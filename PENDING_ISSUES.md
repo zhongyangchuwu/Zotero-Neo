@@ -20,7 +20,7 @@ startup issue.
   (`win.Zotero_Tabs?.tabs`) was silently dead on Zotero 9.
 - FIXED: `_rescanSelectedReader` now enumerates `Zotero.Reader._readers`
   (array or Map, with a `_tabs`/`tabs` fallback). File-log evidence
-  (`zv-startup.log` in the profile dir) shows restored readers are now
+  (`zotero-neo-startup.log` in the profile dir) shows restored readers are now
   injected ~11 ms after startup.
 - Remaining delay is AFTER injection: keys still do nothing until the PDF
   document finishes loading. Leading theory: PDF.js document load — scroll
@@ -36,7 +36,7 @@ startup issue.
   800 ms → 250 ms, marks loading retry when the item DB is not ready.
 
 ### Next investigation directions
-- Confirm via `zv-startup.log` whether `scroll during pdf load (no pdfDocument)`
+- Confirm via `zotero-neo-startup.log` whether `scroll during pdf load (no pdfDocument)`
   lines appear during the wait (keys captured?) or not (capture chain broken).
 - Inspect Zotero 9's `_createView` iframe lifecycle — whether the PDF view's
   `_iframeWindow` at early injection is a placeholder that gets replaced when

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Build the Zotero Vim plugin as an installable .xpi file.
+# Build Zotero Neo as an installable .xpi file.
 # Usage: ./build.sh
 set -euo pipefail
 
-PLUGIN_ID="zotero-vim-plus@zotero-vim"
-OUTPUT="zoetero-vim-plus.xpi"
+OUTPUT="zotero-neo.xpi"
 
 # Optional sanity checks. Only `zip` is required to build; if `node` is
 # available, verify JS syntax and that the hand-maintained keybinding/i18n

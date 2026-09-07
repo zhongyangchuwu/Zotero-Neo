@@ -1,18 +1,18 @@
 /* global Zotero, Services, Components */
 /* eslint-disable no-unused-vars */
 
-var ZoteroVim;
+var ZoteroNeo;
 
 // Approximate app-process start time, for startup-timing diagnostics.
 var APP_START_TS = Date.now();
 var ZV_LOGFILE_TS = 0;
 
 function log(msg) {
-  Zotero.debug('[ZoteroVim] ' + msg);
+  Zotero.debug('[ZoteroNeo] ' + msg);
 }
 
 /**
- * Append a timestamped line to <profile>/zv-startup.log.  The Error Console
+ * Append a timestamped line to <profile>/zotero-neo-startup.log. The Error Console
  * can hide Zotero.debug output behind filters, so startup diagnostics are
  * also written to this file for reliable inspection.
  */
@@ -23,7 +23,7 @@ function zvLogFile(msg) {
       ? Zotero.getProfileDirectory()
       : Services.dirsvc.get('ProfD', Components.interfaces.nsIFile);
     const file = dir.clone();
-    file.append('zv-startup.log');
+    file.append('zotero-neo-startup.log');
     const stream = Components.classes['@mozilla.org/network/file-output-stream;1']
       .createInstance(Components.interfaces.nsIFileOutputStream);
     // nsIFileOutputStream: PR_APPEND | PR_WRONLY | PR_CREATE_FILE
@@ -50,14 +50,14 @@ async function startup({ id, version, rootURI }) {
   // readers stay dead until a later sweep tick.  init()/addToWindow() are
   // idempotent, so the post-await pass below is a safe safety net.
   try {
-    ZoteroVim.init({ id, version, rootURI });
+    ZoteroNeo.init({ id, version, rootURI });
   } catch (e) {
     log('Early init failed: ' + e);
     zvLogFile('early init FAILED: ' + e);
   }
   try {
     for (const win of Zotero.getMainWindows()) {
-      ZoteroVim.addToWindow(win);
+      ZoteroNeo.addToWindow(win);
     }
   } catch (e) {
     log('Early window injection failed: ' + e);
@@ -73,13 +73,13 @@ async function startup({ id, version, rootURI }) {
   // Re-run init so anything that was unavailable pre-init (e.g.
   // Zotero.PreferencePanes) gets registered; all registrations are guarded.
   try {
-    ZoteroVim.init({ id, version, rootURI });
+    ZoteroNeo.init({ id, version, rootURI });
   } catch (e) {
     log('Init after initialization failed: ' + e);
   }
   try {
     for (const win of Zotero.getMainWindows()) {
-      ZoteroVim.addToWindow(win);
+      ZoteroNeo.addToWindow(win);
     }
   } catch (e) {
     log('Window injection after init failed: ' + e);
@@ -87,17 +87,17 @@ async function startup({ id, version, rootURI }) {
 }
 
 function onMainWindowLoad({ window }) {
-  ZoteroVim?.addToWindow(window);
+  ZoteroNeo?.addToWindow(window);
 }
 
 function onMainWindowUnload({ window }) {
-  ZoteroVim?.removeFromWindow(window);
+  ZoteroNeo?.removeFromWindow(window);
 }
 
 function shutdown() {
   log('Shutting down');
-  ZoteroVim?.shutdown();
-  ZoteroVim = undefined;
+  ZoteroNeo?.shutdown();
+  ZoteroNeo = undefined;
 }
 
 function install() {

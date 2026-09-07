@@ -1,24 +1,24 @@
 {
   "manifest_version": 2,
-  "name": "Zotero Vim Plus",
-  "version": "1.8.2",
-  "description": "Vim-like keybindings for the Zotero PDF reader. Navigate, scroll, annotate and note with keyboard shortcuts inspired by Vimium/Vim/LazyVim.",
-  "author": "ZorroStardust, Alex Fink(original author)",
-  "homepage_url": "https://github.com/ZorroStardust/zotero-vim-plus",
+  "name": "Zotero Neo",
+  "version": "0.1.0",
+  "description": "A Neovim-inspired, keyboard-first interaction layer for navigating, reading, annotating, and managing research in Zotero.",
+  "author": "ZorroStardust, Alex Fink (original author)",
+  "homepage_url": "https://github.com/zhongyangchuwu/Zotero-Neo",
   "icons": {
     "64": "icons/icon-64x64.png",
     "128": "icons/icon-128x128.png"
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "zotero-vim-plus@zotero-vim",
-      "update_url": "https://raw.githubusercontent.com/ZorroStardust/zotero-vim-plus/main/updates.json"
+      "id": "zotero-neo@zotero-neo",
+      "update_url": "https://raw.githubusercontent.com/zhongyangchuwu/Zotero-Neo/main/updates.json"
     }
   },
   "applications": {
     "zotero": {
-      "id": "zotero-vim-plus@zotero-vim",
-      "update_url": "https://raw.githubusercontent.com/ZorroStardust/zotero-vim-plus/main/updates.json",
+      "id": "zotero-neo@zotero-neo",
+      "update_url": "https://raw.githubusercontent.com/zhongyangchuwu/Zotero-Neo/main/updates.json",
       "strict_min_version": "7.0",
       "strict_max_version": "10.*"
     }

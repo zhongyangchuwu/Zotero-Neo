@@ -1,11 +1,11 @@
-# Build zotero-vim-plus.xpi on Windows (PowerShell 5.1+).
+# Build zotero-neo.xpi on Windows (PowerShell 5.1+).
 # Equivalent of build.sh — creates a POSIX-path zip that Gecko can read
 # (never use Compress-Archive: it writes backslash entry paths that break
 # Zotero's jar:// loading).
 # Usage: powershell -ExecutionPolicy Bypass -File tools\build.ps1
 param(
     [string]$Root = ($PSScriptRoot | Split-Path -Parent),
-    [string]$Output = "zoetero-vim-plus.xpi"
+    [string]$Output = "zotero-neo.xpi"
 )
 
 $ErrorActionPreference = "Stop"

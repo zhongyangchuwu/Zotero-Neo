@@ -1,15 +1,14 @@
-# Zotero Vim Plus
+# Zotero Neo
 
 > **Languages:** [English](README.md) · [Español](README.es-ES.md) · [中文](README.zh-CN.md)
-
-> Original repository: https://codeberg.org/finktank/zotero-vim
 >
-> This repository is forked from the original Zotero Vim project.
+> Base project: https://github.com/ZorroStardust/zotero-vim-plus
+>
+> Original project: https://codeberg.org/finktank/zotero-vim
+>
+> Zotero Neo preserves the copyright and attribution of both upstream projects.
 
-Vim-style keybindings for the Zotero 7–10 PDF reader. Navigate, scroll,
-annotate, and copy text without touching the mouse.
-
-Vibe coded with Claude Sonnet 4.5.
+A Neovim/LazyVim-inspired, keyboard-first interaction layer for Zotero 7–10.
 
 ![Brief Demo Video (no audio)](BriefDemoVideo.gif)
 
@@ -76,12 +75,12 @@ Vibe coded with Claude Sonnet 4.5.
 
 ## Installation
 
-1. Download `zoetero-vim-plus.xpi` from the releases page (or build it yourself —
+1. Download `zotero-neo.xpi` from the releases page (or build it yourself —
    see below).
 2. Open Zotero.
 3. Go to **Tools → Plugins**.
 4. Click the **gear icon (⚙)** in the top-right of the Plugins window.
-5. Choose **Install Plugin From File…** and select `zoetero-vim-plus.xpi`.
+5. Choose **Install Plugin From File…** and select `zotero-neo.xpi`.
 6. Restart Zotero when prompted.
 
 To update, repeat the same steps with the new `.xpi`. Zotero will replace the
@@ -92,12 +91,12 @@ old version automatically.
 ## Building from source
 
 ```bash
-git clone https://github.com/ZorroStardust/zotero-vim-plus.git
-cd zotero-vim-plus
+git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
+cd Zotero-Neo
 ./build.sh
 ```
 
-`build.sh` zips the plugin source into `zoetero-vim-plus.xpi`. No build tools or
+`build.sh` zips the plugin source into `zotero-neo.xpi`. No build tools or
 package managers are required — only `zip` (available by default on macOS and
 most Linux distributions).
 
@@ -111,10 +110,10 @@ Both scripts run JS syntax and keybinding-table sync checks when `node` is
 available.
 
 ```
-zotero-vim-plus/
+Zotero-Neo/
 ├── manifest.json          Plugin manifest (ID, version, Zotero version range)
 ├── bootstrap.js           Lifecycle hooks (startup/shutdown/window events)
-├── build.sh               Builds zoetero-vim-plus.xpi (plus sanity checks)
+├── build.sh               Builds zotero-neo.xpi (plus sanity checks)
 ├── content/
 │   ├── zoteroVim.js       Core: modes, key handling, action dispatcher
 │   ├── zoteroVimReader.js Reader-side methods (outline, visual/cursor, annotations)
@@ -126,10 +125,7 @@ zotero-vim-plus/
 └── icons/
     ├── icon-64x64.png     Plugin icon (preferences pane, manifest)
     ├── icon-128x128.png   Plugin icon (manifest)
-    ├── zotero vim plus.svg  Vector source of the logo
-    ├── vim.svg            Legacy icon (kept for compatibility)
-    ├── vim-48.png
-    └── vim-96.png
+    └── zotero-neo.svg     Vector source of the logo
 ```
 
 ---
@@ -595,7 +591,7 @@ closes the overlay and hands over to the native editor (Escape inside native
 editors keeps its Zotero behavior).
 
 > **Note:** if pressing `i` shows a red `✗` status instead, the plugin writes
-> detailed diagnostics to `zv-startup.log` in your Zotero profile directory
+> detailed diagnostics to `zotero-neo-startup.log` in your Zotero profile directory
 > (`%APPDATA%\Zotero\Zotero\Profiles\...` on Windows).
 
 ---
@@ -640,7 +636,7 @@ editors keeps its Zotero behavior).
 ## Customising keybindings
 
 Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to the
-**Zotero Vim** tab.
+**Zotero Neo** tab.
 
 - Every row in the **Keybindings** table maps a *mode + key sequence* to an
   *action*.
@@ -656,7 +652,7 @@ Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to t
 The preferences pane is registered with a stable pane id, so the panel opens
 directly on the last-used section even after a restart, and its dropdowns use
 native Zotero `menulist` controls to stay reliable on every open. Init
-failures are reported to `zv-startup.log` in the profile directory with
+failures are reported to `zotero-neo-startup.log` in the profile directory with
 `[prefs]`-prefixed lines.
 
 ### Action reference
@@ -866,7 +862,7 @@ The plugin therefore patches the forwarding callback itself:
   `stopPropagation()`) wherever vim consumes a key, so Zotero's same-window
   capture listener is skipped when the plugin's listener registered first.
 
-The patch is re-applied by the 800 ms view-sync timer so it survives view
+The patch is re-applied by the 250 ms view-sync timer so it survives view
 recreation, split views, and restored sessions.  If Zotero changes the
 reader's forwarding internals, re-verify `view._onKeyDown` and the
 `KeyboardManager` shortcut table (keyboard-manager.js).

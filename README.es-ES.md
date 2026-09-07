@@ -1,15 +1,14 @@
-# Zotero Vim Plus
+# Zotero Neo
 
 > **Idiomas:** [English](README.md) · [Español](README.es-ES.md) · [中文](README.zh-CN.md)
-
-> Repositorio original: https://codeberg.org/finktank/zotero-vim
 >
-> Este repositorio es una bifurcación del proyecto original Zotero Vim.
+> Proyecto base: https://github.com/ZorroStardust/zotero-vim-plus
+>
+> Proyecto original: https://codeberg.org/finktank/zotero-vim
+>
+> Zotero Neo conserva los derechos de autor y la atribución de ambos proyectos.
 
-Atajos de teclado al estilo Vim para el lector de PDF de Zotero 7/8. Navega, desplázate,
-anota y copia texto sin necesidad de usar el ratón.
-
-Programado con emoción por Claude Sonnet 4.5.
+Una capa de interacción para Zotero 7–10, inspirada en Neovim/LazyVim y orientada al teclado.
 
 ![Vídeo de demostración breve (sin audio)](BriefDemoVideo.gif)
 
@@ -49,18 +48,18 @@ Programado con emoción por Claude Sonnet 4.5.
 
 ## Requisitos
 
-- Zotero 7, 8 o 9 (el plugin utiliza la API de arranque de Zotero 7+).
+- Zotero 7–10 (el plugin utiliza la API Bootstrap de Zotero 7+).
 - macOS, Linux o Windows.
 
 ---
 
 ## Instalación
 
-1. Descarga `zotero-vim-plus.xpi` desde la página de lanzamientos (o compílalo tú mismo — ver más abajo).
+1. Descarga `zotero-neo.xpi` desde la página de lanzamientos (o compílalo tú mismo — ver más abajo).
 2. Abre Zotero.
 3. Ve a **Herramientas → Plugins**.
 4. Haz clic en el **icono de engranaje (⚙)** en la esquina superior derecha de la ventana de Plugins.
-5. Elige **Instalar plugin desde archivo…** y selecciona `zotero-vim-plus.xpi`.
+5. Elige **Instalar plugin desde archivo…** y selecciona `zotero-neo.xpi`.
 6. Reinicia Zotero cuando se te solicite.
 
 Para actualizar, repite los mismos pasos con el nuevo `.xpi`. Zotero reemplazará la versión antigua automáticamente.
@@ -70,22 +69,22 @@ Para actualizar, repite los mismos pasos con el nuevo `.xpi`. Zotero reemplazar�
 ## Compilación desde el código fuente
 
 ```bash
-git clone https://github.com/ZorroStardust/zotero-vim-plus.git
-cd zotero-vim-plus
+git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
+cd Zotero-Neo
 ./build.sh
 ```
 
-`build.sh` comprime el código fuente del plugin en `zoetero-vim-plus.xpi`. No se
+`build.sh` comprime el código fuente del plugin en `zotero-neo.xpi`. No se
 necesitan herramientas de compilación ni gestores de paquetes — solo `zip`
 (disponible por defecto en macOS y la mayoría de distribuciones Linux). Si
 `node` está disponible, el script también verifica la sintaxis de los archivos
 JS y que las tablas de atajos (zoteroVim.js vs prefs.js) estén sincronizadas.
 
 ```
-zotero-vim-plus/
+Zotero-Neo/
 ├── manifest.json          Manifest del plugin (ID, versión, rango de versión de Zotero)
 ├── bootstrap.js           Controles de ciclo de vida (inicio/apagado/eventos de ventana)
-├── build.sh               Compila zoetero-vim-plus.xpi (más comprobaciones de cordura)
+├── build.sh               Compila zotero-neo.xpi (más comprobaciones de cordura)
 ├── content/
 │   ├── zoteroVim.js       Núcleo: modos, manejo de teclas, despachador de acciones
 │   ├── zoteroVimReader.js Métodos del lector (esquema, visual/cursor, anotaciones)
@@ -97,10 +96,7 @@ zotero-vim-plus/
 └── icons/
     ├── icon-64x64.png     Icono del plugin (panel de preferencias, manifest)
     ├── icon-128x128.png   Icono del plugin (manifest)
-    ├── zotero vim plus.svg  Fuente vectorial del logotipo
-    ├── vim.svg            Icono heredado (conservado por compatibilidad)
-    ├── vim-48.png
-    └── vim-96.png
+    └── zotero-neo.svg     Fuente vectorial del logotipo
 ```
 
 ---
@@ -505,7 +501,7 @@ Cuando `i` se presiona en modo Normal mientras una anotación está seleccionada
 
 ## Personalización de atajos de teclado
 
-Abrir **Editar → Preferencias** (macOS: **Zotero → Ajustes**) y navegar al pestaña **Zotero Vim**.
+Abrir **Editar → Preferencias** (macOS: **Zotero → Ajustes**) y navegar a la pestaña **Zotero Neo**.
 
 - Cada fila en la tabla **Atajos de teclado** mapea un *modo + secuencia de teclas* a una *acción*.
 - Clic en la celda de secuencia de teclas para editarla directamente.
@@ -718,7 +714,7 @@ El plugin por lo tanto parchea el propio callback de reenvío:
   donde vim consume una tecla, así el listener de captura de la misma ventana
   de Zotero se omite cuando el listener del plugin se registró primero.
 
-El parche se reaplica por el temporizador de sincronización de vista de 800 ms
+El parche se reaplica por el temporizador de sincronización de vista de 250 ms
 (sobrevive a recreación de vista, vistas divididas y sesiones restauradas). Si
 Zotero cambia los internos de reenvío del lector, verifica de nuevo
 `view._onKeyDown` y la tabla de atajos de `KeyboardManager`.

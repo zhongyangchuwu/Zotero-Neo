@@ -2,16 +2,16 @@
 /* eslint-disable no-unused-vars */
 
 /**
- * Zotero Vim Plus — main-window methods: window injection, note
- * editor, split views, fuzzy picker, notes layout. Loaded by
+ * Zotero Neo — main-window methods: window injection, note editor, split
+ * views, fuzzy picker, and notes layout. Loaded by
  * bootstrap.js after zoteroVim.js and zoteroVimReader.js.
  */
 
-Object.assign(ZoteroVim, {
+Object.assign(ZoteroNeo, {
   // ── Main window injection ─────────────────────────────────────────────────
 
   _injectIntoMainWindow(win) {
-    Zotero.debug('[ZoteroVim] Injecting into main window');
+    Zotero.debug('[ZoteroNeo] Injecting into main window');
 
     // Main window is a XUL document — must use HTML namespace for HTML elements.
     const _H = 'http://www.w3.org/1999/xhtml';
@@ -256,7 +256,7 @@ Object.assign(ZoteroVim, {
     }
 
     this._mainSyncFocusedPanel(win, winState);
-    Zotero.debug('[ZoteroVim] Main action: ' + action + ' count:' + count);
+    Zotero.debug('[ZoteroNeo] Main action: ' + action + ' count:' + count);
     switch (action) {
       case 'mainFuzzyAll':         this._openFuzzyPicker(win, winState, 'all');         break;
       case 'mainFuzzyCollection':  this._openFuzzyPicker(win, winState, 'collection');  break;
@@ -286,7 +286,7 @@ Object.assign(ZoteroVim, {
       case 'mainTreeCollapseAll':  this._mainTreeCollapseAll(win, winState);           break;
       case 'mainNavFirst':         this._mainNavigate(win, winState, 'first', 0);      break;
       case 'mainNavLast':          this._mainNavigate(win, winState, 'last',  count);  break;
-      default: Zotero.debug('[ZoteroVim] Unknown main action: ' + action);
+      default: Zotero.debug('[ZoteroNeo] Unknown main action: ' + action);
     }
   },
 
@@ -369,7 +369,7 @@ Object.assign(ZoteroVim, {
         ok = true;
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _toggleReaderSplit ' + method + ' error: ' + e);
+      Zotero.debug('[ZoteroNeo] _toggleReaderSplit ' + method + ' error: ' + e);
     }
 
     if (!ok) {
@@ -1625,7 +1625,7 @@ Object.assign(ZoteroVim, {
       await reader.focus?.();
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _focusReaderContent error: ' + e);
+      Zotero.debug('[ZoteroNeo] _focusReaderContent error: ' + e);
       return false;
     }
   },
@@ -1652,7 +1652,7 @@ Object.assign(ZoteroVim, {
       doc?.body?.focus?.({ preventScroll: true });
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _focusReaderPdfWindow error: ' + e);
+      Zotero.debug('[ZoteroNeo] _focusReaderPdfWindow error: ' + e);
       return false;
     }
   },
@@ -1673,7 +1673,7 @@ Object.assign(ZoteroVim, {
       target?.focus?.({ preventScroll: true });
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _focusContextNoteEditor error: ' + e);
+      Zotero.debug('[ZoteroNeo] _focusContextNoteEditor error: ' + e);
       return false;
     }
   },
@@ -1713,7 +1713,7 @@ Object.assign(ZoteroVim, {
       if (winState) this._syncMainContextNoteListener(win, winState);
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _openNoteInReaderContextPane error: ' + e);
+      Zotero.debug('[ZoteroNeo] _openNoteInReaderContextPane error: ' + e);
       return false;
     }
   },
@@ -1771,7 +1771,7 @@ Object.assign(ZoteroVim, {
       }
       this._showStatus(state, target === 'secondary' ? '▶ split B' : '▶ split A', 700);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _focusReaderSplit error: ' + e);
+      Zotero.debug('[ZoteroNeo] _focusReaderSplit error: ' + e);
       this._showStatus(state, '✗ focus failed', 1200);
     }
   },
@@ -1801,7 +1801,7 @@ Object.assign(ZoteroVim, {
         iv.ensureRowIsVisible?.(next);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainNavigate error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainNavigate error: ' + e);
     }
   },
 
@@ -1867,7 +1867,7 @@ Object.assign(ZoteroVim, {
       this._mainRefocusCollectionsTree(win, cv);
       this._mainShowStatus(win, isOpen ? '→ collapsed' : '→ expanded', 900);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainTreeToggle error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainTreeToggle error: ' + e);
       this._mainShowStatus(win, '✗ toggle failed');
     }
   },
@@ -1892,7 +1892,7 @@ Object.assign(ZoteroVim, {
       this._mainRefocusCollectionsTree(win, cv);
       this._mainShowStatus(win, '→ expanded', 900);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainTreeOpenOnly error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainTreeOpenOnly error: ' + e);
       this._mainShowStatus(win, '✗ open failed');
     }
   },
@@ -1917,7 +1917,7 @@ Object.assign(ZoteroVim, {
       this._mainRefocusCollectionsTree(win, cv);
       this._mainShowStatus(win, '→ collapsed', 900);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainTreeCloseOnly error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainTreeCloseOnly error: ' + e);
       this._mainShowStatus(win, '✗ collapse failed');
     }
   },
@@ -2084,9 +2084,9 @@ Object.assign(ZoteroVim, {
       } else {
         this._mainEnsureItemsSelection(win.ZoteroPane?.itemsView);
       }
-      Zotero.debug('[ZoteroVim] _mainFocusPanel: ' + panel);
+      Zotero.debug('[ZoteroNeo] _mainFocusPanel: ' + panel);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainFocusPanel error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainFocusPanel error: ' + e);
     }
   },
 
@@ -2127,7 +2127,7 @@ Object.assign(ZoteroVim, {
       }
       if (att) {
         win.ZoteroPane.viewAttachment(att.id);
-        Zotero.debug('[ZoteroVim] _mainOpenPDF: attID=' + att.id);
+        Zotero.debug('[ZoteroNeo] _mainOpenPDF: attID=' + att.id);
         return;
       }
 
@@ -2142,7 +2142,7 @@ Object.assign(ZoteroVim, {
       }
       this._mainShowStatus(win, '✗ No attachment');
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainOpenPDF error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainOpenPDF error: ' + e);
       this._mainShowStatus(win, '✗ ' + String(e).slice(0, 40));
     }
   },
@@ -2152,7 +2152,7 @@ Object.assign(ZoteroVim, {
       const tabs = win.Zotero_Tabs;
       if (tabs) tabs.close(tabs.selectedID);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainClosePDF error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainClosePDF error: ' + e);
     }
   },
 
@@ -2200,7 +2200,7 @@ Object.assign(ZoteroVim, {
       tabs.selectedID = nextID;
       this._postMainTabSwitchRecover(win);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainCycleTab error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainCycleTab error: ' + e);
     }
   },
 
@@ -2249,7 +2249,7 @@ Object.assign(ZoteroVim, {
         this._mainFocusPanel(win, winState, panel === 'collections' ? 'collections' : 'items');
       })
       .catch((e) => {
-        Zotero.debug('[ZoteroVim] _recoverMainTabFocusAfterSwitch error: ' + e);
+        Zotero.debug('[ZoteroNeo] _recoverMainTabFocusAfterSwitch error: ' + e);
       });
   },
 
@@ -2259,9 +2259,9 @@ Object.assign(ZoteroVim, {
                  win.document.querySelector('#zotero-tb-search input') ||
                  win.document.querySelector('input[type="search"]');
       if (el) { el.focus(); el.select(); }
-      else Zotero.debug('[ZoteroVim] _mainFocusSearch: search input not found');
+      else Zotero.debug('[ZoteroNeo] _mainFocusSearch: search input not found');
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainFocusSearch error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainFocusSearch error: ' + e);
     }
   },
 
@@ -2276,9 +2276,9 @@ Object.assign(ZoteroVim, {
         .getService(Components.interfaces.nsIClipboardHelper);
       clip.copyString(citekey);
       this._mainShowStatus(win, '✓ @' + citekey);
-      Zotero.debug('[ZoteroVim] _mainYankCitekey: @' + citekey);
+      Zotero.debug('[ZoteroNeo] _mainYankCitekey: @' + citekey);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainYankCitekey error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainYankCitekey error: ' + e);
       this._mainShowStatus(win, '✗ ' + String(e).slice(0, 40));
     }
   },
@@ -2298,7 +2298,7 @@ Object.assign(ZoteroVim, {
       clearTimeout(winState._statusTimer);
       winState._statusTimer = setTimeout(() => { el.style.display = 'none'; }, ms);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainShowStatus error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainShowStatus error: ' + e);
     }
   },
 
@@ -2435,7 +2435,7 @@ Object.assign(ZoteroVim, {
         });
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _openFuzzyPicker load error: ' + e);
+      Zotero.debug('[ZoteroNeo] _openFuzzyPicker load error: ' + e);
       while (results.firstChild) results.removeChild(results.firstChild);
       const errEl = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
       errEl.style.cssText = 'padding:12px;color:#f38ba8';
@@ -2581,7 +2581,7 @@ Object.assign(ZoteroVim, {
         .copyString(text);
       this._mainShowStatus(win, '✓ ' + (item.citekey ? '@' + item.citekey : item.title));
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _pickerYankCitation error: ' + e);
+      Zotero.debug('[ZoteroNeo] _pickerYankCitation error: ' + e);
     }
     this._closeFuzzyPicker(win, winState);
   },
@@ -2666,13 +2666,13 @@ Object.assign(ZoteroVim, {
     try {
       if (winState._pickerScope === 'tabs') {
         this._mainSelectTab(win, item.id);
-        Zotero.debug('[ZoteroVim] pickerSelectTab: id=' + item.id);
+        Zotero.debug('[ZoteroNeo] pickerSelectTab: id=' + item.id);
       } else {
         win.ZoteroPane.selectItem(item.id);
-        Zotero.debug('[ZoteroVim] pickerSelectItem: id=' + item.id);
+        Zotero.debug('[ZoteroNeo] pickerSelectItem: id=' + item.id);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _pickerSelectItem error: ' + e);
+      Zotero.debug('[ZoteroNeo] _pickerSelectItem error: ' + e);
     }
     this._closeFuzzyPicker(win, winState);
   },
@@ -2704,7 +2704,7 @@ Object.assign(ZoteroVim, {
         })
         .filter(Boolean);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _buildTabPickerItems error: ' + e);
+      Zotero.debug('[ZoteroNeo] _buildTabPickerItems error: ' + e);
       return [];
     }
   },
@@ -2724,7 +2724,7 @@ Object.assign(ZoteroVim, {
       tabs.selectedID = tabID;
       this._postMainTabSwitchRecover(win);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainSelectTab error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainSelectTab error: ' + e);
     }
   },
 
@@ -2758,7 +2758,7 @@ Object.assign(ZoteroVim, {
         .copyString(item.citekey);
       this._mainShowStatus(win, '✓ @' + item.citekey);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _pickerYankCitekey error: ' + e);
+      Zotero.debug('[ZoteroNeo] _pickerYankCitekey error: ' + e);
     }
     this._closeFuzzyPicker(win, winState);
   },
@@ -2991,7 +2991,7 @@ Object.assign(ZoteroVim, {
       this._closeMainNotesLayout(win, winState);
       this._mainShowStatus(win, '✓ new child note', 1200);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainNotesCreateAndOpen error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainNotesCreateAndOpen error: ' + e);
       this._mainShowStatus(win, '✗ create note failed');
     }
   },
@@ -3124,7 +3124,7 @@ Object.assign(ZoteroVim, {
         this._mainShowStatus(win, '→ hidden ' + payload.filteredMachineCount + ' machine notes', 1800);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _openMainNotesLayout error: ' + e);
+      Zotero.debug('[ZoteroNeo] _openMainNotesLayout error: ' + e);
       if (!winState.notesLayoutOpen) return;
       winState._notesCurrentRows = [];
       winState._notesAllRows = [];
@@ -3366,7 +3366,7 @@ Object.assign(ZoteroVim, {
       await this._openNoteByTarget(win, noteID, { openInWindow: false });
       this._closeMainNotesLayout(win, winState);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _mainNotesOpenSelected error: ' + e);
+      Zotero.debug('[ZoteroNeo] _mainNotesOpenSelected error: ' + e);
       this._mainShowStatus(win, '✗ open note failed');
     }
   },
@@ -3382,7 +3382,7 @@ Object.assign(ZoteroVim, {
       }
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _openNoteByTarget error: ' + e);
+      Zotero.debug('[ZoteroNeo] _openNoteByTarget error: ' + e);
       throw e;
     }
   },
@@ -3421,7 +3421,7 @@ Object.assign(ZoteroVim, {
       await note.saveTx();
       return note.id || null;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _createMainCurrentChildNote error: ' + e);
+      Zotero.debug('[ZoteroNeo] _createMainCurrentChildNote error: ' + e);
       this._mainShowStatus(win, '✗ create note failed');
       return null;
     }
@@ -3465,7 +3465,7 @@ Object.assign(ZoteroVim, {
       await note.saveTx();
       return note.id || null;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _createMainPreviousChildNote error: ' + e);
+      Zotero.debug('[ZoteroNeo] _createMainPreviousChildNote error: ' + e);
       this._mainShowStatus(win, '✗ create note failed');
       return null;
     }

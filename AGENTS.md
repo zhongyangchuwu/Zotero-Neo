@@ -1,10 +1,10 @@
-# Agent Guidelines for zotero-vim
+# Agent Guidelines for Zotero Neo
 
 ## Project Overview
 
-zotero-vim is a Zotero 7/8 plugin that brings Vim keybindings to the Zotero PDF reader.
-Built as a Firefox/Gecko extension using the Bootstrap API — pure vanilla JavaScript,
-no framework, no npm, no build pipeline beyond a simple zip script.
+Zotero Neo is a Zotero 7–10 plugin that provides a Neovim/LazyVim-inspired,
+keyboard-first interaction layer across the Zotero reader and main window.
+It uses the Firefox/Gecko Bootstrap API, plain JavaScript, and direct XPI packaging.
 
 ## Build / Install / Test
 
@@ -13,15 +13,15 @@ no framework, no npm, no build pipeline beyond a simple zip script.
 ./build.sh
 ```
 On Windows (no bash needed): `powershell -ExecutionPolicy Bypass -File tools\build.ps1`
-Creates `zoetero-vim-plus.xpi` — a zip of `manifest.json`, `bootstrap.js`, `content/`, and `icons/`.
+Creates `zotero-neo.xpi` — a zip of `manifest.json`, `bootstrap.js`, `content/`, and `icons/`.
 
 ### Installing
 1. Open Zotero → Tools → Add-ons → Gear icon → "Install Add-on From File..."
-2. Select `zoetero-vim-plus.xpi`
+2. Select `zotero-neo.xpi`
 3. Restart Zotero
 
 ### Debugging
-- Use `Zotero.debug('[ZoteroVim] message')` for logging — output appears in Zotero's
+- Use `Zotero.debug('[ZoteroNeo] message')` for logging — output appears in Zotero's
   Error Console (Help → Developer → Developer Options → Error Console).
 - For UI feedback, use `this._showStatus(state, 'message', durationMs)` on the current
   reader state object.
@@ -42,7 +42,7 @@ Use **2 spaces** for indentation. Do not use tabs.
 The codebase has several primary files:
 - `bootstrap.js` — Zotero lifecycle entry point (install/uninstall hooks)
 - `content/zoteroVim.js` — Core plugin object: modes, keybindings, key handling,
-  action dispatcher (`var ZoteroVim = { ... }`)
+  action dispatcher (`var ZoteroNeo = { ... }`)
 - `content/zoteroVimReader.js` — Reader-side methods
 - `content/zoteroVimMain.js` — Main-window methods
 - `content/prefs.js` / `content/i18n.js` — Preferences panel logic and labels
@@ -51,7 +51,7 @@ The codebase has several primary files:
 
 **No ES6 classes.** Use object literals:
 ```js
-var ZoteroVim = {
+var ZoteroNeo = {
     init({ id, version, rootURI }) { ... },
     shutdown() { ... },
     // methods here
@@ -98,7 +98,7 @@ Components.classes["@mozilla.org/preferences-service;1"]
   ```
 - Log unexpected errors with `Zotero.debug()`:
   ```js
-  Zotero.debug('[ZoteroVim] _executeAction error (' + action + '): ' + e);
+  Zotero.debug('[ZoteroNeo] _executeAction error (' + action + '): ' + e);
   ```
 
 ### State Management

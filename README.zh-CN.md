@@ -1,15 +1,14 @@
-# Zotero Vim Plus
+# Zotero Neo
 
 > **语言：** [English](README.md) · [Español](README.es-ES.md) · [中文](README.zh-CN.md)
-
-> 原始仓库：https://codeberg.org/finktank/zotero-vim
 >
-> 本仓库是从原始 Zotero Vim 项目复刻（fork）而来。
+> 基础项目：https://github.com/ZorroStardust/zotero-vim-plus
+>
+> 原始项目：https://codeberg.org/finktank/zotero-vim
+>
+> Zotero Neo 保留两个上游项目的版权与 attribution。
 
-为 Zotero 7/8 PDF 阅读器提供 Vim 风格按键绑定。无需鼠标即可导航、滚动、
-标注和复制文本。
-
-由 Claude Sonnet 4.5 以 vibe coding 方式编写。
+一个受 Neovim/LazyVim 启发、面向 Zotero 7–10 的键盘优先交互层。
 
 ![简短演示视频（无音频）](BriefDemoVideo.gif)
 
@@ -64,18 +63,18 @@
 
 ## 系统要求
 
-- Zotero 7、8 或 9（插件使用 Zotero 7+ 的 bootstrap API）
+- Zotero 7–10（插件使用 Zotero 7+ 的 Bootstrap API）
 - macOS、Linux 或 Windows
 
 ---
 
 ## 安装
 
-1. 从发布页面下载 `zoetero-vim-plus.xpi`（或自行构建——见下文）。
+1. 从发布页面下载 `zotero-neo.xpi`（或自行构建——见下文）。
 2. 打开 Zotero。
 3. 进入 **工具 → 插件**。
 4. 点击插件窗口右上角的**齿轮图标（⚙）**。
-5. 选择**从文件安装插件…**并选中 `zoetero-vim-plus.xpi`。
+5. 选择**从文件安装插件…**并选中 `zotero-neo.xpi`。
 6. 按提示重启 Zotero。
 
 要更新，请用新的 `.xpi` 重复同样的步骤。Zotero 会自动替换旧版本。
@@ -85,21 +84,21 @@
 ## 从源码构建
 
 ```bash
-git clone https://github.com/ZorroStardust/zotero-vim-plus.git
-cd zotero-vim-plus
+git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
+cd Zotero-Neo
 ./build.sh
 ```
 
-`build.sh` 将插件源码打包为 `zoetero-vim-plus.xpi`。无需构建工具或包管理器——
+`build.sh` 将插件源码打包为 `zotero-neo.xpi`。无需构建工具或包管理器——
 只需要 `zip`（macOS 和大多数 Linux 发行版默认自带）。如果 `node` 可用，
 该脚本还会校验 JS 文件语法以及按键绑定表（zoteroVim.js 与 prefs.js）
 是否保持同步。
 
 ```
-zotero-vim-plus/
+Zotero-Neo/
 ├── manifest.json          插件清单（ID、版本、Zotero 版本范围）
 ├── bootstrap.js           生命周期钩子（启动/关闭/窗口事件）
-├── build.sh               构建 zoetero-vim-plus.xpi（含完整性检查）
+├── build.sh               构建 zotero-neo.xpi（含完整性检查）
 ├── content/
 │   ├── zoteroVim.js       核心：模式、按键处理、动作分发器
 │   ├── zoteroVimReader.js 阅读器侧方法（目录、可视/光标、标注）
@@ -111,10 +110,7 @@ zotero-vim-plus/
 └── icons/
     ├── icon-64x64.png     插件图标（偏好设置面板、清单）
     ├── icon-128x128.png   插件图标（清单）
-    ├── zotero vim plus.svg 标志的矢量源文件
-    ├── vim.svg            旧版图标（为兼容保留）
-    ├── vim-48.png
-    └── vim-96.png
+    └── zotero-neo.svg     标志的矢量源文件
 ```
 
 ---
@@ -550,7 +546,7 @@ UI 元素输入内容而无需 vim 绑定拦截按键时，这很有用。
 ## 自定义按键绑定
 
 打开 **编辑 → 偏好设置**（macOS：**Zotero → 设置**），
-进入 **Zotero Vim** 标签页。
+进入 **Zotero Neo** 标签页。
 
 - **按键绑定**表中的每一行都将一个 *模式 + 键序列* 映射到一个 *动作*。
 - 点击键序列单元格可直接编辑。
@@ -565,7 +561,7 @@ UI 元素输入内容而无需 vim 绑定拦截按键时，这很有用。
 偏好设置面板使用稳定的面板 id 注册，因此即使重启后也会直接定位到上次
 停留的设置区块；下拉框采用 Zotero 原生的 `menulist` 控件，确保每次打开
 都稳定可用。面板初始化异常会以 `[prefs]` 前缀记录到配置文件目录下的
-`zv-startup.log`。
+`zotero-neo-startup.log`。
 
 ### 动作参考
 
@@ -767,7 +763,7 @@ Zotero 阅读器 React 应用在 `l`/`r` 键上启动朗读，并从其 `Keyboar
   `stopImmediatePropagation()`（而非 `stopPropagation()`），因此当插件的
   监听器先注册时，Zotero 的同窗口捕获监听器会被跳过。
 
-该修补由 800 ms 的视图同步计时器重新应用，因此可跨视图重建、分栏视图
+该修补由 250 ms 的视图同步计时器重新应用，因此可跨视图重建、分栏视图
 和恢复会话存活。如果 Zotero 更改阅读器的转发内部实现，请重新验证
 `view._onKeyDown` 和 `KeyboardManager` 快捷键表（keyboard-manager.js）。
 
