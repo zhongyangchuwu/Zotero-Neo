@@ -10,6 +10,9 @@ zotero-neo-startup.log
 # AI session scratch data
 .sisyphus/
 
+# Local workflow and agent planning state
+.planning/
+
 # macOS
 .DS_Store
 .AppleDouble
