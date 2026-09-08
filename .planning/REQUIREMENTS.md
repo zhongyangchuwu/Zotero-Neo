@@ -7,9 +7,25 @@
 
 - [ ] **ID-01** Installed product, preference pane, and user-facing name are Zotero Neo.
 - [ ] **ID-02** Extension ID, global controller, pane IDs, preference root, debug prefix, and diagnostic file cannot collide with upstream.
-- [ ] **ID-03** Unix and Windows builders emit exactly `zotero-neo.xpi`, and no upstream update channel remains active.
+- [x] **ID-03** Unix and Windows builders emit exactly `zotero-neo.xpi`, and no upstream update channel remains active.
 - [ ] **ID-04** English, Chinese, and Spanish documentation state the Neo repository, AGPL-3.0 license, and both upstream lineage hops.
 - [ ] **ID-05** The Neo XPI installs and starts while the upstream major reader/main/note capabilities remain operational.
+
+## Milestone 0.1 — Release Automation and Diagnostics
+
+- [x] **OPS-01** Pull requests and pushes run native Ubuntu `build.sh` and Windows `build.ps1` jobs.
+- [x] **OPS-02** Each platform exposes an independently named XPI artifact, with the Ubuntu XPI designated as the canonical release artifact.
+- [x] **OPS-03** Release publication rejects tags that do not match `manifest.json` version or the prepared `updates.json` entry.
+- [ ] **OPS-04** A valid version tag publishes exactly one `zotero-neo.xpi`, and only the release job receives repository write permission.
+- [ ] **OPS-05** Startup diagnostics record lifecycle/failure/state-change events without periodic idle-session file growth.
+
+## Milestone 0.2 — Theme-Aware UI
+
+- [ ] **THEME-01** One preference provides `auto`, `light`, and `dark` appearance modes, with invalid values resolving to `auto`.
+- [ ] **THEME-02** Auto follows a verified Zotero theme signal and uses the operating-system color scheme only as fallback.
+- [ ] **THEME-03** Preferences, pickers, explorers, note surfaces, and theme-sensitive indicators share one semantic Light/Dark palette contract.
+- [ ] **THEME-04** Open Neo panels update theme without losing focus, selection, scroll position, or content.
+- [ ] **THEME-05** The theme cutover preserves keyboard behavior and semantic annotation/link-hint colors while keeping both palettes readable.
 
 ## Milestone 1 — Reading History
 
@@ -79,9 +95,11 @@ Neovim RPC/embedding, external viewers, MCP, AI assistant, direct SQLite writes,
 
 | Requirement | Phase | Status |
 |---|---:|---|
-| ID-01–ID-05 | 0 — Fork hygiene | Implemented; verification blocked |
-| HIST-01–HIST-04 | 1 — Reading history | Planned |
-| KEY-01–KEY-07 | 2 — Neo keymap | Planned |
+| ID-01–ID-05 | 0 — Fork hygiene | Implemented; final verification in 0.1 |
+| OPS-01–OPS-05 | 0.1 — Release automation and diagnostics | OPS-01–OPS-03 verified; tag publication and host log retest pending |
+| THEME-01–THEME-05 | 0.2 — Theme-aware UI | Planned second |
+| HIST-01–HIST-04 | 1 — Reading history | Planned third |
+| KEY-01–KEY-07 | 2 — Neo keymap | Pending design review |
 | SPOT-01–SPOT-06 | 3 — Spotlight adapter | Planned |
 | TAG-01–TAG-09 | 4 — Tag management | Planned |
 | WK-01–WK-05 | 5 — Which-key | Planned |
@@ -89,6 +107,6 @@ Neovim RPC/embedding, external viewers, MCP, AI assistant, direct SQLite writes,
 
 ## Coverage Summary
 
-- Current requirements: 43
-- Mapped to exactly one phase: 43
+- Current requirements: 53
+- Mapped to exactly one phase: 53
 - Unmapped: 0

@@ -20,7 +20,8 @@ A user should be able to express common Zotero intent through one consistent, pr
 
 ### Active
 
-- Deliver the PRD v0.1 scope in milestone order: identity, reader history, Neo keymap, optional Spotlight adapter, native tag management, which-key, then QA/documentation.
+- Finish M0 with cross-platform CI/release automation and event-based diagnostics, then add host-aware Light/Dark/Auto theming before resuming the PRD functional milestones.
+- Resume the PRD order after theming: reader history, reviewed Neo keymap, optional Spotlight adapter, native tag management, which-key, then QA/documentation.
 - Preserve upstream PDF Visual/annotation workflows and ordinary text input while changing global key behavior.
 - Produce a releaseable `zotero-neo.xpi` with a distinct installed identity and update channel.
 
@@ -33,9 +34,10 @@ A user should be able to express common Zotero intent through one consistent, pr
 
 - Current implementation branch is `feat/m0-fork-hygiene`.
 - Repository origin points to `https://github.com/zhongyangchuwu/Zotero-Neo.git`.
-- M0 source identity is implemented as Zotero Neo `0.1.0`; host runtime verification remains pending.
-- `./build.sh` passes syntax and binding-sync checks and produces `zotero-neo.xpi`.
-- There is no automated GUI suite or CI. Installation, focus, input, mutation, and optional integration behavior require manual Zotero verification.
+- M0 source identity is implemented as Zotero Neo `0.1.0`; the user installed the WSL-built XPI and reported no functional problem in the initial smoke.
+- `./build.sh` and the Windows-native `tools/build.ps1` pass through GitHub Actions; both upload `zotero-neo.xpi`, with Linux designated as the canonical release artifact.
+- The supplied Windows log identified five-second steady-state rescan writes. Source diagnostics are now state-change-based and await a post-fix Zotero host smoke.
+- There is no automated GUI suite. Installation, focus, input, mutation, theme, and optional integration behavior require manual Zotero verification.
 - Reader behavior depends on private Zotero/PDF.js APIs, cross-compartment cloning, per-reader state, and key-forwarding wrappers documented in `README.md`.
 
 ## Constraints
@@ -58,6 +60,10 @@ A user should be able to express common Zotero intent through one consistent, pr
 | Keep Spotlight behind one adapter and re-detect it per invocation. | Plugin load order and optional availability are variable. | No cached startup dependency or vendored implementation. |
 | Build a purpose-specific tag picker before any generic picker abstraction. | Tag creation, batch counts, and mutation semantics differ from item/tab selection. | Reuse interaction patterns, not a premature base class/API. |
 | Manual runtime evidence is a release gate. | Build and sync checks cannot prove Zotero behavior. | Every phase records a Zotero smoke checklist and M6 records full results. |
+| Validate both builders in GitHub Actions and publish one canonical Linux-built release XPI. | The target Windows build must be exercised without installing PowerShell inside WSL, while duplicate public artifacts add ambiguity. | Ubuntu and Windows are independent gates; a tag release attaches only `zotero-neo.xpi` from Ubuntu after both pass. |
+| Treat startup-file logging as state-change diagnostics, not a periodic trace. | Time throttles still cause unbounded idle growth and hide whether reader lifecycle is stable. | Log startup, failures, and first injection; fix reinjection churn if present. |
+| Theme every Neo-owned panel through Auto, Light, and Dark modes. | Existing preferences follow the OS media query while runtime overlays are hard-coded dark. | Auto follows verified Zotero theme state; all Neo panels share semantic palette tokens. |
+| Review the full LazyVim-inspired map before changing defaults. | `Ctrl-h/j/k/l`, `H/L`, `zh/zl`, picker precedence, and input focus interact across contexts. | Phase 2 begins with a complete conflict/precedence table and user review, then performs one clean cutover. |
 
 ## Release Contract Defaults
 

@@ -14,6 +14,12 @@ All notable changes to Zotero Neo are documented here.
 - Replaced the upstream update feed with a Neo-owned, initially empty feed.
 - Updated English, Chinese, and Spanish documentation while preserving the
   `ZorroStardust/zotero-vim-plus` and `finktank/zotero-vim` lineage.
+- Stopped periodic idle reader rescans from growing `zotero-neo-startup.log`.
+- Added GitHub Actions validation for native Ubuntu and Windows XPI builds.
+- Added independently named CI artifacts and guarded version-tag publication of
+  one canonical `zotero-neo.xpi`.
+- Added release metadata validation for manifest, compatibility, tag, and
+  `updates.json` consistency.
 
 ### Removed
 

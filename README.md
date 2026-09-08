@@ -109,6 +109,12 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 Both scripts run JS syntax and keybinding-table sync checks when `node` is
 available.
 
+GitHub Actions runs both builders on every push and pull request and uploads
+separate Linux and Windows XPI artifacts. Version tags additionally publish the
+Linux-built `zotero-neo.xpi` only after `tools/check-release.js` confirms that
+the tag, manifest version, compatibility range, and prepared `updates.json`
+entry agree. Add the update-feed entry before creating the release tag.
+
 ```
 Zotero-Neo/
 ├── manifest.json          Plugin manifest (ID, version, Zotero version range)
@@ -121,7 +127,11 @@ Zotero-Neo/
 │   ├── preferences.xhtml  Preferences panel UI (XUL/HTML hybrid)
 │   └── prefs.js           Preferences panel JS (reads/writes Firefox prefs)
 ├── tools/
+│   ├── build.ps1          Windows XPI builder
+│   ├── check-release.js   Validates tag and update metadata before release
 │   └── check-sync.js      Verifies the keybinding tables stay in sync
+├── .github/workflows/
+│   └── build.yml          Linux/Windows CI artifacts and guarded tag releases
 └── icons/
     ├── icon-64x64.png     Plugin icon (preferences pane, manifest)
     ├── icon-128x128.png   Plugin icon (manifest)

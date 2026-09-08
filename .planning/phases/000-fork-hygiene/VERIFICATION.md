@@ -7,12 +7,12 @@
 | Runtime uses `ZoteroNeo` and `[ZoteroNeo]` | AST/text searches plus successful syntax checks | Passed |
 | Preferences and pane IDs are isolated | Source assertions for all three preference consumers and XHTML/runtime pane IDs | Passed statically |
 | Manifest/update channel is Neo-owned | Parsed source and packaged manifest/update JSON | Passed statically |
-| Both build scripts target `zotero-neo.xpi` | Source inspection; Unix build execution | Partial |
+| Both build scripts target and produce `zotero-neo.xpi` | Local Unix build plus successful Ubuntu/Windows GitHub Actions jobs | Passed |
 | XPI contains only intended source/assets | Python `zipfile` member-set comparison | Passed |
 | Packaged files contain no collision-bearing upstream identity | Forbidden-token scan of every packaged text member | Passed |
 | Localized documentation and lineage are correct | Required-string assertions for README variants and `AGENTS.md` | Passed |
-| XPI installs, starts, and preserves baseline behavior | Requires Zotero runtime | Blocked |
-| Upstream and Neo coexist without preference/update collision | Requires Zotero/upstream installation | Blocked |
+| XPI installs, starts, and preserves baseline behavior | User installed the WSL-built XPI and reported no functional problem in the initial smoke | Partial — broad matrix not recorded |
+| Upstream and Neo coexist without preference/update collision | Requires side-by-side Zotero/upstream installation | Blocked |
 
 ## Evidence Observed
 
@@ -34,6 +34,9 @@
 - `updates.json` parses as a new-ID feed with an empty updates list.
 - Packaged forbidden-token scan returned no matches.
 - `git diff --check` returned no errors.
+- User runtime evidence: the WSL-built XPI installed and showed no functional problem in the initial smoke.
+- User runtime observation: `zotero-neo-startup.log` contains steady-state `rescan ... newlyInjected=0` entries every approximately five seconds; Phase 0.1 identified and removed that producer.
+- GitHub Actions run `34189504069` passed both Ubuntu `build.sh` and Windows `build.ps1` jobs and uploaded independently named XPI artifacts.
 
 ## Coverage
 
@@ -43,6 +46,7 @@
 - Runtime/preferences binding synchronization
 - Manifest/update JSON parsing
 - Unix packaging
+- Windows packaging through GitHub Actions
 - Exact XPI payload
 - Collision-string absence in packaged text
 - Documentation identity and lineage
@@ -50,8 +54,8 @@
 
 ### Partial
 
-- Windows builder: default output and packaging code inspected, but the script was not executed.
-- Preference isolation: source wiring verified, persistence behavior not executed.
+- Host smoke: installation/startup and ordinary use passed by user report, but the detailed main/reader/note/coexistence matrix was not recorded.
+- Diagnostics: the supplied Windows log confirms periodic five-second steady-state rescan writes; the source fix passes a focused VM smoke but awaits host retest.
 
 ## Failed Checks
 
@@ -59,22 +63,22 @@ None.
 
 ## Skipped Checks
 
-- `tools/build.ps1`: neither `pwsh` nor `powershell` is installed in WSL.
-- Zotero install/startup: Zotero is not installed in WSL.
-- GUI preference-pane and feature smoke tests: require a real Zotero host environment.
+- Agent-driven GUI checks: this WSL session cannot directly operate the user's Zotero host.
+- Post-fix idle logging and reader restoration: require installing the newly built XPI.
+- Side-by-side upstream/Neo coexistence: not yet exercised.
 
 ## Untested Claims
 
-- Zotero accepts and displays the new installed identity.
-- The preference pane opens repeatedly and persists Neo-only settings.
-- Runtime logs use the new prefix/file in a real profile.
+- Zotero displays every expected installed-identity field.
+- The preference pane persists Neo-only settings across restart.
 - Neo can coexist with the upstream add-on without overwriting settings or updates.
-- Main navigation, PDF motions/search, Visual annotations, Insert/comment input, notes, pickers, tab cycling, and reader split retain baseline behavior.
+- Main navigation, PDF motions/search, Visual annotations, Insert/comment input, notes, pickers, tab cycling, and reader split each pass a recorded regression matrix.
+- Idle logging remains bounded after reader restoration and normal toolbar activity.
 
 ## Gaps
 
-The PRD Phase 0 acceptance criteria include installation, startup, and baseline runtime behavior. Static/package checks cannot prove those properties.
+The broad user smoke and Windows CI resolve the previous installation/build blockers. Phase 0 still requires a post-fix Zotero logging/injection smoke and side-by-side coexistence evidence.
 
 ## Result
 
-`blocked` — implementation and WSL-available verification passed; Windows PowerShell and Zotero runtime verification remain required before Phase 0 completion.
+`blocked` — implementation, Linux/Windows packaging, CI artifacts, release guards, and initial user host smoke pass; install the new XPI and verify bounded idle logging plus reader restoration before Phase 0 completion.

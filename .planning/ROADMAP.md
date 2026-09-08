@@ -2,11 +2,13 @@
 
 ## Overview
 
-The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing build but an unsafe upstream identity. Delivery proceeds in strict PRD order: isolate the fork identity first, then add a low-risk history bridge, cut over the default keyboard language, add optional search integration, add safe native tag mutation, add discoverability, and finally prove the full workflow in Zotero.
+The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing build but an unsafe upstream identity. Delivery isolates the fork identity first, closes release automation and diagnostics, adds host-aware theming, then resumes the PRD order: reader history, the default keyboard language, optional search integration, safe native tag mutation, discoverability, and final Zotero verification.
 
 ## Phases
 
 - [ ] **Phase 0 — Fork hygiene**
+- [ ] **Phase 0.1 — Release automation and diagnostics**
+- [ ] **Phase 0.2 — Theme-aware UI**
 - [ ] **Phase 1 — Reading history**
 - [ ] **Phase 2 — Zotero Neo keymap**
 - [ ] **Phase 3 — Spotlight adapter**
@@ -29,16 +31,53 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 - AGPL and both upstream lineage hops are explicit.
 
 **Plans:** 1
-**Plans:**
 
-- [ ] `000-01` — `.planning/phases/000-fork-hygiene/PLAN.md`
+- [x] `000-01` — `.planning/phases/000-fork-hygiene/PLAN.md`
 
-**Status:** Implemented; blocked on Windows/PowerShell and Zotero host verification.
+**Status:** Identity implementation and initial user smoke complete; final verification closes with Phase 0.1.
+
+### Phase 0.1 — Release automation and diagnostics
+
+**Goal:** Prove both native build paths, publish reusable XPI artifacts, prepare safe tag releases, and stop idle startup-log growth.
+**Depends on:** Phase 0 implementation.
+**Requirements:** OPS-01–OPS-05.
+**Success Criteria:**
+
+- Ubuntu runs `./build.sh`; Windows runs `tools/build.ps1`; both upload independently named artifacts.
+- A matching version tag publishes one canonical `zotero-neo.xpi` only after both builds and metadata checks pass.
+- Release permissions are scoped to the publishing job.
+- Idle Zotero sessions append no periodic startup-log entries while first injection and failures remain diagnosable.
+- Phase 0 verification records the user smoke result and exact remaining boundaries.
+
+**Plans:** 1
+
+- [ ] `000.1-01` — `.planning/phases/000.1-release-diagnostics/PLAN.md`
+
+**Status:** Implemented; Ubuntu/Windows CI passed. Awaiting post-fix Windows Zotero logging and reader-restoration smoke.
+
+### Phase 0.2 — Theme-aware UI
+
+**Goal:** Give every Neo-owned panel Auto, Light, and Dark appearance modes, with Auto following Zotero's active theme.
+**Depends on:** Phase 0.1 verified.
+**Requirements:** THEME-01–THEME-05.
+**Success Criteria:**
+
+- Auto follows a verified Zotero theme signal, using system color scheme only as a fallback.
+- Forced Light and Dark override the host consistently.
+- Preferences, pickers, explorers, notes surfaces, and theme-sensitive indicators share one semantic palette.
+- Open panels update without losing focus, selection, scroll, or content.
+- Existing key handling and semantic annotation/link-hint colors remain intact.
+
+**Plans:** 1
+
+- [ ] `000.2-01` — `.planning/phases/000.2-theme-aware-ui/PLAN.md`
+
+**Status:** Planned; execute only after Phase 0.1 verification.
 
 ### Phase 1 — Reading history
 
 **Goal:** Bridge `Ctrl-o`/`Ctrl-i` to Zotero native reader history.
-**Depends on:** Phase 0 verified.
+**Depends on:** Phase 0.2 verified.
 **Requirements:** HIST-01–HIST-04.
 **Success Criteria:**
 
@@ -47,7 +86,9 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 - Insert mode and editable inputs retain native behavior.
 - Reloaded readers and multiple tabs keep independent behavior.
 
-**Plans:** TBD
+**Plans:** 1
+
+- [ ] `001-01` — `.planning/phases/001-reading-history/PLAN.md`
 
 ### Phase 2 — Zotero Neo keymap
 
@@ -109,7 +150,7 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 ### Phase 6 — QA, documentation, and release readiness
 
 **Goal:** Prove the PRD v0.1 workflow, record known limitations, and align release documentation/metadata with observed behavior.
-**Depends on:** Phases 0–5 verified individually.
+**Depends on:** Phases 0, 0.1, 0.2, and 1–5 verified individually.
 **Requirements:** QA-01–QA-07.
 **Success Criteria:**
 
@@ -124,9 +165,11 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 
 | Phase | Plans complete | Status | Completed |
 |---:|---:|---|---|
-| 0 | 0/1 | Blocked — host verification | - |
-| 1 | 0/TBD | Pending | - |
-| 2 | 0/TBD | Pending | - |
+| 0 | 1/1 | Implementation complete; closure in 0.1 | - |
+| 0.1 | 0/1 | Planned next | - |
+| 0.2 | 0/1 | Planned second | - |
+| 1 | 0/1 | Planned third | - |
+| 2 | 0/TBD | Pending design review | - |
 | 3 | 0/TBD | Pending | - |
 | 4 | 0/TBD | Pending | - |
 | 5 | 0/TBD | Pending | - |

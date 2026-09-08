@@ -94,6 +94,18 @@ cd Zotero-Neo
 该脚本还会校验 JS 文件语法以及按键绑定表（zoteroVim.js 与 prefs.js）
 是否保持同步。
 
+Windows 可使用对应的 PowerShell 脚本，无需 bash：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build.ps1
+```
+
+GitHub Actions 会在每次 push 和 pull request 中分别执行 Linux 与 Windows
+构建并上传两个 XPI 构建产物。创建版本标签时，仅在
+`tools/check-release.js` 确认标签、清单版本、兼容范围及预先准备的
+`updates.json` 条目一致后，发布 Linux 构建的标准 `zotero-neo.xpi`。
+创建发布标签前必须先加入对应的更新源条目。
+
 ```
 Zotero-Neo/
 ├── manifest.json          插件清单（ID、版本、Zotero 版本范围）
@@ -106,7 +118,11 @@ Zotero-Neo/
 │   ├── preferences.xhtml  偏好设置面板 UI（XUL/HTML 混合）
 │   └── prefs.js           偏好设置面板 JS（读写 Firefox 偏好）
 ├── tools/
+│   ├── build.ps1          Windows XPI 构建脚本
+│   ├── check-release.js   发布前校验标签和更新元数据
 │   └── check-sync.js      校验按键绑定表保持同步
+├── .github/workflows/
+│   └── build.yml          Linux/Windows CI 产物及受保护的标签发布
 └── icons/
     ├── icon-64x64.png     插件图标（偏好设置面板、清单）
     ├── icon-128x128.png   插件图标（清单）

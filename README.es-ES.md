@@ -80,6 +80,19 @@ necesitan herramientas de compilación ni gestores de paquetes — solo `zip`
 `node` está disponible, el script también verifica la sintaxis de los archivos
 JS y que las tablas de atajos (zoteroVim.js vs prefs.js) estén sincronizadas.
 
+En Windows se puede usar el script de PowerShell equivalente, sin bash:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build.ps1
+```
+
+GitHub Actions ejecuta ambos compiladores en cada push y pull request y sube
+artefactos XPI separados para Linux y Windows. Una etiqueta de versión publica
+el `zotero-neo.xpi` compilado en Linux solo después de que
+`tools/check-release.js` valide la etiqueta, la versión del manifest, la
+compatibilidad y la entrada preparada de `updates.json`. La entrada de
+actualización debe añadirse antes de crear la etiqueta.
+
 ```
 Zotero-Neo/
 ├── manifest.json          Manifest del plugin (ID, versión, rango de versión de Zotero)
@@ -92,7 +105,11 @@ Zotero-Neo/
 │   ├── preferences.xhtml  Interfaz de usuario del panel de preferencias (híbrido XUL/HTML)
 │   └── prefs.js           JS del panel de preferencias (lee/escribe preferencias de Firefox)
 ├── tools/
+│   ├── build.ps1          Compilador XPI para Windows
+│   ├── check-release.js   Valida la etiqueta y metadatos antes de publicar
 │   └── check-sync.js      Verifica que las tablas de atajos sigan sincronizadas
+├── .github/workflows/
+│   └── build.yml          CI Linux/Windows y publicación protegida por etiqueta
 └── icons/
     ├── icon-64x64.png     Icono del plugin (panel de preferencias, manifest)
     ├── icon-128x128.png   Icono del plugin (manifest)

@@ -4,6 +4,9 @@ zotero-neo.xpi
 # Local product specification
 Zotero Neo — Product Requirements Document.md
 
+# Runtime diagnostics copied from a Zotero profile
+zotero-neo-startup.log
+
 # AI session scratch data
 .sisyphus/
 

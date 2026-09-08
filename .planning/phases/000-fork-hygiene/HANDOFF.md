@@ -2,21 +2,23 @@
 
 ## Resume Goal
 
-Complete the remaining host/manual verification for the Zotero Neo identity cutover, then close Phase 0 or route any observed failure back to the smallest owning change.
+Close Phase 0 through `.planning/phases/000.1-release-diagnostics/PLAN.md`: eliminate recurring idle startup-log writes, prove both packaging paths in GitHub Actions, and retain the recorded user host smoke.
 
 ## Current State
 
 - Branch: `feat/m0-fork-hygiene`
-- Implementation: complete for M0 scope
+- Identity implementation: complete and committed as `29e10e6`
 - Static/Unix packaging verification: passed
-- Phase status: blocked on external runtime verification
-- Next milestone: M1 must not start yet
+- User host smoke: WSL-built XPI installed; no functional problem reported
+- Active defect: `zotero-neo-startup.log` appears to gain a line approximately every second
+- Phase status: final verification moves through Phase 0.1
+- Next feature work: Phase 0.2 theme-aware UI; M1 follows
 
 ## Required Reading
 
-- `.planning/phases/000-fork-hygiene/PLAN.md`
-- `.planning/phases/000-fork-hygiene/SUMMARY.md`
-- `.planning/phases/000-fork-hygiene/REVIEW.md`
+- `.planning/phases/000.1-release-diagnostics/CONTEXT.md`
+- `.planning/phases/000.1-release-diagnostics/RESEARCH.md`
+- `.planning/phases/000.1-release-diagnostics/PLAN.md`
 - `.planning/phases/000-fork-hygiene/VERIFICATION.md`
 - `AGENTS.md`
 
@@ -26,26 +28,28 @@ Complete the remaining host/manual verification for the Zotero Neo identity cuto
 - Clean Neo XPI packaging with no forbidden upstream collision strings.
 - Localized README and contributor documentation updates.
 - Changelog and planning evidence.
+- Initial installation/startup/ordinary-use smoke by the user.
 
 ## Pending Work
 
-1. Execute `powershell -ExecutionPolicy Bypass -File tools\build.ps1` on Windows and confirm `zotero-neo.xpi` is produced.
-2. Install the XPI in Zotero and restart if prompted.
-3. Confirm Add-ons and Preferences display Zotero Neo and the preference pane opens more than once.
-4. Confirm the profile log is `zotero-neo-startup.log` and entries use `[ZoteroNeo]`.
-5. Verify Neo preferences do not read or modify upstream settings; ideally test coexistence with Zotero Vim Plus.
-6. Smoke main navigation, PDF hjkl/search, Visual annotation, Insert/comment input, notes, item/tab picker, tab cycling, and split reader.
-7. Record observed pass/fail results in `VERIFICATION.md`.
+1. Capture several consecutive repeated lines from `zotero-neo-startup.log` while Zotero is idle.
+2. Fix the producing path so file diagnostics are state-change-based rather than periodic.
+3. Add Ubuntu and Windows GitHub Actions build jobs and independently named artifacts.
+4. Add version/update validation and tag-based publication of one canonical `zotero-neo.xpi`.
+5. Confirm reader restoration/injection remains functional and idle logging stops growing.
+6. Record Actions and runtime evidence in `VERIFICATION.md` and close Phases 0/0.1.
+7. Keep upstream/Neo coexistence as an explicit untested boundary until exercised.
 
-## Blockers
+## Environment Constraint
 
-The active environment is WSL without Zotero, `pwsh`, or Windows PowerShell. Installing Zotero through `paru` in WSL is not required and would not prove the Windows build path or the real host Zotero GUI/integration behavior. Do not add package-manager or GUI dependencies to the repository for this verification.
+The agent environment is WSL without a directly controllable Zotero GUI or Windows PowerShell. Do not install Zotero or PowerShell through `paru`; Windows packaging belongs in GitHub Actions, and host UI behavior remains manual Zotero evidence.
 
 ## Verification So Far
 
 - Unix build, JavaScript syntax, binding sync, JSON parsing, XPI payload, packaged identity scan, documentation assertions, and whitespace checks passed.
-- No static check failed.
+- The user reports no functional problem with the installed WSL-built XPI.
+- The real profile contains the Neo diagnostic filename, but its recurring cadence remains a release blocker.
 
 ## Next Action
 
-On a Windows host with Zotero installed, run `tools\build.ps1`, install the generated `zotero-neo.xpi`, execute the seven pending checks above, and append the exact observations to `.planning/phases/000-fork-hygiene/VERIFICATION.md` before changing roadmap or requirement completion status.
+Obtain the repeated log-line text, then execute `.planning/phases/000.1-release-diagnostics/PLAN.md`. Do not start theme implementation or M1 until Phase 0.1 passes.

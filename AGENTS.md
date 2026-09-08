@@ -27,11 +27,12 @@ Creates `zotero-neo.xpi` — a zip of `manifest.json`, `bootstrap.js`, `content/
   reader state object.
 
 ### Testing
-There is **no automated test suite**. Test changes by:
+There is **no automated Zotero runtime test suite**. GitHub Actions runs both
+native builders and their syntax/binding checks. Test behavior changes by:
 1. Building (`./build.sh`)
 2. Re-installing the `.xpi` in Zotero
 3. Restarting Zotero
-4. Manually exercising the changed functionality in the PDF reader
+4. Manually exercising the changed functionality in the relevant Zotero surface
 
 ## Code Style
 
@@ -142,6 +143,9 @@ see README "Architecture Notes → Zotero built-in shortcut conflicts (Read Alou
 | `content/prefs.js` | Preferences panel JS + the hand-maintained default-binding tables |
 | `content/preferences.xhtml` | Preferences panel UI (XUL/HTML hybrid) |
 | `tools/check-sync.js` | Verifies `prefs.js` binding tables match `zoteroVim.js` (run by `build.sh`) |
+| `tools/build.ps1` | Windows-native XPI builder with POSIX archive entry paths |
+| `tools/check-release.js` | Validates a release tag against manifest and update metadata |
+| `.github/workflows/build.yml` | Ubuntu/Windows builds, XPI artifacts, and guarded tag releases |
 | `manifest.json` | Extension manifest |
 | `build.sh` | Builds the `.xpi` (runs syntax + binding-sync checks when `node` is available) |
 | `FUTURE_FEATURES.md` | Triaged ideas for new features (Tier 1–3 by effort) |
@@ -153,5 +157,6 @@ see README "Architecture Notes → Zotero built-in shortcut conflicts (Read Alou
   or browser APIs not available in Gecko.
 - **No external dependencies.** Do not add npm packages, CDN scripts, or external libraries.
 - **No TypeScript.** The codebase is plain JavaScript.
-- **No CI.** There are no automated checks. Code quality is maintained manually.
+- **CI covers packaging only.** GitHub Actions validates both builders, syntax, binding sync,
+  release metadata, and artifacts; Zotero GUI/runtime behavior still requires manual verification.
 - **No pre-commit hooks.** Linting is optional and manual.
