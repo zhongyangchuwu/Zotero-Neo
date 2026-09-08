@@ -391,10 +391,10 @@ var ZoteroNeo = {
 
   _onRenderToolbar(event) {
     const { reader } = event;
+    if (!this._ensureReaderInjected(reader)) return;
     try {
-      zvLogFile('renderToolbar reader ' + (reader?._instanceID || '?'));
+      zvLogFile('renderToolbar initiated reader ' + (reader?._instanceID || '?'));
     } catch (_) {}
-    this._ensureReaderInjected(reader);
   },
 
   /**
@@ -432,28 +432,14 @@ var ZoteroNeo = {
       for (const reader of readers) {
         if (this._ensureReaderInjected(reader)) injected++;
       }
-      if (readers.length > 0) {
-        // Both logs share the 5 s throttle — the unthrottled zvLogFile call
-        // used to write ~1 line per second and bloated zotero-neo-startup.log.
+      if (injected > 0) {
         const msg = 'readers=' + readers.length + ' newlyInjected=' + injected;
-        this._logRescan(msg);
-        const now = Date.now();
-        if (!this._lastRescanFileTS || now - this._lastRescanFileTS >= 5000) {
-          this._lastRescanFileTS = now;
-          try { zvLogFile('rescan ' + msg); } catch (_) {}
-        }
+        Zotero.debug('[ZoteroNeo] rescan: ' + msg);
+        try { zvLogFile('rescan ' + msg); } catch (_) {}
       }
     } catch (e) {
       Zotero.debug('[ZoteroNeo] _rescanSelectedReader error: ' + e);
     }
-  },
-
-  /** Rate-limited scan logging (at most one line per 5 s). */
-  _logRescan(msg) {
-    const now = Date.now();
-    if (this._lastScanLogTS && now - this._lastScanLogTS < 5000) return;
-    this._lastScanLogTS = now;
-    Zotero.debug('[ZoteroNeo] rescan: ' + msg);
   },
 
   /**
