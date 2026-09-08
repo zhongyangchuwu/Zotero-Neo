@@ -22,6 +22,7 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
         node --check content/zoteroVimReader.js
         node --check content/zoteroVimMain.js
         node --check content/prefs.js
+        node --check tools/check-release.js
         node tools/check-sync.js
     } finally {
         Pop-Location

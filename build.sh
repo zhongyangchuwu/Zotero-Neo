@@ -16,6 +16,7 @@ if command -v node >/dev/null 2>&1; then
   node --check content/zoteroVimReader.js
   node --check content/zoteroVimMain.js
   node --check content/prefs.js
+  node --check tools/check-release.js
   node tools/check-sync.js
 else
   echo "Warning: node not found — skipping syntax and sync checks."

@@ -1,0 +1,82 @@
+name: Build and release
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    name: Build on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Build XPI
+        run: ./build.sh
+      - name: Upload Linux XPI
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-neo-linux
+          path: zotero-neo.xpi
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Build XPI
+        shell: pwsh
+        run: ./tools/build.ps1
+      - name: Upload Windows XPI
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-neo-windows
+          path: zotero-neo.xpi
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - build-linux
+      - build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Validate release metadata
+        run: node tools/check-release.js "$GITHUB_REF_NAME"
+      - name: Download canonical XPI
+        uses: actions/download-artifact@v5
+        with:
+          name: zotero-neo-linux
+          path: release
+      - name: Verify XPI archive
+        run: unzip -t release/zotero-neo.xpi
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          release/zotero-neo.xpi
+          --verify-tag
+          --generate-notes
+          --title "Zotero Neo $GITHUB_REF_NAME"
