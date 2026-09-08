@@ -2,12 +2,12 @@
 /* eslint-disable no-unused-vars */
 
 /**
- * Zotero Vim Plus — reader-side methods: outline explorer, visual /
- * cursor mode, annotations. Loaded by bootstrap.js after zoteroVim.js;
- * every method here is merged onto the ZoteroVim object.
+ * Zotero Neo — reader-side methods: outline explorer, visual / cursor mode,
+ * and annotations. Loaded by bootstrap.js after core.js; every method here is
+ * merged onto the ZoteroNeo object.
  */
 
-Object.assign(ZoteroVim, {
+Object.assign(ZoteroNeo, {
   _onReaderOutlineExplorerKeyDown(event, reader, state, pdfWin) {
     const keyStr = this._keyString(event);
     if (!keyStr) return false;
@@ -186,7 +186,7 @@ Object.assign(ZoteroVim, {
         this._setReaderOutlineExplorerStatus(state, 'No outline available');
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _loadReaderOutlineExplorer error: ' + e);
+      Zotero.debug('[ZoteroNeo] _loadReaderOutlineExplorer error: ' + e);
       state.outlineExplorerTree = [];
       this._refreshReaderOutlineExplorer(state);
       this._setReaderOutlineExplorerStatus(state, 'Error loading outline');
@@ -503,7 +503,7 @@ Object.assign(ZoteroVim, {
         return true;
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _goToReaderOutlineEntry error: ' + e);
+      Zotero.debug('[ZoteroNeo] _goToReaderOutlineEntry error: ' + e);
     }
     return false;
   },
@@ -529,7 +529,7 @@ Object.assign(ZoteroVim, {
       match.click();
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _clickNativeReaderOutlineEntry error: ' + e);
+      Zotero.debug('[ZoteroNeo] _clickNativeReaderOutlineEntry error: ' + e);
       return false;
     }
   },
@@ -1214,7 +1214,7 @@ Object.assign(ZoteroVim, {
       }
       this._updateVisualCursor(state, pdfWin);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _cursorMoveByGranularity error: ' + e);
+      Zotero.debug('[ZoteroNeo] _cursorMoveByGranularity error: ' + e);
     }
   },
 
@@ -1226,7 +1226,7 @@ Object.assign(ZoteroVim, {
       }
       this._updateVisualCursor(state, pdfWin);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _cursorMoveLine error: ' + e);
+      Zotero.debug('[ZoteroNeo] _cursorMoveLine error: ' + e);
     }
   },
 
@@ -1805,7 +1805,7 @@ Object.assign(ZoteroVim, {
       this._updateVisualCursor(state, pdfWin);
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _setVisualSelectionFromAnchor error: ' + e);
+      Zotero.debug('[ZoteroNeo] _setVisualSelectionFromAnchor error: ' + e);
       return false;
     }
   },
@@ -1934,7 +1934,7 @@ Object.assign(ZoteroVim, {
       state.cursorPreferredX = this._cursorCurrentX(pdfWin.document, sel, state.cursorPreferredX);
       this._updateVisualCursor(state, pdfWin);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _cursorMoveToLineBoundary error: ' + e);
+      Zotero.debug('[ZoteroNeo] _cursorMoveToLineBoundary error: ' + e);
     }
   },
 
@@ -1985,7 +1985,7 @@ Object.assign(ZoteroVim, {
       if (!target?.node) return;
       this._setVisualSelectionFromAnchor(state, pdfWin, target.node, target.offset);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _extendToLineBoundary error: ' + e);
+      Zotero.debug('[ZoteroNeo] _extendToLineBoundary error: ' + e);
     }
   },
 
@@ -2066,7 +2066,7 @@ Object.assign(ZoteroVim, {
       const targetOffset = Math.max(0, Math.min(pos.off, targetNode.length));
       this._setVisualSelectionFromAnchor(state, pdfWin, targetNode, targetOffset);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _extendByWord error: ' + e);
+      Zotero.debug('[ZoteroNeo] _extendByWord error: ' + e);
     }
   },
 
@@ -2491,9 +2491,9 @@ Object.assign(ZoteroVim, {
       }
       pdfWin.focus();
       this._updateVisualCursor(state, pdfWin);
-      Zotero.debug('[ZoteroVim] Hint selected: ' + badge.label);
+      Zotero.debug('[ZoteroNeo] Hint selected: ' + badge.label);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _activateHint error: ' + e);
+      Zotero.debug('[ZoteroNeo] _activateHint error: ' + e);
     }
   },
 
@@ -2643,7 +2643,7 @@ Object.assign(ZoteroVim, {
       pdfWin.focus();
       this._updateVisualCursor(state, pdfWin);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _placeCursorAtFirstText error: ' + e);
+      Zotero.debug('[ZoteroNeo] _placeCursorAtFirstText error: ' + e);
     }
   },
 
@@ -2699,7 +2699,7 @@ Object.assign(ZoteroVim, {
         this._showStatus(state, '▶ ' + selLen + ' chars', 400);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _extendByLine error: ' + e);
+      Zotero.debug('[ZoteroNeo] _extendByLine error: ' + e);
     }
   },
 
@@ -2734,7 +2734,7 @@ Object.assign(ZoteroVim, {
       const targetOffset = Math.max(0, Math.min(pos.off, targetNode.length));
       this._setVisualSelectionFromAnchor(state, pdfWin, targetNode, targetOffset);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _extendByChar error: ' + e);
+      Zotero.debug('[ZoteroNeo] _extendByChar error: ' + e);
     }
   },
 
@@ -2851,12 +2851,12 @@ Object.assign(ZoteroVim, {
         const selLen = sel.toString().length;
         this._showStatus(state, '▶ ' + selLen + ' chars', 600);
         this._updateVisualCursor(state, pdfWin);
-        Zotero.debug('[ZoteroVim] _extendByParagraph dir=' + direction + ' len=' + selLen);
+        Zotero.debug('[ZoteroNeo] _extendByParagraph dir=' + direction + ' len=' + selLen);
       } catch (e) {
-        Zotero.debug('[ZoteroVim] _extendByParagraph range error: ' + e);
+        Zotero.debug('[ZoteroNeo] _extendByParagraph range error: ' + e);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _extendByParagraph error: ' + e);
+      Zotero.debug('[ZoteroNeo] _extendByParagraph error: ' + e);
     }
   },
 
@@ -2882,7 +2882,7 @@ Object.assign(ZoteroVim, {
       if ((sel.rangeCount === 0 || sel.isCollapsed) && state.visualCursor) {
         const vc = state.visualCursor;
         if (!vc.textNode.isConnected) {
-          Zotero.debug('[ZoteroVim] _extendBySentence: visualCursor node detached');
+          Zotero.debug('[ZoteroNeo] _extendBySentence: visualCursor node detached');
           return;
         }
         try {
@@ -2892,7 +2892,7 @@ Object.assign(ZoteroVim, {
           sel.removeAllRanges();
           sel.addRange(r);
         } catch (e) {
-          Zotero.debug('[ZoteroVim] _extendBySentence: restore failed: ' + e);
+          Zotero.debug('[ZoteroNeo] _extendBySentence: restore failed: ' + e);
           return;
         }
       }
@@ -2911,7 +2911,7 @@ Object.assign(ZoteroVim, {
         if (tn && tn.nodeType === 3 && tn.data?.trim()) textNodes.push(tn);
       }
       if (textNodes.length === 0) {
-        Zotero.debug('[ZoteroVim] _extendBySentence: no text nodes found');
+        Zotero.debug('[ZoteroNeo] _extendBySentence: no text nodes found');
         return;
       }
 
@@ -2930,7 +2930,7 @@ Object.assign(ZoteroVim, {
         }
       }
       if (focusIdx < 0) {
-        Zotero.debug('[ZoteroVim] _extendBySentence: focusNode not in textNodes ' +
+        Zotero.debug('[ZoteroNeo] _extendBySentence: focusNode not in textNodes ' +
                      '(type=' + focusNode?.nodeType + ' data="' +
                      (focusNode?.data || focusNode?.textContent || '').slice(0, 20) + '")');
         return;
@@ -3025,13 +3025,13 @@ Object.assign(ZoteroVim, {
         const selLen = sel.toString().length;
         this._showStatus(state, '▶ ' + selLen + ' chars', 600);
         this._updateVisualCursor(state, pdfWin);
-        Zotero.debug('[ZoteroVim] _extendBySentence dir=' + direction +
+        Zotero.debug('[ZoteroNeo] _extendBySentence dir=' + direction +
                      ' focusIdx=' + focusIdx + ' len=' + selLen);
       } catch (e) {
-        Zotero.debug('[ZoteroVim] _extendBySentence range error: ' + e);
+        Zotero.debug('[ZoteroNeo] _extendBySentence range error: ' + e);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _extendBySentence error: ' + e);
+      Zotero.debug('[ZoteroNeo] _extendBySentence error: ' + e);
     }
   },
 
@@ -3073,7 +3073,7 @@ Object.assign(ZoteroVim, {
 
       this._scrollContainerTo(container, Math.max(0, newTop), { smooth: true });
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _scrollToPagePosition error: ' + e);
+      Zotero.debug('[ZoteroNeo] _scrollToPagePosition error: ' + e);
     }
   },
 
@@ -3162,23 +3162,23 @@ Object.assign(ZoteroVim, {
       // supported in Gecko and allows "backward" selections where focus < anchor.
       try {
         sel.setBaseAndExtent(oldFocusNode, oldFocusOff, oldAnchorNode, oldAnchorOff);
-        Zotero.debug('[ZoteroVim] _swapVisualEnds: setBaseAndExtent OK' +
+        Zotero.debug('[ZoteroNeo] _swapVisualEnds: setBaseAndExtent OK' +
                      ' newAnchorOff=' + oldFocusOff + ' newFocusOff=' + oldAnchorOff);
       } catch (e1) {
-        Zotero.debug('[ZoteroVim] _swapVisualEnds: setBaseAndExtent failed: ' + e1);
+        Zotero.debug('[ZoteroNeo] _swapVisualEnds: setBaseAndExtent failed: ' + e1);
         // Fallback: collapse to old focus then extend to old anchor.
         try {
           sel.collapse(oldFocusNode, oldFocusOff);
           sel.extend(oldAnchorNode, oldAnchorOff);
-          Zotero.debug('[ZoteroVim] _swapVisualEnds: collapse+extend fallback OK');
+          Zotero.debug('[ZoteroNeo] _swapVisualEnds: collapse+extend fallback OK');
         } catch (e2) {
-          Zotero.debug('[ZoteroVim] _swapVisualEnds: fallback also failed: ' + e2);
+          Zotero.debug('[ZoteroNeo] _swapVisualEnds: fallback also failed: ' + e2);
         }
       }
       state.visualPreferredX = this._cursorCurrentX(pdfWin.document, sel, state.visualPreferredX);
       this._updateVisualCursor(state, pdfWin);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _swapVisualEnds error: ' + e);
+      Zotero.debug('[ZoteroNeo] _swapVisualEnds error: ' + e);
     }
   },
 
@@ -3268,9 +3268,9 @@ Object.assign(ZoteroVim, {
       const sel = pdfWin.getSelection();
       if (!sel) return;
       sel.modify(alter, direction, granularity);
-      Zotero.debug('[ZoteroVim] selModify ' + direction + '/' + granularity + ' len=' + sel.toString().length);
+      Zotero.debug('[ZoteroNeo] selModify ' + direction + '/' + granularity + ' len=' + sel.toString().length);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _selModify error: ' + e);
+      Zotero.debug('[ZoteroNeo] _selModify error: ' + e);
     }
   },
 
@@ -3291,16 +3291,16 @@ Object.assign(ZoteroVim, {
     // Brief flash confirms the action fired (disappears when ✓/✗ arrives).
     const colorName = Object.entries(this.COLORS).find(([, v]) => v === color)?.[0] || color;
     this._showStatus(state, '▶ ' + colorName, 800);
-    Zotero.debug('[ZoteroVim] _highlight: color=' + color + ' (' + colorName + ')');
+    Zotero.debug('[ZoteroNeo] _highlight: color=' + color + ' (' + colorName + ')');
 
     const params = state.selectionParams ||
       (Date.now() - this._lastSelectionTS < 10000 ? this._lastSelectionParams : null);
-    Zotero.debug('[ZoteroVim] _highlight: hasParams=' + !!(params?.annotation) +
+    Zotero.debug('[ZoteroNeo] _highlight: hasParams=' + !!(params?.annotation) +
                  ' selText="' + (pdfWin.getSelection?.()?.toString?.() || '').slice(0, 40) + '"');
     if (params?.annotation) {
       state.selectionParams     = null;
       this._lastSelectionParams = null;
-      Zotero.debug('[ZoteroVim] _highlight: using params path, ann.text="' +
+      Zotero.debug('[ZoteroNeo] _highlight: using params path, ann.text="' +
                    (params.annotation.text || '').slice(0, 40) + '"');
       this._createAnnotationFromParams(state, reader, params.annotation, 'highlight', color, opts);
       return;
@@ -3352,14 +3352,14 @@ Object.assign(ZoteroVim, {
       if (ann.position)    item.annotationPosition  =
         typeof ann.position === 'string' ? ann.position : JSON.stringify(ann.position);
 
-      Zotero.debug('[ZoteroVim] _createAnnotationFromParams:'
+      Zotero.debug('[ZoteroNeo] _createAnnotationFromParams:'
         + ' sortIndex=' + JSON.stringify(ann.sortIndex)
         + ' pageLabel=' + JSON.stringify(ann.pageLabel)
         + ' item.annotationSortIndex=' + JSON.stringify(item.annotationSortIndex)
         + ' item.annotationPageLabel=' + JSON.stringify(item.annotationPageLabel));
 
       await item.saveTx();
-      Zotero.debug('[ZoteroVim] Created ' + type + ' id=' + item.id + ' color=' + color);
+      Zotero.debug('[ZoteroNeo] Created ' + type + ' id=' + item.id + ' color=' + color);
       state.lastAnnotationKey = item.key;
       this._showStatus(state, '✓ annotated', 1200);
       if (opts?.focusComment) {
@@ -3379,7 +3379,7 @@ Object.assign(ZoteroVim, {
         } catch (_) {}
       }, 100);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _createAnnotationFromParams error: ' + e);
+      Zotero.debug('[ZoteroNeo] _createAnnotationFromParams error: ' + e);
       this._showStatus(state, '✗ ' + (e.message || String(e)).slice(0, 40), 5000);
     }
   },
@@ -3392,10 +3392,10 @@ Object.assign(ZoteroVim, {
    * selection was built programmatically and that event didn't fire.
    */
   async _createAnnotationFromSelection(reader, state, pdfWin, type, color, opts = null) {
-    Zotero.debug('[ZoteroVim] _createAnnotation: start type=' + type + ' color=' + color);
+    Zotero.debug('[ZoteroNeo] _createAnnotation: start type=' + type + ' color=' + color);
     const sel = pdfWin.getSelection?.();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-      Zotero.debug('[ZoteroVim] _createAnnotation: no selection (isCollapsed=' + sel?.isCollapsed + ')');
+      Zotero.debug('[ZoteroNeo] _createAnnotation: no selection (isCollapsed=' + sel?.isCollapsed + ')');
       this._showStatus(state, '✗ no selection');
       return;
     }
@@ -3404,14 +3404,14 @@ Object.assign(ZoteroVim, {
       // Use text-node-level rects to avoid the spurious full-page rects that
       // range.getClientRects() emits for cross-page selections.
       const clientRects = this._getRangeTextRects(range, pdfWin.document);
-      Zotero.debug('[ZoteroVim] _createAnnotation: clientRects=' + clientRects.length);
+      Zotero.debug('[ZoteroNeo] _createAnnotation: clientRects=' + clientRects.length);
       if (clientRects.length === 0) {
         this._showStatus(state, '✗ no rects');
         return;
       }
 
       const text = sel.toString().normalize('NFKC').replace(/\n/g, ' ').replace(/ {2,}/g, ' ').trim();
-      Zotero.debug('[ZoteroVim] _createAnnotation: text="' + text.slice(0, 60) + '"');
+      Zotero.debug('[ZoteroNeo] _createAnnotation: text="' + text.slice(0, 60) + '"');
 
       const pdfViewer = pdfWin.PDFViewerApplication?.pdfViewer;
       if (!pdfViewer) { this._showStatus(state, '✗ no pdfViewer'); return; }
@@ -3448,7 +3448,7 @@ Object.assign(ZoteroVim, {
         .map(([pageIndex, { el, rects }]) => ({ pageIndex, el, rects }));
 
       if (pageGroups.length === 0) { this._showStatus(state, '✗ no page el'); return; }
-      Zotero.debug('[ZoteroVim] _createAnnotation: spanning ' + pageGroups.length + ' page(s)');
+      Zotero.debug('[ZoteroNeo] _createAnnotation: spanning ' + pageGroups.length + ' page(s)');
 
       // ── Convert screen rects → PDF coords for one page group ──────────────
       const toPdfRects = async ({ pageIndex, el: pageEl, rects: pageRects }) => {
@@ -3470,7 +3470,7 @@ Object.assign(ZoteroVim, {
               : pageEl.getBoundingClientRect().width;
             scale = renderedW / vp.width;
           } catch (e) {
-            Zotero.debug('[ZoteroVim] _createAnnotation: viewport err page ' + pageIndex + ': ' + e);
+            Zotero.debug('[ZoteroNeo] _createAnnotation: viewport err page ' + pageIndex + ': ' + e);
             return [];
           }
         }
@@ -3551,7 +3551,7 @@ Object.assign(ZoteroVim, {
       annotItem.annotationPageLabel  = pageLabel;
       annotItem.annotationPosition   = JSON.stringify(position);
 
-      Zotero.debug('[ZoteroVim] _createAnnotationFromSelection:'
+      Zotero.debug('[ZoteroNeo] _createAnnotationFromSelection:'
         + ' pageIndex=' + firstGroup.pageIndex
         + ' pdfPageH0=' + pdfPageH0
         + ' rect[3]=' + (firstPdfRects[0]?.[3])
@@ -3561,17 +3561,17 @@ Object.assign(ZoteroVim, {
         + ' item.annotationSortIndex=' + JSON.stringify(annotItem.annotationSortIndex)
         + ' item.annotationPageLabel=' + JSON.stringify(annotItem.annotationPageLabel));
 
-      Zotero.debug('[ZoteroVim] _createAnnotation: pos=' + annotItem.annotationPosition);
+      Zotero.debug('[ZoteroNeo] _createAnnotation: pos=' + annotItem.annotationPosition);
       try {
         await annotItem.saveTx();
       } catch (saveErr) {
         const msg = saveErr.message || String(saveErr);
-        Zotero.debug('[ZoteroVim] saveTx FAILED: ' + msg);
+        Zotero.debug('[ZoteroNeo] saveTx FAILED: ' + msg);
         this._showStatus(state, '✗ ' + msg.slice(0, 45), 5000);
         return;
       }
 
-      Zotero.debug('[ZoteroVim] Created ' + type + ' id=' + annotItem.id +
+      Zotero.debug('[ZoteroNeo] Created ' + type + ' id=' + annotItem.id +
                    ' pages=' + pageGroups.map(g => g.pageIndex + 1).join('+'));
 
       state.lastAnnotationKey = annotItem.key;
@@ -3594,7 +3594,7 @@ Object.assign(ZoteroVim, {
         } catch (_) {}
       }, 100);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _createAnnotationFromSelection error: ' + e);
+      Zotero.debug('[ZoteroNeo] _createAnnotationFromSelection error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 28));
     }
   },
@@ -3620,11 +3620,11 @@ Object.assign(ZoteroVim, {
         const clipboardHelper = Components.classes['@mozilla.org/widget/clipboardhelper;1']
           .getService(Components.interfaces.nsIClipboardHelper);
         clipboardHelper.copyString(text);
-        Zotero.debug('[ZoteroVim] Copied ' + text.length + ' chars');
+        Zotero.debug('[ZoteroNeo] Copied ' + text.length + ' chars');
         this._showStatus(state, '✓ copied ' + text.length + ' chars', 1200);
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _copySelection error: ' + e);
+      Zotero.debug('[ZoteroNeo] _copySelection error: ' + e);
     }
     this._setMode(state, 'normal');
     try { pdfWin.getSelection()?.removeAllRanges(); } catch (_) {}
@@ -3657,18 +3657,18 @@ Object.assign(ZoteroVim, {
       setTimeout(() => {
         try {
           const inp = readerWin.document.querySelector('.primary-view .find-popup input');
-          if (!inp) { Zotero.debug('[ZoteroVim] find input not found'); return; }
+          if (!inp) { Zotero.debug('[ZoteroNeo] find input not found'); return; }
           inp.value = text;
           inp.dispatchEvent(new readerWin.Event('input', { bubbles: true }));
-          Zotero.debug('[ZoteroVim] find input set: "' + text + '"');
+          Zotero.debug('[ZoteroNeo] find input set: "' + text + '"');
         } catch (e2) {
-          Zotero.debug('[ZoteroVim] fill find input error: ' + e2);
+          Zotero.debug('[ZoteroNeo] fill find input error: ' + e2);
         }
       }, 200);
 
-      Zotero.debug('[ZoteroVim] searchSelection: "' + text + '"');
+      Zotero.debug('[ZoteroNeo] searchSelection: "' + text + '"');
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _searchSelection error: ' + e);
+      Zotero.debug('[ZoteroNeo] _searchSelection error: ' + e);
     }
     this._setMode(state, 'normal');
     try { pdfWin.getSelection()?.removeAllRanges(); } catch (_) {}
@@ -3684,11 +3684,11 @@ Object.assign(ZoteroVim, {
       const ir = reader._internalReader;
       if (typeof ir?.toggleFindPopup === 'function') {
         ir.toggleFindPopup(Cu.cloneInto({ open: true }, reader._iframeWindow));
-        Zotero.debug('[ZoteroVim] openSearch: toggleFindPopup OK');
+        Zotero.debug('[ZoteroNeo] openSearch: toggleFindPopup OK');
         return;
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] openSearch toggleFindPopup error: ' + e);
+      Zotero.debug('[ZoteroNeo] openSearch toggleFindPopup error: ' + e);
     }
 
     // Fallback: focus the find-popup input in the reader.html DOM directly.
@@ -3739,11 +3739,11 @@ Object.assign(ZoteroVim, {
       const ir = reader?._internalReader;
       if (typeof ir?.toggleFindPopup === 'function') {
         ir.toggleFindPopup(Cu.cloneInto({ open: false }, reader._iframeWindow));
-        Zotero.debug('[ZoteroVim] clearSearch: toggleFindPopup(false) OK');
+        Zotero.debug('[ZoteroNeo] clearSearch: toggleFindPopup(false) OK');
         return;
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _clearSearch toggleFindPopup error: ' + e);
+      Zotero.debug('[ZoteroNeo] _clearSearch toggleFindPopup error: ' + e);
     }
 
     // Fallback: if the popup is not reachable, blur any focused find input.
@@ -3776,7 +3776,7 @@ Object.assign(ZoteroVim, {
           .filter(a => ['highlight', 'underline', 'note', 'text'].includes(a.annotationType));
       } catch (e) {
         this._showStatus(state, '✗ getAnnotations: ' + String(e).slice(0, 30), 4000);
-        Zotero.debug('[ZoteroVim] getAnnotations error: ' + e);
+        Zotero.debug('[ZoteroNeo] getAnnotations error: ' + e);
         return;
       }
 
@@ -3839,7 +3839,7 @@ Object.assign(ZoteroVim, {
         if (typeof parsed.pageIndex === 'number') posPage = parsed.pageIndex;
       } catch (_) {}
 
-      Zotero.debug('[ZoteroVim] navigateAnnotation → key=' + target.key +
+      Zotero.debug('[ZoteroNeo] navigateAnnotation → key=' + target.key +
                    ' page=' + posPage + ' idx=' + targetIdx + '/' + annotations.length);
       this._showStatus(state,
         '→ ann ' + (targetIdx + 1) + '/' + annotations.length +
@@ -3847,7 +3847,7 @@ Object.assign(ZoteroVim, {
 
       this._navigateToAnnotationKey(state, reader, target);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _navigateAnnotation error: ' + e);
+      Zotero.debug('[ZoteroNeo] _navigateAnnotation error: ' + e);
       this._showStatus(state, '✗ nav: ' + String(e).slice(0, 30), 4000);
     }
   },
@@ -3885,10 +3885,10 @@ Object.assign(ZoteroVim, {
         if (typeof internalReader.setSelectedAnnotations === 'function' && readerWin) {
           internalReader.setSelectedAnnotations(Cu.cloneInto([target.key], readerWin));
           selectedOK = true;
-          Zotero.debug('[ZoteroVim] setSelectedAnnotations(' + target.key + ') OK');
+          Zotero.debug('[ZoteroNeo] setSelectedAnnotations(' + target.key + ') OK');
         }
       } catch (e) {
-        Zotero.debug('[ZoteroVim] setSelectedAnnotations error: ' + e);
+        Zotero.debug('[ZoteroNeo] setSelectedAnnotations error: ' + e);
       }
 
       // Fallback: navigate({annotationID}) directly (smooth, no jump).
@@ -3897,10 +3897,10 @@ Object.assign(ZoteroVim, {
         try {
           if (typeof internalReader.navigate === 'function' && readerWin) {
             internalReader.navigate(Cu.cloneInto({ annotationID: target.key }, readerWin));
-            Zotero.debug('[ZoteroVim] navigate({annotationID}) fallback OK');
+            Zotero.debug('[ZoteroNeo] navigate({annotationID}) fallback OK');
           }
         } catch (e) {
-          Zotero.debug('[ZoteroVim] navigate annotationID error: ' + e);
+          Zotero.debug('[ZoteroNeo] navigate annotationID error: ' + e);
           // Last resort: jump to page (may be jarring).
           try {
             const pdfApp = internalReader._primaryView?._iframeWindow?.PDFViewerApplication;
@@ -3910,7 +3910,7 @@ Object.assign(ZoteroVim, {
       }
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _navigateToAnnotationKey error: ' + e);
+      Zotero.debug('[ZoteroNeo] _navigateToAnnotationKey error: ' + e);
       return false;
     }
   },
@@ -3948,7 +3948,7 @@ Object.assign(ZoteroVim, {
       }
       return { pageIndex: null, ratio: 0 };
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _markPosition error: ' + e);
+      Zotero.debug('[ZoteroNeo] _markPosition error: ' + e);
       return { pageIndex: null, ratio: 0 };
     }
   },
@@ -3976,10 +3976,10 @@ Object.assign(ZoteroVim, {
       }
       const pageLabel = pos.pageIndex === null ? '' : '  p.' + (pos.pageIndex + 1);
       this._showStatus(state, '✓ mark ' + char + ' set' + pageLabel + persistLabel, 1200);
-      Zotero.debug('[ZoteroVim] setMark ' + char + ' page=' + pos.pageIndex +
+      Zotero.debug('[ZoteroNeo] setMark ' + char + ' page=' + pos.pageIndex +
                    ' ratio=' + pos.ratio.toFixed(3) + ' key=' + (state.marks[char].key || ''));
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _setMark error: ' + e);
+      Zotero.debug('[ZoteroNeo] _setMark error: ' + e);
       this._showStatus(state, '✗ mark: ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -4031,7 +4031,7 @@ Object.assign(ZoteroVim, {
       this._showStatus(state,
         '→ mark ' + char + (annotationOK ? '' : ' · annotation gone'), 1200);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _jumpMark error: ' + e);
+      Zotero.debug('[ZoteroNeo] _jumpMark error: ' + e);
       this._showStatus(state, '✗ mark: ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -4042,7 +4042,7 @@ Object.assign(ZoteroVim, {
       const pdfApp = pdfWin.PDFViewerApplication;
       if (pdfApp?.pdfViewer) pdfApp.pdfViewer.currentPageNumber = pageIndex + 1;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _instantPageFlip error: ' + e);
+      Zotero.debug('[ZoteroNeo] _instantPageFlip error: ' + e);
     }
   },
 
@@ -4073,7 +4073,7 @@ Object.assign(ZoteroVim, {
       }
       return { pageIndex, ratio };
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _annotationPageRatio error: ' + e);
+      Zotero.debug('[ZoteroNeo] _annotationPageRatio error: ' + e);
       return { pageIndex: 0, ratio: 0.5 };
     }
   },
@@ -4099,7 +4099,7 @@ Object.assign(ZoteroVim, {
       const top = Math.max(0, pageEl.offsetTop + pageEl.offsetHeight * ratio - viewH / 2);
       this._scrollContainerTo(container, top, opts);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _scrollToPageRatio error: ' + e);
+      Zotero.debug('[ZoteroNeo] _scrollToPageRatio error: ' + e);
     }
   },
 
@@ -4117,7 +4117,7 @@ Object.assign(ZoteroVim, {
       }
       this._showStatus(state, '✓ mark ' + char + ' deleted', 1200);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _delMark error: ' + e);
+      Zotero.debug('[ZoteroNeo] _delMark error: ' + e);
     }
   },
 
@@ -4130,7 +4130,7 @@ Object.assign(ZoteroVim, {
       }
       this._showStatus(state, '✓ all marks deleted', 1200);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _clearAllMarks error: ' + e);
+      Zotero.debug('[ZoteroNeo] _clearAllMarks error: ' + e);
     }
   },
 
@@ -4166,7 +4166,7 @@ Object.assign(ZoteroVim, {
       const attKey = attachment.key;
       if (hasMarks) {
         await this._writeMarksExtra(storeItem, attKey, payload);
-        Zotero.debug('[ZoteroVim] extra after saveTx: '
+        Zotero.debug('[ZoteroNeo] extra after saveTx: '
           + String(this._getItemExtra(storeItem)).slice(0, 120));
       } else {
         await this._clearMarksExtra(storeItem, attKey);
@@ -4175,7 +4175,7 @@ Object.assign(ZoteroVim, {
       return 'extra';
     } catch (e) {
       errors.push(String(e.message || e).slice(0, 80));
-      Zotero.debug('[ZoteroVim] _saveMarks extra backend failed: ' + e);
+      Zotero.debug('[ZoteroNeo] _saveMarks extra backend failed: ' + e);
     }
 
     // 2) Local pref fallback (no sync).
@@ -4185,7 +4185,7 @@ Object.assign(ZoteroVim, {
       return 'local';
     } catch (e) {
       errors.push(String(e.message || e).slice(0, 80));
-      Zotero.debug('[ZoteroVim] _saveMarks pref backend failed: ' + e);
+      Zotero.debug('[ZoteroNeo] _saveMarks pref backend failed: ' + e);
     }
 
     if (state) {
@@ -4358,13 +4358,13 @@ Object.assign(ZoteroVim, {
       if (migrated) await this._saveMarks(state, reader, state.marks);
       const chars = Object.keys(state.marks);
       if (chars.length) {
-        Zotero.debug('[ZoteroVim] loaded persisted marks from ' + (source || '?') +
+        Zotero.debug('[ZoteroNeo] loaded persisted marks from ' + (source || '?') +
                      ': ' + chars.join(','));
       } else {
-        Zotero.debug('[ZoteroVim] no persisted marks found (reader ' + reader.itemID + ')');
+        Zotero.debug('[ZoteroNeo] no persisted marks found (reader ' + reader.itemID + ')');
       }
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _loadPersistedMarks error: ' + e);
+      Zotero.debug('[ZoteroNeo] _loadPersistedMarks error: ' + e);
     }
   },
 
@@ -4723,19 +4723,19 @@ Object.assign(ZoteroVim, {
       if (key && text !== null) {
         const item = await this._getAnnotationItemForSave(state);
         if (!item) {
-          try { zvLogFile('[ZoteroVim] comment save FAILED: annotation not resolved key=' + key); } catch (_) {}
+          try { zvLogFile('[ZoteroNeo] comment save FAILED: annotation not resolved key=' + key); } catch (_) {}
           return false;
         }
         if (!item.deleted && (item.annotationComment || '') !== text) {
           item.annotationComment = text;
           await item.saveTx();
-          try { zvLogFile('[ZoteroVim] comment saved key=' + key + ' len=' + text.length); } catch (_) {}
+          try { zvLogFile('[ZoteroNeo] comment saved key=' + key + ' len=' + text.length); } catch (_) {}
         }
       }
       return true;
     } catch (e) {
-      Zotero.debug('[ZoteroVim] save annotation comment error: ' + e);
-      try { zvLogFile('[ZoteroVim] comment save error: ' + e); } catch (_) {}
+      Zotero.debug('[ZoteroNeo] save annotation comment error: ' + e);
+      try { zvLogFile('[ZoteroNeo] comment save error: ' + e); } catch (_) {}
       return false;
     }
   },
@@ -4780,7 +4780,7 @@ Object.assign(ZoteroVim, {
             const popup = node.classList?.contains('annotation-popup')
               ? node : node.querySelector?.('.annotation-popup');
             if (!popup) continue;
-            try { zvLogFile('[ZoteroVim] insert: stray annotation popup appeared — closing'); } catch (_) {}
+            try { zvLogFile('[ZoteroNeo] insert: stray annotation popup appeared — closing'); } catch (_) {}
             const ed = popup.querySelector?.('[contenteditable="true"], textarea, input');
             if (ed) {
               ed.dispatchEvent(new outerWin.KeyboardEvent('keydown', {
@@ -4855,7 +4855,7 @@ Object.assign(ZoteroVim, {
     state._commentItemID = item?.id || null;
     state._commentLibraryID = item?.libraryID || null;
     if (!item) {
-      Zotero.debug('[ZoteroVim] annotation item not resolved key=' + key);
+      Zotero.debug('[ZoteroNeo] annotation item not resolved key=' + key);
     }
     let commentText = '';
     let quotedText = '';
@@ -4936,7 +4936,7 @@ Object.assign(ZoteroVim, {
       if (state.mode !== 'insert') this._setMode(state, 'insert');
       await this._enterAnnotationInsertMode(state, reader, { initialDelayMs: 150 });
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _enterInsertForAnnotation error: ' + e);
+      Zotero.debug('[ZoteroNeo] _enterInsertForAnnotation error: ' + e);
     }
   },
   /**
@@ -4998,9 +4998,9 @@ Object.assign(ZoteroVim, {
       await target.eraseTx();
 
       this._showStatus(state, '✓ annotation deleted', 1500);
-      Zotero.debug('[ZoteroVim] deleted annotation key=' + key);
+      Zotero.debug('[ZoteroNeo] deleted annotation key=' + key);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _deleteAnnotation error: ' + e);
+      Zotero.debug('[ZoteroNeo] _deleteAnnotation error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -5024,9 +5024,9 @@ Object.assign(ZoteroVim, {
       await target.saveTx();
 
       this._showStatus(state, '✓ → ' + colorName, 1200);
-      Zotero.debug('[ZoteroVim] recolorAnnotation key=' + key + ' color=' + color);
+      Zotero.debug('[ZoteroNeo] recolorAnnotation key=' + key + ' color=' + color);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _recolorAnnotation error: ' + e);
+      Zotero.debug('[ZoteroNeo] _recolorAnnotation error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -5045,9 +5045,9 @@ Object.assign(ZoteroVim, {
         ? (Object.entries(this.COLORS).find(([, v]) => v === color)?.[0] || color)
         : null;
       this._showStatus(state, colorName ? '✓ filter: ' + colorName : '✓ filter cleared', 1200);
-      Zotero.debug('[ZoteroVim] filterByColor: ' + (color || 'clear'));
+      Zotero.debug('[ZoteroNeo] filterByColor: ' + (color || 'clear'));
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _filterByColor error: ' + e);
+      Zotero.debug('[ZoteroNeo] _filterByColor error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -5081,9 +5081,9 @@ Object.assign(ZoteroVim, {
       clipboardHelper.copyString(text);
 
       this._showStatus(state, '✓ copied ' + text.length + ' chars', 1500);
-      Zotero.debug('[ZoteroVim] yankAnnotation key=' + key + ' len=' + text.length);
+      Zotero.debug('[ZoteroNeo] yankAnnotation key=' + key + ' len=' + text.length);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _yankAnnotation error: ' + e);
+      Zotero.debug('[ZoteroNeo] _yankAnnotation error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -5109,9 +5109,9 @@ Object.assign(ZoteroVim, {
       Components.classes['@mozilla.org/widget/clipboardhelper;1']
         .getService(Components.interfaces.nsIClipboardHelper).copyString(text);
       this._showStatus(state, '✓ copied comment (' + text.length + ' chars)', 1500);
-      Zotero.debug('[ZoteroVim] yankAnnotationComment key=' + key + ' len=' + text.length);
+      Zotero.debug('[ZoteroNeo] yankAnnotationComment key=' + key + ' len=' + text.length);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _yankAnnotationComment error: ' + e);
+      Zotero.debug('[ZoteroNeo] _yankAnnotationComment error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 35), 3000);
     }
   },
@@ -5174,10 +5174,10 @@ Object.assign(ZoteroVim, {
       Components.classes['@mozilla.org/widget/clipboardhelper;1']
         .getService(Components.interfaces.nsIClipboardHelper).copyString(text);
       this._showStatus(state, '✓ copied paragraph (' + text.length + ' chars)', 1500);
-      Zotero.debug('[ZoteroVim] yankParagraph spans=' + (paraEnd - paraStart + 1) +
+      Zotero.debug('[ZoteroNeo] yankParagraph spans=' + (paraEnd - paraStart + 1) +
                    ' len=' + text.length);
     } catch (e) {
-      Zotero.debug('[ZoteroVim] _yankParagraph error: ' + e);
+      Zotero.debug('[ZoteroNeo] _yankParagraph error: ' + e);
       this._showStatus(state, '✗ ' + String(e).slice(0, 35), 3000);
     }
   },

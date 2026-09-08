@@ -4,9 +4,8 @@
 // Uses raw XPCOM — the only thing reliably available in every Gecko chrome
 // sandbox without imports or external globals.
 
-// Legacy preference branch, kept for migration/compatibility with the
-// original zotero-vim add-on (the current add-on ID is zotero-vim-plus@zotero-vim).
-const ZV_PREFIX = "extensions.zotero-vim@zotero-vim.";
+// Zotero Neo keeps its settings separate from the upstream add-ons.
+const ZV_PREFIX = "extensions.zotero-neo.";
 
 function _zvPrefs() {
   return Components.classes["@mozilla.org/preferences-service;1"]
@@ -35,11 +34,11 @@ function _zvSet(key, value) {
     else if (typeof value === "number") p.setIntPref(full, value);
     else                                p.setStringPref(full, String(value));
   } catch (e) {
-    dump("[ZoteroVim] prefs set failed (" + key + "): " + e + "\n");
+    dump("[ZoteroNeo] prefs set failed (" + key + "): " + e + "\n");
   }
 }
 
-// ── Default bindings (kept in sync with zoteroVim.js) ────────────────────────
+// ── Default bindings (kept in sync with core.js) ────────────────────────────
 const ZV_DEFAULT_BINDINGS = {
   "normal:j":       "scrollDown",
   "normal:k":       "scrollUp",
@@ -358,10 +357,10 @@ var _zvInitStarted = 0;
 var _zvInitObserver = null;
 var _zvLogTS = 0;
 
-// Append a diagnostic line to <profile>/zv-startup.log (same file bootstrap.js
+// Append a diagnostic line to <profile>/zotero-neo-startup.log (same file bootstrap.js
 // uses) and mirror it to Zotero.debug.
 function _zvLog(msg) {
-  try { Zotero.debug('[ZoteroVim] [prefs] ' + msg); } catch (_) {}
+  try { Zotero.debug('[ZoteroNeo] [prefs] ' + msg); } catch (_) {}
   try {
     if (!_zvLogTS) _zvLogTS = Date.now();
     const dir = (typeof Zotero.getProfileDirectory === 'function')
@@ -370,7 +369,7 @@ function _zvLog(msg) {
           .getService(Components.interfaces.nsIProperties)
           .get('ProfD', Components.interfaces.nsIFile);
     const file = dir.clone();
-    file.append('zv-startup.log');
+    file.append('zotero-neo-startup.log');
     const stream = Components.classes['@mozilla.org/network/file-output-stream;1']
       .createInstance(Components.interfaces.nsIFileOutputStream);
     stream.init(file, 0x02 | 0x08 | 0x10, 0o600, 0);

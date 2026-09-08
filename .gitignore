@@ -1,9 +1,17 @@
 # Built plugin artifact (built by build.sh; attach to GitHub releases only)
-zotero-vim.xpi
-zoetero-vim-plus.xpi
+zotero-neo.xpi
+
+# Local product specification
+Zotero Neo — Product Requirements Document.md
+
+# Runtime diagnostics copied from a Zotero profile
+zotero-neo-startup.log
 
 # AI session scratch data
 .sisyphus/
+
+# Local workflow and agent planning state
+.planning/
 
 # macOS
 .DS_Store

@@ -1,22 +1,19 @@
 #!/usr/bin/env bash
-# Build the Zotero Vim plugin as an installable .xpi file.
+# Build Zotero Neo as an installable .xpi file.
 # Usage: ./build.sh
 set -euo pipefail
 
-PLUGIN_ID="zotero-vim-plus@zotero-vim"
-OUTPUT="zoetero-vim-plus.xpi"
+OUTPUT="zotero-neo.xpi"
 
 # Optional sanity checks. Only `zip` is required to build; if `node` is
-# available, verify JS syntax and that the hand-maintained keybinding/i18n
-# tables (zoteroVim.js vs prefs.js/i18n.js) have not drifted.
+# available, recursively verify content JavaScript and binding-table sync.
 if command -v node >/dev/null 2>&1; then
   echo "Checking JS syntax and binding-table sync ..."
   node --check bootstrap.js
-  node --check content/i18n.js
-  node --check content/zoteroVim.js
-  node --check content/zoteroVimReader.js
-  node --check content/zoteroVimMain.js
-  node --check content/prefs.js
+  while IFS= read -r -d '' file; do
+    node --check "$file"
+  done < <(find content -type f -name '*.js' -print0)
+  node --check tools/check-release.js
   node tools/check-sync.js
 else
   echo "Warning: node not found — skipping syntax and sync checks."

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
- * Consistency check between content/zoteroVim.js (DEFAULT_BINDINGS) and
- * content/prefs.js (ZV_DEFAULT_BINDINGS, ZV_ACTION_LABELS).
+ * Consistency check between content/core.js (DEFAULT_BINDINGS) and
+ * content/preferences/pane.js (ZV_DEFAULT_BINDINGS, ZV_ACTION_LABELS).
  *
  * These tables are maintained by hand in two files, so drift silently breaks
  * the Preferences panel: "Reset to defaults" and the action dropdown would
@@ -77,66 +77,66 @@ function diff(a, b) {
 }
 
 const zoteroVimBindings = extractTable(
-  'content/zoteroVim.js',
+  'content/core.js',
   /DEFAULT_BINDINGS\s*:\s*\{/,
   /^\s*\},\s*$/,
   /'([^']+)'\s*:\s*'([^']+)'/g
 );
 
 const prefsBindings = extractTable(
-  'content/prefs.js',
+  'content/preferences/pane.js',
   /ZV_DEFAULT_BINDINGS\s*=\s*\{/,
   /^\s*\};\s*$/,
   /"([^"]+)"\s*:\s*"([^"]+)"/g
 );
 
 const actionLabels = extractTable(
-  'content/prefs.js',
+  'content/preferences/pane.js',
   /ZV_ACTION_LABELS\s*=\s*\{/,
   /^\s*\};\s*$/,
   /^\s*(\w+)\s*:\s*"([^"]+)"/gm
 );
 
 const zhActionLabels = extractTable(
-  'content/i18n.js',
+  'content/preferences/i18n.js',
   /ZV_I18N_ACTION_LABELS\s*=\s*\{/,
   /^\s*\};\s*$/,
   /^\s*(\w+)\s*:\s*"([^"]+)"/gm
 );
 
-console.log('[sync] zoteroVim.js bindings: ' + Object.keys(zoteroVimBindings).length);
-console.log('[sync] prefs.js bindings:     ' + Object.keys(prefsBindings).length);
-console.log('[sync] prefs.js action labels:' + Object.keys(actionLabels).length);
-console.log('[sync] zh-CN action labels:   ' + Object.keys(zhActionLabels).length);
+console.log('[sync] core.js bindings:       ' + Object.keys(zoteroVimBindings).length);
+console.log('[sync] preferences/pane.js bindings:     ' + Object.keys(prefsBindings).length);
+console.log('[sync] preferences/pane.js action labels:' + Object.keys(actionLabels).length);
+console.log('[sync] zh-CN action labels:               ' + Object.keys(zhActionLabels).length);
 
 reportDuplicateKeys(
-  'content/zoteroVim.js',
+  'content/core.js',
   /DEFAULT_BINDINGS\s*:\s*\{/,
   /^\s*\},\s*$/,
   /'([^']+)'\s*:\s*'([^']+)'/g,
-  'zoteroVim.js DEFAULT_BINDINGS'
+  'core.js DEFAULT_BINDINGS'
 );
 reportDuplicateKeys(
-  'content/prefs.js',
+  'content/preferences/pane.js',
   /ZV_DEFAULT_BINDINGS\s*=\s*\{/,
   /^\s*\};\s*$/,
   /"([^"]+)"\s*:\s*"([^"]+)"/g,
-  'prefs.js ZV_DEFAULT_BINDINGS'
+  'preferences/pane.js ZV_DEFAULT_BINDINGS'
 );
 reportDuplicateKeys(
-  'content/prefs.js',
+  'content/preferences/pane.js',
   /ZV_ACTION_LABELS\s*=\s*\{/,
   /^\s*\};\s*$/,
   /^\s*(\w+)\s*:\s*"([^"]+)"/gm,
-  'prefs.js ZV_ACTION_LABELS'
+  'preferences/pane.js ZV_ACTION_LABELS'
 );
 
 // 1. The two default-binding tables must be identical.
 for (const key of diff(zoteroVimBindings, prefsBindings)) {
-  report('binding missing in prefs.js ZV_DEFAULT_BINDINGS: "' + key + '"');
+  report('binding missing in preferences/pane.js ZV_DEFAULT_BINDINGS: "' + key + '"');
 }
 for (const key of diff(prefsBindings, zoteroVimBindings)) {
-  report('binding present only in prefs.js (stale): "' + key + '"');
+  report('binding present only in preferences/pane.js (stale): "' + key + '"');
 }
 for (const key of Object.keys(zoteroVimBindings)) {
   if (zoteroVimBindings[key] !== prefsBindings[key]) {
@@ -173,7 +173,7 @@ for (const action of diff(zhActionLabels, actionLabels)) {
 }
 
 if (failed) {
-  console.error('[sync] FAILED — sync the tables above (see content/prefs.js).');
+  console.error('[sync] FAILED — sync the tables above (see content/preferences/pane.js).');
   process.exit(1);
 }
 console.log('[sync] OK — bindings and action labels are in sync.');
