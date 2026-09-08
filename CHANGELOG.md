@@ -12,8 +12,12 @@ All notable changes to Zotero Neo are documented here.
 - Renamed the runtime controller and diagnostics to `ZoteroNeo` / `[ZoteroNeo]`.
 - Renamed the build artifact to `zotero-neo.xpi`.
 - Replaced the upstream update feed with a Neo-owned, initially empty feed.
-- Updated English, Chinese, and Spanish documentation while preserving the
-  `ZorroStardust/zotero-vim-plus` and `finktank/zotero-vim` lineage.
+- Reorganized public documentation around an English landing page and canonical
+  English guides; removed translated project documents and inherited demo media.
+- Clarified latest-stable Zotero support and named Zotero Vim Plus as the
+  immediate upstream while preserving historical attribution.
+- Replaced inherited runtime filenames with `core.js`, `reader.js`, and
+  `main.js`; grouped preference-pane sources under `content/preferences/`.
 - Stopped periodic idle reader rescans from growing `zotero-neo-startup.log`.
 - Added GitHub Actions validation for native Ubuntu and Windows XPI builds.
 - Added independently named CI artifacts and guarded version-tag publication of

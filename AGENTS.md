@@ -2,9 +2,10 @@
 
 ## Project Overview
 
-Zotero Neo is a Zotero 7–10 plugin that provides a Neovim/LazyVim-inspired,
-keyboard-first interaction layer across the Zotero reader and main window.
-It uses the Firefox/Gecko Bootstrap API, plain JavaScript, and direct XPI packaging.
+Zotero Neo is a plugin for the latest stable Zotero release. It provides a
+Neovim/LazyVim-inspired, keyboard-first interaction layer across the Zotero
+reader and main window through the Firefox/Gecko Bootstrap API, plain
+JavaScript, and direct XPI packaging.
 
 ## Build / Install / Test
 
@@ -42,11 +43,10 @@ Use **2 spaces** for indentation. Do not use tabs.
 ### File Structure
 The codebase has several primary files:
 - `bootstrap.js` — Zotero lifecycle entry point (install/uninstall hooks)
-- `content/zoteroVim.js` — Core plugin object: modes, keybindings, key handling,
-  action dispatcher (`var ZoteroNeo = { ... }`)
-- `content/zoteroVimReader.js` — Reader-side methods
-- `content/zoteroVimMain.js` — Main-window methods
-- `content/prefs.js` / `content/i18n.js` — Preferences panel logic and labels
+- `content/core.js` — Base controller: shared state, bindings, key handling, and dispatch
+- `content/reader.js` — Reader-side methods
+- `content/main.js` — Main-window methods
+- `content/preferences/` — Preferences pane markup, behavior, and runtime localization
 
 ### JavaScript Conventions
 
@@ -83,8 +83,8 @@ Components.classes["@mozilla.org/preferences-service;1"]
 ```
 
 ### Formatting
-- **Single quotes** preferred in `zoteroVim.js`; double quotes in `prefs.js` — match the
-  surrounding file.
+- **Single quotes** preferred in runtime scripts; double quotes in preferences scripts —
+  match the surrounding file.
 - **Max line length:** ~100 characters. Use line breaks to stay readable.
 - Use ASCII box-drawing comments as section dividers:
   ```js
@@ -123,38 +123,39 @@ Inline comments are welcome for complex logic — use `//` style.
 ## Architecture Notes
 
 The plugin operates across a **three-level iframe stack** in the Zotero PDF reader.
-Key architectural decisions are documented in `README.md` under "Architecture Notes."
-Read them before making changes to annotation navigation, text selection, or iframe injection.
+Architecture decisions are documented in `docs/DEVELOPMENT.md`. Read that guide
+before changing annotation navigation, text selection, or iframe injection.
 
 The plugin also patches Zotero's reader key-forwarding callback (`_onKeyDown`
-on the PdfView instances) so keys consumed by vim are not re-handled by Zotero
+on the PdfView instances) so keys consumed by Neo are not re-handled by Zotero
 (Read Aloud on `l`/`r`, tools on `h`/`s`). Keep `_patchReaderKeyForwarding` /
-`_readerConsumesKey` in mind when touching key handling or iframe injection;
-see README "Architecture Notes → Zotero built-in shortcut conflicts (Read Aloud)".
+`_readerConsumesKey` in mind when touching key handling or iframe injection.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `bootstrap.js` | Zotero lifecycle hooks (install, uninstall, start, shutdown); loads the three content scripts |
-| `content/zoteroVim.js` | Core plugin object: modes, keybindings, key handling, action dispatcher |
-| `content/zoteroVimReader.js` | Reader-side methods (outline explorer, visual/cursor mode, annotations) |
-| `content/zoteroVimMain.js` | Main-window methods (note editor, split views, pickers, notes layout) |
-| `content/prefs.js` | Preferences panel JS + the hand-maintained default-binding tables |
-| `content/preferences.xhtml` | Preferences panel UI (XUL/HTML hybrid) |
-| `tools/check-sync.js` | Verifies `prefs.js` binding tables match `zoteroVim.js` (run by `build.sh`) |
+| `bootstrap.js` | Zotero lifecycle hooks; loads runtime scripts in explicit order |
+| `content/core.js` | Shared controller, bindings, lifecycle, reader injection, and dispatch |
+| `content/reader.js` | Reader features: outline, visual/cursor mode, annotations, and marks |
+| `content/main.js` | Main-window features: note editor, pickers, split views, and notes layout |
+| `content/preferences/pane.xhtml` | Preferences panel markup and styles |
+| `content/preferences/pane.js` | Preferences pane behavior, bindings, and English labels |
+| `content/preferences/i18n.js` | Preferences pane runtime localization |
+| `tools/check-sync.js` | Verifies preference binding tables match runtime defaults |
 | `tools/build.ps1` | Windows-native XPI builder with POSIX archive entry paths |
 | `tools/check-release.js` | Validates a release tag against manifest and update metadata |
 | `.github/workflows/build.yml` | Ubuntu/Windows builds, XPI artifacts, and guarded tag releases |
+| `docs/DEVELOPMENT.md` | Build, architecture, release, and maintenance constraints |
+| `docs/KNOWN_ISSUES.md` | Current shelved runtime investigations |
+| `docs/ROADMAP.md` | Public product direction |
 | `manifest.json` | Extension manifest |
-| `build.sh` | Builds the `.xpi` (runs syntax + binding-sync checks when `node` is available) |
-| `FUTURE_FEATURES.md` | Triaged ideas for new features (Tier 1–3 by effort) |
-| `PENDING_ISSUES.md` | Shelved issues with investigation notes |
+| `build.sh` | Builds the `.xpi` and runs available sanity checks |
 
 ## Important Constraints
 
-- **Zotero 7/8/9/10 only.** The plugin targets the Firefox Gecko runtime. Do not assume Node.js
-  or browser APIs not available in Gecko.
+- **Latest stable Zotero only.** Older versions may work but are outside the
+  compatibility guarantee and release test matrix.
 - **No external dependencies.** Do not add npm packages, CDN scripts, or external libraries.
 - **No TypeScript.** The codebase is plain JavaScript.
 - **CI covers packaging only.** GitHub Actions validates both builders, syntax, binding sync,
