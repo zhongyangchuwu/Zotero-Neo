@@ -261,8 +261,8 @@ var ZoteroNeo = {
       // window state (unselectable pane, dead controls until reopened).
       id:       'zotero-neo-prefs',
       pluginID: this.id,
-      src:      this.rootURI + 'content/preferences.xhtml',
-      scripts:  [this.rootURI + 'content/i18n.js', this.rootURI + 'content/prefs.js'],
+      src:      this.rootURI + 'content/preferences/pane.xhtml',
+      scripts:  [this.rootURI + 'content/preferences/i18n.js', this.rootURI + 'content/preferences/pane.js'],
       label:    'Zotero Neo',
       image:    this.rootURI + 'icons/icon-64x64.png',
     });

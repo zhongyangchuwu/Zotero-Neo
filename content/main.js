@@ -3,8 +3,8 @@
 
 /**
  * Zotero Neo — main-window methods: window injection, note editor, split
- * views, fuzzy picker, and notes layout. Loaded by
- * bootstrap.js after zoteroVim.js and zoteroVimReader.js.
+ * views, fuzzy picker, and notes layout. Loaded by bootstrap.js after core.js
+ * and reader.js.
  */
 
 Object.assign(ZoteroNeo, {

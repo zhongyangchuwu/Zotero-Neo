@@ -39,9 +39,9 @@ async function startup({ id, version, rootURI }) {
   log('startup called at ' + T0 + ' (app process start +' + (T0 - APP_START_TS) + 'ms)');
   zvLogFile('startup called (app process +' + (T0 - APP_START_TS) + 'ms)');
 
-  Services.scriptloader.loadSubScript(rootURI + 'content/zoteroVim.js');
-  Services.scriptloader.loadSubScript(rootURI + 'content/zoteroVimReader.js');
-  Services.scriptloader.loadSubScript(rootURI + 'content/zoteroVimMain.js');
+  Services.scriptloader.loadSubScript(rootURI + 'content/core.js');
+  Services.scriptloader.loadSubScript(rootURI + 'content/reader.js');
+  Services.scriptloader.loadSubScript(rootURI + 'content/main.js');
 
   // Two-phase startup: wire up everything that does not need Zotero's full
   // initialization BEFORE Zotero.initializationPromise resolves.  Restored

@@ -3,8 +3,8 @@
 
 /**
  * Zotero Neo — reader-side methods: outline explorer, visual / cursor mode,
- * and annotations. Loaded by bootstrap.js after zoteroVim.js; every method
- * here is merged onto the ZoteroNeo object.
+ * and annotations. Loaded by bootstrap.js after core.js; every method here is
+ * merged onto the ZoteroNeo object.
  */
 
 Object.assign(ZoteroNeo, {

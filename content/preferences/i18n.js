@@ -4,8 +4,8 @@
 /* eslint-disable no-unused-vars */
 
 // ── Localization for the preferences pane ─────────────────────────────────────
-// Loaded before prefs.js via Zotero.PreferencePanes.register (scripts array).
-// English action labels live in prefs.js's ZV_ACTION_LABELS; this file only
+// Loaded before pane.js via Zotero.PreferencePanes.register (scripts array).
+// English action labels live in pane.js's ZV_ACTION_LABELS; this file only
 // supplies the zh-CN action labels and the dictionary/apply helpers.
 
 // Zotero Neo keeps its language preference separate from the upstream add-ons.

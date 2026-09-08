@@ -14,20 +14,28 @@ $Root = (Resolve-Path -LiteralPath $Root).Path
 
 # Optional sanity checks (mirror build.sh).
 if (Get-Command node -ErrorAction SilentlyContinue) {
+    function Test-NodeSyntax([string]$Path) {
+        & node --check $Path
+        if ($LASTEXITCODE -ne 0) {
+            throw "JavaScript syntax check failed: $Path"
+        }
+    }
+
     Push-Location $Root
     try {
-        node --check bootstrap.js
-        node --check content/i18n.js
-        node --check content/zoteroVim.js
-        node --check content/zoteroVimReader.js
-        node --check content/zoteroVimMain.js
-        node --check content/prefs.js
-        node --check tools/check-release.js
-        node tools/check-sync.js
+        Test-NodeSyntax "bootstrap.js"
+        Get-ChildItem -LiteralPath (Join-Path $Root "content") -File -Recurse -Filter "*.js" |
+            ForEach-Object { Test-NodeSyntax $_.FullName }
+        Test-NodeSyntax "tools/check-release.js"
+        & node tools/check-sync.js
+        if ($LASTEXITCODE -ne 0) {
+            throw "Binding-table sync check failed"
+        }
     } finally {
         Pop-Location
     }
-} else {
+}
+else {
     Write-Host "Warning: node not found - skipping syntax and sync checks."
 }
 
@@ -41,7 +49,7 @@ Remove-Item -LiteralPath $outPath -ErrorAction SilentlyContinue
 $files = @()
 $files += Join-Path $Root "manifest.json"
 $files += Join-Path $Root "bootstrap.js"
-$files += Get-ChildItem -LiteralPath (Join-Path $Root "content") -File | ForEach-Object { $_.FullName }
+$files += Get-ChildItem -LiteralPath (Join-Path $Root "content") -File -Recurse | ForEach-Object { $_.FullName }
 $files += Get-ChildItem -LiteralPath (Join-Path $Root "icons") -File | ForEach-Object { $_.FullName }
 
 $fs = [System.IO.File]::Create($outPath)

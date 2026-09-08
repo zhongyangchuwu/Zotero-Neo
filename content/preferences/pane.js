@@ -38,7 +38,7 @@ function _zvSet(key, value) {
   }
 }
 
-// ── Default bindings (kept in sync with zoteroVim.js) ────────────────────────
+// ── Default bindings (kept in sync with core.js) ────────────────────────────
 const ZV_DEFAULT_BINDINGS = {
   "normal:j":       "scrollDown",
   "normal:k":       "scrollUp",
