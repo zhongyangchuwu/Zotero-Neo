@@ -19,6 +19,15 @@
 - [ ] **OPS-04** A valid version tag publishes exactly one `zotero-neo.xpi`, and only the release job receives repository write permission.
 - [ ] **OPS-05** Startup diagnostics record lifecycle/failure/state-change events without periodic idle-session file growth.
 
+## Phase 0.1 — Repository Documentation Hygiene
+
+- [ ] **DOC-01** Root `README.md` is a concise English landing page that accurately states the pre-release installation status.
+- [ ] **DOC-02** Chinese and Spanish landing pages live under `docs/` with valid relative navigation and no full-reference drift.
+- [ ] **DOC-03** One canonical user guide and one canonical development guide own detailed behavior, settings, build, release, and architecture material.
+- [ ] **DOC-04** Legacy root backlogs, mixed issue/design documents, and inherited demo media are consolidated, relocated, or removed without losing durable maintenance knowledge.
+- [ ] **DOC-05** Active documentation guarantees compatibility only with the latest stable Zotero release and distinguishes that policy from manifest install bounds.
+- [ ] **DOC-06** Zotero Vim Plus is named as the immediate upstream; historical zotero-vim attribution remains preserved but secondary.
+
 ## Milestone 0.2 — Theme-Aware UI
 
 - [ ] **THEME-01** One preference provides `auto`, `light`, and `dark` appearance modes, with invalid values resolving to `auto`.
@@ -97,6 +106,7 @@ Neovim RPC/embedding, external viewers, MCP, AI assistant, direct SQLite writes,
 |---|---:|---|
 | ID-01–ID-05 | 0 — Fork hygiene | Implemented; final verification in 0.1 |
 | OPS-01–OPS-05 | 0.1 — Release automation and diagnostics | OPS-01–OPS-03 verified; tag publication and host log retest pending |
+| DOC-01–DOC-06 | 0.1 — Repository documentation hygiene | Planned next |
 | THEME-01–THEME-05 | 0.2 — Theme-aware UI | Planned second |
 | HIST-01–HIST-04 | 1 — Reading history | Planned third |
 | KEY-01–KEY-07 | 2 — Neo keymap | Pending design review |
@@ -107,6 +117,6 @@ Neovim RPC/embedding, external viewers, MCP, AI assistant, direct SQLite writes,
 
 ## Coverage Summary
 
-- Current requirements: 53
-- Mapped to exactly one phase: 53
+- Current requirements: 59
+- Mapped to exactly one phase: 59
 - Unmapped: 0

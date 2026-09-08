@@ -1,7 +1,7 @@
 ---
-status: blocked
+status: ready
 current_phase: 0.1
-current_plan: 000.1-01
+current_plan: 000.1-02
 progress: 0/9
 updated: 2026-09-08
 ---
@@ -13,14 +13,14 @@ updated: 2026-09-08
 See `.planning/PROJECT.md`.
 
 **Core value:** Common Zotero intent should be expressible through a consistent, predictable, discoverable keyboard language.
-**Current focus:** Install the CI-built XPI in Windows Zotero and verify bounded idle logging plus reader restoration.
+**Current focus:** Reorganize repository documentation and assets while the post-fix Zotero smoke is deferred until a public release exists.
 
 ## Current Position
 
 - Phase: 0.1 — Release automation and diagnostics
-- Plan: `000.1-01` — Windows/Linux CI, release artifact, startup-log fix
-- Status: Blocked — source/CI verification passed; actual Windows Zotero retest requires the user host
-- Last activity: Fixed state-change logging, passed Linux and Windows CI, and downloaded/compared both XPI artifacts
+- Plan: `000.1-02` — Repository documentation hygiene
+- Status: Ready for review — scope and file migration decisions recorded; no repository files moved yet
+- Last activity: Inventoried root documents/media and planned a canonical `docs/` layout, support policy, and upstream attribution
 - Progress: 0 of 9 phases verified
 
 ## Accumulated Context
@@ -31,6 +31,10 @@ See `.planning/PROJECT.md`.
 - The supplied Windows log proves the old file growth was `rescan ... newlyInjected=0` every approximately five seconds; no recurring reinjection was observed.
 - Commits `9453a25` and `3dd7364` implement state-change-only diagnostics plus Ubuntu/Windows build and guarded tag-release automation.
 - GitHub Actions run `34189504069` passed both build jobs; its Linux and Windows XPI artifacts contain the same 11 normalized payload files and POSIX archive paths.
+- The current 91-second, 5.9 MB `BriefDemoVideo.gif` is inherited from Zotero Vim Plus and should be removed rather than presented as Neo behavior.
+- Only root `README.md` remains a landing file; localized landing pages move under `docs/`, while detailed behavior and development material get one canonical source each.
+- Official compatibility guarantees the latest stable Zotero only; broader manifest install bounds remain best-effort rather than a support promise.
+- Zotero Vim Plus is the immediate upstream. `finktank/zotero-vim` remains historical attribution, not the displayed origin.
 - Phase 0.2 adds Auto/Light/Dark theming across every Neo-owned panel; Auto follows Zotero before falling back to the OS media query.
 - Phase 1 reader history follows theming; Phase 2 begins with a complete LazyVim keymap review centered on `Ctrl-h/j/k/l` pane focus.
 - Primary later risks remain input capture, private Zotero APIs, read-only tag writes, main digit capture, and inherited ZV-001/ZV-002/ZV-004 behavior.
@@ -38,6 +42,6 @@ See `.planning/PROJECT.md`.
 ## Session Continuity
 
 - Last session: 2026-09-08
-- Stopped at: Phase 0.1 source and CI work passed; Windows Zotero post-fix smoke remains
-- Resume from: `.planning/phases/000.1-release-diagnostics/VERIFICATION.md`
-- Gate: Install the new XPI, leave Zotero idle with restored/open readers, confirm no recurring rescan lines and working injection, then close Phases 0/0.1 and start Phase 0.2.
+- Stopped at: Documentation reorganization plan prepared for user review; Windows Zotero post-fix smoke remains deferred until a release exists
+- Resume from: `.planning/phases/000.1-release-diagnostics/DOCS-PLAN.md`
+- Gate: Accept or revise Plan 000.1-02 before moving/deleting documentation files; after implementation, return to the deferred host smoke when a release artifact is available.

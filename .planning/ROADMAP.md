@@ -38,9 +38,9 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 
 ### Phase 0.1 — Release automation and diagnostics
 
-**Goal:** Prove both native build paths, publish reusable XPI artifacts, prepare safe tag releases, and stop idle startup-log growth.
+**Goal:** Complete fork/release hygiene: cross-platform delivery, bounded diagnostics, and a maintainable repository documentation layout.
 **Depends on:** Phase 0 implementation.
-**Requirements:** OPS-01–OPS-05.
+**Requirements:** OPS-01–OPS-05, DOC-01–DOC-06.
 **Success Criteria:**
 
 - Ubuntu runs `./build.sh`; Windows runs `tools/build.ps1`; both upload independently named artifacts.
@@ -48,12 +48,15 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 - Release permissions are scoped to the publishing job.
 - Idle Zotero sessions append no periodic startup-log entries while first injection and failures remain diagnosable.
 - Phase 0 verification records the user smoke result and exact remaining boundaries.
+- Root documentation is concise, localized landing pages and detailed guides live under `docs/`, and stale inherited media/backlogs are removed or consolidated.
+- Active support wording guarantees only the latest stable Zotero; immediate upstream is Zotero Vim Plus with older lineage retained as secondary attribution.
 
-**Plans:** 1
+**Plans:** 2
 
 - [ ] `000.1-01` — `.planning/phases/000.1-release-diagnostics/PLAN.md`
+- [ ] `000.1-02` — `.planning/phases/000.1-release-diagnostics/DOCS-PLAN.md`
 
-**Status:** Implemented; Ubuntu/Windows CI passed. Awaiting post-fix Windows Zotero logging and reader-restoration smoke.
+**Status:** Plan 000.1-01 implemented with Ubuntu/Windows CI passing; host retest deferred until a release exists. Plan 000.1-02 is ready for review.
 
 ### Phase 0.2 — Theme-aware UI
 
@@ -166,7 +169,7 @@ The repository begins as a working Zotero Vim Plus 1.8.2 codebase with a passing
 | Phase | Plans complete | Status | Completed |
 |---:|---:|---|---|
 | 0 | 1/1 | Implementation complete; closure in 0.1 | - |
-| 0.1 | 0/1 | Planned next | - |
+| 0.1 | 0/2 | Documentation hygiene planned next; host smoke deferred | - |
 | 0.2 | 0/1 | Planned second | - |
 | 1 | 0/1 | Planned third | - |
 | 2 | 0/TBD | Pending design review | - |

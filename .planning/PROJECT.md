@@ -2,7 +2,7 @@
 
 ## What This Is
 
-Zotero Neo is a Neovim/LazyVim-inspired, keyboard-first interaction layer for Zotero 7–10. It is a cleanly identified fork of `ZorroStardust/zotero-vim-plus`, which itself descends from `finktank/zotero-vim`, and it preserves the existing Bootstrap/plain-JavaScript architecture rather than replacing Zotero or its reader.
+Zotero Neo is a Neovim/LazyVim-inspired, keyboard-first interaction layer for the latest stable Zotero. It is an independently maintained fork of `ZorroStardust/zotero-vim-plus`, which contains earlier work from `finktank/zotero-vim`, and it preserves the existing Bootstrap/plain-JavaScript architecture rather than replacing Zotero or its reader.
 
 ## Core Value
 
@@ -16,12 +16,12 @@ A user should be able to express common Zotero intent through one consistent, pr
 - Existing reader navigation, annotations, marks, notes, collection/item navigation, fuzzy item picker, tab picker, and split reader are reusable foundations.
 - The current binding dispatcher supports configurable multi-key sequences and a Space leader.
 - The repository builds successfully and its current binding/action-label tables are synchronized.
-- Zotero 7–10, Windows, macOS, and Linux remain the intended compatibility range.
+- Official compatibility targets the latest stable Zotero release; older versions and broader manifest install bounds are best-effort, not part of the release guarantee.
 
 ### Active
 
-- Finish M0 with cross-platform CI/release automation and event-based diagnostics, then add host-aware Light/Dark/Auto theming before resuming the PRD functional milestones.
-- Resume the PRD order after theming: reader history, reviewed Neo keymap, optional Spotlight adapter, native tag management, which-key, then QA/documentation.
+- Finish M0 with maintainable repository documentation while the post-fix host smoke is deferred until a public release exists.
+- After M0 closure, add host-aware Light/Dark/Auto theming, then resume the PRD order: reader history, reviewed Neo keymap, optional Spotlight adapter, native tag management, which-key, and QA/documentation.
 - Preserve upstream PDF Visual/annotation workflows and ordinary text input while changing global key behavior.
 - Produce a releaseable `zotero-neo.xpi` with a distinct installed identity and update channel.
 
@@ -34,6 +34,7 @@ A user should be able to express common Zotero intent through one consistent, pr
 
 - Current implementation branch is `feat/m0-fork-hygiene`.
 - Repository origin points to `https://github.com/zhongyangchuwu/Zotero-Neo.git`.
+- The immediate upstream is `ZorroStardust/zotero-vim-plus`; `finktank/zotero-vim` is preserved as historical lineage rather than presented as Neo's origin.
 - M0 source identity is implemented as Zotero Neo `0.1.0`; the user installed the WSL-built XPI and reported no functional problem in the initial smoke.
 - `./build.sh` and the Windows-native `tools/build.ps1` pass through GitHub Actions; both upload `zotero-neo.xpi`, with Linux designated as the canonical release artifact.
 - The supplied Windows log identified five-second steady-state rescan writes. Source diagnostics are now state-change-based and await a post-fix Zotero host smoke.
@@ -64,6 +65,9 @@ A user should be able to express common Zotero intent through one consistent, pr
 | Treat startup-file logging as state-change diagnostics, not a periodic trace. | Time throttles still cause unbounded idle growth and hide whether reader lifecycle is stable. | Log startup, failures, and first injection; fix reinjection churn if present. |
 | Theme every Neo-owned panel through Auto, Light, and Dark modes. | Existing preferences follow the OS media query while runtime overlays are hard-coded dark. | Auto follows verified Zotero theme state; all Neo panels share semantic palette tokens. |
 | Review the full LazyVim-inspired map before changing defaults. | `Ctrl-h/j/k/l`, `H/L`, `zh/zl`, picker precedence, and input focus interact across contexts. | Phase 2 begins with a complete conflict/precedence table and user review, then performs one clean cutover. |
+| Guarantee only the latest stable Zotero release. | Private Zotero/PDF.js APIs change faster than this project can honestly verify a broad historical matrix. | Active docs promise the latest stable release; older installable versions are best-effort. |
+| Keep the root README concise and move human documentation under `docs/`. | Three 35–41 KB README copies already drift, while the root mixes landing, user, and maintainer concerns. | Root keeps one English landing page; localized landing pages and canonical detailed guides live under `docs/`. |
+| Name Zotero Vim Plus as the immediate upstream. | Git `origin` belongs to Zotero Neo, while `finktank/zotero-vim` is an earlier lineage hop. | Header attribution points to Vim Plus; the older project remains in the detailed license/attribution section. |
 
 ## Release Contract Defaults
 
