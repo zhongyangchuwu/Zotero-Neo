@@ -63,7 +63,12 @@
     "zoteroVersion": null,
     "operatingSystem": null,
     "xpiSha256": null,
-    "executedAt": null,
-    "results": {}
+    "executedAt": "2026-09-09",
+    "results": {
+      "status": "accepted",
+      "source": "user report",
+      "summary": "Current XPI has no known functional problem; legacy runtime cleanup authorized.",
+      "limitations": "Exact Zotero version, operating system, and tested XPI digest were not recorded."
+    }
   }
 }
