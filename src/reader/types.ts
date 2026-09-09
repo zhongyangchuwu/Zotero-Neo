@@ -36,6 +36,8 @@ export interface InternalReaderRuntime {
   navigateToFirstPage?(): void;
   navigateToLastPage?(): void;
   navigate?(payload: { readonly pageIndex?: number; readonly annotationID?: string }): void;
+  navigateBack?(): void;
+  navigateForward?(): void;
   setSelectedAnnotations?(keys: readonly string[]): void;
   toggleFindPopup?(options: { readonly open: boolean }): void;
   findNext?(): void;

@@ -26,7 +26,11 @@
       "outline explorer navigation and activation",
       "mark set jump delete persist reload and clear",
       "reader split toggle and directional focus",
-      "Neo-consumed keys do not trigger Zotero Read Aloud or tools"
+      "Neo-consumed keys do not trigger Zotero Read Aloud or tools",
+      "native reading history back and forward after link or destination jumps",
+      "empty native history boundaries remain safe",
+      "reading history remains independent across reloads tabs and split focus",
+      "history chords remain native in Insert mode and editable controls"
     ],
     "main": [
       "collection tree navigation and expansion",
@@ -63,13 +67,13 @@
   "record": {
     "zoteroVersion": null,
     "operatingSystem": null,
-    "xpiSha256": "40a6b0dbd7f440e717ea5bc2f723f3fcdeaa48d26c5cfd7a5cd9c6c95214b7c9",
-    "executedAt": "2026-09-09",
+    "xpiSha256": "a55eba52d46dd0b4169bca6638ec3b8a9f7eea46353a1a987edab538ea69f6f6",
+    "executedAt": null,
     "results": {
-      "status": "accepted",
-      "source": "user report",
-      "summary": "User reported no known problem with the theme-aware XPI; Auto, Light, Dark, live panel updates, and preserved reader/main/note behavior accepted.",
-      "limitations": "Exact Zotero version and operating system were not recorded."
+      "status": "pending",
+      "source": "automated candidate",
+      "summary": "Theme-aware baseline XPI 40a6b0dbd7f440e717ea5bc2f723f3fcdeaa48d26c5cfd7a5cd9c6c95214b7c9 was user-accepted; native reader history requires host verification.",
+      "limitations": "History back/forward, boundaries, reload, multiple tabs, split focus, and editable precedence are not yet verified in Zotero."
     }
   }
 }
