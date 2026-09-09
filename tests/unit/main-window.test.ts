@@ -12,6 +12,23 @@ import type { MainWindowSession } from '../../src/main/session';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
 
+function statusElement() {
+  return {
+    style: {
+      cssText: '',
+      display: '',
+      background: '',
+      color: '',
+      colorScheme: '',
+      getPropertyValue: () => '',
+      setProperty: () => {},
+    },
+    getAttribute: () => null,
+    setAttribute: () => {},
+    remove: () => {},
+  };
+}
+
 describe('current Zotero collection APIs', () => {
   it('uses plural collection selection methods for object and ID lookup', () => {
     const collection = { id: 42 } as Zotero.Collection;
@@ -60,10 +77,7 @@ describe('current Zotero collection APIs', () => {
 describe('repeated tab switching', () => {
   it('applies every rapid tab-switch command instead of time-deduplicating it', () => {
     let selectedIndex = 0;
-    const status = {
-      style: { cssText: '', display: '', background: '' },
-      remove: () => {},
-    };
+    const status = statusElement();
     const document = {
       body: { append: () => {} },
       documentElement: { append: () => {} },
@@ -136,10 +150,7 @@ describe('collection navigation repeat pacing', () => {
       selection,
       ensureRowIsVisible: () => {},
     };
-    const status = {
-      style: { cssText: '', display: '', background: '' },
-      remove: () => {},
-    };
+    const status = statusElement();
     const document = {
       activeElement: active,
       body: { append: () => {} },

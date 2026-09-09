@@ -56,19 +56,20 @@
       "mark persistence control persists",
       "default highlight color persists",
       "custom bindings persist",
-      "reset restores all default bindings"
+      "reset restores all default bindings",
+      "appearance Auto Light Dark persistence and live panel updates"
     ]
   },
   "record": {
     "zoteroVersion": null,
     "operatingSystem": null,
-    "xpiSha256": null,
+    "xpiSha256": "40a6b0dbd7f440e717ea5bc2f723f3fcdeaa48d26c5cfd7a5cd9c6c95214b7c9",
     "executedAt": "2026-09-09",
     "results": {
       "status": "accepted",
       "source": "user report",
-      "summary": "Current XPI has no known functional problem; legacy runtime cleanup authorized.",
-      "limitations": "Exact Zotero version, operating system, and tested XPI digest were not recorded."
+      "summary": "User reported no known problem with the theme-aware XPI; Auto, Light, Dark, live panel updates, and preserved reader/main/note behavior accepted.",
+      "limitations": "Exact Zotero version and operating system were not recorded."
     }
   }
 }

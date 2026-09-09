@@ -519,7 +519,7 @@ Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to t
 - Multi-key sequences such as `gg`, `zy`, or `yy` are supported.
 - Click **+ Add binding** to add a new row; click **×** to remove one.
 - Click **Apply bindings** to save keybinding changes.
-- Highlight colour, mode, marks and scroll settings save automatically on change.
+- Appearance, highlight colour, mode, marks and scroll settings save automatically on change.
 - Note editor Vim mode can be turned on or off independently from the Preferences panel.
 - Click **Reset to defaults** to restore all bindings to their defaults.
 
@@ -648,6 +648,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 
 | Setting | Default | Description |
 |---------|---------|-------------|
+| Appearance | Auto | Auto follows Zotero's computed Light/Dark palette; Light and Dark force all Neo-owned panels without recolouring PDF pages or annotations |
 | Enable Visual mode | on | Allow entering Visual mode with `v` |
 | Enable Cursor mode | on | Allow entering Cursor mode with `c` |
 | Enable Insert mode | on | Allow entering Insert mode with `i` |
@@ -663,7 +664,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Persist marks | off | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync |
 | Default highlight colour | Yellow | Colour used when no explicit colour key is pressed |
 
-Scroll settings save automatically on change.
+Appearance and scroll settings save automatically on change.
 
 - **Step scrolling** moves instantly by the scroll step per `j`/`k`/`H`/`L` press.
 - **Constant-speed scrolling** glides at a fixed speed while a scroll key is

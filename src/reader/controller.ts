@@ -11,6 +11,7 @@ import { advanceInput, bindingMatchesPrefix, resolveInputTimeout } from '../inpu
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap } from '../input/bindings';
 import type { ActionId } from '../input/actions';
+import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderMarks } from './marks';
 import { ReaderOutline, type OutlineHost } from './outline';
 import {
@@ -301,6 +302,7 @@ export class ReaderSession {
   readonly #textFocusPatches = new Map<ReaderViewRuntime, () => boolean>();
   readonly #marks: ReaderMarks;
   readonly #outline: ReaderOutline;
+  readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly state: ReaderSessionState;
   #viewSyncTimer: number | null = null;
 
@@ -313,6 +315,7 @@ export class ReaderSession {
       keyTimeout: null,
       selectionParams: null,
       indicator: null,
+      indicatorThemeCleanup: null,
       activePdfWindow: dependencies.firstPdfWindow,
       visualAnchor: null,
       visualPreferredX: null,
@@ -328,6 +331,7 @@ export class ReaderSession {
       marksExplorerSelected: 0,
       marksOverlay: null,
       marksList: null,
+      marksThemeCleanup: null,
       outline: {
         open: false,
         loading: false,
@@ -337,6 +341,7 @@ export class ReaderSession {
         overlay: null,
         list: null,
         status: null,
+        themeCleanup: null,
         hintBuffer: '',
         hintTimer: null,
         commandBuffer: '',
@@ -357,6 +362,7 @@ export class ReaderSession {
       },
       commentOverlay: null,
       commentInput: null,
+      commentThemeCleanup: null,
       commentItemID: null,
       commentLibraryID: null,
       commentAutosaveTimer: null,
@@ -384,6 +390,7 @@ export class ReaderSession {
       clearTimer: (timer) => this.clearTimer(timer),
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
       setModeNormal: () => this.setMode('normal'),
+      themeRoot: (root) => this.themeRoot(root),
     };
     this.#outline = new ReaderOutline(outlineHost);
   }
@@ -399,6 +406,8 @@ export class ReaderSession {
     this.state.indicator = this.createIndicator(
       this.#dependencies.reader._iframeWindow?.document ?? null,
     );
+    if (this.state.indicator)
+      this.state.indicatorThemeCleanup = this.themeRoot(this.state.indicator);
     this.injectSelectionStyle(this.state.activePdfWindow);
     this.syncPdfViews();
     this.#viewSyncTimer = this.state.activePdfWindow.setInterval(() => this.syncPdfViews(), 250);
@@ -421,6 +430,10 @@ export class ReaderSession {
     this.#viewHandlers.clear();
     this.restorePatches();
     this.#scope.dispose();
+    this.state.indicatorThemeCleanup?.();
+    this.state.indicatorThemeCleanup = null;
+    for (const manager of this.#themeManagers.values()) manager.dispose();
+    this.#themeManagers.clear();
     this.state.indicator?.remove();
     this.state.indicator = null;
     for (const badge of this.state.hintBadges) badge.element.remove();
@@ -556,6 +569,27 @@ export class ReaderSession {
     pdfWindow.document.removeEventListener('selectionchange', handlers.selection);
     pdfWindow.removeEventListener('resize', handlers.resize);
     handlers.scrollElement?.removeEventListener('scroll', handlers.scroll);
+    this.releaseViewTheme(pdfWindow);
+  }
+
+  /**
+   * Releases Neo overlays and theme subscriptions owned by a PDF view that Zotero removed or
+   * recreated, without affecting the reader chrome or surviving split view.
+   */
+  private releaseViewTheme(pdfWindow: PdfWindow): void {
+    if (this.state.outline.overlay?.ownerDocument.defaultView === pdfWindow) {
+      this.#outline.close(this.state.outline);
+    }
+    if (this.state.commentOverlay?.ownerDocument.defaultView === pdfWindow) {
+      this.closeCommentOverlay();
+    }
+    if (this.state.marksOverlay?.ownerDocument.defaultView === pdfWindow) {
+      this.closeMarksExplorer();
+    }
+    const manager = this.#themeManagers.get(pdfWindow);
+    if (!manager) return;
+    manager.dispose();
+    this.#themeManagers.delete(pdfWindow);
   }
 
   private patchKeyForwarding(): void {
@@ -1089,14 +1123,24 @@ export class ReaderSession {
     }
   }
 
+  private themeRoot(root: HTMLElement): () => void {
+    const window = root.ownerDocument.defaultView;
+    if (!window) return () => undefined;
+    let manager = this.#themeManagers.get(window);
+    if (!manager) {
+      manager = new ThemeManager(window, this.#dependencies.controller.dependencies.preferences);
+      this.#themeManagers.set(window, manager);
+    }
+    return manager.add(root);
+  }
+
   private createIndicator(document: Document | null): HTMLElement | null {
     if (!document) return null;
     const existing = document.getElementById('zotero-vim-mode-indicator');
     existing?.remove();
     const indicator = document.createElement('div');
     indicator.id = 'zotero-vim-mode-indicator';
-    indicator.style.cssText =
-      'position:fixed;bottom:10px;right:14px;z-index:9999;padding:4px 8px;border-radius:4px;color:#fff;background:rgba(0,0,0,.65);font:12px monospace;pointer-events:none;display:none;';
+    indicator.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:9999;padding:4px 8px;border:1px solid ${THEME_VARS.border};border-radius:4px;color:${THEME_VARS.text};background:${THEME_VARS.elevated};box-shadow:0 4px 16px ${THEME_VARS.shadow};font:12px monospace;pointer-events:none;display:none`;
     document.body?.appendChild(indicator);
     return indicator;
   }
@@ -1133,14 +1177,15 @@ export class ReaderSession {
     }
     indicator.style.display = 'block';
     indicator.textContent = `-- ${this.state.mode.toUpperCase()} --${this.state.countBuffer || this.state.keyBuffer ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
+    indicator.style.color = this.state.mode === 'normal' ? THEME_VARS.text : THEME_VARS.onAccent;
     indicator.style.background =
       this.state.mode === 'visual'
-        ? 'rgba(80,120,200,.85)'
+        ? THEME_VARS.accent
         : this.state.mode === 'cursor'
-          ? 'rgba(180,120,40,.9)'
+          ? THEME_VARS.warning
           : this.state.mode === 'insert'
-            ? 'rgba(50,150,80,.85)'
-            : 'rgba(0,0,0,.65)';
+            ? THEME_VARS.success
+            : THEME_VARS.elevated;
   }
 
   private showStatus(message: string, duration = 2000): void {
@@ -1148,11 +1193,12 @@ export class ReaderSession {
     if (!indicator) return;
     indicator.style.display = 'block';
     indicator.textContent = message;
+    indicator.style.color = THEME_VARS.onAccent;
     indicator.style.background = message.startsWith('✓')
-      ? 'rgba(50,150,50,.9)'
+      ? THEME_VARS.success
       : message.startsWith('→') || message.startsWith('▶')
-        ? 'rgba(60,100,180,.9)'
-        : 'rgba(180,40,40,.9)';
+        ? THEME_VARS.accent
+        : THEME_VARS.error;
     this.schedule(duration, () => this.updateIndicator());
   }
 
@@ -2011,12 +2057,10 @@ export class ReaderSession {
     const document = pdfWindow.document;
     const overlay = document.createElement('div');
     overlay.id = 'zv-annotation-comment';
-    overlay.style.cssText =
-      'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:rgba(24,24,37,.97);color:#cdd6f4;border:1px solid #313244;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.45);display:flex;flex-direction:column;font:13px/1.4 sans-serif;';
+    overlay.style.cssText = `position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 32px ${THEME_VARS.shadow};display:flex;flex-direction:column;font:13px/1.4 sans-serif`;
     if (quote) {
       const excerpt = document.createElement('div');
-      excerpt.style.cssText =
-        'padding:8px 12px;color:#6c7086;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+      excerpt.style.cssText = `padding:8px 12px;color:${THEME_VARS.muted};font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${THEME_VARS.elevated}`;
       excerpt.textContent = annotationText(quote).slice(0, 200);
       overlay.appendChild(excerpt);
     }
@@ -2024,8 +2068,7 @@ export class ReaderSession {
     input.id = 'zv-annotation-comment-input';
     input.value = comment;
     input.spellcheck = false;
-    input.style.cssText =
-      'width:100%;box-sizing:border-box;min-height:72px;max-height:220px;padding:10px 12px;background:transparent;color:#cdd6f4;border:0;outline:none;resize:none;font:13px/1.5 sans-serif;';
+    input.style.cssText = `width:100%;box-sizing:border-box;min-height:72px;max-height:220px;padding:10px 12px;background:${THEME_VARS.input};color:${THEME_VARS.text};border:0;outline:2px solid ${THEME_VARS.focusRing};outline-offset:-2px;resize:none;font:13px/1.5 sans-serif`;
     input.addEventListener('compositionstart', () => {
       this.state.composing = true;
     });
@@ -2034,13 +2077,13 @@ export class ReaderSession {
     });
     input.addEventListener('input', () => this.scheduleCommentAutosave());
     const hint = document.createElement('div');
-    hint.style.cssText =
-      'padding:5px 12px;border-top:1px solid #313244;color:#6c7086;font-size:11px;';
+    hint.style.cssText = `padding:5px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
     hint.textContent = /^zh/i.test(zoteroRuntime().locale ?? '')
       ? 'Enter 换行 · Esc 保存并关闭'
       : 'Enter newline · Esc save & close';
     overlay.append(input, hint);
     document.body?.appendChild(overlay);
+    this.state.commentThemeCleanup = this.themeRoot(overlay);
     this.state.commentOverlay = overlay;
     this.state.commentInput = input;
   }
@@ -2074,6 +2117,8 @@ export class ReaderSession {
   }
 
   private closeCommentOverlay(): void {
+    this.state.commentThemeCleanup?.();
+    this.state.commentThemeCleanup = null;
     this.state.commentOverlay?.remove();
     this.state.commentOverlay = null;
     this.state.commentInput = null;
@@ -2177,20 +2222,19 @@ export class ReaderSession {
     const overlay = document.createElement('div');
     overlay.id = 'zv-marks-explorer';
     overlay.tabIndex = -1;
-    overlay.style.cssText =
-      'position:fixed;top:0;left:0;bottom:0;width:320px;z-index:99998;background:rgba(24,24,37,.96);color:#cdd6f4;border-right:1px solid #313244;display:flex;flex-direction:column;font:13px/1.35 monospace;';
+    overlay.style.cssText = `position:fixed;top:0;left:0;bottom:0;width:320px;z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border-right:1px solid ${THEME_VARS.border};display:flex;flex-direction:column;box-shadow:12px 0 40px ${THEME_VARS.shadow};font:13px/1.35 monospace`;
     const heading = document.createElement('div');
-    heading.style.cssText = 'padding:12px 14px;border-bottom:1px solid #313244;font-weight:bold;';
+    heading.style.cssText = `padding:12px 14px;border-bottom:1px solid ${THEME_VARS.border};font-weight:bold;background:${THEME_VARS.elevated}`;
     heading.textContent = 'Marks';
     const list = document.createElement('div');
     list.style.cssText = 'flex:1;overflow:auto;padding:8px 0;';
     const help = document.createElement('div');
-    help.style.cssText =
-      'padding:6px 12px;border-top:1px solid #313244;color:#6c7086;font-size:11px;';
+    help.style.cssText = `padding:6px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
     help.textContent =
       'type a mark char to jump · j/k move · Enter jump · d delete · x delete all · Esc close';
     overlay.append(heading, list, help);
     document.body?.appendChild(overlay);
+    this.state.marksThemeCleanup = this.themeRoot(overlay);
     this.state.marksOverlay = overlay;
     this.state.marksList = list;
     this.renderMarksExplorer();
@@ -2255,6 +2299,8 @@ export class ReaderSession {
 
   private closeMarksExplorer(pdfWindow?: PdfWindow): void {
     this.state.marksExplorerOpen = false;
+    this.state.marksThemeCleanup?.();
+    this.state.marksThemeCleanup = null;
     this.state.marksOverlay?.remove();
     this.state.marksOverlay = null;
     this.state.marksList = null;
@@ -2268,7 +2314,7 @@ export class ReaderSession {
     const chars = Object.keys(this.state.marks).sort();
     if (!chars.length) {
       const row = list.ownerDocument.createElement('div');
-      row.style.cssText = 'padding:10px 14px;color:#6c7086;';
+      row.style.cssText = `padding:10px 14px;color:${THEME_VARS.muted}`;
       row.textContent = 'No marks — press m<x> in Normal mode to set one';
       list.appendChild(row);
       return;
@@ -2277,7 +2323,8 @@ export class ReaderSession {
       const mark = this.state.marks[char];
       if (!mark) return;
       const row = list.ownerDocument.createElement('div');
-      row.style.cssText = `padding:6px 14px;white-space:nowrap;${index === this.state.marksExplorerSelected ? 'background:rgba(138,173,244,.22);color:#a6d189;' : ''}`;
+      const selected = index === this.state.marksExplorerSelected;
+      row.style.cssText = `padding:6px 14px;white-space:nowrap;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
       row.textContent = `${char}   ${mark.pageIndex === null ? '—' : `p.${mark.pageIndex + 1}  ${Math.round(mark.ratio * 100)}%`}${mark.key ? '  ⚑ ann' : ''}`;
       list.appendChild(row);
     });

@@ -207,6 +207,7 @@ export interface OutlineState {
   overlay: HTMLElement | null;
   list: HTMLElement | null;
   status: HTMLElement | null;
+  themeCleanup: (() => void) | null;
   hintBuffer: string;
   hintTimer: ReaderTimer | null;
   commandBuffer: string;
@@ -220,6 +221,7 @@ export interface ReaderSessionState {
   keyTimeout: ReaderTimer | null;
   selectionParams: AnnotationSelectionParams | null;
   indicator: HTMLElement | null;
+  indicatorThemeCleanup: (() => void) | null;
   activePdfWindow: PdfWindow;
   visualAnchor: Pointer | null;
   visualPreferredX: number | null;
@@ -235,6 +237,7 @@ export interface ReaderSessionState {
   marksExplorerSelected: number;
   marksOverlay: HTMLElement | null;
   marksList: HTMLElement | null;
+  marksThemeCleanup: (() => void) | null;
   outline: OutlineState;
   sidebarOutlineIndex: number;
   filterColor: AnnotationColor | null;
@@ -242,6 +245,7 @@ export interface ReaderSessionState {
   smoothHold: SmoothHold;
   commentOverlay: HTMLElement | null;
   commentInput: HTMLTextAreaElement | null;
+  commentThemeCleanup: (() => void) | null;
   commentItemID: number | null;
   commentLibraryID: number | null;
   commentAutosaveTimer: ReaderTimer | null;

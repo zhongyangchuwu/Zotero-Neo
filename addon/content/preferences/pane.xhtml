@@ -6,51 +6,36 @@
 >
 
   <html:style>
-    /* ── Keybinding table mode-row colours ─── */
-    #zv-bindings-table tbody tr[data-mode="normal"] { background-color: #e8f0fe; }
-    #zv-bindings-table tbody tr[data-mode="visual"] { background-color: #e8f5e9; }
-    #zv-bindings-table tbody tr[data-mode="cursor"] { background-color: #fff3e0; }
-    #zv-bindings-table tbody tr[data-mode="insert"] { background-color: #fff8e1; }
-    #zv-bindings-table tbody tr[data-mode="main"]   { background-color: #f0e8ff; }
-
-    @media (prefers-color-scheme: dark) {
-      /* Table header */
-      #zv-bindings-table thead tr {
-        background-color: #2c2c2c !important;
-        color: #d0d0d0 !important;
-        border-bottom-color: #555 !important;
-      }
-      /* Mode rows — dark tints that keep text readable */
-      #zv-bindings-table tbody tr[data-mode="normal"] {
-        background-color: #1e2d50 !important;
-        color: #c8d8ff;
-      }
-      #zv-bindings-table tbody tr[data-mode="visual"] {
-        background-color: #1a3020 !important;
-        color: #b8e8c0;
-      }
-      #zv-bindings-table tbody tr[data-mode="cursor"] {
-        background-color: #332b00 !important;
-        color: #e8d890;
-      }
-      #zv-bindings-table tbody tr[data-mode="insert"] {
-        background-color: #332800 !important;
-        color: #e8d870;
-      }
-      #zv-bindings-table tbody tr[data-mode="main"] {
-        background-color: #2a1a40 !important;
-        color: #d8b4fe;
-      }
-      /* Table border and generic text */
-      #zv-bindings-table {
-        border-color: #555;
-        color: #d0d0d0;
-      }
-      /* Scrollable container border */
-      #zv-bindings-table { border-collapse: collapse; }
-      /* Help text paragraphs */
-      #zotero-neo-prefs html|p { color: #999; }
+    #zotero-neo-prefs {
+      color: var(--zotero-neo-text, inherit);
+      background: var(--zotero-neo-surface, transparent);
     }
+    #zotero-neo-prefs html|p { color: var(--zotero-neo-muted, #666); }
+    #zotero-neo-prefs html|input,
+    #zotero-neo-prefs html|select,
+    #zotero-neo-prefs html|button,
+    #zotero-neo-prefs menulist {
+      color: var(--zotero-neo-text, inherit);
+      background: var(--zotero-neo-input, transparent);
+      border-color: var(--zotero-neo-border, #ccc);
+    }
+    #zotero-neo-prefs html|input:focus-visible,
+    #zotero-neo-prefs html|select:focus-visible,
+    #zotero-neo-prefs html|button:focus-visible {
+      outline: 2px solid var(--zotero-neo-focus-ring, Highlight);
+      outline-offset: 1px;
+    }
+    #zv-bindings-table-wrap { border-color: var(--zotero-neo-border, #ccc) !important; }
+    #zv-bindings-table { color: var(--zotero-neo-text, inherit); }
+    #zv-bindings-table thead tr { background: var(--zotero-neo-elevated, #f0f0f0) !important; }
+    #zv-bindings-table th { border-bottom-color: var(--zotero-neo-border, #ccc) !important; }
+    #zv-bindings-table tbody tr[data-mode="normal"] { background: var(--zotero-neo-mode-normal, #e8f0fe); }
+    #zv-bindings-table tbody tr[data-mode="visual"] { background: var(--zotero-neo-mode-visual, #e8f5e9); }
+    #zv-bindings-table tbody tr[data-mode="cursor"] { background: var(--zotero-neo-mode-cursor, #fff3e0); }
+    #zv-bindings-table tbody tr[data-mode="insert"] { background: var(--zotero-neo-mode-insert, #fff8e1); }
+    #zv-bindings-table tbody tr[data-mode="main"] { background: var(--zotero-neo-mode-main, #f0e8ff); }
+    .zv-divider { border-color: var(--zotero-neo-border, #ddd) !important; }
+    .zv-status { color: var(--zotero-neo-success, #287a43) !important; }
   </html:style>
 
   <!-- ── Language ──────────────────────────────────────────────────────── -->
@@ -64,6 +49,27 @@
           <menuitem value="zh-CN" label="中文" />
         </menupopup>
       </menulist>
+    </hbox>
+  </groupbox>
+
+  <!-- ── Appearance ───────────────────────────────────────────────────── -->
+  <groupbox>
+    <label data-i18n="zv.appearance" value="Appearance" style="font-weight: bold;" />
+    <html:p style="margin: 4px 0 10px; font-size: 0.9em;" data-i18n="zv.appearance.help">
+      Auto follows Zotero; Light and Dark override it for Neo panels.
+    </html:p>
+    <hbox align="center">
+      <html:label for="zv-appearance-theme" data-i18n="zv.appearance.mode"
+        style="min-width: 180px; font-weight: 600;">Theme</html:label>
+      <menulist id="zv-appearance-theme" style="padding: 2px 6px;">
+        <menupopup>
+          <menuitem value="auto" data-i18n="zv.appearance.auto" label="Auto" />
+          <menuitem value="light" data-i18n="zv.appearance.light" label="Light" />
+          <menuitem value="dark" data-i18n="zv.appearance.dark" label="Dark" />
+        </menupopup>
+      </menulist>
+      <html:span id="zv-appearance-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
     </hbox>
   </groupbox>
 
@@ -87,15 +93,15 @@
         label="Enable Vim-style editing in note editors (context pane and note tabs)" />
     </hbox>
     <hbox style="margin-top: 6px; justify-content: flex-end; align-items: center;">
-      <html:span id="zv-modes-status"
-        style="font-size: 0.9em; color: #5FB236;"></html:span>
+      <html:span id="zv-modes-status" class="zv-status"
+        style="font-size: 0.9em;"></html:span>
     </hbox>
   </groupbox>
 
   <!-- ── Scroll ─────────────────────────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.scroll" value="Scroll" style="font-weight: bold;" />
-    <html:p style="margin: 4px 0 10px; font-size: 0.9em; color: #666;"
+    <html:p style="margin: 4px 0 10px; font-size: 0.9em;"
       data-i18n="zv.scroll.help">
       Pick one scrolling mode for j/k/H/L — only its parameters are shown.
     </html:p>
@@ -133,7 +139,7 @@
 
     <!-- Accelerating mode: trapezoid curve -->
     <html:div id="zv-scroll-trapezoid-block" style="margin-top: 10px;" hidden="true">
-      <html:div style="padding-top: 10px; border-top: 1px solid #ddd; display: grid; grid-template-columns: 180px 90px; gap: 8px 12px; align-items: center;">
+      <html:div class="zv-divider" style="padding-top: 10px; border-top: 1px solid; display: grid; grid-template-columns: 180px 90px; gap: 8px 12px; align-items: center;">
         <html:label for="zv-smooth-initial-speed"
           data-i18n="zv.scroll.initialSpeed" style="font-weight: 600;">Initial speed (px/s)</html:label>
         <html:input type="number" id="zv-smooth-initial-speed" min="50" max="2000" step="10" style="width: 90px; padding: 3px 6px;" />
@@ -158,12 +164,12 @@
     </html:div>
 
     <hbox style="margin-top: 10px; justify-content: flex-end; align-items: center;">
-      <html:p style="font-size: 0.85em; color: #888; margin: 0 12px 0 0;"
+      <html:p style="font-size: 0.85em; margin: 0 12px 0 0;"
         data-i18n="zv.scroll.autosave">
         Scroll settings save automatically on change.
       </html:p>
-      <html:span id="zv-scroll-config-status"
-        style="margin-left: 10px; font-size: 0.9em; color: #5FB236;"></html:span>
+      <html:span id="zv-scroll-config-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
     </hbox>
   </groupbox>
 
@@ -176,19 +182,19 @@
         label="Persist marks in the parent item's Extra field (m / ` / dm) — survive restarts and sync" />
     </hbox>
     <hbox style="margin-top: 10px; justify-content: flex-end; align-items: center;">
-      <html:p style="font-size: 0.85em; color: #888; margin: 0 12px 0 0;"
+      <html:p style="font-size: 0.85em; margin: 0 12px 0 0;"
         data-i18n="zv.marks.staged">
         Marks settings save automatically on change.
       </html:p>
-      <html:span id="zv-marks-config-status"
-        style="margin-left: 10px; font-size: 0.9em; color: #5FB236;"></html:span>
+      <html:span id="zv-marks-config-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
     </hbox>
   </groupbox>
 
   <!-- ── Default highlight colour ───────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.color.group" value="Default highlight colour" style="font-weight: bold;" />
-    <html:p style="margin: 4px 0 10px; font-size: 0.9em; color: #666;"
+    <html:p style="margin: 4px 0 10px; font-size: 0.9em;"
       data-i18n="zv.color.help">
       Used when no explicit colour prefix is given (zh in the default bindings, if bound).
     </html:p>
@@ -205,15 +211,15 @@
           <menuitem value="purple" data-i18n="zv.color.opt.purple" label="Purple  (#A28AE5)" />
         </menupopup>
       </menulist>
-      <html:span id="zv-default-color-status"
-        style="margin-left: 10px; font-size: 0.9em; color: #5FB236;"></html:span>
+      <html:span id="zv-default-color-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
     </hbox>
   </groupbox>
 
   <!-- ── Keybindings ────────────────────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.bindings" value="Keybindings" style="font-weight: bold;" />
-    <html:p style="margin: 4px 0 8px; font-size: 0.9em; color: #666;">
+    <html:p style="margin: 4px 0 8px; font-size: 0.9em;">
       <html:span data-i18n="zv.bindings.help1">Each row binds a key sequence in a given mode to an action.</html:span>
       <html:br />
       <html:span data-i18n="zv.bindings.help2a">Click a </html:span><html:strong data-i18n="zv.bindings.help2b">Key sequence</html:strong><html:span data-i18n="zv.bindings.help2c"> cell to edit it.</html:span>
@@ -231,15 +237,15 @@
     </hbox>
 
     <!-- Keybinding table -->
-    <html:div style="max-height: 400px; overflow-y: auto; border: 1px solid #ccc; border-radius: 3px;">
+    <html:div id="zv-bindings-table-wrap" style="max-height: 400px; overflow-y: auto; border: 1px solid; border-radius: 3px;">
       <html:table id="zv-bindings-table"
         style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
         <html:thead>
-          <html:tr style="background: #f0f0f0; position: sticky; top: 0;">
-            <html:th data-i18n="zv.bindings.mode" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid #ccc; width: 80px;">Mode</html:th>
-            <html:th data-i18n="zv.bindings.key" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid #ccc; width: 140px;">Key sequence</html:th>
-            <html:th data-i18n="zv.bindings.action" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid #ccc;">Action</html:th>
-            <html:th style="padding: 6px 10px; border-bottom: 1px solid #ccc; width: 50px;"></html:th>
+          <html:tr style="position: sticky; top: 0;">
+            <html:th data-i18n="zv.bindings.mode" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid; width: 80px;">Mode</html:th>
+            <html:th data-i18n="zv.bindings.key" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid; width: 140px;">Key sequence</html:th>
+            <html:th data-i18n="zv.bindings.action" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid;">Action</html:th>
+            <html:th style="padding: 6px 10px; border-bottom: 1px solid; width: 50px;"></html:th>
           </html:tr>
         </html:thead>
         <html:tbody id="zv-bindings-body">
@@ -253,14 +259,14 @@
   <!-- Modes/marks/colour/scroll save live on change.
        Keybindings need an explicit "Apply" because the table is edited. -->
   <hbox style="margin-top: 12px; justify-content: flex-end; align-items: center;">
-    <html:p style="font-size: 0.85em; color: #888; margin: 0 12px 0 0;"
+    <html:p style="font-size: 0.85em; margin: 0 12px 0 0;"
       data-i18n="zv.bindings.footer">
-      Modes, marks, colour and scroll settings save automatically.
+      Appearance, modes, marks, colour and scroll settings save automatically.
     </html:p>
     <html:button id="zv-save"
       data-i18n="zv.bindings.apply" style="padding: 4px 16px; font-weight: bold;">Apply bindings</html:button>
-    <html:span id="zv-save-status"
-      style="margin-left: 10px; font-size: 0.9em; color: #5FB236;"></html:span>
+    <html:span id="zv-save-status" class="zv-status"
+      style="margin-left: 10px; font-size: 0.9em;"></html:span>
   </hbox>
 
 </vbox>

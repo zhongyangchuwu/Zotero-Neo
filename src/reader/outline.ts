@@ -1,3 +1,4 @@
+import { THEME_VARS } from '../ui/theme';
 import type {
   OutlineNode,
   OutlineSourceNode,
@@ -14,6 +15,7 @@ export interface OutlineHost {
   readonly clearTimer: (timer: ReaderTimer | null) => void;
   readonly log: (message: string) => void;
   readonly setModeNormal: () => void;
+  readonly themeRoot: (root: HTMLElement) => () => void;
 }
 
 interface PdfLinkService {
@@ -55,6 +57,8 @@ export class ReaderOutline {
     state.open = false;
     state.loading = false;
     this.clearBuffers(state);
+    state.themeCleanup?.();
+    state.themeCleanup = null;
     state.overlay?.remove();
     state.overlay = null;
     state.list = null;
@@ -155,21 +159,19 @@ export class ReaderOutline {
     const overlay = document.createElement('div');
     overlay.id = 'zv-outline-explorer';
     overlay.tabIndex = -1;
-    overlay.style.cssText =
-      'position:fixed;top:0;left:0;bottom:0;width:320px;z-index:99998;background:rgba(24,24,37,.96);color:#cdd6f4;border-right:1px solid #313244;display:flex;flex-direction:column;box-shadow:12px 0 40px rgba(0,0,0,.35);font:13px/1.35 monospace;';
+    overlay.style.cssText = `position:fixed;top:0;left:0;bottom:0;width:320px;z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border-right:1px solid ${THEME_VARS.border};display:flex;flex-direction:column;box-shadow:12px 0 40px ${THEME_VARS.shadow};font:13px/1.35 monospace`;
     const title = document.createElement('div');
-    title.style.cssText =
-      'padding:12px 14px;border-bottom:1px solid #313244;font-weight:bold;letter-spacing:.04em;';
+    title.style.cssText = `padding:12px 14px;border-bottom:1px solid ${THEME_VARS.border};font-weight:bold;letter-spacing:.04em;background:${THEME_VARS.elevated}`;
     title.textContent = 'Outline Explorer';
     const list = document.createElement('div');
     list.style.cssText = 'flex:1;overflow:auto;padding:8px 0;';
     const status = document.createElement('div');
-    status.style.cssText =
-      'padding:6px 12px;border-top:1px solid #313244;color:#6c7086;font-size:11px;';
+    status.style.cssText = `padding:6px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
     status.textContent =
       'j/k move · Ctrl+d/u fast · gg/G top/bottom · R/M expand/collapse all · Enter jump';
     overlay.append(title, list, status);
     root.appendChild(overlay);
+    state.themeCleanup = this.#host.themeRoot(overlay);
     state.overlay = overlay;
     state.list = list;
     state.status = status;
@@ -182,14 +184,14 @@ export class ReaderOutline {
     const document = list.ownerDocument;
     if (state.loading) {
       const row = document.createElement('div');
-      row.style.cssText = 'padding:12px 14px;color:#6c7086;';
+      row.style.cssText = `padding:12px 14px;color:${THEME_VARS.muted}`;
       row.textContent = 'Loading outline...';
       list.appendChild(row);
       return;
     }
     if (!state.visible.length) {
       const row = document.createElement('div');
-      row.style.cssText = 'padding:12px 14px;color:#6c7086;';
+      row.style.cssText = `padding:12px 14px;color:${THEME_VARS.muted}`;
       row.textContent = 'No outline available';
       list.appendChild(row);
       return;
@@ -198,7 +200,7 @@ export class ReaderOutline {
     state.visible.forEach((node, index) => {
       const row = document.createElement('div');
       const selected = index === state.selected;
-      row.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px 6px ${12 + node.depth * 16}px;cursor:pointer;border-left:3px solid ${selected ? '#89b4fa' : 'transparent'};background:${selected ? '#313244' : 'transparent'};`;
+      row.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px 6px ${12 + node.depth * 16}px;cursor:pointer;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
       const indicator = node.children.length ? (node.expanded ? '▾' : '▸') : '·';
       row.textContent = `${node.hint.padEnd(2)} ${indicator} ${node.title}`;
       row.addEventListener('click', () => {

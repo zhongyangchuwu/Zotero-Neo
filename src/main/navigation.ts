@@ -2,6 +2,7 @@ import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
 import { citationKey } from '../platform/better-bibtex';
 import { copyToClipboard } from '../platform/clipboard';
+import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 
 type Selection = { focused?: number; count?: number; select?(index: number): void };
@@ -82,11 +83,12 @@ export class MainNavigation {
   status(session: MainWindowSession, text: string, milliseconds = 2000): void {
     session.status.textContent = text;
     session.status.style.display = 'block';
+    session.status.style.color = THEME_VARS.onAccent;
     session.status.style.background = text.startsWith('✓')
-      ? 'rgba(50,150,50,.9)'
+      ? THEME_VARS.success
       : text.startsWith('→') || text.startsWith('▶')
-        ? 'rgba(60,100,180,.9)'
-        : 'rgba(180,40,40,.9)';
+        ? THEME_VARS.accent
+        : THEME_VARS.error;
     const timer = session.window.setTimeout(() => {
       session.status.style.display = 'none';
     }, milliseconds);
