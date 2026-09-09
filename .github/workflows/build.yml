@@ -23,7 +23,7 @@ jobs:
       - name: Build XPI
         run: ./build.sh
       - name: Upload Linux XPI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zotero-neo-linux
           path: zotero-neo.xpi
@@ -46,7 +46,7 @@ jobs:
         shell: pwsh
         run: ./tools/build.ps1
       - name: Upload Windows XPI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: zotero-neo-windows
           path: zotero-neo.xpi
@@ -71,7 +71,7 @@ jobs:
       - name: Validate release metadata
         run: node tools/check-release.mjs "$GITHUB_REF_NAME"
       - name: Download canonical XPI
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: zotero-neo-linux
           path: release
