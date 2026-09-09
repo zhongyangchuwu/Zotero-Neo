@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["zotero-types/entries/mainWindow", "node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "tools/*.d.mts", "tests/**/*.ts", "vitest.config.ts"]
+}

@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
       - name: Build XPI
         run: ./build.sh
       - name: Upload Linux XPI
@@ -36,6 +39,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
       - name: Build XPI
         shell: pwsh
         run: ./tools/build.ps1
@@ -63,7 +69,7 @@ jobs:
         with:
           node-version: '24'
       - name: Validate release metadata
-        run: node tools/check-release.js "$GITHUB_REF_NAME"
+        run: node tools/check-release.mjs "$GITHUB_REF_NAME"
       - name: Download canonical XPI
         uses: actions/download-artifact@v5
         with:

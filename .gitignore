@@ -31,8 +31,11 @@ zotero-neo-startup.log
 *.un~
 Session.vim
 
-# Node (if tooling is ever added)
+# Node and generated TypeScript output
 node_modules/
+build/
+coverage/
+*.tsbuildinfo
 npm-debug.log*
 yarn-error.log*
 

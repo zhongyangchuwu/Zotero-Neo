@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "requiredHost": "latest stable Zotero",
+  "surfaces": {
+    "lifecycle": [
+      "cold startup",
+      "restart with restored library tab",
+      "restart with restored reader tabs",
+      "open and close additional main window",
+      "plugin shutdown removes injected state",
+      "idle session produces no recurring startup-log entries"
+    ],
+    "reader": [
+      "new PDF reader injection",
+      "restored PDF reader injection",
+      "multiple reader tabs keep independent mode and count state",
+      "primary and secondary PDF views receive keys after split recreation",
+      "normal motions and count prefixes",
+      "search open next previous and clear",
+      "cursor mode motions",
+      "visual selection motions and swap ends",
+      "highlight and note creation",
+      "annotation navigation edit delete recolor filter and yank",
+      "annotation comment IME composition and autosave",
+      "native annotation editor focus handoff",
+      "outline explorer navigation and activation",
+      "mark set jump delete persist reload and clear",
+      "reader split toggle and directional focus",
+      "Neo-consumed keys do not trigger Zotero Read Aloud or tools"
+    ],
+    "main": [
+      "collection tree navigation and expansion",
+      "item list navigation and activation",
+      "main count prefixes",
+      "tab previous next and tab picker",
+      "open and close selected PDF",
+      "search focus and Escape return",
+      "directional pane focus",
+      "citekey copy with and without Better BibTeX",
+      "fuzzy all-items and current-collection picker",
+      "picker focus restoration"
+    ],
+    "notes": [
+      "notes layout navigation preview creation and open targets",
+      "context note Normal and Insert modes",
+      "standalone note Normal and Insert modes",
+      "note motions operators text object line operations paste undo and redo",
+      "editable text receives ordinary input without interception",
+      "note listener follows editor replacement and cleans up"
+    ],
+    "preferences": [
+      "preference pane opens without script errors",
+      "English and Chinese runtime localization",
+      "mode controls persist",
+      "scroll mode and numeric controls clamp and persist",
+      "mark persistence control persists",
+      "default highlight color persists",
+      "custom bindings persist",
+      "reset restores all default bindings"
+    ]
+  },
+  "record": {
+    "zoteroVersion": null,
+    "operatingSystem": null,
+    "xpiSha256": null,
+    "executedAt": null,
+    "results": {}
+  }
+}
