@@ -12,8 +12,12 @@ const expectedMembers = [
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
   'icons/icon-128x128.png',
+  'icons/icon-16x16.png',
+  'icons/icon-256x256.png',
+  'icons/icon-32x32.png',
+  'icons/icon-48x48.png',
   'icons/icon-64x64.png',
-  'icons/zotero-neo.svg',
+  'icons/icon-96x96.png',
   'manifest.json',
 ];
 
@@ -38,12 +42,16 @@ describe('ZIP package contract', () => {
       const source = join(directory, 'addon');
       for (const [member, contents] of [
         ['manifest.json', '{"version":"1.2.3"}'],
-        ['icons/zotero-neo.svg', '<svg/>'],
+        ['icons/icon-256x256.png', 'largest icon'],
         ['content/zotero-neo.js', 'window.ZoteroNeo = true;'],
         ['icons/icon-64x64.png', 'small icon'],
+        ['icons/icon-16x16.png', 'smallest icon'],
+        ['icons/icon-96x96.png', 'medium icon'],
         ['content/preferences/pane.xhtml', '<html/>'],
         ['bootstrap.js', 'function startup() {}'],
+        ['icons/icon-32x32.png', 'compact icon'],
         ['icons/icon-128x128.png', 'large icon'],
+        ['icons/icon-48x48.png', 'toolbar icon'],
         ['content/preferences/pane.js', 'window.Pane = true;'],
       ] as const) {
         writeFixtureFile(source, member, contents);

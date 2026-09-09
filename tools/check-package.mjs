@@ -12,8 +12,12 @@ const expected = [
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
   'icons/icon-128x128.png',
+  'icons/icon-16x16.png',
+  'icons/icon-256x256.png',
+  'icons/icon-32x32.png',
+  'icons/icon-48x48.png',
   'icons/icon-64x64.png',
-  'icons/zotero-neo.svg',
+  'icons/icon-96x96.png',
   'manifest.json',
 ].sort();
 
