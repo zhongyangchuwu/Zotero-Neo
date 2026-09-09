@@ -73,6 +73,17 @@ pages, and so on.
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
 
+#### Reading history
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+o` | Go back through Zotero's native reading history |
+| `Ctrl+i` | Go forward through Zotero's native reading history |
+
+History remains owned by Zotero and follows the last active primary or split
+reader view. Empty history boundaries are safe no-ops. These bindings are active
+only in reader Normal mode; Insert mode and editable controls retain native input.
+
 > **Note:** Zotero's built-in Read Aloud also listens for the `l`/`r` keys.
 > The plugin blocks Zotero's reader key forwarding for keys vim consumes, so
 > `l` (next page) never starts Read Aloud. To use Read Aloud, press `r`
