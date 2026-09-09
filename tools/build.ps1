@@ -1,76 +1,28 @@
-# Build zotero-neo.xpi on Windows (PowerShell 5.1+).
-# Equivalent of build.sh — creates a POSIX-path zip that Gecko can read
-# (never use Compress-Archive: it writes backslash entry paths that break
-# Zotero's jar:// loading).
+# Build and verify zotero-neo.xpi on Windows (PowerShell 5.1+).
 # Usage: powershell -ExecutionPolicy Bypass -File tools\build.ps1
 param(
-    [string]$Root = ($PSScriptRoot | Split-Path -Parent),
-    [string]$Output = "zotero-neo.xpi"
+    [string]$Root = ($PSScriptRoot | Split-Path -Parent)
 )
 
 $ErrorActionPreference = "Stop"
-
 $Root = (Resolve-Path -LiteralPath $Root).Path
 
-# Optional sanity checks (mirror build.sh).
-if (Get-Command node -ErrorAction SilentlyContinue) {
-    function Test-NodeSyntax([string]$Path) {
-        & node --check $Path
-        if ($LASTEXITCODE -ne 0) {
-            throw "JavaScript syntax check failed: $Path"
-        }
-    }
-
-    Push-Location $Root
-    try {
-        Test-NodeSyntax "bootstrap.js"
-        Get-ChildItem -LiteralPath (Join-Path $Root "content") -File -Recurse -Filter "*.js" |
-            ForEach-Object { Test-NodeSyntax $_.FullName }
-        Test-NodeSyntax "tools/check-release.js"
-        & node tools/check-sync.js
-        if ($LASTEXITCODE -ne 0) {
-            throw "Binding-table sync check failed"
-        }
-    } finally {
-        Pop-Location
-    }
+if (-not (Get-Command node -ErrorAction SilentlyContinue) -or
+    -not (Get-Command npm -ErrorAction SilentlyContinue)) {
+    throw "Node.js 24 and npm are required"
 }
-else {
-    Write-Host "Warning: node not found - skipping syntax and sync checks."
+if (-not (Test-Path -LiteralPath (Join-Path $Root "node_modules"))) {
+    throw "Dependencies are missing; run 'npm ci' first"
 }
 
-Add-Type -AssemblyName System.IO.Compression
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-$outPath = Join-Path $Root $Output
-
-Remove-Item -LiteralPath $outPath -ErrorAction SilentlyContinue
-
-$files = @()
-$files += Join-Path $Root "manifest.json"
-$files += Join-Path $Root "bootstrap.js"
-$files += Get-ChildItem -LiteralPath (Join-Path $Root "content") -File -Recurse | ForEach-Object { $_.FullName }
-$files += Get-ChildItem -LiteralPath (Join-Path $Root "icons") -File | ForEach-Object { $_.FullName }
-
-$fs = [System.IO.File]::Create($outPath)
-$zip = New-Object System.IO.Compression.ZipArchive(
-    $fs,
-    [System.IO.Compression.ZipArchiveMode]::Create)
+Push-Location $Root
 try {
-    foreach ($f in $files) {
-        $rel = $f.Substring($Root.Length + 1).Replace('\', '/')
-        $entry = $zip.CreateEntry($rel, [System.IO.Compression.CompressionLevel]::Optimal)
-        $stream = $entry.Open()
-        try {
-            $bytes = [System.IO.File]::ReadAllBytes($f)
-            $stream.Write($bytes, 0, $bytes.Length)
-        } finally {
-            $stream.Dispose()
-        }
+    & npm run verify
+    if ($LASTEXITCODE -ne 0) {
+        throw "Zotero Neo verification failed"
     }
 } finally {
-    $zip.Dispose()
-    $fs.Dispose()
+    Pop-Location
 }
 
-Write-Host "Done: $Output"
+Write-Host "Done: zotero-neo.xpi"

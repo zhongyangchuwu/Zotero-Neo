@@ -19,22 +19,23 @@ The Windows-native equivalent is:
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
-Both builders produce `zotero-neo.xpi`, syntax-check JavaScript when Node is
-available, and run `tools/check-sync.js` to compare default bindings and action
-labels.
+Both builders run the same `npm run verify` workflow: Prettier, strict
+TypeScript checks, Vitest contracts, the esbuild package build, and the XPI
+member check. Run `npm ci` before either builder.
 
 GitHub Actions runs the Linux and Windows builders on pushes and pull requests,
 then uploads separate XPI artifacts. A version tag runs a guarded release job:
-`tools/check-release.js` requires the tag, manifest version, compatibility
+`tools/check-release.mjs` requires the tag, manifest version, compatibility
 range, and prepared `updates.json` entry to agree before the Linux-built XPI is
 published. Do not create a release tag until its update-feed entry exists.
 
 ## Runtime architecture
 
-Zotero Neo is plain JavaScript for Gecko Bootstrap. `bootstrap.js` loads the
-base controller, then reader and main-window extensions into one `ZoteroNeo`
-object before startup. Script order is a contract: the base controller must load
-before extensions that call `Object.assign(ZoteroNeo, ...)`.
+Zotero Neo is authored as strict TypeScript and bundled to plain JavaScript for
+Gecko Bootstrap. `bootstrap.js` remains a global Bootstrap entry point; it loads
+the IIFE runtime bundle at `content/zotero-neo.js`, which installs one
+`ZoteroNeo` controller on its global. Preferences use a separate IIFE at
+`content/preferences/pane.js`. The XPI contains generated JavaScript only.
 
 The reader has three relevant document layers:
 
@@ -44,9 +45,9 @@ Zotero chrome window
        └─ PDF.js iframe   (reader._internalReader._primaryView._iframeWindow)
 ```
 
-Reader state is per instance ID in `_readerState`; do not put reader-specific
-state at module scope. Objects crossing the chrome/content boundary must use
-`Components.utils.cloneInto(value, targetWindow)`.
+Reader state belongs to `ReaderController` sessions keyed by `instanceID`; do
+not put reader-specific state at module scope. Objects crossing the
+chrome/content boundary must use `Components.utils.cloneInto(value, targetWindow)`.
 
 ## Reader keyboard forwarding
 
@@ -75,14 +76,21 @@ fight to reclaim focus.
 
 ## Source layout
 
-The runtime currently uses explicit script paths and no module system. Source
-path migrations must update bootstrap, preference registration, both builders,
-syntax checks, `tools/check-sync.js`, and documentation atomically. Keep
-runtime script order explicit; do not auto-discover scripts.
+```text
+src/
+  addon.ts                 controller composition and preference registration
+  bootstrap.ts             global Gecko Bootstrap lifecycle entry
+  input/                   canonical bindings, actions, and input matcher
+  main/                    main-window controller and UI features
+  reader/                  reader lifecycle, input, annotations, marks, outline
+  preferences/index.ts     preference-pane behavior and localization
+  platform/                narrow Gecko and optional-addon boundaries
+```
 
-Default bindings currently exist in both runtime and preferences tables. The
-binding-sync tool protects parity. Consolidating them belongs to the approved
-keymap phase, where a canonical keymap can also serve Which-Key.
+`src/input/` is the canonical source for bindings and bilingual action labels.
+The preference pane imports that metadata directly; do not recreate a second
+binding table. `tools/build.mjs` creates deterministic ZIP bytes with the eight
+packaged members verified by `tools/check-package.mjs`.
 
 ## Diagnostics
 

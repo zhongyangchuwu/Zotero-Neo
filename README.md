@@ -31,6 +31,7 @@ verification in the current stable host.
 ```bash
 git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
 cd Zotero-Neo
+npm ci
 ./build.sh
 ```
 

@@ -1,39 +1,19 @@
 #!/usr/bin/env bash
-# Build Zotero Neo as an installable .xpi file.
+# Build and verify Zotero Neo as an installable .xpi file.
 # Usage: ./build.sh
 set -euo pipefail
 
-OUTPUT="zotero-neo.xpi"
-
-# Optional sanity checks. Only `zip` is required to build; if `node` is
-# available, recursively verify content JavaScript and binding-table sync.
-if command -v node >/dev/null 2>&1; then
-  echo "Checking JS syntax and binding-table sync ..."
-  node --check bootstrap.js
-  while IFS= read -r -d '' file; do
-    node --check "$file"
-  done < <(find content -type f -name '*.js' -print0)
-  node --check tools/check-release.js
-  node tools/check-sync.js
-else
-  echo "Warning: node not found — skipping syntax and sync checks."
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "Error: Node.js 24 and npm are required." >&2
+  exit 1
+fi
+if [[ ! -d node_modules ]]; then
+  echo "Error: dependencies are missing; run 'npm ci' first." >&2
+  exit 1
 fi
 
-echo "Building $OUTPUT ..."
+npm run verify
 
-# Remove previous build.
-rm -f "$OUTPUT"
-
-# An .xpi is just a zip of the plugin root (without the outer directory).
-zip -r "$OUTPUT" \
-  manifest.json \
-  bootstrap.js \
-  content/ \
-  icons/
-
-echo "Done: $OUTPUT"
 echo ""
-echo "To install:"
-echo "  1. Open Zotero → Tools → Plugins"
-echo "  2. Click the gear icon → Install Plugin From File..."
-echo "  3. Select $(pwd)/$OUTPUT"
+echo "Done: zotero-neo.xpi"
+echo "To install: Zotero → Tools → Plugins → gear → Install Plugin From File..."
