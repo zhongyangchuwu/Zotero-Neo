@@ -56,7 +56,8 @@
       "mark persistence control persists",
       "default highlight color persists",
       "custom bindings persist",
-      "reset restores all default bindings"
+      "reset restores all default bindings",
+      "appearance Auto Light Dark persistence and live panel updates"
     ]
   },
   "record": {

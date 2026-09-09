@@ -48,7 +48,7 @@ export class MainWindowController implements MainWindowControllerApi {
 
   addWindow(window: MainWindow): void {
     if (this.#sessions.has(window)) return;
-    const session = new MainWindowSession(window);
+    const session = new MainWindowSession(window, this.#dependencies.preferences);
     this.#sessions.set(window, session);
     const scan = (): void => {
       this.rescan(window);

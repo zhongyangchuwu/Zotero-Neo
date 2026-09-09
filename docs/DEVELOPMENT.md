@@ -49,6 +49,15 @@ Reader state belongs to `ReaderController` sessions keyed by `instanceID`; do
 not put reader-specific state at module scope. Objects crossing the
 chrome/content boundary must use `Components.utils.cloneInto(value, targetWindow)`.
 
+### Neo-owned appearance
+
+`src/ui/theme.ts` owns Auto, Light, and Dark resolution and semantic panel
+tokens. Auto reads Zotero's computed `--color-background` first and falls back
+to the owner window's `prefers-color-scheme`. Each main window or reader
+document owns its own `ThemeManager`; preference, media-query, and root-attribute
+listeners are disposed with that session. Apply variables only to Neo roots —
+never recolour Zotero documents, PDF pages, annotation colours, or link hints.
+
 ## Reader keyboard forwarding
 
 Zotero forwards PDF keys through `PdfView._onKeyDown`, outside normal DOM event
@@ -85,6 +94,7 @@ src/
   reader/                  reader lifecycle, input, annotations, marks, outline
   preferences/index.ts     preference-pane behavior and localization
   platform/                narrow Gecko and optional-addon boundaries
+  ui/theme.ts              shared appearance resolution and semantic palette
 ```
 
 `src/input/` is the canonical source for bindings and bilingual action labels.

@@ -1,5 +1,6 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
+import { THEME_VARS } from '../ui/theme';
 import type { MainWindowSession, NoteEntry, NoteRow } from './session';
 import { MainNavigation } from './navigation';
 const H = 'http://www.w3.org/1999/xhtml';
@@ -23,6 +24,7 @@ export class NotesLayout {
   }
   close(session: MainWindowSession): void {
     if (!session.notes.open) return;
+    session.notes.themeCleanup?.();
     session.notes.overlay?.remove();
     clearTimeout(session.notes.hintTimer);
     clearTimeout(session.notes.commandTimer);
@@ -39,6 +41,7 @@ export class NotesLayout {
       selected: 0,
       hint: '',
       command: '',
+      themeCleanup: null,
     };
   }
   onKeyDown(event: KeyboardEvent, window: MainWindow, session: MainWindowSession): void {
@@ -150,27 +153,25 @@ export class NotesLayout {
     const h = (tag: string): HTMLElement => doc.createElementNS(H, tag);
     const overlay = h('div');
     overlay.id = 'zv-notes-layout-overlay';
-    overlay.style.cssText =
-      'position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:99999;display:flex;align-items:center;justify-content:center;padding:4vh 4vw';
+    overlay.style.cssText = `position:fixed;inset:0;background:${THEME_VARS.backdrop};z-index:99999;display:flex;align-items:center;justify-content:center;padding:4vh 4vw`;
     const modal = h('div');
-    modal.style.cssText =
-      'width:min(1100px,92vw);height:min(760px,88vh);background:#10141b;color:#e8edf5;border:1px solid #2b3442;border-radius:10px;overflow:hidden;display:flex;flex-direction:column;font:13px/1.45 monospace';
+    modal.style.cssText = `width:min(1100px,92vw);height:min(760px,88vh);background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px ${THEME_VARS.shadow};font:13px/1.45 monospace`;
     const status = h('div');
     status.textContent =
       'j/k move · Ctrl+d/u fast · Ctrl+j/k section · Ctrl+h/l list/preview · n/N new · Enter/Shift+Enter open';
-    status.style.cssText = 'padding:10px 14px;background:#16202d;border-bottom:1px solid #2b3442';
+    status.style.cssText = `padding:10px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted}`;
     const body = h('div');
     body.style.cssText =
       'display:grid;grid-template-columns:minmax(320px,38%) 1fr;min-height:0;flex:1';
     const list = h('div');
-    list.style.cssText =
-      'overflow:auto;padding:8px;background:#0f141d;border-right:1px solid #2b3442';
+    list.style.cssText = `overflow:auto;padding:8px;background:${THEME_VARS.surface};border-right:1px solid ${THEME_VARS.border}`;
     const preview = h('div');
-    preview.style.cssText = 'overflow:auto;padding:14px 16px;background:#111825';
+    preview.style.cssText = `overflow:auto;padding:14px 16px;background:${THEME_VARS.elevated}`;
     body.append(list, preview);
     modal.append(status, body);
     overlay.append(modal);
     (doc.body ?? doc.documentElement).append(overlay);
+    const themeCleanup = session.theme.add(overlay);
     overlay.addEventListener('mousedown', (event) => {
       if (event.target === overlay) this.close(session);
     });
@@ -186,6 +187,7 @@ export class NotesLayout {
       current: [],
       all: [],
       entries: [],
+      themeCleanup,
     };
     list.textContent = 'Loading notes…';
     preview.textContent = 'Loading note preview…';
@@ -217,10 +219,14 @@ export class NotesLayout {
     const preview = session.notes.preview;
     if (!list || !preview) return;
     list.replaceChildren();
-    if (!entries.length) list.textContent = 'No notes found.';
+    if (!entries.length) {
+      list.style.color = THEME_VARS.muted;
+      list.textContent = 'No notes found.';
+    }
     entries.forEach((entry, index) => {
       const card = list.ownerDocument.createElementNS(H, 'article');
-      card.style.cssText = `border:1px solid ${index === session.notes.selected ? '#5f93da' : '#293240'};background:${index === session.notes.selected ? '#152236' : '#0f151f'};border-radius:6px;padding:6px 8px;margin:0 0 6px`;
+      const selectedCard = index === session.notes.selected;
+      card.style.cssText = `border:1px solid ${selectedCard ? THEME_VARS.accent : THEME_VARS.border};background:${selectedCard ? THEME_VARS.selected : THEME_VARS.surface};color:${selectedCard ? THEME_VARS.selectedText : THEME_VARS.text};border-radius:6px;padding:6px 8px;margin:0 0 6px`;
       card.textContent = `[${this.hint(index)}] ${entry.section === 'current' ? 'Current: ' : ''}${entry.row.title}`;
       card.addEventListener('click', () => {
         session.notes.selected = index;
@@ -238,8 +244,7 @@ export class NotesLayout {
     const title = preview.ownerDocument.createElementNS(H, 'h3');
     title.textContent = selected.row.title;
     const text = preview.ownerDocument.createElementNS(H, 'div');
-    text.style.cssText =
-      'white-space:pre-wrap;color:#c8d6e8;line-height:1.6;background:#0f151f;border:1px solid #293240;border-radius:8px;padding:12px 14px';
+    text.style.cssText = `white-space:pre-wrap;color:${THEME_VARS.text};line-height:1.6;background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;padding:12px 14px`;
     text.textContent = selected.row.text;
     preview.append(title, text);
     list.children[session.notes.selected]?.scrollIntoView({ block: 'nearest' });
@@ -299,10 +304,10 @@ export class NotesLayout {
     session.notes.pane = pane;
     if (session.notes.list)
       session.notes.list.style.boxShadow =
-        pane === 'list' ? 'inset 0 0 0 1px rgba(98,156,236,.75)' : 'none';
+        pane === 'list' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
     if (session.notes.preview)
       session.notes.preview.style.boxShadow =
-        pane === 'preview' ? 'inset 0 0 0 1px rgba(98,156,236,.75)' : 'none';
+        pane === 'preview' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
   }
   private async openSelected(
     window: MainWindow,

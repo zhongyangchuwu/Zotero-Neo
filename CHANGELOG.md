@@ -16,15 +16,21 @@ All notable changes to Zotero Neo are documented here.
   English guides; removed translated project documents and inherited demo media.
 - Clarified latest-stable Zotero support and named Zotero Vim Plus as the
   immediate upstream while preserving historical attribution.
-- Replaced inherited runtime filenames with `core.js`, `reader.js`, and
-  `main.js`; grouped preference-pane sources under `content/preferences/`.
+- Replaced the inherited ordered-global JavaScript runtime with strict TypeScript
+  reader/main controllers, typed host boundaries, focused Vitest contracts, and
+  deterministic esbuild bundles containing no runtime npm dependencies.
 - Stopped periodic idle reader rescans from growing `zotero-neo-startup.log`.
 - Added GitHub Actions validation for native Ubuntu and Windows XPI builds.
 - Added independently named CI artifacts and guarded version-tag publication of
   one canonical `zotero-neo.xpi`.
 - Added release metadata validation for manifest, compatibility, tag, and
   `updates.json` consistency.
+- Added Auto, Light, and Dark appearance modes across Neo preferences, pickers,
+  explorers, notes layout, annotation comments, and status/mode surfaces.
+- Upgraded GitHub artifact actions to current Node 24 runtimes.
 
 ### Removed
 
 - Removed unused legacy Vim icon assets from the packaged source tree.
+- Removed unpackaged legacy runtime/preference sources and migration-only
+  characterization generators, fixtures, and synchronization tooling.

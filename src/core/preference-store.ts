@@ -3,6 +3,7 @@ import { PREFERENCE_PREFIX, type PreferenceReader } from './preferences';
 export interface PreferenceStore extends PreferenceReader {
   has(key: string): boolean;
   set(key: string, value: boolean | number | string): void;
+  observe?(key: string, listener: () => void): () => void;
 }
 
 export class ZoteroPreferenceStore implements PreferenceStore {
@@ -49,5 +50,22 @@ export class ZoteroPreferenceStore implements PreferenceStore {
     } else {
       Services.prefs.setStringPref(fullKey, value);
     }
+  }
+
+  observe(key: string, listener: () => void): () => void {
+    const fullKey = this.#fullKey(key);
+    const observer = {
+      observe(): void {
+        listener();
+      },
+    };
+    Services.prefs.addObserver(fullKey, observer);
+    return () => {
+      try {
+        Services.prefs.removeObserver(fullKey, observer);
+      } catch {
+        // The preference service may already be shutting down.
+      }
+    };
   }
 }

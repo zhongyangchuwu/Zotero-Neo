@@ -1,3 +1,5 @@
+import { ZoteroPreferenceStore } from '../core/preference-store';
+import { PREFERENCE_PREFIX } from '../core/preferences';
 import { ACTION_IDS, ACTION_LABELS, isActionId, type ActionId } from '../input/actions';
 import {
   DEFAULT_BINDINGS,
@@ -7,8 +9,16 @@ import {
   type BindingMap,
   type Mode,
 } from '../input/bindings';
+import {
+  APPEARANCE_PREFERENCE_KEY,
+  THEME_VARS,
+  ThemeManager,
+  appearanceModeFromPreferences,
+  type AppearanceMode,
+  type ThemeRoot,
+} from '../ui/theme';
 
-const PREFERENCE_PREFIX = 'extensions.zotero-neo.';
+const PREFERENCE_BRANCH = `${PREFERENCE_PREFIX}.`;
 const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 const INITIAL_DELAY_MS = 50;
 const MAX_DELAY_MS = 1_000;
@@ -28,6 +38,12 @@ interface XulMenuList extends Element {
 const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
   en: {
     'zv.lang.label': 'Language',
+    'zv.appearance': 'Appearance',
+    'zv.appearance.help': 'Auto follows Zotero; Light and Dark override it for Neo panels.',
+    'zv.appearance.mode': 'Theme',
+    'zv.appearance.auto': 'Auto',
+    'zv.appearance.light': 'Light',
+    'zv.appearance.dark': 'Dark',
     'zv.modes': 'Modes',
     'zv.mode.visual': 'Enable Visual mode (v — select text and annotate)',
     'zv.mode.insert': 'Enable Insert / passthrough mode (i — disable vim keys temporarily)',
@@ -69,17 +85,23 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help4a': 'Multi-key sequences such as ',
     'zv.bindings.help4b': ' or ',
     'zv.bindings.help4c': ' are supported.',
-    'zv.bindings.add': '+ Add binding',
+    'zv.bindings.footer':
+      'Appearance, modes, marks, colour and scroll settings save automatically.',
     'zv.bindings.reset': 'Reset to defaults',
     'zv.bindings.mode': 'Mode',
     'zv.bindings.key': 'Key sequence',
     'zv.bindings.action': 'Action',
-    'zv.bindings.footer': 'Modes, marks, colour and scroll settings save automatically.',
     'zv.bindings.apply': 'Apply bindings',
     'zv.status.saved': 'Saved!',
   },
   'zh-CN': {
     'zv.lang.label': '语言',
+    'zv.appearance': '外观',
+    'zv.appearance.help': '自动模式跟随 Zotero；浅色和深色仅覆盖 Neo 面板。',
+    'zv.appearance.mode': '主题',
+    'zv.appearance.auto': '自动',
+    'zv.appearance.light': '浅色',
+    'zv.appearance.dark': '深色',
     'zv.modes': '模式',
     'zv.mode.visual': '启用可视模式（v — 选择文本并标注）',
     'zv.mode.insert': '启用插入 / 透传模式（i — 临时禁用 vim 按键）',
@@ -124,8 +146,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.mode': '模式',
     'zv.bindings.key': '键序列',
     'zv.bindings.action': '动作',
-    'zv.bindings.footer': '模式、标记、颜色与滚动设置在更改时自动保存。',
-    'zv.bindings.apply': '应用绑定',
+    'zv.bindings.footer': '外观、模式、标记、颜色与滚动设置在更改时自动保存。',
     'zv.status.saved': '已保存！',
   },
 } as const satisfies Record<Language, Record<string, string>>;
@@ -150,6 +171,7 @@ const MODE_ORDER: Readonly<Record<Mode, number>> = {
 
 const initializedDocuments = new WeakSet<Document>();
 const observers = new WeakMap<Document, MutationObserver>();
+const preferenceStore = new ZoteroPreferenceStore();
 
 function getPreference(key: string, fallback: boolean): boolean;
 function getPreference(key: string, fallback: number): number;
@@ -157,7 +179,7 @@ function getPreference(key: string, fallback: string): string;
 function getPreference(key: string, fallback: PreferenceValue): PreferenceValue {
   try {
     const branch = Services.prefs;
-    const fullKey = `${PREFERENCE_PREFIX}${key}`;
+    const fullKey = `${PREFERENCE_BRANCH}${key}`;
     switch (branch.getPrefType(fullKey)) {
       case 128:
         return branch.getBoolPref(fullKey);
@@ -175,7 +197,7 @@ function getPreference(key: string, fallback: PreferenceValue): PreferenceValue 
 
 function hasPreference(key: string): boolean {
   try {
-    return Services.prefs.getPrefType(`${PREFERENCE_PREFIX}${key}`) !== 0;
+    return Services.prefs.getPrefType(`${PREFERENCE_BRANCH}${key}`) !== 0;
   } catch {
     return false;
   }
@@ -184,7 +206,7 @@ function hasPreference(key: string): boolean {
 function setPreference(key: string, value: PreferenceValue): void {
   try {
     const branch = Services.prefs;
-    const fullKey = `${PREFERENCE_PREFIX}${key}`;
+    const fullKey = `${PREFERENCE_BRANCH}${key}`;
     if (typeof value === 'boolean') branch.setBoolPref(fullKey, value);
     else if (typeof value === 'number') branch.setIntPref(fullKey, value);
     else branch.setStringPref(fullKey, value);
@@ -266,7 +288,7 @@ function clampInteger(
 function flashStatus(element: HTMLElement | null, text: string): void {
   if (!element) return;
   element.textContent = text;
-  element.style.color = '#5FB236';
+  element.style.color = THEME_VARS.success;
   window.setTimeout(() => {
     element.textContent = '';
   }, STATUS_DURATION_MS);
@@ -317,7 +339,7 @@ function makeBindingRow(
   isNew: boolean,
 ): HTMLTableRowElement {
   const row = doc.createElement('tr');
-  row.style.borderBottom = '1px solid #eee';
+  row.style.borderBottom = `1px solid ${THEME_VARS.border}`;
   row.dataset.mode = mode;
 
   const modeCell = doc.createElement('td');
@@ -372,8 +394,7 @@ function makeBindingRow(
   const deleteButton = doc.createElement('button');
   deleteButton.type = 'button';
   deleteButton.textContent = '×';
-  deleteButton.style.cssText =
-    'cursor:pointer;padding:0 6px;font-size:1.1em;background:none;border:1px solid #ccc;border-radius:3px;';
+  deleteButton.style.cssText = `cursor:pointer;padding:0 6px;font-size:1.1em;background:none;color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:3px;`;
   deleteButton.addEventListener('click', () => row.remove());
   deleteCell.appendChild(deleteButton);
   row.appendChild(deleteCell);
@@ -438,6 +459,20 @@ function initializePane(doc: Document): void {
   initializedDocuments.add(doc);
   observers.get(doc)?.disconnect();
   observers.delete(doc);
+  const view = doc.defaultView;
+  const paneRoot = byId<Element>(doc, 'zotero-neo-prefs') as ThemeRoot | null;
+  let themeManager: ThemeManager | null = null;
+  if (view && paneRoot) {
+    themeManager = new ThemeManager(view, preferenceStore);
+    themeManager.add(paneRoot);
+    view.addEventListener(
+      'unload',
+      () => {
+        themeManager?.dispose();
+      },
+      { once: true },
+    );
+  }
 
   const language = currentLanguage();
   const languageSelect = byId<XulMenuList>(doc, 'zv-language');
@@ -451,6 +486,22 @@ function initializePane(doc: Document): void {
     });
   }
   applyTranslations(doc, language);
+  const appearanceSelect = byId<XulMenuList>(doc, 'zv-appearance-theme');
+  if (appearanceSelect) {
+    appearanceSelect.value = appearanceModeFromPreferences(preferenceStore);
+    appearanceSelect.addEventListener('command', () => {
+      const nextMode: AppearanceMode =
+        appearanceSelect.value === 'light' || appearanceSelect.value === 'dark'
+          ? appearanceSelect.value
+          : 'auto';
+      setPreference(APPEARANCE_PREFERENCE_KEY, nextMode);
+      themeManager?.refresh();
+      flashStatus(
+        byId<HTMLElement>(doc, 'zv-appearance-status'),
+        translate('zv.status.saved', currentLanguage()),
+      );
+    });
+  }
 
   const modesStatus = byId<HTMLElement>(doc, 'zv-modes-status');
   const visualCheckbox = byId<XulCheckbox>(doc, 'zv-visual-enabled');

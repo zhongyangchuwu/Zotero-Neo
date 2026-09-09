@@ -2,6 +2,7 @@ import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
 import { citationKey } from '../platform/better-bibtex';
 import { copyToClipboard } from '../platform/clipboard';
+import { THEME_VARS } from '../ui/theme';
 import type { PickerItem, PickerScope, MainWindowSession } from './session';
 import { MainNavigation, selectedCollection, type TreeView } from './navigation';
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
@@ -34,22 +35,20 @@ export class FuzzyPicker {
     const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
     const overlay = create('div');
     overlay.id = 'zv-picker-overlay';
-    overlay.style.cssText =
-      'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding-top:10vh';
+    overlay.style.cssText = `position:fixed;inset:0;background:${THEME_VARS.backdrop};z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding-top:10vh`;
     const modal = create('div');
-    modal.style.cssText =
-      'background:#1e1e2e;color:#cdd6f4;width:60vw;max-height:70vh;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.8);font:13px/1.4 monospace';
+    modal.style.cssText = `background:${THEME_VARS.surface};color:${THEME_VARS.text};width:60vw;max-height:70vh;border:1px solid ${THEME_VARS.border};border-radius:8px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px ${THEME_VARS.shadow};font:13px/1.4 monospace`;
     const input = create('input') as HTMLInputElement;
     input.type = 'text';
     input.placeholder =
       scope === 'tabs' ? 'Pick tab by hint or search tab title...' : 'Search items...';
-    input.style.cssText =
-      'margin:10px 12px;background:#313244;color:#cdd6f4;border:0;outline:0;border-radius:4px;padding:6px 10px;font:13px/1 monospace';
+    input.style.cssText = `margin:10px 12px;background:${THEME_VARS.input};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};outline:2px solid ${THEME_VARS.focusRing};outline-offset:1px;border-radius:4px;padding:6px 10px;font:13px/1 monospace`;
     const results = create('div');
     results.style.cssText = 'overflow-y:auto;flex:1;max-height:55vh';
     modal.append(input, results);
     overlay.append(modal);
     (doc.body ?? doc.documentElement).append(overlay);
+    const themeCleanup = session.theme.add(overlay);
     // Zotero exposes the focused chrome window as mozIDOMWindowProxy.
     const focusedWindow = Services.focus?.focusedWindow as unknown as Window | null;
     session.picker = {
@@ -64,6 +63,7 @@ export class FuzzyPicker {
       items: [],
       previousElement: doc.activeElement,
       previousWindow: focusedWindow,
+      themeCleanup,
     };
     const inputHandler = (): void => {
       session.picker.selected = 0;
@@ -85,9 +85,11 @@ export class FuzzyPicker {
   }
   close(session: MainWindowSession): void {
     if (!session.picker.open) return;
-    const { overlay, previousElement, previousWindow, yTimer } = session.picker;
+    const { overlay, previousElement, previousWindow, yTimer, themeCleanup } = session.picker;
     clearTimeout(yTimer);
     session.picker.yTimer = undefined;
+    themeCleanup?.();
+    session.picker.themeCleanup = null;
     overlay?.remove();
     session.picker.open = false;
     session.picker.overlay = null;
@@ -189,12 +191,14 @@ export class FuzzyPicker {
     container.replaceChildren();
     const doc = container.ownerDocument;
     if (!session.picker.filtered.length) {
+      container.style.color = THEME_VARS.muted;
       container.textContent = 'No results';
       return;
     }
     session.picker.filtered.forEach((item, index) => {
       const row = doc.createElementNS(H, 'div');
-      row.style.cssText = `padding:6px 12px;cursor:pointer;border-left:3px solid ${index === session.picker.selected ? '#89b4fa;background:#313244' : 'transparent'}`;
+      const selected = index === session.picker.selected;
+      row.style.cssText = `padding:6px 12px;cursor:pointer;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
       row.textContent = fuzzyPickerRowText(item, index, session.picker.scope);
       row.addEventListener('click', () => {
         session.picker.selected = index;
