@@ -23,6 +23,14 @@ export const ACTION_LABELS = {
     en: 'Next page',
     'zh-CN': '下一页',
   },
+  historyBack: {
+    en: 'Go back in reading history (Ctrl-o)',
+    'zh-CN': '返回阅读历史上一位置（Ctrl-o）',
+  },
+  historyForward: {
+    en: 'Go forward in reading history (Ctrl-i)',
+    'zh-CN': '前进到阅读历史下一位置（Ctrl-i）',
+  },
   firstPage: {
     en: 'First page (gg)',
     'zh-CN': '第一页（gg）',

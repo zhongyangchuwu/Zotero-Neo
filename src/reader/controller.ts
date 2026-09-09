@@ -883,6 +883,12 @@ export class ReaderSession {
         this.clearAnnotation();
         this.scrollBy(pdfWindow, this.scrollStep() * number, 0);
         break;
+      case 'historyBack':
+        this.navigateHistory('back');
+        break;
+      case 'historyForward':
+        this.navigateHistory('forward');
+        break;
       case 'halfPageDown':
         this.clearAnnotation();
         this.scrollBy(pdfWindow, 0, (this.viewport(pdfWindow) / 2) * number, true);
@@ -1186,6 +1192,24 @@ export class ReaderSession {
           : this.state.mode === 'insert'
             ? THEME_VARS.success
             : THEME_VARS.elevated;
+  }
+
+  /** Delegates one jump to Zotero's per-view history without caching private host methods. */
+  private navigateHistory(direction: 'back' | 'forward'): void {
+    try {
+      const internal = this.#dependencies.reader._internalReader;
+      const navigate = direction === 'back' ? internal?.navigateBack : internal?.navigateForward;
+      if (typeof navigate !== 'function') {
+        this.showStatus('History unavailable', 1500);
+        return;
+      }
+      navigate.call(internal);
+    } catch (error) {
+      this.#dependencies.controller.dependencies.logger.debug(
+        `reader history ${direction} failed: ${String(error)}`,
+      );
+      this.showStatus('History unavailable', 1500);
+    }
   }
 
   private showStatus(message: string, duration = 2000): void {

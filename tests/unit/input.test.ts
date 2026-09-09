@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_BINDINGS,
   parseBindingKey,
   parseCustomBindings,
   resolveBindings,
@@ -87,6 +88,17 @@ describe('binding parsing and overrides', () => {
     expect(bindings['normal:k']).toBe('scrollUp');
     expect(bindings['normal:']).toBeUndefined();
     expect(bindings['normal:x']).toBeUndefined();
+  });
+
+  it('provides reader-only native history defaults that remain remappable', () => {
+    expect(DEFAULT_BINDINGS['normal:ctrl+o']).toBe('historyBack');
+    expect(DEFAULT_BINDINGS['normal:ctrl+i']).toBe('historyForward');
+    expect('insert:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
+    expect('main:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
+
+    const bindings = resolveBindings('{"normal:ctrl+o":"scrollDown"}');
+    expect(bindings['normal:ctrl+o']).toBe('scrollDown');
+    expect(bindings['normal:ctrl+i']).toBe('historyForward');
   });
 });
 
