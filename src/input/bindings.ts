@@ -29,6 +29,7 @@ export const DEFAULT_BINDINGS = {
   'normal:ctrl+b': 'fullPageUp',
   'normal:ctrl+o': 'historyBack',
   'normal:ctrl+i': 'historyForward',
+  'normal:f': 'followLink',
   'normal:/': 'openSearch',
   'normal:n': 'findNext',
   'normal:N': 'findPrevious',

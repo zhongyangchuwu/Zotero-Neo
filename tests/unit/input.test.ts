@@ -90,15 +90,19 @@ describe('binding parsing and overrides', () => {
     expect(bindings['normal:x']).toBeUndefined();
   });
 
-  it('provides reader-only native history defaults that remain remappable', () => {
+  it('provides reader-only native history and follow-link defaults that remain remappable', () => {
     expect(DEFAULT_BINDINGS['normal:ctrl+o']).toBe('historyBack');
     expect(DEFAULT_BINDINGS['normal:ctrl+i']).toBe('historyForward');
+    expect(DEFAULT_BINDINGS['normal:f']).toBe('followLink');
     expect('insert:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
     expect('main:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
+    expect('insert:f' in DEFAULT_BINDINGS).toBe(false);
+    expect('main:f' in DEFAULT_BINDINGS).toBe(false);
 
-    const bindings = resolveBindings('{"normal:ctrl+o":"scrollDown"}');
+    const bindings = resolveBindings('{"normal:ctrl+o":"scrollDown","normal:f":"scrollUp"}');
     expect(bindings['normal:ctrl+o']).toBe('scrollDown');
     expect(bindings['normal:ctrl+i']).toBe('historyForward');
+    expect(bindings['normal:f']).toBe('scrollUp');
   });
 });
 

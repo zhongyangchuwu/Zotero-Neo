@@ -31,6 +31,10 @@ export const ACTION_LABELS = {
     en: 'Go forward in reading history (Ctrl-i)',
     'zh-CN': '前进到阅读历史下一位置（Ctrl-i）',
   },
+  followLink: {
+    en: 'Follow visible PDF link (f)',
+    'zh-CN': '跟随可见 PDF 链接（f）',
+  },
   firstPage: {
     en: 'First page (gg)',
     'zh-CN': '第一页（gg）',

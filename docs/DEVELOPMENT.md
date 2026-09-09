@@ -69,6 +69,20 @@ pair whenever key handling or reader injection changes.
 The patch is reapplied as reader views are recreated. Restored reader tabs need
 the periodic discovery sweep because they can miss early toolbar events.
 
+## PDF link hints
+
+Zotero does not expose its authoritative PDF links as ordinary `a[href]` nodes.
+The active `PDFView` stores semantic and annotation fallbacks in `_pdfPages[*].overlays`.
+Normal `f` resolves that private model and `getClientRectForPopup()` at each invocation,
+then labels only visible `internal-link` and `external-link` entries. Duplicate semantic
+and native fallbacks are collapsed by source geometry.
+
+Activation must stay on the same primary or secondary `PDFView`: call
+`navigate({ position })` for an internal destination so Zotero records native history,
+or its `_onOpenLink(url)` callback for an external target. Do not synthesize clicks or
+introduce Neo-owned link/history state. Missing or changed members must fail closed with
+status and cleanup rather than leaving badges or input capture active.
+
 ## Annotation comment overlay
 
 The operating-system keyboard focus remains in the PDF.js iframe in common

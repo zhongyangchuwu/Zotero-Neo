@@ -101,7 +101,7 @@ side effects. Inline comments are welcome for host constraints and complex logic
 
 The plugin operates across a **three-level iframe stack** in the Zotero PDF reader.
 Architecture decisions are documented in `docs/DEVELOPMENT.md`. Read that guide
-before changing annotation navigation, text selection, or iframe injection.
+before changing annotation navigation, text selection, PDF link hints, or iframe injection.
 
 The plugin patches Zotero's reader key-forwarding callback (`_onKeyDown` on
 `PdfView` instances) so keys consumed by Neo are not re-handled by Zotero

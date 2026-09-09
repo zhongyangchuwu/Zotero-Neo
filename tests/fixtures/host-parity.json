@@ -30,7 +30,13 @@
       "native reading history back and forward after link or destination jumps",
       "empty native history boundaries remain safe",
       "reading history remains independent across reloads tabs and split focus",
-      "history chords remain native in Insert mode and editable controls"
+      "history chords remain native in Insert mode and editable controls",
+      "normal f labels visible internal and external PDF links once",
+      "follow-link internal navigation enters native reading history",
+      "follow-link external URLs use Zotero link opening",
+      "follow-link Backspace Escape scroll zoom and view recreation cleanup",
+      "follow-link empty pages and changed private APIs remain safe",
+      "follow-link remains native in Insert mode and editable controls"
     ],
     "main": [
       "collection tree navigation and expansion",
@@ -67,13 +73,13 @@
   "record": {
     "zoteroVersion": null,
     "operatingSystem": null,
-    "xpiSha256": "a55eba52d46dd0b4169bca6638ec3b8a9f7eea46353a1a987edab538ea69f6f6",
-    "executedAt": "2026-09-10",
+    "xpiSha256": "fa1d1f623dee97241a01838130931f179070ea16d36c9b6f4510e9103c304af9",
+    "executedAt": null,
     "results": {
-      "status": "accepted",
-      "source": "user report",
-      "summary": "User reported no known problem with native Ctrl-o and Ctrl-i reading history in the exact candidate XPI.",
-      "limitations": "Exact Zotero version and operating system were not recorded."
+      "status": "pending",
+      "source": "automated candidate",
+      "summary": "Automated follow-link contracts and deterministic package verification passed; latest-stable Zotero host acceptance is pending.",
+      "limitations": "Exact Zotero version and operating system are pending with the follow-link host run."
     }
   }
 }
