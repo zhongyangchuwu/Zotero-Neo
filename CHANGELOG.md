@@ -28,6 +28,8 @@ All notable changes to Zotero Neo are documented here.
 - Added Auto, Light, and Dark appearance modes across Neo preferences, pickers,
   explorers, notes layout, annotation comments, and status/mode surfaces.
 - Upgraded GitHub artifact actions to current Node 24 runtimes.
+- Replaced the legacy HJKL/Visio icon artwork with a transparent Neo ribbon mark
+  rendered at 16, 32, 48, 64, 96, 128, and 256 pixels.
 
 ### Removed
 
