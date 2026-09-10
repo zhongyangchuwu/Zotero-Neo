@@ -1,3 +1,5 @@
+![Zotero Neo — Neovim-inspired keyboard layer for Zotero](assets/branding/zotero-neo-banner.png)
+
 # Zotero Neo
 
 Zotero Neo is an independently maintained, Neovim/LazyVim-inspired keyboard

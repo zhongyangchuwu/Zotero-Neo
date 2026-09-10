@@ -29,6 +29,20 @@ then uploads separate XPI artifacts. A version tag runs a guarded release job:
 range, and prepared `updates.json` entry to agree before the Linux-built XPI is
 published. Do not create a release tag until its update-feed entry exists.
 
+## Branding assets
+
+Source branding is tracked separately from runtime package assets:
+
+- `assets/branding/zotero-neo-icon.png` is the original full-resolution Neo artwork.
+- `assets/branding/zotero-neo-banner.png` is the README hero banner.
+- `icons/icon-*.png` remains the seven-size transparent runtime icon set copied
+  into the XPI.
+
+The full-resolution RGB source images have white backgrounds and are for
+repository presentation and future asset generation only. Do not copy
+`assets/branding/` into the XPI; the exact-member package check enforces that
+boundary.
+
 ## Runtime architecture
 
 Zotero Neo is authored as strict TypeScript and bundled to plain JavaScript for
