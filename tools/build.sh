@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Build and verify Zotero Neo as an installable .xpi file.
-# Usage: ./build.sh
+# Usage: ./tools/build.sh
 set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
 
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   echo "Error: Node.js 24 and npm are required." >&2

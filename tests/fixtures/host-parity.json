@@ -30,7 +30,16 @@
       "native reading history back and forward after link or destination jumps",
       "empty native history boundaries remain safe",
       "reading history remains independent across reloads tabs and split focus",
-      "history chords remain native in Insert mode and editable controls"
+      "history chords remain native in Insert mode and editable controls",
+      "normal f labels visible internal citation and external PDF links once",
+      "follow-link internal and citation navigation enters native reading history",
+      "follow-link external URLs use Zotero link opening",
+      "follow-link Backspace Escape scroll zoom and view recreation cleanup",
+      "follow-link empty pages and changed private APIs remain safe",
+      "follow-link remains native in Insert mode and editable controls",
+      "follow-link point destinations show a transient red circle",
+      "follow-link area destinations show a transient red rectangle",
+      "destination cue follows scroll zoom replacement timeout and view cleanup without annotations or selection"
     ],
     "main": [
       "collection tree navigation and expansion",
@@ -65,15 +74,15 @@
     ]
   },
   "record": {
-    "zoteroVersion": null,
-    "operatingSystem": null,
-    "xpiSha256": "a55eba52d46dd0b4169bca6638ec3b8a9f7eea46353a1a987edab538ea69f6f6",
+    "zoteroVersion": "latest stable (exact version not recorded)",
+    "operatingSystem": "Windows",
+    "xpiSha256": "54278006d1ca5b2595d91748ab86983d7b0a39b1580cbf1e297515082a62e5e5",
     "executedAt": "2026-09-10",
     "results": {
       "status": "accepted",
       "source": "user report",
-      "summary": "User reported no known problem with native Ctrl-o and Ctrl-i reading history in the exact candidate XPI.",
-      "limitations": "Exact Zotero version and operating system were not recorded."
+      "summary": "User reported no problem with internal, citation, and external follow-link navigation or the Zotero-preview-style transient landing cue in the exact local candidate XPI on latest-stable Windows Zotero.",
+      "limitations": "The exact latest-stable Zotero version number was not recorded."
     }
   }
 }

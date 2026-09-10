@@ -30,8 +30,16 @@ All notable changes to Zotero Neo are documented here.
 - Upgraded GitHub artifact actions to current Node 24 runtimes.
 - Replaced the legacy HJKL/Visio icon artwork with a transparent Neo ribbon mark
   rendered at 16, 32, 48, 64, 96, 128, and 256 pixels.
+- Added the full-resolution Neo icon source and README banner under
+  `assets/branding/`, outside the packaged runtime asset set.
+- Consolidated static XPI assets under `assets/package/` and colocated the POSIX
+  build wrapper with the Windows wrapper under `tools/`.
 - Added native reader history navigation on Normal-mode `Ctrl-o` / `Ctrl-i`,
   delegated to Zotero's per-view history with guarded private API access.
+- Added Normal-mode `f` follow-link hints for visible internal, citation, and external
+  PDF links, using Zotero's native per-view navigation and safe link-opening callbacks.
+- Added a transient Zotero-preview-style landing cue after internal and citation
+  jumps: a red circle for point destinations and a red rectangle for area targets.
 
 ### Removed
 

@@ -35,7 +35,11 @@ export interface InternalReaderRuntime {
   navigateToNextPage?(): void;
   navigateToFirstPage?(): void;
   navigateToLastPage?(): void;
-  navigate?(payload: { readonly pageIndex?: number; readonly annotationID?: string }): void;
+  navigate?(payload: {
+    readonly pageIndex?: number;
+    readonly annotationID?: string;
+    readonly position?: ReaderLinkPosition;
+  }): void;
   navigateBack?(): void;
   navigateForward?(): void;
   setSelectedAnnotations?(keys: readonly string[]): void;
@@ -53,6 +57,9 @@ export interface InternalReaderRuntime {
 export interface ReaderViewRuntime {
   readonly _iframeWindow?: Window;
   readonly _findState?: { readonly active?: boolean };
+  readonly _pdfPages?:
+    | Readonly<Record<number, ReaderPdfPageRuntime | undefined>>
+    | readonly (ReaderPdfPageRuntime | undefined)[];
   readonly _annotationRenderRootEl?:
     | Element
     | {
@@ -60,8 +67,38 @@ export interface ReaderViewRuntime {
         querySelector?(selectors: string): Element | null;
       };
   _onKeyDown?: (event: KeyboardEvent) => unknown;
+  _onOpenLink?: (url: string) => void | Promise<void>;
   _textAnnotationFocused?: () => boolean;
+  getClientRectForPopup?(position: ReaderLinkPosition): readonly number[];
+  navigate?(payload: { readonly position: ReaderLinkPosition }): void | Promise<void>;
   navigateToNextPage?(): void;
+}
+
+export interface ReaderLinkPosition {
+  readonly pageIndex: number;
+  readonly rects: readonly (readonly number[])[];
+  readonly nextPageRects?: readonly (readonly number[])[];
+}
+
+export type ReaderLinkOverlay =
+  | {
+      readonly type: 'internal-link';
+      readonly position: ReaderLinkPosition;
+      readonly destinationPosition: ReaderLinkPosition;
+    }
+  | {
+      readonly type: 'citation';
+      readonly position: ReaderLinkPosition;
+      readonly references: readonly { readonly position: ReaderLinkPosition }[];
+    }
+  | {
+      readonly type: 'external-link';
+      readonly position: ReaderLinkPosition;
+      readonly url: string;
+    };
+
+export interface ReaderPdfPageRuntime {
+  readonly overlays?: readonly (ReaderLinkOverlay | { readonly type?: string })[];
 }
 
 export interface PdfViewerRuntime {
@@ -234,6 +271,15 @@ export interface ReaderSessionState {
   hintTargetMode: ReaderMode | null;
   hintStarts: Pointer[];
   hintRepositionFrame: number | null;
+  linkHintBadges: LinkHintBadge[];
+  linkHintBuffer: string;
+  linkHintWindow: PdfWindow | null;
+  linkHintRepositionFrame: number | null;
+  destinationCue: HTMLElement | null;
+  destinationCuePosition: ReaderLinkPosition | null;
+  destinationCueWindow: PdfWindow | null;
+  destinationCueTimer: ReaderTimer | null;
+  destinationCueRepositionFrame: number | null;
   marks: Record<string, Mark>;
   marksExplorerOpen: boolean;
   marksExplorerSelected: number;
@@ -273,6 +319,12 @@ export interface HintBadge {
   readonly label: string;
   readonly textNode: Text;
   readonly offset: number;
+}
+
+export interface LinkHintBadge {
+  readonly element: HTMLElement;
+  readonly label: string;
+  readonly overlay: ReaderLinkOverlay;
 }
 
 export interface ReaderEventRuntime {

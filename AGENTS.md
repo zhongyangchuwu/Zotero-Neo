@@ -12,7 +12,7 @@ packaging.
 
 ### Building the plugin
 ```bash
-./build.sh
+./tools/build.sh
 ```
 On Windows (no bash needed): `powershell -ExecutionPolicy Bypass -File tools\build.ps1`
 Creates `zotero-neo.xpi` — a deterministic archive containing generated runtime
@@ -35,7 +35,7 @@ the esbuild package build, and the XPI member check. GitHub Actions runs this
 workflow through both native wrappers.
 
 Zotero GUI behavior still requires manual verification:
-1. Build (`npm ci && ./build.sh`)
+1. Build (`npm ci && ./tools/build.sh`)
 2. Re-install the `.xpi` in Zotero
 3. Restart Zotero
 4. Exercise the changed reader, main-window, or preference surface
@@ -48,6 +48,11 @@ Use **2 spaces** for indentation. Do not use tabs.
 ### Source Layout
 
 ```text
+assets/
+  branding/                repository-only source artwork and README banner
+  package/                 static XPI skeleton copied into build/addon
+    content/preferences/   preference pane XHTML
+    icons/                 seven-size transparent runtime PNGs
 src/
   addon.ts                 composed add-on controller
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
@@ -101,7 +106,7 @@ side effects. Inline comments are welcome for host constraints and complex logic
 
 The plugin operates across a **three-level iframe stack** in the Zotero PDF reader.
 Architecture decisions are documented in `docs/DEVELOPMENT.md`. Read that guide
-before changing annotation navigation, text selection, or iframe injection.
+before changing annotation navigation, text selection, PDF link hints, or iframe injection.
 
 The plugin patches Zotero's reader key-forwarding callback (`_onKeyDown` on
 `PdfView` instances) so keys consumed by Neo are not re-handled by Zotero
@@ -125,7 +130,7 @@ touching reader input or iframe injection.
 | `.github/workflows/build.yml` | Linux/Windows build and guarded tag release |
 | `docs/DEVELOPMENT.md` | Build, architecture, release, and maintenance constraints |
 | `manifest.json` | Extension manifest |
-| `build.sh` | POSIX verification/build wrapper |
+| `tools/build.sh` / `tools/build.ps1` | POSIX and Windows verification/build wrappers |
 
 ## Important Constraints
 

@@ -9,8 +9,8 @@ public release; shipped behavior is documented in the [user guide](USER_GUIDE.md
   bounded startup diagnostics, and latest-stable Zotero host verification.
 - Make all Neo-owned panels follow Zotero with Auto, Light, and Dark appearance
   modes.
-- Add native reader history through `Ctrl-o` / `Ctrl-i`.
-- Review the complete LazyVim-inspired keymap before changing defaults.
+- Add keyboard follow-link hints for visible internal and external PDF links.
+- Review the complete LazyVim-inspired keymap after follow-link host verification.
 
 ## Planned capabilities
 

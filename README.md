@@ -1,3 +1,5 @@
+![Zotero Neo — Neovim-inspired keyboard layer for Zotero](assets/branding/zotero-neo-banner.png)
+
 # Zotero Neo
 
 Zotero Neo is an independently maintained, Neovim/LazyVim-inspired keyboard
@@ -32,7 +34,7 @@ verification in the current stable host.
 git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
 cd Zotero-Neo
 npm ci
-./build.sh
+./tools/build.sh
 ```
 
 The output is `zotero-neo.xpi`. On Windows:

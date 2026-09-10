@@ -71,7 +71,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       id: 'zotero-neo-prefs',
       src: `${this.#context.rootURI}content/preferences/pane.xhtml`,
       label: 'Zotero Neo',
-      image: `${this.#context.rootURI}icons/zotero-neo.svg`,
+      image: `${this.#context.rootURI}icons/icon-32x32.png`,
       scripts: [`${this.#context.rootURI}content/preferences/pane.js`],
     });
     this.#preferencesRegistered = true;

@@ -84,6 +84,25 @@ History remains owned by Zotero and follows the last active primary or split
 reader view. Empty history boundaries are safe no-ops. These bindings are active
 only in reader Normal mode; Insert mode and editable controls retain native input.
 
+#### Follow PDF links
+
+| Key | Action |
+|-----|--------|
+| `f` | Label every visible internal, citation, or external PDF link in the active reader view |
+
+Type the displayed hint letters to activate a link. Matching is case-insensitive;
+`Backspace` removes one typed hint character and `Escape` cancels the hint mode.
+Internal links, including figure/table references, navigate in the active primary
+or split PDF view and become part of Zotero's native `Ctrl+o` / `Ctrl+i` reading
+history. Citation hints follow Zotero's first resolved bibliography target.
+External links open through Zotero's normal link handler. Reference-preview
+overlays, off-screen links, Insert mode, and editable controls are not claimed.
+
+After an internal or citation jump, Neo shows Zotero's preview-style target cue
+for about two seconds: a red circle for point destinations or a red rectangle
+when the PDF provides an area. The cue is transient and does not create an
+annotation or modify text selection.
+
 > **Note:** Zotero's built-in Read Aloud also listens for the `l`/`r` keys.
 > The plugin blocks Zotero's reader key forwarding for keys vim consumes, so
 > `l` (next page) never starts Read Aloud. To use Read Aloud, press `r`

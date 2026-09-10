@@ -10,7 +10,7 @@ reader, main-window, note, or preferences flow in the current Zotero host.
 ## Build
 
 ```bash
-./build.sh
+./tools/build.sh
 ```
 
 The Windows-native equivalent is:
@@ -28,6 +28,23 @@ then uploads separate XPI artifacts. A version tag runs a guarded release job:
 `tools/check-release.mjs` requires the tag, manifest version, compatibility
 range, and prepared `updates.json` entry to agree before the Linux-built XPI is
 published. Do not create a release tag until its update-feed entry exists.
+
+## Branding assets
+
+Repository visuals and static package files have separate ownership:
+
+- `assets/branding/zotero-neo-icon.png` is the original full-resolution Neo artwork.
+- `assets/branding/zotero-neo-banner.png` is the README hero banner.
+- `assets/package/` is the static XPI skeleton copied into `build/addon/` before
+  generated JavaScript and `manifest.json` are added.
+- `assets/package/icons/icon-*.png` is the seven-size transparent runtime icon set.
+- `assets/package/content/preferences/pane.xhtml` is the static Zotero preference
+  pane markup; its behavior is generated from `src/preferences/index.ts`.
+
+The full-resolution RGB branding images have white backgrounds and are for
+repository presentation and future asset generation only. Do not copy
+`assets/branding/` into the XPI; the exact-member package check enforces that
+boundary. Paths inside the XPI remain `icons/*` and `content/preferences/*`.
 
 ## Runtime architecture
 
@@ -68,6 +85,34 @@ pair whenever key handling or reader injection changes.
 
 The patch is reapplied as reader views are recreated. Restored reader tabs need
 the periodic discovery sweep because they can miss early toolbar events.
+
+## PDF link hints
+
+Zotero does not expose its authoritative PDF links as ordinary `a[href]` nodes.
+The active `PDFView` stores semantic and annotation fallbacks in the page-indexed
+object map `_pdfPages`, with each loaded value exposing `overlays`. This host
+container is not an Array; enumerate its values without requiring array identity.
+Semantic and native fallbacks that share source geometry collapse to one hint.
+Selectable targets are `internal-link`, `citation`, and `external-link`; standalone
+`reference` preview overlays remain Zotero-owned.
+
+Activation must stay on the same primary or secondary `PDFView`. Internal links use
+their `destinationPosition`; citations use the first resolved reference position; both
+call `navigate({ position })` so Zotero records native history. Because the call crosses
+from Bootstrap chrome into the reader content realm, clone the complete location payload
+into `reader._iframeWindow` first. External targets call `_onOpenLink(url)` with a primitive
+string. Do not synthesize clicks or introduce Neo-owned link/history state. Missing or
+changed members must fail closed with status and write the specific reason to both Zotero
+debug output and the startup diagnostic log rather than leaving badges or input capture active.
+
+After successful internal/citation navigation, Neo mirrors
+`PDFRenderer.renderPreviewPage()` target semantics over the live PDF document:
+`#f57b7b` with `multiply`, a 7-pixel-radius circle when either client dimension
+is below 5 pixels, otherwise the client rectangle. Use
+`getClientRectForPopup()` instead of invoking the preview renderer, which would
+render and crop a separate canvas with coordinates unrelated to the live view.
+The one cue follows scroll/resize and is owned by the view/session timeout;
+never represent it as a Zotero annotation or DOM text selection.
 
 ## Annotation comment overlay
 
