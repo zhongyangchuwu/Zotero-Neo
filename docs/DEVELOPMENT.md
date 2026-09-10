@@ -10,7 +10,7 @@ reader, main-window, note, or preferences flow in the current Zotero host.
 ## Build
 
 ```bash
-./build.sh
+./tools/build.sh
 ```
 
 The Windows-native equivalent is:
@@ -31,17 +31,20 @@ published. Do not create a release tag until its update-feed entry exists.
 
 ## Branding assets
 
-Source branding is tracked separately from runtime package assets:
+Repository visuals and static package files have separate ownership:
 
 - `assets/branding/zotero-neo-icon.png` is the original full-resolution Neo artwork.
 - `assets/branding/zotero-neo-banner.png` is the README hero banner.
-- `icons/icon-*.png` remains the seven-size transparent runtime icon set copied
-  into the XPI.
+- `assets/package/` is the static XPI skeleton copied into `build/addon/` before
+  generated JavaScript and `manifest.json` are added.
+- `assets/package/icons/icon-*.png` is the seven-size transparent runtime icon set.
+- `assets/package/content/preferences/pane.xhtml` is the static Zotero preference
+  pane markup; its behavior is generated from `src/preferences/index.ts`.
 
-The full-resolution RGB source images have white backgrounds and are for
+The full-resolution RGB branding images have white backgrounds and are for
 repository presentation and future asset generation only. Do not copy
 `assets/branding/` into the XPI; the exact-member package check enforces that
-boundary.
+boundary. Paths inside the XPI remain `icons/*` and `content/preferences/*`.
 
 ## Runtime architecture
 

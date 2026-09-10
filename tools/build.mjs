@@ -1,21 +1,19 @@
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { build } from 'esbuild';
 
 import { zipDirectory } from './zip.mjs';
 
 const root = resolve(import.meta.dirname, '..');
-const sourceAssets = resolve(root, 'addon');
+const packageAssets = resolve(root, 'assets/package');
 const buildRoot = resolve(root, 'build/addon');
 const outputXpi = resolve(root, 'zotero-neo.xpi');
 
 rmSync(resolve(root, 'build'), { recursive: true, force: true });
 rmSync(outputXpi, { force: true });
 mkdirSync(buildRoot, { recursive: true });
-if (existsSync(sourceAssets)) cpSync(sourceAssets, buildRoot, { recursive: true });
+cpSync(packageAssets, buildRoot, { recursive: true });
 cpSync(resolve(root, 'manifest.json'), resolve(buildRoot, 'manifest.json'));
-cpSync(resolve(root, 'icons'), resolve(buildRoot, 'icons'), { recursive: true });
-mkdirSync(resolve(buildRoot, 'content/preferences'), { recursive: true });
 
 const common = {
   target: ['firefox115'],

@@ -32,6 +32,8 @@ All notable changes to Zotero Neo are documented here.
   rendered at 16, 32, 48, 64, 96, 128, and 256 pixels.
 - Added the full-resolution Neo icon source and README banner under
   `assets/branding/`, outside the packaged runtime asset set.
+- Consolidated static XPI assets under `assets/package/` and colocated the POSIX
+  build wrapper with the Windows wrapper under `tools/`.
 - Added native reader history navigation on Normal-mode `Ctrl-o` / `Ctrl-i`,
   delegated to Zotero's per-view history with guarded private API access.
 - Added Normal-mode `f` follow-link hints for visible internal, citation, and external

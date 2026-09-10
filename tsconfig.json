@@ -10,7 +10,8 @@
     "useUnknownInCatchVariables": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "tsBuildInfoFile": "./build/cache/tsconfig.tsbuildinfo"
   },
   "include": ["src/**/*.ts"]
 }

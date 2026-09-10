@@ -34,7 +34,7 @@ verification in the current stable host.
 git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
 cd Zotero-Neo
 npm ci
-./build.sh
+./tools/build.sh
 ```
 
 The output is `zotero-neo.xpi`. On Windows:
