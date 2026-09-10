@@ -72,16 +72,17 @@ the periodic discovery sweep because they can miss early toolbar events.
 ## PDF link hints
 
 Zotero does not expose its authoritative PDF links as ordinary `a[href]` nodes.
-The active `PDFView` stores semantic and annotation fallbacks in `_pdfPages[*].overlays`.
-Normal `f` resolves that private model and `getClientRectForPopup()` at each invocation,
-then labels only visible `internal-link` and `external-link` entries. Duplicate semantic
-and native fallbacks are collapsed by source geometry.
+The active `PDFView` stores semantic and annotation fallbacks in the page-indexed
+object map `_pdfPages`, with each loaded value exposing `overlays`. This host
+container is not an Array; enumerate its values without requiring array identity.
+Semantic and native fallbacks that share source geometry collapse to one hint.
 
 Activation must stay on the same primary or secondary `PDFView`: call
 `navigate({ position })` for an internal destination so Zotero records native history,
 or its `_onOpenLink(url)` callback for an external target. Do not synthesize clicks or
 introduce Neo-owned link/history state. Missing or changed members must fail closed with
-status and cleanup rather than leaving badges or input capture active.
+status and write the specific reason to both Zotero debug output and the startup diagnostic
+log rather than leaving badges or input capture active.
 
 ## Annotation comment overlay
 

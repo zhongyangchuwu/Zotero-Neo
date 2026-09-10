@@ -73,13 +73,13 @@
   "record": {
     "zoteroVersion": null,
     "operatingSystem": null,
-    "xpiSha256": "fa1d1f623dee97241a01838130931f179070ea16d36c9b6f4510e9103c304af9",
+    "xpiSha256": "c9bf13f1f57055a4a67ea942439d7754889d14b46085cc7007d33e542e20363a",
     "executedAt": null,
     "results": {
       "status": "pending",
       "source": "automated candidate",
-      "summary": "Automated follow-link contracts and deterministic package verification passed; latest-stable Zotero host acceptance is pending.",
-      "limitations": "Exact Zotero version and operating system are pending with the follow-link host run."
+      "summary": "The first host candidate exposed an incorrect Array assumption for Zotero's page-indexed PDF data map. The corrected object-map implementation passes automated contracts and awaits repeated host acceptance.",
+      "limitations": "Exact Zotero version and operating system are pending with the corrected follow-link host run."
     }
   }
 }

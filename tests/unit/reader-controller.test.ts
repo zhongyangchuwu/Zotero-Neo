@@ -61,6 +61,7 @@ describe('reader discovery diagnostics', () => {
 
 function createHistorySession(internal: InternalReaderRuntime = {}) {
   const debug: string[] = [];
+  const diagnostics: string[] = [];
   const nodes = new Map<string, { id: string }>();
   const intervalTasks: (() => void)[] = [];
   const bodyChildren: HTMLElement[] = [];
@@ -133,7 +134,7 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
       },
       logger: {
         debug: (message: string) => debug.push(message),
-        diagnostic: () => {},
+        diagnostic: (message: string) => diagnostics.push(message),
       },
       delegateMain: () => {},
     },
@@ -150,7 +151,16 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     textContent: '',
   } as unknown as HTMLElement;
   session.state.indicator = indicator;
-  return { session, indicator, debug, pdfWindow, reader, bodyChildren, intervalTasks };
+  return {
+    session,
+    indicator,
+    debug,
+    diagnostics,
+    pdfWindow,
+    reader,
+    bodyChildren,
+    intervalTasks,
+  };
 }
 
 function readerKey(
@@ -213,7 +223,7 @@ function configureLinkView(
   if (!view) throw new Error('Expected a primary reader view');
   const navigate = vi.fn();
   const openLink = vi.fn();
-  Reflect.set(view, '_pdfPages', [{ overlays }]);
+  Reflect.set(view, '_pdfPages', { 0: { overlays } });
   Reflect.set(view, 'getClientRectForPopup', (position: ReaderLinkPosition) => position.rects[0]);
   Reflect.set(view, 'navigate', navigate);
   Reflect.set(view, '_onOpenLink', openLink);
@@ -333,7 +343,7 @@ describe('PDF follow-link hints', () => {
     const navigate = vi.fn();
     const secondary = {
       _iframeWindow: created.pdfWindow,
-      _pdfPages: [{ overlays: [internalLink([10, 10, 40, 30], 7)] }],
+      _pdfPages: { 0: { overlays: [internalLink([10, 10, 40, 30], 7)] } },
       getClientRectForPopup: (position: ReaderLinkPosition) => position.rects[0],
       navigate,
     } as ReaderViewRuntime;
@@ -415,6 +425,9 @@ describe('PDF follow-link hints', () => {
     expect(() => missing.session.focusAndHandle(readerKey('f').event)).not.toThrow();
     expect(missing.indicator.textContent).toBe('Link hints unavailable');
     expect(missing.debug).toEqual(['reader follow link discovery failed: Error: reader reloaded']);
+    expect(missing.diagnostics).toEqual([
+      'reader follow link discovery failed: Error: reader reloaded',
+    ]);
 
     const empty = createHistorySession();
     configureLinkView(empty, []);
@@ -432,6 +445,9 @@ describe('PDF follow-link hints', () => {
     expect(() => failed.session.focusAndHandle(readerKey('a').event)).not.toThrow();
     expect(failed.indicator.textContent).toBe('Link unavailable');
     expect(failed.debug).toEqual(['reader follow link activation failed: Error: blocked URI']);
+    expect(failed.diagnostics).toEqual([
+      'reader follow link activation failed: Error: blocked URI',
+    ]);
 
     const rejected = createHistorySession();
     const rejectedView = configureLinkView(rejected, [internalLink([10, 10, 80, 30])]);
@@ -443,6 +459,9 @@ describe('PDF follow-link hints', () => {
     await Promise.resolve();
     expect(rejected.indicator.textContent).toBe('Link unavailable');
     expect(rejected.debug).toEqual([
+      'reader follow link activation failed: Error: navigation rejected',
+    ]);
+    expect(rejected.diagnostics).toEqual([
       'reader follow link activation failed: Error: navigation rejected',
     ]);
     vi.clearAllTimers();

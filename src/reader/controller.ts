@@ -1722,18 +1722,18 @@ export class ReaderSession {
     this.state.linkHintWindow = pdfWindow;
     try {
       const view = this.readerViewForWindow(pdfWindow);
-      if (
-        !view ||
-        !Array.isArray(view._pdfPages) ||
-        typeof view.getClientRectForPopup !== 'function'
-      )
-        throw new Error('missing link overlay model');
+      if (!view) throw new Error('active PDF view not found');
+      const pages = view._pdfPages;
+      if (!pages || typeof pages !== 'object')
+        throw new Error(`PDF page map unavailable (${typeof pages})`);
+      if (typeof view.getClientRectForPopup !== 'function')
+        throw new Error('PDF client-rectangle conversion unavailable');
       const seen = new Set<string>();
       const targets: {
         readonly overlay: ReaderLinkOverlay;
         readonly rect: readonly number[];
       }[] = [];
-      for (const page of view._pdfPages) {
+      for (const page of Object.values(pages)) {
         if (!Array.isArray(page?.overlays)) continue;
         for (const value of page.overlays) {
           if (!this.isReaderLinkOverlay(value)) continue;
@@ -1761,9 +1761,9 @@ export class ReaderSession {
       });
     } catch (error) {
       this.clearLinkHints();
-      this.#dependencies.controller.dependencies.logger.debug(
-        `reader follow link discovery failed: ${String(error)}`,
-      );
+      const message = `reader follow link discovery failed: ${String(error)}`;
+      this.#dependencies.controller.dependencies.logger.debug(message);
+      this.#dependencies.controller.dependencies.logger.diagnostic(message);
       this.showStatus('Link hints unavailable', 1500);
       return;
     }
@@ -1830,9 +1830,9 @@ export class ReaderSession {
   }
 
   private reportLinkActivationFailure(error: unknown): void {
-    this.#dependencies.controller.dependencies.logger.debug(
-      `reader follow link activation failed: ${String(error)}`,
-    );
+    const message = `reader follow link activation failed: ${String(error)}`;
+    this.#dependencies.controller.dependencies.logger.debug(message);
+    this.#dependencies.controller.dependencies.logger.diagnostic(message);
     this.showStatus('Link unavailable', 1500);
   }
 

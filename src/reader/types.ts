@@ -57,7 +57,9 @@ export interface InternalReaderRuntime {
 export interface ReaderViewRuntime {
   readonly _iframeWindow?: Window;
   readonly _findState?: { readonly active?: boolean };
-  readonly _pdfPages?: readonly (ReaderPdfPageRuntime | undefined)[];
+  readonly _pdfPages?:
+    | Readonly<Record<number, ReaderPdfPageRuntime | undefined>>
+    | readonly (ReaderPdfPageRuntime | undefined)[];
   readonly _annotationRenderRootEl?:
     | Element
     | {
