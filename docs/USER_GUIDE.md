@@ -98,6 +98,11 @@ history. Citation hints follow Zotero's first resolved bibliography target.
 External links open through Zotero's normal link handler. Reference-preview
 overlays, off-screen links, Insert mode, and editable controls are not claimed.
 
+After an internal or citation jump, Neo shows Zotero's preview-style target cue
+for about two seconds: a red circle for point destinations or a red rectangle
+when the PDF provides an area. The cue is transient and does not create an
+annotation or modify text selection.
+
 > **Note:** Zotero's built-in Read Aloud also listens for the `l`/`r` keys.
 > The plugin blocks Zotero's reader key forwarding for keys vim consumes, so
 > `l` (next page) never starts Read Aloud. To use Read Aloud, press `r`

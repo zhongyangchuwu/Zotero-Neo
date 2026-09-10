@@ -275,6 +275,11 @@ export interface ReaderSessionState {
   linkHintBuffer: string;
   linkHintWindow: PdfWindow | null;
   linkHintRepositionFrame: number | null;
+  destinationCue: HTMLElement | null;
+  destinationCuePosition: ReaderLinkPosition | null;
+  destinationCueWindow: PdfWindow | null;
+  destinationCueTimer: ReaderTimer | null;
+  destinationCueRepositionFrame: number | null;
   marks: Record<string, Mark>;
   marksExplorerOpen: boolean;
   marksExplorerSelected: number;

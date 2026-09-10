@@ -67,6 +67,7 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
   const diagnostics: string[] = [];
   const nodes = new Map<string, { id: string }>();
   const intervalTasks: (() => void)[] = [];
+  const animationFrameTasks: (() => void)[] = [];
   const bodyChildren: HTMLElement[] = [];
   const document = {
     defaultView: null as Window | null,
@@ -89,6 +90,7 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
         ownerDocument: document,
         textContent: '',
         hidden: false,
+        dataset: {} as Record<string, string>,
         style: {
           cssText: '',
           display: '',
@@ -96,6 +98,9 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
           top: '',
           color: '',
           background: '',
+          width: '',
+          height: '',
+          borderRadius: '',
         },
         remove: vi.fn(() => {
           const index = bodyChildren.indexOf(element as unknown as HTMLElement);
@@ -114,7 +119,10 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     focus: vi.fn(),
     addEventListener: () => {},
     removeEventListener: () => {},
-    requestAnimationFrame: () => 1,
+    requestAnimationFrame: (task: () => void) => {
+      animationFrameTasks.push(task);
+      return animationFrameTasks.length;
+    },
     cancelAnimationFrame: vi.fn(),
     setInterval: (task: () => void) => {
       intervalTasks.push(task);
@@ -157,6 +165,7 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
   const indicator = {
     style: { display: '', color: '', background: '' },
     textContent: '',
+    remove: vi.fn(),
   } as unknown as HTMLElement;
   session.state.indicator = indicator;
   return {
@@ -169,6 +178,7 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     reader,
     cloneInto,
     bodyChildren,
+    animationFrameTasks,
     intervalTasks,
   };
 }
@@ -217,11 +227,12 @@ function internalLink(
 function citationLink(
   rect: readonly number[],
   destinationPage = 1,
+  destinationRect: readonly number[] = [0, 0, 0, 0],
 ): Extract<ReaderLinkOverlay, { readonly type: 'citation' }> {
   return {
     type: 'citation',
     position: linkPosition(rect),
-    references: [{ position: linkPosition([0, 0, 0, 0], destinationPage) }],
+    references: [{ position: linkPosition(destinationRect, destinationPage) }],
   };
 }
 function externalLink(
@@ -325,11 +336,12 @@ describe('native reader history', () => {
 });
 
 describe('PDF follow-link hints', () => {
-  it('labels visible links once and invokes Zotero native internal, citation, and external actions', () => {
+  it('follows visible links and shows Zotero-preview-style point and rectangle cues', () => {
+    vi.useFakeTimers();
     const created = createHistorySession();
     const internal = internalLink([20, 30, 80, 50], 4);
     const external = externalLink([100, 120, 180, 140], 'https://example.com');
-    const citation = citationLink([200, 200, 260, 220], 8);
+    const citation = citationLink([200, 200, 260, 220], 8, [300, 320, 380, 340]);
     const configured = configureLinkView(created, [
       internal,
       internal,
@@ -359,12 +371,18 @@ describe('PDF follow-link hints', () => {
     expect(configured.navigate).toHaveBeenNthCalledWith(1, {
       position: internal.destinationPosition,
     });
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    created.animationFrameTasks.shift()?.();
+    const pointCue = created.session.state.destinationCue;
+    expect(pointCue?.style.cssText).toContain('background:#f57b7b');
+    expect(pointCue?.style.cssText).toContain('mix-blend-mode:multiply');
+    expect(pointCue?.style.width).toBe('14px');
+    expect(pointCue?.style.height).toBe('14px');
+    expect(pointCue?.style.borderRadius).toBe('50%');
 
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('s').event);
     expect(configured.openLink).toHaveBeenCalledWith('https://example.com');
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    expect(created.session.state.destinationCue).toBeNull();
 
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('d').event);
@@ -376,7 +394,18 @@ describe('PDF follow-link hints', () => {
     expect(configured.navigate).toHaveBeenNthCalledWith(2, {
       position: citation.references[0]!.position,
     });
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    created.animationFrameTasks.shift()?.();
+    const rectangleCue = created.session.state.destinationCue;
+    expect(rectangleCue?.style.left).toBe('300px');
+    expect(rectangleCue?.style.top).toBe('320px');
+    expect(rectangleCue?.style.width).toBe('80px');
+    expect(rectangleCue?.style.height).toBe('20px');
+    expect(rectangleCue?.style.borderRadius).toBe('0');
+
+    vi.advanceTimersByTime(2000);
+    expect(created.session.state.destinationCue).toBeNull();
+    expect(created.bodyChildren).toHaveLength(0);
+    created.session.dispose();
   });
 
   it('uses the active secondary PDF view for split-reader navigation', () => {

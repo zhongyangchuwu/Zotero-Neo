@@ -332,6 +332,11 @@ export class ReaderSession {
       linkHintBuffer: '',
       linkHintWindow: null,
       linkHintRepositionFrame: null,
+      destinationCue: null,
+      destinationCuePosition: null,
+      destinationCueWindow: null,
+      destinationCueTimer: null,
+      destinationCueRepositionFrame: null,
       marks: {},
       marksExplorerOpen: false,
       marksExplorerSelected: 0,
@@ -444,6 +449,7 @@ export class ReaderSession {
     this.state.indicator = null;
     this.clearHints();
     this.clearLinkHints();
+    this.clearDestinationCue();
     this.#dependencies.release();
   }
 
@@ -542,12 +548,14 @@ export class ReaderSession {
       const scroll = (() => {
         if (this.state.hintBadges.length) this.repositionHints(pdfWindow);
         if (this.state.linkHintWindow === pdfWindow) this.repositionLinkHints(pdfWindow);
+        if (this.state.destinationCueWindow === pdfWindow) this.repositionDestinationCue(pdfWindow);
         if (this.state.mode === 'visual' || this.state.mode === 'cursor')
           this.updateVisualCursor(pdfWindow, false);
       }) as EventListener;
       const resize = (() => {
         this.repositionHints(pdfWindow);
         if (this.state.linkHintWindow === pdfWindow) this.repositionLinkHints(pdfWindow);
+        if (this.state.destinationCueWindow === pdfWindow) this.repositionDestinationCue(pdfWindow);
       }) as EventListener;
       const scrollElement =
         pdfWindow.document.getElementById('viewerContainer') ??
@@ -580,6 +588,7 @@ export class ReaderSession {
     pdfWindow.removeEventListener('resize', handlers.resize);
     handlers.scrollElement?.removeEventListener('scroll', handlers.scroll);
     if (this.state.linkHintWindow === pdfWindow) this.clearLinkHints();
+    if (this.state.destinationCueWindow === pdfWindow) this.clearDestinationCue();
     this.releaseViewTheme(pdfWindow);
   }
 
@@ -1810,6 +1819,7 @@ export class ReaderSession {
   ): void {
     const overlay = badge.overlay;
     this.clearLinkHints();
+    this.clearDestinationCue();
     try {
       const view = this.readerViewForWindow(pdfWindow);
       let result: void | Promise<void>;
@@ -1824,7 +1834,9 @@ export class ReaderSession {
           overlay.type === 'internal-link'
             ? overlay.destinationPosition
             : overlay.references[0]!.position;
-        result = view.navigate(cloneInto({ position }, readerWindow));
+        const location = cloneInto({ position }, readerWindow);
+        result = view.navigate(location);
+        this.showDestinationCue(pdfWindow, location.position);
       }
       if (result && typeof result.then === 'function')
         void Promise.resolve(result).catch((error: unknown) =>
@@ -1836,6 +1848,7 @@ export class ReaderSession {
   }
 
   private reportLinkActivationFailure(error: unknown): void {
+    this.clearDestinationCue();
     const message = `reader follow link activation failed: ${String(error)}`;
     this.#dependencies.controller.dependencies.logger.debug(message);
     this.#dependencies.controller.dependencies.logger.diagnostic(message);
@@ -1877,6 +1890,115 @@ export class ReaderSession {
       owner.cancelAnimationFrame(this.state.linkHintRepositionFrame);
     this.state.linkHintRepositionFrame = null;
     this.state.linkHintWindow = null;
+  }
+
+  /**
+   * Mirrors Zotero's link-preview target marker over the live PDF view without rendering a
+   * preview canvas or modifying annotations/selection.
+   */
+  private showDestinationCue(pdfWindow: PdfWindow, position: ReaderLinkPosition): void {
+    this.clearDestinationCue();
+    try {
+      const cue = pdfWindow.document.createElement('div');
+      cue.dataset.zoteroNeoDestinationCue = '1';
+      cue.hidden = true;
+      cue.style.cssText =
+        'position:fixed;z-index:99998;background:#f57b7b;mix-blend-mode:multiply;pointer-events:none;';
+      pdfWindow.document.body?.appendChild(cue);
+      this.state.destinationCue = cue;
+      this.state.destinationCuePosition = position;
+      this.state.destinationCueWindow = pdfWindow;
+      this.state.destinationCueTimer = setTimeout(() => this.clearDestinationCue(), 2000);
+      this.repositionDestinationCue(pdfWindow);
+    } catch (error) {
+      this.clearDestinationCue();
+      this.reportDestinationCueFailure(error);
+    }
+  }
+
+  private refreshDestinationCue(pdfWindow: PdfWindow): void {
+    const cue = this.state.destinationCue;
+    const position = this.state.destinationCuePosition;
+    if (!cue || !position || this.state.destinationCueWindow !== pdfWindow) return;
+    try {
+      const view = this.readerViewForWindow(pdfWindow);
+      if (!view || typeof view.getClientRectForPopup !== 'function')
+        throw new Error('destination rectangle conversion unavailable');
+      const rect = this.positionClientRect(view, position);
+      if (!rect) throw new Error('invalid destination rectangle');
+      this.positionDestinationCue(pdfWindow, cue, rect);
+    } catch (error) {
+      this.clearDestinationCue();
+      this.reportDestinationCueFailure(error);
+    }
+  }
+
+  private repositionDestinationCue(pdfWindow: PdfWindow): void {
+    if (
+      !this.state.destinationCue ||
+      this.state.destinationCueWindow !== pdfWindow ||
+      this.state.destinationCueRepositionFrame !== null
+    )
+      return;
+    this.state.destinationCueRepositionFrame = pdfWindow.requestAnimationFrame(() => {
+      this.state.destinationCueRepositionFrame = null;
+      this.refreshDestinationCue(pdfWindow);
+    });
+  }
+
+  private clearDestinationCue(): void {
+    this.state.destinationCue?.remove();
+    this.state.destinationCue = null;
+    this.state.destinationCuePosition = null;
+    clearTimeout(this.state.destinationCueTimer ?? undefined);
+    this.state.destinationCueTimer = null;
+    const owner = this.state.destinationCueWindow;
+    if (owner && this.state.destinationCueRepositionFrame !== null)
+      owner.cancelAnimationFrame(this.state.destinationCueRepositionFrame);
+    this.state.destinationCueRepositionFrame = null;
+    this.state.destinationCueWindow = null;
+  }
+
+  private reportDestinationCueFailure(error: unknown): void {
+    const message = `reader destination cue failed: ${String(error)}`;
+    this.#dependencies.controller.dependencies.logger.debug(message);
+    this.#dependencies.controller.dependencies.logger.diagnostic(message);
+  }
+
+  private positionDestinationCue(
+    pdfWindow: PdfWindow,
+    cue: HTMLElement,
+    rect: readonly number[],
+  ): void {
+    const viewportWidth = pdfWindow.innerWidth || pdfWindow.document.documentElement.clientWidth;
+    const viewportHeight = pdfWindow.innerHeight || pdfWindow.document.documentElement.clientHeight;
+    const width = rect[2]! - rect[0]!;
+    const height = rect[3]! - rect[1]!;
+    const isPoint = width < 5 || height < 5;
+    cue.hidden =
+      rect[2]! < 0 || rect[3]! < 0 || rect[0]! > viewportWidth || rect[1]! > viewportHeight;
+    if (isPoint) {
+      const radius = 7;
+      const centerX = Math.min(
+        Math.max((rect[0]! + rect[2]!) / 2, radius),
+        Math.max(radius, viewportWidth - radius),
+      );
+      const centerY = Math.min(
+        Math.max((rect[1]! + rect[3]!) / 2, radius),
+        Math.max(radius, viewportHeight - radius),
+      );
+      cue.style.left = `${centerX - radius}px`;
+      cue.style.top = `${centerY - radius}px`;
+      cue.style.width = `${radius * 2}px`;
+      cue.style.height = `${radius * 2}px`;
+      cue.style.borderRadius = '50%';
+      return;
+    }
+    cue.style.left = `${rect[0]}px`;
+    cue.style.top = `${rect[1]}px`;
+    cue.style.width = `${width}px`;
+    cue.style.height = `${height}px`;
+    cue.style.borderRadius = '0';
   }
 
   private readerViewForWindow(pdfWindow: PdfWindow): ReaderViewRuntime | null {
@@ -1924,17 +2046,20 @@ export class ReaderSession {
     );
   }
 
+  private positionClientRect(
+    view: ReaderViewRuntime,
+    position: ReaderLinkPosition,
+  ): readonly number[] | null {
+    const rect = view.getClientRectForPopup?.(position);
+    return rect?.length === 4 && rect.every(Number.isFinite) ? rect : null;
+  }
+
   private linkClientRect(
     view: ReaderViewRuntime,
     overlay: ReaderLinkOverlay,
   ): readonly number[] | null {
-    const rect = view.getClientRectForPopup?.(overlay.position);
-    return rect?.length === 4 &&
-      rect.every(Number.isFinite) &&
-      rect[2]! > rect[0]! &&
-      rect[3]! > rect[1]!
-      ? rect
-      : null;
+    const rect = this.positionClientRect(view, overlay.position);
+    return rect && rect[2]! > rect[0]! && rect[3]! > rect[1]! ? rect : null;
   }
 
   private linkRectIsVisible(pdfWindow: PdfWindow, rect: readonly number[]): boolean {

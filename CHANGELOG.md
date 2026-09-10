@@ -34,6 +34,8 @@ All notable changes to Zotero Neo are documented here.
   delegated to Zotero's per-view history with guarded private API access.
 - Added Normal-mode `f` follow-link hints for visible internal, citation, and external
   PDF links, using Zotero's native per-view navigation and safe link-opening callbacks.
+- Added a transient Zotero-preview-style landing cue after internal and citation
+  jumps: a red circle for point destinations and a red rectangle for area targets.
 
 ### Removed
 

@@ -88,6 +88,15 @@ string. Do not synthesize clicks or introduce Neo-owned link/history state. Miss
 changed members must fail closed with status and write the specific reason to both Zotero
 debug output and the startup diagnostic log rather than leaving badges or input capture active.
 
+After successful internal/citation navigation, Neo mirrors
+`PDFRenderer.renderPreviewPage()` target semantics over the live PDF document:
+`#f57b7b` with `multiply`, a 7-pixel-radius circle when either client dimension
+is below 5 pixels, otherwise the client rectangle. Use
+`getClientRectForPopup()` instead of invoking the preview renderer, which would
+render and crop a separate canvas with coordinates unrelated to the live view.
+The one cue follows scroll/resize and is owned by the view/session timeout;
+never represent it as a Zotero annotation or DOM text selection.
+
 ## Annotation comment overlay
 
 The operating-system keyboard focus remains in the PDF.js iframe in common
