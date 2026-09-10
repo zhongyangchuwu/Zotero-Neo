@@ -14,6 +14,7 @@ import type {
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
+const originalComponents = Reflect.get(globalThis, 'Components');
 
 afterEach(() => {
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
@@ -21,6 +22,8 @@ afterEach(() => {
   vi.useRealTimers();
   if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
   else Reflect.set(globalThis, 'Services', originalServices);
+  if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+  else Reflect.set(globalThis, 'Components', originalComponents);
 });
 
 describe('reader discovery diagnostics', () => {
@@ -83,6 +86,7 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     createElement: () => {
       const element = {
         id: '',
+        ownerDocument: document,
         textContent: '',
         hidden: false,
         style: {
@@ -118,8 +122,12 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     },
   } as unknown as PdfWindow;
   document.defaultView = pdfWindow;
+  const readerWindow = { document } as unknown as Window;
+  const cloneInto = vi.fn(<T>(value: T) => value);
+  Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: pdfWindow } });
   const reader = {
+    _iframeWindow: readerWindow,
     _internalReader: {
       ...internal,
       _primaryView: internal._primaryView ?? { _iframeWindow: pdfWindow },
@@ -157,7 +165,9 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     debug,
     diagnostics,
     pdfWindow,
+    readerWindow,
     reader,
+    cloneInto,
     bodyChildren,
     intervalTasks,
   };
@@ -204,6 +214,16 @@ function internalLink(
   };
 }
 
+function citationLink(
+  rect: readonly number[],
+  destinationPage = 1,
+): Extract<ReaderLinkOverlay, { readonly type: 'citation' }> {
+  return {
+    type: 'citation',
+    position: linkPosition(rect),
+    references: [{ position: linkPosition([0, 0, 0, 0], destinationPage) }],
+  };
+}
 function externalLink(
   rect: readonly number[],
   url: string,
@@ -291,6 +311,7 @@ describe('native reader history', () => {
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected a primary reader view');
     view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
     created.session.start();
 
     view._onKeyDown?.(controlKey('o').event);
@@ -304,33 +325,57 @@ describe('native reader history', () => {
 });
 
 describe('PDF follow-link hints', () => {
-  it('labels visible links once and invokes Zotero native internal and external actions', () => {
+  it('labels visible links once and invokes Zotero native internal, citation, and external actions', () => {
     const created = createHistorySession();
     const internal = internalLink([20, 30, 80, 50], 4);
     const external = externalLink([100, 120, 180, 140], 'https://example.com');
+    const citation = citationLink([200, 200, 260, 220], 8);
     const configured = configureLinkView(created, [
       internal,
       internal,
       external,
+      citation,
       internalLink([900, 30, 950, 50]),
-      { type: 'citation', position: linkPosition([200, 200, 260, 220]) },
     ]);
     const open = readerKey('f');
 
     created.session.focusAndHandle(open.event);
 
-    expect(created.session.state.linkHintBadges.map((badge) => badge.label)).toEqual(['A', 'S']);
-    expect(created.bodyChildren).toHaveLength(2);
+    expect(created.session.state.linkHintBadges.map((badge) => badge.label)).toEqual([
+      'A',
+      'S',
+      'D',
+    ]);
+    expect(created.bodyChildren).toHaveLength(3);
     expect(open.preventDefault).toHaveBeenCalledOnce();
     expect(open.stopImmediatePropagation).toHaveBeenCalledOnce();
 
     created.session.focusAndHandle(readerKey('a').event);
-    expect(configured.navigate).toHaveBeenCalledWith({ position: internal.destinationPosition });
+    expect(created.cloneInto).toHaveBeenNthCalledWith(
+      1,
+      { position: internal.destinationPosition },
+      created.readerWindow,
+    );
+    expect(configured.navigate).toHaveBeenNthCalledWith(1, {
+      position: internal.destinationPosition,
+    });
     expect(created.session.state.linkHintBadges).toHaveLength(0);
 
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('s').event);
     expect(configured.openLink).toHaveBeenCalledWith('https://example.com');
+    expect(created.session.state.linkHintBadges).toHaveLength(0);
+
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('d').event);
+    expect(created.cloneInto).toHaveBeenNthCalledWith(
+      2,
+      { position: citation.references[0]!.position },
+      created.readerWindow,
+    );
+    expect(configured.navigate).toHaveBeenNthCalledWith(2, {
+      position: citation.references[0]!.position,
+    });
     expect(created.session.state.linkHintBadges).toHaveLength(0);
   });
 
@@ -399,6 +444,7 @@ describe('PDF follow-link hints', () => {
   it('removes link hints when Zotero replaces their PDF view', () => {
     const created = createHistorySession();
     configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    Reflect.set(created.reader, '_iframeWindow', undefined);
     created.session.start();
     created.session.focusAndHandle(readerKey('f').event);
     expect(created.session.state.linkHintBadges).toHaveLength(1);

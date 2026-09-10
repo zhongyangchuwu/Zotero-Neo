@@ -76,13 +76,17 @@ The active `PDFView` stores semantic and annotation fallbacks in the page-indexe
 object map `_pdfPages`, with each loaded value exposing `overlays`. This host
 container is not an Array; enumerate its values without requiring array identity.
 Semantic and native fallbacks that share source geometry collapse to one hint.
+Selectable targets are `internal-link`, `citation`, and `external-link`; standalone
+`reference` preview overlays remain Zotero-owned.
 
-Activation must stay on the same primary or secondary `PDFView`: call
-`navigate({ position })` for an internal destination so Zotero records native history,
-or its `_onOpenLink(url)` callback for an external target. Do not synthesize clicks or
-introduce Neo-owned link/history state. Missing or changed members must fail closed with
-status and write the specific reason to both Zotero debug output and the startup diagnostic
-log rather than leaving badges or input capture active.
+Activation must stay on the same primary or secondary `PDFView`. Internal links use
+their `destinationPosition`; citations use the first resolved reference position; both
+call `navigate({ position })` so Zotero records native history. Because the call crosses
+from Bootstrap chrome into the reader content realm, clone the complete location payload
+into `reader._iframeWindow` first. External targets call `_onOpenLink(url)` with a primitive
+string. Do not synthesize clicks or introduce Neo-owned link/history state. Missing or
+changed members must fail closed with status and write the specific reason to both Zotero
+debug output and the startup diagnostic log rather than leaving badges or input capture active.
 
 ## Annotation comment overlay
 

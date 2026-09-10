@@ -32,8 +32,8 @@ All notable changes to Zotero Neo are documented here.
   rendered at 16, 32, 48, 64, 96, 128, and 256 pixels.
 - Added native reader history navigation on Normal-mode `Ctrl-o` / `Ctrl-i`,
   delegated to Zotero's per-view history with guarded private API access.
-- Added Normal-mode `f` follow-link hints for visible internal and external PDF
-  links, using Zotero's native per-view navigation and safe link-opening callbacks.
+- Added Normal-mode `f` follow-link hints for visible internal, citation, and external
+  PDF links, using Zotero's native per-view navigation and safe link-opening callbacks.
 
 ### Removed
 

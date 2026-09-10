@@ -88,14 +88,15 @@ only in reader Normal mode; Insert mode and editable controls retain native inpu
 
 | Key | Action |
 |-----|--------|
-| `f` | Label every visible internal or external PDF link in the active reader view |
+| `f` | Label every visible internal, citation, or external PDF link in the active reader view |
 
 Type the displayed hint letters to activate a link. Matching is case-insensitive;
 `Backspace` removes one typed hint character and `Escape` cancels the hint mode.
-Internal links navigate in the active primary or split PDF view and become part of
-Zotero's native `Ctrl+o` / `Ctrl+i` reading history. External links open through
-Zotero's normal link handler. Citation/reference overlays, off-screen links, Insert
-mode, and editable controls are not claimed by this command.
+Internal links, including figure/table references, navigate in the active primary
+or split PDF view and become part of Zotero's native `Ctrl+o` / `Ctrl+i` reading
+history. Citation hints follow Zotero's first resolved bibliography target.
+External links open through Zotero's normal link handler. Reference-preview
+overlays, off-screen links, Insert mode, and editable controls are not claimed.
 
 > **Note:** Zotero's built-in Read Aloud also listens for the `l`/`r` keys.
 > The plugin blocks Zotero's reader key forwarding for keys vim consumes, so

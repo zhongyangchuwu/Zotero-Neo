@@ -1813,12 +1813,18 @@ export class ReaderSession {
     try {
       const view = this.readerViewForWindow(pdfWindow);
       let result: void | Promise<void>;
-      if (overlay.type === 'internal-link') {
-        if (typeof view?.navigate !== 'function') throw new Error('missing internal navigation');
-        result = view.navigate({ position: overlay.destinationPosition });
-      } else {
+      if (overlay.type === 'external-link') {
         if (typeof view?._onOpenLink !== 'function') throw new Error('missing external open-link');
         result = view._onOpenLink(overlay.url);
+      } else {
+        if (typeof view?.navigate !== 'function') throw new Error('missing internal navigation');
+        const readerWindow = this.#dependencies.reader._iframeWindow;
+        if (!readerWindow) throw new Error('reader window unavailable');
+        const position =
+          overlay.type === 'internal-link'
+            ? overlay.destinationPosition
+            : overlay.references[0]!.position;
+        result = view.navigate(cloneInto({ position }, readerWindow));
       }
       if (result && typeof result.then === 'function')
         void Promise.resolve(result).catch((error: unknown) =>
@@ -1892,6 +1898,16 @@ export class ReaderSession {
     if (!this.isReaderLinkPosition(overlay.position)) return false;
     if (overlay.type === 'internal-link')
       return this.isReaderLinkPosition(overlay.destinationPosition);
+    if (overlay.type === 'citation') {
+      const references = (overlay as { readonly references?: unknown }).references;
+      if (!Array.isArray(references) || !references.length) return false;
+      const first = references[0];
+      return (
+        !!first &&
+        typeof first === 'object' &&
+        this.isReaderLinkPosition((first as { readonly position?: unknown }).position)
+      );
+    }
     return overlay.type === 'external-link' && typeof overlay.url === 'string' && !!overlay.url;
   }
 

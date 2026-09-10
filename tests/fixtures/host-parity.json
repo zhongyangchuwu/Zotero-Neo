@@ -31,8 +31,8 @@
       "empty native history boundaries remain safe",
       "reading history remains independent across reloads tabs and split focus",
       "history chords remain native in Insert mode and editable controls",
-      "normal f labels visible internal and external PDF links once",
-      "follow-link internal navigation enters native reading history",
+      "normal f labels visible internal citation and external PDF links once",
+      "follow-link internal and citation navigation enters native reading history",
       "follow-link external URLs use Zotero link opening",
       "follow-link Backspace Escape scroll zoom and view recreation cleanup",
       "follow-link empty pages and changed private APIs remain safe",
@@ -71,15 +71,15 @@
     ]
   },
   "record": {
-    "zoteroVersion": null,
-    "operatingSystem": null,
-    "xpiSha256": "c9bf13f1f57055a4a67ea942439d7754889d14b46085cc7007d33e542e20363a",
+    "zoteroVersion": "latest stable (exact version not recorded)",
+    "operatingSystem": "Windows",
+    "xpiSha256": "90e4e826faedacdecc72d4fbfd7b1896bd7c6281989cff610ce3d94ceeb72976",
     "executedAt": null,
     "results": {
       "status": "pending",
       "source": "automated candidate",
-      "summary": "The first host candidate exposed an incorrect Array assumption for Zotero's page-indexed PDF data map. The corrected object-map implementation passes automated contracts and awaits repeated host acceptance.",
-      "limitations": "Exact Zotero version and operating system are pending with the corrected follow-link host run."
+      "summary": "Windows latest-stable host testing confirmed external links but exposed inert internal and citation activation because the location object crossed from Bootstrap chrome without cloneInto. The corrected candidate clones the full payload into the reader realm and awaits retest.",
+      "limitations": "The exact latest-stable Zotero version number was not recorded."
     }
   }
 }

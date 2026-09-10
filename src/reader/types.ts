@@ -87,6 +87,11 @@ export type ReaderLinkOverlay =
       readonly destinationPosition: ReaderLinkPosition;
     }
   | {
+      readonly type: 'citation';
+      readonly position: ReaderLinkPosition;
+      readonly references: readonly { readonly position: ReaderLinkPosition }[];
+    }
+  | {
       readonly type: 'external-link';
       readonly position: ReaderLinkPosition;
       readonly url: string;
