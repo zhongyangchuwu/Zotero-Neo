@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
+import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
+
 import {
+  BINDING_SCHEMA_VERSION,
   bindingsFromPreferences,
+  keyGuideConfig,
+  migrateBindingPreferences,
   scrollModeFromPreferences,
   smoothScrollConfig,
   type PreferenceReader,
 } from '../../src/core/preferences';
 
 class TestPreferences implements PreferenceReader {
-  constructor(private readonly values: Readonly<Record<string, boolean | number | string>>) {}
+  private readonly values: Record<string, boolean | number | string>;
+  constructor(values: Readonly<Record<string, boolean | number | string>>) {
+    this.values = { ...values };
+  }
   has(key: string): boolean {
     return Object.hasOwn(this.values, key);
   }
@@ -18,6 +26,9 @@ class TestPreferences implements PreferenceReader {
   get(key: string, fallback: string): string;
   get(key: string, fallback: boolean | number | string): boolean | number | string {
     return this.values[key] ?? fallback;
+  }
+  set(key: string, value: boolean | number | string): void {
+    this.values[key] = value;
   }
 }
 
@@ -111,5 +122,78 @@ describe('binding preferences', () => {
     const bindings = bindingsFromPreferences(preferences);
     expect(bindings['normal:j']).toBe('scrollDown');
     expect(bindings['main:enter']).toBe('mainActivate');
+    expect(bindings['normal: fn']).toBe('mainNotesLayout');
+    expect(bindings['main: fn']).toBe('mainNotesLayout');
+    expect(bindings['normal: n']).toBeUndefined();
+    expect(bindings['main: n']).toBeUndefined();
+    expect(bindings['normal: ft']).toBe('mainTabPick');
+    expect(bindings['main: ft']).toBe('mainTabPick');
+    expect(bindings['main: fT']).toBe('mainTagPicker');
+    expect(bindings['main:u']).toBe('mainRestoreTrashedItems');
+    expect(bindings['normal: tp']).toBeUndefined();
+    expect(bindings['main: tp']).toBeUndefined();
+    expect(bindings['main:ctrl+u']).toBeUndefined();
+  });
+
+  it('migrates retired defaults and removes legacy native-search actions without dropping unrelated remaps', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 4,
+      bindings: JSON.stringify({
+        'normal: fb': 'mainFuzzyCollection',
+        'main: bj': 'mainTabPick',
+        'main: legacy-search': 'mainFocusSearch',
+        'main: old-advanced': 'mainAdvancedSearch',
+        'main:x': 'mainActivate',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({ 'main:x': 'mainActivate' });
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['main: legacy-search']).toBeUndefined();
+    expect(resolved['main: old-advanced']).toBeUndefined();
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+
+    preferences.set('bindings', JSON.stringify({ 'main: q': 'mainClosePDF' }));
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main: q': 'mainClosePDF',
+    });
+  });
+});
+
+describe('key guide preferences', () => {
+  it('uses configured defaults and clamps display delay and font size', () => {
+    expect(keyGuideConfig(new TestPreferences({}))).toEqual({
+      enabled: true,
+      delayMs: KEY_GUIDE_CONFIG.defaultDelayMs,
+      fontSizePx: KEY_GUIDE_CONFIG.defaultFontSizePx,
+    });
+    expect(
+      keyGuideConfig(
+        new TestPreferences({
+          'keyGuide.delayMs': KEY_GUIDE_CONFIG.maxDelayMs + 1_000,
+          'keyGuide.fontSizePx': KEY_GUIDE_CONFIG.maxFontSizePx + 10,
+        }),
+      ),
+    ).toEqual({
+      enabled: true,
+      delayMs: KEY_GUIDE_CONFIG.maxDelayMs,
+      fontSizePx: KEY_GUIDE_CONFIG.maxFontSizePx,
+    });
+    expect(
+      keyGuideConfig(
+        new TestPreferences({
+          'keyGuide.enabled': false,
+          'keyGuide.delayMs': -10,
+          'keyGuide.fontSizePx': 1,
+        }),
+      ),
+    ).toEqual({
+      enabled: false,
+      delayMs: 0,
+      fontSizePx: KEY_GUIDE_CONFIG.minFontSizePx,
+    });
   });
 });

@@ -27,6 +27,12 @@ export const DEFAULT_BINDINGS = {
   'normal:ctrl+u': 'halfPageUp',
   'normal:ctrl+f': 'fullPageDown',
   'normal:ctrl+b': 'fullPageUp',
+  'normal:+': 'zoomIn',
+  'normal:-': 'zoomOut',
+  'normal:zI': 'zoomIn',
+  'normal:zO': 'zoomOut',
+  'normal:=': 'zoomReset',
+  'normal:z0': 'zoomReset',
   'normal:ctrl+o': 'historyBack',
   'normal:ctrl+i': 'historyForward',
   'normal:f': 'followLink',
@@ -67,12 +73,11 @@ export const DEFAULT_BINDINGS = {
   'normal: -': 'toggleReaderSplitHorizontal',
   'normal: |': 'toggleReaderSplitVertical',
   'normal: ff': 'mainFuzzyAll',
-  'normal: fb': 'mainFuzzyCollection',
-  'normal: bj': 'mainTabPick',
-  'normal: n': 'mainNotesLayout',
+  'normal: fc': 'mainFuzzyCollection',
+  'normal: ft': 'mainTabPick',
+  'normal: td': 'mainClosePDF',
+  'normal: fn': 'mainNotesLayout',
   'normal: yy': 'mainYankCitekey',
-  'normal: o': 'mainOpenPDF',
-  'normal: q': 'mainClosePDF',
   'normal: m': 'toggleMarksExplorer',
   'visual:j': 'extendDown',
   'visual:k': 'extendUp',
@@ -113,17 +118,24 @@ export const DEFAULT_BINDINGS = {
   'cursor:escape': 'exitMode',
   'insert:escape': 'exitMode',
   'main: ff': 'mainFuzzyAll',
-  'main: fb': 'mainFuzzyCollection',
-  'main: bj': 'mainTabPick',
-  'main: n': 'mainNotesLayout',
+  'main: fc': 'mainFuzzyCollection',
+  'main: ft': 'mainTabPick',
+  'main: fT': 'mainTagPicker',
+  'main: td': 'mainClosePDF',
+  'main: fn': 'mainNotesLayout',
   'main: e': 'mainFocusTree',
   'main: yy': 'mainYankCitekey',
   'main: o': 'mainOpenPDF',
-  'main: q': 'mainClosePDF',
-  'main: /': 'mainFocusSearch',
   'main: wh': 'mainFocusLeft',
   'main: wl': 'mainFocusRight',
   'main: ww': 'mainFocusItems',
+  'main:ctrl+h': 'focusReaderSplitLeft',
+  'main:ctrl+j': 'focusReaderSplitDown',
+  'main:ctrl+k': 'focusReaderSplitUp',
+  'main:ctrl+l': 'focusReaderSplitRight',
+  'main:dd': 'mainTrashItems',
+  'main:x': 'mainTrashItems',
+  'main:u': 'mainRestoreTrashedItems',
   'main:h': 'mainTreeCollapse',
   'main:l': 'mainTreeExpand',
   'main:j': 'mainNavDown',
@@ -156,22 +168,58 @@ export function parseBindingKey(value: string): ParsedBindingKey | null {
   return { mode: mode as Mode, sequence };
 }
 
-export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
-  if (typeof raw !== 'string' || raw === '') return {};
+function parseBindingEntries(raw: unknown): [string, unknown][] {
+  if (typeof raw !== 'string' || raw === '') return [];
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return {};
+    return [];
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  return Object.entries(parsed);
+}
 
+export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
   const result: Record<string, ActionId> = {};
-  for (const [key, action] of Object.entries(parsed)) {
+  for (const [key, action] of parseBindingEntries(raw)) {
     if (!parseBindingKey(key) || !isActionId(action)) continue;
     result[key] = action;
   }
   return result;
+}
+
+const RETIRED_DEFAULT_BINDINGS = {
+  'normal: fb': 'mainFuzzyCollection',
+  'normal: bj': 'mainTabPick',
+  'normal: o': 'mainOpenPDF',
+  'normal: q': 'mainClosePDF',
+  'main: fb': 'mainFuzzyCollection',
+  'main: bj': 'mainTabPick',
+  'main: q': 'mainClosePDF',
+  'normal: n': 'mainNotesLayout',
+  'main: n': 'mainNotesLayout',
+  'normal: tp': 'mainTabPick',
+  'main: tp': 'mainTabPick',
+  'main:ctrl+u': 'mainRestoreTrashedItems',
+} as const;
+
+const REMOVED_ACTIONS: Readonly<Record<string, true>> = {
+  mainFocusSearch: true,
+  mainAdvancedSearch: true,
+};
+
+/** Removes retired defaults and removed actions while preserving valid custom bindings. */
+export function migrateRetiredDefaultBindings(raw: unknown): string {
+  const bindings: Record<string, ActionId> = {};
+  for (const [key, action] of parseBindingEntries(raw)) {
+    if (!parseBindingKey(key) || REMOVED_ACTIONS[String(action)]) continue;
+    if (isActionId(action)) bindings[key] = action;
+  }
+  for (const [key, action] of Object.entries(RETIRED_DEFAULT_BINDINGS)) {
+    if (bindings[key] === action) delete bindings[key];
+  }
+  return Object.keys(bindings).length ? JSON.stringify(bindings) : '';
 }
 
 export function resolveBindings(raw: unknown): BindingMap {

@@ -1,6 +1,9 @@
-import { resolveBindings, type BindingMap } from '../input/bindings';
+import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
+
+import { migrateRetiredDefaultBindings, resolveBindings, type BindingMap } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
+export const BINDING_SCHEMA_VERSION = 5;
 
 export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
@@ -15,11 +18,42 @@ export interface SmoothScrollConfig {
   readonly followSpeed: number;
 }
 
+export interface KeyGuideConfig {
+  readonly enabled: boolean;
+  readonly delayMs: number;
+  readonly fontSizePx: number;
+}
+
+export function keyGuideConfig(preferences: PreferenceReader): KeyGuideConfig {
+  const delay = preferences.get('keyGuide.delayMs', KEY_GUIDE_CONFIG.defaultDelayMs);
+  const fontSize = preferences.get('keyGuide.fontSizePx', KEY_GUIDE_CONFIG.defaultFontSizePx);
+  return {
+    enabled: preferences.get('keyGuide.enabled', true),
+    delayMs: Math.max(0, Math.min(KEY_GUIDE_CONFIG.maxDelayMs, delay)),
+    fontSizePx: Math.max(
+      KEY_GUIDE_CONFIG.minFontSizePx,
+      Math.min(KEY_GUIDE_CONFIG.maxFontSizePx, fontSize),
+    ),
+  };
+}
+
 export interface PreferenceReader {
   has?(key: string): boolean;
   get(key: string, fallback: boolean): boolean;
   get(key: string, fallback: number): number;
   get(key: string, fallback: string): string;
+}
+
+export interface PreferenceWriter extends PreferenceReader {
+  set(key: string, value: boolean | number | string): void;
+}
+
+export function migrateBindingPreferences(preferences: PreferenceWriter): void {
+  if (preferences.get('bindings.schemaVersion', 0) >= BINDING_SCHEMA_VERSION) return;
+  const raw = preferences.get('bindings', '');
+  const migrated = migrateRetiredDefaultBindings(raw);
+  if (migrated !== raw) preferences.set('bindings', migrated);
+  preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }
 
 export function scrollModeFromPreferences(preferences: PreferenceReader): ScrollMode {

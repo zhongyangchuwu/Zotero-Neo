@@ -7,6 +7,11 @@ export interface InputState {
   readonly countBuffer: string;
 }
 
+export interface InputContext extends InputState {
+  readonly bindings: BindingMap;
+  readonly allowCountPrefix: boolean;
+}
+
 export type InputDecision =
   | {
       readonly kind: 'pass';
@@ -27,9 +32,7 @@ export type InputDecision =
       readonly count: number;
     };
 
-export interface AdvanceOptions {
-  readonly allowCountPrefix: boolean;
-}
+export type InputTransition = InputDecision;
 
 function resetState(state: InputState): InputState {
   return { ...state, keyBuffer: '', countBuffer: '' };
@@ -90,16 +93,13 @@ function processMatch(
   };
 }
 
-export function advanceInput(
-  state: InputState,
-  key: string,
-  bindings: BindingMap,
-  options: AdvanceOptions,
-): InputDecision {
+export function advanceInput(context: InputContext, key: string): InputTransition {
+  const { mode, keyBuffer, countBuffer, bindings, allowCountPrefix } = context;
+  const state: InputState = { mode, keyBuffer, countBuffer };
   if (!key) return { kind: 'pass', state };
 
   if (
-    options.allowCountPrefix &&
+    allowCountPrefix &&
     !state.keyBuffer &&
     /^\d$/.test(key) &&
     (key !== '0' || state.countBuffer)
@@ -137,16 +137,30 @@ export function advanceInput(
 }
 
 export function resolveInputTimeout(
-  decision: Extract<InputDecision, { kind: 'pending' }>,
-): InputDecision {
-  if (decision.timeoutAction) {
+  pending: Extract<InputTransition, { readonly kind: 'pending' }>,
+): InputTransition {
+  if (pending.timeoutAction) {
     return {
       kind: 'execute',
-      state: resetState(decision.state),
+      state: resetState(pending.state),
       consumed: true,
-      action: decision.timeoutAction,
-      count: countValue(decision.state.countBuffer),
+      action: pending.timeoutAction,
+      count: countValue(pending.state.countBuffer),
     };
   }
-  return { kind: 'pass', state: resetState(decision.state) };
+  return { kind: 'pass', state: resetState(pending.state) };
+}
+
+export function inputWouldConsume(context: InputContext, key: string): boolean {
+  return advanceInput(context, key).kind !== 'pass';
+}
+
+export function cancelLeaderInput(state: InputState): InputState | null {
+  if (!state.keyBuffer.startsWith(' ')) return null;
+  return { ...state, keyBuffer: '' };
+}
+
+export function backspaceLeaderInput(state: InputState): InputState | null {
+  if (!state.keyBuffer.startsWith(' ')) return null;
+  return { ...state, keyBuffer: state.keyBuffer.slice(0, -1) };
 }

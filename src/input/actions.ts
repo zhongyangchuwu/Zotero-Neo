@@ -59,6 +59,18 @@ export const ACTION_LABELS = {
     en: 'Full-page up',
     'zh-CN': '向上整页',
   },
+  zoomIn: {
+    en: 'Zoom in (+, zI)',
+    'zh-CN': '放大（+、zI）',
+  },
+  zoomOut: {
+    en: 'Zoom out (-, zO)',
+    'zh-CN': '缩小（-、zO）',
+  },
+  zoomReset: {
+    en: 'Reset zoom / Fit page width (=, z0)',
+    'zh-CN': '重置缩放 / 适合页面宽度（=、z0）',
+  },
   scrollTop: {
     en: 'Scroll — current page to top of view (zt)',
     'zh-CN': '滚动 — 当前页面到视图顶部（zt）',
@@ -308,12 +320,20 @@ export const ACTION_LABELS = {
     'zh-CN': '主窗口：模糊选择器 — 所有条目（<space>ff）',
   },
   mainFuzzyCollection: {
-    en: 'Main window: fuzzy picker — current collection (<space>fb)',
-    'zh-CN': '主窗口：模糊选择器 — 当前分类（<space>fb）',
+    en: 'Main window: fuzzy picker — current collection (<space>fc)',
+    'zh-CN': '主窗口：模糊选择器 — 当前分类（<space>fc）',
   },
   mainNotesLayout: {
-    en: 'Main window: open notes layout (<space>n)',
-    'zh-CN': '主窗口：打开笔记布局（<space>n）',
+    en: 'Main window: search notes (<space>fn)',
+    'zh-CN': '主窗口：搜索笔记（<space>fn）',
+  },
+  mainTrashItems: {
+    en: 'Main window: move selected items to trash (dd / x)',
+    'zh-CN': '主窗口：将所选条目移到回收站（dd / x）',
+  },
+  mainRestoreTrashedItems: {
+    en: 'Main window: restore the last trashed items (u)',
+    'zh-CN': '主窗口：恢复最近移到回收站的条目（u）',
   },
   mainFocusTree: {
     en: 'Main window: focus collection tree (<space>e)',
@@ -340,12 +360,12 @@ export const ACTION_LABELS = {
     'zh-CN': '主窗口：打开所选条目的 PDF（<space>o）',
   },
   mainClosePDF: {
-    en: 'Main window: close active PDF tab (<space>q)',
-    'zh-CN': '主窗口：关闭活动 PDF 标签页（<space>q）',
+    en: 'Main window: close active tab (<space>td)',
+    'zh-CN': '主窗口：关闭活动标签页（<space>td）',
   },
-  mainFocusSearch: {
-    en: 'Main window: focus search bar (<space>/)',
-    'zh-CN': '主窗口：聚焦搜索栏（<space>/）',
+  mainTagPicker: {
+    en: 'Main window: tag picker (<space>fT)',
+    'zh-CN': '主窗口：标签选择器（<space>fT）',
   },
   mainNavDown: {
     en: 'Main window: navigate down (j)',
@@ -368,8 +388,8 @@ export const ACTION_LABELS = {
     'zh-CN': '主窗口：打开所选条目的 PDF（Enter）',
   },
   mainTabPick: {
-    en: 'Main window: tab picker (<space>bj)',
-    'zh-CN': '主窗口：标签选择器（<space>bj）',
+    en: 'Main window: tab picker (<space>ft)',
+    'zh-CN': '主窗口：标签选择器（<space>ft）',
   },
   mainPrevTab: {
     en: 'Main window: switch to previous tab (J)',
@@ -412,20 +432,20 @@ export const ACTION_LABELS = {
     'zh-CN': '主窗口：折叠所有分类（M）',
   },
   focusReaderSplitLeft: {
-    en: 'Reader: focus left split pane (or toggle in horizontal split)',
-    'zh-CN': '阅读器：聚焦左侧分栏面板（水平分栏中则切换）',
+    en: 'Focus the visible pane to the left (Ctrl-h)',
+    'zh-CN': '聚焦左侧可见面板（Ctrl-h）',
   },
   focusReaderSplitDown: {
-    en: 'Reader: focus lower split pane (or toggle in vertical split)',
-    'zh-CN': '阅读器：聚焦下方分栏面板（垂直分栏中则切换）',
+    en: 'Focus the visible pane below (Ctrl-j)',
+    'zh-CN': '聚焦下方可见面板（Ctrl-j）',
   },
   focusReaderSplitUp: {
-    en: 'Reader: focus upper split pane (or toggle in vertical split)',
-    'zh-CN': '阅读器：聚焦上方分栏面板（垂直分栏中则切换）',
+    en: 'Focus the visible pane above (Ctrl-k)',
+    'zh-CN': '聚焦上方可见面板（Ctrl-k）',
   },
   focusReaderSplitRight: {
-    en: 'Reader: focus right split pane (or toggle in horizontal split)',
-    'zh-CN': '阅读器：聚焦右侧分栏面板（水平分栏中则切换）',
+    en: 'Focus the visible pane to the right (Ctrl-l)',
+    'zh-CN': '聚焦右侧可见面板（Ctrl-l）',
   },
   toggleReaderSplitHorizontal: {
     en: 'Reader: toggle horizontal split (<space>-)',
@@ -450,6 +470,19 @@ export const ACTION_LABELS = {
 } as const;
 
 export type ActionId = keyof typeof ACTION_LABELS;
+
+export type FocusDirection = 'left' | 'down' | 'up' | 'right';
+
+const FOCUS_DIRECTION_BY_ACTION: Partial<Record<ActionId, FocusDirection>> = {
+  focusReaderSplitLeft: 'left',
+  focusReaderSplitDown: 'down',
+  focusReaderSplitUp: 'up',
+  focusReaderSplitRight: 'right',
+};
+
+export function focusDirectionForAction(action: ActionId | undefined): FocusDirection | null {
+  return action ? (FOCUS_DIRECTION_BY_ACTION[action] ?? null) : null;
+}
 
 export const ACTION_IDS = Object.freeze(Object.keys(ACTION_LABELS) as ActionId[]);
 
