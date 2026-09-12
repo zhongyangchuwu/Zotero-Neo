@@ -7,6 +7,7 @@ export class ZoteroLogger implements Logger {
   readonly #prefix: string;
   readonly #fileName: string;
   #epoch = 0;
+  #writeFailureReported = false;
 
   constructor(prefix = '[ZoteroNeo]', fileName = 'zotero-neo-startup.log') {
     this.#prefix = prefix;
@@ -33,8 +34,10 @@ export class ZoteroLogger implements Logger {
       const line = `${Date.now() - this.#epoch}ms  ${message}\n`;
       stream.write(line, line.length);
       stream.close();
-    } catch {
-      // Diagnostics must never block plugin startup or reader injection.
+    } catch (error) {
+      if (this.#writeFailureReported) return;
+      this.#writeFailureReported = true;
+      Zotero.debug(`${this.#prefix} diagnostic log write failed: ${String(error)}`);
     }
   }
 }
