@@ -191,6 +191,32 @@
     </hbox>
   </groupbox>
 
+  <!-- ── Key guide ─────────────────────────────────────────────────────── -->
+  <groupbox>
+    <label data-i18n="zv.keyGuide" value="Key guide" style="font-weight: bold;" />
+    <html:p style="margin: 4px 0 8px; font-size: 0.9em;" data-i18n="zv.keyGuide.help">
+      Show valid Space-leader continuations in Normal mode without intercepting text input.
+    </html:p>
+    <hbox align="center">
+      <checkbox id="zv-key-guide-enabled" data-i18n="zv.keyGuide.enabled"
+        label="Show the Space-leader key guide" />
+    </hbox>
+    <hbox align="center" style="margin-top: 8px;">
+      <html:label for="zv-key-guide-delay" data-i18n="zv.keyGuide.delay"
+        style="min-width: 180px; font-weight: 600;">Display delay (ms)</html:label>
+      <html:input type="number" id="zv-key-guide-delay" step="25"
+        style="width: 90px; padding: 3px 6px;" />
+      <html:span id="zv-key-guide-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
+    </hbox>
+    <hbox align="center" style="margin-top: 8px;">
+      <html:label for="zv-key-guide-font-size" data-i18n="zv.keyGuide.fontSize"
+        style="min-width: 180px; font-weight: 600;">Font size (px)</html:label>
+      <html:input type="number" id="zv-key-guide-font-size" step="1"
+        style="width: 90px; padding: 3px 6px;" />
+    </hbox>
+  </groupbox>
+
   <!-- ── Default highlight colour ───────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.color.group" value="Default highlight colour" style="font-weight: bold;" />
@@ -224,7 +250,7 @@
       <html:br />
       <html:span data-i18n="zv.bindings.help2a">Click a </html:span><html:strong data-i18n="zv.bindings.help2b">Key sequence</html:strong><html:span data-i18n="zv.bindings.help2c"> cell to edit it.</html:span>
       <html:br />
-      <html:span data-i18n="zv.bindings.help3a">Use lowercase letters; prefix with </html:span><html:code>ctrl+</html:code><html:span data-i18n="zv.bindings.help3b"> for Ctrl/Cmd.</html:span>
+      <html:span data-i18n="zv.bindings.help3a">Letter case is preserved; prefix with </html:span><html:code>ctrl+</html:code><html:span data-i18n="zv.bindings.help3b"> for Ctrl/Cmd.</html:span>
       <html:br />
       <html:span data-i18n="zv.bindings.help4a">Multi-key sequences such as </html:span><html:code>gg</html:code><html:span data-i18n="zv.bindings.help4b"> or </html:span><html:code>zy</html:code><html:span data-i18n="zv.bindings.help4c"> are supported.</html:span>
     </html:p>
@@ -256,7 +282,7 @@
   </groupbox>
 
   <!-- ── Keybinding apply ───────────────────────────────────────────── -->
-  <!-- Modes/marks/colour/scroll save live on change.
+  <!-- Modes/key guide/marks/colour/scroll save live on change.
        Keybindings need an explicit "Apply" because the table is edited. -->
   <hbox style="margin-top: 12px; justify-content: flex-end; align-items: center;">
     <html:p style="font-size: 0.85em; margin: 0 12px 0 0;"

@@ -1,6 +1,8 @@
 import { ZoteroPreferenceStore } from '../core/preference-store';
 import { PREFERENCE_PREFIX } from '../core/preferences';
 import { ACTION_IDS, ACTION_LABELS, isActionId, type ActionId } from '../input/actions';
+import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
+
 import {
   DEFAULT_BINDINGS,
   MODES,
@@ -66,6 +68,12 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.marks.persist':
       "Persist marks in the parent item's Extra field (m / ` / dm) — survive restarts and sync",
     'zv.marks.staged': 'Marks settings save automatically on change.',
+    'zv.keyGuide': 'Key guide',
+    'zv.keyGuide.help':
+      'Show valid Space-leader continuations in Normal mode without intercepting text input.',
+    'zv.keyGuide.enabled': 'Show the Space-leader key guide',
+    'zv.keyGuide.delay': 'Display delay (ms)',
+    'zv.keyGuide.fontSize': 'Font size (px)',
     'zv.color.group': 'Default highlight colour',
     'zv.color.help':
       'Used when no explicit colour prefix is given (zh in the default bindings, if bound).',
@@ -80,13 +88,13 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help2a': 'Click a ',
     'zv.bindings.help2b': 'Key sequence',
     'zv.bindings.help2c': ' cell to edit it.',
-    'zv.bindings.help3a': 'Use lowercase letters; prefix with ',
+    'zv.bindings.help3a': 'Letter case is preserved; prefix with ',
     'zv.bindings.help3b': ' for Ctrl/Cmd.',
     'zv.bindings.help4a': 'Multi-key sequences such as ',
     'zv.bindings.help4b': ' or ',
     'zv.bindings.help4c': ' are supported.',
     'zv.bindings.footer':
-      'Appearance, modes, marks, colour and scroll settings save automatically.',
+      'Appearance, key guide, modes, marks, colour and scroll settings save automatically.',
     'zv.bindings.reset': 'Reset to defaults',
     'zv.bindings.mode': 'Mode',
     'zv.bindings.key': 'Key sequence',
@@ -123,6 +131,11 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.marks': '标记',
     'zv.marks.persist': '将标记保存到父条目的 Extra 字段（m / ` / dm）— 重启后保留并同步',
     'zv.marks.staged': '标记设置在更改时自动保存。',
+    'zv.keyGuide': '按键提示',
+    'zv.keyGuide.help': '在普通模式中显示可用的 Space Leader 后续按键，不拦截文本输入。',
+    'zv.keyGuide.enabled': '显示 Space Leader 按键提示',
+    'zv.keyGuide.delay': '显示延迟（毫秒）',
+    'zv.keyGuide.fontSize': '字体大小（像素）',
     'zv.color.group': '默认高亮颜色',
     'zv.color.help': '未按显式颜色前缀时使用（默认绑定中的 zh，若已绑定）。',
     'zv.color.default': '默认颜色',
@@ -136,7 +149,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help2a': '点击',
     'zv.bindings.help2b': '键序列',
     'zv.bindings.help2c': '单元格即可编辑。',
-    'zv.bindings.help3a': '使用小写字母；以',
+    'zv.bindings.help3a': '字母大小写会保留；以',
     'zv.bindings.help3b': '前缀表示 Ctrl/Cmd。',
     'zv.bindings.help4a': '支持',
     'zv.bindings.help4b': '或',
@@ -146,7 +159,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.mode': '模式',
     'zv.bindings.key': '键序列',
     'zv.bindings.action': '动作',
-    'zv.bindings.footer': '外观、模式、标记、颜色与滚动设置在更改时自动保存。',
+    'zv.bindings.footer': '外观、按键提示、模式、标记、颜色与滚动设置在更改时自动保存。',
     'zv.status.saved': '已保存！',
   },
 } as const satisfies Record<Language, Record<string, string>>;
@@ -524,6 +537,61 @@ function initializePane(doc: Document): void {
   if (marksCheckbox) {
     marksCheckbox.checked = getPreference('marks.persist', false);
     saveCheckbox(marksCheckbox, 'marks.persist', byId<HTMLElement>(doc, 'zv-marks-config-status'));
+  }
+
+  const keyGuideStatus = byId<HTMLElement>(doc, 'zv-key-guide-status');
+  const keyGuideEnabled = byId<XulCheckbox>(doc, 'zv-key-guide-enabled');
+  if (keyGuideEnabled) {
+    keyGuideEnabled.checked = getPreference('keyGuide.enabled', true);
+    saveCheckbox(keyGuideEnabled, 'keyGuide.enabled', keyGuideStatus);
+  }
+  const keyGuideDelay = byId<HTMLInputElement>(doc, 'zv-key-guide-delay');
+  if (keyGuideDelay) {
+    keyGuideDelay.min = '0';
+    keyGuideDelay.max = String(KEY_GUIDE_CONFIG.maxDelayMs);
+    keyGuideDelay.value = String(
+      clampInteger(
+        String(getPreference('keyGuide.delayMs', KEY_GUIDE_CONFIG.defaultDelayMs)),
+        KEY_GUIDE_CONFIG.defaultDelayMs,
+        0,
+        KEY_GUIDE_CONFIG.maxDelayMs,
+      ),
+    );
+    keyGuideDelay.addEventListener('change', () => {
+      const delay = clampInteger(
+        keyGuideDelay.value,
+        KEY_GUIDE_CONFIG.defaultDelayMs,
+        0,
+        KEY_GUIDE_CONFIG.maxDelayMs,
+      );
+      keyGuideDelay.value = String(delay);
+      setPreference('keyGuide.delayMs', delay);
+      flashStatus(keyGuideStatus, translate('zv.status.saved', currentLanguage()));
+    });
+  }
+  const keyGuideFontSize = byId<HTMLInputElement>(doc, 'zv-key-guide-font-size');
+  if (keyGuideFontSize) {
+    keyGuideFontSize.min = String(KEY_GUIDE_CONFIG.minFontSizePx);
+    keyGuideFontSize.max = String(KEY_GUIDE_CONFIG.maxFontSizePx);
+    keyGuideFontSize.value = String(
+      clampInteger(
+        String(getPreference('keyGuide.fontSizePx', KEY_GUIDE_CONFIG.defaultFontSizePx)),
+        KEY_GUIDE_CONFIG.defaultFontSizePx,
+        KEY_GUIDE_CONFIG.minFontSizePx,
+        KEY_GUIDE_CONFIG.maxFontSizePx,
+      ),
+    );
+    keyGuideFontSize.addEventListener('change', () => {
+      const fontSize = clampInteger(
+        keyGuideFontSize.value,
+        KEY_GUIDE_CONFIG.defaultFontSizePx,
+        KEY_GUIDE_CONFIG.minFontSizePx,
+        KEY_GUIDE_CONFIG.maxFontSizePx,
+      );
+      keyGuideFontSize.value = String(fontSize);
+      setPreference('keyGuide.fontSizePx', fontSize);
+      flashStatus(keyGuideStatus, translate('zv.status.saved', currentLanguage()));
+    });
   }
 
   const modeSelect = byId<XulMenuList>(doc, 'zv-scroll-mode');
