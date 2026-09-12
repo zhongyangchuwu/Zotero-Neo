@@ -63,6 +63,11 @@ describe('binding parsing and overrides', () => {
     expect(parseBindingKey('main: gg')).toEqual({ mode: 'main', sequence: ' gg' });
   });
 
+  it('parses colon command bindings without widening their mode', () => {
+    expect(parseBindingKey('normal::')).toEqual({ mode: 'normal', sequence: ':' });
+    expect(parseBindingKey('main::')).toEqual({ mode: 'main', sequence: ':' });
+  });
+
   it('rejects malformed binding keys', () => {
     expect(parseBindingKey('normal')).toBeNull();
     expect(parseBindingKey(':j')).toBeNull();
@@ -125,9 +130,17 @@ describe('binding parsing and overrides', () => {
     expect('normal:zi' in DEFAULT_BINDINGS).toBe(false);
     expect('normal:zo' in DEFAULT_BINDINGS).toBe(false);
     expect('insert:+' in DEFAULT_BINDINGS).toBe(false);
+    expect('normal: :' in DEFAULT_BINDINGS).toBe(false);
+    expect('main: :' in DEFAULT_BINDINGS).toBe(false);
     expect('main:-' in DEFAULT_BINDINGS).toBe(false);
-    expect(ACTION_IDS).toContain('zoomReset');
-    expect(ACTION_LABELS.zoomReset.en).toBe('Reset zoom / Fit page width (=, z0)');
+    expect(DEFAULT_BINDINGS['normal::']).toBe('openCommandPalette');
+    expect(DEFAULT_BINDINGS['main::']).toBe('openCommandPalette');
+    expect('visual::' in DEFAULT_BINDINGS).toBe(false);
+    expect('cursor::' in DEFAULT_BINDINGS).toBe(false);
+    expect('insert::' in DEFAULT_BINDINGS).toBe(false);
+    expect(ACTION_IDS).toContain('openCommandPalette');
+    expect(ACTION_LABELS.openCommandPalette.en).toBe('Open command palette');
+    expect(ACTION_LABELS.zoomReset.en).toBe('Reset zoom / Fit page width');
 
     const bindings = resolveBindings(
       JSON.stringify({

@@ -1,14 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ActionId } from '../../src/input/actions';
-import type { MainWindow, MainWindowControllerDependencies } from '../../src/core/contracts';
+import type {
+  MainWindow,
+  MainWindowControllerApi,
+  MainWindowControllerDependencies,
+} from '../../src/core/contracts';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS } from '../../src/input/bindings';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { createMainWindowController } from '../../src/main/controller';
-import { ReaderSession } from '../../src/reader/controller';
-import type { PdfWindow, ReaderRuntime } from '../../src/reader/types';
+import { ReaderSession, createReaderController } from '../../src/reader/controller';
+import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
 import {
   MainNavigation,
   selectedCollection,
@@ -35,9 +39,14 @@ function statusElement() {
     remove: () => {},
   };
 }
-function pickerMainWindow(): { window: MainWindow; bodyChildren: HTMLElement[] } {
+function pickerMainWindow(): {
+  window: MainWindow;
+  bodyChildren: HTMLElement[];
+  keydown: (event: Event) => void;
+} {
   const bodyChildren: HTMLElement[] = [];
   let document: Document;
+  let keydown: EventListener | undefined;
   const createElement = (tag: string): HTMLElement => {
     const children: HTMLElement[] = [];
     const listeners = new Map<string, EventListener[]>();
@@ -46,6 +55,7 @@ function pickerMainWindow(): { window: MainWindow; bodyChildren: HTMLElement[] }
       tagName: tag.toUpperCase(),
       localName: tag,
       ownerDocument: null as unknown as Document,
+      parentElement: null as HTMLElement | null,
       style: {
         getPropertyValue: () => '',
         setProperty: () => {},
@@ -69,16 +79,54 @@ function pickerMainWindow(): { window: MainWindow; bodyChildren: HTMLElement[] }
       },
       setAttribute: (name: string, value: string) => Reflect.set(element, name, value),
       getAttribute: () => null,
-      append: (...nodes: HTMLElement[]) => children.push(...nodes),
-      appendChild: (node: HTMLElement) => children.push(node),
+      append: (...nodes: HTMLElement[]) => {
+        for (const node of nodes) Reflect.set(node, 'parentElement', element);
+        children.push(...nodes);
+      },
+      appendChild: (node: HTMLElement) => {
+        Reflect.set(node, 'parentElement', element);
+        children.push(node);
+      },
       replaceChildren: (...nodes: HTMLElement[]) => {
+        for (const child of children) Reflect.set(child, 'parentElement', null);
+        for (const node of nodes) Reflect.set(node, 'parentElement', element);
         children.splice(0, children.length, ...nodes);
       },
       addEventListener: (type: string, listener: EventListener) => {
         listeners.set(type, [...(listeners.get(type) ?? []), listener]);
       },
       removeEventListener: () => {},
-      focus: () => {},
+      closest: (selector: string) => {
+        if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
+          return element as unknown as HTMLElement;
+        return element.parentElement?.closest?.(selector) ?? null;
+      },
+      emit: (type: string, event: Partial<Event> = {}) => {
+        let stopped = false;
+        const synthetic = {
+          ...event,
+          target: event.target ?? element,
+          preventDefault: () => event.preventDefault?.(),
+          stopPropagation: () => {
+            stopped = true;
+            event.stopPropagation?.();
+          },
+          stopImmediatePropagation: () => {
+            stopped = true;
+            event.stopImmediatePropagation?.();
+          },
+        } as Event;
+        for (const listener of listeners.get(type) ?? []) listener(synthetic);
+        if (!stopped)
+          (
+            element.parentElement as
+              | (HTMLElement & { emit?: (type: string, event?: Event) => void })
+              | null
+          )?.emit?.(type, synthetic);
+      },
+      focus: () => {
+        Reflect.set(document, 'activeElement', element);
+      },
       select: vi.fn(),
       scrollBy: vi.fn(),
       scrollIntoView: vi.fn(),
@@ -88,17 +136,31 @@ function pickerMainWindow(): { window: MainWindow; bodyChildren: HTMLElement[] }
       },
     };
     element.ownerDocument = document;
-    return element as unknown as HTMLElement;
+    return element as unknown as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
   };
   document = {
+    defaultView: null,
     activeElement: null,
+    createElement: (tag: string) => createElement(tag),
     createElementNS: (_namespace: string, tag: string) => createElement(tag),
-    body: { append: (node: HTMLElement) => bodyChildren.push(node) },
-    documentElement: { append: (node: HTMLElement) => bodyChildren.push(node) },
-    addEventListener: () => {},
+    head: { appendChild: (node: HTMLElement) => bodyChildren.push(node) },
+    body: {
+      append: (node: HTMLElement) => bodyChildren.push(node),
+      appendChild: (node: HTMLElement) => bodyChildren.push(node),
+    },
+    documentElement: {
+      append: (node: HTMLElement) => bodyChildren.push(node),
+      appendChild: (node: HTMLElement) => bodyChildren.push(node),
+    },
+    addEventListener: (type: string, listener: EventListener) => {
+      if (type === 'keydown') keydown = listener;
+    },
     removeEventListener: () => {},
     getElementById: () => null,
     querySelector: () => null,
+    querySelectorAll: () => [],
   } as unknown as Document;
   const window = {
     document,
@@ -111,7 +173,8 @@ function pickerMainWindow(): { window: MainWindow; bodyChildren: HTMLElement[] }
     setTimeout,
     clearTimeout,
   } as unknown as MainWindow;
-  return { window, bodyChildren };
+  Reflect.set(document, 'defaultView', window);
+  return { window, bodyChildren, keydown: (event) => keydown?.(event) };
 }
 
 describe('current Zotero collection APIs', () => {
@@ -515,8 +578,191 @@ describe('NoteEditor canonical main commands', () => {
     expect(native.stopPropagation).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
+  it('launches the command palette from Note Normal without propagating a count', () => {
+    const test = harness({ 'main::': 'openCommandPalette' });
+    test.press('3');
+    const colon = test.press(':');
+
+    expect(test.actions).toEqual([['openCommandPalette', 0]]);
+    expect(colon.preventDefault).toHaveBeenCalledOnce();
+    expect(test.session.note.count).toBe('');
+
+    test.session.note.mode = 'insert';
+    const insert = test.press(':');
+    expect(insert.preventDefault).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
 });
 
+describe('Main command palette', () => {
+  it('opens through the canonical ActionId path in the owner window', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = pickerMainWindow();
+    const controller = createMainWindowController({
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+      },
+      logger,
+      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    controller.addWindow(host.window);
+
+    const colon = {
+      key: ':',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent;
+    host.keydown(colon);
+    await vi.waitFor(() =>
+      expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+    );
+    controller.shutdown();
+  });
+});
+
+describe('Reader to Main command palette integration', () => {
+  it('keeps Reader ownership, active split execution, and picker chaining end to end', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const owner = pickerMainWindow();
+    const other = pickerMainWindow();
+    Reflect.set(owner.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'reader-tab', title: 'Reader', type: 'reader' }],
+      selectedID: 'reader-tab',
+    });
+    Reflect.set(other.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'other-tab', title: 'Other', type: 'library' }],
+      selectedID: 'other-tab',
+    });
+
+    const primary = {
+      document: owner.window.document,
+      innerWidth: 800,
+      innerHeight: 600,
+      focus: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setInterval: () => 0,
+      clearInterval: () => {},
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame: () => {},
+      getSelection: () => ({ isCollapsed: true }),
+    } as unknown as PdfWindow;
+    const secondary = {
+      ...primary,
+      focus: vi.fn(),
+    } as unknown as PdfWindow;
+    const primaryOriginal = vi.fn();
+    const secondaryOriginal = vi.fn();
+    const zoomIn = vi.fn(function (this: InternalReaderRuntime) {
+      expect(this._lastViewPrimary).toBe(false);
+    });
+    const internal = {
+      _primaryView: { _iframeWindow: primary, _onKeyDown: primaryOriginal },
+      _secondaryView: { _iframeWindow: secondary, _onKeyDown: secondaryOriginal },
+      _lastViewPrimary: false,
+      zoomIn,
+    } as unknown as InternalReaderRuntime;
+    const reader = {
+      _instanceID: 'reader-owner',
+      itemID: 17,
+      _window: owner.window,
+      _iframeWindow: owner.window,
+      _internalReader: internal,
+    } as unknown as ReaderRuntime;
+    const readerService = {
+      _readers: [reader],
+      registerEventListener: vi.fn(() => Symbol('reader-listener')),
+      unregisterEventListener: vi.fn(),
+      getByTabID: vi.fn((tabID: string) => (tabID === 'reader-tab' ? reader : null)),
+    };
+    const preferences = {
+      has: () => false,
+      get: (_key: string, fallback: boolean | number | string) => fallback,
+      set: () => {},
+    } as unknown as MainWindowControllerDependencies['preferences'];
+    Reflect.set(globalThis, 'Zotero', {
+      Reader: readerService,
+      Items: { get: () => false, getAll: async () => [] },
+      Libraries: { userLibraryID: 1 },
+      locale: 'en-US',
+    });
+
+    let main: MainWindowControllerApi | null = null;
+    const readerController = createReaderController({
+      preferences,
+      logger,
+      delegateMain: (action, count, ownerWindow) =>
+        main?.executeFromReader(action, count, ownerWindow),
+      openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
+    });
+    main = createMainWindowController({ preferences, logger, reader: readerController });
+    readerController.start('zotero-neo@zotero-neo');
+    main.addWindow(owner.window);
+    main.addWindow(other.window);
+
+    const overlayFor = (host: { bodyChildren: HTMLElement[] }): HTMLElement | null =>
+      host.bodyChildren.find((child) => child.id === 'zv-picker-overlay') ?? null;
+    const pickerParts = (host: { bodyChildren: HTMLElement[] }) => {
+      const overlay = overlayFor(host);
+      const left = overlay?.children[0]?.children[0]?.children[0];
+      if (!left) throw new Error('Expected mounted picker left pane');
+      return {
+        input: left.children[1] as HTMLElement & {
+          value: string;
+          emit(type: string, event?: Partial<Event>): void;
+        },
+        results: left.children[3] as HTMLElement,
+        title: left.children[0]?.children[0]?.textContent ?? '',
+      };
+    };
+    const key = (value: string, target: EventTarget | null = null): KeyboardEvent =>
+      ({
+        key: value,
+        target,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        stopImmediatePropagation: vi.fn(),
+      }) as unknown as KeyboardEvent;
+
+    owner.keydown(key(':'));
+    await vi.waitFor(() => expect(overlayFor(owner)).not.toBeNull());
+    await vi.waitFor(() => expect(pickerParts(owner).results.children.length).toBeGreaterThan(0));
+    const readerCommands = pickerParts(owner);
+    readerCommands.input.value = 'Zoom in';
+    readerCommands.input.emit('input');
+    owner.keydown(key('Enter', readerCommands.results));
+    await vi.waitFor(() => expect(zoomIn).toHaveBeenCalledOnce());
+    expect(overlayFor(owner)).toBeNull();
+    expect(overlayFor(other)).toBeNull();
+
+    owner.keydown(key(':'));
+    await vi.waitFor(() => expect(overlayFor(owner)).not.toBeNull());
+    const mainCommands = pickerParts(owner);
+    mainCommands.input.value = 'all items';
+    mainCommands.input.emit('input');
+    owner.keydown(key('Enter', mainCommands.results));
+    await vi.waitFor(() => expect(pickerParts(owner).title).toBe('All items'));
+    expect(overlayFor(other)).toBeNull();
+
+    main.removeWindow(owner.window);
+    expect(overlayFor(owner)).toBeNull();
+    owner.keydown(key(':'));
+    await Promise.resolve();
+    expect(overlayFor(owner)).toBeNull();
+    expect(overlayFor(other)).toBeNull();
+
+    readerController.shutdown();
+    main.shutdown();
+  });
+});
 describe('repeated tab switching', () => {
   it('applies every rapid tab-switch command instead of time-deduplicating it', () => {
     let selectedIndex = 0;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ReaderControllerDependencies } from '../../src/core/contracts';
+import type { CommandPaletteContext, ReaderControllerDependencies } from '../../src/core/contracts';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import { DEFAULT_BINDINGS, type BindingMap } from '../../src/input/bindings';
 import type {
@@ -50,6 +50,7 @@ describe('reader discovery diagnostics', () => {
         diagnostic: (message: string) => diagnostics.push(message),
       },
       delegateMain: () => {},
+      openCommandPalette: () => {},
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
@@ -68,6 +69,7 @@ function createHistorySession(
   internal: InternalReaderRuntime = {},
   delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
   bindings: BindingMap = DEFAULT_BINDINGS,
+  openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -174,6 +176,7 @@ function createHistorySession(
         diagnostic: (message: string) => diagnostics.push(message),
       },
       delegateMain,
+      openCommandPalette,
     },
   };
   const session = new ReaderSession({
@@ -535,6 +538,7 @@ describe('reader zoom shortcuts', () => {
     view._onKeyDown?.(readerKey('+').event);
     view._onKeyDown?.(readerKey('-').event);
     view._onKeyDown?.(readerKey('=').event);
+    view._onKeyDown?.(readerKey(':').event);
     const advanceThroughReader = (key: string): void => {
       const press = readerKey(key);
       view._onKeyDown?.(press.event);
@@ -551,6 +555,23 @@ describe('reader zoom shortcuts', () => {
     expect(zoomOut).toHaveBeenCalledOnce();
     expect(zoomReset).toHaveBeenCalledOnce();
     expect(originalKeyDown).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+  it('leaves colon native when a custom resolved map removes the default binding', () => {
+    const originalKeyDown = vi.fn();
+    const bindings = Object.fromEntries(
+      Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'normal::'),
+    ) as BindingMap;
+    const created = createHistorySession({}, () => {}, bindings);
+    const view = created.reader._internalReader?._primaryView;
+    if (!view) throw new Error('Expected a primary reader view');
+    view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+
+    view._onKeyDown?.(readerKey(':').event);
+
+    expect(originalKeyDown).toHaveBeenCalledOnce();
     created.session.dispose();
   });
 });
@@ -596,6 +617,49 @@ describe('reader Space-leader key guide', () => {
     expect(created.bodyChildren).toHaveLength(0);
     expect(escape.preventDefault).toHaveBeenCalledOnce();
     created.session.dispose();
+  });
+});
+describe('Reader command palette', () => {
+  it('opens from Reader Normal, routes active-split local actions, and preserves owner delegation', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const zoomIn = vi.fn(function (this: InternalReaderRuntime) {
+      expect(this._lastViewPrimary).toBe(false);
+    });
+    const paletteRef: { value: CommandPaletteContext | null } = { value: null };
+    const created = createHistorySession(
+      { _lastViewPrimary: false, zoomIn },
+      delegateMain,
+      DEFAULT_BINDINGS,
+      (_window, context) => {
+        paletteRef.value = context;
+      },
+    );
+    const secondary = { ...created.pdfWindow, focus: vi.fn() } as unknown as PdfWindow;
+    Reflect.set(created.reader._internalReader, '_secondaryView', { _iframeWindow: secondary });
+
+    created.session.focusAndHandle(readerKey('3').event);
+    const colon = readerKey(':');
+    created.session.focusAndHandle(colon.event);
+    expect(colon.preventDefault).toHaveBeenCalledOnce();
+    const palette = paletteRef.value;
+    if (!palette) throw new Error('Expected a Reader command palette context');
+    expect(palette.mode).toBe('normal');
+
+    palette.execute('zoomIn', 123);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    palette.execute('mainFuzzyAll', 123);
+    expect(delegateMain).toHaveBeenCalledWith('mainFuzzyAll', 0, created.reader._window);
+
+    Reflect.set(created.reader._internalReader, '_primaryView', undefined);
+    Reflect.set(created.reader._internalReader, '_secondaryView', undefined);
+    palette.execute('zoomIn', 123);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(delegateMain).toHaveBeenCalledOnce();
+    created.session.dispose();
+    palette.execute('zoomIn', 123);
+    palette.execute('mainFuzzyAll', 123);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(delegateMain).toHaveBeenCalledOnce();
   });
 });
 describe('Reader leader timer guards', () => {

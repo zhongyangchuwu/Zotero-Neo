@@ -1,5 +1,5 @@
 import type { Logger } from '../../core/logging';
-import type { MainWindow } from '../../core/contracts';
+import type { CommandPaletteContext, MainWindow } from '../../core/contracts';
 import { THEME_VARS } from '../../ui/theme';
 import { asElement } from '../../platform/dom';
 import type { MainWindowSession } from '../session';
@@ -11,6 +11,7 @@ import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';
 import { createTabsProvider } from './providers/tabs';
 import { createTagsProvider } from './providers/tags';
+import { createCommandsProvider } from './providers/commands';
 
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
@@ -58,13 +59,18 @@ export class FuzzyPicker {
     this.#mouseEnabled = mouseEnabled;
   }
 
-  async open(window: MainWindow, session: MainWindowSession, scope: PickerScope): Promise<void> {
+  async open(
+    window: MainWindow,
+    session: MainWindowSession,
+    scope: PickerScope,
+    commandContext?: CommandPaletteContext,
+  ): Promise<void> {
     if (session.picker.open) return;
     const generation = ++session.picker.generation;
     let orphanOverlay: HTMLElement | null = null;
     try {
       this.trace(`picker open scope=${scope}`);
-      const provider = this.provider(window, session, scope);
+      const provider = this.provider(window, session, scope, commandContext);
       const commands = this.createProviderCommands(session);
       session.picker.provider = provider;
       session.picker.commands = commands;
@@ -464,16 +470,19 @@ export class FuzzyPicker {
   ): Promise<boolean> {
     const item = session.picker.filtered[session.picker.selected];
     if (!item) return false;
+    const provider = session.picker.provider;
+    if (!provider) return false;
     const generation = session.picker.generation;
+    const closeBeforeActivate = provider.closeBeforeActivate === true && closeWhenDone;
+    if (closeBeforeActivate) this.close(session);
     try {
-      const provider = session.picker.provider;
-      if (!provider) return false;
       const pending = provider.activate(item, openInWindow);
       if (pending) await pending;
     } catch (error) {
       this.failure(`picker select scope=${session.picker.scope}`, error);
       return false;
     }
+    if (closeBeforeActivate) return true;
     if (!this.isCurrent(session, generation)) return false;
     if (closeWhenDone) this.close(session);
     return true;
@@ -564,6 +573,7 @@ export class FuzzyPicker {
     window: MainWindow,
     session: MainWindowSession,
     scope: PickerScope,
+    commandContext?: CommandPaletteContext,
   ): PickerProvider {
     switch (scope) {
       case 'all':
@@ -575,6 +585,9 @@ export class FuzzyPicker {
         return createNotesProvider(window, session, this.#navigation, this.#logger);
       case 'tags':
         return createTagsProvider(window, session, this.#navigation, this.#logger);
+      case 'commands':
+        if (!commandContext) throw new Error('Command palette context missing');
+        return createCommandsProvider(commandContext);
       default: {
         const exhaustive: never = scope;
         return exhaustive;

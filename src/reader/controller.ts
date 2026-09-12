@@ -991,6 +991,23 @@ export class ReaderSession {
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
+    if (action === 'openCommandPalette') {
+      if (!pdfWindow || this.#scope.disposed) return;
+      const ownerWindow = this.#dependencies.reader._window;
+      if (!ownerWindow) return;
+      this.#dependencies.controller.dependencies.openCommandPalette(ownerWindow, {
+        mode: 'normal',
+        bindings: this.#dependencies.bindings(),
+        language: this.keyGuideLanguage(),
+        execute: (nextAction, _count) => {
+          if (this.#scope.disposed) return;
+          const active = this.activePdfWindow();
+          if (!active || !this.readerViewForWindow(active)) return;
+          this.executeAction(nextAction, 0, active);
+        },
+      });
+      return;
+    }
     if (!pdfWindow) return;
     const number = Math.max(1, count || 1);
     if (action.startsWith('main')) {

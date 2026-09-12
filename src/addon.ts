@@ -1,4 +1,9 @@
-import type { MainWindow, MainWindowControllerApi, ReaderControllerApi } from './core/contracts';
+import type {
+  CommandPaletteContext,
+  MainWindow,
+  MainWindowControllerApi,
+  ReaderControllerApi,
+} from './core/contracts';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
 import { migrateBindingPreferences } from './core/preferences';
@@ -33,6 +38,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       logger: this.#logger,
       delegateMain(action, count, ownerWindow) {
         main?.executeFromReader(action, count, ownerWindow);
+      },
+      openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
+        main?.openCommandPalette(window, context);
       },
     });
     this.#main = createMainWindowController({

@@ -25,6 +25,8 @@ export interface PickerProvider {
   readonly initialFocusPane?: PickerPane;
   readonly loadingText?: string;
   readonly help?: { readonly query: string; readonly list: string };
+  /** Close the shell before invoking activation, for actions that may open another picker. */
+  readonly closeBeforeActivate?: boolean;
   readonly searchFocusUpdates?: boolean;
   readonly inputClick?: (commands: PickerProviderCommands) => void;
   load(): Promise<PickerItem[]>;

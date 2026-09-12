@@ -88,6 +88,9 @@ All notable changes to Zotero Neo are documented here.
 - Made picker result rows keyboard-only by default so pointer hover/click cannot override keyboard selection.
 - Added opt-in mouse selection and double-click confirmation for All, Collection, Tab, and Note
   picker rows through `picker.mouse.enabled`; Tag rows and markers remain keyboard-only.
+- Added Normal `:` command palettes for Reader, Main, and Note contexts. The finite command
+  provider derives unique actions and current key hints from the resolved binding map, closes
+  before execution, and keeps command arguments, counts, scopes, and Spotlight integration deferred.
 
 ### Removed
 

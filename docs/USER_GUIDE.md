@@ -104,6 +104,28 @@ without a second display-only keymap.
 Only working commands are shown; unsupported commands are omitted until their
 owning features are available.
 
+#### Normal command palette
+
+Press `:` in Reader Normal, Main Normal, or Note Normal to open the command palette.
+It uses the shared picker surface: a query field, filtered command rows, a preview, and
+the current key hints. There is no `<space>:` alias.
+
+- One row is shown for each unique `ActionId` currently present in the active resolved
+  bindings (`normal` for Reader, `main` for Main and Note). The launcher itself and
+  unbound actions are hidden.
+- Key hints come from the current binding table, so custom remaps appear immediately;
+  action descriptions do not contain stale shortcut text.
+- Use `↑` / `↓`, `j` / `k`, or `Ctrl+j` / `Ctrl+k` to select, `Enter` to run, and
+  `Escape` to close and restore the previous focus. A selected action runs in the
+  originating Reader, Main, or Note context after the palette closes.
+- The initial palette is query-only: it accepts no command arguments, counts, scopes,
+  history, Spotlight commands, or external registrations. `3:` may open it, but the
+  selected action runs with its ordinary uncounted behavior.
+
+When **Preferences → Picker → Enable mouse row selection and double-click confirmation**
+is enabled, ordinary command rows also support pointer selection and double-click
+confirmation. Tag rows remain keyboard-only.
+
 #### Directional pane focus
 
 `Ctrl+h` / `Ctrl+j` / `Ctrl+k` / `Ctrl+l` move to the nearest visible pane in
@@ -727,6 +749,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `cursorBigWordForward`        | Move caret forward one WORD (Cursor mode)                                            |
 | `cursorWordBackward`          | Move caret backward one word (Cursor mode)                                           |
 | `cursorBigWordBackward`       | Move caret backward one WORD (Cursor mode)                                           |
+| `openCommandPalette`          | Open the command palette in the current Normal context                    |
 | `mainTabPick`                 | Open the shared picker for currently open Zotero tabs                                |
 | `mainNotesLayout`             | Search notes in the shared list/preview picker                                       |
 | `mainFuzzyAll`                | Open the shared picker over all items in the current library                         |

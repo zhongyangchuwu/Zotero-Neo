@@ -1,4 +1,5 @@
 import type {
+  CommandPaletteContext,
   MainWindowControllerApi,
   MainWindowControllerDependencies,
   MainWindow,
@@ -121,6 +122,26 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     this.execute(action, ownerWindow, session, count);
+  }
+
+  openCommandPalette(window: MainWindow, context: CommandPaletteContext): void {
+    const session = this.#sessions.get(window);
+    if (!session) {
+      this.#dependencies.logger.debug('ignored command palette: owner window detached');
+      return;
+    }
+    const execute = context.execute;
+    const ownerContext: CommandPaletteContext = {
+      ...context,
+      execute: (action, count) => {
+        if (this.#sessions.get(window) !== session) {
+          this.#dependencies.logger.debug('ignored command palette action: owner window detached');
+          return;
+        }
+        execute(action, count);
+      },
+    };
+    void this.#picker.open(window, session, 'commands', ownerContext);
   }
 
   private bindings() {
@@ -332,6 +353,17 @@ export class MainWindowController implements MainWindowControllerApi {
     count: number,
   ): void {
     switch (action) {
+      case 'openCommandPalette':
+        this.openCommandPalette(window, {
+          mode: 'main',
+          bindings: this.bindings(),
+          language: this.keyGuideLanguage(),
+          execute: (nextAction, nextCount) => {
+            if (this.#sessions.get(window) === session)
+              this.execute(nextAction, window, session, nextCount);
+          },
+        });
+        break;
       case 'mainFuzzyAll':
         void this.#picker.open(window, session, 'all');
         break;

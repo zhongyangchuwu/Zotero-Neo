@@ -87,9 +87,9 @@ selected items, reader-tab context, and tag filtering. Main-window control flow 
 these named adapters rather than spreading structural casts through feature code.
 
 `src/main/picker/` owns one generic picker shell plus direct finite providers for items,
-tabs, notes, and tags. The shell owns lifecycle, rendering, focus, queueing, and containment;
-providers own their scope-specific loading, previews, activation, and commands. It has no
-generic fallback provider or module-global provider state.
+tabs, notes, tags, and commands. The shell owns lifecycle, rendering, focus, queueing, and
+containment; providers own their scope-specific loading, previews, activation, and commands.
+It has no generic fallback provider or module-global provider state.
 
 Reader outline and marks retain separate domain behavior. `src/reader/sidebar-overlay.ts`
 coordinates only their view-local lifecycle: mutual exclusion, theme-root cleanup, PDF-view
@@ -122,8 +122,9 @@ aligned on the movement axis, and never wraps. A directional key is prevented on
 after a target is found.
 
 `src/main/picker/` owns one search shell for library items, current-collection
-items, tabs, notes, and tags. Scope providers supply rows, preview content, activation,
-and scope-only commands; they do not bypass the resolved `BindingMap`. The internal fuzzy
+items, tabs, notes, tags, and commands. Scope providers supply rows, preview content,
+activation, and scope-only commands; they do not bypass the resolved `BindingMap`.
+The internal fuzzy
 ranker is a small allocation-conscious subsequence scorer with consecutive and
 word-boundary bonuses. Do not import Zotero's private DevTools copy of
 `fuzzaldrin-plus`: `resource://devtools/...` is not a stable add-on API, and adding an
@@ -136,6 +137,14 @@ preview scrolling remain pointer-enabled in both states. Tag rows and markers ar
 from pointer selection/toggling because Tag provider mutations are keyboard-only. Provider
 `onKeyDown` still returns handled status before shell generic navigation and Enter handling, so
 scope-specific commands retain precedence.
+
+The command provider is a finite projection of the active resolved `BindingMap`: it
+deduplicates bound `ActionId`s, displays key hints separately from key-independent
+`ACTION_LABELS`, and hides the launcher itself. Its explicit context carries mode, language,
+bindings, and an executor callback. The shell's `closeBeforeActivate` contract closes the
+palette before invoking that callback, so an action can safely open another picker without a
+second dispatcher, synthetic key event, or display-only command registry. Reader contexts
+revalidate session/view ownership through their executor and never fall back to another window.
 
 Bibliographic picker previews are deliberately bounded and synchronous: they retain the
 existing title, creator, year, and citation-key metadata, then add attachment and child-note

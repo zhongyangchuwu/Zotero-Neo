@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { MainWindow } from '../../src/core/contracts';
+import type { ActionId } from '../../src/input/actions';
+import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
 import {
   FuzzyPicker,
   fuzzyMatchScore,
@@ -274,6 +275,114 @@ describe('picker mouse activation', () => {
   });
 });
 
+describe('command palette provider', () => {
+  it('deduplicates remapped actions and closes before keyboard or pointer execution', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const tabs = {
+      _tabs: [{ id: 'library', title: 'Library', type: 'library' }],
+      selectedID: 'library',
+    };
+    const actions: [ActionId, number][] = [];
+    let picker: FuzzyPicker;
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      language: 'en',
+      bindings: {
+        'main::': 'openCommandPalette',
+        'main:x': 'mainFuzzyAll',
+        'main:y': 'mainFuzzyAll',
+        'main:z': 'mainNextTab',
+      },
+      execute: (action, count) => {
+        actions.push([action, count]);
+        if (action === 'mainFuzzyAll') void picker.open(window, session, 'tabs');
+      },
+    };
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { Zotero_Tabs: tabs });
+    picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+
+    await picker.open(window, session, 'commands', context);
+    const all = session.picker.filtered.find((item) => item.id === 'mainFuzzyAll');
+    expect(all?.title).toBe('Main window: fuzzy picker — all items');
+    expect(all?.meta).toBe('x, y');
+    expect(session.picker.filtered.filter((item) => item.id === 'mainFuzzyAll')).toHaveLength(1);
+    expect(session.picker.filtered.some((item) => item.id === 'openCommandPalette')).toBe(false);
+    expect(session.picker.filtered.some((item) => item.id === 'mainOpenPDF')).toBe(false);
+
+    const keyboardIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
+    session.picker.selected = keyboardIndex;
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await vi.waitFor(() => expect(actions).toEqual([['mainFuzzyAll', 0]]));
+    await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
+    expect(session.picker.open).toBe(true);
+
+    picker.close(session);
+    await picker.open(window, session, 'commands', context);
+    const pointerIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
+    const pointerRow = session.picker.results?.children[pointerIndex] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    pointerRow.emit('dblclick');
+    await vi.waitFor(() =>
+      expect(actions).toEqual([
+        ['mainFuzzyAll', 0],
+        ['mainFuzzyAll', 0],
+      ]),
+    );
+    await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
+  });
+
+  it('closes on Escape and restores the prior focus target', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      language: 'en',
+      bindings: { 'main:x': 'mainNextTab' },
+      execute: () => {},
+    };
+    await picker.open(window, session, 'commands', context);
+    const restore = { isConnected: true, focus: vi.fn() } as unknown as HTMLElement;
+    session.picker.previousElement = restore;
+    picker.onKeyDown(pickerKey('Escape', session.picker.input), window, session);
+    expect(session.picker.open).toBe(false);
+    expect(restore.focus).toHaveBeenCalledOnce();
+  });
+  it('discards a queued command after close and reopen', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const execute = vi.fn<CommandPaletteContext['execute']>();
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      language: 'en',
+      bindings: { 'main:x': 'mainNextTab' },
+      execute,
+    };
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'commands', context);
+    session.picker.selected = 0;
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    picker.close(session);
+    await picker.open(window, session, 'commands', context);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(execute).not.toHaveBeenCalled();
+    picker.close(session);
+  });
+});
 function createPickerHarness(width = 1200): {
   window: MainWindow;
   session: MainWindowSession;
