@@ -165,9 +165,14 @@ every query character must appear in order, with consecutive and word-boundary m
 first. Enter applies the selected result in item, collection, tab, and note scopes. Tags use
 an explicit List/Query model and remain open while each tag filter is toggled.
 
-Result rows are keyboard-only: pointer hover, clicks, and double-clicks do not
-change selection or activate results. Pointer remains usable for search-input focus
-and result or preview scrolling.
+Result rows are keyboard-only by default: pointer hover, clicks, and double-clicks do not
+change selection or activate results. Enable **Preferences → Picker → Enable mouse row
+selection and double-click confirmation** to opt in for All, Collection, Tab, and Note rows
+(stored as `picker.mouse.enabled`): a single click selects the row and updates its preview,
+while a double-click confirms it. The setting is read when pointer events occur, so it takes
+effect without restarting Zotero. Hover remains inert in either setting, and pointer input
+remains usable for search-input focus and result or preview scrolling. `Enter` and every other
+keyboard command remain canonical.
 
 | Key                    | Action                                                    |
 | ---------------------- | --------------------------------------------------------- |
@@ -784,8 +789,9 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                           |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                               |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                               |
+| Picker mouse rows        | off                     | When enabled, single-click selects and double-click confirms All, Collection, Tab, and Note rows; hover remains inert and Tag rows stay keyboard-only |
 
-Appearance, key guide, and scroll settings save automatically on change.
+Appearance, key guide, picker, and scroll settings save automatically on change.
 
 - **Step scrolling** moves instantly by the scroll step per `j`/`k`/`H`/`L` press.
 - **Constant-speed scrolling** glides at a fixed speed while a scroll key is

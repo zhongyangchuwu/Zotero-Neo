@@ -85,7 +85,9 @@ All notable changes to Zotero Neo are documented here.
   and failed native updates resynchronize without mutating tag data.
 - Split Tag picker shortcut help between the search input and tag list so each location reflects
   the active Query or List controls.
-- Made picker result rows keyboard-only so pointer hover/click cannot override keyboard selection.
+- Made picker result rows keyboard-only by default so pointer hover/click cannot override keyboard selection.
+- Added opt-in mouse selection and double-click confirmation for All, Collection, Tab, and Note
+  picker rows through `picker.mouse.enabled`; Tag rows and markers remain keyboard-only.
 
 ### Removed
 

@@ -4,9 +4,11 @@ import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 
 import {
   BINDING_SCHEMA_VERSION,
+  PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
   bindingsFromPreferences,
   keyGuideConfig,
   migrateBindingPreferences,
+  pickerMouseEnabled,
   scrollModeFromPreferences,
   smoothScrollConfig,
   type PreferenceReader,
@@ -195,5 +197,17 @@ describe('key guide preferences', () => {
       delayMs: 0,
       fontSizePx: KEY_GUIDE_CONFIG.minFontSizePx,
     });
+  });
+});
+
+describe('picker preferences', () => {
+  it('defaults mouse row interaction off and honors explicit values', () => {
+    expect(pickerMouseEnabled(new TestPreferences({}))).toBe(false);
+    expect(
+      pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: false })),
+    ).toBe(false);
+    expect(
+      pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: true })),
+    ).toBe(true);
   });
 });

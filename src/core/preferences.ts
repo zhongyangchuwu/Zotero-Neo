@@ -5,6 +5,12 @@ import { migrateRetiredDefaultBindings, resolveBindings, type BindingMap } from 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
 export const BINDING_SCHEMA_VERSION = 5;
 
+export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
+
+export function pickerMouseEnabled(preferences: PreferenceReader): boolean {
+  return preferences.get(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
+}
+
 export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
 

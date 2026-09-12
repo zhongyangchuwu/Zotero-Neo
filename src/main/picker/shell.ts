@@ -1,6 +1,7 @@
 import type { Logger } from '../../core/logging';
 import type { MainWindow } from '../../core/contracts';
 import { THEME_VARS } from '../../ui/theme';
+import { asElement } from '../../platform/dom';
 import type { MainWindowSession } from '../session';
 import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
@@ -14,6 +15,27 @@ import { createTagsProvider } from './providers/tags';
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
 
+function pickerRowFromEvent(event: Event, results: HTMLElement): HTMLElement | null {
+  const target = asElement(event.target);
+  if (!target) return null;
+  const directTarget = (target as HTMLElement).dataset?.zvPickerRow === '1';
+  const row = directTarget ? target : target.closest?.('[data-zv-picker-row="1"]');
+  if (!row || !Array.from(results.children).includes(row)) return null;
+  return row as HTMLElement;
+}
+
+function pickerRowIndex(event: Event, results: HTMLElement): number | null {
+  const row = pickerRowFromEvent(event, results);
+  if (!row) return null;
+  const index = Number.parseInt(row.dataset.zvPickerIndex ?? '', 10);
+  return Number.isInteger(index) ? index : null;
+}
+
+function isPrimaryMouseEvent(event: Event): boolean {
+  const button = (event as MouseEvent).button;
+  return typeof button !== 'number' || button === 0;
+}
+
 export function fuzzyPickerRowText(item: PickerItem, _index: number, _scope: PickerScope): string {
   const metadata = `${item.title || '(untitled)'}${
     item.author ? ` — ${item.author}${item.year ? `, ${item.year}` : ''}` : ''
@@ -24,10 +46,16 @@ export function fuzzyPickerRowText(item: PickerItem, _index: number, _scope: Pic
 export class FuzzyPicker {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
+  readonly #mouseEnabled: () => boolean;
 
-  constructor(logger: Logger, navigation: MainNavigation) {
+  constructor(
+    logger: Logger,
+    navigation: MainNavigation,
+    mouseEnabled: () => boolean = () => false,
+  ) {
     this.#logger = logger;
     this.#navigation = navigation;
+    this.#mouseEnabled = mouseEnabled;
   }
 
   async open(window: MainWindow, session: MainWindowSession, scope: PickerScope): Promise<void> {
@@ -153,12 +181,50 @@ export class FuzzyPicker {
         if (provider.inputClick) provider.inputClick(session.picker.commands!);
         else this.markFocus(session, 'search');
       });
+      const pointerRowHandler = (event: Event): void => {
+        if (!this.#mouseEnabled() || session.picker.scope === 'tags' || !isPrimaryMouseEvent(event))
+          return;
+        const index = pickerRowIndex(event, results);
+        if (index === null || index < 0 || index >= session.picker.filtered.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.focusPane(session, 'list');
+        this.selectRow(session, index);
+      };
+      const doubleClickRowHandler = (event: Event): void => {
+        if (!this.#mouseEnabled() || session.picker.scope === 'tags' || !isPrimaryMouseEvent(event))
+          return;
+        const index = pickerRowIndex(event, results);
+        const item = index === null ? undefined : session.picker.filtered[index];
+        if (index === null || !item) return;
+        const generation = session.picker.generation;
+        const itemID = item.id;
+        event.preventDefault();
+        event.stopPropagation();
+        this.focusPane(session, 'list');
+        this.selectRow(session, index);
+        void this.enqueue(session, 'pointer select result', async () => {
+          if (!this.isCurrent(session, generation)) return;
+          const currentIndex = session.picker.filtered.findIndex(
+            (candidate) => candidate.id === itemID,
+          );
+          if (currentIndex < 0) return;
+          this.selectRow(session, currentIndex);
+          await this.select(window, session, false);
+        });
+      };
+      results.addEventListener('click', pointerRowHandler);
+      results.addEventListener('dblclick', doubleClickRowHandler);
+      session.picker.inputCleanup = () => {
+        input.removeEventListener('input', inputHandler);
+        results.removeEventListener('click', pointerRowHandler);
+        results.removeEventListener('dblclick', doubleClickRowHandler);
+      };
       results.addEventListener('focus', () => this.markFocus(session, 'list'));
       preview.addEventListener('focus', () => this.markFocus(session, 'preview'));
       overlay.addEventListener('mousedown', (event) => {
         if (event.target === overlay) this.close(session);
       });
-      session.picker.inputCleanup = () => input.removeEventListener('input', inputHandler);
       if (provider.loadingText) {
         results.style.color = THEME_VARS.muted;
         results.textContent = provider.loadingText;
@@ -319,6 +385,26 @@ export class FuzzyPicker {
     this.traceSlowFilter(session, query, ranked.length, startedAt);
   }
 
+  private selectRow(session: MainWindowSession, index: number): void {
+    if (index < 0 || index >= session.picker.filtered.length) return;
+    session.picker.selected = index;
+    this.refreshRowSelection(session);
+    this.renderPreview(session);
+  }
+
+  private refreshRowSelection(session: MainWindowSession): void {
+    const results = session.picker.results;
+    if (!results) return;
+    const mouseEnabled = this.#mouseEnabled() && session.picker.scope !== 'tags';
+    Array.from(results.children).forEach((child, index) =>
+      this.styleRow(child as HTMLElement, index === session.picker.selected, mouseEnabled),
+    );
+  }
+
+  private styleRow(row: HTMLElement, selected: boolean, mouseEnabled: boolean): void {
+    row.style.cssText = `padding:6px 12px;cursor:${mouseEnabled ? 'pointer' : 'default'};color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
+  }
+
   private render(session: MainWindowSession): void {
     const container = session.picker.results;
     if (!container) return;
@@ -337,10 +423,12 @@ export class FuzzyPicker {
       return;
     }
     container.style.color = THEME_VARS.text;
+    const mouseEnabled = this.#mouseEnabled() && session.picker.scope !== 'tags';
     session.picker.filtered.forEach((item, index) => {
       const row = doc.createElementNS(H, 'div');
-      const selected = index === session.picker.selected;
-      row.style.cssText = `padding:6px 12px;cursor:default;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
+      row.dataset.zvPickerRow = '1';
+      row.dataset.zvPickerIndex = String(index);
+      this.styleRow(row, index === session.picker.selected, mouseEnabled);
       const label = doc.createElementNS(H, 'span');
       label.textContent =
         provider?.rowText(item, index) ?? fuzzyPickerRowText(item, index, session.picker.scope);
@@ -376,6 +464,7 @@ export class FuzzyPicker {
   ): Promise<boolean> {
     const item = session.picker.filtered[session.picker.selected];
     if (!item) return false;
+    const generation = session.picker.generation;
     try {
       const provider = session.picker.provider;
       if (!provider) return false;
@@ -385,6 +474,7 @@ export class FuzzyPicker {
       this.failure(`picker select scope=${session.picker.scope}`, error);
       return false;
     }
+    if (!this.isCurrent(session, generation)) return false;
     if (closeWhenDone) this.close(session);
     return true;
   }

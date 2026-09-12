@@ -217,6 +217,20 @@
     </hbox>
   </groupbox>
 
+  <!-- ── Picker ─────────────────────────────────────────────────────────── -->
+  <groupbox>
+    <label data-i18n="zv.picker" value="Picker" style="font-weight: bold;" />
+    <html:p style="margin: 4px 0 8px; font-size: 0.9em;" data-i18n="zv.picker.help">
+      Enable mouse selection and double-click confirmation for item, collection, tab, and note rows. Tag filters remain keyboard-only.
+    </html:p>
+    <hbox align="center">
+      <checkbox id="zv-picker-mouse-enabled" data-i18n="zv.picker.mouse.enabled"
+        label="Enable mouse row selection and double-click confirmation" />
+      <html:span id="zv-picker-mouse-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
+    </hbox>
+  </groupbox>
+
   <!-- ── Default highlight colour ───────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.color.group" value="Default highlight colour" style="font-weight: bold;" />

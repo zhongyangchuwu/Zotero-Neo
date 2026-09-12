@@ -128,9 +128,14 @@ ranker is a small allocation-conscious subsequence scorer with consecutive and
 word-boundary bonuses. Do not import Zotero's private DevTools copy of
 `fuzzaldrin-plus`: `resource://devtools/...` is not a stable add-on API, and adding an
 npm fuzzy package would violate the zero-runtime-dependency XPI contract.
-Picker result rows are keyboard-only; pointer input remains available for query focus and
-result or preview scrolling. Provider `onKeyDown` returns handled status before the shell's
-generic navigation and Enter handling, so scope-specific commands retain precedence.
+Picker result rows are keyboard-only by default; the shared shell reads the injected
+`picker.mouse.enabled` preference at pointer-event time. When enabled, delegated click handling
+selects ordinary item/collection/tab/note rows and delegated double-click handling confirms
+through the existing provider activation queue; hover remains inert. Query focus and result or
+preview scrolling remain pointer-enabled in both states. Tag rows and markers are hard-excluded
+from pointer selection/toggling because Tag provider mutations are keyboard-only. Provider
+`onKeyDown` still returns handled status before shell generic navigation and Enter handling, so
+scope-specific commands retain precedence.
 
 Bibliographic picker previews are deliberately bounded and synchronous: they retain the
 existing title, creator, year, and citation-key metadata, then add attachment and child-note

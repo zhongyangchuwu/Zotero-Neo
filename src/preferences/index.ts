@@ -1,5 +1,5 @@
 import { ZoteroPreferenceStore } from '../core/preference-store';
-import { PREFERENCE_PREFIX } from '../core/preferences';
+import { PREFERENCE_PREFIX, PICKER_MOUSE_ENABLED_PREFERENCE_KEY } from '../core/preferences';
 import { ACTION_IDS, ACTION_LABELS, isActionId, type ActionId } from '../input/actions';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 
@@ -74,6 +74,10 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.keyGuide.enabled': 'Show the Space-leader key guide',
     'zv.keyGuide.delay': 'Display delay (ms)',
     'zv.keyGuide.fontSize': 'Font size (px)',
+    'zv.picker': 'Picker',
+    'zv.picker.help':
+      'Enable mouse selection and double-click confirmation for item, collection, tab, and note rows. Tag filters remain keyboard-only.',
+    'zv.picker.mouse.enabled': 'Enable mouse row selection and double-click confirmation',
     'zv.color.group': 'Default highlight colour',
     'zv.color.help':
       'Used when no explicit colour prefix is given (zh in the default bindings, if bound).',
@@ -94,7 +98,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help4b': ' or ',
     'zv.bindings.help4c': ' are supported.',
     'zv.bindings.footer':
-      'Appearance, key guide, modes, marks, colour and scroll settings save automatically.',
+      'Appearance, key guide, modes, marks, colour, picker and scroll settings save automatically.',
     'zv.bindings.reset': 'Reset to defaults',
     'zv.bindings.mode': 'Mode',
     'zv.bindings.key': 'Key sequence',
@@ -136,6 +140,10 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.keyGuide.enabled': '显示 Space Leader 按键提示',
     'zv.keyGuide.delay': '显示延迟（毫秒）',
     'zv.keyGuide.fontSize': '字体大小（像素）',
+    'zv.picker': '选择器',
+    'zv.picker.help':
+      '启用条目、分类、标签页和笔记结果行的鼠标选择与双击确认。标签筛选仍仅支持键盘。',
+    'zv.picker.mouse.enabled': '启用鼠标选择结果行与双击确认',
     'zv.color.group': '默认高亮颜色',
     'zv.color.help': '未按显式颜色前缀时使用（默认绑定中的 zh，若已绑定）。',
     'zv.color.default': '默认颜色',
@@ -159,7 +167,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.mode': '模式',
     'zv.bindings.key': '键序列',
     'zv.bindings.action': '动作',
-    'zv.bindings.footer': '外观、按键提示、模式、标记、颜色与滚动设置在更改时自动保存。',
+    'zv.bindings.footer': '外观、按键提示、模式、标记、颜色、选择器与滚动设置在更改时自动保存。',
     'zv.status.saved': '已保存！',
   },
 } as const satisfies Record<Language, Record<string, string>>;
@@ -592,6 +600,12 @@ function initializePane(doc: Document): void {
       setPreference('keyGuide.fontSizePx', fontSize);
       flashStatus(keyGuideStatus, translate('zv.status.saved', currentLanguage()));
     });
+  }
+  const pickerMouseStatus = byId<HTMLElement>(doc, 'zv-picker-mouse-status');
+  const pickerMouseCheckbox = byId<XulCheckbox>(doc, 'zv-picker-mouse-enabled');
+  if (pickerMouseCheckbox) {
+    pickerMouseCheckbox.checked = getPreference(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
+    saveCheckbox(pickerMouseCheckbox, PICKER_MOUSE_ENABLED_PREFERENCE_KEY, pickerMouseStatus);
   }
 
   const modeSelect = byId<XulMenuList>(doc, 'zv-scroll-mode');

@@ -4,7 +4,7 @@ import type {
   MainWindow,
 } from '../core/contracts';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
-import { keyGuideConfig } from '../core/preferences';
+import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
 import { resolveBindings } from '../input/bindings';
 import {
   advanceInput,
@@ -42,7 +42,9 @@ export class MainWindowController implements MainWindowControllerApi {
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
-    this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation);
+    this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
+      pickerMouseEnabled(dependencies.preferences),
+    );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,
       this.#navigation,
