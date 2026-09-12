@@ -91,6 +91,12 @@ All notable changes to Zotero Neo are documented here.
 - Added Normal `:` command palettes for Reader, Main, and Note contexts. The finite command
   provider derives unique actions and current key hints from the resolved binding map, closes
   before execution, and keeps command arguments, counts, scopes, and Spotlight integration deferred.
+- Made ArrowUp/ArrowDown move the selected row from query or list focus exactly once across
+  all picker scopes; Tag Query retains query focus/mode while Tab and Escape still return to List.
+- Moved default previous/next tab switching to H/L across Reader, Main, and Note Normal contexts,
+  moved horizontal Reader pan to zh/zl, and retired the default J/K tab aliases.
+- Added binding schema migration for the H/L and J/K default cutover while preserving differing
+  custom rows and unrelated bindings.
 
 ### Removed
 

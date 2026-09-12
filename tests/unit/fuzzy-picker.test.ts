@@ -131,6 +131,9 @@ describe('item picker keyboard activation', () => {
       getAttachments: () => [],
       getNotes: () => [],
     } as unknown as Zotero.Item;
+    const collection = {
+      getChildItems: () => [first, second],
+    } as unknown as Zotero.Collection;
     let nativeSelection: Zotero.Item[] = [];
     const selectItem = vi.fn(async (id: number) => {
       nativeSelection = [id === first.id ? first : second];
@@ -142,7 +145,11 @@ describe('item picker keyboard activation', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, {
-      ZoteroPane: { getSelectedItems: () => nativeSelection, selectItem },
+      ZoteroPane: {
+        getSelectedItems: () => nativeSelection,
+        selectItem,
+        collectionsView: { getSelectedCollections: () => [collection] },
+      },
     });
     const picker = new FuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
@@ -158,8 +165,18 @@ describe('item picker keyboard activation', () => {
     expect(selectItem).not.toHaveBeenCalled();
 
     const input = session.picker.input;
-    picker.onKeyDown(pickerKey('j', input), window, session);
+    const arrowDown = pickerKey('ArrowDown', input);
+    picker.onKeyDown(arrowDown, window, session);
+    expect(session.picker.selected).toBe(1);
+    const arrowUp = pickerKey('ArrowUp', input);
+    picker.onKeyDown(arrowUp, window, session);
     expect(session.picker.selected).toBe(0);
+    expect(arrowDown.preventDefault).toHaveBeenCalledOnce();
+    expect(arrowUp.preventDefault).toHaveBeenCalledOnce();
+    const literalJ = pickerKey('j', input);
+    picker.onKeyDown(literalJ, window, session);
+    expect(session.picker.selected).toBe(0);
+    expect(literalJ.preventDefault).not.toHaveBeenCalled();
     picker.onKeyDown(pickerKey('j', session.picker.results), window, session);
     expect(session.picker.selected).toBe(1);
     picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
@@ -186,6 +203,14 @@ describe('item picker keyboard activation', () => {
     const y = pickerKey('y', session.picker.results);
     picker.onKeyDown(y, window, session);
     expect(y.preventDefault).toHaveBeenCalledOnce();
+    picker.close(session);
+    await picker.open(window, session, 'collection');
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.input), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.input), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
     picker.close(session);
   });
 });
@@ -313,6 +338,15 @@ describe('command palette provider', () => {
     expect(session.picker.filtered.filter((item) => item.id === 'mainFuzzyAll')).toHaveLength(1);
     expect(session.picker.filtered.some((item) => item.id === 'openCommandPalette')).toBe(false);
     expect(session.picker.filtered.some((item) => item.id === 'mainOpenPDF')).toBe(false);
+    const commandInput = session.picker.input;
+    picker.onKeyDown(pickerKey('ArrowDown', commandInput), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', commandInput), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
 
     const keyboardIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
     session.picker.selected = keyboardIndex;
@@ -607,7 +641,9 @@ describe('tab picker activation', () => {
     const input = session.picker.input;
     picker.onKeyDown(pickerKey('j', input), window, session);
     picker.onKeyDown(pickerKey('k', input), window, session);
+    expect(session.picker.selected).toBe(0);
     picker.onKeyDown(pickerKey('ArrowDown', input), window, session);
+    expect(session.picker.selected).toBe(1);
     picker.onKeyDown(pickerKey('ArrowUp', input), window, session);
     expect(session.picker.selected).toBe(0);
 
@@ -768,6 +804,14 @@ describe('unified Notes picker', () => {
     input.value = '';
     input.emit('input');
 
+    picker.onKeyDown(pickerKey('ArrowDown', input), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', input), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
     picker.onKeyDown(pickerKey('j', input, { ctrl: true }), window, session);
     expect(session.picker.selected).toBe(1);
     picker.onKeyDown(pickerKey('k', input, { ctrl: true }), window, session);
@@ -1182,15 +1226,43 @@ describe('unified tag picker', () => {
     expect(session.picker.filtered[0]?.selected).toBe(true);
     expect(session.picker.tagSelection).toEqual(['alpha']);
     session.picker.tagMode = 'query';
-    picker.onKeyDown(pickerKey('ArrowDown', session.picker.input), window, session);
-    picker.onKeyDown(pickerKey('j', session.picker.input, { ctrl: true }), window, session);
+    session.picker.focusPane = 'search';
+    const queryInput = session.picker.input;
+    queryInput?.focus();
+    expect(window.document.activeElement).toBe(queryInput);
+    const arrowDown = pickerKey('ArrowDown', queryInput);
+    picker.onKeyDown(arrowDown, window, session);
     expect(session.picker.selected).toBe(1);
-    picker.onKeyDown(pickerKey('k', session.picker.input, { ctrl: true }), window, session);
+    expect(session.picker.tagMode).toBe('query');
+    expect(session.picker.focusPane).toBe('search');
+    expect(arrowDown.preventDefault).toHaveBeenCalledOnce();
+    const arrowUp = pickerKey('ArrowUp', queryInput);
+    picker.onKeyDown(arrowUp, window, session);
     expect(session.picker.selected).toBe(0);
+    expect(session.picker.tagMode).toBe('query');
+    expect(window.document.activeElement).toBe(queryInput);
+    expect(arrowUp.preventDefault).toHaveBeenCalledOnce();
+    picker.onKeyDown(pickerKey('j', queryInput, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('k', queryInput, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(0);
+    session.picker.tagMode = 'list';
+    session.picker.focusPane = 'list';
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    session.picker.tagMode = 'query';
+    session.picker.focusPane = 'search';
     picker.onKeyDown(pickerKey('d', session.picker.input, { ctrl: true }), window, session);
     expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: 200 });
     picker.onKeyDown(pickerKey('u', session.picker.input, { ctrl: true }), window, session);
     expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: -200 });
+    const toList = pickerKey('Tab', queryInput);
+    picker.onKeyDown(toList, window, session);
+    expect(toList.preventDefault).toHaveBeenCalledOnce();
+    expect(session.picker.tagMode).toBe('list');
+    expect(session.picker.focusPane).toBe('list');
 
     session.picker.selected = 1;
     picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
@@ -1333,6 +1405,11 @@ describe('unified tag picker', () => {
     picker.onKeyDown(slash, window, session);
     expect(session.picker.tagMode).toBe('query');
     expect(slash.preventDefault).toHaveBeenCalledOnce();
+    const escape = pickerKey('Escape', input);
+    picker.onKeyDown(escape, window, session);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(session.picker.tagMode).toBe('list');
+    expect(session.picker.focusPane).toBe('list');
 
     input.focus();
     session.picker.tagMode = 'list';

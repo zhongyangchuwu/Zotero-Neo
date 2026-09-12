@@ -17,6 +17,7 @@
       "primary and secondary PDF views receive keys after split recreation",
       "normal motions and count prefixes",
       "normal zoom aliases and reset-to-fit-width count semantics",
+      "Reader H/L tab switching, zh/zl pan counts, and retired J/K native behavior",
       "Reader Normal colon command palette routes local actions through the active split",
       "Reader command palette main actions retain the originating main-window owner",
       "search open next previous and clear",
@@ -49,6 +50,7 @@
       "item list navigation and activation",
       "main count prefixes",
       "tab previous next and tab picker",
+      "Main H/L tab switching and retired J/K native behavior",
       "open and close selected PDF",
       "search focus and Escape return",
       "directional pane focus",
@@ -62,6 +64,7 @@
       "notes layout navigation preview creation and open targets",
       "context note Normal and Insert modes",
       "standalone note Normal and Insert modes",
+      "Note Normal H/L tab switching preserves lowercase h/l motions",
       "note motions operators text object line operations paste undo and redo",
       "editable text receives ordinary input without interception",
       "note listener follows editor replacement and cleans up",
@@ -77,6 +80,7 @@
       "custom bindings persist",
       "reset restores all default bindings",
       "appearance Auto Light Dark persistence and live panel updates",
+      "picker ArrowUp/ArrowDown selection from query and list focus, including Tag Query",
       "command palette labels and resolved key hints follow English/Chinese preferences"
     ]
   },

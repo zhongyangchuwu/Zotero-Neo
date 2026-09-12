@@ -3,7 +3,7 @@ import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { migrateRetiredDefaultBindings, resolveBindings, type BindingMap } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
-export const BINDING_SCHEMA_VERSION = 5;
+export const BINDING_SCHEMA_VERSION = 6;
 
 export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
 

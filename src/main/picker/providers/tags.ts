@@ -175,7 +175,7 @@ export function createTagsProvider(
     initialFocusPane: 'list',
     loadingText: 'Loading tags…',
     help: {
-      query: 'Query · Type search · Space/x/C/a literal · Esc list',
+      query: 'Query · Type search · ↑/↓ select · Space/x/C/a literal · Tab/Esc list',
       list: 'List · Space/Enter toggle · x remove · C clear · a scope · Tab or / query · Esc close',
     },
     searchFocusUpdates: false,
@@ -229,7 +229,7 @@ export function createTagsProvider(
         event.stopPropagation();
       };
       if (session.picker.tagMode === 'query') {
-        if (key === 'ArrowDown' || key === 'Tab') {
+        if (key === 'Tab') {
           stop();
           session.picker.tagMode = 'list';
           commands.focusPane('list');
@@ -257,18 +257,6 @@ export function createTagsProvider(
         stop();
         if (selectedItem)
           commands.enqueue('toggle tag', () => toggleSelected(commands, String(selectedItem.id)));
-        return true;
-      }
-      if (key === 'ArrowDown' || lower === 'j') {
-        stop();
-        session.picker.selected = Math.min(max, session.picker.selected + 1);
-        commands.render();
-        return true;
-      }
-      if (key === 'ArrowUp' || lower === 'k') {
-        stop();
-        session.picker.selected = Math.max(0, session.picker.selected - 1);
-        commands.render();
         return true;
       }
       if (lower === 'x' && !event.ctrlKey && !event.metaKey && !event.altKey) {

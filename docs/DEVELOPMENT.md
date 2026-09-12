@@ -107,6 +107,11 @@ pair whenever key handling or reader injection changes.
 The patch is reapplied as reader views are recreated. Restored reader tabs need
 the periodic discovery sweep because they can miss early toolbar events.
 
+The default Reader Normal `H`/`L` tab actions and the `zh`/`zl` pan chord are consumed by
+Neo's resolved `BindingMap` before Zotero forwarding; retired unbound `J`/`K` keys remain native.
+Smooth-hold checks still consult the resolved action, so the default H/L tab actions cannot start
+horizontal pan, while an explicit custom H/L scroll remap remains eligible.
+
 Reader Normal `+`/`-` and `zI`/`zO` delegate to Zotero's `InternalReader.zoomIn()` /
 `zoomOut()` on the active `_lastView`; `=`/`z0` delegate to `zoomReset()` for fit-page-width
 semantics. Missing or throwing host methods fail closed with `Zoom unavailable`.
@@ -137,6 +142,11 @@ preview scrolling remain pointer-enabled in both states. Tag rows and markers ar
 from pointer selection/toggling because Tag provider mutations are keyboard-only. Provider
 `onKeyDown` still returns handled status before shell generic navigation and Enter handling, so
 scope-specific commands retain precedence.
+
+The shell owns unmodified ArrowUp/ArrowDown movement before provider callbacks when the
+search or list pane is active, including Tag Query mode; it moves the highlight exactly once
+like Ctrl+k/Ctrl+j without changing query focus or Tag mode. Providers must not duplicate this
+movement. Tag Query keeps its deliberate Tab/Escape return-to-List transitions.
 
 The command provider is a finite projection of the active resolved `BindingMap`: it
 deduplicates bound `ActionId`s, displays key hints separately from key-independent

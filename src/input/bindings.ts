@@ -17,8 +17,10 @@ const MODE_BY_NAME: Readonly<Record<string, true>> = {
 export const DEFAULT_BINDINGS = {
   'normal:j': 'scrollDown',
   'normal:k': 'scrollUp',
-  'normal:H': 'scrollLeft',
-  'normal:L': 'scrollRight',
+  'normal:H': 'mainPrevTab',
+  'normal:L': 'mainNextTab',
+  'normal:zh': 'scrollLeft',
+  'normal:zl': 'scrollRight',
   'normal:h': 'prevPage',
   'normal:l': 'nextPage',
   'normal:gg': 'firstPage',
@@ -63,8 +65,6 @@ export const DEFAULT_BINDINGS = {
   'normal:v': 'enterVisual',
   'normal:c': 'enterCursor',
   'normal:i': 'enterInsert',
-  'normal:J': 'mainPrevTab',
-  'normal:K': 'mainNextTab',
   'normal:ctrl+h': 'focusReaderSplitLeft',
   'normal:ctrl+j': 'focusReaderSplitDown',
   'normal:ctrl+k': 'focusReaderSplitUp',
@@ -150,8 +150,8 @@ export const DEFAULT_BINDINGS = {
   'main:backspace': 'mainTreeParent',
   'main:gg': 'mainNavFirst',
   'main:G': 'mainNavLast',
-  'main:J': 'mainPrevTab',
-  'main:K': 'mainNextTab',
+  'main:H': 'mainPrevTab',
+  'main:L': 'mainNextTab',
   'main:enter': 'mainActivate',
   'main:return': 'mainActivate',
 } as const satisfies BindingMap;
@@ -192,6 +192,12 @@ export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
 }
 
 const RETIRED_DEFAULT_BINDINGS = {
+  'normal:H': 'scrollLeft',
+  'normal:L': 'scrollRight',
+  'normal:J': 'mainPrevTab',
+  'normal:K': 'mainNextTab',
+  'main:J': 'mainPrevTab',
+  'main:K': 'mainNextTab',
   'normal: fb': 'mainFuzzyCollection',
   'normal: bj': 'mainTabPick',
   'normal: o': 'mainOpenPDF',

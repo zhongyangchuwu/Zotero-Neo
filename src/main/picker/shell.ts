@@ -324,23 +324,34 @@ export class FuzzyPicker {
       event.stopImmediatePropagation?.();
       event.stopPropagation();
     };
-    const max = Math.max(0, picker.filtered.length - 1);
     if (event.ctrlKey && ['j', 'n'].includes(lower)) {
       stop();
-      picker.selected = Math.min(max, picker.selected + 1);
-      this.render(session);
+      this.moveSelection(session, 1);
       return;
     }
     if (event.ctrlKey && ['k', 'p'].includes(lower)) {
       stop();
-      picker.selected = Math.max(0, picker.selected - 1);
-      this.render(session);
+      this.moveSelection(session, -1);
       return;
     }
     if (event.ctrlKey && (lower === 'd' || lower === 'u')) {
       stop();
       const amount = Math.max(120, Math.floor((picker.preview?.clientHeight || 480) / 2));
       picker.preview?.scrollBy({ top: lower === 'd' ? amount : -amount });
+      return;
+    }
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      (key === 'ArrowDown' || key === 'ArrowUp') &&
+      (event.target === picker.input ||
+        event.target === picker.results ||
+        picker.focusPane === 'search' ||
+        picker.focusPane === 'list')
+    ) {
+      stop();
+      this.moveSelection(session, key === 'ArrowDown' ? 1 : -1);
       return;
     }
     if (key === 'Escape') {
@@ -353,14 +364,12 @@ export class FuzzyPicker {
     if (event.target !== picker.input && !event.ctrlKey && !event.metaKey && !event.altKey) {
       if (key === 'ArrowDown' || lower === 'j') {
         stop();
-        picker.selected = Math.min(max, picker.selected + 1);
-        this.render(session);
+        this.moveSelection(session, 1);
         return;
       }
       if (key === 'ArrowUp' || lower === 'k') {
         stop();
-        picker.selected = Math.max(0, picker.selected - 1);
-        this.render(session);
+        this.moveSelection(session, -1);
         return;
       }
     }
@@ -389,6 +398,12 @@ export class FuzzyPicker {
     );
     this.render(session);
     this.traceSlowFilter(session, query, ranked.length, startedAt);
+  }
+
+  private moveSelection(session: MainWindowSession, direction: -1 | 1): void {
+    const max = Math.max(0, session.picker.filtered.length - 1);
+    session.picker.selected = Math.max(0, Math.min(max, session.picker.selected + direction));
+    this.render(session);
   }
 
   private selectRow(session: MainWindowSession, index: number): void {

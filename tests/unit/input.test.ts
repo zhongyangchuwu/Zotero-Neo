@@ -120,7 +120,17 @@ describe('binding parsing and overrides', () => {
     expect(bindings['normal:ctrl+i']).toBe('historyForward');
     expect(bindings['normal:f']).toBe('scrollUp');
   });
-  it('provides reader-only Zathura zoom defaults and preserves custom overrides', () => {
+  it('provides Reader zoom, H/L tab, and zh/zl pan defaults', () => {
+    expect(DEFAULT_BINDINGS['normal:H']).toBe('mainPrevTab');
+    expect(DEFAULT_BINDINGS['normal:L']).toBe('mainNextTab');
+    expect(DEFAULT_BINDINGS['normal:zh']).toBe('scrollLeft');
+    expect(DEFAULT_BINDINGS['normal:zl']).toBe('scrollRight');
+    expect('normal:J' in DEFAULT_BINDINGS).toBe(false);
+    expect('normal:K' in DEFAULT_BINDINGS).toBe(false);
+    expect(DEFAULT_BINDINGS['main:H']).toBe('mainPrevTab');
+    expect(DEFAULT_BINDINGS['main:L']).toBe('mainNextTab');
+    expect('main:J' in DEFAULT_BINDINGS).toBe(false);
+    expect('main:K' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['normal:+']).toBe('zoomIn');
     expect(DEFAULT_BINDINGS['normal:-']).toBe('zoomOut');
     expect(DEFAULT_BINDINGS['normal:zI']).toBe('zoomIn');

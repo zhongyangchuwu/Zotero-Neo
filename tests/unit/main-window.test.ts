@@ -558,18 +558,26 @@ describe('NoteEditor canonical main commands', () => {
     vi.useRealTimers();
   });
 
-  it('keeps local commands and Insert input ahead of canonical main matching while J/K remain eligible', () => {
-    const test = harness({ 'main:J': 'mainPrevTab', 'main:K': 'mainNextTab' });
+  it('keeps lowercase h/l local and Insert input native while H/L switch tabs', () => {
+    const test = harness({ 'main:H': 'mainPrevTab', 'main:L': 'mainNextTab' });
 
     test.press('g');
     expect(test.session.note.buffer).toBe('g');
     expect(test.actions).toEqual([]);
     test.press('Escape');
-    test.press('J');
+    test.press('H');
     expect(test.actions).toEqual([['mainPrevTab', 0]]);
 
-    const local = test.press('j');
-    expect(local.preventDefault).not.toHaveBeenCalled();
+    const lowerH = test.press('h');
+    const lowerL = test.press('l');
+    expect(lowerH.preventDefault).not.toHaveBeenCalled();
+    expect(lowerL.preventDefault).not.toHaveBeenCalled();
+    expect(test.actions).toEqual([['mainPrevTab', 0]]);
+
+    const oldPrevious = test.press('J');
+    const oldNext = test.press('K');
+    expect(oldPrevious.preventDefault).not.toHaveBeenCalled();
+    expect(oldNext.preventDefault).not.toHaveBeenCalled();
     expect(test.actions).toEqual([['mainPrevTab', 0]]);
 
     test.session.note.mode = 'insert';
@@ -761,6 +769,52 @@ describe('Reader to Main command palette integration', () => {
 
     readerController.shutdown();
     main.shutdown();
+  });
+});
+describe('Main H/L tab defaults', () => {
+  it('switches tabs with H/L and leaves retired J/K native', () => {
+    const host = pickerMainWindow();
+    const previous = vi.fn();
+    const next = vi.fn();
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'library', title: 'Library', type: 'library' }],
+      selectedID: 'library',
+      selectPrev: previous,
+      selectNext: next,
+    });
+    const controller = createMainWindowController({
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+      },
+      logger,
+      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    controller.addWindow(host.window);
+
+    const press = (key: string): KeyboardEvent => {
+      const event = {
+        key,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as KeyboardEvent;
+      host.keydown(event);
+      return event;
+    };
+    press('H');
+    press('L');
+    const oldPrevious = press('J');
+    const oldNext = press('K');
+    controller.shutdown();
+
+    expect(previous).toHaveBeenCalledOnce();
+    expect(next).toHaveBeenCalledOnce();
+    expect(oldPrevious.preventDefault).not.toHaveBeenCalled();
+    expect(oldNext.preventDefault).not.toHaveBeenCalled();
   });
 });
 describe('repeated tab switching', () => {

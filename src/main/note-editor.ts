@@ -173,12 +173,12 @@ export class NoteEditor {
         }
       }
     }
-    // Note-local text input starts the ordinary grammar; only Space, colon, idle J/K, or an active
+    // Note-local text input starts the ordinary grammar; only Space, colon, idle H/L, or an active
     // canonical sequence may enter main-command matching. Colon is reserved for the palette even
     // after a count, but the palette always receives the uncounted action default.
     const commandPaletteShortcut = key === ':' && !session.note.buffer;
     const mainShortcut =
-      ((key === 'J' || key === 'K') && !session.note.buffer && !session.note.count) ||
+      ((key === 'H' || key === 'L') && !session.note.buffer && !session.note.count) ||
       commandPaletteShortcut;
     if (commandPaletteShortcut) session.note.count = '';
     if (session.note.mainBuffer || key === ' ' || mainShortcut) {

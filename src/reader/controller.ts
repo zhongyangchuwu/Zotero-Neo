@@ -119,6 +119,20 @@ function annotationText(value: string): string {
   return value.normalize('NFKC').replace(/\n/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
 
+type SmoothScrollAction = Extract<
+  ActionId,
+  'scrollDown' | 'scrollUp' | 'scrollLeft' | 'scrollRight'
+>;
+
+const SMOOTH_SCROLL_SPECS: Readonly<
+  Record<SmoothScrollAction, Readonly<{ axis: 'x' | 'y'; direction: -1 | 1 }>>
+> = {
+  scrollDown: { axis: 'y', direction: 1 },
+  scrollUp: { axis: 'y', direction: -1 },
+  scrollLeft: { axis: 'x', direction: -1 },
+  scrollRight: { axis: 'x', direction: 1 },
+};
+
 export function createReaderController(
   dependencies: ReaderControllerDependencies,
 ): ReaderControllerApi {
@@ -805,8 +819,8 @@ export class ReaderSession {
     if (!key) return;
     this.#inputRevision += 1;
     const revision = this.#inputRevision;
-    if (this.startSmoothHold(event, pdfWindow)) return;
     if (this.handleMarkChord(event, key, pdfWindow)) return;
+    if (this.startSmoothHold(event, pdfWindow, key)) return;
     const decision = advanceInput(
       {
         mode: this.state.mode,
@@ -2966,31 +2980,65 @@ export class ReaderSession {
       return false;
     }
   }
-
-  private startSmoothHold(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
+  /**
+   * Starts a smooth hold only for an executable resolved scroll action. The physical key may be
+   * direct (`j`/`k` or a custom single-key remap) or the continuation of a multi-key chord such
+   * as `zh`/`zl`; pending chord state is cleared before holding so repeated continuations cannot
+   * fall through to another Normal action.
+   */
+  private startSmoothHold(event: KeyboardEvent, pdfWindow: PdfWindow, key: string): boolean {
+    const hold = this.state.smoothHold;
+    if (
+      hold.active &&
+      hold.key === event.key &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return true;
+    }
     if (
       this.scrollMode() === 'step' ||
       this.state.mode !== 'normal' ||
-      this.state.keyBuffer ||
       this.state.countBuffer ||
       event.ctrlKey ||
       event.metaKey ||
       event.altKey
     )
       return false;
-    const spec = ({ j: ['y', 1], k: ['y', -1], H: ['x', -1], L: ['x', 1] } as const)[event.key];
-    if (!spec) return false;
-    const action = this.#dependencies.bindings()[`normal:${event.key}`];
-    if (!['scrollDown', 'scrollUp', 'scrollLeft', 'scrollRight'].includes(action ?? ''))
+    const bindings = this.#dependencies.bindings();
+    const directAction = bindings[`normal:${key}`];
+    if (!this.state.keyBuffer && (!directAction || !(directAction in SMOOTH_SCROLL_SPECS)))
       return false;
+    const decision = advanceInput(
+      {
+        mode: 'normal',
+        keyBuffer: this.state.keyBuffer,
+        countBuffer: this.state.countBuffer,
+        bindings,
+        allowCountPrefix: true,
+      },
+      key,
+    );
+    if (decision.kind !== 'execute' || !(decision.action in SMOOTH_SCROLL_SPECS)) return false;
+    const spec = SMOOTH_SCROLL_SPECS[decision.action as SmoothScrollAction];
+    const hadPendingSequence = !!this.state.keyBuffer;
+    this.state.keyBuffer = '';
+    this.state.countBuffer = '';
+    if (hadPendingSequence) {
+      this.clearKeyTimer();
+      this.clearKeyGuide();
+      this.updateIndicator();
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const hold = this.state.smoothHold;
     hold.active = true;
     hold.releasing = false;
     hold.key = event.key;
-    hold.axis = spec[0];
-    hold.direction = spec[1];
+    hold.axis = spec.axis;
+    hold.direction = spec.direction;
     hold.speed =
       this.scrollMode() === 'follow'
         ? this.#dependencies.controller.dependencies.preferences.get(

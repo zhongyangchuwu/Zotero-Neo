@@ -216,11 +216,6 @@ export function createNotesProvider(
         return true;
       }
       if (event.target === session.picker.input || session.picker.focusPane === 'search') {
-        if (key === 'ArrowDown') {
-          stop();
-          commands.focusPane('list');
-          return true;
-        }
         event.stopPropagation();
         return false;
       }
@@ -228,21 +223,6 @@ export function createNotesProvider(
         stop();
         commands.focusPane('search');
         session.picker.input?.select();
-        return true;
-      }
-      if (key === 'ArrowDown' || lower === 'j') {
-        stop();
-        session.picker.selected = Math.min(
-          Math.max(0, session.picker.filtered.length - 1),
-          session.picker.selected + 1,
-        );
-        commands.render();
-        return true;
-      }
-      if (key === 'ArrowUp' || lower === 'k') {
-        stop();
-        session.picker.selected = Math.max(0, session.picker.selected - 1);
-        commands.render();
         return true;
       }
       if (lower === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey) {

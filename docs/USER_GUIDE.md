@@ -47,8 +47,8 @@ Cursor ──v──▶ Visual ──v/Escape──▶ Normal
 | --------------- | -------------- |
 | `j`             | Scroll down    |
 | `k`             | Scroll up      |
-| `Shift+h` (`H`) | Scroll left    |
-| `Shift+l` (`L`) | Scroll right   |
+| `zh`            | Scroll left    |
+| `zl`            | Scroll right   |
 | `Ctrl+d`        | Half-page down |
 | `Ctrl+u`        | Half-page up   |
 | `Ctrl+f`        | Full-page down |
@@ -76,8 +76,8 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `l`             | Next page                                                                 |
 | `gg`            | First page                                                                |
 | `G`             | Last page                                                                 |
-| `Shift+J` (`J`) | Switch to previous open tab                                               |
-| `Shift+K` (`K`) | Switch to next open tab                                                   |
+| `H`             | Switch to previous open tab                                               |
+| `L`             | Switch to next open tab                                                   |
 | `<space>ft`     | Open tab picker                                                           |
 | `<space>td`     | Close the active Zotero tab                                               |
 | `<space>fn`     | Search all notes in the shared picker (left: note titles, right: preview) |
@@ -198,15 +198,16 @@ keyboard command remain canonical.
 
 | Key                    | Action                                                    |
 | ---------------------- | --------------------------------------------------------- |
-| `↑` / `↓` or `j` / `k` | Move selection up / down outside the search input         |
-| `Ctrl+j` / `Ctrl+k`    | Move the selected row down / up                           |
-| `Ctrl+d` / `Ctrl+u`    | Scroll the preview down / up                              |
-| `Enter`                | Apply the selected result                                 |
-| `Type`                 | Filter the picker query                                   |
-| `Ctrl+o`               | Open the selected item's PDF (item scopes only)           |
-| `y`                    | Copy the selected item's full citation (item scopes only) |
-| `yy`                   | Copy the selected item's citekey (item scopes only)       |
-| `Escape`               | Close the picker                                          |
+| `↑` / `↓`              | Move selection up / down from the query input or list      |
+| `j` / `k`              | Move selection up / down outside the search input          |
+| `Ctrl+j` / `Ctrl+k`    | Move the selected row down / up                            |
+| `Ctrl+d` / `Ctrl+u`    | Scroll the preview down / up                               |
+| `Enter`                | Apply the selected result                                  |
+| `Type`                 | Filter the picker query                                    |
+| `Ctrl+o`               | Open the selected item's PDF (item scopes only)            |
+| `y`                    | Copy the selected item's full citation (item scopes only)  |
+| `yy`                   | Copy the selected item's citekey (item scopes only)        |
+| `Escape`               | Close the picker                                           |
 
 Tab rows are selected by search, arrows, `j`/`k`, or `Ctrl+j`/`Ctrl+k`; there are no
 alphabet hint labels. `y`/`yy` copying is not available in the tab scope.
@@ -223,14 +224,15 @@ The picker shows separate concise help below the search input for Query mode and
 tag list for List mode; each location updates when the mode changes.
 
 `/`, `Tab`, or clicking the input enters **Query mode**. Query text only filters picker rows:
-Space, `x`, `C`, and `a` remain literal input there. `Escape` returns Query mode to List mode;
-another `Escape` closes while retaining already-applied filters.
+Space, `x`, `C`, and `a` remain literal input there. In Query mode, `↑` / `↓` move the
+highlighted tag while retaining Query mode and input focus; `Tab` or `Escape` returns to List
+mode. Another `Escape` from List closes while retaining already-applied filters.
 
 | Key                        | Action                                                          |
 | -------------------------- | --------------------------------------------------------------- |
-| `j` / `k` or `↑` / `↓`     | Move the highlighted tag in List mode                           |
+| `j` / `k`                  | Move the highlighted tag in List mode                           |
+| `↑` / `↓`                  | Move the highlighted tag in List or Query mode                  |
 | `Ctrl+j` / `Ctrl+k`        | Move the highlighted tag down / up                              |
-| `/`, `Tab`, or input click | Enter Query mode                                                |
 | `Space` / `Enter`          | Toggle the highlighted tag immediately and keep the picker open |
 | `x`                        | Remove the highlighted tag only when it is active               |
 | `C`                        | Clear all active tag filters and keep the picker open           |
@@ -254,8 +256,8 @@ editor.
 
 | Key                    | Action                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `j` / `k` or `↑` / `↓` | Move note selection up / down                                                                          |
-| `Ctrl+j` / `Ctrl+k`    | Move the selected note down / up                                                                       |
+| `↑` / `↓`              | Move note selection from the query input or list                                                       |
+| `j` / `k`              | Move note selection outside the search input                                                           |
 | `Ctrl+d` / `Ctrl+u`    | Scroll the selected note preview down / up                                                             |
 | `n`                    | Create a child note under the selected note's parent; with no row, use the active reader item's parent |
 | `Shift+N`              | Create a child note under the active reader parent or current main-window item, then open a note tab   |
@@ -363,7 +365,7 @@ note tab), the plugin provides a minimal Vim-like layer.
 | `p` / `P`                 | Paste last yanked/deleted text after / before caret                                                  |
 | `u` / `Ctrl+r`            | Undo / redo bridge                                                                                   |
 | `<space>...`              | Main-window leader bindings are available in note Normal mode (for example `<space>fn`, `<space>ff`) |
-| `Shift+J` / `Shift+K`     | Switch to previous / next tab from note Normal mode                                                  |
+| `H` / `L`                 | Switch to previous / next tab from note Normal mode                                                    |
 
 `dd`, `yy`, and `x` support count prefixes (for example `3dd`, `5yy`, `4x`).
 Operator+motion combos also support counts (for example `3dw`, `2y$`).
@@ -389,6 +391,9 @@ list) when that pane has focus.
 | `zc`        | Collapse the current collection row (if already closed, keep it closed)                                              |
 | `R`         | Expand all collections in the current library tree                                                                   |
 | `M`         | Collapse all collections in the current library tree                                                                 |
+
+In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
+`J` and `K` are not Neo defaults and remain available to native Zotero behavior.
 
 #### Main window `<space>` chords
 
@@ -800,7 +805,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Enable Insert mode       | on                       | Allow entering Insert mode with `i`                                                                                                       |
 | Note editor Vim mode     | on                       | Enable Vim-style editing in note editors (context pane and note tabs)                                                                     |
 | Scroll mode              | Constant-speed scrolling | Step / Constant-speed / Accelerating — only the active mode's parameters are shown                                                        |
-| Scroll step              | 60 px                    | Pixels scrolled per `j`/`k`/`H`/`L` keypress (step mode; count prefixes like `3j` always use this)                                        |
+| Scroll step              | 60 px                    | Pixels scrolled per `j`/`k`/`zh`/`zl` keypress (step mode; count prefixes like `3j` always use this)                                        |
 | Scroll speed             | 2000 px/s                | Constant hold-scroll speed (constant-speed mode)                                                                                          |
 | Smooth initial speed     | 2000 px/s                | Starting speed for hold-based smooth scrolling (accelerating mode)                                                                        |
 | Smooth max speed         | 2000 px/s                | Maximum hold-scroll speed (accelerating mode)                                                                                             |
@@ -816,7 +821,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 
 Appearance, key guide, picker, and scroll settings save automatically on change.
 
-- **Step scrolling** moves instantly by the scroll step per `j`/`k`/`H`/`L` press.
+- **Step scrolling** moves instantly by the scroll step per `j`/`k`/`zh`/`zl` press.
 - **Constant-speed scrolling** glides at a fixed speed while a scroll key is
   held and stops immediately on release.
 - **Accelerating (trapezoid curve) scrolling** ramps from `initial speed` to

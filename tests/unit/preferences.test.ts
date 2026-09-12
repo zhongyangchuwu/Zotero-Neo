@@ -163,6 +163,50 @@ describe('binding preferences', () => {
       'main: q': 'mainClosePDF',
     });
   });
+
+  it('retires only exact old H/L and J/K defaults while preserving custom rows', () => {
+    const exact = new TestPreferences({
+      'bindings.schemaVersion': 5,
+      bindings: JSON.stringify({
+        'normal:H': 'scrollLeft',
+        'normal:L': 'scrollRight',
+        'normal:J': 'mainPrevTab',
+        'normal:K': 'mainNextTab',
+        'main:J': 'mainPrevTab',
+        'main:K': 'mainNextTab',
+        'main:x': 'mainActivate',
+      }),
+    });
+    migrateBindingPreferences(exact);
+    expect(JSON.parse(exact.get('bindings', ''))).toEqual({ 'main:x': 'mainActivate' });
+    expect(exact.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    expect(bindingsFromPreferences(exact)['normal:H']).toBe('mainPrevTab');
+    expect(bindingsFromPreferences(exact)['normal:zh']).toBe('scrollLeft');
+
+    const custom = new TestPreferences({
+      'bindings.schemaVersion': 5,
+      bindings: JSON.stringify({
+        'normal:H': 'scrollRight',
+        'normal:L': 'scrollLeft',
+        'normal:J': 'mainNextTab',
+        'normal:K': 'mainPrevTab',
+        'main:J': 'mainNextTab',
+        'main:K': 'mainPrevTab',
+      }),
+    });
+    migrateBindingPreferences(custom);
+    expect(JSON.parse(custom.get('bindings', ''))).toEqual({
+      'normal:H': 'scrollRight',
+      'normal:L': 'scrollLeft',
+      'normal:J': 'mainNextTab',
+      'normal:K': 'mainPrevTab',
+      'main:J': 'mainNextTab',
+      'main:K': 'mainPrevTab',
+    });
+    expect(custom.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    expect(bindingsFromPreferences(custom)['normal:H']).toBe('scrollRight');
+    expect(bindingsFromPreferences(custom)['main:J']).toBe('mainNextTab');
+  });
 });
 
 describe('key guide preferences', () => {

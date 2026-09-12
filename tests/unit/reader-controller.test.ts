@@ -70,6 +70,7 @@ function createHistorySession(
   delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
   bindings: BindingMap = DEFAULT_BINDINGS,
   openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
+  preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -167,8 +168,9 @@ function createHistorySession(
   const controller = {
     dependencies: {
       preferences: {
-        has: () => false,
-        get: (_key: string, fallback: boolean | number | string) => fallback,
+        has: (key: string) => Object.hasOwn(preferenceValues, key),
+        get: (key: string, fallback: boolean | number | string) =>
+          preferenceValues[key] ?? fallback,
         set: () => {},
       },
       logger: {
@@ -232,6 +234,57 @@ function readerKey(
 
 function controlKey(key: string, target: EventTarget | null = null) {
   return readerKey(key, { ctrl: true, target });
+}
+
+type SmoothMode = 'step' | 'follow' | 'trapezoid';
+const smoothPreferences = (
+  mode: SmoothMode,
+): Readonly<Record<string, boolean | number | string>> => ({
+  'scroll.mode': mode,
+  'smoothScroll.followSpeed': 1200,
+  'smoothScroll.initialSpeed': 900,
+  'smoothScroll.maxSpeed': 2400,
+  'smoothScroll.acceleration': 1000,
+  'smoothScroll.deceleration': 500,
+  'smoothScroll.stopOnRelease': false,
+});
+
+function smoothSession(
+  mode: SmoothMode,
+  internal: InternalReaderRuntime = {},
+  bindings: BindingMap = DEFAULT_BINDINGS,
+  delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
+) {
+  const created = createHistorySession(
+    internal,
+    delegateMain,
+    bindings,
+    () => {},
+    smoothPreferences(mode),
+  );
+  const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+  Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
+  return { ...created, container };
+}
+
+type SmoothTestSession = {
+  readonly session: ReaderSession;
+  readonly pdfWindow: PdfWindow;
+  readonly animationFrameTasks: (() => void)[];
+};
+
+function releaseSmoothHold(created: SmoothTestSession, key: string) {
+  const event = readerKey(key);
+  const session = created.session as unknown as {
+    handleKeyUp(event: KeyboardEvent, pdfWindow: PdfWindow): void;
+  };
+  session.handleKeyUp.call(created.session, event.event, created.pdfWindow);
+  return event;
+}
+
+function runSmoothFrame(created: SmoothTestSession, timestamp: number): void {
+  const frame = created.animationFrameTasks.shift() as ((timestamp: number) => void) | undefined;
+  frame?.(timestamp);
 }
 
 type ActionExecutorSession = {
@@ -378,6 +431,44 @@ describe('native reader history', () => {
     expect(originalKeyDown).toHaveBeenCalledTimes(2);
     expect(originalKeyDown).toHaveBeenNthCalledWith(1, expect.objectContaining({ key: 'x' }));
     expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'h' }));
+    created.session.dispose();
+  });
+});
+describe('reader keymap forwarding', () => {
+  it('consumes new tab and pan chords while forwarding retired J/K keys', () => {
+    const originalKeyDown = vi.fn();
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+    const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
+    const view = created.reader._internalReader?._primaryView;
+    if (!view) throw new Error('Expected a primary reader view');
+    view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+
+    const press = (key: string) => {
+      const event = readerKey(key);
+      view._onKeyDown?.(event.event);
+      created.session.focusAndHandle(event.event);
+      return event;
+    };
+    const previous = press('H');
+    const next = press('L');
+    const oldPrevious = press('J');
+    const oldNext = press('K');
+    press('z');
+    press('h');
+
+    expect(delegateMain).toHaveBeenNthCalledWith(1, 'mainPrevTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(2, 'mainNextTab', 0, created.reader._window);
+    expect(previous.preventDefault).toHaveBeenCalledOnce();
+    expect(next.preventDefault).toHaveBeenCalledOnce();
+    expect(originalKeyDown).toHaveBeenCalledTimes(2);
+    expect(container.scrollBy).toHaveBeenCalledWith(-2000 / 120, 0);
+    expect(originalKeyDown).toHaveBeenNthCalledWith(1, expect.objectContaining({ key: 'J' }));
+    expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'K' }));
+    expect(created.session.state.keyBuffer).toBe('');
     created.session.dispose();
   });
 });
@@ -539,6 +630,8 @@ describe('reader zoom shortcuts', () => {
     view._onKeyDown?.(readerKey('-').event);
     view._onKeyDown?.(readerKey('=').event);
     view._onKeyDown?.(readerKey(':').event);
+    view._onKeyDown?.(readerKey('J').event);
+    view._onKeyDown?.(readerKey('K').event);
     const advanceThroughReader = (key: string): void => {
       const press = readerKey(key);
       view._onKeyDown?.(press.event);
@@ -554,7 +647,7 @@ describe('reader zoom shortcuts', () => {
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(zoomOut).toHaveBeenCalledOnce();
     expect(zoomReset).toHaveBeenCalledOnce();
-    expect(originalKeyDown).not.toHaveBeenCalled();
+    expect(originalKeyDown).toHaveBeenCalledTimes(2);
     created.session.dispose();
   });
   it('leaves colon native when a custom resolved map removes the default binding', () => {
@@ -705,6 +798,219 @@ describe('Reader leader timer guards', () => {
   });
 });
 
+describe('reader H/L tab and zh/zl pan defaults', () => {
+  it('switches tabs horizontally, pans with counts, and leaves J/K native', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+    const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfViewer: { container },
+    });
+
+    const previousTab = readerKey('H');
+    const nextTab = readerKey('L');
+    created.session.focusAndHandle(previousTab.event);
+    created.session.focusAndHandle(nextTab.event);
+    expect(delegateMain).toHaveBeenNthCalledWith(1, 'mainPrevTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(2, 'mainNextTab', 0, created.reader._window);
+    expect(container.scrollBy).not.toHaveBeenCalled();
+
+    created.session.focusAndHandle(readerKey('3').event);
+    created.session.focusAndHandle(readerKey('z').event);
+    const left = readerKey('h');
+    created.session.focusAndHandle(left.event);
+    expect(container.scrollBy).toHaveBeenCalledWith(-180, 0);
+    expect(left.preventDefault).toHaveBeenCalledOnce();
+
+    created.session.focusAndHandle(readerKey('2').event);
+    created.session.focusAndHandle(readerKey('z').event);
+    const right = readerKey('l');
+    created.session.focusAndHandle(right.event);
+    expect(container.scrollBy).toHaveBeenCalledWith(120, 0);
+    expect(right.preventDefault).toHaveBeenCalledOnce();
+
+    const oldPrevious = readerKey('J');
+    const oldNext = readerKey('K');
+    created.session.focusAndHandle(oldPrevious.event);
+    created.session.focusAndHandle(oldNext.event);
+    expect(oldPrevious.preventDefault).not.toHaveBeenCalled();
+    expect(oldNext.preventDefault).not.toHaveBeenCalled();
+    expect(delegateMain).toHaveBeenCalledTimes(2);
+    created.session.dispose();
+  });
+});
+
+describe('Reader smooth horizontal pan', () => {
+  it('starts follow holds for zh/zl and consumes continuation repeats until keyup', () => {
+    const previousPage = vi.fn();
+    const nextPage = vi.fn();
+    const created = smoothSession('follow', {
+      navigateToPreviousPage: previousPage,
+      navigateToNextPage: nextPage,
+    });
+
+    const leftPrefix = readerKey('z');
+    created.session.focusAndHandle(leftPrefix.event);
+    const left = readerKey('h');
+    created.session.focusAndHandle(left.event);
+    expect(created.session.state.smoothHold).toMatchObject({
+      active: true,
+      key: 'h',
+      axis: 'x',
+      direction: -1,
+    });
+    expect(created.container.scrollBy).toHaveBeenCalledWith(-10, 0);
+    const leftSpeed = created.session.state.smoothHold.speed;
+    const repeatedLeft = readerKey('h');
+    created.session.focusAndHandle(repeatedLeft.event);
+    expect(repeatedLeft.preventDefault).toHaveBeenCalledOnce();
+    expect(created.session.state.smoothHold.speed).toBe(leftSpeed);
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
+    expect(previousPage).not.toHaveBeenCalled();
+    releaseSmoothHold(created, 'h');
+    expect(created.session.state.smoothHold).toMatchObject({
+      active: false,
+      releasing: false,
+      key: null,
+    });
+
+    const rightPrefix = readerKey('z');
+    created.session.focusAndHandle(rightPrefix.event);
+    const right = readerKey('l');
+    created.session.focusAndHandle(right.event);
+    expect(created.session.state.smoothHold).toMatchObject({
+      active: true,
+      key: 'l',
+      axis: 'x',
+      direction: 1,
+    });
+    expect(created.container.scrollBy).toHaveBeenCalledWith(10, 0);
+    const repeatedRight = readerKey('l');
+    created.session.focusAndHandle(repeatedRight.event);
+    expect(repeatedRight.preventDefault).toHaveBeenCalledOnce();
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(2);
+    expect(nextPage).not.toHaveBeenCalled();
+    releaseSmoothHold(created, 'l');
+    created.session.dispose();
+  });
+
+  it('accelerates and decelerates zh/zl holds in trapezoid mode', () => {
+    for (const [continuation, direction] of [
+      ['h', -1],
+      ['l', 1],
+    ] as const) {
+      const previousPage = vi.fn();
+      const nextPage = vi.fn();
+      const created = smoothSession('trapezoid', {
+        navigateToPreviousPage: previousPage,
+        navigateToNextPage: nextPage,
+      });
+      created.session.focusAndHandle(readerKey('z').event);
+      const first = readerKey(continuation);
+      created.session.focusAndHandle(first.event);
+      const initialSpeed = created.session.state.smoothHold.speed;
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: true,
+        key: continuation,
+        axis: 'x',
+        direction,
+      });
+      runSmoothFrame(created, 16);
+      const acceleratedSpeed = created.session.state.smoothHold.speed;
+      expect(acceleratedSpeed).toBeGreaterThan(initialSpeed);
+      const repeat = readerKey(continuation);
+      created.session.focusAndHandle(repeat.event);
+      expect(repeat.preventDefault).toHaveBeenCalledOnce();
+      expect(created.session.state.smoothHold.speed).toBe(acceleratedSpeed);
+      const release = releaseSmoothHold(created, continuation);
+      expect(release.preventDefault).not.toHaveBeenCalled();
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: false,
+        releasing: true,
+        key: null,
+      });
+      const releasingSpeed = created.session.state.smoothHold.speed;
+      runSmoothFrame(created, 32);
+      expect(created.session.state.smoothHold.speed).toBeLessThan(releasingSpeed);
+      expect(previousPage).not.toHaveBeenCalled();
+      expect(nextPage).not.toHaveBeenCalled();
+      created.session.dispose();
+    }
+  });
+
+  it('keeps counted chords and step mode as immediate discrete pan', () => {
+    const counted = smoothSession('follow');
+    counted.session.focusAndHandle(readerKey('3').event);
+    counted.session.focusAndHandle(readerKey('z').event);
+    counted.session.focusAndHandle(readerKey('h').event);
+    expect(counted.container.scrollBy).toHaveBeenCalledWith(-180, 0);
+    expect(counted.session.state.smoothHold.active).toBe(false);
+    expect(counted.animationFrameTasks).toHaveLength(0);
+    counted.session.focusAndHandle(readerKey('2').event);
+    counted.session.focusAndHandle(readerKey('z').event);
+    counted.session.focusAndHandle(readerKey('l').event);
+    expect(counted.container.scrollBy).toHaveBeenCalledWith(120, 0);
+    expect(counted.session.state.smoothHold.active).toBe(false);
+    expect(counted.animationFrameTasks).toHaveLength(0);
+    counted.session.dispose();
+
+    const step = smoothSession('step');
+    step.session.focusAndHandle(readerKey('z').event);
+    step.session.focusAndHandle(readerKey('h').event);
+    expect(step.container.scrollBy).toHaveBeenCalledWith(-60, 0);
+    expect(step.session.state.smoothHold.active).toBe(false);
+    expect(step.animationFrameTasks).toHaveLength(0);
+    step.session.focusAndHandle(readerKey('z').event);
+    step.session.focusAndHandle(readerKey('l').event);
+    expect(step.container.scrollBy).toHaveBeenCalledWith(60, 0);
+    expect(step.session.state.smoothHold.active).toBe(false);
+    expect(step.animationFrameTasks).toHaveLength(0);
+    step.session.dispose();
+  });
+
+  it('derives direct j/k and custom H/L scroll holds from their actions', () => {
+    for (const [key, direction] of [
+      ['j', 1],
+      ['k', -1],
+    ] as const) {
+      const created = smoothSession('follow');
+      const press = readerKey(key);
+      created.session.focusAndHandle(press.event);
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: true,
+        key,
+        axis: 'y',
+        direction,
+      });
+      expect(created.container.scrollBy).toHaveBeenCalledWith(0, direction * 10);
+      releaseSmoothHold(created, key);
+      created.session.dispose();
+    }
+
+    const customBindings = {
+      ...DEFAULT_BINDINGS,
+      'normal:H': 'scrollLeft',
+      'normal:L': 'scrollRight',
+    } as BindingMap;
+    for (const [key, direction] of [
+      ['H', -1],
+      ['L', 1],
+    ] as const) {
+      const created = smoothSession('follow', {}, customBindings);
+      const press = readerKey(key);
+      created.session.focusAndHandle(press.event);
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: true,
+        key,
+        axis: 'x',
+        direction,
+      });
+      expect(created.container.scrollBy).toHaveBeenCalledWith(direction * 10, 0);
+      releaseSmoothHold(created, key);
+      created.session.dispose();
+    }
+  });
+});
 describe('reader split shortcuts', () => {
   it('uses the current Zotero reader split methods for Space-minus and Space-pipe', () => {
     const toggleHorizontalSplit = vi.fn();
