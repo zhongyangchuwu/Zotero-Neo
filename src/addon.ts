@@ -30,8 +30,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#reader = createReaderController({
       preferences: this.#preferences,
       logger: this.#logger,
-      delegateMain(action, count) {
-        main?.executeFromReader(action, count);
+      delegateMain(action, count, ownerWindow) {
+        main?.executeFromReader(action, count, ownerWindow);
       },
     });
     this.#main = createMainWindowController({

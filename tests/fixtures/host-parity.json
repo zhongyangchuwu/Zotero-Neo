@@ -16,6 +16,7 @@
       "multiple reader tabs keep independent mode and count state",
       "primary and secondary PDF views receive keys after split recreation",
       "normal motions and count prefixes",
+      "normal zoom aliases and reset-to-fit-width count semantics",
       "search open next previous and clear",
       "cursor mode motions",
       "visual selection motions and swap ends",

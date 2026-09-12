@@ -4,16 +4,32 @@ import type {
   MainWindow,
 } from '../core/contracts';
 import { CleanupScope } from '../core/cleanup';
+import { keyGuideConfig } from '../core/preferences';
 import { copyToClipboard } from '../platform/clipboard';
 import { cloneInto } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
-import { advanceInput, bindingMatchesPrefix, resolveInputTimeout } from '../input/engine';
+import {
+  advanceInput,
+  backspaceLeaderInput,
+  cancelLeaderInput,
+  inputWouldConsume,
+  resolveInputTimeout,
+} from '../input/engine';
+import {
+  KEY_GUIDE_CONFIG,
+  keyGuideLanguage,
+  type KeyGuideLanguage,
+} from '../input/key-guide-config';
+import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap } from '../input/bindings';
-import type { ActionId } from '../input/actions';
+import { focusDirectionForAction, type ActionId, type FocusDirection } from '../input/actions';
+import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderMarks } from './marks';
 import { ReaderOutline, type OutlineHost } from './outline';
+import { ReaderSidebarOverlay } from './sidebar-overlay';
+import { ReaderMarksExplorer, type MarksExplorerState } from './marks-explorer';
 import {
   COLORS,
   type AnnotationColor,
@@ -303,8 +319,13 @@ export class ReaderSession {
   readonly #keyPatches = new Map<ReaderViewRuntime, (event: KeyboardEvent) => unknown>();
   readonly #textFocusPatches = new Map<ReaderViewRuntime, () => boolean>();
   readonly #marks: ReaderMarks;
+  readonly #marksExplorer: ReaderMarksExplorer;
+  readonly #sidebar: ReaderSidebarOverlay;
   readonly #outline: ReaderOutline;
   readonly #themeManagers = new Map<Window, ThemeManager>();
+  readonly #keyGuide = new KeyGuide();
+  #keyGuideTimer: ReaderTimer | null = null;
+  #inputRevision = 0;
   readonly state: ReaderSessionState;
   #viewSyncTimer: number | null = null;
 
@@ -346,6 +367,7 @@ export class ReaderSession {
       outline: {
         open: false,
         loading: false,
+        loadGeneration: 0,
         tree: null,
         visible: [],
         selected: 0,
@@ -396,14 +418,33 @@ export class ReaderSession {
       annotationPageRatio: (pdfWindow, annotation) =>
         this.annotationPageRatio(pdfWindow, annotation),
     });
+    this.#sidebar = new ReaderSidebarOverlay({
+      schedule: (delay, task) => this.schedule(delay, task),
+      clearTimer: (timer) => this.clearTimer(timer),
+      themeRoot: (root) => this.themeRoot(root),
+    });
+    this.#marksExplorer = new ReaderMarksExplorer({
+      marks: this.#marks,
+      reader: dependencies.reader,
+      themeRoot: (root) => this.#sidebar.themeRoot(root),
+      marksState: () => this.state.marks,
+      onAnnotation: (key) => {
+        this.state.lastAnnotationKey = key;
+      },
+    });
     const outlineHost: OutlineHost = {
       schedule: (delay, task) => this.schedule(delay, task),
       clearTimer: (timer) => this.clearTimer(timer),
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
       setModeNormal: () => this.setMode('normal'),
-      themeRoot: (root) => this.themeRoot(root),
+      themeRoot: (root) => this.#sidebar.themeRoot(root),
+      onClose: (pdfWindow) => this.#sidebar.closed('outline', pdfWindow),
     };
     this.#outline = new ReaderOutline(outlineHost);
+    this.#scope.add(() => {
+      this.#inputRevision += 1;
+      this.clearKeyTimer();
+    });
   }
 
   get itemID(): number | undefined {
@@ -433,14 +474,15 @@ export class ReaderSession {
   dispose(): void {
     this.state.insertSession += 1;
     this.stopSmoothHold(true);
-    this.closeMarksExplorer();
-    this.#outline.close(this.state.outline);
-    this.closeCommentOverlay();
     for (const [pdfWindow, handlers] of this.#viewHandlers)
       this.removeViewHandlers(pdfWindow, handlers);
     this.#viewHandlers.clear();
     this.restorePatches();
     this.#scope.dispose();
+    this.#sidebar.dispose(() => {
+      this.closeMarksExplorer();
+      this.#outline.close(this.state.outline);
+    });
     this.state.indicatorThemeCleanup?.();
     this.state.indicatorThemeCleanup = null;
     for (const manager of this.#themeManagers.values()) manager.dispose();
@@ -450,6 +492,7 @@ export class ReaderSession {
     this.clearHints();
     this.clearLinkHints();
     this.clearDestinationCue();
+    this.clearKeyGuide();
     this.#dependencies.release();
   }
 
@@ -597,15 +640,14 @@ export class ReaderSession {
    * recreated, without affecting the reader chrome or surviving split view.
    */
   private releaseViewTheme(pdfWindow: PdfWindow): void {
-    if (this.state.outline.overlay?.ownerDocument.defaultView === pdfWindow) {
-      this.#outline.close(this.state.outline);
-    }
-    if (this.state.commentOverlay?.ownerDocument.defaultView === pdfWindow) {
+    if (this.state.outline.overlay?.ownerDocument.defaultView === pdfWindow)
+      this.#sidebar.releaseView(pdfWindow, () =>
+        this.#outline.close(this.state.outline, pdfWindow),
+      );
+    if (this.state.commentOverlay?.ownerDocument.defaultView === pdfWindow)
       this.closeCommentOverlay();
-    }
-    if (this.state.marksOverlay?.ownerDocument.defaultView === pdfWindow) {
-      this.closeMarksExplorer();
-    }
+    if (this.state.marksOverlay?.ownerDocument.defaultView === pdfWindow)
+      this.#sidebar.releaseView(pdfWindow, () => this.closeMarksExplorer(pdfWindow));
     const manager = this.#themeManagers.get(pdfWindow);
     if (!manager) return;
     manager.dispose();
@@ -691,23 +733,19 @@ export class ReaderSession {
           false,
         ),
     );
-    if (!this.state.smoothHold.active && !this.state.smoothHold.releasing)
-      this.clearSmoothFrame(pdfWindow);
   }
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
-    this.state.activePdfWindow = pdfWindow;
-    if (this.nativeEditableFocused()) {
-      if (this.state.linkHintBadges.length) this.clearLinkHints();
-      return;
-    }
+    this.activatePdfWindow(pdfWindow);
     if (
       this.state.outline.open &&
       this.#outline.handleKey(this.state.outline, this.#dependencies.reader, pdfWindow, event)
     )
       return;
     if (this.state.marksExplorerOpen) {
-      this.handleMarksExplorerKey(event, pdfWindow);
+      const view = this.marksExplorerState();
+      this.#marksExplorer.handleKey(view, pdfWindow, event);
+      this.syncMarksExplorerState(view);
       return;
     }
     if (this.state.linkHintBadges.length && isEditableElement(asElement(event.target))) {
@@ -726,9 +764,47 @@ export class ReaderSession {
       this.handleInsertKey(event);
       return;
     }
-    if (isEditableElement(asElement(event.target))) return;
+    if (isEditableElement(asElement(event.target))) {
+      this.clearKeyGuide();
+      return;
+    }
+    const leaderState = {
+      mode: this.state.mode,
+      keyBuffer: this.state.keyBuffer,
+      countBuffer: this.state.countBuffer,
+    };
+    if (event.key.toLowerCase() === 'escape') {
+      const cancelled = cancelLeaderInput(leaderState);
+      if (cancelled) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.state.keyBuffer = cancelled.keyBuffer;
+        this.state.countBuffer = cancelled.countBuffer;
+        this.#inputRevision += 1;
+        this.clearKeyTimer();
+        this.clearKeyGuide();
+        this.updateIndicator();
+        return;
+      }
+    }
+    if (event.key.toLowerCase() === 'backspace') {
+      const backed = backspaceLeaderInput(leaderState);
+      if (backed) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.state.keyBuffer = backed.keyBuffer;
+        this.state.countBuffer = backed.countBuffer;
+        this.#inputRevision += 1;
+        this.clearKeyTimer();
+        this.refreshKeyGuide();
+        this.updateIndicator();
+        return;
+      }
+    }
     const key = keyString(event);
     if (!key) return;
+    this.#inputRevision += 1;
+    const revision = this.#inputRevision;
     if (this.startSmoothHold(event, pdfWindow)) return;
     if (this.handleMarkChord(event, key, pdfWindow)) return;
     const decision = advanceInput(
@@ -736,32 +812,48 @@ export class ReaderSession {
         mode: this.state.mode,
         keyBuffer: this.state.keyBuffer,
         countBuffer: this.state.countBuffer,
+        bindings: this.#dependencies.bindings(),
+        allowCountPrefix: this.state.mode === 'normal' || this.state.mode === 'cursor',
       },
       key,
-      this.#dependencies.bindings(),
-      { allowCountPrefix: this.state.mode === 'normal' || this.state.mode === 'cursor' },
     );
     this.state.keyBuffer = decision.state.keyBuffer;
     this.state.countBuffer = decision.state.countBuffer;
+    this.clearKeyTimer();
     if (decision.kind === 'pass') {
+      this.refreshKeyGuide();
       this.updateIndicator();
+      return;
+    }
+    if (decision.kind === 'execute') {
+      this.clearKeyGuide();
+      this.updateIndicator();
+      const direction = focusDirectionForAction(decision.action);
+      if (direction) {
+        if (this.focusDirection(direction)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.executeAction(decision.action, decision.count, pdfWindow);
       return;
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    this.clearKeyTimer();
-    if (decision.kind === 'execute') {
-      this.updateIndicator();
-      this.executeAction(decision.action, decision.count, pdfWindow);
-      return;
-    }
-    this.updateIndicator();
-    if (decision.timeoutMs !== null) {
-      this.state.keyTimeout = this.schedule(decision.timeoutMs, () => {
-        if (this.#scope.disposed) return;
+    this.refreshKeyGuide();
+    const timeoutMs = isLeaderPrefix(decision.state.keyBuffer)
+      ? KEY_GUIDE_CONFIG.idleTimeoutMs
+      : decision.timeoutMs;
+    if (timeoutMs !== null) {
+      this.state.keyTimeout = this.schedule(timeoutMs, () => {
+        if (this.#scope.disposed || this.#inputRevision !== revision) return;
         const resolved = resolveInputTimeout(decision);
         this.state.keyBuffer = resolved.state.keyBuffer;
         this.state.countBuffer = resolved.state.countBuffer;
+        this.clearKeyGuide();
         this.updateIndicator();
         if (resolved.kind === 'execute')
           this.executeAction(resolved.action, resolved.count, this.activePdfWindow());
@@ -845,7 +937,6 @@ export class ReaderSession {
     }
     return false;
   }
-
   private armMarkTimer(): void {
     this.clearKeyTimer();
     this.state.keyTimeout = this.schedule(1200, () => {
@@ -876,26 +967,46 @@ export class ReaderSession {
       this.state.keyBuffer === 'dm'
     )
       return /^[a-z0-9]$/.test(key);
-    const bindings = this.#dependencies.bindings();
-    return (
-      !!bindings[`${this.state.mode}:${key}`] ||
-      Object.keys(bindings).some((binding) => bindingMatchesPrefix(binding, this.state.mode, key))
-    );
+    const context = {
+      mode: this.state.mode,
+      keyBuffer: this.state.keyBuffer,
+      countBuffer: this.state.countBuffer,
+      bindings: this.#dependencies.bindings(),
+      allowCountPrefix: this.state.mode === 'normal' || this.state.mode === 'cursor',
+    };
+    if (!inputWouldConsume(context, key)) return false;
+    const transition = advanceInput(context, key);
+    if (transition.kind !== 'execute') return true;
+    const direction = focusDirectionForAction(transition.action);
+    return direction ? this.canFocusDirection(direction) : true;
+  }
+  private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
+    this.#sidebar.activate('outline', pdfWindow, () => this.closeMarksExplorer(pdfWindow));
+    if (focusOnly) {
+      void this.#outline.focus(this.state.outline, this.#dependencies.reader, pdfWindow);
+      return;
+    }
+    if (this.state.outline.open) this.#outline.close(this.state.outline, pdfWindow);
+    else void this.#outline.toggle(this.state.outline, this.#dependencies.reader, pdfWindow);
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
     if (!pdfWindow) return;
     const number = Math.max(1, count || 1);
     if (action.startsWith('main')) {
-      this.#dependencies.controller.dependencies.delegateMain(action, count);
+      this.#dependencies.controller.dependencies.delegateMain(
+        action,
+        count,
+        this.#dependencies.reader._window ?? null,
+      );
       return;
     }
     if (action === 'toggleReaderSidebarOutline') {
-      void this.#outline.toggle(this.state.outline, this.#dependencies.reader, pdfWindow);
+      this.openOrFocusOutline(pdfWindow, false);
       return;
     }
     if (action === 'focusReaderSidebar') {
-      void this.#outline.focus(this.state.outline, this.#dependencies.reader, pdfWindow);
+      this.openOrFocusOutline(pdfWindow, true);
       return;
     }
     if (action === 'toggleMarksExplorer') {
@@ -944,6 +1055,16 @@ export class ReaderSession {
         this.clearAnnotation();
         this.scrollBy(pdfWindow, 0, -this.viewport(pdfWindow) * number, true);
         break;
+      case 'zoomIn':
+        this.zoomReader('in', number);
+        break;
+      case 'zoomOut':
+        this.zoomReader('out', number);
+        break;
+      case 'zoomReset':
+        this.zoomReader('reset', 1);
+        break;
+
       case 'scrollTop':
         this.scrollToPagePosition(pdfWindow, 'top');
         break;
@@ -1150,16 +1271,16 @@ export class ReaderSession {
         this.toggleSplit('vertical');
         break;
       case 'focusReaderSplitLeft':
-        this.focusSplit('left');
+        this.focusDirection('left');
         break;
       case 'focusReaderSplitDown':
-        this.focusSplit('down');
+        this.focusDirection('down');
         break;
       case 'focusReaderSplitUp':
-        this.focusSplit('up');
+        this.focusDirection('up');
         break;
       case 'focusReaderSplitRight':
-        this.focusSplit('right');
+        this.focusDirection('right');
         break;
       default:
         this.#dependencies.controller.dependencies.logger.debug(
@@ -1204,14 +1325,72 @@ export class ReaderSession {
     if (this.state.linkHintBadges.length) this.clearLinkHints();
     if (this.state.mode === 'insert' && mode !== 'insert') this.state.insertSession += 1;
     if (mode !== 'normal') this.stopSmoothHold(true);
+    this.#inputRevision += 1;
     this.state.mode = mode;
     this.state.keyBuffer = '';
     this.state.countBuffer = '';
     this.clearKeyTimer();
+    this.clearKeyGuide();
     if (mode !== 'insert') this.clearTimer(this.state.insertWatchdog);
     if (mode !== 'visual' && mode !== 'cursor') this.clearHints();
     if (mode !== 'visual' && mode !== 'cursor') this.removeVisualCursor(this.state.activePdfWindow);
     this.updateIndicator();
+  }
+
+  private clearKeyGuide(): void {
+    this.clearTimer(this.#keyGuideTimer);
+    this.#keyGuideTimer = null;
+    this.#keyGuide.hide();
+  }
+
+  private refreshKeyGuide(): void {
+    const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
+    const prefix = this.state.keyBuffer;
+    if (!config.enabled || this.state.mode !== 'normal' || !isLeaderPrefix(prefix)) {
+      this.clearKeyGuide();
+      return;
+    }
+    const entries = leaderGuideEntries(
+      this.#dependencies.bindings(),
+      this.state.mode,
+      prefix,
+      this.keyGuideLanguage(),
+    );
+    if (!entries.length) {
+      this.clearKeyGuide();
+      return;
+    }
+    const document = this.#dependencies.reader._iframeWindow?.document;
+    if (!document) return;
+    if (this.#keyGuide.visible) {
+      this.#keyGuide.show(
+        document,
+        { add: (root) => this.themeRoot(root as HTMLElement) },
+        prefix,
+        entries,
+        config.fontSizePx,
+      );
+      return;
+    }
+    this.clearTimer(this.#keyGuideTimer);
+    this.#keyGuideTimer = this.schedule(config.delayMs, () => {
+      this.#keyGuideTimer = null;
+      if (this.state.mode !== 'normal' || this.state.keyBuffer !== prefix) return;
+      this.#keyGuide.show(
+        document,
+        { add: (root) => this.themeRoot(root as HTMLElement) },
+        prefix,
+        entries,
+        config.fontSizePx,
+      );
+    });
+  }
+
+  private keyGuideLanguage(): KeyGuideLanguage {
+    return keyGuideLanguage(
+      this.#dependencies.controller.dependencies.preferences.get('language', ''),
+      typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
+    );
   }
 
   private updateIndicator(): void {
@@ -1249,6 +1428,30 @@ export class ReaderSession {
         `reader history ${direction} failed: ${String(error)}`,
       );
       this.showStatus('History unavailable', 1500);
+    }
+  }
+
+  /** Delegates repeated step zoom and one-shot reset to Zotero's per-reader internal API. */
+  private zoomReader(direction: 'in' | 'out' | 'reset', steps: number): void {
+    try {
+      const internal = this.#dependencies.reader._internalReader;
+      const zoom =
+        direction === 'in'
+          ? internal?.zoomIn
+          : direction === 'out'
+            ? internal?.zoomOut
+            : internal?.zoomReset;
+      if (typeof zoom !== 'function') {
+        this.showStatus('Zoom unavailable', 1500);
+        return;
+      }
+      const repeat = direction === 'reset' ? 1 : steps;
+      for (let index = 0; index < repeat; index += 1) zoom.call(internal);
+    } catch (error) {
+      this.#dependencies.controller.dependencies.logger.debug(
+        `reader zoom ${direction} failed: ${String(error)}`,
+      );
+      this.showStatus('Zoom unavailable', 1500);
     }
   }
 
@@ -2639,142 +2842,112 @@ export class ReaderSession {
     this.state.previousDeleteFromComment = undefined;
   }
 
+  private marksExplorerState() {
+    return {
+      open: this.state.marksExplorerOpen,
+      selected: this.state.marksExplorerSelected,
+      overlay: this.state.marksOverlay,
+      list: this.state.marksList,
+      themeCleanup: this.state.marksThemeCleanup,
+    };
+  }
+
   private toggleMarksExplorer(pdfWindow: PdfWindow): void {
     if (this.state.marksExplorerOpen) {
       this.closeMarksExplorer(pdfWindow);
       return;
     }
-    this.#outline.close(this.state.outline);
-    this.state.marksExplorerOpen = true;
-    this.state.marksExplorerSelected = 0;
-    const document = pdfWindow.document;
-    const overlay = document.createElement('div');
-    overlay.id = 'zv-marks-explorer';
-    overlay.tabIndex = -1;
-    overlay.style.cssText = `position:fixed;top:0;left:0;bottom:0;width:320px;z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border-right:1px solid ${THEME_VARS.border};display:flex;flex-direction:column;box-shadow:12px 0 40px ${THEME_VARS.shadow};font:13px/1.35 monospace`;
-    const heading = document.createElement('div');
-    heading.style.cssText = `padding:12px 14px;border-bottom:1px solid ${THEME_VARS.border};font-weight:bold;background:${THEME_VARS.elevated}`;
-    heading.textContent = 'Marks';
-    const list = document.createElement('div');
-    list.style.cssText = 'flex:1;overflow:auto;padding:8px 0;';
-    const help = document.createElement('div');
-    help.style.cssText = `padding:6px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
-    help.textContent =
-      'type a mark char to jump · j/k move · Enter jump · d delete · x delete all · Esc close';
-    overlay.append(heading, list, help);
-    document.body?.appendChild(overlay);
-    this.state.marksThemeCleanup = this.themeRoot(overlay);
-    this.state.marksOverlay = overlay;
-    this.state.marksList = list;
-    this.renderMarksExplorer();
-    overlay.focus();
-  }
-
-  private handleMarksExplorerKey(event: KeyboardEvent, pdfWindow: PdfWindow): void {
-    const key = keyString(event);
-    if (!key) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    const chars = Object.keys(this.state.marks).sort();
-    if (
-      /^[a-z0-9]$/.test(key) &&
-      this.state.marks[key] &&
-      !['j', 'k', 'g', 'G', 'd', 'x'].includes(key)
-    ) {
-      this.closeMarksExplorer(pdfWindow);
-      void this.#marks.jump(
-        this.state.marks,
-        this.#dependencies.reader,
-        pdfWindow,
-        key,
-        (annotation) => {
-          this.state.lastAnnotationKey = annotation;
-        },
-      );
-      return;
-    }
-    if (key === 'j')
-      this.state.marksExplorerSelected = Math.min(
-        chars.length - 1,
-        this.state.marksExplorerSelected + 1,
-      );
-    else if (key === 'k')
-      this.state.marksExplorerSelected = Math.max(0, this.state.marksExplorerSelected - 1);
-    else if (key === 'G') this.state.marksExplorerSelected = Math.max(0, chars.length - 1);
-    else if (key === 'enter' || key === 'return') {
-      const char = chars[this.state.marksExplorerSelected];
-      this.closeMarksExplorer(pdfWindow);
-      if (char)
-        void this.#marks.jump(
-          this.state.marks,
-          this.#dependencies.reader,
-          pdfWindow,
-          char,
-          (annotation) => {
-            this.state.lastAnnotationKey = annotation;
-          },
-        );
-      return;
-    } else if (key === 'd') {
-      const char = chars[this.state.marksExplorerSelected];
-      if (char) void this.#marks.delete(this.state.marks, this.#dependencies.reader, char);
-    } else if (key === 'x') void this.#marks.clear(this.state.marks, this.#dependencies.reader);
-    else if (key === 'escape') {
-      this.closeMarksExplorer(pdfWindow);
-      return;
-    }
-    this.renderMarksExplorer();
+    this.#sidebar.activate('marks', pdfWindow, () => this.#outline.close(this.state.outline));
+    const view = this.marksExplorerState();
+    this.#marksExplorer.toggle(view, pdfWindow);
+    this.state.marksExplorerOpen = view.open;
+    this.state.marksExplorerSelected = view.selected;
+    this.state.marksOverlay = view.overlay;
+    this.state.marksList = view.list;
+    this.state.marksThemeCleanup = view.themeCleanup;
   }
 
   private closeMarksExplorer(pdfWindow?: PdfWindow): void {
-    this.state.marksExplorerOpen = false;
-    this.state.marksThemeCleanup?.();
-    this.state.marksThemeCleanup = null;
-    this.state.marksOverlay?.remove();
-    this.state.marksOverlay = null;
-    this.state.marksList = null;
-    if (pdfWindow) this.schedule(30, () => pdfWindow.focus());
+    const view = this.marksExplorerState();
+    this.#marksExplorer.close(view);
+    this.syncMarksExplorerState(view);
+    this.#sidebar.closed('marks', pdfWindow);
   }
-
-  private renderMarksExplorer(): void {
-    const list = this.state.marksList;
-    if (!list) return;
-    list.replaceChildren();
-    const chars = Object.keys(this.state.marks).sort();
-    if (!chars.length) {
-      const row = list.ownerDocument.createElement('div');
-      row.style.cssText = `padding:10px 14px;color:${THEME_VARS.muted}`;
-      row.textContent = 'No marks — press m<x> in Normal mode to set one';
-      list.appendChild(row);
-      return;
-    }
-    chars.forEach((char, index) => {
-      const mark = this.state.marks[char];
-      if (!mark) return;
-      const row = list.ownerDocument.createElement('div');
-      const selected = index === this.state.marksExplorerSelected;
-      row.style.cssText = `padding:6px 14px;white-space:nowrap;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
-      row.textContent = `${char}   ${mark.pageIndex === null ? '—' : `p.${mark.pageIndex + 1}  ${Math.round(mark.ratio * 100)}%`}${mark.key ? '  ⚑ ann' : ''}`;
-      list.appendChild(row);
-    });
+  private syncMarksExplorerState(view: MarksExplorerState): void {
+    this.state.marksExplorerOpen = view.open;
+    this.state.marksExplorerSelected = view.selected;
+    this.state.marksOverlay = view.overlay;
+    this.state.marksList = view.list;
+    this.state.marksThemeCleanup = view.themeCleanup;
   }
 
   private toggleSplit(type: 'horizontal' | 'vertical'): void {
     const internal = this.#dependencies.reader._internalReader;
-    internal?.toggleSplit?.(
-      cloneInto({ type }, this.#dependencies.reader._iframeWindow ?? this.state.activePdfWindow),
+    if (type === 'horizontal') internal?.toggleHorizontalSplit?.();
+    else internal?.toggleVerticalSplit?.();
+    this.syncPdfViews();
+  }
+
+  private splitFocusTarget(
+    direction: FocusDirection,
+  ): { readonly primary: boolean; readonly window: PdfWindow } | null {
+    const internal = this.#dependencies.reader._internalReader;
+    const primary = asPdfWindow(internal?._primaryView?._iframeWindow);
+    const secondary = asPdfWindow(internal?._secondaryView?._iframeWindow);
+    if (!primary || !secondary || !internal?.splitType) return null;
+    const activePrimary = this.state.activePdfWindow !== secondary;
+    const targetPrimary =
+      internal.splitType === 'vertical'
+        ? direction === 'left' && !activePrimary
+          ? true
+          : direction === 'right' && activePrimary
+            ? false
+            : null
+        : direction === 'up' && !activePrimary
+          ? true
+          : direction === 'down' && activePrimary
+            ? false
+            : null;
+    if (targetPrimary === null) return null;
+    return { primary: targetPrimary, window: targetPrimary ? primary : secondary };
+  }
+
+  private canFocusDirection(direction: FocusDirection): boolean {
+    if (this.splitFocusTarget(direction)) return true;
+    return (
+      direction === 'right' &&
+      typeof this.#dependencies.reader._window?.ZoteroContextPane?.focus === 'function'
     );
   }
 
-  private focusSplit(direction: 'left' | 'right' | 'up' | 'down'): void {
-    const internal = this.#dependencies.reader._internalReader;
-    internal?.focusSplit?.(
-      cloneInto(
-        { direction },
-        this.#dependencies.reader._iframeWindow ?? this.state.activePdfWindow,
-      ),
-    );
-    this.syncPdfViews();
+  private focusDirection(direction: FocusDirection): boolean {
+    const target = this.splitFocusTarget(direction);
+    if (target) {
+      try {
+        const internal = this.#dependencies.reader._internalReader;
+        if (internal?.focusView) internal.focusView(target.primary);
+        else target.window.focus();
+        this.state.activePdfWindow = target.window;
+        return true;
+      } catch (error) {
+        this.#dependencies.controller.dependencies.logger.debug(
+          `reader split focus failed: ${String(error)}`,
+        );
+        return false;
+      }
+    }
+    if (direction !== 'right') return false;
+    const focusContext = this.#dependencies.reader._window?.ZoteroContextPane?.focus;
+    if (!focusContext) return false;
+    try {
+      focusContext.call(this.#dependencies.reader._window?.ZoteroContextPane);
+      return true;
+    } catch (error) {
+      this.#dependencies.controller.dependencies.logger.debug(
+        `reader context focus failed: ${String(error)}`,
+      );
+      return false;
+    }
   }
 
   private startSmoothHold(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
@@ -2881,11 +3054,30 @@ export class ReaderSession {
     this.state.smoothHold.rafId = null;
   }
 
+  private activatePdfWindow(pdfWindow: PdfWindow): void {
+    const internal = this.#dependencies.reader._internalReader;
+    const secondary = asPdfWindow(internal?._secondaryView?._iframeWindow);
+    if (secondary) {
+      const primary = pdfWindow !== secondary;
+      const hostPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
+      if (hostPrimary !== undefined && hostPrimary !== primary) {
+        internal?.focusView?.(primary);
+      }
+    }
+    this.state.activePdfWindow = pdfWindow;
+  }
+
   private activePdfWindow(): PdfWindow | null {
     const reader = this.#dependencies.reader;
+    const internal = reader._internalReader;
+    const primary = asPdfWindow(internal?._primaryView?._iframeWindow);
+    const secondary = asPdfWindow(internal?._secondaryView?._iframeWindow);
+    const hostPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
+    if (secondary && hostPrimary === false) return secondary;
+    if (primary && hostPrimary === true) return primary;
+    if (this.state.activePdfWindow === secondary) return secondary;
+    if (this.state.activePdfWindow === primary) return primary;
     const focused = Services.focus?.focusedWindow;
-    const primary = asPdfWindow(reader._internalReader?._primaryView?._iframeWindow);
-    const secondary = asPdfWindow(reader._internalReader?._secondaryView?._iframeWindow);
     if (focused === secondary) return secondary;
     if (focused === primary) return primary;
     return primary ?? secondary ?? this.state.activePdfWindow;

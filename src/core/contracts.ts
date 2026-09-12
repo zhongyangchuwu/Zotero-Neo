@@ -6,7 +6,7 @@ export type MainWindow = _ZoteroTypes.MainWindow;
 export type ReaderInstance = _ZoteroTypes.ReaderInstance;
 
 export interface MainActionDelegate {
-  executeFromReader(action: ActionId, count: number): void;
+  executeFromReader(action: ActionId, count: number, ownerWindow: MainWindow | null): void;
 }
 
 export interface ReaderControllerApi {
@@ -25,7 +25,7 @@ export interface MainWindowControllerApi extends MainActionDelegate {
 export interface ReaderControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly delegateMain: (action: ActionId, count: number) => void;
+  readonly delegateMain: (action: ActionId, count: number, ownerWindow: MainWindow | null) => void;
 }
 
 export interface MainWindowControllerDependencies {
