@@ -1,3 +1,4 @@
+import type { ReaderDelegableMainAction } from '../main/action-capabilities';
 import type { ActionId } from '../input/actions';
 import type { BindingMap } from '../input/bindings';
 import type { Logger } from './logging';
@@ -10,13 +11,18 @@ export type CommandPaletteMode = 'normal' | 'main';
 
 export interface CommandPaletteContext {
   readonly mode: CommandPaletteMode;
+  readonly actions: readonly ActionId[];
   readonly bindings: BindingMap;
   readonly language: 'en' | 'zh-CN';
   readonly execute: (action: ActionId, count: number) => void;
 }
 
 export interface MainActionDelegate {
-  executeFromReader(action: ActionId, count: number, ownerWindow: MainWindow | null): void;
+  executeFromReader(
+    action: ReaderDelegableMainAction,
+    count: number,
+    ownerWindow: MainWindow | null,
+  ): void;
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void;
 }
 
@@ -36,7 +42,11 @@ export interface MainWindowControllerApi extends MainActionDelegate {
 export interface ReaderControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly delegateMain: (action: ActionId, count: number, ownerWindow: MainWindow | null) => void;
+  readonly delegateMain: (
+    action: ReaderDelegableMainAction,
+    count: number,
+    ownerWindow: MainWindow | null,
+  ) => void;
   readonly openCommandPalette: (window: MainWindow, context: CommandPaletteContext) => void;
 }
 

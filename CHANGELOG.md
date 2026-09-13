@@ -88,15 +88,14 @@ All notable changes to Zotero Neo are documented here.
 - Made picker result rows keyboard-only by default so pointer hover/click cannot override keyboard selection.
 - Added opt-in mouse selection and double-click confirmation for All, Collection, Tab, and Note
   picker rows through `picker.mouse.enabled`; Tag rows and markers remain keyboard-only.
-- Added Normal `:` command palettes for Reader, Main, and Note contexts. The finite command
-  provider derives unique actions and current key hints from the resolved binding map, closes
-  before execution, and keeps command arguments, counts, scopes, and Spotlight integration deferred.
+- Added Normal `:` command palettes for Reader, Main, and Note contexts. Each palette lists every executable command valid in that context, including unbound commands marked `Unbound` and still runnable; key hints come only from resolved bindings, and the palette closes before execution. Command arguments, counts, scopes, and Spotlight integration remain deferred.
 - Made ArrowUp/ArrowDown move the selected row from query or list focus exactly once across
   all picker scopes; Tag Query retains query focus/mode while Tab and Escape still return to List.
 - Moved default previous/next tab switching to H/L across Reader, Main, and Note Normal contexts,
   moved horizontal Reader pan to zh/zl, and retired the default J/K tab aliases.
 - Added binding schema migration for the H/L and J/K default cutover while preserving differing
   custom rows and unrelated bindings.
+- The current shortcut-customisation candidate keeps add, edit, delete, and reset changes staged behind explicit Apply. A new binding appears immediately below the table header with focus on Key Sequence; every row has an editable native Mode menu, and Action choices are filtered to the selected Mode. Incompatible existing rows remain visible and block Apply until corrected. Selected and hover states, row separators, and visible table headings remain clear while browsing the table. Deleted shortcuts remain unbound after Apply and restart and disappear from Key Guide and Command Palette hints; exact duplicates block saves, valid prefix pairs warn, multiple keys per action are allowed, and failed saves retain the draft.
 
 ### Removed
 

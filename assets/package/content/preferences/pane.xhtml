@@ -27,13 +27,78 @@
     }
     #zv-bindings-table-wrap { border-color: var(--zotero-neo-border, #ccc) !important; }
     #zv-bindings-table { color: var(--zotero-neo-text, inherit); }
-    #zv-bindings-table thead tr { background: var(--zotero-neo-elevated, #f0f0f0) !important; }
-    #zv-bindings-table th { border-bottom-color: var(--zotero-neo-border, #ccc) !important; }
-    #zv-bindings-table tbody tr[data-mode="normal"] { background: var(--zotero-neo-mode-normal, #e8f0fe); }
-    #zv-bindings-table tbody tr[data-mode="visual"] { background: var(--zotero-neo-mode-visual, #e8f5e9); }
-    #zv-bindings-table tbody tr[data-mode="cursor"] { background: var(--zotero-neo-mode-cursor, #fff3e0); }
-    #zv-bindings-table tbody tr[data-mode="insert"] { background: var(--zotero-neo-mode-insert, #fff8e1); }
-    #zv-bindings-table tbody tr[data-mode="main"] { background: var(--zotero-neo-mode-main, #f0e8ff); }
+    #zv-bindings-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--zotero-neo-elevated, #f0f0f0) !important;
+      border-bottom-color: var(--zotero-neo-border, #ccc) !important;
+    }
+    #zv-bindings-table tbody tr.zv-binding-mode-normal { background: var(--zotero-neo-mode-normal, #e8f0fe); }
+    #zv-bindings-table tbody tr.zv-binding-mode-visual { background: var(--zotero-neo-mode-visual, #e8f5e9); }
+    #zv-bindings-table tbody tr.zv-binding-mode-cursor { background: var(--zotero-neo-mode-cursor, #fff3e0); }
+    #zv-bindings-table tbody tr.zv-binding-mode-insert { background: var(--zotero-neo-mode-insert, #fff8e1); }
+    #zv-bindings-table tbody tr.zv-binding-mode-main { background: var(--zotero-neo-mode-main, #f0e8ff); }
+    #zv-bindings-table tbody tr.zv-binding-row-error { box-shadow: inset 4px 0 var(--zotero-neo-error, #c62828); }
+    #zv-bindings-table tbody tr.zv-binding-row-warning { box-shadow: inset 4px 0 var(--zotero-neo-warning, #b26a00); }
+    #zv-bindings-table .zv-binding-action-results[hidden] { display: none; }
+    #zv-bindings-table .zv-binding-action-results {
+      max-height: 180px;
+      overflow-y: auto;
+      margin-top: 2px;
+      border: 1px solid var(--zotero-neo-border, #ccc);
+      border-radius: 3px;
+      background: var(--zotero-neo-input, transparent);
+    }
+    #zv-bindings-table .zv-binding-action-result {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 3px 5px;
+      color: var(--zotero-neo-text, inherit);
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-top: 1px solid var(--zotero-neo-border, #ccc);
+      cursor: pointer;
+    }
+    #zv-bindings-table .zv-binding-action-result:first-child { border-top: 0; }
+    #zv-bindings-table .zv-binding-action-result[aria-selected="true"] {
+      color: var(--zotero-neo-selected-text, inherit);
+      background: var(--zotero-neo-selected, #dbeafe);
+    }
+    #zv-bindings-table .zv-binding-action-result:hover {
+      color: var(--zotero-neo-text, inherit);
+      background: var(--zotero-neo-elevated, #f0f0f0);
+    }
+    #zv-bindings-table .zv-binding-action-result[aria-selected="true"]:hover {
+      color: var(--zotero-neo-selected-text, inherit);
+      background: var(--zotero-neo-selected, #dbeafe);
+    }
+    #zv-bindings-table .zv-binding-action-result:focus-visible {
+      outline: 2px solid var(--zotero-neo-focus-ring, Highlight);
+      outline-offset: -2px;
+    }
+    #zv-bindings-table .zv-binding-mode-cell,
+    #zv-bindings-table .zv-binding-key-cell,
+    #zv-bindings-table .zv-binding-action-cell,
+    #zv-bindings-table .zv-binding-delete-cell {
+      padding: 5px 10px;
+      vertical-align: top;
+      border-bottom: 1px solid var(--zotero-neo-border, #ccc);
+    }
+    #zv-bindings-table .zv-binding-mode-cell { width: 80px; }
+    #zv-bindings-table .zv-binding-key-cell { width: 140px; }
+    #zv-bindings-table .zv-binding-mode { padding: 2px 4px; font-family: monospace; }
+    #zv-bindings-table .zv-binding-key { width: 120px; box-sizing: border-box; padding: 2px 4px; font-family: monospace; }
+    #zv-bindings-table .zv-binding-action { display: flex; min-width: 0; flex-direction: column; }
+    #zv-bindings-table .zv-binding-action-input { width: 100%; box-sizing: border-box; padding: 2px 4px; }
+    #zv-bindings-table .zv-binding-delete-cell { width: 50px; text-align: center; }
+    #zv-bindings-table .zv-binding-delete { padding: 0 6px; font-size: 1.1em; cursor: pointer; }
+    .zv-status.zv-binding-status-invalid,
+    .zv-status.zv-binding-save-save-failed { color: var(--zotero-neo-error, #c62828) !important; }
+    .zv-status.zv-binding-status-warning { color: var(--zotero-neo-warning, #b26a00) !important; }
+    .zv-status.zv-binding-status-dirty { color: var(--zotero-neo-warning, #b26a00) !important; }
     .zv-divider { border-color: var(--zotero-neo-border, #ddd) !important; }
     .zv-status { color: var(--zotero-neo-success, #287a43) !important; }
   </html:style>
@@ -281,7 +346,7 @@
       <html:table id="zv-bindings-table"
         style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
         <html:thead>
-          <html:tr style="position: sticky; top: 0;">
+          <html:tr>
             <html:th data-i18n="zv.bindings.mode" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid; width: 80px;">Mode</html:th>
             <html:th data-i18n="zv.bindings.key" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid; width: 140px;">Key sequence</html:th>
             <html:th data-i18n="zv.bindings.action" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid;">Action</html:th>
@@ -289,10 +354,14 @@
           </html:tr>
         </html:thead>
         <html:tbody id="zv-bindings-body">
-          <!-- Populated by prefs.js -->
+          <!-- Populated by the mounted binding editor view. -->
         </html:tbody>
       </html:table>
     </html:div>
+    <hbox style="margin-top: 6px; justify-content: flex-end; align-items: center;">
+      <html:span id="zv-bindings-validation-status" class="zv-status"
+        style="font-size: 0.9em;"></html:span>
+    </hbox>
   </groupbox>
 
   <!-- ── Keybinding apply ───────────────────────────────────────────── -->

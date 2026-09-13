@@ -737,9 +737,15 @@ describe('Reader command palette', () => {
     const palette = paletteRef.value;
     if (!palette) throw new Error('Expected a Reader command palette context');
     expect(palette.mode).toBe('normal');
+    expect(palette.actions).toContain('mainTabPick');
+    expect(palette.actions).not.toContain('mainTrashItems');
+    expect(palette.actions).not.toContain('mainOpenPDF');
+    expect(palette.actions).not.toContain('mainActivate');
 
     palette.execute('zoomIn', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
+    palette.execute('mainTrashItems', 123);
+    expect(delegateMain).not.toHaveBeenCalled();
     palette.execute('mainFuzzyAll', 123);
     expect(delegateMain).toHaveBeenCalledWith('mainFuzzyAll', 0, created.reader._window);
 
@@ -748,9 +754,12 @@ describe('Reader command palette', () => {
     palette.execute('zoomIn', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(delegateMain).toHaveBeenCalledOnce();
+    Reflect.set(created.reader._internalReader, '_primaryView', {
+      _iframeWindow: created.pdfWindow,
+    });
     created.session.dispose();
     palette.execute('zoomIn', 123);
-    palette.execute('mainFuzzyAll', 123);
+    palette.execute('mainTabPick', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(delegateMain).toHaveBeenCalledOnce();
   });

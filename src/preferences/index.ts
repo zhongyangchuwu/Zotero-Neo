@@ -1,16 +1,7 @@
 import { ZoteroPreferenceStore } from '../core/preference-store';
 import { PREFERENCE_PREFIX, PICKER_MOUSE_ENABLED_PREFERENCE_KEY } from '../core/preferences';
-import { ACTION_IDS, ACTION_LABELS, isActionId, type ActionId } from '../input/actions';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
-
-import {
-  DEFAULT_BINDINGS,
-  MODES,
-  parseBindingKey,
-  resolveBindings,
-  type BindingMap,
-  type Mode,
-} from '../input/bindings';
+import { encodeBindingOverrides, resolveBindings } from '../input/bindings';
 import {
   APPEARANCE_PREFERENCE_KEY,
   THEME_VARS,
@@ -19,6 +10,7 @@ import {
   type AppearanceMode,
   type ThemeRoot,
 } from '../ui/theme';
+import { mountBindingEditor, type MountedBindingEditor } from './binding-editor-view';
 
 const PREFERENCE_BRANCH = `${PREFERENCE_PREFIX}.`;
 const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
@@ -97,6 +89,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help4a': 'Multi-key sequences such as ',
     'zv.bindings.help4b': ' or ',
     'zv.bindings.help4c': ' are supported.',
+    'zv.bindings.add': '+ Add binding',
     'zv.bindings.footer':
       'Appearance, key guide, modes, marks, colour, picker and scroll settings save automatically.',
     'zv.bindings.reset': 'Reset to defaults',
@@ -104,7 +97,16 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.key': 'Key sequence',
     'zv.bindings.action': 'Action',
     'zv.bindings.apply': 'Apply bindings',
+    'zv.bindings.status.dirty': 'Unsaved changes',
+    'zv.bindings.status.invalid': 'Fix invalid rows before applying.',
+    'zv.bindings.status.warning': 'Prefix conflicts detected; Apply is allowed.',
+    'zv.bindings.error.empty': 'Enter a key sequence and action.',
+    'zv.bindings.error.malformed': 'Invalid mode, key sequence, or action.',
+    'zv.bindings.error.incompatible': 'Action is not supported in this mode.',
+    'zv.bindings.error.duplicate': 'Duplicate mode and key sequence.',
+    'zv.bindings.warning.prefix': 'Strict prefix of another sequence.',
     'zv.status.saved': 'Saved!',
+    'zv.status.saveFailed': 'Could not save bindings.',
   },
   'zh-CN': {
     'zv.lang.label': '语言',
@@ -163,12 +165,22 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help4b': '或',
     'zv.bindings.help4c': '等多键序列。',
     'zv.bindings.add': '+ 添加绑定',
+    'zv.bindings.footer': '外观、按键提示、模式、标记、颜色、选择器与滚动设置在更改时自动保存。',
     'zv.bindings.reset': '重置为默认值',
     'zv.bindings.mode': '模式',
     'zv.bindings.key': '键序列',
     'zv.bindings.action': '动作',
-    'zv.bindings.footer': '外观、按键提示、模式、标记、颜色、选择器与滚动设置在更改时自动保存。',
+    'zv.bindings.apply': '应用按键绑定',
+    'zv.bindings.status.dirty': '有未保存的更改',
+    'zv.bindings.status.invalid': '请先修正无效行。',
+    'zv.bindings.status.warning': '检测到前缀冲突；仍可应用。',
+    'zv.bindings.error.empty': '请输入键序列和动作。',
+    'zv.bindings.error.malformed': '模式、键序列或动作无效。',
+    'zv.bindings.error.incompatible': '此动作不受当前模式支持。',
+    'zv.bindings.error.duplicate': '模式和键序列重复。',
+    'zv.bindings.warning.prefix': '这是另一键序列的严格前缀。',
     'zv.status.saved': '已保存！',
+    'zv.status.saveFailed': '按键绑定保存失败。',
   },
 } as const satisfies Record<Language, Record<string, string>>;
 
@@ -182,13 +194,6 @@ const SCROLL_DEFAULTS = {
   deceleration: 4_200,
   stopOnRelease: false,
 } as const;
-const MODE_ORDER: Readonly<Record<Mode, number>> = {
-  normal: 0,
-  visual: 1,
-  cursor: 2,
-  insert: 3,
-  main: 4,
-};
 
 const initializedDocuments = new WeakSet<Document>();
 const observers = new WeakMap<Document, MutationObserver>();
@@ -224,19 +229,21 @@ function hasPreference(key: string): boolean {
   }
 }
 
-function setPreference(key: string, value: PreferenceValue): void {
+function setPreference(key: string, value: PreferenceValue): boolean {
   try {
     const branch = Services.prefs;
     const fullKey = `${PREFERENCE_BRANCH}${key}`;
     if (typeof value === 'boolean') branch.setBoolPref(fullKey, value);
     else if (typeof value === 'number') branch.setIntPref(fullKey, value);
     else branch.setStringPref(fullKey, value);
+    return true;
   } catch (error) {
     try {
       dump(`[ZoteroNeo] prefs set failed (${key}): ${String(error)}\n`);
     } catch {
       // Preference persistence is unavailable in this host compartment.
     }
+    return false;
   }
 }
 
@@ -334,145 +341,6 @@ function saveCheckbox(checkbox: XulCheckbox, key: string, status: HTMLElement | 
   });
 }
 
-interface BindingRow {
-  readonly mode: Mode;
-  readonly key: string;
-  readonly action: ActionId;
-}
-
-function bindingRows(bindings: BindingMap): BindingRow[] {
-  return Object.entries(bindings)
-    .flatMap(([fullKey, action]) => {
-      const parsed = parseBindingKey(fullKey);
-      return parsed ? [{ mode: parsed.mode, key: parsed.sequence, action }] : [];
-    })
-    .sort((left, right) => {
-      const modeDelta = MODE_ORDER[left.mode] - MODE_ORDER[right.mode];
-      return modeDelta !== 0 ? modeDelta : left.key.localeCompare(right.key);
-    });
-}
-
-function makeBindingRow(
-  doc: Document,
-  mode: Mode,
-  key: string,
-  action: ActionId,
-  isNew: boolean,
-): HTMLTableRowElement {
-  const row = doc.createElement('tr');
-  row.style.borderBottom = `1px solid ${THEME_VARS.border}`;
-  row.dataset.mode = mode;
-
-  const modeCell = doc.createElement('td');
-  modeCell.style.cssText =
-    'padding:5px 10px;font-family:monospace;text-transform:uppercase;font-size:.85em;font-weight:bold;';
-  if (isNew) {
-    const modeSelect = doc.createElement('select');
-    modeSelect.style.cssText = 'padding:2px 4px;font-family:monospace;';
-    for (const candidate of MODES) {
-      const option = doc.createElement('option');
-      option.value = candidate;
-      option.textContent = candidate;
-      option.selected = candidate === mode;
-      modeSelect.appendChild(option);
-    }
-    modeSelect.addEventListener('change', () => {
-      row.dataset.mode = modeSelect.value;
-    });
-    modeCell.appendChild(modeSelect);
-    row.dataset.newRow = '1';
-  } else {
-    modeCell.textContent = mode;
-  }
-  row.appendChild(modeCell);
-
-  const keyCell = doc.createElement('td');
-  keyCell.style.cssText = 'padding:5px 10px;';
-  const keyInput = doc.createElement('input');
-  keyInput.type = 'text';
-  keyInput.value = key.replace(/^ /, '<space>');
-  keyInput.style.cssText = 'font-family:monospace;width:120px;padding:2px 4px;';
-  keyCell.appendChild(keyInput);
-  row.appendChild(keyCell);
-
-  const actionCell = doc.createElement('td');
-  actionCell.style.cssText = 'padding:5px 10px;';
-  const actionSelect = doc.createElement('select');
-  actionSelect.style.cssText = 'width:100%;padding:2px 4px;';
-  const language = currentLanguage();
-  for (const candidate of ACTION_IDS) {
-    const option = doc.createElement('option');
-    option.value = candidate;
-    option.textContent = ACTION_LABELS[candidate][language];
-    option.selected = candidate === action;
-    actionSelect.appendChild(option);
-  }
-  actionCell.appendChild(actionSelect);
-  row.appendChild(actionCell);
-
-  const deleteCell = doc.createElement('td');
-  deleteCell.style.cssText = 'padding:5px 6px;text-align:center;';
-  const deleteButton = doc.createElement('button');
-  deleteButton.type = 'button';
-  deleteButton.textContent = '×';
-  deleteButton.style.cssText = `cursor:pointer;padding:0 6px;font-size:1.1em;background:none;color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:3px;`;
-  deleteButton.addEventListener('click', () => row.remove());
-  deleteCell.appendChild(deleteButton);
-  row.appendChild(deleteCell);
-
-  return row;
-}
-
-function renderBindingTable(doc: Document, bindings: BindingMap): void {
-  const body = byId<HTMLTableSectionElement>(doc, 'zv-bindings-body');
-  if (!body) return;
-  body.replaceChildren();
-  for (const { mode, key, action } of bindingRows(bindings)) {
-    body.appendChild(makeBindingRow(doc, mode, key, action, false));
-  }
-}
-
-function addBindingRow(doc: Document): void {
-  const body = byId<HTMLTableSectionElement>(doc, 'zv-bindings-body');
-  body?.appendChild(makeBindingRow(doc, 'normal', '', 'scrollDown', true));
-}
-
-function readBindingTable(doc: Document): Record<string, ActionId> {
-  const body = byId<HTMLTableSectionElement>(doc, 'zv-bindings-body');
-  if (!body) return {};
-  const bindings: Record<string, ActionId> = {};
-  const rows = Array.from(body.querySelectorAll('tr')) as HTMLTableRowElement[];
-  for (const row of rows) {
-    const selects = Array.from(row.querySelectorAll('select')) as HTMLSelectElement[];
-    const keyInput = row.querySelector('input') as HTMLInputElement | null;
-    const isNew = row.dataset.newRow === '1';
-    const mode = isNew ? selects[0]?.value : row.cells.item(0)?.textContent?.trim().toLowerCase();
-    const action = selects[isNew ? 1 : 0]?.value;
-    const key = (keyInput?.value ?? '').replace(/^<space>/, ' ').replace(/\s+$/, '');
-    const parsed = mode ? parseBindingKey(`${mode}:${key}`) : null;
-    if (parsed && isActionId(action)) bindings[`${parsed.mode}:${parsed.sequence}`] = action;
-  }
-  return bindings;
-}
-
-function bindingsEqual(
-  left: Readonly<Record<string, ActionId>>,
-  right: Readonly<Record<string, ActionId>>,
-): boolean {
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every((key) => left[key] === right[key]);
-}
-
-function saveBindings(doc: Document): void {
-  const bindings = readBindingTable(doc);
-  setPreference(
-    'bindings',
-    bindingsEqual(bindings, DEFAULT_BINDINGS) ? '' : JSON.stringify(bindings),
-  );
-}
-
 function initializePane(doc: Document): void {
   if (initializedDocuments.has(doc)) return;
   const scrollInput = byId<HTMLInputElement>(doc, 'zv-scroll-step');
@@ -480,6 +348,7 @@ function initializePane(doc: Document): void {
   initializedDocuments.add(doc);
   observers.get(doc)?.disconnect();
   observers.delete(doc);
+  let bindingView: MountedBindingEditor | null = null;
   const view = doc.defaultView;
   const paneRoot = byId<Element>(doc, 'zotero-neo-prefs') as ThemeRoot | null;
   let themeManager: ThemeManager | null = null;
@@ -489,6 +358,7 @@ function initializePane(doc: Document): void {
     view.addEventListener(
       'unload',
       () => {
+        bindingView?.dispose();
         themeManager?.dispose();
       },
       { once: true },
@@ -501,9 +371,9 @@ function initializePane(doc: Document): void {
     languageSelect.value = language;
     languageSelect.addEventListener('command', () => {
       const nextLanguage: Language = languageSelect.value === 'zh-CN' ? 'zh-CN' : 'en';
+      bindingView?.dispatch({ type: 'set-language', language: nextLanguage });
       setPreference('language', nextLanguage);
       applyTranslations(doc, nextLanguage);
-      renderBindingTable(doc, readBindingTable(doc));
     });
   }
   applyTranslations(doc, language);
@@ -734,20 +604,15 @@ function initializePane(doc: Document): void {
     });
   }
 
-  renderBindingTable(doc, resolveBindings(getPreference('bindings', '')));
-  byId<HTMLButtonElement>(doc, 'zv-add-binding')?.addEventListener('click', () =>
-    addBindingRow(doc),
-  );
-  byId<HTMLButtonElement>(doc, 'zv-reset-bindings')?.addEventListener('click', () => {
-    renderBindingTable(doc, DEFAULT_BINDINGS);
-    saveBindings(doc);
-  });
-  byId<HTMLButtonElement>(doc, 'zv-save')?.addEventListener('click', () => {
-    saveBindings(doc);
-    flashStatus(
-      byId<HTMLElement>(doc, 'zv-save-status'),
-      translate('zv.status.saved', currentLanguage()),
-    );
+  bindingView = mountBindingEditor({
+    document: doc,
+    root: byId<Element>(doc, 'zotero-neo-prefs') ?? doc.documentElement,
+    baseline: resolveBindings(getPreference('bindings', '')),
+    language,
+    localize: translate,
+    onSave(bindings) {
+      return setPreference('bindings', encodeBindingOverrides(bindings));
+    },
   });
 }
 

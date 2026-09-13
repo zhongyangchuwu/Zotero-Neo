@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActionId } from '../../src/input/actions';
+import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
+import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
 import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
 import {
   FuzzyPicker,
@@ -311,6 +313,7 @@ describe('command palette provider', () => {
     let picker: FuzzyPicker;
     const context: CommandPaletteContext = {
       mode: 'main',
+      actions: ['mainFuzzyAll', 'mainFuzzyAll', 'mainNextTab', 'mainOpenPDF', 'openCommandPalette'],
       language: 'en',
       bindings: {
         'main::': 'openCommandPalette',
@@ -324,20 +327,23 @@ describe('command palette provider', () => {
       },
     };
     const { window, session } = createPickerHarness();
-    Object.assign(window, { Zotero_Tabs: tabs });
     picker = new FuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
     );
-
     await picker.open(window, session, 'commands', context);
     const all = session.picker.filtered.find((item) => item.id === 'mainFuzzyAll');
     expect(all?.title).toBe('Main window: fuzzy picker — all items');
     expect(all?.meta).toBe('x, y');
+    expect(all?.search).toContain('x, y');
     expect(session.picker.filtered.filter((item) => item.id === 'mainFuzzyAll')).toHaveLength(1);
     expect(session.picker.filtered.some((item) => item.id === 'openCommandPalette')).toBe(false);
-    expect(session.picker.filtered.some((item) => item.id === 'mainOpenPDF')).toBe(false);
+    const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
+    const provider = session.picker.provider;
+    if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
+    expect(openPDF.meta).toBe('Unbound');
+    expect(provider.preview(openPDF).body).toContain('Keys: Unbound');
     const commandInput = session.picker.input;
     picker.onKeyDown(pickerKey('ArrowDown', commandInput), window, session);
     expect(session.picker.selected).toBe(1);
@@ -370,6 +376,116 @@ describe('command palette provider', () => {
     );
     await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
   });
+  it('keeps unbound catalog commands searchable and executable', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const execute = vi.fn<CommandPaletteContext['execute']>();
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainFuzzyAll', 'mainOpenPDF'],
+      language: 'en',
+      bindings: { 'main:x': 'mainFuzzyAll' },
+      execute,
+    };
+
+    await picker.open(window, session, 'commands', context);
+    const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
+    const provider = session.picker.provider;
+    if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
+    expect(openPDF.meta).toBe('Unbound');
+    expect(provider.preview(openPDF).body).toBe('Action: mainOpenPDF\nKeys: Unbound');
+    const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
+    if (!input) throw new Error('Expected mounted picker input');
+    input.value = 'unbound';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['mainOpenPDF']);
+    input.value = 'mainOpenPDF';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['mainOpenPDF']);
+
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledWith('mainOpenPDF', 0));
+    expect(session.picker.open).toBe(false);
+  });
+
+  it('localizes unbound command metadata, preview, and search', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainOpenPDF'],
+      language: 'zh-CN',
+      bindings: {},
+      execute: () => {},
+    };
+
+    await picker.open(window, session, 'commands', context);
+    const item = session.picker.filtered[0];
+    const provider = session.picker.provider;
+    if (!item || !provider) throw new Error('Expected mounted command provider');
+    expect(item.title).toBe('主窗口：打开所选条目的 PDF');
+    expect(item.meta).toBe('未绑定');
+    expect(provider.rowText(item, 0)).toBe('主窗口：打开所选条目的 PDF · 未绑定');
+    const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
+    if (!input) throw new Error('Expected mounted picker input');
+    input.value = '未绑定';
+    input.emit('input');
+    expect(session.picker.filtered.map((candidate) => candidate.id)).toEqual(['mainOpenPDF']);
+  });
+
+  it('keeps Reader and Main command catalogs context-specific', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const readerContext: CommandPaletteContext = {
+      mode: 'normal',
+      actions: READER_NORMAL_ACTIONS,
+      language: 'en',
+      bindings: {
+        'normal:z': 'zoomIn',
+        'normal:m': 'mainFuzzyAll',
+        'normal:v': 'highlightYellow',
+      },
+      execute: () => {},
+    };
+
+    await picker.open(window, session, 'commands', readerContext);
+    const readerIds = session.picker.filtered.map((item) => item.id);
+    expect(readerIds).toContain('zoomIn');
+    expect(readerIds).toContain('mainFuzzyAll');
+    expect(readerIds).not.toContain('highlightYellow');
+    expect(readerIds).not.toContain('cursorDown');
+    picker.close(session);
+
+    const mainContext: CommandPaletteContext = {
+      mode: 'main',
+      actions: MAIN_EXECUTABLE_ACTIONS,
+      language: 'en',
+      bindings: {
+        'main:x': 'mainFuzzyAll',
+        'main:y': 'zoomIn',
+        'main:z': 'toggleMarksExplorer',
+      },
+      execute: () => {},
+    };
+    await picker.open(window, session, 'commands', mainContext);
+    const mainIds = session.picker.filtered.map((item) => item.id);
+    expect(mainIds).toContain('mainFuzzyAll');
+    expect(mainIds).toContain('mainTabPick');
+    expect(mainIds).not.toContain('toggleMarksExplorer');
+    expect(mainIds).not.toContain('highlightYellow');
+  });
 
   it('closes on Escape and restores the prior focus target', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
@@ -380,6 +496,7 @@ describe('command palette provider', () => {
     );
     const context: CommandPaletteContext = {
       mode: 'main',
+      actions: ['mainNextTab'],
       language: 'en',
       bindings: { 'main:x': 'mainNextTab' },
       execute: () => {},
@@ -397,6 +514,7 @@ describe('command palette provider', () => {
     const execute = vi.fn<CommandPaletteContext['execute']>();
     const context: CommandPaletteContext = {
       mode: 'main',
+      actions: ['mainNextTab'],
       language: 'en',
       bindings: { 'main:x': 'mainNextTab' },
       execute,

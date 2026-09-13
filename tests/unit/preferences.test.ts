@@ -15,6 +15,7 @@ import {
 } from '../../src/core/preferences';
 
 class TestPreferences implements PreferenceReader {
+  readonly writes: Array<readonly [string, boolean | number | string]> = [];
   private readonly values: Record<string, boolean | number | string>;
   constructor(values: Readonly<Record<string, boolean | number | string>>) {
     this.values = { ...values };
@@ -31,6 +32,7 @@ class TestPreferences implements PreferenceReader {
   }
   set(key: string, value: boolean | number | string): void {
     this.values[key] = value;
+    this.writes.push([key, value]);
   }
 }
 
@@ -206,6 +208,55 @@ describe('binding preferences', () => {
     expect(custom.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     expect(bindingsFromPreferences(custom)['normal:H']).toBe('scrollRight');
     expect(bindingsFromPreferences(custom)['main:J']).toBe('mainNextTab');
+  });
+  it('migrates schema 6 to compact storage before versioning and remains idempotent', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 6,
+      bindings: JSON.stringify({
+        'normal:j': 'scrollDown',
+        'normal:H': 'scrollRight',
+        'normal:L': 'scrollLeft',
+        'normal:J': 'mainNextTab',
+        'normal:K': 'mainPrevTab',
+        'main:J': 'mainNextTab',
+        'main:K': 'mainPrevTab',
+        'main:x': 'mainActivate',
+        'main:enter': 'mainActivate',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    const persisted = preferences.get('bindings', '');
+    expect(JSON.parse(persisted)).toEqual({
+      'main:J': 'mainNextTab',
+      'main:K': 'mainPrevTab',
+      'main:x': 'mainActivate',
+      'normal:H': 'scrollRight',
+      'normal:J': 'mainNextTab',
+      'normal:K': 'mainPrevTab',
+      'normal:L': 'scrollLeft',
+    });
+    expect(preferences.writes).toHaveLength(2);
+    expect(preferences.writes[0]).toEqual(['bindings', persisted]);
+    expect(preferences.writes[1]).toEqual(['bindings.schemaVersion', BINDING_SCHEMA_VERSION]);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['normal:H']).toBe('scrollRight');
+    expect(resolved['normal:L']).toBe('scrollLeft');
+    expect(resolved['normal:J']).toBe('mainNextTab');
+    expect(resolved['normal:K']).toBe('mainPrevTab');
+    expect(resolved['main:J']).toBe('mainNextTab');
+    expect(resolved['main:K']).toBe('mainPrevTab');
+    expect(resolved['normal:zh']).toBe('scrollLeft');
+    expect(resolved['normal:zl']).toBe('scrollRight');
+    expect(resolved['main:H']).toBe('mainPrevTab');
+    expect(resolved['main:L']).toBe('mainNextTab');
+
+    const writeCount = preferences.writes.length;
+    migrateBindingPreferences(preferences);
+    expect(preferences.writes).toHaveLength(writeCount);
   });
 });
 

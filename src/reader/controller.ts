@@ -23,6 +23,12 @@ import {
 import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap } from '../input/bindings';
+import { isReaderDelegableMainAction } from '../main/action-capabilities';
+import {
+  READER_NORMAL_ACTIONS,
+  isReaderActionForMode,
+  type ReaderAction,
+} from './action-capabilities';
 import { focusDirectionForAction, type ActionId, type FocusDirection } from '../input/actions';
 import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
@@ -132,6 +138,9 @@ const SMOOTH_SCROLL_SPECS: Readonly<
   scrollLeft: { axis: 'x', direction: -1 },
   scrollRight: { axis: 'x', direction: 1 },
 };
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Reader action: ${String(value)}`);
+}
 
 export function createReaderController(
   dependencies: ReaderControllerDependencies,
@@ -842,6 +851,11 @@ export class ReaderSession {
     if (decision.kind === 'execute') {
       this.clearKeyGuide();
       this.updateIndicator();
+      if (!isReaderActionForMode(this.state.mode, decision.action)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       const direction = focusDirectionForAction(decision.action);
       if (direction) {
         if (this.focusDirection(direction)) {
@@ -991,6 +1005,7 @@ export class ReaderSession {
     if (!inputWouldConsume(context, key)) return false;
     const transition = advanceInput(context, key);
     if (transition.kind !== 'execute') return true;
+    if (!isReaderActionForMode(this.state.mode, transition.action)) return true;
     const direction = focusDirectionForAction(transition.action);
     return direction ? this.canFocusDirection(direction) : true;
   }
@@ -1005,12 +1020,27 @@ export class ReaderSession {
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
+    if (!isReaderActionForMode(this.state.mode, action)) {
+      this.#dependencies.controller.dependencies.logger.debug(
+        `ignored Reader action ${String(action)} in ${this.state.mode} mode`,
+      );
+      return;
+    }
+    this.executeReaderAction(action, count, pdfWindow);
+  }
+
+  private executeReaderAction(
+    action: ReaderAction,
+    count: number,
+    pdfWindow: PdfWindow | null,
+  ): void {
     if (action === 'openCommandPalette') {
       if (!pdfWindow || this.#scope.disposed) return;
       const ownerWindow = this.#dependencies.reader._window;
       if (!ownerWindow) return;
       this.#dependencies.controller.dependencies.openCommandPalette(ownerWindow, {
         mode: 'normal',
+        actions: READER_NORMAL_ACTIONS,
         bindings: this.#dependencies.bindings(),
         language: this.keyGuideLanguage(),
         execute: (nextAction, _count) => {
@@ -1024,7 +1054,7 @@ export class ReaderSession {
     }
     if (!pdfWindow) return;
     const number = Math.max(1, count || 1);
-    if (action.startsWith('main')) {
+    if (isReaderDelegableMainAction(action)) {
       this.#dependencies.controller.dependencies.delegateMain(
         action,
         count,
@@ -1095,7 +1125,6 @@ export class ReaderSession {
       case 'zoomReset':
         this.zoomReader('reset', 1);
         break;
-
       case 'scrollTop':
         this.scrollToPagePosition(pdfWindow, 'top');
         break;
@@ -1314,9 +1343,7 @@ export class ReaderSession {
         this.focusDirection('right');
         break;
       default:
-        this.#dependencies.controller.dependencies.logger.debug(
-          `unhandled reader action: ${action}`,
-        );
+        return assertNever(action);
     }
   }
 

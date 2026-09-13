@@ -1,8 +1,7 @@
 # Zotero Neo User Guide
 
-This guide documents the current shipped bindings and settings. The default
-keymap will change only after the dedicated LazyVim keymap review; consult the
-project [roadmap](ROADMAP.md) before relying on planned bindings.
+This guide describes the current candidate bindings and settings. Planned additions remain
+unavailable until their owning feature is implemented and verified.
 
 ## Contents
 
@@ -43,16 +42,16 @@ Cursor ──v──▶ Visual ──v/Escape──▶ Normal
 
 #### Scrolling
 
-| Key             | Action         |
-| --------------- | -------------- |
-| `j`             | Scroll down    |
-| `k`             | Scroll up      |
-| `zh`            | Scroll left    |
-| `zl`            | Scroll right   |
-| `Ctrl+d`        | Half-page down |
-| `Ctrl+u`        | Half-page up   |
-| `Ctrl+f`        | Full-page down |
-| `Ctrl+b`        | Full-page up   |
+| Key      | Action         |
+| -------- | -------------- |
+| `j`      | Scroll down    |
+| `k`      | Scroll up      |
+| `zh`     | Scroll left    |
+| `zl`     | Scroll right   |
+| `Ctrl+d` | Half-page down |
+| `Ctrl+u` | Half-page up   |
+| `Ctrl+f` | Full-page down |
+| `Ctrl+b` | Full-page up   |
 
 Count prefixes multiply the step — `3j` scrolls three steps, `2ctrl+f` two full
 pages, and so on.
@@ -70,17 +69,17 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 
 #### Page navigation
 
-| Key             | Action                                                                    |
-| --------------- | ------------------------------------------------------------------------- |
-| `h`             | Previous page                                                             |
-| `l`             | Next page                                                                 |
-| `gg`            | First page                                                                |
-| `G`             | Last page                                                                 |
-| `H`             | Switch to previous open tab                                               |
-| `L`             | Switch to next open tab                                                   |
-| `<space>ft`     | Open tab picker                                                           |
-| `<space>td`     | Close the active Zotero tab                                               |
-| `<space>fn`     | Search all notes in the shared picker (left: note titles, right: preview) |
+| Key         | Action                                                                    |
+| ----------- | ------------------------------------------------------------------------- |
+| `h`         | Previous page                                                             |
+| `l`         | Next page                                                                 |
+| `gg`        | First page                                                                |
+| `G`         | Last page                                                                 |
+| `H`         | Switch to previous open tab                                               |
+| `L`         | Switch to next open tab                                                   |
+| `<space>ft` | Open tab picker                                                           |
+| `<space>td` | Close the active Zotero tab                                               |
+| `<space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
@@ -110,11 +109,8 @@ Press `:` in Reader Normal, Main Normal, or Note Normal to open the command pale
 It uses the shared picker surface: a query field, filtered command rows, a preview, and
 the current key hints. There is no `<space>:` alias.
 
-- One row is shown for each unique `ActionId` currently present in the active resolved
-  bindings (`normal` for Reader, `main` for Main and Note). The launcher itself and
-  unbound actions are hidden.
-- Key hints come from the current binding table, so custom remaps appear immediately;
-  action descriptions do not contain stale shortcut text.
+- The palette lists every command that can execute in the current Reader, Main, or Note context, whether or not it has a key binding. Commands without a binding are labeled **Unbound** and remain executable from the palette.
+- Key hints come only from the current resolved bindings, so custom remaps appear immediately; unbound commands have no key hint, and action descriptions do not contain stale shortcut text.
 - Use `↑` / `↓`, `j` / `k`, or `Ctrl+j` / `Ctrl+k` to select, `Enter` to run, and
   `Escape` to close and restore the previous focus. A selected action runs in the
   originating Reader, Main, or Note context after the palette closes.
@@ -196,18 +192,18 @@ effect without restarting Zotero. Hover remains inert in either setting, and poi
 remains usable for search-input focus and result or preview scrolling. `Enter` and every other
 keyboard command remain canonical.
 
-| Key                    | Action                                                    |
-| ---------------------- | --------------------------------------------------------- |
-| `↑` / `↓`              | Move selection up / down from the query input or list      |
-| `j` / `k`              | Move selection up / down outside the search input          |
-| `Ctrl+j` / `Ctrl+k`    | Move the selected row down / up                            |
-| `Ctrl+d` / `Ctrl+u`    | Scroll the preview down / up                               |
-| `Enter`                | Apply the selected result                                  |
-| `Type`                 | Filter the picker query                                    |
-| `Ctrl+o`               | Open the selected item's PDF (item scopes only)            |
-| `y`                    | Copy the selected item's full citation (item scopes only)  |
-| `yy`                   | Copy the selected item's citekey (item scopes only)        |
-| `Escape`               | Close the picker                                           |
+| Key                 | Action                                                    |
+| ------------------- | --------------------------------------------------------- |
+| `↑` / `↓`           | Move selection up / down from the query input or list     |
+| `j` / `k`           | Move selection up / down outside the search input         |
+| `Ctrl+j` / `Ctrl+k` | Move the selected row down / up                           |
+| `Ctrl+d` / `Ctrl+u` | Scroll the preview down / up                              |
+| `Enter`             | Apply the selected result                                 |
+| `Type`              | Filter the picker query                                   |
+| `Ctrl+o`            | Open the selected item's PDF (item scopes only)           |
+| `y`                 | Copy the selected item's full citation (item scopes only) |
+| `yy`                | Copy the selected item's citekey (item scopes only)       |
+| `Escape`            | Close the picker                                          |
 
 Tab rows are selected by search, arrows, `j`/`k`, or `Ctrl+j`/`Ctrl+k`; there are no
 alphabet hint labels. `y`/`yy` copying is not available in the tab scope.
@@ -228,18 +224,18 @@ Space, `x`, `C`, and `a` remain literal input there. In Query mode, `↑` / `↓
 highlighted tag while retaining Query mode and input focus; `Tab` or `Escape` returns to List
 mode. Another `Escape` from List closes while retaining already-applied filters.
 
-| Key                        | Action                                                          |
-| -------------------------- | --------------------------------------------------------------- |
-| `j` / `k`                  | Move the highlighted tag in List mode                           |
-| `↑` / `↓`                  | Move the highlighted tag in List or Query mode                  |
-| `Ctrl+j` / `Ctrl+k`        | Move the highlighted tag down / up                              |
-| `Space` / `Enter`          | Toggle the highlighted tag immediately and keep the picker open |
-| `x`                        | Remove the highlighted tag only when it is active               |
-| `C`                        | Clear all active tag filters and keep the picker open           |
-| `a`                        | Toggle Current view / All library tag scope                     |
-| `gg` / `G`                 | Jump to first / last visible tag                                |
-| `Ctrl+d` / `Ctrl+u`        | Scroll the preview down / up                                    |
-| `Escape`                   | Query → List; List → close                                      |
+| Key                 | Action                                                          |
+| ------------------- | --------------------------------------------------------------- |
+| `j` / `k`           | Move the highlighted tag in List mode                           |
+| `↑` / `↓`           | Move the highlighted tag in List or Query mode                  |
+| `Ctrl+j` / `Ctrl+k` | Move the highlighted tag down / up                              |
+| `Space` / `Enter`   | Toggle the highlighted tag immediately and keep the picker open |
+| `x`                 | Remove the highlighted tag only when it is active               |
+| `C`                 | Clear all active tag filters and keep the picker open           |
+| `a`                 | Toggle Current view / All library tag scope                     |
+| `gg` / `G`          | Jump to first / last visible tag                                |
+| `Ctrl+d` / `Ctrl+u` | Scroll the preview down / up                                    |
+| `Escape`            | Query → List; List → close                                      |
 
 Result rows and their checkbox markers are not pointer actions. Use the keyboard
 controls above to highlight and toggle tags; these controls only alter the current
@@ -365,7 +361,7 @@ note tab), the plugin provides a minimal Vim-like layer.
 | `p` / `P`                 | Paste last yanked/deleted text after / before caret                                                  |
 | `u` / `Ctrl+r`            | Undo / redo bridge                                                                                   |
 | `<space>...`              | Main-window leader bindings are available in note Normal mode (for example `<space>fn`, `<space>ff`) |
-| `H` / `L`                 | Switch to previous / next tab from note Normal mode                                                    |
+| `H` / `L`                 | Switch to previous / next tab from note Normal mode                                                  |
 
 `dd`, `yy`, and `x` support count prefixes (for example `3dd`, `5yy`, `4x`).
 Operator+motion combos also support counts (for example `3dw`, `2y$`).
@@ -659,21 +655,23 @@ editors keeps its Zotero behavior).
 Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to the
 **Zotero Neo** tab.
 
-- Every row in the **Keybindings** table maps a _mode + key sequence_ to an
-  _action_.
-- Click the key sequence cell to edit it directly.
-- Key sequences preserve case: `b` and `B` are different. Use prefixes such as
-  `ctrl+` for modified keys.
+- Every row in the **Keybindings** table maps a _mode + key sequence_ to an _action_. Multiple rows may bind keys to the same action.
+- Edit the key sequence directly in its cell. Key sequences preserve case: `b` and `B` are different. Use prefixes such as `ctrl+` for modified keys.
 - Multi-key sequences such as `gg`, `zy`, or `yy` are supported.
-- Click **+ Add binding** to add a new row; click **×** to remove one.
-- Click **Apply bindings** to save keybinding changes.
+- Click **+ Add binding** to insert a new row immediately below the table header. The row is visible at once, starts in Normal mode with an empty Key Sequence and no selected Action, and focuses/selects the Key Sequence field. Click **×** to remove a row; removing a row truly unbinds that mode-and-sequence once the change is applied.
+- The native **Mode** menu is available on every row. Changing a row's Mode updates the Action choices to show only actions supported by that Mode.
+- The Action selector is searchable by localized action label or action identifier (case-insensitive). Use `↑` / `↓`, `Enter`, or `Escape`, or click an option to choose it.
+- An existing row whose Action is not supported by its selected Mode remains visible so it can be corrected. Such incompatible rows block **Apply bindings** until they are fixed; they are never removed automatically.
+- Rows show visible selected and hover states, separators distinguish adjacent rows, and the table headings remain visible while the table is scrolled.
+- Add, edit, and delete operations are drafts until you click **Apply bindings**. Closing Preferences without applying discards the draft and leaves the active bindings unchanged.
+- Click **Reset to defaults** to stage the default bindings. Reset is also a draft operation: the defaults take effect only after **Apply bindings**, and closing without applying abandons the reset.
+- **Apply bindings** checks all rows before saving. Empty or malformed rows, incompatible mode/action rows, and exact duplicate mode-and-sequence rows block Apply. A valid same-mode prefix pair such as `f` and `ff` is allowed but shows a warning because the shorter sequence may wait for a continuation and introduce a timeout delay.
+- If saving fails, the draft remains in the table and the failure is reported; retry **Apply bindings** after addressing the reported failure.
+- After a successful Apply, a deleted shortcut remains unbound after restart and no longer appears in the resolved Key Guide or Command Palette hints.
 - Appearance, key guide, highlight colour, mode, marks and scroll settings save automatically on change.
 - Note editor Vim mode can be turned on or off independently from the Preferences panel.
-- Click **Reset to defaults** to restore all bindings to their defaults.
 
-The preferences pane is registered with a stable pane id, so the panel opens
-directly on the last-used section even after a restart, and its dropdowns use
-native Zotero `menulist` controls to stay reliable on every open. Init
+The preferences pane reopens on the last-used section after a restart. Init
 failures are reported to `zotero-neo-startup.log` in the profile directory with
 `[prefs]`-prefixed lines.
 
@@ -754,7 +752,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `cursorBigWordForward`        | Move caret forward one WORD (Cursor mode)                                            |
 | `cursorWordBackward`          | Move caret backward one word (Cursor mode)                                           |
 | `cursorBigWordBackward`       | Move caret backward one WORD (Cursor mode)                                           |
-| `openCommandPalette`          | Open the command palette in the current Normal context                    |
+| `openCommandPalette`          | Open the command palette in the current Normal context                               |
 | `mainTabPick`                 | Open the shared picker for currently open Zotero tabs                                |
 | `mainNotesLayout`             | Search notes in the shared list/preview picker                                       |
 | `mainFuzzyAll`                | Open the shared picker over all items in the current library                         |
@@ -797,27 +795,27 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 
 ## Settings
 
-| Setting                  | Default                  | Description                                                                                                                               |
-| ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Appearance               | Auto                     | Auto follows Zotero's computed Light/Dark palette; Light and Dark force all Neo-owned panels without recolouring PDF pages or annotations |
-| Enable Visual mode       | on                       | Allow entering Visual mode with `v`                                                                                                       |
-| Enable Cursor mode       | on                       | Allow entering Cursor mode with `c`                                                                                                       |
-| Enable Insert mode       | on                       | Allow entering Insert mode with `i`                                                                                                       |
-| Note editor Vim mode     | on                       | Enable Vim-style editing in note editors (context pane and note tabs)                                                                     |
-| Scroll mode              | Constant-speed scrolling | Step / Constant-speed / Accelerating — only the active mode's parameters are shown                                                        |
-| Scroll step              | 60 px                    | Pixels scrolled per `j`/`k`/`zh`/`zl` keypress (step mode; count prefixes like `3j` always use this)                                        |
-| Scroll speed             | 2000 px/s                | Constant hold-scroll speed (constant-speed mode)                                                                                          |
-| Smooth initial speed     | 2000 px/s                | Starting speed for hold-based smooth scrolling (accelerating mode)                                                                        |
-| Smooth max speed         | 2000 px/s                | Maximum hold-scroll speed (accelerating mode)                                                                                             |
-| Smooth acceleration      | 2600 px/s²               | Speed increase while holding a scroll key (accelerating mode)                                                                             |
-| Smooth deceleration      | 4200 px/s²               | Speed decrease after key release (accelerating mode)                                                                                      |
-| Stop on release          | off                      | If enabled, stop immediately when key is released (accelerating mode)                                                                     |
-| Persist marks            | off                      | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync                                |
-| Default highlight colour | Yellow                   | Colour used when no explicit colour key is pressed                                                                                        |
-| Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                           |
-| Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                               |
-| Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                               |
-| Picker mouse rows        | off                     | When enabled, single-click selects and double-click confirms All, Collection, Tab, and Note rows; hover remains inert and Tag rows stay keyboard-only |
+| Setting                  | Default                  | Description                                                                                                                                           |
+| ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Appearance               | Auto                     | Auto follows Zotero's computed Light/Dark palette; Light and Dark force all Neo-owned panels without recolouring PDF pages or annotations             |
+| Enable Visual mode       | on                       | Allow entering Visual mode with `v`                                                                                                                   |
+| Enable Cursor mode       | on                       | Allow entering Cursor mode with `c`                                                                                                                   |
+| Enable Insert mode       | on                       | Allow entering Insert mode with `i`                                                                                                                   |
+| Note editor Vim mode     | on                       | Enable Vim-style editing in note editors (context pane and note tabs)                                                                                 |
+| Scroll mode              | Constant-speed scrolling | Step / Constant-speed / Accelerating — only the active mode's parameters are shown                                                                    |
+| Scroll step              | 60 px                    | Pixels scrolled per `j`/`k`/`zh`/`zl` keypress (step mode; count prefixes like `3j` always use this)                                                  |
+| Scroll speed             | 2000 px/s                | Constant hold-scroll speed (constant-speed mode)                                                                                                      |
+| Smooth initial speed     | 2000 px/s                | Starting speed for hold-based smooth scrolling (accelerating mode)                                                                                    |
+| Smooth max speed         | 2000 px/s                | Maximum hold-scroll speed (accelerating mode)                                                                                                         |
+| Smooth acceleration      | 2600 px/s²               | Speed increase while holding a scroll key (accelerating mode)                                                                                         |
+| Smooth deceleration      | 4200 px/s²               | Speed decrease after key release (accelerating mode)                                                                                                  |
+| Stop on release          | off                      | If enabled, stop immediately when key is released (accelerating mode)                                                                                 |
+| Persist marks            | off                      | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync                                            |
+| Default highlight colour | Yellow                   | Colour used when no explicit colour key is pressed                                                                                                    |
+| Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                                       |
+| Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
+| Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
+| Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms All, Collection, Tab, and Note rows; hover remains inert and Tag rows stay keyboard-only |
 
 Appearance, key guide, picker, and scroll settings save automatically on change.
 

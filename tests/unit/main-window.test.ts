@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ActionId } from '../../src/input/actions';
+import type { ReaderDelegableMainAction } from '../../src/main/action-capabilities';
 import type {
   MainWindow,
   MainWindowControllerApi,
@@ -633,6 +634,54 @@ describe('Main command palette', () => {
   });
 });
 
+describe('Main tab picker routing', () => {
+  it('opens the Tabs picker from the Main owner binding', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = pickerMainWindow();
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      _tabs: [
+        { id: 'library', title: 'Library', type: 'library' },
+        { id: 'reader', title: 'Reader', type: 'reader' },
+      ],
+      selectedID: 'library',
+    });
+    const controller = createMainWindowController({
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+      },
+      logger,
+      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    controller.addWindow(host.window);
+
+    const press = (key: string): void =>
+      host.keydown({
+        key,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        stopImmediatePropagation: vi.fn(),
+      } as unknown as KeyboardEvent);
+
+    press(' ');
+    press('f');
+    press('t');
+    await vi.waitFor(() =>
+      expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+    );
+    const overlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
+    const title =
+      overlay?.children[0]?.children[0]?.children[0]?.children[0]?.children[0]?.textContent;
+    expect(title).toBe('Tabs');
+    controller.shutdown();
+  });
+});
+
 describe('Reader to Main command palette integration', () => {
   it('keeps Reader ownership, active split execution, and picker chaining end to end', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
@@ -1184,8 +1233,11 @@ describe('Reader owner picker routing', () => {
         dependencies: {
           preferences: dependencies.preferences,
           logger,
-          delegateMain: (action: ActionId, count: number, ownerWindow: MainWindow | null) =>
-            main.executeFromReader(action, count, ownerWindow),
+          delegateMain: (
+            action: ReaderDelegableMainAction,
+            count: number,
+            ownerWindow: MainWindow | null,
+          ) => main.executeFromReader(action, count, ownerWindow),
         },
       },
       reader,

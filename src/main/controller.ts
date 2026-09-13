@@ -5,6 +5,13 @@ import type {
   MainWindow,
 } from '../core/contracts';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
+import {
+  MAIN_EXECUTABLE_ACTIONS,
+  isMainExecutableAction,
+  isReaderDelegableMainAction,
+  type MainExecutableAction,
+  type ReaderDelegableMainAction,
+} from './action-capabilities';
 import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
 import { resolveBindings } from '../input/bindings';
 import {
@@ -32,6 +39,9 @@ type KeyboardEventWithHandled = KeyboardEvent & {
   _zvPickerHandled?: boolean;
 };
 const NAVIGATION_REPEAT_INTERVAL_MS = 80;
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Main action: ${String(value)}`);
+}
 
 export class MainWindowController implements MainWindowControllerApi {
   readonly #dependencies: MainWindowControllerDependencies;
@@ -111,7 +121,15 @@ export class MainWindowController implements MainWindowControllerApi {
     for (const window of [...this.#sessions.keys()]) this.removeWindow(window);
   }
 
-  executeFromReader(action: ActionId, count: number, ownerWindow: MainWindow | null): void {
+  executeFromReader(
+    action: ReaderDelegableMainAction,
+    count: number,
+    ownerWindow: MainWindow | null,
+  ): void {
+    if (!isReaderDelegableMainAction(action)) {
+      this.#dependencies.logger.debug(`ignored Reader action ${String(action)}: not delegable`);
+      return;
+    }
     if (!ownerWindow) {
       this.#dependencies.logger.debug(`ignored Reader action ${action}: no owner window`);
       return;
@@ -241,6 +259,12 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (decision.kind === 'execute') {
+      if (!isMainExecutableAction(decision.action)) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearKeyGuide(window, session);
+        return;
+      }
       const direction = focusDirectionForAction(decision.action);
       if (direction) {
         if (this.#navigation.focusDirection(window, session, direction)) {
@@ -270,8 +294,8 @@ export class MainWindowController implements MainWindowControllerApi {
         session.keyBuffer = resolved.state.keyBuffer;
         session.countBuffer = resolved.state.countBuffer;
         session.keyTimer = undefined;
-        this.clearKeyGuide(window, session);
         if (resolved.kind !== 'execute') return;
+        if (!isMainExecutableAction(resolved.action)) return;
         const direction = focusDirectionForAction(resolved.action);
         if (direction) {
           this.#navigation.focusDirection(window, session, direction);
@@ -352,10 +376,24 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     count: number,
   ): void {
+    if (!isMainExecutableAction(action)) {
+      this.#dependencies.logger.debug(`ignored Main action: ${String(action)}`);
+      return;
+    }
+    this.executeMain(action, window, session, count);
+  }
+
+  private executeMain(
+    action: MainExecutableAction,
+    window: MainWindow,
+    session: MainWindowSession,
+    count: number,
+  ): void {
     switch (action) {
       case 'openCommandPalette':
         this.openCommandPalette(window, {
           mode: 'main',
+          actions: MAIN_EXECUTABLE_ACTIONS,
           bindings: this.bindings(),
           language: this.keyGuideLanguage(),
           execute: (nextAction, nextCount) => {
@@ -460,7 +498,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.collapseAll(window, session);
         break;
       default:
-        this.#dependencies.logger.debug(`Unknown main action: ${action}`);
+        return assertNever(action);
     }
   }
 }

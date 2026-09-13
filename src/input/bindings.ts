@@ -170,6 +170,9 @@ export function parseBindingKey(value: string): ParsedBindingKey | null {
   return { mode: mode as Mode, sequence };
 }
 
+export type BindingOverride = ActionId | null;
+export type BindingOverrides = Readonly<Record<string, BindingOverride>>;
+
 function parseBindingEntries(raw: unknown): [string, unknown][] {
   if (typeof raw !== 'string' || raw === '') return [];
   let parsed: unknown;
@@ -182,11 +185,19 @@ function parseBindingEntries(raw: unknown): [string, unknown][] {
   return Object.entries(parsed);
 }
 
+export function parseBindingOverrides(raw: unknown): Record<string, BindingOverride> {
+  const result: Record<string, BindingOverride> = {};
+  for (const [key, action] of parseBindingEntries(raw)) {
+    if (!parseBindingKey(key) || (action !== null && !isActionId(action))) continue;
+    result[key] = action;
+  }
+  return result;
+}
+
 export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
   const result: Record<string, ActionId> = {};
-  for (const [key, action] of parseBindingEntries(raw)) {
-    if (!parseBindingKey(key) || !isActionId(action)) continue;
-    result[key] = action;
+  for (const [key, action] of Object.entries(parseBindingOverrides(raw))) {
+    if (action !== null) result[key] = action;
   }
   return result;
 }
@@ -217,19 +228,43 @@ const REMOVED_ACTIONS: Readonly<Record<string, true>> = {
   mainAdvancedSearch: true,
 };
 
-/** Removes retired defaults and removed actions while preserving valid custom bindings. */
-export function migrateRetiredDefaultBindings(raw: unknown): string {
-  const bindings: Record<string, ActionId> = {};
+function stringifyBindingOverrides(overrides: BindingOverrides): string {
+  const sorted = Object.fromEntries(
+    Object.entries(overrides).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return Object.keys(sorted).length ? JSON.stringify(sorted) : '';
+}
+
+/** Converts the legacy full binding table into compact overrides without inferring deletions. */
+export function migrateLegacyBindingOverrides(raw: unknown): string {
+  const overrides: Record<string, ActionId> = {};
   for (const [key, action] of parseBindingEntries(raw)) {
-    if (!parseBindingKey(key) || REMOVED_ACTIONS[String(action)]) continue;
-    if (isActionId(action)) bindings[key] = action;
+    if (!parseBindingKey(key) || REMOVED_ACTIONS[String(action)] || !isActionId(action)) continue;
+    if (RETIRED_DEFAULT_BINDINGS[key as keyof typeof RETIRED_DEFAULT_BINDINGS] === action) continue;
+    if (DEFAULT_BINDINGS[key as keyof typeof DEFAULT_BINDINGS] !== action) overrides[key] = action;
   }
-  for (const [key, action] of Object.entries(RETIRED_DEFAULT_BINDINGS)) {
-    if (bindings[key] === action) delete bindings[key];
+  return stringifyBindingOverrides(overrides);
+}
+
+export function encodeBindingOverrides(bindings: BindingMap): string {
+  const overrides: Record<string, BindingOverride> = {};
+  const keys = new Set([...Object.keys(DEFAULT_BINDINGS), ...Object.keys(bindings)]);
+  for (const key of keys) {
+    const action = bindings[key];
+    const defaultAction: ActionId | undefined =
+      DEFAULT_BINDINGS[key as keyof typeof DEFAULT_BINDINGS];
+    if (action === undefined) {
+      if (defaultAction !== undefined) overrides[key] = null;
+    } else if (action !== defaultAction) overrides[key] = action;
   }
-  return Object.keys(bindings).length ? JSON.stringify(bindings) : '';
+  return stringifyBindingOverrides(overrides);
 }
 
 export function resolveBindings(raw: unknown): BindingMap {
-  return Object.freeze({ ...DEFAULT_BINDINGS, ...parseCustomBindings(raw) });
+  const bindings: Record<string, ActionId> = { ...DEFAULT_BINDINGS };
+  for (const [key, action] of Object.entries(parseBindingOverrides(raw))) {
+    if (action === null) delete bindings[key];
+    else bindings[key] = action;
+  }
+  return Object.freeze(bindings);
 }
