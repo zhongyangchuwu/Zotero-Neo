@@ -21,27 +21,51 @@ var ZoteroNeo: BootstrapController | undefined;
 
 const APP_START_TS = Date.now();
 let LOG_EPOCH = 0;
+const LOG_WRITE = 0x02;
+const LOG_CREATE = 0x08;
+const LOG_APPEND = 0x10;
+const LOG_TRUNCATE = 0x20;
 
 function log(message: string): void {
   Zotero.debug(`[ZoteroNeo] ${message}`);
 }
 
+function startupLogFile() {
+  const directory =
+    typeof Zotero.getProfileDirectory === 'function'
+      ? Zotero.getProfileDirectory()
+      : Services.dirsvc.get('ProfD', Components.interfaces.nsIFile);
+  const file = directory.clone();
+  file.append('zotero-neo-startup.log');
+  return file;
+}
+
+function writeLogFile(text: string, flags: number): void {
+  const stream = Components.classes['@mozilla.org/network/file-output-stream;1'].createInstance(
+    Components.interfaces.nsIFileOutputStream,
+  );
+  stream.init(startupLogFile(), flags, 0o600, 0);
+  stream.write(text, text.length);
+  stream.close();
+}
+
+function resetLogFile(context: BootstrapContext): void {
+  LOG_EPOCH = Date.now();
+  try {
+    writeLogFile(
+      `Zotero Neo diagnostic log\nstarted=${new Date(LOG_EPOCH).toISOString()}\naddon=${context.id} version=${context.version}\nzotero=${Zotero.version || '?'}\n`,
+      LOG_WRITE | LOG_CREATE | LOG_TRUNCATE,
+    );
+  } catch (error) {
+    log(`Diagnostic log reset failed: ${String(error)}`);
+  }
+}
+
 function logFile(message: string): void {
   try {
     if (!LOG_EPOCH) LOG_EPOCH = Date.now();
-    const directory =
-      typeof Zotero.getProfileDirectory === 'function'
-        ? Zotero.getProfileDirectory()
-        : Services.dirsvc.get('ProfD', Components.interfaces.nsIFile);
-    const file = directory.clone();
-    file.append('zotero-neo-startup.log');
-    const stream = Components.classes['@mozilla.org/network/file-output-stream;1'].createInstance(
-      Components.interfaces.nsIFileOutputStream,
-    );
-    stream.init(file, 0x02 | 0x08 | 0x10, 0o600, 0);
     const line = `${Date.now() - LOG_EPOCH}ms  ${message}\n`;
-    stream.write(line, line.length);
-    stream.close();
+    writeLogFile(line, LOG_WRITE | LOG_CREATE | LOG_APPEND);
   } catch {
     // Diagnostics must never block Bootstrap lifecycle execution.
   }
@@ -49,6 +73,7 @@ function logFile(message: string): void {
 
 async function startup(context: BootstrapContext): Promise<void> {
   const startedAt = Date.now();
+  resetLogFile(context);
   log(`startup called at ${startedAt} (app process start +${startedAt - APP_START_TS}ms)`);
   logFile(`startup called (app process +${startedAt - APP_START_TS}ms)`);
 
@@ -76,11 +101,13 @@ async function startup(context: BootstrapContext): Promise<void> {
     ZoteroNeo.init(context);
   } catch (error) {
     log(`Init after initialization failed: ${String(error)}`);
+    logFile(`init after initialization FAILED: ${String(error)}`);
   }
   try {
     for (const window of Zotero.getMainWindows()) ZoteroNeo.addToWindow(window);
   } catch (error) {
     log(`Window injection after init failed: ${String(error)}`);
+    logFile(`window injection after init FAILED: ${String(error)}`);
   }
 }
 

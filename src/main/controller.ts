@@ -1,33 +1,46 @@
 import type {
+  CommandPaletteContext,
   MainWindowControllerApi,
   MainWindowControllerDependencies,
   MainWindow,
 } from '../core/contracts';
-import type { ActionId } from '../input/actions';
+import { focusDirectionForAction, type ActionId } from '../input/actions';
+import {
+  MAIN_EXECUTABLE_ACTIONS,
+  isMainExecutableAction,
+  isReaderDelegableMainAction,
+  type MainExecutableAction,
+  type ReaderDelegableMainAction,
+} from './action-capabilities';
+import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
 import { resolveBindings } from '../input/bindings';
-import { advanceInput, resolveInputTimeout } from '../input/engine';
+import {
+  advanceInput,
+  backspaceLeaderInput,
+  cancelLeaderInput,
+  resolveInputTimeout,
+} from '../input/engine';
+import {
+  KEY_GUIDE_CONFIG,
+  keyGuideLanguage,
+  type KeyGuideLanguage,
+} from '../input/key-guide-config';
+import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
+import { keyString } from '../input/keys';
 import { isEditableElement } from '../platform/dom';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
-import { NotesLayout } from './notes-layout';
 import { NoteEditor } from './note-editor';
+import { mainReaderForTab, selectedMainTabID } from './host';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
   _zvPickerHandled?: boolean;
 };
 const NAVIGATION_REPEAT_INTERVAL_MS = 80;
-
-function keyString(event: KeyboardEvent): string {
-  const key = event.key === ' ' ? ' ' : event.key.toLowerCase();
-  if (!key) return '';
-  const modifier = event.ctrlKey || event.metaKey ? 'ctrl+' : event.altKey ? 'alt+' : '';
-  return modifier
-    ? `${modifier}${key}`
-    : event.key.length === 1 && event.shiftKey
-      ? event.key
-      : key;
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Main action: ${String(value)}`);
 }
 
 export class MainWindowController implements MainWindowControllerApi {
@@ -35,21 +48,37 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #sessions = new Map<MainWindow, MainWindowSession>();
   readonly #navigation: MainNavigation;
   readonly #picker: FuzzyPicker;
-  readonly #notes: NotesLayout;
   readonly #noteEditor: NoteEditor;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
-    this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation);
-    this.#notes = new NotesLayout(dependencies.logger, this.#navigation);
-    this.#noteEditor = new NoteEditor(dependencies.logger, this.#navigation, () => this.bindings());
+    this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
+      pickerMouseEnabled(dependencies.preferences),
+    );
+    this.#noteEditor = new NoteEditor(
+      dependencies.logger,
+      this.#navigation,
+      () => this.bindings(),
+      {
+        refresh: (window, session) =>
+          this.refreshKeyGuide(
+            window,
+            session,
+            session.note.mainBuffer,
+            (prefix) => session.note.mainBuffer === prefix,
+          ),
+        clear: (window, session) => this.clearKeyGuide(window, session),
+      },
+    );
   }
 
   addWindow(window: MainWindow): void {
     if (this.#sessions.has(window)) return;
     const session = new MainWindowSession(window, this.#dependencies.preferences);
     this.#sessions.set(window, session);
+    this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
+    this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     const scan = (): void => {
       this.rescan(window);
       this.#noteEditor.sync(
@@ -75,7 +104,6 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.add(() => {
       this.#picker.close(session);
-      this.#notes.close(session);
       this.#noteEditor.clear(session);
     });
   }
@@ -84,6 +112,8 @@ export class MainWindowController implements MainWindowControllerApi {
     const session = this.#sessions.get(window);
     if (!session) return;
     this.#sessions.delete(window);
+    this.#dependencies.logger.debug(`main window detached sessions=${this.#sessions.size}`);
+    this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`);
     session.dispose();
   }
 
@@ -91,11 +121,45 @@ export class MainWindowController implements MainWindowControllerApi {
     for (const window of [...this.#sessions.keys()]) this.removeWindow(window);
   }
 
-  executeFromReader(action: ActionId, count: number): void {
-    const first = this.#sessions.entries().next().value as
-      | [MainWindow, MainWindowSession]
-      | undefined;
-    if (first) this.execute(action, first[0], first[1], count);
+  executeFromReader(
+    action: ReaderDelegableMainAction,
+    count: number,
+    ownerWindow: MainWindow | null,
+  ): void {
+    if (!isReaderDelegableMainAction(action)) {
+      this.#dependencies.logger.debug(`ignored Reader action ${String(action)}: not delegable`);
+      return;
+    }
+    if (!ownerWindow) {
+      this.#dependencies.logger.debug(`ignored Reader action ${action}: no owner window`);
+      return;
+    }
+    const session = this.#sessions.get(ownerWindow);
+    if (!session) {
+      this.#dependencies.logger.debug(`ignored Reader action ${action}: owner window detached`);
+      return;
+    }
+    this.execute(action, ownerWindow, session, count);
+  }
+
+  openCommandPalette(window: MainWindow, context: CommandPaletteContext): void {
+    const session = this.#sessions.get(window);
+    if (!session) {
+      this.#dependencies.logger.debug('ignored command palette: owner window detached');
+      return;
+    }
+    const execute = context.execute;
+    const ownerContext: CommandPaletteContext = {
+      ...context,
+      execute: (action, count) => {
+        if (this.#sessions.get(window) !== session) {
+          this.#dependencies.logger.debug('ignored command palette action: owner window detached');
+          return;
+        }
+        execute(action, count);
+      },
+    };
+    void this.#picker.open(window, session, 'commands', ownerContext);
   }
 
   private bindings() {
@@ -114,10 +178,6 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#picker.onKeyDown(event, window, session);
       return;
     }
-    if (session.notes.open) {
-      this.#notes.onKeyDown(event, window, session);
-      return;
-    }
     if (
       this.#dependencies.preferences.get('noteEditor.enabled', true) &&
       this.#noteEditor.isStandalone(window)
@@ -129,6 +189,7 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     const active = window.document.activeElement;
     if (isEditableElement(active)) {
+      this.clearKeyGuide(window, session);
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -136,8 +197,7 @@ export class MainWindowController implements MainWindowControllerApi {
       }
       return;
     }
-    const tabID = (window as unknown as { Zotero_Tabs?: { selectedID?: string } }).Zotero_Tabs
-      ?.selectedID;
+    const tabID = selectedMainTabID(window);
     if (active?.localName === 'browser' || (tabID && this.isReaderTab(tabID))) {
       this.#dependencies.reader.forwardKey(event, window);
       return;
@@ -145,45 +205,104 @@ export class MainWindowController implements MainWindowControllerApi {
     const key = keyString(event);
     if (!key) return;
     const bindings = this.bindings();
-    const direct = bindings[`main:${key}`];
-    if (direct === 'mainPrevTab' || direct === 'mainNextTab') {
-      event.preventDefault();
-      event.stopPropagation();
-      this.execute(direct, window, session, 1);
-      return;
+    const leaderState = {
+      mode: 'main' as const,
+      keyBuffer: session.keyBuffer,
+      countBuffer: session.countBuffer,
+    };
+    if (event.key.toLowerCase() === 'escape') {
+      const cancelled = cancelLeaderInput(leaderState);
+      if (cancelled) {
+        event.preventDefault();
+        event.stopPropagation();
+        session.keyBuffer = cancelled.keyBuffer;
+        session.countBuffer = cancelled.countBuffer;
+        session.inputRevision += 1;
+        window.clearTimeout(session.keyTimer);
+        session.keyTimer = undefined;
+        this.clearKeyGuide(window, session);
+        return;
+      }
     }
+    if (event.key.toLowerCase() === 'backspace') {
+      const backed = backspaceLeaderInput(leaderState);
+      if (backed) {
+        event.preventDefault();
+        event.stopPropagation();
+        session.keyBuffer = backed.keyBuffer;
+        session.countBuffer = backed.countBuffer;
+        session.inputRevision += 1;
+        window.clearTimeout(session.keyTimer);
+        session.keyTimer = undefined;
+        this.refreshKeyGuide(window, session);
+        return;
+      }
+    }
+    session.inputRevision += 1;
+    const revision = session.inputRevision;
     const decision = advanceInput(
-      { mode: 'main', keyBuffer: session.keyBuffer, countBuffer: session.countBuffer },
+      {
+        mode: 'main',
+        keyBuffer: session.keyBuffer,
+        countBuffer: session.countBuffer,
+        bindings,
+        allowCountPrefix: true,
+      },
       key,
-      bindings,
-      { allowCountPrefix: true },
     );
-    if (decision.kind === 'pass') {
-      session.keyBuffer = decision.state.keyBuffer;
-      session.countBuffer = decision.state.countBuffer;
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
     session.keyBuffer = decision.state.keyBuffer;
     session.countBuffer = decision.state.countBuffer;
     window.clearTimeout(session.keyTimer);
     session.keyTimer = undefined;
+    if (decision.kind === 'pass') {
+      this.refreshKeyGuide(window, session);
+      return;
+    }
     if (decision.kind === 'execute') {
+      if (!isMainExecutableAction(decision.action)) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.clearKeyGuide(window, session);
+        return;
+      }
+      const direction = focusDirectionForAction(decision.action);
+      if (direction) {
+        if (this.#navigation.focusDirection(window, session, direction)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearKeyGuide(window, session);
       if (this.acceptNavigationRepeat(decision.action, event, session)) {
         this.execute(decision.action, window, session, decision.count);
       }
       return;
     }
-    if (decision.timeoutMs !== null) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.refreshKeyGuide(window, session);
+    const timeoutMs = isLeaderPrefix(decision.state.keyBuffer)
+      ? KEY_GUIDE_CONFIG.idleTimeoutMs
+      : decision.timeoutMs;
+    if (timeoutMs !== null) {
       session.keyTimer = window.setTimeout(() => {
+        if (session.inputRevision !== revision) return;
         const resolved = resolveInputTimeout(decision);
         session.keyBuffer = resolved.state.keyBuffer;
         session.countBuffer = resolved.state.countBuffer;
         session.keyTimer = undefined;
-        if (resolved.kind === 'execute')
-          this.execute(resolved.action, window, session, resolved.count);
-      }, decision.timeoutMs);
+        if (resolved.kind !== 'execute') return;
+        if (!isMainExecutableAction(resolved.action)) return;
+        const direction = focusDirectionForAction(resolved.action);
+        if (direction) {
+          this.#navigation.focusDirection(window, session, direction);
+          return;
+        }
+        this.execute(resolved.action, window, session, resolved.count);
+      }, timeoutMs);
     }
   }
 
@@ -206,12 +325,49 @@ export class MainWindowController implements MainWindowControllerApi {
     return true;
   }
 
-  private isReaderTab(tabID: string): boolean {
-    try {
-      return !!Zotero.Reader.getByTabID?.(tabID);
-    } catch {
-      return false;
+  private clearKeyGuide(window: MainWindow, session: MainWindowSession): void {
+    window.clearTimeout(session.keyGuideTimer);
+    session.keyGuideTimer = undefined;
+    session.keyGuide.hide();
+  }
+
+  private refreshKeyGuide(
+    window: MainWindow,
+    session: MainWindowSession,
+    prefix = session.keyBuffer,
+    isCurrent = (candidate: string) => session.keyBuffer === candidate,
+  ): void {
+    const config = keyGuideConfig(this.#dependencies.preferences);
+    if (!config.enabled || !isLeaderPrefix(prefix)) {
+      this.clearKeyGuide(window, session);
+      return;
     }
+    const entries = leaderGuideEntries(this.bindings(), 'main', prefix, this.keyGuideLanguage());
+    if (!entries.length) {
+      this.clearKeyGuide(window, session);
+      return;
+    }
+    if (session.keyGuide.visible) {
+      session.keyGuide.show(window.document, session.theme, prefix, entries, config.fontSizePx);
+      return;
+    }
+    window.clearTimeout(session.keyGuideTimer);
+    session.keyGuideTimer = window.setTimeout(() => {
+      session.keyGuideTimer = undefined;
+      if (!isCurrent(prefix)) return;
+      session.keyGuide.show(window.document, session.theme, prefix, entries, config.fontSizePx);
+    }, config.delayMs);
+  }
+
+  private keyGuideLanguage(): KeyGuideLanguage {
+    return keyGuideLanguage(
+      this.#dependencies.preferences.get('language', ''),
+      typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
+    );
+  }
+
+  private isReaderTab(tabID: string): boolean {
+    return !!mainReaderForTab(tabID);
   }
 
   private execute(
@@ -220,7 +376,32 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     count: number,
   ): void {
+    if (!isMainExecutableAction(action)) {
+      this.#dependencies.logger.debug(`ignored Main action: ${String(action)}`);
+      return;
+    }
+    this.executeMain(action, window, session, count);
+  }
+
+  private executeMain(
+    action: MainExecutableAction,
+    window: MainWindow,
+    session: MainWindowSession,
+    count: number,
+  ): void {
     switch (action) {
+      case 'openCommandPalette':
+        this.openCommandPalette(window, {
+          mode: 'main',
+          actions: MAIN_EXECUTABLE_ACTIONS,
+          bindings: this.bindings(),
+          language: this.keyGuideLanguage(),
+          execute: (nextAction, nextCount) => {
+            if (this.#sessions.get(window) === session)
+              this.execute(nextAction, window, session, nextCount);
+          },
+        });
+        break;
       case 'mainFuzzyAll':
         void this.#picker.open(window, session, 'all');
         break;
@@ -231,7 +412,13 @@ export class MainWindowController implements MainWindowControllerApi {
         void this.#picker.open(window, session, 'tabs');
         break;
       case 'mainNotesLayout':
-        void this.#notes.toggle(window, session);
+        void this.#picker.open(window, session, 'notes');
+        break;
+      case 'mainTrashItems':
+        void this.#navigation.trashSelectedItems(window, session);
+        break;
+      case 'mainRestoreTrashedItems':
+        void this.#navigation.restoreLastTrashedItems(session);
         break;
       case 'mainFocusTree':
       case 'mainFocusLeft':
@@ -240,6 +427,18 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainFocusItems':
       case 'mainFocusRight':
         this.#navigation.focusPanel(window, session, 'items');
+        break;
+      case 'focusReaderSplitLeft':
+        this.#navigation.focusDirection(window, session, 'left');
+        break;
+      case 'focusReaderSplitDown':
+        this.#navigation.focusDirection(window, session, 'down');
+        break;
+      case 'focusReaderSplitUp':
+        this.#navigation.focusDirection(window, session, 'up');
+        break;
+      case 'focusReaderSplitRight':
+        this.#navigation.focusDirection(window, session, 'right');
         break;
       case 'mainYankCitekey':
         this.#navigation.yankCitekey(window, session);
@@ -259,8 +458,8 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainNextTab':
         this.#navigation.cycleTab(window, 1);
         break;
-      case 'mainFocusSearch':
-        this.#navigation.focusSearch(window);
+      case 'mainTagPicker':
+        void this.#picker.open(window, session, 'tags');
         break;
       case 'mainNavDown':
         this.#navigation.navigate(window, session, 1, count);
@@ -299,7 +498,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.collapseAll(window, session);
         break;
       default:
-        this.#dependencies.logger.debug(`Unknown main action: ${action}`);
+        return assertNever(action);
     }
   }
 }

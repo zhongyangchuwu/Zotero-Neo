@@ -75,6 +75,27 @@ document owns its own `ThemeManager`; preference, media-query, and root-attribut
 listeners are disposed with that session. Apply variables only to Neo roots —
 never recolour Zotero documents, PDF pages, annotation colours, or link hints.
 
+### Module ownership
+
+`src/input/engine.ts` is a pure, stateless reducer for key normalization inputs:
+matching, count/prefix transitions, leader cancellation/backspace transforms, timeout
+resolution, and side-effect-free consumption prediction. Main and Reader sessions retain
+event gates, timers, guides, focus decisions, and action execution.
+
+`src/main/host.ts` is the narrow boundary for private main-window APIs: tabs, panes,
+selected items, reader-tab context, and tag filtering. Main-window control flow should use
+these named adapters rather than spreading structural casts through feature code.
+
+`src/main/picker/` owns one generic picker shell plus direct finite providers for items,
+tabs, notes, tags, and commands. The shell owns lifecycle, rendering, focus, queueing, and
+containment; providers own their scope-specific loading, previews, activation, and commands.
+It has no generic fallback provider or module-global provider state.
+
+Reader outline and marks retain separate domain behavior. `src/reader/sidebar-overlay.ts`
+coordinates only their view-local lifecycle: mutual exclusion, theme-root cleanup, PDF-view
+replacement cleanup, and delayed focus restoration. Outline owns loading, tree navigation,
+expansion, hints, and destination navigation; Marks owns persistence, jumping, and deletion.
+
 ## Reader keyboard forwarding
 
 Zotero forwards PDF keys through `PdfView._onKeyDown`, outside normal DOM event
@@ -85,6 +106,80 @@ pair whenever key handling or reader injection changes.
 
 The patch is reapplied as reader views are recreated. Restored reader tabs need
 the periodic discovery sweep because they can miss early toolbar events.
+
+The default Reader Normal `H`/`L` tab actions and the `zh`/`zl` pan chord are consumed by
+Neo's resolved `BindingMap` before Zotero forwarding; retired unbound `J`/`K` keys remain native.
+Smooth-hold checks still consult the resolved action, so the default H/L tab actions cannot start
+horizontal pan, while an explicit custom H/L scroll remap remains eligible.
+
+Reader Normal `+`/`-` and `zI`/`zO` delegate to Zotero's `InternalReader.zoomIn()` /
+`zoomOut()` on the active `_lastView`; `=`/`z0` delegate to `zoomReset()` for fit-page-width
+semantics. Missing or throwing host methods fail closed with `Zoom unavailable`.
+
+Directional focus reuses the executable binding dispatcher. Reader split movement
+calls `InternalReader.focusView(primary)` based on `splitType`; every Reader command
+then resolves the same active view from the event source and Zotero's
+`_lastViewPrimary` state before consulting Gecko focus. This keeps page turns,
+scrolling, history, and link actions on the split most recently focused by mouse or
+keyboard. Right-edge movement uses Zotero's context-pane focus callback. Main-window
+movement ranks visible pane rectangles in the requested half-plane, prefers candidates
+aligned on the movement axis, and never wraps. A directional key is prevented only
+after a target is found.
+
+`src/main/picker/` owns one search shell for library items, current-collection
+items, tabs, notes, tags, and commands. Scope providers supply rows, preview content,
+activation, and scope-only commands; they do not bypass the resolved `BindingMap`.
+The internal fuzzy
+ranker is a small allocation-conscious subsequence scorer with consecutive and
+word-boundary bonuses. Do not import Zotero's private DevTools copy of
+`fuzzaldrin-plus`: `resource://devtools/...` is not a stable add-on API, and adding an
+npm fuzzy package would violate the zero-runtime-dependency XPI contract.
+Picker result rows are keyboard-only by default; the shared shell reads the injected
+`picker.mouse.enabled` preference at pointer-event time. When enabled, delegated click handling
+selects ordinary item/collection/tab/note rows and delegated double-click handling confirms
+through the existing provider activation queue; hover remains inert. Query focus and result or
+preview scrolling remain pointer-enabled in both states. Tag rows and markers are hard-excluded
+from pointer selection/toggling because Tag provider mutations are keyboard-only. Provider
+`onKeyDown` still returns handled status before shell generic navigation and Enter handling, so
+scope-specific commands retain precedence.
+
+The shell owns unmodified ArrowUp/ArrowDown movement before provider callbacks when the
+search or list pane is active, including Tag Query mode; it moves the highlight exactly once
+like Ctrl+k/Ctrl+j without changing query focus or Tag mode. Providers must not duplicate this
+movement. Tag Query keeps its deliberate Tab/Escape return-to-List transitions.
+
+The command provider is a finite projection of the active resolved `BindingMap`: it
+deduplicates bound `ActionId`s, displays key hints separately from key-independent
+`ACTION_LABELS`, and hides the launcher itself. Its explicit context carries mode, language,
+bindings, and an executor callback. The shell's `closeBeforeActivate` contract closes the
+palette before invoking that callback, so an action can safely open another picker without a
+second dispatcher, synthetic key event, or display-only command registry. Reader contexts
+revalidate session/view ownership through their executor and never fall back to another window.
+
+Bibliographic picker previews are deliberately bounded and synchronous: they retain the
+existing title, creator, year, and citation-key metadata, then add attachment and child-note
+counts plus up to six safely accessible filenames/titles. The picker does not render PDF pages;
+Zotero exposes no stable add-on first-page thumbnail API, so progressive PDF preview remains
+deferred rather than relying on private Reader/PDF.js internals.
+
+Note rows search the normalized title and normalized HTML-stripped body from `getNote()` in the
+same in-memory snapshot used for ordering. Current-item notes remain first. No persisted index or
+runtime search dependency is required; Zotero's native Search query remains the library-scope
+loader and local matching covers body content consistently.
+
+The Tag provider reads the active collection row's `tags` set and `getTags()` scope,
+then applies its own `Set<string>` through `itemsView.setFilter('tags', ...)`, matching
+Zotero's native AND semantics. It mirrors selection to a live native tag selector only
+after a successful native filter refresh, so failed updates resynchronize from the row
+state and leave the picker open. Selected tags are pinned by tag identity above a stable picker snapshot; scope toggle is the only source reload. Tag input has explicit List and Query modes stored independently from physical DOM focus: focus events never change tag mode, while List `/`/`Tab` and explicit input clicks enter Query. Query preserves literal text input, and hover never moves the keyboard highlight. Picker-owned commands prevent default, stop propagation, and stop immediate propagation so host Tab traversal cannot run after Neo handles it. `x` and `C` alter only the filter, never tag data or item-tag links.
+
+The Notes provider resolves reader context through the active Zotero tab and reader
+attachment before consulting the main-window selection. Its primary note query uses
+`Zotero.Search.addCondition()` after `schemaUpdatePromise`; a failed search falls back
+to `Zotero.Items.getAll()` for that library, and malformed individual notes are skipped
+rather than failing the picker. Note and main-item deletion use
+`Zotero.Items.trashTx()` so Zotero stages native undo data; Neo tracks only the last ID
+batch as a targeted restore fallback and never permanently erases these items.
 
 ## PDF link hints
 
@@ -136,21 +231,34 @@ src/
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and input matcher
   main/                    main-window controller and UI features
+  main/host.ts              narrow private-Zotero main-window boundary
   reader/                  reader lifecycle, input, annotations, marks, outline
   preferences/index.ts     preference-pane behavior and localization
   platform/                narrow Gecko and optional-addon boundaries
   ui/theme.ts              shared appearance resolution and semantic palette
 ```
 
-`src/input/` is the canonical source for bindings and bilingual action labels.
-The preference pane imports that metadata directly; do not recreate a second
-binding table. `tools/build.mjs` creates deterministic ZIP bytes with the eight
-packaged members verified by `tools/check-package.mjs`.
+`src/input/` is the canonical source for executable bindings and bilingual
+action labels. `key-guide-config.ts` contains only localized Space-leader group
+and display labels plus timing and sizing defaults; `key-guide.ts` projects currently valid
+continuations from resolved bindings, so it never owns a second command map.
+The preference pane imports this metadata directly. `tools/build.mjs` creates
+deterministic ZIP bytes with the twelve packaged members verified by
+`tools/check-package.mjs`.
+
+`src/main/host.ts` owns the narrow structural boundary for private Zotero window, Reader,
+tag, and item APIs used by main-window features. `src/main/picker/` owns the picker shell
+and direct scope providers; keep host casts in `main/host.ts` rather than picker UI/control-
+flow code. Picker openings carry a generation token: close invalidates pending loads and
+queued actions, so stale host responses cannot repaint a later picker. Actions that require
+a selected item run through one per-session queue; activation completes before a dependent
+command, such as `Ctrl+o`, reads Zotero's selected item.
 
 ## Diagnostics
 
-Use `Zotero.debug('[ZoteroNeo] ...')` for unexpected conditions. Startup and
-first-injection diagnostics are also written to `zotero-neo-startup.log` in the
-Zotero profile. Logs are state-change based: idle reader discovery must not
-append recurring rescan entries. Verify any change to reader injection with
-restored and newly opened readers.
+Use `Zotero.debug('[ZoteroNeo] ...')` for unexpected conditions. Each add-on startup truncates
+`zotero-neo-startup.log` in the Zotero profile and writes the add-on/Zotero versions before
+appending state-change diagnostics for Bootstrap, main-window attachment, Reader injection,
+picker mount/load/close, tag-filter changes, and contextual failures. Idle reader discovery
+must not append recurring rescan entries. Verify Reader injection with restored and newly opened
+readers, and verify picker work against the mounted list/preview DOM rather than session fields alone.

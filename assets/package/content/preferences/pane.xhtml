@@ -27,13 +27,78 @@
     }
     #zv-bindings-table-wrap { border-color: var(--zotero-neo-border, #ccc) !important; }
     #zv-bindings-table { color: var(--zotero-neo-text, inherit); }
-    #zv-bindings-table thead tr { background: var(--zotero-neo-elevated, #f0f0f0) !important; }
-    #zv-bindings-table th { border-bottom-color: var(--zotero-neo-border, #ccc) !important; }
-    #zv-bindings-table tbody tr[data-mode="normal"] { background: var(--zotero-neo-mode-normal, #e8f0fe); }
-    #zv-bindings-table tbody tr[data-mode="visual"] { background: var(--zotero-neo-mode-visual, #e8f5e9); }
-    #zv-bindings-table tbody tr[data-mode="cursor"] { background: var(--zotero-neo-mode-cursor, #fff3e0); }
-    #zv-bindings-table tbody tr[data-mode="insert"] { background: var(--zotero-neo-mode-insert, #fff8e1); }
-    #zv-bindings-table tbody tr[data-mode="main"] { background: var(--zotero-neo-mode-main, #f0e8ff); }
+    #zv-bindings-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--zotero-neo-elevated, #f0f0f0) !important;
+      border-bottom-color: var(--zotero-neo-border, #ccc) !important;
+    }
+    #zv-bindings-table tbody tr.zv-binding-mode-normal { background: var(--zotero-neo-mode-normal, #e8f0fe); }
+    #zv-bindings-table tbody tr.zv-binding-mode-visual { background: var(--zotero-neo-mode-visual, #e8f5e9); }
+    #zv-bindings-table tbody tr.zv-binding-mode-cursor { background: var(--zotero-neo-mode-cursor, #fff3e0); }
+    #zv-bindings-table tbody tr.zv-binding-mode-insert { background: var(--zotero-neo-mode-insert, #fff8e1); }
+    #zv-bindings-table tbody tr.zv-binding-mode-main { background: var(--zotero-neo-mode-main, #f0e8ff); }
+    #zv-bindings-table tbody tr.zv-binding-row-error { box-shadow: inset 4px 0 var(--zotero-neo-error, #c62828); }
+    #zv-bindings-table tbody tr.zv-binding-row-warning { box-shadow: inset 4px 0 var(--zotero-neo-warning, #b26a00); }
+    #zv-bindings-table .zv-binding-action-results[hidden] { display: none; }
+    #zv-bindings-table .zv-binding-action-results {
+      max-height: 180px;
+      overflow-y: auto;
+      margin-top: 2px;
+      border: 1px solid var(--zotero-neo-border, #ccc);
+      border-radius: 3px;
+      background: var(--zotero-neo-input, transparent);
+    }
+    #zv-bindings-table .zv-binding-action-result {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 3px 5px;
+      color: var(--zotero-neo-text, inherit);
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-top: 1px solid var(--zotero-neo-border, #ccc);
+      cursor: pointer;
+    }
+    #zv-bindings-table .zv-binding-action-result:first-child { border-top: 0; }
+    #zv-bindings-table .zv-binding-action-result[aria-selected="true"] {
+      color: var(--zotero-neo-selected-text, inherit);
+      background: var(--zotero-neo-selected, #dbeafe);
+    }
+    #zv-bindings-table .zv-binding-action-result:hover {
+      color: var(--zotero-neo-text, inherit);
+      background: var(--zotero-neo-elevated, #f0f0f0);
+    }
+    #zv-bindings-table .zv-binding-action-result[aria-selected="true"]:hover {
+      color: var(--zotero-neo-selected-text, inherit);
+      background: var(--zotero-neo-selected, #dbeafe);
+    }
+    #zv-bindings-table .zv-binding-action-result:focus-visible {
+      outline: 2px solid var(--zotero-neo-focus-ring, Highlight);
+      outline-offset: -2px;
+    }
+    #zv-bindings-table .zv-binding-mode-cell,
+    #zv-bindings-table .zv-binding-key-cell,
+    #zv-bindings-table .zv-binding-action-cell,
+    #zv-bindings-table .zv-binding-delete-cell {
+      padding: 5px 10px;
+      vertical-align: top;
+      border-bottom: 1px solid var(--zotero-neo-border, #ccc);
+    }
+    #zv-bindings-table .zv-binding-mode-cell { width: 80px; }
+    #zv-bindings-table .zv-binding-key-cell { width: 140px; }
+    #zv-bindings-table .zv-binding-mode { padding: 2px 4px; font-family: monospace; }
+    #zv-bindings-table .zv-binding-key { width: 120px; box-sizing: border-box; padding: 2px 4px; font-family: monospace; }
+    #zv-bindings-table .zv-binding-action { display: flex; min-width: 0; flex-direction: column; }
+    #zv-bindings-table .zv-binding-action-input { width: 100%; box-sizing: border-box; padding: 2px 4px; }
+    #zv-bindings-table .zv-binding-delete-cell { width: 50px; text-align: center; }
+    #zv-bindings-table .zv-binding-delete { padding: 0 6px; font-size: 1.1em; cursor: pointer; }
+    .zv-status.zv-binding-status-invalid,
+    .zv-status.zv-binding-save-save-failed { color: var(--zotero-neo-error, #c62828) !important; }
+    .zv-status.zv-binding-status-warning { color: var(--zotero-neo-warning, #b26a00) !important; }
+    .zv-status.zv-binding-status-dirty { color: var(--zotero-neo-warning, #b26a00) !important; }
     .zv-divider { border-color: var(--zotero-neo-border, #ddd) !important; }
     .zv-status { color: var(--zotero-neo-success, #287a43) !important; }
   </html:style>
@@ -103,7 +168,7 @@
     <label data-i18n="zv.scroll" value="Scroll" style="font-weight: bold;" />
     <html:p style="margin: 4px 0 10px; font-size: 0.9em;"
       data-i18n="zv.scroll.help">
-      Pick one scrolling mode for j/k/H/L — only its parameters are shown.
+      Pick one scrolling mode for j/k/zh/zl — only its parameters are shown.
     </html:p>
     <hbox align="center">
       <html:label for="zv-scroll-mode"
@@ -191,6 +256,46 @@
     </hbox>
   </groupbox>
 
+  <!-- ── Key guide ─────────────────────────────────────────────────────── -->
+  <groupbox>
+    <label data-i18n="zv.keyGuide" value="Key guide" style="font-weight: bold;" />
+    <html:p style="margin: 4px 0 8px; font-size: 0.9em;" data-i18n="zv.keyGuide.help">
+      Show valid Space-leader continuations in Normal mode without intercepting text input.
+    </html:p>
+    <hbox align="center">
+      <checkbox id="zv-key-guide-enabled" data-i18n="zv.keyGuide.enabled"
+        label="Show the Space-leader key guide" />
+    </hbox>
+    <hbox align="center" style="margin-top: 8px;">
+      <html:label for="zv-key-guide-delay" data-i18n="zv.keyGuide.delay"
+        style="min-width: 180px; font-weight: 600;">Display delay (ms)</html:label>
+      <html:input type="number" id="zv-key-guide-delay" step="25"
+        style="width: 90px; padding: 3px 6px;" />
+      <html:span id="zv-key-guide-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
+    </hbox>
+    <hbox align="center" style="margin-top: 8px;">
+      <html:label for="zv-key-guide-font-size" data-i18n="zv.keyGuide.fontSize"
+        style="min-width: 180px; font-weight: 600;">Font size (px)</html:label>
+      <html:input type="number" id="zv-key-guide-font-size" step="1"
+        style="width: 90px; padding: 3px 6px;" />
+    </hbox>
+  </groupbox>
+
+  <!-- ── Picker ─────────────────────────────────────────────────────────── -->
+  <groupbox>
+    <label data-i18n="zv.picker" value="Picker" style="font-weight: bold;" />
+    <html:p style="margin: 4px 0 8px; font-size: 0.9em;" data-i18n="zv.picker.help">
+      Enable mouse selection and double-click confirmation for item, collection, tab, and note rows. Tag filters remain keyboard-only.
+    </html:p>
+    <hbox align="center">
+      <checkbox id="zv-picker-mouse-enabled" data-i18n="zv.picker.mouse.enabled"
+        label="Enable mouse row selection and double-click confirmation" />
+      <html:span id="zv-picker-mouse-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
+    </hbox>
+  </groupbox>
+
   <!-- ── Default highlight colour ───────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.color.group" value="Default highlight colour" style="font-weight: bold;" />
@@ -224,7 +329,7 @@
       <html:br />
       <html:span data-i18n="zv.bindings.help2a">Click a </html:span><html:strong data-i18n="zv.bindings.help2b">Key sequence</html:strong><html:span data-i18n="zv.bindings.help2c"> cell to edit it.</html:span>
       <html:br />
-      <html:span data-i18n="zv.bindings.help3a">Use lowercase letters; prefix with </html:span><html:code>ctrl+</html:code><html:span data-i18n="zv.bindings.help3b"> for Ctrl/Cmd.</html:span>
+      <html:span data-i18n="zv.bindings.help3a">Letter case is preserved; prefix with </html:span><html:code>ctrl+</html:code><html:span data-i18n="zv.bindings.help3b"> for Ctrl/Cmd.</html:span>
       <html:br />
       <html:span data-i18n="zv.bindings.help4a">Multi-key sequences such as </html:span><html:code>gg</html:code><html:span data-i18n="zv.bindings.help4b"> or </html:span><html:code>zy</html:code><html:span data-i18n="zv.bindings.help4c"> are supported.</html:span>
     </html:p>
@@ -241,7 +346,7 @@
       <html:table id="zv-bindings-table"
         style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
         <html:thead>
-          <html:tr style="position: sticky; top: 0;">
+          <html:tr>
             <html:th data-i18n="zv.bindings.mode" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid; width: 80px;">Mode</html:th>
             <html:th data-i18n="zv.bindings.key" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid; width: 140px;">Key sequence</html:th>
             <html:th data-i18n="zv.bindings.action" style="padding: 6px 10px; text-align: left; border-bottom: 1px solid;">Action</html:th>
@@ -249,14 +354,18 @@
           </html:tr>
         </html:thead>
         <html:tbody id="zv-bindings-body">
-          <!-- Populated by prefs.js -->
+          <!-- Populated by the mounted binding editor view. -->
         </html:tbody>
       </html:table>
     </html:div>
+    <hbox style="margin-top: 6px; justify-content: flex-end; align-items: center;">
+      <html:span id="zv-bindings-validation-status" class="zv-status"
+        style="font-size: 0.9em;"></html:span>
+    </hbox>
   </groupbox>
 
   <!-- ── Keybinding apply ───────────────────────────────────────────── -->
-  <!-- Modes/marks/colour/scroll save live on change.
+  <!-- Modes/key guide/marks/colour/scroll save live on change.
        Keybindings need an explicit "Apply" because the table is edited. -->
   <hbox style="margin-top: 12px; justify-content: flex-end; align-items: center;">
     <html:p style="font-size: 0.85em; margin: 0 12px 0 0;"

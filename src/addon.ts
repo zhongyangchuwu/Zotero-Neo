@@ -1,6 +1,12 @@
-import type { MainWindow, MainWindowControllerApi, ReaderControllerApi } from './core/contracts';
+import type {
+  CommandPaletteContext,
+  MainWindow,
+  MainWindowControllerApi,
+  ReaderControllerApi,
+} from './core/contracts';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
+import { migrateBindingPreferences } from './core/preferences';
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 
@@ -30,8 +36,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#reader = createReaderController({
       preferences: this.#preferences,
       logger: this.#logger,
-      delegateMain(action, count) {
-        main?.executeFromReader(action, count);
+      delegateMain(action, count, ownerWindow) {
+        main?.executeFromReader(action, count, ownerWindow);
+      },
+      openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
+        main?.openCommandPalette(window, context);
       },
     });
     this.#main = createMainWindowController({
@@ -44,15 +53,20 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
 
   init(context: AddonContext): void {
     this.#context = context;
+    migrateBindingPreferences(this.#preferences);
     this.#registerPreferences();
     this.#reader.start(context.id);
     this.#logger.debug(`Initialized v${context.version} on Zotero ${Zotero.version || '?'}`);
+    this.#logger.diagnostic(
+      `addon initialized version=${context.version} zotero=${Zotero.version || '?'}`,
+    );
   }
 
   shutdown(): void {
     this.#reader.shutdown();
     this.#main.shutdown();
     this.#logger.debug('Shut down');
+    this.#logger.diagnostic('addon shut down');
     this.#context = null;
   }
 

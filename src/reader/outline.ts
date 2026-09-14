@@ -1,3 +1,4 @@
+import { keyString } from '../input/keys';
 import { THEME_VARS } from '../ui/theme';
 import type {
   OutlineNode,
@@ -16,6 +17,7 @@ export interface OutlineHost {
   readonly log: (message: string) => void;
   readonly setModeNormal: () => void;
   readonly themeRoot: (root: HTMLElement) => () => void;
+  readonly onClose: (pdfWindow?: PdfWindow) => void;
 }
 
 interface PdfLinkService {
@@ -37,6 +39,7 @@ export class ReaderOutline {
       this.close(state, pdfWindow);
       return;
     }
+    state.loadGeneration += 1;
     state.open = true;
     this.createOverlay(state, pdfWindow);
     this.render(state);
@@ -54,6 +57,7 @@ export class ReaderOutline {
   }
 
   close(state: OutlineState, pdfWindow?: PdfWindow): void {
+    state.loadGeneration += 1;
     state.open = false;
     state.loading = false;
     this.clearBuffers(state);
@@ -65,7 +69,7 @@ export class ReaderOutline {
     state.status = null;
     state.visible = [];
     state.selected = 0;
-    if (pdfWindow) this.#host.schedule(30, () => pdfWindow.focus());
+    this.#host.onClose(pdfWindow);
   }
 
   handleKey(
@@ -74,10 +78,11 @@ export class ReaderOutline {
     pdfWindow: PdfWindow,
     event: KeyboardEvent,
   ): boolean {
-    const key = this.key(event);
+    const key = keyString(event);
     if (!key) return false;
     const consume = (): void => {
       event.preventDefault();
+      event.stopImmediatePropagation?.();
       event.stopPropagation();
     };
     if (key === 'g') {
@@ -127,27 +132,43 @@ export class ReaderOutline {
       this.applyHint(state, key);
       return true;
     }
-    return false;
+    consume();
+    return true;
   }
-
   private async load(
     state: OutlineState,
     reader: ReaderRuntime,
     pdfWindow: PdfWindow,
   ): Promise<void> {
+    const generation = state.loadGeneration;
+    const current = (): boolean =>
+      state.open &&
+      state.loadGeneration === generation &&
+      state.overlay?.ownerDocument.defaultView === pdfWindow;
+    if (!current()) return;
     state.loading = true;
     this.render(state);
     try {
-      if (!state.tree) state.tree = await this.fetchTree(reader, pdfWindow);
+      if (!state.tree) {
+        const tree = await this.fetchTree(reader, pdfWindow);
+        if (!current()) return;
+        state.tree = tree;
+      }
+      if (!current()) return;
       this.refresh(state);
+      if (!current()) return;
       this.selectCurrent(state, pdfWindow);
+      if (!current()) return;
       if (!state.visible.length) this.setStatus(state, 'No outline available');
     } catch (error) {
+      if (!current()) return;
       state.tree = [];
       this.refresh(state);
+      if (!current()) return;
       this.setStatus(state, 'Error loading outline');
       this.#host.log(`outline load failed: ${String(error)}`);
     } finally {
+      if (!current()) return;
       state.loading = false;
       this.render(state);
     }
@@ -479,15 +500,6 @@ export class ReaderOutline {
 
   private fastStep(state: OutlineState): number {
     return Math.max(5, Math.floor(state.visible.length / 10) || 10);
-  }
-
-  private key(event: KeyboardEvent): string {
-    if (!event.key || event.key === 'Dead' || event.key === 'Unidentified') return '';
-    const parts: string[] = [];
-    if (event.ctrlKey || event.metaKey) parts.push('ctrl');
-    if (event.altKey) parts.push('alt');
-    parts.push(event.key.length === 1 ? event.key : event.key.toLowerCase());
-    return parts.join('+');
   }
 
   private setStatus(state: OutlineState, text: string): void {

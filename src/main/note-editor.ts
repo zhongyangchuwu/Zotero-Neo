@@ -1,12 +1,32 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
-import type { ActionId } from '../input/actions';
 import type { MainWindowSession } from './session';
+import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
+import type { ActionId } from '../input/actions';
+import {
+  advanceInput,
+  backspaceLeaderInput,
+  cancelLeaderInput,
+  resolveInputTimeout,
+} from '../input/engine';
+import { isLeaderPrefix } from '../input/key-guide';
+import { keyString } from '../input/keys';
 import { MainNavigation } from './navigation';
 import { copyToClipboard } from '../platform/clipboard';
 import { asElement } from '../platform/dom';
+import {
+  activeContextEditorWindow,
+  mainReaderForTab,
+  mainTabList,
+  selectedMainTabID,
+} from './host';
 
 type Execute = (action: ActionId, count: number) => void;
+
+interface LeaderGuideHost {
+  refresh(window: MainWindow, session: MainWindowSession): void;
+  clear(window: MainWindow, session: MainWindowSession): void;
+}
 type TextControl = HTMLElement & {
   value: string;
   selectionStart: number | null;
@@ -32,28 +52,22 @@ export class NoteEditor {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
   readonly #bindings: () => Readonly<Record<string, ActionId>>;
+  readonly #leaderGuide: LeaderGuideHost;
 
   constructor(
     logger: Logger,
     navigation: MainNavigation,
     bindings: () => Readonly<Record<string, ActionId>>,
+    leaderGuide: LeaderGuideHost,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#bindings = bindings;
+    this.#leaderGuide = leaderGuide;
   }
   isStandalone(window: MainWindow): boolean {
-    const tab = window as unknown as {
-      Zotero_Tabs?: {
-        selectedID?: string;
-        _tabs?: { id?: string; type?: string; title?: string; label?: string }[];
-        tabs?: { id?: string; type?: string; title?: string; label?: string }[];
-      };
-    };
-    const selected = tab.Zotero_Tabs?.selectedID;
-    const entry = (tab.Zotero_Tabs?._tabs ?? tab.Zotero_Tabs?.tabs ?? []).find(
-      (value) => value.id === selected,
-    );
+    const selected = selectedMainTabID(window);
+    const entry = mainTabList(window).find((value) => value.id === selected);
     const value =
       `${entry?.id ?? ''} ${entry?.type ?? ''} ${entry?.title ?? ''} ${entry?.label ?? ''}`.toLowerCase();
     return /\bnote/.test(value) && !/\b(reader|pdf)\b/.test(value);
@@ -77,16 +91,21 @@ export class NoteEditor {
     this.style(candidate.document, session.note.mode);
   }
   clear(session: MainWindowSession): void {
-    const { editorWindow, editorDocument, handler, timer } = session.note;
+    const { editorWindow, editorDocument, handler, timer, mainTimer } = session.note;
     if (editorWindow && handler) editorWindow.removeEventListener('keydown', handler, true);
     if (editorDocument && handler) editorDocument.removeEventListener('keydown', handler, true);
     clearTimeout(timer);
+    clearTimeout(mainTimer);
     session.note.editorWindow = null;
     session.note.editorDocument = null;
     session.note.handler = null;
     session.note.buffer = '';
     session.note.mainBuffer = '';
     session.note.count = '';
+    session.note.timer = undefined;
+    session.note.mainTimer = undefined;
+    session.note.mainRevision += 1;
+    this.#leaderGuide.clear(session.window, session);
   }
   onKeyDown(
     event: KeyboardEvent,
@@ -96,22 +115,26 @@ export class NoteEditor {
   ): void {
     const el = editable(event.target);
     if (!el) return;
-    const key =
-      event.ctrlKey || event.metaKey
-        ? `ctrl+${event.key.toLowerCase()}`
-        : event.key.length === 1 && event.shiftKey
-          ? event.key
-          : event.key.toLowerCase();
-    if (key === 'ctrl+h') {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.focusReader(main);
-      return;
-    }
-    if (key === 'ctrl+l') {
-      event.preventDefault();
-      event.stopPropagation();
-      el.focus();
+    const key = keyString(event);
+    if (!key) return;
+    const direction =
+      key === 'ctrl+h'
+        ? 'left'
+        : key === 'ctrl+j'
+          ? 'down'
+          : key === 'ctrl+k'
+            ? 'up'
+            : key === 'ctrl+l'
+              ? 'right'
+              : null;
+    if (direction) {
+      const focused =
+        (direction === 'left' && this.focusReader(main)) ||
+        this.#navigation.focusDirection(main, session, direction);
+      if (focused) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
       return;
     }
     if (session.note.mode === 'insert') {
@@ -124,10 +147,52 @@ export class NoteEditor {
       }
       return;
     }
+    if (session.note.mainBuffer) {
+      const mainState = {
+        mode: 'main' as const,
+        keyBuffer: session.note.mainBuffer,
+        countBuffer: '',
+      };
+      if (key === 'escape') {
+        const cancelled = cancelLeaderInput(mainState);
+        if (cancelled) session.note.mainBuffer = cancelled.keyBuffer;
+        this.clearMainInput(main, session);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (key === 'backspace') {
+        const backed = backspaceLeaderInput(mainState);
+        if (backed) {
+          session.note.mainBuffer = backed.keyBuffer;
+          this.invalidateMainInput(main, session);
+          if (session.note.mainBuffer) this.#leaderGuide.refresh(main, session);
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+    }
+    // Note-local text input starts the ordinary grammar; only Space, colon, idle H/L, or an active
+    // canonical sequence may enter main-command matching. Colon is reserved for the palette even
+    // after a count, but the palette always receives the uncounted action default.
+    const commandPaletteShortcut = key === ':' && !session.note.buffer;
+    const mainShortcut =
+      ((key === 'H' || key === 'L') && !session.note.buffer && !session.note.count) ||
+      commandPaletteShortcut;
+    if (commandPaletteShortcut) session.note.count = '';
+    if (session.note.mainBuffer || key === ' ' || mainShortcut) {
+      if (this.mainBinding(key, main, session, execute)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
     if (key === 'escape') {
       event.preventDefault();
       event.stopPropagation();
       this.reset(session);
+      this.#leaderGuide.clear(main, session);
       return;
     }
     if (key === 'i') {
@@ -136,11 +201,7 @@ export class NoteEditor {
       session.note.mode = 'insert';
       this.style(el.ownerDocument, 'insert');
       this.#navigation.status(session, '-- NOTE INSERT --', 900);
-      return;
-    }
-    if (this.mainBinding(key, main, session, execute)) {
-      event.preventDefault();
-      event.stopPropagation();
+      this.#leaderGuide.clear(main, session);
       return;
     }
     if (/^\d$/.test(key) && (key !== '0' || session.note.count)) {
@@ -169,36 +230,52 @@ export class NoteEditor {
       this.style(el.ownerDocument, session.note.mode);
     }
   }
+
   private mainBinding(
     key: string,
     main: MainWindow,
     session: MainWindowSession,
     execute: Execute,
   ): boolean {
-    if (!session.note.mainBuffer && (key === 'J' || key === 'K')) {
-      const action = this.#bindings()[`main:${key}`];
-      if (action) {
-        execute(action, 1);
-        return true;
-      }
-    }
-    if (!session.note.mainBuffer && key !== ' ') return false;
-    const candidate = session.note.mainBuffer + key;
-    const bindings = this.#bindings();
-    const exact = bindings[`main:${candidate}`];
-    const possible = Object.keys(bindings).some((binding) =>
-      binding.startsWith(`main:${candidate}`),
+    session.note.mainRevision += 1;
+    const revision = session.note.mainRevision;
+    clearTimeout(session.note.mainTimer);
+    session.note.mainTimer = undefined;
+    const decision = advanceInput(
+      {
+        mode: 'main',
+        keyBuffer: session.note.mainBuffer,
+        countBuffer: '',
+        bindings: this.#bindings(),
+        allowCountPrefix: false,
+      },
+      key,
     );
-    if (!possible) {
-      session.note.mainBuffer = '';
+    session.note.mainBuffer = decision.state.keyBuffer;
+    if (decision.kind === 'pass') {
+      this.clearMainInput(main, session);
+      return false;
+    }
+    if (decision.kind === 'execute') {
+      this.clearMainInput(main, session);
+      execute(decision.action, decision.count);
       return true;
     }
-    if (exact) {
-      session.note.mainBuffer = '';
-      execute(exact, 1);
-      return true;
+    if (isLeaderPrefix(decision.state.keyBuffer)) this.#leaderGuide.refresh(main, session);
+    else this.#leaderGuide.clear(main, session);
+    const timeoutMs = isLeaderPrefix(decision.state.keyBuffer)
+      ? KEY_GUIDE_CONFIG.idleTimeoutMs
+      : decision.timeoutMs;
+    if (timeoutMs !== null) {
+      session.note.mainTimer = main.setTimeout(() => {
+        if (session.note.mainRevision !== revision) return;
+        const resolved = resolveInputTimeout(decision);
+        session.note.mainBuffer = resolved.state.keyBuffer;
+        session.note.mainTimer = undefined;
+        this.#leaderGuide.clear(main, session);
+        if (resolved.kind === 'execute') execute(resolved.action, resolved.count);
+      }, timeoutMs);
     }
-    session.note.mainBuffer = candidate;
     return true;
   }
   private command(
@@ -350,11 +427,7 @@ export class NoteEditor {
       const candidate = (frame as HTMLIFrameElement).contentWindow;
       if (this.likely(candidate, main)) return candidate;
     }
-    const editor = (
-      main as unknown as {
-        ZoteroContextPane?: { activeEditor?: { _iframe?: { contentWindow?: Window } } };
-      }
-    ).ZoteroContextPane?.activeEditor?._iframe?.contentWindow;
+    const editor = activeContextEditorWindow(main);
     return this.likely(editor, main) ? editor : null;
   }
   private likely(candidate: Window | null | undefined, main: MainWindow): candidate is Window {
@@ -386,22 +459,38 @@ export class NoteEditor {
     clearTimeout(session.note.timer);
     session.note.timer = main.setTimeout(() => this.reset(session), 1200);
   }
+
   private reset(session: MainWindowSession): void {
     session.note.buffer = '';
-    session.note.mainBuffer = '';
     session.note.count = '';
     clearTimeout(session.note.timer);
     session.note.timer = undefined;
   }
-  private async focusReader(main: MainWindow): Promise<void> {
+
+  private invalidateMainInput(main: MainWindow, session: MainWindowSession): void {
+    session.note.mainRevision += 1;
+    clearTimeout(session.note.mainTimer);
+    session.note.mainTimer = undefined;
+    if (!session.note.mainBuffer) this.#leaderGuide.clear(main, session);
+  }
+
+  private clearMainInput(main: MainWindow, session: MainWindowSession): void {
+    this.invalidateMainInput(main, session);
+    session.note.mainBuffer = '';
+    this.#leaderGuide.clear(main, session);
+  }
+  private focusReader(main: MainWindow): boolean {
     try {
-      const tabs = main as unknown as { Zotero_Tabs?: { selectedID?: string } };
-      const reader = tabs.Zotero_Tabs?.selectedID
-        ? Zotero.Reader.getByTabID?.(tabs.Zotero_Tabs.selectedID)
-        : null;
-      await reader?.focus?.();
+      const tabID = selectedMainTabID(main);
+      const reader = tabID ? mainReaderForTab(tabID) : null;
+      if (!reader?.focus) return false;
+      void Promise.resolve(reader.focus()).catch((error) => {
+        this.#logger.debug(`focus reader error: ${String(error)}`);
+      });
+      return true;
     } catch (error) {
       this.#logger.debug(`focus reader error: ${String(error)}`);
+      return false;
     }
   }
 }

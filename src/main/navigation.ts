@@ -1,9 +1,11 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
 import { citationKey } from '../platform/better-bibtex';
+import type { FocusDirection } from '../input/actions';
 import { copyToClipboard } from '../platform/clipboard';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
+import { closeSelectedMainTab, cycleMainTab, mainHost } from './host';
 
 type Selection = { focused?: number; count?: number; select?(index: number): void };
 type TreeFocusTarget = { focus?(): void };
@@ -24,33 +26,66 @@ export type TreeView = {
   getSelectedCollections?(idOnly: true): number[];
   getRowIndexByID?(id: string): number;
 };
-type HostWindow = Omit<MainWindow, 'Zotero_Tabs'> & {
-  ZoteroPane?: {
-    collectionsView?: TreeView;
-    itemsView?: TreeView;
-    getSelectedItems?(): Zotero.Item[];
-    selectItem?(id: number): void;
-    viewAttachment?(id: number): void;
-    openNote?(id: number): Promise<void> | void;
-    loadURI?(uri: string): void;
-  };
-  Zotero_Tabs?: {
-    selectedID?: string;
-    _selectedID?: string;
-    _tabs?: Tab[];
-    tabs?: Tab[];
-    close?(id?: string): void;
-    selectPrev?(): void;
-    selectNext?(): void;
-    select?(id: string): void;
-    selectTab?(id: string): void;
-    showTab?(id: string): void;
+
+type FocusElement = Element & {
+  readonly hidden?: boolean;
+  focus?(): void;
+  getBoundingClientRect(): {
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+    readonly bottom: number;
+    readonly width?: number;
+    readonly height?: number;
   };
 };
-type Tab = { id?: string; tabID?: string; dataset?: DOMStringMap };
 
-function host(window: MainWindow): HostWindow {
-  return window as HostWindow;
+interface FocusTarget {
+  readonly root: FocusElement;
+  readonly focus: () => boolean;
+}
+
+function asFocusElement(value: unknown): FocusElement | null {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    typeof (value as { getBoundingClientRect?: unknown }).getBoundingClientRect !== 'function'
+  )
+    return null;
+  return value as FocusElement;
+}
+
+function focusRect(element: FocusElement): {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+} | null {
+  if (element.hidden || element.getAttribute?.('hidden') === 'true') return null;
+  const rect = element.getBoundingClientRect();
+  const width = rect.width ?? rect.right - rect.left;
+  const height = rect.height ?? rect.bottom - rect.top;
+  return width > 0 && height > 0 ? rect : null;
+}
+
+function containsFocus(root: FocusElement, active: Element | null): boolean {
+  if (!active) return false;
+  try {
+    return root === active || root.contains(active);
+  } catch {
+    return false;
+  }
+}
+
+function focusElement(document: Document, root: FocusElement): boolean {
+  const target =
+    asFocusElement(
+      root.querySelector?.(
+        'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ) ?? root;
+  target.focus?.();
+  return containsFocus(root, document.activeElement);
 }
 function containsTarget(root: unknown, node: unknown): boolean {
   if (!root || !node) return false;
@@ -96,22 +131,14 @@ export class MainNavigation {
   }
   panel(window: MainWindow, session: MainWindowSession): MainPanel {
     const current = window.document.activeElement;
-    const h = host(window);
+    const h = mainHost(window);
     const collections = h.ZoteroPane?.collectionsView;
-    const items = h.ZoteroPane?.itemsView;
     const collectionTargets = [
       collections?.tree,
       collections?.domEl,
       window.document.getElementById('collection-tree'),
       window.document.getElementById('zotero-collections-tree'),
       window.document.querySelector('#zotero-collections-tree .virtualized-table'),
-    ];
-    const itemTargets = [
-      items?.tree,
-      items?.domEl,
-      window.document.getElementById('item-tree-main-default'),
-      window.document.getElementById('zotero-items-tree'),
-      window.document.querySelector('#zotero-items-tree .virtualized-table'),
     ];
     if (
       current &&
@@ -121,34 +148,122 @@ export class MainNavigation {
         current.id.includes('collection'))
     ) {
       session.activePanel = 'collections';
-    } else if (
-      current &&
-      (itemTargets.some(
-        (target) => containsTarget(target, current) || containsTarget(current, target),
-      ) ||
-        current.id.includes('item-tree'))
-    ) {
+    } else if (this.itemPaneContainsFocus(window)) {
       session.activePanel = 'items';
     } else if (collections?.selection?.count) {
       session.activePanel = 'collections';
     }
     return session.activePanel;
   }
-  focusPanel(window: MainWindow, session: MainWindowSession, panel: MainPanel): void {
+  focusPanel(window: MainWindow, session: MainWindowSession, panel: MainPanel): boolean {
     const view =
       panel === 'collections'
-        ? host(window).ZoteroPane?.collectionsView
-        : host(window).ZoteroPane?.itemsView;
+        ? mainHost(window).ZoteroPane?.collectionsView
+        : mainHost(window).ZoteroPane?.itemsView;
     const fallback = window.document.querySelector(
       panel === 'collections'
         ? '#collection-tree,#zotero-collections-tree .virtualized-table,#zotero-collections-tree'
         : '#item-tree-main-default,#zotero-items-tree .virtualized-table,#zotero-items-tree',
     );
     const focusTarget = (view?.tree ?? view?.domEl ?? fallback) as HTMLElement | null;
-    focusTarget?.focus();
+    if (!focusTarget?.focus && !view?.focus) return false;
+    focusTarget?.focus?.();
     view?.focus?.();
     session.activePanel = panel;
     this.ensureSelection(view);
+    return true;
+  }
+
+  focusDirection(
+    window: MainWindow,
+    session: MainWindowSession,
+    direction: FocusDirection,
+  ): boolean {
+    const h = mainHost(window);
+    const document = window.document;
+    const collections = h.ZoteroPane?.collectionsView;
+    const items = h.ZoteroPane?.itemsView;
+    const collectionsRoot =
+      asFocusElement(collections?.domEl) ??
+      asFocusElement(collections?.tree) ??
+      asFocusElement(
+        document.querySelector(
+          '#collection-tree,#zotero-collections-tree .virtualized-table,#zotero-collections-tree',
+        ),
+      );
+    const itemsRoot =
+      asFocusElement(items?.domEl) ??
+      asFocusElement(items?.tree) ??
+      asFocusElement(
+        document.querySelector(
+          '#item-tree-main-default,#zotero-items-tree .virtualized-table,#zotero-items-tree',
+        ),
+      );
+    const detailRoot = asFocusElement(document.getElementById('zotero-item-pane'));
+    const contextRoot = asFocusElement(document.getElementById('zotero-context-pane'));
+    const targets: FocusTarget[] = [];
+    if (collectionsRoot)
+      targets.push({
+        root: collectionsRoot,
+        focus: () => this.focusPanel(window, session, 'collections'),
+      });
+    if (itemsRoot)
+      targets.push({ root: itemsRoot, focus: () => this.focusPanel(window, session, 'items') });
+    if (detailRoot)
+      targets.push({ root: detailRoot, focus: () => focusElement(document, detailRoot) });
+    if (contextRoot)
+      targets.push({
+        root: contextRoot,
+        focus: () => {
+          if (h.ZoteroContextPane?.focus) {
+            h.ZoteroContextPane.focus();
+            return true;
+          }
+          return focusElement(document, contextRoot);
+        },
+      });
+
+    const visible = targets.flatMap((target) => {
+      const rect = focusRect(target.root);
+      return rect ? [{ target, rect }] : [];
+    });
+    const active = document.activeElement;
+    const current = visible
+      .filter(({ target }) => containsFocus(target.root, active))
+      .sort(
+        (a, b) =>
+          (a.rect.right - a.rect.left) * (a.rect.bottom - a.rect.top) -
+          (b.rect.right - b.rect.left) * (b.rect.bottom - b.rect.top),
+      )[0];
+    const activeElement = asFocusElement(active);
+    const origin = current?.rect ?? (activeElement ? focusRect(activeElement) : null);
+    if (!origin) return false;
+    const originX = (origin.left + origin.right) / 2;
+    const originY = (origin.top + origin.bottom) / 2;
+    const ranked = visible
+      .filter(({ target, rect }) => {
+        if (target === current?.target) return false;
+        const x = (rect.left + rect.right) / 2;
+        const y = (rect.top + rect.bottom) / 2;
+        if (direction === 'left') return x < originX;
+        if (direction === 'right') return x > originX;
+        if (direction === 'up') return y < originY;
+        return y > originY;
+      })
+      .sort((a, b) => {
+        const overlapsAxis = (rect: (typeof visible)[number]['rect']): boolean =>
+          direction === 'left' || direction === 'right'
+            ? rect.bottom > origin.top && rect.top < origin.bottom
+            : rect.right > origin.left && rect.left < origin.right;
+        const alignedDifference = Number(overlapsAxis(b.rect)) - Number(overlapsAxis(a.rect));
+        if (alignedDifference) return alignedDifference;
+        const ax = (a.rect.left + a.rect.right) / 2 - originX;
+        const ay = (a.rect.top + a.rect.bottom) / 2 - originY;
+        const bx = (b.rect.left + b.rect.right) / 2 - originX;
+        const by = (b.rect.top + b.rect.bottom) / 2 - originY;
+        return ax * ax + ay * ay - (bx * bx + by * by);
+      });
+    return ranked.some(({ target }) => target.focus());
   }
   navigate(
     window: MainWindow,
@@ -158,8 +273,8 @@ export class MainNavigation {
   ): void {
     const view =
       this.panel(window, session) === 'collections'
-        ? host(window).ZoteroPane?.collectionsView
-        : host(window).ZoteroPane?.itemsView;
+        ? mainHost(window).ZoteroPane?.collectionsView
+        : mainHost(window).ZoteroPane?.itemsView;
     if (!view?.selection) return;
     const current = view.selection.focused ?? 0;
     const last = Math.max(0, (view.rowCount ?? 1) - 1);
@@ -182,9 +297,76 @@ export class MainNavigation {
     }
     void this.openPDF(window, session);
   }
+
+  async trashItems(ids: readonly number[]): Promise<boolean> {
+    const valid = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    if (!valid.length) return false;
+    await Zotero.Items.trashTx(valid);
+    return true;
+  }
+
+  async restoreTrashedItems(ids: readonly number[]): Promise<boolean> {
+    const valid = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+    if (!valid.length) return false;
+    const undo = (
+      Zotero as unknown as {
+        UndoHistory?: {
+          getUndoAction?(): { readonly action?: string } | null;
+          undo?(): Promise<boolean>;
+        };
+      }
+    ).UndoHistory;
+    if (undo?.getUndoAction?.()?.action === 'undo-action-trash' && undo.undo) {
+      return undo.undo();
+    }
+    let restored = false;
+    for (const id of valid) {
+      const item = Zotero.Items.get(id);
+      if (!item || !item.deleted) continue;
+      item.deleted = false;
+      await item.saveTx();
+      restored = true;
+    }
+    return restored;
+  }
+  async trashSelectedItems(window: MainWindow, session: MainWindowSession): Promise<void> {
+    if (!this.itemPaneContainsFocus(window)) {
+      this.status(session, '✗ Focus the items list first');
+      return;
+    }
+    const ids = (mainHost(window).ZoteroPane?.getSelectedItems?.() ?? []).map((item) => item.id);
+    if (!ids.length) {
+      this.status(session, '✗ No items selected');
+      return;
+    }
+    try {
+      await this.trashItems(ids);
+      session.trashedItemIDs = ids;
+      this.status(session, `✓ Moved ${ids.length} item${ids.length === 1 ? '' : 's'} to trash`);
+    } catch (error) {
+      this.#logger.debug(`trash selected items failed: ${String(error)}`);
+      this.status(session, '✗ Unable to move selected items to trash');
+    }
+  }
+
+  async restoreLastTrashedItems(session: MainWindowSession): Promise<void> {
+    try {
+      const restored = await this.restoreTrashedItems(session.trashedItemIDs);
+      if (!restored) {
+        this.status(session, '✗ Nothing to restore');
+        return;
+      }
+      const count = session.trashedItemIDs.length;
+      session.trashedItemIDs = [];
+      this.status(session, `✓ Restored ${count} item${count === 1 ? '' : 's'}`);
+    } catch (error) {
+      this.#logger.debug(`restore trashed items failed: ${String(error)}`);
+      this.status(session, '✗ Unable to restore items');
+    }
+  }
   async openPDF(window: MainWindow, session: MainWindowSession): Promise<void> {
     try {
-      const pane = host(window).ZoteroPane;
+      const pane = mainHost(window).ZoteroPane;
       let items = pane?.getSelectedItems?.() ?? [];
       if (!items.length) {
         this.ensureSelection(pane?.itemsView);
@@ -232,35 +414,15 @@ export class MainNavigation {
     }
   }
   closePDF(window: MainWindow): void {
-    const tabs = host(window).Zotero_Tabs;
-    tabs?.close?.(tabs.selectedID);
+    closeSelectedMainTab(window);
   }
   cycleTab(window: MainWindow, direction: 1 | -1): void {
-    const tabs = host(window).Zotero_Tabs;
-    if (!tabs) return;
-    if (direction < 0 && tabs.selectPrev) tabs.selectPrev();
-    else if (direction > 0 && tabs.selectNext) tabs.selectNext();
-    else {
-      const list = tabs._tabs ?? tabs.tabs ?? [];
-      const ids = list
-        .map((tab) => tab.id ?? tab.tabID ?? tab.dataset?.id)
-        .filter((id): id is string => !!id);
-      const index = ids.indexOf(tabs.selectedID ?? tabs._selectedID ?? '');
-      const next = ids[(index + direction + ids.length) % ids.length];
-      if (next) (tabs.select ?? tabs.selectTab ?? tabs.showTab)?.(next);
-    }
+    cycleMainTab(window, direction);
     this.afterTabSwitch(window);
-  }
-  focusSearch(window: MainWindow): void {
-    const input = window.document.querySelector<HTMLInputElement>(
-      '#zotero-tb-search-input,#zotero-tb-search input,input[type="search"]',
-    );
-    input?.focus();
-    input?.select();
   }
   yankCitekey(window: MainWindow, session: MainWindowSession): void {
     try {
-      const item = host(window).ZoteroPane?.getSelectedItems?.()[0];
+      const item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
       const key = item ? citationKey(item) : '';
       if (!key) {
         this.status(session, '✗ No citekey (BBT not ready?)');
@@ -360,9 +522,27 @@ export class MainNavigation {
     for (const delay of [0, 60, 180, 420, 900])
       window.setTimeout(() => this.#rescan(window), delay);
   }
+  private itemPaneContainsFocus(window: MainWindow): boolean {
+    const current = window.document.activeElement;
+    if (!current) return false;
+    const items = mainHost(window).ZoteroPane?.itemsView;
+    const targets = [
+      items?.tree,
+      items?.domEl,
+      window.document.getElementById('item-tree-main-default'),
+      window.document.getElementById('zotero-items-tree'),
+      window.document.querySelector('#zotero-items-tree .virtualized-table'),
+    ];
+    return (
+      targets.some(
+        (target) => containsTarget(target, current) || containsTarget(current, target),
+      ) || current.id.includes('item-tree')
+    );
+  }
+
   private collections(window: MainWindow, session: MainWindowSession): TreeView | undefined {
     this.focusPanel(window, session, 'collections');
-    return host(window).ZoteroPane?.collectionsView;
+    return mainHost(window).ZoteroPane?.collectionsView;
   }
   private row(view: TreeView | undefined): number {
     if (!view) return -1;

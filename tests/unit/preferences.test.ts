@@ -1,14 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
+import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
+
 import {
+  BINDING_SCHEMA_VERSION,
+  PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
   bindingsFromPreferences,
+  keyGuideConfig,
+  migrateBindingPreferences,
+  pickerMouseEnabled,
   scrollModeFromPreferences,
   smoothScrollConfig,
   type PreferenceReader,
 } from '../../src/core/preferences';
 
 class TestPreferences implements PreferenceReader {
-  constructor(private readonly values: Readonly<Record<string, boolean | number | string>>) {}
+  readonly writes: Array<readonly [string, boolean | number | string]> = [];
+  private readonly values: Record<string, boolean | number | string>;
+  constructor(values: Readonly<Record<string, boolean | number | string>>) {
+    this.values = { ...values };
+  }
   has(key: string): boolean {
     return Object.hasOwn(this.values, key);
   }
@@ -18,6 +29,10 @@ class TestPreferences implements PreferenceReader {
   get(key: string, fallback: string): string;
   get(key: string, fallback: boolean | number | string): boolean | number | string {
     return this.values[key] ?? fallback;
+  }
+  set(key: string, value: boolean | number | string): void {
+    this.values[key] = value;
+    this.writes.push([key, value]);
   }
 }
 
@@ -111,5 +126,183 @@ describe('binding preferences', () => {
     const bindings = bindingsFromPreferences(preferences);
     expect(bindings['normal:j']).toBe('scrollDown');
     expect(bindings['main:enter']).toBe('mainActivate');
+    expect(bindings['normal: fn']).toBe('mainNotesLayout');
+    expect(bindings['main: fn']).toBe('mainNotesLayout');
+    expect(bindings['normal: n']).toBeUndefined();
+    expect(bindings['main: n']).toBeUndefined();
+    expect(bindings['normal: ft']).toBe('mainTabPick');
+    expect(bindings['main: ft']).toBe('mainTabPick');
+    expect(bindings['main: fT']).toBe('mainTagPicker');
+    expect(bindings['main:u']).toBe('mainRestoreTrashedItems');
+    expect(bindings['normal: tp']).toBeUndefined();
+    expect(bindings['main: tp']).toBeUndefined();
+    expect(bindings['main:ctrl+u']).toBeUndefined();
+  });
+
+  it('migrates retired defaults and removes legacy native-search actions without dropping unrelated remaps', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 4,
+      bindings: JSON.stringify({
+        'normal: fb': 'mainFuzzyCollection',
+        'main: bj': 'mainTabPick',
+        'main: legacy-search': 'mainFocusSearch',
+        'main: old-advanced': 'mainAdvancedSearch',
+        'main:x': 'mainActivate',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({ 'main:x': 'mainActivate' });
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['main: legacy-search']).toBeUndefined();
+    expect(resolved['main: old-advanced']).toBeUndefined();
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+
+    preferences.set('bindings', JSON.stringify({ 'main: q': 'mainClosePDF' }));
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main: q': 'mainClosePDF',
+    });
+  });
+
+  it('retires only exact old H/L and J/K defaults while preserving custom rows', () => {
+    const exact = new TestPreferences({
+      'bindings.schemaVersion': 5,
+      bindings: JSON.stringify({
+        'normal:H': 'scrollLeft',
+        'normal:L': 'scrollRight',
+        'normal:J': 'mainPrevTab',
+        'normal:K': 'mainNextTab',
+        'main:J': 'mainPrevTab',
+        'main:K': 'mainNextTab',
+        'main:x': 'mainActivate',
+      }),
+    });
+    migrateBindingPreferences(exact);
+    expect(JSON.parse(exact.get('bindings', ''))).toEqual({ 'main:x': 'mainActivate' });
+    expect(exact.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    expect(bindingsFromPreferences(exact)['normal:H']).toBe('mainPrevTab');
+    expect(bindingsFromPreferences(exact)['normal:zh']).toBe('scrollLeft');
+
+    const custom = new TestPreferences({
+      'bindings.schemaVersion': 5,
+      bindings: JSON.stringify({
+        'normal:H': 'scrollRight',
+        'normal:L': 'scrollLeft',
+        'normal:J': 'mainNextTab',
+        'normal:K': 'mainPrevTab',
+        'main:J': 'mainNextTab',
+        'main:K': 'mainPrevTab',
+      }),
+    });
+    migrateBindingPreferences(custom);
+    expect(JSON.parse(custom.get('bindings', ''))).toEqual({
+      'normal:H': 'scrollRight',
+      'normal:L': 'scrollLeft',
+      'normal:J': 'mainNextTab',
+      'normal:K': 'mainPrevTab',
+      'main:J': 'mainNextTab',
+      'main:K': 'mainPrevTab',
+    });
+    expect(custom.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    expect(bindingsFromPreferences(custom)['normal:H']).toBe('scrollRight');
+    expect(bindingsFromPreferences(custom)['main:J']).toBe('mainNextTab');
+  });
+  it('migrates schema 6 to compact storage before versioning and remains idempotent', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 6,
+      bindings: JSON.stringify({
+        'normal:j': 'scrollDown',
+        'normal:H': 'scrollRight',
+        'normal:L': 'scrollLeft',
+        'normal:J': 'mainNextTab',
+        'normal:K': 'mainPrevTab',
+        'main:J': 'mainNextTab',
+        'main:K': 'mainPrevTab',
+        'main:x': 'mainActivate',
+        'main:enter': 'mainActivate',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    const persisted = preferences.get('bindings', '');
+    expect(JSON.parse(persisted)).toEqual({
+      'main:J': 'mainNextTab',
+      'main:K': 'mainPrevTab',
+      'main:x': 'mainActivate',
+      'normal:H': 'scrollRight',
+      'normal:J': 'mainNextTab',
+      'normal:K': 'mainPrevTab',
+      'normal:L': 'scrollLeft',
+    });
+    expect(preferences.writes).toHaveLength(2);
+    expect(preferences.writes[0]).toEqual(['bindings', persisted]);
+    expect(preferences.writes[1]).toEqual(['bindings.schemaVersion', BINDING_SCHEMA_VERSION]);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['normal:H']).toBe('scrollRight');
+    expect(resolved['normal:L']).toBe('scrollLeft');
+    expect(resolved['normal:J']).toBe('mainNextTab');
+    expect(resolved['normal:K']).toBe('mainPrevTab');
+    expect(resolved['main:J']).toBe('mainNextTab');
+    expect(resolved['main:K']).toBe('mainPrevTab');
+    expect(resolved['normal:zh']).toBe('scrollLeft');
+    expect(resolved['normal:zl']).toBe('scrollRight');
+    expect(resolved['main:H']).toBe('mainPrevTab');
+    expect(resolved['main:L']).toBe('mainNextTab');
+
+    const writeCount = preferences.writes.length;
+    migrateBindingPreferences(preferences);
+    expect(preferences.writes).toHaveLength(writeCount);
+  });
+});
+
+describe('key guide preferences', () => {
+  it('uses configured defaults and clamps display delay and font size', () => {
+    expect(keyGuideConfig(new TestPreferences({}))).toEqual({
+      enabled: true,
+      delayMs: KEY_GUIDE_CONFIG.defaultDelayMs,
+      fontSizePx: KEY_GUIDE_CONFIG.defaultFontSizePx,
+    });
+    expect(
+      keyGuideConfig(
+        new TestPreferences({
+          'keyGuide.delayMs': KEY_GUIDE_CONFIG.maxDelayMs + 1_000,
+          'keyGuide.fontSizePx': KEY_GUIDE_CONFIG.maxFontSizePx + 10,
+        }),
+      ),
+    ).toEqual({
+      enabled: true,
+      delayMs: KEY_GUIDE_CONFIG.maxDelayMs,
+      fontSizePx: KEY_GUIDE_CONFIG.maxFontSizePx,
+    });
+    expect(
+      keyGuideConfig(
+        new TestPreferences({
+          'keyGuide.enabled': false,
+          'keyGuide.delayMs': -10,
+          'keyGuide.fontSizePx': 1,
+        }),
+      ),
+    ).toEqual({
+      enabled: false,
+      delayMs: 0,
+      fontSizePx: KEY_GUIDE_CONFIG.minFontSizePx,
+    });
+  });
+});
+
+describe('picker preferences', () => {
+  it('defaults mouse row interaction off and honors explicit values', () => {
+    expect(pickerMouseEnabled(new TestPreferences({}))).toBe(false);
+    expect(
+      pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: false })),
+    ).toBe(false);
+    expect(
+      pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: true })),
+    ).toBe(true);
   });
 });

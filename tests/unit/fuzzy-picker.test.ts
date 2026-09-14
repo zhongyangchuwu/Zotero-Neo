@@ -1,13 +1,28 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fuzzyPickerRowText, isFuzzyPickerItem } from '../../src/main/picker';
+import type { ActionId } from '../../src/input/actions';
+import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
+import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
+import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
+import {
+  FuzzyPicker,
+  fuzzyMatchScore,
+  fuzzyPickerRowText,
+  isFuzzyPickerItem,
+} from '../../src/main/picker';
+import { MainNavigation } from '../../src/main/navigation';
+import type { MainWindowSession } from '../../src/main/session';
 import { citationKey } from '../../src/platform/better-bibtex';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
+const originalServices = Reflect.get(globalThis, 'Services');
 
 afterEach(() => {
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
   else Reflect.set(globalThis, 'Zotero', originalZotero);
+  if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+  else Reflect.set(globalThis, 'Services', originalServices);
+  vi.useRealTimers();
 });
 
 describe('fuzzy picker bibliographic items', () => {
@@ -30,6 +45,1669 @@ describe('fuzzy picker bibliographic items', () => {
   });
 });
 
+describe('shared fuzzy ranking', () => {
+  it('prefers contiguous and boundary matches while rejecting missing subsequences', () => {
+    expect(fuzzyMatchScore('alpha beta', 'ab')).toBeGreaterThan(
+      fuzzyMatchScore('a very long gap before b', 'ab') ?? Number.NEGATIVE_INFINITY,
+    );
+    expect(fuzzyMatchScore('alpha', 'az')).toBeNull();
+  });
+});
+
+describe('bibliographic picker previews', () => {
+  it('shows metadata, attachment filenames, and bounded child-note titles', async () => {
+    const attachment = {
+      id: 2,
+      attachmentFilename: 'paper.pdf',
+      getDisplayTitle: () => 'Paper PDF',
+      getField: () => '',
+    } as unknown as Zotero.Item;
+    const note = {
+      id: 3,
+      getNoteTitle: () => 'Methods note',
+      getDisplayTitle: () => 'Methods note',
+      getField: () => '',
+    } as unknown as Zotero.Item;
+    const item = {
+      id: 1,
+      isRegularItem: () => true,
+      getField: (field: string) => ({ title: 'Preview item', year: '2026' })[field] ?? '',
+      getCreators: () => [{ lastName: 'Author' }],
+      getAttachments: () => [attachment.id],
+      getNotes: () => [note.id],
+    } as unknown as Zotero.Item;
+    const byID = new Map([
+      [item.id, item],
+      [attachment.id, attachment],
+      [note.id, note],
+    ]);
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: {
+        get: (id: number | number[]) =>
+          Array.isArray(id)
+            ? id.flatMap((value) => byID.get(value) ?? [])
+            : (byID.get(id) ?? false),
+        getAll: async () => [item],
+      },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'all');
+
+    expect(session.picker.preview?.textContent).toContain('Author, 2026');
+    expect(session.picker.preview?.textContent).toContain('Attachments: 1');
+    expect(session.picker.preview?.textContent).toContain('paper.pdf');
+    expect(session.picker.preview?.textContent).toContain('Child notes: 1');
+    expect(session.picker.preview?.textContent).toContain('Methods note');
+  });
+});
+
+describe('item picker keyboard activation', () => {
+  it('ignores result pointer events, navigates by keyboard, and activates the highlighted item', async () => {
+    const first = {
+      id: 1,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) =>
+        ({ title: 'First item', year: '2025', citationKey: 'first-key' })[field] ?? '',
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const second = {
+      id: 2,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) =>
+        ({ title: 'Second item', year: '2026', citationKey: 'second-key' })[field] ?? '',
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const collection = {
+      getChildItems: () => [first, second],
+    } as unknown as Zotero.Collection;
+    let nativeSelection: Zotero.Item[] = [];
+    const selectItem = vi.fn(async (id: number) => {
+      nativeSelection = [id === first.id ? first : second];
+    });
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [first, second] },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: {
+        getSelectedItems: () => nativeSelection,
+        selectItem,
+        collectionsView: { getSelectedCollections: () => [collection] },
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'all');
+    const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
+    row.emit('click');
+    row.emit('dblclick');
+    row.emit('mouseenter');
+    expect(session.picker.selected).toBe(0);
+    expect(selectItem).not.toHaveBeenCalled();
+
+    const input = session.picker.input;
+    const arrowDown = pickerKey('ArrowDown', input);
+    picker.onKeyDown(arrowDown, window, session);
+    expect(session.picker.selected).toBe(1);
+    const arrowUp = pickerKey('ArrowUp', input);
+    picker.onKeyDown(arrowUp, window, session);
+    expect(session.picker.selected).toBe(0);
+    expect(arrowDown.preventDefault).toHaveBeenCalledOnce();
+    expect(arrowUp.preventDefault).toHaveBeenCalledOnce();
+    const literalJ = pickerKey('j', input);
+    picker.onKeyDown(literalJ, window, session);
+    expect(session.picker.selected).toBe(0);
+    expect(literalJ.preventDefault).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('j', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('k', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('j', session.picker.results, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(second.id));
+    expect(session.picker.open).toBe(false);
+
+    await picker.open(window, session, 'all');
+    const ctrlO = pickerKey('o', session.picker.results, { ctrl: true });
+    picker.onKeyDown(ctrlO, window, session);
+    expect(ctrlO.preventDefault).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(session.picker.open).toBe(false));
+
+    await picker.open(window, session, 'all');
+    const y = pickerKey('y', session.picker.results);
+    picker.onKeyDown(y, window, session);
+    expect(y.preventDefault).toHaveBeenCalledOnce();
+    picker.close(session);
+    await picker.open(window, session, 'collection');
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.input), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.input), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.close(session);
+  });
+});
+
+describe('picker mouse activation', () => {
+  it('reads mouse preference at event time and confirms an item row once', async () => {
+    const first = {
+      id: 1,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) =>
+        ({ title: 'First item', year: '2025', citationKey: 'first-key' })[field] ?? '',
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const second = {
+      id: 2,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) =>
+        ({ title: 'Second item', year: '2026', citationKey: 'second-key' })[field] ?? '',
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const selectItem = vi.fn(async () => undefined);
+    let mouseEnabled = false;
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [first, second] },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => mouseEnabled,
+    );
+
+    await picker.open(window, session, 'all');
+    const firstRow = session.picker.results?.children[0] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    const secondRow = session.picker.results?.children[1] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    secondRow.emit('mouseenter');
+    secondRow.emit('click');
+    expect(session.picker.selected).toBe(0);
+    expect(session.picker.previewTitle?.textContent).toBe('First item');
+
+    mouseEnabled = true;
+    secondRow.emit('click', { button: 1 } as unknown as Partial<Event>);
+    secondRow.emit('dblclick', { button: 1 } as unknown as Partial<Event>);
+    expect(session.picker.selected).toBe(0);
+    expect(selectItem).not.toHaveBeenCalled();
+    secondRow.emit('click');
+    expect(session.picker.selected).toBe(1);
+    expect(session.picker.previewTitle?.textContent).toBe('Second item');
+
+    session.picker.selected = 1;
+    const input = session.picker.input as HTMLInputElement;
+    input.focus();
+    input.value = 'typed query';
+    const firstLabel = firstRow.children[0] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    firstLabel.emit('click');
+    expect(session.picker.selected).toBe(0);
+    expect(session.picker.focusPane).toBe('list');
+    expect(window.document.activeElement).toBe(session.picker.results);
+    picker.onKeyDown(pickerKey('j', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    expect(input.value).toBe('typed query');
+
+    const currentSecondRow = session.picker.results?.children[1] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    currentSecondRow.emit('dblclick');
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(second.id));
+    expect(selectItem).toHaveBeenCalledOnce();
+    expect(session.picker.open).toBe(false);
+  });
+});
+
+describe('command palette provider', () => {
+  it('deduplicates remapped actions and closes before keyboard or pointer execution', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const tabs = {
+      _tabs: [{ id: 'library', title: 'Library', type: 'library' }],
+      selectedID: 'library',
+    };
+    const actions: [ActionId, number][] = [];
+    let picker: FuzzyPicker;
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainFuzzyAll', 'mainFuzzyAll', 'mainNextTab', 'mainOpenPDF', 'openCommandPalette'],
+      language: 'en',
+      bindings: {
+        'main::': 'openCommandPalette',
+        'main:x': 'mainFuzzyAll',
+        'main:y': 'mainFuzzyAll',
+        'main:z': 'mainNextTab',
+      },
+      execute: (action, count) => {
+        actions.push([action, count]);
+        if (action === 'mainFuzzyAll') void picker.open(window, session, 'tabs');
+      },
+    };
+    const { window, session } = createPickerHarness();
+    picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+    await picker.open(window, session, 'commands', context);
+    const all = session.picker.filtered.find((item) => item.id === 'mainFuzzyAll');
+    expect(all?.title).toBe('Main window: fuzzy picker — all items');
+    expect(all?.meta).toBe('x, y');
+    expect(all?.search).toContain('x, y');
+    expect(session.picker.filtered.filter((item) => item.id === 'mainFuzzyAll')).toHaveLength(1);
+    expect(session.picker.filtered.some((item) => item.id === 'openCommandPalette')).toBe(false);
+    const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
+    const provider = session.picker.provider;
+    if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
+    expect(openPDF.meta).toBe('Unbound');
+    expect(provider.preview(openPDF).body).toContain('Keys: Unbound');
+    const commandInput = session.picker.input;
+    picker.onKeyDown(pickerKey('ArrowDown', commandInput), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', commandInput), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+
+    const keyboardIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
+    session.picker.selected = keyboardIndex;
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await vi.waitFor(() => expect(actions).toEqual([['mainFuzzyAll', 0]]));
+    await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
+    expect(session.picker.open).toBe(true);
+
+    picker.close(session);
+    await picker.open(window, session, 'commands', context);
+    const pointerIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
+    const pointerRow = session.picker.results?.children[pointerIndex] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    pointerRow.emit('dblclick');
+    await vi.waitFor(() =>
+      expect(actions).toEqual([
+        ['mainFuzzyAll', 0],
+        ['mainFuzzyAll', 0],
+      ]),
+    );
+    await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
+  });
+  it('keeps unbound catalog commands searchable and executable', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const execute = vi.fn<CommandPaletteContext['execute']>();
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainFuzzyAll', 'mainOpenPDF'],
+      language: 'en',
+      bindings: { 'main:x': 'mainFuzzyAll' },
+      execute,
+    };
+
+    await picker.open(window, session, 'commands', context);
+    const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
+    const provider = session.picker.provider;
+    if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
+    expect(openPDF.meta).toBe('Unbound');
+    expect(provider.preview(openPDF).body).toBe('Action: mainOpenPDF\nKeys: Unbound');
+    const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
+    if (!input) throw new Error('Expected mounted picker input');
+    input.value = 'unbound';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['mainOpenPDF']);
+    input.value = 'mainOpenPDF';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['mainOpenPDF']);
+
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledWith('mainOpenPDF', 0));
+    expect(session.picker.open).toBe(false);
+  });
+
+  it('localizes unbound command metadata, preview, and search', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainOpenPDF'],
+      language: 'zh-CN',
+      bindings: {},
+      execute: () => {},
+    };
+
+    await picker.open(window, session, 'commands', context);
+    const item = session.picker.filtered[0];
+    const provider = session.picker.provider;
+    if (!item || !provider) throw new Error('Expected mounted command provider');
+    expect(item.title).toBe('主窗口：打开所选条目的 PDF');
+    expect(item.meta).toBe('未绑定');
+    expect(provider.rowText(item, 0)).toBe('主窗口：打开所选条目的 PDF · 未绑定');
+    const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
+    if (!input) throw new Error('Expected mounted picker input');
+    input.value = '未绑定';
+    input.emit('input');
+    expect(session.picker.filtered.map((candidate) => candidate.id)).toEqual(['mainOpenPDF']);
+  });
+
+  it('keeps Reader and Main command catalogs context-specific', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const readerContext: CommandPaletteContext = {
+      mode: 'normal',
+      actions: READER_NORMAL_ACTIONS,
+      language: 'en',
+      bindings: {
+        'normal:z': 'zoomIn',
+        'normal:m': 'mainFuzzyAll',
+        'normal:v': 'highlightYellow',
+      },
+      execute: () => {},
+    };
+
+    await picker.open(window, session, 'commands', readerContext);
+    const readerIds = session.picker.filtered.map((item) => item.id);
+    expect(readerIds).toContain('zoomIn');
+    expect(readerIds).toContain('mainFuzzyAll');
+    expect(readerIds).not.toContain('highlightYellow');
+    expect(readerIds).not.toContain('cursorDown');
+    picker.close(session);
+
+    const mainContext: CommandPaletteContext = {
+      mode: 'main',
+      actions: MAIN_EXECUTABLE_ACTIONS,
+      language: 'en',
+      bindings: {
+        'main:x': 'mainFuzzyAll',
+        'main:y': 'zoomIn',
+        'main:z': 'toggleMarksExplorer',
+      },
+      execute: () => {},
+    };
+    await picker.open(window, session, 'commands', mainContext);
+    const mainIds = session.picker.filtered.map((item) => item.id);
+    expect(mainIds).toContain('mainFuzzyAll');
+    expect(mainIds).toContain('mainTabPick');
+    expect(mainIds).not.toContain('toggleMarksExplorer');
+    expect(mainIds).not.toContain('highlightYellow');
+  });
+
+  it('closes on Escape and restores the prior focus target', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainNextTab'],
+      language: 'en',
+      bindings: { 'main:x': 'mainNextTab' },
+      execute: () => {},
+    };
+    await picker.open(window, session, 'commands', context);
+    const restore = { isConnected: true, focus: vi.fn() } as unknown as HTMLElement;
+    session.picker.previousElement = restore;
+    picker.onKeyDown(pickerKey('Escape', session.picker.input), window, session);
+    expect(session.picker.open).toBe(false);
+    expect(restore.focus).toHaveBeenCalledOnce();
+  });
+  it('discards a queued command after close and reopen', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const execute = vi.fn<CommandPaletteContext['execute']>();
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      actions: ['mainNextTab'],
+      language: 'en',
+      bindings: { 'main:x': 'mainNextTab' },
+      execute,
+    };
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'commands', context);
+    session.picker.selected = 0;
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    picker.close(session);
+    await picker.open(window, session, 'commands', context);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(execute).not.toHaveBeenCalled();
+    picker.close(session);
+  });
+});
+function createPickerHarness(width = 1200): {
+  window: MainWindow;
+  session: MainWindowSession;
+  bodyChildren: HTMLElement[];
+} {
+  let activeElement: Element | null = null;
+  let document: Document;
+  const createElement = (tag: string) => {
+    const children: HTMLElement[] = [];
+    const listeners = new Map<string, EventListener[]>();
+    let textContent = '';
+    const element = {
+      setAttribute: (name: string, value: string) => {
+        Reflect.set(element, name, value);
+      },
+      tagName: tag.toUpperCase(),
+      localName: tag,
+      ownerDocument: null as unknown as Document,
+      parentElement: null as HTMLElement | null,
+      style: {} as CSSStyleDeclaration,
+      children,
+      dataset: {} as DOMStringMap,
+      value: '',
+      type: '',
+      placeholder: '',
+      tabIndex: 0,
+      clientHeight: 400,
+      isConnected: true,
+      get textContent() {
+        return textContent;
+      },
+      set textContent(value: string) {
+        textContent = value;
+      },
+      set innerHTML(value: string) {
+        textContent = value.replace(/<[^>]*>/g, '');
+      },
+      append: (...nodes: HTMLElement[]) => {
+        for (const node of nodes)
+          Reflect.set(node, 'parentElement', element as unknown as HTMLElement);
+        children.push(...nodes);
+        textContent += nodes.map((node) => node.textContent ?? '').join('');
+      },
+      appendChild: (node: HTMLElement) => {
+        Reflect.set(node, 'parentElement', element as unknown as HTMLElement);
+        children.push(node);
+        textContent += node.textContent ?? '';
+      },
+      replaceChildren: (...nodes: HTMLElement[]) => {
+        for (const child of children) Reflect.set(child, 'parentElement', null);
+        for (const node of nodes)
+          Reflect.set(node, 'parentElement', element as unknown as HTMLElement);
+        children.splice(0, children.length, ...nodes);
+        textContent = nodes.map((node) => node.textContent ?? '').join('');
+      },
+      addEventListener: (type: string, listener: EventListener) => {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+      },
+      removeEventListener: () => {},
+      closest: (selector: string) => {
+        if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
+          return element as unknown as HTMLElement;
+        return element.parentElement?.closest?.(selector) ?? null;
+      },
+      emit: (type: string, event: Partial<Event> = {}) => {
+        let stopped = false;
+        const synthetic = {
+          ...event,
+          target: event.target ?? element,
+          preventDefault: () => event.preventDefault?.(),
+          stopPropagation: () => {
+            stopped = true;
+            event.stopPropagation?.();
+          },
+          stopImmediatePropagation: () => {
+            stopped = true;
+            event.stopImmediatePropagation?.();
+          },
+        } as Event;
+        for (const listener of listeners.get(type) ?? []) listener(synthetic);
+        if (!stopped)
+          (
+            element.parentElement as
+              | (HTMLElement & { emit?: (type: string, event?: Event) => void })
+              | null
+          )?.emit?.(type, synthetic);
+      },
+      focus: () => {
+        activeElement = element as unknown as Element;
+        element.emit('focus');
+      },
+      select: vi.fn(),
+      scrollBy: vi.fn(),
+      scrollIntoView: vi.fn(),
+      remove: () => {},
+    };
+    element.ownerDocument = document;
+    return element as unknown as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+  };
+  const bodyChildren: HTMLElement[] = [];
+  document = {
+    get activeElement() {
+      return activeElement;
+    },
+    createElementNS: (_namespace: string, tag: string) => createElement(tag),
+    body: { append: (node: HTMLElement) => bodyChildren.push(node) },
+    documentElement: { append: (node: HTMLElement) => bodyChildren.push(node) },
+  } as unknown as Document;
+  const window = {
+    document,
+    innerWidth: width,
+    setTimeout,
+    clearTimeout,
+  } as unknown as MainWindow;
+  const session = {
+    window,
+    picker: {
+      generation: 0,
+      open: false,
+      scope: 'all',
+      overlay: null,
+      input: null,
+      results: null,
+      preview: null,
+      count: null,
+      previewTitle: null,
+      items: [],
+      filtered: [],
+      selected: 0,
+      lastKey: null,
+      yTimer: undefined,
+      focusPane: 'search',
+      tagMode: 'list',
+      command: '',
+      commandTimer: undefined,
+      layout: 'dual',
+      previousElement: null,
+      previousWindow: null,
+      themeCleanup: null,
+    },
+    status: { textContent: '', style: {} },
+    cleanup: { add: () => {} },
+    theme: { add: () => () => {} },
+  } as unknown as MainWindowSession;
+  return { window, session, bodyChildren };
+}
+
+function pickerKey(
+  key: string,
+  target: EventTarget | null,
+  options: { ctrl?: boolean; shift?: boolean } = {},
+): KeyboardEvent {
+  return {
+    key,
+    target,
+    ctrlKey: options.ctrl ?? false,
+    shiftKey: options.shift ?? false,
+    metaKey: false,
+    altKey: false,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  } as unknown as KeyboardEvent;
+}
+
+describe('tab picker activation', () => {
+  it('keeps tab selection and activation keyboard-only', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const selected: string[] = [];
+    const tabs = {
+      _tabs: [
+        { id: 'zotero-pane', title: 'Library', type: 'library' },
+        { id: 'reader-tab', title: 'Reader', type: 'reader' },
+      ],
+      selectedID: 'zotero-pane',
+      select: vi.fn(function (this: typeof tabs, id: string) {
+        expect(this).toBe(tabs);
+        selected.push(id);
+      }),
+    };
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { Zotero_Tabs: tabs });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'tabs');
+    expect(session.picker.results?.children[0]?.textContent).toBe('Library');
+    picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+    await vi.waitFor(() => expect(selected).toEqual(['zotero-pane']));
+    expect(session.picker.open).toBe(false);
+
+    await picker.open(window, session, 'tabs');
+    const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
+    row.emit('click');
+    row.emit('dblclick');
+    row.emit('mouseenter');
+    expect(session.picker.selected).toBe(0);
+    expect(selected).toEqual(['zotero-pane']);
+    expect(session.picker.open).toBe(true);
+    picker.close(session);
+  });
+  it('supports keyboard navigation outside the query input', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const tabs = {
+      _tabs: [
+        { id: 'first-tab', title: 'First', type: 'reader' },
+        { id: 'second-tab', title: 'Second', type: 'reader' },
+      ],
+      selectedID: 'first-tab',
+    };
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { Zotero_Tabs: tabs });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'tabs');
+    const input = session.picker.input;
+    picker.onKeyDown(pickerKey('j', input), window, session);
+    picker.onKeyDown(pickerKey('k', input), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', input), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', input), window, session);
+    expect(session.picker.selected).toBe(0);
+
+    picker.onKeyDown(pickerKey('j', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('k', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+
+    picker.onKeyDown(pickerKey('j', session.picker.results, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+    const firstRow = session.picker.results?.children[0] as HTMLElement & {
+      emit(type: string): void;
+    };
+    firstRow.emit('mouseenter');
+    expect(session.picker.selected).toBe(1);
+
+    picker.onKeyDown(pickerKey('k', session.picker.results, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(0);
+    const secondRow = session.picker.results?.children[1] as HTMLElement & {
+      emit(type: string): void;
+    };
+    secondRow.emit('mouseenter');
+    expect(session.picker.selected).toBe(0);
+  });
+  it('selects and confirms a tab row with enabled mouse', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const selected: string[] = [];
+    const tabs = {
+      _tabs: [
+        { id: 'zotero-pane', title: 'Library', type: 'library' },
+        { id: 'reader-tab', title: 'Reader', type: 'reader' },
+      ],
+      selectedID: 'zotero-pane',
+      select: vi.fn(function (this: typeof tabs, id: string) {
+        expect(this).toBe(tabs);
+        selected.push(id);
+      }),
+    };
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { Zotero_Tabs: tabs });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+
+    await picker.open(window, session, 'tabs');
+    const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
+    expect(row.dataset.zvPickerRow).toBe('1');
+    row.emit('mouseenter');
+    expect(session.picker.selected).toBe(0);
+    row.emit('click');
+    expect(session.picker.selected).toBe(1);
+    expect(session.picker.preview?.textContent).toContain('reader');
+    expect(selected).toEqual([]);
+    row.emit('dblclick');
+    await vi.waitFor(() => expect(selected).toEqual(['reader-tab']));
+    expect(selected).toHaveLength(1);
+    expect(session.picker.open).toBe(false);
+  });
+});
+
+describe('unified Notes picker', () => {
+  it('searches note names, previews in two panes, moves focus, scrolls, trashes, and restores', async () => {
+    vi.useFakeTimers();
+    const current = {
+      id: 1,
+      deleted: false,
+      dateModified: '2026-09-11 08:00:00',
+      isNote: () => true,
+      getNote: () => '<p>Current preview body</p>',
+      getDisplayTitle: () => 'Current note',
+    } as unknown as Zotero.Item;
+    const other = {
+      id: 2,
+      deleted: false,
+      dateModified: '2026-09-10 00:00:00',
+      isNote: () => true,
+      getNote: () => '<p>Body-only searchable phrase</p>',
+      getDisplayTitle: () => 'Other note',
+    } as unknown as Zotero.Item;
+    const parent = {
+      id: 10,
+      libraryID: 3,
+      isNote: () => false,
+      isAttachment: () => false,
+      getNotes: () => [current.id],
+      getDisplayTitle: () => 'Parent item',
+    } as unknown as Zotero.Item;
+    const attachment = {
+      id: 11,
+      parentItemID: parent.id,
+      isNote: () => false,
+      isAttachment: () => true,
+    } as unknown as Zotero.Item;
+    const byID = new Map([
+      [current.id, current],
+      [other.id, other],
+      [parent.id, parent],
+      [attachment.id, attachment],
+    ]);
+    const trashTx = vi.fn(async (ids: number[]) => {
+      for (const id of ids) Reflect.set(byID.get(id) ?? {}, 'deleted', true);
+    });
+    const undo = vi.fn(async () => {
+      Reflect.set(other, 'deleted', false);
+      return true;
+    });
+    class Search {
+      addCondition() {}
+      async search(): Promise<number[]> {
+        return [current.id, other.id];
+      }
+    }
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: {
+        get: (id: number | number[]) =>
+          Array.isArray(id)
+            ? id.flatMap((value) => byID.get(value) ?? [])
+            : (byID.get(id) ?? false),
+        getAll: vi.fn(),
+        trashTx,
+      },
+      Reader: { getByTabID: () => ({ itemID: attachment.id }) },
+      Libraries: { userLibraryID: 1 },
+      Schema: { schemaUpdatePromise: Promise.resolve() },
+      Search,
+      UndoHistory: { getUndoAction: () => ({ action: 'undo-action-trash' }), undo },
+      Notes: { open: vi.fn() },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      Zotero_Tabs: { selectedID: 'reader-tab' },
+      ZoteroPane: { getSelectedItems: () => [] },
+    });
+    const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {});
+    const restoreTrashedItems = vi.spyOn(navigation, 'restoreTrashedItems');
+    const picker = new FuzzyPicker({ debug: vi.fn(), diagnostic: vi.fn() }, navigation);
+
+    await picker.open(window, session, 'notes');
+    vi.advanceTimersByTime(30);
+    expect(session.picker.preview?.textContent).toContain('Current preview body');
+    const input = session.picker.input as HTMLInputElement & { emit(type: string): void };
+    input.value = 'other';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([other.id]);
+    input.value = 'body-only searchable phrase';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([other.id]);
+    input.value = 'not present in any note';
+    input.emit('input');
+    expect(session.picker.filtered).toHaveLength(0);
+    input.value = '';
+    input.emit('input');
+
+    picker.onKeyDown(pickerKey('ArrowDown', input), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', input), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('j', input, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('k', input, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('d', input, { ctrl: true }), window, session);
+    expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: 200 });
+    picker.onKeyDown(pickerKey('u', input, { ctrl: true }), window, session);
+    expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: -200 });
+    session.picker.selected = 1;
+    session.picker.focusPane = 'list';
+
+    picker.onKeyDown(pickerKey('x', session.picker.results), window, session);
+    await vi.waitFor(() => expect(trashTx).toHaveBeenCalledWith([other.id]));
+    await vi.waitFor(() =>
+      expect(session.picker.filtered.map((item) => item.id)).toEqual([current.id]),
+    );
+    picker.onKeyDown(pickerKey('u', session.picker.results), window, session);
+    await vi.waitFor(() => expect(restoreTrashedItems).toHaveBeenCalledWith([other.id]));
+    await vi.waitFor(() => expect(undo).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(session.picker.filtered).toHaveLength(2));
+  });
+
+  it('ignores a pending note trash completion after close', async () => {
+    vi.useFakeTimers();
+    let resolveTrash: ((value: boolean) => void) | undefined;
+    const pendingTrash = new Promise<boolean>((resolve) => {
+      resolveTrash = resolve;
+    });
+    const note = {
+      id: 2,
+      deleted: false,
+      dateModified: '2026-09-10 00:00:00',
+      isNote: () => true,
+      getNote: () => '<p>Pending note</p>',
+      getDisplayTitle: () => 'Pending note',
+    } as unknown as Zotero.Item;
+    class Search {
+      addCondition() {}
+      async search(): Promise<number[]> {
+        return [note.id];
+      }
+    }
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: {
+        get: (id: number | number[]) => (Array.isArray(id) ? [note] : note),
+        getAll: vi.fn(),
+      },
+      Schema: { schemaUpdatePromise: Promise.resolve() },
+      Search,
+      Notes: { open: vi.fn() },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
+    const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {});
+    const picker = new FuzzyPicker({ debug: vi.fn(), diagnostic: vi.fn() }, navigation);
+    vi.spyOn(navigation, 'trashItems').mockReturnValue(pendingTrash);
+    await picker.open(window, session, 'notes');
+    session.picker.items = [
+      { id: note.id, title: 'Pending note', search: 'pending note', kind: 'note' },
+    ];
+    session.picker.filtered = [...session.picker.items];
+    session.picker.selected = 0;
+    session.picker.focusPane = 'list';
+    picker.onKeyDown(pickerKey('x', session.picker.results), window, session);
+    await vi.waitFor(() => expect(navigation.trashItems).toHaveBeenCalledWith([note.id]));
+    picker.close(session);
+    resolveTrash?.(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(session.picker.items).toEqual([]);
+    expect(session.picker.filtered).toEqual([]);
+    expect(session.picker.lastDeletedNoteID).toBeNull();
+    expect(session.status.textContent).toBe('');
+  });
+
+  it('selects and confirms a note row with enabled mouse', async () => {
+    const note = {
+      id: 7,
+      deleted: false,
+      dateModified: '2026-09-12 08:00:00',
+      isNote: () => true,
+      getNote: () => '<p>Mouse note body</p>',
+      getDisplayTitle: () => 'Mouse note',
+    } as unknown as Zotero.Item;
+    class Search {
+      addCondition() {}
+      async search(): Promise<number[]> {
+        return [note.id];
+      }
+    }
+    const selectItem = vi.fn(async () => undefined);
+    const openNote = vi.fn(async () => undefined);
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: {
+        get: (id: number | number[]) => (Array.isArray(id) ? [note] : note),
+      },
+      Libraries: { userLibraryID: 1 },
+      Schema: { schemaUpdatePromise: Promise.resolve() },
+      Search,
+      Notes: { open: vi.fn() },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem, openNote } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+
+    await picker.open(window, session, 'notes');
+    const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
+    row.emit('mouseenter');
+    expect(session.picker.selected).toBe(0);
+    row.emit('click');
+    expect(session.picker.preview?.textContent).toContain('Mouse note body');
+    expect(selectItem).not.toHaveBeenCalled();
+    row.emit('dblclick');
+    await vi.waitFor(() => expect(openNote).toHaveBeenCalledWith(note.id, { openInWindow: false }));
+    expect(openNote).toHaveBeenCalledOnce();
+    expect(session.picker.open).toBe(false);
+  });
+  it('uses a stacked single-column fallback on narrow windows', async () => {
+    vi.useFakeTimers();
+    class Search {
+      addCondition() {}
+      async search(): Promise<number[]> {
+        return [];
+      }
+    }
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { get: () => false, getAll: vi.fn(), trashTx: vi.fn() },
+      Reader: { getByTabID: () => null },
+      Libraries: { userLibraryID: 1 },
+      Schema: { schemaUpdatePromise: Promise.resolve() },
+      Search,
+    });
+    const { window, session, bodyChildren } = createPickerHarness(720);
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'notes');
+    vi.advanceTimersByTime(30);
+
+    expect(session.picker.layout).toBe('single');
+    expect(session.picker.results).not.toBeNull();
+    expect(session.picker.preview).not.toBeNull();
+    const overlay = bodyChildren[0];
+    const modal = overlay?.children[0];
+    const content = modal?.children[0];
+    expect(Array.from(content?.children ?? []).map((element) => element.localName)).toEqual([
+      'section',
+      'section',
+    ]);
+    const left = content?.children[0];
+    const shortcuts = left?.children[2];
+    expect(shortcuts?.textContent).toContain('Ctrl+j/k select');
+    expect(shortcuts?.textContent).toContain('Ctrl+d/u preview');
+    expect(shortcuts?.textContent).toContain('Enter apply · Esc close');
+  });
+});
+
+describe('picker async lifecycle', () => {
+  it('discards a scope load that finishes after the picker closes', async () => {
+    let resolveItems: ((items: Zotero.Item[]) => void) | undefined;
+    const pendingItems = new Promise<Zotero.Item[]>((resolve) => {
+      resolveItems = resolve;
+    });
+    const diagnostic = vi.fn();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: () => pendingItems },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    const opening = picker.open(window, session, 'all');
+    picker.close(session);
+    resolveItems?.([
+      {
+        id: 1,
+        isRegularItem: () => true,
+        getField: (field: string) => (field === 'title' ? 'Late item' : ''),
+      } as unknown as Zotero.Item,
+    ]);
+    await opening;
+
+    expect(session.picker.open).toBe(false);
+    expect(session.picker.items).toEqual([]);
+    expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('picker load discarded'));
+  });
+
+  it('waits for item selection before opening its attachment', async () => {
+    let releaseSelection: (() => void) | undefined;
+    const selected: Zotero.Item[] = [];
+    const attachment = { id: 2, isAttachment: () => true } as Zotero.Item;
+    const item = {
+      id: 1,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) => (field === 'title' ? 'Selected item' : ''),
+      getBestAttachment: async () => attachment,
+      getAttachments: () => [],
+    } as unknown as Zotero.Item;
+    const selectItem = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSelection = () => {
+            selected.splice(0, selected.length, item);
+            resolve();
+          };
+        }),
+    );
+    const viewAttachment = vi.fn();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [item] },
+      Libraries: { userLibraryID: 1 },
+      Utilities: { cleanDOI: (value: string) => value },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: { getSelectedItems: () => selected, selectItem, viewAttachment },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'all');
+    picker.onKeyDown(pickerKey('o', session.picker.results, { ctrl: true }), window, session);
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(item.id));
+    expect(viewAttachment).not.toHaveBeenCalled();
+
+    releaseSelection?.();
+    await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(attachment.id));
+    expect(session.picker.open).toBe(false);
+  });
+});
+
+describe('pointer activation lifecycle', () => {
+  it('leaves the picker open when pointer activation fails', async () => {
+    const item = {
+      id: 3,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) => (field === 'title' ? 'Failed item' : ''),
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const selectItem = vi.fn(async () => {
+      throw new Error('selection failed');
+    });
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [item] },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+
+    await picker.open(window, session, 'all');
+    const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
+    row.emit('dblclick');
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledOnce());
+    expect(session.picker.open).toBe(true);
+  });
+
+  it('discards pointer activation that finishes after the picker closes', async () => {
+    let releaseSelection: (() => void) | undefined;
+    const item = {
+      id: 4,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) => (field === 'title' ? 'Stale item' : ''),
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const selectItem = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSelection = resolve;
+        }),
+    );
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [item] },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+
+    await picker.open(window, session, 'all');
+    const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
+    row.emit('dblclick');
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledOnce());
+    picker.close(session);
+    releaseSelection?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(session.picker.open).toBe(false);
+  });
+  it('revalidates the clicked item when filtering reorders rows before activation', async () => {
+    const first = {
+      id: 11,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) => (field === 'title' ? 'First stable item' : ''),
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const second = {
+      id: 12,
+      isRegularItem: () => true,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: (field: string) => (field === 'title' ? 'Second stable item' : ''),
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const selectItem = vi.fn(async () => undefined);
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [first, second] },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+
+    await picker.open(window, session, 'all');
+    const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
+    const [firstItem, secondItem] = session.picker.filtered;
+    row.emit('dblclick');
+    session.picker.filtered = [secondItem!, firstItem!];
+    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(first.id));
+    expect(selectItem).not.toHaveBeenCalledWith(second.id);
+    expect(session.picker.open).toBe(false);
+  });
+});
+describe('unified tag picker', () => {
+  it('pins active filters, applies AND selection immediately, clears filters, and switches scope', async () => {
+    vi.useFakeTimers();
+    const selectedTags = new Set(['alpha']);
+    const currentTags: _ZoteroTypes.Tags.TagJson[] = [
+      { tag: 'beta' },
+      { tag: 'alpha' },
+      { tag: 'automatic', type: 1 },
+    ];
+    const libraryTags: _ZoteroTypes.Tags.TagJson[] = [...currentTags, { tag: 'outside' }];
+    const setFilter = vi.fn(async (_type: 'tags', tags: ReadonlySet<string>) => {
+      selectedTags.clear();
+      for (const tag of tags) selectedTags.add(tag);
+    });
+    const itemsView = { rowCount: 42, setFilter };
+    const tagSelector = { selectedTags: new Set(['alpha']) };
+    const row = {
+      ref: { libraryID: 1 },
+      tags: selectedTags,
+      getTags: vi.fn(async () => currentTags),
+    };
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Tags: { getAll: vi.fn(async () => libraryTags) },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: { getCollectionTreeRow: () => row, itemsView, tagSelector },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'tags');
+    vi.advanceTimersByTime(30);
+
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['alpha', 'beta', 'automatic']);
+    expect(session.picker.filtered[0]?.selected).toBe(true);
+    expect(session.picker.tagSelection).toEqual(['alpha']);
+    session.picker.tagMode = 'query';
+    session.picker.focusPane = 'search';
+    const queryInput = session.picker.input;
+    queryInput?.focus();
+    expect(window.document.activeElement).toBe(queryInput);
+    const arrowDown = pickerKey('ArrowDown', queryInput);
+    picker.onKeyDown(arrowDown, window, session);
+    expect(session.picker.selected).toBe(1);
+    expect(session.picker.tagMode).toBe('query');
+    expect(session.picker.focusPane).toBe('search');
+    expect(arrowDown.preventDefault).toHaveBeenCalledOnce();
+    const arrowUp = pickerKey('ArrowUp', queryInput);
+    picker.onKeyDown(arrowUp, window, session);
+    expect(session.picker.selected).toBe(0);
+    expect(session.picker.tagMode).toBe('query');
+    expect(window.document.activeElement).toBe(queryInput);
+    expect(arrowUp.preventDefault).toHaveBeenCalledOnce();
+    picker.onKeyDown(pickerKey('j', queryInput, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('k', queryInput, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(0);
+    session.picker.tagMode = 'list';
+    session.picker.focusPane = 'list';
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    session.picker.tagMode = 'query';
+    session.picker.focusPane = 'search';
+    picker.onKeyDown(pickerKey('d', session.picker.input, { ctrl: true }), window, session);
+    expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: 200 });
+    picker.onKeyDown(pickerKey('u', session.picker.input, { ctrl: true }), window, session);
+    expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: -200 });
+    const toList = pickerKey('Tab', queryInput);
+    picker.onKeyDown(toList, window, session);
+    expect(toList.preventDefault).toHaveBeenCalledOnce();
+    expect(session.picker.tagMode).toBe('list');
+    expect(session.picker.focusPane).toBe('list');
+
+    session.picker.selected = 1;
+    picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
+    await vi.waitFor(() =>
+      expect(setFilter).toHaveBeenLastCalledWith('tags', new Set(['alpha', 'beta'])),
+    );
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['beta', 'alpha', 'automatic']);
+    expect(session.picker.selected).toBe(0);
+    expect(session.picker.preview?.textContent).toContain('Filters: alpha AND beta');
+
+    picker.onKeyDown(pickerKey('x', session.picker.results), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenLastCalledWith('tags', new Set(['alpha'])));
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['alpha', 'beta', 'automatic']);
+    expect(session.picker.selected).toBe(1);
+
+    picker.onKeyDown(pickerKey('a', session.picker.results), window, session);
+    await vi.waitFor(() => expect(session.picker.tagScope).toBe('library'));
+    await vi.waitFor(() =>
+      expect(session.picker.items.map((item) => item.id)).toContain('outside'),
+    );
+
+    picker.onKeyDown(pickerKey('C', session.picker.results), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenLastCalledWith('tags', new Set()));
+    expect(session.picker.tagSelection).toEqual([]);
+    expect(session.picker.preview?.textContent).toContain('Filters: (none)');
+    session.picker.selected = session.picker.filtered.findIndex((item) => item.id === 'beta');
+    const filterCalls = setFilter.mock.calls.length;
+    picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
+    picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenCalledTimes(filterCalls + 2));
+    expect(setFilter).toHaveBeenLastCalledWith('tags', new Set());
+    expect(session.picker.tagSelection).toEqual([]);
+  });
+  it('keeps control keys literal in Query mode and Enter toggles without closing', async () => {
+    vi.useFakeTimers();
+    const selectedTags = new Set<string>();
+    const tags: _ZoteroTypes.Tags.TagJson[] = [{ tag: 'beta' }, { tag: 'alpha' }];
+    const setFilter = vi.fn(async (_type: 'tags', next: ReadonlySet<string>) => {
+      selectedTags.clear();
+      for (const tag of next) selectedTags.add(tag);
+    });
+    const row = {
+      ref: { libraryID: 1 },
+      tags: selectedTags,
+      getTags: vi.fn(async () => tags),
+    };
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Tags: { getAll: vi.fn(async () => tags) },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    const tagSelector = { selectedTags: new Set<string>() };
+    Object.assign(window, {
+      ZoteroPane: {
+        getCollectionTreeRow: () => row,
+        itemsView: { rowCount: 7, setFilter },
+        tagSelector,
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'tags');
+    vi.advanceTimersByTime(30);
+    expect(session.picker.focusPane).toBe('list');
+    expect(session.picker.selected).toBe(0);
+    const input = session.picker.input as HTMLInputElement & { emit(type: string): void };
+    input.value = 'alp';
+    input.emit('input');
+    picker.onKeyDown(pickerKey('/', session.picker.results), window, session);
+    expect(session.picker.focusPane).toBe('search');
+    const callsBeforeLiteral = setFilter.mock.calls.length;
+    picker.onKeyDown(pickerKey(' ', input), window, session);
+    picker.onKeyDown(pickerKey('x', input), window, session);
+    picker.onKeyDown(pickerKey('C', input), window, session);
+    picker.onKeyDown(pickerKey('a', input), window, session);
+    expect(setFilter).toHaveBeenCalledTimes(callsBeforeLiteral);
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenLastCalledWith('tags', new Set(['alpha'])));
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.focusPane).toBe('list');
+    picker.onKeyDown(pickerKey('Escape', session.picker.results), window, session);
+    expect(session.picker.open).toBe(false);
+  });
+  it('uses explicit List mode despite physical input focus and target', async () => {
+    vi.useFakeTimers();
+    const tags: _ZoteroTypes.Tags.TagJson[] = [{ tag: 'alpha' }];
+    const row = {
+      ref: { libraryID: 1 },
+      tags: new Set<string>(),
+      getTags: vi.fn(async () => tags),
+    };
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Tags: { getAll: vi.fn(async () => tags) },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session, bodyChildren } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: {
+        getCollectionTreeRow: () => row,
+        itemsView: { rowCount: 1, setFilter: vi.fn() },
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    await picker.open(window, session, 'tags');
+    vi.advanceTimersByTime(30);
+    const overlay = bodyChildren[0];
+    const content = overlay?.children[0]?.children[0];
+    const left = content?.children[0];
+    expect(Array.from(left?.children ?? []).map((child) => child.tagName)).toEqual([
+      'HEADER',
+      'INPUT',
+      'DIV',
+      'DIV',
+      'DIV',
+    ]);
+    expect(session.picker.queryHelp?.textContent).toContain('Query');
+    expect(session.picker.listHelp?.textContent).toContain('List');
+    expect(session.picker.queryHelp?.style.cssText).toContain('flex:0 0 auto');
+    expect(session.picker.listHelp?.style.cssText).toContain('flex:0 0 auto');
+    expect(session.picker.queryHelp?.style.cssText).not.toContain('overflow:auto');
+    expect(session.picker.listHelp?.style.cssText).not.toContain('overflow:auto');
+    expect(session.picker.results?.style.cssText).toContain('overflow:auto');
+    expect(session.picker.results?.style.cssText).toContain('flex:1');
+    expect(session.picker.results?.style.cssText).toContain('min-height:0');
+    expect(left?.children[2]).toBe(session.picker.queryHelp);
+    expect(left?.children[3]).toBe(session.picker.results);
+    expect(left?.children[4]).toBe(session.picker.listHelp);
+    const input = session.picker.input as HTMLInputElement;
+    input.focus();
+    session.picker.tagMode = 'list';
+    const slash = pickerKey('/', input);
+    picker.onKeyDown(slash, window, session);
+    expect(session.picker.tagMode).toBe('query');
+    expect(slash.preventDefault).toHaveBeenCalledOnce();
+    const escape = pickerKey('Escape', input);
+    picker.onKeyDown(escape, window, session);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(session.picker.tagMode).toBe('list');
+    expect(session.picker.focusPane).toBe('list');
+
+    input.focus();
+    session.picker.tagMode = 'list';
+    const tab = pickerKey('Tab', input);
+    tab.stopImmediatePropagation = vi.fn();
+    picker.onKeyDown(tab, window, session);
+    expect(session.picker.tagMode).toBe('query');
+    expect(tab.preventDefault).toHaveBeenCalledOnce();
+    expect(tab.stopImmediatePropagation).toHaveBeenCalledOnce();
+  });
+
+  it('resynchronizes native state when a tag filter update fails', async () => {
+    vi.useFakeTimers();
+    const nativeTags = new Set(['alpha']);
+    const setFilter = vi.fn(async () => {
+      throw new Error('refresh failed');
+    });
+    const tags: _ZoteroTypes.Tags.TagJson[] = [{ tag: 'beta' }, { tag: 'alpha' }];
+    const row = { ref: { libraryID: 1 }, tags: nativeTags, getTags: vi.fn(async () => tags) };
+    const tagSelector = { selectedTags: new Set(['native-selected']) };
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Tags: { getAll: vi.fn(async () => tags) },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: {
+        getCollectionTreeRow: () => row,
+        itemsView: { rowCount: 2, setFilter },
+        tagSelector,
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    await picker.open(window, session, 'tags');
+    vi.advanceTimersByTime(30);
+    session.picker.selected = 1;
+    picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenCalledOnce());
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.tagSelection).toEqual(['alpha']);
+    expect(tagSelector.selectedTags).toEqual(new Set(['alpha']));
+  });
+
+  it('keeps tag selection and toggling keyboard-only', async () => {
+    vi.useFakeTimers();
+    const selectedTags = new Set<string>();
+    const tags: _ZoteroTypes.Tags.TagJson[] = [{ tag: 'beta' }, { tag: 'alpha' }];
+    const setFilter = vi.fn(async (_type: 'tags', next: ReadonlySet<string>) => {
+      selectedTags.clear();
+      for (const tag of next) selectedTags.add(tag);
+    });
+    const row = { ref: { libraryID: 1 }, tags: selectedTags, getTags: vi.fn(async () => tags) };
+    const tagSelector = { selectedTags: new Set(['native-selected']) };
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Tags: { getAll: vi.fn(async () => tags) },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: {
+        getCollectionTreeRow: () => row,
+        itemsView: { rowCount: 3, setFilter },
+        tagSelector,
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+    await picker.open(window, session, 'tags');
+    expect(session.picker.tagSelection).toEqual([]);
+    expect(tagSelector.selectedTags).toEqual(new Set(['native-selected']));
+    vi.advanceTimersByTime(30);
+    const callsBeforePointer = setFilter.mock.calls.length;
+    const second = session.picker.results?.children[1] as HTMLElement & {
+      emit(type: string): void;
+    };
+    expect(second.children).toHaveLength(2);
+    const marker = second.children[0] as HTMLElement & { emit(type: string): void };
+    expect(marker.tagName).toBe('SPAN');
+    expect(marker.tabIndex).toBe(-1);
+    expect(Reflect.get(marker, 'role')).toBe('checkbox');
+    expect(Reflect.get(marker, 'aria-checked')).toBe('false');
+    expect(second.children[1]?.textContent).toBe('alpha · manual');
+    second.emit('click');
+    second.emit('dblclick');
+    second.emit('mouseenter');
+    marker.emit('click');
+    expect(session.picker.selected).toBe(0);
+    expect(setFilter).toHaveBeenCalledTimes(callsBeforePointer);
+
+    picker.onKeyDown(pickerKey('j', session.picker.results, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenLastCalledWith('tags', new Set(['alpha'])));
+    expect(session.picker.open).toBe(true);
+    expect(tagSelector.selectedTags).toEqual(new Set(['alpha']));
+  });
+
+  it('ignores a pending tag filter completion after close', async () => {
+    let resolveFilter: (() => void) | undefined;
+    const pending = new Promise<void>((resolve) => {
+      resolveFilter = resolve;
+    });
+    const selectedTags = new Set<string>();
+    const tags: _ZoteroTypes.Tags.TagJson[] = [{ tag: 'beta' }];
+    const setFilter = vi.fn(() => pending);
+    const row = { ref: { libraryID: 1 }, tags: selectedTags, getTags: vi.fn(async () => tags) };
+    const tagSelector = { selectedTags: new Set<string>() };
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Tags: { getAll: vi.fn(async () => tags) },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: {
+        getCollectionTreeRow: () => row,
+        itemsView: { rowCount: 1, setFilter },
+        tagSelector,
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    await picker.open(window, session, 'tags');
+    session.picker.selected = 0;
+    picker.onKeyDown(pickerKey(' ', session.picker.results), window, session);
+    await vi.waitFor(() => expect(setFilter).toHaveBeenCalledOnce());
+    picker.close(session);
+    resolveFilter?.();
+    await Promise.resolve();
+    expect(session.picker.open).toBe(false);
+    expect(session.picker.tagSelection).toEqual([]);
+    expect(tagSelector.selectedTags).toEqual(new Set());
+  });
+
+  it('ignores a pending tag scope load after close', async () => {
+    let resolveTags: ((tags: _ZoteroTypes.Tags.TagJson[]) => void) | undefined;
+    const pendingTags = new Promise<_ZoteroTypes.Tags.TagJson[]>((resolve) => {
+      resolveTags = resolve;
+    });
+    const currentTags: _ZoteroTypes.Tags.TagJson[] = [{ tag: 'current' }];
+    const row = {
+      ref: { libraryID: 1 },
+      tags: new Set<string>(),
+      getTags: vi.fn(async () => currentTags),
+    };
+    const getAll = vi.fn(() => pendingTags);
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', { Tags: { getAll }, Libraries: { userLibraryID: 1 } });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, {
+      ZoteroPane: {
+        getCollectionTreeRow: () => row,
+        itemsView: { rowCount: 1, setFilter: vi.fn() },
+      },
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    await picker.open(window, session, 'tags');
+    picker.onKeyDown(pickerKey('a', session.picker.results), window, session);
+    await vi.waitFor(() => expect(getAll).toHaveBeenCalledOnce());
+    picker.close(session);
+    resolveTags?.([{ tag: 'library' }]);
+    await Promise.resolve();
+    expect(session.picker.open).toBe(false);
+    expect(session.picker.tagScope).toBe('current');
+    expect(session.picker.items).toEqual([]);
+  });
+});
 describe('citation-key lookup', () => {
   it('prefers the native citationKey field populated by current Better BibTeX', () => {
     const item = {

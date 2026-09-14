@@ -1,3 +1,4 @@
+import type { MainWindow } from '../core/contracts';
 import type { ActionId } from '../input/actions';
 import type { Mode } from '../input/bindings';
 
@@ -18,6 +19,7 @@ export type ReaderRuntime = _ZoteroTypes.ReaderInstance & {
   readonly _instanceID?: string;
   readonly itemID?: number;
   readonly _iframeWindow?: Window;
+  readonly _window?: MainWindow & { readonly ZoteroContextPane?: { focus?(): boolean | void } };
   readonly _internalReader?: InternalReaderRuntime;
 };
 
@@ -25,16 +27,22 @@ export interface InternalReaderRuntime {
   readonly _primaryView?: ReaderViewRuntime;
   readonly _secondaryView?: ReaderViewRuntime;
   readonly _lastView?: ReaderViewRuntime;
+  readonly _lastViewPrimary?: boolean;
   readonly _state?: {
     readonly selectedAnnotationIDs?: readonly string[];
     readonly primaryViewFindState?: { readonly active?: boolean };
     readonly secondaryViewFindState?: { readonly active?: boolean };
+    readonly primary?: boolean;
   };
+  readonly splitType?: 'horizontal' | 'vertical' | null;
   _enableAnnotationDeletionFromComment?: boolean;
   navigateToPreviousPage?(): void;
   navigateToNextPage?(): void;
   navigateToFirstPage?(): void;
   navigateToLastPage?(): void;
+  zoomIn?(): void;
+  zoomOut?(): void;
+  zoomReset?(): void;
   navigate?(payload: {
     readonly pageIndex?: number;
     readonly annotationID?: string;
@@ -50,8 +58,9 @@ export interface InternalReaderRuntime {
   toggleSidebar?(): void;
   setSidebarOpen?(options: { readonly open: boolean } | boolean): void;
   setSidebarView?(options: { readonly view: 'outline' } | 'outline'): void;
-  toggleSplit?(options: { readonly type: 'horizontal' | 'vertical' }): void;
-  focusSplit?(options: { readonly direction: 'left' | 'right' | 'up' | 'down' }): void;
+  toggleHorizontalSplit?(enable?: boolean): void;
+  toggleVerticalSplit?(enable?: boolean): void;
+  focusView?(primary?: boolean): void;
 }
 
 export interface ReaderViewRuntime {
@@ -240,6 +249,7 @@ export interface ViewHandlers {
 export interface OutlineState {
   open: boolean;
   loading: boolean;
+  loadGeneration: number;
   tree: OutlineNode[] | null;
   visible: OutlineNode[];
   selected: number;

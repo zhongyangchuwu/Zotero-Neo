@@ -17,8 +17,10 @@ const MODE_BY_NAME: Readonly<Record<string, true>> = {
 export const DEFAULT_BINDINGS = {
   'normal:j': 'scrollDown',
   'normal:k': 'scrollUp',
-  'normal:H': 'scrollLeft',
-  'normal:L': 'scrollRight',
+  'normal:H': 'mainPrevTab',
+  'normal:L': 'mainNextTab',
+  'normal:zh': 'scrollLeft',
+  'normal:zl': 'scrollRight',
   'normal:h': 'prevPage',
   'normal:l': 'nextPage',
   'normal:gg': 'firstPage',
@@ -27,10 +29,17 @@ export const DEFAULT_BINDINGS = {
   'normal:ctrl+u': 'halfPageUp',
   'normal:ctrl+f': 'fullPageDown',
   'normal:ctrl+b': 'fullPageUp',
+  'normal:+': 'zoomIn',
+  'normal:-': 'zoomOut',
+  'normal:zI': 'zoomIn',
+  'normal:zO': 'zoomOut',
+  'normal:=': 'zoomReset',
+  'normal:z0': 'zoomReset',
   'normal:ctrl+o': 'historyBack',
   'normal:ctrl+i': 'historyForward',
   'normal:f': 'followLink',
   'normal:/': 'openSearch',
+  'normal::': 'openCommandPalette',
   'normal:n': 'findNext',
   'normal:N': 'findPrevious',
   'normal:[': 'prevAnnotation',
@@ -56,8 +65,6 @@ export const DEFAULT_BINDINGS = {
   'normal:v': 'enterVisual',
   'normal:c': 'enterCursor',
   'normal:i': 'enterInsert',
-  'normal:J': 'mainPrevTab',
-  'normal:K': 'mainNextTab',
   'normal:ctrl+h': 'focusReaderSplitLeft',
   'normal:ctrl+j': 'focusReaderSplitDown',
   'normal:ctrl+k': 'focusReaderSplitUp',
@@ -67,12 +74,11 @@ export const DEFAULT_BINDINGS = {
   'normal: -': 'toggleReaderSplitHorizontal',
   'normal: |': 'toggleReaderSplitVertical',
   'normal: ff': 'mainFuzzyAll',
-  'normal: fb': 'mainFuzzyCollection',
-  'normal: bj': 'mainTabPick',
-  'normal: n': 'mainNotesLayout',
+  'normal: fc': 'mainFuzzyCollection',
+  'normal: ft': 'mainTabPick',
+  'normal: td': 'mainClosePDF',
+  'normal: fn': 'mainNotesLayout',
   'normal: yy': 'mainYankCitekey',
-  'normal: o': 'mainOpenPDF',
-  'normal: q': 'mainClosePDF',
   'normal: m': 'toggleMarksExplorer',
   'visual:j': 'extendDown',
   'visual:k': 'extendUp',
@@ -113,17 +119,25 @@ export const DEFAULT_BINDINGS = {
   'cursor:escape': 'exitMode',
   'insert:escape': 'exitMode',
   'main: ff': 'mainFuzzyAll',
-  'main: fb': 'mainFuzzyCollection',
-  'main: bj': 'mainTabPick',
-  'main: n': 'mainNotesLayout',
+  'main::': 'openCommandPalette',
+  'main: fc': 'mainFuzzyCollection',
+  'main: ft': 'mainTabPick',
+  'main: fT': 'mainTagPicker',
+  'main: td': 'mainClosePDF',
+  'main: fn': 'mainNotesLayout',
   'main: e': 'mainFocusTree',
   'main: yy': 'mainYankCitekey',
   'main: o': 'mainOpenPDF',
-  'main: q': 'mainClosePDF',
-  'main: /': 'mainFocusSearch',
   'main: wh': 'mainFocusLeft',
   'main: wl': 'mainFocusRight',
   'main: ww': 'mainFocusItems',
+  'main:ctrl+h': 'focusReaderSplitLeft',
+  'main:ctrl+j': 'focusReaderSplitDown',
+  'main:ctrl+k': 'focusReaderSplitUp',
+  'main:ctrl+l': 'focusReaderSplitRight',
+  'main:dd': 'mainTrashItems',
+  'main:x': 'mainTrashItems',
+  'main:u': 'mainRestoreTrashedItems',
   'main:h': 'mainTreeCollapse',
   'main:l': 'mainTreeExpand',
   'main:j': 'mainNavDown',
@@ -136,8 +150,8 @@ export const DEFAULT_BINDINGS = {
   'main:backspace': 'mainTreeParent',
   'main:gg': 'mainNavFirst',
   'main:G': 'mainNavLast',
-  'main:J': 'mainPrevTab',
-  'main:K': 'mainNextTab',
+  'main:H': 'mainPrevTab',
+  'main:L': 'mainNextTab',
   'main:enter': 'mainActivate',
   'main:return': 'mainActivate',
 } as const satisfies BindingMap;
@@ -156,24 +170,101 @@ export function parseBindingKey(value: string): ParsedBindingKey | null {
   return { mode: mode as Mode, sequence };
 }
 
-export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
-  if (typeof raw !== 'string' || raw === '') return {};
+export type BindingOverride = ActionId | null;
+export type BindingOverrides = Readonly<Record<string, BindingOverride>>;
+
+function parseBindingEntries(raw: unknown): [string, unknown][] {
+  if (typeof raw !== 'string' || raw === '') return [];
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return {};
+    return [];
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  return Object.entries(parsed);
+}
 
-  const result: Record<string, ActionId> = {};
-  for (const [key, action] of Object.entries(parsed)) {
-    if (!parseBindingKey(key) || !isActionId(action)) continue;
+export function parseBindingOverrides(raw: unknown): Record<string, BindingOverride> {
+  const result: Record<string, BindingOverride> = {};
+  for (const [key, action] of parseBindingEntries(raw)) {
+    if (!parseBindingKey(key) || (action !== null && !isActionId(action))) continue;
     result[key] = action;
   }
   return result;
 }
 
+export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
+  const result: Record<string, ActionId> = {};
+  for (const [key, action] of Object.entries(parseBindingOverrides(raw))) {
+    if (action !== null) result[key] = action;
+  }
+  return result;
+}
+
+const RETIRED_DEFAULT_BINDINGS = {
+  'normal:H': 'scrollLeft',
+  'normal:L': 'scrollRight',
+  'normal:J': 'mainPrevTab',
+  'normal:K': 'mainNextTab',
+  'main:J': 'mainPrevTab',
+  'main:K': 'mainNextTab',
+  'normal: fb': 'mainFuzzyCollection',
+  'normal: bj': 'mainTabPick',
+  'normal: o': 'mainOpenPDF',
+  'normal: q': 'mainClosePDF',
+  'main: fb': 'mainFuzzyCollection',
+  'main: bj': 'mainTabPick',
+  'main: q': 'mainClosePDF',
+  'normal: n': 'mainNotesLayout',
+  'main: n': 'mainNotesLayout',
+  'normal: tp': 'mainTabPick',
+  'main: tp': 'mainTabPick',
+  'main:ctrl+u': 'mainRestoreTrashedItems',
+} as const;
+
+const REMOVED_ACTIONS: Readonly<Record<string, true>> = {
+  mainFocusSearch: true,
+  mainAdvancedSearch: true,
+};
+
+function stringifyBindingOverrides(overrides: BindingOverrides): string {
+  const sorted = Object.fromEntries(
+    Object.entries(overrides).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return Object.keys(sorted).length ? JSON.stringify(sorted) : '';
+}
+
+/** Converts the legacy full binding table into compact overrides without inferring deletions. */
+export function migrateLegacyBindingOverrides(raw: unknown): string {
+  const overrides: Record<string, ActionId> = {};
+  for (const [key, action] of parseBindingEntries(raw)) {
+    if (!parseBindingKey(key) || REMOVED_ACTIONS[String(action)] || !isActionId(action)) continue;
+    if (RETIRED_DEFAULT_BINDINGS[key as keyof typeof RETIRED_DEFAULT_BINDINGS] === action) continue;
+    if (DEFAULT_BINDINGS[key as keyof typeof DEFAULT_BINDINGS] !== action) overrides[key] = action;
+  }
+  return stringifyBindingOverrides(overrides);
+}
+
+export function encodeBindingOverrides(bindings: BindingMap): string {
+  const overrides: Record<string, BindingOverride> = {};
+  const keys = new Set([...Object.keys(DEFAULT_BINDINGS), ...Object.keys(bindings)]);
+  for (const key of keys) {
+    const action = bindings[key];
+    const defaultAction: ActionId | undefined =
+      DEFAULT_BINDINGS[key as keyof typeof DEFAULT_BINDINGS];
+    if (action === undefined) {
+      if (defaultAction !== undefined) overrides[key] = null;
+    } else if (action !== defaultAction) overrides[key] = action;
+  }
+  return stringifyBindingOverrides(overrides);
+}
+
 export function resolveBindings(raw: unknown): BindingMap {
-  return Object.freeze({ ...DEFAULT_BINDINGS, ...parseCustomBindings(raw) });
+  const bindings: Record<string, ActionId> = { ...DEFAULT_BINDINGS };
+  for (const [key, action] of Object.entries(parseBindingOverrides(raw))) {
+    if (action === null) delete bindings[key];
+    else bindings[key] = action;
+  }
+  return Object.freeze(bindings);
 }

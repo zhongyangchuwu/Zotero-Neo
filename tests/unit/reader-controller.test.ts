@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ReaderControllerDependencies } from '../../src/core/contracts';
+import type { CommandPaletteContext, ReaderControllerDependencies } from '../../src/core/contracts';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
-import { DEFAULT_BINDINGS } from '../../src/input/bindings';
+import { DEFAULT_BINDINGS, type BindingMap } from '../../src/input/bindings';
 import type {
   InternalReaderRuntime,
   PdfWindow,
@@ -11,6 +11,8 @@ import type {
   ReaderRuntime,
   ReaderViewRuntime,
 } from '../../src/reader/types';
+
+import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -48,6 +50,7 @@ describe('reader discovery diagnostics', () => {
         diagnostic: (message: string) => diagnostics.push(message),
       },
       delegateMain: () => {},
+      openCommandPalette: () => {},
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
@@ -62,7 +65,13 @@ describe('reader discovery diagnostics', () => {
   });
 });
 
-function createHistorySession(internal: InternalReaderRuntime = {}) {
+function createHistorySession(
+  internal: InternalReaderRuntime = {},
+  delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
+  bindings: BindingMap = DEFAULT_BINDINGS,
+  openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
+  preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
+) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
   const nodes = new Map<string, { id: string }>();
@@ -85,6 +94,8 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
     getElementById: (id: string) => nodes.get(id) ?? null,
     querySelector: () => null,
     createElement: () => {
+      const attributes = new Map<string, string>();
+      const children: HTMLElement[] = [];
       const element = {
         id: '',
         ownerDocument: document,
@@ -101,7 +112,18 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
           width: '',
           height: '',
           borderRadius: '',
+          colorScheme: '',
+          getPropertyValue: () => '',
+          setProperty: () => {},
         },
+        focus: vi.fn(),
+        append: (...nodes: HTMLElement[]) => children.push(...nodes),
+        appendChild: (node: HTMLElement) => children.push(node),
+        replaceChildren: (...nodes: HTMLElement[]) => {
+          children.splice(0, children.length, ...nodes);
+        },
+        getAttribute: (name: string) => attributes.get(name) ?? null,
+        setAttribute: (name: string, value: string) => attributes.set(name, value),
         remove: vi.fn(() => {
           const index = bodyChildren.indexOf(element as unknown as HTMLElement);
           if (index >= 0) bodyChildren.splice(index, 1);
@@ -134,8 +156,10 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
   const cloneInto = vi.fn(<T>(value: T) => value);
   Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: pdfWindow } });
+  const ownerWindow = {} as _ZoteroTypes.MainWindow;
   const reader = {
     _iframeWindow: readerWindow,
+    _window: ownerWindow,
     _internalReader: {
       ...internal,
       _primaryView: internal._primaryView ?? { _iframeWindow: pdfWindow },
@@ -144,22 +168,24 @@ function createHistorySession(internal: InternalReaderRuntime = {}) {
   const controller = {
     dependencies: {
       preferences: {
-        has: () => false,
-        get: (_key: string, fallback: boolean | number | string) => fallback,
+        has: (key: string) => Object.hasOwn(preferenceValues, key),
+        get: (key: string, fallback: boolean | number | string) =>
+          preferenceValues[key] ?? fallback,
         set: () => {},
       },
       logger: {
         debug: (message: string) => debug.push(message),
         diagnostic: (message: string) => diagnostics.push(message),
       },
-      delegateMain: () => {},
+      delegateMain,
+      openCommandPalette,
     },
   };
   const session = new ReaderSession({
     controller,
     reader,
     firstPdfWindow: pdfWindow,
-    bindings: () => DEFAULT_BINDINGS,
+    bindings: () => bindings,
     release: () => {},
   } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
   const indicator = {
@@ -195,13 +221,14 @@ function readerKey(
       ctrlKey: options.ctrl ?? false,
       metaKey: false,
       altKey: false,
-      shiftKey: false,
       target: options.target ?? null,
       preventDefault,
       stopImmediatePropagation,
+      stopPropagation: vi.fn(),
     } as unknown as KeyboardEvent,
     preventDefault,
     stopImmediatePropagation,
+    stopPropagation: vi.fn(),
   };
 }
 
@@ -209,6 +236,73 @@ function controlKey(key: string, target: EventTarget | null = null) {
   return readerKey(key, { ctrl: true, target });
 }
 
+type SmoothMode = 'step' | 'follow' | 'trapezoid';
+const smoothPreferences = (
+  mode: SmoothMode,
+): Readonly<Record<string, boolean | number | string>> => ({
+  'scroll.mode': mode,
+  'smoothScroll.followSpeed': 1200,
+  'smoothScroll.initialSpeed': 900,
+  'smoothScroll.maxSpeed': 2400,
+  'smoothScroll.acceleration': 1000,
+  'smoothScroll.deceleration': 500,
+  'smoothScroll.stopOnRelease': false,
+});
+
+function smoothSession(
+  mode: SmoothMode,
+  internal: InternalReaderRuntime = {},
+  bindings: BindingMap = DEFAULT_BINDINGS,
+  delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
+) {
+  const created = createHistorySession(
+    internal,
+    delegateMain,
+    bindings,
+    () => {},
+    smoothPreferences(mode),
+  );
+  const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+  Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
+  return { ...created, container };
+}
+
+type SmoothTestSession = {
+  readonly session: ReaderSession;
+  readonly pdfWindow: PdfWindow;
+  readonly animationFrameTasks: (() => void)[];
+};
+
+function releaseSmoothHold(created: SmoothTestSession, key: string) {
+  const event = readerKey(key);
+  const session = created.session as unknown as {
+    handleKeyUp(event: KeyboardEvent, pdfWindow: PdfWindow): void;
+  };
+  session.handleKeyUp.call(created.session, event.event, created.pdfWindow);
+  return event;
+}
+
+function runSmoothFrame(created: SmoothTestSession, timestamp: number): void {
+  const frame = created.animationFrameTasks.shift() as ((timestamp: number) => void) | undefined;
+  frame?.(timestamp);
+}
+
+type ActionExecutorSession = {
+  executeAction: (action: string, count: number, window: PdfWindow) => void;
+};
+
+function executeReaderAction(session: ReaderSession, action: string, pdfWindow: PdfWindow): void {
+  const executable = session as unknown as ActionExecutorSession;
+  executable.executeAction(action, 1, pdfWindow);
+}
+type ViewReleaseSession = {
+  releaseViewTheme: (pdfWindow: PdfWindow) => void;
+};
+
+function releaseReaderView(session: ReaderSession, pdfWindow: PdfWindow): void {
+  const releaser = session as unknown as ViewReleaseSession;
+  releaser.releaseViewTheme(pdfWindow);
+}
 function linkPosition(rect: readonly number[], pageIndex = 0): ReaderLinkPosition {
   return { pageIndex, rects: [rect] };
 }
@@ -322,15 +416,813 @@ describe('native reader history', () => {
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected a primary reader view');
     view._onKeyDown = originalKeyDown;
+
     Reflect.set(created.reader, '_iframeWindow', undefined);
     created.session.start();
 
     view._onKeyDown?.(controlKey('o').event);
     view._onKeyDown?.(readerKey('f').event);
+    view._onKeyDown?.(readerKey('3').event);
+
+    created.session.focusAndHandle(readerKey(' ').event);
+    view._onKeyDown?.(readerKey('t').event);
     view._onKeyDown?.(controlKey('x').event);
+    view._onKeyDown?.(controlKey('h').event);
+    expect(originalKeyDown).toHaveBeenCalledTimes(2);
+    expect(originalKeyDown).toHaveBeenNthCalledWith(1, expect.objectContaining({ key: 'x' }));
+    expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'h' }));
+    created.session.dispose();
+  });
+});
+describe('reader keymap forwarding', () => {
+  it('consumes new tab and pan chords while forwarding retired J/K keys', () => {
+    const originalKeyDown = vi.fn();
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+    const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
+    const view = created.reader._internalReader?._primaryView;
+    if (!view) throw new Error('Expected a primary reader view');
+    view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+
+    const press = (key: string) => {
+      const event = readerKey(key);
+      view._onKeyDown?.(event.event);
+      created.session.focusAndHandle(event.event);
+      return event;
+    };
+    const previous = press('H');
+    const next = press('L');
+    const oldPrevious = press('J');
+    const oldNext = press('K');
+    press('z');
+    press('h');
+
+    expect(delegateMain).toHaveBeenNthCalledWith(1, 'mainPrevTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(2, 'mainNextTab', 0, created.reader._window);
+    expect(previous.preventDefault).toHaveBeenCalledOnce();
+    expect(next.preventDefault).toHaveBeenCalledOnce();
+    expect(originalKeyDown).toHaveBeenCalledTimes(2);
+    expect(container.scrollBy).toHaveBeenCalledWith(-2000 / 120, 0);
+    expect(originalKeyDown).toHaveBeenNthCalledWith(1, expect.objectContaining({ key: 'J' }));
+    expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'K' }));
+    expect(created.session.state.keyBuffer).toBe('');
+    created.session.dispose();
+  });
+});
+describe('reader zoom shortcuts', () => {
+  it('dispatches zoom commands and repeats count prefixes', () => {
+    const zoomIn = vi.fn();
+    const zoomOut = vi.fn();
+    const created = createHistorySession({ zoomIn, zoomOut });
+    const zoomInKey = readerKey('+');
+    created.session.focusAndHandle(zoomInKey.event);
+    created.session.focusAndHandle(readerKey('3').event);
+    const zoomOutKey = readerKey('-');
+    created.session.focusAndHandle(zoomOutKey.event);
+
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(zoomOut).toHaveBeenCalledTimes(3);
+    expect(zoomInKey.preventDefault).toHaveBeenCalledOnce();
+    expect(zoomOutKey.preventDefault).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('supports Zathura zoom aliases and resets once regardless of count', () => {
+    const zoomIn = vi.fn();
+    const zoomOut = vi.fn();
+    const zoomReset = vi.fn();
+    const created = createHistorySession({ zoomIn, zoomOut, zoomReset });
+    const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
+
+    press('3');
+    press('z');
+    press('I');
+    press('2');
+    press('z');
+    press('O');
+    press('4');
+    press('=');
+    press('3');
+    press('z');
+    press('0');
+
+    expect(zoomIn).toHaveBeenCalledTimes(3);
+    expect(zoomOut).toHaveBeenCalledTimes(2);
+    expect(zoomReset).toHaveBeenCalledTimes(2);
+    created.session.dispose();
+  });
+
+  it('fails closed when the host zoom APIs are unavailable or throw', () => {
+    vi.useFakeTimers();
+    const missing = createHistorySession();
+    const missingKey = readerKey('+');
+    expect(() => missing.session.focusAndHandle(missingKey.event)).not.toThrow();
+    expect(missing.indicator.textContent).toBe('Zoom unavailable');
+
+    const missingReset = createHistorySession();
+    const missingResetKey = readerKey('=');
+    expect(() => missingReset.session.focusAndHandle(missingResetKey.event)).not.toThrow();
+    expect(missingReset.indicator.textContent).toBe('Zoom unavailable');
+
+    const failed = createHistorySession({
+      zoomOut: () => {
+        throw new Error('reader reloaded');
+      },
+    });
+    expect(() => failed.session.focusAndHandle(readerKey('-').event)).not.toThrow();
+    expect(failed.indicator.textContent).toBe('Zoom unavailable');
+    expect(failed.debug).toEqual(['reader zoom out failed: Error: reader reloaded']);
+
+    const failedReset = createHistorySession({
+      zoomReset: () => {
+        throw new Error('reader reloaded');
+      },
+    });
+    expect(() => failedReset.session.focusAndHandle(readerKey('=').event)).not.toThrow();
+    expect(failedReset.indicator.textContent).toBe('Zoom unavailable');
+    expect(failedReset.debug).toEqual(['reader zoom reset failed: Error: reader reloaded']);
+    expect(missingKey.preventDefault).toHaveBeenCalledOnce();
+    expect(missingResetKey.preventDefault).toHaveBeenCalledOnce();
+    missing.session.dispose();
+    missingReset.session.dispose();
+    failed.session.dispose();
+    failedReset.session.dispose();
+    vi.clearAllTimers();
+  });
+
+  it('leaves zoom keys native in Insert mode and editable controls', () => {
+    const zoomIn = vi.fn();
+    const zoomReset = vi.fn();
+    const created = createHistorySession({ zoomIn, zoomReset });
+    created.session.state.mode = 'insert';
+    const insert = readerKey('+');
+    created.session.focusAndHandle(insert.event);
+
+    const input = { tagName: 'INPUT', localName: 'input' } as unknown as EventTarget;
+    created.session.state.mode = 'normal';
+    const editable = readerKey('=', { target: input });
+    created.session.focusAndHandle(editable.event);
+
+    expect(zoomIn).not.toHaveBeenCalled();
+    expect(zoomReset).not.toHaveBeenCalled();
+    expect(insert.preventDefault).not.toHaveBeenCalled();
+    expect(editable.preventDefault).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+
+  it('keeps zoom inside the Outline overlay until Escape closes it', () => {
+    const zoomIn = vi.fn();
+    const zoomOut = vi.fn();
+    const zoomReset = vi.fn();
+    const created = createHistorySession({ zoomIn, zoomOut, zoomReset });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+
+    const plusWhileOpen = readerKey('+');
+    const minusWhileOpen = readerKey('-');
+    const resetWhileOpen = readerKey('=');
+    created.session.focusAndHandle(plusWhileOpen.event);
+    created.session.focusAndHandle(minusWhileOpen.event);
+    created.session.focusAndHandle(resetWhileOpen.event);
+
+    expect(zoomIn).not.toHaveBeenCalled();
+    expect(zoomOut).not.toHaveBeenCalled();
+    expect(zoomReset).not.toHaveBeenCalled();
+    expect(plusWhileOpen.preventDefault).toHaveBeenCalledOnce();
+    expect(plusWhileOpen.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(minusWhileOpen.preventDefault).toHaveBeenCalledOnce();
+    expect(minusWhileOpen.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(resetWhileOpen.preventDefault).toHaveBeenCalledOnce();
+    expect(resetWhileOpen.stopImmediatePropagation).toHaveBeenCalledOnce();
+
+    const modifier = readerKey('Control');
+    created.session.focusAndHandle(modifier.event);
+    expect(modifier.preventDefault).not.toHaveBeenCalled();
+
+    const escape = readerKey('Escape');
+    created.session.focusAndHandle(escape.event);
+    expect(created.session.state.outline.open).toBe(false);
+
+    created.session.focusAndHandle(readerKey('+').event);
+    created.session.focusAndHandle(readerKey('-').event);
+    created.session.focusAndHandle(readerKey('=').event);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(zoomOut).toHaveBeenCalledOnce();
+    expect(zoomReset).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('consumes zoom shortcuts before Zotero reader forwarding', () => {
+    const originalKeyDown = vi.fn();
+    const zoomIn = vi.fn();
+    const zoomOut = vi.fn();
+    const zoomReset = vi.fn();
+    const created = createHistorySession({ zoomIn, zoomOut, zoomReset });
+    const view = created.reader._internalReader?._primaryView;
+    if (!view) throw new Error('Expected a primary reader view');
+    view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+
+    view._onKeyDown?.(readerKey('+').event);
+    view._onKeyDown?.(readerKey('-').event);
+    view._onKeyDown?.(readerKey('=').event);
+    view._onKeyDown?.(readerKey(':').event);
+    view._onKeyDown?.(readerKey('J').event);
+    view._onKeyDown?.(readerKey('K').event);
+    const advanceThroughReader = (key: string): void => {
+      const press = readerKey(key);
+      view._onKeyDown?.(press.event);
+      created.session.focusAndHandle(press.event);
+    };
+    advanceThroughReader('z');
+    advanceThroughReader('I');
+    advanceThroughReader('z');
+    advanceThroughReader('O');
+    advanceThroughReader('z');
+    advanceThroughReader('0');
+
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(zoomOut).toHaveBeenCalledOnce();
+    expect(zoomReset).toHaveBeenCalledOnce();
+    expect(originalKeyDown).toHaveBeenCalledTimes(2);
+    created.session.dispose();
+  });
+  it('leaves colon native when a custom resolved map removes the default binding', () => {
+    const originalKeyDown = vi.fn();
+    const bindings = Object.fromEntries(
+      Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'normal::'),
+    ) as BindingMap;
+    const created = createHistorySession({}, () => {}, bindings);
+    const view = created.reader._internalReader?._primaryView;
+    if (!view) throw new Error('Expected a primary reader view');
+    view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+
+    view._onKeyDown?.(readerKey(':').event);
 
     expect(originalKeyDown).toHaveBeenCalledOnce();
-    expect(originalKeyDown).toHaveBeenCalledWith(expect.objectContaining({ key: 'x' }));
+    created.session.dispose();
+  });
+});
+
+describe('Reader-origin main delegation', () => {
+  it('passes the Reader runtime owner window with picker-opening actions', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+
+    created.session.focusAndHandle(readerKey(' ').event);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('f').event);
+
+    expect(delegateMain).toHaveBeenCalledWith('mainFuzzyAll', 0, created.reader._window);
+    created.session.dispose();
+  });
+});
+describe('reader Space-leader key guide', () => {
+  it('updates nested prefixes, returns with Backspace, and closes on invalid input or Escape', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+
+    created.session.focusAndHandle(readerKey(' ').event);
+    expect(created.bodyChildren).toHaveLength(0);
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
+    expect(created.bodyChildren).toHaveLength(1);
+    expect(created.bodyChildren[0]?.id).toBe('zotero-neo-key-guide');
+
+    created.session.focusAndHandle(readerKey('f').event);
+    expect(created.bodyChildren).toHaveLength(1);
+    const backspace = readerKey('Backspace');
+    created.session.focusAndHandle(backspace.event);
+    expect(created.bodyChildren).toHaveLength(1);
+    expect(backspace.preventDefault).toHaveBeenCalledOnce();
+
+    created.session.focusAndHandle(readerKey('x').event);
+    expect(created.bodyChildren).toHaveLength(0);
+
+    created.session.focusAndHandle(readerKey(' ').event);
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
+    const escape = readerKey('Escape');
+    created.session.focusAndHandle(escape.event);
+    expect(created.bodyChildren).toHaveLength(0);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+});
+describe('Reader command palette', () => {
+  it('opens from Reader Normal, routes active-split local actions, and preserves owner delegation', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const zoomIn = vi.fn(function (this: InternalReaderRuntime) {
+      expect(this._lastViewPrimary).toBe(false);
+    });
+    const paletteRef: { value: CommandPaletteContext | null } = { value: null };
+    const created = createHistorySession(
+      { _lastViewPrimary: false, zoomIn },
+      delegateMain,
+      DEFAULT_BINDINGS,
+      (_window, context) => {
+        paletteRef.value = context;
+      },
+    );
+    const secondary = { ...created.pdfWindow, focus: vi.fn() } as unknown as PdfWindow;
+    Reflect.set(created.reader._internalReader, '_secondaryView', { _iframeWindow: secondary });
+
+    created.session.focusAndHandle(readerKey('3').event);
+    const colon = readerKey(':');
+    created.session.focusAndHandle(colon.event);
+    expect(colon.preventDefault).toHaveBeenCalledOnce();
+    const palette = paletteRef.value;
+    if (!palette) throw new Error('Expected a Reader command palette context');
+    expect(palette.mode).toBe('normal');
+    expect(palette.actions).toContain('mainTabPick');
+    expect(palette.actions).not.toContain('mainTrashItems');
+    expect(palette.actions).not.toContain('mainOpenPDF');
+    expect(palette.actions).not.toContain('mainActivate');
+
+    palette.execute('zoomIn', 123);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    palette.execute('mainTrashItems', 123);
+    expect(delegateMain).not.toHaveBeenCalled();
+    palette.execute('mainFuzzyAll', 123);
+    expect(delegateMain).toHaveBeenCalledWith('mainFuzzyAll', 0, created.reader._window);
+
+    Reflect.set(created.reader._internalReader, '_primaryView', undefined);
+    Reflect.set(created.reader._internalReader, '_secondaryView', undefined);
+    palette.execute('zoomIn', 123);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(delegateMain).toHaveBeenCalledOnce();
+    Reflect.set(created.reader._internalReader, '_primaryView', {
+      _iframeWindow: created.pdfWindow,
+    });
+    created.session.dispose();
+    palette.execute('zoomIn', 123);
+    palette.execute('mainTabPick', 123);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(delegateMain).toHaveBeenCalledOnce();
+  });
+});
+describe('Reader leader timer guards', () => {
+  it('executes only current ambiguous leader transitions', () => {
+    vi.useFakeTimers();
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const bindings: BindingMap = {
+      'normal: f': 'mainFuzzyAll',
+      'normal: ff': 'mainTabPick',
+    };
+    const created = createHistorySession({}, delegateMain, bindings);
+    const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
+
+    press(' ');
+    press('f');
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(delegateMain).toHaveBeenCalledTimes(1);
+    expect(delegateMain).toHaveBeenLastCalledWith('mainFuzzyAll', 0, created.reader._window);
+
+    press(' ');
+    press('f');
+    press('z');
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(delegateMain).toHaveBeenCalledTimes(1);
+
+    press(' ');
+    press('f');
+    press('Escape');
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(delegateMain).toHaveBeenCalledTimes(1);
+
+    press(' ');
+    press('f');
+    press('Backspace');
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(delegateMain).toHaveBeenCalledTimes(1);
+
+    press(' ');
+    press('f');
+    created.session.dispose();
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(delegateMain).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reader H/L tab and zh/zl pan defaults', () => {
+  it('switches tabs horizontally, pans with counts, and leaves J/K native', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+    const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfViewer: { container },
+    });
+
+    const previousTab = readerKey('H');
+    const nextTab = readerKey('L');
+    created.session.focusAndHandle(previousTab.event);
+    created.session.focusAndHandle(nextTab.event);
+    expect(delegateMain).toHaveBeenNthCalledWith(1, 'mainPrevTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(2, 'mainNextTab', 0, created.reader._window);
+    expect(container.scrollBy).not.toHaveBeenCalled();
+
+    created.session.focusAndHandle(readerKey('3').event);
+    created.session.focusAndHandle(readerKey('z').event);
+    const left = readerKey('h');
+    created.session.focusAndHandle(left.event);
+    expect(container.scrollBy).toHaveBeenCalledWith(-180, 0);
+    expect(left.preventDefault).toHaveBeenCalledOnce();
+
+    created.session.focusAndHandle(readerKey('2').event);
+    created.session.focusAndHandle(readerKey('z').event);
+    const right = readerKey('l');
+    created.session.focusAndHandle(right.event);
+    expect(container.scrollBy).toHaveBeenCalledWith(120, 0);
+    expect(right.preventDefault).toHaveBeenCalledOnce();
+
+    const oldPrevious = readerKey('J');
+    const oldNext = readerKey('K');
+    created.session.focusAndHandle(oldPrevious.event);
+    created.session.focusAndHandle(oldNext.event);
+    expect(oldPrevious.preventDefault).not.toHaveBeenCalled();
+    expect(oldNext.preventDefault).not.toHaveBeenCalled();
+    expect(delegateMain).toHaveBeenCalledTimes(2);
+    created.session.dispose();
+  });
+});
+
+describe('Reader smooth horizontal pan', () => {
+  it('starts follow holds for zh/zl and consumes continuation repeats until keyup', () => {
+    const previousPage = vi.fn();
+    const nextPage = vi.fn();
+    const created = smoothSession('follow', {
+      navigateToPreviousPage: previousPage,
+      navigateToNextPage: nextPage,
+    });
+
+    const leftPrefix = readerKey('z');
+    created.session.focusAndHandle(leftPrefix.event);
+    const left = readerKey('h');
+    created.session.focusAndHandle(left.event);
+    expect(created.session.state.smoothHold).toMatchObject({
+      active: true,
+      key: 'h',
+      axis: 'x',
+      direction: -1,
+    });
+    expect(created.container.scrollBy).toHaveBeenCalledWith(-10, 0);
+    const leftSpeed = created.session.state.smoothHold.speed;
+    const repeatedLeft = readerKey('h');
+    created.session.focusAndHandle(repeatedLeft.event);
+    expect(repeatedLeft.preventDefault).toHaveBeenCalledOnce();
+    expect(created.session.state.smoothHold.speed).toBe(leftSpeed);
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
+    expect(previousPage).not.toHaveBeenCalled();
+    releaseSmoothHold(created, 'h');
+    expect(created.session.state.smoothHold).toMatchObject({
+      active: false,
+      releasing: false,
+      key: null,
+    });
+
+    const rightPrefix = readerKey('z');
+    created.session.focusAndHandle(rightPrefix.event);
+    const right = readerKey('l');
+    created.session.focusAndHandle(right.event);
+    expect(created.session.state.smoothHold).toMatchObject({
+      active: true,
+      key: 'l',
+      axis: 'x',
+      direction: 1,
+    });
+    expect(created.container.scrollBy).toHaveBeenCalledWith(10, 0);
+    const repeatedRight = readerKey('l');
+    created.session.focusAndHandle(repeatedRight.event);
+    expect(repeatedRight.preventDefault).toHaveBeenCalledOnce();
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(2);
+    expect(nextPage).not.toHaveBeenCalled();
+    releaseSmoothHold(created, 'l');
+    created.session.dispose();
+  });
+
+  it('accelerates and decelerates zh/zl holds in trapezoid mode', () => {
+    for (const [continuation, direction] of [
+      ['h', -1],
+      ['l', 1],
+    ] as const) {
+      const previousPage = vi.fn();
+      const nextPage = vi.fn();
+      const created = smoothSession('trapezoid', {
+        navigateToPreviousPage: previousPage,
+        navigateToNextPage: nextPage,
+      });
+      created.session.focusAndHandle(readerKey('z').event);
+      const first = readerKey(continuation);
+      created.session.focusAndHandle(first.event);
+      const initialSpeed = created.session.state.smoothHold.speed;
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: true,
+        key: continuation,
+        axis: 'x',
+        direction,
+      });
+      runSmoothFrame(created, 16);
+      const acceleratedSpeed = created.session.state.smoothHold.speed;
+      expect(acceleratedSpeed).toBeGreaterThan(initialSpeed);
+      const repeat = readerKey(continuation);
+      created.session.focusAndHandle(repeat.event);
+      expect(repeat.preventDefault).toHaveBeenCalledOnce();
+      expect(created.session.state.smoothHold.speed).toBe(acceleratedSpeed);
+      const release = releaseSmoothHold(created, continuation);
+      expect(release.preventDefault).not.toHaveBeenCalled();
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: false,
+        releasing: true,
+        key: null,
+      });
+      const releasingSpeed = created.session.state.smoothHold.speed;
+      runSmoothFrame(created, 32);
+      expect(created.session.state.smoothHold.speed).toBeLessThan(releasingSpeed);
+      expect(previousPage).not.toHaveBeenCalled();
+      expect(nextPage).not.toHaveBeenCalled();
+      created.session.dispose();
+    }
+  });
+
+  it('keeps counted chords and step mode as immediate discrete pan', () => {
+    const counted = smoothSession('follow');
+    counted.session.focusAndHandle(readerKey('3').event);
+    counted.session.focusAndHandle(readerKey('z').event);
+    counted.session.focusAndHandle(readerKey('h').event);
+    expect(counted.container.scrollBy).toHaveBeenCalledWith(-180, 0);
+    expect(counted.session.state.smoothHold.active).toBe(false);
+    expect(counted.animationFrameTasks).toHaveLength(0);
+    counted.session.focusAndHandle(readerKey('2').event);
+    counted.session.focusAndHandle(readerKey('z').event);
+    counted.session.focusAndHandle(readerKey('l').event);
+    expect(counted.container.scrollBy).toHaveBeenCalledWith(120, 0);
+    expect(counted.session.state.smoothHold.active).toBe(false);
+    expect(counted.animationFrameTasks).toHaveLength(0);
+    counted.session.dispose();
+
+    const step = smoothSession('step');
+    step.session.focusAndHandle(readerKey('z').event);
+    step.session.focusAndHandle(readerKey('h').event);
+    expect(step.container.scrollBy).toHaveBeenCalledWith(-60, 0);
+    expect(step.session.state.smoothHold.active).toBe(false);
+    expect(step.animationFrameTasks).toHaveLength(0);
+    step.session.focusAndHandle(readerKey('z').event);
+    step.session.focusAndHandle(readerKey('l').event);
+    expect(step.container.scrollBy).toHaveBeenCalledWith(60, 0);
+    expect(step.session.state.smoothHold.active).toBe(false);
+    expect(step.animationFrameTasks).toHaveLength(0);
+    step.session.dispose();
+  });
+
+  it('derives direct j/k and custom H/L scroll holds from their actions', () => {
+    for (const [key, direction] of [
+      ['j', 1],
+      ['k', -1],
+    ] as const) {
+      const created = smoothSession('follow');
+      const press = readerKey(key);
+      created.session.focusAndHandle(press.event);
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: true,
+        key,
+        axis: 'y',
+        direction,
+      });
+      expect(created.container.scrollBy).toHaveBeenCalledWith(0, direction * 10);
+      releaseSmoothHold(created, key);
+      created.session.dispose();
+    }
+
+    const customBindings = {
+      ...DEFAULT_BINDINGS,
+      'normal:H': 'scrollLeft',
+      'normal:L': 'scrollRight',
+    } as BindingMap;
+    for (const [key, direction] of [
+      ['H', -1],
+      ['L', 1],
+    ] as const) {
+      const created = smoothSession('follow', {}, customBindings);
+      const press = readerKey(key);
+      created.session.focusAndHandle(press.event);
+      expect(created.session.state.smoothHold).toMatchObject({
+        active: true,
+        key,
+        axis: 'x',
+        direction,
+      });
+      expect(created.container.scrollBy).toHaveBeenCalledWith(direction * 10, 0);
+      releaseSmoothHold(created, key);
+      created.session.dispose();
+    }
+  });
+});
+describe('reader split shortcuts', () => {
+  it('uses the current Zotero reader split methods for Space-minus and Space-pipe', () => {
+    const toggleHorizontalSplit = vi.fn();
+    const toggleVerticalSplit = vi.fn();
+    const created = createHistorySession({ toggleHorizontalSplit, toggleVerticalSplit });
+
+    created.session.focusAndHandle(readerKey(' ').event);
+    created.session.focusAndHandle(readerKey('-').event);
+    created.session.focusAndHandle(readerKey(' ').event);
+    created.session.focusAndHandle(readerKey('|').event);
+
+    expect(toggleHorizontalSplit).toHaveBeenCalledOnce();
+    expect(toggleVerticalSplit).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('routes motions through Zotero active split state even when Gecko focus stays primary', () => {
+    const zoomOut = vi.fn(function (this: InternalReaderRuntime) {
+      expect(this._lastViewPrimary).toBe(true);
+    });
+    const zoomReset = vi.fn(function (this: InternalReaderRuntime) {
+      expect(this._lastViewPrimary).toBe(false);
+    });
+    const created = createHistorySession({
+      _state: { primary: true },
+      _lastViewPrimary: true,
+      zoomOut,
+      zoomReset,
+    });
+    const internal = created.reader._internalReader ?? {};
+    const focusView = vi.fn((primary = true) => {
+      Reflect.set(internal, '_lastViewPrimary', primary);
+      Reflect.set(internal, '_state', { primary });
+    });
+    Reflect.set(internal, 'focusView', focusView);
+    const primaryScrollTo = vi.fn();
+    const secondaryScrollTo = vi.fn();
+    const primaryScrollBy = vi.fn();
+    const secondaryScrollBy = vi.fn();
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfViewer: {
+        container: {
+          clientHeight: 600,
+          scrollHeight: 2400,
+          scrollTo: primaryScrollTo,
+          scrollBy: primaryScrollBy,
+        } as unknown as HTMLElement,
+      },
+    });
+    const secondary = {
+      ...created.pdfWindow,
+      focus: vi.fn(),
+      PDFViewerApplication: {
+        pdfViewer: {
+          container: {
+            clientHeight: 600,
+            scrollHeight: 2400,
+            scrollTo: secondaryScrollTo,
+            scrollBy: secondaryScrollBy,
+          } as unknown as HTMLElement,
+        },
+      },
+    } as unknown as PdfWindow;
+    Reflect.set(internal, '_secondaryView', { _iframeWindow: secondary });
+    Reflect.set(internal, 'splitType', 'vertical');
+
+    const right = controlKey('l');
+    created.session.focusAndHandle(right.event);
+    expect(focusView).toHaveBeenLastCalledWith(false);
+    expect(right.preventDefault).toHaveBeenCalledOnce();
+
+    created.session.focusAndHandle(readerKey('z').event);
+    created.session.focusAndHandle(readerKey('0').event);
+    expect(zoomReset).toHaveBeenCalledOnce();
+
+    created.session.focusAndHandle(readerKey('G').event);
+    expect(secondaryScrollTo).toHaveBeenCalledWith(0, 1800);
+    expect(primaryScrollTo).not.toHaveBeenCalled();
+
+    created.session.focusAndHandle(readerKey('j').event);
+    created.session.focusAndHandle(readerKey('k').event);
+    created.session.focusAndHandle(controlKey('d').event);
+    created.session.focusAndHandle(controlKey('u').event);
+    expect(secondaryScrollBy).toHaveBeenCalledTimes(4);
+    expect(primaryScrollBy).not.toHaveBeenCalled();
+
+    const rightEdge = controlKey('l');
+    created.session.focusAndHandle(rightEdge.event);
+    expect(focusView).toHaveBeenCalledTimes(1);
+    expect(rightEdge.preventDefault).not.toHaveBeenCalled();
+
+    created.session.focusAndHandle(controlKey('h').event);
+    expect(focusView).toHaveBeenLastCalledWith(true);
+    created.session.focusAndHandle(readerKey('-').event);
+    expect(zoomOut).toHaveBeenCalledOnce();
+
+    Reflect.set(internal, 'splitType', 'horizontal');
+    created.session.focusAndHandle(controlKey('j').event);
+    expect(focusView).toHaveBeenLastCalledWith(false);
+    created.session.focusAndHandle(controlKey('k').event);
+    expect(focusView).toHaveBeenLastCalledWith(true);
+    created.session.dispose();
+  });
+
+  it('moves right from the reader into Zotero context notes when no split target exists', () => {
+    const focusContext = vi.fn();
+    const created = createHistorySession();
+    Reflect.set(created.reader, '_window', { ZoteroContextPane: { focus: focusContext } });
+    const right = controlKey('l');
+
+    created.session.focusAndHandle(right.event);
+
+    expect(focusContext).toHaveBeenCalledOnce();
+    expect(right.preventDefault).toHaveBeenCalledOnce();
+    const left = controlKey('h');
+    created.session.focusAndHandle(left.event);
+    expect(left.preventDefault).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+});
+
+describe('reader sidebar coordination', () => {
+  it('replaces Outline with Marks and restores focus once on close', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-marks-explorer');
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
+
+    created.session.focusAndHandle(readerKey('Escape').event);
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('coordinates Marks replacement when focusing Outline and restores focus on disposal', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-marks-explorer');
+    executeReaderAction(created.session, 'focusReaderSidebar', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-marks-explorer');
+
+    created.session.dispose();
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    expect(created.bodyChildren).toHaveLength(0);
+  });
+});
+
+describe('reader outline load invalidation', () => {
+  it('does not resurrect a closed Outline after pending load resolves', async () => {
+    vi.useFakeTimers();
+    let resolveOutline!: (value: unknown[]) => void;
+    const pending = new Promise<unknown[]>((resolve) => {
+      resolveOutline = resolve;
+    });
+    const created = createHistorySession();
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfDocument: { getOutline: () => pending },
+    });
+
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    created.session.focusAndHandle(readerKey('Escape').event);
+    vi.advanceTimersByTime(30);
+    const focusCount = vi.mocked(created.pdfWindow.focus).mock.calls.length;
+    resolveOutline([]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(created.session.state.outline.open).toBe(false);
+    expect(created.session.state.outline.loading).toBe(false);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
+    expect(created.pdfWindow.focus).toHaveBeenCalledTimes(focusCount);
+    created.session.dispose();
+  });
+
+  it('does not resurrect a released PDF view Outline after pending load resolves', async () => {
+    vi.useFakeTimers();
+    let resolveOutline!: (value: unknown[]) => void;
+    const pending = new Promise<unknown[]>((resolve) => {
+      resolveOutline = resolve;
+    });
+    const created = createHistorySession();
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfDocument: { getOutline: () => pending },
+    });
+
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    releaseReaderView(created.session, created.pdfWindow);
+    resolveOutline([]);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(created.session.state.outline.open).toBe(false);
+    expect(created.session.state.outline.loading).toBe(false);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
     created.session.dispose();
   });
 });
