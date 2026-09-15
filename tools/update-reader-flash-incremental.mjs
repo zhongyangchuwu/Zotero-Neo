@@ -10,6 +10,27 @@ async function replaceExactly(path, before, after) {
 }
 
 await replaceExactly(
+  'tests/unit/flash.test.ts',
+  `    expect(hints.map((hint) => hint.textContent)).toEqual(['A', 'S']);
+    expect(activations).toHaveLength(0);
+
+    flash.handleKey(flashKey('A'), created.pdfWindow);`,
+  `    expect(hints.map((hint) => hint.textContent)).toEqual(['S', 'F']);
+    expect(activations).toHaveLength(0);
+
+    flash.handleKey(flashKey('S'), created.pdfWindow);`,
+);
+
+await replaceExactly(
+  'tests/unit/flash.test.ts',
+  `    expect(flashHints(created.bodyChildren).map((hint) => hint.textContent)).toEqual(['A', 'D']);`,
+  `    const labels = flashHints(created.bodyChildren).map((hint) => hint.textContent);
+    expect(labels).toHaveLength(2);
+    expect(labels).not.toContain('S');
+    expect(labels).not.toContain('B');`,
+);
+
+await replaceExactly(
   'docs/USER_GUIDE.md',
   `Press \`s\`, type an ASCII/Latin literal query, then press \`Enter\` to freeze the current visible
 matches and show stable hint labels. Type a displayed label to choose the target. \`Backspace\` edits
