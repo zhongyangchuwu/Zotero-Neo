@@ -355,6 +355,16 @@ function configureLinkView(
   return { view, navigate, openLink };
 }
 
+function linkHintElements(created: ReturnType<typeof createHistorySession>): HTMLElement[] {
+  return created.bodyChildren.filter((node) => node.dataset.zoteroNeoLinkHint === '1');
+}
+
+function destinationCueElement(
+  created: ReturnType<typeof createHistorySession>,
+): HTMLElement | null {
+  return created.bodyChildren.find((node) => node.dataset.zoteroNeoDestinationCue === '1') ?? null;
+}
+
 describe('native reader history', () => {
   it('delegates Ctrl-o and Ctrl-i to Zotero and consumes both events', () => {
     const navigateBack = vi.fn();
@@ -1245,11 +1255,7 @@ describe('PDF follow-link hints', () => {
 
     created.session.focusAndHandle(open.event);
 
-    expect(created.session.state.linkHintBadges.map((badge) => badge.label)).toEqual([
-      'A',
-      'S',
-      'D',
-    ]);
+    expect(linkHintElements(created).map((badge) => badge.textContent)).toEqual(['A', 'S', 'D']);
     expect(created.bodyChildren).toHaveLength(3);
     expect(open.preventDefault).toHaveBeenCalledOnce();
     expect(open.stopImmediatePropagation).toHaveBeenCalledOnce();
@@ -1264,7 +1270,7 @@ describe('PDF follow-link hints', () => {
       position: internal.destinationPosition,
     });
     created.animationFrameTasks.shift()?.();
-    const pointCue = created.session.state.destinationCue;
+    const pointCue = destinationCueElement(created);
     expect(pointCue?.style.cssText).toContain('background:#f57b7b');
     expect(pointCue?.style.cssText).toContain('mix-blend-mode:multiply');
     expect(pointCue?.style.width).toBe('14px');
@@ -1274,7 +1280,7 @@ describe('PDF follow-link hints', () => {
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('s').event);
     expect(configured.openLink).toHaveBeenCalledWith('https://example.com');
-    expect(created.session.state.destinationCue).toBeNull();
+    expect(destinationCueElement(created)).toBeNull();
 
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('d').event);
@@ -1287,7 +1293,7 @@ describe('PDF follow-link hints', () => {
       position: citation.references[0]!.position,
     });
     created.animationFrameTasks.shift()?.();
-    const rectangleCue = created.session.state.destinationCue;
+    const rectangleCue = destinationCueElement(created);
     expect(rectangleCue?.style.left).toBe('300px');
     expect(rectangleCue?.style.top).toBe('320px');
     expect(rectangleCue?.style.width).toBe('80px');
@@ -1295,7 +1301,7 @@ describe('PDF follow-link hints', () => {
     expect(rectangleCue?.style.borderRadius).toBe('0');
 
     vi.advanceTimersByTime(2000);
-    expect(created.session.state.destinationCue).toBeNull();
+    expect(destinationCueElement(created)).toBeNull();
     expect(created.bodyChildren).toHaveLength(0);
     created.session.dispose();
   });
@@ -1340,25 +1346,21 @@ describe('PDF follow-link hints', () => {
 
     created.session.focusAndHandle(readerKey('f').event);
 
-    expect(new Set(created.session.state.linkHintBadges.map((badge) => badge.label)).size).toBe(27);
-    expect(created.session.state.linkHintBadges.every((badge) => badge.label.length === 2)).toBe(
+    expect(new Set(linkHintElements(created).map((badge) => badge.textContent)).size).toBe(27);
+    expect(linkHintElements(created).every((badge) => (badge.textContent ?? '').length === 2)).toBe(
       true,
     );
 
     created.session.focusAndHandle(readerKey('a').event);
     expect(navigate).not.toHaveBeenCalled();
-    expect(created.session.state.linkHintBuffer).toBe('A');
-    expect(
-      created.session.state.linkHintBadges.filter((badge) => !badge.element.hidden),
-    ).toHaveLength(26);
+    expect(linkHintElements(created).filter((badge) => !badge.hidden)).toHaveLength(26);
 
     created.session.focusAndHandle(readerKey('Backspace').event);
-    expect(created.session.state.linkHintBuffer).toBe('');
-    expect(created.session.state.linkHintBadges.every((badge) => !badge.element.hidden)).toBe(true);
+    expect(linkHintElements(created).every((badge) => !badge.hidden)).toBe(true);
 
     const escape = readerKey('Escape');
     created.session.focusAndHandle(escape.event);
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    expect(linkHintElements(created)).toHaveLength(0);
     expect(created.bodyChildren).toHaveLength(0);
     expect(escape.preventDefault).toHaveBeenCalledOnce();
   });
@@ -1368,12 +1370,12 @@ describe('PDF follow-link hints', () => {
     Reflect.set(created.reader, '_iframeWindow', undefined);
     created.session.start();
     created.session.focusAndHandle(readerKey('f').event);
-    expect(created.session.state.linkHintBadges).toHaveLength(1);
+    expect(linkHintElements(created)).toHaveLength(1);
 
     Reflect.set(created.reader._internalReader ?? {}, '_primaryView', undefined);
     created.intervalTasks[0]?.();
 
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    expect(linkHintElements(created)).toHaveLength(0);
     expect(created.bodyChildren).toHaveLength(0);
     created.session.dispose();
   });
@@ -1440,20 +1442,20 @@ describe('PDF follow-link hints', () => {
     created.session.state.mode = 'insert';
     const insert = readerKey('f');
     created.session.focusAndHandle(insert.event);
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    expect(linkHintElements(created)).toHaveLength(0);
     expect(insert.preventDefault).not.toHaveBeenCalled();
 
     created.session.state.mode = 'normal';
     const input = { tagName: 'INPUT', localName: 'input' } as unknown as EventTarget;
     const editable = readerKey('f', { target: input });
     created.session.focusAndHandle(editable.event);
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    expect(linkHintElements(created)).toHaveLength(0);
     expect(editable.preventDefault).not.toHaveBeenCalled();
 
     created.session.focusAndHandle(readerKey('f').event);
     const focusedInput = readerKey('a', { target: input });
     created.session.focusAndHandle(focusedInput.event);
-    expect(created.session.state.linkHintBadges).toHaveLength(0);
+    expect(linkHintElements(created)).toHaveLength(0);
     expect(focusedInput.preventDefault).not.toHaveBeenCalled();
   });
 });

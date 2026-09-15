@@ -275,15 +275,6 @@ export interface ReaderSessionState {
   visualAnchor: Pointer | null;
   visualPreferredX: number | null;
   cursorPreferredX: number | null;
-  linkHintBadges: LinkHintBadge[];
-  linkHintBuffer: string;
-  linkHintWindow: PdfWindow | null;
-  linkHintRepositionFrame: number | null;
-  destinationCue: HTMLElement | null;
-  destinationCuePosition: ReaderLinkPosition | null;
-  destinationCueWindow: PdfWindow | null;
-  destinationCueTimer: ReaderTimer | null;
-  destinationCueRepositionFrame: number | null;
   marks: Record<string, Mark>;
   marksExplorerOpen: boolean;
   marksExplorerSelected: number;
@@ -316,12 +307,6 @@ export interface AnnotationSelectionParams {
     readonly position?: string | unknown;
   };
   readonly onAddAnnotation?: unknown;
-}
-
-export interface LinkHintBadge {
-  readonly element: HTMLElement;
-  readonly label: string;
-  readonly overlay: ReaderLinkOverlay;
 }
 
 export interface ReaderEventRuntime {

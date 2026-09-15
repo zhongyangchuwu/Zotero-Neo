@@ -175,7 +175,9 @@ export class ReaderLinkHints {
         this.#showDestinationCue(pdfWindow, location.position);
       }
       if (result && typeof result.then === 'function')
-        void Promise.resolve(result).catch((error: unknown) => this.#reportActivationFailure(error));
+        void Promise.resolve(result).catch((error: unknown) =>
+          this.#reportActivationFailure(error),
+        );
     } catch (error) {
       this.#reportActivationFailure(error);
     }
@@ -284,11 +286,7 @@ export class ReaderLinkHints {
     this.#host.diagnostic(message);
   }
 
-  #positionDestinationCue(
-    pdfWindow: PdfWindow,
-    cue: HTMLElement,
-    rect: readonly number[],
-  ): void {
+  #positionDestinationCue(pdfWindow: PdfWindow, cue: HTMLElement, rect: readonly number[]): void {
     const viewportWidth = pdfWindow.innerWidth || pdfWindow.document.documentElement.clientWidth;
     const viewportHeight = pdfWindow.innerHeight || pdfWindow.document.documentElement.clientHeight;
     const width = rect[2]! - rect[0]!;
@@ -365,10 +363,7 @@ export class ReaderLinkHints {
     return rect?.length === 4 && rect.every(Number.isFinite) ? rect : null;
   }
 
-  #linkClientRect(
-    view: ReaderViewRuntime,
-    overlay: ReaderLinkOverlay,
-  ): readonly number[] | null {
+  #linkClientRect(view: ReaderViewRuntime, overlay: ReaderLinkOverlay): readonly number[] | null {
     const rect = this.#positionClientRect(view, overlay.position);
     return rect && rect[2]! > rect[0]! && rect[3]! > rect[1]! ? rect : null;
   }
