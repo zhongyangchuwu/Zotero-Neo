@@ -106,5 +106,41 @@ function write(path, text) {
   const anchor = `    expect(selected).toBe(3);\n    expect(session.activePanel).toBe('collections');\n  });\n});\n`;
   const replacement = `    expect(selected).toBe(3);\n    expect(session.activePanel).toBe('collections');\n  });\n\n  it('uses Zotero repeat debouncing and native selection scrolling for held j/k', () => {\n    const active = { id: 'collection-tree-row-2' } as Element;\n    const select = vi.fn();\n    const ensureRowIsVisible = vi.fn();\n    const view: TreeView = {\n      tree: { focus: () => {} },\n      domEl: { contains: (node: unknown) => node === active } as HTMLElement,\n      rowCount: 6,\n      selection: { count: 1, focused: 2, select },\n      ensureRowIsVisible,\n    };\n    const window = {\n      document: {\n        activeElement: active,\n        getElementById: () => null,\n        querySelector: () => null,\n      },\n      ZoteroPane: { collectionsView: view },\n    } as unknown as MainWindow;\n    const session = { activePanel: 'items' } as MainWindowSession;\n    const navigation = new MainNavigation(logger, () => {});\n\n    navigation.navigate(window, session, 1, 1, true);\n\n    expect(select).toHaveBeenCalledWith(3, true);\n    expect(ensureRowIsVisible).not.toHaveBeenCalled();\n    expect(session.activePanel).toBe('collections');\n  });\n});\n`;
   text = replaceOnce(text, anchor, replacement, 'main navigation repeat test');
+  text = replaceOnce(
+    text,
+    `describe('collection navigation repeat pacing', () => {\n  it('moves one row at a time while dropping only over-frequent auto-repeat events', () => {\n`,
+    `describe('collection navigation repeat pacing', () => {\n  it('keeps every repeat movement while debouncing Zotero selection work', () => {\n`,
+    'legacy repeat test title',
+  );
+  text = replaceOnce(
+    text,
+    `    const selectedRows: number[] = [];\n`,
+    `    const selections: Array<{ index: number; shouldDebounce: boolean | undefined }> = [];\n`,
+    'legacy repeat selection log',
+  );
+  text = replaceOnce(
+    text,
+    `      select(index: number) {\n        this.focused = index;\n        selectedRows.push(index);\n      },\n`,
+    `      select(index: number, shouldDebounce?: boolean) {\n        this.focused = index;\n        selections.push({ index, shouldDebounce });\n      },\n`,
+    'legacy repeat selection callback',
+  );
+  text = replaceOnce(
+    text,
+    `    const now = vi.spyOn(Date, 'now');\n    const press = (timestamp: number, repeat: boolean): void => {\n      now.mockReturnValue(timestamp);\n      keydown?.({\n`,
+    `    const press = (repeat: boolean): void => {\n      keydown?.({\n`,
+    'legacy repeat press helper',
+  );
+  text = replaceOnce(
+    text,
+    `    press(0, false);\n    press(10, true);\n    press(30, true);\n    press(85, true);\n    press(100, true);\n    press(170, true);\n`,
+    `    press(false);\n    press(true);\n    press(true);\n    press(true);\n    press(true);\n    press(true);\n`,
+    'legacy repeat events',
+  );
+  text = replaceOnce(
+    text,
+    `    expect(selectedRows).toEqual([1, 2, 3]);\n`,
+    `    expect(selections).toEqual([\n      { index: 1, shouldDebounce: false },\n      { index: 2, shouldDebounce: true },\n      { index: 3, shouldDebounce: true },\n      { index: 4, shouldDebounce: true },\n      { index: 5, shouldDebounce: true },\n      { index: 6, shouldDebounce: true },\n    ]);\n`,
+    'legacy repeat expectation',
+  );
   write(path, text);
 }
