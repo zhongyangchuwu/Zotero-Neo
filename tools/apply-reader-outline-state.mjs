@@ -126,6 +126,12 @@ writeFileSync(typesPath, types);
 
 const testsPath = 'tests/unit/reader-controller.test.ts';
 let tests = readFileSync(testsPath, 'utf8');
+tests = replaceOnce(
+  tests,
+  "    created.session.focusAndHandle(escape.event);\n    expect(created.session.state.outline.open).toBe(false);\n\n    created.session.focusAndHandle(readerKey('+').event);",
+  "    created.session.focusAndHandle(escape.event);\n    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');\n\n    created.session.focusAndHandle(readerKey('+').event);",
+  'outline close behavior assertion',
+);
 const stateAssertions =
   "    expect(created.session.state.outline.open).toBe(false);\n    expect(created.session.state.outline.loading).toBe(false);\n";
 const first = tests.indexOf(stateAssertions);
