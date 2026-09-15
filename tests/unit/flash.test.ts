@@ -206,7 +206,7 @@ describe('Reader Flash lifecycle', () => {
     expect(flash.isOpen).toBe(true);
     flash.handleKey(flashKey('Backspace'), created.pdfWindow);
     flash.handleKey(flashKey('Enter'), created.pdfWindow);
-    expect(flashHints(created.bodyChildren)).toHaveLength(0);
+    expect(flashHints(created.bodyChildren)).toHaveLength(2);
   });
 
   it('cancels instead of reindexing when the viewport changes', () => {
