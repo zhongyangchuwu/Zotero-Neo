@@ -1,0 +1,40 @@
+name: Apply Reader comment editor state
+
+on:
+  push:
+    branches:
+      - refactor/reader-comment-editor-state
+    paths:
+      - tools/apply-reader-comment-editor-state.mjs
+      - .github/workflows/apply-reader-comment-editor-state-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refactor/reader-comment-editor-state
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply guarded extraction
+        run: |
+          node tools/apply-reader-comment-editor-state.mjs
+          rm tools/apply-reader-comment-editor-state.mjs .github/workflows/apply-reader-comment-editor-state-once.yml
+      - name: Format and verify
+        run: |
+          npx prettier --write src/reader/controller.ts src/reader/types.ts src/reader/comment-editor.ts tests/unit/comment-editor.test.ts docs/DEVELOPMENT.md
+          npm run verify
+      - name: Commit extraction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor(reader): let comment editor own transient state"
+          git push origin HEAD:refactor/reader-comment-editor-state
