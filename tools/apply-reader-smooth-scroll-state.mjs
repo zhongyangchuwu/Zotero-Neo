@@ -173,7 +173,7 @@ controller = replaceSection(
     )
       return false;
     const bindings = this.#dependencies.bindings();
-    const directAction = bindings[`normal:${key}`];
+    const directAction = bindings['normal:' + key];
     if (!this.state.keyBuffer && (!directAction || !smoothScrollSpec(directAction))) return false;
     const decision = advanceInput(
       {
