@@ -295,7 +295,10 @@ export class ReaderFlash {
     if (code < 0x20 || code > 0x7e) return;
 
     const labelKey = event.key.toUpperCase();
-    if (/^[A-Z]$/.test(labelKey) && this.#targets.some((target) => target.label.startsWith(labelKey))) {
+    if (
+      /^[A-Z]$/.test(labelKey) &&
+      this.#targets.some((target) => target.label.startsWith(labelKey))
+    ) {
       this.#labelBuffer = labelKey;
       this.#refreshLabels();
       const exact = this.#targets.find((target) => target.label === labelKey);

@@ -184,18 +184,25 @@ batch as a targeted restore fallback and never permanently erases these items.
 ## Reader Flash visible-text targeting
 
 `ReaderFlash` owns one active visible-text invocation: the PDF view, literal query, normalized text
-index, query/label stage, stable hint labels, prompt DOM, and cleanup. `ReaderSessionState` must not
+index, stable label reuse, label buffer, prompt/badge DOM, and cleanup. `ReaderSessionState` must not
 mirror any Flash state. The session only resolves the `flashText` action and applies the selected
 source pointer according to the current mode. Normal places a collapsed caret, Cursor moves its
 caret and keeps Cursor mode, and Visual moves only the focus while preserving the existing anchor.
 
 The v1 index includes only currently visible `.textLayer span` text from the active PDF view. It
-normalizes NFKC and whitespace, supports literal cross-node matching with ASCII smartcase, ranks
-labels by distance from the current caret/focus (or viewport center), and never jumps merely because
-a query has one match. Enter freezes the current matches and their labels; an explicit label selects
-the target. Scroll, resize, split-view replacement, blur, mode change, and disposal cancel the
-invocation instead of live-reindexing stale PDF.js text. Fuzzy search, regex, whole-document indexing,
-and CJK/IME composition are intentionally outside v1.
+normalizes NFKC and whitespace, supports literal cross-node matching with ASCII smartcase, and ranks
+labels by distance from the current caret/focus (or viewport center). Incremental query updates first
+run the cheap in-memory matcher. When more than `FLASH_TARGET_LIMIT` (48) matches remain, Flash
+updates only the prompt and intentionally performs no Range geometry or per-target DOM rendering.
+At or below that limit it measures visible targets and reuses stable labels where possible.
+
+The first character of every rendered label is excluded from the set of letters that can extend any
+current match by one character. This mirrors Flash.nvim's continuation-safe label idea: continuing the
+search and starting a jump cannot compete for the same key. Multi-character labels use a fixed width
+after their safe first character. Enter selects the nearest currently labelled target; Flash never
+auto-jumps merely because only one text match remains. Scroll, resize, split-view replacement, blur,
+mode change, and disposal cancel the invocation instead of live-reindexing stale PDF.js text. Fuzzy
+search, regex, whole-document indexing, and CJK/IME composition are intentionally outside v1.
 
 ## PDF text vertical motion
 

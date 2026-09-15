@@ -196,10 +196,10 @@ describe('Reader Flash lifecycle', () => {
 
     const hints = flashHints(created.bodyChildren);
     expect(hints).toHaveLength(2);
-    expect(hints.map((hint) => hint.textContent)).toEqual(['A', 'S']);
+    expect(hints.map((hint) => hint.textContent)).toEqual(['S', 'F']);
     expect(activations).toHaveLength(0);
 
-    flash.handleKey(flashKey('A'), created.pdfWindow);
+    flash.handleKey(flashKey('S'), created.pdfWindow);
     expect(activations).toHaveLength(1);
     expect(activations[0]?.mode).toBe('cursor');
     expect(activations[0]?.pointer.textNode).toBe(created.spans[1]?.node);
@@ -216,7 +216,10 @@ describe('Reader Flash lifecycle', () => {
     flash.handleKey(flashKey('t'), created.pdfWindow);
     flash.handleKey(flashKey('a'), created.pdfWindow);
 
-    expect(flashHints(created.bodyChildren).map((hint) => hint.textContent)).toEqual(['A', 'D']);
+    const labels = flashHints(created.bodyChildren).map((hint) => hint.textContent);
+    expect(labels).toHaveLength(2);
+    expect(labels).not.toContain('S');
+    expect(labels).not.toContain('B');
     flash.handleKey(flashKey('s'), created.pdfWindow);
     expect(activations).toHaveLength(0);
     expect(flashPrompt(created.bodyChildren)?.textContent).toContain('tas (1)');
