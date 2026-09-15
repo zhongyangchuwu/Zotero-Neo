@@ -1,3 +1,4 @@
+import { hintLabels } from './hint-labels';
 import type { PdfWindow, Pointer, ReaderMode } from './types';
 
 interface TextHintBadge {
@@ -45,7 +46,7 @@ export class ReaderTextHints {
       this.#host.setMode('normal');
       return;
     }
-    const labels = this.#labels(starts.length);
+    const labels = hintLabels(starts.length);
     this.#targetMode = targetMode;
     starts.forEach((start, index) => {
       const range = pdfWindow.document.createRange();
@@ -146,24 +147,5 @@ export class ReaderTextHints {
     return spans
       .map((span) => span.firstChild ?? null)
       .filter((node): node is Text => isTextNode(node) && !!node.data.trim());
-  }
-
-  #labels(count: number): string[] {
-    const alphabet = 'ASDFJKLGHQWERTYUIOPZXCVBNM';
-    let width = 1;
-    let capacity = alphabet.length;
-    while (capacity < count) {
-      width += 1;
-      capacity *= alphabet.length;
-    }
-    return Array.from({ length: count }, (_, index) => {
-      let value = index;
-      const label = Array.from({ length: width }, () => alphabet[0]!);
-      for (let position = width - 1; position >= 0; position -= 1) {
-        label[position] = alphabet[value % alphabet.length]!;
-        value = Math.floor(value / alphabet.length);
-      }
-      return label.join('');
-    });
   }
 }
