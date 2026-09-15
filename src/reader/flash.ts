@@ -1,7 +1,7 @@
 import { HINT_ALPHABET } from './hint-labels';
-import type { PdfWindow, Pointer, ReaderMode } from './types';
+import type { PdfWindow, Pointer } from './types';
 
-export type FlashMode = Extract<ReaderMode, 'normal' | 'cursor' | 'visual'>;
+export type FlashIntent = 'visual-start' | 'visual-end';
 
 export interface FlashTextSegment {
   readonly textNode: Text;
@@ -16,6 +16,12 @@ export interface FlashTextIndex {
 export interface FlashMatch {
   readonly index: number;
   readonly pointer: Pointer;
+  readonly end: Pointer;
+}
+
+export interface FlashSelectionTarget {
+  readonly start: Pointer;
+  readonly end: Pointer;
 }
 
 interface FlashRect {
@@ -31,7 +37,7 @@ interface FlashCandidate extends FlashMatch {
   readonly rect: FlashRect;
 }
 
-interface FlashTarget {
+interface FlashTarget extends FlashSelectionTarget {
   readonly pointer: Pointer;
   readonly rect: FlashRect;
   readonly label: string;
@@ -39,7 +45,11 @@ interface FlashTarget {
 }
 
 export interface ReaderFlashHost {
-  readonly activate: (mode: FlashMode, pdfWindow: PdfWindow, pointer: Pointer) => void;
+  readonly activate: (
+    intent: FlashIntent,
+    pdfWindow: PdfWindow,
+    target: FlashSelectionTarget,
+  ) => void;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
@@ -79,6 +89,15 @@ function appendMappedCharacter(
     output.push(character);
     for (let index = 0; index < character.length; index += 1) pointers.push(pointer);
   }
+}
+
+function pointerAfterSourceCharacter(pointer: Pointer): Pointer {
+  const codePoint = pointer.textNode.data.codePointAt(pointer.offset);
+  const width = codePoint === undefined ? 1 : String.fromCodePoint(codePoint).length;
+  return {
+    textNode: pointer.textNode,
+    offset: Math.min(pointer.textNode.length, pointer.offset + width),
+  };
 }
 
 /** NFKC + collapsed whitespace normalization used by Flash query matching. */
@@ -122,7 +141,8 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
     const found = haystack.indexOf(needle, from);
     if (found < 0) break;
     const pointer = index.pointers[found];
-    if (pointer) {
+    const last = index.pointers[found + needle.length - 1];
+    if (pointer && last) {
       let offsets = seen.get(pointer.textNode);
       if (!offsets) {
         offsets = new Set<number>();
@@ -130,7 +150,11 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
       }
       if (!offsets.has(pointer.offset)) {
         offsets.add(pointer.offset);
-        matches.push({ index: found, pointer });
+        matches.push({
+          index: found,
+          pointer,
+          end: pointerAfterSourceCharacter(last),
+        });
       }
     }
     from = found + 1;
@@ -191,7 +215,7 @@ function flashLabelPool(count: number, firstAlphabet: string): string[] {
 export class ReaderFlash {
   readonly #host: ReaderFlashHost;
   #window: PdfWindow | null = null;
-  #mode: FlashMode | null = null;
+  #intent: FlashIntent | null = null;
   #index: FlashTextIndex | null = null;
   #query = '';
   #labelBuffer = '';
@@ -208,7 +232,7 @@ export class ReaderFlash {
     return this.#window !== null;
   }
 
-  open(pdfWindow: PdfWindow, mode: FlashMode): void {
+  open(pdfWindow: PdfWindow, intent: FlashIntent): void {
     this.cancel();
     try {
       const segments = this.#visibleSegments(pdfWindow);
@@ -218,7 +242,7 @@ export class ReaderFlash {
         return;
       }
       this.#window = pdfWindow;
-      this.#mode = mode;
+      this.#intent = intent;
       this.#index = index;
       this.#query = '';
       this.#labelBuffer = '';
@@ -271,7 +295,7 @@ export class ReaderFlash {
     this.#prompt?.remove();
     this.#prompt = null;
     this.#window = null;
-    this.#mode = null;
+    this.#intent = null;
     this.#index = null;
     this.#query = '';
     this.#labelBuffer = '';
@@ -395,7 +419,9 @@ export class ReaderFlash {
         element.style.top = `${candidate.rect.top}px`;
         pdfWindow.document.body?.appendChild(element);
         this.#targets.push({
+          start: candidate.pointer,
           pointer: candidate.pointer,
+          end: candidate.end,
           rect: candidate.rect,
           label,
           element,
@@ -453,27 +479,37 @@ export class ReaderFlash {
 
   #activate(target: FlashTarget): void {
     const pdfWindow = this.#window;
-    const mode = this.#mode;
-    const pointer = target.pointer;
-    if (!pdfWindow || !mode || !pointer.textNode.isConnected) {
+    const intent = this.#intent;
+    if (
+      !pdfWindow ||
+      !intent ||
+      !target.start.textNode.isConnected ||
+      !target.end.textNode.isConnected
+    ) {
       this.cancel();
       this.#host.showStatus('Flash target unavailable', 1200);
       return;
     }
+    const selectionTarget = { start: target.start, end: target.end };
     this.cancel();
-    this.#host.activate(mode, pdfWindow, pointer);
+    this.#host.activate(intent, pdfWindow, selectionTarget);
+  }
+
+  #promptPrefix(): string {
+    return this.#intent === 'visual-end' ? 'SELECT END' : 'SELECT START';
   }
 
   #refreshPrompt(suffix = ''): void {
     const prompt = this.#prompt;
     if (!prompt) return;
+    const prefix = this.#promptPrefix();
     if (this.#labelBuffer) {
-      prompt.textContent = `FLASH: ${this.#query} → ${this.#labelBuffer}`;
+      prompt.textContent = `${prefix}: ${this.#query} → ${this.#labelBuffer}`;
       return;
     }
     prompt.textContent = this.#query
-      ? `FLASH: ${this.#query} (${this.#matchCount})${suffix}`
-      : 'FLASH: …';
+      ? `${prefix}: ${this.#query} (${this.#matchCount})${suffix}`
+      : `${prefix}: …`;
   }
 
   #refreshLabels(): void {
@@ -491,7 +527,7 @@ export class ReaderFlash {
     const prompt = pdfWindow.document.createElement('div');
     prompt.dataset.zoteroNeoFlashPrompt = '1';
     prompt.style.cssText =
-      'position:fixed;left:12px;bottom:12px;z-index:100001;padding:4px 7px;border:1px solid #585b70;border-radius:4px;background:#1e1e2e;color:#cdd6f4;font:12px monospace;pointer-events:none;';
+      'position:fixed;left:12px;bottom:12px;z-index:100001;padding:5px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#172554;color:#ffffff;font:bold 12px monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);pointer-events:none;';
     pdfWindow.document.body?.appendChild(prompt);
     return prompt;
   }
