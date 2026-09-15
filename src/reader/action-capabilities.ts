@@ -4,7 +4,7 @@ import {
 } from '../main/action-capabilities';
 import type { ActionId } from '../input/actions';
 
-export type ReaderCapabilityMode = 'normal' | 'visual' | 'cursor' | 'insert';
+export type ReaderCapabilityMode = 'normal' | 'visual' | 'insert';
 
 /** Actions implemented by the Reader Normal executor itself. */
 export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
@@ -17,7 +17,6 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'historyBack',
   'historyForward',
   'followLink',
-  'flashText',
   'firstPage',
   'lastPage',
   'halfPageDown',
@@ -52,7 +51,6 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'yankAnnotation',
   'yankAnnotationComment',
   'enterVisual',
-  'enterCursor',
   'enterInsert',
   'focusReaderSplitLeft',
   'focusReaderSplitDown',
@@ -66,9 +64,10 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'openCommandPalette',
 ] as const satisfies readonly ActionId[]);
 
-/** Actions implemented by the Reader Visual executor. */
+/** Actions implemented while a PDF text selection is active. */
 export const READER_LOCAL_VISUAL_ACTIONS = Object.freeze([
   'flashText',
+  'openSelectionActions',
   'extendDown',
   'extendUp',
   'extendLeft',
@@ -86,28 +85,12 @@ export const READER_LOCAL_VISUAL_ACTIONS = Object.freeze([
   'highlightGreen',
   'highlightBlue',
   'highlightPurple',
+  'underlineSelection',
   'addNote',
   'copySelection',
   'searchSelection',
   'swapVisualEnds',
   'yankParagraph',
-  'exitMode',
-] as const satisfies readonly ActionId[]);
-
-/** Actions implemented by the Reader Cursor executor. */
-export const READER_LOCAL_CURSOR_ACTIONS = Object.freeze([
-  'flashText',
-  'cursorDown',
-  'cursorUp',
-  'cursorLeft',
-  'cursorRight',
-  'cursorWordForward',
-  'cursorBigWordForward',
-  'cursorWordBackward',
-  'cursorBigWordBackward',
-  'cursorLineStart',
-  'cursorLineEnd',
-  'cursorToVisual',
   'exitMode',
 ] as const satisfies readonly ActionId[]);
 
@@ -124,13 +107,11 @@ export const READER_NORMAL_ACTIONS = Object.freeze([
 
 export type ReaderLocalNormalAction = (typeof READER_LOCAL_NORMAL_ACTIONS)[number];
 export type ReaderLocalVisualAction = (typeof READER_LOCAL_VISUAL_ACTIONS)[number];
-export type ReaderLocalCursorAction = (typeof READER_LOCAL_CURSOR_ACTIONS)[number];
 export type ReaderLocalInsertAction = (typeof READER_LOCAL_INSERT_ACTIONS)[number];
 export type ReaderNormalAction = (typeof READER_NORMAL_ACTIONS)[number];
 export type ReaderLocalAction =
   | ReaderLocalNormalAction
   | ReaderLocalVisualAction
-  | ReaderLocalCursorAction
   | ReaderLocalInsertAction;
 export type ReaderAction = ReaderLocalAction | ReaderDelegableMainAction;
 
@@ -138,9 +119,7 @@ export type ReaderActionForMode<Mode extends ReaderCapabilityMode> = Mode extend
   ? ReaderNormalAction
   : Mode extends 'visual'
     ? ReaderLocalVisualAction
-    : Mode extends 'cursor'
-      ? ReaderLocalCursorAction
-      : ReaderLocalInsertAction;
+    : ReaderLocalInsertAction;
 
 function includesAction(actions: readonly string[], value: unknown): boolean {
   return typeof value === 'string' && actions.includes(value);
@@ -152,10 +131,6 @@ export function isReaderLocalNormalAction(value: unknown): value is ReaderLocalN
 
 export function isReaderLocalVisualAction(value: unknown): value is ReaderLocalVisualAction {
   return includesAction(READER_LOCAL_VISUAL_ACTIONS, value);
-}
-
-export function isReaderLocalCursorAction(value: unknown): value is ReaderLocalCursorAction {
-  return includesAction(READER_LOCAL_CURSOR_ACTIONS, value);
 }
 
 export function isReaderLocalInsertAction(value: unknown): value is ReaderLocalInsertAction {
@@ -170,7 +145,6 @@ export function isReaderLocalAction(value: unknown): value is ReaderLocalAction 
   return (
     isReaderLocalNormalAction(value) ||
     isReaderLocalVisualAction(value) ||
-    isReaderLocalCursorAction(value) ||
     isReaderLocalInsertAction(value)
   );
 }
@@ -184,10 +158,6 @@ export function isReaderActionForMode(
   mode: 'visual',
   value: unknown,
 ): value is ReaderLocalVisualAction;
-export function isReaderActionForMode(
-  mode: 'cursor',
-  value: unknown,
-): value is ReaderLocalCursorAction;
 export function isReaderActionForMode(
   mode: 'insert',
   value: unknown,
@@ -205,11 +175,7 @@ export function isReaderActionForMode(
       return isReaderNormalAction(value);
     case 'visual':
       return isReaderLocalVisualAction(value);
-    case 'cursor':
-      return isReaderLocalCursorAction(value);
     case 'insert':
       return isReaderLocalInsertAction(value);
-    default:
-      return false;
   }
 }
