@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  FLASH_TARGET_LIMIT,
   ReaderFlash,
   buildFlashTextIndex,
+  flashContinuationLabels,
   flashMatches,
   normalizeFlashText,
   type FlashTextSegment,
@@ -67,6 +69,14 @@ describe('Flash text index', () => {
     expect(flashMatches(index, 'a.pha')).toEqual([
       { index: 18, pointer: { textNode: node, offset: 18 } },
     ]);
+  });
+
+  it('excludes every letter that can continue the current query', () => {
+    const node = textNode('taste table tax');
+    const index = buildFlashTextIndex([segment(node)]);
+    const matches = flashMatches(index, 'ta');
+
+    expect([...flashContinuationLabels(index, 'ta', matches)].sort()).toEqual(['B', 'S', 'X']);
   });
 });
 
@@ -155,6 +165,10 @@ function flashHints(children: readonly HTMLElement[]): HTMLElement[] {
   return children.filter((element) => element.dataset.zoteroNeoFlashHint === '1');
 }
 
+function flashPrompt(children: readonly HTMLElement[]): HTMLElement | undefined {
+  return children.find((element) => element.dataset.zoteroNeoFlashPrompt === '1');
+}
+
 function createFlash() {
   const activations: { mode: string; pointer: Pointer }[] = [];
   const statuses: string[] = [];
@@ -168,7 +182,7 @@ function createFlash() {
 }
 
 describe('Reader Flash lifecycle', () => {
-  it('freezes distance-ordered stable labels and requires an explicit label', () => {
+  it('renders distance-ordered labels incrementally without Enter', () => {
     const created = createFlashWindow(
       [
         { value: 'target far', left: 500, top: 300 },
@@ -179,7 +193,6 @@ describe('Reader Flash lifecycle', () => {
     const { flash, activations } = createFlash();
     flash.open(created.pdfWindow, 'cursor');
     for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
-    flash.handleKey(flashKey('Enter'), created.pdfWindow);
 
     const hints = flashHints(created.bodyChildren);
     expect(hints).toHaveLength(2);
@@ -193,20 +206,82 @@ describe('Reader Flash lifecycle', () => {
     expect(flash.isOpen).toBe(false);
   });
 
-  it('returns from label stage to query editing with Backspace', () => {
-    const created = createFlashWindow([{ value: 'target target', left: 20, top: 20 }]);
+  it('keeps continuation letters for the query and reserves other letters for labels', () => {
+    const created = createFlashWindow([
+      { value: 'taste', left: 20, top: 20 },
+      { value: 'table', left: 20, top: 50 },
+    ]);
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'normal');
+    flash.handleKey(flashKey('t'), created.pdfWindow);
+    flash.handleKey(flashKey('a'), created.pdfWindow);
+
+    expect(flashHints(created.bodyChildren).map((hint) => hint.textContent)).toEqual(['A', 'D']);
+    flash.handleKey(flashKey('s'), created.pdfWindow);
+    expect(activations).toHaveLength(0);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('tas (1)');
+
+    flash.handleKey(flashKey('A'), created.pdfWindow);
+    expect(activations).toHaveLength(1);
+  });
+
+  it('suppresses badge geometry when there are too many matches', () => {
+    const created = createFlashWindow(
+      Array.from({ length: FLASH_TARGET_LIMIT + 1 }, (_, index) => ({
+        value: 'target',
+        left: 20 + (index % 6) * 90,
+        top: 20 + Math.floor(index / 6) * 24,
+      })),
+    );
     const { flash } = createFlash();
     flash.open(created.pdfWindow, 'normal');
     for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
-    flash.handleKey(flashKey('Enter'), created.pdfWindow);
-    expect(flashHints(created.bodyChildren)).toHaveLength(2);
+
+    expect(flashHints(created.bodyChildren)).toHaveLength(0);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain(
+      `(${FLASH_TARGET_LIMIT + 1}) — type more`,
+    );
+  });
+
+  it('supports fixed-width multi-character labels and Backspace out of label input', () => {
+    const created = createFlashWindow(
+      Array.from({ length: 30 }, (_, index) => ({
+        value: 'target',
+        left: 20 + (index % 6) * 90,
+        top: 20 + Math.floor(index / 6) * 24,
+      })),
+    );
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'normal');
+    for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
+
+    expect(flashHints(created.bodyChildren)[0]?.textContent).toBe('AA');
+    flash.handleKey(flashKey('A'), created.pdfWindow);
+    expect(activations).toHaveLength(0);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('→ A');
 
     flash.handleKey(flashKey('Backspace'), created.pdfWindow);
-    expect(flashHints(created.bodyChildren)).toHaveLength(0);
-    expect(flash.isOpen).toBe(true);
-    flash.handleKey(flashKey('Backspace'), created.pdfWindow);
+    expect(flashHints(created.bodyChildren).filter((hint) => !hint.hidden)).toHaveLength(30);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('target (30)');
+  });
+
+  it('lets Enter choose the nearest currently labeled target', () => {
+    const created = createFlashWindow(
+      [
+        { value: 'target far', left: 500, top: 300 },
+        { value: 'target near', left: 30, top: 30 },
+      ],
+      1,
+    );
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'visual');
+    for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
+
     flash.handleKey(flashKey('Enter'), created.pdfWindow);
-    expect(flashHints(created.bodyChildren)).toHaveLength(2);
+
+    expect(activations).toHaveLength(1);
+    expect(activations[0]?.mode).toBe('visual');
+    expect(activations[0]?.pointer.textNode).toBe(created.spans[1]?.node);
   });
 
   it('cancels instead of reindexing when the viewport changes', () => {
