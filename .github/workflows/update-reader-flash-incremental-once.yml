@@ -1,0 +1,40 @@
+name: Update Reader Flash incremental behavior once
+
+on:
+  push:
+    branches:
+      - feat/reader-flash-text
+    paths:
+      - tools/update-reader-flash-incremental.mjs
+      - .github/workflows/update-reader-flash-incremental-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/reader-flash-text
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Update docs and remove one-shot scaffolding
+        run: |
+          node tools/update-reader-flash-incremental.mjs
+          rm tools/update-reader-flash-incremental.mjs .github/workflows/update-reader-flash-incremental-once.yml
+      - name: Format and verify
+        run: |
+          npx prettier --write src/reader/flash.ts src/reader/hint-labels.ts tests/unit/flash.test.ts docs/DEVELOPMENT.md docs/USER_GUIDE.md
+          npm run verify
+      - name: Commit incremental Flash update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(reader): make Flash labels incremental"
+          git push origin HEAD:feat/reader-flash-text
