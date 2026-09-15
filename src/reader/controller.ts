@@ -37,7 +37,6 @@ import { ReaderOutline, type OutlineHost } from './outline';
 import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer, type MarksExplorerState } from './marks-explorer';
 import { hintLabels } from './hint-labels';
-import { ReaderTextHints } from './text-hints';
 import {
   COLORS,
   type AnnotationColor,
@@ -347,7 +346,6 @@ export class ReaderSession {
   readonly #marksExplorer: ReaderMarksExplorer;
   readonly #sidebar: ReaderSidebarOverlay;
   readonly #outline: ReaderOutline;
-  readonly #textHints: ReaderTextHints;
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
   #keyGuideTimer: ReaderTimer | null = null;
@@ -425,16 +423,6 @@ export class ReaderSession {
       previousDeleteFromComment: undefined,
       popupGuard: null,
     };
-    this.#textHints = new ReaderTextHints({
-      activePdfWindow: () => this.state.activePdfWindow,
-      clearLinkHints: () => this.clearLinkHints(),
-      setMode: (mode) => this.setMode(mode),
-      setVisualAnchor: (pointer) => {
-        this.state.visualAnchor = pointer;
-      },
-      showStatus: (message, duration) => this.showStatus(message, duration),
-      updateVisualCursor: (pdfWindow, autoPan) => this.updateVisualCursor(pdfWindow, autoPan),
-    });
     this.#marks = new ReaderMarks({
       preferences: dependencies.controller.dependencies.preferences,
       itemForReader: (reader) => this.itemForReader(reader),
@@ -519,7 +507,6 @@ export class ReaderSession {
     this.#themeManagers.clear();
     this.state.indicator?.remove();
     this.state.indicator = null;
-    this.#textHints.clear();
     this.clearLinkHints();
     this.clearDestinationCue();
     this.clearKeyGuide();
@@ -619,14 +606,12 @@ export class ReaderSession {
         if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
       }) as EventListener;
       const scroll = (() => {
-        if (this.#textHints.active) this.#textHints.reposition(pdfWindow);
         if (this.state.linkHintWindow === pdfWindow) this.repositionLinkHints(pdfWindow);
         if (this.state.destinationCueWindow === pdfWindow) this.repositionDestinationCue(pdfWindow);
         if (this.state.mode === 'visual' || this.state.mode === 'cursor')
           this.updateVisualCursor(pdfWindow, false);
       }) as EventListener;
       const resize = (() => {
-        this.#textHints.reposition(pdfWindow);
         if (this.state.linkHintWindow === pdfWindow) this.repositionLinkHints(pdfWindow);
         if (this.state.destinationCueWindow === pdfWindow) this.repositionDestinationCue(pdfWindow);
       }) as EventListener;
@@ -784,10 +769,6 @@ export class ReaderSession {
     }
     if (this.state.linkHintBadges.length) {
       this.handleLinkHintKey(event, pdfWindow);
-      return;
-    }
-    if (this.#textHints.active) {
-      this.#textHints.handleKey(event, pdfWindow);
       return;
     }
     if (this.state.mode === 'insert') {
@@ -989,12 +970,7 @@ export class ReaderSession {
         (!!this.state.commentInput &&
           (key.length === 1 || ['backspace', 'delete', 'enter'].includes(key)))
       );
-    if (
-      this.state.marksExplorerOpen ||
-      this.state.outline.open ||
-      this.#textHints.active ||
-      this.state.linkHintBadges.length
-    )
+    if (this.state.marksExplorerOpen || this.state.outline.open || this.state.linkHintBadges.length)
       return true;
     if (
       this.state.keyBuffer === 'm' ||
@@ -1397,7 +1373,6 @@ export class ReaderSession {
     this.clearKeyTimer();
     this.clearKeyGuide();
     if (mode !== 'insert') this.clearTimer(this.state.insertWatchdog);
-    if (mode !== 'visual' && mode !== 'cursor') this.#textHints.clear();
     if (mode !== 'visual' && mode !== 'cursor') this.removeVisualCursor(this.state.activePdfWindow);
     this.updateIndicator();
   }
@@ -1717,14 +1692,27 @@ export class ReaderSession {
       this.updateVisualCursor(pdfWindow, true);
       return;
     }
-    this.#textHints.show(pdfWindow, 'visual');
+    if (!this.ensureCursor(pdfWindow)) {
+      this.showStatus('✗ no selectable text', 1500);
+      this.setMode('normal');
+      return;
+    }
+    const caret = pdfWindow.getSelection();
+    if (caret && isTextNode(caret.anchorNode))
+      this.state.visualAnchor = { textNode: caret.anchorNode, offset: caret.anchorOffset };
+    this.updateVisualCursor(pdfWindow, true);
   }
 
   private enterCursor(pdfWindow: PdfWindow): void {
     this.state.visualAnchor = null;
     this.state.cursorPreferredX = null;
     this.setMode('cursor');
-    this.#textHints.show(pdfWindow, 'cursor');
+    if (!this.ensureCursor(pdfWindow)) {
+      this.showStatus('✗ no selectable text', 1500);
+      this.setMode('normal');
+      return;
+    }
+    this.updateVisualCursor(pdfWindow, true);
   }
 
   private cursorToVisual(pdfWindow: PdfWindow): void {
@@ -1861,7 +1849,6 @@ export class ReaderSession {
   }
 
   private showLinkHints(pdfWindow: PdfWindow): void {
-    this.#textHints.clear();
     this.clearLinkHints();
     this.state.linkHintWindow = pdfWindow;
     try {
