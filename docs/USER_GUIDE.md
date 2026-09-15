@@ -484,22 +484,11 @@ highlighted in the PDF and scrolled to in the sidebar.
 
 ### Cursor mode
 
-Enter Cursor mode with `c` from Normal mode.
-After pressing `c`, the plugin shows **hint badges** (yellow letter labels) at
-sentence starts across the visible page. Picking a sentence badge opens
-**word-level hints** inside that sentence: the sentence's own badge keeps its
-label, so pressing the same label again places the caret exactly at the
-sentence start, and every other label places the caret at that word.
-
-#### Hint picking
-
-- Labels are uppercase; you type lowercase keys (matched case-insensitively).
-- With more candidates than letters, labels grow to two characters.
-- As you type, the consumed letters dim and non-matching badges disappear;
-  a complete label — or input that uniquely matches one badge — activates
-  immediately.
-- `Backspace` removes the last typed letter. `Escape` returns from word
-  hints to sentence hints; another `Escape` exits to Normal mode.
+Enter Cursor mode with `c` from Normal mode. The legacy sentence/word hint
+picker has been removed in preparation for Flash-style text targeting. Until
+Flash lands, entering Cursor mode keeps an existing collapsed caret when
+possible and otherwise places the caret at the first selectable text position
+in the active PDF view.
 
 #### Caret movement
 
@@ -525,7 +514,6 @@ sentence start, and every other label places the caret at that word.
 
 | Key           | Action                                                              |
 | ------------- | ------------------------------------------------------------------- |
-| `a..z` (hint) | Pick a sentence hint, then a word hint inside it to place the caret |
 | `v`           | Enter Visual mode from current caret                                |
 | `Escape`      | Exit to Normal mode                                                 |
 
@@ -533,18 +521,10 @@ sentence start, and every other label places the caret at that word.
 
 ### Visual mode
 
-Enter Visual mode with `v` from Normal mode. If there is no existing text
-selection, the plugin shows **hint badges** (yellow letter labels) at sentence
-starts across the visible page. Pressing a sentence label opens **word-level
-hints** inside that sentence: the sentence's own badge keeps its label, so
-pressing the same label again anchors the selection exactly at the sentence
-start, while any other label anchors it at that word. The selection then
-grows as you press movement keys.
-
-Hint picking works like Cursor mode: uppercase labels (type lowercase),
-two-character labels when needed, typed letters dim while non-matching badges
-disappear, `Backspace` steps back, and `Escape` returns from word hints to
-sentence hints (then to Normal mode).
+Enter Visual mode with `v` from Normal mode. If a text selection already
+exists, its anchor is reused. Otherwise, until Flash-style targeting lands,
+Visual mode starts from the first selectable text position in the active PDF
+view.
 
 #### Selection movement
 
@@ -627,9 +607,7 @@ editors keeps its Zotero behavior).
 ### Creating a highlight from scratch
 
 1. Press `v` to enter Visual mode.
-2. Press the hint label shown at the desired sentence start — optionally
-   refine with a second (word-level) label to anchor at an exact word —
-   or press `j`/`k` to begin from the current position.
+2. Until Flash-style targeting lands, Visual mode starts from the first selectable text position when there is no existing selection.
 3. Extend the selection with `j`/`k`/`w`/`b`/`)`/`}`/`h`/`l`.
 4. Use `o` to jump to the other end of the selection if you need to trim the
    start rather than extend the end.
