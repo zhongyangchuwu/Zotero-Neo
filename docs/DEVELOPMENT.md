@@ -223,6 +223,20 @@ render and crop a separate canvas with coordinates unrelated to the live view.
 The one cue follows scroll/resize and is owned by the view/session timeout;
 never represent it as a Zotero annotation or DOM text selection.
 
+## Reader smooth-scroll ownership
+
+`ReaderSession` resolves bindings and count/chord state, but continuous scroll physics are owned by
+`ReaderSmoothScroller`. The feature owns the physical hold key, active/releasing phase, axis,
+direction, speed, timestamp, requestAnimationFrame ID, and the PDF view that scheduled the frame.
+Normal-mode input hands it only an already-resolved scroll action. Counted motions and step mode stay
+on the ordinary discrete action path.
+
+The owning PDF view is part of the transient state: switching a hold to another split view cancels
+the old view's frame before scheduling the new one, and view release/disposal cancels the frame on
+that exact window rather than whichever Reader view happens to be active later. Follow mode stops on
+keyup; trapezoid mode decelerates unless `smoothScroll.stopOnRelease` requests an immediate stop.
+Reader session state must not mirror the continuous hold/RAF fields.
+
 ## Reader sidebar ownership
 
 `ReaderMarksExplorer` and `ReaderOutline` own their transient open/selection/DOM/theme state.

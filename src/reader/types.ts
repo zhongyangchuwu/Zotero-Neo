@@ -225,17 +225,6 @@ export interface Pointer {
   readonly offset: number;
 }
 
-export interface SmoothHold {
-  active: boolean;
-  releasing: boolean;
-  key: string | null;
-  axis: 'x' | 'y' | null;
-  direction: -1 | 0 | 1;
-  speed: number;
-  rafId: number | null;
-  lastTimestamp: number;
-}
-
 export interface ViewHandlers {
   readonly keyDown: EventListener;
   readonly keyUp: EventListener;
@@ -262,7 +251,6 @@ export interface ReaderSessionState {
   sidebarOutlineIndex: number;
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;
-  smoothHold: SmoothHold;
 }
 
 export interface AnnotationSelectionParams {
