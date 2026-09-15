@@ -1,0 +1,40 @@
+name: Apply Reader smooth scroll state
+
+on:
+  push:
+    branches:
+      - refactor/reader-smooth-scroll-state
+    paths:
+      - tools/apply-reader-smooth-scroll-state.mjs
+      - .github/workflows/apply-reader-smooth-scroll-state-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refactor/reader-smooth-scroll-state
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply guarded extraction
+        run: |
+          node tools/apply-reader-smooth-scroll-state.mjs
+          rm tools/apply-reader-smooth-scroll-state.mjs .github/workflows/apply-reader-smooth-scroll-state-once.yml
+      - name: Format and verify
+        run: |
+          npx prettier --write src/reader/controller.ts src/reader/types.ts src/reader/smooth-scroll.ts tests/unit/reader-controller.test.ts tests/unit/smooth-scroll.test.ts docs/DEVELOPMENT.md
+          npm run verify
+      - name: Commit extraction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor(reader): let smooth scroller own hold state"
+          git push origin HEAD:refactor/reader-smooth-scroll-state
