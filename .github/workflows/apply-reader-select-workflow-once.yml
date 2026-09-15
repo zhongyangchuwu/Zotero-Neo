@@ -26,7 +26,8 @@ jobs:
       - name: Apply Select workflow migration
         run: |
           node tools/apply-reader-select-workflow.mjs
-          rm tools/apply-reader-select-workflow.mjs .github/workflows/apply-reader-select-workflow-once.yml
+          node tools/fix-reader-select-workflow-output.mjs
+          rm tools/apply-reader-select-workflow.mjs tools/fix-reader-select-workflow-output.mjs .github/workflows/apply-reader-select-workflow-once.yml
       - name: Format and verify
         run: |
           npx prettier --write src tests docs README.md assets/package/content/preferences/pane.xhtml
