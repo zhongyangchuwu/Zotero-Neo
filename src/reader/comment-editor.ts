@@ -115,9 +115,11 @@ export class ReaderCommentEditor {
 
   /** Saves, closes, then restores Zotero's annotation-comment deletion flag. */
   async exit(): Promise<boolean> {
-    const saved = await this.#saveAndClose();
-    this.#restoreAnnotationDeletionFlag();
-    return saved;
+    try {
+      return await this.#saveAndClose();
+    } finally {
+      this.#restoreAnnotationDeletionFlag();
+    }
   }
 
   /** Restores native Zotero behavior before yielding focus and saving the Neo editor. */
