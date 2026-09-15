@@ -90,7 +90,9 @@ function createTextSession(values: readonly string[]) {
       if (selector === '.textLayer span')
         return textNodes.map((node) => ({ firstChild: node })) as unknown as NodeListOf<Element>;
       if (selector === '[data-zv-cursor]')
-        return appended.filter((element) => element.dataset.zvCursor === '1') as unknown as NodeListOf<Element>;
+        return appended.filter(
+          (element) => element.dataset.zvCursor === '1',
+        ) as unknown as NodeListOf<Element>;
       return [] as unknown as NodeListOf<Element>;
     },
     querySelector: (selector: string) => {
@@ -210,12 +212,18 @@ describe('reader text hint navigation characterization', () => {
     textHints(session).showHints(pdfWindow, 'cursor');
 
     expect(session.state.hintBadges.map((badge) => badge.label)).toEqual(['A', 'S']);
-    expect(session.state.hintBadges.map((badge) => badge.textNode.data)).toEqual(['Alpha', 'Beta']);
+    expect(session.state.hintBadges.map((badge) => badge.textNode.data)).toEqual([
+      'Alpha',
+      'Beta',
+    ]);
     expect(session.state.hintTargetMode).toBe('cursor');
   });
 
   it('activates an exact hint as a collapsed caret and keeps the requested mode', () => {
-    const { session, pdfWindow, selectionState, textNodes } = createTextSession(['Alpha', 'Beta']);
+    const { session, pdfWindow, selectionState, textNodes } = createTextSession([
+      'Alpha',
+      'Beta',
+    ]);
     textHints(session).showHints(pdfWindow, 'cursor');
     const event = keyEvent('a');
 
