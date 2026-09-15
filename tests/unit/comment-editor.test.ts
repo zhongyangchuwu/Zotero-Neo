@@ -16,6 +16,7 @@ afterEach(() => {
 });
 
 type FakeElement = HTMLElement & {
+  value: string;
   emit(type: string): void;
   focus: ReturnType<typeof vi.fn>;
 };
