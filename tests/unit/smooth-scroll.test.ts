@@ -49,9 +49,7 @@ function fakePdfWindow() {
   };
 }
 
-function createHarness(
-  values: Readonly<Record<string, boolean | number | string>> = {},
-) {
+function createHarness(values: Readonly<Record<string, boolean | number | string>> = {}) {
   const preferences = {
     get<T extends boolean | number | string>(key: string, fallback: T): T {
       return (values[key] ?? fallback) as T;

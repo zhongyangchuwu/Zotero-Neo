@@ -20,9 +20,7 @@ const SMOOTH_SCROLL_SPECS: Readonly<Record<SmoothScrollAction, SmoothScrollSpec>
 };
 
 export function smoothScrollSpec(action: ActionId): SmoothScrollSpec | null {
-  return action in SMOOTH_SCROLL_SPECS
-    ? SMOOTH_SCROLL_SPECS[action as SmoothScrollAction]
-    : null;
+  return action in SMOOTH_SCROLL_SPECS ? SMOOTH_SCROLL_SPECS[action as SmoothScrollAction] : null;
 }
 
 interface SmoothScrollConfig {

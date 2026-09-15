@@ -276,9 +276,9 @@ type SmoothTestSession = {
 function releaseSmoothHold(created: SmoothTestSession, key: string) {
   const event = readerKey(key);
   const session = created.session as unknown as {
-    handleKeyUp(event: KeyboardEvent, pdfWindow: PdfWindow): void;
+    handleKeyUp(event: KeyboardEvent): void;
   };
-  session.handleKeyUp.call(created.session, event.event, created.pdfWindow);
+  session.handleKeyUp.call(created.session, event.event);
   return event;
 }
 
@@ -861,100 +861,55 @@ describe('reader H/L tab and zh/zl pan defaults', () => {
 
 describe('Reader smooth horizontal pan', () => {
   it('starts follow holds for zh/zl and consumes continuation repeats until keyup', () => {
-    const previousPage = vi.fn();
-    const nextPage = vi.fn();
-    const created = smoothSession('follow', {
-      navigateToPreviousPage: previousPage,
-      navigateToNextPage: nextPage,
-    });
-
-    const leftPrefix = readerKey('z');
-    created.session.focusAndHandle(leftPrefix.event);
-    const left = readerKey('h');
-    created.session.focusAndHandle(left.event);
-    expect(created.session.state.smoothHold).toMatchObject({
-      active: true,
-      key: 'h',
-      axis: 'x',
-      direction: -1,
-    });
-    expect(created.container.scrollBy).toHaveBeenCalledWith(-10, 0);
-    const leftSpeed = created.session.state.smoothHold.speed;
-    const repeatedLeft = readerKey('h');
-    created.session.focusAndHandle(repeatedLeft.event);
-    expect(repeatedLeft.preventDefault).toHaveBeenCalledOnce();
-    expect(created.session.state.smoothHold.speed).toBe(leftSpeed);
-    expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
-    expect(previousPage).not.toHaveBeenCalled();
-    releaseSmoothHold(created, 'h');
-    expect(created.session.state.smoothHold).toMatchObject({
-      active: false,
-      releasing: false,
-      key: null,
-    });
-
-    const rightPrefix = readerKey('z');
-    created.session.focusAndHandle(rightPrefix.event);
-    const right = readerKey('l');
-    created.session.focusAndHandle(right.event);
-    expect(created.session.state.smoothHold).toMatchObject({
-      active: true,
-      key: 'l',
-      axis: 'x',
-      direction: 1,
-    });
-    expect(created.container.scrollBy).toHaveBeenCalledWith(10, 0);
-    const repeatedRight = readerKey('l');
-    created.session.focusAndHandle(repeatedRight.event);
-    expect(repeatedRight.preventDefault).toHaveBeenCalledOnce();
-    expect(created.container.scrollBy).toHaveBeenCalledTimes(2);
-    expect(nextPage).not.toHaveBeenCalled();
-    releaseSmoothHold(created, 'l');
-    created.session.dispose();
-  });
-
-  it('accelerates and decelerates zh/zl holds in trapezoid mode', () => {
     for (const [continuation, direction] of [
       ['h', -1],
       ['l', 1],
     ] as const) {
       const previousPage = vi.fn();
       const nextPage = vi.fn();
-      const created = smoothSession('trapezoid', {
+      const created = smoothSession('follow', {
         navigateToPreviousPage: previousPage,
         navigateToNextPage: nextPage,
       });
+
       created.session.focusAndHandle(readerKey('z').event);
       const first = readerKey(continuation);
       created.session.focusAndHandle(first.event);
-      const initialSpeed = created.session.state.smoothHold.speed;
-      expect(created.session.state.smoothHold).toMatchObject({
-        active: true,
-        key: continuation,
-        axis: 'x',
-        direction,
-      });
-      runSmoothFrame(created, 16);
-      const acceleratedSpeed = created.session.state.smoothHold.speed;
-      expect(acceleratedSpeed).toBeGreaterThan(initialSpeed);
+      expect(created.container.scrollBy).toHaveBeenCalledWith(direction * 10, 0);
+      expect(created.animationFrameTasks).toHaveLength(1);
+
       const repeat = readerKey(continuation);
       created.session.focusAndHandle(repeat.event);
       expect(repeat.preventDefault).toHaveBeenCalledOnce();
-      expect(created.session.state.smoothHold.speed).toBe(acceleratedSpeed);
-      const release = releaseSmoothHold(created, continuation);
-      expect(release.preventDefault).not.toHaveBeenCalled();
-      expect(created.session.state.smoothHold).toMatchObject({
-        active: false,
-        releasing: true,
-        key: null,
-      });
-      const releasingSpeed = created.session.state.smoothHold.speed;
-      runSmoothFrame(created, 32);
-      expect(created.session.state.smoothHold.speed).toBeLessThan(releasingSpeed);
+      expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
       expect(previousPage).not.toHaveBeenCalled();
       expect(nextPage).not.toHaveBeenCalled();
+
+      releaseSmoothHold(created, continuation);
+      runSmoothFrame(created, 16);
+      expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
       created.session.dispose();
     }
+  });
+
+  it('keeps trapezoid release moving while repeat keydown does not restart the curve', () => {
+    const created = smoothSession('trapezoid');
+    created.session.focusAndHandle(readerKey('z').event);
+    created.session.focusAndHandle(readerKey('l').event);
+    expect(created.container.scrollBy).toHaveBeenNthCalledWith(1, 7.5, 0);
+
+    runSmoothFrame(created, 16);
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(2);
+
+    const repeat = readerKey('l');
+    created.session.focusAndHandle(repeat.event);
+    expect(repeat.preventDefault).toHaveBeenCalledOnce();
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(2);
+
+    releaseSmoothHold(created, 'l');
+    runSmoothFrame(created, 32);
+    expect(created.container.scrollBy).toHaveBeenCalledTimes(3);
+    created.session.dispose();
   });
 
   it('keeps counted chords and step mode as immediate discrete pan', () => {
@@ -963,13 +918,11 @@ describe('Reader smooth horizontal pan', () => {
     counted.session.focusAndHandle(readerKey('z').event);
     counted.session.focusAndHandle(readerKey('h').event);
     expect(counted.container.scrollBy).toHaveBeenCalledWith(-180, 0);
-    expect(counted.session.state.smoothHold.active).toBe(false);
     expect(counted.animationFrameTasks).toHaveLength(0);
     counted.session.focusAndHandle(readerKey('2').event);
     counted.session.focusAndHandle(readerKey('z').event);
     counted.session.focusAndHandle(readerKey('l').event);
     expect(counted.container.scrollBy).toHaveBeenCalledWith(120, 0);
-    expect(counted.session.state.smoothHold.active).toBe(false);
     expect(counted.animationFrameTasks).toHaveLength(0);
     counted.session.dispose();
 
@@ -977,12 +930,10 @@ describe('Reader smooth horizontal pan', () => {
     step.session.focusAndHandle(readerKey('z').event);
     step.session.focusAndHandle(readerKey('h').event);
     expect(step.container.scrollBy).toHaveBeenCalledWith(-60, 0);
-    expect(step.session.state.smoothHold.active).toBe(false);
     expect(step.animationFrameTasks).toHaveLength(0);
     step.session.focusAndHandle(readerKey('z').event);
     step.session.focusAndHandle(readerKey('l').event);
     expect(step.container.scrollBy).toHaveBeenCalledWith(60, 0);
-    expect(step.session.state.smoothHold.active).toBe(false);
     expect(step.animationFrameTasks).toHaveLength(0);
     step.session.dispose();
   });
@@ -995,13 +946,12 @@ describe('Reader smooth horizontal pan', () => {
       const created = smoothSession('follow');
       const press = readerKey(key);
       created.session.focusAndHandle(press.event);
-      expect(created.session.state.smoothHold).toMatchObject({
-        active: true,
-        key,
-        axis: 'y',
-        direction,
-      });
       expect(created.container.scrollBy).toHaveBeenCalledWith(0, direction * 10);
+      expect(created.animationFrameTasks).toHaveLength(1);
+      const repeat = readerKey(key);
+      created.session.focusAndHandle(repeat.event);
+      expect(repeat.preventDefault).toHaveBeenCalledOnce();
+      expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
       releaseSmoothHold(created, key);
       created.session.dispose();
     }
@@ -1018,13 +968,8 @@ describe('Reader smooth horizontal pan', () => {
       const created = smoothSession('follow', {}, customBindings);
       const press = readerKey(key);
       created.session.focusAndHandle(press.event);
-      expect(created.session.state.smoothHold).toMatchObject({
-        active: true,
-        key,
-        axis: 'x',
-        direction,
-      });
       expect(created.container.scrollBy).toHaveBeenCalledWith(direction * 10, 0);
+      expect(created.animationFrameTasks).toHaveLength(1);
       releaseSmoothHold(created, key);
       created.session.dispose();
     }

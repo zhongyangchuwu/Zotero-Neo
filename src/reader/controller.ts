@@ -38,6 +38,7 @@ import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
+import { ReaderSmoothScroller, smoothScrollSpec } from './smooth-scroll';
 import { verticalTextPosition } from './text-motion';
 import {
   COLORS,
@@ -126,19 +127,6 @@ function annotationText(value: string): string {
   return value.normalize('NFKC').replace(/\n/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
 
-type SmoothScrollAction = Extract<
-  ActionId,
-  'scrollDown' | 'scrollUp' | 'scrollLeft' | 'scrollRight'
->;
-
-const SMOOTH_SCROLL_SPECS: Readonly<
-  Record<SmoothScrollAction, Readonly<{ axis: 'x' | 'y'; direction: -1 | 1 }>>
-> = {
-  scrollDown: { axis: 'y', direction: 1 },
-  scrollUp: { axis: 'y', direction: -1 },
-  scrollLeft: { axis: 'x', direction: -1 },
-  scrollRight: { axis: 'x', direction: 1 },
-};
 function assertNever(value: never): never {
   throw new Error(`Unhandled Reader action: ${String(value)}`);
 }
@@ -348,6 +336,7 @@ export class ReaderSession {
   readonly #outline: ReaderOutline;
   readonly #linkHints: ReaderLinkHints;
   readonly #commentEditor: ReaderCommentEditor;
+  readonly #smoothScroller: ReaderSmoothScroller;
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
   #keyGuideTimer: ReaderTimer | null = null;
@@ -375,17 +364,11 @@ export class ReaderSession {
       sidebarOutlineIndex: -1,
       filterColor: null,
       lastAnnotationKey: null,
-      smoothHold: {
-        active: false,
-        releasing: false,
-        key: null,
-        axis: null,
-        direction: 0,
-        speed: 0,
-        rafId: null,
-        lastTimestamp: 0,
-      },
     };
+    this.#smoothScroller = new ReaderSmoothScroller({
+      preferences: dependencies.controller.dependencies.preferences,
+      scrollBy: (pdfWindow, x, y) => this.scrollContainer(pdfWindow).scrollBy(x, y),
+    });
     this.#linkHints = new ReaderLinkHints({
       reader: dependencies.reader,
       viewForWindow: (pdfWindow) => this.readerViewForWindow(pdfWindow),
@@ -482,7 +465,7 @@ export class ReaderSession {
 
   dispose(): void {
     this.#commentEditor.dispose();
-    this.stopSmoothHold(true);
+    this.#smoothScroller.dispose();
     this.clearSidebarToggleInput();
     for (const [pdfWindow, handlers] of this.#viewHandlers)
       this.removeViewHandlers(pdfWindow, handlers);
@@ -590,9 +573,9 @@ export class ReaderSession {
       }) as EventListener;
       const keyUp = ((event: Event) => {
         const keyEvent = asKeyboardEvent(event);
-        if (keyEvent) this.handleKeyUp(keyEvent, pdfWindow);
+        if (keyEvent) this.handleKeyUp(keyEvent);
       }) as EventListener;
-      const blur = (() => this.stopSmoothHold(true)) as EventListener;
+      const blur = (() => this.#smoothScroller.stop(true)) as EventListener;
       const selection = (() => {
         if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
       }) as EventListener;
@@ -641,6 +624,7 @@ export class ReaderSession {
    * recreated, without affecting the reader chrome or surviving split view.
    */
   private releaseViewTheme(pdfWindow: PdfWindow): void {
+    this.#smoothScroller.releaseView(pdfWindow);
     if (this.#outline.ownsView(pdfWindow))
       this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
     this.#commentEditor.releaseView(pdfWindow);
@@ -720,16 +704,8 @@ export class ReaderSession {
     this.#textFocusPatches.clear();
   }
 
-  private handleKeyUp(event: KeyboardEvent, pdfWindow: PdfWindow): void {
-    if (this.state.smoothHold.key !== event.key) return;
-    const mode = this.scrollMode();
-    this.stopSmoothHold(
-      mode === 'follow' ||
-        this.#dependencies.controller.dependencies.preferences.get(
-          'smoothScroll.stopOnRelease',
-          false,
-        ),
-    );
+  private handleKeyUp(event: KeyboardEvent): void {
+    this.#smoothScroller.handleKeyUp(event);
   }
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
@@ -1399,7 +1375,7 @@ export class ReaderSession {
   private setMode(mode: ReaderMode): void {
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
     if (this.state.mode === 'insert' && mode !== 'insert') this.#commentEditor.invalidate();
-    if (mode !== 'normal') this.stopSmoothHold(true);
+    if (mode !== 'normal') this.#smoothScroller.stop(true);
     this.#inputRevision += 1;
     this.state.mode = mode;
     this.state.keyBuffer = '';
@@ -1546,16 +1522,6 @@ export class ReaderSession {
     return this.#dependencies.controller.dependencies.preferences.get(`mode.${mode}.enabled`, true);
   }
 
-  private scrollMode(): 'step' | 'follow' | 'trapezoid' {
-    const configured = this.#dependencies.controller.dependencies.preferences.get(
-      'scroll.mode',
-      'follow',
-    );
-    return configured === 'step' || configured === 'trapezoid' || configured === 'follow'
-      ? configured
-      : 'follow';
-  }
-
   private scrollStep(): number {
     return Math.max(
       1,
@@ -1580,7 +1546,7 @@ export class ReaderSession {
 
   private scrollBy(pdfWindow: PdfWindow, x: number, y: number, smooth = false): void {
     const container = this.scrollContainer(pdfWindow);
-    if (smooth && this.scrollMode() !== 'step') {
+    if (smooth && this.#smoothScroller.mode !== 'step') {
       try {
         container.scrollBy(cloneInto({ left: x, top: y, behavior: 'smooth' as const }, pdfWindow));
         return;
@@ -1593,7 +1559,7 @@ export class ReaderSession {
 
   private scrollTo(pdfWindow: PdfWindow, top: number, smooth = false): void {
     const container = this.scrollContainer(pdfWindow);
-    if (smooth && this.scrollMode() !== 'step') {
+    if (smooth && this.#smoothScroller.mode !== 'step') {
       try {
         container.scrollTo(cloneInto({ top, behavior: 'smooth' as const }, pdfWindow));
         return;
@@ -2399,20 +2365,13 @@ export class ReaderSession {
    * fall through to another Normal action.
    */
   private startSmoothHold(event: KeyboardEvent, pdfWindow: PdfWindow, key: string): boolean {
-    const hold = this.state.smoothHold;
-    if (
-      hold.active &&
-      hold.key === event.key &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey
-    ) {
+    if (this.#smoothScroller.isRepeat(event)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       return true;
     }
     if (
-      this.scrollMode() === 'step' ||
+      this.#smoothScroller.mode === 'step' ||
       this.state.mode !== 'normal' ||
       this.state.countBuffer ||
       event.ctrlKey ||
@@ -2421,9 +2380,8 @@ export class ReaderSession {
     )
       return false;
     const bindings = this.#dependencies.bindings();
-    const directAction = bindings[`normal:${key}`];
-    if (!this.state.keyBuffer && (!directAction || !(directAction in SMOOTH_SCROLL_SPECS)))
-      return false;
+    const directAction = bindings['normal:' + key];
+    if (!this.state.keyBuffer && (!directAction || !smoothScrollSpec(directAction))) return false;
     const decision = advanceInput(
       {
         mode: 'normal',
@@ -2434,8 +2392,9 @@ export class ReaderSession {
       },
       key,
     );
-    if (decision.kind !== 'execute' || !(decision.action in SMOOTH_SCROLL_SPECS)) return false;
-    const spec = SMOOTH_SCROLL_SPECS[decision.action as SmoothScrollAction];
+    if (decision.kind !== 'execute') return false;
+    const spec = smoothScrollSpec(decision.action);
+    if (!spec || !this.#smoothScroller.start(pdfWindow, event.key, spec)) return false;
     const hadPendingSequence = !!this.state.keyBuffer;
     this.state.keyBuffer = '';
     this.state.countBuffer = '';
@@ -2446,89 +2405,7 @@ export class ReaderSession {
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    hold.active = true;
-    hold.releasing = false;
-    hold.key = event.key;
-    hold.axis = spec.axis;
-    hold.direction = spec.direction;
-    hold.speed =
-      this.scrollMode() === 'follow'
-        ? this.#dependencies.controller.dependencies.preferences.get(
-            'smoothScroll.followSpeed',
-            2000,
-          )
-        : this.#dependencies.controller.dependencies.preferences.get(
-            'smoothScroll.initialSpeed',
-            2000,
-          );
-    this.scrollBy(
-      pdfWindow,
-      hold.axis === 'x' ? (hold.direction * hold.speed) / 120 : 0,
-      hold.axis === 'y' ? (hold.direction * hold.speed) / 120 : 0,
-    );
-    if (hold.rafId === null)
-      hold.rafId = pdfWindow.requestAnimationFrame((timestamp) =>
-        this.smoothTick(pdfWindow, timestamp),
-      );
     return true;
-  }
-
-  private smoothTick(pdfWindow: PdfWindow, timestamp: number): void {
-    const hold = this.state.smoothHold;
-    if ((!hold.active && !hold.releasing) || !hold.axis || !hold.direction) {
-      hold.rafId = null;
-      return;
-    }
-    const seconds = hold.lastTimestamp
-      ? Math.min(0.05, Math.max(0.001, (timestamp - hold.lastTimestamp) / 1000))
-      : 0.016;
-    hold.lastTimestamp = timestamp;
-    const preferences = this.#dependencies.controller.dependencies.preferences;
-    if (hold.active && this.scrollMode() === 'trapezoid')
-      hold.speed = Math.min(
-        preferences.get('smoothScroll.maxSpeed', 2000),
-        Math.max(
-          preferences.get('smoothScroll.initialSpeed', 2000),
-          hold.speed + preferences.get('smoothScroll.acceleration', 2600) * seconds,
-        ),
-      );
-    if (hold.releasing) {
-      hold.speed = Math.max(
-        0,
-        hold.speed - preferences.get('smoothScroll.deceleration', 4200) * seconds,
-      );
-      if (!hold.speed) {
-        this.stopSmoothHold(true);
-        return;
-      }
-    }
-    const delta = hold.direction * hold.speed * seconds;
-    this.scrollBy(pdfWindow, hold.axis === 'x' ? delta : 0, hold.axis === 'y' ? delta : 0);
-    hold.rafId = pdfWindow.requestAnimationFrame((next) => this.smoothTick(pdfWindow, next));
-  }
-
-  private stopSmoothHold(immediate: boolean): void {
-    const hold = this.state.smoothHold;
-    if (!immediate && hold.active) {
-      hold.active = false;
-      hold.releasing = true;
-      hold.key = null;
-      return;
-    }
-    hold.active = false;
-    hold.releasing = false;
-    hold.key = null;
-    hold.axis = null;
-    hold.direction = 0;
-    hold.speed = 0;
-    hold.lastTimestamp = 0;
-    this.clearSmoothFrame(this.state.activePdfWindow);
-  }
-
-  private clearSmoothFrame(pdfWindow: PdfWindow): void {
-    const frame = this.state.smoothHold.rafId;
-    if (frame !== null) pdfWindow.cancelAnimationFrame(frame);
-    this.state.smoothHold.rafId = null;
   }
 
   private activatePdfWindow(pdfWindow: PdfWindow): void {
