@@ -1,4 +1,4 @@
-import { hintLabels } from './hint-labels';
+import { HINT_ALPHABET } from './hint-labels';
 import type { PdfWindow, Pointer, ReaderMode } from './types';
 
 export type FlashMode = Extract<ReaderMode, 'normal' | 'cursor' | 'visual'>;
@@ -27,6 +27,10 @@ interface FlashRect {
   readonly height: number;
 }
 
+interface FlashCandidate extends FlashMatch {
+  readonly rect: FlashRect;
+}
+
 interface FlashTarget {
   readonly pointer: Pointer;
   readonly rect: FlashRect;
@@ -40,7 +44,8 @@ export interface ReaderFlashHost {
   readonly debug: (message: string) => void;
 }
 
-const FLASH_TARGET_LIMIT = 512;
+/** Keep geometry + DOM work comfortably below one 60 Hz frame on ordinary visible PDF text. */
+export const FLASH_TARGET_LIMIT = 48;
 
 function isTextNode(node: Node | null): node is Text {
   return node?.nodeType === 3;
@@ -134,8 +139,54 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
 }
 
 /**
- * Keyboard-first visible-text targeter. Query entry and label selection are intentionally separate
- * in v1: Enter freezes the current literal query, then stable labels select an explicit target.
+ * Returns label letters that would also be valid one-character continuations of the current query.
+ * Flash must not use these as first label characters, so search input and jump input stay unambiguous.
+ */
+export function flashContinuationLabels(
+  index: FlashTextIndex,
+  rawQuery: string,
+  matches: readonly FlashMatch[],
+): ReadonlySet<string> {
+  const query = normalizeFlashText(rawQuery);
+  const excluded = new Set<string>();
+  if (!query) return excluded;
+  for (const match of matches) {
+    const position = match.index + query.length;
+    const codePoint = index.text.codePointAt(position);
+    if (codePoint === undefined) continue;
+    const character = String.fromCodePoint(codePoint);
+    if (/^[a-z]$/i.test(character)) excluded.add(character.toUpperCase());
+  }
+  return excluded;
+}
+
+function flashLabelPool(count: number, firstAlphabet: string): string[] {
+  if (count <= 0 || !firstAlphabet) return [];
+  let suffixWidth = 0;
+  let capacity = firstAlphabet.length;
+  while (capacity < count) {
+    suffixWidth += 1;
+    capacity *= HINT_ALPHABET.length;
+  }
+  return Array.from({ length: capacity }, (_, index) => {
+    const suffixCapacity = HINT_ALPHABET.length ** suffixWidth;
+    const firstIndex = Math.floor(index / suffixCapacity);
+    let remainder = index % suffixCapacity;
+    let suffix = '';
+    for (let position = suffixWidth - 1; position >= 0; position -= 1) {
+      const divisor = HINT_ALPHABET.length ** position;
+      const digit = Math.floor(remainder / divisor);
+      suffix += HINT_ALPHABET[digit] ?? HINT_ALPHABET[0]!;
+      remainder %= divisor;
+    }
+    return `${firstAlphabet[firstIndex] ?? firstAlphabet[0]!}${suffix}`;
+  });
+}
+
+/**
+ * Keyboard-first visible-text targeter. Labels update incrementally with the literal query. Their
+ * first letters are excluded from every valid one-character query continuation, so pressing a
+ * visible label can jump immediately without a separate confirmation stage.
  */
 export class ReaderFlash {
   readonly #host: ReaderFlashHost;
@@ -143,10 +194,11 @@ export class ReaderFlash {
   #mode: FlashMode | null = null;
   #index: FlashTextIndex | null = null;
   #query = '';
-  #stage: 'query' | 'label' = 'query';
   #labelBuffer = '';
   #targets: FlashTarget[] = [];
   #prompt: HTMLElement | null = null;
+  #matchCount = 0;
+  #labelCache = new Map<Text, Map<number, string>>();
 
   constructor(host: ReaderFlashHost) {
     this.#host = host;
@@ -169,8 +221,9 @@ export class ReaderFlash {
       this.#mode = mode;
       this.#index = index;
       this.#query = '';
-      this.#stage = 'query';
       this.#labelBuffer = '';
+      this.#matchCount = 0;
+      this.#labelCache.clear();
       this.#prompt = this.#createPrompt(pdfWindow);
       this.#refreshPrompt();
     } catch (error) {
@@ -196,11 +249,8 @@ export class ReaderFlash {
       return true;
     }
 
-    if (this.#stage === 'query') {
-      this.#handleQueryKey(event);
-      return true;
-    }
-    this.#handleLabelKey(event);
+    if (this.#labelBuffer) this.#handleLabelKey(event);
+    else this.#handleQueryKey(event);
     return true;
   }
 
@@ -217,45 +267,50 @@ export class ReaderFlash {
   }
 
   cancel(): void {
-    for (const target of this.#targets) target.element.remove();
-    this.#targets = [];
+    this.#clearTargets();
     this.#prompt?.remove();
     this.#prompt = null;
     this.#window = null;
     this.#mode = null;
     this.#index = null;
     this.#query = '';
-    this.#stage = 'query';
     this.#labelBuffer = '';
+    this.#matchCount = 0;
+    this.#labelCache.clear();
   }
 
   #handleQueryKey(event: KeyboardEvent): void {
     if (event.key === 'Backspace') {
       this.#query = this.#query.slice(0, -1);
-      this.#refreshPrompt();
+      this.#refreshTargets();
       return;
     }
     if (event.key === 'Enter' || event.key === 'Return') {
-      this.#freezeTargets();
+      const first = this.#targets[0];
+      if (first) this.#activate(first);
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
     const code = event.key.charCodeAt(0);
     if (code < 0x20 || code > 0x7e) return;
+
+    const labelKey = event.key.toUpperCase();
+    if (/^[A-Z]$/.test(labelKey) && this.#targets.some((target) => target.label.startsWith(labelKey))) {
+      this.#labelBuffer = labelKey;
+      this.#refreshLabels();
+      const exact = this.#targets.find((target) => target.label === labelKey);
+      if (exact) this.#activate(exact);
+      return;
+    }
+
     this.#query += event.key;
-    this.#refreshPrompt();
+    this.#refreshTargets();
   }
 
   #handleLabelKey(event: KeyboardEvent): void {
     if (event.key === 'Backspace') {
-      if (this.#labelBuffer) {
-        this.#labelBuffer = this.#labelBuffer.slice(0, -1);
-        this.#refreshLabels();
-      } else {
-        this.#clearTargets();
-        this.#stage = 'query';
-        this.#refreshPrompt();
-      }
+      this.#labelBuffer = this.#labelBuffer.slice(0, -1);
+      this.#refreshLabels();
       return;
     }
     if (!/^[a-z]$/i.test(event.key)) return;
@@ -272,34 +327,63 @@ export class ReaderFlash {
     if (exact) this.#activate(exact);
   }
 
-  #freezeTargets(): void {
+  #refreshTargets(): void {
     const pdfWindow = this.#window;
     const index = this.#index;
-    if (!pdfWindow || !index || !normalizeFlashText(this.#query)) return;
+    this.#labelBuffer = '';
+    this.#clearTargets();
+    if (!pdfWindow || !index) return;
+    const query = normalizeFlashText(this.#query);
+    if (!query) {
+      this.#matchCount = 0;
+      this.#refreshPrompt();
+      return;
+    }
+
     try {
+      const matches = flashMatches(index, this.#query);
+      this.#matchCount = matches.length;
+      if (!matches.length) {
+        this.#refreshPrompt();
+        return;
+      }
+      if (matches.length > FLASH_TARGET_LIMIT) {
+        this.#refreshPrompt(' — type more');
+        return;
+      }
+
+      const excluded = flashContinuationLabels(index, this.#query, matches);
+      const firstAlphabet = Array.from(HINT_ALPHABET)
+        .filter((letter) => !excluded.has(letter))
+        .join('');
+      if (!firstAlphabet) {
+        this.#refreshPrompt(' — type more');
+        return;
+      }
+
       const origin = this.#originPoint(pdfWindow);
-      const candidates = flashMatches(index, this.#query)
+      const candidates = matches
         .map((match) => {
           const rect = this.#pointerRect(pdfWindow, match.pointer);
           return rect && this.#rectVisible(pdfWindow, rect) ? { ...match, rect } : null;
         })
-        .filter((value): value is FlashMatch & { readonly rect: FlashRect } => value !== null)
+        .filter((value): value is FlashCandidate => value !== null)
         .sort((left, right) => {
           const leftDistance = this.#distanceSquared(left.rect, origin.x, origin.y);
           const rightDistance = this.#distanceSquared(right.rect, origin.x, origin.y);
           return leftDistance - rightDistance || left.index - right.index;
-        })
-        .slice(0, FLASH_TARGET_LIMIT);
+        });
 
       if (!candidates.length) {
-        this.#refreshPrompt(' — no matches');
+        this.#refreshPrompt(' — no visible targets');
         return;
       }
-      const labels = hintLabels(candidates.length);
-      this.#clearTargets();
+
+      const labels = this.#assignLabels(candidates, firstAlphabet);
       candidates.forEach((candidate, indexValue) => {
+        const label = labels[indexValue];
+        if (!label) return;
         const element = pdfWindow.document.createElement('span');
-        const label = labels[indexValue] ?? '';
         element.dataset.zoteroNeoFlashHint = '1';
         element.textContent = label;
         element.style.cssText =
@@ -314,15 +398,54 @@ export class ReaderFlash {
           element,
         });
       });
-      this.#stage = 'label';
-      this.#labelBuffer = '';
-      this.#refreshLabels();
-      this.#refreshPrompt(` — ${this.#targets.length} targets`);
+      this.#refreshPrompt();
     } catch (error) {
-      this.#host.debug(`reader Flash target freeze failed: ${String(error)}`);
+      this.#host.debug(`reader Flash refresh failed: ${String(error)}`);
       this.cancel();
       this.#host.showStatus('Flash unavailable', 1500);
     }
+  }
+
+  #assignLabels(candidates: readonly FlashCandidate[], firstAlphabet: string): string[] {
+    const pool = flashLabelPool(candidates.length, firstAlphabet);
+    if (!pool.length) return [];
+    const width = pool[0]!.length;
+    const allowed = new Set(pool);
+    const used = new Set<string>();
+    const assigned: (string | null)[] = Array.from({ length: candidates.length }, () => null);
+
+    candidates.forEach((candidate, index) => {
+      const cached = this.#cachedLabel(candidate.pointer);
+      if (!cached || cached.length !== width || !allowed.has(cached) || used.has(cached)) return;
+      assigned[index] = cached;
+      used.add(cached);
+    });
+
+    let poolIndex = 0;
+    candidates.forEach((candidate, index) => {
+      if (assigned[index]) return;
+      while (poolIndex < pool.length && used.has(pool[poolIndex]!)) poolIndex += 1;
+      const label = pool[poolIndex];
+      if (!label) return;
+      poolIndex += 1;
+      assigned[index] = label;
+      used.add(label);
+      this.#cacheLabel(candidate.pointer, label);
+    });
+    return assigned.map((label) => label ?? '');
+  }
+
+  #cachedLabel(pointer: Pointer): string | null {
+    return this.#labelCache.get(pointer.textNode)?.get(pointer.offset) ?? null;
+  }
+
+  #cacheLabel(pointer: Pointer, label: string): void {
+    let offsets = this.#labelCache.get(pointer.textNode);
+    if (!offsets) {
+      offsets = new Map<number, string>();
+      this.#labelCache.set(pointer.textNode, offsets);
+    }
+    offsets.set(pointer.offset, label);
   }
 
   #activate(target: FlashTarget): void {
@@ -340,27 +463,25 @@ export class ReaderFlash {
 
   #refreshPrompt(suffix = ''): void {
     const prompt = this.#prompt;
-    const index = this.#index;
-    if (!prompt || !index) return;
-    const count = this.#query ? flashMatches(index, this.#query).length : 0;
-    const stage = this.#stage === 'query' ? 'FLASH' : 'FLASH LABEL';
-    prompt.textContent =
-      this.#stage === 'query'
-        ? `${stage}: ${this.#query || '…'}${this.#query ? ` (${count})` : ''}${suffix}`
-        : `${stage}: ${this.#labelBuffer || '…'}${suffix}`;
+    if (!prompt) return;
+    if (this.#labelBuffer) {
+      prompt.textContent = `FLASH: ${this.#query} → ${this.#labelBuffer}`;
+      return;
+    }
+    prompt.textContent = this.#query
+      ? `FLASH: ${this.#query} (${this.#matchCount})${suffix}`
+      : 'FLASH: …';
   }
 
   #refreshLabels(): void {
-    for (const target of this.#targets) {
+    for (const target of this.#targets)
       target.element.hidden = !target.label.startsWith(this.#labelBuffer);
-    }
     this.#refreshPrompt();
   }
 
   #clearTargets(): void {
     for (const target of this.#targets) target.element.remove();
     this.#targets = [];
-    this.#labelBuffer = '';
   }
 
   #createPrompt(pdfWindow: PdfWindow): HTMLElement {
