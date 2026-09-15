@@ -1180,6 +1180,69 @@ describe('reader sidebar coordination', () => {
     created.session.dispose();
   });
 
+  it('toggles open Outline and Marks with their default Space-leader shortcuts', () => {
+    for (const [key, overlayID] of [
+      ['e', 'zv-outline-explorer'],
+      ['m', 'zv-marks-explorer'],
+    ] as const) {
+      const created = createHistorySession();
+      created.session.focusAndHandle(readerKey(' ').event);
+      created.session.focusAndHandle(readerKey(key).event);
+      expect(created.bodyChildren.map((node) => node.id)).toContain(overlayID);
+
+      const prefix = readerKey(' ');
+      created.session.focusAndHandle(prefix.event);
+      expect(prefix.preventDefault).toHaveBeenCalledOnce();
+      expect(created.bodyChildren.map((node) => node.id)).toContain(overlayID);
+
+      const close = readerKey(key);
+      created.session.focusAndHandle(close.event);
+      expect(close.preventDefault).toHaveBeenCalledOnce();
+      expect(created.bodyChildren.map((node) => node.id)).not.toContain(overlayID);
+      created.session.dispose();
+    }
+  });
+
+  it('uses remapped toggle bindings while a Reader sidebar owns input', () => {
+    const bindings = {
+      ...Object.fromEntries(
+        Object.entries(DEFAULT_BINDINGS).filter(
+          ([binding]) => binding !== 'normal: e' && binding !== 'normal: m',
+        ),
+      ),
+      'normal:q': 'toggleReaderSidebarOutline',
+      'normal:w': 'toggleMarksExplorer',
+    } as BindingMap;
+    const created = createHistorySession({}, () => {}, bindings);
+
+    created.session.focusAndHandle(readerKey('q').event);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    created.session.focusAndHandle(readerKey('q').event);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
+
+    created.session.focusAndHandle(readerKey('w').event);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-marks-explorer');
+    created.session.focusAndHandle(readerKey('w').event);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-marks-explorer');
+    created.session.dispose();
+  });
+
+  it('returns a failed sidebar toggle prefix to local sidebar input', () => {
+    const scrollBy = vi.fn();
+    const created = createHistorySession();
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfViewer: { container: { scrollBy } },
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+
+    created.session.focusAndHandle(readerKey(' ').event);
+    created.session.focusAndHandle(readerKey('j').event);
+
+    expect(scrollBy).not.toHaveBeenCalled();
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    created.session.dispose();
+  });
+
   it('coordinates Marks replacement when focusing Outline and restores focus on disposal', () => {
     vi.useFakeTimers();
     const created = createHistorySession();
