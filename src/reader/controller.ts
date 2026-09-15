@@ -1762,6 +1762,8 @@ export class ReaderSession {
     if (!target.start.textNode.isConnected || !target.end.textNode.isConnected) return;
     const selection = pdfWindow.getSelection();
     if (!selection) return;
+    // Flash replaces the native range, so any cached Zotero popup geometry now targets old text.
+    this.state.selectionParams = null;
     this.state.visualPreferredX = null;
     if (intent === 'visual-start') {
       this.state.visualAnchor = target.start;
@@ -1820,6 +1822,7 @@ export class ReaderSession {
   ): void {
     this.state.visualPreferredX = null;
     this.ensureVisualAnchor(pdfWindow);
+    this.state.selectionParams = null;
     pdfWindow.getSelection()?.modify('extend', direction, granularity);
     this.updateVisualCursor(pdfWindow, true);
   }
@@ -1832,6 +1835,7 @@ export class ReaderSession {
     const pointer = { textNode: selection.focusNode, offset: selection.focusOffset };
     const target = verticalTextPosition(pdfWindow, pointer, direction, this.state.visualPreferredX);
     if (!target) return;
+    this.state.selectionParams = null;
     this.state.visualPreferredX = target.preferredX;
     selection.setBaseAndExtent(
       anchor.textNode,
@@ -1845,6 +1849,7 @@ export class ReaderSession {
   private extendLineBoundary(pdfWindow: PdfWindow, end: boolean): void {
     this.state.visualPreferredX = null;
     this.ensureVisualAnchor(pdfWindow);
+    this.state.selectionParams = null;
     pdfWindow.getSelection()?.modify('extend', end ? 'forward' : 'backward', 'lineboundary');
     this.updateVisualCursor(pdfWindow, true);
   }
