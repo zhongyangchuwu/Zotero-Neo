@@ -503,12 +503,10 @@ in the active PDF view.
 | `0` / `$`       | Move caret to line start / line end                    |
 | `2w`, `3b`, ... | Count prefix repeats the motion                        |
 
-> **Multi-column papers:** text flows column by column — `j` at the bottom
-> of a column wraps to the next column's first line on the same page (`k`
-> back the other way), then continues into the next page's first column.
-> Page headers/footers are treated as decoration and skipped: a caret never
-> lands on them, so `j`/`k` cannot stall there. `0`/`$` stay within the
-> column; `h`/`l`/`w`/`b` follow the reading flow across column breaks.
+> `j`/`k` use PDF text-layer geometry instead of Gecko's browser line
+> navigation. Repeated vertical movement keeps the original horizontal column
+> when possible. Across columns and pages, movement follows PDF.js text-layer
+> reading order.
 
 #### Mode switches
 
