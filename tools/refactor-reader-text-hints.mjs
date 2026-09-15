@@ -9,7 +9,11 @@ function replaceOnce(source, before, after, label) {
 }
 
 function replaceRegexOnce(source, pattern, after, label) {
-  const matches = [...source.matchAll(new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`))];
+  const matches = [
+    ...source.matchAll(
+      new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`),
+    ),
+  ];
   if (matches.length !== 1) throw new Error(`Expected one ${label}, found ${matches.length}`);
   return source.replace(pattern, after);
 }
@@ -43,8 +47,8 @@ controller = replaceOnce(
 );
 controller = replaceOnce(
   controller,
-  '    this.clearHints();\n    this.clearLinkHints();',
-  '    this.#textHints.clear();\n    this.clearLinkHints();',
+  "    this.state.indicator = null;\n    this.clearHints();\n    this.clearLinkHints();\n    this.clearDestinationCue();",
+  "    this.state.indicator = null;\n    this.#textHints.clear();\n    this.clearLinkHints();\n    this.clearDestinationCue();",
   'dispose text hints',
 );
 controller = replaceOnce(
