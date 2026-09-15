@@ -8,18 +8,28 @@ function replaceOnce(source, before, after, label) {
   return `${source.slice(0, index)}${after}${source.slice(index + before.length)}`;
 }
 
-const path = 'src/reader/controller.ts';
-let source = fs.readFileSync(path, 'utf8');
-source = replaceOnce(
-  source,
+const controllerPath = 'src/reader/controller.ts';
+let controller = fs.readFileSync(controllerPath, 'utf8');
+controller = replaceOnce(
+  controller,
   "import { ReaderTextHints } from './text-hints';\n",
   "import { hintLabels } from './hint-labels';\nimport { ReaderTextHints } from './text-hints';\n",
   'shared hint label import',
 );
-source = replaceOnce(
-  source,
+controller = replaceOnce(
+  controller,
   '    const labels = this.hintLabels(targets.length);',
   '    const labels = hintLabels(targets.length);',
   'Follow Link hint labels',
 );
-fs.writeFileSync(path, source);
+fs.writeFileSync(controllerPath, controller);
+
+const testPath = 'tests/unit/reader-text-navigation.test.ts';
+let test = fs.readFileSync(testPath, 'utf8');
+test = replaceOnce(
+  test,
+  "    const { session, pdfWindow } = createTextSession(['Alpha', '   ', 'Beta']);",
+  "    const { session, appended } = createTextSession(['Alpha', '   ', 'Beta']);",
+  'label characterization fixture',
+);
+fs.writeFileSync(testPath, test);
