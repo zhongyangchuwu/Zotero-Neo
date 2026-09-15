@@ -36,6 +36,8 @@ import { ReaderMarks } from './marks';
 import { ReaderOutline, type OutlineHost } from './outline';
 import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer, type MarksExplorerState } from './marks-explorer';
+import { hintLabels } from './hint-labels';
+import { ReaderTextHints } from './text-hints';
 import {
   COLORS,
   type AnnotationColor,
@@ -345,6 +347,7 @@ export class ReaderSession {
   readonly #marksExplorer: ReaderMarksExplorer;
   readonly #sidebar: ReaderSidebarOverlay;
   readonly #outline: ReaderOutline;
+  readonly #textHints: ReaderTextHints;
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
   #keyGuideTimer: ReaderTimer | null = null;
@@ -366,12 +369,6 @@ export class ReaderSession {
       visualAnchor: null,
       visualPreferredX: null,
       cursorPreferredX: null,
-      hintBadges: [],
-      hintBuffer: '',
-      hintStage: null,
-      hintTargetMode: null,
-      hintStarts: [],
-      hintRepositionFrame: null,
       linkHintBadges: [],
       linkHintBuffer: '',
       linkHintWindow: null,
@@ -428,6 +425,16 @@ export class ReaderSession {
       previousDeleteFromComment: undefined,
       popupGuard: null,
     };
+    this.#textHints = new ReaderTextHints({
+      activePdfWindow: () => this.state.activePdfWindow,
+      clearLinkHints: () => this.clearLinkHints(),
+      setMode: (mode) => this.setMode(mode),
+      setVisualAnchor: (pointer) => {
+        this.state.visualAnchor = pointer;
+      },
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      updateVisualCursor: (pdfWindow, autoPan) => this.updateVisualCursor(pdfWindow, autoPan),
+    });
     this.#marks = new ReaderMarks({
       preferences: dependencies.controller.dependencies.preferences,
       itemForReader: (reader) => this.itemForReader(reader),
@@ -512,7 +519,7 @@ export class ReaderSession {
     this.#themeManagers.clear();
     this.state.indicator?.remove();
     this.state.indicator = null;
-    this.clearHints();
+    this.#textHints.clear();
     this.clearLinkHints();
     this.clearDestinationCue();
     this.clearKeyGuide();
@@ -612,14 +619,14 @@ export class ReaderSession {
         if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
       }) as EventListener;
       const scroll = (() => {
-        if (this.state.hintBadges.length) this.repositionHints(pdfWindow);
+        if (this.#textHints.active) this.#textHints.reposition(pdfWindow);
         if (this.state.linkHintWindow === pdfWindow) this.repositionLinkHints(pdfWindow);
         if (this.state.destinationCueWindow === pdfWindow) this.repositionDestinationCue(pdfWindow);
         if (this.state.mode === 'visual' || this.state.mode === 'cursor')
           this.updateVisualCursor(pdfWindow, false);
       }) as EventListener;
       const resize = (() => {
-        this.repositionHints(pdfWindow);
+        this.#textHints.reposition(pdfWindow);
         if (this.state.linkHintWindow === pdfWindow) this.repositionLinkHints(pdfWindow);
         if (this.state.destinationCueWindow === pdfWindow) this.repositionDestinationCue(pdfWindow);
       }) as EventListener;
@@ -779,8 +786,8 @@ export class ReaderSession {
       this.handleLinkHintKey(event, pdfWindow);
       return;
     }
-    if (this.state.hintBadges.length) {
-      this.handleHintKey(event, pdfWindow);
+    if (this.#textHints.active) {
+      this.#textHints.handleKey(event, pdfWindow);
       return;
     }
     if (this.state.mode === 'insert') {
@@ -985,7 +992,7 @@ export class ReaderSession {
     if (
       this.state.marksExplorerOpen ||
       this.state.outline.open ||
-      this.state.hintBadges.length ||
+      this.#textHints.active ||
       this.state.linkHintBadges.length
     )
       return true;
@@ -1390,7 +1397,7 @@ export class ReaderSession {
     this.clearKeyTimer();
     this.clearKeyGuide();
     if (mode !== 'insert') this.clearTimer(this.state.insertWatchdog);
-    if (mode !== 'visual' && mode !== 'cursor') this.clearHints();
+    if (mode !== 'visual' && mode !== 'cursor') this.#textHints.clear();
     if (mode !== 'visual' && mode !== 'cursor') this.removeVisualCursor(this.state.activePdfWindow);
     this.updateIndicator();
   }
@@ -1710,14 +1717,14 @@ export class ReaderSession {
       this.updateVisualCursor(pdfWindow, true);
       return;
     }
-    this.showHints(pdfWindow, 'visual');
+    this.#textHints.show(pdfWindow, 'visual');
   }
 
   private enterCursor(pdfWindow: PdfWindow): void {
     this.state.visualAnchor = null;
     this.state.cursorPreferredX = null;
     this.setMode('cursor');
-    this.showHints(pdfWindow, 'cursor');
+    this.#textHints.show(pdfWindow, 'cursor');
   }
 
   private cursorToVisual(pdfWindow: PdfWindow): void {
@@ -1853,141 +1860,8 @@ export class ReaderSession {
     for (const cursor of cursors) cursor.remove();
   }
 
-  private showHints(pdfWindow: PdfWindow, targetMode: ReaderMode): void {
-    this.clearLinkHints();
-    this.clearHints();
-    const starts = this.textNodes(pdfWindow)
-      .map((textNode) => ({ textNode, offset: 0 }))
-      .filter(({ textNode }) => textNode.data.trim());
-    if (!starts.length) {
-      this.showStatus('✗ no selectable text', 1500);
-      this.setMode('normal');
-      return;
-    }
-    const labels = this.hintLabels(starts.length);
-    this.state.hintStarts = starts;
-    this.state.hintTargetMode = targetMode;
-    this.state.hintStage = 'coarse';
-    starts.forEach((start, index) => {
-      const range = pdfWindow.document.createRange();
-      range.setStart(start.textNode, start.offset);
-      range.collapse(true);
-      const rect = range.getBoundingClientRect();
-      const badge = pdfWindow.document.createElement('span');
-      badge.textContent = labels[index] ?? '';
-      badge.style.cssText = `position:fixed;left:${rect.left}px;top:${Math.max(0, rect.top - 17)}px;z-index:99998;background:#f9e2af;color:#1e1e2e;padding:1px 3px;border-radius:2px;font:10px monospace;pointer-events:none;`;
-      pdfWindow.document.body?.appendChild(badge);
-      this.state.hintBadges.push({
-        element: badge,
-        label: labels[index] ?? '',
-        textNode: start.textNode,
-        offset: start.offset,
-      });
-    });
-  }
-
-  private handleHintKey(event: KeyboardEvent, pdfWindow: PdfWindow): void {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (event.key === 'Escape') {
-      this.clearHints();
-      this.setMode('normal');
-      return;
-    }
-    if (event.key === 'Backspace') {
-      this.state.hintBuffer = this.state.hintBuffer.slice(0, -1);
-      this.refreshHints();
-      return;
-    }
-    if (!/^[a-z]$/i.test(event.key)) return;
-    const next = `${this.state.hintBuffer}${event.key.toUpperCase()}`;
-    const matches = this.state.hintBadges.filter((badge) => badge.label.startsWith(next));
-    if (!matches.length) {
-      this.state.hintBuffer = '';
-      this.refreshHints();
-      return;
-    }
-    this.state.hintBuffer = next;
-    this.refreshHints();
-    const exact = matches.find((badge) => badge.label === next);
-    if (exact || matches.length === 1) this.activateHint(pdfWindow, exact ?? matches[0]!);
-  }
-
-  private activateHint(
-    pdfWindow: PdfWindow,
-    badge: { readonly textNode: Text; readonly offset: number },
-  ): void {
-    const selection = pdfWindow.getSelection();
-    if (!selection) return;
-    const range = pdfWindow.document.createRange();
-    range.setStart(badge.textNode, badge.offset);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    this.state.visualAnchor = { textNode: badge.textNode, offset: badge.offset };
-    const target = this.state.hintTargetMode;
-    this.clearHints();
-    if (target === 'visual') this.setMode('visual');
-    else if (target === 'cursor') this.setMode('cursor');
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private refreshHints(): void {
-    for (const badge of this.state.hintBadges)
-      badge.element.style.display = badge.label.startsWith(this.state.hintBuffer)
-        ? 'block'
-        : 'none';
-  }
-
-  private repositionHints(pdfWindow: PdfWindow): void {
-    if (this.state.hintRepositionFrame !== null) return;
-    this.state.hintRepositionFrame = pdfWindow.requestAnimationFrame(() => {
-      this.state.hintRepositionFrame = null;
-      for (const badge of this.state.hintBadges) {
-        if (!badge.textNode.isConnected) continue;
-        const range = pdfWindow.document.createRange();
-        range.setStart(badge.textNode, Math.min(badge.offset, badge.textNode.length));
-        range.collapse(true);
-        const rect = range.getBoundingClientRect();
-        badge.element.style.left = `${rect.left}px`;
-        badge.element.style.top = `${Math.max(0, rect.top - 17)}px`;
-      }
-    });
-  }
-
-  private clearHints(): void {
-    for (const badge of this.state.hintBadges) badge.element.remove();
-    this.state.hintBadges = [];
-    this.state.hintBuffer = '';
-    this.state.hintStarts = [];
-    this.state.hintStage = null;
-    this.state.hintTargetMode = null;
-    if (this.state.hintRepositionFrame !== null)
-      this.state.activePdfWindow.cancelAnimationFrame(this.state.hintRepositionFrame);
-    this.state.hintRepositionFrame = null;
-  }
-
-  private hintLabels(count: number): string[] {
-    const alphabet = 'ASDFJKLGHQWERTYUIOPZXCVBNM';
-    let width = 1;
-    let capacity = alphabet.length;
-    while (capacity < count) {
-      width += 1;
-      capacity *= alphabet.length;
-    }
-    return Array.from({ length: count }, (_, index) => {
-      let value = index;
-      const label = Array.from({ length: width }, () => alphabet[0]!);
-      for (let position = width - 1; position >= 0; position -= 1) {
-        label[position] = alphabet[value % alphabet.length]!;
-        value = Math.floor(value / alphabet.length);
-      }
-      return label.join('');
-    });
-  }
-
   private showLinkHints(pdfWindow: PdfWindow): void {
-    this.clearHints();
+    this.#textHints.clear();
     this.clearLinkHints();
     this.state.linkHintWindow = pdfWindow;
     try {
@@ -2015,7 +1889,7 @@ export class ReaderSession {
           targets.push({ overlay: value, rect });
         }
       }
-      const labels = this.hintLabels(targets.length);
+      const labels = hintLabels(targets.length);
       targets.forEach(({ overlay, rect }, index) => {
         const badge = pdfWindow.document.createElement('span');
         badge.textContent = labels[index] ?? '';
@@ -2338,15 +2212,6 @@ export class ReaderSession {
   private positionLinkHint(element: HTMLElement, rect: readonly number[]): void {
     element.style.left = `${Math.max(0, rect[0]!)}px`;
     element.style.top = `${Math.max(0, rect[1]! - 14)}px`;
-  }
-
-  private textNodes(pdfWindow: PdfWindow): Text[] {
-    const spans = Array.from(
-      pdfWindow.document.querySelectorAll('.textLayer span'),
-    ) as HTMLElement[];
-    return spans
-      .map((span) => span.firstChild ?? null)
-      .filter((node): node is Text => isTextNode(node) && !!node.data.trim());
   }
 
   private swapVisualEnds(pdfWindow: PdfWindow): void {

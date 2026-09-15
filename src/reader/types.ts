@@ -275,12 +275,6 @@ export interface ReaderSessionState {
   visualAnchor: Pointer | null;
   visualPreferredX: number | null;
   cursorPreferredX: number | null;
-  hintBadges: HintBadge[];
-  hintBuffer: string;
-  hintStage: 'coarse' | 'fine' | null;
-  hintTargetMode: ReaderMode | null;
-  hintStarts: Pointer[];
-  hintRepositionFrame: number | null;
   linkHintBadges: LinkHintBadge[];
   linkHintBuffer: string;
   linkHintWindow: PdfWindow | null;
@@ -322,13 +316,6 @@ export interface AnnotationSelectionParams {
     readonly position?: string | unknown;
   };
   readonly onAddAnnotation?: unknown;
-}
-
-export interface HintBadge {
-  readonly element: HTMLElement;
-  readonly label: string;
-  readonly textNode: Text;
-  readonly offset: number;
 }
 
 export interface LinkHintBadge {

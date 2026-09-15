@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReaderSession } from '../../src/reader/controller';
+import { DEFAULT_BINDINGS } from '../../src/input/bindings';
 import type { PdfWindow, ReaderRuntime } from '../../src/reader/types';
 
 interface FakeText extends Text {
@@ -175,20 +176,11 @@ function createTextSession(values: readonly string[]) {
     controller,
     reader,
     firstPdfWindow: pdfWindow,
-    bindings: () => ({}),
+    bindings: () => DEFAULT_BINDINGS,
     release: () => {},
   } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
 
   return { session, pdfWindow, selection, selectionState, textNodes, appended };
-}
-
-type TextHintSession = {
-  showHints(pdfWindow: PdfWindow, targetMode: 'visual' | 'cursor'): void;
-  handleHintKey(event: KeyboardEvent, pdfWindow: PdfWindow): void;
-};
-
-function textHints(session: ReaderSession): TextHintSession {
-  return session as unknown as TextHintSession;
 }
 
 function keyEvent(key: string) {
@@ -197,6 +189,11 @@ function keyEvent(key: string) {
   return {
     event: {
       key,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      target: null,
       preventDefault,
       stopImmediatePropagation,
     } as unknown as KeyboardEvent,
@@ -207,51 +204,49 @@ function keyEvent(key: string) {
 
 describe('reader text hint navigation characterization', () => {
   it('labels each non-empty PDF text span in DOM order', () => {
-    const { session, pdfWindow } = createTextSession(['Alpha', '   ', 'Beta']);
+    const { session, appended } = createTextSession(['Alpha', '   ', 'Beta']);
 
-    textHints(session).showHints(pdfWindow, 'cursor');
+    session.focusAndHandle(keyEvent('c').event);
 
-    expect(session.state.hintBadges.map((badge) => badge.label)).toEqual(['A', 'S']);
-    expect(session.state.hintBadges.map((badge) => badge.textNode.data)).toEqual(['Alpha', 'Beta']);
-    expect(session.state.hintTargetMode).toBe('cursor');
+    expect(appended.map((element) => element.textContent)).toEqual(['A', 'S']);
+    expect(session.state.mode).toBe('cursor');
   });
 
   it('activates an exact hint as a collapsed caret and keeps the requested mode', () => {
-    const { session, pdfWindow, selectionState, textNodes } = createTextSession(['Alpha', 'Beta']);
-    textHints(session).showHints(pdfWindow, 'cursor');
+    const { session, selectionState, textNodes, appended } = createTextSession(['Alpha', 'Beta']);
+    session.focusAndHandle(keyEvent('c').event);
     const event = keyEvent('a');
 
-    textHints(session).handleHintKey(event.event, pdfWindow);
+    session.focusAndHandle(event.event);
 
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(event.stopImmediatePropagation).toHaveBeenCalledOnce();
     expect(session.state.mode).toBe('cursor');
-    expect(session.state.hintBadges).toHaveLength(0);
+    expect(appended.filter((element) => element.dataset.zvCursor !== '1')).toHaveLength(0);
     expect(selectionState.focusNode).toBe(textNodes[0]);
     expect(selectionState.focusOffset).toBe(0);
     expect(session.state.visualAnchor).toEqual({ textNode: textNodes[0], offset: 0 });
   });
 
   it('cancels hint picking to Normal mode on Escape', () => {
-    const { session, pdfWindow } = createTextSession(['Alpha']);
-    textHints(session).showHints(pdfWindow, 'visual');
+    const { session, appended } = createTextSession(['Alpha']);
+    session.focusAndHandle(keyEvent('v').event);
     const event = keyEvent('Escape');
 
-    textHints(session).handleHintKey(event.event, pdfWindow);
+    session.focusAndHandle(event.event);
 
     expect(session.state.mode).toBe('normal');
-    expect(session.state.hintBadges).toHaveLength(0);
+    expect(appended).toHaveLength(0);
     expect(event.preventDefault).toHaveBeenCalledOnce();
     expect(event.stopImmediatePropagation).toHaveBeenCalledOnce();
   });
 
   it('fails closed to Normal mode when the visible PDF has no selectable text', () => {
-    const { session, pdfWindow } = createTextSession(['   ', '']);
-    session.state.mode = 'cursor';
+    const { session, appended } = createTextSession(['   ', '']);
 
-    textHints(session).showHints(pdfWindow, 'cursor');
+    session.focusAndHandle(keyEvent('c').event);
 
     expect(session.state.mode).toBe('normal');
-    expect(session.state.hintBadges).toHaveLength(0);
+    expect(appended).toHaveLength(0);
   });
 });
