@@ -142,6 +142,13 @@ controller = replaceOnce(
   'insert generation ownership',
 );
 
+controller = replaceOnce(
+  controller,
+  "    if (mode !== 'insert') this.clearTimer(this.state.insertWatchdog);\n",
+  '',
+  'insert watchdog timer ownership',
+);
+
 controller = replaceSection(
   controller,
   '  private async enterAnnotationInsert(): Promise<void> {',
