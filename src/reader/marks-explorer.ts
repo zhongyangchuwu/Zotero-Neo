@@ -3,7 +3,7 @@ import { keyString } from '../input/keys';
 import type { Mark, PdfWindow, ReaderRuntime } from './types';
 import { ReaderMarks } from './marks';
 
-export interface MarksExplorerState {
+interface MarksExplorerState {
   open: boolean;
   selected: number;
   overlay: HTMLElement | null;
@@ -17,22 +17,38 @@ export interface MarksExplorerHost {
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly marksState: () => Record<string, Mark>;
   readonly onAnnotation: (key: string | null) => void;
+  readonly onClose: (pdfWindow?: PdfWindow) => void;
 }
 
 export class ReaderMarksExplorer {
   readonly #host: MarksExplorerHost;
+  readonly #state: MarksExplorerState = {
+    open: false,
+    selected: 0,
+    overlay: null,
+    list: null,
+    themeCleanup: null,
+  };
 
   constructor(host: MarksExplorerHost) {
     this.#host = host;
   }
 
-  toggle(state: MarksExplorerState, pdfWindow: PdfWindow): void {
-    if (state.open) {
-      this.close(state);
+  get isOpen(): boolean {
+    return this.#state.open;
+  }
+
+  ownsView(pdfWindow: PdfWindow): boolean {
+    return this.#state.overlay?.ownerDocument.defaultView === pdfWindow;
+  }
+
+  toggle(pdfWindow: PdfWindow): void {
+    if (this.#state.open) {
+      this.close(pdfWindow);
       return;
     }
-    state.open = true;
-    state.selected = 0;
+    this.#state.open = true;
+    this.#state.selected = 0;
     const document = pdfWindow.document;
     const overlay = document.createElement('div');
     overlay.id = 'zv-marks-explorer';
@@ -49,14 +65,14 @@ export class ReaderMarksExplorer {
       'type a mark char to jump · j/k move · Enter jump · d delete · x delete all · Esc close';
     overlay.append(heading, list, help);
     document.body?.appendChild(overlay);
-    state.themeCleanup = this.#host.themeRoot(overlay);
-    state.overlay = overlay;
-    state.list = list;
-    this.render(state);
+    this.#state.themeCleanup = this.#host.themeRoot(overlay);
+    this.#state.overlay = overlay;
+    this.#state.list = list;
+    this.#render();
     overlay.focus();
   }
 
-  handleKey(state: MarksExplorerState, pdfWindow: PdfWindow, event: KeyboardEvent): void {
+  handleKey(pdfWindow: PdfWindow, event: KeyboardEvent): void {
     const key = keyString(event);
     if (!key) return;
     event.preventDefault();
@@ -68,45 +84,48 @@ export class ReaderMarksExplorer {
       this.#marks()[key] &&
       !['j', 'k', 'g', 'G', 'd', 'x'].includes(key)
     ) {
-      this.close(state);
+      this.close(pdfWindow);
       void marks.jump(this.#marks(), this.#host.reader, pdfWindow, key, (annotation) =>
         this.#host.onAnnotation(annotation),
       );
       return;
     }
-    if (key === 'j') state.selected = Math.min(chars.length - 1, state.selected + 1);
-    else if (key === 'k') state.selected = Math.max(0, state.selected - 1);
-    else if (key === 'G') state.selected = Math.max(0, chars.length - 1);
+    if (key === 'j') this.#state.selected = Math.min(chars.length - 1, this.#state.selected + 1);
+    else if (key === 'k') this.#state.selected = Math.max(0, this.#state.selected - 1);
+    else if (key === 'G') this.#state.selected = Math.max(0, chars.length - 1);
     else if (key === 'enter' || key === 'return') {
-      const char = chars[state.selected];
-      this.close(state);
+      const char = chars[this.#state.selected];
+      this.close(pdfWindow);
       if (char)
         void marks.jump(this.#marks(), this.#host.reader, pdfWindow, char, (annotation) =>
           this.#host.onAnnotation(annotation),
         );
       return;
     } else if (key === 'd') {
-      const char = chars[state.selected];
+      const char = chars[this.#state.selected];
       if (char) void marks.delete(this.#marks(), this.#host.reader, char);
     } else if (key === 'x') void marks.clear(this.#marks(), this.#host.reader);
     else if (key === 'escape') {
-      this.close(state);
+      this.close(pdfWindow);
       return;
     }
-    this.render(state);
+    this.#render();
   }
 
-  close(state: MarksExplorerState): void {
-    state.open = false;
-    state.themeCleanup?.();
-    state.themeCleanup = null;
-    state.overlay?.remove();
-    state.overlay = null;
-    state.list = null;
+  close(pdfWindow?: PdfWindow): void {
+    const ownerWindow = this.#state.overlay?.ownerDocument.defaultView;
+    const owner = pdfWindow ?? (ownerWindow as PdfWindow | null) ?? undefined;
+    this.#state.open = false;
+    this.#state.themeCleanup?.();
+    this.#state.themeCleanup = null;
+    this.#state.overlay?.remove();
+    this.#state.overlay = null;
+    this.#state.list = null;
+    this.#host.onClose(owner);
   }
 
-  render(state: MarksExplorerState): void {
-    const list = state.list;
+  #render(): void {
+    const list = this.#state.list;
     if (!list) return;
     list.replaceChildren();
     const marks = this.#marks();
@@ -122,7 +141,7 @@ export class ReaderMarksExplorer {
       const mark = marks[char];
       if (!mark) return;
       const row = list.ownerDocument.createElement('div');
-      const selected = index === state.selected;
+      const selected = index === this.#state.selected;
       row.style.cssText = `padding:6px 14px;white-space:nowrap;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
       row.textContent = `${char}   ${mark.pageIndex === null ? '—' : `p.${mark.pageIndex + 1}  ${Math.round(mark.ratio * 100)}%`}${mark.key ? '  ⚑ ann' : ''}`;
       list.appendChild(row);

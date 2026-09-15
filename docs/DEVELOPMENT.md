@@ -223,6 +223,14 @@ render and crop a separate canvas with coordinates unrelated to the live view.
 The one cue follows scroll/resize and is owned by the view/session timeout;
 never represent it as a Zotero annotation or DOM text selection.
 
+## Reader sidebar ownership
+
+`ReaderMarksExplorer` owns its transient open/selection/DOM/theme state. Every close path,
+including Escape and mark activation, notifies `ReaderSidebarOverlay` so the shared sidebar
+coordinator never retains a stale active kind. `ReaderSessionState` keeps only persistent mark
+data; it must not mirror Marks Explorer DOM state. Outline keeps its existing explicit state
+until its asynchronous load lifecycle is isolated separately.
+
 ## Annotation comment overlay
 
 The operating-system keyboard focus remains in the PDF.js iframe in common

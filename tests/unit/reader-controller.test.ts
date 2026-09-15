@@ -1163,7 +1163,20 @@ describe('reader sidebar coordination', () => {
 
     created.session.focusAndHandle(readerKey('Escape').event);
     vi.advanceTimersByTime(30);
-    expect(created.pdfWindow.focus).toHaveBeenCalledOnce();
+    expect(created.pdfWindow.focus).toHaveBeenCalledTimes(2);
+    created.session.dispose();
+  });
+
+  it('reopens Marks immediately after Escape closes the explorer', () => {
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-marks-explorer');
+
+    created.session.focusAndHandle(readerKey('Escape').event);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-marks-explorer');
+
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-marks-explorer');
     created.session.dispose();
   });
 

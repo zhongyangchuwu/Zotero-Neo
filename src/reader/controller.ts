@@ -35,7 +35,7 @@ import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderMarks } from './marks';
 import { ReaderOutline, type OutlineHost } from './outline';
 import { ReaderSidebarOverlay } from './sidebar-overlay';
-import { ReaderMarksExplorer, type MarksExplorerState } from './marks-explorer';
+import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { verticalTextPosition } from './text-motion';
 import {
@@ -368,11 +368,6 @@ export class ReaderSession {
       visualPreferredX: null,
       cursorPreferredX: null,
       marks: {},
-      marksExplorerOpen: false,
-      marksExplorerSelected: 0,
-      marksOverlay: null,
-      marksList: null,
-      marksThemeCleanup: null,
       outline: {
         open: false,
         loading: false,
@@ -447,6 +442,7 @@ export class ReaderSession {
       onAnnotation: (key) => {
         this.state.lastAnnotationKey = key;
       },
+      onClose: (pdfWindow) => this.#sidebar.closed('marks', pdfWindow),
     });
     const outlineHost: OutlineHost = {
       schedule: (delay, task) => this.schedule(delay, task),
@@ -496,7 +492,7 @@ export class ReaderSession {
     this.restorePatches();
     this.#scope.dispose();
     this.#sidebar.dispose(() => {
-      this.closeMarksExplorer();
+      this.#marksExplorer.close();
       this.#outline.close(this.state.outline);
     });
     this.state.indicatorThemeCleanup?.();
@@ -653,8 +649,8 @@ export class ReaderSession {
       );
     if (this.state.commentOverlay?.ownerDocument.defaultView === pdfWindow)
       this.closeCommentOverlay();
-    if (this.state.marksOverlay?.ownerDocument.defaultView === pdfWindow)
-      this.#sidebar.releaseView(pdfWindow, () => this.closeMarksExplorer(pdfWindow));
+    if (this.#marksExplorer.ownsView(pdfWindow))
+      this.#sidebar.releaseView(pdfWindow, () => this.#marksExplorer.close(pdfWindow));
     const manager = this.#themeManagers.get(pdfWindow);
     if (!manager) return;
     manager.dispose();
@@ -749,10 +745,8 @@ export class ReaderSession {
       this.#outline.handleKey(this.state.outline, this.#dependencies.reader, pdfWindow, event)
     )
       return;
-    if (this.state.marksExplorerOpen) {
-      const view = this.marksExplorerState();
-      this.#marksExplorer.handleKey(view, pdfWindow, event);
-      this.syncMarksExplorerState(view);
+    if (this.#marksExplorer.isOpen) {
+      this.#marksExplorer.handleKey(pdfWindow, event);
       return;
     }
     if (this.#linkHints.hasHints && isEditableElement(asElement(event.target))) {
@@ -962,7 +956,7 @@ export class ReaderSession {
         (!!this.state.commentInput &&
           (key.length === 1 || ['backspace', 'delete', 'enter'].includes(key)))
       );
-    if (this.state.marksExplorerOpen || this.state.outline.open || this.#linkHints.hasHints)
+    if (this.#marksExplorer.isOpen || this.state.outline.open || this.#linkHints.hasHints)
       return true;
     if (
       this.state.keyBuffer === 'm' ||
@@ -985,7 +979,7 @@ export class ReaderSession {
     return direction ? this.canFocusDirection(direction) : true;
   }
   private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
-    this.#sidebar.activate('outline', pdfWindow, () => this.closeMarksExplorer(pdfWindow));
+    this.#sidebar.activate('outline', pdfWindow, () => this.#marksExplorer.close(pdfWindow));
     if (focusOnly) {
       void this.#outline.focus(this.state.outline, this.#dependencies.reader, pdfWindow);
       return;
@@ -2429,43 +2423,13 @@ export class ReaderSession {
     this.state.previousDeleteFromComment = undefined;
   }
 
-  private marksExplorerState() {
-    return {
-      open: this.state.marksExplorerOpen,
-      selected: this.state.marksExplorerSelected,
-      overlay: this.state.marksOverlay,
-      list: this.state.marksList,
-      themeCleanup: this.state.marksThemeCleanup,
-    };
-  }
-
   private toggleMarksExplorer(pdfWindow: PdfWindow): void {
-    if (this.state.marksExplorerOpen) {
-      this.closeMarksExplorer(pdfWindow);
+    if (this.#marksExplorer.isOpen) {
+      this.#marksExplorer.close(pdfWindow);
       return;
     }
     this.#sidebar.activate('marks', pdfWindow, () => this.#outline.close(this.state.outline));
-    const view = this.marksExplorerState();
-    this.#marksExplorer.toggle(view, pdfWindow);
-    this.state.marksExplorerOpen = view.open;
-    this.state.marksExplorerSelected = view.selected;
-    this.state.marksOverlay = view.overlay;
-    this.state.marksList = view.list;
-    this.state.marksThemeCleanup = view.themeCleanup;
-  }
-
-  private closeMarksExplorer(pdfWindow?: PdfWindow): void {
-    const view = this.marksExplorerState();
-    this.#marksExplorer.close(view);
-    this.syncMarksExplorerState(view);
-    this.#sidebar.closed('marks', pdfWindow);
-  }
-  private syncMarksExplorerState(view: MarksExplorerState): void {
-    this.state.marksExplorerOpen = view.open;
-    this.state.marksExplorerSelected = view.selected;
-    this.state.marksOverlay = view.overlay;
-    this.state.marksList = view.list;
-    this.state.marksThemeCleanup = view.themeCleanup;
+    this.#marksExplorer.toggle(pdfWindow);
   }
 
   private toggleSplit(type: 'horizontal' | 'vertical'): void {
