@@ -36,10 +36,7 @@ export interface ReaderSelectionActionDefinition {
   readonly isAvailable?: (context: ReaderSelectionContext) => boolean;
   readonly run: (
     context: ReaderSelectionContext,
-  ) =>
-    | void
-    | ReaderSelectionActionOutcome
-    | Promise<void | ReaderSelectionActionOutcome>;
+  ) => void | ReaderSelectionActionOutcome | Promise<void | ReaderSelectionActionOutcome>;
 }
 
 export interface ReaderSelectionApi {
@@ -83,5 +80,5 @@ export interface ReaderControllerDependencies {
 export interface MainWindowControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly reader: ReaderControllerApi;
+  readonly reader: Pick<ReaderControllerApi, 'rescan' | 'forwardKey'>;
 }
