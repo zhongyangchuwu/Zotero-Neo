@@ -1,0 +1,40 @@
+name: Apply Reader Flash text
+
+on:
+  push:
+    branches:
+      - feat/reader-flash-text
+    paths:
+      - tools/apply-reader-flash-text.mjs
+      - .github/workflows/apply-reader-flash-text-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/reader-flash-text
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply guarded integration
+        run: |
+          node tools/apply-reader-flash-text.mjs
+          rm tools/apply-reader-flash-text.mjs .github/workflows/apply-reader-flash-text-once.yml
+      - name: Format and verify
+        run: |
+          npx prettier --write src/input/actions.ts src/input/bindings.ts src/reader/action-capabilities.ts src/reader/controller.ts src/reader/flash.ts src/reader/types.ts tests/unit/action-capabilities.test.ts tests/unit/input.test.ts tests/unit/flash.test.ts docs/DEVELOPMENT.md docs/USER_GUIDE.md
+          npm run verify
+      - name: Commit integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(reader): add visible text Flash targeting"
+          git push origin HEAD:feat/reader-flash-text
