@@ -118,7 +118,7 @@ export class ReaderTextHints {
     this.#repositionFrame = null;
   }
 
-  private #activate(pdfWindow: PdfWindow, badge: Pick<TextHintBadge, 'textNode' | 'offset'>): void {
+  #activate(pdfWindow: PdfWindow, badge: Pick<TextHintBadge, 'textNode' | 'offset'>): void {
     const selection = pdfWindow.getSelection();
     if (!selection) return;
     const range = pdfWindow.document.createRange();
@@ -134,12 +134,12 @@ export class ReaderTextHints {
     this.#host.updateVisualCursor(pdfWindow, true);
   }
 
-  private #refresh(): void {
+  #refresh(): void {
     for (const badge of this.#badges)
       badge.element.style.display = badge.label.startsWith(this.#buffer) ? 'block' : 'none';
   }
 
-  private #textNodes(pdfWindow: PdfWindow): Text[] {
+  #textNodes(pdfWindow: PdfWindow): Text[] {
     const spans = Array.from(
       pdfWindow.document.querySelectorAll('.textLayer span'),
     ) as HTMLElement[];
@@ -148,7 +148,7 @@ export class ReaderTextHints {
       .filter((node): node is Text => isTextNode(node) && !!node.data.trim());
   }
 
-  private #labels(count: number): string[] {
+  #labels(count: number): string[] {
     const alphabet = 'ASDFJKLGHQWERTYUIOPZXCVBNM';
     let width = 1;
     let capacity = alphabet.length;
