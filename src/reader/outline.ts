@@ -3,14 +3,29 @@ import { THEME_VARS } from '../ui/theme';
 import type {
   OutlineNode,
   OutlineSourceNode,
-  OutlineState,
   PdfDocumentRuntime,
   PdfWindow,
   ReaderRuntime,
   ReaderTimer,
 } from './types';
 
-export type { OutlineState } from './types';
+interface OutlineState {
+  open: boolean;
+  loading: boolean;
+  loadGeneration: number;
+  tree: OutlineNode[] | null;
+  visible: OutlineNode[];
+  selected: number;
+  overlay: HTMLElement | null;
+  list: HTMLElement | null;
+  status: HTMLElement | null;
+  themeCleanup: (() => void) | null;
+  hintBuffer: string;
+  hintTimer: ReaderTimer | null;
+  commandBuffer: string;
+  commandTimer: ReaderTimer | null;
+}
+
 export interface OutlineHost {
   readonly schedule: (delay: number, task: () => void) => ReaderTimer;
   readonly clearTimer: (timer: ReaderTimer | null) => void;
@@ -29,14 +44,39 @@ interface PdfLinkService {
 
 export class ReaderOutline {
   readonly #host: OutlineHost;
+  readonly #state: OutlineState = {
+    open: false,
+    loading: false,
+    loadGeneration: 0,
+    tree: null,
+    visible: [],
+    selected: 0,
+    overlay: null,
+    list: null,
+    status: null,
+    themeCleanup: null,
+    hintBuffer: '',
+    hintTimer: null,
+    commandBuffer: '',
+    commandTimer: null,
+  };
 
   constructor(host: OutlineHost) {
     this.#host = host;
   }
 
-  async toggle(state: OutlineState, reader: ReaderRuntime, pdfWindow: PdfWindow): Promise<void> {
+  get isOpen(): boolean {
+    return this.#state.open;
+  }
+
+  ownsView(pdfWindow: PdfWindow): boolean {
+    return this.#state.overlay?.ownerDocument.defaultView === pdfWindow;
+  }
+
+  async toggle(reader: ReaderRuntime, pdfWindow: PdfWindow): Promise<void> {
+    const state = this.#state;
     if (state.open) {
-      this.close(state, pdfWindow);
+      this.close(pdfWindow);
       return;
     }
     state.loadGeneration += 1;
@@ -47,16 +87,18 @@ export class ReaderOutline {
     await this.load(state, reader, pdfWindow);
   }
 
-  async focus(state: OutlineState, reader: ReaderRuntime, pdfWindow: PdfWindow): Promise<void> {
+  async focus(reader: ReaderRuntime, pdfWindow: PdfWindow): Promise<void> {
+    const state = this.#state;
     if (!state.open) {
-      await this.toggle(state, reader, pdfWindow);
+      await this.toggle(reader, pdfWindow);
       return;
     }
     state.overlay?.focus();
     if (!state.visible.length && !state.loading) await this.load(state, reader, pdfWindow);
   }
 
-  close(state: OutlineState, pdfWindow?: PdfWindow): void {
+  close(pdfWindow?: PdfWindow): void {
+    const state = this.#state;
     state.loadGeneration += 1;
     state.open = false;
     state.loading = false;
@@ -72,12 +114,8 @@ export class ReaderOutline {
     this.#host.onClose(pdfWindow);
   }
 
-  handleKey(
-    state: OutlineState,
-    reader: ReaderRuntime,
-    pdfWindow: PdfWindow,
-    event: KeyboardEvent,
-  ): boolean {
+  handleKey(reader: ReaderRuntime, pdfWindow: PdfWindow, event: KeyboardEvent): boolean {
+    const state = this.#state;
     const key = keyString(event);
     if (!key) return false;
     const consume = (): void => {
@@ -108,7 +146,7 @@ export class ReaderOutline {
       M: () => this.expandAll(state, false),
       'ctrl+d': () => this.move(state, this.fastStep(state)),
       'ctrl+u': () => this.move(state, -this.fastStep(state)),
-      escape: () => this.close(state, pdfWindow),
+      escape: () => this.close(pdfWindow),
     };
     const action = direct[key];
     if (action) {
@@ -359,7 +397,7 @@ export class ReaderOutline {
     const node = state.visible[state.selected];
     if (!node) return;
     if (await this.goTo(reader, pdfWindow, node)) {
-      this.close(state, pdfWindow);
+      this.close(pdfWindow);
       this.#host.setModeNormal();
     } else {
       this.setStatus(state, 'Jump failed');

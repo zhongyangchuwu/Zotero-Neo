@@ -246,23 +246,6 @@ export interface ViewHandlers {
 
   readonly scrollElement: Element | null;
 }
-export interface OutlineState {
-  open: boolean;
-  loading: boolean;
-  loadGeneration: number;
-  tree: OutlineNode[] | null;
-  visible: OutlineNode[];
-  selected: number;
-  overlay: HTMLElement | null;
-  list: HTMLElement | null;
-  status: HTMLElement | null;
-  themeCleanup: (() => void) | null;
-  hintBuffer: string;
-  hintTimer: ReaderTimer | null;
-  commandBuffer: string;
-  commandTimer: ReaderTimer | null;
-}
-
 export interface ReaderSessionState {
   mode: ReaderMode;
   keyBuffer: string;
@@ -276,7 +259,6 @@ export interface ReaderSessionState {
   visualPreferredX: number | null;
   cursorPreferredX: number | null;
   marks: Record<string, Mark>;
-  outline: OutlineState;
   sidebarOutlineIndex: number;
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;

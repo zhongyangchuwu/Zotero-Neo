@@ -368,22 +368,6 @@ export class ReaderSession {
       visualPreferredX: null,
       cursorPreferredX: null,
       marks: {},
-      outline: {
-        open: false,
-        loading: false,
-        loadGeneration: 0,
-        tree: null,
-        visible: [],
-        selected: 0,
-        overlay: null,
-        list: null,
-        status: null,
-        themeCleanup: null,
-        hintBuffer: '',
-        hintTimer: null,
-        commandBuffer: '',
-        commandTimer: null,
-      },
       sidebarOutlineIndex: -1,
       filterColor: null,
       lastAnnotationKey: null,
@@ -493,7 +477,7 @@ export class ReaderSession {
     this.#scope.dispose();
     this.#sidebar.dispose(() => {
       this.#marksExplorer.close();
-      this.#outline.close(this.state.outline);
+      this.#outline.close();
     });
     this.state.indicatorThemeCleanup?.();
     this.state.indicatorThemeCleanup = null;
@@ -643,10 +627,8 @@ export class ReaderSession {
    * recreated, without affecting the reader chrome or surviving split view.
    */
   private releaseViewTheme(pdfWindow: PdfWindow): void {
-    if (this.state.outline.overlay?.ownerDocument.defaultView === pdfWindow)
-      this.#sidebar.releaseView(pdfWindow, () =>
-        this.#outline.close(this.state.outline, pdfWindow),
-      );
+    if (this.#outline.ownsView(pdfWindow))
+      this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
     if (this.state.commentOverlay?.ownerDocument.defaultView === pdfWindow)
       this.closeCommentOverlay();
     if (this.#marksExplorer.ownsView(pdfWindow))
@@ -741,8 +723,8 @@ export class ReaderSession {
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.activatePdfWindow(pdfWindow);
     if (
-      this.state.outline.open &&
-      this.#outline.handleKey(this.state.outline, this.#dependencies.reader, pdfWindow, event)
+      this.#outline.isOpen &&
+      this.#outline.handleKey(this.#dependencies.reader, pdfWindow, event)
     )
       return;
     if (this.#marksExplorer.isOpen) {
@@ -956,8 +938,7 @@ export class ReaderSession {
         (!!this.state.commentInput &&
           (key.length === 1 || ['backspace', 'delete', 'enter'].includes(key)))
       );
-    if (this.#marksExplorer.isOpen || this.state.outline.open || this.#linkHints.hasHints)
-      return true;
+    if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
     if (
       this.state.keyBuffer === 'm' ||
       this.state.keyBuffer === '`' ||
@@ -981,11 +962,11 @@ export class ReaderSession {
   private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
     this.#sidebar.activate('outline', pdfWindow, () => this.#marksExplorer.close(pdfWindow));
     if (focusOnly) {
-      void this.#outline.focus(this.state.outline, this.#dependencies.reader, pdfWindow);
+      void this.#outline.focus(this.#dependencies.reader, pdfWindow);
       return;
     }
-    if (this.state.outline.open) this.#outline.close(this.state.outline, pdfWindow);
-    else void this.#outline.toggle(this.state.outline, this.#dependencies.reader, pdfWindow);
+    if (this.#outline.isOpen) this.#outline.close(pdfWindow);
+    else void this.#outline.toggle(this.#dependencies.reader, pdfWindow);
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
@@ -2428,7 +2409,7 @@ export class ReaderSession {
       this.#marksExplorer.close(pdfWindow);
       return;
     }
-    this.#sidebar.activate('marks', pdfWindow, () => this.#outline.close(this.state.outline));
+    this.#sidebar.activate('marks', pdfWindow, () => this.#outline.close());
     this.#marksExplorer.toggle(pdfWindow);
   }
 
