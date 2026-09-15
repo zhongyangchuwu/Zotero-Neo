@@ -9,6 +9,7 @@ import type { PdfWindow } from './types';
 export interface ReaderSelectionActionHost {
   readonly actions: (
     context: ReaderSelectionContext,
+    pdfWindow: PdfWindow,
   ) => readonly ReaderSelectionActionDefinition[];
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly copyText: (text: string) => void;
@@ -83,7 +84,7 @@ export class ReaderSelectionActions {
 
   open(pdfWindow: PdfWindow, context: ReaderSelectionContext): boolean {
     this.close();
-    const actions = this.#host.actions(context);
+    const actions = this.#host.actions(context, pdfWindow);
     if (!actions.length) {
       this.#host.showStatus('No actions for selection', 1500);
       return false;
