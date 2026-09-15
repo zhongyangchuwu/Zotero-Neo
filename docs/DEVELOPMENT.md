@@ -225,11 +225,11 @@ never represent it as a Zotero annotation or DOM text selection.
 
 ## Reader sidebar ownership
 
-`ReaderMarksExplorer` owns its transient open/selection/DOM/theme state. Every close path,
-including Escape and mark activation, notifies `ReaderSidebarOverlay` so the shared sidebar
-coordinator never retains a stale active kind. `ReaderSessionState` keeps only persistent mark
-data; it must not mirror Marks Explorer DOM state. Outline keeps its existing explicit state
-until its asynchronous load lifecycle is isolated separately.
+`ReaderMarksExplorer` and `ReaderOutline` own their transient open/selection/DOM/theme state.
+Every close path notifies `ReaderSidebarOverlay` so the shared coordinator never retains a stale
+active kind. `ReaderOutline` also owns its cached tree, hint/command timers, and load-generation
+token; closing or replacing a PDF view invalidates pending `getOutline()` work before it can
+repaint a later overlay. `ReaderSessionState` must not mirror either sidebar's transient state.
 
 ## Annotation comment overlay
 

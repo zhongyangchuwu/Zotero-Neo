@@ -613,7 +613,7 @@ describe('reader zoom shortcuts', () => {
 
     const escape = readerKey('Escape');
     created.session.focusAndHandle(escape.event);
-    expect(created.session.state.outline.open).toBe(false);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
 
     created.session.focusAndHandle(readerKey('+').event);
     created.session.focusAndHandle(readerKey('-').event);
@@ -1217,8 +1217,6 @@ describe('reader outline load invalidation', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(created.session.state.outline.open).toBe(false);
-    expect(created.session.state.outline.loading).toBe(false);
     expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
     expect(created.pdfWindow.focus).toHaveBeenCalledTimes(focusCount);
     created.session.dispose();
@@ -1241,8 +1239,6 @@ describe('reader outline load invalidation', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(created.session.state.outline.open).toBe(false);
-    expect(created.session.state.outline.loading).toBe(false);
     expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
     vi.advanceTimersByTime(30);
     expect(created.pdfWindow.focus).not.toHaveBeenCalled();
