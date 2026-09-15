@@ -66,9 +66,7 @@ export class ReaderCommentEditor {
 
   isInputFocused(pdfWindow: Window | undefined): boolean {
     return (
-      !!this.#input?.isConnected &&
-      !!pdfWindow &&
-      pdfWindow.document.activeElement === this.#input
+      !!this.#input?.isConnected && !!pdfWindow && pdfWindow.document.activeElement === this.#input
     );
   }
 

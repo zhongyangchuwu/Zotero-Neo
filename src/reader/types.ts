@@ -263,17 +263,6 @@ export interface ReaderSessionState {
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;
   smoothHold: SmoothHold;
-  commentOverlay: HTMLElement | null;
-  commentInput: HTMLTextAreaElement | null;
-  commentThemeCleanup: (() => void) | null;
-  commentItemID: number | null;
-  commentLibraryID: number | null;
-  commentAutosaveTimer: ReaderTimer | null;
-  composing: boolean;
-  insertSession: number;
-  insertWatchdog: ReaderTimer | null;
-  previousDeleteFromComment: boolean | undefined;
-  popupGuard: MutationObserver | null;
 }
 
 export interface AnnotationSelectionParams {

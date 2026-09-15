@@ -37,6 +37,7 @@ import { ReaderOutline, type OutlineHost } from './outline';
 import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
+import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { verticalTextPosition } from './text-motion';
 import {
   COLORS,
@@ -346,6 +347,7 @@ export class ReaderSession {
   readonly #sidebar: ReaderSidebarOverlay;
   readonly #outline: ReaderOutline;
   readonly #linkHints: ReaderLinkHints;
+  readonly #commentEditor: ReaderCommentEditor;
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
   #keyGuideTimer: ReaderTimer | null = null;
@@ -383,17 +385,6 @@ export class ReaderSession {
         rafId: null,
         lastTimestamp: 0,
       },
-      commentOverlay: null,
-      commentInput: null,
-      commentThemeCleanup: null,
-      commentItemID: null,
-      commentLibraryID: null,
-      commentAutosaveTimer: null,
-      composing: false,
-      insertSession: 0,
-      insertWatchdog: null,
-      previousDeleteFromComment: undefined,
-      popupGuard: null,
     };
     this.#linkHints = new ReaderLinkHints({
       reader: dependencies.reader,
@@ -401,6 +392,20 @@ export class ReaderSession {
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       diagnostic: (message) => dependencies.controller.dependencies.logger.diagnostic(message),
+    });
+    this.#commentEditor = new ReaderCommentEditor({
+      reader: dependencies.reader,
+      schedule: (delay, task) => this.schedule(delay, task),
+      clearTimer: (timer) => this.clearTimer(timer),
+      themeRoot: (root) => this.themeRoot(root),
+      activePdfWindow: () => this.activePdfWindow(),
+      resolveAnnotation: (key) => this.resolveAnnotation(key),
+      annotationForSave: (target) => this.annotationForSave(target),
+      nativeEditableFocused: () => this.nativeEditableFocused(),
+      onNativeEditorFocus: () => {
+        void this.handOverNativeEditor();
+      },
+      locale: () => zoteroRuntime().locale ?? '',
     });
     this.#marks = new ReaderMarks({
       preferences: dependencies.controller.dependencies.preferences,
@@ -476,7 +481,7 @@ export class ReaderSession {
   }
 
   dispose(): void {
-    this.state.insertSession += 1;
+    this.#commentEditor.dispose();
     this.stopSmoothHold(true);
     this.clearSidebarToggleInput();
     for (const [pdfWindow, handlers] of this.#viewHandlers)
@@ -526,7 +531,7 @@ export class ReaderSession {
       ((event: Event) => {
         if (
           this.state.mode !== 'insert' ||
-          !this.state.commentInput ||
+          !this.#commentEditor.hasInput ||
           !isEditableElement(asElement(event.target))
         )
           return;
@@ -638,8 +643,7 @@ export class ReaderSession {
   private releaseViewTheme(pdfWindow: PdfWindow): void {
     if (this.#outline.ownsView(pdfWindow))
       this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
-    if (this.state.commentOverlay?.ownerDocument.defaultView === pdfWindow)
-      this.closeCommentOverlay();
+    this.#commentEditor.releaseView(pdfWindow);
     if (this.#marksExplorer.ownsView(pdfWindow))
       this.#sidebar.releaseView(pdfWindow, () => this.#marksExplorer.close(pdfWindow));
     const manager = this.#themeManagers.get(pdfWindow);
@@ -683,8 +687,7 @@ export class ReaderSession {
       const original = view._textAnnotationFocused;
       const session = this;
       const wrapper = (): boolean => {
-        const input = session.state.commentInput;
-        if (input?.isConnected && view._iframeWindow?.document.activeElement === input) return true;
+        if (session.#commentEditor.isInputFocused(view._iframeWindow)) return true;
         return original.call(view);
       };
       try {
@@ -916,7 +919,7 @@ export class ReaderSession {
       void this.exitAnnotationInsert();
       return;
     }
-    if (event.target === this.state.commentInput) event.stopImmediatePropagation();
+    if (this.#commentEditor.ownsTarget(event.target)) event.stopImmediatePropagation();
   }
 
   private handleMarkChord(event: KeyboardEvent, key: string, pdfWindow: PdfWindow): boolean {
@@ -999,7 +1002,7 @@ export class ReaderSession {
     if (this.state.mode === 'insert')
       return (
         key === 'escape' ||
-        (!!this.state.commentInput &&
+        (this.#commentEditor.hasInput &&
           (key.length === 1 || ['backspace', 'delete', 'enter'].includes(key)))
       );
     if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
@@ -1395,7 +1398,7 @@ export class ReaderSession {
 
   private setMode(mode: ReaderMode): void {
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
-    if (this.state.mode === 'insert' && mode !== 'insert') this.state.insertSession += 1;
+    if (this.state.mode === 'insert' && mode !== 'insert') this.#commentEditor.invalidate();
     if (mode !== 'normal') this.stopSmoothHold(true);
     this.#inputRevision += 1;
     this.state.mode = mode;
@@ -1403,7 +1406,6 @@ export class ReaderSession {
     this.state.countBuffer = '';
     this.clearKeyTimer();
     this.clearKeyGuide();
-    if (mode !== 'insert') this.clearTimer(this.state.insertWatchdog);
     if (mode !== 'visual' && mode !== 'cursor') this.removeVisualCursor(this.state.activePdfWindow);
     this.updateIndicator();
   }
@@ -2266,37 +2268,7 @@ export class ReaderSession {
     }
     this.setMode('insert');
     this.state.lastAnnotationKey = key;
-    const session = ++this.state.insertSession;
-    const annotation = await this.resolveAnnotation(key);
-    if (
-      this.#scope.disposed ||
-      this.state.mode !== 'insert' ||
-      session !== this.state.insertSession
-    )
-      return;
-    this.state.commentItemID = annotation?.id ?? null;
-    this.state.commentLibraryID = annotation?.libraryID ?? null;
-    const pdfWindow = this.activePdfWindow();
-    if (!pdfWindow) return;
-    this.#dependencies.reader._internalReader?.navigate?.({ annotationID: key });
-    this.state.previousDeleteFromComment =
-      this.#dependencies.reader._internalReader?._enableAnnotationDeletionFromComment;
-    if (this.#dependencies.reader._internalReader)
-      this.#dependencies.reader._internalReader._enableAnnotationDeletionFromComment = false;
-    this.createCommentOverlay(
-      pdfWindow,
-      annotation?.annotationComment ?? '',
-      annotation?.annotationText ?? '',
-    );
-    this.armPopupGuard();
-    this.schedule(60, () => {
-      if (this.state.insertSession !== session || !this.state.commentInput?.isConnected) return;
-      this.state.commentInput.focus();
-      const length = this.state.commentInput.value.length;
-      this.state.commentInput.selectionStart = length;
-      this.state.commentInput.selectionEnd = length;
-      this.keepCommentFocus(session);
-    });
+    await this.#commentEditor.open(key);
   }
 
   private async resolveAnnotation(key: string): Promise<AnnotationRuntime | null> {
@@ -2310,45 +2282,8 @@ export class ReaderSession {
     return annotation;
   }
 
-  private createCommentOverlay(pdfWindow: PdfWindow, comment: string, quote: string): void {
-    this.closeCommentOverlay();
-    const document = pdfWindow.document;
-    const overlay = document.createElement('div');
-    overlay.id = 'zv-annotation-comment';
-    overlay.style.cssText = `position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 32px ${THEME_VARS.shadow};display:flex;flex-direction:column;font:13px/1.4 sans-serif`;
-    if (quote) {
-      const excerpt = document.createElement('div');
-      excerpt.style.cssText = `padding:8px 12px;color:${THEME_VARS.muted};font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${THEME_VARS.elevated}`;
-      excerpt.textContent = annotationText(quote).slice(0, 200);
-      overlay.appendChild(excerpt);
-    }
-    const input = document.createElement('textarea');
-    input.id = 'zv-annotation-comment-input';
-    input.value = comment;
-    input.spellcheck = false;
-    input.style.cssText = `width:100%;box-sizing:border-box;min-height:72px;max-height:220px;padding:10px 12px;background:${THEME_VARS.input};color:${THEME_VARS.text};border:0;outline:2px solid ${THEME_VARS.focusRing};outline-offset:-2px;resize:none;font:13px/1.5 sans-serif`;
-    input.addEventListener('compositionstart', () => {
-      this.state.composing = true;
-    });
-    input.addEventListener('compositionend', () => {
-      this.state.composing = false;
-    });
-    input.addEventListener('input', () => this.scheduleCommentAutosave());
-    const hint = document.createElement('div');
-    hint.style.cssText = `padding:5px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
-    hint.textContent = /^zh/i.test(zoteroRuntime().locale ?? '')
-      ? 'Enter 换行 · Esc 保存并关闭'
-      : 'Enter newline · Esc save & close';
-    overlay.append(input, hint);
-    document.body?.appendChild(overlay);
-    this.state.commentThemeCleanup = this.themeRoot(overlay);
-    this.state.commentOverlay = overlay;
-    this.state.commentInput = input;
-  }
-
   private async exitAnnotationInsert(): Promise<void> {
-    const saved = await this.saveAndCloseCommentOverlay();
-    this.restoreAnnotationDeletionFlag();
+    const saved = await this.#commentEditor.exit();
     this.setMode('normal');
     this.activePdfWindow()?.focus();
     this.showStatus(saved ? '✓ saved' : '✗ save failed', saved ? 1200 : 2500);
@@ -2356,116 +2291,28 @@ export class ReaderSession {
 
   private async handOverNativeEditor(): Promise<void> {
     this.setMode('normal');
-    this.restoreAnnotationDeletionFlag();
-    await this.saveAndCloseCommentOverlay();
+    await this.#commentEditor.handOver();
   }
 
-  private async saveAndCloseCommentOverlay(): Promise<boolean> {
-    const text = this.state.commentInput?.value ?? null;
-    const key = this.state.lastAnnotationKey;
-    this.closeCommentOverlay();
-    if (text === null || !key) return true;
-    const annotation = await this.annotationForSave(key);
-    if (!annotation || annotation.deleted) return false;
-    if ((annotation.annotationComment ?? '') !== text) {
-      annotation.annotationComment = text;
-      await annotation.saveTx();
-    }
-    return true;
-  }
-
-  private closeCommentOverlay(): void {
-    this.state.commentThemeCleanup?.();
-    this.state.commentThemeCleanup = null;
-    this.state.commentOverlay?.remove();
-    this.state.commentOverlay = null;
-    this.state.commentInput = null;
-    this.clearTimer(this.state.commentAutosaveTimer);
-    this.state.commentAutosaveTimer = null;
-    this.state.popupGuard?.disconnect();
-    this.state.popupGuard = null;
-  }
-
-  private scheduleCommentAutosave(): void {
-    this.clearTimer(this.state.commentAutosaveTimer);
-    this.state.commentAutosaveTimer = this.schedule(2000, () => {
-      const key = this.state.lastAnnotationKey;
-      const text = this.state.commentInput?.value;
-      if (!key || text === undefined) return;
-      void this.annotationForSave(key).then(async (annotation) => {
-        if (!annotation || annotation.deleted || annotation.annotationComment === text) return;
-        annotation.annotationComment = text;
-        await annotation.saveTx();
-      });
-    });
-  }
-
-  private async annotationForSave(key: string): Promise<AnnotationRuntime | null> {
+  private async annotationForSave(
+    target: AnnotationCommentTarget,
+  ): Promise<AnnotationRuntime | null> {
     const items = zoteroRuntime().Items;
     let annotation: AnnotationRuntime | null = null;
-    if (this.state.commentItemID !== null) {
-      const cached = items.get(this.state.commentItemID);
+    if (target.itemID !== null) {
+      const cached = items.get(target.itemID);
       if (cached) annotation = cached;
     }
-    if (!annotation && this.state.commentLibraryID !== null) {
-      const indexed = items.getByLibraryAndKey?.(this.state.commentLibraryID, key) ?? null;
+    if (!annotation && target.libraryID !== null) {
+      const indexed = items.getByLibraryAndKey?.(target.libraryID, target.key) ?? null;
       if (indexed) annotation = indexed;
     }
-    if (!annotation && this.state.commentLibraryID !== null && items.getByLibraryAndKeyAsync) {
-      const fetched = await items.getByLibraryAndKeyAsync(this.state.commentLibraryID, key);
+    if (!annotation && target.libraryID !== null && items.getByLibraryAndKeyAsync) {
+      const fetched = await items.getByLibraryAndKeyAsync(target.libraryID, target.key);
       if (fetched) annotation = fetched;
     }
     if (annotation?.loadDataType) await annotation.loadDataType('annotation');
     return annotation;
-  }
-
-  private armPopupGuard(): void {
-    const outerWindow = this.#dependencies.reader._iframeWindow;
-    const root = outerWindow?.document.body;
-    if (!outerWindow || !root || typeof outerWindow.MutationObserver !== 'function') return;
-    const guard = new outerWindow.MutationObserver((mutations: MutationRecord[]) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          const element = asElement(node);
-          if (!element) continue;
-          const popup = element.matches('.annotation-popup')
-            ? element
-            : element.querySelector('.annotation-popup');
-          const input = popup?.querySelector<HTMLElement>(
-            '[contenteditable="true"],textarea,input',
-          );
-          input?.dispatchEvent(
-            new outerWindow.KeyboardEvent('keydown', {
-              key: 'Escape',
-              code: 'Escape',
-              bubbles: true,
-              cancelable: true,
-            }),
-          );
-        }
-      }
-    });
-    guard.observe(root, { childList: true, subtree: true });
-    this.state.popupGuard = guard;
-  }
-
-  private keepCommentFocus(session: number): void {
-    if (this.state.mode !== 'insert' || session !== this.state.insertSession) return;
-    if (this.nativeEditableFocused()) {
-      void this.handOverNativeEditor();
-      return;
-    }
-    const input = this.state.commentInput;
-    if (input?.isConnected && !this.state.composing && input.ownerDocument.activeElement !== input)
-      input.focus();
-    this.state.insertWatchdog = this.schedule(500, () => this.keepCommentFocus(session));
-  }
-
-  private restoreAnnotationDeletionFlag(): void {
-    const internal = this.#dependencies.reader._internalReader;
-    if (internal && this.state.previousDeleteFromComment !== undefined)
-      internal._enableAnnotationDeletionFromComment = this.state.previousDeleteFromComment;
-    this.state.previousDeleteFromComment = undefined;
   }
 
   private toggleMarksExplorer(pdfWindow: PdfWindow): void {

@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  ReaderCommentEditor,
-  type AnnotationCommentTarget,
-} from '../../src/reader/comment-editor';
+import { ReaderCommentEditor, type AnnotationCommentTarget } from '../../src/reader/comment-editor';
 import type {
   AnnotationRuntime,
   PdfWindow,

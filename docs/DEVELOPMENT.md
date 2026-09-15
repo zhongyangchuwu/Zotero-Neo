@@ -233,17 +233,23 @@ repaint a later overlay. `ReaderSessionState` must not mirror either sidebar's t
 
 ## Annotation comment overlay
 
-The operating-system keyboard focus remains in the PDF.js iframe in common
-reader states. Programmatic focus on Zotero-native annotation editors is not a
-reliable text-input strategy and interferes with Gecko/React focus handling.
+The operating-system keyboard focus remains in the PDF.js iframe in common reader states.
+Programmatic focus on Zotero-native annotation editors is not a reliable text-input strategy and
+interferes with Gecko/React focus handling.
 
-Neo therefore renders its comment textarea in the PDF document. It accepts
-native typing and IME composition, saves via the resolved annotation item using
-`saveTx()`, and uses a session token to prevent stale async focus work. The
-`_textAnnotationFocused` patch prevents Zotero's earlier Enter handler from
-opening a competing annotation popup while that textarea is active. Native
-editor focus hands off by saving and closing the Neo overlay; it must never
-fight to reclaim focus.
+`ReaderCommentEditor` owns the transient annotation-comment target, textarea DOM, IME state,
+autosave/focus timers, popup guard, theme subscription, and Zotero's private
+`_enableAnnotationDeletionFromComment` override. `ReaderSession` owns only Insert mode and the
+persistent selected-annotation key. The feature resolves and snapshots its save target before
+mounting so later annotation navigation cannot retarget an in-progress edit.
+
+Neo renders the textarea in the PDF document, accepts native typing and IME composition, and saves
+through the resolved annotation item with `saveTx()`. A generation token prevents stale async open
+or focus work. PDF-view release and Reader disposal invalidate that work, stop the watchdog, remove
+the overlay, disconnect the popup observer, and restore the host deletion flag. The
+`_textAnnotationFocused` patch reports the Neo textarea as focused so Zotero's earlier Enter
+handler cannot open a competing annotation popup. Native editor focus hands off by restoring host
+behavior, saving, and closing the Neo overlay; it must never fight to reclaim focus.
 
 ## Source layout
 
