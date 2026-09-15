@@ -37,6 +37,7 @@ import { ReaderOutline, type OutlineHost } from './outline';
 import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer, type MarksExplorerState } from './marks-explorer';
 import { hintLabels } from './hint-labels';
+import { verticalTextPosition } from './text-motion';
 import {
   COLORS,
   type AnnotationColor,
@@ -1686,6 +1687,7 @@ export class ReaderSession {
   private enterVisual(pdfWindow: PdfWindow): void {
     const selection = pdfWindow.getSelection();
     this.state.visualAnchor = null;
+    this.state.visualPreferredX = null;
     this.setMode('visual');
     if (selection && !selection.isCollapsed && isTextNode(selection.anchorNode)) {
       this.state.visualAnchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
@@ -1719,6 +1721,7 @@ export class ReaderSession {
     if (!this.ensureCursor(pdfWindow)) return;
     const selection = pdfWindow.getSelection();
     if (!selection?.anchorNode || !isTextNode(selection.anchorNode)) return;
+    this.state.visualPreferredX = null;
     this.setMode('visual');
     this.state.visualAnchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
     this.updateVisualCursor(pdfWindow, true);
@@ -1756,6 +1759,7 @@ export class ReaderSession {
     if (!this.ensureCursor(pdfWindow)) return;
     const selection = pdfWindow.getSelection();
     if (!selection) return;
+    this.state.cursorPreferredX = null;
     for (let index = 0; index < count; index += 1) selection.modify('move', direction, granularity);
     if (isTextNode(selection.focusNode))
       this.state.visualAnchor = { textNode: selection.focusNode, offset: selection.focusOffset };
@@ -1765,11 +1769,22 @@ export class ReaderSession {
   private moveCursorLine(pdfWindow: PdfWindow, direction: -1 | 1, count: number): void {
     if (!this.ensureCursor(pdfWindow)) return;
     const selection = pdfWindow.getSelection();
-    if (!selection) return;
-    for (let index = 0; index < count; index += 1)
-      selection.modify('move', direction > 0 ? 'forward' : 'backward', 'line');
-    if (isTextNode(selection.focusNode))
-      this.state.visualAnchor = { textNode: selection.focusNode, offset: selection.focusOffset };
+    if (!selection || !isTextNode(selection.focusNode)) return;
+    let pointer = { textNode: selection.focusNode, offset: selection.focusOffset };
+    let preferredX = this.state.cursorPreferredX;
+    for (let index = 0; index < count; index += 1) {
+      const target = verticalTextPosition(pdfWindow, pointer, direction, preferredX);
+      if (!target) break;
+      const range = pdfWindow.document.createRange();
+      range.setStart(target.pointer.textNode, target.pointer.offset);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      pointer = target.pointer;
+      preferredX = target.preferredX;
+    }
+    this.state.cursorPreferredX = preferredX;
+    this.state.visualAnchor = pointer;
     this.updateVisualCursor(pdfWindow, true);
   }
 
@@ -1777,6 +1792,7 @@ export class ReaderSession {
     if (!this.ensureCursor(pdfWindow)) return;
     const selection = pdfWindow.getSelection();
     if (!selection) return;
+    this.state.cursorPreferredX = null;
     selection.modify('move', end ? 'forward' : 'backward', 'lineboundary');
     if (isTextNode(selection.focusNode))
       this.state.visualAnchor = { textNode: selection.focusNode, offset: selection.focusOffset };
@@ -1788,6 +1804,7 @@ export class ReaderSession {
     direction: 'forward' | 'backward',
     granularity: 'character' | 'word' | 'sentence' | 'paragraph',
   ): void {
+    this.state.visualPreferredX = null;
     this.ensureVisualAnchor(pdfWindow);
     pdfWindow.getSelection()?.modify('extend', direction, granularity);
     this.updateVisualCursor(pdfWindow, true);
@@ -1795,11 +1812,24 @@ export class ReaderSession {
 
   private extendByLine(pdfWindow: PdfWindow, direction: -1 | 1): void {
     this.ensureVisualAnchor(pdfWindow);
-    pdfWindow.getSelection()?.modify('extend', direction > 0 ? 'forward' : 'backward', 'line');
+    const selection = pdfWindow.getSelection();
+    const anchor = this.state.visualAnchor;
+    if (!selection || !anchor || !isTextNode(selection.focusNode)) return;
+    const pointer = { textNode: selection.focusNode, offset: selection.focusOffset };
+    const target = verticalTextPosition(pdfWindow, pointer, direction, this.state.visualPreferredX);
+    if (!target) return;
+    this.state.visualPreferredX = target.preferredX;
+    selection.setBaseAndExtent(
+      anchor.textNode,
+      anchor.offset,
+      target.pointer.textNode,
+      target.pointer.offset,
+    );
     this.updateVisualCursor(pdfWindow, true);
   }
 
   private extendLineBoundary(pdfWindow: PdfWindow, end: boolean): void {
+    this.state.visualPreferredX = null;
     this.ensureVisualAnchor(pdfWindow);
     pdfWindow.getSelection()?.modify('extend', end ? 'forward' : 'backward', 'lineboundary');
     this.updateVisualCursor(pdfWindow, true);
@@ -2224,6 +2254,7 @@ export class ReaderSession {
       this.state.visualAnchor.offset,
     );
     this.state.visualAnchor = { textNode: focusNode, offset: focusOffset };
+    this.state.visualPreferredX = null;
     this.updateVisualCursor(pdfWindow, true);
   }
 

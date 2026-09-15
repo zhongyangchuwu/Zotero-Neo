@@ -181,6 +181,18 @@ rather than failing the picker. Note and main-item deletion use
 `Zotero.Items.trashTx()` so Zotero stages native undo data; Neo tracks only the last ID
 batch as a targeted restore fallback and never permanently erases these items.
 
+## PDF text vertical motion
+
+Cursor/Visual `j` and `k` must not delegate to Gecko
+`Selection.modify(..., 'line')`. PDF.js text layers are absolutely positioned
+spans, so browser line granularity can jump across unrelated DOM positions. Neo
+groups contiguous `.textLayer span` nodes into visual lines using client-rect
+overlap while preserving PDF.js DOM reading order. A vertical step moves exactly
+one such line and chooses the caret offset nearest the remembered horizontal X
+coordinate. Non-vertical Cursor/Visual motions clear that preferred X. This keeps
+ragged lines stable and lets column/page transitions follow the PDF text layer's
+reading order without introducing Neo-owned text content or selection state.
+
 ## PDF link hints
 
 Zotero does not expose its authoritative PDF links as ordinary `a[href]` nodes.
