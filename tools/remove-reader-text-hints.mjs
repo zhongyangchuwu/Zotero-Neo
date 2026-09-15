@@ -38,8 +38,8 @@ controller = replaceOnce(
 );
 controller = replaceOnce(
   controller,
-  '    this.#textHints.clear();\n',
-  '',
+  `    this.state.indicator = null;\n    this.#textHints.clear();\n    this.clearLinkHints();\n`,
+  `    this.state.indicator = null;\n    this.clearLinkHints();\n`,
   'dispose text hints',
 );
 controller = replaceOnce(
