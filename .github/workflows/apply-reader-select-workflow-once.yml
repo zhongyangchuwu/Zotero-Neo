@@ -1,0 +1,40 @@
+name: Apply Reader Select workflow once
+
+on:
+  push:
+    branches:
+      - feat/reader-flash-text
+    paths:
+      - .github/workflows/apply-reader-select-workflow-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/reader-flash-text
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply Select workflow migration
+        run: |
+          node tools/apply-reader-select-workflow.mjs
+          rm tools/apply-reader-select-workflow.mjs .github/workflows/apply-reader-select-workflow-once.yml
+      - name: Format and verify
+        run: |
+          npx prettier --write src tests docs README.md assets/package/content/preferences/pane.xhtml
+          npm run verify
+      - name: Commit Select workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "refactor(reader): unify Flash with Select workflow"
+          git push origin HEAD:feat/reader-flash-text
