@@ -38,3 +38,4 @@ jobs:
           git add -A
           git commit -m "fix(main): smooth repeated tree navigation"
           git push origin HEAD:feat/reader-flash-text
+# retry after updating the legacy repeat pacing regression
