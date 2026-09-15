@@ -164,6 +164,20 @@ describe('ReaderCommentEditor', () => {
     expect(harness.cleanupTheme).toHaveBeenCalledOnce();
   });
 
+  it('restores Zotero comment deletion behavior even when explicit save fails', async () => {
+    const harness = createHarness();
+    await harness.editor.open('ANN');
+    vi.advanceTimersByTime(60);
+    const input = commentInput(harness);
+    input.value = 'unsaved change';
+    harness.saveTx.mockRejectedValueOnce(new Error('save failed'));
+
+    await expect(harness.editor.exit()).rejects.toThrow('save failed');
+
+    expect(harness.editor.hasInput).toBe(false);
+    expect(harness.internal._enableAnnotationDeletionFromComment).toBe(true);
+  });
+
   it('does not mount stale async annotation work after invalidation', async () => {
     const harness = createHarness();
     harness.deferResolution();
