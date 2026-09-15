@@ -221,6 +221,35 @@ describe('current Zotero collection APIs', () => {
     expect(selected).toBe(3);
     expect(session.activePanel).toBe('collections');
   });
+
+  it('uses Zotero repeat debouncing and native selection scrolling for held j/k', () => {
+    const active = { id: 'collection-tree-row-2' } as Element;
+    const select = vi.fn();
+    const ensureRowIsVisible = vi.fn();
+    const view: TreeView = {
+      tree: { focus: () => {} },
+      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
+      rowCount: 6,
+      selection: { count: 1, focused: 2, select },
+      ensureRowIsVisible,
+    };
+    const window = {
+      document: {
+        activeElement: active,
+        getElementById: () => null,
+        querySelector: () => null,
+      },
+      ZoteroPane: { collectionsView: view },
+    } as unknown as MainWindow;
+    const session = { activePanel: 'items' } as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    navigation.navigate(window, session, 1, 1, true);
+
+    expect(select).toHaveBeenCalledWith(3, true);
+    expect(ensureRowIsVisible).not.toHaveBeenCalled();
+    expect(session.activePanel).toBe('collections');
+  });
 });
 
 describe('main item trash and restore', () => {
@@ -1280,15 +1309,15 @@ describe('Reader owner picker routing', () => {
 });
 
 describe('collection navigation repeat pacing', () => {
-  it('moves one row at a time while dropping only over-frequent auto-repeat events', () => {
+  it('keeps every repeat movement while debouncing Zotero selection work', () => {
     let keydown: EventListener | undefined;
-    const selectedRows: number[] = [];
+    const selections: Array<{ index: number; shouldDebounce: boolean | undefined }> = [];
     const selection = {
       count: 1,
       focused: 0,
-      select(index: number) {
+      select(index: number, shouldDebounce?: boolean) {
         this.focused = index;
-        selectedRows.push(index);
+        selections.push({ index, shouldDebounce });
       },
     };
     const active = {
@@ -1344,9 +1373,7 @@ describe('collection navigation repeat pacing', () => {
     } as MainWindowControllerDependencies;
     const controller = createMainWindowController(dependencies);
     controller.addWindow(window);
-    const now = vi.spyOn(Date, 'now');
-    const press = (timestamp: number, repeat: boolean): void => {
-      now.mockReturnValue(timestamp);
+    const press = (repeat: boolean): void => {
       keydown?.({
         key: 'j',
         repeat,
@@ -1355,14 +1382,21 @@ describe('collection navigation repeat pacing', () => {
       } as KeyboardEvent);
     };
 
-    press(0, false);
-    press(10, true);
-    press(30, true);
-    press(85, true);
-    press(100, true);
-    press(170, true);
+    press(false);
+    press(true);
+    press(true);
+    press(true);
+    press(true);
+    press(true);
     controller.shutdown();
 
-    expect(selectedRows).toEqual([1, 2, 3]);
+    expect(selections).toEqual([
+      { index: 1, shouldDebounce: false },
+      { index: 2, shouldDebounce: true },
+      { index: 3, shouldDebounce: true },
+      { index: 4, shouldDebounce: true },
+      { index: 5, shouldDebounce: true },
+      { index: 6, shouldDebounce: true },
+    ]);
   });
 });

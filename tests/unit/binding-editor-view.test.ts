@@ -361,7 +361,7 @@ describe('mounted binding editor view', () => {
     expect(harness.host.createCalls).toContain('menupopup');
     expect(firstRow(harness).querySelector('.zv-binding-mode')?.value).toBe('normal');
 
-    for (const mode of ['normal', 'visual', 'cursor', 'insert', 'main'] as const) {
+    for (const mode of ['normal', 'visual', 'insert', 'main'] as const) {
       const currentRow = harness.mounted.getState().rows.find((row) => row.id === rowId);
       expect(currentRow).toBeDefined();
       const renderedRow = firstRow(harness);

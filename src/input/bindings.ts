@@ -1,6 +1,6 @@
 import { isActionId, type ActionId } from './actions';
 
-export const MODES = ['normal', 'visual', 'cursor', 'insert', 'main'] as const;
+export const MODES = ['normal', 'visual', 'insert', 'main'] as const;
 
 export type Mode = (typeof MODES)[number];
 export type BindingKey = `${Mode}:${string}`;
@@ -9,7 +9,6 @@ export type BindingMap = Readonly<Record<string, ActionId>>;
 const MODE_BY_NAME: Readonly<Record<string, true>> = {
   normal: true,
   visual: true,
-  cursor: true,
   insert: true,
   main: true,
 };
@@ -63,7 +62,6 @@ export const DEFAULT_BINDINGS = {
   'normal:Zp': 'filterPurple',
   'normal:Za': 'filterClear',
   'normal:v': 'enterVisual',
-  'normal:c': 'enterCursor',
   'normal:i': 'enterInsert',
   'normal:ctrl+h': 'focusReaderSplitLeft',
   'normal:ctrl+j': 'focusReaderSplitDown',
@@ -80,6 +78,10 @@ export const DEFAULT_BINDINGS = {
   'normal: fn': 'mainNotesLayout',
   'normal: yy': 'mainYankCitekey',
   'normal: m': 'toggleMarksExplorer',
+  'visual:s': 'flashText',
+  'visual:a': 'openSelectionActions',
+  'visual:enter': 'openSelectionActions',
+  'visual:return': 'openSelectionActions',
   'visual:j': 'extendDown',
   'visual:k': 'extendUp',
   'visual:h': 'extendLeft',
@@ -105,18 +107,6 @@ export const DEFAULT_BINDINGS = {
   'visual:o': 'swapVisualEnds',
   'visual:v': 'exitMode',
   'visual:escape': 'exitMode',
-  'cursor:j': 'cursorDown',
-  'cursor:k': 'cursorUp',
-  'cursor:h': 'cursorLeft',
-  'cursor:l': 'cursorRight',
-  'cursor:w': 'cursorWordForward',
-  'cursor:W': 'cursorBigWordForward',
-  'cursor:b': 'cursorWordBackward',
-  'cursor:B': 'cursorBigWordBackward',
-  'cursor:0': 'cursorLineStart',
-  'cursor:$': 'cursorLineEnd',
-  'cursor:v': 'cursorToVisual',
-  'cursor:escape': 'exitMode',
   'insert:escape': 'exitMode',
   'main: ff': 'mainFuzzyAll',
   'main::': 'openCommandPalette',
@@ -203,6 +193,7 @@ export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
 }
 
 const RETIRED_DEFAULT_BINDINGS = {
+  'normal:s': 'flashText',
   'normal:H': 'scrollLeft',
   'normal:L': 'scrollRight',
   'normal:J': 'mainPrevTab',

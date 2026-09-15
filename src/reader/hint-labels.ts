@@ -1,4 +1,4 @@
-const HINT_ALPHABET = 'ASDFJKLGHQWERTYUIOPZXCVBNM';
+export const HINT_ALPHABET = 'ASDFJKLGHQWERTYUIOPZXCVBNM';
 
 /** Generates fixed-width keyboard hint labels in stable display order. */
 export function hintLabels(count: number): string[] {

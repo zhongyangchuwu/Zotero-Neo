@@ -30,7 +30,6 @@ export const THEME_VARS = {
   shadow: 'var(--zotero-neo-shadow)',
   modeNormal: 'var(--zotero-neo-mode-normal)',
   modeVisual: 'var(--zotero-neo-mode-visual)',
-  modeCursor: 'var(--zotero-neo-mode-cursor)',
   modeInsert: 'var(--zotero-neo-mode-insert)',
   modeMain: 'var(--zotero-neo-mode-main)',
 } as const;
@@ -55,7 +54,6 @@ const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>
     '--zotero-neo-shadow': 'rgba(15, 23, 42, 0.24)',
     '--zotero-neo-mode-normal': '#e8f0fe',
     '--zotero-neo-mode-visual': '#e8f5e9',
-    '--zotero-neo-mode-cursor': '#fff3e0',
     '--zotero-neo-mode-insert': '#fff8e1',
     '--zotero-neo-mode-main': '#f0e8ff',
   },
@@ -78,7 +76,6 @@ const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>
     '--zotero-neo-shadow': 'rgba(0, 0, 0, 0.55)',
     '--zotero-neo-mode-normal': '#1e2d50',
     '--zotero-neo-mode-visual': '#1a3020',
-    '--zotero-neo-mode-cursor': '#332b00',
     '--zotero-neo-mode-insert': '#332800',
     '--zotero-neo-mode-main': '#2a1a40',
   },

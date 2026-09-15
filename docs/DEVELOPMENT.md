@@ -181,9 +181,32 @@ rather than failing the picker. Note and main-item deletion use
 `Zotero.Items.trashTx()` so Zotero stages native undo data; Neo tracks only the last ID
 batch as a targeted restore fallback and never permanently erases these items.
 
+## Reader Flash visible-text targeting
+
+`ReaderFlash` owns one active visible-text invocation: the PDF view, literal query, normalized text
+index, stable label reuse, label buffer, prompt/badge DOM, and cleanup. `ReaderSessionState` must not
+mirror any Flash state. The session only resolves the `flashText` action and applies the selected
+source pointer according to the current mode. Normal places a collapsed caret, Cursor moves its
+caret and keeps Cursor mode, and Visual moves only the focus while preserving the existing anchor.
+
+The v1 index includes only currently visible `.textLayer span` text from the active PDF view. It
+normalizes NFKC and whitespace, supports literal cross-node matching with ASCII smartcase, and ranks
+labels by distance from the current caret/focus (or viewport center). Incremental query updates first
+run the cheap in-memory matcher. When more than `FLASH_TARGET_LIMIT` (48) matches remain, Flash
+updates only the prompt and intentionally performs no Range geometry or per-target DOM rendering.
+At or below that limit it measures visible targets and reuses stable labels where possible.
+
+The first character of every rendered label is excluded from the set of letters that can extend any
+current match by one character. This mirrors Flash.nvim's continuation-safe label idea: continuing the
+search and starting a jump cannot compete for the same key. Multi-character labels use a fixed width
+after their safe first character. Enter selects the nearest currently labelled target; Flash never
+auto-jumps merely because only one text match remains. Scroll, resize, split-view replacement, blur,
+mode change, and disposal cancel the invocation instead of live-reindexing stale PDF.js text. Fuzzy
+search, regex, whole-document indexing, and CJK/IME composition are intentionally outside v1.
+
 ## PDF text vertical motion
 
-Cursor/Visual `j` and `k` must not delegate to Gecko
+Visual `j` and `k` must not delegate to Gecko
 `Selection.modify(..., 'line')`. PDF.js text layers are absolutely positioned
 spans, so browser line granularity can jump across unrelated DOM positions. Neo
 groups contiguous `.textLayer span` nodes into visual lines using client-rect
@@ -304,3 +327,19 @@ appending state-change diagnostics for Bootstrap, main-window attachment, Reader
 picker mount/load/close, tag-filter changes, and contextual failures. Idle reader discovery
 must not append recurring rescan entries. Verify Reader injection with restored and newly opened
 readers, and verify picker work against the mounted list/preview DOM rather than session fields alone.
+
+
+### Reader text selection and external actions
+
+PDF text interaction is intentionally one workflow: Normal `v` opens `ReaderFlash` for a start
+range unless a native selection already exists; successful targeting enters internal `visual` mode
+(the UI calls it **SELECT**). Visual `s` reuses Flash for the far endpoint. Cursor mode no longer
+exists. Flash owns only temporary query/index/label DOM; `ReaderSession` owns the persistent range
+anchor and ordinary selection motions.
+
+`ReaderSelectionActions` owns the keyboard action palette and result view. Its inputs are immutable
+`ReaderSelectionContext` snapshots rather than DOM nodes. Built-ins remain Reader actions; Translate
+for Zotero is discovered through its documented `Zotero.PDFTranslate.api.translate` API. A small public
+extension seam is exposed as `Zotero.Neo.reader.getSelection()` and
+`registerSelectionAction(...)`; integrations must use this contract instead of reaching into
+`ReaderSession` or PDF.js private nodes.
