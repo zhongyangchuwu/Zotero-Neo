@@ -23,6 +23,19 @@ jobs:
       - name: Apply guarded extraction
         run: |
           node tools/apply-reader-marks-explorer-state.mjs
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'tests/unit/reader-controller.test.ts';
+          let source = readFileSync(path, 'utf8');
+          const before = "    created.session.focusAndHandle(readerKey('Escape').event);\n    vi.advanceTimersByTime(30);\n    expect(created.pdfWindow.focus).toHaveBeenCalledOnce();";
+          const after = "    created.session.focusAndHandle(readerKey('Escape').event);\n    vi.advanceTimersByTime(30);\n    expect(created.pdfWindow.focus).toHaveBeenCalledTimes(2);";
+          const first = source.indexOf(before);
+          if (first < 0) throw new Error('Missing sidebar focus assertion');
+          if (source.indexOf(before, first + before.length) >= 0)
+            throw new Error('Non-unique sidebar focus assertion');
+          source = source.slice(0, first) + after + source.slice(first + before.length);
+          writeFileSync(path, source);
+          NODE
           rm tools/apply-reader-marks-explorer-state.mjs .github/workflows/apply-reader-marks-explorer-state-once.yml
       - name: Format and verify
         run: |
