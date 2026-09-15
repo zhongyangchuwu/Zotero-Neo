@@ -208,8 +208,10 @@ their `destinationPosition`; citations use the first resolved reference position
 call `navigate({ position })` so Zotero records native history. Because the call crosses
 from Bootstrap chrome into the reader content realm, clone the complete location payload
 into `reader._iframeWindow` first. External targets call `_onOpenLink(url)` with a primitive
-string. Do not synthesize clicks or introduce Neo-owned link/history state. Missing or
-changed members must fail closed with status and write the specific reason to both Zotero
+string. `ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
+temporary destination cue; `ReaderSession` only orchestrates host/view boundaries. Do not
+synthesize clicks or introduce Neo-owned link/history state. Missing or changed members
+must fail closed with status and write the specific reason to both Zotero
 debug output and the startup diagnostic log rather than leaving badges or input capture active.
 
 After successful internal/citation navigation, Neo mirrors
