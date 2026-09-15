@@ -144,8 +144,8 @@ tests = replaceOnce(
 );
 tests = replaceOnce(
   tests,
-  '    expect(created.session.state.destinationCue).toBeNull();',
-  '    expect(destinationCueElement(created)).toBeNull();',
+  "    created.session.focusAndHandle(readerKey('f').event);\n    created.session.focusAndHandle(readerKey('s').event);\n    expect(configured.openLink).toHaveBeenCalledWith('https://example.com');\n    expect(created.session.state.destinationCue).toBeNull();",
+  "    created.session.focusAndHandle(readerKey('f').event);\n    created.session.focusAndHandle(readerKey('s').event);\n    expect(configured.openLink).toHaveBeenCalledWith('https://example.com');\n    expect(destinationCueElement(created)).toBeNull();",
   'external cue cleared',
 );
 tests = replaceOnce(
@@ -180,8 +180,8 @@ tests = replaceOnce(
 );
 tests = replaceOnce(
   tests,
-  '    expect(created.session.state.linkHintBadges).toHaveLength(0);',
-  '    expect(linkHintElements(created)).toHaveLength(0);',
+  "    const escape = readerKey('Escape');\n    created.session.focusAndHandle(escape.event);\n    expect(created.session.state.linkHintBadges).toHaveLength(0);\n    expect(created.bodyChildren).toHaveLength(0);",
+  "    const escape = readerKey('Escape');\n    created.session.focusAndHandle(escape.event);\n    expect(linkHintElements(created)).toHaveLength(0);\n    expect(created.bodyChildren).toHaveLength(0);",
   'escape clears link hints',
 );
 tests = replaceOnce(
