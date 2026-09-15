@@ -65,7 +65,6 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
 
 export interface MainWindowControllerApi extends MainActionDelegate {
   addWindow(window: MainWindow): void;
-  removeFromWindow?(window: MainWindow): void;
   removeWindow(window: MainWindow): void;
   shutdown(): void;
 }
