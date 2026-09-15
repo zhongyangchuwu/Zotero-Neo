@@ -248,7 +248,6 @@ export interface ReaderSessionState {
   visualPreferredX: number | null;
   cursorPreferredX: number | null;
   marks: Record<string, Mark>;
-  sidebarOutlineIndex: number;
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;
 }

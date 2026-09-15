@@ -141,6 +141,26 @@ primary or split reader view, whether focus changed by mouse or keyboard. Empty
 history boundaries are safe no-ops. These bindings are active only in reader Normal
 mode; Insert mode and editable controls retain native input.
 
+#### Flash visible text
+
+| Key | Action |
+| --- | ------ |
+| `s` | Target visible PDF text in the active reader view |
+
+Press `s`, type an ASCII/Latin literal query, then press `Enter` to freeze the current visible
+matches and show stable hint labels. Type a displayed label to choose the target. `Backspace` edits
+the query; after labels appear, an empty label buffer plus `Backspace` returns to query editing.
+`Escape` cancels. Matching uses NFKC normalization, collapsed whitespace, and smartcase: lowercase
+queries ignore case while any ASCII uppercase letter makes the query case-sensitive. There is no
+fuzzy search or regex interpretation in this first version.
+
+In Normal mode the target becomes a collapsed caret, so `s … Enter …`, then `v`, can start a
+selection from that location. In Cursor mode Flash moves the caret and remains in Cursor mode. In
+Visual mode it moves only the selection focus and preserves the Visual anchor, so a practical range
+workflow is `s` to place the start, `v`, then `s` to place the other end; `o` still swaps the ends.
+Only text currently visible in the active primary or split PDF view is indexed. Scrolling, resizing,
+or replacing that view cancels Flash rather than reusing stale PDF.js text nodes.
+
 #### Follow PDF links
 
 | Key | Action                                                                                 |

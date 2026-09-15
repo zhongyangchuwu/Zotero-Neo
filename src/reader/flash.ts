@@ -48,8 +48,9 @@ function isTextNode(node: Node | null): node is Text {
 
 function validRect(rect: FlashRect): boolean {
   return (
-    [rect.left, rect.right, rect.top, rect.bottom, rect.width, rect.height].every(Number.isFinite) &&
-    rect.height > 0
+    [rect.left, rect.right, rect.top, rect.bottom, rect.width, rect.height].every(
+      Number.isFinite,
+    ) && rect.height > 0
   );
 }
 
@@ -372,7 +373,9 @@ export class ReaderFlash {
   }
 
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {
-    const spans = Array.from(pdfWindow.document.querySelectorAll('.textLayer span')) as HTMLElement[];
+    const spans = Array.from(
+      pdfWindow.document.querySelectorAll('.textLayer span'),
+    ) as HTMLElement[];
     const segments: FlashTextSegment[] = [];
     for (const span of spans) {
       const textNode = span.firstChild;

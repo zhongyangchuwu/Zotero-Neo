@@ -157,6 +157,9 @@ describe('binding parsing and overrides', () => {
     expect(DEFAULT_BINDINGS['normal:ctrl+o']).toBe('historyBack');
     expect(DEFAULT_BINDINGS['normal:ctrl+i']).toBe('historyForward');
     expect(DEFAULT_BINDINGS['normal:f']).toBe('followLink');
+    expect(DEFAULT_BINDINGS['normal:s']).toBe('flashText');
+    expect(DEFAULT_BINDINGS['visual:s']).toBe('flashText');
+    expect(DEFAULT_BINDINGS['cursor:s']).toBe('flashText');
     expect('insert:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
     expect('main:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
     expect('insert:f' in DEFAULT_BINDINGS).toBe(false);

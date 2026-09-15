@@ -181,6 +181,22 @@ rather than failing the picker. Note and main-item deletion use
 `Zotero.Items.trashTx()` so Zotero stages native undo data; Neo tracks only the last ID
 batch as a targeted restore fallback and never permanently erases these items.
 
+## Reader Flash visible-text targeting
+
+`ReaderFlash` owns one active visible-text invocation: the PDF view, literal query, normalized text
+index, query/label stage, stable hint labels, prompt DOM, and cleanup. `ReaderSessionState` must not
+mirror any Flash state. The session only resolves the `flashText` action and applies the selected
+source pointer according to the current mode. Normal places a collapsed caret, Cursor moves its
+caret and keeps Cursor mode, and Visual moves only the focus while preserving the existing anchor.
+
+The v1 index includes only currently visible `.textLayer span` text from the active PDF view. It
+normalizes NFKC and whitespace, supports literal cross-node matching with ASCII smartcase, ranks
+labels by distance from the current caret/focus (or viewport center), and never jumps merely because
+a query has one match. Enter freezes the current matches and their labels; an explicit label selects
+the target. Scroll, resize, split-view replacement, blur, mode change, and disposal cancel the
+invocation instead of live-reindexing stale PDF.js text. Fuzzy search, regex, whole-document indexing,
+and CJK/IME composition are intentionally outside v1.
+
 ## PDF text vertical motion
 
 Cursor/Visual `j` and `k` must not delegate to Gecko

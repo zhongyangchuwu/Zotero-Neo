@@ -116,8 +116,11 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'mainTabPick')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
+    expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
     expect(isReaderActionForMode('visual', 'zoomIn')).toBe(false);
     expect(isReaderActionForMode('cursor', 'cursorDown')).toBe(true);
+    expect(isReaderActionForMode('cursor', 'flashText')).toBe(true);
+    expect(isReaderActionForMode('normal', 'flashText')).toBe(true);
     expect(isReaderActionForMode('cursor', 'scrollDown')).toBe(false);
     expect(isReaderActionForMode('insert', 'exitMode')).toBe(true);
     expect(isReaderActionForMode('insert', 'mainFuzzyAll')).toBe(false);

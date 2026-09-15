@@ -17,6 +17,7 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'historyBack',
   'historyForward',
   'followLink',
+  'flashText',
   'firstPage',
   'lastPage',
   'halfPageDown',
@@ -67,6 +68,7 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
 
 /** Actions implemented by the Reader Visual executor. */
 export const READER_LOCAL_VISUAL_ACTIONS = Object.freeze([
+  'flashText',
   'extendDown',
   'extendUp',
   'extendLeft',
@@ -94,6 +96,7 @@ export const READER_LOCAL_VISUAL_ACTIONS = Object.freeze([
 
 /** Actions implemented by the Reader Cursor executor. */
 export const READER_LOCAL_CURSOR_ACTIONS = Object.freeze([
+  'flashText',
   'cursorDown',
   'cursorUp',
   'cursorLeft',

@@ -35,6 +35,10 @@ export const ACTION_LABELS = {
     en: 'Follow visible PDF link',
     'zh-CN': '跟随可见 PDF 链接',
   },
+  flashText: {
+    en: 'Flash to visible PDF text',
+    'zh-CN': 'Flash 跳转到可见 PDF 文本',
+  },
   firstPage: {
     en: 'First page',
     'zh-CN': '第一页',

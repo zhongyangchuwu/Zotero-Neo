@@ -38,6 +38,7 @@ import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
+import { ReaderFlash, type FlashMode } from './flash';
 import { ReaderSmoothScroller, smoothScrollSpec } from './smooth-scroll';
 import { verticalTextPosition } from './text-motion';
 import {
@@ -48,6 +49,7 @@ import {
   type AnnotationSelectionParams,
   type ItemRuntime,
   type PdfWindow,
+  type Pointer,
   type ReaderEventRuntime,
   type ReaderMode,
   type ReaderRuntime,
@@ -336,6 +338,7 @@ export class ReaderSession {
   readonly #outline: ReaderOutline;
   readonly #linkHints: ReaderLinkHints;
   readonly #commentEditor: ReaderCommentEditor;
+  readonly #flash: ReaderFlash;
   readonly #smoothScroller: ReaderSmoothScroller;
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
@@ -361,10 +364,14 @@ export class ReaderSession {
       visualPreferredX: null,
       cursorPreferredX: null,
       marks: {},
-      sidebarOutlineIndex: -1,
       filterColor: null,
       lastAnnotationKey: null,
     };
+    this.#flash = new ReaderFlash({
+      activate: (mode, pdfWindow, pointer) => this.activateFlashTarget(mode, pdfWindow, pointer),
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+    });
     this.#smoothScroller = new ReaderSmoothScroller({
       preferences: dependencies.controller.dependencies.preferences,
       scrollBy: (pdfWindow, x, y) => this.scrollContainer(pdfWindow).scrollBy(x, y),
@@ -465,6 +472,7 @@ export class ReaderSession {
 
   dispose(): void {
     this.#commentEditor.dispose();
+    this.#flash.dispose();
     this.#smoothScroller.dispose();
     this.clearSidebarToggleInput();
     for (const [pdfWindow, handlers] of this.#viewHandlers)
@@ -575,16 +583,23 @@ export class ReaderSession {
         const keyEvent = asKeyboardEvent(event);
         if (keyEvent) this.handleKeyUp(keyEvent);
       }) as EventListener;
-      const blur = (() => this.#smoothScroller.stop(true)) as EventListener;
+      const blur = (() => {
+        this.#smoothScroller.stop(true);
+        this.#flash.releaseView(pdfWindow);
+      }) as EventListener;
       const selection = (() => {
         if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
       }) as EventListener;
       const scroll = (() => {
+        this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
         if (this.state.mode === 'visual' || this.state.mode === 'cursor')
           this.updateVisualCursor(pdfWindow, false);
       }) as EventListener;
-      const resize = (() => this.#linkHints.onViewportChange(pdfWindow)) as EventListener;
+      const resize = (() => {
+        this.#flash.onViewportChange(pdfWindow);
+        this.#linkHints.onViewportChange(pdfWindow);
+      }) as EventListener;
       const scrollElement =
         pdfWindow.document.getElementById('viewerContainer') ??
         pdfWindow.document.querySelector('.pdfViewer');
@@ -624,6 +639,7 @@ export class ReaderSession {
    * recreated, without affecting the reader chrome or surviving split view.
    */
   private releaseViewTheme(pdfWindow: PdfWindow): void {
+    this.#flash.releaseView(pdfWindow);
     this.#smoothScroller.releaseView(pdfWindow);
     if (this.#outline.ownsView(pdfWindow))
       this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
@@ -710,6 +726,7 @@ export class ReaderSession {
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.activatePdfWindow(pdfWindow);
+    if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.handleSidebarToggleKey(event, pdfWindow)) return;
     if (
       this.#outline.isOpen &&
@@ -975,6 +992,7 @@ export class ReaderSession {
 
   private readerConsumesKey(key: string): boolean {
     if (!key) return false;
+    if (this.#flash.isOpen) return true;
     if (this.state.mode === 'insert')
       return (
         key === 'escape' ||
@@ -1092,6 +1110,14 @@ export class ReaderSession {
         break;
       case 'followLink':
         this.#linkHints.open(pdfWindow);
+        break;
+      case 'flashText':
+        if (
+          this.state.mode === 'normal' ||
+          this.state.mode === 'cursor' ||
+          this.state.mode === 'visual'
+        )
+          this.#flash.open(pdfWindow, this.state.mode);
         break;
       case 'halfPageDown':
         this.clearAnnotation();
@@ -1373,6 +1399,7 @@ export class ReaderSession {
   }
 
   private setMode(mode: ReaderMode): void {
+    if (this.#flash.isOpen) this.#flash.cancel();
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
     if (this.state.mode === 'insert' && mode !== 'insert') this.#commentEditor.invalidate();
     if (mode !== 'normal') this.#smoothScroller.stop(true);
@@ -1680,6 +1707,37 @@ export class ReaderSession {
           ? page.offsetTop + page.offsetHeight - container.clientHeight
           : page.offsetTop + page.offsetHeight / 2 - container.clientHeight / 2;
     this.scrollTo(pdfWindow, Math.max(0, target), true);
+  }
+
+  private activateFlashTarget(mode: FlashMode, pdfWindow: PdfWindow, pointer: Pointer): void {
+    if (this.state.mode !== mode || !pointer.textNode.isConnected) return;
+    const selection = pdfWindow.getSelection();
+    if (!selection) return;
+    if (mode === 'visual') {
+      this.ensureVisualAnchor(pdfWindow);
+      const anchor = this.state.visualAnchor;
+      if (!anchor?.textNode.isConnected) return;
+      this.state.visualPreferredX = null;
+      selection.setBaseAndExtent(
+        anchor.textNode,
+        anchor.offset,
+        pointer.textNode,
+        Math.min(pointer.offset, pointer.textNode.length),
+      );
+      this.updateVisualCursor(pdfWindow, true);
+      return;
+    }
+    const range = pdfWindow.document.createRange();
+    range.setStart(pointer.textNode, Math.min(pointer.offset, pointer.textNode.length));
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    this.state.cursorPreferredX = null;
+    this.state.visualPreferredX = null;
+    if (mode === 'cursor') {
+      this.state.visualAnchor = pointer;
+      this.updateVisualCursor(pdfWindow, true);
+    }
   }
 
   private enterVisual(pdfWindow: PdfWindow): void {
