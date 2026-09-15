@@ -6,6 +6,7 @@ on:
       - refactor/reader-smooth-scroll-state
     paths:
       - tools/apply-reader-smooth-scroll-state.mjs
+      - tools/fix-reader-smooth-integration.mjs
       - .github/workflows/apply-reader-smooth-scroll-state-once.yml
 
 permissions:
@@ -26,7 +27,8 @@ jobs:
       - name: Apply guarded extraction
         run: |
           node tools/apply-reader-smooth-scroll-state.mjs
-          rm tools/apply-reader-smooth-scroll-state.mjs .github/workflows/apply-reader-smooth-scroll-state-once.yml
+          node tools/fix-reader-smooth-integration.mjs
+          rm tools/apply-reader-smooth-scroll-state.mjs tools/fix-reader-smooth-integration.mjs .github/workflows/apply-reader-smooth-scroll-state-once.yml
       - name: Format and verify
         run: |
           npx prettier --write src/reader/controller.ts src/reader/types.ts src/reader/smooth-scroll.ts tests/unit/reader-controller.test.ts tests/unit/smooth-scroll.test.ts docs/DEVELOPMENT.md
