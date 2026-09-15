@@ -246,7 +246,6 @@ export interface ReaderSessionState {
   activePdfWindow: PdfWindow;
   visualAnchor: Pointer | null;
   visualPreferredX: number | null;
-  cursorPreferredX: number | null;
   marks: Record<string, Mark>;
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;

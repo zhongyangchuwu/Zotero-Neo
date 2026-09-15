@@ -115,9 +115,9 @@ export const ACTION_LABELS = {
     en: 'Enter Visual mode',
     'zh-CN': '进入可视模式',
   },
-  enterCursor: {
-    en: 'Enter Cursor mode',
-    'zh-CN': '进入光标模式',
+  openSelectionActions: {
+    en: 'Open actions for selected text',
+    'zh-CN': '打开所选文本操作',
   },
   enterInsert: {
     en: 'Enter Insert mode (focuses annotation comment if selected)',
@@ -175,50 +175,6 @@ export const ACTION_LABELS = {
     en: 'Extend selection — end of current line',
     'zh-CN': '扩展选择 — 当前行行尾',
   },
-  cursorDown: {
-    en: 'Move caret down one visual line (cursor mode)',
-    'zh-CN': '光标按可视行下移（光标模式）',
-  },
-  cursorUp: {
-    en: 'Move caret up one visual line (cursor mode)',
-    'zh-CN': '光标按可视行上移（光标模式）',
-  },
-  cursorLeft: {
-    en: 'Move caret left one character (cursor mode)',
-    'zh-CN': '光标按字符左移（光标模式）',
-  },
-  cursorRight: {
-    en: 'Move caret right one character (cursor mode)',
-    'zh-CN': '光标按字符右移（光标模式）',
-  },
-  cursorWordForward: {
-    en: 'Move caret forward one word (cursor mode)',
-    'zh-CN': '光标向前移动一个单词（光标模式）',
-  },
-  cursorBigWordForward: {
-    en: 'Move caret forward one WORD (cursor mode)',
-    'zh-CN': '光标向前移动一个 WORD（光标模式）',
-  },
-  cursorWordBackward: {
-    en: 'Move caret backward one word (cursor mode)',
-    'zh-CN': '光标向后移动一个单词（光标模式）',
-  },
-  cursorBigWordBackward: {
-    en: 'Move caret backward one WORD (cursor mode)',
-    'zh-CN': '光标向后移动一个 WORD（光标模式）',
-  },
-  cursorLineStart: {
-    en: 'Move caret to start of line (cursor mode)',
-    'zh-CN': '光标移动到行首（光标模式）',
-  },
-  cursorLineEnd: {
-    en: 'Move caret to end of line (cursor mode)',
-    'zh-CN': '光标移动到行尾（光标模式）',
-  },
-  cursorToVisual: {
-    en: 'Enter Visual mode from current caret (cursor mode)',
-    'zh-CN': '从当前光标位置进入可视模式（光标模式）',
-  },
   highlightYellow: {
     en: 'Highlight — Yellow',
     'zh-CN': '高亮 — 黄色',
@@ -238,6 +194,10 @@ export const ACTION_LABELS = {
   highlightPurple: {
     en: 'Highlight — Purple',
     'zh-CN': '高亮 — 紫色',
+  },
+  underlineSelection: {
+    en: 'Underline selection',
+    'zh-CN': '为选区添加下划线',
   },
   addNote: {
     en: 'Add note / comment',

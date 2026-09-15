@@ -8,7 +8,6 @@ import {
   isReaderDelegableMainAction,
 } from '../../src/main/action-capabilities';
 import {
-  READER_LOCAL_CURSOR_ACTIONS,
   READER_LOCAL_INSERT_ACTIONS,
   READER_LOCAL_NORMAL_ACTIONS,
   READER_LOCAL_VISUAL_ACTIONS,
@@ -102,7 +101,6 @@ describe('action capability ownership', () => {
     sameActions(actionsForBindingMode('main'), MAIN_EXECUTABLE_ACTIONS);
     sameActions(actionsForBindingMode('normal'), READER_NORMAL_ACTIONS);
     sameActions(actionsForBindingMode('visual'), READER_LOCAL_VISUAL_ACTIONS);
-    sameActions(actionsForBindingMode('cursor'), READER_LOCAL_CURSOR_ACTIONS);
     sameActions(actionsForBindingMode('insert'), READER_LOCAL_INSERT_ACTIONS);
 
     sameActions(READER_NORMAL_ACTIONS, [
@@ -117,11 +115,10 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
+    expect(isReaderActionForMode('visual', 'openSelectionActions')).toBe(true);
+    expect(isReaderActionForMode('visual', 'underlineSelection')).toBe(true);
     expect(isReaderActionForMode('visual', 'zoomIn')).toBe(false);
-    expect(isReaderActionForMode('cursor', 'cursorDown')).toBe(true);
-    expect(isReaderActionForMode('cursor', 'flashText')).toBe(true);
-    expect(isReaderActionForMode('normal', 'flashText')).toBe(true);
-    expect(isReaderActionForMode('cursor', 'scrollDown')).toBe(false);
+    expect(isReaderActionForMode('normal', 'flashText')).toBe(false);
     expect(isReaderActionForMode('insert', 'exitMode')).toBe(true);
     expect(isReaderActionForMode('insert', 'mainFuzzyAll')).toBe(false);
     expect(isReaderActionForMode('normal', 'not-an-action')).toBe(false);

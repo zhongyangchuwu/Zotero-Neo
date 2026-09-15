@@ -163,7 +163,7 @@ describe('ReaderSelectionActions', () => {
     const event = key('j');
 
     expect(palette.handleKey(event, secondary.pdfWindow)).toBe(false);
-    expect((event.preventDefault as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(event.preventDefault as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(palette.isOpen).toBe(false);
   });
 });

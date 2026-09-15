@@ -206,7 +206,7 @@ search, regex, whole-document indexing, and CJK/IME composition are intentionall
 
 ## PDF text vertical motion
 
-Cursor/Visual `j` and `k` must not delegate to Gecko
+Visual `j` and `k` must not delegate to Gecko
 `Selection.modify(..., 'line')`. PDF.js text layers are absolutely positioned
 spans, so browser line granularity can jump across unrelated DOM positions. Neo
 groups contiguous `.textLayer span` nodes into visual lines using client-rect
@@ -327,3 +327,19 @@ appending state-change diagnostics for Bootstrap, main-window attachment, Reader
 picker mount/load/close, tag-filter changes, and contextual failures. Idle reader discovery
 must not append recurring rescan entries. Verify Reader injection with restored and newly opened
 readers, and verify picker work against the mounted list/preview DOM rather than session fields alone.
+
+
+### Reader text selection and external actions
+
+PDF text interaction is intentionally one workflow: Normal `v` opens `ReaderFlash` for a start
+range unless a native selection already exists; successful targeting enters internal `visual` mode
+(the UI calls it **SELECT**). Visual `s` reuses Flash for the far endpoint. Cursor mode no longer
+exists. Flash owns only temporary query/index/label DOM; `ReaderSession` owns the persistent range
+anchor and ordinary selection motions.
+
+`ReaderSelectionActions` owns the keyboard action palette and result view. Its inputs are immutable
+`ReaderSelectionContext` snapshots rather than DOM nodes. Built-ins remain Reader actions; Translate
+for Zotero is discovered through its documented `Zotero.PDFTranslate.api.translate` API. A small public
+extension seam is exposed as `Zotero.Neo.reader.getSelection()` and
+`registerSelectionAction(...)`; integrations must use this contract instead of reaching into
+`ReaderSession` or PDF.js private nodes.

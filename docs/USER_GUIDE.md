@@ -15,23 +15,22 @@ unavailable until their owning feature is implemented and verified.
 
 ## Modes
 
-The plugin operates in four modes, displayed in a small overlay in the
-bottom-right corner of the PDF viewer:
+The plugin has three user-facing Reader states. Flash is a temporary targeting motion inside
+the Select workflow rather than a separate mode.
 
-| Mode       | Indicator      | Purpose                                      |
-| ---------- | -------------- | -------------------------------------------- |
-| **Normal** | _(hidden)_     | Default — navigation and annotation commands |
-| **Cursor** | `-- CURSOR --` | Caret navigation without text selection      |
-| **Visual** | `-- VISUAL --` | Text selection and annotation creation       |
-| **Insert** | `-- INSERT --` | Passthrough — all keys go to Zotero          |
+| Mode       | Indicator | Purpose |
+| ---------- | --------- | ------- |
+| **Normal** | _(hidden)_ | Reading, navigation, and existing-annotation commands |
+| **Select** (internal name: Visual) | `SELECT · …` | Select PDF text, refine endpoints, and run actions |
+| **Insert** | `-- INSERT --` | Native/comment text input |
 
 Mode transitions:
 
 ```
-Normal ──c──▶ Cursor ──Escape────▶ Normal
-Normal ──v──▶ Visual ──v/Escape──▶ Normal
-Normal ──i──▶ Insert ──Escape────▶ Normal
-Cursor ──v──▶ Visual ──v/Escape──▶ Normal
+Normal ──v──▶ Flash start ──target──▶ Select ──v/Escape──▶ Normal
+                                      │
+                                      └──s──▶ Flash endpoint ──target──▶ Select
+Normal ──i──▶ Insert ──Escape────────────────────────────▶ Normal
 ```
 
 ---
@@ -141,28 +140,23 @@ primary or split reader view, whether focus changed by mouse or keyboard. Empty
 history boundaries are safe no-ops. These bindings are active only in reader Normal
 mode; Insert mode and editable controls retain native input.
 
-#### Flash visible text
+#### Select text with Flash
 
 | Key | Action |
 | --- | ------ |
-| `s` | Target visible PDF text in the active reader view |
+| `v` | Start a text selection; with no existing mouse selection this opens Flash for the start target |
+| `s` in Select | Flash to a distant endpoint while preserving the current anchor |
 
-Press `s` and type an ASCII/Latin literal query. Flash updates the visible match count on every
-keystroke. When at most 48 targets remain, labels appear immediately; larger result sets show the
-count plus `type more` and deliberately skip per-target geometry and badge rendering until the query
-narrows. Label first letters are chosen so none can be the next character of any current match. This
-keeps search and jump input unambiguous: a character that can extend the query keeps searching, while
-a displayed label key starts label selection immediately. Multi-character labels use fixed-width
-prefixes; `Backspace` backs out of label input or edits the query, `Enter` chooses the nearest
-currently labelled target, and `Escape` cancels. Matching uses NFKC normalization, collapsed
-whitespace, and smartcase; there is no fuzzy or regex interpretation in this first version.
+Press `v`, type an ASCII/Latin literal query, then choose the displayed label. The whole matched
+query becomes the initial selection, so there is no intermediate caret mode. Flash updates the visible
+match count on every keystroke. When at most 48 targets remain, labels appear immediately; larger
+result sets show the count plus `type more` and skip per-target geometry until the query narrows.
+Label first letters cannot be valid next characters of the current matches, so continuing the query and
+choosing a label remain unambiguous. `Enter` chooses the nearest labelled target and `Escape` cancels.
 
-In Normal mode the target becomes a collapsed caret, so `s … label`, then `v`, can start a
-selection from that location. In Cursor mode Flash moves the caret and remains in Cursor mode. In
-Visual mode it moves only the selection focus and preserves the Visual anchor, so a practical range
-workflow is `s` to place the start, `v`, then `s` to place the other end; `o` still swaps the ends.
-Only text currently visible in the active primary or split PDF view is indexed. Scrolling, resizing,
-or replacing that view cancels Flash rather than reusing stale PDF.js text nodes.
+Once Select is active, `h/l/w/b/j/k/0/$/(/)/{/}` refine the range and `o` swaps the active end.
+Press `s` to use Flash for the other endpoint. The selection and active endpoint use high-contrast
+visuals, and the persistent `SELECT` indicator shows the selected character count and action hints.
 
 #### Follow PDF links
 
@@ -495,99 +489,28 @@ highlighted in the PDF and scrolled to in the sidebar.
 > **Tip:** `y` vs `yy` — the plugin waits up to 800 ms for the second `y`
 > before firing the single-`y` action. Typing `yy` quickly always wins.
 
-#### Mode switches
+#### Selection workflow
 
-| Key | Action            |
-| --- | ----------------- |
-| `v` | Enter Visual mode |
-| `c` | Enter Cursor mode |
-| `i` | Enter Insert mode |
+| Key | Action |
+| --- | ------ |
+| `v` | Start Select with Flash, or adopt an existing mouse selection |
+| `s` | While selecting, Flash to the other endpoint |
+| `Enter` / `a` | Open Selection Actions |
+| `zy/zr/zg/zb/zp` | Create a coloured highlight directly |
+| `za` / `i` | Create a highlight and open its comment editor |
+| `y` | Copy the selected text |
+| `#` | Search for the selected text |
+| `o` | Swap selection anchor/focus |
+| `v` / `Escape` | Cancel Select and return to Normal |
 
----
+Selection Actions is a keyboard palette over the current range. It includes highlights, underline,
+add note, copy, and search. If **Translate for Zotero** is installed, **Translate** appears automatically
+and uses that plugin's public translation API; its result stays in the palette and can be copied with
+`y`. Other plugins can add actions through `Zotero.Neo.reader.registerSelectionAction(...)`, while
+custom scripts such as Actions & Tags can read `Zotero.Neo.reader.getSelection()`.
 
-### Cursor mode
-
-Enter Cursor mode with `c` from Normal mode. The legacy sentence/word hint
-picker has been removed in preparation for Flash-style text targeting. Until
-Flash lands, entering Cursor mode keeps an existing collapsed caret when
-possible and otherwise places the caret at the first selectable text position
-in the active PDF view.
-
-#### Caret movement
-
-| Key             | Action                                                 |
-| --------------- | ------------------------------------------------------ |
-| `j` / `k`       | Move caret down / up by one visual line                |
-| `h` / `l`       | Move caret left / right by one character               |
-| `w`             | Move caret forward by one word                         |
-| `W`             | Move caret forward by one WORD (non-whitespace chunk)  |
-| `b`             | Move caret backward by one word                        |
-| `B`             | Move caret backward by one WORD (non-whitespace chunk) |
-| `0` / `$`       | Move caret to line start / line end                    |
-| `2w`, `3b`, ... | Count prefix repeats the motion                        |
-
-> `j`/`k` use PDF text-layer geometry instead of Gecko's browser line
-> navigation. Repeated vertical movement keeps the original horizontal column
-> when possible. Across columns and pages, movement follows PDF.js text-layer
-> reading order.
-
-#### Mode switches
-
-| Key           | Action                                                              |
-| ------------- | ------------------------------------------------------------------- |
-| `v`           | Enter Visual mode from current caret                                |
-| `Escape`      | Exit to Normal mode                                                 |
-
----
-
-### Visual mode
-
-Enter Visual mode with `v` from Normal mode. If a text selection already
-exists, its anchor is reused. Otherwise, until Flash-style targeting lands,
-Visual mode starts from the first selectable text position in the active PDF
-view.
-
-#### Selection movement
-
-| Key       | Action                                                                                                                                                  |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k` | Extend selection down / up by one line                                                                                                                  |
-| `h` / `l` | Extend selection left / right by one character                                                                                                          |
-| `w` / `b` | Extend selection forward / backward by one word                                                                                                         |
-| `0` / `$` | Extend selection to line start / line end                                                                                                               |
-| `)` / `(` | Extend selection to next / previous sentence start                                                                                                      |
-| `}` / `{` | Extend selection to paragraph end / start                                                                                                               |
-| `o`       | **Swap anchor and focus** — jump to the opposite end of the selection (like Vim's `o` in Visual mode); subsequent movement keys extend from the new end |
-
-#### Creating annotations
-
-| Key  | Action                                                               |
-| ---- | -------------------------------------------------------------------- |
-| `zy` | Create a **yellow** highlight                                        |
-| `zr` | Create a **red** highlight                                           |
-| `zg` | Create a **green** highlight                                         |
-| `zb` | Create a **blue** highlight                                          |
-| `zp` | Create a **purple** highlight                                        |
-| `za` | Add a **note** annotation (creates highlight + opens comment editor) |
-| `i`  | Same as `za` (quick note + enter Insert on comment)                  |
-
-#### Copying text
-
-| Key  | Action                                                                 |
-| ---- | ---------------------------------------------------------------------- |
-| `y`  | Copy the **current selection** to the clipboard                        |
-| `yy` | Copy the **whole paragraph** containing the selection to the clipboard |
-| `#`  | Open the find bar and search for the **current selection**             |
-
-All copy operations apply Unicode NFKC normalisation (resolves ligatures such
-as `ﬁ` → `fi`) and collapse PDF line-break newlines into spaces.
-
-#### Exiting Visual mode
-
-| Key      | Action                                 |
-| -------- | -------------------------------------- |
-| `v`      | Exit to Normal mode (clears selection) |
-| `Escape` | Exit to Normal mode (clears selection) |
+The old PDF Cursor mode has been removed: a standalone caret had no useful PDF action surface, and
+all text-oriented work now goes through one Select workflow.
 
 ---
 
@@ -627,13 +550,12 @@ editors keeps its Zotero behavior).
 
 ### Creating a highlight from scratch
 
-1. Press `v` to enter Visual mode.
-2. Until Flash-style targeting lands, Visual mode starts from the first selectable text position when there is no existing selection.
-3. Extend the selection with `j`/`k`/`w`/`b`/`)`/`}`/`h`/`l`.
-4. Use `o` to jump to the other end of the selection if you need to trim the
-   start rather than extend the end.
-5. Press `zy`/`zr`/`zg`/`zb`/`zp` to create a coloured highlight, or `za` to
-   add a note.
+1. Press `v` and type enough text to identify the selection start. Choose its Flash label; the whole
+   matched query becomes selected immediately.
+2. Refine locally with Select motions, or press `s` and Flash to the distant endpoint. Use `o` to
+   swap which end is active.
+3. Press `Enter`/`a` for Selection Actions, or use `zy`/`zr`/`zg`/`zb`/`zp` directly.
+   Underline and translation are available from Selection Actions when supported.
 
 ### Navigating and editing existing annotations
 

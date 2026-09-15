@@ -20,7 +20,7 @@ verification in the current stable host.
 
 ## Highlights
 
-- Normal, Cursor, Visual, and Insert modes for PDF reading and annotation.
+- Normal, Select (Visual), and Insert modes, with Flash-assisted PDF text selection and actions.
 - Keyboard-first navigation for readers, collections, items, notes, tabs, and
   pickers.
 - Vim-style marks, annotation navigation, highlighting, comment editing, and

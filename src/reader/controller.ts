@@ -2,6 +2,8 @@ import type {
   ReaderControllerApi,
   ReaderControllerDependencies,
   MainWindow,
+  ReaderSelectionActionDefinition,
+  ReaderSelectionContext,
 } from '../core/contracts';
 import { CleanupScope } from '../core/cleanup';
 import { keyGuideConfig } from '../core/preferences';
@@ -29,7 +31,12 @@ import {
   isReaderActionForMode,
   type ReaderAction,
 } from './action-capabilities';
-import { focusDirectionForAction, type ActionId, type FocusDirection } from '../input/actions';
+import {
+  ACTION_LABELS,
+  focusDirectionForAction,
+  type ActionId,
+  type FocusDirection,
+} from '../input/actions';
 import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderMarks } from './marks';
@@ -38,7 +45,8 @@ import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
-import { ReaderFlash, type FlashMode } from './flash';
+import { ReaderFlash, type FlashIntent, type FlashSelectionTarget } from './flash';
+import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
 import { ReaderSmoothScroller, smoothScrollSpec } from './smooth-scroll';
 import { verticalTextPosition } from './text-motion';
 import {
@@ -81,6 +89,14 @@ interface ZoteroRuntime {
     ): Promise<AnnotationRuntime | null | false>;
   };
   readonly Item: new (itemType: 'annotation') => AnnotationDraft;
+  readonly PDFTranslate?: {
+    readonly api?: {
+      translate?(
+        raw: string,
+        options: { readonly pluginID: string; readonly itemID?: number },
+      ): Promise<{ readonly result?: string }>;
+    };
+  };
   readonly locale?: string;
 }
 
@@ -96,12 +112,22 @@ type MainWindowRuntime = MainWindow & {
   };
 };
 
+interface SessionSelectionBridge {
+  readonly registered: (
+    context: ReaderSelectionContext,
+  ) => readonly ReaderSelectionActionDefinition[];
+  readonly noteOwner: (session: ReaderSession) => void;
+  readonly clearOwner: (session: ReaderSession) => void;
+  readonly pluginID: () => string | null;
+}
+
 interface SessionDependencies {
   readonly controller: ReaderController;
   readonly reader: ReaderRuntime;
   readonly firstPdfWindow: PdfWindow;
   readonly bindings: () => BindingMap;
   readonly release: () => void;
+  readonly selection?: SessionSelectionBridge;
 }
 
 interface ComputedAnnotationPosition {
@@ -149,6 +175,8 @@ export class ReaderController implements ReaderControllerApi {
   #pluginID: string | null = null;
   #lastSelection: AnnotationSelectionParams | null = null;
   #lastSelectionAt = 0;
+  readonly #selectionActions = new ReaderSelectionActionRegistry();
+  #selectionOwner: ReaderSession | null = null;
 
   constructor(dependencies: ReaderControllerDependencies) {
     this.#dependencies = dependencies;
@@ -209,6 +237,8 @@ export class ReaderController implements ReaderControllerApi {
     this.#sessionsByItem.clear();
     this.#lastSelection = null;
     this.#lastSelectionAt = 0;
+    this.#selectionOwner = null;
+    this.#selectionActions.clear();
   }
 
   rescan(window: MainWindow): void {
@@ -248,6 +278,32 @@ export class ReaderController implements ReaderControllerApi {
       : null;
   }
 
+  getSelection(): ReaderSelectionContext | null {
+    return this.#selectionOwner?.selectionContext() ?? null;
+  }
+
+  registerSelectionAction(action: ReaderSelectionActionDefinition): () => void {
+    return this.#selectionActions.register(action);
+  }
+
+  registeredSelectionActions(
+    context: ReaderSelectionContext,
+  ): readonly ReaderSelectionActionDefinition[] {
+    return this.#selectionActions.available(context);
+  }
+
+  noteSelectionOwner(session: ReaderSession): void {
+    this.#selectionOwner = session;
+  }
+
+  clearSelectionOwner(session: ReaderSession): void {
+    if (this.#selectionOwner === session) this.#selectionOwner = null;
+  }
+
+  get pluginID(): string | null {
+    return this.#pluginID;
+  }
+
   #onToolbar(event: ReaderEventRuntime): void {
     if (event.reader) this.#ensure(event.reader);
   }
@@ -284,6 +340,12 @@ export class ReaderController implements ReaderControllerApi {
         firstPdfWindow: pdfWindow,
         bindings: () => resolveBindings(this.#dependencies.preferences.get('bindings', '')),
         release: () => this.#release(instanceID, reader),
+        selection: {
+          registered: (context) => this.registeredSelectionActions(context),
+          noteOwner: (owner) => this.noteSelectionOwner(owner),
+          clearOwner: (owner) => this.clearSelectionOwner(owner),
+          pluginID: () => this.pluginID,
+        },
       });
       this.#sessions.set(instanceID, session);
       if (reader.itemID !== undefined) this.#sessionsByItem.set(reader.itemID, session);
@@ -307,6 +369,7 @@ export class ReaderController implements ReaderControllerApi {
 
   #release(instanceID: string, reader: ReaderRuntime): void {
     const session = this.#sessions.get(instanceID);
+    if (session && this.#selectionOwner === session) this.#selectionOwner = null;
     this.#sessions.delete(instanceID);
     this.#pending.delete(instanceID);
     const timer = this.#waitTimers.get(instanceID);
@@ -339,6 +402,7 @@ export class ReaderSession {
   readonly #linkHints: ReaderLinkHints;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #flash: ReaderFlash;
+  readonly #selectionActions: ReaderSelectionActions;
   readonly #smoothScroller: ReaderSmoothScroller;
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
@@ -362,13 +426,19 @@ export class ReaderSession {
       activePdfWindow: dependencies.firstPdfWindow,
       visualAnchor: null,
       visualPreferredX: null,
-      cursorPreferredX: null,
       marks: {},
       filterColor: null,
       lastAnnotationKey: null,
     };
     this.#flash = new ReaderFlash({
-      activate: (mode, pdfWindow, pointer) => this.activateFlashTarget(mode, pdfWindow, pointer),
+      activate: (intent, pdfWindow, target) => this.activateFlashTarget(intent, pdfWindow, target),
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+    });
+    this.#selectionActions = new ReaderSelectionActions({
+      actions: (context, pdfWindow) => this.selectionActionDefinitions(context, pdfWindow),
+      themeRoot: (root) => this.themeRoot(root),
+      copyText: (text) => this.copyText(text),
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
@@ -472,6 +542,8 @@ export class ReaderSession {
 
   dispose(): void {
     this.#commentEditor.dispose();
+    this.#selectionActions.dispose();
+    this.#dependencies.selection?.clearOwner(this);
     this.#flash.dispose();
     this.#smoothScroller.dispose();
     this.clearSidebarToggleInput();
@@ -593,8 +665,7 @@ export class ReaderSession {
       const scroll = (() => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
-        if (this.state.mode === 'visual' || this.state.mode === 'cursor')
-          this.updateVisualCursor(pdfWindow, false);
+        if (this.state.mode === 'visual') this.updateVisualCursor(pdfWindow, false);
       }) as EventListener;
       const resize = (() => {
         this.#flash.onViewportChange(pdfWindow);
@@ -631,6 +702,7 @@ export class ReaderSession {
     pdfWindow.removeEventListener('resize', handlers.resize);
     handlers.scrollElement?.removeEventListener('scroll', handlers.scroll);
     this.#linkHints.releaseView(pdfWindow);
+    this.#selectionActions.releaseView(pdfWindow);
     this.releaseViewTheme(pdfWindow);
   }
 
@@ -726,6 +798,7 @@ export class ReaderSession {
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.activatePdfWindow(pdfWindow);
+    if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.handleSidebarToggleKey(event, pdfWindow)) return;
     if (
@@ -798,7 +871,7 @@ export class ReaderSession {
         keyBuffer: this.state.keyBuffer,
         countBuffer: this.state.countBuffer,
         bindings: this.#dependencies.bindings(),
-        allowCountPrefix: this.state.mode === 'normal' || this.state.mode === 'cursor',
+        allowCountPrefix: this.state.mode === 'normal',
       },
       key,
     );
@@ -992,7 +1065,7 @@ export class ReaderSession {
 
   private readerConsumesKey(key: string): boolean {
     if (!key) return false;
-    if (this.#flash.isOpen) return true;
+    if (this.#selectionActions.isOpen || this.#flash.isOpen) return true;
     if (this.state.mode === 'insert')
       return (
         key === 'escape' ||
@@ -1011,7 +1084,7 @@ export class ReaderSession {
       keyBuffer: this.state.keyBuffer,
       countBuffer: this.state.countBuffer,
       bindings: this.#dependencies.bindings(),
-      allowCountPrefix: this.state.mode === 'normal' || this.state.mode === 'cursor',
+      allowCountPrefix: this.state.mode === 'normal',
     };
     if (!inputWouldConsume(context, key)) return false;
     const transition = advanceInput(context, key);
@@ -1112,12 +1185,7 @@ export class ReaderSession {
         this.#linkHints.open(pdfWindow);
         break;
       case 'flashText':
-        if (
-          this.state.mode === 'normal' ||
-          this.state.mode === 'cursor' ||
-          this.state.mode === 'visual'
-        )
-          this.#flash.open(pdfWindow, this.state.mode);
+        if (this.state.mode === 'visual') this.#flash.open(pdfWindow, 'visual-end');
         break;
       case 'halfPageDown':
         this.clearAnnotation();
@@ -1233,8 +1301,8 @@ export class ReaderSession {
       case 'enterVisual':
         if (this.modeEnabled('visual')) this.enterVisual(pdfWindow);
         break;
-      case 'enterCursor':
-        if (this.modeEnabled('cursor')) this.enterCursor(pdfWindow);
+      case 'openSelectionActions':
+        this.openSelectionActions(pdfWindow);
         break;
       case 'enterInsert':
         if (this.modeEnabled('insert')) void this.enterAnnotationInsert();
@@ -1295,6 +1363,9 @@ export class ReaderSession {
       case 'highlightPurple':
         void this.highlight(pdfWindow, COLORS.purple);
         break;
+      case 'underlineSelection':
+        void this.highlight(pdfWindow, this.defaultHighlightColor(), false, 'underline');
+        break;
       case 'addNote':
         void this.highlight(pdfWindow, this.defaultHighlightColor(), true);
         break;
@@ -1309,39 +1380,6 @@ export class ReaderSession {
         break;
       case 'swapVisualEnds':
         this.swapVisualEnds(pdfWindow);
-        break;
-      case 'cursorDown':
-        this.moveCursorLine(pdfWindow, 1, number);
-        break;
-      case 'cursorUp':
-        this.moveCursorLine(pdfWindow, -1, number);
-        break;
-      case 'cursorLeft':
-        this.moveCursor(pdfWindow, 'backward', 'character', number);
-        break;
-      case 'cursorRight':
-        this.moveCursor(pdfWindow, 'forward', 'character', number);
-        break;
-      case 'cursorWordForward':
-        this.moveCursor(pdfWindow, 'forward', 'word', number);
-        break;
-      case 'cursorBigWordForward':
-        this.moveCursor(pdfWindow, 'forward', 'word', number);
-        break;
-      case 'cursorWordBackward':
-        this.moveCursor(pdfWindow, 'backward', 'word', number);
-        break;
-      case 'cursorBigWordBackward':
-        this.moveCursor(pdfWindow, 'backward', 'word', number);
-        break;
-      case 'cursorLineStart':
-        this.moveCursorBoundary(pdfWindow, false);
-        break;
-      case 'cursorLineEnd':
-        this.moveCursorBoundary(pdfWindow, true);
-        break;
-      case 'cursorToVisual':
-        this.cursorToVisual(pdfWindow);
         break;
       case 'toggleReaderSplitHorizontal':
         this.toggleSplit('horizontal');
@@ -1394,14 +1432,19 @@ export class ReaderSession {
     const style = document.createElement('style');
     style.id = 'zv-sel-css';
     style.textContent =
-      '.textLayer,.textLayer span{user-select:text!important;-moz-user-select:text!important}.textLayer span{cursor:text!important}.textLayer ::selection{background:rgba(0,140,255,.6)!important;color:inherit!important}@keyframes zv-cursor-blink{0%,100%{opacity:1}50%{opacity:0}}';
+      '.textLayer,.textLayer span{user-select:text!important;-moz-user-select:text!important}.textLayer span{cursor:text!important}.textLayer ::selection{background:rgba(0,82,220,.82)!important;color:#fff!important;text-shadow:0 0 1px rgba(0,0,0,.45)!important}';
     (document.head ?? document.documentElement).appendChild(style);
   }
 
   private setMode(mode: ReaderMode): void {
+    const previousMode = this.state.mode;
     if (this.#flash.isOpen) this.#flash.cancel();
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
     if (this.state.mode === 'insert' && mode !== 'insert') this.#commentEditor.invalidate();
+    if (previousMode === 'visual' && mode !== 'visual') {
+      this.#selectionActions.close();
+      this.#dependencies.selection?.clearOwner(this);
+    }
     if (mode !== 'normal') this.#smoothScroller.stop(true);
     this.#inputRevision += 1;
     this.state.mode = mode;
@@ -1409,7 +1452,7 @@ export class ReaderSession {
     this.state.countBuffer = '';
     this.clearKeyTimer();
     this.clearKeyGuide();
-    if (mode !== 'visual' && mode !== 'cursor') this.removeVisualCursor(this.state.activePdfWindow);
+    if (mode !== 'visual') this.removeVisualCursor(this.state.activePdfWindow);
     this.updateIndicator();
   }
 
@@ -1477,16 +1520,18 @@ export class ReaderSession {
       return;
     }
     indicator.style.display = 'block';
+    if (this.state.mode === 'visual') {
+      const selected = annotationText(this.activePdfWindow()?.getSelection()?.toString() ?? '');
+      const pending = this.state.countBuffer || this.state.keyBuffer;
+      indicator.textContent = `SELECT · ${selected.length} chars · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
+      indicator.style.color = THEME_VARS.onAccent;
+      indicator.style.background = THEME_VARS.accent;
+      return;
+    }
     indicator.textContent = `-- ${this.state.mode.toUpperCase()} --${this.state.countBuffer || this.state.keyBuffer ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
     indicator.style.color = this.state.mode === 'normal' ? THEME_VARS.text : THEME_VARS.onAccent;
     indicator.style.background =
-      this.state.mode === 'visual'
-        ? THEME_VARS.accent
-        : this.state.mode === 'cursor'
-          ? THEME_VARS.warning
-          : this.state.mode === 'insert'
-            ? THEME_VARS.success
-            : THEME_VARS.elevated;
+      this.state.mode === 'insert' ? THEME_VARS.success : THEME_VARS.elevated;
   }
 
   /** Delegates one jump to Zotero's per-view history without caching private host methods. */
@@ -1709,150 +1754,63 @@ export class ReaderSession {
     this.scrollTo(pdfWindow, Math.max(0, target), true);
   }
 
-  private activateFlashTarget(mode: FlashMode, pdfWindow: PdfWindow, pointer: Pointer): void {
-    if (this.state.mode !== mode || !pointer.textNode.isConnected) return;
+  private activateFlashTarget(
+    intent: FlashIntent,
+    pdfWindow: PdfWindow,
+    target: FlashSelectionTarget,
+  ): void {
+    if (!target.start.textNode.isConnected || !target.end.textNode.isConnected) return;
     const selection = pdfWindow.getSelection();
     if (!selection) return;
-    if (mode === 'visual') {
-      this.ensureVisualAnchor(pdfWindow);
-      const anchor = this.state.visualAnchor;
-      if (!anchor?.textNode.isConnected) return;
-      this.state.visualPreferredX = null;
+    this.state.visualPreferredX = null;
+    if (intent === 'visual-start') {
+      this.state.visualAnchor = target.start;
+      this.setMode('visual');
       selection.setBaseAndExtent(
-        anchor.textNode,
-        anchor.offset,
-        pointer.textNode,
-        Math.min(pointer.offset, pointer.textNode.length),
+        target.start.textNode,
+        target.start.offset,
+        target.end.textNode,
+        target.end.offset,
       );
       this.updateVisualCursor(pdfWindow, true);
+      this.showStatus('✓ selection started', 650);
       return;
     }
-    const range = pdfWindow.document.createRange();
-    range.setStart(pointer.textNode, Math.min(pointer.offset, pointer.textNode.length));
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    this.state.cursorPreferredX = null;
-    this.state.visualPreferredX = null;
-    if (mode === 'cursor') {
-      this.state.visualAnchor = pointer;
-      this.updateVisualCursor(pdfWindow, true);
-    }
+    if (this.state.mode !== 'visual') return;
+    this.ensureVisualAnchor(pdfWindow);
+    const anchor = this.state.visualAnchor;
+    if (!anchor?.textNode.isConnected) return;
+    const focus = this.comparePointers(target.end, anchor) <= 0 ? target.start : target.end;
+    selection.setBaseAndExtent(anchor.textNode, anchor.offset, focus.textNode, focus.offset);
+    this.updateVisualCursor(pdfWindow, true);
+    this.showStatus('✓ selection updated', 650);
+  }
+
+  private comparePointers(left: Pointer, right: Pointer): number {
+    if (left.textNode === right.textNode) return left.offset - right.offset;
+    const compare = left.textNode.compareDocumentPosition?.(right.textNode) ?? 0;
+    if (compare & 4) return -1;
+    if (compare & 2) return 1;
+    return 0;
   }
 
   private enterVisual(pdfWindow: PdfWindow): void {
     const selection = pdfWindow.getSelection();
     this.state.visualAnchor = null;
     this.state.visualPreferredX = null;
-    this.setMode('visual');
     if (selection && !selection.isCollapsed && isTextNode(selection.anchorNode)) {
       this.state.visualAnchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
+      this.setMode('visual');
       this.updateVisualCursor(pdfWindow, true);
       return;
     }
-    if (!this.ensureCursor(pdfWindow)) {
-      this.showStatus('✗ no selectable text', 1500);
-      this.setMode('normal');
-      return;
-    }
-    const caret = pdfWindow.getSelection();
-    if (caret && isTextNode(caret.anchorNode))
-      this.state.visualAnchor = { textNode: caret.anchorNode, offset: caret.anchorOffset };
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private enterCursor(pdfWindow: PdfWindow): void {
-    this.state.visualAnchor = null;
-    this.state.cursorPreferredX = null;
-    this.setMode('cursor');
-    if (!this.ensureCursor(pdfWindow)) {
-      this.showStatus('✗ no selectable text', 1500);
-      this.setMode('normal');
-      return;
-    }
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private cursorToVisual(pdfWindow: PdfWindow): void {
-    if (!this.ensureCursor(pdfWindow)) return;
-    const selection = pdfWindow.getSelection();
-    if (!selection?.anchorNode || !isTextNode(selection.anchorNode)) return;
-    this.state.visualPreferredX = null;
-    this.setMode('visual');
-    this.state.visualAnchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private ensureCursor(pdfWindow: PdfWindow): boolean {
-    const selection = pdfWindow.getSelection();
-    if (!selection) return false;
-    if (selection.rangeCount && selection.isCollapsed) return true;
-    const anchor = this.state.visualAnchor?.textNode.isConnected
-      ? this.state.visualAnchor
-      : this.firstTextPosition(pdfWindow);
-    if (!anchor) return false;
-    const range = pdfWindow.document.createRange();
-    range.setStart(anchor.textNode, Math.min(anchor.offset, anchor.textNode.length));
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    this.state.visualAnchor = anchor;
-    return true;
+    this.#flash.open(pdfWindow, 'visual-start');
   }
 
   private firstTextPosition(pdfWindow: PdfWindow): { textNode: Text; offset: number } | null {
     const span = pdfWindow.document.querySelector('.textLayer span') as HTMLElement | null;
     const text = span?.firstChild ?? null;
     return isTextNode(text) ? { textNode: text, offset: 0 } : null;
-  }
-
-  private moveCursor(
-    pdfWindow: PdfWindow,
-    direction: 'forward' | 'backward',
-    granularity: 'character' | 'word',
-    count: number,
-  ): void {
-    if (!this.ensureCursor(pdfWindow)) return;
-    const selection = pdfWindow.getSelection();
-    if (!selection) return;
-    this.state.cursorPreferredX = null;
-    for (let index = 0; index < count; index += 1) selection.modify('move', direction, granularity);
-    if (isTextNode(selection.focusNode))
-      this.state.visualAnchor = { textNode: selection.focusNode, offset: selection.focusOffset };
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private moveCursorLine(pdfWindow: PdfWindow, direction: -1 | 1, count: number): void {
-    if (!this.ensureCursor(pdfWindow)) return;
-    const selection = pdfWindow.getSelection();
-    if (!selection || !isTextNode(selection.focusNode)) return;
-    let pointer = { textNode: selection.focusNode, offset: selection.focusOffset };
-    let preferredX = this.state.cursorPreferredX;
-    for (let index = 0; index < count; index += 1) {
-      const target = verticalTextPosition(pdfWindow, pointer, direction, preferredX);
-      if (!target) break;
-      const range = pdfWindow.document.createRange();
-      range.setStart(target.pointer.textNode, target.pointer.offset);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      pointer = target.pointer;
-      preferredX = target.preferredX;
-    }
-    this.state.cursorPreferredX = preferredX;
-    this.state.visualAnchor = pointer;
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private moveCursorBoundary(pdfWindow: PdfWindow, end: boolean): void {
-    if (!this.ensureCursor(pdfWindow)) return;
-    const selection = pdfWindow.getSelection();
-    if (!selection) return;
-    this.state.cursorPreferredX = null;
-    selection.modify('move', end ? 'forward' : 'backward', 'lineboundary');
-    if (isTextNode(selection.focusNode))
-      this.state.visualAnchor = { textNode: selection.focusNode, offset: selection.focusOffset };
-    this.updateVisualCursor(pdfWindow, true);
   }
 
   private modifySelection(
@@ -1902,7 +1860,7 @@ export class ReaderSession {
 
   private updateVisualCursor(pdfWindow: PdfWindow, autoPan: boolean): void {
     this.removeVisualCursor(pdfWindow);
-    if (this.state.mode !== 'visual' && this.state.mode !== 'cursor') return;
+    if (this.state.mode !== 'visual') return;
     const selection = pdfWindow.getSelection();
     const focus = selection?.focusNode ?? null;
     const node = isTextNode(focus) ? focus : this.state.visualAnchor?.textNode;
@@ -1917,8 +1875,10 @@ export class ReaderSession {
     if (!rect.width && !rect.height) return;
     const cursor = pdfWindow.document.createElement('span');
     cursor.dataset.zvCursor = '1';
-    cursor.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;height:${Math.max(12, rect.height)}px;width:2px;background:#f9e2af;z-index:99997;pointer-events:none;animation:zv-cursor-blink 1s step-end infinite;`;
+    cursor.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;height:${Math.max(12, rect.height)}px;width:3px;background:#0057d9;z-index:99997;pointer-events:none;box-shadow:0 0 0 1px #fff,0 0 0 2px #0057d9;border-radius:1px;`;
     pdfWindow.document.body?.appendChild(cursor);
+    this.#dependencies.selection?.noteOwner(this);
+    this.updateIndicator();
     if (autoPan) {
       const container = this.scrollContainer(pdfWindow);
       if (rect.top < 20) this.scrollBy(pdfWindow, 0, rect.top - 40);
@@ -1973,6 +1933,7 @@ export class ReaderSession {
     pdfWindow: PdfWindow,
     color: AnnotationColor,
     focusComment = false,
+    annotationType: 'highlight' | 'underline' = 'highlight',
   ): Promise<void> {
     const params = this.state.selectionParams ?? this.#dependencies.controller.selection();
     if (params?.annotation) {
@@ -1984,6 +1945,7 @@ export class ReaderSession {
         params.annotation.pageLabel,
         color,
         focusComment,
+        annotationType,
       );
       return;
     }
@@ -2004,8 +1966,10 @@ export class ReaderSession {
       computed.pageLabel,
       color,
       focusComment,
+      annotationType,
     );
     selection.removeAllRanges();
+    if (!focusComment) this.setMode('normal');
   }
 
   private computeSelectionPosition(
@@ -2103,6 +2067,7 @@ export class ReaderSession {
     pageLabel: string | undefined,
     color: AnnotationColor,
     focusComment: boolean,
+    annotationType: 'highlight' | 'underline',
   ): Promise<void> {
     const attachment = this.itemForReader(this.#dependencies.reader);
     if (!attachment?.id || attachment.libraryID === undefined) {
@@ -2113,7 +2078,7 @@ export class ReaderSession {
       const item = new (zoteroRuntime().Item)('annotation');
       item.libraryID = attachment.libraryID;
       item.parentID = attachment.id;
-      item.annotationType = 'highlight';
+      item.annotationType = annotationType;
       item.annotationColor = color;
       item.annotationText = annotationText(text);
       item.annotationComment = '';
@@ -2130,6 +2095,76 @@ export class ReaderSession {
     } catch (error) {
       this.showStatus(`✗ ${String(error).slice(0, 40)}`, 4000);
     }
+  }
+
+  selectionContext(): ReaderSelectionContext | null {
+    if (this.state.mode !== 'visual') return null;
+    const pdfWindow = this.activePdfWindow();
+    if (!pdfWindow) return null;
+    const selection = pdfWindow.getSelection();
+    if (!selection || selection.isCollapsed) return null;
+    const text = annotationText(selection.toString());
+    if (!text) return null;
+    const computed = this.computeSelectionPosition(pdfWindow, selection);
+    return {
+      text,
+      itemID: this.#dependencies.reader.itemID ?? null,
+      pageLabel: computed?.pageLabel ?? null,
+      position: computed?.position ?? null,
+    };
+  }
+
+  private openSelectionActions(pdfWindow: PdfWindow): void {
+    const context = this.selectionContext();
+    if (!context) {
+      this.showStatus('✗ no selection', 1500);
+      return;
+    }
+    this.#dependencies.selection?.noteOwner(this);
+    this.#selectionActions.open(pdfWindow, context);
+  }
+
+  private selectionActionDefinitions(
+    context: ReaderSelectionContext,
+    pdfWindow: PdfWindow,
+  ): readonly ReaderSelectionActionDefinition[] {
+    const language = this.keyGuideLanguage();
+    const actions: ReaderSelectionActionDefinition[] = [];
+    const translate = zoteroRuntime().PDFTranslate?.api?.translate;
+    const pluginID = this.#dependencies.selection?.pluginID() ?? null;
+    if (typeof translate === 'function' && pluginID) {
+      actions.push({
+        id: 'pdf-translate.translate',
+        label: language === 'zh-CN' ? '翻译' : 'Translate',
+        run: async (selection) => {
+          const task = await translate(selection.text, {
+            pluginID,
+            ...(selection.itemID === null ? {} : { itemID: selection.itemID }),
+          });
+          const result = task.result?.trim();
+          if (!result) throw new Error('empty translation result');
+          return { title: language === 'zh-CN' ? '翻译结果' : 'Translation', body: result };
+        },
+      });
+    }
+    const addBuiltIn = (id: string, action: ActionId): void => {
+      actions.push({
+        id,
+        label: ACTION_LABELS[action][language],
+        run: () => this.executeAction(action, 1, pdfWindow),
+      });
+    };
+    addBuiltIn('neo.highlight-yellow', 'highlightYellow');
+    addBuiltIn('neo.underline', 'underlineSelection');
+    addBuiltIn('neo.add-note', 'addNote');
+    addBuiltIn('neo.highlight-red', 'highlightRed');
+    addBuiltIn('neo.highlight-green', 'highlightGreen');
+    addBuiltIn('neo.highlight-blue', 'highlightBlue');
+    addBuiltIn('neo.highlight-purple', 'highlightPurple');
+    addBuiltIn('neo.copy', 'copySelection');
+    addBuiltIn('neo.search', 'searchSelection');
+    actions.push(...(this.#dependencies.selection?.registered(context) ?? []));
+    return actions;
   }
 
   private copySelection(pdfWindow: PdfWindow): void {
