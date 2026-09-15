@@ -29,13 +29,13 @@ patchFile('src/reader/controller.ts', [
     'selection palette owner view',
   ],
   [
-    '    this.#dependencies.controller.clearSelectionOwner(this);\n',
-    '    this.#dependencies.selection?.clearOwner(this);\n',
+    `    this.#commentEditor.dispose();\n    this.#selectionActions.dispose();\n    this.#dependencies.controller.clearSelectionOwner(this);\n    this.#flash.dispose();`,
+    `    this.#commentEditor.dispose();\n    this.#selectionActions.dispose();\n    this.#dependencies.selection?.clearOwner(this);\n    this.#flash.dispose();`,
     'dispose selection owner bridge',
   ],
   [
-    '      this.#dependencies.controller.clearSelectionOwner(this);\n',
-    '      this.#dependencies.selection?.clearOwner(this);\n',
+    `    if (previousMode === 'visual' && mode !== 'visual') {\n      this.#selectionActions.close();\n      this.#dependencies.controller.clearSelectionOwner(this);\n    }`,
+    `    if (previousMode === 'visual' && mode !== 'visual') {\n      this.#selectionActions.close();\n      this.#dependencies.selection?.clearOwner(this);\n    }`,
     'mode exit selection owner bridge',
   ],
   [
