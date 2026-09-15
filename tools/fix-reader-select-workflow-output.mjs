@@ -39,9 +39,9 @@ patchFile('src/reader/controller.ts', [
     'mode exit selection owner bridge',
   ],
   [
-    '    this.#dependencies.controller.noteSelectionOwner(this);\n',
-    '    this.#dependencies.selection?.noteOwner(this);\n',
-    'selection owner note bridge',
+    '    this.#dependencies.controller.noteSelectionOwner(this);\n    this.updateIndicator();\n',
+    '    this.#dependencies.selection?.noteOwner(this);\n    this.updateIndicator();\n',
+    'selection endpoint owner bridge',
   ],
   [
     '    this.#dependencies.controller.noteSelectionOwner(this);\n    this.#selectionActions.open(pdfWindow, context);\n',
