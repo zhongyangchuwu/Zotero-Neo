@@ -1,6 +1,6 @@
-name: Apply Reader Select workflow once v4
+name: Apply Reader Select workflow once v5
 
-# trigger: select-v4
+# trigger: select-v5
 on:
   push:
     branches:
