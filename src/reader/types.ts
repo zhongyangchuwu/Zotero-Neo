@@ -276,11 +276,6 @@ export interface ReaderSessionState {
   visualPreferredX: number | null;
   cursorPreferredX: number | null;
   marks: Record<string, Mark>;
-  marksExplorerOpen: boolean;
-  marksExplorerSelected: number;
-  marksOverlay: HTMLElement | null;
-  marksList: HTMLElement | null;
-  marksThemeCleanup: (() => void) | null;
   outline: OutlineState;
   sidebarOutlineIndex: number;
   filterColor: AnnotationColor | null;
