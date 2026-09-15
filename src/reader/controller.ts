@@ -350,6 +350,8 @@ export class ReaderSession {
   readonly #keyGuide = new KeyGuide();
   #keyGuideTimer: ReaderTimer | null = null;
   #inputRevision = 0;
+  #sidebarToggleBuffer = '';
+  #sidebarToggleTimer: ReaderTimer | null = null;
   readonly state: ReaderSessionState;
   #viewSyncTimer: number | null = null;
 
@@ -426,7 +428,10 @@ export class ReaderSession {
       onAnnotation: (key) => {
         this.state.lastAnnotationKey = key;
       },
-      onClose: (pdfWindow) => this.#sidebar.closed('marks', pdfWindow),
+      onClose: (pdfWindow) => {
+        this.clearSidebarToggleInput();
+        this.#sidebar.closed('marks', pdfWindow);
+      },
     });
     const outlineHost: OutlineHost = {
       schedule: (delay, task) => this.schedule(delay, task),
@@ -434,7 +439,10 @@ export class ReaderSession {
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
       setModeNormal: () => this.setMode('normal'),
       themeRoot: (root) => this.#sidebar.themeRoot(root),
-      onClose: (pdfWindow) => this.#sidebar.closed('outline', pdfWindow),
+      onClose: (pdfWindow) => {
+        this.clearSidebarToggleInput();
+        this.#sidebar.closed('outline', pdfWindow);
+      },
     };
     this.#outline = new ReaderOutline(outlineHost);
     this.#scope.add(() => {
@@ -470,6 +478,7 @@ export class ReaderSession {
   dispose(): void {
     this.state.insertSession += 1;
     this.stopSmoothHold(true);
+    this.clearSidebarToggleInput();
     for (const [pdfWindow, handlers] of this.#viewHandlers)
       this.removeViewHandlers(pdfWindow, handlers);
     this.#viewHandlers.clear();
@@ -722,6 +731,7 @@ export class ReaderSession {
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.activatePdfWindow(pdfWindow);
+    if (this.handleSidebarToggleKey(event, pdfWindow)) return;
     if (
       this.#outline.isOpen &&
       this.#outline.handleKey(this.#dependencies.reader, pdfWindow, event)
@@ -843,6 +853,60 @@ export class ReaderSession {
           this.executeAction(resolved.action, resolved.count, this.activePdfWindow());
       });
     }
+  }
+
+  private handleSidebarToggleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
+    const action = this.#outline.isOpen
+      ? 'toggleReaderSidebarOutline'
+      : this.#marksExplorer.isOpen
+        ? 'toggleMarksExplorer'
+        : null;
+    if (!action) {
+      this.clearSidebarToggleInput();
+      return false;
+    }
+    const key = keyString(event);
+    if (!key) return false;
+    const modePrefix = 'normal:';
+    const sequences = Object.entries(this.#dependencies.bindings())
+      .filter(([binding, boundAction]) => binding.startsWith(modePrefix) && boundAction === action)
+      .map(([binding]) => binding.slice(modePrefix.length));
+    const matching = (buffer: string): string[] =>
+      sequences.filter((sequence) => sequence.startsWith(buffer));
+
+    let next = `${this.#sidebarToggleBuffer}${key}`;
+    let matches = matching(next);
+    if (!matches.length && this.#sidebarToggleBuffer) {
+      next = key;
+      matches = matching(next);
+    }
+    if (!matches.length) {
+      this.clearSidebarToggleInput();
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (matches.includes(next)) {
+      this.clearSidebarToggleInput();
+      if (action === 'toggleReaderSidebarOutline') this.#outline.close(pdfWindow);
+      else this.#marksExplorer.close(pdfWindow);
+      return true;
+    }
+
+    this.#sidebarToggleBuffer = next;
+    this.clearTimer(this.#sidebarToggleTimer);
+    this.#sidebarToggleTimer = this.schedule(1200, () => {
+      this.#sidebarToggleBuffer = '';
+      this.#sidebarToggleTimer = null;
+    });
+    return true;
+  }
+
+  private clearSidebarToggleInput(): void {
+    this.#sidebarToggleBuffer = '';
+    this.clearTimer(this.#sidebarToggleTimer);
+    this.#sidebarToggleTimer = null;
   }
 
   private handleInsertKey(event: KeyboardEvent): void {
