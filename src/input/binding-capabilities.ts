@@ -1,6 +1,5 @@
 import { MAIN_EXECUTABLE_ACTIONS } from '../main/action-capabilities';
 import {
-  READER_LOCAL_CURSOR_ACTIONS,
   READER_LOCAL_INSERT_ACTIONS,
   READER_LOCAL_VISUAL_ACTIONS,
   READER_NORMAL_ACTIONS,
@@ -15,8 +14,6 @@ export function actionsForBindingMode(mode: Mode): readonly ActionId[] {
       return READER_NORMAL_ACTIONS;
     case 'visual':
       return READER_LOCAL_VISUAL_ACTIONS;
-    case 'cursor':
-      return READER_LOCAL_CURSOR_ACTIONS;
     case 'insert':
       return READER_LOCAL_INSERT_ACTIONS;
     case 'main':
