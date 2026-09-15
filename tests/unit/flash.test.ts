@@ -7,9 +7,10 @@ import {
   flashContinuationLabels,
   flashMatches,
   normalizeFlashText,
+  type FlashSelectionTarget,
   type FlashTextSegment,
 } from '../../src/reader/flash';
-import type { PdfWindow, Pointer } from '../../src/reader/types';
+import type { PdfWindow } from '../../src/reader/types';
 
 function textNode(value: string): Text {
   return {
@@ -44,17 +45,25 @@ describe('Flash text index', () => {
     expect(normalizeFlashText('  ﬁ\n\tfoo  ')).toBe('fi foo');
   });
 
-  it('matches literals across PDF.js text-node boundaries', () => {
+  it('matches literal ranges across PDF.js text-node boundaries', () => {
     const first = textNode('hel');
     const second = textNode('lo world');
     const index = buildFlashTextIndex([segment(first), segment(second)]);
 
     expect(index.text).toBe('hello world');
     expect(flashMatches(index, 'llo')).toEqual([
-      { index: 2, pointer: { textNode: first, offset: 2 } },
+      {
+        index: 2,
+        pointer: { textNode: first, offset: 2 },
+        end: { textNode: second, offset: 2 },
+      },
     ]);
     expect(flashMatches(index, 'lo w')).toEqual([
-      { index: 3, pointer: { textNode: second, offset: 0 } },
+      {
+        index: 3,
+        pointer: { textNode: second, offset: 0 },
+        end: { textNode: second, offset: 4 },
+      },
     ]);
   });
 
@@ -64,10 +73,18 @@ describe('Flash text index', () => {
 
     expect(flashMatches(index, 'alpha')).toHaveLength(3);
     expect(flashMatches(index, 'Alpha')).toEqual([
-      { index: 0, pointer: { textNode: node, offset: 0 } },
+      {
+        index: 0,
+        pointer: { textNode: node, offset: 0 },
+        end: { textNode: node, offset: 5 },
+      },
     ]);
     expect(flashMatches(index, 'a.pha')).toEqual([
-      { index: 18, pointer: { textNode: node, offset: 18 } },
+      {
+        index: 18,
+        pointer: { textNode: node, offset: 18 },
+        end: { textNode: node, offset: 23 },
+      },
     ]);
   });
 
@@ -170,11 +187,11 @@ function flashPrompt(children: readonly HTMLElement[]): HTMLElement | undefined 
 }
 
 function createFlash() {
-  const activations: { mode: string; pointer: Pointer }[] = [];
+  const activations: { intent: string; target: FlashSelectionTarget }[] = [];
   const statuses: string[] = [];
   const debug: string[] = [];
   const flash = new ReaderFlash({
-    activate: (mode, _window, pointer) => activations.push({ mode, pointer }),
+    activate: (intent, _window, target) => activations.push({ intent, target }),
     showStatus: (message) => statuses.push(message),
     debug: (message) => debug.push(message),
   });
@@ -182,7 +199,7 @@ function createFlash() {
 }
 
 describe('Reader Flash lifecycle', () => {
-  it('renders distance-ordered labels incrementally without Enter', () => {
+  it('renders distance-ordered labels and returns the whole selected match', () => {
     const created = createFlashWindow(
       [
         { value: 'target far', left: 500, top: 300 },
@@ -191,7 +208,7 @@ describe('Reader Flash lifecycle', () => {
       1,
     );
     const { flash, activations } = createFlash();
-    flash.open(created.pdfWindow, 'cursor');
+    flash.open(created.pdfWindow, 'visual-start');
     for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
 
     const hints = flashHints(created.bodyChildren);
@@ -201,8 +218,10 @@ describe('Reader Flash lifecycle', () => {
 
     flash.handleKey(flashKey('S'), created.pdfWindow);
     expect(activations).toHaveLength(1);
-    expect(activations[0]?.mode).toBe('cursor');
-    expect(activations[0]?.pointer.textNode).toBe(created.spans[1]?.node);
+    expect(activations[0]?.intent).toBe('visual-start');
+    expect(activations[0]?.target.start.textNode).toBe(created.spans[1]?.node);
+    expect(activations[0]?.target.start.offset).toBe(0);
+    expect(activations[0]?.target.end.offset).toBe(6);
     expect(flash.isOpen).toBe(false);
   });
 
@@ -212,7 +231,7 @@ describe('Reader Flash lifecycle', () => {
       { value: 'table', left: 20, top: 50 },
     ]);
     const { flash, activations } = createFlash();
-    flash.open(created.pdfWindow, 'normal');
+    flash.open(created.pdfWindow, 'visual-start');
     flash.handleKey(flashKey('t'), created.pdfWindow);
     flash.handleKey(flashKey('a'), created.pdfWindow);
 
@@ -237,7 +256,7 @@ describe('Reader Flash lifecycle', () => {
       })),
     );
     const { flash } = createFlash();
-    flash.open(created.pdfWindow, 'normal');
+    flash.open(created.pdfWindow, 'visual-start');
     for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
 
     expect(flashHints(created.bodyChildren)).toHaveLength(0);
@@ -255,7 +274,7 @@ describe('Reader Flash lifecycle', () => {
       })),
     );
     const { flash, activations } = createFlash();
-    flash.open(created.pdfWindow, 'normal');
+    flash.open(created.pdfWindow, 'visual-start');
     for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
 
     expect(flashHints(created.bodyChildren)[0]?.textContent).toBe('AA');
@@ -268,7 +287,7 @@ describe('Reader Flash lifecycle', () => {
     expect(flashPrompt(created.bodyChildren)?.textContent).toContain('target (30)');
   });
 
-  it('lets Enter choose the nearest currently labeled target', () => {
+  it('lets Enter choose the nearest currently labeled endpoint', () => {
     const created = createFlashWindow(
       [
         { value: 'target far', left: 500, top: 300 },
@@ -277,20 +296,31 @@ describe('Reader Flash lifecycle', () => {
       1,
     );
     const { flash, activations } = createFlash();
-    flash.open(created.pdfWindow, 'visual');
+    flash.open(created.pdfWindow, 'visual-end');
     for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
 
     flash.handleKey(flashKey('Enter'), created.pdfWindow);
 
     expect(activations).toHaveLength(1);
-    expect(activations[0]?.mode).toBe('visual');
-    expect(activations[0]?.pointer.textNode).toBe(created.spans[1]?.node);
+    expect(activations[0]?.intent).toBe('visual-end');
+    expect(activations[0]?.target.start.textNode).toBe(created.spans[1]?.node);
+    expect(activations[0]?.target.end.offset).toBe(6);
+  });
+
+  it('uses purpose-specific prompts for Visual start and endpoint targeting', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT START: …');
+    flash.cancel();
+    flash.open(created.pdfWindow, 'visual-end');
+    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT END: …');
   });
 
   it('cancels instead of reindexing when the viewport changes', () => {
     const created = createFlashWindow([{ value: 'visible text', left: 20, top: 20 }]);
     const { flash } = createFlash();
-    flash.open(created.pdfWindow, 'normal');
+    flash.open(created.pdfWindow, 'visual-start');
     expect(flash.isOpen).toBe(true);
 
     flash.onViewportChange(created.pdfWindow);
@@ -303,7 +333,7 @@ describe('Reader Flash lifecycle', () => {
     const primary = createFlashWindow([{ value: 'primary', left: 20, top: 20 }]);
     const secondary = createFlashWindow([{ value: 'secondary', left: 20, top: 20 }]);
     const { flash } = createFlash();
-    flash.open(primary.pdfWindow, 'visual');
+    flash.open(primary.pdfWindow, 'visual-end');
     const event = flashKey('j');
 
     expect(flash.handleKey(event, secondary.pdfWindow)).toBe(false);
