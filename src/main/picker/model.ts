@@ -1,4 +1,11 @@
-export type PickerScope = 'all' | 'collection' | 'tabs' | 'notes' | 'tags' | 'commands';
+export type PickerScope =
+  | 'all'
+  | 'collection'
+  | 'tabs'
+  | 'notes'
+  | 'tags'
+  | 'tag-edit'
+  | 'commands';
 
 export interface PickerItem {
   id: string | number;
@@ -13,4 +20,5 @@ export interface PickerItem {
   meta?: string;
   section?: 'current' | 'all';
   tagType?: 'manual' | 'automatic';
+  tagState?: 'all' | 'mixed' | 'none';
 }
