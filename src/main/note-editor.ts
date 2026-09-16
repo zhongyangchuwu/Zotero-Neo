@@ -72,7 +72,12 @@ export class NoteEditor {
       `${entry?.id ?? ''} ${entry?.type ?? ''} ${entry?.title ?? ''} ${entry?.label ?? ''}`.toLowerCase();
     return /\bnote/.test(value) && !/\b(reader|pdf)\b/.test(value);
   }
-  sync(main: MainWindow, session: MainWindowSession, enabled: boolean): void {
+  sync(
+    main: MainWindow,
+    session: MainWindowSession,
+    enabled: boolean,
+    execute: Execute = () => {},
+  ): void {
     if (!enabled) {
       this.clear(session);
       return;
@@ -82,7 +87,7 @@ export class NoteEditor {
     this.clear(session);
     if (!candidate) return;
     const handler: EventListener = (event) =>
-      this.onKeyDown(event as KeyboardEvent, main, session, () => {});
+      this.onKeyDown(event as KeyboardEvent, main, session, execute);
     candidate.addEventListener('keydown', handler, true);
     candidate.document.addEventListener('keydown', handler, true);
     session.note.editorWindow = candidate;
