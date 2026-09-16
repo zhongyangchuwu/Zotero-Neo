@@ -365,6 +365,47 @@ function destinationCueElement(
   return created.bodyChildren.find((node) => node.dataset.zoteroNeoDestinationCue === '1') ?? null;
 }
 
+describe('Select range freshness', () => {
+  it('drops cached native popup geometry before a local motion changes the selection', () => {
+    const created = createHistorySession();
+    const node = {
+      nodeType: 3,
+      data: 'abcdef',
+      length: 6,
+      isConnected: true,
+    } as unknown as Text;
+    const modify = vi.fn();
+    Reflect.set(created.pdfWindow, 'getSelection', () => ({
+      anchorNode: node,
+      anchorOffset: 1,
+      focusNode: node,
+      focusOffset: 3,
+      isCollapsed: false,
+      modify,
+    }));
+    created.session.state.mode = 'visual';
+    created.session.state.visualAnchor = { textNode: node, offset: 1 };
+    created.session.state.selectionParams = {
+      annotation: { text: 'old selection' },
+      onAddAnnotation: {},
+    };
+    Reflect.set(created.session, 'updateVisualCursor', vi.fn());
+    const selectable = created.session as unknown as {
+      modifySelection(
+        pdfWindow: PdfWindow,
+        direction: 'forward' | 'backward',
+        granularity: 'character' | 'word' | 'sentence' | 'paragraph',
+      ): void;
+    };
+
+    selectable.modifySelection(created.pdfWindow, 'forward', 'character');
+
+    expect(modify).toHaveBeenCalledWith('extend', 'forward', 'character');
+    expect(created.session.state.selectionParams).toBeNull();
+    created.session.dispose();
+  });
+});
+
 describe('native reader history', () => {
   it('delegates Ctrl-o and Ctrl-i to Zotero and consumes both events', () => {
     const navigateBack = vi.fn();

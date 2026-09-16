@@ -1,7 +1,6 @@
 import { CleanupScope } from '../core/cleanup';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
-import type { ActionId } from '../input/actions';
 import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import type { PickerProvider, PickerProviderCommands } from './picker/types';
@@ -24,8 +23,6 @@ export class MainWindowSession {
   inputRevision = 0;
   readonly keyGuide = new KeyGuide();
   keyGuideTimer: BrowserTimer | undefined;
-  navigationRepeatAction: Extract<ActionId, 'mainNavDown' | 'mainNavUp'> | null = null;
-  navigationRepeatAt = 0;
   trashedItemIDs: number[] = [];
   picker: {
     open: boolean;

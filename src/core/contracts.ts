@@ -17,6 +17,33 @@ export interface CommandPaletteContext {
   readonly execute: (action: ActionId, count: number) => void;
 }
 
+/** Stable, DOM-free snapshot passed to Selection Actions and other Zotero plugins. */
+export interface ReaderSelectionContext {
+  readonly text: string;
+  readonly itemID: number | null;
+  readonly pageLabel: string | null;
+  readonly position: string | null;
+}
+
+export interface ReaderSelectionActionOutcome {
+  readonly title?: string;
+  readonly body: string;
+}
+
+export interface ReaderSelectionActionDefinition {
+  readonly id: string;
+  readonly label: string;
+  readonly isAvailable?: (context: ReaderSelectionContext) => boolean;
+  readonly run: (
+    context: ReaderSelectionContext,
+  ) => void | ReaderSelectionActionOutcome | Promise<void | ReaderSelectionActionOutcome>;
+}
+
+export interface ReaderSelectionApi {
+  getSelection(): ReaderSelectionContext | null;
+  registerSelectionAction(action: ReaderSelectionActionDefinition): () => void;
+}
+
 export interface MainActionDelegate {
   executeFromReader(
     action: ReaderDelegableMainAction,
@@ -26,7 +53,7 @@ export interface MainActionDelegate {
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void;
 }
 
-export interface ReaderControllerApi {
+export interface ReaderControllerApi extends ReaderSelectionApi {
   start(pluginId: string): void;
   shutdown(): void;
   rescan(window: MainWindow): void;
@@ -53,5 +80,5 @@ export interface ReaderControllerDependencies {
 export interface MainWindowControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly reader: ReaderControllerApi;
+  readonly reader: Pick<ReaderControllerApi, 'rescan' | 'forwardKey'>;
 }

@@ -61,9 +61,8 @@ export interface BindingEditorDerived {
 const MODE_ORDER: Readonly<Record<Mode, number>> = {
   normal: 0,
   visual: 1,
-  cursor: 2,
-  insert: 3,
-  main: 4,
+  insert: 2,
+  main: 3,
 };
 
 function isMode(value: string): value is Mode {

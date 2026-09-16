@@ -38,7 +38,6 @@ type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
   _zvPickerHandled?: boolean;
 };
-const NAVIGATION_REPEAT_INTERVAL_MS = 80;
 function assertNever(value: never): never {
   throw new Error(`Unhandled Main action: ${String(value)}`);
 }
@@ -276,9 +275,7 @@ export class MainWindowController implements MainWindowControllerApi {
       event.preventDefault();
       event.stopPropagation();
       this.clearKeyGuide(window, session);
-      if (this.acceptNavigationRepeat(decision.action, event, session)) {
-        this.execute(decision.action, window, session, decision.count);
-      }
+      this.execute(decision.action, window, session, decision.count, event.repeat);
       return;
     }
     event.preventDefault();
@@ -304,25 +301,6 @@ export class MainWindowController implements MainWindowControllerApi {
         this.execute(resolved.action, window, session, resolved.count);
       }, timeoutMs);
     }
-  }
-
-  private acceptNavigationRepeat(
-    action: ActionId,
-    event: KeyboardEvent,
-    session: MainWindowSession,
-  ): boolean {
-    if (action !== 'mainNavDown' && action !== 'mainNavUp') return true;
-    const now = Date.now();
-    if (
-      event.repeat &&
-      session.navigationRepeatAction === action &&
-      now - session.navigationRepeatAt < NAVIGATION_REPEAT_INTERVAL_MS
-    ) {
-      return false;
-    }
-    session.navigationRepeatAction = action;
-    session.navigationRepeatAt = now;
-    return true;
   }
 
   private clearKeyGuide(window: MainWindow, session: MainWindowSession): void {
@@ -375,12 +353,13 @@ export class MainWindowController implements MainWindowControllerApi {
     window: MainWindow,
     session: MainWindowSession,
     count: number,
+    shouldDebounce = false,
   ): void {
     if (!isMainExecutableAction(action)) {
       this.#dependencies.logger.debug(`ignored Main action: ${String(action)}`);
       return;
     }
-    this.executeMain(action, window, session, count);
+    this.executeMain(action, window, session, count, shouldDebounce);
   }
 
   private executeMain(
@@ -388,6 +367,7 @@ export class MainWindowController implements MainWindowControllerApi {
     window: MainWindow,
     session: MainWindowSession,
     count: number,
+    shouldDebounce = false,
   ): void {
     switch (action) {
       case 'openCommandPalette':
@@ -462,10 +442,10 @@ export class MainWindowController implements MainWindowControllerApi {
         void this.#picker.open(window, session, 'tags');
         break;
       case 'mainNavDown':
-        this.#navigation.navigate(window, session, 1, count);
+        this.#navigation.navigate(window, session, 1, count, shouldDebounce);
         break;
       case 'mainNavUp':
-        this.#navigation.navigate(window, session, -1, count);
+        this.#navigation.navigate(window, session, -1, count, shouldDebounce);
         break;
       case 'mainNavFirst':
         this.#navigation.navigate(window, session, 'first', count);

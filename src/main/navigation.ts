@@ -7,7 +7,11 @@ import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 import { closeSelectedMainTab, cycleMainTab, mainHost } from './host';
 
-type Selection = { focused?: number; count?: number; select?(index: number): void };
+type Selection = {
+  focused?: number;
+  count?: number;
+  select?(index: number, shouldDebounce?: boolean): void;
+};
 type TreeFocusTarget = { focus?(): void };
 export type TreeView = {
   tree?: TreeFocusTarget;
@@ -270,6 +274,7 @@ export class MainNavigation {
     session: MainWindowSession,
     direction: 1 | -1 | 'first' | 'last',
     count: number,
+    shouldDebounce = false,
   ): void {
     const view =
       this.panel(window, session) === 'collections'
@@ -286,8 +291,7 @@ export class MainNavigation {
             ? Math.min(count - 1, last)
             : last
           : Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
-    view.selection.select?.(next);
-    view.ensureRowIsVisible?.(next);
+    view.selection.select?.(next, shouldDebounce);
   }
   activate(window: MainWindow, session: MainWindowSession): void {
     if (this.panel(window, session) === 'collections') {

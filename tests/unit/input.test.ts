@@ -153,10 +153,15 @@ describe('binding parsing and overrides', () => {
     expect(bindings['main:return']).toBe('mainActivate');
   });
 
-  it('provides reader-only native history and follow-link defaults that remain remappable', () => {
+  it('provides native history, Follow Link, and Select-first Flash defaults that remain remappable', () => {
     expect(DEFAULT_BINDINGS['normal:ctrl+o']).toBe('historyBack');
     expect(DEFAULT_BINDINGS['normal:ctrl+i']).toBe('historyForward');
     expect(DEFAULT_BINDINGS['normal:f']).toBe('followLink');
+    expect(DEFAULT_BINDINGS['normal:v']).toBe('enterVisual');
+    expect('normal:s' in DEFAULT_BINDINGS).toBe(false);
+    expect(DEFAULT_BINDINGS['visual:s']).toBe('flashText');
+    expect(DEFAULT_BINDINGS['visual:enter']).toBe('openSelectionActions');
+    expect(Object.keys(DEFAULT_BINDINGS).some((key) => key.startsWith('cursor:'))).toBe(false);
     expect('insert:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
     expect('main:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
     expect('insert:f' in DEFAULT_BINDINGS).toBe(false);
