@@ -84,6 +84,9 @@ export class MainWindowController implements MainWindowControllerApi {
         window,
         session,
         this.#dependencies.preferences.get('noteEditor.enabled', true),
+        (action, count) => {
+          if (action === 'mainTagEditor') this.execute(action, window, session, count);
+        },
       );
     };
     scan();
