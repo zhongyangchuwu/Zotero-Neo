@@ -85,7 +85,7 @@ export const ACTION_LABELS = {
   },
   scrollBottom: {
     en: 'Scroll — current page to bottom of view',
-    'zh-CN': '滚动 — 当前页面到视图底部',
+    'zh-CN': '滚动 — 当前页面到底部',
   },
   openSearch: {
     en: 'Open find bar',
