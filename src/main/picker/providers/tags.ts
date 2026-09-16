@@ -7,6 +7,7 @@ import { fuzzyMatchScore } from '../fuzzy';
 import type { MainWindowSession } from '../../session';
 import type { PickerItem } from '../model';
 import type { PickerProvider, PickerProviderCommands } from '../types';
+import { createTagEditorProvider } from './tag-editor';
 
 type TagJson = _ZoteroTypes.Tags.TagJson;
 
@@ -16,6 +17,9 @@ export function createTagsProvider(
   navigation: MainNavigation,
   logger: Logger,
 ): PickerProvider {
+  if (session.picker.tagPurpose === 'edit')
+    return createTagEditorProvider(window, session, navigation, logger);
+
   const trace = (message: string): void => {
     logger.debug(message);
     logger.diagnostic(message);
