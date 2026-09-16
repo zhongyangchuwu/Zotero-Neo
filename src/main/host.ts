@@ -57,6 +57,12 @@ type MainPane = {
   } | null;
 };
 
+type ContextNoteEditor = {
+  readonly item?: Zotero.Item;
+  readonly _iframe?: { readonly contentWindow?: Window };
+  contains?(node: Node | null): boolean;
+};
+
 /** Minimal registry entry exposed by Zotero's main-window tab lookup; not a Reader runtime. */
 type MainReaderRegistryEntry = { readonly itemID?: number; focus?(): void | Promise<void> };
 
@@ -65,7 +71,7 @@ export type MainHostWindow = MainWindow & {
   readonly Zotero_Tabs?: MainTabs;
   readonly ZoteroContextPane?: {
     focus?(): boolean | void;
-    activeEditor?: { readonly _iframe?: { readonly contentWindow?: Window } };
+    activeEditor?: ContextNoteEditor;
   };
 };
 
@@ -163,6 +169,14 @@ export function currentMainItem(window: MainWindow): Zotero.Item | undefined {
     // Fall through to the selected main-window item.
   }
   return mainSelectedItems(window)[0];
+}
+
+/** Mirrors Zotero's own focused-context-note test instead of treating any open note as active. */
+export function activeContextNoteItem(window: MainWindow): Zotero.Item | undefined {
+  const editor = mainHost(window).ZoteroContextPane?.activeEditor;
+  const active = window.document?.activeElement ?? null;
+  if (!editor?.item || !active || !editor.contains?.(active)) return undefined;
+  return editor.item;
 }
 
 export function currentTagSelection(window: MainWindow): string[] {
