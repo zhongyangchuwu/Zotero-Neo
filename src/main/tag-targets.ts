@@ -34,8 +34,7 @@ export function normalizeItemTargets(items: readonly Zotero.Item[]): Zotero.Item
 
 export function resolveItemTagTargets(window: MainWindow): ItemTargetSet {
   const contextNote = activeContextNoteItem(window);
-  if (contextNote)
-    return { source: 'note', items: normalizeItemTargets([contextNote]) };
+  if (contextNote) return { source: 'note', items: normalizeItemTargets([contextNote]) };
 
   const tabID = selectedMainTabID(window);
   const reader = tabID ? mainReaderForTab(tabID) : null;
