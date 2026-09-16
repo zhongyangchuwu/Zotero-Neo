@@ -241,7 +241,9 @@ export class TagWorkspace {
         } catch (error) {
           this.#logger.debug(`tag workspace update failed: ${String(error)}`);
           if (this.#states.get(window) === state) {
-            state.tags = await this.loadTags(state.targets, state.libraryID).catch(() => state.tags);
+            state.tags = await this.loadTags(state.targets, state.libraryID).catch(
+              () => state.tags,
+            );
             this.render(state);
             this.#navigation.status(session, '✗ Unable to update item tags');
           }
