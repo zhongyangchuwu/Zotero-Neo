@@ -108,6 +108,37 @@ describe('item tag target normalization', () => {
       items: [{ id: parent.id }, { id: second.id }],
     });
   });
+
+  it('prefers a focused Reader context note but ignores an open unfocused editor', () => {
+    const readerParent = tagItem(1);
+    const attachment = tagItem(2, { kind: 'attachment', parentItemID: readerParent.id });
+    const noteParent = tagItem(3);
+    const childNote = tagItem(4, { kind: 'note', parentItemID: noteParent.id });
+    installItems([readerParent, attachment, noteParent, childNote], attachment.id);
+
+    const activeElement = {} as Element;
+    const otherElement = {} as Element;
+    const editor = {
+      item: childNote,
+      contains: (node: Node | null) => node === (activeElement as unknown as Node),
+    };
+    const window = {
+      document: { activeElement },
+      Zotero_Tabs: { selectedID: 'reader-tab', getTabInfo: () => ({ type: 'reader' }) },
+      ZoteroContextPane: { activeEditor: editor },
+    } as unknown as MainWindow;
+
+    expect(resolveItemTagTargets(window)).toMatchObject({
+      source: 'note',
+      items: [{ id: noteParent.id }],
+    });
+
+    Reflect.set(window.document, 'activeElement', otherElement);
+    expect(resolveItemTagTargets(window)).toMatchObject({
+      source: 'reader',
+      items: [{ id: readerParent.id }],
+    });
+  });
 });
 
 describe('semantic multi-target tag action', () => {
