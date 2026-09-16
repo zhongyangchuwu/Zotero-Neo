@@ -332,8 +332,12 @@ export const ACTION_LABELS = {
     'zh-CN': '主窗口：关闭活动标签页',
   },
   mainTagPicker: {
-    en: 'Main window: tag picker',
-    'zh-CN': '主窗口：标签选择器',
+    en: 'Main window: tag filter picker',
+    'zh-CN': '主窗口：标签筛选器',
+  },
+  mainTagEditor: {
+    en: 'Edit tags for the current item target(s)',
+    'zh-CN': '编辑当前目标条目的标签',
   },
   mainNavDown: {
     en: 'Main window: navigate down',
