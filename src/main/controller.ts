@@ -439,6 +439,11 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.cycleTab(window, 1);
         break;
       case 'mainTagPicker':
+        session.picker.tagPurpose = 'filter';
+        void this.#picker.open(window, session, 'tags');
+        break;
+      case 'mainTagEditor':
+        session.picker.tagPurpose = 'edit';
         void this.#picker.open(window, session, 'tags');
         break;
       case 'mainNavDown':
