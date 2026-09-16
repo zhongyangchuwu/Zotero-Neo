@@ -47,6 +47,7 @@ import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderFlash, type FlashIntent, type FlashSelectionTarget } from './flash';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
+import { selectionClipboardText } from './selection-text';
 import { ReaderSmoothScroller, smoothScrollSpec } from './smooth-scroll';
 import { verticalTextPosition } from './text-motion';
 import {
@@ -529,7 +530,6 @@ export class ReaderSession {
     );
     if (this.state.indicator)
       this.state.indicatorThemeCleanup = this.themeRoot(this.state.indicator);
-    this.injectSelectionStyle(this.state.activePdfWindow);
     this.syncPdfViews();
     this.#viewSyncTimer = this.state.activePdfWindow.setInterval(() => this.syncPdfViews(), 250);
     this.#scope.add(() => {
@@ -646,7 +646,6 @@ export class ReaderSession {
     }
     for (const pdfWindow of wanted) {
       if (this.#viewHandlers.has(pdfWindow)) continue;
-      this.injectSelectionStyle(pdfWindow);
       const keyDown = ((event: Event) => {
         const keyEvent = asKeyboardEvent(event);
         if (keyEvent) this.handleKeyDown(keyEvent, pdfWindow);
@@ -1426,16 +1425,6 @@ export class ReaderSession {
     return indicator;
   }
 
-  private injectSelectionStyle(pdfWindow: PdfWindow): void {
-    const document = pdfWindow.document;
-    if (document.getElementById('zv-sel-css')) return;
-    const style = document.createElement('style');
-    style.id = 'zv-sel-css';
-    style.textContent =
-      '.textLayer,.textLayer span{user-select:text!important;-moz-user-select:text!important}.textLayer span{cursor:text!important}.textLayer ::selection{background:rgba(0,82,220,.82)!important;color:#fff!important;text-shadow:0 0 1px rgba(0,0,0,.45)!important}';
-    (document.head ?? document.documentElement).appendChild(style);
-  }
-
   private setMode(mode: ReaderMode): void {
     const previousMode = this.state.mode;
     if (this.#flash.isOpen) this.#flash.cancel();
@@ -1523,7 +1512,7 @@ export class ReaderSession {
     if (this.state.mode === 'visual') {
       const selected = annotationText(this.activePdfWindow()?.getSelection()?.toString() ?? '');
       const pending = this.state.countBuffer || this.state.keyBuffer;
-      indicator.textContent = `SELECT · ${selected.length} chars · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
+      indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
       indicator.style.color = THEME_VARS.onAccent;
       indicator.style.background = THEME_VARS.accent;
       return;
@@ -1878,10 +1867,6 @@ export class ReaderSession {
     range.collapse(true);
     const rect = range.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
-    const cursor = pdfWindow.document.createElement('span');
-    cursor.dataset.zvCursor = '1';
-    cursor.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;height:${Math.max(12, rect.height)}px;width:3px;background:#0057d9;z-index:99997;pointer-events:none;box-shadow:0 0 0 1px #fff,0 0 0 2px #0057d9;border-radius:1px;`;
-    pdfWindow.document.body?.appendChild(cursor);
     this.#dependencies.selection?.noteOwner(this);
     this.updateIndicator();
     if (autoPan) {
@@ -2159,22 +2144,23 @@ export class ReaderSession {
         run: () => this.executeAction(action, 1, pdfWindow),
       });
     };
-    addBuiltIn('neo.highlight-yellow', 'highlightYellow');
     addBuiltIn('neo.underline', 'underlineSelection');
     addBuiltIn('neo.add-note', 'addNote');
-    addBuiltIn('neo.highlight-red', 'highlightRed');
-    addBuiltIn('neo.highlight-green', 'highlightGreen');
-    addBuiltIn('neo.highlight-blue', 'highlightBlue');
-    addBuiltIn('neo.highlight-purple', 'highlightPurple');
-    addBuiltIn('neo.copy', 'copySelection');
-    addBuiltIn('neo.search', 'searchSelection');
     actions.push(...(this.#dependencies.selection?.registered(context) ?? []));
     return actions;
   }
 
   private copySelection(pdfWindow: PdfWindow): void {
     const selection = pdfWindow.getSelection();
-    if (selection && !selection.isCollapsed) this.copyText(annotationText(selection.toString()));
+    if (selection && !selection.isCollapsed) {
+      let copiedNatively = false;
+      try {
+        copiedNatively = pdfWindow.document.execCommand?.('copy') === true;
+      } catch {
+        // Fall back to Neo clipboard handling if the host blocks programmatic native copy.
+      }
+      if (!copiedNatively) this.copyText(selectionClipboardText(selection.toString()));
+    }
     this.setMode('normal');
     selection?.removeAllRanges();
     pdfWindow.focus();

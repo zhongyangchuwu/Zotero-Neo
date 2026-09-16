@@ -155,8 +155,9 @@ Label first letters cannot be valid next characters of the current matches, so c
 choosing a label remain unambiguous. `Enter` chooses the nearest labelled target and `Escape` cancels.
 
 Once Select is active, `h/l/w/b/j/k/0/$/(/)/{/}` refine the range and `o` swaps the active end.
-Press `s` to use Flash for the other endpoint. The selection and active endpoint use high-contrast
-visuals, and the persistent `SELECT` indicator shows the selected character count and action hints.
+Press `s` to use Flash for the other endpoint. Neo deliberately leaves the PDF selection appearance
+to Zotero, so keyboard Select and ordinary mouse selection look the same. The persistent `SELECT`
+indicator remains the mode cue and shows the selected character count plus direct-action hints.
 
 #### Follow PDF links
 
@@ -503,11 +504,17 @@ highlighted in the PDF and scrolled to in the sidebar.
 | `o` | Swap selection anchor/focus |
 | `v` / `Escape` | Cancel Select and return to Normal |
 
-Selection Actions is a keyboard palette over the current range. It includes highlights, underline,
-add note, copy, and search. If **Translate for Zotero** is installed, **Translate** appears automatically
-and uses that plugin's public translation API; its result stays in the palette and can be copied with
-`y`. Other plugins can add actions through `Zotero.Neo.reader.registerSelectionAction(...)`, while
-custom scripts such as Actions & Tags can read `Zotero.Neo.reader.getSelection()`.
+Selection Actions is a keyboard palette for lower-frequency or extensible operations rather than a
+duplicate of every Select shortcut. Built-ins currently keep **Underline** and **Add note** in the palette;
+coloured highlights stay on `zy/zr/zg/zb/zp`, copy stays on `y`, and search stays on `#`. If
+**Translate for Zotero** is installed, **Translate** appears automatically and uses that plugin's public
+translation API; its result stays in the palette and can be copied with `y`. Other plugins can add
+actions through `Zotero.Neo.reader.registerSelectionAction(...)`, while custom scripts such as
+Actions & Tags can read `Zotero.Neo.reader.getSelection()`.
+
+Select `y` first asks Zotero's own PDF copy handler to write the clipboard, preserving Zotero's text
+extraction behavior across wrapped PDF lines. If that native path is unavailable, Neo falls back to plain
+text and converts PDF layout line breaks/whitespace to ordinary spaces before copying.
 
 The old PDF Cursor mode has been removed: a standalone caret had no useful PDF action surface, and
 all text-oriented work now goes through one Select workflow.

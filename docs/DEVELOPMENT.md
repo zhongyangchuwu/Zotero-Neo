@@ -185,9 +185,17 @@ batch as a targeted restore fallback and never permanently erases these items.
 
 `ReaderFlash` owns one active visible-text invocation: the PDF view, literal query, normalized text
 index, stable label reuse, label buffer, prompt/badge DOM, and cleanup. `ReaderSessionState` must not
-mirror any Flash state. The session only resolves the `flashText` action and applies the selected
-source pointer according to the current mode. Normal places a collapsed caret, Cursor moves its
-caret and keeps Cursor mode, and Visual moves only the focus while preserving the existing anchor.
+mirror any Flash state. The session only resolves Flash as Select-start or Select-end targeting. Normal `v` either adopts an
+existing native selection or uses Flash to create the initial range; Select `s` moves the far endpoint
+while preserving the anchor. There is no separate Cursor user mode.
+
+Select intentionally does not inject a custom `::selection` rule or endpoint caret into PDF.js.
+Zotero owns selection rendering for both mouse and keyboard-created ranges; Neo owns only range
+manipulation, mode indication, Flash targeting, and actions. Select `y` prefers `document.execCommand('copy')`
+inside the trusted key event so Zotero's own PDF copy listener can serialize its semantic selection ranges.
+The fallback clipboard path is used only when that host command is unavailable and collapses layout
+whitespace to spaces. Keep direct high-frequency actions on bindings instead of duplicating every command
+in Selection Actions; the palette is primarily for low-frequency and externally registered operations.
 
 The v1 index includes only currently visible `.textLayer span` text from the active PDF view. It
 normalizes NFKC and whitespace, supports literal cross-node matching with ASCII smartcase, and ranks
@@ -212,7 +220,7 @@ spans, so browser line granularity can jump across unrelated DOM positions. Neo
 groups contiguous `.textLayer span` nodes into visual lines using client-rect
 overlap while preserving PDF.js DOM reading order. A vertical step moves exactly
 one such line and chooses the caret offset nearest the remembered horizontal X
-coordinate. Non-vertical Cursor/Visual motions clear that preferred X. This keeps
+coordinate. Non-vertical Select motions clear that preferred X. This keeps
 ragged lines stable and lets column/page transitions follow the PDF text layer's
 reading order without introducing Neo-owned text content or selection state.
 
