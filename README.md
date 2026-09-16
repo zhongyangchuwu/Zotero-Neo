@@ -2,8 +2,8 @@
 
 # Zotero Neo
 
-Zotero Neo is an independently maintained, Neovim/LazyVim-inspired keyboard
-interaction layer for Zotero's reader and main window.
+Zotero Neo is a standalone, Neovim/LazyVim-inspired keyboard interaction layer
+for Zotero's reader and main window.
 
 > **Status:** Pre-release development. No public GitHub Release exists yet;
 > build the XPI from source for development testing.
@@ -51,15 +51,16 @@ From File…** and restart when prompted.
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
 - [Development guide](docs/DEVELOPMENT.md) — architecture, build, CI, release,
   and debugging constraints.
-- [Known issues](docs/KNOWN_ISSUES.md) — current shelved runtime issues.
-- [Roadmap](docs/ROADMAP.md) — public project direction.
+- [Roadmap](docs/ROADMAP.md) — work planned before and after the first release.
+- [Issue tracker](https://github.com/zhongyangchuwu/Zotero-Neo/issues) — current bugs and tracked host/API limitations.
 - [Changelog](CHANGELOG.md)
 
-## Attribution and license
+## License and provenance
 
-Zotero Neo is derived from [Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus)
-by ZorroStardust. Zotero Vim Plus includes earlier work from
-[zotero-vim](https://codeberg.org/finktank/zotero-vim) by Alex Fink. Existing
-copyright notices and AGPL-3.0 obligations are preserved.
+Zotero Neo is independently developed and is not maintained as an upstream-compatible
+fork. Its history began from code in
+[Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus), which itself
+incorporated work from [zotero-vim](https://codeberg.org/finktank/zotero-vim).
+Historical copyright notices are preserved under the project license.
 
 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
