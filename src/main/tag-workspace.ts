@@ -17,7 +17,13 @@ import {
 type TagRecord = { readonly tag: string; readonly type?: number };
 type WorkspaceSuggestion =
   | TagPathSuggestion
-  | { readonly kind: 'create'; readonly label: string; readonly insertText: string; readonly score: number; readonly count: 1 };
+  | {
+      readonly kind: 'create';
+      readonly label: string;
+      readonly insertText: string;
+      readonly score: number;
+      readonly count: 1;
+    };
 
 interface TagWorkspaceState {
   readonly overlay: HTMLElement;
@@ -218,7 +224,8 @@ export class TagWorkspace {
       }
       this.enqueue(state, async () => {
         const name = suggestion.insertText;
-        const present = suggestion.kind === 'create' || itemTagState(state.targets.items, name) !== 'all';
+        const present =
+          suggestion.kind === 'create' || itemTagState(state.targets.items, name) !== 'all';
         try {
           await setTagOnTargets(state.targets.items, name, present);
           if (this.#states.get(window) !== state) return;
@@ -271,7 +278,8 @@ export class TagWorkspace {
       state.separator,
     ).slice(0, 80);
     const exact = state.tags.some((tag) => sameTag(tag.tag, query));
-    const canCreate = !!query.trim() && !exact && (!state.separator || !query.endsWith(state.separator));
+    const canCreate =
+      !!query.trim() && !exact && (!state.separator || !query.endsWith(state.separator));
     const createSuggestion: WorkspaceSuggestion[] = canCreate
       ? [
           {
@@ -286,21 +294,27 @@ export class TagWorkspace {
     const namespaces = pathSuggestions.filter((suggestion) => suggestion.kind === 'namespace');
     const tags = pathSuggestions.filter((suggestion) => suggestion.kind === 'tag');
     state.suggestions = [...namespaces, ...createSuggestion, ...tags];
-    state.selected = Math.max(0, Math.min(state.selected, Math.max(0, state.suggestions.length - 1)));
+    state.selected = Math.max(
+      0,
+      Math.min(state.selected, Math.max(0, state.suggestions.length - 1)),
+    );
     state.list.replaceChildren();
 
     const doc = state.list.ownerDocument;
     state.suggestions.forEach((suggestion, index) => {
       const row = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
       row.dataset.neoTagIndex = String(index);
-      row.style.cssText = `padding:7px 14px;display:flex;gap:10px;align-items:center;cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${index === state.selected ? `background:${THEME_VARS.focus};` : ''}`;
+      row.style.cssText = `padding:7px 14px;display:flex;gap:10px;align-items:center;cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${index === state.selected ? `background:${THEME_VARS.selected};` : ''}`;
       if (suggestion.kind === 'namespace') {
         row.textContent = `› ${suggestion.label}  ·  ${suggestion.count} tag${suggestion.count === 1 ? '' : 's'}`;
       } else if (suggestion.kind === 'create') {
         row.textContent = suggestion.label;
       } else {
         const tagState = itemTagState(state.targets.items, suggestion.insertText);
-        const type = state.tags.find((tag) => tag.tag === suggestion.insertText)?.type === 1 ? 'automatic' : 'manual';
+        const type =
+          state.tags.find((tag) => tag.tag === suggestion.insertText)?.type === 1
+            ? 'automatic'
+            : 'manual';
         row.textContent = `${marker(tagState)} ${suggestion.label}  ·  ${type}`;
       }
       state.list.append(row);
