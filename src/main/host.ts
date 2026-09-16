@@ -12,6 +12,13 @@ type MainTab = {
   readonly dataset?: DOMStringMap;
 };
 
+type MainTabInfo = {
+  readonly id?: string;
+  readonly type?: string;
+  readonly subType?: string;
+  readonly data?: { readonly itemID?: number };
+};
+
 type TagScopeRow = {
   readonly ref?: { readonly libraryID?: number };
   readonly tags?: Iterable<string>;
@@ -29,6 +36,7 @@ type MainTabs = {
   select?(id: string): void;
   selectTab?(id: string): void;
   showTab?(id: string): void;
+  getTabInfo?(id?: string): MainTabInfo;
 };
 
 type MainPane = {
@@ -73,6 +81,11 @@ export function mainTabs(window: MainWindow): MainTabs | undefined {
 export function selectedMainTabID(window: MainWindow): string | undefined {
   const tabs = mainTabs(window);
   return tabs?.selectedID ?? tabs?._selectedID;
+}
+
+export function selectedMainTabInfo(window: MainWindow): MainTabInfo | undefined {
+  const tabs = mainTabs(window);
+  return tabs?.getTabInfo?.(selectedMainTabID(window));
 }
 
 export function mainTabList(window: MainWindow): readonly MainTab[] {
