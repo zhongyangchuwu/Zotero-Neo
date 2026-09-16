@@ -15,6 +15,8 @@ if [[ ! -d node_modules ]]; then
   exit 1
 fi
 
-npx prettier --write src/main/picker/providers/tag-editor.ts
-git diff -- src/main/picker/providers/tag-editor.ts
-exit 1
+npm run verify
+
+echo ""
+echo "Done: zotero-neo.xpi"
+echo "To install: Zotero → Tools → Plugins → gear → Install Plugin From File..."
