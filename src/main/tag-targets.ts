@@ -66,7 +66,7 @@ export async function setTagOnTargets(
   for (const item of items) {
     const hadTag = item.hasTag(name);
     if (hadTag === present) continue;
-    const previousType = hadTag ? item.getTagType(name) : 0;
+    const previousType = hadTag ? (item.getTagType(name) ?? 0) : 0;
     const changed = present ? item.addTag(name, 0) : item.removeTag(name);
     if (!changed) continue;
     try {
