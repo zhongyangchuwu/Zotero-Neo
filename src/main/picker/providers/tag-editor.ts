@@ -12,7 +12,7 @@ import { fuzzyMatchScore } from '../fuzzy';
 import type { PickerItem } from '../model';
 import type { PickerProvider, PickerProviderCommands } from '../types';
 
-type TagJson = _ZoteroTypes.Tags.TagJson;
+type TagRecord = { readonly tag: string; readonly type?: number };
 
 function targetLabel(targets: ItemTargetSet): string {
   const context =
@@ -41,8 +41,8 @@ export function createTagEditorProvider(
   };
   const load = async (): Promise<PickerItem[]> => {
     if (!targets.items.length) return [];
-    const source: readonly TagJson[] = await Zotero.Tags.getAll(libraryID());
-    const byName = new Map<string, TagJson>();
+    const source: readonly TagRecord[] = await Zotero.Tags.getAll(libraryID());
+    const byName = new Map<string, TagRecord>();
     for (const tag of source) {
       const existing = byName.get(tag.tag);
       if (!existing || (existing.type === 1 && tag.type !== 1)) byName.set(tag.tag, tag);
