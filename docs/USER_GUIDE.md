@@ -155,9 +155,11 @@ Label first letters cannot be valid next characters of the current matches, so c
 choosing a label remain unambiguous. `Enter` chooses the nearest labelled target and `Escape` cancels.
 
 Once Select is active, `h/l/w/b/j/k/0/$/(/)/{/}` refine the range and `o` swaps the active end.
-Press `s` to use Flash for the other endpoint. Neo deliberately leaves the PDF selection appearance
-to Zotero, so keyboard Select and ordinary mouse selection look the same. The persistent `SELECT`
-indicator remains the mode cue and shows the selected character count plus direct-action hints.
+Press `s` to use Flash for the other endpoint. Desktop Zotero keeps ordinary DOM selection
+transparent because its mouse-selection renderer is driven by private semantic ranges. While Select
+owns a keyboard-created DOM range, Neo enables the same blue selection colour used by Zotero/PDF.js
+for native text selection, without adding a second endpoint caret. The persistent `SELECT` indicator
+remains the mode cue and shows the selected character count plus direct-action hints.
 
 #### Follow PDF links
 
@@ -512,9 +514,10 @@ translation API; its result stays in the palette and can be copied with `y`. Oth
 actions through `Zotero.Neo.reader.registerSelectionAction(...)`, while custom scripts such as
 Actions & Tags can read `Zotero.Neo.reader.getSelection()`.
 
-Select `y` first asks Zotero's own PDF copy handler to write the clipboard, preserving Zotero's text
-extraction behavior across wrapped PDF lines. If that native path is unavailable, Neo falls back to plain
-text and converts PDF layout line breaks/whitespace to ordinary spaces before copying.
+Select `y` copies the Neo-owned DOM range directly. Desktop Zotero's native copy handler reads a
+separate private semantic-range model, so invoking it for a keyboard-only DOM range would fail. Neo
+therefore normalizes the selected text itself, converting PDF layout line breaks and other whitespace to
+ordinary spaces before writing the clipboard.
 
 The old PDF Cursor mode has been removed: a standalone caret had no useful PDF action surface, and
 all text-oriented work now goes through one Select workflow.

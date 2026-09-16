@@ -1855,6 +1855,18 @@ export class ReaderSession {
   private updateVisualCursor(pdfWindow: PdfWindow, autoPan: boolean): void {
     this.removeVisualCursor(pdfWindow);
     if (this.state.mode !== 'visual') return;
+    const document = pdfWindow.document;
+    let style = document.querySelector<HTMLStyleElement>('style[data-zv-select-selection]');
+    if (!style) {
+      style = document.createElement('style');
+      style.dataset.zvSelectSelection = '1';
+      // Zotero/PDF.js makes ordinary desktop DOM selection transparent. Mirror the
+      // Reader's own native-selection blue only while Neo Select owns the range.
+      style.textContent =
+        ':root[data-zv-select-active] .textLayer ::selection { background-color: rgb(66, 133, 244); }';
+      document.documentElement.appendChild(style);
+    }
+    document.documentElement.setAttribute('data-zv-select-active', '');
     const selection = pdfWindow.getSelection();
     const focus = selection?.focusNode ?? null;
     const node = isTextNode(focus) ? focus : this.state.visualAnchor?.textNode;
@@ -1878,6 +1890,7 @@ export class ReaderSession {
   }
 
   private removeVisualCursor(pdfWindow: PdfWindow): void {
+    pdfWindow.document.documentElement.removeAttribute('data-zv-select-active');
     const cursors = Array.from(
       pdfWindow.document.querySelectorAll('[data-zv-cursor]'),
     ) as HTMLElement[];
@@ -2152,15 +2165,8 @@ export class ReaderSession {
 
   private copySelection(pdfWindow: PdfWindow): void {
     const selection = pdfWindow.getSelection();
-    if (selection && !selection.isCollapsed) {
-      let copiedNatively = false;
-      try {
-        copiedNatively = pdfWindow.document.execCommand?.('copy') === true;
-      } catch {
-        // Fall back to Neo clipboard handling if the host blocks programmatic native copy.
-      }
-      if (!copiedNatively) this.copyText(selectionClipboardText(selection.toString()));
-    }
+    if (selection && !selection.isCollapsed)
+      this.copyText(selectionClipboardText(selection.toString()));
     this.setMode('normal');
     selection?.removeAllRanges();
     pdfWindow.focus();

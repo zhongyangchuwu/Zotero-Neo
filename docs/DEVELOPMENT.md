@@ -189,13 +189,20 @@ mirror any Flash state. The session only resolves Flash as Select-start or Selec
 existing native selection or uses Flash to create the initial range; Select `s` moves the far endpoint
 while preserving the anchor. There is no separate Cursor user mode.
 
-Select intentionally does not inject a custom `::selection` rule or endpoint caret into PDF.js.
-Zotero owns selection rendering for both mouse and keyboard-created ranges; Neo owns only range
-manipulation, mode indication, Flash targeting, and actions. Select `y` prefers `document.execCommand('copy')`
-inside the trusted key event so Zotero's own PDF copy listener can serialize its semantic selection ranges.
-The fallback clipboard path is used only when that host command is unavailable and collapses layout
-whitespace to spaces. Keep direct high-frequency actions on bindings instead of duplicating every command
-in Selection Actions; the palette is primarily for low-frequency and externally registered operations.
+Desktop Zotero has two distinct text-selection models. Its PDF stylesheet makes ordinary DOM
+`::selection` transparent, while mouse selection is rendered from the private PDFView
+`_selectionRanges` model. Neo currently owns a DOM range for keyboard Select and must not pretend that
+range has been synchronized into Zotero's semantic model. While Select is active, a narrowly scoped
+`::selection` rule mirrors Zotero/PDF.js's native-selection blue; it is inactive outside Select and does
+not add an endpoint caret.
+
+For the same reason, Select `y` must not call `document.execCommand('copy')`: Zotero's capture-phase
+copy handler reads `PDFView._selectionRanges`, and a Neo-only DOM range leaves that array empty. Neo
+copies its DOM Selection directly and collapses PDF layout whitespace to ordinary spaces. A future host
+bridge may synchronize semantic ranges, but it must be implemented and verified explicitly rather than
+assuming DOM Selection is authoritative. Keep direct high-frequency actions on bindings instead of
+duplicating every command in Selection Actions; the palette is primarily for low-frequency and externally
+registered operations.
 
 The v1 index includes only currently visible `.textLayer span` text from the active PDF view. It
 normalizes NFKC and whitespace, supports literal cross-node matching with ASCII smartcase, and ranks
