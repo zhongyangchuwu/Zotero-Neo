@@ -16,7 +16,11 @@ type TagJson = _ZoteroTypes.Tags.TagJson;
 
 function targetLabel(targets: ItemTargetSet): string {
   const context =
-    targets.source === 'reader' ? 'Reader' : targets.source === 'note' ? 'Note' : 'Main selection';
+    targets.source === 'reader'
+      ? 'Reader'
+      : targets.source === 'note'
+        ? 'Note'
+        : 'Main selection';
   return `${context} · ${targets.items.length} item${targets.items.length === 1 ? '' : 's'}`;
 }
 
@@ -72,9 +76,13 @@ export function createTagEditorProvider(
         const score = fuzzyMatchScore(item.search, query);
         return score === null ? [] : [{ item, index, score }];
       })
-      .sort((a, b) => (query.trim() ? b.score - a.score || a.index - b.index : a.index - b.index));
+      .sort((a, b) =>
+        query.trim() ? b.score - a.score || a.index - b.index : a.index - b.index,
+      );
     session.picker.filtered = ranked.slice(0, 100).map(({ item }) => item);
-    const focused = focusID ? session.picker.filtered.findIndex((item) => item.id === focusID) : -1;
+    const focused = focusID
+      ? session.picker.filtered.findIndex((item) => item.id === focusID)
+      : -1;
     session.picker.selected =
       focused >= 0
         ? focused
@@ -162,7 +170,8 @@ export function createTagEditorProvider(
     load,
     filter,
     rowText: (item) => {
-      const state = item.tagState === 'all' ? 'all' : item.tagState === 'mixed' ? 'mixed' : 'none';
+      const state =
+        item.tagState === 'all' ? 'all' : item.tagState === 'mixed' ? 'mixed' : 'none';
       return `${item.title} · ${state}${item.tagType ? ` · ${item.tagType}` : ''}`;
     },
     preview: (item) => ({
@@ -206,7 +215,8 @@ export function createTagEditorProvider(
           stop();
           session.picker.tagMode = 'list';
           commands.focusPane('list');
-          if (selectedItem) commands.enqueue('toggle item tag', () => toggle(commands, selectedItem));
+          if (selectedItem)
+            commands.enqueue('toggle item tag', () => toggle(commands, selectedItem));
           return true;
         }
         event.stopPropagation();
@@ -221,13 +231,16 @@ export function createTagEditorProvider(
       }
       if (key === 'Enter' || key === ' ') {
         stop();
-        if (selectedItem) commands.enqueue('toggle item tag', () => toggle(commands, selectedItem));
+        if (selectedItem)
+          commands.enqueue('toggle item tag', () => toggle(commands, selectedItem));
         return true;
       }
       if (lower === 'x' && !event.ctrlKey && !event.metaKey && !event.altKey) {
         stop();
         if (selectedItem?.tagState !== 'none')
-          commands.enqueue('remove item tag', () => setTag(commands, String(selectedItem.id), false));
+          commands.enqueue('remove item tag', () =>
+            setTag(commands, String(selectedItem.id), false),
+          );
         else navigation.status(session, '✗ Tag is not present on the targets');
         return true;
       }
@@ -257,12 +270,18 @@ export function createTagEditorProvider(
       return false;
     },
     onRowRender(row, item) {
-      const marker = row.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', 'span');
+      const marker = row.ownerDocument.createElementNS(
+        'http://www.w3.org/1999/xhtml',
+        'span',
+      );
       const state = item.tagState ?? 'none';
       marker.tabIndex = -1;
       marker.textContent = state === 'all' ? '[x]' : state === 'mixed' ? '[-]' : '[ ]';
       marker.setAttribute('role', 'checkbox');
-      marker.setAttribute('aria-checked', state === 'mixed' ? 'mixed' : String(state === 'all'));
+      marker.setAttribute(
+        'aria-checked',
+        state === 'mixed' ? 'mixed' : String(state === 'all'),
+      );
       marker.setAttribute('aria-disabled', 'true');
       marker.setAttribute('aria-label', `${state} tag ${item.title}`);
       marker.style.cssText = 'margin-right:8px';
