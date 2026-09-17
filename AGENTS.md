@@ -61,14 +61,16 @@ src/
   reader/                  reader lifecycle and features
   preferences/index.ts     preference behavior and localization
   platform/                narrow host-boundary adapters
+vendor/                    pinned, licensed third-party source/build snapshots
 ```
 
 ### TypeScript Conventions
 
 - Use strict TypeScript and `import type` for type-only dependencies.
-- The packaged runtime has no runtime npm dependencies. Development dependencies
-  are limited to TypeScript, esbuild, Vitest, Prettier, Node types, and
-  `zotero-types`.
+- The packaged runtime has no dynamic npm/package-manager dependency. Development
+  dependencies stay limited to build/test tooling; small audited zero-dependency
+  libraries may be vendored and bundled by esbuild when their version, upstream
+  source, and license are pinned under `vendor/`.
 - Keep global Gecko and private Zotero APIs behind small structural guards or
   named platform adapters. Bootstrap globals do not provide DOM constructors;
   do not use cross-compartment `instanceof` checks.
@@ -136,10 +138,13 @@ touching reader input or iframe injection.
 
 - **Latest stable Zotero only.** Older versions may work but are outside the
   compatibility guarantee and release test matrix.
-- **No runtime dependencies.** Do not add npm packages, CDN scripts, or external
-  libraries to the generated add-on.
+- **No dynamic runtime dependencies.** Do not load npm packages, CDN scripts,
+  native helper binaries, or network-hosted libraries at runtime. A small
+  third-party library may be included only as a pinned, licensed vendored
+  snapshot that esbuild folds into the generated JavaScript.
 - **TypeScript source, JavaScript XPI.** Package only generated JavaScript and
-  static assets; never source maps, TypeScript, tests, or `node_modules`.
+  static assets; never source maps, TypeScript, tests, `node_modules`, or raw
+  vendor modules as separate XPI runtime files.
 - **CI covers packaging and Node contracts.** Zotero GUI/runtime behavior still
   requires manual verification.
 - **No pre-commit hooks.**
