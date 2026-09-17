@@ -45,7 +45,7 @@ function tagItem(
       return true;
     },
     removeTag: (tag: string) => tags.delete(tag),
-    saveTx: saves,
+    save: saves,
     saves,
   } as unknown as MutableTagItem;
 }
@@ -56,6 +56,12 @@ function installItems(items: readonly Zotero.Item[], readerItemID?: number): voi
     Items: { get: (id: number) => byID.get(id) ?? false },
     Reader: { getByTabID: () => (readerItemID ? { itemID: readerItemID } : null) },
   });
+}
+
+function installTransactionHost(): ReturnType<typeof vi.fn> {
+  const executeTransaction = vi.fn(async (callback: () => Promise<void>) => callback());
+  vi.stubGlobal('Zotero', { DB: { executeTransaction } });
+  return executeTransaction;
 }
 
 describe('item tag target normalization', () => {
@@ -142,31 +148,37 @@ describe('item tag target normalization', () => {
 });
 
 describe('semantic multi-target tag action', () => {
-  it('reports all/mixed/none and only changes targets that need the transition', async () => {
+  it('uses one transaction and only saves targets that need the transition', async () => {
+    const executeTransaction = installTransactionHost();
     const first = tagItem(1, { tags: [{ tag: 'robotics', type: 1 }] });
     const second = tagItem(2);
     expect(itemTagState([first, second], 'robotics')).toBe('mixed');
 
-    await setTagOnTargets([first, second], 'robotics', true);
+    await expect(setTagOnTargets([first, second], 'robotics', true)).resolves.toBe(1);
+    expect(executeTransaction).toHaveBeenCalledTimes(1);
     expect(itemTagState([first, second], 'robotics')).toBe('all');
     expect(first.saves).not.toHaveBeenCalled();
     expect(second.saves).toHaveBeenCalledTimes(1);
     expect(second.getTagType('robotics')).toBe(0);
 
-    await setTagOnTargets([first, second], 'robotics', false);
+    await expect(setTagOnTargets([first, second], 'robotics', false)).resolves.toBe(2);
+    expect(executeTransaction).toHaveBeenCalledTimes(2);
     expect(itemTagState([first, second], 'robotics')).toBe('none');
     expect(first.saves).toHaveBeenCalledTimes(1);
     expect(second.saves).toHaveBeenCalledTimes(2);
   });
 
-  it('creates a new user-assigned tag as manual and rolls back an unsaved failed change', async () => {
+  it('creates manual tags and restores in-memory state if the batch transaction fails', async () => {
+    installTransactionHost();
     const created = tagItem(1);
-    await setTagOnTargets([created], 'new-tag', true);
+    await expect(setTagOnTargets([created], 'new-tag', true)).resolves.toBe(1);
     expect(created.hasTag('new-tag')).toBe(true);
     expect(created.getTagType('new-tag')).toBe(0);
 
-    const failed = tagItem(2, { saveError: new Error('save failed') });
-    await expect(setTagOnTargets([failed], 'unsafe', true)).rejects.toThrow('save failed');
+    const first = tagItem(2);
+    const failed = tagItem(3, { saveError: new Error('save failed') });
+    await expect(setTagOnTargets([first, failed], 'unsafe', true)).rejects.toThrow('save failed');
+    expect(first.hasTag('unsafe')).toBe(false);
     expect(failed.hasTag('unsafe')).toBe(false);
   });
 });
