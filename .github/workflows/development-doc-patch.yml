@@ -1,0 +1,52 @@
+name: Development doc patch (temporary)
+
+on:
+  push:
+    branches:
+      - refactor/pre-release-architecture
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Patch Development Guide
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'docs/DEVELOPMENT.md';
+          let text = fs.readFileSync(path, 'utf8');
+          const oldCompat = `Official support covers the latest stable Zotero release at the time of a Zotero
+          Neo release. The manifest's install bounds are not a promise that every older
+          accepted version is tested. GitHub Actions proves packaging only; test a changed
+          reader, main-window, note, or preferences flow in the current Zotero host.`.replace(/^          /gm, '');
+          const newCompat = `Official support covers the latest stable Zotero release at the time of a Zotero
+          Neo release. The manifest enforces that supported major instead of advertising
+          untested older Zotero majors. The current pre-release target is Zotero 10.
+          GitHub Actions proves packaging only; test a changed reader, main-window, note,
+          or preferences flow in the current stable Zotero host.`.replace(/^          /gm, '');
+          if (!text.includes(oldCompat)) throw new Error('compatibility paragraph not found');
+          text = text.replace(oldCompat, newCompat);
+          const marker = `## Runtime architecture\n\n`;
+          if (!text.includes(marker)) throw new Error('runtime architecture marker not found');
+          text = text.replace(marker, `${marker}The ownership model and interaction-scope design are summarized in\n[ARCHITECTURE.md](ARCHITECTURE.md). This guide documents lower-level host seams and\nimplementation constraints.\n\n`);
+          fs.writeFileSync(path, text);
+          NODE
+      - name: Commit and remove scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f .github/workflows/development-doc-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/DEVELOPMENT.md
+          git diff --cached --check
+          git commit -m "docs: align development architecture and compatibility"
+          git push
