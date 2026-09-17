@@ -23,6 +23,9 @@ verification in the current stable host.
 - Normal, Select (Visual), and Insert modes, with Flash-assisted PDF text selection and actions.
 - Keyboard-first navigation for readers, collections, items, notes, tabs, and
   pickers.
+- Native-backed Main Item Select for keyboard range selection and bulk actions.
+- Persistent Tag Workspace for multi-item add/remove/create, tri-state assignment,
+  and optional virtual tag-path completion without replacing Zotero's tag model.
 - Vim-style marks, annotation navigation, highlighting, comment editing, and
   configurable bindings.
 - Snapshot and EPUB navigation/search support where Zotero exposes compatible
@@ -49,6 +52,8 @@ From File…** and restart when prompted.
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
+- [Item Select and Tag Workspace](docs/TAG_WORKSPACE.md) — bulk item selection,
+  item-tag editing, and virtual tag-path semantics.
 - [Development guide](docs/DEVELOPMENT.md) — architecture, build, CI, release,
   and debugging constraints.
 - [Roadmap](docs/ROADMAP.md) — work planned before and after the first release.
