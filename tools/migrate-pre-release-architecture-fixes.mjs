@@ -74,7 +74,7 @@ edit('tests/unit/action-capabilities.test.ts', (source) => source
   'mainSelectCancel',
 ];`,
   )
-  .replace("sameActions(actionsForBindingMode('main-normal'), MAIN_EXECUTABLE_ACTIONS);", "sameActions(actionsForBindingMode('main-normal'), MAIN_NORMAL_ACTIONS);\n    sameActions(actionsForBindingMode('main-select'), MAIN_SELECT_ACTIONS);")
+  .replace("sameActions(actionsForBindingMode('main'), MAIN_EXECUTABLE_ACTIONS);", "sameActions(actionsForBindingMode('main-normal'), MAIN_NORMAL_ACTIONS);\n    sameActions(actionsForBindingMode('main-select'), MAIN_SELECT_ACTIONS);")
   .replace("actionsForBindingMode('normal')", "actionsForBindingMode('reader-normal')")
   .replace("actionsForBindingMode('visual')", "actionsForBindingMode('reader-select')")
   .replace("actionsForBindingMode('insert')", "actionsForBindingMode('reader-insert')"));
