@@ -10,7 +10,8 @@ export function keyGuideLanguage(configured: string, hostLocale: string): KeyGui
 
 const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
   mainClosePDF: { en: 'Close active tab', 'zh-CN': '关闭活动标签页' },
-  mainTagPicker: { en: 'Open tag picker', 'zh-CN': '打开标签选择器' },
+  mainTagPicker: { en: 'Open tag filter', 'zh-CN': '打开标签筛选器' },
+  mainTagEditor: { en: 'Edit item tags', 'zh-CN': '编辑条目标签' },
   mainFocusTree: { en: 'Focus collection tree', 'zh-CN': '聚焦分类树' },
   mainFuzzyAll: { en: 'Find all papers/items', 'zh-CN': '查找所有论文/条目' },
   mainFuzzyCollection: { en: 'Find current collection', 'zh-CN': '查找当前分类' },
@@ -40,7 +41,7 @@ export const KEY_GUIDE_CONFIG = {
     'zh-CN': '更多命令',
   },
   groupLabels: {
-    t: { en: 'Tabs', 'zh-CN': '标签页' },
+    t: { en: 'Tabs / Tags', 'zh-CN': '标签页 / 条目标签' },
     f: { en: 'Find', 'zh-CN': '查找' },
     w: { en: 'Panes', 'zh-CN': '窗格' },
     y: { en: 'Citations', 'zh-CN': '引用' },

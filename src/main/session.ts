@@ -44,6 +44,7 @@ export class MainWindowSession {
     yTimer: BrowserTimer | undefined;
     focusPane: 'search' | 'list' | 'preview';
     tagMode: 'list' | 'query';
+    tagPurpose: 'filter' | 'edit';
     command: string;
     commandTimer: BrowserTimer | undefined;
     tagScope: 'current' | 'library';
@@ -79,6 +80,7 @@ export class MainWindowSession {
     previousElement: null,
     focusPane: 'search',
     tagMode: 'list',
+    tagPurpose: 'filter',
     command: '',
     commandTimer: undefined,
     tagScope: 'current',

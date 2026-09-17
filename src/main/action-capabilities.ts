@@ -24,6 +24,7 @@ export const MAIN_EXECUTABLE_ACTIONS = Object.freeze([
   'mainPrevTab',
   'mainNextTab',
   'mainTagPicker',
+  'mainTagEditor',
   'mainNavDown',
   'mainNavUp',
   'mainNavFirst',
@@ -53,6 +54,7 @@ export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
   'mainClosePDF',
   'mainPrevTab',
   'mainNextTab',
+  'mainTagEditor',
 ] as const satisfies readonly MainExecutableAction[]);
 
 export type ReaderDelegableMainAction = (typeof READER_DELEGABLE_MAIN_ACTIONS)[number];

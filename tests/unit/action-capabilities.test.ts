@@ -39,6 +39,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainPrevTab',
   'mainNextTab',
   'mainTagPicker',
+  'mainTagEditor',
   'mainNavDown',
   'mainNavUp',
   'mainNavFirst',
@@ -62,6 +63,7 @@ const expectedDelegableMainActions: readonly ActionId[] = [
   'mainClosePDF',
   'mainPrevTab',
   'mainNextTab',
+  'mainTagEditor',
 ];
 
 function sameActions(actual: readonly ActionId[], expected: readonly ActionId[]): void {
@@ -112,6 +114,7 @@ describe('action capability ownership', () => {
   it('guards commands by Reader mode and rejects unsafe catalog drift', () => {
     expect(isReaderActionForMode('normal', 'openCommandPalette')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainTabPick')).toBe(true);
+    expect(isReaderActionForMode('normal', 'mainTagEditor')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);

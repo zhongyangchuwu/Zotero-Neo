@@ -32,6 +32,7 @@ import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
 import { NoteEditor } from './note-editor';
+import { TagWorkspace } from './tag-workspace';
 import { mainReaderForTab, selectedMainTabID } from './host';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
@@ -48,12 +49,18 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #navigation: MainNavigation;
   readonly #picker: FuzzyPicker;
   readonly #noteEditor: NoteEditor;
+  readonly #tagWorkspace: TagWorkspace;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
+    );
+    this.#tagWorkspace = new TagWorkspace(
+      dependencies.logger,
+      this.#navigation,
+      dependencies.preferences,
     );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,
@@ -84,6 +91,9 @@ export class MainWindowController implements MainWindowControllerApi {
         window,
         session,
         this.#dependencies.preferences.get('noteEditor.enabled', true),
+        (action, count) => {
+          if (action === 'mainTagEditor') this.execute(action, window, session, count);
+        },
       );
     };
     scan();
@@ -102,6 +112,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.add(() => {
+      this.#tagWorkspace.close(window);
       this.#picker.close(session);
       this.#noteEditor.clear(session);
     });
@@ -173,6 +184,10 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
+    if (this.#tagWorkspace.isOpen(window)) {
+      this.#tagWorkspace.onKeyDown(event, window, session);
+      return;
+    }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
       return;
@@ -439,7 +454,11 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.cycleTab(window, 1);
         break;
       case 'mainTagPicker':
+        session.picker.tagPurpose = 'filter';
         void this.#picker.open(window, session, 'tags');
+        break;
+      case 'mainTagEditor':
+        void this.#tagWorkspace.open(window, session);
         break;
       case 'mainNavDown':
         this.#navigation.navigate(window, session, 1, count, shouldDebounce);

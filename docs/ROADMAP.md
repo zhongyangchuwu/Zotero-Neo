@@ -9,11 +9,12 @@ host/API limitations are tracked in GitHub Issues.
 The first public release should prioritize complete, useful keyboard-first
 workflows over broad Vim feature parity.
 
-- Finish safe native tag assignment/removal for selected library items and the
-  active Reader/Note context, reusing Zotero item APIs and Neo's existing picker
-  surfaces rather than introducing a second tag UI.
-- Extend Flash text targeting to Unicode/CJK input and IME composition while
-  keeping literal visible-text matching and the existing bounded target model.
+- Item-tag assignment/removal is now implemented through Main Item Select plus a
+  persistent [Tag Workspace](TAG_WORKSPACE.md), using Zotero-native selection,
+  item APIs, and batched transactions while keeping `<Space>fT` as filtering.
+- **Next:** extend Flash text targeting to Unicode/CJK input and IME composition
+  ([#23](https://github.com/zhongyangchuwu/Zotero-Neo/issues/23)) while keeping
+  literal visible-text matching and the existing bounded target model.
 - Complete a final default-keymap review and latest-stable Zotero host regression
   pass across Reader, Main, Note, split views, pickers, restart/restore, and
   preference persistence.

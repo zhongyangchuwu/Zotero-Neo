@@ -12,6 +12,13 @@ type MainTab = {
   readonly dataset?: DOMStringMap;
 };
 
+type MainTabInfo = {
+  readonly id?: string;
+  readonly type?: string;
+  readonly subType?: string;
+  readonly data?: { readonly itemID?: number };
+};
+
 type TagScopeRow = {
   readonly ref?: { readonly libraryID?: number };
   readonly tags?: Iterable<string>;
@@ -29,6 +36,7 @@ type MainTabs = {
   select?(id: string): void;
   selectTab?(id: string): void;
   showTab?(id: string): void;
+  getTabInfo?(id?: string): MainTabInfo;
 };
 
 type MainPane = {
@@ -49,6 +57,12 @@ type MainPane = {
   } | null;
 };
 
+type ContextNoteEditor = {
+  readonly item?: Zotero.Item;
+  readonly _iframe?: { readonly contentWindow?: Window };
+  contains?(node: Node | null): boolean;
+};
+
 /** Minimal registry entry exposed by Zotero's main-window tab lookup; not a Reader runtime. */
 type MainReaderRegistryEntry = { readonly itemID?: number; focus?(): void | Promise<void> };
 
@@ -57,7 +71,7 @@ export type MainHostWindow = MainWindow & {
   readonly Zotero_Tabs?: MainTabs;
   readonly ZoteroContextPane?: {
     focus?(): boolean | void;
-    activeEditor?: { readonly _iframe?: { readonly contentWindow?: Window } };
+    activeEditor?: ContextNoteEditor;
   };
 };
 
@@ -73,6 +87,11 @@ export function mainTabs(window: MainWindow): MainTabs | undefined {
 export function selectedMainTabID(window: MainWindow): string | undefined {
   const tabs = mainTabs(window);
   return tabs?.selectedID ?? tabs?._selectedID;
+}
+
+export function selectedMainTabInfo(window: MainWindow): MainTabInfo | undefined {
+  const tabs = mainTabs(window);
+  return tabs?.getTabInfo?.(selectedMainTabID(window));
 }
 
 export function mainTabList(window: MainWindow): readonly MainTab[] {
@@ -150,6 +169,14 @@ export function currentMainItem(window: MainWindow): Zotero.Item | undefined {
     // Fall through to the selected main-window item.
   }
   return mainSelectedItems(window)[0];
+}
+
+/** Mirrors Zotero's own focused-context-note test instead of treating any open note as active. */
+export function activeContextNoteItem(window: MainWindow): Zotero.Item | undefined {
+  const editor = mainHost(window).ZoteroContextPane?.activeEditor;
+  const active = window.document?.activeElement ?? null;
+  if (!editor?.item || !active || !editor.contains?.(active)) return undefined;
+  return editor.item;
 }
 
 export function currentTagSelection(window: MainWindow): string[] {
