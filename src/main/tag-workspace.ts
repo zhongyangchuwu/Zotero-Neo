@@ -216,27 +216,49 @@ export class TagWorkspace {
       stop();
       const suggestion = state.suggestions[state.selected];
       if (!suggestion) return;
+      const remove = event.shiftKey;
       if (suggestion.kind === 'namespace') {
+        if (remove) {
+          this.#navigation.status(session, '✗ Namespace rows cannot be removed');
+          return;
+        }
         state.input.value = suggestion.insertText;
         state.selected = 0;
         this.render(state);
         return;
       }
+      if (remove && suggestion.kind === 'create') {
+        this.#navigation.status(session, '✗ New tag is not assigned');
+        return;
+      }
+
+      const name = suggestion.insertText;
+      const current = itemTagState(state.targets.items, name);
+      const present = !remove;
+      if ((present && current === 'all') || (!present && current === 'none')) {
+        state.input.value = '';
+        state.selected = 0;
+        this.render(state);
+        this.#navigation.status(
+          session,
+          present ? `✓ Tag “${name}” already assigned` : `✓ Tag “${name}” is not assigned`,
+        );
+        return;
+      }
+
       this.enqueue(state, async () => {
-        const name = suggestion.insertText;
-        const present =
-          suggestion.kind === 'create' || itemTagState(state.targets.items, name) !== 'all';
         try {
-          await setTagOnTargets(state.targets.items, name, present);
+          const changed = await setTagOnTargets(state.targets.items, name, present);
           if (this.#states.get(window) !== state) return;
-          state.tags = await this.loadTags(state.targets, state.libraryID);
-          if (this.#states.get(window) !== state) return;
+          if (suggestion.kind === 'create' && !state.tags.some((tag) => sameTag(tag.tag, name))) {
+            state.tags = [...state.tags, { tag: name, type: 0 }];
+          }
           state.input.value = '';
           state.selected = 0;
           this.render(state);
           this.#navigation.status(
             session,
-            `${present ? '✓ Added' : '✓ Removed'} tag “${name}” ${present ? 'to' : 'from'} ${state.targets.items.length} item${state.targets.items.length === 1 ? '' : 's'}`,
+            `${present ? '✓ Added' : '✓ Removed'} tag “${name}” ${present ? 'to' : 'from'} ${changed} item${changed === 1 ? '' : 's'}`,
           );
         } catch (error) {
           this.#logger.debug(`tag workspace update failed: ${String(error)}`);
@@ -330,8 +352,8 @@ export class TagWorkspace {
     }
 
     state.footer.textContent = state.separator
-      ? `Hierarchy separator: “${state.separator}” · Tab complete · ↑/↓ or Ctrl+j/k select · Enter add/remove · Esc clear/close`
-      : 'Flat tags · Tab complete · ↑/↓ or Ctrl+j/k select · Enter add/remove · Esc clear/close';
+      ? `Hierarchy separator: “${state.separator}” · Tab complete · ↑/↓ or Ctrl+j/k select · Enter add · Shift+Enter remove · Esc clear/close`
+      : 'Flat tags · Tab complete · ↑/↓ or Ctrl+j/k select · Enter add · Shift+Enter remove · Esc clear/close';
   }
 
   private renderAssigned(state: TagWorkspaceState): void {
