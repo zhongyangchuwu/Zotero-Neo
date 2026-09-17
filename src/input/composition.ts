@@ -3,10 +3,7 @@ export interface CompositionState {
 }
 
 /** Track the browser/IME composition lifecycle for one real text input. */
-export function bindCompositionState(
-  input: HTMLInputElement,
-  state: CompositionState,
-): () => void {
+export function bindCompositionState(input: HTMLInputElement, state: CompositionState): () => void {
   const start = (): void => {
     state.active = true;
   };

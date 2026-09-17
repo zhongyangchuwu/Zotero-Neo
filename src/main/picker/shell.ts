@@ -2,6 +2,11 @@ import type { Logger } from '../../core/logging';
 import type { CommandPaletteContext, MainWindow } from '../../core/contracts';
 import { THEME_VARS } from '../../ui/theme';
 import { asElement } from '../../platform/dom';
+import {
+  bindCompositionState,
+  compositionOwnsKey,
+  isCommittedInput,
+} from '../../input/composition';
 import type { MainWindowSession } from '../session';
 import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
@@ -149,6 +154,7 @@ export class FuzzyPicker {
         scope,
         overlay,
         input,
+        composition: { active: false },
         results,
         preview,
         count,
@@ -169,7 +175,9 @@ export class FuzzyPicker {
       orphanOverlay = null;
       this.trace(`picker mounted scope=${scope} layout=${single ? 'single' : 'dual'}`);
       const loadStartedAt = Date.now();
-      const inputHandler = (): void => {
+      const compositionCleanup = bindCompositionState(input, session.picker.composition);
+      const inputHandler = (event: Event): void => {
+        if (!isCommittedInput(event, session.picker.composition.active)) return;
         const focusID = provider.filter
           ? String(session.picker.filtered[session.picker.selected]?.id ?? '')
           : '';
@@ -222,6 +230,7 @@ export class FuzzyPicker {
       results.addEventListener('click', pointerRowHandler);
       results.addEventListener('dblclick', doubleClickRowHandler);
       session.picker.inputCleanup = () => {
+        compositionCleanup();
         input.removeEventListener('input', inputHandler);
         results.removeEventListener('click', pointerRowHandler);
         results.removeEventListener('dblclick', doubleClickRowHandler);
@@ -296,6 +305,7 @@ export class FuzzyPicker {
     session.picker.queryHelp = null;
     session.picker.listHelp = null;
     session.picker.input = null;
+    session.picker.composition.active = false;
     session.picker.results = null;
     session.picker.preview = null;
     session.picker.count = null;
@@ -317,6 +327,10 @@ export class FuzzyPicker {
     if (event._zvPickerHandled) return;
     event._zvPickerHandled = true;
     const picker = session.picker;
+    if (compositionOwnsKey(event, picker.composition.active)) {
+      event.stopPropagation();
+      return;
+    }
     const key = event.key;
     const lower = key.toLowerCase();
     const stop = (): void => {

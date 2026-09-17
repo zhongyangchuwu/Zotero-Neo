@@ -1,3 +1,9 @@
+import {
+  bindCompositionState,
+  compositionOwnsKey,
+  isCommittedInput,
+  type CompositionState,
+} from '../input/composition';
 import { HINT_ALPHABET } from './hint-labels';
 import type { PdfWindow, Pointer } from './types';
 
@@ -221,6 +227,9 @@ export class ReaderFlash {
   #labelBuffer = '';
   #targets: FlashTarget[] = [];
   #prompt: HTMLElement | null = null;
+  #input: HTMLInputElement | null = null;
+  #inputCleanup: (() => void) | null = null;
+  readonly #composition: CompositionState = { active: false };
   #matchCount = 0;
   #labelCache = new Map<Text, Map<number, string>>();
 
@@ -249,6 +258,8 @@ export class ReaderFlash {
       this.#matchCount = 0;
       this.#labelCache.clear();
       this.#prompt = this.#createPrompt(pdfWindow);
+      this.#input = this.#createInput(pdfWindow);
+      this.#input.focus();
       this.#refreshPrompt();
     } catch (error) {
       this.cancel();
@@ -265,16 +276,52 @@ export class ReaderFlash {
       return false;
     }
 
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    if (compositionOwnsKey(event, this.#composition.active)) {
+      event.stopPropagation();
+      return true;
+    }
+
+    const consumeCommand = (): void => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
     if (event.key === 'Escape') {
+      consumeCommand();
       this.cancel();
       pdfWindow.focus();
       return true;
     }
 
-    if (this.#labelBuffer) this.#handleLabelKey(event);
-    else this.#handleQueryKey(event);
+    if (this.#labelBuffer) {
+      consumeCommand();
+      this.#handleLabelKey(event);
+      return true;
+    }
+
+    if (event.key === 'Enter' || event.key === 'Return') {
+      consumeCommand();
+      const first = this.#targets[0];
+      if (first) this.#activate(first);
+      return true;
+    }
+
+    if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
+      const labelKey = event.key.toUpperCase();
+      if (
+        /^[A-Z]$/.test(labelKey) &&
+        this.#targets.some((target) => target.label.startsWith(labelKey))
+      ) {
+        consumeCommand();
+        this.#labelBuffer = labelKey;
+        this.#refreshLabels();
+        const exact = this.#targets.find((target) => target.label === labelKey);
+        if (exact) this.#activate(exact);
+        return true;
+      }
+    }
+
+    // Keep Reader/Zotero shortcuts from seeing query-editing keys, but preserve the input's default edit.
+    event.stopPropagation();
     return true;
   }
 
@@ -292,6 +339,11 @@ export class ReaderFlash {
 
   cancel(): void {
     this.#clearTargets();
+    this.#inputCleanup?.();
+    this.#inputCleanup = null;
+    this.#input?.remove();
+    this.#input = null;
+    this.#composition.active = false;
     this.#prompt?.remove();
     this.#prompt = null;
     this.#window = null;
@@ -301,37 +353,6 @@ export class ReaderFlash {
     this.#labelBuffer = '';
     this.#matchCount = 0;
     this.#labelCache.clear();
-  }
-
-  #handleQueryKey(event: KeyboardEvent): void {
-    if (event.key === 'Backspace') {
-      this.#query = this.#query.slice(0, -1);
-      this.#refreshTargets();
-      return;
-    }
-    if (event.key === 'Enter' || event.key === 'Return') {
-      const first = this.#targets[0];
-      if (first) this.#activate(first);
-      return;
-    }
-    if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
-    const code = event.key.charCodeAt(0);
-    if (code < 0x20 || code > 0x7e) return;
-
-    const labelKey = event.key.toUpperCase();
-    if (
-      /^[A-Z]$/.test(labelKey) &&
-      this.#targets.some((target) => target.label.startsWith(labelKey))
-    ) {
-      this.#labelBuffer = labelKey;
-      this.#refreshLabels();
-      const exact = this.#targets.find((target) => target.label === labelKey);
-      if (exact) this.#activate(exact);
-      return;
-    }
-
-    this.#query += event.key;
-    this.#refreshTargets();
   }
 
   #handleLabelKey(event: KeyboardEvent): void {
@@ -521,6 +542,30 @@ export class ReaderFlash {
   #clearTargets(): void {
     for (const target of this.#targets) target.element.remove();
     this.#targets = [];
+  }
+
+  #createInput(pdfWindow: PdfWindow): HTMLInputElement {
+    const input = pdfWindow.document.createElement('input') as HTMLInputElement;
+    input.dataset.zoteroNeoFlashInput = '1';
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.placeholder = 'Type visible text…';
+    input.style.cssText =
+      'position:fixed;left:12px;bottom:46px;z-index:100001;width:min(360px,calc(100vw - 24px));box-sizing:border-box;padding:6px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#0f172a;color:#ffffff;outline:none;font:13px/1.2 monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);';
+    const compositionCleanup = bindCompositionState(input, this.#composition);
+    const inputHandler = (event: Event): void => {
+      if (!isCommittedInput(event, this.#composition.active)) return;
+      this.#query = input.value;
+      this.#refreshTargets();
+    };
+    input.addEventListener('input', inputHandler);
+    this.#inputCleanup = () => {
+      compositionCleanup();
+      input.removeEventListener('input', inputHandler);
+    };
+    pdfWindow.document.body?.appendChild(input);
+    return input;
   }
 
   #createPrompt(pdfWindow: PdfWindow): HTMLElement {

@@ -2,6 +2,12 @@ import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
 import type { PreferenceReader } from '../core/preferences';
 import { THEME_VARS } from '../ui/theme';
+import {
+  bindCompositionState,
+  compositionOwnsKey,
+  isCommittedInput,
+  type CompositionState,
+} from '../input/composition';
 import { fuzzyMatchScore } from './picker/fuzzy';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
@@ -36,6 +42,8 @@ interface TagWorkspaceState {
   readonly separator: string;
   readonly previousElement: Element | null;
   readonly themeCleanup: () => void;
+  readonly composition: CompositionState;
+  inputCleanup: () => void;
   tags: TagRecord[];
   suggestions: WorkspaceSuggestion[];
   selected: number;
@@ -131,6 +139,8 @@ export class TagWorkspace {
       separator: this.#preferences.get('tags.separator', '/'),
       previousElement: doc.activeElement,
       themeCleanup,
+      composition: { active: false },
+      inputCleanup: () => {},
       tags,
       suggestions: [],
       selected: 0,
@@ -138,10 +148,17 @@ export class TagWorkspace {
     };
     this.#states.set(window, state);
 
-    input.addEventListener('input', () => {
+    const compositionCleanup = bindCompositionState(input, state.composition);
+    const inputHandler = (event: Event): void => {
+      if (!isCommittedInput(event, state.composition.active)) return;
       state.selected = 0;
       this.render(state);
-    });
+    };
+    input.addEventListener('input', inputHandler);
+    state.inputCleanup = () => {
+      compositionCleanup();
+      input.removeEventListener('input', inputHandler);
+    };
     list.addEventListener('click', (event) => {
       const target = event.target as HTMLElement | null;
       const row = target?.closest?.('[data-neo-tag-index]') as HTMLElement | null;
@@ -163,6 +180,7 @@ export class TagWorkspace {
     const state = this.#states.get(window);
     if (!state) return;
     this.#states.delete(window);
+    state.inputCleanup();
     state.themeCleanup();
     state.overlay.remove();
     try {
@@ -173,6 +191,10 @@ export class TagWorkspace {
   onKeyDown(event: KeyboardEvent, window: MainWindow, session: MainWindowSession): void {
     const state = this.#states.get(window);
     if (!state) return;
+    if (compositionOwnsKey(event, state.composition.active)) {
+      event.stopPropagation();
+      return;
+    }
     const lower = event.key.toLowerCase();
     const stop = (): void => {
       event.preventDefault();
