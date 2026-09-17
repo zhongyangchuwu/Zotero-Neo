@@ -26,6 +26,11 @@ All notable changes to Zotero Neo are documented here.
   with responsive previews and optional mouse row selection for non-tag scopes.
 - A keyboard-first tag-filter picker with List/Query modes, current-view/all-library scope,
   pinned active filters, AND semantics, and safe filter clearing without changing item tags.
+- Main Item Select backed by Zotero's native `TreeSelection`, with `v`, count-aware `j/k`,
+  `gg/G`, endpoint swapping, preserve-on-finish, and cancel-to-focused-item behavior.
+- A persistent Tag Workspace on `<Space>ta` for Main/Reader/Note target sets, with all/mixed/none
+  assignment state, explicit add/remove/create operations, and virtual separator-based tag-path
+  completion while Zotero continues to store ordinary flat tag strings.
 - Note search across normalized titles and note bodies, child-note creation, right-side editor
   opening, note-tab opening, trash, and restore workflows.
 - Main-window item trash/restore, PDF opening, tab switching/closing, collection-tree navigation,
@@ -41,6 +46,10 @@ All notable changes to Zotero Neo are documented here.
   other host operations where stable host seams are available.
 - Held `j/k` in Collections and Items delegates repeat/debounce behavior to Zotero's native tree
   selection path instead of Neo-side throttling.
+- Multi-item tag mutation uses one Zotero DB transaction per semantic batch and saves only items
+  that need the requested transition; successful Workspace edits avoid a full tag-catalog reload.
+- Tag filtering (`<Space>fT`) and item-tag mutation (`<Space>ta`) are separate workflows rather
+  than two modes of the same picker.
 - PDF Select currently owns a DOM range and scoped native-style selection rendering rather than
   pretending it is synchronized with Zotero Reader's private semantic selection state; native
   semantic-selection integration is tracked separately in issue #20.
@@ -52,7 +61,7 @@ All notable changes to Zotero Neo are documented here.
 - Runtime source is strict TypeScript, bundled by esbuild into deterministic JavaScript/XPI
   artifacts with no runtime npm dependencies.
 - Focused Vitest contracts cover input matching, picker behavior, Reader state, selection text,
-  host-boundary guards, preferences, and package behavior.
+  host-boundary guards, preferences, tag target batching, virtual tag paths, and package behavior.
 - GitHub Actions validates the native Ubuntu and Windows build wrappers, TypeScript/tests,
   deterministic XPI contents, and guarded release metadata.
 - Startup diagnostics are bounded and reset with version metadata instead of growing during idle
