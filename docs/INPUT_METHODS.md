@@ -13,7 +13,7 @@ OS / IME
   -> Neo matching / completion
 ```
 
-Neo does not reconstruct editable text from `keydown` characters. While composition is active, candidate-navigation and confirmation keys belong to the IME and must not be interpreted as Neo commands.
+Neo does not reconstruct editable text from `keydown` characters. While composition is active, candidate-navigation and confirmation keys belong to the IME and must not be interpreted as Neo commands. The shared guard checks the local composition lifecycle together with Gecko's `KeyboardEvent.isComposing` state and the platform `Process`/229 fallback before any Neo command is dispatched.
 
 The shared boundary lives in `src/input/composition.ts` and is used by:
 
