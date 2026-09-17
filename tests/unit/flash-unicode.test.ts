@@ -18,16 +18,28 @@ describe('Flash Unicode literal matching', () => {
     const korean = text('로봇 학습과 확산 모델');
 
     expect(
-      flashMatches(buildFlashTextIndex([{ textNode: simplified, text: simplified.data }]), '机器人'),
+      flashMatches(
+        buildFlashTextIndex([{ textNode: simplified, text: simplified.data }]),
+        '机器人',
+      ),
     ).toHaveLength(1);
     expect(
-      flashMatches(buildFlashTextIndex([{ textNode: traditional, text: traditional.data }]), '機器人'),
+      flashMatches(
+        buildFlashTextIndex([{ textNode: traditional, text: traditional.data }]),
+        '機器人',
+      ),
     ).toHaveLength(1);
     expect(
-      flashMatches(buildFlashTextIndex([{ textNode: japanese, text: japanese.data }]), 'ロボット'),
+      flashMatches(
+        buildFlashTextIndex([{ textNode: japanese, text: japanese.data }]),
+        'ロボット',
+      ),
     ).toHaveLength(1);
     expect(
-      flashMatches(buildFlashTextIndex([{ textNode: korean, text: korean.data }]), '로봇'),
+      flashMatches(
+        buildFlashTextIndex([{ textNode: korean, text: korean.data }]),
+        '로봇',
+      ),
     ).toHaveLength(1);
   });
 });
