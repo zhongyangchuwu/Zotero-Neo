@@ -50,4 +50,26 @@ edit('src/reader/controller.ts', (source) => {
   return source;
 });
 
+// Test fixtures follow the canonical configurable binding modes; Reader runtime-mode tests remain unchanged.
+edit('tests/unit/action-capabilities.test.ts', (source) => source
+  .replace("actionsForBindingMode('main')", "actionsForBindingMode('main-normal')")
+  .replace("actionsForBindingMode('normal')", "actionsForBindingMode('reader-normal')")
+  .replace("actionsForBindingMode('visual')", "actionsForBindingMode('reader-select')")
+  .replace("actionsForBindingMode('insert')", "actionsForBindingMode('reader-insert')"));
+
+edit('tests/unit/input.test.ts', (source) => source.replace("  mode: 'normal',", "  mode: 'reader-normal',"));
+
+edit('tests/unit/key-guide.test.ts', (source) => source
+  .replaceAll("leaderGuideEntries(custom, 'main'", "leaderGuideEntries(custom, 'main-normal'"));
+
+edit('tests/unit/fuzzy-picker.test.ts', (source) => source
+  .replaceAll(
+    "      mode: 'main',\n      actions:",
+    "      mode: 'main',\n      bindingMode: 'main-normal',\n      actions:",
+  )
+  .replaceAll(
+    "      mode: 'normal',\n      actions:",
+    "      mode: 'normal',\n      bindingMode: 'reader-normal',\n      actions:",
+  ));
+
 console.log('pre-release architecture follow-up fixes staged');
