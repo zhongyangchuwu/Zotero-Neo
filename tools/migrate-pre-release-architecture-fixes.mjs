@@ -52,12 +52,36 @@ edit('src/reader/controller.ts', (source) => {
 
 // Test fixtures follow the canonical configurable binding modes; Reader runtime-mode tests remain unchanged.
 edit('tests/unit/action-capabilities.test.ts', (source) => source
-  .replace("actionsForBindingMode('main')", "actionsForBindingMode('main-normal')")
+  .replace(
+`  MAIN_EXECUTABLE_ACTIONS,
+  READER_DELEGABLE_MAIN_ACTIONS,`,
+`  MAIN_EXECUTABLE_ACTIONS,
+  MAIN_NORMAL_ACTIONS,
+  MAIN_SELECT_ACTIONS,
+  READER_DELEGABLE_MAIN_ACTIONS,`,
+  )
+  .replace(
+`  'mainTreeCollapseAll',
+];`,
+`  'mainTreeCollapseAll',
+  'mainEnterSelect',
+  'mainSelectDown',
+  'mainSelectUp',
+  'mainSelectFirst',
+  'mainSelectLast',
+  'mainSelectSwapEnds',
+  'mainSelectFinish',
+  'mainSelectCancel',
+];`,
+  )
+  .replace("sameActions(actionsForBindingMode('main-normal'), MAIN_EXECUTABLE_ACTIONS);", "sameActions(actionsForBindingMode('main-normal'), MAIN_NORMAL_ACTIONS);\n    sameActions(actionsForBindingMode('main-select'), MAIN_SELECT_ACTIONS);")
   .replace("actionsForBindingMode('normal')", "actionsForBindingMode('reader-normal')")
   .replace("actionsForBindingMode('visual')", "actionsForBindingMode('reader-select')")
   .replace("actionsForBindingMode('insert')", "actionsForBindingMode('reader-insert')"));
 
-edit('tests/unit/input.test.ts', (source) => source.replace("  mode: 'normal',", "  mode: 'reader-normal',"));
+edit('tests/unit/input.test.ts', (source) => source
+  .replaceAll("mode: 'normal'", "mode: 'reader-normal'")
+  .replaceAll("mode: 'main'", "mode: 'main-normal'"));
 
 edit('tests/unit/key-guide.test.ts', (source) => source
   .replaceAll("leaderGuideEntries(custom, 'main'", "leaderGuideEntries(custom, 'main-normal'"));
@@ -71,5 +95,13 @@ edit('tests/unit/fuzzy-picker.test.ts', (source) => source
     "      mode: 'normal',\n      actions:",
     "      mode: 'normal',\n      bindingMode: 'reader-normal',\n      actions:",
   ));
+
+for (const path of ['tests/unit/binding-editor.test.ts', 'tests/unit/binding-editor-view.test.ts']) {
+  edit(path, (source) => source
+    .replaceAll("'normal'", "'reader-normal'")
+    .replaceAll("'visual'", "'reader-select'")
+    .replaceAll("'insert'", "'reader-insert'")
+    .replaceAll("'main'", "'main-normal'"));
+}
 
 console.log('pre-release architecture follow-up fixes staged');
