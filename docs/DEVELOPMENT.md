@@ -129,11 +129,10 @@ after a target is found.
 `src/main/picker/` owns one search shell for library items, current-collection
 items, tabs, notes, tags, and commands. Scope providers supply rows, preview content,
 activation, and scope-only commands; they do not bypass the resolved `BindingMap`.
-The internal fuzzy
-ranker is a small allocation-conscious subsequence scorer with consecutive and
-word-boundary bonuses. Do not import Zotero's private DevTools copy of
-`fuzzaldrin-plus`: `resource://devtools/...` is not a stable add-on API, and adding an
-npm fuzzy package would violate the zero-runtime-dependency XPI contract.
+Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` adapter,
+backed by the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the
+existing runtime IIFE; no npm/CDN/native dependency is resolved at runtime. Keep consumers
+behind the adapter instead of importing the vendor module throughout feature code.
 Picker result rows are keyboard-only by default; the shared shell reads the injected
 `picker.mouse.enabled` preference at pointer-event time. When enabled, delegated click handling
 selects ordinary item/collection/tab/note rows and delegated double-click handling confirms
@@ -216,8 +215,11 @@ current match by one character. This mirrors Flash.nvim's continuation-safe labe
 search and starting a jump cannot compete for the same key. Multi-character labels use a fixed width
 after their safe first character. Enter selects the nearest currently labelled target; Flash never
 auto-jumps merely because only one text match remains. Scroll, resize, split-view replacement, blur,
-mode change, and disposal cancel the invocation instead of live-reindexing stale PDF.js text. Fuzzy
-search, regex, whole-document indexing, and CJK/IME composition are intentionally outside v1.
+mode change, and disposal cancel the invocation instead of live-reindexing stale PDF.js text. Flash
+query editing is hosted by a real focused HTML input, so Gecko/OS IME composition, Backspace,
+and Unicode text editing remain browser-owned. Neo only consumes committed `input.value`, actual
+Flash commands, and continuation-safe ASCII hint labels; fuzzy Flash search, regex,
+transliteration, OCR, and whole-document indexing remain outside v1. See `INPUT_METHODS.md`.
 
 ## PDF text vertical motion
 

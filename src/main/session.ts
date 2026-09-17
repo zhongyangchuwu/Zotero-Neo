@@ -1,4 +1,5 @@
 import { CleanupScope } from '../core/cleanup';
+import type { CompositionState } from '../input/composition';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { KeyGuide } from '../ui/key-guide';
@@ -30,6 +31,7 @@ export class MainWindowSession {
     scope: PickerScope;
     overlay: HTMLElement | null;
     input: HTMLInputElement | null;
+    composition: CompositionState;
     results: HTMLElement | null;
     preview: HTMLElement | null;
     count: HTMLElement | null;
@@ -65,6 +67,7 @@ export class MainWindowSession {
     scope: 'all',
     overlay: null,
     input: null,
+    composition: { active: false },
     results: null,
     preview: null,
     items: [],
