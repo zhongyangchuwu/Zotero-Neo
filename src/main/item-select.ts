@@ -175,7 +175,7 @@ export class MainItemSelect {
     const view = this.itemView(window);
     const selection = view?.selection;
     const rowCount = view?.rowCount ?? 0;
-    if (!selection?.select || !selection.shiftSelect || rowCount <= 0) {
+    if (!view || !selection?.select || !selection.shiftSelect || rowCount <= 0) {
       this.showBadge(window, state, 'ITEM SELECT · unavailable', false);
       return;
     }
@@ -208,7 +208,7 @@ export class MainItemSelect {
     const view = this.itemView(window);
     const selection = view?.selection;
     const rowCount = view?.rowCount ?? 0;
-    if (!selection?.shiftSelect || rowCount <= 0) return;
+    if (!view || !selection?.shiftSelect || rowCount <= 0) return;
     const current = Math.max(0, Math.min(rowCount - 1, selection.focused ?? 0));
     const next = nextItemSelectIndex(current, rowCount, direction, count);
     selection.shiftSelect(next, false, shouldDebounce);
@@ -221,7 +221,13 @@ export class MainItemSelect {
     const selection = view?.selection;
     const pivot = selection?.pivot;
     const focused = selection?.focused;
-    if (!selection?.shiftSelect || pivot === undefined || focused === undefined) return;
+    if (
+      !view ||
+      !selection?.shiftSelect ||
+      pivot === undefined ||
+      focused === undefined
+    )
+      return;
     selection.pivot = focused;
     selection.shiftSelect(pivot, false);
     view.ensureRowIsVisible?.(pivot);
