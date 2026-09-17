@@ -1,0 +1,58 @@
+name: Fix IME test harness
+
+on:
+  push:
+    branches:
+      - feat/flash-unicode-ime
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/flash-unicode-ime
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply corrected test patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/apply-ime-tests.yml').read_text()
+          marker = "          python - <<'PY'\n"
+          body = workflow.split(marker, 1)[1].split("\n          PY", 1)[0]
+          script = textwrap.dedent(body)
+          script = script.replace(
+              '"    setFlashQuery(created.bodyChildren, \'target\');",',
+              '"    for (const key of \'target\') typeFlashKey(flash, created, key);",',
+          )
+          script = script.replace(
+              '"    setFlashQuery(created.bodyChildren, \'ta\');",',
+              '"    for (const key of \'ta\') typeFlashKey(flash, created, key);",',
+          )
+          exec(compile(script, '<ime-test-patch>', 'exec'), {'Path': Path, '__name__': '__main__'})
+          PY
+      - name: Verify full suite
+        shell: bash
+        run: |
+          npm ci
+          npx prettier --write tests/unit/flash.test.ts tests/unit/fuzzy-picker.test.ts tests/unit/composition.test.ts
+          npm run verify
+      - name: Commit corrected tests
+        shell: bash
+        run: |
+          rm .github/workflows/apply-ime-tests.yml .github/workflows/fix-ime-tests.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "test(input): cover Unicode and IME composition"
+          git push origin HEAD:feat/flash-unicode-ime
