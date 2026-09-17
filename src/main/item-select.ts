@@ -119,13 +119,18 @@ export class MainItemSelect {
     }
 
     if (!itemsFocused) {
-      this.deactivate(window, state, false);
+      this.deactivate(window, state, true, false);
       return;
     }
 
-    if (event.key === 'Escape' || this.isPlainKey(event, 'v')) {
+    if (event.key === 'Escape') {
       this.consume(event);
-      this.deactivate(window, state, true);
+      this.deactivate(window, state, false, true);
+      return;
+    }
+    if (this.isPlainKey(event, 'v')) {
+      this.consume(event);
+      this.deactivate(window, state, true, true);
       return;
     }
     if (this.isPlainKey(event, 'o')) {
@@ -188,14 +193,39 @@ export class MainItemSelect {
     this.#logger.debug(`main item select entered row=${focused}`);
   }
 
-  private deactivate(window: MainWindow, state: ItemSelectState, announce: boolean): void {
+  private deactivate(
+    window: MainWindow,
+    state: ItemSelectState,
+    preserve: boolean,
+    announce: boolean,
+  ): void {
     if (!state.active) return;
+    const view = this.itemView(window);
+    const selection = view?.selection;
+    if (!preserve && view && selection?.select) {
+      const last = Math.max(0, (view.rowCount ?? 1) - 1);
+      const focused = Math.max(0, Math.min(last, selection.focused ?? 0));
+      selection.select(focused);
+      view.ensureRowIsVisible?.(focused);
+    }
     state.active = false;
     this.resetInput(window, state);
-    const selection = this.itemView(window)?.selection;
-    if (announce) this.showBadge(window, state, `${selection?.count ?? 0} items selected`, false);
-    else this.hideBadge(window, state);
-    this.#logger.debug(`main item select exited count=${selection?.count ?? 0}`);
+    if (announce) {
+      const count = selection?.count ?? 0;
+      this.showBadge(
+        window,
+        state,
+        preserve
+          ? `${count} item${count === 1 ? '' : 's'} selected`
+          : 'Item selection cancelled',
+        false,
+      );
+    } else {
+      this.hideBadge(window, state);
+    }
+    this.#logger.debug(
+      `main item select exited preserve=${preserve} count=${selection?.count ?? 0}`,
+    );
   }
 
   private extend(
@@ -221,13 +251,7 @@ export class MainItemSelect {
     const selection = view?.selection;
     const pivot = selection?.pivot;
     const focused = selection?.focused;
-    if (
-      !view ||
-      !selection?.shiftSelect ||
-      pivot === undefined ||
-      focused === undefined
-    )
-      return;
+    if (!view || !selection?.shiftSelect || pivot === undefined || focused === undefined) return;
     selection.pivot = focused;
     selection.shiftSelect(pivot, false);
     view.ensureRowIsVisible?.(pivot);
