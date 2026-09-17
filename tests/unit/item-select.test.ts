@@ -101,7 +101,8 @@ describe('Main Item Select', () => {
         },
       },
       setTimeout: (fn: () => void) => setTimeout(fn, 5000) as unknown as number,
-      clearTimeout: (timer: number) => clearTimeout(timer as unknown as ReturnType<typeof setTimeout>),
+      clearTimeout: (timer: number) =>
+        clearTimeout(timer as unknown as ReturnType<typeof setTimeout>),
     } as unknown as MainWindow;
     const feature = new MainItemSelect(logger);
     feature.addWindow(window);
