@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { ActionId } from '../../src/input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
+  MAIN_NORMAL_ACTIONS,
+  MAIN_SELECT_ACTIONS,
   READER_DELEGABLE_MAIN_ACTIONS,
   isMainExecutableAction,
   isReaderDelegableMainAction,
@@ -52,6 +54,14 @@ const expectedMainActions: readonly ActionId[] = [
   'mainTreeParent',
   'mainTreeExpandAll',
   'mainTreeCollapseAll',
+  'mainEnterSelect',
+  'mainSelectDown',
+  'mainSelectUp',
+  'mainSelectFirst',
+  'mainSelectLast',
+  'mainSelectSwapEnds',
+  'mainSelectFinish',
+  'mainSelectCancel',
 ];
 
 const expectedDelegableMainActions: readonly ActionId[] = [
@@ -100,10 +110,11 @@ describe('action capability ownership', () => {
   });
 
   it('composes binding capabilities from the owning Main and Reader sets', () => {
-    sameActions(actionsForBindingMode('main'), MAIN_EXECUTABLE_ACTIONS);
-    sameActions(actionsForBindingMode('normal'), READER_NORMAL_ACTIONS);
-    sameActions(actionsForBindingMode('visual'), READER_LOCAL_VISUAL_ACTIONS);
-    sameActions(actionsForBindingMode('insert'), READER_LOCAL_INSERT_ACTIONS);
+    sameActions(actionsForBindingMode('main-normal'), MAIN_NORMAL_ACTIONS);
+    sameActions(actionsForBindingMode('main-select'), MAIN_SELECT_ACTIONS);
+    sameActions(actionsForBindingMode('reader-normal'), READER_NORMAL_ACTIONS);
+    sameActions(actionsForBindingMode('reader-select'), READER_LOCAL_VISUAL_ACTIONS);
+    sameActions(actionsForBindingMode('reader-insert'), READER_LOCAL_INSERT_ACTIONS);
 
     sameActions(READER_NORMAL_ACTIONS, [
       ...READER_LOCAL_NORMAL_ACTIONS,

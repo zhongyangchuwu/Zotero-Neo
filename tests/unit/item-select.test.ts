@@ -1,30 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-
 import type { MainWindow } from '../../src/core/contracts';
 import { MainItemSelect, nextItemSelectIndex } from '../../src/main/item-select';
 
 const logger = { debug: vi.fn(), diagnostic: vi.fn() };
-
-function keyEvent(key: string, target: EventTarget): KeyboardEvent {
-  let prevented = false;
-  return {
-    key,
-    target,
-    ctrlKey: false,
-    metaKey: false,
-    altKey: false,
-    shiftKey: false,
-    repeat: false,
-    get defaultPrevented() {
-      return prevented;
-    },
-    preventDefault: () => {
-      prevented = true;
-    },
-    stopPropagation: vi.fn(),
-    stopImmediatePropagation: vi.fn(),
-  } as unknown as KeyboardEvent;
-}
 
 describe('Main Item Select', () => {
   it('computes clamped Vim-style range targets', () => {
@@ -35,16 +13,11 @@ describe('Main Item Select', () => {
     expect(nextItemSelectIndex(3, 10, 'last', 5)).toBe(4);
   });
 
-  it('uses Zotero native pivot/focus selection and distinguishes finish from cancel', () => {
-    let keydown: EventListener | undefined;
+  it('mutates only Zotero native pivot/focus selection while Main owns modal input', () => {
     let pivot = 2;
     let focused = 2;
     let count = 1;
-    const active = {
-      id: 'item-tree-row-2',
-      tagName: 'DIV',
-      localName: 'div',
-    } as unknown as Element;
+    const active = { id: 'item-tree-row-2' } as unknown as Element;
     const root = { contains: (node: unknown) => node === active } as HTMLElement;
     const select = vi.fn((index: number) => {
       pivot = index;
@@ -55,7 +28,6 @@ describe('Main Item Select', () => {
       focused = index;
       count = Math.abs(pivot - focused) + 1;
     });
-    const ensureRowIsVisible = vi.fn();
     const badge = {
       id: '',
       style: { cssText: '', display: '' },
@@ -64,10 +36,6 @@ describe('Main Item Select', () => {
     } as unknown as HTMLElement;
     const document = {
       activeElement: active,
-      addEventListener: (type: string, listener: EventListener) => {
-        if (type === 'keydown') keydown = listener;
-      },
-      removeEventListener: vi.fn(),
       getElementById: () => null,
       querySelector: () => null,
       createElementNS: () => badge,
@@ -93,49 +61,29 @@ describe('Main Item Select', () => {
     const window = {
       document,
       ZoteroPane: {
-        itemsView: {
-          domEl: root,
-          rowCount: 10,
-          selection,
-          ensureRowIsVisible,
-        },
+        itemsView: { domEl: root, rowCount: 10, selection, ensureRowIsVisible: vi.fn() },
       },
       setTimeout: (fn: () => void) => setTimeout(fn, 5000) as unknown as number,
       clearTimeout: (timer: number) =>
         clearTimeout(timer as unknown as ReturnType<typeof setTimeout>),
     } as unknown as MainWindow;
     const feature = new MainItemSelect(logger);
-    feature.addWindow(window);
 
-    keydown?.(keyEvent('v', active));
-    expect(select).toHaveBeenCalledWith(2);
-
-    keydown?.(keyEvent('j', active));
-    expect(shiftSelect).toHaveBeenLastCalledWith(3, false, false);
-    expect(count).toBe(2);
-
-    keydown?.(keyEvent('3', active));
-    keydown?.(keyEvent('j', active));
-    expect(shiftSelect).toHaveBeenLastCalledWith(6, false, false);
+    expect(feature.enter(window)).toBe('entered');
+    feature.extend(window, 1, 1, false);
+    feature.extend(window, 1, 3, false);
     expect(count).toBe(5);
-
-    keydown?.(keyEvent('o', active));
+    feature.swapEnds(window);
     expect(pivot).toBe(6);
     expect(focused).toBe(2);
-    expect(count).toBe(5);
+    expect(feature.finish(window)).toBe(5);
 
-    keydown?.(keyEvent('v', active));
-    expect(count).toBe(5);
-
-    keydown?.(keyEvent('v', active));
-    keydown?.(keyEvent('2', active));
-    keydown?.(keyEvent('j', active));
-    expect(count).toBe(3);
+    feature.enter(window);
+    feature.extend(window, 1, 2, false);
     const focusedBeforeCancel = focused;
-    keydown?.(keyEvent('Escape', active));
+    feature.cancel(window);
     expect(count).toBe(1);
     expect(focused).toBe(focusedBeforeCancel);
-
     feature.removeWindow(window);
   });
 });

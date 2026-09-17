@@ -373,13 +373,14 @@ describe('command palette provider', () => {
     let picker: FuzzyPicker;
     const context: CommandPaletteContext = {
       mode: 'main',
+      bindingMode: 'main-normal',
       actions: ['mainFuzzyAll', 'mainFuzzyAll', 'mainNextTab', 'mainOpenPDF', 'openCommandPalette'],
       language: 'en',
       bindings: {
-        'main::': 'openCommandPalette',
-        'main:x': 'mainFuzzyAll',
-        'main:y': 'mainFuzzyAll',
-        'main:z': 'mainNextTab',
+        'main-normal::': 'openCommandPalette',
+        'main-normal:x': 'mainFuzzyAll',
+        'main-normal:y': 'mainFuzzyAll',
+        'main-normal:z': 'mainNextTab',
       },
       execute: (action, count) => {
         actions.push([action, count]);
@@ -446,9 +447,10 @@ describe('command palette provider', () => {
     );
     const context: CommandPaletteContext = {
       mode: 'main',
+      bindingMode: 'main-normal',
       actions: ['mainFuzzyAll', 'mainOpenPDF'],
       language: 'en',
-      bindings: { 'main:x': 'mainFuzzyAll' },
+      bindings: { 'main-normal:x': 'mainFuzzyAll' },
       execute,
     };
 
@@ -481,6 +483,7 @@ describe('command palette provider', () => {
     );
     const context: CommandPaletteContext = {
       mode: 'main',
+      bindingMode: 'main-normal',
       actions: ['mainOpenPDF'],
       language: 'zh-CN',
       bindings: {},
@@ -510,12 +513,13 @@ describe('command palette provider', () => {
     );
     const readerContext: CommandPaletteContext = {
       mode: 'normal',
+      bindingMode: 'reader-normal',
       actions: READER_NORMAL_ACTIONS,
       language: 'en',
       bindings: {
-        'normal:z': 'zoomIn',
-        'normal:m': 'mainFuzzyAll',
-        'normal:v': 'highlightYellow',
+        'reader-normal:z': 'zoomIn',
+        'reader-normal:m': 'mainFuzzyAll',
+        'reader-normal:v': 'highlightYellow',
       },
       execute: () => {},
     };
@@ -530,12 +534,13 @@ describe('command palette provider', () => {
 
     const mainContext: CommandPaletteContext = {
       mode: 'main',
+      bindingMode: 'main-normal',
       actions: MAIN_EXECUTABLE_ACTIONS,
       language: 'en',
       bindings: {
-        'main:x': 'mainFuzzyAll',
-        'main:y': 'zoomIn',
-        'main:z': 'toggleMarksExplorer',
+        'main-normal:x': 'mainFuzzyAll',
+        'main-normal:y': 'zoomIn',
+        'main-normal:z': 'toggleMarksExplorer',
       },
       execute: () => {},
     };
@@ -556,9 +561,10 @@ describe('command palette provider', () => {
     );
     const context: CommandPaletteContext = {
       mode: 'main',
+      bindingMode: 'main-normal',
       actions: ['mainNextTab'],
       language: 'en',
-      bindings: { 'main:x': 'mainNextTab' },
+      bindings: { 'main-normal:x': 'mainNextTab' },
       execute: () => {},
     };
     await picker.open(window, session, 'commands', context);
@@ -574,9 +580,10 @@ describe('command palette provider', () => {
     const execute = vi.fn<CommandPaletteContext['execute']>();
     const context: CommandPaletteContext = {
       mode: 'main',
+      bindingMode: 'main-normal',
       actions: ['mainNextTab'],
       language: 'en',
-      bindings: { 'main:x': 'mainNextTab' },
+      bindings: { 'main-normal:x': 'mainNextTab' },
       execute,
     };
     const picker = new FuzzyPicker(

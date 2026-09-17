@@ -1,4 +1,4 @@
-import { MAIN_EXECUTABLE_ACTIONS } from '../main/action-capabilities';
+import { MAIN_NORMAL_ACTIONS, MAIN_SELECT_ACTIONS } from '../main/action-capabilities';
 import {
   READER_LOCAL_INSERT_ACTIONS,
   READER_LOCAL_VISUAL_ACTIONS,
@@ -7,16 +7,18 @@ import {
 import type { Mode } from './bindings';
 import type { ActionId } from './actions';
 
-/** Returns the executor-owned ActionId set available for a binding mode. */
+/** Returns the executor-owned ActionId set available for a configurable interaction mode. */
 export function actionsForBindingMode(mode: Mode): readonly ActionId[] {
   switch (mode) {
-    case 'normal':
+    case 'reader-normal':
       return READER_NORMAL_ACTIONS;
-    case 'visual':
+    case 'reader-select':
       return READER_LOCAL_VISUAL_ACTIONS;
-    case 'insert':
+    case 'reader-insert':
       return READER_LOCAL_INSERT_ACTIONS;
-    case 'main':
-      return MAIN_EXECUTABLE_ACTIONS;
+    case 'main-normal':
+      return MAIN_NORMAL_ACTIONS;
+    case 'main-select':
+      return MAIN_SELECT_ACTIONS;
   }
 }

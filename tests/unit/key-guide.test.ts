@@ -10,16 +10,16 @@ import {
 } from '../../src/input/key-guide';
 
 const bindings: BindingMap = {
-  'normal: e': 'toggleReaderSidebarOutline',
-  'normal: ff': 'mainFuzzyAll',
-  'normal: fc': 'mainFuzzyCollection',
-  'normal: ft': 'mainTabPick',
-  'normal: yy': 'mainYankCitekey',
+  'reader-normal: e': 'toggleReaderSidebarOutline',
+  'reader-normal: ff': 'mainFuzzyAll',
+  'reader-normal: fc': 'mainFuzzyCollection',
+  'reader-normal: ft': 'mainTabPick',
+  'reader-normal: yy': 'mainYankCitekey',
 };
 
 describe('leader guide projection', () => {
   it('projects only executable Space-leader continuations and group metadata', () => {
-    expect(leaderGuideEntries(bindings, 'normal', ' ', 'en')).toEqual([
+    expect(leaderGuideEntries(bindings, 'reader-normal', ' ', 'en')).toEqual([
       {
         key: 'e',
         label: KEY_GUIDE_CONFIG.actionLabels.toggleReaderSidebarOutline!.en,
@@ -31,7 +31,7 @@ describe('leader guide projection', () => {
   });
 
   it('updates the valid subtree for nested prefixes and resolves labels in Chinese', () => {
-    expect(leaderGuideEntries(bindings, 'normal', ' f', 'zh-CN')).toEqual([
+    expect(leaderGuideEntries(bindings, 'reader-normal', ' f', 'zh-CN')).toEqual([
       {
         key: 'c',
         label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyCollection!['zh-CN'],
@@ -52,18 +52,18 @@ describe('leader guide projection', () => {
 
   it('uses custom bindings as its only command source and hides non-leader prefixes', () => {
     const custom: BindingMap = {
-      'main: xx': 'mainTabPick',
-      'main: xy': 'mainFuzzyAll',
+      'main-normal: xx': 'mainTabPick',
+      'main-normal: xy': 'mainFuzzyAll',
     };
 
-    expect(leaderGuideEntries(custom, 'main', ' ', 'en')).toEqual([
+    expect(leaderGuideEntries(custom, 'main-normal', ' ', 'en')).toEqual([
       { key: 'x', label: KEY_GUIDE_CONFIG.genericGroupLabel.en, isGroup: true },
     ]);
-    expect(leaderGuideEntries(custom, 'main', ' x', 'en')).toEqual([
+    expect(leaderGuideEntries(custom, 'main-normal', ' x', 'en')).toEqual([
       { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.mainTabPick!.en, isGroup: false },
       { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyAll!.en, isGroup: false },
     ]);
-    expect(leaderGuideEntries(custom, 'main', 'g', 'en')).toEqual([]);
+    expect(leaderGuideEntries(custom, 'main-normal', 'g', 'en')).toEqual([]);
   });
 
   it('keeps the runtime defaults alongside the display metadata', () => {
@@ -74,16 +74,16 @@ describe('leader guide projection', () => {
   });
 
   it('keeps tab and picker groups without removed native-main search leaves', () => {
-    expect(DEFAULT_BINDINGS['normal: ft']).toBe('mainTabPick');
-    expect(DEFAULT_BINDINGS['normal: td']).toBe('mainClosePDF');
-    expect('normal: tp' in DEFAULT_BINDINGS).toBe(false);
-    expect('normal: o' in DEFAULT_BINDINGS).toBe(false);
-    expect('normal: q' in DEFAULT_BINDINGS).toBe(false);
-    expect('main: fa' in DEFAULT_BINDINGS).toBe(false);
-    expect('main: fs' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['main: ft']).toBe('mainTabPick');
-    expect(DEFAULT_BINDINGS['main: fT']).toBe('mainTagPicker');
-    expect('main: tp' in DEFAULT_BINDINGS).toBe(false);
+    expect(DEFAULT_BINDINGS['reader-normal: ft']).toBe('mainTabPick');
+    expect(DEFAULT_BINDINGS['reader-normal: td']).toBe('mainClosePDF');
+    expect('reader-normal: tp' in DEFAULT_BINDINGS).toBe(false);
+    expect('reader-normal: o' in DEFAULT_BINDINGS).toBe(false);
+    expect('reader-normal: q' in DEFAULT_BINDINGS).toBe(false);
+    expect('main-normal: fa' in DEFAULT_BINDINGS).toBe(false);
+    expect('main-normal: fs' in DEFAULT_BINDINGS).toBe(false);
+    expect(DEFAULT_BINDINGS['main-normal: ft']).toBe('mainTabPick');
+    expect(DEFAULT_BINDINGS['main-normal: fT']).toBe('mainTagPicker');
+    expect('main-normal: tp' in DEFAULT_BINDINGS).toBe(false);
   });
 
   it('uses an explicit language first and otherwise follows the host locale', () => {

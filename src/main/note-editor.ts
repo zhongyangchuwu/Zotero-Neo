@@ -154,7 +154,7 @@ export class NoteEditor {
     }
     if (session.note.mainBuffer) {
       const mainState = {
-        mode: 'main' as const,
+        mode: 'main-normal' as const,
         keyBuffer: session.note.mainBuffer,
         countBuffer: '',
       };
@@ -248,7 +248,7 @@ export class NoteEditor {
     session.note.mainTimer = undefined;
     const decision = advanceInput(
       {
-        mode: 'main',
+        mode: 'main-normal',
         keyBuffer: session.note.mainBuffer,
         countBuffer: '',
         bindings: this.#bindings(),

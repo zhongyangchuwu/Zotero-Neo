@@ -241,7 +241,9 @@ class FakeDocument {
   }
 }
 
-function createViewHarness(baseline: BindingMap = { 'normal:x': 'scrollDown' } as BindingMap) {
+function createViewHarness(
+  baseline: BindingMap = { 'reader-normal:x': 'scrollDown' } as BindingMap,
+) {
   const document = new FakeDocument();
   const root = document.documentElement;
   const wrapper = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
@@ -335,7 +337,7 @@ describe('mounted binding editor view', () => {
     harness.add.emit('click');
 
     const added = harness.mounted.getState().rows[0];
-    expect(added).toMatchObject({ mode: 'normal', key: '', action: '' });
+    expect(added).toMatchObject({ mode: 'reader-normal', key: '', action: '' });
     expect(harness.wrapper.scrollTop).toBe(0);
     expect(harness.geometry.setScrollTop).toHaveBeenCalledWith(harness.wrapper, 0);
     const focused = harness.geometry.focusAndSelect.mock.calls[0]?.[0] as unknown as FakeElement;
@@ -359,9 +361,15 @@ describe('mounted binding editor view', () => {
 
     expect(harness.host.createCalls).toContain('menulist');
     expect(harness.host.createCalls).toContain('menupopup');
-    expect(firstRow(harness).querySelector('.zv-binding-mode')?.value).toBe('normal');
+    expect(firstRow(harness).querySelector('.zv-binding-mode')?.value).toBe('reader-normal');
 
-    for (const mode of ['normal', 'visual', 'insert', 'main'] as const) {
+    for (const mode of [
+      'reader-normal',
+      'reader-select',
+      'reader-insert',
+      'main-normal',
+      'main-select',
+    ] as const) {
       const currentRow = harness.mounted.getState().rows.find((row) => row.id === rowId);
       expect(currentRow).toBeDefined();
       const renderedRow = firstRow(harness);

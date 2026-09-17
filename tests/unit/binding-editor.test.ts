@@ -38,7 +38,7 @@ describe('binding editor model transitions', () => {
     const addedRow = added.rows[0];
     expect(addedRow).toEqual({
       id: initial.nextRowId,
-      mode: 'normal',
+      mode: 'reader-normal',
       key: '',
       action: '',
     });
@@ -53,7 +53,7 @@ describe('binding editor model transitions', () => {
   it('returns clean after an existing row is edited and reverted without changing its ID', () => {
     const initial = createBindingEditor(DEFAULT_BINDINGS);
     const target = initial.rows.find(
-      (candidate) => candidate.mode === 'normal' && candidate.key === 'j',
+      (candidate) => candidate.mode === 'reader-normal' && candidate.key === 'j',
     );
     if (!target) throw new Error('Expected default normal:j row');
 
@@ -80,7 +80,7 @@ describe('binding editor model transitions', () => {
   it('resets to the default baseline and clears staged edits', () => {
     const initial = createBindingEditor(DEFAULT_BINDINGS);
     const target = initial.rows.find(
-      (candidate) => candidate.mode === 'normal' && candidate.key === 'j',
+      (candidate) => candidate.mode === 'reader-normal' && candidate.key === 'j',
     );
     if (!target) throw new Error('Expected default normal:j row');
 
@@ -103,8 +103,8 @@ describe('binding editor model transitions', () => {
 
   it('resets a customized editor to staged defaults while retaining its custom baseline', () => {
     const baseline = {
-      'normal:x': 'scrollDown',
-      'main:y': 'mainTabPick',
+      'reader-normal:x': 'scrollDown',
+      'main-normal:y': 'mainTabPick',
     } as BindingMap;
     const initial = createBindingEditor(baseline);
     const edited = transition(initial, {
@@ -124,19 +124,19 @@ describe('binding editor model transitions', () => {
 
   it('updates Mode on every existing row while preserving stable IDs', () => {
     const initial = createBindingEditor({
-      'normal:a': 'scrollDown',
-      'normal:b': 'scrollUp',
-      'normal:c': 'scrollLeft',
-      'normal:d': 'scrollRight',
-      'normal:e': 'scrollTop',
+      'reader-normal:a': 'scrollDown',
+      'reader-normal:b': 'scrollUp',
+      'reader-normal:c': 'scrollLeft',
+      'reader-normal:d': 'scrollRight',
+      'reader-normal:e': 'scrollTop',
     } as BindingMap);
     const ids = initial.rows.map((candidate) => candidate.id);
     const edits: readonly Pick<BindingEditorRow, 'mode' | 'action'>[] = [
-      { mode: 'visual', action: 'extendDown' },
-      { mode: 'insert', action: 'exitMode' },
-      { mode: 'main', action: 'mainTabPick' },
-      { mode: 'normal', action: 'scrollBottom' },
-      { mode: 'visual', action: 'openSelectionActions' },
+      { mode: 'reader-select', action: 'extendDown' },
+      { mode: 'reader-insert', action: 'exitMode' },
+      { mode: 'main-normal', action: 'mainTabPick' },
+      { mode: 'reader-normal', action: 'scrollBottom' },
+      { mode: 'reader-select', action: 'openSelectionActions' },
     ];
 
     let state = initial;
@@ -153,7 +153,7 @@ describe('binding editor model transitions', () => {
   });
 
   it('preserves incompatible legacy rows and blocks Apply until their Mode or Action is corrected', () => {
-    const baseline = { 'normal:x': 'mainTrashItems' } as BindingMap;
+    const baseline = { 'reader-normal:x': 'mainTrashItems' } as BindingMap;
     const state = createBindingEditor(baseline);
     const legacy = state.rows[0];
     const invalid = deriveBindingEditor(state);
@@ -166,14 +166,14 @@ describe('binding editor model transitions', () => {
     const corrected = transition(state, {
       type: 'update-row',
       rowId: legacy.id,
-      patch: { mode: 'main' },
+      patch: { mode: 'main-normal' },
     });
     expect(deriveBindingEditor(corrected).validation.valid).toBe(true);
-    expect(corrected.rows[0]).toEqual({ ...legacy, mode: 'main' });
+    expect(corrected.rows[0]).toEqual({ ...legacy, mode: 'main-normal' });
   });
 
   it('tracks save success and failure without losing staged state', () => {
-    const initial = createBindingEditor({ 'normal:x': 'scrollDown' } as BindingMap);
+    const initial = createBindingEditor({ 'reader-normal:x': 'scrollDown' } as BindingMap);
     const edited = transition(initial, {
       type: 'update-row',
       rowId: initial.rows[0].id,
@@ -198,9 +198,9 @@ describe('binding editor model transitions', () => {
 describe('binding editor validation and capabilities', () => {
   it('reports duplicate rows by stable ID without collapsing the draft', () => {
     const rows = [
-      row(10, 'normal', 'x', 'scrollDown'),
-      row(20, 'normal', 'x', 'scrollUp'),
-      row(30, 'main', 'x', 'mainFocusTree'),
+      row(10, 'reader-normal', 'x', 'scrollDown'),
+      row(20, 'reader-normal', 'x', 'scrollUp'),
+      row(30, 'main-normal', 'x', 'mainFocusTree'),
     ];
     const validation = validateBindingDraft(rows);
 
@@ -215,25 +215,25 @@ describe('binding editor validation and capabilities', () => {
 
   it('warns for strict same-mode prefixes while retaining an effective map', () => {
     const validation = validateBindingDraft([
-      row(1, 'normal', 'g', 'scrollDown'),
-      row(2, 'normal', 'gg', 'scrollUp'),
-      row(3, 'main', 'g', 'mainFocusTree'),
+      row(1, 'reader-normal', 'g', 'scrollDown'),
+      row(2, 'reader-normal', 'gg', 'scrollUp'),
+      row(3, 'main-normal', 'g', 'mainFocusTree'),
     ]);
 
     expect(validation.valid).toBe(true);
     expect(validation.warnings.map((issue) => issue.rowId)).toEqual([1, 2]);
     expect(validation.effectiveMap).toEqual({
-      'normal:g': 'scrollDown',
-      'normal:gg': 'scrollUp',
-      'main:g': 'mainFocusTree',
+      'reader-normal:g': 'scrollDown',
+      'reader-normal:gg': 'scrollUp',
+      'main-normal:g': 'mainFocusTree',
     });
   });
 
   it('blocks empty and malformed rows independently', () => {
     const validation = validateBindingDraft([
-      row(4, 'normal', '', 'scrollDown'),
+      row(4, 'reader-normal', '', 'scrollDown'),
       row(5, 'unknown', 'x', 'scrollDown'),
-      row(6, 'normal', 'y', 'notAnAction'),
+      row(6, 'reader-normal', 'y', 'notAnAction'),
     ]);
 
     expect(validation.valid).toBe(false);
@@ -247,32 +247,32 @@ describe('binding editor validation and capabilities', () => {
 
   it('produces an effective map ready for compact delta serialization', () => {
     const bindings = Object.fromEntries(
-      Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'normal:H'),
+      Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'reader-normal:H'),
     ) as BindingMap;
     const validation = validateBindingDraft(createBindingEditor(bindings).rows);
 
     expect(validation.valid).toBe(true);
     expect(validation.effectiveMap).not.toBeNull();
     expect(JSON.parse(encodeBindingOverrides(validation.effectiveMap!))).toEqual({
-      'normal:H': null,
+      'reader-normal:H': null,
     });
   });
 
   it('filters Action IDs and localized labels within the selected Mode capability set', () => {
-    expect(actionOptions('normal', 'scroll', 'en')).toContain('scrollDown');
-    expect(actionOptions('normal', 'SCROLLDOWN', 'en')).toContain('scrollDown');
-    expect(actionOptions('normal', '向下滚动', 'zh-CN')).toContain('scrollDown');
-    expect(actionOptions('main', 'mainfocusitems', 'en')).toContain('mainFocusItems');
-    expect(actionOptions('main', 'trash', 'en')).toContain('mainTrashItems');
-    expect(actionOptions('normal', 'trash', 'en')).not.toContain('mainTrashItems');
-    expect(actionOptions('visual', 'scroll', 'en')).toEqual([]);
+    expect(actionOptions('reader-normal', 'scroll', 'en')).toContain('scrollDown');
+    expect(actionOptions('reader-normal', 'SCROLLDOWN', 'en')).toContain('scrollDown');
+    expect(actionOptions('reader-normal', '向下滚动', 'zh-CN')).toContain('scrollDown');
+    expect(actionOptions('main-normal', 'mainfocusitems', 'en')).toContain('mainFocusItems');
+    expect(actionOptions('main-normal', 'trash', 'en')).toContain('mainTrashItems');
+    expect(actionOptions('reader-normal', 'trash', 'en')).not.toContain('mainTrashItems');
+    expect(actionOptions('reader-select', 'scroll', 'en')).toEqual([]);
     expect(actionLabel('scrollDown', 'en')).toBe('Scroll down');
   });
 });
 
 describe('binding editor Action interaction state', () => {
   it('wraps keyboard selection and commits the selected Action through model transitions', () => {
-    const initial = createBindingEditor({ 'normal:x': 'scrollDown' } as BindingMap);
+    const initial = createBindingEditor({ 'reader-normal:x': 'scrollDown' } as BindingMap);
     const rowId = initial.rows[0].id;
     let active = transition(initial, { type: 'open-action-editor', rowId });
     active = transition(active, {
@@ -297,7 +297,7 @@ describe('binding editor Action interaction state', () => {
   });
 
   it('keeps one active Action editor, mode-aware options, and query across language changes', () => {
-    const state = createBindingEditor({ 'normal:x': 'scrollDown' } as BindingMap);
+    const state = createBindingEditor({ 'reader-normal:x': 'scrollDown' } as BindingMap);
     const rowId = state.rows[0].id;
     let active = transition(state, { type: 'open-action-editor', rowId });
     active = transition(active, {
@@ -323,22 +323,22 @@ describe('binding editor Action interaction state', () => {
     });
     expect(localized.rows).toEqual(active.rows);
     expect(deriveBindingEditor(localized).activeActionOptions).toEqual(
-      actionOptions('normal', 'scroll', 'zh-CN'),
+      actionOptions('reader-normal', 'scroll', 'zh-CN'),
     );
 
     const switched = transition(localized, {
       type: 'update-row',
       rowId: rowId,
-      patch: { mode: 'main' },
+      patch: { mode: 'main-normal' },
     });
     expect(switched.actionEditor).toMatchObject({ rowId, query: 'scroll', open: true });
     expect(deriveBindingEditor(switched).activeActionOptions).toEqual(
-      actionOptions('main', 'scroll', 'zh-CN'),
+      actionOptions('main-normal', 'scroll', 'zh-CN'),
     );
   });
 
   it('selects an explicit Action and closes the active editor', () => {
-    const state = createBindingEditor({ 'normal:x': 'scrollDown' } as BindingMap);
+    const state = createBindingEditor({ 'reader-normal:x': 'scrollDown' } as BindingMap);
     const rowId = state.rows[0].id;
     const opened = transition(state, { type: 'open-action-editor', rowId });
     const selected = transition(opened, {

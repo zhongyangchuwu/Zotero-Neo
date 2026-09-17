@@ -1,5 +1,6 @@
 import { CleanupScope } from '../core/cleanup';
 import type { CompositionState } from '../input/composition';
+import type { Mode } from '../input/bindings';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { KeyGuide } from '../ui/key-guide';
@@ -18,6 +19,7 @@ export class MainWindowSession {
   readonly status: HTMLElement;
   readonly theme: ThemeManager;
   activePanel: MainPanel = 'items';
+  inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
   keyBuffer = '';
   countBuffer = '';
   keyTimer: BrowserTimer | undefined;
@@ -46,7 +48,6 @@ export class MainWindowSession {
     yTimer: BrowserTimer | undefined;
     focusPane: 'search' | 'list' | 'preview';
     tagMode: 'list' | 'query';
-    tagPurpose: 'filter' | 'edit';
     command: string;
     commandTimer: BrowserTimer | undefined;
     tagScope: 'current' | 'library';
@@ -83,7 +84,6 @@ export class MainWindowSession {
     previousElement: null,
     focusPane: 'search',
     tagMode: 'list',
-    tagPurpose: 'filter',
     command: '',
     commandTimer: undefined,
     tagScope: 'current',

@@ -7,13 +7,15 @@ import type {
 import { focusDirectionForAction, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
+  MAIN_NORMAL_ACTIONS,
+  MAIN_SELECT_ACTIONS,
   isMainExecutableAction,
   isReaderDelegableMainAction,
   type MainExecutableAction,
   type ReaderDelegableMainAction,
 } from './action-capabilities';
 import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
-import { resolveBindings } from '../input/bindings';
+import { bindingsForMode, resolveBindings, type Mode } from '../input/bindings';
 import {
   advanceInput,
   backspaceLeaderInput,
@@ -33,6 +35,7 @@ import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
 import { NoteEditor } from './note-editor';
 import { TagWorkspace } from './tag-workspace';
+import { MainItemSelect } from './item-select';
 import { mainReaderForTab, selectedMainTabID } from './host';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
@@ -50,10 +53,12 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #picker: FuzzyPicker;
   readonly #noteEditor: NoteEditor;
   readonly #tagWorkspace: TagWorkspace;
+  readonly #itemSelect: MainItemSelect;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
+    this.#itemSelect = new MainItemSelect(dependencies.logger);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -124,6 +129,7 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#sessions.delete(window);
     this.#dependencies.logger.debug(`main window detached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`);
+    this.#itemSelect.removeWindow(window);
     session.dispose();
   }
 
@@ -175,6 +181,9 @@ export class MainWindowController implements MainWindowControllerApi {
   private bindings() {
     return resolveBindings(this.#dependencies.preferences.get('bindings', ''));
   }
+  private activeBindings(mode: Mode) {
+    return bindingsForMode(this.bindings(), mode, mode === 'main-select' ? ['main-normal'] : []);
+  }
   private rescan = (window: MainWindow): void => this.#dependencies.reader.rescan(window);
 
   private onKeyDown(
@@ -216,11 +225,22 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.reader.forwardKey(event, window);
       return;
     }
+    if (session.inputMode === 'main-select' && !this.#itemSelect.itemsFocused(window)) {
+      this.#itemSelect.leave(window);
+      session.inputMode = 'main-normal';
+      session.keyBuffer = '';
+      session.countBuffer = '';
+      session.inputRevision += 1;
+      window.clearTimeout(session.keyTimer);
+      session.keyTimer = undefined;
+      this.clearKeyGuide(window, session);
+      return;
+    }
     const key = keyString(event);
     if (!key) return;
-    const bindings = this.bindings();
+    const bindings = this.activeBindings(session.inputMode);
     const leaderState = {
-      mode: 'main' as const,
+      mode: session.inputMode,
       keyBuffer: session.keyBuffer,
       countBuffer: session.countBuffer,
     };
@@ -256,7 +276,7 @@ export class MainWindowController implements MainWindowControllerApi {
     const revision = session.inputRevision;
     const decision = advanceInput(
       {
-        mode: 'main',
+        mode: session.inputMode,
         keyBuffer: session.keyBuffer,
         countBuffer: session.countBuffer,
         bindings,
@@ -273,6 +293,10 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (decision.kind === 'execute') {
+      if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
       if (!isMainExecutableAction(decision.action)) {
         event.preventDefault();
         event.stopPropagation();
@@ -335,7 +359,12 @@ export class MainWindowController implements MainWindowControllerApi {
       this.clearKeyGuide(window, session);
       return;
     }
-    const entries = leaderGuideEntries(this.bindings(), 'main', prefix, this.keyGuideLanguage());
+    const entries = leaderGuideEntries(
+      this.activeBindings(session.inputMode),
+      session.inputMode,
+      prefix,
+      this.keyGuideLanguage(),
+    );
     if (!entries.length) {
       this.clearKeyGuide(window, session);
       return;
@@ -388,7 +417,8 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'openCommandPalette':
         this.openCommandPalette(window, {
           mode: 'main',
-          actions: MAIN_EXECUTABLE_ACTIONS,
+          bindingMode: session.inputMode,
+          actions: session.inputMode === 'main-select' ? MAIN_SELECT_ACTIONS : MAIN_NORMAL_ACTIONS,
           bindings: this.bindings(),
           language: this.keyGuideLanguage(),
           execute: (nextAction, nextCount) => {
@@ -454,7 +484,6 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.cycleTab(window, 1);
         break;
       case 'mainTagPicker':
-        session.picker.tagPurpose = 'filter';
         void this.#picker.open(window, session, 'tags');
         break;
       case 'mainTagEditor':
@@ -495,6 +524,34 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'mainTreeCollapseAll':
         this.#navigation.collapseAll(window, session);
+        break;
+      case 'mainEnterSelect': {
+        const result = this.#itemSelect.enter(window);
+        if (result === 'entered') session.inputMode = 'main-select';
+        break;
+      }
+      case 'mainSelectDown':
+        this.#itemSelect.extend(window, 1, count, shouldDebounce);
+        break;
+      case 'mainSelectUp':
+        this.#itemSelect.extend(window, -1, count, shouldDebounce);
+        break;
+      case 'mainSelectFirst':
+        this.#itemSelect.extend(window, 'first', count);
+        break;
+      case 'mainSelectLast':
+        this.#itemSelect.extend(window, 'last', count);
+        break;
+      case 'mainSelectSwapEnds':
+        this.#itemSelect.swapEnds(window);
+        break;
+      case 'mainSelectFinish':
+        this.#itemSelect.finish(window);
+        session.inputMode = 'main-normal';
+        break;
+      case 'mainSelectCancel':
+        this.#itemSelect.cancel(window);
+        session.inputMode = 'main-normal';
         break;
       default:
         return assertNever(action);

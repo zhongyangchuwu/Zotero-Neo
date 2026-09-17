@@ -339,6 +339,38 @@ export const ACTION_LABELS = {
     en: 'Edit tags for the current item target(s)',
     'zh-CN': '编辑当前目标条目的标签',
   },
+  mainEnterSelect: {
+    en: 'Main window: enter item selection',
+    'zh-CN': '主窗口：进入条目选择',
+  },
+  mainSelectDown: {
+    en: 'Item Select: extend down',
+    'zh-CN': '条目选择：向下扩展',
+  },
+  mainSelectUp: {
+    en: 'Item Select: extend up',
+    'zh-CN': '条目选择：向上扩展',
+  },
+  mainSelectFirst: {
+    en: 'Item Select: extend to first item',
+    'zh-CN': '条目选择：扩展到首项',
+  },
+  mainSelectLast: {
+    en: 'Item Select: extend to last item',
+    'zh-CN': '条目选择：扩展到末项',
+  },
+  mainSelectSwapEnds: {
+    en: 'Item Select: swap anchor and focus',
+    'zh-CN': '条目选择：交换锚点与焦点',
+  },
+  mainSelectFinish: {
+    en: 'Item Select: finish and preserve selection',
+    'zh-CN': '条目选择：完成并保留选择',
+  },
+  mainSelectCancel: {
+    en: 'Item Select: cancel to focused item',
+    'zh-CN': '条目选择：取消并保留焦点项',
+  },
   mainNavDown: {
     en: 'Main window: navigate down',
     'zh-CN': '主窗口：向下导航',

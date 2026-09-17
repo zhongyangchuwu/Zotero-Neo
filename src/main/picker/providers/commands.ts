@@ -22,7 +22,7 @@ function commandItems(context: CommandPaletteContext): PickerItem[] {
   const keysByAction = new Map<ActionId, Set<string>>();
   for (const [bindingKey, action] of Object.entries(context.bindings)) {
     const binding = parseBindingKey(bindingKey);
-    if (!binding || binding.mode !== context.mode || !isActionId(action)) continue;
+    if (!binding || binding.mode !== context.bindingMode || !isActionId(action)) continue;
     const keys = keysByAction.get(action) ?? new Set<string>();
     keys.add(displayKey(binding.sequence));
     keysByAction.set(action, keys);
