@@ -215,9 +215,7 @@ export class MainItemSelect {
       this.showBadge(
         window,
         state,
-        preserve
-          ? `${count} item${count === 1 ? '' : 's'} selected`
-          : 'Item selection cancelled',
+        preserve ? `${count} item${count === 1 ? '' : 's'} selected` : 'Item selection cancelled',
         false,
       );
     } else {
