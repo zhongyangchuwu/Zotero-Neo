@@ -255,19 +255,14 @@ export class MainItemSelect {
           ];
     const id = active.id ?? '';
     return (
-      targets.some(
-        (target) => containsTarget(target, active) || containsTarget(active, target),
-      ) || (panel === 'items' ? id.includes('item-tree') : id.includes('collection'))
+      targets.some((target) => containsTarget(target, active) || containsTarget(active, target)) ||
+      (panel === 'items' ? id.includes('item-tree') : id.includes('collection'))
     );
   }
 
   private isPlainKey(event: KeyboardEvent, key: string): boolean {
     return (
-      event.key === key &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      !event.shiftKey
+      event.key === key && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
     );
   }
 
