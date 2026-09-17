@@ -50,6 +50,11 @@ edit('src/reader/controller.ts', (source) => {
   return source;
 });
 
+// New Binding Editor rows must use the canonical configurable default mode.
+edit('src/preferences/binding-editor.ts', (source) =>
+  source.replace("rows: [{ id, mode: 'normal', key: '', action: '' }, ...state.rows],", "rows: [{ id, mode: 'reader-normal', key: '', action: '' }, ...state.rows],"),
+);
+
 // Test fixtures follow the canonical configurable binding modes; Reader runtime-mode tests remain unchanged.
 edit('tests/unit/action-capabilities.test.ts', (source) => source
   .replace(
