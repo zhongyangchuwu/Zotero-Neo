@@ -13,5 +13,4 @@ export interface PickerItem {
   meta?: string;
   section?: 'current' | 'all';
   tagType?: 'manual' | 'automatic';
-  tagState?: 'all' | 'mixed' | 'none';
 }
