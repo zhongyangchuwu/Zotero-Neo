@@ -30,16 +30,10 @@ describe('Flash Unicode literal matching', () => {
       ),
     ).toHaveLength(1);
     expect(
-      flashMatches(
-        buildFlashTextIndex([{ textNode: japanese, text: japanese.data }]),
-        'ロボット',
-      ),
+      flashMatches(buildFlashTextIndex([{ textNode: japanese, text: japanese.data }]), 'ロボット'),
     ).toHaveLength(1);
     expect(
-      flashMatches(
-        buildFlashTextIndex([{ textNode: korean, text: korean.data }]),
-        '로봇',
-      ),
+      flashMatches(buildFlashTextIndex([{ textNode: korean, text: korean.data }]), '로봇'),
     ).toHaveLength(1);
   });
 });
