@@ -217,6 +217,66 @@ describe('item picker keyboard activation', () => {
   });
 });
 
+describe('picker IME boundary', () => {
+  it('defers filtering and command keys until composition commits', async () => {
+    const first = {
+      id: 1,
+      isRegularItem: () => true,
+      getField: (field: string) => (field === 'title' ? '机器人学习' : ''),
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const second = {
+      id: 2,
+      isRegularItem: () => true,
+      getField: (field: string) => (field === 'title' ? 'Diffusion Models' : ''),
+      getCreators: () => [],
+      getAttachments: () => [],
+      getNotes: () => [],
+    } as unknown as Zotero.Item;
+    const selectItem = vi.fn(async () => undefined);
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Zotero', {
+      Items: { getAll: async () => [first, second] },
+      Libraries: { userLibraryID: 1 },
+    });
+    const { window, session } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'all');
+    const input = session.picker.input as HTMLInputElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    input.emit('compositionstart');
+    input.value = '机器人';
+    input.emit('input', { isComposing: true } as unknown as Partial<Event>);
+    expect(session.picker.filtered).toHaveLength(2);
+
+    const enter = pickerKey('Enter', input, { isComposing: true, keyCode: 229 });
+    picker.onKeyDown(enter, window, session);
+    expect(enter.preventDefault).not.toHaveBeenCalled();
+    expect(selectItem).not.toHaveBeenCalled();
+    expect(session.picker.open).toBe(true);
+
+    const selectedBefore = session.picker.selected;
+    picker.onKeyDown(
+      pickerKey('ArrowDown', input, { isComposing: true, keyCode: 229 }),
+      window,
+      session,
+    );
+    expect(session.picker.selected).toBe(selectedBefore);
+
+    input.emit('compositionend');
+    input.emit('input', { isComposing: false } as unknown as Partial<Event>);
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([first.id]);
+  });
+});
+
 describe('picker mouse activation', () => {
   it('reads mouse preference at event time and confirms an item row once', async () => {
     const first = {
@@ -687,7 +747,7 @@ function createPickerHarness(width = 1200): {
 function pickerKey(
   key: string,
   target: EventTarget | null,
-  options: { ctrl?: boolean; shift?: boolean } = {},
+  options: { ctrl?: boolean; shift?: boolean; isComposing?: boolean; keyCode?: number } = {},
 ): KeyboardEvent {
   return {
     key,
@@ -696,6 +756,8 @@ function pickerKey(
     shiftKey: options.shift ?? false,
     metaKey: false,
     altKey: false,
+    isComposing: options.isComposing ?? false,
+    keyCode: options.keyCode ?? 0,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
   } as unknown as KeyboardEvent;

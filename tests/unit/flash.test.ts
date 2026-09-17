@@ -126,18 +126,41 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
     },
     querySelectorAll: (selector: string) =>
       selector === '.textLayer span' ? spans.map((entry) => entry.span) : [],
-    createElement: () => {
+    createElement: (tag: string) => {
+      const listeners = new Map<string, EventListener[]>();
       const element = {
+        tagName: tag.toUpperCase(),
         dataset: {} as Record<string, string>,
         style: { cssText: '', left: '', top: '' },
         hidden: false,
         textContent: '',
+        value: '',
+        type: '',
+        autocomplete: '',
+        spellcheck: false,
+        placeholder: '',
+        addEventListener: (type: string, listener: EventListener) => {
+          listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+        },
+        removeEventListener: (type: string, listener: EventListener) => {
+          listeners.set(
+            type,
+            (listeners.get(type) ?? []).filter((candidate) => candidate !== listener),
+          );
+        },
+        emit: (type: string, event: Partial<Event> = {}) => {
+          const synthetic = { ...event, target: event.target ?? element } as Event;
+          for (const listener of listeners.get(type) ?? []) listener(synthetic);
+        },
+        focus: vi.fn(),
         remove: vi.fn(() => {
           const index = bodyChildren.indexOf(element as unknown as HTMLElement);
           if (index >= 0) bodyChildren.splice(index, 1);
         }),
       };
-      return element as unknown as HTMLElement;
+      return element as unknown as HTMLElement & {
+        emit(type: string, event?: Partial<Event>): void;
+      };
     },
     createRange: () => ({
       setStart: (node: Text, offset: number) => {
@@ -167,13 +190,21 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
   return { pdfWindow, spans, bodyChildren };
 }
 
-function flashKey(key: string) {
+function flashKey(
+  key: string,
+  target: EventTarget | null = null,
+  options: { isComposing?: boolean; keyCode?: number } = {},
+) {
   return {
     key,
+    target,
     ctrlKey: false,
     metaKey: false,
     altKey: false,
+    isComposing: options.isComposing ?? false,
+    keyCode: options.keyCode ?? 0,
     preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
     stopImmediatePropagation: vi.fn(),
   } as unknown as KeyboardEvent;
 }
@@ -184,6 +215,38 @@ function flashHints(children: readonly HTMLElement[]): HTMLElement[] {
 
 function flashPrompt(children: readonly HTMLElement[]): HTMLElement | undefined {
   return children.find((element) => element.dataset.zoteroNeoFlashPrompt === '1');
+}
+
+function flashInput(
+  children: readonly HTMLElement[],
+): (HTMLInputElement & { emit(type: string, event?: Partial<Event>): void }) | undefined {
+  return children.find((element) => element.dataset.zoteroNeoFlashInput === '1') as
+    | (HTMLInputElement & { emit(type: string, event?: Partial<Event>): void })
+    | undefined;
+}
+
+function setFlashQuery(children: readonly HTMLElement[], value: string): void {
+  const input = flashInput(children);
+  if (!input) throw new Error('Expected Flash input');
+  input.value = value;
+  input.emit('input', { isComposing: false } as unknown as Partial<Event>);
+}
+
+function typeFlashKey(
+  flash: ReaderFlash,
+  created: ReturnType<typeof createFlashWindow>,
+  key: string,
+): KeyboardEvent {
+  const input = flashInput(created.bodyChildren);
+  if (!input) throw new Error('Expected Flash input');
+  const event = flashKey(key, input);
+  flash.handleKey(event, created.pdfWindow);
+  if (!(event.preventDefault as ReturnType<typeof vi.fn>).mock.calls.length) {
+    if (key === 'Backspace') input.value = Array.from(input.value).slice(0, -1).join('');
+    else if (key.length === 1) input.value += key;
+    input.emit('input', { isComposing: false } as unknown as Partial<Event>);
+  }
+  return event;
 }
 
 function createFlash() {
@@ -209,7 +272,7 @@ describe('Reader Flash lifecycle', () => {
     );
     const { flash, activations } = createFlash();
     flash.open(created.pdfWindow, 'visual-start');
-    for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
+    for (const key of 'target') typeFlashKey(flash, created, key);
 
     const hints = flashHints(created.bodyChildren);
     expect(hints).toHaveLength(2);
@@ -232,14 +295,13 @@ describe('Reader Flash lifecycle', () => {
     ]);
     const { flash, activations } = createFlash();
     flash.open(created.pdfWindow, 'visual-start');
-    flash.handleKey(flashKey('t'), created.pdfWindow);
-    flash.handleKey(flashKey('a'), created.pdfWindow);
+    for (const key of 'ta') typeFlashKey(flash, created, key);
 
     const labels = flashHints(created.bodyChildren).map((hint) => hint.textContent);
     expect(labels).toHaveLength(2);
     expect(labels).not.toContain('S');
     expect(labels).not.toContain('B');
-    flash.handleKey(flashKey('s'), created.pdfWindow);
+    typeFlashKey(flash, created, 's');
     expect(activations).toHaveLength(0);
     expect(flashPrompt(created.bodyChildren)?.textContent).toContain('tas (1)');
 
@@ -257,7 +319,7 @@ describe('Reader Flash lifecycle', () => {
     );
     const { flash } = createFlash();
     flash.open(created.pdfWindow, 'visual-start');
-    for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
+    for (const key of 'target') typeFlashKey(flash, created, key);
 
     expect(flashHints(created.bodyChildren)).toHaveLength(0);
     expect(flashPrompt(created.bodyChildren)?.textContent).toContain(
@@ -275,7 +337,7 @@ describe('Reader Flash lifecycle', () => {
     );
     const { flash, activations } = createFlash();
     flash.open(created.pdfWindow, 'visual-start');
-    for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
+    for (const key of 'target') typeFlashKey(flash, created, key);
 
     expect(flashHints(created.bodyChildren)[0]?.textContent).toBe('AA');
     flash.handleKey(flashKey('A'), created.pdfWindow);
@@ -297,7 +359,7 @@ describe('Reader Flash lifecycle', () => {
     );
     const { flash, activations } = createFlash();
     flash.open(created.pdfWindow, 'visual-end');
-    for (const key of 'target') flash.handleKey(flashKey(key), created.pdfWindow);
+    for (const key of 'target') typeFlashKey(flash, created, key);
 
     flash.handleKey(flashKey('Enter'), created.pdfWindow);
 
@@ -315,6 +377,46 @@ describe('Reader Flash lifecycle', () => {
     flash.cancel();
     flash.open(created.pdfWindow, 'visual-end');
     expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT END: …');
+  });
+
+  it('commits CJK IME text through the real input without leaking candidate keys', () => {
+    const created = createFlashWindow([{ value: '机器学习 方法', left: 20, top: 20 }]);
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    const input = flashInput(created.bodyChildren);
+    if (!input) throw new Error('Expected Flash input');
+
+    input.emit('compositionstart');
+    input.value = 'jiqi';
+    input.emit('input', { isComposing: true } as unknown as Partial<Event>);
+    expect(flashHints(created.bodyChildren)).toHaveLength(0);
+
+    const enter = flashKey('Enter', input, { isComposing: true, keyCode: 229 });
+    flash.handleKey(enter, created.pdfWindow);
+    expect(enter.preventDefault).not.toHaveBeenCalled();
+    expect(activations).toHaveLength(0);
+
+    input.value = '机器';
+    input.emit('compositionend');
+    input.emit('input', { isComposing: false } as unknown as Partial<Event>);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('机器 (1)');
+    expect(flashHints(created.bodyChildren)).toHaveLength(1);
+  });
+
+  it('leaves Backspace to the browser input instead of slicing UTF-16 query text', () => {
+    const created = createFlashWindow([{ value: '😀 emoji', left: 20, top: 20 }]);
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    setFlashQuery(created.bodyChildren, '😀');
+    const input = flashInput(created.bodyChildren);
+    if (!input) throw new Error('Expected Flash input');
+
+    const backspace = flashKey('Backspace', input);
+    flash.handleKey(backspace, created.pdfWindow);
+    expect(backspace.preventDefault).not.toHaveBeenCalled();
+    input.value = '';
+    input.emit('input', { isComposing: false } as unknown as Partial<Event>);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT START: …');
   });
 
   it('cancels instead of reindexing when the viewport changes', () => {
