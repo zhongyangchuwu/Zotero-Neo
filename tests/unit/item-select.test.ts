@@ -35,7 +35,7 @@ describe('Main Item Select', () => {
     expect(nextItemSelectIndex(3, 10, 'last', 5)).toBe(4);
   });
 
-  it('uses Zotero native pivot/focus selection and preserves it when leaving', () => {
+  it('uses Zotero native pivot/focus selection and distinguishes finish from cancel', () => {
     let keydown: EventListener | undefined;
     let pivot = 2;
     let focused = 2;
@@ -126,6 +126,16 @@ describe('Main Item Select', () => {
 
     keydown?.(keyEvent('v', active));
     expect(count).toBe(5);
+
+    keydown?.(keyEvent('v', active));
+    keydown?.(keyEvent('2', active));
+    keydown?.(keyEvent('j', active));
+    expect(count).toBe(3);
+    const focusedBeforeCancel = focused;
+    keydown?.(keyEvent('Escape', active));
+    expect(count).toBe(1);
+    expect(focused).toBe(focusedBeforeCancel);
+
     feature.removeWindow(window);
   });
 });
