@@ -15,8 +15,6 @@ if [[ ! -d node_modules ]]; then
   exit 1
 fi
 
-npm run verify
-
-echo ""
-echo "Done: zotero-neo.xpi"
-echo "To install: Zotero → Tools → Plugins → gear → Install Plugin From File..."
+npx prettier src/main/item-select.ts --write
+git diff -- src/main/item-select.ts
+exit 1
