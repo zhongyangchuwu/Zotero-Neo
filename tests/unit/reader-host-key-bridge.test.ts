@@ -52,4 +52,36 @@ describe('ReaderHostKeyBridge', () => {
     expect(view._onKeyDown).toBe(originalKeyDown);
     expect(view._textAnnotationFocused).toBe(originalTextFocus);
   });
+  it('ignores null host views and patches a view that appears later', () => {
+    const internal = { _primaryView: null, _secondaryView: null } as unknown as NonNullable<
+      ReaderRuntime['_internalReader']
+    >;
+    const reader = { _internalReader: internal } as ReaderRuntime;
+    const bridge = new ReaderHostKeyBridge({
+      reader,
+      nativeEditableFocused: () => false,
+      consumesKey: () => false,
+      commentInputFocused: () => false,
+      debug: vi.fn(),
+    });
+
+    expect(() => bridge.sync()).not.toThrow();
+
+    const originalKeyDown = vi.fn();
+    const originalTextFocus = vi.fn(() => false);
+    const view = {
+      _onKeyDown: originalKeyDown,
+      _textAnnotationFocused: originalTextFocus,
+    } as unknown as ReaderViewRuntime;
+    Reflect.set(internal, '_primaryView', view);
+
+    bridge.sync();
+
+    expect(view._onKeyDown).not.toBe(originalKeyDown);
+    expect(view._textAnnotationFocused).not.toBe(originalTextFocus);
+    bridge.dispose();
+    expect(view._onKeyDown).toBe(originalKeyDown);
+    expect(view._textAnnotationFocused).toBe(originalTextFocus);
+  });
+
 });
