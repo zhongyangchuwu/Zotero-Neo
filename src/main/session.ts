@@ -104,11 +104,9 @@ export class MainWindowSession {
     handler: EventListener | null;
     mode: NoteMode;
     buffer: string;
-    mainBuffer: string;
-    mainTimer: BrowserTimer | undefined;
-    mainRevision: number;
     count: string;
     timer: BrowserTimer | undefined;
+    inputRevision: number;
     yank: string;
   } = {
     editorWindow: null,
@@ -116,11 +114,9 @@ export class MainWindowSession {
     handler: null,
     mode: 'normal',
     buffer: '',
-    mainBuffer: '',
-    mainTimer: undefined,
-    mainRevision: 0,
     count: '',
     timer: undefined,
+    inputRevision: 0,
     yank: '',
   };
   constructor(window: MainWindow, preferences: PreferenceStore) {
