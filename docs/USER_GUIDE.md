@@ -488,16 +488,13 @@ highlighted in the PDF and scrolled to in the sidebar.
 | `Enter` | Open the selected annotation's comment field for editing     |
 | `i`     | Enter Insert mode **and** focus the annotation comment field |
 | `y`     | Copy the annotation's **highlighted text** to the clipboard  |
-| `yy`    | Copy the annotation's **comment text** to the clipboard      |
+| `Y`     | Copy the annotation's **comment text** to the clipboard      |
 | `dd`    | Delete the selected annotation                               |
 | `zy`    | Change annotation colour → Yellow                            |
 | `zr`    | Change annotation colour → Red                               |
 | `zg`    | Change annotation colour → Green                             |
 | `zb`    | Change annotation colour → Blue                              |
 | `zp`    | Change annotation colour → Purple                            |
-
-> **Tip:** `y` vs `yy` — the plugin waits up to 800 ms for the second `y`
-> before firing the single-`y` action. Typing `yy` quickly always wins.
 
 #### Selection workflow
 
@@ -578,7 +575,7 @@ editors keeps its Zotero behavior).
 
 1. Press `]` / `[` to move to the next / previous annotation. The annotation
    is highlighted in the PDF viewer and the sidebar scrolls to its card.
-2. Press `y` to copy the highlighted text, `yy` to copy the comment.
+2. Press `y` to copy the highlighted text, `Y` to copy the comment.
 3. Press `i` (or `Enter`) to open the comment overlay and type a note.
    The plugin's own floating input box appears over the PDF with the comment
    pre-filled and the highlighted text quoted as context (Zotero's popup is
@@ -679,7 +676,6 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `addNote`                     | Add note annotation                                                                  |
 | `copySelection`               | Copy current selection to clipboard                                                  |
 | `searchSelection`             | Open find bar and search for current selection                                       |
-| `yankParagraph`               | Copy whole paragraph to clipboard                                                    |
 | `swapVisualEnds`              | Swap selection anchor and focus                                                      |
 | `openCommandPalette`          | Open the command palette in the current Normal context                               |
 | `mainTabPick`                 | Open the shared picker for currently open Zotero tabs                                |

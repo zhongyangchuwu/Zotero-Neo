@@ -277,10 +277,6 @@ const BASE_ACTION_LABELS = {
     en: 'Copy annotation comment text',
     'zh-CN': '复制标注注释文本',
   },
-  yankParagraph: {
-    en: 'Copy whole paragraph to clipboard',
-    'zh-CN': '将整个段落复制到剪贴板',
-  },
   openCommandPalette: {
     en: 'Open command palette',
     'zh-CN': '打开命令面板',

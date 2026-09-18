@@ -2,6 +2,7 @@ import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 
 import {
   migrateBindingModeOverrides,
+  migrateFrozenKeymapOverrides,
   migrateLegacyBindingOverrides,
   migrateNoteBindingOverrides,
   resolveBindings,
@@ -9,7 +10,7 @@ import {
 } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
-export const BINDING_SCHEMA_VERSION = 9;
+export const BINDING_SCHEMA_VERSION = 10;
 
 export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
 
@@ -70,7 +71,8 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
       : version >= 7
         ? migrateBindingModeOverrides(raw)
         : migrateLegacyBindingOverrides(raw);
-  const migrated = migrateNoteBindingOverrides(canonical);
+  const noteMigrated = migrateNoteBindingOverrides(canonical);
+  const migrated = migrateFrozenKeymapOverrides(noteMigrated);
   if (migrated !== raw) preferences.set('bindings', migrated);
   preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }

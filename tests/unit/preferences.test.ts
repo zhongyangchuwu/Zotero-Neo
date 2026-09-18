@@ -211,6 +211,51 @@ describe('binding preferences', () => {
     expect(bindingsFromPreferences(custom)['reader-normal:H']).toBe('scrollRight');
     expect(bindingsFromPreferences(custom)['main-normal:J']).toBe('mainNextTab');
   });
+  it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {
+    const unbound = new TestPreferences({
+      'bindings.schemaVersion': 9,
+      bindings: JSON.stringify({
+        'reader-normal:yy': null,
+        'reader-select:yy': null,
+      }),
+    });
+
+    migrateBindingPreferences(unbound);
+
+    expect(JSON.parse(unbound.get('bindings', ''))).toEqual({
+      'reader-normal:Y': null,
+    });
+    expect(unbound.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    const resolvedUnbound = bindingsFromPreferences(unbound);
+    expect(resolvedUnbound['reader-normal:y']).toBe('yankAnnotation');
+    expect(resolvedUnbound['reader-normal:Y']).toBeUndefined();
+    expect(resolvedUnbound['reader-normal:yy']).toBeUndefined();
+    expect(resolvedUnbound['reader-select:y']).toBe('copySelection');
+    expect(resolvedUnbound['reader-select:yy']).toBeUndefined();
+
+    const custom = new TestPreferences({
+      'bindings.schemaVersion': 9,
+      bindings: JSON.stringify({
+        'reader-normal:Y': null,
+        'reader-normal:yy': 'scrollDown',
+        'reader-select:yy': 'searchSelection',
+      }),
+    });
+
+    migrateBindingPreferences(custom);
+
+    expect(JSON.parse(custom.get('bindings', ''))).toEqual({
+      'reader-normal:Y': null,
+      'reader-normal:yy': 'scrollDown',
+      'reader-select:yy': 'searchSelection',
+    });
+    expect(custom.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    const resolvedCustom = bindingsFromPreferences(custom);
+    expect(resolvedCustom['reader-normal:Y']).toBeUndefined();
+    expect(resolvedCustom['reader-normal:yy']).toBe('scrollDown');
+    expect(resolvedCustom['reader-select:yy']).toBe('searchSelection');
+  });
+
   it('migrates schema 6 to compact storage before versioning and remains idempotent', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 6,

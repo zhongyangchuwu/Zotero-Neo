@@ -19,19 +19,19 @@ Completed feature gates:
   composition on the current Zotero host (#23).
 - Shared fuzzy matching uses the pinned `fuzzysort` adapter rather than a local
   ad-hoc scorer (#26).
+- Pre-release interaction architecture is unified across Main Item Select and Note, while Reader
+  orchestration has explicit host-key, PDF-view lifecycle, navigation, and Select-range owners
+  (#29).
+- The default 0.1.0 keymap is frozen with an automated no-exact-prefix-ambiguity guard; Reader
+  annotation copy uses `y` / `Y` without timeout ambiguity (#24).
 
 Current pre-release work:
 
-- **Architecture cleanup (#29):** remove remaining parallel input paths before
-  the public keymap freezes. Main Item Select and Note Normal/Insert now use the
-  shared binding/input system; the remaining structural work is decomposition of
-  the oversized Reader orchestration boundary along existing feature/host
-  ownership lines. See [ARCHITECTURE.md](ARCHITECTURE.md).
-- **Release gate (#24):** after the architecture/keymap boundary is accepted,
-  run the final Zotero 10 host regression across Reader, Main, Note, split views,
-  pickers/workspaces, restart/restore, preferences, and Error Console.
-- Prepare the first release metadata and update feed, then validate clean install
-  and upgrade behavior before tagging `v0.1.0`.
+- **Release gate (#24):** run the final Zotero 10 host regression across Reader,
+  Main, Note, split views, pickers/workspaces, restart/restore, preferences, and
+  Error Console using the frozen defaults.
+- Prepare and validate the first release metadata/update feed, then validate clean
+  install and upgrade behavior before tagging `v0.1.0`.
 - Continue tracking native Zotero Reader semantic-selection integration in
   [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
   DOM-selection compatibility path remains acceptable until Zotero exposes or

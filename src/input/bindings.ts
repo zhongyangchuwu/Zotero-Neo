@@ -61,7 +61,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:return': 'editAnnotation',
   'reader-normal:dd': 'deleteAnnotation',
   'reader-normal:y': 'yankAnnotation',
-  'reader-normal:yy': 'yankAnnotationComment',
+  'reader-normal:Y': 'yankAnnotationComment',
   'reader-normal:zy': 'recolorYellow',
   'reader-normal:zr': 'recolorRed',
   'reader-normal:zg': 'recolorGreen',
@@ -117,7 +117,6 @@ export const DEFAULT_BINDINGS = {
   'reader-select:za': 'addNote',
   'reader-select:i': 'addNote',
   'reader-select:y': 'copySelection',
-  'reader-select:yy': 'yankParagraph',
   'reader-select:#': 'searchSelection',
   'reader-select:o': 'swapVisualEnds',
   'reader-select:v': 'exitMode',
@@ -244,6 +243,8 @@ export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
 
 const RETIRED_DEFAULT_BINDINGS = {
   'reader-normal:s': 'flashText',
+  'reader-normal:yy': 'yankAnnotationComment',
+  'reader-select:yy': 'yankParagraph',
   'reader-normal:H': 'scrollLeft',
   'reader-normal:L': 'scrollRight',
   'reader-normal:J': 'mainPrevTab',
@@ -267,6 +268,7 @@ const RETIRED_DEFAULT_BINDINGS = {
 const REMOVED_ACTIONS: Readonly<Record<string, true>> = {
   mainFocusSearch: true,
   mainAdvancedSearch: true,
+  yankParagraph: true,
 };
 
 function stringifyBindingOverrides(overrides: BindingOverrides): string {
@@ -320,6 +322,26 @@ export function migrateNoteBindingOverrides(raw: unknown): string {
     const noteKey = 'note-normal:' + binding.sequence;
     if (!(noteKey in overrides)) overrides[noteKey] = action;
   }
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Migrates the 0.1.0 Reader yank-key freeze without losing explicit unbindings.
+ *
+ * Schema 9 stored compact overrides, so the old default yy binding itself is normally absent.
+ * A persisted null at reader-normal:yy therefore means the user explicitly unbound the old
+ * comment-yank default and must follow that action to its new Y default. Custom yy actions remain
+ * untouched. Select yy no longer has a default, so its obsolete null can simply be dropped.
+ */
+export function migrateFrozenKeymapOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const oldCommentYank = 'reader-normal:yy';
+  const newCommentYank = 'reader-normal:Y';
+  if (overrides[oldCommentYank] === null) {
+    delete overrides[oldCommentYank];
+    if (!(newCommentYank in overrides)) overrides[newCommentYank] = null;
+  }
+  if (overrides['reader-select:yy'] === null) delete overrides['reader-select:yy'];
   return stringifyBindingOverrides(overrides);
 }
 
