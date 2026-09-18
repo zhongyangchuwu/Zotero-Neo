@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   APPEARANCE_PREFERENCE_KEY,
   ThemeManager,
+  applyTheme,
   appearanceModeFromPreferences,
   cssColorIsDark,
   resolveThemeFromSignals,
@@ -116,6 +117,34 @@ describe('appearance theme contract', () => {
     expect(() => manager.add(panel)).not.toThrow();
     expect(panel.attributes.get('data-zotero-neo-theme')).toBe('dark');
     manager.dispose();
+  });
+
+  it('provides paired semantic surfaces and foregrounds for modes and statuses', () => {
+    const panel = root();
+
+    applyTheme(panel, 'light');
+    expect(panel.values.get('--zotero-neo-mode-visual')).toBe('#e8f5e9');
+    expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#14532d');
+    expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#fff8e1');
+    expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#713f12');
+    expect(panel.values.get('--zotero-neo-status-success')).toBe('#dcfce7');
+    expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#166534');
+    expect(panel.values.get('--zotero-neo-status-info')).toBe('#dbeafe');
+    expect(panel.values.get('--zotero-neo-status-info-text')).toBe('#1e40af');
+    expect(panel.values.get('--zotero-neo-status-error')).toBe('#fee2e2');
+    expect(panel.values.get('--zotero-neo-status-error-text')).toBe('#991b1b');
+
+    applyTheme(panel, 'dark');
+    expect(panel.values.get('--zotero-neo-mode-visual')).toBe('#1a3020');
+    expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#dcfce7');
+    expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#332800');
+    expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#fef3c7');
+    expect(panel.values.get('--zotero-neo-status-success')).toBe('#16301f');
+    expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#bbf7d0');
+    expect(panel.values.get('--zotero-neo-status-info')).toBe('#172554');
+    expect(panel.values.get('--zotero-neo-status-info-text')).toBe('#dbeafe');
+    expect(panel.values.get('--zotero-neo-status-error')).toBe('#3f1d1d');
+    expect(panel.values.get('--zotero-neo-status-error-text')).toBe('#fecaca');
   });
 
   it('updates existing roots in place and detaches live listeners', () => {

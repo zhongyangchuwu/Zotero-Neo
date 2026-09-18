@@ -122,12 +122,18 @@ export class MainNavigation {
   status(session: MainWindowSession, text: string, milliseconds = 2000): void {
     session.status.textContent = text;
     session.status.style.display = 'block';
-    session.status.style.color = THEME_VARS.onAccent;
-    session.status.style.background = text.startsWith('✓')
-      ? THEME_VARS.success
-      : text.startsWith('→') || text.startsWith('▶')
-        ? THEME_VARS.accent
-        : THEME_VARS.error;
+    const success = text.startsWith('✓');
+    const info = text.startsWith('→') || text.startsWith('▶');
+    session.status.style.color = success
+      ? THEME_VARS.statusSuccessText
+      : info
+        ? THEME_VARS.statusInfoText
+        : THEME_VARS.statusErrorText;
+    session.status.style.background = success
+      ? THEME_VARS.statusSuccess
+      : info
+        ? THEME_VARS.statusInfo
+        : THEME_VARS.statusError;
     const timer = session.window.setTimeout(() => {
       session.status.style.display = 'none';
     }, milliseconds);

@@ -1436,14 +1436,15 @@ export class ReaderSession {
       );
       const pending = this.state.countBuffer || this.state.keyBuffer;
       indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
-      indicator.style.color = THEME_VARS.onAccent;
-      indicator.style.background = THEME_VARS.accent;
+      indicator.style.color = THEME_VARS.modeVisualText;
+      indicator.style.background = THEME_VARS.modeVisual;
       return;
     }
     indicator.textContent = `-- ${this.state.mode.toUpperCase()} --${this.state.countBuffer || this.state.keyBuffer ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
-    indicator.style.color = this.state.mode === 'normal' ? THEME_VARS.text : THEME_VARS.onAccent;
+    indicator.style.color =
+      this.state.mode === 'insert' ? THEME_VARS.modeInsertText : THEME_VARS.modeNormalText;
     indicator.style.background =
-      this.state.mode === 'insert' ? THEME_VARS.success : THEME_VARS.elevated;
+      this.state.mode === 'insert' ? THEME_VARS.modeInsert : THEME_VARS.modeNormal;
   }
 
   private showStatus(message: string, duration = 2000): void {
@@ -1451,12 +1452,18 @@ export class ReaderSession {
     if (!indicator) return;
     indicator.style.display = 'block';
     indicator.textContent = message;
-    indicator.style.color = THEME_VARS.onAccent;
-    indicator.style.background = message.startsWith('✓')
-      ? THEME_VARS.success
-      : message.startsWith('→') || message.startsWith('▶')
-        ? THEME_VARS.accent
-        : THEME_VARS.error;
+    const success = message.startsWith('✓');
+    const info = message.startsWith('→') || message.startsWith('▶');
+    indicator.style.color = success
+      ? THEME_VARS.statusSuccessText
+      : info
+        ? THEME_VARS.statusInfoText
+        : THEME_VARS.statusErrorText;
+    indicator.style.background = success
+      ? THEME_VARS.statusSuccess
+      : info
+        ? THEME_VARS.statusInfo
+        : THEME_VARS.statusError;
     this.schedule(duration, () => this.updateIndicator());
   }
 
