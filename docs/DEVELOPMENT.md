@@ -96,8 +96,9 @@ sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, re
 focus, queueing, confirmation/cancellation, and containment. Ordinary object sources own
 only candidate loading and presentation; the semantic action that opens the surface injects
 the confirmation callback and therefore owns the host operation. Command Palette reuses the
-same surface to resolve an `ActionId`. The Tag source still carries transitional interaction
-hooks until issue #39 replaces the legacy Tag Picker/Workspace behavior.
+same surface to resolve an `ActionId`. Tag candidate sources may project namespaces,
+create candidates, and action-specific metadata, but they do not mutate item tags or Main
+filter state; those effects belong to `TagActions`.
 
 Reader outline and marks retain separate domain behavior. `src/reader/sidebar-overlay.ts`
 coordinates only their view-local lifecycle: mutual exclusion, theme-root cleanup, PDF-view
