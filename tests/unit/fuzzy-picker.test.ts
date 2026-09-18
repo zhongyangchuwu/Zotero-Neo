@@ -406,7 +406,7 @@ describe('command palette provider', () => {
     );
     await picker.open(window, session, 'commands', commandPickerOptions(context));
     const all = session.picker.filtered.find((item) => item.id === 'findAllItems');
-    expect(all?.title).toBe('Main window: fuzzy picker — all items');
+    expect(all?.title).toBe('Find an item in the library');
     expect(all?.meta).toBe('x, y');
     expect(all?.search).toContain('x, y');
     expect(session.picker.filtered.filter((item) => item.id === 'findAllItems')).toHaveLength(1);
