@@ -43,11 +43,11 @@ import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-edi
 import { ReaderHostKeyBridge } from './host-key-bridge';
 import { ReaderNavigation } from './navigation';
 import { ReaderViewLifecycle } from './view-lifecycle';
-import { ReaderFlash, type FlashIntent, type FlashSelectionTarget } from './flash';
+import { ReaderFlash } from './flash';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
+import { ReaderSelectionRange } from './selection-range';
 import { selectionClipboardText } from './selection-text';
 import { ReaderSmoothScroller, smoothScrollSpec } from './smooth-scroll';
-import { verticalTextPosition } from './text-motion';
 import {
   COLORS,
   type AnnotationColor,
@@ -56,7 +56,6 @@ import {
   type AnnotationSelectionParams,
   type ItemRuntime,
   type PdfWindow,
-  type Pointer,
   type ReaderEventRuntime,
   type ReaderMode,
   type ReaderRuntime,
@@ -143,10 +142,6 @@ function zoteroRuntime(): ZoteroRuntime {
 function asPdfWindow(window: Window | undefined): PdfWindow | null {
   const pdfWindow = window as PdfWindow | undefined;
   return pdfWindow ?? null;
-}
-
-function isTextNode(node: Node | null): node is Text {
-  return node?.nodeType === 3;
 }
 
 function annotationText(value: string): string {
@@ -409,6 +404,7 @@ export class ReaderSession {
   readonly #linkHints: ReaderLinkHints;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #flash: ReaderFlash;
+  readonly #selectionRange: ReaderSelectionRange;
   readonly #selectionActions: ReaderSelectionActions;
   readonly #smoothScroller: ReaderSmoothScroller;
   readonly #themeManagers = new Map<Window, ThemeManager>();
@@ -430,16 +426,28 @@ export class ReaderSession {
       indicator: null,
       indicatorThemeCleanup: null,
       activePdfWindow: dependencies.firstPdfWindow,
-      visualAnchor: null,
-      visualPreferredX: null,
       marks: {},
       filterColor: null,
       lastAnnotationKey: null,
     };
     this.#flash = new ReaderFlash({
-      activate: (intent, pdfWindow, target) => this.activateFlashTarget(intent, pdfWindow, target),
+      activate: (intent, pdfWindow, target) =>
+        this.#selectionRange.activateFlashTarget(intent, pdfWindow, target),
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+    });
+    this.#selectionRange = new ReaderSelectionRange({
+      mode: () => this.state.mode,
+      setModeVisual: () => this.setMode('visual'),
+      invalidateNativeSelection: () => {
+        this.state.selectionParams = null;
+      },
+      noteOwner: () => this.#dependencies.selection?.noteOwner(this),
+      updateIndicator: () => this.updateIndicator(),
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      scrollContainer: (pdfWindow) => this.scrollContainer(pdfWindow),
+      scrollBy: (pdfWindow, x, y) => this.scrollBy(pdfWindow, x, y),
+      openFlash: (pdfWindow, intent) => this.#flash.open(pdfWindow, intent),
     });
     this.#selectionActions = new ReaderSelectionActions({
       actions: (context, pdfWindow) => this.selectionActionDefinitions(context, pdfWindow),
@@ -542,13 +550,14 @@ export class ReaderSession {
       onScroll: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
-        if (this.state.mode === 'visual') this.updateVisualCursor(pdfWindow, false);
+        if (this.state.mode === 'visual') this.#selectionRange.refresh(pdfWindow, false);
       },
       onResize: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
       },
       releaseView: (pdfWindow) => {
+        this.#selectionRange.releaseView(pdfWindow);
         this.#linkHints.releaseView(pdfWindow);
         this.#selectionActions.releaseView(pdfWindow);
         this.releaseViewTheme(pdfWindow);
@@ -604,6 +613,7 @@ export class ReaderSession {
     this.#flash.dispose();
     this.#smoothScroller.dispose();
     this.clearSidebarToggleInput();
+    this.#selectionRange.leave();
     this.#viewLifecycle.dispose();
     this.#hostKeyBridge.dispose();
     this.#scope.dispose();
@@ -1212,7 +1222,7 @@ export class ReaderSession {
         this.yankAnnotation(true);
         break;
       case 'enterVisual':
-        if (this.modeEnabled('visual')) this.enterVisual(pdfWindow);
+        if (this.modeEnabled('visual')) this.#selectionRange.enter(pdfWindow);
         break;
       case 'openSelectionActions':
         this.openSelectionActions(pdfWindow);
@@ -1226,40 +1236,40 @@ export class ReaderSession {
         pdfWindow.getSelection()?.removeAllRanges();
         break;
       case 'extendDown':
-        this.extendByLine(pdfWindow, 1);
+        this.#selectionRange.extendByLine(pdfWindow, 1);
         break;
       case 'extendUp':
-        this.extendByLine(pdfWindow, -1);
+        this.#selectionRange.extendByLine(pdfWindow, -1);
         break;
       case 'extendLeft':
-        this.modifySelection(pdfWindow, 'backward', 'character');
+        this.#selectionRange.modify(pdfWindow, 'backward', 'character');
         break;
       case 'extendRight':
-        this.modifySelection(pdfWindow, 'forward', 'character');
+        this.#selectionRange.modify(pdfWindow, 'forward', 'character');
         break;
       case 'extendWordForward':
-        this.modifySelection(pdfWindow, 'forward', 'word');
+        this.#selectionRange.modify(pdfWindow, 'forward', 'word');
         break;
       case 'extendWordBackward':
-        this.modifySelection(pdfWindow, 'backward', 'word');
+        this.#selectionRange.modify(pdfWindow, 'backward', 'word');
         break;
       case 'extendLineStart':
-        this.extendLineBoundary(pdfWindow, false);
+        this.#selectionRange.extendLineBoundary(pdfWindow, false);
         break;
       case 'extendLineEnd':
-        this.extendLineBoundary(pdfWindow, true);
+        this.#selectionRange.extendLineBoundary(pdfWindow, true);
         break;
       case 'extendSentenceForward':
-        this.modifySelection(pdfWindow, 'forward', 'sentence');
+        this.#selectionRange.modify(pdfWindow, 'forward', 'sentence');
         break;
       case 'extendSentenceBackward':
-        this.modifySelection(pdfWindow, 'backward', 'sentence');
+        this.#selectionRange.modify(pdfWindow, 'backward', 'sentence');
         break;
       case 'extendParagraphForward':
-        this.modifySelection(pdfWindow, 'forward', 'paragraph');
+        this.#selectionRange.modify(pdfWindow, 'forward', 'paragraph');
         break;
       case 'extendParagraphBackward':
-        this.modifySelection(pdfWindow, 'backward', 'paragraph');
+        this.#selectionRange.modify(pdfWindow, 'backward', 'paragraph');
         break;
       case 'highlightYellow':
         void this.highlight(pdfWindow, COLORS.yellow);
@@ -1292,7 +1302,7 @@ export class ReaderSession {
         this.searchSelection(pdfWindow);
         break;
       case 'swapVisualEnds':
-        this.swapVisualEnds(pdfWindow);
+        this.#selectionRange.swapEnds(pdfWindow);
         break;
       case 'toggleReaderSplitHorizontal':
         this.#navigation.toggleSplit('horizontal');
@@ -1355,7 +1365,7 @@ export class ReaderSession {
     this.state.countBuffer = '';
     this.clearKeyTimer();
     this.clearKeyGuide();
-    if (mode !== 'visual') this.removeVisualCursor(this.state.activePdfWindow);
+    if (mode !== 'visual') this.#selectionRange.leave();
     this.updateIndicator();
   }
 
@@ -1540,193 +1550,12 @@ export class ReaderSession {
     this.scrollTo(pdfWindow, Math.max(0, target), true);
   }
 
-  private activateFlashTarget(
-    intent: FlashIntent,
-    pdfWindow: PdfWindow,
-    target: FlashSelectionTarget,
-  ): void {
-    if (!target.start.textNode.isConnected || !target.end.textNode.isConnected) return;
-    const selection = pdfWindow.getSelection();
-    if (!selection) return;
-    // Flash replaces the native range, so any cached Zotero popup geometry now targets old text.
-    this.state.selectionParams = null;
-    this.state.visualPreferredX = null;
-    if (intent === 'visual-start') {
-      this.state.visualAnchor = target.start;
-      this.setMode('visual');
-      selection.setBaseAndExtent(
-        target.start.textNode,
-        target.start.offset,
-        target.end.textNode,
-        target.end.offset,
-      );
-      this.updateVisualCursor(pdfWindow, true);
-      this.showStatus('✓ selection started', 650);
-      return;
-    }
-    if (this.state.mode !== 'visual') return;
-    this.ensureVisualAnchor(pdfWindow);
-    const anchor = this.state.visualAnchor;
-    if (!anchor?.textNode.isConnected) return;
-    const focus = this.comparePointers(target.end, anchor) <= 0 ? target.start : target.end;
-    selection.setBaseAndExtent(anchor.textNode, anchor.offset, focus.textNode, focus.offset);
-    this.updateVisualCursor(pdfWindow, true);
-    this.showStatus('✓ selection updated', 650);
-  }
-
-  private comparePointers(left: Pointer, right: Pointer): number {
-    if (left.textNode === right.textNode) return left.offset - right.offset;
-    const compare = left.textNode.compareDocumentPosition?.(right.textNode) ?? 0;
-    if (compare & 4) return -1;
-    if (compare & 2) return 1;
-    return 0;
-  }
-
-  private enterVisual(pdfWindow: PdfWindow): void {
-    const selection = pdfWindow.getSelection();
-    this.state.visualAnchor = null;
-    this.state.visualPreferredX = null;
-    if (selection && !selection.isCollapsed && isTextNode(selection.anchorNode)) {
-      this.state.visualAnchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
-      this.setMode('visual');
-      this.updateVisualCursor(pdfWindow, true);
-      return;
-    }
-    this.#flash.open(pdfWindow, 'visual-start');
-  }
-
-  private firstTextPosition(pdfWindow: PdfWindow): { textNode: Text; offset: number } | null {
-    const span = pdfWindow.document.querySelector('.textLayer span') as HTMLElement | null;
-    const text = span?.firstChild ?? null;
-    return isTextNode(text) ? { textNode: text, offset: 0 } : null;
-  }
-
-  private modifySelection(
-    pdfWindow: PdfWindow,
-    direction: 'forward' | 'backward',
-    granularity: 'character' | 'word' | 'sentence' | 'paragraph',
-  ): void {
-    this.state.visualPreferredX = null;
-    this.ensureVisualAnchor(pdfWindow);
-    this.state.selectionParams = null;
-    pdfWindow.getSelection()?.modify('extend', direction, granularity);
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private extendByLine(pdfWindow: PdfWindow, direction: -1 | 1): void {
-    this.ensureVisualAnchor(pdfWindow);
-    const selection = pdfWindow.getSelection();
-    const anchor = this.state.visualAnchor;
-    if (!selection || !anchor || !isTextNode(selection.focusNode)) return;
-    const pointer = { textNode: selection.focusNode, offset: selection.focusOffset };
-    const target = verticalTextPosition(pdfWindow, pointer, direction, this.state.visualPreferredX);
-    if (!target) return;
-    this.state.selectionParams = null;
-    this.state.visualPreferredX = target.preferredX;
-    selection.setBaseAndExtent(
-      anchor.textNode,
-      anchor.offset,
-      target.pointer.textNode,
-      target.pointer.offset,
-    );
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private extendLineBoundary(pdfWindow: PdfWindow, end: boolean): void {
-    this.state.visualPreferredX = null;
-    this.ensureVisualAnchor(pdfWindow);
-    this.state.selectionParams = null;
-    pdfWindow.getSelection()?.modify('extend', end ? 'forward' : 'backward', 'lineboundary');
-    this.updateVisualCursor(pdfWindow, true);
-  }
-
-  private ensureVisualAnchor(pdfWindow: PdfWindow): void {
-    if (this.state.visualAnchor?.textNode.isConnected) return;
-    const selection = pdfWindow.getSelection();
-    const anchor = selection?.anchorNode ?? null;
-    if (isTextNode(anchor))
-      this.state.visualAnchor = { textNode: anchor, offset: selection?.anchorOffset ?? 0 };
-    else this.state.visualAnchor = this.firstTextPosition(pdfWindow);
-  }
-
-  private updateVisualCursor(pdfWindow: PdfWindow, autoPan: boolean): void {
-    this.removeVisualCursor(pdfWindow);
-    if (this.state.mode !== 'visual') return;
-    const document = pdfWindow.document;
-    let style = document.querySelector<HTMLStyleElement>('style[data-zv-select-selection]');
-    if (!style) {
-      style = document.createElement('style');
-      style.dataset.zvSelectSelection = '1';
-      // Zotero/PDF.js makes ordinary desktop DOM selection transparent. Mirror the
-      // Reader's own native-selection blue only while Neo Select owns the range.
-      style.textContent =
-        ':root[data-zv-select-active] .textLayer ::selection { background-color: rgb(66, 133, 244); }';
-      document.documentElement.appendChild(style);
-    }
-    document.documentElement.setAttribute('data-zv-select-active', '');
-    const selection = pdfWindow.getSelection();
-    const focus = selection?.focusNode ?? null;
-    const node = isTextNode(focus) ? focus : this.state.visualAnchor?.textNode;
-    const offset = isTextNode(focus)
-      ? (selection?.focusOffset ?? 0)
-      : (this.state.visualAnchor?.offset ?? 0);
-    if (!node?.isConnected) return;
-    const range = pdfWindow.document.createRange();
-    range.setStart(node, Math.min(offset, node.length));
-    range.collapse(true);
-    const rect = range.getBoundingClientRect();
-    if (!rect.width && !rect.height) return;
-    this.#dependencies.selection?.noteOwner(this);
-    this.updateIndicator();
-    if (autoPan) {
-      const container = this.scrollContainer(pdfWindow);
-      if (rect.top < 20) this.scrollBy(pdfWindow, 0, rect.top - 40);
-      else if (rect.bottom > container.clientHeight - 20)
-        this.scrollBy(pdfWindow, 0, rect.bottom - container.clientHeight + 40);
-    }
-  }
-
-  private removeVisualCursor(pdfWindow: PdfWindow): void {
-    pdfWindow.document.documentElement.removeAttribute('data-zv-select-active');
-    const cursors = Array.from(
-      pdfWindow.document.querySelectorAll('[data-zv-cursor]'),
-    ) as HTMLElement[];
-    for (const cursor of cursors) cursor.remove();
-  }
-
   private readerViewForWindow(pdfWindow: PdfWindow): ReaderViewRuntime | null {
     const internal = this.#dependencies.reader._internalReader;
     if (internal?._primaryView?._iframeWindow === pdfWindow) return internal._primaryView;
     if (internal?._secondaryView?._iframeWindow === pdfWindow) return internal._secondaryView;
     if (internal?._lastView?._iframeWindow === pdfWindow) return internal._lastView;
     return null;
-  }
-
-  private swapVisualEnds(pdfWindow: PdfWindow): void {
-    const selection = pdfWindow.getSelection();
-    if (
-      !selection ||
-      selection.rangeCount === 0 ||
-      selection.isCollapsed ||
-      !this.state.visualAnchor
-    )
-      return;
-    const range = selection.getRangeAt(0);
-    const anchorIsStart =
-      this.state.visualAnchor.textNode === range.startContainer &&
-      this.state.visualAnchor.offset === range.startOffset;
-    const focusNode = anchorIsStart ? range.endContainer : range.startContainer;
-    const focusOffset = anchorIsStart ? range.endOffset : range.startOffset;
-    if (!isTextNode(focusNode)) return;
-    selection.setBaseAndExtent(
-      focusNode,
-      focusOffset,
-      this.state.visualAnchor.textNode,
-      this.state.visualAnchor.offset,
-    );
-    this.state.visualAnchor = { textNode: focusNode, offset: focusOffset };
-    this.state.visualPreferredX = null;
-    this.updateVisualCursor(pdfWindow, true);
   }
 
   private async highlight(
