@@ -10,6 +10,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional version tag to publish from main (for example v0.1.0)
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
@@ -66,7 +72,9 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != '')
     needs:
       - build-linux
       - build-windows
@@ -75,11 +83,43 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="$INPUT_RELEASE_TAG"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Validate release metadata
-        run: node tools/check-release.mjs "$GITHUB_REF_NAME"
+        run: node tools/check-release.mjs "${{ steps.release.outputs.tag }}"
+      - name: Create release tag for manual publication
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          existing="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
+          if [[ -n "$existing" && "$existing" != "$GITHUB_SHA" ]]; then
+            echo "Tag $tag already exists at $existing, expected $GITHUB_SHA" >&2
+            exit 1
+          fi
+          if [[ -z "$existing" ]]; then
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
       - name: Download canonical XPI
         uses: actions/download-artifact@v8
         with:
@@ -90,9 +130,11 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          release/zotero-neo.xpi
-          --verify-tag
-          --generate-notes
-          --title "Zotero Neo $GITHUB_REF_NAME"
+        shell: bash
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" release/zotero-neo.xpi --clobber
+          else
+            gh release create "$tag" release/zotero-neo.xpi --verify-tag --generate-notes --title "Zotero Neo $tag"
+          fi
