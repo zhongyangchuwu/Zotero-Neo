@@ -590,6 +590,24 @@ describe('NoteEditor shared binding input', () => {
     vi.useRealTimers();
   });
 
+  it('leaves IME-owned Insert keydowns native, including Escape during composition', () => {
+    const test = harness();
+
+    test.press('i');
+    expect(test.session.note.mode).toBe('insert');
+
+    const composingEscape = test.press('Escape', { isComposing: true });
+    expect(test.session.note.mode).toBe('insert');
+    expect(composingEscape.preventDefault).not.toHaveBeenCalled();
+    expect(composingEscape.stopPropagation).not.toHaveBeenCalled();
+
+    const process = test.press('Process', { keyCode: 229 });
+    expect(test.session.note.mode).toBe('insert');
+    expect(process.preventDefault).not.toHaveBeenCalled();
+    expect(process.stopPropagation).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('launches the Note command palette action without propagating a count', () => {
     const test = harness();
     test.press('3');
