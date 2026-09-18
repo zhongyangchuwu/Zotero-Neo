@@ -2283,7 +2283,7 @@ export class ReaderSession {
     const internal = this.#dependencies.reader._internalReader;
     if (type === 'horizontal') internal?.toggleHorizontalSplit?.();
     else internal?.toggleVerticalSplit?.();
-    this.syncPdfViews();
+    this.#viewLifecycle.sync();
   }
 
   private splitFocusTarget(
