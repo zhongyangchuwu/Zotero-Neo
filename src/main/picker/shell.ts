@@ -10,17 +10,11 @@ import {
 import type { MainWindowSession } from '../session';
 import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
-import type {
-  PickerOpenOptions,
-  PickerPane,
-  PickerProvider,
-  PickerProviderCommands,
-} from './types';
+import type { PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from './fuzzy';
 import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';
 import { createTabsProvider } from './providers/tabs';
-import { createTagsProvider } from './providers/tags';
 import { createCommandsProvider } from './providers/commands';
 
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
@@ -80,10 +74,8 @@ export class FuzzyPicker {
     let orphanOverlay: HTMLElement | null = null;
     try {
       this.trace(`picker open scope=${scope}`);
-      const provider = this.provider(window, session, scope, options.commandContext);
-      const commands = this.createProviderCommands(session);
+      const provider = options.source ?? this.provider(window, scope, options.commandContext);
       session.picker.provider = provider;
-      session.picker.commands = commands;
       session.picker.confirm = options.confirm ?? null;
       session.picker.closeBeforeConfirm = options.closeBeforeConfirm ?? false;
       session.picker.queue = Promise.resolve();
@@ -177,33 +169,20 @@ export class FuzzyPicker {
         previousWindow: focusedWindow,
         themeCleanup,
       };
-      provider.initialize?.(session.picker.commands!);
       orphanOverlay = null;
       this.trace(`picker mounted scope=${scope} layout=${single ? 'single' : 'dual'}`);
       const loadStartedAt = Date.now();
       const compositionCleanup = bindCompositionState(input, session.picker.composition);
       const inputHandler = (event: Event): void => {
         if (!isCommittedInput(event, session.picker.composition.active)) return;
-        const focusID = provider.filter
-          ? String(session.picker.filtered[session.picker.selected]?.id ?? '')
-          : '';
-        if (provider.filter) provider.filter(input.value, session.picker.commands!, focusID);
-        else {
-          session.picker.selected = 0;
-          this.filter(session, input.value);
-        }
+        session.picker.selected = 0;
+        this.filter(session, input.value);
       };
       input.addEventListener('input', inputHandler);
-      input.addEventListener('focus', () => {
-        if (provider.searchFocusUpdates !== false) this.markFocus(session, 'search');
-      });
-      input.addEventListener('click', () => {
-        if (provider.inputClick) provider.inputClick(session.picker.commands!);
-        else this.markFocus(session, 'search');
-      });
+      input.addEventListener('focus', () => this.markFocus(session, 'search'));
+      input.addEventListener('click', () => this.markFocus(session, 'search'));
       const pointerRowHandler = (event: Event): void => {
-        if (!this.#mouseEnabled() || session.picker.scope === 'tags' || !isPrimaryMouseEvent(event))
-          return;
+        if (!this.#mouseEnabled() || !isPrimaryMouseEvent(event)) return;
         const index = pickerRowIndex(event, results);
         if (index === null || index < 0 || index >= session.picker.filtered.length) return;
         event.preventDefault();
@@ -212,8 +191,7 @@ export class FuzzyPicker {
         this.selectRow(session, index);
       };
       const doubleClickRowHandler = (event: Event): void => {
-        if (!this.#mouseEnabled() || session.picker.scope === 'tags' || !isPrimaryMouseEvent(event))
-          return;
+        if (!this.#mouseEnabled() || !isPrimaryMouseEvent(event)) return;
         const index = pickerRowIndex(event, results);
         const item = index === null ? undefined : session.picker.filtered[index];
         if (index === null || !item) return;
@@ -252,7 +230,7 @@ export class FuzzyPicker {
       }
       window.setTimeout(() => {
         if (!this.isCurrent(session, generation)) return;
-        session.picker.commands!.focusPane(provider.initialFocusPane ?? 'search');
+        this.focusPane(session, provider.initialFocusPane ?? 'search');
       }, 30);
       try {
         const items = await provider.load();
@@ -261,8 +239,7 @@ export class FuzzyPicker {
           return;
         }
         session.picker.items = items;
-        if (provider.filter) provider.filter('', session.picker.commands!);
-        else this.filter(session, '');
+        this.filter(session, '');
         this.trace(
           `picker loaded scope=${scope} items=${items.length} duration=${Date.now() - loadStartedAt}ms`,
         );
@@ -282,7 +259,6 @@ export class FuzzyPicker {
         session.picker.inputCleanup?.();
         session.picker.inputCleanup = null;
         session.picker.provider = null;
-        session.picker.commands = null;
         session.picker.confirm = null;
         session.picker.closeBeforeConfirm = false;
         session.picker.queue = Promise.resolve();
@@ -292,11 +268,9 @@ export class FuzzyPicker {
   }
   close(session: MainWindowSession): void {
     if (!session.picker.open) return;
-    session.picker.provider?.onClose?.();
     this.trace(`picker close scope=${session.picker.scope}`);
     const { overlay, previousElement, previousWindow, themeCleanup } = session.picker;
     session.picker.provider = null;
-    session.picker.commands = null;
     session.picker.confirm = null;
     session.picker.closeBeforeConfirm = false;
     session.picker.queue = Promise.resolve();
@@ -372,11 +346,9 @@ export class FuzzyPicker {
     }
     if (key === 'Escape') {
       stop();
-      if (session.picker.provider?.onEscape?.(session.picker.commands!)) return;
       this.close(session);
       return;
     }
-    if (session.picker.provider?.onKeyDown?.(event, session.picker.commands!)) return;
     if (
       key === '/' &&
       event.target !== picker.input &&
@@ -413,6 +385,18 @@ export class FuzzyPicker {
 
   private filter(session: MainWindowSession, query: string): void {
     const startedAt = Date.now();
+    const provider = session.picker.provider;
+    if (provider?.filterItems) {
+      const filtered = provider.filterItems(session.picker.items, query).slice(0, 100);
+      session.picker.filtered = filtered;
+      session.picker.selected = Math.max(
+        0,
+        Math.min(session.picker.selected, Math.max(0, filtered.length - 1)),
+      );
+      this.render(session);
+      this.traceSlowFilter(session, query, filtered.length, startedAt);
+      return;
+    }
     const ranked = session.picker.items.flatMap((item, index) => {
       const score = fuzzyMatchScore(item.search, query);
       return score === null ? [] : [{ item, index, score }];
@@ -443,7 +427,7 @@ export class FuzzyPicker {
   private refreshRowSelection(session: MainWindowSession): void {
     const results = session.picker.results;
     if (!results) return;
-    const mouseEnabled = this.#mouseEnabled() && session.picker.scope !== 'tags';
+    const mouseEnabled = this.#mouseEnabled();
     Array.from(results.children).forEach((child, index) =>
       this.styleRow(child as HTMLElement, index === session.picker.selected, mouseEnabled),
     );
@@ -471,7 +455,7 @@ export class FuzzyPicker {
       return;
     }
     container.style.color = THEME_VARS.text;
-    const mouseEnabled = this.#mouseEnabled() && session.picker.scope !== 'tags';
+    const mouseEnabled = this.#mouseEnabled();
     session.picker.filtered.forEach((item, index) => {
       const row = doc.createElementNS(H, 'div');
       row.dataset.zvPickerRow = '1';
@@ -480,7 +464,6 @@ export class FuzzyPicker {
       const label = doc.createElementNS(H, 'span');
       label.textContent =
         provider?.rowText(item, index) ?? fuzzyPickerRowText(item, index, session.picker.scope);
-      provider?.onRowRender?.(row, item);
       row.append(label);
       container.append(row);
     });
@@ -511,8 +494,21 @@ export class FuzzyPicker {
     closeWhenDone = true,
   ): Promise<boolean> {
     const item = session.picker.filtered[session.picker.selected];
+    const provider = session.picker.provider;
+    if (!item || !provider) return false;
+    const refinement = provider.refineQuery?.(item);
+    if (refinement !== undefined && refinement !== null) {
+      const input = session.picker.input;
+      if (!input) return false;
+      input.value = refinement;
+      session.picker.selected = 0;
+      this.filter(session, refinement);
+      this.focusPane(session, 'search');
+      input.select();
+      return true;
+    }
     const confirm = session.picker.confirm;
-    if (!item || !confirm) return false;
+    if (!confirm) return false;
     const generation = session.picker.generation;
     const closeBeforeConfirm = session.picker.closeBeforeConfirm && closeWhenDone;
     if (closeBeforeConfirm) this.close(session);
@@ -549,18 +545,6 @@ export class FuzzyPicker {
       .catch((error) => this.failure(`picker action=${label}`, error));
     session.picker.queue = next;
     return next;
-  }
-  private createProviderCommands(session: MainWindowSession): PickerProviderCommands {
-    return {
-      render: () => this.render(session),
-      filter: (query, focusID) => this.filter(session, query ?? session.picker.input?.value ?? ''),
-      focusPane: (pane: PickerPane) => this.focusPane(session, pane),
-      close: () => this.close(session),
-      enqueue: (label: string, operation: () => Promise<unknown> | void) => {
-        void this.enqueue(session, label, operation);
-      },
-      isCurrent: (generation: number) => this.isCurrent(session, generation),
-    };
   }
   private traceSlowFilter(
     session: MainWindowSession,
@@ -600,7 +584,6 @@ export class FuzzyPicker {
 
   private provider(
     window: MainWindow,
-    session: MainWindowSession,
     scope: PickerScope,
     commandContext?: CommandPaletteContext,
   ): PickerProvider {
@@ -613,7 +596,7 @@ export class FuzzyPicker {
       case 'notes':
         return createNotesProvider(window, this.#logger);
       case 'tags':
-        return createTagsProvider(window, session, this.#navigation, this.#logger);
+        throw new Error('Tag chooser requires an explicit candidate source');
       case 'commands':
         if (!commandContext) throw new Error('Command palette context missing');
         return createCommandsProvider(commandContext);
