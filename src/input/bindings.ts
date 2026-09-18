@@ -89,7 +89,8 @@ export const DEFAULT_BINDINGS = {
   'reader-normal: fc': 'mainFuzzyCollection',
   'reader-normal: ft': 'mainTabPick',
   'reader-normal: td': 'mainClosePDF',
-  'reader-normal: ta': 'mainTagEditor',
+  'reader-normal: ta': 'addTag',
+  'reader-normal: tr': 'removeTag',
   'reader-normal: fn': 'mainNotesLayout',
   'reader-normal: yy': 'mainYankCitekey',
   'reader-normal: m': 'toggleMarksExplorer',
@@ -129,8 +130,8 @@ export const DEFAULT_BINDINGS = {
   'note-normal: ff': 'mainFuzzyAll',
   'note-normal: fc': 'mainFuzzyCollection',
   'note-normal: ft': 'mainTabPick',
-  'note-normal: fT': 'mainTagPicker',
-  'note-normal: ta': 'mainTagEditor',
+  'note-normal: ta': 'addTag',
+  'note-normal: tr': 'removeTag',
   'note-normal: td': 'mainClosePDF',
   'note-normal: fn': 'mainNotesLayout',
   'note-normal: e': 'mainFocusTree',
@@ -151,8 +152,10 @@ export const DEFAULT_BINDINGS = {
   'main-normal::': 'openCommandPalette',
   'main-normal: fc': 'mainFuzzyCollection',
   'main-normal: ft': 'mainTabPick',
-  'main-normal: fT': 'mainTagPicker',
-  'main-normal: ta': 'mainTagEditor',
+  'main-normal: ta': 'addTag',
+  'main-normal: tr': 'removeTag',
+  'main-normal: tf': 'toggleTagFilter',
+  'main-normal: tc': 'clearTagFilters',
   'main-normal: td': 'mainClosePDF',
   'main-normal: fn': 'mainNotesLayout',
   'main-normal: e': 'mainFocusTree',
@@ -211,6 +214,16 @@ export function parseBindingKey(value: string): ParsedBindingKey | null {
 export type BindingOverride = ActionId | null;
 export type BindingOverrides = Readonly<Record<string, BindingOverride>>;
 
+const LEGACY_ACTION_ALIASES: Readonly<Record<string, ActionId>> = {
+  mainTagEditor: 'addTag',
+  mainTagPicker: 'toggleTagFilter',
+};
+
+function canonicalAction(value: unknown): ActionId | null {
+  if (isActionId(value)) return value;
+  return typeof value === 'string' ? (LEGACY_ACTION_ALIASES[value] ?? null) : null;
+}
+
 function parseBindingEntries(raw: unknown): [string, unknown][] {
   if (typeof raw !== 'string' || raw === '') return [];
   let parsed: unknown;
@@ -227,8 +240,9 @@ export function parseBindingOverrides(raw: unknown): Record<string, BindingOverr
   const result: Record<string, BindingOverride> = {};
   for (const [key, action] of parseBindingEntries(raw)) {
     const binding = parseBindingKey(key);
-    if (!binding || (action !== null && !isActionId(action))) continue;
-    result[`${binding.mode}:${binding.sequence}`] = action;
+    const normalized = action === null ? null : canonicalAction(action);
+    if (!binding || (action !== null && !normalized)) continue;
+    result[`${binding.mode}:${binding.sequence}`] = normalized;
   }
   return result;
 }
