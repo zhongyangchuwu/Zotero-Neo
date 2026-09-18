@@ -1188,13 +1188,16 @@ describe('picker async lifecycle', () => {
     Object.assign(window, {
       ZoteroPane: { getSelectedItems: () => selected, selectItem, viewAttachment },
     });
-    const picker = new FuzzyPicker(
-      { debug: vi.fn(), diagnostic: vi.fn() },
-      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
-    );
+    const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {});
+    const picker = new FuzzyPicker({ debug: vi.fn(), diagnostic: vi.fn() }, navigation);
 
-    await picker.open(window, session, 'all');
-    picker.onKeyDown(pickerKey('o', session.picker.results, { ctrl: true }), window, session);
+    await picker.open(window, session, 'all', {
+      confirm: async (target) => {
+        await selectItem(Number(target.id));
+        await navigation.openPDF(window, session);
+      },
+    });
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
     await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(item.id));
     expect(viewAttachment).not.toHaveBeenCalled();
 
