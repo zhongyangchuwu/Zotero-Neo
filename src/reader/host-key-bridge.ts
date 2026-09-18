@@ -58,7 +58,7 @@ export class ReaderHostKeyBridge {
     const secondary = this.#dependencies.reader._internalReader?._secondaryView as
       | ReaderViewRuntime
       | undefined;
-    return [primary, secondary].filter((view): view is ReaderViewRuntime => view !== undefined);
+    return [primary, secondary].filter((view): view is ReaderViewRuntime => view != null);
   }
 
   #patchKeyForwarding(view: ReaderViewRuntime): void {
