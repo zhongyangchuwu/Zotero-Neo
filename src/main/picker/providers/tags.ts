@@ -211,7 +211,6 @@ export function createTagsProvider(
         `State: ${item.selected ? 'Selected' : 'Not selected'}`,
       ].join('\n'),
     }),
-    activate: () => {},
     onEscape: (commands) => {
       if (session.picker.tagMode !== 'query') return false;
       session.picker.tagMode = 'list';
@@ -222,7 +221,6 @@ export function createTagsProvider(
       const key = event.key;
       const lower = key.toLowerCase();
       const selectedItem = session.picker.filtered[session.picker.selected];
-      const max = Math.max(0, session.picker.filtered.length - 1);
       const stop = (): void => {
         event.preventDefault();
         event.stopImmediatePropagation?.();
@@ -280,23 +278,6 @@ export function createTagsProvider(
         commands.enqueue('toggle tag scope', () =>
           toggleScope(commands, String(selectedItem?.id ?? '')),
         );
-        return true;
-      }
-      if (lower === 'g' && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        stop();
-        if (session.picker.command === 'g') {
-          session.picker.command = '';
-          clearTimeout(session.picker.commandTimer);
-          session.picker.commandTimer = undefined;
-          session.picker.selected = 0;
-          commands.render();
-        } else commands.armCommand('g');
-        return true;
-      }
-      if (key === 'G') {
-        stop();
-        session.picker.selected = max;
-        commands.render();
         return true;
       }
       event.stopPropagation();
