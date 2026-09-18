@@ -194,6 +194,7 @@ export async function applyMainTagFilter(
   const pane = mainPane(window);
   if (!pane?.itemsView?.setFilter) throw new Error('Zotero item tag filtering is unavailable');
   await pane.itemsView.setFilter('tags', new Set(tags));
+  if (pane.tagSelector?.selectedTags) pane.tagSelector.selectedTags = new Set(tags);
   return pane.itemsView.rowCount ?? 0;
 }
 export function activeContextEditorWindow(window: MainWindow): Window | undefined {
