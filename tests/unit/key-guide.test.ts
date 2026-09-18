@@ -11,9 +11,9 @@ import {
 
 const bindings: BindingMap = {
   'reader-normal: e': 'toggleReaderSidebarOutline',
-  'reader-normal: ff': 'mainFuzzyAll',
-  'reader-normal: fc': 'mainFuzzyCollection',
-  'reader-normal: ft': 'mainTabPick',
+  'reader-normal: ff': 'findAllItems',
+  'reader-normal: fc': 'findCollectionItems',
+  'reader-normal: ft': 'switchTab',
   'reader-normal: yy': 'mainYankCitekey',
 };
 
@@ -34,17 +34,17 @@ describe('leader guide projection', () => {
     expect(leaderGuideEntries(bindings, 'reader-normal', ' f', 'zh-CN')).toEqual([
       {
         key: 'c',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyCollection!['zh-CN'],
+        label: KEY_GUIDE_CONFIG.actionLabels.findCollectionItems!['zh-CN'],
         isGroup: false,
       },
       {
         key: 'f',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyAll!['zh-CN'],
+        label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!['zh-CN'],
         isGroup: false,
       },
       {
         key: 't',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainTabPick!['zh-CN'],
+        label: KEY_GUIDE_CONFIG.actionLabels.switchTab!['zh-CN'],
         isGroup: false,
       },
     ]);
@@ -52,16 +52,16 @@ describe('leader guide projection', () => {
 
   it('uses custom bindings as its only command source and hides non-leader prefixes', () => {
     const custom: BindingMap = {
-      'main-normal: xx': 'mainTabPick',
-      'main-normal: xy': 'mainFuzzyAll',
+      'main-normal: xx': 'switchTab',
+      'main-normal: xy': 'findAllItems',
     };
 
     expect(leaderGuideEntries(custom, 'main-normal', ' ', 'en')).toEqual([
       { key: 'x', label: KEY_GUIDE_CONFIG.genericGroupLabel.en, isGroup: true },
     ]);
     expect(leaderGuideEntries(custom, 'main-normal', ' x', 'en')).toEqual([
-      { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.mainTabPick!.en, isGroup: false },
-      { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyAll!.en, isGroup: false },
+      { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
+      { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!.en, isGroup: false },
     ]);
     expect(leaderGuideEntries(custom, 'main-normal', 'g', 'en')).toEqual([]);
   });
