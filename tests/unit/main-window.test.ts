@@ -672,6 +672,47 @@ describe('Main command palette', () => {
     );
     controller.shutdown();
   });
+
+  it('keeps Main shortcuts attached when Reader rescan fails during startup', async () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = pickerMainWindow();
+    const debug = vi.fn();
+    const controller = createMainWindowController({
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+      },
+      logger: { debug, diagnostic: vi.fn() },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {
+          throw new Error('missing Reader view');
+        },
+        forwardKey: () => {},
+      },
+    } as MainWindowControllerDependencies);
+
+    expect(() => controller.addWindow(host.window)).not.toThrow();
+
+    host.keydown({
+      key: ':',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as unknown as KeyboardEvent);
+
+    await vi.waitFor(() =>
+      expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+    );
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('Reader rescan failed during Main window scan'),
+    );
+    controller.shutdown();
+  });
 });
 
 describe('Main tab picker routing', () => {
