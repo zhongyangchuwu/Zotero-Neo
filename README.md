@@ -79,7 +79,7 @@ verification in the current stable host.
 
 ### Keymaps and appearance
 
-- Configurable Reader/Main bindings with multiple bindings per action,
+- Configurable Reader/Main/Note bindings with multiple bindings per action,
   duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
 - Space-leader Key Guide derived from the active resolved keymap.
 - Auto, Light, and Dark appearance modes on Neo-owned surfaces.
