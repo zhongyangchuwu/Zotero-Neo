@@ -322,7 +322,11 @@ describe('picker mouse activation', () => {
       () => mouseEnabled,
     );
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', {
+      confirm: async (item) => {
+        await selectItem(Number(item.id));
+      },
+    });
     const firstRow = session.picker.results?.children[0] as HTMLElement & {
       emit(type: string, event?: Partial<Event>): void;
     };
