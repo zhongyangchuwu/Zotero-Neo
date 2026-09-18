@@ -1295,9 +1295,6 @@ export class ReaderSession {
       case 'copySelection':
         this.copySelection(pdfWindow);
         break;
-      case 'yankParagraph':
-        this.yankParagraph(pdfWindow);
-        break;
       case 'searchSelection':
         this.searchSelection(pdfWindow);
         break;
@@ -1902,16 +1899,6 @@ export class ReaderSession {
     const text = comment ? annotation?.annotationComment : annotation?.annotationText;
     if (!text) {
       this.showStatus(comment ? '✗ annotation has no comment' : '✗ annotation has no text', 2000);
-      return;
-    }
-    this.copyText(annotationText(text));
-  }
-
-  private yankParagraph(pdfWindow: PdfWindow): void {
-    const selection = pdfWindow.getSelection();
-    const text = selection?.toString() ?? '';
-    if (!text) {
-      this.showStatus('✗ no selection', 2000);
       return;
     }
     this.copyText(annotationText(text));
