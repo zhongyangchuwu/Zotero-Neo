@@ -522,23 +522,23 @@ describe('NoteEditor shared binding input', () => {
 
   it('resolves Note-scoped ambiguous leader remaps on continuation or timeout', () => {
     const test = harness({
-      'note-normal: f': 'mainNextTab',
-      'note-normal: ff': 'mainPrevTab',
+      'note-normal: f': 'nextTab',
+      'note-normal: ff': 'previousTab',
     });
 
     test.press(' ');
     test.press('f');
     test.press('f');
-    expect(test.actions).toEqual([['mainPrevTab', 0]]);
+    expect(test.actions).toEqual([['previousTab', 0]]);
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([['mainPrevTab', 0]]);
+    expect(test.actions).toEqual([['previousTab', 0]]);
 
     test.press(' ');
     test.press('f');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
     expect(test.actions).toEqual([
-      ['mainPrevTab', 0],
-      ['mainNextTab', 0],
+      ['previousTab', 0],
+      ['nextTab', 0],
     ]);
     vi.useRealTimers();
   });
@@ -566,11 +566,11 @@ describe('NoteEditor shared binding input', () => {
     expect(test.actions).toEqual([]);
 
     test.press('H');
-    expect(test.actions).toEqual([['mainPrevTab', 0]]);
+    expect(test.actions).toEqual([['previousTab', 0]]);
 
     const retired = test.press('J');
     expect(retired.preventDefault).not.toHaveBeenCalled();
-    expect(test.actions).toEqual([['mainPrevTab', 0]]);
+    expect(test.actions).toEqual([['previousTab', 0]]);
     vi.useRealTimers();
   });
 
@@ -950,8 +950,8 @@ describe('repeated tab switching', () => {
     const controller = createMainWindowController(dependencies);
     controller.addWindow(window);
 
-    controller.executeFromReader('mainNextTab', 1, window);
-    controller.executeFromReader('mainNextTab', 1, window);
+    controller.executeFromReader('nextTab', 1, window);
+    controller.executeFromReader('nextTab', 1, window);
     controller.shutdown();
 
     expect(selectedIndex).toBe(2);
@@ -1004,10 +1004,10 @@ describe('repeated tab switching', () => {
     controller.addWindow(first);
     controller.addWindow(second);
 
-    controller.executeFromReader('mainNextTab', 1, second);
+    controller.executeFromReader('nextTab', 1, second);
     controller.removeWindow(second);
-    controller.executeFromReader('mainNextTab', 1, second);
-    controller.executeFromReader('mainNextTab', 1, null);
+    controller.executeFromReader('nextTab', 1, second);
+    controller.executeFromReader('nextTab', 1, null);
     controller.shutdown();
 
     expect(firstCount).toBe(0);
@@ -1058,11 +1058,11 @@ describe('main Space-leader key guide', () => {
               ? false
               : key === 'bindings'
                 ? JSON.stringify({
-                    'main-normal:x': 'mainNextTab',
-                    'main-normal:xy': 'mainPrevTab',
+                    'main-normal:x': 'nextTab',
+                    'main-normal:xy': 'previousTab',
                     'main-normal:q': 'focusReaderSplitLeft',
-                    'main-normal: f': 'mainNextTab',
-                    'main-normal: ff': 'mainPrevTab',
+                    'main-normal: f': 'nextTab',
+                    'main-normal: ff': 'previousTab',
                   })
                 : fallback,
           set: () => {},
@@ -1309,7 +1309,7 @@ describe('Reader owner picker routing', () => {
     press('f');
     press('t');
     await Promise.resolve();
-    main.executeFromReader('mainTabPick', 1, null);
+    main.executeFromReader('switchTab', 1, null);
     expect(first.bodyChildren).toHaveLength(firstBodyCount);
 
     readerSession.dispose();
