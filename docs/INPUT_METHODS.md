@@ -17,9 +17,9 @@ Neo does not reconstruct editable text from `keydown` characters. While composit
 
 The shared boundary lives in `src/input/composition.ts` and is used by:
 
-- Picker search inputs;
-- Tag Workspace search/create input;
-- Reader Flash text targeting.
+- chooser search inputs, including action-specific tag candidates;
+- Reader Flash text targeting;
+- Note editor composition guards where Neo and native editing share key ownership.
 
 ## Flash
 

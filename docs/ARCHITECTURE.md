@@ -44,8 +44,8 @@ Main Item Select also uses the shared input engine and resolved binding map. Its
 `src/main/item-select.ts` module no longer parses keys or owns count/prefix state;
 it is a thin feature/host adapter over Zotero's native `TreeSelection` plus its
 transient status UI. While `main-select` is active, ordinary `main-normal`
-bindings are available as fallbacks so operations such as Tag Workspace can act
-on the preserved native selection.
+bindings are available as fallbacks so semantic operations such as Add Tag or
+Remove Tag can act on the preserved native selection.
 
 Note Normal and Insert use the same reducer and binding source through explicit
 `note-normal` and `note-insert` scopes. Note-local motions and operators are
@@ -54,8 +54,8 @@ Insert text that is not bound to a Neo action stays browser/Zotero-owned. Earlie
 development builds that exposed selected `main-normal` shortcuts inside Note
 editors migrate those customizations and explicit unbindings into the Note scope.
 
-Text-entry surfaces are a separate boundary. Flash, Picker, and Tag Workspace
-use real HTML inputs and browser/Gecko composition behavior; Neo consumes
+Text-entry surfaces are a separate boundary. Flash and chooser/tag candidate
+queries use real HTML inputs and browser/Gecko composition behavior; Neo consumes
 committed values and does not reconstruct Unicode text from keydown events. See
 [INPUT_METHODS.md](INPUT_METHODS.md).
 
@@ -84,10 +84,11 @@ family. Controllers coordinate them; they should not mirror child feature state.
   collection-item, note, and tab sources own candidate data/presentation only; the
   invoking semantic action owns confirmation and the resulting host operation.
   Command Palette reuses the same surface to choose an `ActionId`.
-- `main/tag-workspace.ts` — legacy persistent item-tag mutation surface pending
-  replacement by the explicit Tag actions tracked in issue #39.
-- `main/tag-targets.ts` — Main/Reader/Note target normalization for item-tag
-  operations.
+- `main/tag-actions.ts` — semantic Add Tag / Remove Tag / Toggle Tag Filter /
+  Clear Tag Filters orchestration; it invokes the shared chooser only when a tag
+  target must be resolved.
+- `main/tag-targets.ts` — Main/Reader/Note target normalization and batched
+  item-tag mutation primitives.
 - `main/note-editor.ts` — note-editor Normal/Insert integration.
 - `main/host.ts` — named adapters over private Main-window host seams.
 
@@ -97,11 +98,11 @@ one confirmed target to the invoking semantic action. Sources must not grow
 private mutation grammars such as create/delete/yank/open variants.
 
 Product semantics remain explicit even when implementation is shared: ordinary
-object choosing, Command Palette action selection, Tag filtering, and any future
-Manager/Workspace may reuse search/ranking/rendering primitives without becoming
-one universal Picker application. The remaining Tag provider interaction hooks
-are transitional until issue #39 replaces the current Tag Picker/Workspace
-ambiguity with explicit Tag actions.
+object choosing, Command Palette action selection, Tag actions/filtering, and any
+future Manager/Workspace may reuse search/ranking/rendering primitives without
+becoming one universal Picker application. Tag candidate sources may constrain
+or describe candidates, but item mutation and Main-view filter changes remain in
+the invoking semantic action.
 
 #### Reader
 

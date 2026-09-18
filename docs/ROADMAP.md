@@ -11,12 +11,11 @@ workflows over broad Vim feature parity.
 
 Completed feature gates:
 
-- Item-tag assignment/removal is implemented through Main Item Select plus a
-  persistent [Tag Workspace](TAG_WORKSPACE.md), using Zotero-native selection,
-  item APIs, and batched transactions while keeping `<Space>fT` as filtering
-  (#22).
-- Flash, Picker, and Tag Workspace support Unicode/CJK and browser-owned IME
-  composition on the current Zotero host (#23).
+- Item-tag assignment/removal is implemented through Main Item Select plus
+  explicit [Tag actions](TAGS.md), using Zotero-native selection, item APIs, and
+  batched transactions; Main-only `tf/tc` own view filtering (#22, #39).
+- Flash, chooser/tag candidate inputs, and Note editing support Unicode/CJK and
+  browser-owned IME composition on the current Zotero host (#23).
 - Shared fuzzy matching uses the pinned `fuzzysort` adapter rather than a local
   ad-hoc scorer (#26).
 - Pre-release interaction architecture is unified across Main Item Select and Note, while Reader
@@ -28,8 +27,8 @@ Completed feature gates:
 Current pre-release work:
 
 - **Release gate (#24):** run the final Zotero 10 host regression across Reader,
-  Main, Note, split views, pickers/workspaces, restart/restore, preferences, and
-  Error Console using the frozen defaults.
+  Main, Note, split views, choosers/tag actions, restart/restore, preferences,
+  and Error Console using the frozen defaults.
 - Prepare and validate the first release metadata/update feed, then validate clean
   install and upgrade behavior before tagging `v0.1.0`.
 - Continue tracking native Zotero Reader semantic-selection integration in
@@ -46,7 +45,7 @@ Current pre-release work:
 - Consider keymap import/export after the default schema has stabilized in real
   use.
 - Evaluate an optional Spotlight adapter only if it adds material value beyond
-  Neo's existing all-items, collection, note, tab, tag, and command pickers.
+  Neo's existing item/note/tab target choosers, tag candidate flows, and Command Palette.
 - Prefer native Reader/sidebar integration only where Zotero exposes a supported
   extension seam; keep Neo-owned overlays when private host behavior would make
   the integration fragile.

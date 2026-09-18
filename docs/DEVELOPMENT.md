@@ -96,8 +96,9 @@ sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, re
 focus, queueing, confirmation/cancellation, and containment. Ordinary object sources own
 only candidate loading and presentation; the semantic action that opens the surface injects
 the confirmation callback and therefore owns the host operation. Command Palette reuses the
-same surface to resolve an `ActionId`. The Tag source still carries transitional interaction
-hooks until issue #39 replaces the legacy Tag Picker/Workspace behavior.
+same surface to resolve an `ActionId`. Tag candidate sources may project namespaces,
+create candidates, and action-specific metadata, but they do not mutate item tags or Main
+filter state; those effects belong to `TagActions`.
 
 Reader outline and marks retain separate domain behavior. `src/reader/sidebar-overlay.ts`
 coordinates only their view-local lifecycle: mutual exclusion, theme-root cleanup, PDF-view
@@ -170,11 +171,11 @@ same in-memory snapshot used for ordering. Current-item notes remain first. Zote
 query remains the library-scope loader and local matching covers body content consistently. Note
 create/trash/restore operations are deliberately outside the chooser contract.
 
-The current Tag provider is the one temporary exception: it still owns Query/List mode and filter
-mutation while issue #39 migrates Tag behavior to explicit semantic actions (`ta/tr/tf/tc`).
-Do not use those hooks as precedent for new Picker sources. Tag filtering remains view state;
-item-tag mutation remains persistent data mutation, and the two must stay distinct even when they
-reuse candidate-search primitives.
+Tag candidate sources follow the same chooser contract as ordinary object sources. They may
+project virtual namespaces, explicit create candidates, and action-specific metadata, but they do
+not mutate item tags or Main filter state. `TagActions` owns `ta/tr/tf/tc`: tag filtering remains
+view state, item-tag mutation remains persistent data mutation, and the two stay distinct even when
+they reuse candidate-search primitives.
 
 ## Reader Flash visible-text targeting
 

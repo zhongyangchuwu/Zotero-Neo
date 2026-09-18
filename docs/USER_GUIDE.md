@@ -76,8 +76,8 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `G`         | Last page                                                                 |
 | `H`         | Switch to previous open tab                                               |
 | `L`         | Switch to next open tab                                                   |
-| `<space>ft` | Open tab picker                                                           |
-| `<space>td` | Close the active Zotero tab                                               |
+| `<space>,`  | Choose and switch to an open Zotero tab                                   |
+| `<space>q`  | Close the active Zotero tab                                               |
 | `<space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
@@ -118,8 +118,8 @@ the current key hints. There is no `<space>:` alias.
   selected action runs with its ordinary uncounted behavior.
 
 When **Preferences → Picker → Enable mouse row selection and double-click confirmation**
-is enabled, ordinary command rows also support pointer selection and double-click
-confirmation. Tag rows remain keyboard-only.
+is enabled, chooser and command rows also support pointer selection and double-click
+confirmation.
 
 #### Directional pane focus
 
@@ -185,104 +185,76 @@ annotation or modify text selection.
 > `l` (next page) never starts Read Aloud. To use Read Aloud, press `r`
 > (unbound in vim by default) or click the Read Aloud toolbar button.
 
-#### Unified fuzzy picker
+#### Shared target chooser
 
-| Key         | Scope                                        |
-| ----------- | -------------------------------------------- |
-| `<space>ff` | All items in the current library             |
-| `<space>fc` | Items in the current collection              |
-| `<space>fn` | All notes in the active library              |
-| `<space>ft` | Currently open Zotero tabs                   |
-| `<space>fT` | Tags for the current collection/library view |
+Neo uses one narrow candidate surface for target resolution. The user intent is
+chosen first; the chooser only answers which object/tag that action should use.
 
-All five scopes use the same picker shell: search prompt, result count, selected-row
-highlight, result list, scope-specific preview, and an always-visible shortcut reference.
-The default layout places results on the left and the preview on the right; narrow windows
-stack them into a usable single-column layout. Matching is case-insensitive and fzf-style:
-every query character must appear in order, with consecutive and word-boundary matches ranked
-first. Enter applies the selected result in item, collection, tab, and note scopes. Tags use
-an explicit List/Query model and remain open while each tag filter is toggled.
+| Key | Intent |
+| --- | --- |
+| `<space>ff` | Find and open an item in the current library |
+| `<space>fc` | Find and open an item in the current collection |
+| `<space>fn` | Find and open a note in the active library |
+| `<space>,` | Switch to an already-open Zotero tab |
+| `<space>ta` | Add one chosen tag to the current target(s) |
+| `<space>tr` | Remove one chosen tag from the current target(s) |
+| `<space>tf` | Main only: toggle one chosen tag filter |
+| `<space>tc` | Main only: clear all tag filters directly |
 
-Result rows are keyboard-only by default: pointer hover, clicks, and double-clicks do not
-change selection or activate results. Enable **Preferences → Picker → Enable mouse row
-selection and double-click confirmation** to opt in for All, Collection, Tab, and Note rows
-(stored as `picker.mouse.enabled`): a single click selects the row and updates its preview,
-while a double-click confirms it. The setting is read when pointer events occur, so it takes
-effect without restarting Zotero. Hover remains inert in either setting, and pointer input
-remains usable for search-input focus and result or preview scrolling. `Enter` and every other
-keyboard command remain canonical.
+The shared surface owns query input, fuzzy ranking, highlighted-row navigation,
+preview, IME/composition handling, confirmation, and cancellation. It does not
+provide provider-local create/delete/yank/open command grammars.
 
-| Key                 | Action                                                    |
-| ------------------- | --------------------------------------------------------- |
-| `↑` / `↓`           | Move selection up / down from the query input or list     |
-| `j` / `k`           | Move selection up / down outside the search input         |
-| `Ctrl+j` / `Ctrl+k` | Move the selected row down / up                           |
-| `Ctrl+d` / `Ctrl+u` | Scroll the preview down / up                              |
-| `Enter`             | Apply the selected result                                 |
-| `Type`              | Filter the picker query                                   |
-| `Ctrl+o`            | Open the selected item's PDF (item scopes only)           |
-| `y`                 | Copy the selected item's full citation (item scopes only) |
-| `yy`                | Copy the selected item's citekey (item scopes only)       |
-| `Escape`            | Close the picker                                          |
+Common controls:
 
-Tab rows are selected by search, arrows, `j`/`k`, or `Ctrl+j`/`Ctrl+k`; there are no
-alphabet hint labels. `y`/`yy` copying is not available in the tab scope.
+| Key | Action |
+| --- | --- |
+| `↑` / `↓` | Move the highlighted result |
+| `j` / `k` | Move the highlighted result while focus is outside the query input |
+| `Ctrl+j` / `Ctrl+k` | Move the highlighted result down / up |
+| `Ctrl+d` / `Ctrl+u` | Scroll the preview down / up |
+| `Enter` | Confirm the highlighted terminal candidate |
+| `Shift+Enter` | Confirm with the alternate open-in-window presentation when the invoking action supports it |
+| Type | Edit/filter the focused query input |
+| `Escape` | Close the chooser |
 
-#### Tag scope
+Result rows are keyboard-first by default. Enable **Preferences → Picker →
+Enable mouse row selection and double-click confirmation** to let a single click
+select a row and a double-click confirm it. Hover remains inert.
 
-`<space>fT` opens a keyboard-first tag picker in **List mode**. It starts with tags relevant
-to the current collection/library view; `a` toggles to all tags in the current library.
-The top visible row is highlighted after loading, even when it is already active. Selected
-tags remain pinned above available tags and filters apply immediately with Zotero's native
-**AND** semantics. The source snapshot remains stable while open; close and reopen it to
-refresh the current scope.
-The picker shows separate concise help below the search input for Query mode and below the
-tag list for List mode; each location updates when the mode changes.
+Item and collection-item choosers only resolve an item. PDF opening and citekey
+copying remain separate semantic actions rather than hidden chooser commands.
 
-`/`, `Tab`, or clicking the input enters **Query mode**. Query text only filters picker rows:
-Space, `x`, `C`, and `a` remain literal input there. In Query mode, `↑` / `↓` move the
-highlighted tag while retaining Query mode and input focus; `Tab` or `Escape` returns to List
-mode. Another `Escape` from List closes while retaining already-applied filters.
+##### Tag actions and tag candidates
 
-| Key                 | Action                                                          |
-| ------------------- | --------------------------------------------------------------- |
-| `j` / `k`           | Move the highlighted tag in List mode                           |
-| `↑` / `↓`           | Move the highlighted tag in List or Query mode                  |
-| `Ctrl+j` / `Ctrl+k` | Move the highlighted tag down / up                              |
-| `Space` / `Enter`   | Toggle the highlighted tag immediately and keep the picker open |
-| `x`                 | Remove the highlighted tag only when it is active               |
-| `C`                 | Clear all active tag filters and keep the picker open           |
-| `a`                 | Toggle Current view / All library tag scope                     |
-| `gg` / `G`          | Jump to first / last visible tag                                |
-| `Ctrl+d` / `Ctrl+u` | Scroll the preview down / up                                    |
-| `Escape`            | Query → List; List → close                                      |
+`<space>ta` and `<space>tr` are available from Main, Reader, and Note when a
+taggable target set can be resolved. `ta` searches existing tags and can offer
+an explicit `+ Create "..."` candidate. `tr` lists only tags currently
+assigned to at least one target. For multi-item targets the preview may show
+all/mixed assignment metadata, but the action itself remains explicit: add means
+ensure-present; remove means ensure-absent.
 
-Result rows and their checkbox markers are not pointer actions. Use the keyboard
-controls above to highlight and toggle tags; these controls only alter the current
-filter. They never remove tag data or edit item-tag associations. Existing filters
-made through Zotero's tag selector are shown when the picker opens and can be removed here.
+Main-only `<space>tf` uses the same candidate surface to toggle one member of
+Zotero's native tag-filter set, then closes. Active filters use Zotero's native
+**AND** semantics. `<space>tc` clears all filters without opening a chooser.
 
-#### Notes scope
+Virtual tag namespaces such as `method/` may appear as non-terminal refinement
+candidates when `tags.separator` is configured. Confirming a namespace narrows
+the query; it never mutates item data.
 
-Notes are filtered by display title and normalized note body content. Current-item notes are
-marked in the shared result list, followed by the remaining notes from the active library. On
-a PDF reader tab, current-item and library context come from the active reader attachment and
-its parent rather than a stale main-window selection. Opening a note prefers Zotero's right-side
-editor.
+See [Item Select and Tag Actions](TAGS.md) for target-resolution and persistence
+semantics.
 
-| Key                    | Action                                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `↑` / `↓`              | Move note selection from the query input or list                                                       |
-| `j` / `k`              | Move note selection outside the search input                                                           |
-| `Ctrl+d` / `Ctrl+u`    | Scroll the selected note preview down / up                                                             |
-| `n`                    | Create a child note under the selected note's parent; with no row, use the active reader item's parent |
-| `Shift+N`              | Create a child note under the active reader parent or current main-window item, then open a note tab   |
-| `gg` / `G`             | Jump to first / last note                                                                              |
-| `dd`, `x`, or `Delete` | Move the selected note to Zotero Trash                                                                 |
-| `u`                    | Restore the last note deleted from this picker                                                         |
-| `Enter`                | Open selected note in the right-side note editor                                                       |
-| `Shift+Enter`          | Open selected note in a new note tab                                                                   |
-| `Escape`               | Close the picker                                                                                       |
+##### Notes
+
+`<space>fn` searches normalized note titles and note body content. Notes related
+to the current item are grouped ahead of the remaining notes in the active
+library. Confirming a note opens it through Zotero; `Shift+Enter` requests the
+alternate window presentation.
+
+Note creation, deletion, restore, yank, and editing are not a second grammar
+inside the chooser. Note editor Normal/Insert operations use the shared binding
+engine in the editor itself.
 
 #### Outline explorer
 
@@ -420,23 +392,26 @@ In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
 
 #### Main window `<space>` chords
 
-These bindings work in the main Zotero window (not inside the reader), on
-whatever has focus:
+These bindings work in the main Zotero window, subject to the active capability
+and focus context:
 
-| Key         | Action                                                  |
-| ----------- | ------------------------------------------------------- |
-| `<space>ff` | Fuzzy picker over all items in the current library      |
-| `<space>fc` | Fuzzy picker over items in the current collection       |
-| `<space>fn` | Search all notes in the shared picker                   |
-| `<space>ft` | Open tab picker                                         |
-| `<space>fT` | Open tag picker for the current collection/library view |
-| `<space>td` | Close the active Zotero tab                             |
-| `<space>e`  | Focus the collection tree                               |
-| `<space>yy` | Copy the selected item's citekey to the clipboard       |
-| `<space>o`  | Open the selected item's PDF                            |
-| `<space>wh` | Focus the collection tree (left pane)                   |
-| `<space>wl` | Focus the detail pane (right pane)                      |
-| `<space>ww` | Focus the item list (middle pane)                       |
+| Key | Action |
+| --- | --- |
+| `<space>ff` | Find an item in the current library |
+| `<space>fc` | Find an item in the current collection |
+| `<space>fn` | Find and open a note |
+| `<space>,` | Choose and switch to an open Zotero tab |
+| `<space>q` | Close the active Zotero tab |
+| `<space>ta` | Add one tag to the current target(s) |
+| `<space>tr` | Remove one tag from the current target(s) |
+| `<space>tf` | Toggle one Main-window tag filter |
+| `<space>tc` | Clear all Main-window tag filters |
+| `<space>e` | Focus the collection tree |
+| `<space>yy` | Copy the selected item's citekey to the clipboard |
+| `<space>o` | Open the selected item's PDF |
+| `<space>wh` | Focus the collection tree (left pane) |
+| `<space>wl` | Focus the detail pane (right pane) |
+| `<space>ww` | Focus the item list (middle pane) |
 
 #### Viewport positioning (like Vim's z commands)
 
@@ -678,22 +653,25 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `searchSelection`             | Open find bar and search for current selection                                       |
 | `swapVisualEnds`              | Swap selection anchor and focus                                                      |
 | `openCommandPalette`          | Open the command palette in the current Normal context                               |
-| `mainTabPick`                 | Open the shared picker for currently open Zotero tabs                                |
-| `mainNotesLayout`             | Search notes in the shared list/preview picker                                       |
-| `mainFuzzyAll`                | Open the shared picker over all items in the current library                         |
-| `mainFuzzyCollection`         | Open the shared picker over items in the current collection                          |
+| `switchTab`                   | Choose and switch to an open Zotero tab                                               |
+| `findNotes`                   | Find and open a note                                                                  |
+| `findAllItems`                | Find an item in the current library                                                   |
+| `findCollectionItems`         | Find an item in the current collection                                                |
 | `mainYankCitekey`             | Copy the selected item's citekey to the clipboard                                    |
 | `mainOpenPDF`                 | Open the selected item's PDF                                                         |
 | `mainTrashItems`              | Move selected main item-list rows to Zotero Trash                                    |
 | `mainRestoreTrashedItems`     | Restore the last item batch trashed by Neo                                           |
-| `mainClosePDF`                | Close the active Zotero tab                                                          |
-| `mainPrevTab`                 | Switch to the previous open tab                                                      |
-| `mainNextTab`                 | Switch to the next open tab                                                          |
+| `closeCurrentTab`             | Close the active Zotero tab                                                           |
+| `previousTab`                 | Switch to the previous open tab                                                       |
+| `nextTab`                     | Switch to the next open tab                                                           |
 | `mainFocusTree`               | Focus the collection tree (left pane)                                                |
 | `mainFocusItems`              | Focus the item list (middle pane)                                                    |
 | `mainFocusLeft`               | Focus the collection tree (left pane)                                                |
 | `mainFocusRight`              | Focus the detail pane (right pane)                                                   |
-| `mainTagPicker`               | Open the shared tag filter picker                                                    |
+| `addTag`                      | Add one tag to the current target(s)                                                  |
+| `removeTag`                   | Remove one tag from the current target(s)                                             |
+| `toggleTagFilter`             | Main only: toggle one tag filter                                                      |
+| `clearTagFilters`             | Main only: clear all tag filters                                                      |
 | `mainNavDown`                 | Move selection down (collections tree / item list)                                   |
 | `mainNavUp`                   | Move selection up (collections tree / item list)                                     |
 | `mainNavFirst`                | Jump to the first row                                                                |
@@ -739,7 +717,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                                       |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
-| Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms All, Collection, Tab, and Note rows; hover remains inert and Tag rows stay keyboard-only |
+| Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |
 
 Appearance, key guide, picker, and scroll settings save automatically on change.
 
