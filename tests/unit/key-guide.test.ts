@@ -13,7 +13,7 @@ const bindings: BindingMap = {
   'reader-normal: e': 'toggleReaderSidebarOutline',
   'reader-normal: ff': 'findAllItems',
   'reader-normal: fc': 'findCollectionItems',
-  'reader-normal: ft': 'switchTab',
+  'reader-normal: ,': 'switchTab',
   'reader-normal: yy': 'mainYankCitekey',
 };
 
@@ -25,6 +25,7 @@ describe('leader guide projection', () => {
         label: KEY_GUIDE_CONFIG.actionLabels.toggleReaderSidebarOutline!.en,
         isGroup: false,
       },
+      { key: ',', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
       { key: 'f', label: KEY_GUIDE_CONFIG.groupLabels.f.en, isGroup: true },
       { key: 'y', label: KEY_GUIDE_CONFIG.groupLabels.y.en, isGroup: true },
     ]);
@@ -40,11 +41,6 @@ describe('leader guide projection', () => {
       {
         key: 'f',
         label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!['zh-CN'],
-        isGroup: false,
-      },
-      {
-        key: 't',
-        label: KEY_GUIDE_CONFIG.actionLabels.switchTab!['zh-CN'],
         isGroup: false,
       },
     ]);
