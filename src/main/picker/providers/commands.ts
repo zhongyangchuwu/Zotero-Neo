@@ -69,14 +69,5 @@ export function createCommandsProvider(context: CommandPaletteContext): PickerPr
         '\n',
       ),
     }),
-    closeBeforeActivate: true,
-    activate(item) {
-      if (
-        isActionId(item.id) &&
-        item.id !== 'openCommandPalette' &&
-        isSupportedAction(context, item.id)
-      )
-        context.execute(item.id, 0);
-    },
   };
 }
