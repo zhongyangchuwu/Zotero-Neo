@@ -268,6 +268,7 @@ const RETIRED_DEFAULT_BINDINGS = {
 const REMOVED_ACTIONS: Readonly<Record<string, true>> = {
   mainFocusSearch: true,
   mainAdvancedSearch: true,
+  yankParagraph: true,
 };
 
 function stringifyBindingOverrides(overrides: BindingOverrides): string {
