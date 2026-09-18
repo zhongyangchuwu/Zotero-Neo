@@ -192,6 +192,12 @@ describe('binding parsing and overrides', () => {
     expect('reader-normal:K' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
     expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
+    expect(DEFAULT_BINDINGS['reader-normal: ,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['main-normal: ,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['reader-normal: q']).toBe('closeCurrentTab');
+    expect(DEFAULT_BINDINGS['main-normal: q']).toBe('closeCurrentTab');
+    expect('reader-normal: ft' in DEFAULT_BINDINGS).toBe(false);
+    expect('main-normal: td' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:K' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['reader-normal:+']).toBe('zoomIn');
@@ -283,21 +289,21 @@ describe('binding parsing and overrides', () => {
       'main-normal:enter': 'mainActivate',
       'reader-normal:H': 'scrollLeft',
       'reader-normal:L': 'scrollRight',
-      'reader-normal:J': 'previousTab',
-      'reader-normal:K': 'nextTab',
-      'main-normal:J': 'previousTab',
-      'main-normal:K': 'nextTab',
-      'reader-normal: fb': 'findCollectionItems',
-      'reader-normal: bj': 'switchTab',
+      'reader-normal:J': 'mainPrevTab',
+      'reader-normal:K': 'mainNextTab',
+      'main-normal:J': 'mainPrevTab',
+      'main-normal:K': 'mainNextTab',
+      'reader-normal: fb': 'mainFuzzyCollection',
+      'reader-normal: bj': 'mainTabPick',
       'reader-normal: o': 'mainOpenPDF',
-      'reader-normal: q': 'closeCurrentTab',
-      'main-normal: fb': 'findCollectionItems',
-      'main-normal: bj': 'switchTab',
-      'main-normal: q': 'closeCurrentTab',
-      'reader-normal: n': 'findNotes',
-      'main-normal: n': 'findNotes',
-      'reader-normal: tp': 'switchTab',
-      'main-normal: tp': 'switchTab',
+      'reader-normal: q': 'mainClosePDF',
+      'main-normal: fb': 'mainFuzzyCollection',
+      'main-normal: bj': 'mainTabPick',
+      'main-normal: q': 'mainClosePDF',
+      'reader-normal: n': 'mainNotesLayout',
+      'main-normal: n': 'mainNotesLayout',
+      'reader-normal: tp': 'mainTabPick',
+      'main-normal: tp': 'mainTabPick',
       'main-normal:ctrl+u': 'mainRestoreTrashedItems',
       'main-normal:legacy-search': 'mainFocusSearch',
       'main-normal:old-advanced': 'mainAdvancedSearch',
