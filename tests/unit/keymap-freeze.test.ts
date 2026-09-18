@@ -40,7 +40,8 @@ function press(mode: Mode, key: string, bindings: BindingMap = resolveBindings('
       keyBuffer: '',
       countBuffer: '',
       bindings,
-      allowCountPrefix: mode === 'reader-normal' || mode === 'main-normal' || mode === 'note-normal',
+      allowCountPrefix:
+        mode === 'reader-normal' || mode === 'main-normal' || mode === 'note-normal',
     },
     key,
   );
