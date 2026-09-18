@@ -61,7 +61,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:return': 'editAnnotation',
   'reader-normal:dd': 'deleteAnnotation',
   'reader-normal:y': 'yankAnnotation',
-  'reader-normal:yy': 'yankAnnotationComment',
+  'reader-normal:Y': 'yankAnnotationComment',
   'reader-normal:zy': 'recolorYellow',
   'reader-normal:zr': 'recolorRed',
   'reader-normal:zg': 'recolorGreen',
@@ -117,7 +117,6 @@ export const DEFAULT_BINDINGS = {
   'reader-select:za': 'addNote',
   'reader-select:i': 'addNote',
   'reader-select:y': 'copySelection',
-  'reader-select:yy': 'yankParagraph',
   'reader-select:#': 'searchSelection',
   'reader-select:o': 'swapVisualEnds',
   'reader-select:v': 'exitMode',
@@ -244,6 +243,8 @@ export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
 
 const RETIRED_DEFAULT_BINDINGS = {
   'reader-normal:s': 'flashText',
+  'reader-normal:yy': 'yankAnnotationComment',
+  'reader-select:yy': 'yankParagraph',
   'reader-normal:H': 'scrollLeft',
   'reader-normal:L': 'scrollRight',
   'reader-normal:J': 'mainPrevTab',
