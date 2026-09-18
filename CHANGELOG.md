@@ -9,8 +9,8 @@ All notable changes to Zotero Neo are documented here.
 - Normal, Select, and Insert interaction states for keyboard-first Zotero Reader workflows.
 - Flash-assisted visible PDF text selection with live literal matching, bounded hint rendering,
   range refinement, endpoint swapping, and direct selection actions.
-- Unicode/CJK Flash targeting and browser-owned IME composition across Flash, Picker, and Tag
-  Workspace text inputs without reconstructing query text from keydown events.
+- Unicode/CJK Flash targeting and browser-owned IME composition across Flash, chooser/tag
+  candidate inputs, and Note editing without reconstructing query text from keydown events.
 - Selection actions for copying, searching, coloured highlights, underline, annotation comments,
   and optional Translate for Zotero integration through its public API.
 - A small public Reader selection/action seam through `Zotero.Neo.reader.getSelection()` and
@@ -24,20 +24,22 @@ All notable changes to Zotero Neo are documented here.
 - A configurable Space-leader key guide generated from the active resolved keymap.
 - Normal-mode `:` command palettes for Reader, Main, and Note contexts, including unbound but
   executable actions.
-- A shared fuzzy picker for all-library items, current-collection items, notes, tabs, and tags,
-  with responsive previews and optional mouse row selection for non-tag scopes.
-- A keyboard-first tag-filter picker with List/Query modes, current-view/all-library scope,
-  pinned active filters, AND semantics, and safe filter clearing without changing item tags.
+- A shared fuzzy target chooser for all-library items, current-collection items, notes, tabs,
+  and action-specific tag candidates, with responsive previews and optional mouse row selection.
+- Explicit semantic tag actions: `<Space>ta` Add Tag, `<Space>tr` Remove Tag,
+  Main-only `<Space>tf` Toggle Tag Filter, and `<Space>tc` Clear Tag Filters.
 - Main Item Select backed by Zotero's native `TreeSelection`, with `v`, count-aware `j/k`,
   `gg/G`, endpoint swapping, preserve-on-finish, and cancel-to-focused-item behavior.
-- A persistent Tag Workspace on `<Space>ta` for Main/Reader/Note target sets, with all/mixed/none
-  assignment state, explicit add/remove/create operations, and virtual separator-based tag-path
-  completion while Zotero continues to store ordinary flat tag strings.
-- Note search across normalized titles and note bodies, child-note creation, right-side editor
-  opening, note-tab opening, trash, and restore workflows.
+- Context-aware Main/Reader/Note tag target resolution with explicit add/remove semantics,
+  multi-target assignment metadata, create candidates, and virtual separator-based tag-path
+  refinement while Zotero continues to store ordinary flat tag strings.
+- Note search across normalized titles and note bodies with chooser-based open behavior; Note
+  editing itself uses the shared Normal/Insert binding engine rather than a picker-local CRUD grammar.
 - Main-window item trash/restore, PDF opening, tab switching/closing, collection-tree navigation,
   and Better BibTeX citekey copying where available.
-- Auto, Light, and Dark appearance modes across Neo-owned surfaces.
+- Auto, Light, and Dark appearance modes across Neo-owned surfaces, with semantic mode/status
+  surface-and-text pairs so light mode uses pale surfaces with dark text and dark mode keeps
+  appropriately dark surfaces with light text.
 - Configurable shortcut editing with staged Apply, per-mode action filtering, duplicate blocking,
   prefix warnings, multiple bindings per action, and persistent unbinding.
 - Snapshot and EPUB navigation/search support where Zotero exposes compatible Reader behavior.
@@ -68,9 +70,13 @@ All notable changes to Zotero Neo are documented here.
 - Held `j/k` in Collections and Items delegates repeat/debounce behavior to Zotero's native tree
   selection path instead of Neo-side throttling.
 - Multi-item tag mutation uses one Zotero DB transaction per semantic batch and saves only items
-  that need the requested transition; successful Workspace edits avoid a full tag-catalog reload.
-- Tag filtering (`<Space>fT`) and item-tag mutation (`<Space>ta`) are separate workflows rather
-  than two modes of the same picker.
+  that need the requested transition.
+- Tag filtering and item-tag mutation are explicit semantic actions rather than modes of a tag
+  operation console: `ta/tr` mutate item data, while Main-only `tf/tc` change view state.
+- Picker/chooser providers no longer own create/delete/yank/open mini-grammars; the invoking
+  semantic action owns confirmation and host mutation.
+- Space-leader defaults are organized around semantic namespaces: `ff/fc/fn` find targets,
+  `<Space>,` switches tabs, `<Space>q` closes the current tab, and `t*` is reserved for Tags.
 - PDF Select currently owns a DOM range and scoped native-style selection rendering rather than
   pretending it is synchronized with Zotero Reader's private semantic selection state; native
   semantic-selection integration is tracked separately in issue #20.
