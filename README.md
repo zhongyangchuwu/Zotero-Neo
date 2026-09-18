@@ -73,10 +73,10 @@ verification in the current stable host.
 
 ### Notes
 
-- Note search across normalized titles and note bodies.
-- Child-note creation, right-side editor opening, note-tab opening, trash, and
-  restore workflows.
-- Keyboard Normal/Insert handoff inside Zotero note editors.
+- Note search across normalized titles and note bodies with chooser-based opening.
+- Keyboard Normal/Insert handoff and Vim-style editing inside Zotero note editors.
+- Note chooser results resolve a note target only; note editing/lifecycle behavior
+  is not hidden behind a provider-local Picker command grammar.
 
 ### Keymaps and appearance
 
