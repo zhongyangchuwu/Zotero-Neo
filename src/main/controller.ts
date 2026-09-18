@@ -480,21 +480,21 @@ export class MainWindowController implements MainWindowControllerApi {
           },
         });
         break;
-      case 'mainFuzzyAll':
+      case 'findAllItems':
         void this.#picker.open(window, session, 'all', {
           confirm: async (item) => {
             await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
           },
         });
         break;
-      case 'mainFuzzyCollection':
+      case 'findCollectionItems':
         void this.#picker.open(window, session, 'collection', {
           confirm: async (item) => {
             await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
           },
         });
         break;
-      case 'mainTabPick':
+      case 'switchTab':
         void this.#picker.open(window, session, 'tabs', {
           confirm: (item) => {
             selectMainTab(window, String(item.id));
@@ -502,7 +502,7 @@ export class MainWindowController implements MainWindowControllerApi {
           },
         });
         break;
-      case 'mainNotesLayout':
+      case 'findNotes':
         void this.#picker.open(window, session, 'notes', {
           confirm: async (item, openInWindow) => {
             const pane = mainHost(window).ZoteroPane;
@@ -548,13 +548,13 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainActivate':
         void this.#navigation.activate(window, session);
         break;
-      case 'mainClosePDF':
+      case 'closeCurrentTab':
         this.#navigation.closePDF(window);
         break;
-      case 'mainPrevTab':
+      case 'previousTab':
         this.#navigation.cycleTab(window, -1);
         break;
-      case 'mainNextTab':
+      case 'nextTab':
         this.#navigation.cycleTab(window, 1);
         break;
       case 'addTag':
