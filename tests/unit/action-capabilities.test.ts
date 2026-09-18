@@ -40,8 +40,10 @@ const expectedMainActions: readonly ActionId[] = [
   'mainClosePDF',
   'mainPrevTab',
   'mainNextTab',
-  'mainTagPicker',
-  'mainTagEditor',
+  'addTag',
+  'removeTag',
+  'toggleTagFilter',
+  'clearTagFilters',
   'mainNavDown',
   'mainNavUp',
   'mainNavFirst',
@@ -73,7 +75,8 @@ const expectedDelegableMainActions: readonly ActionId[] = [
   'mainClosePDF',
   'mainPrevTab',
   'mainNextTab',
-  'mainTagEditor',
+  'addTag',
+  'removeTag',
 ];
 
 function sameActions(actual: readonly ActionId[], expected: readonly ActionId[]): void {
@@ -102,7 +105,8 @@ describe('action capability ownership', () => {
       'mainFocusItems',
       'mainOpenPDF',
       'mainActivate',
-      'mainTagPicker',
+      'toggleTagFilter',
+      'clearTagFilters',
       'mainTreeExpand',
     ] as const)
       expect(isReaderDelegableMainAction(action)).toBe(false);
@@ -125,7 +129,9 @@ describe('action capability ownership', () => {
   it('guards commands by Reader mode and rejects unsafe catalog drift', () => {
     expect(isReaderActionForMode('normal', 'openCommandPalette')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainTabPick')).toBe(true);
-    expect(isReaderActionForMode('normal', 'mainTagEditor')).toBe(true);
+    expect(isReaderActionForMode('normal', 'addTag')).toBe(true);
+    expect(isReaderActionForMode('normal', 'removeTag')).toBe(true);
+    expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
