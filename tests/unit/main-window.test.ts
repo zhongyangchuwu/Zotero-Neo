@@ -448,7 +448,11 @@ describe('NoteEditor shared binding input', () => {
     const main = {
       setTimeout,
       clearTimeout,
-      document: {},
+      document: {
+        activeElement: null,
+        querySelector: () => null,
+        getElementById: () => null,
+      },
     } as unknown as MainWindow;
     const document = {
       getSelection: () => null,
