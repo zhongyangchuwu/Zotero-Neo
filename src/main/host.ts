@@ -120,8 +120,11 @@ export function cycleMainTab(window: MainWindow, direction: 1 | -1): void {
   }
 }
 
-export function closeMainTab(window: MainWindow, id: string): void {
-  mainTabs(window)?.close?.(id);
+export function closeMainTab(window: MainWindow, id: string): boolean {
+  const tabs = mainTabs(window);
+  if (!tabs?.close) return false;
+  tabs.close(id);
+  return true;
 }
 
 export function closeSelectedMainTab(window: MainWindow): void {
