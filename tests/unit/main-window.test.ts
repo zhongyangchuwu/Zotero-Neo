@@ -394,7 +394,7 @@ describe('directional pane focus', () => {
       new MainNavigation(logger, () => {}),
       () => DEFAULT_BINDINGS,
       {
-      refresh: () => {},
+        refresh: () => {},
         clear: () => {},
       },
     );
