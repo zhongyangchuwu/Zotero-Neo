@@ -132,11 +132,29 @@ describe('binding preferences', () => {
     expect(bindings['main-normal: n']).toBeUndefined();
     expect(bindings['reader-normal: ft']).toBe('mainTabPick');
     expect(bindings['main-normal: ft']).toBe('mainTabPick');
-    expect(bindings['main-normal: fT']).toBe('mainTagPicker');
+    expect(bindings['main-normal: ta']).toBe('addTag');
+    expect(bindings['main-normal: tr']).toBe('removeTag');
+    expect(bindings['main-normal: tf']).toBe('toggleTagFilter');
+    expect(bindings['main-normal: tc']).toBe('clearTagFilters');
+    expect(bindings['main-normal: fT']).toBeUndefined();
     expect(bindings['main-normal:u']).toBe('mainRestoreTrashedItems');
     expect(bindings['reader-normal: tp']).toBeUndefined();
     expect(bindings['main-normal: tp']).toBeUndefined();
     expect(bindings['main-normal:ctrl+u']).toBeUndefined();
+  });
+
+  it('canonicalizes pre-release Tag action aliases without changing custom key sequences', () => {
+    const bindings = bindingsFromPreferences(
+      new TestPreferences({
+        bindings: JSON.stringify({
+          'reader-normal: custom-add': 'mainTagEditor',
+          'main-normal: custom-filter': 'mainTagPicker',
+        }),
+      }),
+    );
+
+    expect(bindings['reader-normal: custom-add']).toBe('addTag');
+    expect(bindings['main-normal: custom-filter']).toBe('toggleTagFilter');
   });
 
   it('migrates retired defaults and removes legacy native-search actions without dropping unrelated remaps', () => {
