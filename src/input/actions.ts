@@ -281,17 +281,17 @@ const BASE_ACTION_LABELS = {
     en: 'Open command palette',
     'zh-CN': '打开命令面板',
   },
-  mainFuzzyAll: {
-    en: 'Main window: fuzzy picker — all items',
-    'zh-CN': '主窗口：模糊选择器 — 所有条目',
+  findAllItems: {
+    en: 'Find an item in the library',
+    'zh-CN': '在文库中查找条目',
   },
-  mainFuzzyCollection: {
-    en: 'Main window: fuzzy picker — current collection',
-    'zh-CN': '主窗口：模糊选择器 — 当前分类',
+  findCollectionItems: {
+    en: 'Find an item in the current collection',
+    'zh-CN': '在当前分类中查找条目',
   },
-  mainNotesLayout: {
-    en: 'Main window: search notes',
-    'zh-CN': '主窗口：搜索笔记',
+  findNotes: {
+    en: 'Find and open a note',
+    'zh-CN': '查找并打开笔记',
   },
   mainTrashItems: {
     en: 'Main window: move selected items to trash',
@@ -325,9 +325,9 @@ const BASE_ACTION_LABELS = {
     en: 'Main window: open PDF of selected item',
     'zh-CN': '主窗口：打开所选条目的 PDF',
   },
-  mainClosePDF: {
-    en: 'Main window: close active tab',
-    'zh-CN': '主窗口：关闭活动标签页',
+  closeCurrentTab: {
+    en: 'Close current tab',
+    'zh-CN': '关闭当前标签页',
   },
   addTag: {
     en: 'Add tag to current target(s)',
@@ -397,17 +397,17 @@ const BASE_ACTION_LABELS = {
     en: 'Main window: open PDF of selected item',
     'zh-CN': '主窗口：打开所选条目的 PDF',
   },
-  mainTabPick: {
-    en: 'Main window: tab picker',
-    'zh-CN': '主窗口：标签选择器',
+  switchTab: {
+    en: 'Switch to an open tab',
+    'zh-CN': '切换到已打开的标签页',
   },
-  mainPrevTab: {
-    en: 'Main window: switch to previous tab',
-    'zh-CN': '主窗口：切换到上一个标签页',
+  previousTab: {
+    en: 'Switch to previous tab',
+    'zh-CN': '切换到上一个标签页',
   },
-  mainNextTab: {
-    en: 'Main window: switch to next tab',
-    'zh-CN': '主窗口：切换到下一个标签页',
+  nextTab: {
+    en: 'Switch to next tab',
+    'zh-CN': '切换到下一个标签页',
   },
   mainTreeToggle: {
     en: 'Main window: toggle expand/collapse collection',
