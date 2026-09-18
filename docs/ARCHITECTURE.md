@@ -96,9 +96,14 @@ not one generic editing framework.
 #### Reader
 
 `ReaderController` discovers and owns Reader sessions keyed by Zotero
-`instanceID`. Reader feature modules own their own transient state where a clear
-lifecycle exists:
+`instanceID`. `ReaderSession` coordinates input and semantic execution, while
+host/view lifecycle seams are owned separately:
 
+- `host-key-bridge.ts` — installation/restoration of private Zotero
+  `PdfView._onKeyDown` and `_textAnnotationFocused` patches; input policy remains
+  in the session callbacks;
+- `view-lifecycle.ts` — primary/secondary PDF-view discovery, periodic rescan,
+  view-local DOM listeners, active-view fallback, and detached-view release;
 - `flash.ts` — visible-text targeting and hint lifecycle;
 - `link-hints.ts` — PDF link targeting;
 - `marks.ts` / `marks-explorer.ts` — persisted marks and explorer behavior;
@@ -111,11 +116,12 @@ lifecycle exists:
 These modules should not be merged into a generic Reader widget framework. Their
 state and host contracts differ and are already independently testable.
 
-`reader/controller.ts` is still the largest orchestration boundary. It currently
-combines Reader discovery/view injection, input routing, semantic dispatch,
-selection/range mutation, navigation, and several private Reader seams. This is
-a known pre-release cleanup target under issue #29. Decomposition should follow
-coherent responsibilities with direct tests, not arbitrary file-size splitting.
+`reader/controller.ts` is still the largest orchestration boundary. Reader
+discovery/session ownership remains there, and `ReaderSession` still combines input
+routing, semantic dispatch, selection/range mutation, and navigation. PDF-view
+discovery/listener ownership and the two private key seams have been extracted into
+the owners above. The remaining pre-release cleanup under issue #29 should continue
+along coherent responsibilities with direct tests, not arbitrary file-size splitting.
 
 ### 4. Zotero host adapters
 

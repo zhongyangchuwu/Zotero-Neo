@@ -224,16 +224,6 @@ export interface Pointer {
   readonly offset: number;
 }
 
-export interface ViewHandlers {
-  readonly keyDown: EventListener;
-  readonly keyUp: EventListener;
-  readonly blur: EventListener;
-  readonly selection: EventListener;
-  readonly resize: EventListener;
-  readonly scroll: EventListener;
-
-  readonly scrollElement: Element | null;
-}
 export interface ReaderSessionState {
   mode: ReaderMode;
   keyBuffer: string;
