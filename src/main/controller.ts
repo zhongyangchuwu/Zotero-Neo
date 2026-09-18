@@ -15,7 +15,8 @@ import {
   type ReaderDelegableMainAction,
 } from './action-capabilities';
 import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
-import { bindingsForMode, resolveBindings, type Mode } from '../input/bindings';
+import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
+import { actionsForBindingMode } from '../input/binding-capabilities';
 import {
   advanceInput,
   backspaceLeaderInput,
@@ -33,7 +34,8 @@ import { isEditableElement } from '../platform/dom';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
-import { NoteEditor } from './note-editor';
+import { NoteEditor, type NoteBindingMode } from './note-editor';
+import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagWorkspace } from './tag-workspace';
 import { MainItemSelect } from './item-select';
 import { mainReaderForTab, selectedMainTabID } from './host';
@@ -72,13 +74,17 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#navigation,
       () => this.bindings(),
       {
-        refresh: (window, session) =>
+        refresh: (window, session) => {
+          const active = this.#noteEditor.activeBindings(session);
           this.refreshKeyGuide(
             window,
             session,
-            session.note.mainBuffer,
-            (prefix) => session.note.mainBuffer === prefix,
-          ),
+            session.note.buffer,
+            (prefix) => session.note.buffer === prefix,
+            active.mode,
+            active.bindings,
+          );
+        },
         clear: (window, session) => this.clearKeyGuide(window, session),
       },
     );
@@ -96,9 +102,8 @@ export class MainWindowController implements MainWindowControllerApi {
         window,
         session,
         this.#dependencies.preferences.get('noteEditor.enabled', true),
-        (action, count) => {
-          if (action === 'mainTagEditor') this.execute(action, window, session, count);
-        },
+        (action, count, target, mode, bindings) =>
+          this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
     };
     scan();
@@ -205,8 +210,12 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.preferences.get('noteEditor.enabled', true) &&
       this.#noteEditor.isStandalone(window)
     ) {
-      this.#noteEditor.onKeyDown(event, window, session, (action, count) =>
-        this.execute(action, window, session, count),
+      this.#noteEditor.onKeyDown(
+        event,
+        window,
+        session,
+        (action, count, target, mode, bindings) =>
+          this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
       return;
     }
@@ -353,6 +362,8 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     prefix = session.keyBuffer,
     isCurrent = (candidate: string) => session.keyBuffer === candidate,
+    mode: Mode = session.inputMode,
+    bindings: BindingMap = this.activeBindings(mode),
   ): void {
     const config = keyGuideConfig(this.#dependencies.preferences);
     if (!config.enabled || !isLeaderPrefix(prefix)) {
@@ -360,8 +371,8 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     const entries = leaderGuideEntries(
-      this.activeBindings(session.inputMode),
-      session.inputMode,
+      bindings,
+      mode,
       prefix,
       this.keyGuideLanguage(),
     );
@@ -390,6 +401,49 @@ export class MainWindowController implements MainWindowControllerApi {
 
   private isReaderTab(tabID: string): boolean {
     return !!mainReaderForTab(tabID);
+  }
+
+  private executeFromNote(
+    action: ActionId,
+    count: number,
+    target: HTMLElement,
+    bindingMode: NoteBindingMode,
+    bindings: BindingMap,
+    window: MainWindow,
+    session: MainWindowSession,
+  ): boolean {
+    const local = this.#noteEditor.executeAction(action, target, window, session, count);
+    if (local !== null) return local;
+
+    if (action === 'openCommandPalette') {
+      this.openCommandPalette(window, {
+        mode: 'note',
+        bindingMode,
+        actions:
+          bindingMode === 'note-normal'
+            ? NOTE_COMMAND_PALETTE_ACTIONS
+            : actionsForBindingMode(bindingMode),
+        bindings,
+        language: this.keyGuideLanguage(),
+        execute: (nextAction, nextCount) => {
+          if (this.#sessions.get(window) !== session) return;
+          const nextLocal = this.#noteEditor.executeAction(
+            nextAction,
+            target,
+            window,
+            session,
+            nextCount,
+          );
+          if (nextLocal === null && isMainExecutableAction(nextAction))
+            this.execute(nextAction, window, session, nextCount);
+        },
+      });
+      return true;
+    }
+
+    if (!isMainExecutableAction(action)) return false;
+    this.execute(action, window, session, count);
+    return true;
   }
 
   private execute(
