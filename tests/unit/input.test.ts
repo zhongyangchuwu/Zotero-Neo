@@ -340,6 +340,32 @@ describe('input matcher', () => {
     });
   });
 
+  it('keeps Note word motion immediate instead of turning w into a prefix timeout', () => {
+    const bindings = resolveBindings('');
+    const state: InputState = {
+      mode: 'note-normal',
+      keyBuffer: '',
+      countBuffer: '',
+    };
+
+    expect(
+      advanceInput(
+        {
+          ...state,
+          bindings,
+          allowCountPrefix: true,
+        },
+        'w',
+      ),
+    ).toEqual({
+      kind: 'execute',
+      state,
+      consumed: true,
+      action: 'noteMoveWordForward',
+      count: 0,
+    });
+  });
+
   it('waits for an exact binding that has a longer continuation, then resolves it on timeout', () => {
     const bindings: BindingMap = {
       'reader-normal:y': 'yankAnnotation',
