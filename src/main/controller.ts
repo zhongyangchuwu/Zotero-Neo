@@ -17,6 +17,7 @@ import {
 import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { actionsForBindingMode } from '../input/binding-capabilities';
+import { isNoteCrossContextActionId } from '../input/note-actions';
 import {
   advanceInput,
   backspaceLeaderInput,
@@ -425,14 +426,18 @@ export class MainWindowController implements MainWindowControllerApi {
             session,
             nextCount,
           );
-          if (nextLocal === null && isMainExecutableAction(nextAction))
+          if (
+            nextLocal === null &&
+            isNoteCrossContextActionId(nextAction) &&
+            isMainExecutableAction(nextAction)
+          )
             this.execute(nextAction, window, session, nextCount);
         },
       });
       return true;
     }
 
-    if (!isMainExecutableAction(action)) return false;
+    if (!isNoteCrossContextActionId(action) || !isMainExecutableAction(action)) return false;
     this.execute(action, window, session, count);
     return true;
   }
