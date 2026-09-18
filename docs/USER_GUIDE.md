@@ -118,8 +118,8 @@ the current key hints. There is no `<space>:` alias.
   selected action runs with its ordinary uncounted behavior.
 
 When **Preferences → Picker → Enable mouse row selection and double-click confirmation**
-is enabled, ordinary command rows also support pointer selection and double-click
-confirmation. Tag rows remain keyboard-only.
+is enabled, chooser and command rows also support pointer selection and double-click
+confirmation.
 
 #### Directional pane focus
 
@@ -717,7 +717,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                                       |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
-| Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms All, Collection, Tab, and Note rows; hover remains inert and Tag rows stay keyboard-only |
+| Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |
 
 Appearance, key guide, picker, and scroll settings save automatically on change.
 
