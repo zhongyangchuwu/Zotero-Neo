@@ -1,0 +1,86 @@
+name: Format branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: Same-repository branch to format
+        required: true
+        type: string
+      expected_sha:
+        description: Expected branch HEAD before formatting
+        required: true
+        type: string
+
+concurrency:
+  group: format-${{ inputs.target_ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    name: Apply Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.target_ref }}
+          fetch-depth: 0
+
+      - name: Validate target
+        shell: bash
+        env:
+          TARGET_REF: ${{ inputs.target_ref }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          git check-ref-format --branch "$TARGET_REF" >/dev/null
+          if [ "$TARGET_REF" = "main" ]; then
+            echo "Refusing to format the default branch directly."
+            exit 1
+          fi
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "Target moved: expected $EXPECTED_SHA, found $ACTUAL_SHA"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply Prettier
+        run: npm run format
+
+      - name: Validate formatted diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "Formatting unexpectedly created untracked files."
+            git ls-files --others --exclude-standard
+            exit 1
+          fi
+
+      - name: Commit formatted files
+        shell: bash
+        env:
+          TARGET_REF: ${{ inputs.target_ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          git commit -m "style: apply prettier"
+          git push origin "HEAD:refs/heads/$TARGET_REF"
