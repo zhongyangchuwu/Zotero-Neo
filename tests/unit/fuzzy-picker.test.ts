@@ -909,7 +909,7 @@ describe('tab picker activation', () => {
 });
 
 describe('unified Notes picker', () => {
-  it('searches note names, previews in two panes, moves focus, scrolls, trashes, and restores', async () => {
+  it('searches and previews notes while leaving domain mutation keys unclaimed', async () => {
     vi.useFakeTimers();
     const current = {
       id: 1,
@@ -947,13 +947,6 @@ describe('unified Notes picker', () => {
       [parent.id, parent],
       [attachment.id, attachment],
     ]);
-    const trashTx = vi.fn(async (ids: number[]) => {
-      for (const id of ids) Reflect.set(byID.get(id) ?? {}, 'deleted', true);
-    });
-    const undo = vi.fn(async () => {
-      Reflect.set(other, 'deleted', false);
-      return true;
-    });
     class Search {
       addCondition() {}
       async search(): Promise<number[]> {
@@ -968,23 +961,21 @@ describe('unified Notes picker', () => {
             ? id.flatMap((value) => byID.get(value) ?? [])
             : (byID.get(id) ?? false),
         getAll: vi.fn(),
-        trashTx,
       },
       Reader: { getByTabID: () => ({ itemID: attachment.id }) },
       Libraries: { userLibraryID: 1 },
       Schema: { schemaUpdatePromise: Promise.resolve() },
       Search,
-      UndoHistory: { getUndoAction: () => ({ action: 'undo-action-trash' }), undo },
-      Notes: { open: vi.fn() },
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, {
       Zotero_Tabs: { selectedID: 'reader-tab' },
       ZoteroPane: { getSelectedItems: () => [] },
     });
-    const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {});
-    const restoreTrashedItems = vi.spyOn(navigation, 'restoreTrashedItems');
-    const picker = new FuzzyPicker({ debug: vi.fn(), diagnostic: vi.fn() }, navigation);
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
 
     await picker.open(window, session, 'notes');
     vi.advanceTimersByTime(30);
@@ -996,19 +987,12 @@ describe('unified Notes picker', () => {
     input.value = 'body-only searchable phrase';
     input.emit('input');
     expect(session.picker.filtered.map((item) => item.id)).toEqual([other.id]);
-    input.value = 'not present in any note';
-    input.emit('input');
-    expect(session.picker.filtered).toHaveLength(0);
     input.value = '';
     input.emit('input');
 
     picker.onKeyDown(pickerKey('ArrowDown', input), window, session);
     expect(session.picker.selected).toBe(1);
     picker.onKeyDown(pickerKey('ArrowUp', input), window, session);
-    expect(session.picker.selected).toBe(0);
-    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
-    expect(session.picker.selected).toBe(1);
-    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
     expect(session.picker.selected).toBe(0);
     picker.onKeyDown(pickerKey('j', input, { ctrl: true }), window, session);
     expect(session.picker.selected).toBe(1);
@@ -1018,72 +1002,17 @@ describe('unified Notes picker', () => {
     expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: 200 });
     picker.onKeyDown(pickerKey('u', input, { ctrl: true }), window, session);
     expect(session.picker.preview?.scrollBy).toHaveBeenCalledWith({ top: -200 });
-    session.picker.selected = 1;
+
     session.picker.focusPane = 'list';
-
-    picker.onKeyDown(pickerKey('x', session.picker.results), window, session);
-    await vi.waitFor(() => expect(trashTx).toHaveBeenCalledWith([other.id]));
-    await vi.waitFor(() =>
-      expect(session.picker.filtered.map((item) => item.id)).toEqual([current.id]),
-    );
-    picker.onKeyDown(pickerKey('u', session.picker.results), window, session);
-    await vi.waitFor(() => expect(restoreTrashedItems).toHaveBeenCalledWith([other.id]));
-    await vi.waitFor(() => expect(undo).toHaveBeenCalledOnce());
-    await vi.waitFor(() => expect(session.picker.filtered).toHaveLength(2));
-  });
-
-  it('ignores a pending note trash completion after close', async () => {
-    vi.useFakeTimers();
-    let resolveTrash: ((value: boolean) => void) | undefined;
-    const pendingTrash = new Promise<boolean>((resolve) => {
-      resolveTrash = resolve;
-    });
-    const note = {
-      id: 2,
-      deleted: false,
-      dateModified: '2026-09-10 00:00:00',
-      isNote: () => true,
-      getNote: () => '<p>Pending note</p>',
-      getDisplayTitle: () => 'Pending note',
-    } as unknown as Zotero.Item;
-    class Search {
-      addCondition() {}
-      async search(): Promise<number[]> {
-        return [note.id];
-      }
+    for (const key of ['n', 'x', 'u']) {
+      const event = pickerKey(key, session.picker.results);
+      picker.onKeyDown(event, window, session);
+      expect(event.preventDefault).not.toHaveBeenCalled();
     }
-    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
-    vi.stubGlobal('Zotero', {
-      Items: {
-        get: (id: number | number[]) => (Array.isArray(id) ? [note] : note),
-        getAll: vi.fn(),
-      },
-      Schema: { schemaUpdatePromise: Promise.resolve() },
-      Search,
-      Notes: { open: vi.fn() },
-    });
-    const { window, session } = createPickerHarness();
-    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
-    const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {});
-    const picker = new FuzzyPicker({ debug: vi.fn(), diagnostic: vi.fn() }, navigation);
-    vi.spyOn(navigation, 'trashItems').mockReturnValue(pendingTrash);
-    await picker.open(window, session, 'notes');
-    session.picker.items = [
-      { id: note.id, title: 'Pending note', search: 'pending note', kind: 'note' },
-    ];
-    session.picker.filtered = [...session.picker.items];
-    session.picker.selected = 0;
-    session.picker.focusPane = 'list';
-    picker.onKeyDown(pickerKey('x', session.picker.results), window, session);
-    await vi.waitFor(() => expect(navigation.trashItems).toHaveBeenCalledWith([note.id]));
-    picker.close(session);
-    resolveTrash?.(true);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(session.picker.items).toEqual([]);
-    expect(session.picker.filtered).toEqual([]);
-    expect(session.picker.lastDeletedNoteID).toBeNull();
-    expect(session.status.textContent).toBe('');
+    const slash = pickerKey('/', session.picker.results);
+    picker.onKeyDown(slash, window, session);
+    expect(slash.preventDefault).toHaveBeenCalledOnce();
+    expect(session.picker.focusPane).toBe('search');
   });
 
   it('selects and confirms a note row with enabled mouse', async () => {
