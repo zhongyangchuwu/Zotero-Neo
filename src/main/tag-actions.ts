@@ -5,11 +5,7 @@ import type { FuzzyPicker } from './picker';
 import { createTagCandidateProvider, type TagRecord } from './picker/providers/tags';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
-import {
-  applyMainTagFilter,
-  currentTagSelection,
-  mainHost,
-} from './host';
+import { applyMainTagFilter, currentTagSelection, mainHost } from './host';
 import {
   itemTagState,
   resolveItemTagTargets,
@@ -54,7 +50,10 @@ function mergeTags(...sources: readonly (readonly TagRecord[])[]): TagRecord[] {
   return [...byName.values()];
 }
 
-function candidateName(item: { readonly tagName?: string; readonly tagCandidate?: string }): string {
+function candidateName(item: {
+  readonly tagName?: string;
+  readonly tagCandidate?: string;
+}): string {
   return item.tagCandidate === 'namespace' ? '' : (item.tagName?.trim() ?? '');
 }
 
@@ -103,8 +102,7 @@ export class TagActions {
       placeholder: '> Search or create a tag…',
       separator,
       allowCreate: true,
-      loadTags: async () =>
-        mergeTags(await Zotero.Tags.getAll(libraryID), targetTags(targets)),
+      loadTags: async () => mergeTags(await Zotero.Tags.getAll(libraryID), targetTags(targets)),
       describe: (tag) => presenceLabel(targets, tag),
     });
     void this.#picker.open(window, session, 'tags', {
@@ -168,7 +166,10 @@ export class TagActions {
         const scoped: readonly TagRecord[] = row?.getTags
           ? await row.getTags()
           : await Zotero.Tags.getAll(libraryID);
-        return mergeTags(scoped, active.map((tag) => ({ tag })));
+        return mergeTags(
+          scoped,
+          active.map((tag) => ({ tag })),
+        );
       },
       describe: (tag) => (activeSet.has(tag) ? 'Active filter' : undefined),
     });
@@ -178,9 +179,7 @@ export class TagActions {
         const name = candidateName(item);
         if (!name) return;
         const wasActive = active.some((tag) => sameTag(tag, name));
-        const next = wasActive
-          ? active.filter((tag) => !sameTag(tag, name))
-          : [...active, name];
+        const next = wasActive ? active.filter((tag) => !sameTag(tag, name)) : [...active, name];
         const matches = await applyMainTagFilter(window, next);
         this.#navigation.status(
           session,

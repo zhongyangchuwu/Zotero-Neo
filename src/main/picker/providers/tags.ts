@@ -105,7 +105,9 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
       if (item.tagCandidate === 'namespace') {
         return {
           title: item.title,
-          body: ['Tag namespace', item.meta, 'Enter to narrow the query'].filter(Boolean).join('\n'),
+          body: ['Tag namespace', item.meta, 'Enter to narrow the query']
+            .filter(Boolean)
+            .join('\n'),
         };
       }
       return {
