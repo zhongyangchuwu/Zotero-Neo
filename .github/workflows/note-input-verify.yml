@@ -1,4 +1,5 @@
 name: Note input verification (temporary)
+# trigger: typed-and-runtime verification
 
 on:
   push:
