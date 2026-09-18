@@ -45,6 +45,7 @@ import { ReaderSidebarOverlay } from './sidebar-overlay';
 import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
+import { ReaderHostKeyBridge } from './host-key-bridge';
 import { ReaderFlash, type FlashIntent, type FlashSelectionTarget } from './flash';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
 import { selectionClipboardText } from './selection-text';
@@ -403,8 +404,7 @@ export class ReaderSession {
   readonly #dependencies: SessionDependencies;
   readonly #scope = new CleanupScope();
   readonly #viewHandlers = new Map<PdfWindow, ViewHandlers>();
-  readonly #keyPatches = new Map<ReaderViewRuntime, (event: KeyboardEvent) => unknown>();
-  readonly #textFocusPatches = new Map<ReaderViewRuntime, () => boolean>();
+  readonly #hostKeyBridge: ReaderHostKeyBridge;
   readonly #marks: ReaderMarks;
   readonly #marksExplorer: ReaderMarksExplorer;
   readonly #sidebar: ReaderSidebarOverlay;
@@ -476,6 +476,13 @@ export class ReaderSession {
         void this.handOverNativeEditor();
       },
       locale: () => zoteroRuntime().locale ?? '',
+    });
+    this.#hostKeyBridge = new ReaderHostKeyBridge({
+      reader: dependencies.reader,
+      nativeEditableFocused: () => this.nativeEditableFocused(),
+      consumesKey: (key) => this.readerConsumesKey(key),
+      commentInputFocused: (window) => this.#commentEditor.isInputFocused(window),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
     this.#marks = new ReaderMarks({
       preferences: dependencies.controller.dependencies.preferences,
@@ -559,7 +566,7 @@ export class ReaderSession {
     for (const [pdfWindow, handlers] of this.#viewHandlers)
       this.removeViewHandlers(pdfWindow, handlers);
     this.#viewHandlers.clear();
-    this.restorePatches();
+    this.#hostKeyBridge.dispose();
     this.#scope.dispose();
     this.#sidebar.dispose(() => {
       this.#marksExplorer.close();
@@ -698,8 +705,7 @@ export class ReaderSession {
         scrollElement,
       });
     }
-    this.patchKeyForwarding();
-    this.patchTextAnnotationFocus();
+    this.#hostKeyBridge.sync();
   }
 
   private removeViewHandlers(pdfWindow: PdfWindow, handlers: ViewHandlers): void {
@@ -730,74 +736,6 @@ export class ReaderSession {
     if (!manager) return;
     manager.dispose();
     this.#themeManagers.delete(pdfWindow);
-  }
-
-  private patchKeyForwarding(): void {
-    const views = [
-      this.#dependencies.reader._internalReader?._primaryView,
-      this.#dependencies.reader._internalReader?._secondaryView,
-    ];
-    for (const view of views) {
-      if (!view || this.#keyPatches.has(view) || !view._onKeyDown) continue;
-      const original = view._onKeyDown;
-      const session = this;
-      const wrapper = (event: KeyboardEvent): unknown => {
-        if (session.nativeEditableFocused() || session.readerConsumesKey(keyString(event)))
-          return undefined;
-        return original.call(view, event);
-      };
-      try {
-        view._onKeyDown = wrapper;
-        this.#keyPatches.set(view, original);
-      } catch (error) {
-        this.#dependencies.controller.dependencies.logger.debug(
-          `reader key forwarding patch failed: ${String(error)}`,
-        );
-      }
-    }
-  }
-
-  private patchTextAnnotationFocus(): void {
-    const views = [
-      this.#dependencies.reader._internalReader?._primaryView,
-      this.#dependencies.reader._internalReader?._secondaryView,
-    ];
-    for (const view of views) {
-      if (!view || this.#textFocusPatches.has(view) || !view._textAnnotationFocused) continue;
-      const original = view._textAnnotationFocused;
-      const session = this;
-      const wrapper = (): boolean => {
-        if (session.#commentEditor.isInputFocused(view._iframeWindow)) return true;
-        return original.call(view);
-      };
-      try {
-        view._textAnnotationFocused = wrapper;
-        this.#textFocusPatches.set(view, original);
-      } catch (error) {
-        this.#dependencies.controller.dependencies.logger.debug(
-          `reader text annotation patch failed: ${String(error)}`,
-        );
-      }
-    }
-  }
-
-  private restorePatches(): void {
-    for (const [view, original] of this.#keyPatches) {
-      try {
-        view._onKeyDown = original;
-      } catch {
-        // A recreated view may no longer accept restoration.
-      }
-    }
-    this.#keyPatches.clear();
-    for (const [view, original] of this.#textFocusPatches) {
-      try {
-        view._textAnnotationFocused = original;
-      } catch {
-        // A recreated view may no longer accept restoration.
-      }
-    }
-    this.#textFocusPatches.clear();
   }
 
   private handleKeyUp(event: KeyboardEvent): void {
