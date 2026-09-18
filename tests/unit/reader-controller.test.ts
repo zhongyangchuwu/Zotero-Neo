@@ -704,7 +704,7 @@ describe('reader zoom shortcuts', () => {
   it('leaves colon native when a custom resolved map removes the default binding', () => {
     const originalKeyDown = vi.fn();
     const bindings = Object.fromEntries(
-      Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'normal::'),
+      Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'reader-normal::'),
     ) as BindingMap;
     const created = createHistorySession({}, () => {}, bindings);
     const view = created.reader._internalReader?._primaryView;
@@ -820,8 +820,8 @@ describe('Reader leader timer guards', () => {
     vi.useFakeTimers();
     const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
     const bindings: BindingMap = {
-      'normal: f': 'mainFuzzyAll',
-      'normal: ff': 'mainTabPick',
+      'reader-normal: f': 'mainFuzzyAll',
+      'reader-normal: ff': 'mainTabPick',
     };
     const created = createHistorySession({}, delegateMain, bindings);
     const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
@@ -999,8 +999,8 @@ describe('Reader smooth horizontal pan', () => {
 
     const customBindings = {
       ...DEFAULT_BINDINGS,
-      'normal:H': 'scrollLeft',
-      'normal:L': 'scrollRight',
+      'reader-normal:H': 'scrollLeft',
+      'reader-normal:L': 'scrollRight',
     } as BindingMap;
     for (const [key, direction] of [
       ['H', -1],
@@ -1193,11 +1193,11 @@ describe('reader sidebar coordination', () => {
     const bindings = {
       ...Object.fromEntries(
         Object.entries(DEFAULT_BINDINGS).filter(
-          ([binding]) => binding !== 'normal: e' && binding !== 'normal: m',
+          ([binding]) => binding !== 'reader-normal: e' && binding !== 'reader-normal: m',
         ),
       ),
-      'normal:q': 'toggleReaderSidebarOutline',
-      'normal:w': 'toggleMarksExplorer',
+      'reader-normal:q': 'toggleReaderSidebarOutline',
+      'reader-normal:w': 'toggleMarksExplorer',
     } as BindingMap;
     const created = createHistorySession({}, () => {}, bindings);
 

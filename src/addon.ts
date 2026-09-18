@@ -10,7 +10,6 @@ import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
 import { migrateBindingPreferences } from './core/preferences';
 import { createMainWindowController } from './main/controller';
-import { MainItemSelect } from './main/item-select';
 import { createReaderController } from './reader/controller';
 
 export interface AddonContext {
@@ -38,7 +37,6 @@ type ZoteroWithNeo = typeof Zotero & {
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
   readonly #preferences = new ZoteroPreferenceStore();
-  readonly #itemSelect = new MainItemSelect(this.#logger);
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -87,7 +85,6 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   shutdown(): void {
     const host = Zotero as ZoteroWithNeo;
     if (host.Neo === this.api) delete host.Neo;
-    this.#itemSelect.shutdown();
     this.#reader.shutdown();
     this.#main.shutdown();
     this.#logger.debug('Shut down');
@@ -96,13 +93,10 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   }
 
   addToWindow(window: MainWindow): void {
-    // Register Item Select first so its capture listener can own v/j/k before Main navigation.
-    this.#itemSelect.addWindow(window);
     this.#main.addWindow(window);
   }
 
   removeFromWindow(window: MainWindow): void {
-    this.#itemSelect.removeWindow(window);
     this.#main.removeWindow(window);
   }
 

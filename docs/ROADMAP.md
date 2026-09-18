@@ -9,15 +9,27 @@ host/API limitations are tracked in GitHub Issues.
 The first public release should prioritize complete, useful keyboard-first
 workflows over broad Vim feature parity.
 
-- Item-tag assignment/removal is now implemented through Main Item Select plus a
+Completed feature gates:
+
+- Item-tag assignment/removal is implemented through Main Item Select plus a
   persistent [Tag Workspace](TAG_WORKSPACE.md), using Zotero-native selection,
-  item APIs, and batched transactions while keeping `<Space>fT` as filtering.
-- **Next:** extend Flash text targeting to Unicode/CJK input and IME composition
-  ([#23](https://github.com/zhongyangchuwu/Zotero-Neo/issues/23)) while keeping
-  literal visible-text matching and the existing bounded target model.
-- Complete a final default-keymap review and latest-stable Zotero host regression
-  pass across Reader, Main, Note, split views, pickers, restart/restore, and
-  preference persistence.
+  item APIs, and batched transactions while keeping `<Space>fT` as filtering
+  (#22).
+- Flash, Picker, and Tag Workspace support Unicode/CJK and browser-owned IME
+  composition on the current Zotero host (#23).
+- Shared fuzzy matching uses the pinned `fuzzysort` adapter rather than a local
+  ad-hoc scorer (#26).
+
+Current pre-release work:
+
+- **Architecture cleanup (#29):** remove remaining parallel input paths before
+  the public keymap freezes. Main Item Select now uses the shared binding/input
+  system; the remaining work is Note-local grammar unification and decomposition
+  of the oversized Reader orchestration boundary along existing feature/host
+  ownership lines. See [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Release gate (#24):** after the architecture/keymap boundary is accepted,
+  run the final Zotero 10 host regression across Reader, Main, Note, split views,
+  pickers/workspaces, restart/restore, preferences, and Error Console.
 - Prepare the first release metadata and update feed, then validate clean install
   and upgrade behavior before tagging `v0.1.0`.
 - Continue tracking native Zotero Reader semantic-selection integration in

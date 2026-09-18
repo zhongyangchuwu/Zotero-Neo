@@ -297,9 +297,9 @@ describe('main item trash and restore', () => {
       expect(trashTx).toHaveBeenCalledTimes(1);
       expect(session.status.textContent).toBe('✗ Focus the items list first');
       expect(DEFAULT_BINDINGS).toMatchObject({
-        'main:dd': 'mainTrashItems',
-        'main:x': 'mainTrashItems',
-        'main:u': 'mainRestoreTrashedItems',
+        'main-normal:dd': 'mainTrashItems',
+        'main-normal:x': 'mainTrashItems',
+        'main-normal:u': 'mainRestoreTrashedItems',
       });
     } finally {
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
@@ -355,10 +355,10 @@ describe('directional pane focus', () => {
     const navigation = new MainNavigation(logger, () => {});
 
     expect(DEFAULT_BINDINGS).toMatchObject({
-      'main:ctrl+h': 'focusReaderSplitLeft',
-      'main:ctrl+j': 'focusReaderSplitDown',
-      'main:ctrl+k': 'focusReaderSplitUp',
-      'main:ctrl+l': 'focusReaderSplitRight',
+      'main-normal:ctrl+h': 'focusReaderSplitLeft',
+      'main-normal:ctrl+j': 'focusReaderSplitDown',
+      'main-normal:ctrl+k': 'focusReaderSplitUp',
+      'main-normal:ctrl+l': 'focusReaderSplitRight',
     });
     expect(navigation.focusDirection(window, session, 'right')).toBe(true);
     expect(active).toBe(items);
@@ -507,7 +507,7 @@ describe('NoteEditor canonical main commands', () => {
   }
 
   it('resolves ambiguous leader remaps on continuation or timeout', () => {
-    const test = harness({ 'main: f': 'mainNextTab', 'main: ff': 'mainPrevTab' });
+    const test = harness({ 'main-normal: f': 'mainNextTab', 'main-normal: ff': 'mainPrevTab' });
 
     test.press(' ');
     test.press('f');
@@ -527,7 +527,7 @@ describe('NoteEditor canonical main commands', () => {
   });
 
   it('cancels, backspaces, and clears stale leader timers without dispatching', () => {
-    const test = harness({ 'main: f': 'mainNextTab', 'main: ff': 'mainPrevTab' });
+    const test = harness({ 'main-normal: f': 'mainNextTab', 'main-normal: ff': 'mainPrevTab' });
 
     test.press(' ');
     test.press('f');
@@ -550,10 +550,10 @@ describe('NoteEditor canonical main commands', () => {
 
   it('keeps custom Escape and Backspace bindings outside NoteEditor canonical eligibility', () => {
     const test = harness({
-      'main:escape': 'mainNextTab',
-      'main:backspace': 'mainPrevTab',
-      'main: f': 'mainFuzzyAll',
-      'main: ff': 'mainTabPick',
+      'main-normal:escape': 'mainNextTab',
+      'main-normal:backspace': 'mainPrevTab',
+      'main-normal: f': 'mainFuzzyAll',
+      'main-normal: ff': 'mainTabPick',
     });
 
     test.press('Escape');
@@ -571,7 +571,7 @@ describe('NoteEditor canonical main commands', () => {
   });
 
   it('invalidates stale leader timeouts after newer canonical input and Insert transition', () => {
-    const test = harness({ 'main: f': 'mainNextTab', 'main: ff': 'mainPrevTab' });
+    const test = harness({ 'main-normal: f': 'mainNextTab', 'main-normal: ff': 'mainPrevTab' });
 
     test.press(' ');
     test.press('f');
@@ -589,7 +589,7 @@ describe('NoteEditor canonical main commands', () => {
   });
 
   it('keeps lowercase h/l local and Insert input native while H/L switch tabs', () => {
-    const test = harness({ 'main:H': 'mainPrevTab', 'main:L': 'mainNextTab' });
+    const test = harness({ 'main-normal:H': 'mainPrevTab', 'main-normal:L': 'mainNextTab' });
 
     test.press('g');
     expect(test.session.note.buffer).toBe('g');
@@ -617,7 +617,7 @@ describe('NoteEditor canonical main commands', () => {
     vi.useRealTimers();
   });
   it('launches the command palette from Note Normal without propagating a count', () => {
-    const test = harness({ 'main::': 'openCommandPalette' });
+    const test = harness({ 'main-normal::': 'openCommandPalette' });
     test.press('3');
     const colon = test.press(':');
 
@@ -1047,11 +1047,11 @@ describe('main Space-leader key guide', () => {
               ? false
               : key === 'bindings'
                 ? JSON.stringify({
-                    'main:x': 'mainNextTab',
-                    'main:xy': 'mainPrevTab',
-                    'main:q': 'focusReaderSplitLeft',
-                    'main: f': 'mainNextTab',
-                    'main: ff': 'mainPrevTab',
+                    'main-normal:x': 'mainNextTab',
+                    'main-normal:xy': 'mainPrevTab',
+                    'main-normal:q': 'focusReaderSplitLeft',
+                    'main-normal: f': 'mainNextTab',
+                    'main-normal: ff': 'mainPrevTab',
                   })
                 : fallback,
           set: () => {},

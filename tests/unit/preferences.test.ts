@@ -111,58 +111,60 @@ describe('scroll preferences', () => {
 describe('binding preferences', () => {
   it('merges valid custom bindings over the defaults', () => {
     const preferences = new TestPreferences({
-      bindings: JSON.stringify({ 'normal:j': 'scrollUp', 'main:x': 'mainActivate' }),
+      bindings: JSON.stringify({ 'reader-normal:j': 'scrollUp', 'main-normal:x': 'mainActivate' }),
     });
 
     const bindings = bindingsFromPreferences(preferences);
-    expect(bindings['normal:j']).toBe('scrollUp');
-    expect(bindings['normal:k']).toBe('scrollUp');
-    expect(bindings['main:x']).toBe('mainActivate');
+    expect(bindings['reader-normal:j']).toBe('scrollUp');
+    expect(bindings['reader-normal:k']).toBe('scrollUp');
+    expect(bindings['main-normal:x']).toBe('mainActivate');
   });
 
   it('falls back to default bindings when the preference is malformed', () => {
-    const preferences = new TestPreferences({ bindings: '{"normal:j":' });
+    const preferences = new TestPreferences({ bindings: '{"reader-normal:j":' });
 
     const bindings = bindingsFromPreferences(preferences);
-    expect(bindings['normal:j']).toBe('scrollDown');
-    expect(bindings['main:enter']).toBe('mainActivate');
-    expect(bindings['normal: fn']).toBe('mainNotesLayout');
-    expect(bindings['main: fn']).toBe('mainNotesLayout');
-    expect(bindings['normal: n']).toBeUndefined();
-    expect(bindings['main: n']).toBeUndefined();
-    expect(bindings['normal: ft']).toBe('mainTabPick');
-    expect(bindings['main: ft']).toBe('mainTabPick');
-    expect(bindings['main: fT']).toBe('mainTagPicker');
-    expect(bindings['main:u']).toBe('mainRestoreTrashedItems');
-    expect(bindings['normal: tp']).toBeUndefined();
-    expect(bindings['main: tp']).toBeUndefined();
-    expect(bindings['main:ctrl+u']).toBeUndefined();
+    expect(bindings['reader-normal:j']).toBe('scrollDown');
+    expect(bindings['main-normal:enter']).toBe('mainActivate');
+    expect(bindings['reader-normal: fn']).toBe('mainNotesLayout');
+    expect(bindings['main-normal: fn']).toBe('mainNotesLayout');
+    expect(bindings['reader-normal: n']).toBeUndefined();
+    expect(bindings['main-normal: n']).toBeUndefined();
+    expect(bindings['reader-normal: ft']).toBe('mainTabPick');
+    expect(bindings['main-normal: ft']).toBe('mainTabPick');
+    expect(bindings['main-normal: fT']).toBe('mainTagPicker');
+    expect(bindings['main-normal:u']).toBe('mainRestoreTrashedItems');
+    expect(bindings['reader-normal: tp']).toBeUndefined();
+    expect(bindings['main-normal: tp']).toBeUndefined();
+    expect(bindings['main-normal:ctrl+u']).toBeUndefined();
   });
 
   it('migrates retired defaults and removes legacy native-search actions without dropping unrelated remaps', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 4,
       bindings: JSON.stringify({
-        'normal: fb': 'mainFuzzyCollection',
-        'main: bj': 'mainTabPick',
-        'main: legacy-search': 'mainFocusSearch',
-        'main: old-advanced': 'mainAdvancedSearch',
-        'main:x': 'mainActivate',
+        'reader-normal: fb': 'mainFuzzyCollection',
+        'main-normal: bj': 'mainTabPick',
+        'main-normal: legacy-search': 'mainFocusSearch',
+        'main-normal: old-advanced': 'mainAdvancedSearch',
+        'main-normal:x': 'mainActivate',
       }),
     });
 
     migrateBindingPreferences(preferences);
 
-    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({ 'main:x': 'mainActivate' });
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main-normal:x': 'mainActivate',
+    });
     const resolved = bindingsFromPreferences(preferences);
-    expect(resolved['main: legacy-search']).toBeUndefined();
-    expect(resolved['main: old-advanced']).toBeUndefined();
+    expect(resolved['main-normal: legacy-search']).toBeUndefined();
+    expect(resolved['main-normal: old-advanced']).toBeUndefined();
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
 
-    preferences.set('bindings', JSON.stringify({ 'main: q': 'mainClosePDF' }));
+    preferences.set('bindings', JSON.stringify({ 'main-normal: q': 'mainClosePDF' }));
     migrateBindingPreferences(preferences);
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
-      'main: q': 'mainClosePDF',
+      'main-normal: q': 'mainClosePDF',
     });
   });
 
@@ -170,58 +172,58 @@ describe('binding preferences', () => {
     const exact = new TestPreferences({
       'bindings.schemaVersion': 5,
       bindings: JSON.stringify({
-        'normal:H': 'scrollLeft',
-        'normal:L': 'scrollRight',
-        'normal:J': 'mainPrevTab',
-        'normal:K': 'mainNextTab',
-        'main:J': 'mainPrevTab',
-        'main:K': 'mainNextTab',
-        'main:x': 'mainActivate',
+        'reader-normal:H': 'scrollLeft',
+        'reader-normal:L': 'scrollRight',
+        'reader-normal:J': 'mainPrevTab',
+        'reader-normal:K': 'mainNextTab',
+        'main-normal:J': 'mainPrevTab',
+        'main-normal:K': 'mainNextTab',
+        'main-normal:x': 'mainActivate',
       }),
     });
     migrateBindingPreferences(exact);
-    expect(JSON.parse(exact.get('bindings', ''))).toEqual({ 'main:x': 'mainActivate' });
+    expect(JSON.parse(exact.get('bindings', ''))).toEqual({ 'main-normal:x': 'mainActivate' });
     expect(exact.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
-    expect(bindingsFromPreferences(exact)['normal:H']).toBe('mainPrevTab');
-    expect(bindingsFromPreferences(exact)['normal:zh']).toBe('scrollLeft');
+    expect(bindingsFromPreferences(exact)['reader-normal:H']).toBe('mainPrevTab');
+    expect(bindingsFromPreferences(exact)['reader-normal:zh']).toBe('scrollLeft');
 
     const custom = new TestPreferences({
       'bindings.schemaVersion': 5,
       bindings: JSON.stringify({
-        'normal:H': 'scrollRight',
-        'normal:L': 'scrollLeft',
-        'normal:J': 'mainNextTab',
-        'normal:K': 'mainPrevTab',
-        'main:J': 'mainNextTab',
-        'main:K': 'mainPrevTab',
+        'reader-normal:H': 'scrollRight',
+        'reader-normal:L': 'scrollLeft',
+        'reader-normal:J': 'mainNextTab',
+        'reader-normal:K': 'mainPrevTab',
+        'main-normal:J': 'mainNextTab',
+        'main-normal:K': 'mainPrevTab',
       }),
     });
     migrateBindingPreferences(custom);
     expect(JSON.parse(custom.get('bindings', ''))).toEqual({
-      'normal:H': 'scrollRight',
-      'normal:L': 'scrollLeft',
-      'normal:J': 'mainNextTab',
-      'normal:K': 'mainPrevTab',
-      'main:J': 'mainNextTab',
-      'main:K': 'mainPrevTab',
+      'reader-normal:H': 'scrollRight',
+      'reader-normal:L': 'scrollLeft',
+      'reader-normal:J': 'mainNextTab',
+      'reader-normal:K': 'mainPrevTab',
+      'main-normal:J': 'mainNextTab',
+      'main-normal:K': 'mainPrevTab',
     });
     expect(custom.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
-    expect(bindingsFromPreferences(custom)['normal:H']).toBe('scrollRight');
-    expect(bindingsFromPreferences(custom)['main:J']).toBe('mainNextTab');
+    expect(bindingsFromPreferences(custom)['reader-normal:H']).toBe('scrollRight');
+    expect(bindingsFromPreferences(custom)['main-normal:J']).toBe('mainNextTab');
   });
   it('migrates schema 6 to compact storage before versioning and remains idempotent', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 6,
       bindings: JSON.stringify({
-        'normal:j': 'scrollDown',
-        'normal:H': 'scrollRight',
-        'normal:L': 'scrollLeft',
-        'normal:J': 'mainNextTab',
-        'normal:K': 'mainPrevTab',
-        'main:J': 'mainNextTab',
-        'main:K': 'mainPrevTab',
-        'main:x': 'mainActivate',
-        'main:enter': 'mainActivate',
+        'reader-normal:j': 'scrollDown',
+        'reader-normal:H': 'scrollRight',
+        'reader-normal:L': 'scrollLeft',
+        'reader-normal:J': 'mainNextTab',
+        'reader-normal:K': 'mainPrevTab',
+        'main-normal:J': 'mainNextTab',
+        'main-normal:K': 'mainPrevTab',
+        'main-normal:x': 'mainActivate',
+        'main-normal:enter': 'mainActivate',
       }),
     });
 
@@ -229,13 +231,13 @@ describe('binding preferences', () => {
 
     const persisted = preferences.get('bindings', '');
     expect(JSON.parse(persisted)).toEqual({
-      'main:J': 'mainNextTab',
-      'main:K': 'mainPrevTab',
-      'main:x': 'mainActivate',
-      'normal:H': 'scrollRight',
-      'normal:J': 'mainNextTab',
-      'normal:K': 'mainPrevTab',
-      'normal:L': 'scrollLeft',
+      'main-normal:J': 'mainNextTab',
+      'main-normal:K': 'mainPrevTab',
+      'main-normal:x': 'mainActivate',
+      'reader-normal:H': 'scrollRight',
+      'reader-normal:J': 'mainNextTab',
+      'reader-normal:K': 'mainPrevTab',
+      'reader-normal:L': 'scrollLeft',
     });
     expect(preferences.writes).toHaveLength(2);
     expect(preferences.writes[0]).toEqual(['bindings', persisted]);
@@ -243,16 +245,16 @@ describe('binding preferences', () => {
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
 
     const resolved = bindingsFromPreferences(preferences);
-    expect(resolved['normal:H']).toBe('scrollRight');
-    expect(resolved['normal:L']).toBe('scrollLeft');
-    expect(resolved['normal:J']).toBe('mainNextTab');
-    expect(resolved['normal:K']).toBe('mainPrevTab');
-    expect(resolved['main:J']).toBe('mainNextTab');
-    expect(resolved['main:K']).toBe('mainPrevTab');
-    expect(resolved['normal:zh']).toBe('scrollLeft');
-    expect(resolved['normal:zl']).toBe('scrollRight');
-    expect(resolved['main:H']).toBe('mainPrevTab');
-    expect(resolved['main:L']).toBe('mainNextTab');
+    expect(resolved['reader-normal:H']).toBe('scrollRight');
+    expect(resolved['reader-normal:L']).toBe('scrollLeft');
+    expect(resolved['reader-normal:J']).toBe('mainNextTab');
+    expect(resolved['reader-normal:K']).toBe('mainPrevTab');
+    expect(resolved['main-normal:J']).toBe('mainNextTab');
+    expect(resolved['main-normal:K']).toBe('mainPrevTab');
+    expect(resolved['reader-normal:zh']).toBe('scrollLeft');
+    expect(resolved['reader-normal:zl']).toBe('scrollRight');
+    expect(resolved['main-normal:H']).toBe('mainPrevTab');
+    expect(resolved['main-normal:L']).toBe('mainNextTab');
 
     const writeCount = preferences.writes.length;
     migrateBindingPreferences(preferences);

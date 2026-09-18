@@ -1,6 +1,6 @@
 import type { ReaderDelegableMainAction } from '../main/action-capabilities';
 import type { ActionId } from '../input/actions';
-import type { BindingMap } from '../input/bindings';
+import type { BindingMap, Mode } from '../input/bindings';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
 
@@ -11,6 +11,7 @@ export type CommandPaletteMode = 'normal' | 'main';
 
 export interface CommandPaletteContext {
   readonly mode: CommandPaletteMode;
+  readonly bindingMode: Mode;
   readonly actions: readonly ActionId[];
   readonly bindings: BindingMap;
   readonly language: 'en' | 'zh-CN';

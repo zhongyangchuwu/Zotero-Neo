@@ -10,26 +10,79 @@ for Zotero's reader and main window.
 
 ## Support
 
-Officially supported: the latest stable Zotero release. Older Zotero versions
-may continue to work, but they are not part of the compatibility guarantee or
-release test matrix.
+Zotero Neo supports the **latest stable Zotero release only**. The current
+pre-release target is Zotero 10; older Zotero major versions are outside the
+install and test contract.
 
 Zotero Neo targets macOS, Linux, and Windows. GitHub Actions validates XPI
 packaging on Ubuntu and Windows; Zotero GUI behavior still requires manual
 verification in the current stable host.
 
-## Highlights
+## Major features
 
-- Normal, Select (Visual), and Insert modes, with Flash-assisted PDF text selection and actions.
-- Keyboard-first navigation for readers, collections, items, notes, tabs, and
-  pickers.
-- Native-backed Main Item Select for keyboard range selection and bulk actions.
-- Persistent Tag Workspace for multi-item add/remove/create, tri-state assignment,
-  and optional virtual tag-path completion without replacing Zotero's tag model.
-- Vim-style marks, annotation navigation, highlighting, comment editing, and
-  configurable bindings.
-- Snapshot and EPUB navigation/search support where Zotero exposes compatible
-  reader behavior.
+### Library and Main window
+
+- Keyboard navigation across collections, saved searches, feeds, item lists, and
+  tabs, including Vim-style `j/k`, `gg/G`, tree expansion/collapse, pane focus,
+  PDF opening, tab switching/closing, trash, and restore.
+- Native-backed **Item Select** for range selection with counts, endpoint swap,
+  preserve/cancel semantics, and bulk actions without maintaining a parallel
+  selected-item model.
+- Better BibTeX citekey copying when Better BibTeX is available.
+
+### Reader navigation
+
+- Reader **Normal, Select, and Insert** interaction states.
+- Page turns, scrolling, half/full-page movement, zoom, horizontal pan, native
+  reading history, annotation navigation, and Zotero Reader search.
+- Horizontal/vertical split control and directional pane focus.
+- Link hints for visible internal, citation, and external PDF links.
+- Keyboard explorers for PDF outline and persisted marks.
+- Snapshot and EPUB navigation/search where Zotero exposes compatible Reader
+  behavior.
+
+### PDF text selection and actions
+
+- Flash-assisted visible-text targeting for Select start/end with literal
+  Unicode matching, CJK/IME input, bounded hint rendering, and stable labels.
+- Range refinement by character/word/sentence/paragraph/line motions plus
+  endpoint swapping.
+- Copy, search, coloured highlight, underline, annotation comment, and Selection
+  Actions workflows.
+- Optional Translate for Zotero selection integration through its public API.
+
+### Search, Picker, and commands
+
+- Shared fuzzy Picker for all-library items, current-collection items, notes,
+  tabs, and tags, backed by the pinned `fuzzysort` matcher.
+- Command Palette in Reader and Main contexts, with actions projected from the
+  active resolved binding map.
+- Browser/Gecko-owned text input and IME composition for Picker, Tag Workspace,
+  and Flash instead of reconstructing text from keydown events.
+
+### Tags
+
+- `<Space>fT` opens a keyboard-first **tag filter** workflow using Zotero's native
+  item-view tag filter with AND semantics.
+- `<Space>ta` opens a persistent **Tag Workspace** for Main/Reader/Note targets:
+  bulk add/remove/create, explicit all/mixed/none state, and repeated mutations
+  without reopening the UI.
+- Optional virtual tag-path completion such as `method/...` while Zotero keeps
+  ordinary flat tag strings as the authoritative data model.
+
+### Notes
+
+- Note search across normalized titles and note bodies.
+- Child-note creation, right-side editor opening, note-tab opening, trash, and
+  restore workflows.
+- Keyboard Normal/Insert handoff inside Zotero note editors.
+
+### Keymaps and appearance
+
+- Configurable Reader/Main bindings with multiple bindings per action,
+  duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
+- Space-leader Key Guide derived from the active resolved keymap.
+- Auto, Light, and Dark appearance modes on Neo-owned surfaces.
 
 ## Build from source
 
@@ -52,10 +105,14 @@ From File…** and restart when prompted.
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
+- [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
+  semantic actions, and Zotero host boundaries.
 - [Item Select and Tag Workspace](docs/TAG_WORKSPACE.md) — bulk item selection,
   item-tag editing, and virtual tag-path semantics.
-- [Development guide](docs/DEVELOPMENT.md) — architecture, build, CI, release,
-  and debugging constraints.
+- [Input methods](docs/INPUT_METHODS.md) — Unicode/IME ownership and composition
+  boundaries.
+- [Development guide](docs/DEVELOPMENT.md) — build, CI, release, host seams, and
+  debugging constraints.
 - [Roadmap](docs/ROADMAP.md) — work planned before and after the first release.
 - [Issue tracker](https://github.com/zhongyangchuwu/Zotero-Neo/issues) — current bugs and tracked host/API limitations.
 - [Changelog](CHANGELOG.md)

@@ -59,10 +59,11 @@ export interface BindingEditorDerived {
 }
 
 const MODE_ORDER: Readonly<Record<Mode, number>> = {
-  normal: 0,
-  visual: 1,
-  insert: 2,
-  main: 3,
+  'reader-normal': 0,
+  'reader-select': 1,
+  'reader-insert': 2,
+  'main-normal': 3,
+  'main-select': 4,
 };
 
 function isMode(value: string): value is Mode {
@@ -350,7 +351,7 @@ export function transition(
       const id = nextRowId(state);
       return {
         ...state,
-        rows: [{ id, mode: 'normal', key: '', action: '' }, ...state.rows],
+        rows: [{ id, mode: 'reader-normal', key: '', action: '' }, ...state.rows],
         actionEditor: null,
         nextRowId: id + 1,
         saveOutcome: null,

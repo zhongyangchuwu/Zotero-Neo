@@ -24,7 +24,7 @@ import {
 } from '../input/key-guide-config';
 import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
-import { resolveBindings, type BindingMap } from '../input/bindings';
+import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { isReaderDelegableMainAction } from '../main/action-capabilities';
 import {
   READER_NORMAL_ACTIONS,
@@ -158,6 +158,15 @@ function annotationText(value: string): string {
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled Reader action: ${String(value)}`);
+}
+function readerBindingMode(
+  mode: ReaderMode,
+): Extract<Mode, 'reader-normal' | 'reader-select' | 'reader-insert'> {
+  return mode === 'normal'
+    ? 'reader-normal'
+    : mode === 'visual'
+      ? 'reader-select'
+      : 'reader-insert';
 }
 
 export function createReaderController(
@@ -826,7 +835,7 @@ export class ReaderSession {
       return;
     }
     const leaderState = {
-      mode: this.state.mode,
+      mode: readerBindingMode(this.state.mode),
       keyBuffer: this.state.keyBuffer,
       countBuffer: this.state.countBuffer,
     };
@@ -866,7 +875,7 @@ export class ReaderSession {
     if (this.startSmoothHold(event, pdfWindow, key)) return;
     const decision = advanceInput(
       {
-        mode: this.state.mode,
+        mode: readerBindingMode(this.state.mode),
         keyBuffer: this.state.keyBuffer,
         countBuffer: this.state.countBuffer,
         bindings: this.#dependencies.bindings(),
@@ -935,7 +944,7 @@ export class ReaderSession {
     }
     const key = keyString(event);
     if (!key) return false;
-    const modePrefix = 'normal:';
+    const modePrefix = 'reader-normal:';
     const sequences = Object.entries(this.#dependencies.bindings())
       .filter(([binding, boundAction]) => binding.startsWith(modePrefix) && boundAction === action)
       .map(([binding]) => binding.slice(modePrefix.length));
@@ -989,7 +998,8 @@ export class ReaderSession {
 
   private handleMarkChord(event: KeyboardEvent, key: string, pdfWindow: PdfWindow): boolean {
     const bindings = this.#dependencies.bindings();
-    if (this.state.mode !== 'normal' || bindings['normal:m'] || bindings['normal:`']) return false;
+    if (this.state.mode !== 'normal' || bindings['reader-normal:m'] || bindings['reader-normal:`'])
+      return false;
     const consume = (): void => {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1079,7 +1089,7 @@ export class ReaderSession {
     )
       return /^[a-z0-9]$/.test(key);
     const context = {
-      mode: this.state.mode,
+      mode: readerBindingMode(this.state.mode),
       keyBuffer: this.state.keyBuffer,
       countBuffer: this.state.countBuffer,
       bindings: this.#dependencies.bindings(),
@@ -1123,6 +1133,7 @@ export class ReaderSession {
       if (!ownerWindow) return;
       this.#dependencies.controller.dependencies.openCommandPalette(ownerWindow, {
         mode: 'normal',
+        bindingMode: 'reader-normal',
         actions: READER_NORMAL_ACTIONS,
         bindings: this.#dependencies.bindings(),
         language: this.keyGuideLanguage(),
@@ -1460,7 +1471,7 @@ export class ReaderSession {
     }
     const entries = leaderGuideEntries(
       this.#dependencies.bindings(),
-      this.state.mode,
+      readerBindingMode(this.state.mode),
       prefix,
       this.keyGuideLanguage(),
     );
@@ -2470,11 +2481,11 @@ export class ReaderSession {
     )
       return false;
     const bindings = this.#dependencies.bindings();
-    const directAction = bindings['normal:' + key];
+    const directAction = bindings['reader-normal:' + key];
     if (!this.state.keyBuffer && (!directAction || !smoothScrollSpec(directAction))) return false;
     const decision = advanceInput(
       {
-        mode: 'normal',
+        mode: 'reader-normal',
         keyBuffer: this.state.keyBuffer,
         countBuffer: this.state.countBuffer,
         bindings,

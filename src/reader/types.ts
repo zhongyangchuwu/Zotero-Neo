@@ -1,6 +1,5 @@
 import type { MainWindow } from '../core/contracts';
 import type { ActionId } from '../input/actions';
-import type { Mode } from '../input/bindings';
 
 export type ReaderTimer = number | NodeJS.Timeout;
 
@@ -13,7 +12,7 @@ export const COLORS = {
 } as const;
 
 export type AnnotationColor = (typeof COLORS)[keyof typeof COLORS];
-export type ReaderMode = Exclude<Mode, 'main'>;
+export type ReaderMode = 'normal' | 'visual' | 'insert';
 
 export type ReaderRuntime = _ZoteroTypes.ReaderInstance & {
   readonly _instanceID?: string;

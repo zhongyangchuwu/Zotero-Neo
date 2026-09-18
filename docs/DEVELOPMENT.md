@@ -3,9 +3,10 @@
 ## Compatibility and verification
 
 Official support covers the latest stable Zotero release at the time of a Zotero
-Neo release. The manifest's install bounds are not a promise that every older
-accepted version is tested. GitHub Actions proves packaging only; test a changed
-reader, main-window, note, or preferences flow in the current Zotero host.
+Neo release. The manifest enforces that supported major instead of advertising
+untested older Zotero majors. The current pre-release target is Zotero 10.
+GitHub Actions proves packaging only; test a changed reader, main-window, note,
+or preferences flow in the current stable Zotero host.
 
 ## Build
 
@@ -47,6 +48,10 @@ repository presentation and future asset generation only. Do not copy
 boundary. Paths inside the XPI remain `icons/*` and `content/preferences/*`.
 
 ## Runtime architecture
+
+The ownership model and interaction-scope design are summarized in
+[ARCHITECTURE.md](ARCHITECTURE.md). This guide documents lower-level host seams and
+implementation constraints.
 
 Zotero Neo is authored as strict TypeScript and bundled to plain JavaScript for
 Gecko Bootstrap. `bootstrap.js` remains a global Bootstrap entry point; it loads
