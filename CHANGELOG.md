@@ -44,6 +44,10 @@ All notable changes to Zotero Neo are documented here.
 
 ### Changed
 
+- The 0.1.0 Reader yank defaults are prefix-unambiguous: annotation highlighted text remains on
+  `y`, annotation comment text moves from `yy` to `Y`, and the stale Select `yy` /
+  `yankParagraph` default is removed instead of freezing an action whose implementation did not
+  match its advertised whole-paragraph semantics.
 - Shared Picker and TagPath fuzzy matching now goes through the pinned `fuzzysort` 4.0.2 adapter
   instead of Neo's earlier ad-hoc fuzzy scorer; consumers remain behind `fuzzyMatchScore()`.
 - Configurable binding scopes now name both surface and interaction state (`reader-normal`,
@@ -87,6 +91,9 @@ All notable changes to Zotero Neo are documented here.
   deterministic XPI contents, and guarded release metadata.
 - Startup diagnostics are bounded and reset with version metadata instead of growing during idle
   Reader rescans.
-- Architecture ownership and remaining pre-release debt are documented in
-  `docs/ARCHITECTURE.md`; Reader orchestration cleanup remains tracked in issue #29 before the
-  final 0.1.0 keymap freeze.
+- Architecture ownership is documented in `docs/ARCHITECTURE.md`. Pre-0.1.0 Reader
+  orchestration now has explicit owners for private key patches, PDF-view lifecycle, navigation
+  host operations, and Neo's temporary Select DOM range; further annotation extraction was
+  deliberately rejected where it would only replace coherent local ownership with reverse callbacks.
+- The frozen default keymap is guarded by a contract test that rejects exact default commands which
+  are also strict prefixes of longer defaults, including the effective Main Select fallback map.
