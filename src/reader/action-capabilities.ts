@@ -90,7 +90,6 @@ export const READER_LOCAL_VISUAL_ACTIONS = Object.freeze([
   'copySelection',
   'searchSelection',
   'swapVisualEnds',
-  'yankParagraph',
   'exitMode',
 ] as const satisfies readonly ActionId[]);
 
