@@ -801,14 +801,19 @@ describe('tab picker activation', () => {
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
+    const options: PickerOpenOptions = {
+      confirm: (item) => {
+        tabs.select(String(item.id));
+      },
+    };
 
-    await picker.open(window, session, 'tabs');
+    await picker.open(window, session, 'tabs', options);
     expect(session.picker.results?.children[0]?.textContent).toBe('Library');
     picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
     await vi.waitFor(() => expect(selected).toEqual(['zotero-pane']));
     expect(session.picker.open).toBe(false);
 
-    await picker.open(window, session, 'tabs');
+    await picker.open(window, session, 'tabs', options);
     const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
     row.emit('click');
     row.emit('dblclick');
@@ -891,7 +896,11 @@ describe('tab picker activation', () => {
       () => true,
     );
 
-    await picker.open(window, session, 'tabs');
+    await picker.open(window, session, 'tabs', {
+      confirm: (item) => {
+        tabs.select(String(item.id));
+      },
+    });
     const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
     expect(row.dataset.zvPickerRow).toBe('1');
     row.emit('mouseenter');
