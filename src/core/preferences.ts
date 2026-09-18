@@ -72,9 +72,10 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
       : version >= 7
         ? migrateBindingModeOverrides(raw)
         : migrateLegacyBindingOverrides(raw);
-  const noteMigrated = migrateNoteBindingOverrides(canonical);
-  const yankMigrated = migrateFrozenKeymapOverrides(noteMigrated);
-  const migrated = migrateSemanticKeymapOverrides(yankMigrated);
+  let migrated = canonical;
+  if (version < 9) migrated = migrateNoteBindingOverrides(migrated);
+  if (version < 10) migrated = migrateFrozenKeymapOverrides(migrated);
+  if (version < 11) migrated = migrateSemanticKeymapOverrides(migrated);
   if (migrated !== raw) preferences.set('bindings', migrated);
   preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }
