@@ -1235,7 +1235,11 @@ describe('pointer activation lifecycle', () => {
       () => true,
     );
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', {
+      confirm: async (target) => {
+        await selectItem(Number(target.id));
+      },
+    });
     const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
     row.emit('dblclick');
     await vi.waitFor(() => expect(selectItem).toHaveBeenCalledOnce());
@@ -1273,7 +1277,11 @@ describe('pointer activation lifecycle', () => {
       () => true,
     );
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', {
+      confirm: async (target) => {
+        await selectItem(Number(target.id));
+      },
+    });
     const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
     row.emit('dblclick');
     await vi.waitFor(() => expect(selectItem).toHaveBeenCalledOnce());
@@ -1318,7 +1326,11 @@ describe('pointer activation lifecycle', () => {
       () => true,
     );
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', {
+      confirm: async (target) => {
+        await selectItem(Number(target.id));
+      },
+    });
     const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
     const [firstItem, secondItem] = session.picker.filtered;
     row.emit('dblclick');
