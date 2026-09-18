@@ -147,7 +147,7 @@ mode; Insert mode and editable controls retain native input.
 | `v` | Start a text selection; with no existing mouse selection this opens Flash for the start target |
 | `s` in Select | Flash to a distant endpoint while preserving the current anchor |
 
-Press `v`, type an ASCII/Latin literal query, then choose the displayed label. The whole matched
+Press `v`, type a literal query (including Unicode/CJK through the system IME), then choose the displayed label. The whole matched
 query becomes the initial selection, so there is no intermediate caret mode. Flash updates the visible
 match count on every keystroke. When at most 48 targets remain, labels appear immediately; larger
 result sets show the count plus `type more` and skip per-target geometry until the query narrows.
@@ -344,7 +344,7 @@ Notes:
   annotation navigation is unaffected.
 - With **Persist marks** enabled (Preferences → Marks) the whole mark set is
   saved as a `zv-marks-<attachmentKey>:` line in the **parent item's Extra
-  field** (syncs via Zotero sync — Zotero 9 attachments have no Extra field,
+  field** (syncs via Zotero sync — attachments do not expose the bibliographic Extra field used here,
   so the parent item is used; multiple PDFs under one item get separate
   lines), falling back to a device-local pref. The status bar shows which
   backend was used (`· saved (extra)` / `· saved (local)`). Marks from the
@@ -354,38 +354,45 @@ Notes:
 #### Note editor (context pane and standalone note tab)
 
 When a Zotero note editor has focus (right-side context pane or a standalone
-note tab), the plugin provides a minimal Vim-like layer.
+note tab), Neo uses the same binding/count/sequence engine as Reader and Main.
+Note DOM editing remains owned by the Note editor integration; unbound keys in
+Note Insert stay native to Zotero/browser editing.
 
-| Key                       | Action                                                                                               |
-| ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `i`                       | Enter note Insert mode (pass through typing)                                                         |
-| `a` / `A` / `I`           | Enter Insert mode at next char / line end / line start                                               |
-| `o` / `O`                 | Open line below / above and enter Insert mode                                                        |
-| `Escape`                  | Return to note Normal mode                                                                           |
-| `h` / `l`                 | Move caret left / right                                                                              |
-| `j` / `k`                 | Move caret down / up line                                                                            |
-| `w` / `e` / `b`           | Move by word (forward start / forward end / backward)                                                |
-| `W` / `E` / `B`           | Big-word variants                                                                                    |
-| `0` / `^` / `$`           | Move to line start / first non-blank (approx) / line end                                             |
-| `gg`                      | Jump to first line                                                                                   |
-| `G`                       | Jump to last line                                                                                    |
-| `3j` (example)            | Count prefix for motions (repeat 3 times)                                                            |
-| `3G` / `12gg`             | Count prefix to jump to a specific line number                                                       |
-| `x`                       | Delete character at caret                                                                            |
-| `dd`                      | Delete current line                                                                                  |
-| `yy`                      | Yank current line to clipboard                                                                       |
-| `dw` / `de` / `db` / `d$` | Delete by motion (word/word-end/back-word/to line end)                                               |
-| `yw` / `ye` / `yb` / `y$` | Yank by motion                                                                                       |
-| `cw` / `ce` / `c$`        | Change by motion (delete range and enter Insert mode)                                                |
-| `diw` / `yiw` / `ciw`     | Inner-word text object (delete/yank/change)                                                          |
-| `p` / `P`                 | Paste last yanked/deleted text after / before caret                                                  |
-| `u` / `Ctrl+r`            | Undo / redo bridge                                                                                   |
-| `<space>...`              | Main-window leader bindings are available in note Normal mode (for example `<space>fn`, `<space>ff`) |
-| `H` / `L`                 | Switch to previous / next tab from note Normal mode                                                  |
+| Key | Action |
+| --- | --- |
+| `i` | Enter Note Insert; ordinary typing passes through natively |
+| `a` / `A` / `I` | Enter Insert at next char / line end / line start |
+| `o` / `O` | Open line below / above and enter Insert |
+| `Escape` | Return to Note Normal |
+| `h` / `l` | Move caret left / right |
+| `j` / `k` | Move caret down / up one line |
+| `w` / `b` | Move to next / previous word |
+| `0` / `$` | Move to line start / line end |
+| `gg` / `G` | Jump to document start / end |
+| `3j` / `4x` (examples) | Counted motion / repeated character deletion |
+| `x` | Delete character at caret |
+| `dd` / `yy` | Delete / yank current line |
+| `dh/dj/dk/dl` | Delete through the corresponding character/line motion |
+| `dw` / `db` / `d0` / `d$` | Delete through word/back-word/line-start/line-end motion |
+| `yh/yj/yk/yl` | Yank through the corresponding character/line motion |
+| `yw` / `yb` / `y0` / `y$` | Yank through word/back-word/line-start/line-end motion |
+| `ch/cj/ck/cl` | Change through the corresponding character/line motion and enter Insert |
+| `cw` / `cb` / `c0` / `c$` | Change through word/back-word/line-start/line-end motion |
+| `diw` / `yiw` / `ciw` | Delete / yank / change the current word |
+| `p` / `P` | Paste the internal Note register after / before the caret |
+| `u` / `Ctrl+r` | Undo / redo bridge |
+| `<space>...` | Note Normal leader bindings; defaults mirror useful Main workflows such as `<space>fn` and `<space>ff` |
+| `H` / `L` | Switch to previous / next tab |
+| `Ctrl+h/j/k/l` | Directional pane/Reader focus when a target exists |
+| `:` | Open the Note command palette |
 
-`dd`, `yy`, and `x` support count prefixes (for example `3dd`, `5yy`, `4x`).
-Operator+motion combos also support counts (for example `3dw`, `2y$`).
-`p` and `P` use the plugin's internal note register (updated by `yy` and `dd`).
+Note bindings are independently configurable under the explicit `note-normal`
+and `note-insert` scopes in **Preferences → Bindings**. Development builds from
+the preceding binding schema migrate Note-visible Main shortcut overrides and
+explicit unbindings into `note-normal`. Counts are currently applied to the
+motions and repeated-character commands that consume them; line/operator count
+semantics beyond that are not advertised as part of the 0.1.0 contract.
+`p` and `P` use Neo's internal Note register, updated by yank/delete operations.
 
 #### Library tree navigation (left pane)
 
@@ -649,8 +656,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `recolorPurple`               | Change selected annotation colour to Purple                                          |
 | `yankAnnotation`              | Copy annotation highlighted text                                                     |
 | `yankAnnotationComment`       | Copy annotation comment text                                                         |
-| `enterVisual`                 | Enter Visual mode                                                                    |
-| `enterCursor`                 | Enter Cursor mode                                                                    |
+| `enterVisual`                 | Enter Select mode                                                                    |
 | `enterInsert`                 | Enter Insert mode (also focuses comment if annotation selected)                      |
 | `exitMode`                    | Return to Normal mode                                                                |
 | `extendDown`                  | Extend selection down one line                                                       |
@@ -675,14 +681,6 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `searchSelection`             | Open find bar and search for current selection                                       |
 | `yankParagraph`               | Copy whole paragraph to clipboard                                                    |
 | `swapVisualEnds`              | Swap selection anchor and focus                                                      |
-| `cursorDown`                  | Move caret down one visual line (Cursor mode)                                        |
-| `cursorUp`                    | Move caret up one visual line (Cursor mode)                                          |
-| `cursorLeft`                  | Move caret left one character (Cursor mode)                                          |
-| `cursorRight`                 | Move caret right one character (Cursor mode)                                         |
-| `cursorWordForward`           | Move caret forward one word (Cursor mode)                                            |
-| `cursorBigWordForward`        | Move caret forward one WORD (Cursor mode)                                            |
-| `cursorWordBackward`          | Move caret backward one word (Cursor mode)                                           |
-| `cursorBigWordBackward`       | Move caret backward one WORD (Cursor mode)                                           |
 | `openCommandPalette`          | Open the command palette in the current Normal context                               |
 | `mainTabPick`                 | Open the shared picker for currently open Zotero tabs                                |
 | `mainNotesLayout`             | Search notes in the shared list/preview picker                                       |
@@ -729,8 +727,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Setting                  | Default                  | Description                                                                                                                                           |
 | ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Appearance               | Auto                     | Auto follows Zotero's computed Light/Dark palette; Light and Dark force all Neo-owned panels without recolouring PDF pages or annotations             |
-| Enable Visual mode       | on                       | Allow entering Visual mode with `v`                                                                                                                   |
-| Enable Cursor mode       | on                       | Allow entering Cursor mode with `c`                                                                                                                   |
+| Enable Select mode       | on                       | Allow entering Select mode with `v`                                                                                                                   |
 | Enable Insert mode       | on                       | Allow entering Insert mode with `i`                                                                                                                   |
 | Note editor Vim mode     | on                       | Enable Vim-style editing in note editors (context pane and note tabs)                                                                                 |
 | Scroll mode              | Constant-speed scrolling | Step / Constant-speed / Accelerating — only the active mode's parameters are shown                                                                    |

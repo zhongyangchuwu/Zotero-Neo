@@ -23,9 +23,9 @@ Completed feature gates:
 Current pre-release work:
 
 - **Architecture cleanup (#29):** remove remaining parallel input paths before
-  the public keymap freezes. Main Item Select now uses the shared binding/input
-  system; the remaining work is Note-local grammar unification and decomposition
-  of the oversized Reader orchestration boundary along existing feature/host
+  the public keymap freezes. Main Item Select and Note Normal/Insert now use the
+  shared binding/input system; the remaining structural work is decomposition of
+  the oversized Reader orchestration boundary along existing feature/host
   ownership lines. See [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Release gate (#24):** after the architecture/keymap boundary is accepted,
   run the final Zotero 10 host regression across Reader, Main, Note, split views,

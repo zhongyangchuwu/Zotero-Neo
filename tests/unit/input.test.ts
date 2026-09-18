@@ -5,6 +5,7 @@ import {
   DEFAULT_BINDINGS,
   encodeBindingOverrides,
   migrateLegacyBindingOverrides,
+  migrateNoteBindingOverrides,
   parseBindingKey,
   parseBindingOverrides,
   parseCustomBindings,
@@ -67,6 +68,11 @@ describe('binding parsing and overrides', () => {
       sequence: 'ctrl+d',
     });
     expect(parseBindingKey('main-normal: gg')).toEqual({ mode: 'main-normal', sequence: ' gg' });
+    expect(parseBindingKey('note-normal:diw')).toEqual({ mode: 'note-normal', sequence: 'diw' });
+    expect(parseBindingKey('note-insert:escape')).toEqual({
+      mode: 'note-insert',
+      sequence: 'escape',
+    });
   });
 
   it('parses colon command bindings without widening their mode', () => {
@@ -222,6 +228,29 @@ describe('binding parsing and overrides', () => {
     expect(bindings['reader-normal:z0']).toBe('zoomOut');
     expect(bindings['reader-normal:=']).toBe('zoomIn');
   });
+  it('copies schema-8 global Note overrides into explicit Note scope', () => {
+    const migrated = migrateNoteBindingOverrides(
+      JSON.stringify({
+        'main-normal:H': 'mainNextTab',
+        'main-normal:L': 'mainTrashItems',
+        'main-normal: ff': 'mainTabPick',
+        'main-normal:ctrl+h': null,
+        'main-normal:j': 'mainNavUp',
+      }),
+    );
+
+    expect(JSON.parse(migrated)).toEqual({
+      'main-normal: ff': 'mainTabPick',
+      'main-normal:H': 'mainNextTab',
+      'main-normal:L': 'mainTrashItems',
+      'main-normal:ctrl+h': null,
+      'main-normal:j': 'mainNavUp',
+      'note-normal: ff': 'mainTabPick',
+      'note-normal:H': 'mainNextTab',
+      'note-normal:ctrl+h': null,
+    });
+  });
+
   it('encodes compact deterministic deltas from the defaults', () => {
     expect(encodeBindingOverrides(DEFAULT_BINDINGS)).toBe('');
 
@@ -307,6 +336,32 @@ describe('input matcher', () => {
       state: normalState(),
       consumed: true,
       action: 'scrollDown',
+      count: 0,
+    });
+  });
+
+  it('keeps Note word motion immediate instead of turning w into a prefix timeout', () => {
+    const bindings = resolveBindings('');
+    const state: InputState = {
+      mode: 'note-normal',
+      keyBuffer: '',
+      countBuffer: '',
+    };
+
+    expect(
+      advanceInput(
+        {
+          ...state,
+          bindings,
+          allowCountPrefix: true,
+        },
+        'w',
+      ),
+    ).toEqual({
+      kind: 'execute',
+      state,
+      consumed: true,
+      action: 'noteMoveWordForward',
       count: 0,
     });
   });

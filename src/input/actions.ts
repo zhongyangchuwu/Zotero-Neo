@@ -1,4 +1,6 @@
-export const ACTION_LABELS = {
+import { NOTE_ACTION_LABELS, type NoteActionId } from './note-actions';
+
+const BASE_ACTION_LABELS = {
   scrollDown: {
     en: 'Scroll down',
     'zh-CN': '向下滚动',
@@ -473,7 +475,13 @@ export const ACTION_LABELS = {
   },
 } as const;
 
-export type ActionId = keyof typeof ACTION_LABELS;
+type ActionLabel = { readonly en: string; readonly 'zh-CN': string };
+export type BaseActionId = keyof typeof BASE_ACTION_LABELS;
+export type ActionId = BaseActionId | NoteActionId;
+export const ACTION_LABELS: Readonly<Record<ActionId, ActionLabel>> = Object.freeze({
+  ...BASE_ACTION_LABELS,
+  ...NOTE_ACTION_LABELS,
+});
 
 export type FocusDirection = 'left' | 'down' | 'up' | 'right';
 

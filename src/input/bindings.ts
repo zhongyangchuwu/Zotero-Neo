@@ -1,4 +1,5 @@
 import { isActionId, type ActionId } from './actions';
+import { NOTE_LOCAL_DEFAULT_BINDINGS, isNoteCrossContextActionId } from './note-actions';
 
 export const MODES = [
   'reader-normal',
@@ -6,6 +7,8 @@ export const MODES = [
   'reader-insert',
   'main-normal',
   'main-select',
+  'note-normal',
+  'note-insert',
 ] as const;
 
 export type Mode = (typeof MODES)[number];
@@ -120,6 +123,31 @@ export const DEFAULT_BINDINGS = {
   'reader-select:v': 'exitMode',
   'reader-select:escape': 'exitMode',
   'reader-insert:escape': 'exitMode',
+  ...NOTE_LOCAL_DEFAULT_BINDINGS,
+  'note-normal:i': 'enterInsert',
+  'note-normal:escape': 'exitMode',
+  'note-normal::': 'openCommandPalette',
+  'note-normal: ff': 'mainFuzzyAll',
+  'note-normal: fc': 'mainFuzzyCollection',
+  'note-normal: ft': 'mainTabPick',
+  'note-normal: fT': 'mainTagPicker',
+  'note-normal: ta': 'mainTagEditor',
+  'note-normal: td': 'mainClosePDF',
+  'note-normal: fn': 'mainNotesLayout',
+  'note-normal: e': 'mainFocusTree',
+  'note-normal: yy': 'mainYankCitekey',
+  'note-normal: o': 'mainOpenPDF',
+  'note-normal:H': 'mainPrevTab',
+  'note-normal:L': 'mainNextTab',
+  'note-normal:ctrl+h': 'focusReaderSplitLeft',
+  'note-normal:ctrl+j': 'focusReaderSplitDown',
+  'note-normal:ctrl+k': 'focusReaderSplitUp',
+  'note-normal:ctrl+l': 'focusReaderSplitRight',
+  'note-insert:escape': 'exitMode',
+  'note-insert:ctrl+h': 'focusReaderSplitLeft',
+  'note-insert:ctrl+j': 'focusReaderSplitDown',
+  'note-insert:ctrl+k': 'focusReaderSplitUp',
+  'note-insert:ctrl+l': 'focusReaderSplitRight',
   'main-normal: ff': 'mainFuzzyAll',
   'main-normal::': 'openCommandPalette',
   'main-normal: fc': 'mainFuzzyCollection',
@@ -266,6 +294,33 @@ export function migrateLegacyBindingOverrides(raw: unknown): string {
 /** Canonicalizes schema-7 compact overrides while preserving explicit unbindings. */
 export function migrateBindingModeOverrides(raw: unknown): string {
   return stringifyBindingOverrides(parseBindingOverrides(raw));
+}
+
+const NOTE_INHERITED_MAIN_SEQUENCES = new Set([
+  ':',
+  'H',
+  'L',
+  'ctrl+h',
+  'ctrl+j',
+  'ctrl+k',
+  'ctrl+l',
+]);
+
+function noteInheritedMainSequence(sequence: string): boolean {
+  return sequence.startsWith(' ') || NOTE_INHERITED_MAIN_SEQUENCES.has(sequence);
+}
+
+/** Copies schema-8 Note-global Main overrides into the new explicit Note scope. */
+export function migrateNoteBindingOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  for (const [key, action] of Object.entries({ ...overrides })) {
+    const binding = parseBindingKey(key);
+    if (binding?.mode !== 'main-normal' || !noteInheritedMainSequence(binding.sequence)) continue;
+    if (action !== null && !isNoteCrossContextActionId(action)) continue;
+    const noteKey = 'note-normal:' + binding.sequence;
+    if (!(noteKey in overrides)) overrides[noteKey] = action;
+  }
+  return stringifyBindingOverrides(overrides);
 }
 
 export function encodeBindingOverrides(bindings: BindingMap): string {

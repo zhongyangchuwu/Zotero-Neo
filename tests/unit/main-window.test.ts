@@ -8,7 +8,7 @@ import type {
   MainWindowControllerDependencies,
 } from '../../src/core/contracts';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
-import { DEFAULT_BINDINGS } from '../../src/input/bindings';
+import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { createMainWindowController } from '../../src/main/controller';
@@ -386,11 +386,18 @@ describe('directional pane focus', () => {
       document,
       Zotero_Tabs: { selectedID: 'reader-tab' },
     } as unknown as MainWindow;
-    const session = { note: { mode: 'normal' } } as MainWindowSession;
-    const editor = new NoteEditor(logger, new MainNavigation(logger, () => {}), () => ({}), {
-      refresh: () => {},
-      clear: () => {},
-    });
+    const session = {
+      note: { mode: 'normal', buffer: '', count: '', timer: undefined, inputRevision: 0, yank: '' },
+    } as MainWindowSession;
+    const editor = new NoteEditor(
+      logger,
+      new MainNavigation(logger, () => {}),
+      () => DEFAULT_BINDINGS,
+      {
+        refresh: () => {},
+        clear: () => {},
+      },
+    );
     const target = {
       tagName: 'DIV',
       localName: 'div',
@@ -435,13 +442,17 @@ describe('directional pane focus', () => {
   });
 });
 
-describe('NoteEditor canonical main commands', () => {
-  function harness(bindings: Readonly<Record<string, ActionId>>) {
+describe('NoteEditor shared binding input', () => {
+  function harness(overrides: Readonly<Record<string, ActionId | null>> = {}) {
     vi.useFakeTimers();
     const main = {
       setTimeout,
       clearTimeout,
-      document: {},
+      document: {
+        activeElement: null,
+        querySelector: () => null,
+        getElementById: () => null,
+      },
     } as unknown as MainWindow;
     const document = {
       getSelection: () => null,
@@ -467,14 +478,13 @@ describe('NoteEditor canonical main commands', () => {
         handler: null,
         mode: 'normal',
         buffer: '',
-        mainBuffer: '',
-        mainTimer: undefined,
-        mainRevision: 0,
         count: '',
         timer: undefined,
+        inputRevision: 0,
         yank: '',
       },
     } as unknown as MainWindowSession;
+    const bindings = resolveBindings(JSON.stringify(overrides));
     const guide = { refresh: vi.fn(), clear: vi.fn() };
     const editor = new NoteEditor(
       logger,
@@ -483,7 +493,7 @@ describe('NoteEditor canonical main commands', () => {
       guide,
     );
     const actions: [ActionId, number][] = [];
-    const press = (key: string) => {
+    const press = (key: string, modifiers: Partial<KeyboardEvent> = {}) => {
       const preventDefault = vi.fn();
       const stopPropagation = vi.fn();
       editor.onKeyDown(
@@ -496,18 +506,25 @@ describe('NoteEditor canonical main commands', () => {
           target,
           preventDefault,
           stopPropagation,
+          ...modifiers,
         } as unknown as KeyboardEvent,
         main,
         session,
-        (action, count) => actions.push([action, count]),
+        (action, count) => {
+          actions.push([action, count]);
+          return true;
+        },
       );
       return { preventDefault, stopPropagation };
     };
-    return { editor, session, target, main, actions, press };
+    return { editor, session, target, main, actions, press, guide };
   }
 
-  it('resolves ambiguous leader remaps on continuation or timeout', () => {
-    const test = harness({ 'main-normal: f': 'mainNextTab', 'main-normal: ff': 'mainPrevTab' });
+  it('resolves Note-scoped ambiguous leader remaps on continuation or timeout', () => {
+    const test = harness({
+      'note-normal: f': 'mainNextTab',
+      'note-normal: ff': 'mainPrevTab',
+    });
 
     test.press(' ');
     test.press('f');
@@ -526,109 +543,103 @@ describe('NoteEditor canonical main commands', () => {
     vi.useRealTimers();
   });
 
-  it('cancels, backspaces, and clears stale leader timers without dispatching', () => {
-    const test = harness({ 'main-normal: f': 'mainNextTab', 'main-normal: ff': 'mainPrevTab' });
+  it('uses one reducer state for local prefixes and counts', () => {
+    const test = harness();
 
-    test.press(' ');
-    test.press('f');
-    test.press('Escape');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-
-    test.press(' ');
-    test.press('f');
-    test.press('Backspace');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-
-    test.press(' ');
-    test.press('f');
-    test.editor.clear(test.session);
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-
-    expect(test.actions).toEqual([]);
-    vi.useRealTimers();
-  });
-
-  it('keeps custom Escape and Backspace bindings outside NoteEditor canonical eligibility', () => {
-    const test = harness({
-      'main-normal:escape': 'mainNextTab',
-      'main-normal:backspace': 'mainPrevTab',
-      'main-normal: f': 'mainFuzzyAll',
-      'main-normal: ff': 'mainTabPick',
-    });
-
-    test.press('Escape');
-    test.press('Backspace');
-    test.press(' ');
-    test.press('f');
-    test.press('Escape');
-    test.press(' ');
-    test.press('f');
-    test.press('Backspace');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-
-    expect(test.actions).toEqual([]);
-    vi.useRealTimers();
-  });
-
-  it('invalidates stale leader timeouts after newer canonical input and Insert transition', () => {
-    const test = harness({ 'main-normal: f': 'mainNextTab', 'main-normal: ff': 'mainPrevTab' });
-
-    test.press(' ');
-    test.press('f');
-    test.press('z');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([]);
-
-    test.press(' ');
-    test.press('f');
-    test.press('i');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.session.note.mode).toBe('insert');
-    expect(test.actions).toEqual([]);
-    vi.useRealTimers();
-  });
-
-  it('keeps lowercase h/l local and Insert input native while H/L switch tabs', () => {
-    const test = harness({ 'main-normal:H': 'mainPrevTab', 'main-normal:L': 'mainNextTab' });
-
+    test.press('3');
     test.press('g');
+    expect(test.session.note.count).toBe('3');
     expect(test.session.note.buffer).toBe('g');
-    expect(test.actions).toEqual([]);
+
     test.press('Escape');
+    expect(test.session.note.count).toBe('');
+    expect(test.session.note.buffer).toBe('');
+    expect(test.actions).toEqual([]);
+    vi.useRealTimers();
+  });
+
+  it('keeps Note-local keys local while explicit global Note bindings dispatch externally', () => {
+    const test = harness();
+
+    const lowerH = test.press('h');
+    expect(lowerH.preventDefault).not.toHaveBeenCalled();
+    expect(test.actions).toEqual([]);
+
     test.press('H');
     expect(test.actions).toEqual([['mainPrevTab', 0]]);
 
-    const lowerH = test.press('h');
-    const lowerL = test.press('l');
-    expect(lowerH.preventDefault).not.toHaveBeenCalled();
-    expect(lowerL.preventDefault).not.toHaveBeenCalled();
+    const retired = test.press('J');
+    expect(retired.preventDefault).not.toHaveBeenCalled();
     expect(test.actions).toEqual([['mainPrevTab', 0]]);
+    vi.useRealTimers();
+  });
 
-    const oldPrevious = test.press('J');
-    const oldNext = test.press('K');
-    expect(oldPrevious.preventDefault).not.toHaveBeenCalled();
-    expect(oldNext.preventDefault).not.toHaveBeenCalled();
-    expect(test.actions).toEqual([['mainPrevTab', 0]]);
+  it('keeps unbound Insert text native while Escape returns to Note Normal', () => {
+    const test = harness();
 
-    test.session.note.mode = 'insert';
+    test.press('i');
+    expect(test.session.note.mode).toBe('insert');
+
     const native = test.press('f');
     expect(native.preventDefault).not.toHaveBeenCalled();
     expect(native.stopPropagation).not.toHaveBeenCalled();
+
+    const escape = test.press('Escape');
+    expect(test.session.note.mode).toBe('normal');
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
     vi.useRealTimers();
   });
-  it('launches the command palette from Note Normal without propagating a count', () => {
-    const test = harness({ 'main-normal::': 'openCommandPalette' });
+
+  it('leaves IME-owned Insert keydowns native, including Escape during composition', () => {
+    const test = harness();
+
+    test.press('i');
+    expect(test.session.note.mode).toBe('insert');
+
+    const composingEscape = test.press('Escape', { isComposing: true });
+    expect(test.session.note.mode).toBe('insert');
+    expect(composingEscape.preventDefault).not.toHaveBeenCalled();
+    expect(composingEscape.stopPropagation).not.toHaveBeenCalled();
+
+    const process = test.press('Process', { keyCode: 229 });
+    expect(test.session.note.mode).toBe('insert');
+    expect(process.preventDefault).not.toHaveBeenCalled();
+    expect(process.stopPropagation).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('launches the Note command palette action without propagating a count', () => {
+    const test = harness();
     test.press('3');
     const colon = test.press(':');
 
     expect(test.actions).toEqual([['openCommandPalette', 0]]);
     expect(colon.preventDefault).toHaveBeenCalledOnce();
     expect(test.session.note.count).toBe('');
-
-    test.session.note.mode = 'insert';
-    const insert = test.press(':');
-    expect(insert.preventDefault).not.toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it('keeps Ctrl-h native when no reader target exists and consumes after reader focus succeeds', () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const focusReader = vi.fn();
+    const test = harness();
+    Reflect.set(test.main, 'Zotero_Tabs', { selectedID: 'reader-tab' });
+    try {
+      Reflect.set(globalThis, 'Zotero', { Reader: { getByTabID: () => null } });
+      const missing = test.press('h', { ctrlKey: true });
+      expect(missing.preventDefault).not.toHaveBeenCalled();
+
+      Reflect.set(globalThis, 'Zotero', {
+        Reader: { getByTabID: () => ({ focus: focusReader }) },
+      });
+      const available = test.press('h', { ctrlKey: true });
+      expect(focusReader).toHaveBeenCalledOnce();
+      expect(available.preventDefault).toHaveBeenCalledOnce();
+    } finally {
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+      vi.useRealTimers();
+    }
   });
 });
 
