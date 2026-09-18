@@ -241,7 +241,7 @@ describe('picker IME boundary', () => {
       getAttachments: () => [],
       getNotes: () => [],
     } as unknown as Zotero.Item;
-    const selectItem = vi.fn(async () => undefined);
+    const selectItem = vi.fn(async (_id: number) => undefined);
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     vi.stubGlobal('Zotero', {
       Items: { getAll: async () => [first, second] },
@@ -307,7 +307,7 @@ describe('picker mouse activation', () => {
       getAttachments: () => [],
       getNotes: () => [],
     } as unknown as Zotero.Item;
-    const selectItem = vi.fn(async () => undefined);
+    const selectItem = vi.fn(async (_id: number) => undefined);
     let mouseEnabled = false;
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     vi.stubGlobal('Zotero', {
@@ -1038,8 +1038,8 @@ describe('unified Notes picker', () => {
         return [note.id];
       }
     }
-    const selectItem = vi.fn(async () => undefined);
-    const openNote = vi.fn(async () => undefined);
+    const selectItem = vi.fn(async (_id: number) => undefined);
+    const openNote = vi.fn(async (_id: number, _options: { openInWindow: boolean }) => undefined);
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     vi.stubGlobal('Zotero', {
       Items: {
@@ -1169,7 +1169,7 @@ describe('picker async lifecycle', () => {
       getAttachments: () => [],
     } as unknown as Zotero.Item;
     const selectItem = vi.fn(
-      () =>
+      (_id: number) =>
         new Promise<void>((resolve) => {
           releaseSelection = () => {
             selected.splice(0, selected.length, item);
@@ -1219,7 +1219,7 @@ describe('pointer activation lifecycle', () => {
       getAttachments: () => [],
       getNotes: () => [],
     } as unknown as Zotero.Item;
-    const selectItem = vi.fn(async () => {
+    const selectItem = vi.fn(async (_id: number) => {
       throw new Error('selection failed');
     });
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
@@ -1259,7 +1259,7 @@ describe('pointer activation lifecycle', () => {
       getNotes: () => [],
     } as unknown as Zotero.Item;
     const selectItem = vi.fn(
-      () =>
+      (_id: number) =>
         new Promise<void>((resolve) => {
           releaseSelection = resolve;
         }),
@@ -1312,7 +1312,7 @@ describe('pointer activation lifecycle', () => {
       getAttachments: () => [],
       getNotes: () => [],
     } as unknown as Zotero.Item;
-    const selectItem = vi.fn(async () => undefined);
+    const selectItem = vi.fn(async (_id: number) => undefined);
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     vi.stubGlobal('Zotero', {
       Items: { getAll: async () => [first, second] },
