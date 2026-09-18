@@ -131,12 +131,7 @@ export class ReaderSelectionRange {
     const focusNode = anchorIsStart ? range.endContainer : range.startContainer;
     const focusOffset = anchorIsStart ? range.endOffset : range.startOffset;
     if (!isTextNode(focusNode)) return;
-    selection.setBaseAndExtent(
-      focusNode,
-      focusOffset,
-      this.#anchor.textNode,
-      this.#anchor.offset,
-    );
+    selection.setBaseAndExtent(focusNode, focusOffset, this.#anchor.textNode, this.#anchor.offset);
     this.#anchor = { textNode: focusNode, offset: focusOffset };
     this.#preferredX = null;
     this.refresh(pdfWindow, true);
