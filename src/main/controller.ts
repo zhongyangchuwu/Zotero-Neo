@@ -4,7 +4,7 @@ import type {
   MainWindowControllerDependencies,
   MainWindow,
 } from '../core/contracts';
-import { focusDirectionForAction, type ActionId } from '../input/actions';
+import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
   MAIN_NORMAL_ACTIONS,
@@ -39,7 +39,7 @@ import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagWorkspace } from './tag-workspace';
 import { MainItemSelect } from './item-select';
-import { mainReaderForTab, selectedMainTabID } from './host';
+import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -181,7 +181,13 @@ export class MainWindowController implements MainWindowControllerApi {
         execute(action, count);
       },
     };
-    void this.#picker.open(window, session, 'commands', ownerContext);
+    void this.#picker.open(window, session, 'commands', {
+      commandContext: ownerContext,
+      closeBeforeConfirm: true,
+      confirm: (item) => {
+        if (isActionId(item.id) && item.id !== 'openCommandPalette') ownerContext.execute(item.id, 0);
+      },
+    });
   }
 
   private bindings() {
@@ -478,16 +484,33 @@ export class MainWindowController implements MainWindowControllerApi {
         });
         break;
       case 'mainFuzzyAll':
-        void this.#picker.open(window, session, 'all');
+        void this.#picker.open(window, session, 'all', {
+          confirm: (item) => mainHost(window).ZoteroPane?.selectItem?.(Number(item.id)),
+        });
         break;
       case 'mainFuzzyCollection':
-        void this.#picker.open(window, session, 'collection');
+        void this.#picker.open(window, session, 'collection', {
+          confirm: (item) => mainHost(window).ZoteroPane?.selectItem?.(Number(item.id)),
+        });
         break;
       case 'mainTabPick':
-        void this.#picker.open(window, session, 'tabs');
+        void this.#picker.open(window, session, 'tabs', {
+          confirm: (item) => {
+            selectMainTab(window, String(item.id));
+            this.#navigation.afterTabSwitch(window);
+          },
+        });
         break;
       case 'mainNotesLayout':
-        void this.#picker.open(window, session, 'notes');
+        void this.#picker.open(window, session, 'notes', {
+          confirm: async (item, openInWindow) => {
+            const pane = mainHost(window).ZoteroPane;
+            const id = Number(item.id);
+            await pane?.selectItem?.(id);
+            if (pane?.openNote) await pane.openNote(id, { openInWindow });
+            else await Zotero.Notes.open(id, null, { openInWindow });
+          },
+        });
         break;
       case 'mainTrashItems':
         void this.#navigation.trashSelectedItems(window, session);
