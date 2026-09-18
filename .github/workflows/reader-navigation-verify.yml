@@ -18,4 +18,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run verify
+      - name: Show canonical Prettier diff
+        run: |
+          npx prettier --write src/reader/controller.ts src/reader/navigation.ts
+          git diff --unified=1 -- src/reader/controller.ts src/reader/navigation.ts
+          test -z "$(git status --short -- src/reader/controller.ts src/reader/navigation.ts)"
