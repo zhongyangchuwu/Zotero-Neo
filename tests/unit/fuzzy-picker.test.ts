@@ -385,17 +385,17 @@ describe('command palette provider', () => {
     const context: CommandPaletteContext = {
       mode: 'main',
       bindingMode: 'main-normal',
-      actions: ['mainFuzzyAll', 'mainFuzzyAll', 'mainNextTab', 'mainOpenPDF', 'openCommandPalette'],
+      actions: ['findAllItems', 'findAllItems', 'nextTab', 'mainOpenPDF', 'openCommandPalette'],
       language: 'en',
       bindings: {
         'main-normal::': 'openCommandPalette',
-        'main-normal:x': 'mainFuzzyAll',
-        'main-normal:y': 'mainFuzzyAll',
-        'main-normal:z': 'mainNextTab',
+        'main-normal:x': 'findAllItems',
+        'main-normal:y': 'findAllItems',
+        'main-normal:z': 'nextTab',
       },
       execute: (action, count) => {
         actions.push([action, count]);
-        if (action === 'mainFuzzyAll') void picker.open(window, session, 'tabs');
+        if (action === 'findAllItems') void picker.open(window, session, 'tabs');
       },
     };
     const { window, session } = createPickerHarness();
@@ -405,11 +405,11 @@ describe('command palette provider', () => {
       () => true,
     );
     await picker.open(window, session, 'commands', commandPickerOptions(context));
-    const all = session.picker.filtered.find((item) => item.id === 'mainFuzzyAll');
+    const all = session.picker.filtered.find((item) => item.id === 'findAllItems');
     expect(all?.title).toBe('Main window: fuzzy picker — all items');
     expect(all?.meta).toBe('x, y');
     expect(all?.search).toContain('x, y');
-    expect(session.picker.filtered.filter((item) => item.id === 'mainFuzzyAll')).toHaveLength(1);
+    expect(session.picker.filtered.filter((item) => item.id === 'findAllItems')).toHaveLength(1);
     expect(session.picker.filtered.some((item) => item.id === 'openCommandPalette')).toBe(false);
     const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
     const provider = session.picker.provider;
@@ -426,24 +426,24 @@ describe('command palette provider', () => {
     picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
     expect(session.picker.selected).toBe(0);
 
-    const keyboardIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
+    const keyboardIndex = session.picker.filtered.findIndex((item) => item.id === 'findAllItems');
     session.picker.selected = keyboardIndex;
     picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
-    await vi.waitFor(() => expect(actions).toEqual([['mainFuzzyAll', 0]]));
+    await vi.waitFor(() => expect(actions).toEqual([['findAllItems', 0]]));
     await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
     expect(session.picker.open).toBe(true);
 
     picker.close(session);
     await picker.open(window, session, 'commands', commandPickerOptions(context));
-    const pointerIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
+    const pointerIndex = session.picker.filtered.findIndex((item) => item.id === 'findAllItems');
     const pointerRow = session.picker.results?.children[pointerIndex] as HTMLElement & {
       emit(type: string, event?: Partial<Event>): void;
     };
     pointerRow.emit('dblclick');
     await vi.waitFor(() =>
       expect(actions).toEqual([
-        ['mainFuzzyAll', 0],
-        ['mainFuzzyAll', 0],
+        ['findAllItems', 0],
+        ['findAllItems', 0],
       ]),
     );
     await vi.waitFor(() => expect(session.picker.scope).toBe('tabs'));
@@ -459,9 +459,9 @@ describe('command palette provider', () => {
     const context: CommandPaletteContext = {
       mode: 'main',
       bindingMode: 'main-normal',
-      actions: ['mainFuzzyAll', 'mainOpenPDF'],
+      actions: ['findAllItems', 'mainOpenPDF'],
       language: 'en',
-      bindings: { 'main-normal:x': 'mainFuzzyAll' },
+      bindings: { 'main-normal:x': 'findAllItems' },
       execute,
     };
 
@@ -529,7 +529,7 @@ describe('command palette provider', () => {
       language: 'en',
       bindings: {
         'reader-normal:z': 'zoomIn',
-        'reader-normal:m': 'mainFuzzyAll',
+        'reader-normal:m': 'findAllItems',
         'reader-normal:v': 'highlightYellow',
       },
       execute: () => {},
@@ -538,7 +538,7 @@ describe('command palette provider', () => {
     await picker.open(window, session, 'commands', commandPickerOptions(readerContext));
     const readerIds = session.picker.filtered.map((item) => item.id);
     expect(readerIds).toContain('zoomIn');
-    expect(readerIds).toContain('mainFuzzyAll');
+    expect(readerIds).toContain('findAllItems');
     expect(readerIds).not.toContain('highlightYellow');
     expect(readerIds).not.toContain('cursorDown');
     picker.close(session);
@@ -549,7 +549,7 @@ describe('command palette provider', () => {
       actions: MAIN_EXECUTABLE_ACTIONS,
       language: 'en',
       bindings: {
-        'main-normal:x': 'mainFuzzyAll',
+        'main-normal:x': 'findAllItems',
         'main-normal:y': 'zoomIn',
         'main-normal:z': 'toggleMarksExplorer',
       },
@@ -557,8 +557,8 @@ describe('command palette provider', () => {
     };
     await picker.open(window, session, 'commands', commandPickerOptions(mainContext));
     const mainIds = session.picker.filtered.map((item) => item.id);
-    expect(mainIds).toContain('mainFuzzyAll');
-    expect(mainIds).toContain('mainTabPick');
+    expect(mainIds).toContain('findAllItems');
+    expect(mainIds).toContain('switchTab');
     expect(mainIds).not.toContain('toggleMarksExplorer');
     expect(mainIds).not.toContain('highlightYellow');
   });
@@ -573,9 +573,9 @@ describe('command palette provider', () => {
     const context: CommandPaletteContext = {
       mode: 'main',
       bindingMode: 'main-normal',
-      actions: ['mainNextTab'],
+      actions: ['nextTab'],
       language: 'en',
-      bindings: { 'main-normal:x': 'mainNextTab' },
+      bindings: { 'main-normal:x': 'nextTab' },
       execute: () => {},
     };
     await picker.open(window, session, 'commands', commandPickerOptions(context));
@@ -592,9 +592,9 @@ describe('command palette provider', () => {
     const context: CommandPaletteContext = {
       mode: 'main',
       bindingMode: 'main-normal',
-      actions: ['mainNextTab'],
+      actions: ['nextTab'],
       language: 'en',
-      bindings: { 'main-normal:x': 'mainNextTab' },
+      bindings: { 'main-normal:x': 'nextTab' },
       execute,
     };
     const picker = new FuzzyPicker(
