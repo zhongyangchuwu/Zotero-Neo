@@ -1356,18 +1356,11 @@ describe('tag candidate chooser', () => {
       placeholder: '> Search or create a tag…',
       separator: '/',
       allowCreate: true,
-      loadTags: async () => [
-        { tag: 'robot/vision' },
-        { tag: 'robot/control' },
-        { tag: 'ml' },
-      ],
+      loadTags: async () => [{ tag: 'robot/vision' }, { tag: 'robot/control' }, { tag: 'ml' }],
     });
 
     await picker.open(window, session, 'tags', { source, confirm });
-    expect(session.picker.filtered.map((item) => item.tagCandidate)).toEqual([
-      'namespace',
-      'tag',
-    ]);
+    expect(session.picker.filtered.map((item) => item.tagCandidate)).toEqual(['namespace', 'tag']);
     expect(session.picker.filtered[0]?.tagName).toBe('robot/');
 
     picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
@@ -1418,7 +1411,9 @@ describe('tag candidate chooser', () => {
       expect(event.preventDefault).not.toHaveBeenCalled();
     }
 
-    const second = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
+    const second = session.picker.results?.children[1] as HTMLElement & {
+      emit(type: string): void;
+    };
     second.emit('click');
     expect(session.picker.selected).toBe(1);
     second.emit('dblclick');

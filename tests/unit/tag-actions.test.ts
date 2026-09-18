@@ -113,7 +113,10 @@ function harness(options: {
   };
 }
 
-function installZotero(items: readonly Zotero.Item[], libraryTags: _ZoteroTypes.Tags.TagJson[] = []) {
+function installZotero(
+  items: readonly Zotero.Item[],
+  libraryTags: _ZoteroTypes.Tags.TagJson[] = [],
+) {
   const byID = new Map(items.map((item) => [item.id, item]));
   const executeTransaction = vi.fn(async (callback: () => Promise<void>) => callback());
   vi.stubGlobal('Zotero', {
