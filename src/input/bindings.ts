@@ -283,6 +283,14 @@ const RETIRED_DEFAULT_BINDINGS = {
   'main-normal: n': 'findNotes',
   'reader-normal: tp': 'switchTab',
   'main-normal: tp': 'switchTab',
+  'reader-normal: ft': 'switchTab',
+  'note-normal: ft': 'switchTab',
+  'main-normal: ft': 'switchTab',
+  'reader-normal: td': 'closeCurrentTab',
+  'note-normal: td': 'closeCurrentTab',
+  'main-normal: td': 'closeCurrentTab',
+  'note-normal: fT': 'toggleTagFilter',
+  'main-normal: fT': 'toggleTagFilter',
   'main-normal:ctrl+u': 'mainRestoreTrashedItems',
 } as const;
 
