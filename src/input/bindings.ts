@@ -325,6 +325,26 @@ export function migrateNoteBindingOverrides(raw: unknown): string {
   return stringifyBindingOverrides(overrides);
 }
 
+/**
+ * Migrates the 0.1.0 Reader yank-key freeze without losing explicit unbindings.
+ *
+ * Schema 9 stored compact overrides, so the old default yy binding itself is normally absent.
+ * A persisted null at reader-normal:yy therefore means the user explicitly unbound the old
+ * comment-yank default and must follow that action to its new Y default. Custom yy actions remain
+ * untouched. Select yy no longer has a default, so its obsolete null can simply be dropped.
+ */
+export function migrateFrozenKeymapOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const oldCommentYank = 'reader-normal:yy';
+  const newCommentYank = 'reader-normal:Y';
+  if (overrides[oldCommentYank] === null) {
+    delete overrides[oldCommentYank];
+    if (!(newCommentYank in overrides)) overrides[newCommentYank] = null;
+  }
+  if (overrides['reader-select:yy'] === null) delete overrides['reader-select:yy'];
+  return stringifyBindingOverrides(overrides);
+}
+
 export function encodeBindingOverrides(bindings: BindingMap): string {
   const overrides: Record<string, BindingOverride> = {};
   const keys = new Set([...Object.keys(DEFAULT_BINDINGS), ...Object.keys(bindings)]);
