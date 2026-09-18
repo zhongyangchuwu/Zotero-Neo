@@ -52,10 +52,13 @@ export class ReaderHostKeyBridge {
   }
 
   #views(): readonly ReaderViewRuntime[] {
-    return [
-      this.#dependencies.reader._internalReader?._primaryView,
-      this.#dependencies.reader._internalReader?._secondaryView,
-    ].filter((view): view is ReaderViewRuntime => !!view);
+    const primary = this.#dependencies.reader._internalReader?._primaryView as
+      | ReaderViewRuntime
+      | undefined;
+    const secondary = this.#dependencies.reader._internalReader?._secondaryView as
+      | ReaderViewRuntime
+      | undefined;
+    return [primary, secondary].filter((view): view is ReaderViewRuntime => view !== undefined);
   }
 
   #patchKeyForwarding(view: ReaderViewRuntime): void {
