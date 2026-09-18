@@ -98,8 +98,21 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#sessions.set(window, session);
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
+    let readerScanFailed = false;
     const scan = (): void => {
-      this.rescan(window);
+      try {
+        this.rescan(window);
+        if (readerScanFailed) {
+          this.#dependencies.logger.debug('Reader rescan recovered during Main window scan');
+          readerScanFailed = false;
+        }
+      } catch (error) {
+        if (!readerScanFailed)
+          this.#dependencies.logger.debug(
+            `Reader rescan failed during Main window scan: ${String(error)}`,
+          );
+        readerScanFailed = true;
+      }
       this.#noteEditor.sync(
         window,
         session,
