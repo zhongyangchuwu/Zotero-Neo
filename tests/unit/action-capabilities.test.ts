@@ -20,10 +20,10 @@ import { actionsForBindingMode } from '../../src/input/binding-capabilities';
 
 const expectedMainActions: readonly ActionId[] = [
   'openCommandPalette',
-  'mainFuzzyAll',
-  'mainFuzzyCollection',
-  'mainTabPick',
-  'mainNotesLayout',
+  'findAllItems',
+  'findCollectionItems',
+  'switchTab',
+  'findNotes',
   'mainTrashItems',
   'mainRestoreTrashedItems',
   'mainFocusTree',
@@ -37,9 +37,9 @@ const expectedMainActions: readonly ActionId[] = [
   'mainYankCitekey',
   'mainOpenPDF',
   'mainActivate',
-  'mainClosePDF',
-  'mainPrevTab',
-  'mainNextTab',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
   'addTag',
   'removeTag',
   'toggleTagFilter',
@@ -67,14 +67,14 @@ const expectedMainActions: readonly ActionId[] = [
 ];
 
 const expectedDelegableMainActions: readonly ActionId[] = [
-  'mainFuzzyAll',
-  'mainFuzzyCollection',
-  'mainNotesLayout',
-  'mainTabPick',
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'switchTab',
   'mainYankCitekey',
-  'mainClosePDF',
-  'mainPrevTab',
-  'mainNextTab',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
   'addTag',
   'removeTag',
 ];
@@ -128,7 +128,7 @@ describe('action capability ownership', () => {
 
   it('guards commands by Reader mode and rejects unsafe catalog drift', () => {
     expect(isReaderActionForMode('normal', 'openCommandPalette')).toBe(true);
-    expect(isReaderActionForMode('normal', 'mainTabPick')).toBe(true);
+    expect(isReaderActionForMode('normal', 'switchTab')).toBe(true);
     expect(isReaderActionForMode('normal', 'addTag')).toBe(true);
     expect(isReaderActionForMode('normal', 'removeTag')).toBe(true);
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
@@ -140,7 +140,7 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('visual', 'zoomIn')).toBe(false);
     expect(isReaderActionForMode('normal', 'flashText')).toBe(false);
     expect(isReaderActionForMode('insert', 'exitMode')).toBe(true);
-    expect(isReaderActionForMode('insert', 'mainFuzzyAll')).toBe(false);
+    expect(isReaderActionForMode('insert', 'findAllItems')).toBe(false);
     expect(isReaderActionForMode('normal', 'not-an-action')).toBe(false);
   });
 });
