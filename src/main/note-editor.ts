@@ -12,6 +12,7 @@ import {
   resolveInputTimeout,
 } from '../input/engine';
 import { isLeaderPrefix } from '../input/key-guide';
+import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { MainNavigation } from './navigation';
 import { copyToClipboard } from '../platform/clipboard';
@@ -150,7 +151,7 @@ export class NoteEditor {
     execute: NoteExternalExecute,
   ): void {
     const el = editable(event.target);
-    if (!el) return;
+    if (!el || compositionOwnsKey(event, false)) return;
     const key = keyString(event);
     if (!key) return;
 
