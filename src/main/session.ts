@@ -5,7 +5,7 @@ import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
-import type { PickerConfirm, PickerProvider, PickerProviderCommands } from './picker/types';
+import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
 
 export type MainPanel = 'collections' | 'items';
@@ -45,12 +45,7 @@ export class MainWindowSession {
     filtered: PickerItem[];
     selected: number;
     focusPane: 'search' | 'list' | 'preview';
-    tagMode: 'list' | 'query';
-    tagScope: 'current' | 'library';
-    tagSelection: string[];
-    tagMatchCount: number | null;
     provider: PickerProvider | null;
-    commands: PickerProviderCommands | null;
     confirm: PickerConfirm | null;
     closeBeforeConfirm: boolean;
     queue: Promise<void>;
@@ -78,12 +73,7 @@ export class MainWindowSession {
     selected: 0,
     previousElement: null,
     focusPane: 'search',
-    tagMode: 'list',
-    tagScope: 'current',
-    tagSelection: [],
-    tagMatchCount: null,
     provider: null,
-    commands: null,
     confirm: null,
     closeBeforeConfirm: false,
     queue: Promise.resolve(),
