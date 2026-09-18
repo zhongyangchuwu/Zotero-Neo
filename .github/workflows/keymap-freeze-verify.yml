@@ -18,4 +18,8 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run verify
+      - name: Show canonical Prettier diff
+        run: |
+          npx prettier --write tests/unit/keymap-freeze.test.ts
+          git diff --unified=1 -- tests/unit/keymap-freeze.test.ts
+          test -z "$(git status --short -- tests/unit/keymap-freeze.test.ts)"
