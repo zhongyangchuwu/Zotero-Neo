@@ -46,6 +46,7 @@ import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderHostKeyBridge } from './host-key-bridge';
+import { ReaderViewLifecycle } from './view-lifecycle';
 import { ReaderFlash, type FlashIntent, type FlashSelectionTarget } from './flash';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
 import { selectionClipboardText } from './selection-text';
@@ -66,7 +67,6 @@ import {
   type ReaderSessionState,
   type ReaderTimer,
   type ReaderViewRuntime,
-  type ViewHandlers,
 } from './types';
 
 interface ReaderService {
@@ -403,8 +403,8 @@ export class ReaderController implements ReaderControllerApi {
 export class ReaderSession {
   readonly #dependencies: SessionDependencies;
   readonly #scope = new CleanupScope();
-  readonly #viewHandlers = new Map<PdfWindow, ViewHandlers>();
   readonly #hostKeyBridge: ReaderHostKeyBridge;
+  readonly #viewLifecycle: ReaderViewLifecycle;
   readonly #marks: ReaderMarks;
   readonly #marksExplorer: ReaderMarksExplorer;
   readonly #sidebar: ReaderSidebarOverlay;
@@ -421,7 +421,6 @@ export class ReaderSession {
   #sidebarToggleBuffer = '';
   #sidebarToggleTimer: ReaderTimer | null = null;
   readonly state: ReaderSessionState;
-  #viewSyncTimer: number | null = null;
 
   constructor(dependencies: SessionDependencies) {
     this.#dependencies = dependencies;
@@ -527,6 +526,38 @@ export class ReaderSession {
       },
     };
     this.#outline = new ReaderOutline(outlineHost);
+    this.#viewLifecycle = new ReaderViewLifecycle({
+      reader: dependencies.reader,
+      timerWindow: dependencies.firstPdfWindow,
+      activePdfWindow: () => this.state.activePdfWindow,
+      setActivePdfWindow: (pdfWindow) => {
+        this.state.activePdfWindow = pdfWindow;
+      },
+      onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
+      onKeyUp: (event) => this.handleKeyUp(event),
+      onBlur: (pdfWindow) => {
+        this.#smoothScroller.stop(true);
+        this.#flash.releaseView(pdfWindow);
+      },
+      onSelectionChange: (pdfWindow) => {
+        if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
+      },
+      onScroll: (pdfWindow) => {
+        this.#flash.onViewportChange(pdfWindow);
+        this.#linkHints.onViewportChange(pdfWindow);
+        if (this.state.mode === 'visual') this.updateVisualCursor(pdfWindow, false);
+      },
+      onResize: (pdfWindow) => {
+        this.#flash.onViewportChange(pdfWindow);
+        this.#linkHints.onViewportChange(pdfWindow);
+      },
+      releaseView: (pdfWindow) => {
+        this.#linkHints.releaseView(pdfWindow);
+        this.#selectionActions.releaseView(pdfWindow);
+        this.releaseViewTheme(pdfWindow);
+      },
+      syncHostBridge: () => this.#hostKeyBridge.sync(),
+    });
     this.#scope.add(() => {
       this.#inputRevision += 1;
       this.clearKeyTimer();
@@ -546,12 +577,7 @@ export class ReaderSession {
     );
     if (this.state.indicator)
       this.state.indicatorThemeCleanup = this.themeRoot(this.state.indicator);
-    this.syncPdfViews();
-    this.#viewSyncTimer = this.state.activePdfWindow.setInterval(() => this.syncPdfViews(), 250);
-    this.#scope.add(() => {
-      if (this.#viewSyncTimer !== null) clearInterval(this.#viewSyncTimer);
-      this.#viewSyncTimer = null;
-    });
+    this.#viewLifecycle.start();
     this.installOuterReaderListeners();
     this.#marks.load(this.state.marks, this.#dependencies.reader);
   }
@@ -563,9 +589,7 @@ export class ReaderSession {
     this.#flash.dispose();
     this.#smoothScroller.dispose();
     this.clearSidebarToggleInput();
-    for (const [pdfWindow, handlers] of this.#viewHandlers)
-      this.removeViewHandlers(pdfWindow, handlers);
-    this.#viewHandlers.clear();
+    this.#viewLifecycle.dispose();
     this.#hostKeyBridge.dispose();
     this.#scope.dispose();
     this.#sidebar.dispose(() => {
@@ -644,80 +668,6 @@ export class ReaderSession {
       }) as EventListener,
       true,
     );
-  }
-
-  private syncPdfViews(): void {
-    if (this.#scope.disposed) return;
-    const reader = this.#dependencies.reader;
-    const wanted = [
-      asPdfWindow(reader._internalReader?._primaryView?._iframeWindow),
-      asPdfWindow(reader._internalReader?._secondaryView?._iframeWindow),
-    ].filter((value): value is PdfWindow => value !== null);
-    if (!wanted.includes(this.state.activePdfWindow))
-      this.state.activePdfWindow = wanted[0] ?? this.state.activePdfWindow;
-    for (const [window, handlers] of this.#viewHandlers) {
-      if (wanted.includes(window)) continue;
-      this.removeViewHandlers(window, handlers);
-      this.#viewHandlers.delete(window);
-    }
-    for (const pdfWindow of wanted) {
-      if (this.#viewHandlers.has(pdfWindow)) continue;
-      const keyDown = ((event: Event) => {
-        const keyEvent = asKeyboardEvent(event);
-        if (keyEvent) this.handleKeyDown(keyEvent, pdfWindow);
-      }) as EventListener;
-      const keyUp = ((event: Event) => {
-        const keyEvent = asKeyboardEvent(event);
-        if (keyEvent) this.handleKeyUp(keyEvent);
-      }) as EventListener;
-      const blur = (() => {
-        this.#smoothScroller.stop(true);
-        this.#flash.releaseView(pdfWindow);
-      }) as EventListener;
-      const selection = (() => {
-        if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
-      }) as EventListener;
-      const scroll = (() => {
-        this.#flash.onViewportChange(pdfWindow);
-        this.#linkHints.onViewportChange(pdfWindow);
-        if (this.state.mode === 'visual') this.updateVisualCursor(pdfWindow, false);
-      }) as EventListener;
-      const resize = (() => {
-        this.#flash.onViewportChange(pdfWindow);
-        this.#linkHints.onViewportChange(pdfWindow);
-      }) as EventListener;
-      const scrollElement =
-        pdfWindow.document.getElementById('viewerContainer') ??
-        pdfWindow.document.querySelector('.pdfViewer');
-      pdfWindow.addEventListener('keydown', keyDown, true);
-      pdfWindow.addEventListener('keyup', keyUp, true);
-      pdfWindow.addEventListener('blur', blur, true);
-      pdfWindow.document.addEventListener('selectionchange', selection);
-      pdfWindow.addEventListener('resize', resize, { passive: true });
-      scrollElement?.addEventListener('scroll', scroll, { passive: true });
-      this.#viewHandlers.set(pdfWindow, {
-        keyDown,
-        keyUp,
-        blur,
-        selection,
-        resize,
-        scroll,
-        scrollElement,
-      });
-    }
-    this.#hostKeyBridge.sync();
-  }
-
-  private removeViewHandlers(pdfWindow: PdfWindow, handlers: ViewHandlers): void {
-    pdfWindow.removeEventListener('keydown', handlers.keyDown, true);
-    pdfWindow.removeEventListener('keyup', handlers.keyUp, true);
-    pdfWindow.removeEventListener('blur', handlers.blur, true);
-    pdfWindow.document.removeEventListener('selectionchange', handlers.selection);
-    pdfWindow.removeEventListener('resize', handlers.resize);
-    handlers.scrollElement?.removeEventListener('scroll', handlers.scroll);
-    this.#linkHints.releaseView(pdfWindow);
-    this.#selectionActions.releaseView(pdfWindow);
-    this.releaseViewTheme(pdfWindow);
   }
 
   /**
