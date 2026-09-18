@@ -10,7 +10,7 @@ import {
 import type { MainWindowSession } from '../session';
 import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
-import type { PickerPane, PickerProvider, PickerProviderCommands } from './types';
+import type { PickerOpenOptions, PickerPane, PickerProvider, PickerProviderCommands } from './types';
 import { fuzzyMatchScore } from './fuzzy';
 import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';
@@ -68,19 +68,20 @@ export class FuzzyPicker {
     window: MainWindow,
     session: MainWindowSession,
     scope: PickerScope,
-    commandContext?: CommandPaletteContext,
+    options: PickerOpenOptions = {},
   ): Promise<void> {
     if (session.picker.open) return;
     const generation = ++session.picker.generation;
     let orphanOverlay: HTMLElement | null = null;
     try {
       this.trace(`picker open scope=${scope}`);
-      const provider = this.provider(window, session, scope, commandContext);
+      const provider = this.provider(window, session, scope, options.commandContext);
       const commands = this.createProviderCommands(session);
       session.picker.provider = provider;
       session.picker.commands = commands;
+      session.picker.confirm = options.confirm ?? null;
+      session.picker.closeBeforeConfirm = options.closeBeforeConfirm ?? false;
       session.picker.queue = Promise.resolve();
-      session.picker.lastDeletedNoteID = null;
       const doc = window.document;
       const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
       const overlay = create('div');
@@ -277,8 +278,9 @@ export class FuzzyPicker {
         session.picker.inputCleanup = null;
         session.picker.provider = null;
         session.picker.commands = null;
+        session.picker.confirm = null;
+        session.picker.closeBeforeConfirm = false;
         session.picker.queue = Promise.resolve();
-        session.picker.lastDeletedNoteID = null;
       }
       this.#navigation.status(session, `✗ Unable to open ${scope} picker`);
     }
@@ -287,14 +289,12 @@ export class FuzzyPicker {
     if (!session.picker.open) return;
     session.picker.provider?.onClose?.();
     this.trace(`picker close scope=${session.picker.scope}`);
-    const { overlay, previousElement, previousWindow, yTimer, commandTimer, themeCleanup } =
-      session.picker;
+    const { overlay, previousElement, previousWindow, themeCleanup } = session.picker;
     session.picker.provider = null;
     session.picker.commands = null;
+    session.picker.confirm = null;
+    session.picker.closeBeforeConfirm = false;
     session.picker.queue = Promise.resolve();
-    session.picker.lastDeletedNoteID = null;
-    clearTimeout(yTimer);
-    clearTimeout(commandTimer);
     session.picker.inputCleanup?.();
     session.picker.inputCleanup = null;
     themeCleanup?.();
@@ -313,9 +313,6 @@ export class FuzzyPicker {
     session.picker.items = [];
     session.picker.filtered = [];
     session.picker.selected = 0;
-    session.picker.lastKey = null;
-    session.picker.yTimer = undefined;
-    session.picker.command = '';
     session.picker.themeCleanup = null;
     try {
       if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
@@ -375,6 +372,18 @@ export class FuzzyPicker {
       return;
     }
     if (session.picker.provider?.onKeyDown?.(event, session.picker.commands!)) return;
+    if (
+      key === '/' &&
+      event.target !== picker.input &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      stop();
+      this.focusPane(session, 'search');
+      picker.input?.select();
+      return;
+    }
     if (event.target !== picker.input && !event.ctrlKey && !event.metaKey && !event.altKey) {
       if (key === 'ArrowDown' || lower === 'j') {
         stop();
@@ -395,7 +404,6 @@ export class FuzzyPicker {
       return;
     }
     event.stopPropagation();
-    picker.lastKey = null;
   }
 
   private filter(session: MainWindowSession, query: string): void {
@@ -498,20 +506,19 @@ export class FuzzyPicker {
     closeWhenDone = true,
   ): Promise<boolean> {
     const item = session.picker.filtered[session.picker.selected];
-    if (!item) return false;
-    const provider = session.picker.provider;
-    if (!provider) return false;
+    const confirm = session.picker.confirm;
+    if (!item || !confirm) return false;
     const generation = session.picker.generation;
-    const closeBeforeActivate = provider.closeBeforeActivate === true && closeWhenDone;
-    if (closeBeforeActivate) this.close(session);
+    const closeBeforeConfirm = session.picker.closeBeforeConfirm && closeWhenDone;
+    if (closeBeforeConfirm) this.close(session);
     try {
-      const pending = provider.activate(item, openInWindow);
+      const pending = confirm(item, openInWindow);
       if (pending) await pending;
     } catch (error) {
-      this.failure(`picker select scope=${session.picker.scope}`, error);
+      this.failure(`picker confirm scope=${session.picker.scope}`, error);
       return false;
     }
-    if (closeBeforeActivate) return true;
+    if (closeBeforeConfirm) return true;
     if (!this.isCurrent(session, generation)) return false;
     if (closeWhenDone) this.close(session);
     return true;
@@ -543,13 +550,10 @@ export class FuzzyPicker {
       render: () => this.render(session),
       filter: (query, focusID) => this.filter(session, query ?? session.picker.input?.value ?? ''),
       focusPane: (pane: PickerPane) => this.focusPane(session, pane),
-      select: (openInWindow: boolean, closeWhenDone = true) =>
-        this.select(session.window, session, openInWindow, closeWhenDone),
       close: () => this.close(session),
       enqueue: (label: string, operation: () => Promise<unknown> | void) => {
         void this.enqueue(session, label, operation);
       },
-      armCommand: (command: string) => this.armCommand(session.window, session, command),
       isCurrent: (generation: number) => this.isCurrent(session, generation),
     };
   }
@@ -589,15 +593,6 @@ export class FuzzyPicker {
         pane === 'preview' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
   }
 
-  private armCommand(window: MainWindow, session: MainWindowSession, command: string): void {
-    session.picker.command = command;
-    clearTimeout(session.picker.commandTimer);
-    session.picker.commandTimer = window.setTimeout(() => {
-      session.picker.command = '';
-      session.picker.commandTimer = undefined;
-    }, 700);
-  }
-
   private provider(
     window: MainWindow,
     session: MainWindowSession,
@@ -607,11 +602,11 @@ export class FuzzyPicker {
     switch (scope) {
       case 'all':
       case 'collection':
-        return createItemsProvider(window, session, scope, this.#navigation);
+        return createItemsProvider(window, scope);
       case 'tabs':
-        return createTabsProvider(window, this.#navigation);
+        return createTabsProvider(window);
       case 'notes':
-        return createNotesProvider(window, session, this.#navigation, this.#logger);
+        return createNotesProvider(window, this.#logger);
       case 'tags':
         return createTagsProvider(window, session, this.#navigation, this.#logger);
       case 'commands':
