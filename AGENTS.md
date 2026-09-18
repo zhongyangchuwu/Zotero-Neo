@@ -123,6 +123,14 @@ anchor/preferred-X state, range motions, endpoint swaps, and Select view markers
 Input policy, native popup geometry, annotation mutations, and smooth-scroll behavior
 remain in their existing owners.
 
+Main chooser ownership follows the same rule. `src/main/picker/` owns candidate search,
+ranking, rendering, preview, focus, IME, confirmation/cancellation, and stale-work containment.
+Ordinary item/note/tab candidate sources own data and presentation only; the semantic action that
+opens the chooser injects what confirmation means. Do not add provider-local create/delete/yank/
+open grammars or move domain mutation into Picker to save a dispatch step. Command Palette may
+reuse the candidate surface to choose an `ActionId`. The legacy Tag provider hooks are temporary
+until issue #39 replaces Tag Picker/Workspace behavior with explicit tag actions.
+
 ## Key Files
 
 | File | Purpose |

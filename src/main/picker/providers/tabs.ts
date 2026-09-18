@@ -1,9 +1,8 @@
 import type { MainWindow } from '../../../core/contracts';
-import { mainTabList, selectMainTab, selectedMainTabID } from '../../host';
-import type { MainNavigation } from '../../navigation';
+import { mainTabList, selectedMainTabID } from '../../host';
 import type { PickerProvider } from '../types';
 
-export function createTabsProvider(window: MainWindow, navigation: MainNavigation): PickerProvider {
+export function createTabsProvider(window: MainWindow): PickerProvider {
   return {
     title: 'Tabs',
     placeholder: '> Search tab titles…',
@@ -26,9 +25,5 @@ export function createTabsProvider(window: MainWindow, navigation: MainNavigatio
     },
     rowText: (item) => item.title,
     preview: (item) => ({ title: item.title, body: item.kind ?? 'tab' }),
-    activate: (item) => {
-      selectMainTab(window, String(item.id));
-      navigation.afterTabSwitch(window);
-    },
   };
 }

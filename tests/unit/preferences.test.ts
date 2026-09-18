@@ -126,17 +126,44 @@ describe('binding preferences', () => {
     const bindings = bindingsFromPreferences(preferences);
     expect(bindings['reader-normal:j']).toBe('scrollDown');
     expect(bindings['main-normal:enter']).toBe('mainActivate');
-    expect(bindings['reader-normal: fn']).toBe('mainNotesLayout');
-    expect(bindings['main-normal: fn']).toBe('mainNotesLayout');
+    expect(bindings['reader-normal: fn']).toBe('findNotes');
+    expect(bindings['main-normal: fn']).toBe('findNotes');
     expect(bindings['reader-normal: n']).toBeUndefined();
     expect(bindings['main-normal: n']).toBeUndefined();
-    expect(bindings['reader-normal: ft']).toBe('mainTabPick');
-    expect(bindings['main-normal: ft']).toBe('mainTabPick');
-    expect(bindings['main-normal: fT']).toBe('mainTagPicker');
+    expect(bindings['reader-normal: ,']).toBe('switchTab');
+    expect(bindings['main-normal: ,']).toBe('switchTab');
+    expect(bindings['main-normal: ta']).toBe('addTag');
+    expect(bindings['main-normal: tr']).toBe('removeTag');
+    expect(bindings['main-normal: tf']).toBe('toggleTagFilter');
+    expect(bindings['main-normal: tc']).toBe('clearTagFilters');
+    expect(bindings['main-normal: fT']).toBeUndefined();
+    expect(bindings['reader-normal: q']).toBe('closeCurrentTab');
+    expect(bindings['main-normal: q']).toBe('closeCurrentTab');
+    expect(bindings['reader-normal: ft']).toBeUndefined();
+    expect(bindings['main-normal: ft']).toBeUndefined();
+    expect(bindings['main-normal: td']).toBeUndefined();
     expect(bindings['main-normal:u']).toBe('mainRestoreTrashedItems');
     expect(bindings['reader-normal: tp']).toBeUndefined();
     expect(bindings['main-normal: tp']).toBeUndefined();
     expect(bindings['main-normal:ctrl+u']).toBeUndefined();
+  });
+
+  it('canonicalizes pre-release Tag action aliases without changing custom key sequences', () => {
+    const bindings = bindingsFromPreferences(
+      new TestPreferences({
+        bindings: JSON.stringify({
+          'reader-normal: custom-add': 'mainTagEditor',
+          'main-normal: custom-filter': 'mainTagPicker',
+          'main-normal: custom-find': 'mainFuzzyAll',
+          'main-normal: custom-tab': 'mainTabPick',
+        }),
+      }),
+    );
+
+    expect(bindings['reader-normal: custom-add']).toBe('addTag');
+    expect(bindings['main-normal: custom-filter']).toBe('toggleTagFilter');
+    expect(bindings['main-normal: custom-find']).toBe('findAllItems');
+    expect(bindings['main-normal: custom-tab']).toBe('switchTab');
   });
 
   it('migrates retired defaults and removes legacy native-search actions without dropping unrelated remaps', () => {
@@ -161,10 +188,10 @@ describe('binding preferences', () => {
     expect(resolved['main-normal: old-advanced']).toBeUndefined();
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
 
-    preferences.set('bindings', JSON.stringify({ 'main-normal: q': 'mainClosePDF' }));
+    preferences.set('bindings', JSON.stringify({ 'main-normal: q': 'closeCurrentTab' }));
     migrateBindingPreferences(preferences);
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
-      'main-normal: q': 'mainClosePDF',
+      'main-normal: q': 'closeCurrentTab',
     });
   });
 
@@ -184,7 +211,7 @@ describe('binding preferences', () => {
     migrateBindingPreferences(exact);
     expect(JSON.parse(exact.get('bindings', ''))).toEqual({ 'main-normal:x': 'mainActivate' });
     expect(exact.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
-    expect(bindingsFromPreferences(exact)['reader-normal:H']).toBe('mainPrevTab');
+    expect(bindingsFromPreferences(exact)['reader-normal:H']).toBe('previousTab');
     expect(bindingsFromPreferences(exact)['reader-normal:zh']).toBe('scrollLeft');
 
     const custom = new TestPreferences({
@@ -202,15 +229,55 @@ describe('binding preferences', () => {
     expect(JSON.parse(custom.get('bindings', ''))).toEqual({
       'reader-normal:H': 'scrollRight',
       'reader-normal:L': 'scrollLeft',
-      'reader-normal:J': 'mainNextTab',
-      'reader-normal:K': 'mainPrevTab',
-      'main-normal:J': 'mainNextTab',
-      'main-normal:K': 'mainPrevTab',
+      'reader-normal:J': 'nextTab',
+      'reader-normal:K': 'previousTab',
+      'main-normal:J': 'nextTab',
+      'main-normal:K': 'previousTab',
     });
     expect(custom.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     expect(bindingsFromPreferences(custom)['reader-normal:H']).toBe('scrollRight');
-    expect(bindingsFromPreferences(custom)['main-normal:J']).toBe('mainNextTab');
+    expect(bindingsFromPreferences(custom)['main-normal:J']).toBe('nextTab');
   });
+  it('moves schema-10 explicit unbindings to the final semantic leader keys', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 10,
+      bindings: JSON.stringify({
+        'reader-normal: ft': null,
+        'reader-normal: td': null,
+        'note-normal: ft': null,
+        'note-normal: td': null,
+        'note-normal: fT': null,
+        'main-normal: ft': null,
+        'main-normal: td': null,
+        'main-normal: fT': null,
+        'main-normal: custom-tab': 'mainTabPick',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main-normal: ,': null,
+      'main-normal: custom-tab': 'switchTab',
+      'main-normal: q': null,
+      'main-normal: tf': null,
+      'note-normal: ,': null,
+      'note-normal: q': null,
+      'reader-normal: ,': null,
+      'reader-normal: q': null,
+    });
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['reader-normal: ,']).toBeUndefined();
+    expect(resolved['reader-normal: q']).toBeUndefined();
+    expect(resolved['note-normal: ,']).toBeUndefined();
+    expect(resolved['note-normal: q']).toBeUndefined();
+    expect(resolved['main-normal: ,']).toBeUndefined();
+    expect(resolved['main-normal: q']).toBeUndefined();
+    expect(resolved['main-normal: tf']).toBeUndefined();
+    expect(resolved['main-normal: custom-tab']).toBe('switchTab');
+    expect(resolved['main-normal: ta']).toBe('addTag');
+  });
+
   it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {
     const unbound = new TestPreferences({
       'bindings.schemaVersion': 9,
@@ -263,10 +330,10 @@ describe('binding preferences', () => {
         'reader-normal:j': 'scrollDown',
         'reader-normal:H': 'scrollRight',
         'reader-normal:L': 'scrollLeft',
-        'reader-normal:J': 'mainNextTab',
-        'reader-normal:K': 'mainPrevTab',
-        'main-normal:J': 'mainNextTab',
-        'main-normal:K': 'mainPrevTab',
+        'reader-normal:J': 'nextTab',
+        'reader-normal:K': 'previousTab',
+        'main-normal:J': 'nextTab',
+        'main-normal:K': 'previousTab',
         'main-normal:x': 'mainActivate',
         'main-normal:enter': 'mainActivate',
       }),
@@ -276,12 +343,12 @@ describe('binding preferences', () => {
 
     const persisted = preferences.get('bindings', '');
     expect(JSON.parse(persisted)).toEqual({
-      'main-normal:J': 'mainNextTab',
-      'main-normal:K': 'mainPrevTab',
+      'main-normal:J': 'nextTab',
+      'main-normal:K': 'previousTab',
       'main-normal:x': 'mainActivate',
       'reader-normal:H': 'scrollRight',
-      'reader-normal:J': 'mainNextTab',
-      'reader-normal:K': 'mainPrevTab',
+      'reader-normal:J': 'nextTab',
+      'reader-normal:K': 'previousTab',
       'reader-normal:L': 'scrollLeft',
     });
     expect(preferences.writes).toHaveLength(2);
@@ -292,14 +359,14 @@ describe('binding preferences', () => {
     const resolved = bindingsFromPreferences(preferences);
     expect(resolved['reader-normal:H']).toBe('scrollRight');
     expect(resolved['reader-normal:L']).toBe('scrollLeft');
-    expect(resolved['reader-normal:J']).toBe('mainNextTab');
-    expect(resolved['reader-normal:K']).toBe('mainPrevTab');
-    expect(resolved['main-normal:J']).toBe('mainNextTab');
-    expect(resolved['main-normal:K']).toBe('mainPrevTab');
+    expect(resolved['reader-normal:J']).toBe('nextTab');
+    expect(resolved['reader-normal:K']).toBe('previousTab');
+    expect(resolved['main-normal:J']).toBe('nextTab');
+    expect(resolved['main-normal:K']).toBe('previousTab');
     expect(resolved['reader-normal:zh']).toBe('scrollLeft');
     expect(resolved['reader-normal:zl']).toBe('scrollRight');
-    expect(resolved['main-normal:H']).toBe('mainPrevTab');
-    expect(resolved['main-normal:L']).toBe('mainNextTab');
+    expect(resolved['main-normal:H']).toBe('previousTab');
+    expect(resolved['main-normal:L']).toBe('nextTab');
 
     const writeCount = preferences.writes.length;
     migrateBindingPreferences(preferences);

@@ -85,6 +85,13 @@ describe('main host adapter', () => {
     expect(
       (window as unknown as { ZoteroPane: { tagSelector: { selectedTags: Set<string> } } })
         .ZoteroPane.tagSelector.selectedTags,
+    ).toEqual(new Set(['blue', 'green']));
+
+    await expect(applyMainTagFilter(window, [])).resolves.toBe(4);
+    expect(setFilter).toHaveBeenLastCalledWith('tags', new Set());
+    expect(
+      (window as unknown as { ZoteroPane: { tagSelector: { selectedTags: Set<string> } } })
+        .ZoteroPane.tagSelector.selectedTags,
     ).toEqual(new Set());
   });
 

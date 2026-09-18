@@ -4,10 +4,10 @@ import { MAIN_NORMAL_ACTIONS, type MainNormalAction } from './action-capabilitie
 
 export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
   'openCommandPalette',
-  'mainFuzzyAll',
-  'mainFuzzyCollection',
-  'mainNotesLayout',
-  'mainTabPick',
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'switchTab',
   'mainFocusTree',
   'mainFocusLeft',
   'mainFocusRight',
@@ -18,11 +18,11 @@ export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
   'focusReaderSplitRight',
   'mainYankCitekey',
   'mainOpenPDF',
-  'mainClosePDF',
-  'mainPrevTab',
-  'mainNextTab',
-  'mainTagPicker',
-  'mainTagEditor',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
+  'addTag',
+  'removeTag',
 ] as const satisfies readonly MainNormalAction[]);
 
 export const NOTE_NORMAL_ACTIONS = Object.freeze([

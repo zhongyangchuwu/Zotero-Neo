@@ -30,8 +30,8 @@ function canonicalMode(value: string): Mode | null {
 export const DEFAULT_BINDINGS = {
   'reader-normal:j': 'scrollDown',
   'reader-normal:k': 'scrollUp',
-  'reader-normal:H': 'mainPrevTab',
-  'reader-normal:L': 'mainNextTab',
+  'reader-normal:H': 'previousTab',
+  'reader-normal:L': 'nextTab',
   'reader-normal:zh': 'scrollLeft',
   'reader-normal:zl': 'scrollRight',
   'reader-normal:h': 'prevPage',
@@ -85,12 +85,13 @@ export const DEFAULT_BINDINGS = {
   'reader-normal: e': 'toggleReaderSidebarOutline',
   'reader-normal: -': 'toggleReaderSplitHorizontal',
   'reader-normal: |': 'toggleReaderSplitVertical',
-  'reader-normal: ff': 'mainFuzzyAll',
-  'reader-normal: fc': 'mainFuzzyCollection',
-  'reader-normal: ft': 'mainTabPick',
-  'reader-normal: td': 'mainClosePDF',
-  'reader-normal: ta': 'mainTagEditor',
-  'reader-normal: fn': 'mainNotesLayout',
+  'reader-normal: ff': 'findAllItems',
+  'reader-normal: fc': 'findCollectionItems',
+  'reader-normal: ,': 'switchTab',
+  'reader-normal: q': 'closeCurrentTab',
+  'reader-normal: ta': 'addTag',
+  'reader-normal: tr': 'removeTag',
+  'reader-normal: fn': 'findNotes',
   'reader-normal: yy': 'mainYankCitekey',
   'reader-normal: m': 'toggleMarksExplorer',
   'reader-select:s': 'flashText',
@@ -126,18 +127,18 @@ export const DEFAULT_BINDINGS = {
   'note-normal:i': 'enterInsert',
   'note-normal:escape': 'exitMode',
   'note-normal::': 'openCommandPalette',
-  'note-normal: ff': 'mainFuzzyAll',
-  'note-normal: fc': 'mainFuzzyCollection',
-  'note-normal: ft': 'mainTabPick',
-  'note-normal: fT': 'mainTagPicker',
-  'note-normal: ta': 'mainTagEditor',
-  'note-normal: td': 'mainClosePDF',
-  'note-normal: fn': 'mainNotesLayout',
+  'note-normal: ff': 'findAllItems',
+  'note-normal: fc': 'findCollectionItems',
+  'note-normal: ,': 'switchTab',
+  'note-normal: ta': 'addTag',
+  'note-normal: tr': 'removeTag',
+  'note-normal: q': 'closeCurrentTab',
+  'note-normal: fn': 'findNotes',
   'note-normal: e': 'mainFocusTree',
   'note-normal: yy': 'mainYankCitekey',
   'note-normal: o': 'mainOpenPDF',
-  'note-normal:H': 'mainPrevTab',
-  'note-normal:L': 'mainNextTab',
+  'note-normal:H': 'previousTab',
+  'note-normal:L': 'nextTab',
   'note-normal:ctrl+h': 'focusReaderSplitLeft',
   'note-normal:ctrl+j': 'focusReaderSplitDown',
   'note-normal:ctrl+k': 'focusReaderSplitUp',
@@ -147,14 +148,16 @@ export const DEFAULT_BINDINGS = {
   'note-insert:ctrl+j': 'focusReaderSplitDown',
   'note-insert:ctrl+k': 'focusReaderSplitUp',
   'note-insert:ctrl+l': 'focusReaderSplitRight',
-  'main-normal: ff': 'mainFuzzyAll',
+  'main-normal: ff': 'findAllItems',
   'main-normal::': 'openCommandPalette',
-  'main-normal: fc': 'mainFuzzyCollection',
-  'main-normal: ft': 'mainTabPick',
-  'main-normal: fT': 'mainTagPicker',
-  'main-normal: ta': 'mainTagEditor',
-  'main-normal: td': 'mainClosePDF',
-  'main-normal: fn': 'mainNotesLayout',
+  'main-normal: fc': 'findCollectionItems',
+  'main-normal: ,': 'switchTab',
+  'main-normal: ta': 'addTag',
+  'main-normal: tr': 'removeTag',
+  'main-normal: tf': 'toggleTagFilter',
+  'main-normal: tc': 'clearTagFilters',
+  'main-normal: q': 'closeCurrentTab',
+  'main-normal: fn': 'findNotes',
   'main-normal: e': 'mainFocusTree',
   'main-normal: yy': 'mainYankCitekey',
   'main-normal: o': 'mainOpenPDF',
@@ -180,8 +183,8 @@ export const DEFAULT_BINDINGS = {
   'main-normal:backspace': 'mainTreeParent',
   'main-normal:gg': 'mainNavFirst',
   'main-normal:G': 'mainNavLast',
-  'main-normal:H': 'mainPrevTab',
-  'main-normal:L': 'mainNextTab',
+  'main-normal:H': 'previousTab',
+  'main-normal:L': 'nextTab',
   'main-normal:enter': 'mainActivate',
   'main-normal:return': 'mainActivate',
   'main-normal:v': 'mainEnterSelect',
@@ -211,6 +214,23 @@ export function parseBindingKey(value: string): ParsedBindingKey | null {
 export type BindingOverride = ActionId | null;
 export type BindingOverrides = Readonly<Record<string, BindingOverride>>;
 
+const LEGACY_ACTION_ALIASES: Readonly<Record<string, ActionId>> = {
+  mainFuzzyAll: 'findAllItems',
+  mainFuzzyCollection: 'findCollectionItems',
+  mainNotesLayout: 'findNotes',
+  mainTabPick: 'switchTab',
+  mainClosePDF: 'closeCurrentTab',
+  mainPrevTab: 'previousTab',
+  mainNextTab: 'nextTab',
+  mainTagEditor: 'addTag',
+  mainTagPicker: 'toggleTagFilter',
+};
+
+function canonicalAction(value: unknown): ActionId | null {
+  if (isActionId(value)) return value;
+  return typeof value === 'string' ? (LEGACY_ACTION_ALIASES[value] ?? null) : null;
+}
+
 function parseBindingEntries(raw: unknown): [string, unknown][] {
   if (typeof raw !== 'string' || raw === '') return [];
   let parsed: unknown;
@@ -227,8 +247,9 @@ export function parseBindingOverrides(raw: unknown): Record<string, BindingOverr
   const result: Record<string, BindingOverride> = {};
   for (const [key, action] of parseBindingEntries(raw)) {
     const binding = parseBindingKey(key);
-    if (!binding || (action !== null && !isActionId(action))) continue;
-    result[`${binding.mode}:${binding.sequence}`] = action;
+    const normalized = action === null ? null : canonicalAction(action);
+    if (!binding || (action !== null && !normalized)) continue;
+    result[`${binding.mode}:${binding.sequence}`] = normalized;
   }
   return result;
 }
@@ -247,21 +268,29 @@ const RETIRED_DEFAULT_BINDINGS = {
   'reader-select:yy': 'yankParagraph',
   'reader-normal:H': 'scrollLeft',
   'reader-normal:L': 'scrollRight',
-  'reader-normal:J': 'mainPrevTab',
-  'reader-normal:K': 'mainNextTab',
-  'main-normal:J': 'mainPrevTab',
-  'main-normal:K': 'mainNextTab',
-  'reader-normal: fb': 'mainFuzzyCollection',
-  'reader-normal: bj': 'mainTabPick',
+  'reader-normal:J': 'previousTab',
+  'reader-normal:K': 'nextTab',
+  'main-normal:J': 'previousTab',
+  'main-normal:K': 'nextTab',
+  'reader-normal: fb': 'findCollectionItems',
+  'reader-normal: bj': 'switchTab',
   'reader-normal: o': 'mainOpenPDF',
-  'reader-normal: q': 'mainClosePDF',
-  'main-normal: fb': 'mainFuzzyCollection',
-  'main-normal: bj': 'mainTabPick',
-  'main-normal: q': 'mainClosePDF',
-  'reader-normal: n': 'mainNotesLayout',
-  'main-normal: n': 'mainNotesLayout',
-  'reader-normal: tp': 'mainTabPick',
-  'main-normal: tp': 'mainTabPick',
+  'reader-normal: q': 'closeCurrentTab',
+  'main-normal: fb': 'findCollectionItems',
+  'main-normal: bj': 'switchTab',
+  'main-normal: q': 'closeCurrentTab',
+  'reader-normal: n': 'findNotes',
+  'main-normal: n': 'findNotes',
+  'reader-normal: tp': 'switchTab',
+  'main-normal: tp': 'switchTab',
+  'reader-normal: ft': 'switchTab',
+  'note-normal: ft': 'switchTab',
+  'main-normal: ft': 'switchTab',
+  'reader-normal: td': 'closeCurrentTab',
+  'note-normal: td': 'closeCurrentTab',
+  'main-normal: td': 'closeCurrentTab',
+  'note-normal: fT': 'toggleTagFilter',
+  'main-normal: fT': 'toggleTagFilter',
   'main-normal:ctrl+u': 'mainRestoreTrashedItems',
 } as const;
 
@@ -283,12 +312,15 @@ export function migrateLegacyBindingOverrides(raw: unknown): string {
   const overrides: Record<string, ActionId> = {};
   for (const [key, action] of parseBindingEntries(raw)) {
     const binding = parseBindingKey(key);
-    if (!binding || REMOVED_ACTIONS[String(action)] || !isActionId(action)) continue;
+    const normalized = canonicalAction(action);
+    if (!binding || REMOVED_ACTIONS[String(action)] || !normalized) continue;
     const canonicalKey = `${binding.mode}:${binding.sequence}`;
-    if (RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS] === action)
+    if (
+      RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS] === normalized
+    )
       continue;
-    if (DEFAULT_BINDINGS[canonicalKey as keyof typeof DEFAULT_BINDINGS] !== action)
-      overrides[canonicalKey] = action;
+    if (DEFAULT_BINDINGS[canonicalKey as keyof typeof DEFAULT_BINDINGS] !== normalized)
+      overrides[canonicalKey] = normalized;
   }
   return stringifyBindingOverrides(overrides);
 }
@@ -342,6 +374,39 @@ export function migrateFrozenKeymapOverrides(raw: unknown): string {
     if (!(newCommentYank in overrides)) overrides[newCommentYank] = null;
   }
   if (overrides['reader-select:yy'] === null) delete overrides['reader-select:yy'];
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Migrates the final 0.1.0 semantic leader re-freeze.
+ *
+ * Schema 10 compact overrides may contain null tombstones for defaults that moved. Carry those
+ * explicit unbindings to the new semantic key instead of silently re-enabling the action.
+ * The old Note tag-filter action is intentionally dropped because Main view filtering is no longer
+ * a Note capability.
+ */
+export function migrateSemanticKeymapOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const moveNull = (oldKey: string, newKey: string): void => {
+    if (overrides[oldKey] !== null) return;
+    delete overrides[oldKey];
+    if (!(newKey in overrides)) overrides[newKey] = null;
+  };
+
+  moveNull('reader-normal: ft', 'reader-normal: ,');
+  moveNull('note-normal: ft', 'note-normal: ,');
+  moveNull('main-normal: ft', 'main-normal: ,');
+  moveNull('reader-normal: td', 'reader-normal: q');
+  moveNull('note-normal: td', 'note-normal: q');
+  moveNull('main-normal: td', 'main-normal: q');
+  moveNull('main-normal: fT', 'main-normal: tf');
+
+  if (overrides['note-normal: fT'] === null) delete overrides['note-normal: fT'];
+  for (const [key, action] of Object.entries({ ...overrides })) {
+    const binding = parseBindingKey(key);
+    if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
+  }
+
   return stringifyBindingOverrides(overrides);
 }
 

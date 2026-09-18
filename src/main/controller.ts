@@ -4,7 +4,7 @@ import type {
   MainWindowControllerDependencies,
   MainWindow,
 } from '../core/contracts';
-import { focusDirectionForAction, type ActionId } from '../input/actions';
+import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
   MAIN_NORMAL_ACTIONS,
@@ -37,9 +37,9 @@ import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
 import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
-import { TagWorkspace } from './tag-workspace';
+import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
-import { mainReaderForTab, selectedMainTabID } from './host';
+import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -55,7 +55,7 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #navigation: MainNavigation;
   readonly #picker: FuzzyPicker;
   readonly #noteEditor: NoteEditor;
-  readonly #tagWorkspace: TagWorkspace;
+  readonly #tags: TagActions;
   readonly #itemSelect: MainItemSelect;
 
   constructor(dependencies: MainWindowControllerDependencies) {
@@ -65,10 +65,11 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
-    this.#tagWorkspace = new TagWorkspace(
+    this.#tags = new TagActions(
       dependencies.logger,
       this.#navigation,
       dependencies.preferences,
+      this.#picker,
     );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,
@@ -97,8 +98,21 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#sessions.set(window, session);
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
+    let readerScanFailed = false;
     const scan = (): void => {
-      this.rescan(window);
+      try {
+        this.rescan(window);
+        if (readerScanFailed) {
+          this.#dependencies.logger.debug('Reader rescan recovered during Main window scan');
+          readerScanFailed = false;
+        }
+      } catch (error) {
+        if (!readerScanFailed)
+          this.#dependencies.logger.debug(
+            `Reader rescan failed during Main window scan: ${String(error)}`,
+          );
+        readerScanFailed = true;
+      }
       this.#noteEditor.sync(
         window,
         session,
@@ -123,7 +137,6 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.add(() => {
-      this.#tagWorkspace.close(window);
       this.#picker.close(session);
       this.#noteEditor.clear(session);
     });
@@ -181,7 +194,14 @@ export class MainWindowController implements MainWindowControllerApi {
         execute(action, count);
       },
     };
-    void this.#picker.open(window, session, 'commands', ownerContext);
+    void this.#picker.open(window, session, 'commands', {
+      commandContext: ownerContext,
+      closeBeforeConfirm: true,
+      confirm: (item) => {
+        if (isActionId(item.id) && item.id !== 'openCommandPalette')
+          ownerContext.execute(item.id, 0);
+      },
+    });
   }
 
   private bindings() {
@@ -199,10 +219,6 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
-    if (this.#tagWorkspace.isOpen(window)) {
-      this.#tagWorkspace.onKeyDown(event, window, session);
-      return;
-    }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
       return;
@@ -477,17 +493,38 @@ export class MainWindowController implements MainWindowControllerApi {
           },
         });
         break;
-      case 'mainFuzzyAll':
-        void this.#picker.open(window, session, 'all');
+      case 'findAllItems':
+        void this.#picker.open(window, session, 'all', {
+          confirm: async (item) => {
+            await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+          },
+        });
         break;
-      case 'mainFuzzyCollection':
-        void this.#picker.open(window, session, 'collection');
+      case 'findCollectionItems':
+        void this.#picker.open(window, session, 'collection', {
+          confirm: async (item) => {
+            await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+          },
+        });
         break;
-      case 'mainTabPick':
-        void this.#picker.open(window, session, 'tabs');
+      case 'switchTab':
+        void this.#picker.open(window, session, 'tabs', {
+          confirm: (item) => {
+            selectMainTab(window, String(item.id));
+            this.#navigation.afterTabSwitch(window);
+          },
+        });
         break;
-      case 'mainNotesLayout':
-        void this.#picker.open(window, session, 'notes');
+      case 'findNotes':
+        void this.#picker.open(window, session, 'notes', {
+          confirm: async (item, openInWindow) => {
+            const pane = mainHost(window).ZoteroPane;
+            const id = Number(item.id);
+            await pane?.selectItem?.(id);
+            if (pane?.openNote) await pane.openNote(id, { openInWindow });
+            else await Zotero.Notes.open(id, null, { openInWindow });
+          },
+        });
         break;
       case 'mainTrashItems':
         void this.#navigation.trashSelectedItems(window, session);
@@ -524,20 +561,26 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainActivate':
         void this.#navigation.activate(window, session);
         break;
-      case 'mainClosePDF':
+      case 'closeCurrentTab':
         this.#navigation.closePDF(window);
         break;
-      case 'mainPrevTab':
+      case 'previousTab':
         this.#navigation.cycleTab(window, -1);
         break;
-      case 'mainNextTab':
+      case 'nextTab':
         this.#navigation.cycleTab(window, 1);
         break;
-      case 'mainTagPicker':
-        void this.#picker.open(window, session, 'tags');
+      case 'addTag':
+        this.#tags.add(window, session);
         break;
-      case 'mainTagEditor':
-        void this.#tagWorkspace.open(window, session);
+      case 'removeTag':
+        this.#tags.remove(window, session);
+        break;
+      case 'toggleTagFilter':
+        this.#tags.toggleFilter(window, session);
+        break;
+      case 'clearTagFilters':
+        this.#tags.clearFilters(window, session);
         break;
       case 'mainNavDown':
         this.#navigation.navigate(window, session, 1, count, shouldDebounce);

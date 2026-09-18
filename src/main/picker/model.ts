@@ -13,4 +13,6 @@ export interface PickerItem {
   meta?: string;
   section?: 'current' | 'all';
   tagType?: 'manual' | 'automatic';
+  tagName?: string;
+  tagCandidate?: 'tag' | 'create' | 'namespace';
 }

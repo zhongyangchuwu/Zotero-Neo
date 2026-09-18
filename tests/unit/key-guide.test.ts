@@ -11,15 +11,16 @@ import {
 
 const bindings: BindingMap = {
   'reader-normal: e': 'toggleReaderSidebarOutline',
-  'reader-normal: ff': 'mainFuzzyAll',
-  'reader-normal: fc': 'mainFuzzyCollection',
-  'reader-normal: ft': 'mainTabPick',
+  'reader-normal: ff': 'findAllItems',
+  'reader-normal: fc': 'findCollectionItems',
+  'reader-normal: ,': 'switchTab',
   'reader-normal: yy': 'mainYankCitekey',
 };
 
 describe('leader guide projection', () => {
   it('projects only executable Space-leader continuations and group metadata', () => {
     expect(leaderGuideEntries(bindings, 'reader-normal', ' ', 'en')).toEqual([
+      { key: ',', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
       {
         key: 'e',
         label: KEY_GUIDE_CONFIG.actionLabels.toggleReaderSidebarOutline!.en,
@@ -34,17 +35,12 @@ describe('leader guide projection', () => {
     expect(leaderGuideEntries(bindings, 'reader-normal', ' f', 'zh-CN')).toEqual([
       {
         key: 'c',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyCollection!['zh-CN'],
+        label: KEY_GUIDE_CONFIG.actionLabels.findCollectionItems!['zh-CN'],
         isGroup: false,
       },
       {
         key: 'f',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyAll!['zh-CN'],
-        isGroup: false,
-      },
-      {
-        key: 't',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainTabPick!['zh-CN'],
+        label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!['zh-CN'],
         isGroup: false,
       },
     ]);
@@ -52,16 +48,16 @@ describe('leader guide projection', () => {
 
   it('uses custom bindings as its only command source and hides non-leader prefixes', () => {
     const custom: BindingMap = {
-      'main-normal: xx': 'mainTabPick',
-      'main-normal: xy': 'mainFuzzyAll',
+      'main-normal: xx': 'switchTab',
+      'main-normal: xy': 'findAllItems',
     };
 
     expect(leaderGuideEntries(custom, 'main-normal', ' ', 'en')).toEqual([
       { key: 'x', label: KEY_GUIDE_CONFIG.genericGroupLabel.en, isGroup: true },
     ]);
     expect(leaderGuideEntries(custom, 'main-normal', ' x', 'en')).toEqual([
-      { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.mainTabPick!.en, isGroup: false },
-      { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.mainFuzzyAll!.en, isGroup: false },
+      { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
+      { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!.en, isGroup: false },
     ]);
     expect(leaderGuideEntries(custom, 'main-normal', 'g', 'en')).toEqual([]);
   });
@@ -73,17 +69,15 @@ describe('leader guide projection', () => {
     expect(KEY_GUIDE_CONFIG.defaultFontSizePx).toBe(15);
   });
 
-  it('keeps tab and picker groups without removed native-main search leaves', () => {
-    expect(DEFAULT_BINDINGS['reader-normal: ft']).toBe('mainTabPick');
-    expect(DEFAULT_BINDINGS['reader-normal: td']).toBe('mainClosePDF');
-    expect('reader-normal: tp' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal: o' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal: q' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal: fa' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal: fs' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['main-normal: ft']).toBe('mainTabPick');
-    expect(DEFAULT_BINDINGS['main-normal: fT']).toBe('mainTagPicker');
-    expect('main-normal: tp' in DEFAULT_BINDINGS).toBe(false);
+  it('projects the explicit Tag action defaults without reviving retired picker aliases', () => {
+    expect(DEFAULT_BINDINGS['reader-normal: ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['reader-normal: tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['main-normal: ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['main-normal: tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['main-normal: tf']).toBe('toggleTagFilter');
+    expect(DEFAULT_BINDINGS['main-normal: tc']).toBe('clearTagFilters');
+    expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
+    expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
   });
 
   it('uses an explicit language first and otherwise follows the host locale', () => {

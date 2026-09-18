@@ -3,10 +3,10 @@ import type { ActionId } from '../input/actions';
 /** Actions exposed by the ordinary Main-window interaction mode. */
 export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'openCommandPalette',
-  'mainFuzzyAll',
-  'mainFuzzyCollection',
-  'mainNotesLayout',
-  'mainTabPick',
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'switchTab',
   'mainTrashItems',
   'mainRestoreTrashedItems',
   'mainFocusTree',
@@ -20,11 +20,13 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainYankCitekey',
   'mainOpenPDF',
   'mainActivate',
-  'mainClosePDF',
-  'mainPrevTab',
-  'mainNextTab',
-  'mainTagPicker',
-  'mainTagEditor',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
+  'addTag',
+  'removeTag',
+  'toggleTagFilter',
+  'clearTagFilters',
   'mainNavDown',
   'mainNavUp',
   'mainNavFirst',
@@ -64,15 +66,16 @@ export type MainExecutableAction = (typeof MAIN_EXECUTABLE_ACTIONS)[number];
 
 /** Reader may delegate only non-selection Main actions with an explicit owner route. */
 export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
-  'mainFuzzyAll',
-  'mainFuzzyCollection',
-  'mainNotesLayout',
-  'mainTabPick',
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'switchTab',
   'mainYankCitekey',
-  'mainClosePDF',
-  'mainPrevTab',
-  'mainNextTab',
-  'mainTagEditor',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
+  'addTag',
+  'removeTag',
 ] as const satisfies readonly MainNormalAction[]);
 
 export type ReaderDelegableMainAction = (typeof READER_DELEGABLE_MAIN_ACTIONS)[number];

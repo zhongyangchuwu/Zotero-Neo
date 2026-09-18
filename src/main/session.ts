@@ -5,7 +5,7 @@ import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
-import type { PickerProvider, PickerProviderCommands } from './picker/types';
+import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
 
 export type MainPanel = 'collections' | 'items';
@@ -44,19 +44,11 @@ export class MainWindowSession {
     items: PickerItem[];
     filtered: PickerItem[];
     selected: number;
-    lastKey: string | null;
-    yTimer: BrowserTimer | undefined;
     focusPane: 'search' | 'list' | 'preview';
-    tagMode: 'list' | 'query';
-    command: string;
-    commandTimer: BrowserTimer | undefined;
-    tagScope: 'current' | 'library';
-    tagSelection: string[];
-    tagMatchCount: number | null;
     provider: PickerProvider | null;
-    commands: PickerProviderCommands | null;
+    confirm: PickerConfirm | null;
+    closeBeforeConfirm: boolean;
     queue: Promise<void>;
-    lastDeletedNoteID: number | null;
     inputCleanup: (() => void) | null;
     layout: 'dual' | 'single';
     previousElement: Element | null;
@@ -79,20 +71,12 @@ export class MainWindowSession {
     queryHelp: null,
     listHelp: null,
     selected: 0,
-    lastKey: null,
-    yTimer: undefined,
     previousElement: null,
     focusPane: 'search',
-    tagMode: 'list',
-    command: '',
-    commandTimer: undefined,
-    tagScope: 'current',
-    tagSelection: [],
-    tagMatchCount: null,
     provider: null,
-    commands: null,
+    confirm: null,
+    closeBeforeConfirm: false,
     queue: Promise.resolve(),
-    lastDeletedNoteID: null,
     inputCleanup: null,
     layout: 'dual',
     previousWindow: null,

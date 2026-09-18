@@ -5,12 +5,13 @@ import {
   migrateFrozenKeymapOverrides,
   migrateLegacyBindingOverrides,
   migrateNoteBindingOverrides,
+  migrateSemanticKeymapOverrides,
   resolveBindings,
   type BindingMap,
 } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
-export const BINDING_SCHEMA_VERSION = 10;
+export const BINDING_SCHEMA_VERSION = 11;
 
 export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
 
@@ -71,8 +72,10 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
       : version >= 7
         ? migrateBindingModeOverrides(raw)
         : migrateLegacyBindingOverrides(raw);
-  const noteMigrated = migrateNoteBindingOverrides(canonical);
-  const migrated = migrateFrozenKeymapOverrides(noteMigrated);
+  let migrated = canonical;
+  if (version < 9) migrated = migrateNoteBindingOverrides(migrated);
+  if (version < 10) migrated = migrateFrozenKeymapOverrides(migrated);
+  if (version < 11) migrated = migrateSemanticKeymapOverrides(migrated);
   if (migrated !== raw) preferences.set('bindings', migrated);
   preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }

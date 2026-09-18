@@ -9,15 +9,17 @@ export function keyGuideLanguage(configured: string, hostLocale: string): KeyGui
 }
 
 const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
-  mainClosePDF: { en: 'Close active tab', 'zh-CN': '关闭活动标签页' },
-  mainTagPicker: { en: 'Open tag filter', 'zh-CN': '打开标签筛选器' },
-  mainTagEditor: { en: 'Edit item tags', 'zh-CN': '编辑条目标签' },
+  closeCurrentTab: { en: 'Close current tab', 'zh-CN': '关闭当前标签页' },
+  addTag: { en: 'Add tag', 'zh-CN': '添加标签' },
+  removeTag: { en: 'Remove tag', 'zh-CN': '移除标签' },
+  toggleTagFilter: { en: 'Toggle tag filter', 'zh-CN': '切换标签筛选' },
+  clearTagFilters: { en: 'Clear tag filters', 'zh-CN': '清空标签筛选' },
   mainFocusTree: { en: 'Focus collection tree', 'zh-CN': '聚焦分类树' },
-  mainFuzzyAll: { en: 'Find all papers/items', 'zh-CN': '查找所有论文/条目' },
-  mainFuzzyCollection: { en: 'Find current collection', 'zh-CN': '查找当前分类' },
-  mainNotesLayout: { en: 'Search notes', 'zh-CN': '搜索笔记' },
+  findAllItems: { en: 'Find all papers/items', 'zh-CN': '查找所有论文/条目' },
+  findCollectionItems: { en: 'Find current collection', 'zh-CN': '查找当前分类' },
+  findNotes: { en: 'Find note', 'zh-CN': '查找笔记' },
   mainOpenPDF: { en: 'Open selected PDF', 'zh-CN': '打开所选 PDF' },
-  mainTabPick: { en: 'Open tab picker', 'zh-CN': '打开标签选择器' },
+  switchTab: { en: 'Switch tab', 'zh-CN': '切换标签页' },
   mainYankCitekey: { en: 'Copy citekey', 'zh-CN': '复制 citekey' },
   toggleMarksExplorer: { en: 'Open marks explorer', 'zh-CN': '打开标记浏览器' },
   toggleReaderSidebarOutline: { en: 'Toggle reader outline', 'zh-CN': '切换阅读器大纲' },
@@ -41,7 +43,7 @@ export const KEY_GUIDE_CONFIG = {
     'zh-CN': '更多命令',
   },
   groupLabels: {
-    t: { en: 'Tabs / Tags', 'zh-CN': '标签页 / 条目标签' },
+    t: { en: 'Tags', 'zh-CN': '标签' },
     f: { en: 'Find', 'zh-CN': '查找' },
     w: { en: 'Panes', 'zh-CN': '窗格' },
     y: { en: 'Citations', 'zh-CN': '引用' },

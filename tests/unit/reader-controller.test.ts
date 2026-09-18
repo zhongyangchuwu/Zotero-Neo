@@ -470,8 +470,8 @@ describe('reader keymap forwarding', () => {
     press('z');
     press('h');
 
-    expect(delegateMain).toHaveBeenNthCalledWith(1, 'mainPrevTab', 0, created.reader._window);
-    expect(delegateMain).toHaveBeenNthCalledWith(2, 'mainNextTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(1, 'previousTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(2, 'nextTab', 0, created.reader._window);
     expect(previous.preventDefault).toHaveBeenCalledOnce();
     expect(next.preventDefault).toHaveBeenCalledOnce();
     expect(originalKeyDown).toHaveBeenCalledTimes(2);
@@ -688,7 +688,7 @@ describe('Reader-origin main delegation', () => {
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('f').event);
 
-    expect(delegateMain).toHaveBeenCalledWith('mainFuzzyAll', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenCalledWith('findAllItems', 0, created.reader._window);
     created.session.dispose();
   });
 });
@@ -747,7 +747,7 @@ describe('Reader command palette', () => {
     const palette = paletteRef.value;
     if (!palette) throw new Error('Expected a Reader command palette context');
     expect(palette.mode).toBe('normal');
-    expect(palette.actions).toContain('mainTabPick');
+    expect(palette.actions).toContain('switchTab');
     expect(palette.actions).not.toContain('mainTrashItems');
     expect(palette.actions).not.toContain('mainOpenPDF');
     expect(palette.actions).not.toContain('mainActivate');
@@ -756,8 +756,8 @@ describe('Reader command palette', () => {
     expect(zoomIn).toHaveBeenCalledOnce();
     palette.execute('mainTrashItems', 123);
     expect(delegateMain).not.toHaveBeenCalled();
-    palette.execute('mainFuzzyAll', 123);
-    expect(delegateMain).toHaveBeenCalledWith('mainFuzzyAll', 0, created.reader._window);
+    palette.execute('findAllItems', 123);
+    expect(delegateMain).toHaveBeenCalledWith('findAllItems', 0, created.reader._window);
 
     Reflect.set(created.reader._internalReader, '_primaryView', undefined);
     Reflect.set(created.reader._internalReader, '_secondaryView', undefined);
@@ -769,7 +769,7 @@ describe('Reader command palette', () => {
     });
     created.session.dispose();
     palette.execute('zoomIn', 123);
-    palette.execute('mainTabPick', 123);
+    palette.execute('switchTab', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(delegateMain).toHaveBeenCalledOnce();
   });
@@ -779,8 +779,8 @@ describe('Reader leader timer guards', () => {
     vi.useFakeTimers();
     const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
     const bindings: BindingMap = {
-      'reader-normal: f': 'mainFuzzyAll',
-      'reader-normal: ff': 'mainTabPick',
+      'reader-normal: f': 'findAllItems',
+      'reader-normal: ff': 'switchTab',
     };
     const created = createHistorySession({}, delegateMain, bindings);
     const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
@@ -789,7 +789,7 @@ describe('Reader leader timer guards', () => {
     press('f');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
     expect(delegateMain).toHaveBeenCalledTimes(1);
-    expect(delegateMain).toHaveBeenLastCalledWith('mainFuzzyAll', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenLastCalledWith('findAllItems', 0, created.reader._window);
 
     press(' ');
     press('f');
@@ -830,8 +830,8 @@ describe('reader H/L tab and zh/zl pan defaults', () => {
     const nextTab = readerKey('L');
     created.session.focusAndHandle(previousTab.event);
     created.session.focusAndHandle(nextTab.event);
-    expect(delegateMain).toHaveBeenNthCalledWith(1, 'mainPrevTab', 0, created.reader._window);
-    expect(delegateMain).toHaveBeenNthCalledWith(2, 'mainNextTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(1, 'previousTab', 0, created.reader._window);
+    expect(delegateMain).toHaveBeenNthCalledWith(2, 'nextTab', 0, created.reader._window);
     expect(container.scrollBy).not.toHaveBeenCalled();
 
     created.session.focusAndHandle(readerKey('3').event);

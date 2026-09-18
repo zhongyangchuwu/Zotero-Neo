@@ -80,18 +80,28 @@ family. Controllers coordinate them; they should not mirror child feature state.
 - `main/navigation.ts` — collection/item tree navigation operations.
 - `main/item-select.ts` — native `TreeSelection` range operations and mode UI;
   shared input state stays in Main session/controller.
-- `main/picker/` — generic search/choose shell plus finite providers for items,
-  collection items, notes, tabs, tags, and commands.
-- `main/tag-workspace.ts` — persistent item-tag mutation workspace.
+- `main/picker/` — shared candidate search/list/preview surface. Ordinary item,
+  collection-item, note, and tab sources own candidate data/presentation only; the
+  invoking semantic action owns confirmation and the resulting host operation.
+  Command Palette reuses the same surface to choose an `ActionId`.
+- `main/tag-workspace.ts` — legacy persistent item-tag mutation surface pending
+  replacement by the explicit Tag actions tracked in issue #39.
 - `main/tag-targets.ts` — Main/Reader/Note target normalization for item-tag
   operations.
 - `main/note-editor.ts` — note-editor Normal/Insert integration.
 - `main/host.ts` — named adapters over private Main-window host seams.
 
-Picker and Tag Workspace intentionally remain separate. Picker is a
-search/filter/choose interaction; Tag Workspace is persistent mutation state.
-They may share primitives such as fuzzy matching or composition handling, but
-not one generic editing framework.
+The shared candidate surface is a **target resolver**, not an operation console.
+For ordinary object choices its sources load/search/render candidates and return
+one confirmed target to the invoking semantic action. Sources must not grow
+private mutation grammars such as create/delete/yank/open variants.
+
+Product semantics remain explicit even when implementation is shared: ordinary
+object choosing, Command Palette action selection, Tag filtering, and any future
+Manager/Workspace may reuse search/ranking/rendering primitives without becoming
+one universal Picker application. The remaining Tag provider interaction hooks
+are transitional until issue #39 replaces the current Tag Picker/Workspace
+ambiguity with explicit Tag actions.
 
 #### Reader
 
@@ -167,15 +177,13 @@ The following are intentionally **not** project-wide frameworks today:
 Create one only when a second real consumer demonstrates a stable shared
 contract.
 
-## Remaining pre-release architecture work
+## Remaining pre-release interaction cleanup
 
-Issue #29 owns the remaining structural cleanup before the 0.1.0 keymap freeze:
-
-1. **Reader orchestration** — split the large Reader coordinator along existing
-   ownership boundaries while preserving the independently owned feature
-   modules above.
-2. **Release freeze** — after that boundary is accepted, issue #24 freezes the
-   default keymap and runs the full Zotero 10 host/release matrix.
+The structural Reader cleanup tracked by issue #29 is complete. Before the
+v0.1.0 release candidate is frozen again, issues #42, #39, #40, and #43 tighten
+the interaction vocabulary around target resolution, Tag actions, Tab actions,
+and semantic leader namespaces. Issue #41 separately audits semantic light/dark
+component tokens.
 
 The Note input grammar is already on the shared sequence/count/binding machinery;
 browser-native Insert editing remains outside Neo unless an explicit Note binding

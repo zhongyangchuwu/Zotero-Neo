@@ -184,14 +184,20 @@ describe('binding parsing and overrides', () => {
     expect(bindings['reader-normal:f']).toBe('scrollUp');
   });
   it('provides Reader zoom, H/L tab, and zh/zl pan defaults', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:H']).toBe('mainPrevTab');
-    expect(DEFAULT_BINDINGS['reader-normal:L']).toBe('mainNextTab');
+    expect(DEFAULT_BINDINGS['reader-normal:H']).toBe('previousTab');
+    expect(DEFAULT_BINDINGS['reader-normal:L']).toBe('nextTab');
     expect(DEFAULT_BINDINGS['reader-normal:zh']).toBe('scrollLeft');
     expect(DEFAULT_BINDINGS['reader-normal:zl']).toBe('scrollRight');
     expect('reader-normal:J' in DEFAULT_BINDINGS).toBe(false);
     expect('reader-normal:K' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['main-normal:H']).toBe('mainPrevTab');
-    expect(DEFAULT_BINDINGS['main-normal:L']).toBe('mainNextTab');
+    expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
+    expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
+    expect(DEFAULT_BINDINGS['reader-normal: ,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['main-normal: ,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['reader-normal: q']).toBe('closeCurrentTab');
+    expect(DEFAULT_BINDINGS['main-normal: q']).toBe('closeCurrentTab');
+    expect('reader-normal: ft' in DEFAULT_BINDINGS).toBe(false);
+    expect('main-normal: td' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:K' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['reader-normal:+']).toBe('zoomIn');
@@ -231,22 +237,22 @@ describe('binding parsing and overrides', () => {
   it('copies schema-8 global Note overrides into explicit Note scope', () => {
     const migrated = migrateNoteBindingOverrides(
       JSON.stringify({
-        'main-normal:H': 'mainNextTab',
+        'main-normal:H': 'nextTab',
         'main-normal:L': 'mainTrashItems',
-        'main-normal: ff': 'mainTabPick',
+        'main-normal: ff': 'switchTab',
         'main-normal:ctrl+h': null,
         'main-normal:j': 'mainNavUp',
       }),
     );
 
     expect(JSON.parse(migrated)).toEqual({
-      'main-normal: ff': 'mainTabPick',
-      'main-normal:H': 'mainNextTab',
+      'main-normal: ff': 'switchTab',
+      'main-normal:H': 'nextTab',
       'main-normal:L': 'mainTrashItems',
       'main-normal:ctrl+h': null,
       'main-normal:j': 'mainNavUp',
-      'note-normal: ff': 'mainTabPick',
-      'note-normal:H': 'mainNextTab',
+      'note-normal: ff': 'switchTab',
+      'note-normal:H': 'nextTab',
       'note-normal:ctrl+h': null,
     });
   });
@@ -318,8 +324,8 @@ describe('binding parsing and overrides', () => {
     expect(resolved['reader-normal:custom']).toBe('zoomIn');
     expect(resolved['reader-normal:zh']).toBe('scrollLeft');
     expect(resolved['reader-normal:zl']).toBe('scrollRight');
-    expect(resolved['reader-normal:H']).toBe('mainPrevTab');
-    expect(resolved['reader-normal:L']).toBe('mainNextTab');
+    expect(resolved['reader-normal:H']).toBe('previousTab');
+    expect(resolved['reader-normal:L']).toBe('nextTab');
     expect(resolved['reader-normal:J']).toBeUndefined();
     expect(resolved['main-normal:J']).toBeUndefined();
     expect(resolved['main-normal:legacy-search']).toBeUndefined();
