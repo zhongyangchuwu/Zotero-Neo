@@ -104,7 +104,7 @@ describe('binding editor model transitions', () => {
   it('resets a customized editor to staged defaults while retaining its custom baseline', () => {
     const baseline = {
       'reader-normal:x': 'scrollDown',
-      'main-normal:y': 'mainTabPick',
+      'main-normal:y': 'switchTab',
     } as BindingMap;
     const initial = createBindingEditor(baseline);
     const edited = transition(initial, {
@@ -134,7 +134,7 @@ describe('binding editor model transitions', () => {
     const edits: readonly Pick<BindingEditorRow, 'mode' | 'action'>[] = [
       { mode: 'reader-select', action: 'extendDown' },
       { mode: 'reader-insert', action: 'exitMode' },
-      { mode: 'main-normal', action: 'mainTabPick' },
+      { mode: 'main-normal', action: 'switchTab' },
       { mode: 'reader-normal', action: 'scrollBottom' },
       { mode: 'reader-select', action: 'openSelectionActions' },
     ];
