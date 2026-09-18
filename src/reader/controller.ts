@@ -31,12 +31,7 @@ import {
   isReaderActionForMode,
   type ReaderAction,
 } from './action-capabilities';
-import {
-  ACTION_LABELS,
-  focusDirectionForAction,
-  type ActionId,
-  type FocusDirection,
-} from '../input/actions';
+import { ACTION_LABELS, focusDirectionForAction, type ActionId } from '../input/actions';
 import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderMarks } from './marks';
@@ -46,6 +41,7 @@ import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderHostKeyBridge } from './host-key-bridge';
+import { ReaderNavigation } from './navigation';
 import { ReaderViewLifecycle } from './view-lifecycle';
 import { ReaderFlash, type FlashIntent, type FlashSelectionTarget } from './flash';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
@@ -405,6 +401,7 @@ export class ReaderSession {
   readonly #scope = new CleanupScope();
   readonly #hostKeyBridge: ReaderHostKeyBridge;
   readonly #viewLifecycle: ReaderViewLifecycle;
+  readonly #navigation: ReaderNavigation;
   readonly #marks: ReaderMarks;
   readonly #marksExplorer: ReaderMarksExplorer;
   readonly #sidebar: ReaderSidebarOverlay;
@@ -467,7 +464,7 @@ export class ReaderSession {
       schedule: (delay, task) => this.schedule(delay, task),
       clearTimer: (timer) => this.clearTimer(timer),
       themeRoot: (root) => this.themeRoot(root),
-      activePdfWindow: () => this.activePdfWindow(),
+      activePdfWindow: () => this.#navigation.activePdfWindow(),
       resolveAnnotation: (key) => this.resolveAnnotation(key),
       annotationForSave: (target) => this.annotationForSave(target),
       nativeEditableFocused: () => this.nativeEditableFocused(),
@@ -492,7 +489,7 @@ export class ReaderSession {
       scrollToPageRatio: (pdfWindow, pageIndex, ratio) =>
         this.scrollToPageRatio(pdfWindow, pageIndex, ratio),
       scrollDocumentToRatio: (pdfWindow, ratio) => this.scrollDocumentToRatio(pdfWindow, ratio),
-      pageNavigationSupported: (reader) => this.pageNavigationSupported(reader),
+      pageNavigationSupported: () => this.#navigation.pageNavigationSupported(),
       annotationPageRatio: (pdfWindow, annotation) =>
         this.annotationPageRatio(pdfWindow, annotation),
     });
@@ -558,6 +555,24 @@ export class ReaderSession {
       },
       syncHostBridge: () => this.#hostKeyBridge.sync(),
     });
+    this.#navigation = new ReaderNavigation({
+      reader: dependencies.reader,
+      activePdfWindow: () => this.state.activePdfWindow,
+      setActivePdfWindow: (pdfWindow) => {
+        this.state.activePdfWindow = pdfWindow;
+      },
+      syncViews: () => this.#viewLifecycle.sync(),
+      scrollBoundary: (last, pdfWindow) => {
+        this.scrollTo(
+          pdfWindow,
+          last
+            ? Math.max(0, this.scrollContainer(pdfWindow).scrollHeight - this.viewport(pdfWindow))
+            : 0,
+        );
+      },
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+    });
     this.#scope.add(() => {
       this.#inputRevision += 1;
       this.clearKeyTimer();
@@ -619,7 +634,7 @@ export class ReaderSession {
   }
 
   focusAndHandle(event: KeyboardEvent): void {
-    const pdfWindow = this.activePdfWindow();
+    const pdfWindow = this.#navigation.activePdfWindow();
     if (!pdfWindow) return;
     pdfWindow.focus();
     this.handleKeyDown(event, pdfWindow);
@@ -648,7 +663,7 @@ export class ReaderSession {
       ((event: Event) => {
         const keyEvent = asKeyboardEvent(event);
         if (!keyEvent || this.nativeEditableFocused()) return;
-        const pdfWindow = this.activePdfWindow();
+        const pdfWindow = this.#navigation.activePdfWindow();
         if (pdfWindow) this.handleKeyDown(keyEvent, pdfWindow);
       }) as EventListener,
       true,
@@ -663,7 +678,7 @@ export class ReaderSession {
         if (active?.tagName !== 'INPUT' || !active.closest('.find-popup')) return;
         this.schedule(150, () => {
           if ('blur' in active && typeof active.blur === 'function') active.blur();
-          this.activePdfWindow()?.focus();
+          this.#navigation.activePdfWindow()?.focus();
         });
       }) as EventListener,
       true,
@@ -693,7 +708,7 @@ export class ReaderSession {
   }
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
-    this.activatePdfWindow(pdfWindow);
+    this.#navigation.activatePdfWindow(pdfWindow);
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.handleSidebarToggleKey(event, pdfWindow)) return;
@@ -789,7 +804,7 @@ export class ReaderSession {
       }
       const direction = focusDirectionForAction(decision.action);
       if (direction) {
-        if (this.focusDirection(direction)) {
+        if (this.#navigation.focusDirection(direction)) {
           event.preventDefault();
           event.stopImmediatePropagation();
         }
@@ -815,7 +830,7 @@ export class ReaderSession {
         this.clearKeyGuide();
         this.updateIndicator();
         if (resolved.kind === 'execute')
-          this.executeAction(resolved.action, resolved.count, this.activePdfWindow());
+          this.executeAction(resolved.action, resolved.count, this.#navigation.activePdfWindow());
       });
     }
   }
@@ -988,7 +1003,7 @@ export class ReaderSession {
     if (transition.kind !== 'execute') return true;
     if (!isReaderActionForMode(this.state.mode, transition.action)) return true;
     const direction = focusDirectionForAction(transition.action);
-    return direction ? this.canFocusDirection(direction) : true;
+    return direction ? this.#navigation.canFocusDirection(direction) : true;
   }
   private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
     this.#sidebar.activate('outline', pdfWindow, () => this.#marksExplorer.close(pdfWindow));
@@ -1027,7 +1042,7 @@ export class ReaderSession {
         language: this.keyGuideLanguage(),
         execute: (nextAction, _count) => {
           if (this.#scope.disposed) return;
-          const active = this.activePdfWindow();
+          const active = this.#navigation.activePdfWindow();
           if (!active || !this.readerViewForWindow(active)) return;
           this.executeAction(nextAction, 0, active);
         },
@@ -1074,10 +1089,10 @@ export class ReaderSession {
         this.scrollBy(pdfWindow, this.scrollStep() * number, 0);
         break;
       case 'historyBack':
-        this.navigateHistory('back');
+        this.#navigation.navigateHistory('back');
         break;
       case 'historyForward':
-        this.navigateHistory('forward');
+        this.#navigation.navigateHistory('forward');
         break;
       case 'followLink':
         this.#linkHints.open(pdfWindow);
@@ -1102,13 +1117,13 @@ export class ReaderSession {
         this.scrollBy(pdfWindow, 0, -this.viewport(pdfWindow) * number, true);
         break;
       case 'zoomIn':
-        this.zoomReader('in', number);
+        this.#navigation.zoom('in', number);
         break;
       case 'zoomOut':
-        this.zoomReader('out', number);
+        this.#navigation.zoom('out', number);
         break;
       case 'zoomReset':
-        this.zoomReader('reset', 1);
+        this.#navigation.zoom('reset', 1);
         break;
       case 'scrollTop':
         this.scrollToPagePosition(pdfWindow, 'top');
@@ -1120,28 +1135,28 @@ export class ReaderSession {
         this.scrollToPagePosition(pdfWindow, 'bottom');
         break;
       case 'prevPage':
-        this.navigatePage(-number);
+        this.#navigation.navigatePage(-number);
         break;
       case 'nextPage':
-        this.navigatePage(number);
+        this.#navigation.navigatePage(number);
         break;
       case 'firstPage':
-        this.navigateBoundary(count, false, pdfWindow);
+        this.#navigation.navigateBoundary(count, false, pdfWindow);
         break;
       case 'lastPage':
-        this.navigateBoundary(count, true, pdfWindow);
+        this.#navigation.navigateBoundary(count, true, pdfWindow);
         break;
       case 'openSearch':
-        this.openSearch(pdfWindow);
+        this.#navigation.openSearch(pdfWindow);
         break;
       case 'clearSearch':
-        this.clearSearch();
+        this.#navigation.clearSearch();
         break;
       case 'findNext':
-        this.find(true);
+        this.#navigation.find(true);
         break;
       case 'findPrevious':
-        this.find(false);
+        this.#navigation.find(false);
         break;
       case 'prevAnnotation':
         this.navigateAnnotation(-1);
@@ -1280,22 +1295,22 @@ export class ReaderSession {
         this.swapVisualEnds(pdfWindow);
         break;
       case 'toggleReaderSplitHorizontal':
-        this.toggleSplit('horizontal');
+        this.#navigation.toggleSplit('horizontal');
         break;
       case 'toggleReaderSplitVertical':
-        this.toggleSplit('vertical');
+        this.#navigation.toggleSplit('vertical');
         break;
       case 'focusReaderSplitLeft':
-        this.focusDirection('left');
+        this.#navigation.focusDirection('left');
         break;
       case 'focusReaderSplitDown':
-        this.focusDirection('down');
+        this.#navigation.focusDirection('down');
         break;
       case 'focusReaderSplitUp':
-        this.focusDirection('up');
+        this.#navigation.focusDirection('up');
         break;
       case 'focusReaderSplitRight':
-        this.focusDirection('right');
+        this.#navigation.focusDirection('right');
         break;
       default:
         return assertNever(action);
@@ -1409,7 +1424,7 @@ export class ReaderSession {
     }
     indicator.style.display = 'block';
     if (this.state.mode === 'visual') {
-      const selected = annotationText(this.activePdfWindow()?.getSelection()?.toString() ?? '');
+      const selected = annotationText(this.#navigation.activePdfWindow()?.getSelection()?.toString() ?? '');
       const pending = this.state.countBuffer || this.state.keyBuffer;
       indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
       indicator.style.color = THEME_VARS.onAccent;
@@ -1420,48 +1435,6 @@ export class ReaderSession {
     indicator.style.color = this.state.mode === 'normal' ? THEME_VARS.text : THEME_VARS.onAccent;
     indicator.style.background =
       this.state.mode === 'insert' ? THEME_VARS.success : THEME_VARS.elevated;
-  }
-
-  /** Delegates one jump to Zotero's per-view history without caching private host methods. */
-  private navigateHistory(direction: 'back' | 'forward'): void {
-    try {
-      const internal = this.#dependencies.reader._internalReader;
-      const navigate = direction === 'back' ? internal?.navigateBack : internal?.navigateForward;
-      if (typeof navigate !== 'function') {
-        this.showStatus('History unavailable', 1500);
-        return;
-      }
-      navigate.call(internal);
-    } catch (error) {
-      this.#dependencies.controller.dependencies.logger.debug(
-        `reader history ${direction} failed: ${String(error)}`,
-      );
-      this.showStatus('History unavailable', 1500);
-    }
-  }
-
-  /** Delegates repeated step zoom and one-shot reset to Zotero's per-reader internal API. */
-  private zoomReader(direction: 'in' | 'out' | 'reset', steps: number): void {
-    try {
-      const internal = this.#dependencies.reader._internalReader;
-      const zoom =
-        direction === 'in'
-          ? internal?.zoomIn
-          : direction === 'out'
-            ? internal?.zoomOut
-            : internal?.zoomReset;
-      if (typeof zoom !== 'function') {
-        this.showStatus('Zoom unavailable', 1500);
-        return;
-      }
-      const repeat = direction === 'reset' ? 1 : steps;
-      for (let index = 0; index < repeat; index += 1) zoom.call(internal);
-    } catch (error) {
-      this.#dependencies.controller.dependencies.logger.debug(
-        `reader zoom ${direction} failed: ${String(error)}`,
-      );
-      this.showStatus('Zoom unavailable', 1500);
-    }
   }
 
   private showStatus(message: string, duration = 2000): void {
@@ -1536,83 +1509,6 @@ export class ReaderSession {
 
   private clearAnnotation(): void {
     this.state.lastAnnotationKey = null;
-  }
-
-  private pageNavigationSupported(reader: ReaderRuntime): boolean {
-    return (
-      typeof (reader._internalReader?._lastView ?? reader._internalReader?._primaryView)
-        ?.navigateToNextPage === 'function'
-    );
-  }
-
-  private navigatePage(direction: number): void {
-    const internal = this.#dependencies.reader._internalReader;
-    if (!this.pageNavigationSupported(this.#dependencies.reader)) {
-      this.showStatus('✗ Page navigation not supported here', 1500);
-      return;
-    }
-    const method = direction > 0 ? internal?.navigateToNextPage : internal?.navigateToPreviousPage;
-    for (let index = 0; index < Math.abs(direction); index += 1) method?.call(internal);
-  }
-
-  private navigateBoundary(count: number, last: boolean, pdfWindow: PdfWindow): void {
-    const internal = this.#dependencies.reader._internalReader;
-    if (!this.pageNavigationSupported(this.#dependencies.reader)) {
-      this.scrollTo(
-        pdfWindow,
-        last
-          ? Math.max(0, this.scrollContainer(pdfWindow).scrollHeight - this.viewport(pdfWindow))
-          : 0,
-      );
-      return;
-    }
-    if (count > 0 && internal?.navigate && this.#dependencies.reader._iframeWindow) {
-      internal.navigate(
-        cloneInto({ pageIndex: count - 1 }, this.#dependencies.reader._iframeWindow),
-      );
-    } else if (last) internal?.navigateToLastPage?.();
-    else internal?.navigateToFirstPage?.();
-  }
-
-  private openSearch(pdfWindow: PdfWindow): void {
-    const internal = this.#dependencies.reader._internalReader;
-    const outerWindow = this.#dependencies.reader._iframeWindow;
-    if (internal?.toggleFindPopup && outerWindow) {
-      internal.toggleFindPopup(cloneInto({ open: true }, outerWindow));
-      return;
-    }
-    const input = outerWindow?.document.querySelector<HTMLInputElement>(
-      '.primary-view .find-popup input',
-    );
-    input?.focus();
-    input?.select();
-    pdfWindow.focus();
-  }
-
-  private clearSearch(): void {
-    const internal = this.#dependencies.reader._internalReader;
-    const outerWindow = this.#dependencies.reader._iframeWindow;
-    if (internal?.toggleFindPopup && outerWindow) {
-      internal.toggleFindPopup(cloneInto({ open: false }, outerWindow));
-      return;
-    }
-    const input = outerWindow?.document.querySelector<HTMLInputElement>('.find-popup input');
-    if (input && outerWindow?.document.activeElement === input) input.blur();
-  }
-
-  private find(next: boolean): void {
-    const internal = this.#dependencies.reader._internalReader;
-    const active =
-      internal?._primaryView?._findState?.active ||
-      internal?._secondaryView?._findState?.active ||
-      internal?._state?.primaryViewFindState?.active ||
-      internal?._state?.secondaryViewFindState?.active;
-    if (!active) {
-      this.showStatus('No active search — press / to search', 1500);
-      return;
-    }
-    if (next) internal?.findNext?.();
-    else internal?.findPrevious?.();
   }
 
   private scrollToPagePosition(pdfWindow: PdfWindow, position: 'top' | 'center' | 'bottom'): void {
@@ -2001,7 +1897,7 @@ export class ReaderSession {
 
   selectionContext(): ReaderSelectionContext | null {
     if (this.state.mode !== 'visual') return null;
-    const pdfWindow = this.activePdfWindow();
+    const pdfWindow = this.#navigation.activePdfWindow();
     if (!pdfWindow) return null;
     const selection = pdfWindow.getSelection();
     if (!selection || selection.isCollapsed) return null;
@@ -2240,7 +2136,7 @@ export class ReaderSession {
   private async exitAnnotationInsert(): Promise<void> {
     const saved = await this.#commentEditor.exit();
     this.setMode('normal');
-    this.activePdfWindow()?.focus();
+    this.#navigation.activePdfWindow()?.focus();
     this.showStatus(saved ? '✓ saved' : '✗ save failed', saved ? 1200 : 2500);
   }
 
@@ -2279,74 +2175,6 @@ export class ReaderSession {
     this.#marksExplorer.toggle(pdfWindow);
   }
 
-  private toggleSplit(type: 'horizontal' | 'vertical'): void {
-    const internal = this.#dependencies.reader._internalReader;
-    if (type === 'horizontal') internal?.toggleHorizontalSplit?.();
-    else internal?.toggleVerticalSplit?.();
-    this.#viewLifecycle.sync();
-  }
-
-  private splitFocusTarget(
-    direction: FocusDirection,
-  ): { readonly primary: boolean; readonly window: PdfWindow } | null {
-    const internal = this.#dependencies.reader._internalReader;
-    const primary = asPdfWindow(internal?._primaryView?._iframeWindow);
-    const secondary = asPdfWindow(internal?._secondaryView?._iframeWindow);
-    if (!primary || !secondary || !internal?.splitType) return null;
-    const activePrimary = this.state.activePdfWindow !== secondary;
-    const targetPrimary =
-      internal.splitType === 'vertical'
-        ? direction === 'left' && !activePrimary
-          ? true
-          : direction === 'right' && activePrimary
-            ? false
-            : null
-        : direction === 'up' && !activePrimary
-          ? true
-          : direction === 'down' && activePrimary
-            ? false
-            : null;
-    if (targetPrimary === null) return null;
-    return { primary: targetPrimary, window: targetPrimary ? primary : secondary };
-  }
-
-  private canFocusDirection(direction: FocusDirection): boolean {
-    if (this.splitFocusTarget(direction)) return true;
-    return (
-      direction === 'right' &&
-      typeof this.#dependencies.reader._window?.ZoteroContextPane?.focus === 'function'
-    );
-  }
-
-  private focusDirection(direction: FocusDirection): boolean {
-    const target = this.splitFocusTarget(direction);
-    if (target) {
-      try {
-        const internal = this.#dependencies.reader._internalReader;
-        if (internal?.focusView) internal.focusView(target.primary);
-        else target.window.focus();
-        this.state.activePdfWindow = target.window;
-        return true;
-      } catch (error) {
-        this.#dependencies.controller.dependencies.logger.debug(
-          `reader split focus failed: ${String(error)}`,
-        );
-        return false;
-      }
-    }
-    if (direction !== 'right') return false;
-    const focusContext = this.#dependencies.reader._window?.ZoteroContextPane?.focus;
-    if (!focusContext) return false;
-    try {
-      focusContext.call(this.#dependencies.reader._window?.ZoteroContextPane);
-      return true;
-    } catch (error) {
-      this.#dependencies.controller.dependencies.logger.debug(
-        `reader context focus failed: ${String(error)}`,
-      );
-      return false;
-    }
-  }
   /**
    * Starts a smooth hold only for an executable resolved scroll action. The physical key may be
    * direct (`j`/`k` or a custom single-key remap) or the continuation of a multi-key chord such
@@ -2395,35 +2223,6 @@ export class ReaderSession {
     event.preventDefault();
     event.stopImmediatePropagation();
     return true;
-  }
-
-  private activatePdfWindow(pdfWindow: PdfWindow): void {
-    const internal = this.#dependencies.reader._internalReader;
-    const secondary = asPdfWindow(internal?._secondaryView?._iframeWindow);
-    if (secondary) {
-      const primary = pdfWindow !== secondary;
-      const hostPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
-      if (hostPrimary !== undefined && hostPrimary !== primary) {
-        internal?.focusView?.(primary);
-      }
-    }
-    this.state.activePdfWindow = pdfWindow;
-  }
-
-  private activePdfWindow(): PdfWindow | null {
-    const reader = this.#dependencies.reader;
-    const internal = reader._internalReader;
-    const primary = asPdfWindow(internal?._primaryView?._iframeWindow);
-    const secondary = asPdfWindow(internal?._secondaryView?._iframeWindow);
-    const hostPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
-    if (secondary && hostPrimary === false) return secondary;
-    if (primary && hostPrimary === true) return primary;
-    if (this.state.activePdfWindow === secondary) return secondary;
-    if (this.state.activePdfWindow === primary) return primary;
-    const focused = Services.focus?.focusedWindow;
-    if (focused === secondary) return secondary;
-    if (focused === primary) return primary;
-    return primary ?? secondary ?? this.state.activePdfWindow;
   }
 
   private itemForReader(reader: ReaderRuntime): ItemRuntime | null {
