@@ -50,6 +50,35 @@ export const NOTE_COMMAND_BY_ACTION = {
   noteChangeInnerWord: 'ciw',
 } as const;
 
+export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
+  'openCommandPalette',
+  'mainFuzzyAll',
+  'mainFuzzyCollection',
+  'mainNotesLayout',
+  'mainTabPick',
+  'mainFocusTree',
+  'mainFocusLeft',
+  'mainFocusRight',
+  'mainFocusItems',
+  'focusReaderSplitLeft',
+  'focusReaderSplitDown',
+  'focusReaderSplitUp',
+  'focusReaderSplitRight',
+  'mainYankCitekey',
+  'mainOpenPDF',
+  'mainClosePDF',
+  'mainPrevTab',
+  'mainNextTab',
+  'mainTagPicker',
+  'mainTagEditor',
+] as const);
+
+export type NoteCrossContextActionId = (typeof NOTE_CROSS_CONTEXT_ACTION_IDS)[number];
+
+export function isNoteCrossContextActionId(value: unknown): value is NoteCrossContextActionId {
+  return NOTE_CROSS_CONTEXT_ACTION_IDS.includes(value as NoteCrossContextActionId);
+}
+
 export type NoteActionId = keyof typeof NOTE_COMMAND_BY_ACTION;
 
 export const NOTE_ACTION_IDS = Object.freeze(Object.keys(NOTE_COMMAND_BY_ACTION) as NoteActionId[]);
