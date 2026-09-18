@@ -83,5 +83,4 @@ describe('ReaderHostKeyBridge', () => {
     expect(view._onKeyDown).toBe(originalKeyDown);
     expect(view._textAnnotationFocused).toBe(originalTextFocus);
   });
-
 });
