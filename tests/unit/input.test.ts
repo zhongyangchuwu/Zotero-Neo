@@ -232,6 +232,7 @@ describe('binding parsing and overrides', () => {
     const migrated = migrateNoteBindingOverrides(
       JSON.stringify({
         'main-normal:H': 'mainNextTab',
+        'main-normal:L': 'mainTrashItems',
         'main-normal: ff': 'mainTabPick',
         'main-normal:ctrl+h': null,
         'main-normal:j': 'mainNavUp',
@@ -241,6 +242,7 @@ describe('binding parsing and overrides', () => {
     expect(JSON.parse(migrated)).toEqual({
       'main-normal: ff': 'mainTabPick',
       'main-normal:H': 'mainNextTab',
+      'main-normal:L': 'mainTrashItems',
       'main-normal:ctrl+h': null,
       'main-normal:j': 'mainNavUp',
       'note-normal: ff': 'mainTabPick',
