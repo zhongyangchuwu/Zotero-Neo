@@ -181,6 +181,7 @@ export class ReaderSelectionRange {
   }
 
   releaseView(pdfWindow: PdfWindow): void {
+    if (!this.#styledViews.has(pdfWindow)) return;
     this.#removeViewMarker(pdfWindow);
     this.#styledViews.delete(pdfWindow);
   }
