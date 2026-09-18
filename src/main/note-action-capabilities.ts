@@ -29,7 +29,7 @@ export const NOTE_NORMAL_ACTIONS = Object.freeze([
   ...NOTE_ACTION_IDS,
   'enterInsert',
   'exitMode',
-  ...MAIN_NORMAL_ACTIONS,
+  ...NOTE_CROSS_CONTEXT_MAIN_ACTIONS,
 ] as const satisfies readonly ActionId[]);
 
 export const NOTE_COMMAND_PALETTE_ACTIONS = Object.freeze([
