@@ -233,8 +233,6 @@ export interface ReaderSessionState {
   indicator: HTMLElement | null;
   indicatorThemeCleanup: (() => void) | null;
   activePdfWindow: PdfWindow;
-  visualAnchor: Pointer | null;
-  visualPreferredX: number | null;
   marks: Record<string, Mark>;
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;
