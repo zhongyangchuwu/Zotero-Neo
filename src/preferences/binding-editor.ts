@@ -64,6 +64,8 @@ const MODE_ORDER: Readonly<Record<Mode, number>> = {
   'reader-insert': 2,
   'main-normal': 3,
   'main-select': 4,
+  'note-normal': 5,
+  'note-insert': 6,
 };
 
 function isMode(value: string): value is Mode {
