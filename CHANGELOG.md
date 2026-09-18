@@ -47,10 +47,16 @@ All notable changes to Zotero Neo are documented here.
 - Shared Picker and TagPath fuzzy matching now goes through the pinned `fuzzysort` 4.0.2 adapter
   instead of Neo's earlier ad-hoc fuzzy scorer; consumers remain behind `fuzzyMatchScore()`.
 - Configurable binding scopes now name both surface and interaction state (`reader-normal`,
-  `reader-select`, `reader-insert`, `main-normal`, `main-select`) instead of mixing Reader modes
-  with a generic Main context. Development binding overrides migrate to the canonical schema.
+  `reader-select`, `reader-insert`, `main-normal`, `main-select`, `note-normal`,
+  `note-insert`) instead of mixing Reader modes with host contexts. Development binding
+  overrides migrate to the canonical schema, including Note-global customizations and explicit
+  unbindings from the preceding pre-release schema.
 - Main Item Select now uses the same resolved binding/input engine and semantic action dispatcher
   as the rest of Main; its feature module owns only Zotero `TreeSelection` operations and mode UI.
+- Note Normal/Insert now use the shared sequence/count reducer, resolved bindings, capabilities,
+  Key Guide, and Command Palette source instead of a parallel handwritten key grammar; Note DOM
+  editing operations remain owned by `NoteEditor` and unbound Insert text remains Zotero/browser
+  native.
 - Reader runtime state is independent from persisted binding scope instead of reusing one mixed
   `Mode` model.
 - Reader and Main navigation use Zotero-native selection, scrolling, history, split, trash, and
@@ -82,5 +88,5 @@ All notable changes to Zotero Neo are documented here.
 - Startup diagnostics are bounded and reset with version metadata instead of growing during idle
   Reader rescans.
 - Architecture ownership and remaining pre-release debt are documented in
-  `docs/ARCHITECTURE.md`; Note-local grammar and Reader orchestration cleanup remain tracked in
-  issue #29 before the final 0.1.0 keymap freeze.
+  `docs/ARCHITECTURE.md`; Reader orchestration cleanup remains tracked in issue #29 before the
+  final 0.1.0 keymap freeze.
