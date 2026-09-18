@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ActionId } from '../../src/input/actions';
+import { isActionId, type ActionId } from '../../src/input/actions';
 import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
 import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
 import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
@@ -12,6 +12,7 @@ import {
 } from '../../src/main/picker';
 import { MainNavigation } from '../../src/main/navigation';
 import type { MainWindowSession } from '../../src/main/session';
+import type { PickerOpenOptions } from '../../src/main/picker/types';
 import { citationKey } from '../../src/platform/better-bibtex';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -24,6 +25,16 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Services', originalServices);
   vi.useRealTimers();
 });
+
+function commandPickerOptions(context: CommandPaletteContext): PickerOpenOptions {
+  return {
+    commandContext: context,
+    closeBeforeConfirm: true,
+    confirm: (item) => {
+      if (isActionId(item.id) && item.id !== 'openCommandPalette') context.execute(item.id, 0);
+    },
+  };
+}
 
 describe('fuzzy picker bibliographic items', () => {
   it('keeps regular parent items and excludes notes, attachments, and annotations', () => {
@@ -393,7 +404,7 @@ describe('command palette provider', () => {
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
     );
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     const all = session.picker.filtered.find((item) => item.id === 'mainFuzzyAll');
     expect(all?.title).toBe('Main window: fuzzy picker — all items');
     expect(all?.meta).toBe('x, y');
@@ -423,7 +434,7 @@ describe('command palette provider', () => {
     expect(session.picker.open).toBe(true);
 
     picker.close(session);
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     const pointerIndex = session.picker.filtered.findIndex((item) => item.id === 'mainFuzzyAll');
     const pointerRow = session.picker.results?.children[pointerIndex] as HTMLElement & {
       emit(type: string, event?: Partial<Event>): void;
@@ -454,7 +465,7 @@ describe('command palette provider', () => {
       execute,
     };
 
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
     const provider = session.picker.provider;
     if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
@@ -490,7 +501,7 @@ describe('command palette provider', () => {
       execute: () => {},
     };
 
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     const item = session.picker.filtered[0];
     const provider = session.picker.provider;
     if (!item || !provider) throw new Error('Expected mounted command provider');
@@ -524,7 +535,7 @@ describe('command palette provider', () => {
       execute: () => {},
     };
 
-    await picker.open(window, session, 'commands', readerContext);
+    await picker.open(window, session, 'commands', commandPickerOptions(readerContext));
     const readerIds = session.picker.filtered.map((item) => item.id);
     expect(readerIds).toContain('zoomIn');
     expect(readerIds).toContain('mainFuzzyAll');
@@ -544,7 +555,7 @@ describe('command palette provider', () => {
       },
       execute: () => {},
     };
-    await picker.open(window, session, 'commands', mainContext);
+    await picker.open(window, session, 'commands', commandPickerOptions(mainContext));
     const mainIds = session.picker.filtered.map((item) => item.id);
     expect(mainIds).toContain('mainFuzzyAll');
     expect(mainIds).toContain('mainTabPick');
@@ -567,7 +578,7 @@ describe('command palette provider', () => {
       bindings: { 'main-normal:x': 'mainNextTab' },
       execute: () => {},
     };
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     const restore = { isConnected: true, focus: vi.fn() } as unknown as HTMLElement;
     session.picker.previousElement = restore;
     picker.onKeyDown(pickerKey('Escape', session.picker.input), window, session);
@@ -591,11 +602,11 @@ describe('command palette provider', () => {
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     session.picker.selected = 0;
     picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
     picker.close(session);
-    await picker.open(window, session, 'commands', context);
+    await picker.open(window, session, 'commands', commandPickerOptions(context));
     await Promise.resolve();
     await Promise.resolve();
     expect(execute).not.toHaveBeenCalled();
