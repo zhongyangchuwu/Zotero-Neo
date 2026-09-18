@@ -1058,7 +1058,13 @@ describe('unified Notes picker', () => {
       () => true,
     );
 
-    await picker.open(window, session, 'notes');
+    await picker.open(window, session, 'notes', {
+      confirm: async (item, openInWindow) => {
+        const id = Number(item.id);
+        await selectItem(id);
+        await openNote(id, { openInWindow });
+      },
+    });
     const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
     row.emit('mouseenter');
     expect(session.picker.selected).toBe(0);
