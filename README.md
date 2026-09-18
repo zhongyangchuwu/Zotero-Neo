@@ -5,14 +5,14 @@
 Zotero Neo is a standalone, Neovim/LazyVim-inspired keyboard interaction layer
 for Zotero's reader and main window.
 
-> **Status:** Pre-release development. No public GitHub Release exists yet;
-> build the XPI from source for development testing.
+> **Status:** v0.1.0 released on 2026-09-19. Download the packaged XPI from
+> [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
 
 ## Support
 
 Zotero Neo supports the **latest stable Zotero release only**. The current
-pre-release target is Zotero 10; older Zotero major versions are outside the
-install and test contract.
+v0.1.0 target is Zotero 10; older Zotero major versions are outside the install
+and test contract.
 
 Zotero Neo targets macOS, Linux, and Windows. GitHub Actions validates XPI
 packaging on Ubuntu and Windows; Zotero GUI behavior still requires manual
@@ -84,6 +84,14 @@ verification in the current stable host.
   duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
 - Space-leader Key Guide derived from the active resolved keymap.
 - Auto, Light, and Dark appearance modes on Neo-owned surfaces.
+
+## Install
+
+1. Download [`zotero-neo.xpi`](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi) from the v0.1.0 release.
+2. In Zotero, open **Tools → Plugins**, click the gear menu, and choose **Install Plugin From File…**.
+3. Select the downloaded XPI and restart Zotero when prompted.
+
+See the [v0.1.0 release page](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0) for release notes and the packaged asset.
 
 ## Build from source
 

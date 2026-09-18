@@ -1,15 +1,16 @@
 # Roadmap
 
-Zotero Neo is an independent project in pre-release development. Shipped
-behavior is documented in the [user guide](USER_GUIDE.md); current bugs and
-host/API limitations are tracked in GitHub Issues.
+Zotero Neo is an independent project. The first public release, **v0.1.0**, was
+published on 2026-09-19. Shipped behavior is documented in the
+[user guide](USER_GUIDE.md); current bugs and host/API limitations are tracked
+in GitHub Issues.
 
-## Before 0.1.0
+## v0.1.0
 
-The first public release should prioritize complete, useful keyboard-first
-workflows over broad Vim feature parity.
+The first public release established the keyboard-first interaction model before
+broader Vim feature parity.
 
-Completed feature gates:
+Completed release gates:
 
 - Item-tag assignment/removal is implemented through Main Item Select plus
   explicit [Tag actions](TAGS.md), using Zotero-native selection, item APIs, and
@@ -24,19 +25,15 @@ Completed feature gates:
 - The default 0.1.0 keymap is frozen with an automated no-exact-prefix-ambiguity guard; Reader
   annotation copy uses `y` / `Y` without timeout ambiguity (#24).
 
-Current pre-release work:
+The v0.1.0 release gate (#24), update metadata, dual-platform build, and public
+GitHub Release are complete.
 
-- **Release gate (#24):** run the final Zotero 10 host regression across Reader,
-  Main, Note, split views, choosers/tag actions, restart/restore, preferences,
-  and Error Console using the frozen defaults.
-- Prepare and validate the first release metadata/update feed, then validate clean
-  install and upgrade behavior before tagging `v0.1.0`.
+## Next
+
 - Continue tracking native Zotero Reader semantic-selection integration in
   [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
   DOM-selection compatibility path remains acceptable until Zotero exposes or
-  documents a supported semantic-selection seam; this does not block 0.1.0.
-
-## After 0.1.0
+  documents a supported semantic-selection seam.
 
 - Extend the command palette where concrete workflows justify it, such as count
   forwarding, bounded arguments/history, or external action registration.
