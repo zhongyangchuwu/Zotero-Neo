@@ -1,8 +1,5 @@
 import { isActionId, type ActionId } from './actions';
-import {
-  NOTE_LOCAL_DEFAULT_BINDINGS,
-  isNoteCrossContextActionId,
-} from './note-actions';
+import { NOTE_LOCAL_DEFAULT_BINDINGS, isNoteCrossContextActionId } from './note-actions';
 
 export const MODES = [
   'reader-normal',
