@@ -91,10 +91,13 @@ event gates, timers, guides, focus decisions, and action execution.
 selected items, reader-tab context, and tag filtering. Main-window control flow should use
 these named adapters rather than spreading structural casts through feature code.
 
-`src/main/picker/` owns one generic picker shell plus direct finite providers for items,
-tabs, notes, tags, and commands. The shell owns lifecycle, rendering, focus, queueing, and
-containment; providers own their scope-specific loading, previews, activation, and commands.
-It has no generic fallback provider or module-global provider state.
+`src/main/picker/` owns one shared candidate search/list/preview surface plus finite
+sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, rendering,
+focus, queueing, confirmation/cancellation, and containment. Ordinary object sources own
+only candidate loading and presentation; the semantic action that opens the surface injects
+the confirmation callback and therefore owns the host operation. Command Palette reuses the
+same surface to resolve an `ActionId`. The Tag source still carries transitional interaction
+hooks until issue #39 replaces the legacy Tag Picker/Workspace behavior.
 
 Reader outline and marks retain separate domain behavior. `src/reader/sidebar-overlay.ts`
 coordinates only their view-local lifecycle: mutual exclusion, theme-root cleanup, PDF-view
@@ -131,59 +134,47 @@ movement ranks visible pane rectangles in the requested half-plane, prefers cand
 aligned on the movement axis, and never wraps. A directional key is prevented only
 after a target is found.
 
-`src/main/picker/` owns one search shell for library items, current-collection
-items, tabs, notes, tags, and commands. Scope providers supply rows, preview content,
-activation, and scope-only commands; they do not bypass the resolved `BindingMap`.
-Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` adapter,
-backed by the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the
-existing runtime IIFE; no npm/CDN/native dependency is resolved at runtime. Keep consumers
-behind the adapter instead of importing the vendor module throughout feature code.
-Picker result rows are keyboard-only by default; the shared shell reads the injected
-`picker.mouse.enabled` preference at pointer-event time. When enabled, delegated click handling
-selects ordinary item/collection/tab/note rows and delegated double-click handling confirms
-through the existing provider activation queue; hover remains inert. Query focus and result or
-preview scrolling remain pointer-enabled in both states. Tag rows and markers are hard-excluded
-from pointer selection/toggling because Tag provider mutations are keyboard-only. Provider
-`onKeyDown` still returns handled status before shell generic navigation and Enter handling, so
-scope-specific commands retain precedence.
+`src/main/picker/` is a shared candidate resolver, not a domain-operation layer.
+For ordinary item, current-collection, tab, and note choices, providers supply rows and preview
+metadata only. The opening semantic action supplies `PickerOpenOptions.confirm`; Enter or an enabled
+double-click resolves the highlighted candidate through that callback, and successful confirmation
+closes the surface. A semantic action may intentionally request close-before-confirm, as Command
+Palette does when the chosen action can open another chooser.
 
-The shell owns unmodified ArrowUp/ArrowDown movement before provider callbacks when the
-search or list pane is active, including Tag Query mode; it moves the highlight exactly once
-like Ctrl+k/Ctrl+j without changing query focus or Tag mode. Providers must not duplicate this
-movement. Tag Query keeps its deliberate Tab/Escape return-to-List transitions.
+Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` adapter, backed by
+the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the runtime IIFE; no
+npm/CDN/native dependency is resolved at runtime. Keep consumers behind the adapter instead of
+importing the vendor module throughout feature code.
 
-The command provider is a finite projection of the active resolved `BindingMap`: it
-deduplicates bound `ActionId`s, displays key hints separately from key-independent
-`ACTION_LABELS`, and hides the launcher itself. Its explicit context carries mode, language,
-bindings, and an executor callback. The shell's `closeBeforeActivate` contract closes the
-palette before invoking that callback, so an action can safely open another picker without a
-second dispatcher, synthetic key event, or display-only command registry. Reader contexts
-revalidate session/view ownership through their executor and never fall back to another window.
+The shell owns generic navigation: unmodified ArrowUp/ArrowDown when search/list owns interaction,
+Ctrl+j/k (and Ctrl+n/p aliases), list-local j/k, `/` to return to search, Ctrl+d/u preview
+scrolling, Enter confirmation, Escape cancellation, pointer selection when enabled, IME ownership,
+and generation-based stale-work rejection. Ordinary sources must not duplicate this navigation or
+claim domain mutation keys.
 
-Bibliographic picker previews are deliberately bounded and synchronous: they retain the
-existing title, creator, year, and citation-key metadata, then add attachment and child-note
-counts plus up to six safely accessible filenames/titles. The picker does not render PDF pages;
-Zotero exposes no stable add-on first-page thumbnail API, so progressive PDF preview remains
-deferred rather than relying on private Reader/PDF.js internals.
+The command source is a finite projection of the active resolved `BindingMap`: it deduplicates
+supported `ActionId` values, displays key hints separately from key-independent
+`ACTION_LABELS`, and hides the launcher itself. The Main/Reader/Note owner provides the executor
+through the invocation confirmation callback, so command execution remains in semantic dispatch
+rather than provider activation. Reader contexts still revalidate session/view ownership before
+execution.
 
-Note rows search the normalized title and normalized HTML-stripped body from `getNote()` in the
-same in-memory snapshot used for ordering. Current-item notes remain first. No persisted index or
-runtime search dependency is required; Zotero's native Search query remains the library-scope
-loader and local matching covers body content consistently.
+Bibliographic candidate previews are deliberately bounded and synchronous: they retain title,
+creator, year, and citation-key metadata, then add attachment and child-note counts plus up to six
+safely accessible filenames/titles. The chooser does not render PDF pages; Zotero exposes no stable
+add-on first-page thumbnail API, so progressive PDF preview remains deferred rather than relying on
+private Reader/PDF.js internals.
 
-The Tag provider reads the active collection row's `tags` set and `getTags()` scope,
-then applies its own `Set<string>` through `itemsView.setFilter('tags', ...)`, matching
-Zotero's native AND semantics. It mirrors selection to a live native tag selector only
-after a successful native filter refresh, so failed updates resynchronize from the row
-state and leave the picker open. Selected tags are pinned by tag identity above a stable picker snapshot; scope toggle is the only source reload. Tag input has explicit List and Query modes stored independently from physical DOM focus: focus events never change tag mode, while List `/`/`Tab` and explicit input clicks enter Query. Query preserves literal text input, and hover never moves the keyboard highlight. Picker-owned commands prevent default, stop propagation, and stop immediate propagation so host Tab traversal cannot run after Neo handles it. `x` and `C` alter only the filter, never tag data or item-tag links.
+Note candidates search normalized title and normalized HTML-stripped body from `getNote()` in the
+same in-memory snapshot used for ordering. Current-item notes remain first. Zotero's native Search
+query remains the library-scope loader and local matching covers body content consistently. Note
+create/trash/restore operations are deliberately outside the chooser contract.
 
-The Notes provider resolves reader context through the active Zotero tab and reader
-attachment before consulting the main-window selection. Its primary note query uses
-`Zotero.Search.addCondition()` after `schemaUpdatePromise`; a failed search falls back
-to `Zotero.Items.getAll()` for that library, and malformed individual notes are skipped
-rather than failing the picker. Note and main-item deletion use
-`Zotero.Items.trashTx()` so Zotero stages native undo data; Neo tracks only the last ID
-batch as a targeted restore fallback and never permanently erases these items.
+The current Tag provider is the one temporary exception: it still owns Query/List mode and filter
+mutation while issue #39 migrates Tag behavior to explicit semantic actions (`ta/tr/tf/tc`).
+Do not use those hooks as precedent for new Picker sources. Tag filtering remains view state;
+item-tag mutation remains persistent data mutation, and the two must stay distinct even when they
+reuse candidate-search primitives.
 
 ## Reader Flash visible-text targeting
 
@@ -334,12 +325,12 @@ deterministic ZIP bytes with the twelve packaged members verified by
 `tools/check-package.mjs`.
 
 `src/main/host.ts` owns the narrow structural boundary for private Zotero window, Reader,
-tag, and item APIs used by main-window features. `src/main/picker/` owns the picker shell
-and direct scope providers; keep host casts in `main/host.ts` rather than picker UI/control-
-flow code. Picker openings carry a generation token: close invalidates pending loads and
-queued actions, so stale host responses cannot repaint a later picker. Actions that require
-a selected item run through one per-session queue; activation completes before a dependent
-command, such as `Ctrl+o`, reads Zotero's selected item.
+tag, and item APIs used by main-window features. `src/main/picker/` owns the candidate
+surface and finite sources; keep host casts in `main/host.ts` rather than picker UI/control-
+flow code. Openings carry a generation token: close invalidates pending loads and queued
+confirmation work, so stale host responses cannot repaint a later chooser. Domain operations
+that need a selected candidate belong to the semantic invocation, not a provider-private key
+grammar.
 
 ## Diagnostics
 
