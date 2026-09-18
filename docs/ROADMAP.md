@@ -45,7 +45,7 @@ Current pre-release work:
 - Consider keymap import/export after the default schema has stabilized in real
   use.
 - Evaluate an optional Spotlight adapter only if it adds material value beyond
-  Neo's existing all-items, collection, note, tab, tag, and command pickers.
+  Neo's existing item/note/tab target choosers, tag candidate flows, and Command Palette.
 - Prefer native Reader/sidebar integration only where Zotero exposes a supported
   extension seam; keep Neo-owned overlays when private host behavior would make
   the integration fragile.
