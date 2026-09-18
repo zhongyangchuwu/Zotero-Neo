@@ -52,10 +52,10 @@ export const NOTE_COMMAND_BY_ACTION = {
 
 export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
   'openCommandPalette',
-  'mainFuzzyAll',
-  'mainFuzzyCollection',
-  'mainNotesLayout',
-  'mainTabPick',
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'switchTab',
   'mainFocusTree',
   'mainFocusLeft',
   'mainFocusRight',
@@ -66,9 +66,9 @@ export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
   'focusReaderSplitRight',
   'mainYankCitekey',
   'mainOpenPDF',
-  'mainClosePDF',
-  'mainPrevTab',
-  'mainNextTab',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
   'addTag',
   'removeTag',
 ] as const);
