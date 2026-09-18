@@ -69,8 +69,8 @@ export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
   'mainClosePDF',
   'mainPrevTab',
   'mainNextTab',
-  'mainTagPicker',
-  'mainTagEditor',
+  'addTag',
+  'removeTag',
 ] as const);
 
 export type NoteCrossContextActionId = (typeof NOTE_CROSS_CONTEXT_ACTION_IDS)[number];
