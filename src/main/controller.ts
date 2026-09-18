@@ -486,12 +486,16 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'mainFuzzyAll':
         void this.#picker.open(window, session, 'all', {
-          confirm: (item) => mainHost(window).ZoteroPane?.selectItem?.(Number(item.id)),
+          confirm: async (item) => {
+            await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+          },
         });
         break;
       case 'mainFuzzyCollection':
         void this.#picker.open(window, session, 'collection', {
-          confirm: (item) => mainHost(window).ZoteroPane?.selectItem?.(Number(item.id)),
+          confirm: async (item) => {
+            await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+          },
         });
         break;
       case 'mainTabPick':
