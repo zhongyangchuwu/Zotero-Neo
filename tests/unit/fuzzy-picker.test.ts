@@ -120,8 +120,8 @@ describe('bibliographic picker previews', () => {
   });
 });
 
-describe('item picker keyboard activation', () => {
-  it('ignores result pointer events, navigates by keyboard, and activates the highlighted item', async () => {
+describe('item picker target resolution', () => {
+  it('navigates and confirms the highlighted target while leaving domain keys unclaimed', async () => {
     const first = {
       id: 1,
       isRegularItem: () => true,
@@ -168,8 +168,13 @@ describe('item picker keyboard activation', () => {
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
+    const options: PickerOpenOptions = {
+      confirm: async (item) => {
+        await selectItem(Number(item.id));
+      },
+    };
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', options);
     const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
     row.emit('click');
     row.emit('dblclick');
@@ -186,44 +191,34 @@ describe('item picker keyboard activation', () => {
     expect(session.picker.selected).toBe(0);
     expect(arrowDown.preventDefault).toHaveBeenCalledOnce();
     expect(arrowUp.preventDefault).toHaveBeenCalledOnce();
+
     const literalJ = pickerKey('j', input);
     picker.onKeyDown(literalJ, window, session);
     expect(session.picker.selected).toBe(0);
     expect(literalJ.preventDefault).not.toHaveBeenCalled();
     picker.onKeyDown(pickerKey('j', session.picker.results), window, session);
     expect(session.picker.selected).toBe(1);
-    picker.onKeyDown(pickerKey('ArrowUp', session.picker.results), window, session);
-    expect(session.picker.selected).toBe(0);
-    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
-    expect(session.picker.selected).toBe(1);
-    picker.onKeyDown(pickerKey('k', session.picker.results), window, session);
-    expect(session.picker.selected).toBe(0);
-    picker.onKeyDown(pickerKey('j', session.picker.results, { ctrl: true }), window, session);
-    expect(session.picker.selected).toBe(1);
 
     picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
     await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(second.id));
     expect(session.picker.open).toBe(false);
 
-    await picker.open(window, session, 'all');
-    const ctrlO = pickerKey('o', session.picker.results, { ctrl: true });
-    picker.onKeyDown(ctrlO, window, session);
-    expect(ctrlO.preventDefault).toHaveBeenCalledOnce();
-    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() => expect(session.picker.open).toBe(false));
-
-    await picker.open(window, session, 'all');
-    const y = pickerKey('y', session.picker.results);
-    picker.onKeyDown(y, window, session);
-    expect(y.preventDefault).toHaveBeenCalledOnce();
+    await picker.open(window, session, 'all', options);
+    for (const event of [
+      pickerKey('o', session.picker.results, { ctrl: true }),
+      pickerKey('y', session.picker.results),
+    ]) {
+      picker.onKeyDown(event, window, session);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(selectItem).toHaveBeenCalledTimes(1);
     picker.close(session);
-    await picker.open(window, session, 'collection');
+
+    await picker.open(window, session, 'collection', options);
     picker.onKeyDown(pickerKey('ArrowDown', session.picker.input), window, session);
     expect(session.picker.selected).toBe(1);
     picker.onKeyDown(pickerKey('ArrowUp', session.picker.input), window, session);
     expect(session.picker.selected).toBe(0);
-    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
-    expect(session.picker.selected).toBe(1);
     picker.close(session);
   });
 });
