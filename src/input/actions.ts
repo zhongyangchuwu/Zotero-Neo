@@ -329,13 +329,21 @@ const BASE_ACTION_LABELS = {
     en: 'Main window: close active tab',
     'zh-CN': '主窗口：关闭活动标签页',
   },
-  mainTagPicker: {
-    en: 'Main window: tag filter picker',
-    'zh-CN': '主窗口：标签筛选器',
+  addTag: {
+    en: 'Add tag to current target(s)',
+    'zh-CN': '为当前目标添加标签',
   },
-  mainTagEditor: {
-    en: 'Edit tags for the current item target(s)',
-    'zh-CN': '编辑当前目标条目的标签',
+  removeTag: {
+    en: 'Remove tag from current target(s)',
+    'zh-CN': '从当前目标移除标签',
+  },
+  toggleTagFilter: {
+    en: 'Toggle one tag filter',
+    'zh-CN': '切换一个标签筛选条件',
+  },
+  clearTagFilters: {
+    en: 'Clear tag filters',
+    'zh-CN': '清空标签筛选条件',
   },
   mainEnterSelect: {
     en: 'Main window: enter item selection',
