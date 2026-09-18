@@ -1424,7 +1424,9 @@ export class ReaderSession {
     }
     indicator.style.display = 'block';
     if (this.state.mode === 'visual') {
-      const selected = annotationText(this.#navigation.activePdfWindow()?.getSelection()?.toString() ?? '');
+      const selected = annotationText(
+        this.#navigation.activePdfWindow()?.getSelection()?.toString() ?? '',
+      );
       const pending = this.state.countBuffer || this.state.keyBuffer;
       indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
       indicator.style.color = THEME_VARS.onAccent;
