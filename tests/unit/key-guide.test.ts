@@ -73,17 +73,15 @@ describe('leader guide projection', () => {
     expect(KEY_GUIDE_CONFIG.defaultFontSizePx).toBe(15);
   });
 
-  it('keeps tab and picker groups without removed native-main search leaves', () => {
-    expect(DEFAULT_BINDINGS['reader-normal: ft']).toBe('mainTabPick');
-    expect(DEFAULT_BINDINGS['reader-normal: td']).toBe('mainClosePDF');
-    expect('reader-normal: tp' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal: o' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal: q' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal: fa' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal: fs' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['main-normal: ft']).toBe('mainTabPick');
-    expect(DEFAULT_BINDINGS['main-normal: fT']).toBe('mainTagPicker');
-    expect('main-normal: tp' in DEFAULT_BINDINGS).toBe(false);
+  it('projects the explicit Tag action defaults without reviving retired picker aliases', () => {
+    expect(DEFAULT_BINDINGS['reader-normal: ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['reader-normal: tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['main-normal: ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['main-normal: tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['main-normal: tf']).toBe('toggleTagFilter');
+    expect(DEFAULT_BINDINGS['main-normal: tc']).toBe('clearTagFilters');
+    expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
+    expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
   });
 
   it('uses an explicit language first and otherwise follows the host locale', () => {
