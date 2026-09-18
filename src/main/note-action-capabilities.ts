@@ -21,8 +21,8 @@ export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
   'mainClosePDF',
   'mainPrevTab',
   'mainNextTab',
-  'mainTagPicker',
-  'mainTagEditor',
+  'addTag',
+  'removeTag',
 ] as const satisfies readonly MainNormalAction[]);
 
 export const NOTE_NORMAL_ACTIONS = Object.freeze([
