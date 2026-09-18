@@ -184,14 +184,14 @@ describe('binding parsing and overrides', () => {
     expect(bindings['reader-normal:f']).toBe('scrollUp');
   });
   it('provides Reader zoom, H/L tab, and zh/zl pan defaults', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:H']).toBe('mainPrevTab');
-    expect(DEFAULT_BINDINGS['reader-normal:L']).toBe('mainNextTab');
+    expect(DEFAULT_BINDINGS['reader-normal:H']).toBe('previousTab');
+    expect(DEFAULT_BINDINGS['reader-normal:L']).toBe('nextTab');
     expect(DEFAULT_BINDINGS['reader-normal:zh']).toBe('scrollLeft');
     expect(DEFAULT_BINDINGS['reader-normal:zl']).toBe('scrollRight');
     expect('reader-normal:J' in DEFAULT_BINDINGS).toBe(false);
     expect('reader-normal:K' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['main-normal:H']).toBe('mainPrevTab');
-    expect(DEFAULT_BINDINGS['main-normal:L']).toBe('mainNextTab');
+    expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
+    expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
     expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:K' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['reader-normal:+']).toBe('zoomIn');
@@ -231,22 +231,22 @@ describe('binding parsing and overrides', () => {
   it('copies schema-8 global Note overrides into explicit Note scope', () => {
     const migrated = migrateNoteBindingOverrides(
       JSON.stringify({
-        'main-normal:H': 'mainNextTab',
+        'main-normal:H': 'nextTab',
         'main-normal:L': 'mainTrashItems',
-        'main-normal: ff': 'mainTabPick',
+        'main-normal: ff': 'switchTab',
         'main-normal:ctrl+h': null,
         'main-normal:j': 'mainNavUp',
       }),
     );
 
     expect(JSON.parse(migrated)).toEqual({
-      'main-normal: ff': 'mainTabPick',
-      'main-normal:H': 'mainNextTab',
+      'main-normal: ff': 'switchTab',
+      'main-normal:H': 'nextTab',
       'main-normal:L': 'mainTrashItems',
       'main-normal:ctrl+h': null,
       'main-normal:j': 'mainNavUp',
-      'note-normal: ff': 'mainTabPick',
-      'note-normal:H': 'mainNextTab',
+      'note-normal: ff': 'switchTab',
+      'note-normal:H': 'nextTab',
       'note-normal:ctrl+h': null,
     });
   });
@@ -283,21 +283,21 @@ describe('binding parsing and overrides', () => {
       'main-normal:enter': 'mainActivate',
       'reader-normal:H': 'scrollLeft',
       'reader-normal:L': 'scrollRight',
-      'reader-normal:J': 'mainPrevTab',
-      'reader-normal:K': 'mainNextTab',
-      'main-normal:J': 'mainPrevTab',
-      'main-normal:K': 'mainNextTab',
-      'reader-normal: fb': 'mainFuzzyCollection',
-      'reader-normal: bj': 'mainTabPick',
+      'reader-normal:J': 'previousTab',
+      'reader-normal:K': 'nextTab',
+      'main-normal:J': 'previousTab',
+      'main-normal:K': 'nextTab',
+      'reader-normal: fb': 'findCollectionItems',
+      'reader-normal: bj': 'switchTab',
       'reader-normal: o': 'mainOpenPDF',
-      'reader-normal: q': 'mainClosePDF',
-      'main-normal: fb': 'mainFuzzyCollection',
-      'main-normal: bj': 'mainTabPick',
-      'main-normal: q': 'mainClosePDF',
-      'reader-normal: n': 'mainNotesLayout',
-      'main-normal: n': 'mainNotesLayout',
-      'reader-normal: tp': 'mainTabPick',
-      'main-normal: tp': 'mainTabPick',
+      'reader-normal: q': 'closeCurrentTab',
+      'main-normal: fb': 'findCollectionItems',
+      'main-normal: bj': 'switchTab',
+      'main-normal: q': 'closeCurrentTab',
+      'reader-normal: n': 'findNotes',
+      'main-normal: n': 'findNotes',
+      'reader-normal: tp': 'switchTab',
+      'main-normal: tp': 'switchTab',
       'main-normal:ctrl+u': 'mainRestoreTrashedItems',
       'main-normal:legacy-search': 'mainFocusSearch',
       'main-normal:old-advanced': 'mainAdvancedSearch',
@@ -318,8 +318,8 @@ describe('binding parsing and overrides', () => {
     expect(resolved['reader-normal:custom']).toBe('zoomIn');
     expect(resolved['reader-normal:zh']).toBe('scrollLeft');
     expect(resolved['reader-normal:zl']).toBe('scrollRight');
-    expect(resolved['reader-normal:H']).toBe('mainPrevTab');
-    expect(resolved['reader-normal:L']).toBe('mainNextTab');
+    expect(resolved['reader-normal:H']).toBe('previousTab');
+    expect(resolved['reader-normal:L']).toBe('nextTab');
     expect(resolved['reader-normal:J']).toBeUndefined();
     expect(resolved['main-normal:J']).toBeUndefined();
     expect(resolved['main-normal:legacy-search']).toBeUndefined();
