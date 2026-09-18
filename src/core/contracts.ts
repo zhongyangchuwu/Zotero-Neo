@@ -7,7 +7,7 @@ import type { PreferenceStore } from './preference-store';
 export type MainWindow = _ZoteroTypes.MainWindow;
 export type ReaderInstance = _ZoteroTypes.ReaderInstance;
 
-export type CommandPaletteMode = 'normal' | 'main';
+export type CommandPaletteMode = 'normal' | 'main' | 'note';
 
 export interface CommandPaletteContext {
   readonly mode: CommandPaletteMode;
