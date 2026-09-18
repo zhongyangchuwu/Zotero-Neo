@@ -7,6 +7,7 @@ export interface ReaderNavigationDependencies {
   readonly activePdfWindow: () => PdfWindow;
   readonly setActivePdfWindow: (pdfWindow: PdfWindow) => void;
   readonly syncViews: () => void;
+  readonly scrollBoundary: (last: boolean, pdfWindow: PdfWindow) => void;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
@@ -80,15 +81,10 @@ export class ReaderNavigation {
     for (let index = 0; index < Math.abs(direction); index += 1) method?.call(internal);
   }
 
-  navigateBoundary(
-    count: number,
-    last: boolean,
-    pdfWindow: PdfWindow,
-    fallback: (last: boolean, pdfWindow: PdfWindow) => void,
-  ): void {
+  navigateBoundary(count: number, last: boolean, pdfWindow: PdfWindow): void {
     const internal = this.#dependencies.reader._internalReader;
     if (!this.pageNavigationSupported()) {
-      fallback(last, pdfWindow);
+      this.#dependencies.scrollBoundary(last, pdfWindow);
       return;
     }
     const outerWindow = this.#dependencies.reader._iframeWindow;
