@@ -171,11 +171,11 @@ same in-memory snapshot used for ordering. Current-item notes remain first. Zote
 query remains the library-scope loader and local matching covers body content consistently. Note
 create/trash/restore operations are deliberately outside the chooser contract.
 
-The current Tag provider is the one temporary exception: it still owns Query/List mode and filter
-mutation while issue #39 migrates Tag behavior to explicit semantic actions (`ta/tr/tf/tc`).
-Do not use those hooks as precedent for new Picker sources. Tag filtering remains view state;
-item-tag mutation remains persistent data mutation, and the two must stay distinct even when they
-reuse candidate-search primitives.
+Tag candidate sources follow the same chooser contract as ordinary object sources. They may
+project virtual namespaces, explicit create candidates, and action-specific metadata, but they do
+not mutate item tags or Main filter state. `TagActions` owns `ta/tr/tf/tc`: tag filtering remains
+view state, item-tag mutation remains persistent data mutation, and the two stay distinct even when
+they reuse candidate-search primitives.
 
 ## Reader Flash visible-text targeting
 
