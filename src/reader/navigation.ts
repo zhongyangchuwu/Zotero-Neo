@@ -68,7 +68,9 @@ export class ReaderNavigation {
 
   pageNavigationSupported(): boolean {
     const internal = this.#dependencies.reader._internalReader;
-    return typeof (internal?._lastView ?? internal?._primaryView)?.navigateToNextPage === 'function';
+    return (
+      typeof (internal?._lastView ?? internal?._primaryView)?.navigateToNextPage === 'function'
+    );
   }
 
   navigatePage(direction: number): void {
