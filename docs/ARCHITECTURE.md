@@ -28,6 +28,8 @@ reader-select
 reader-insert
 main-normal
 main-select
+note-normal
+note-insert
 ```
 
 This is deliberately different from Reader runtime state. Reader still has the
@@ -44,6 +46,13 @@ it is a thin feature/host adapter over Zotero's native `TreeSelection` plus its
 transient status UI. While `main-select` is active, ordinary `main-normal`
 bindings are available as fallbacks so operations such as Tag Workspace can act
 on the preserved native selection.
+
+Note Normal and Insert use the same reducer and binding source through explicit
+`note-normal` and `note-insert` scopes. Note-local motions and operators are
+semantic actions whose DOM editing operations remain owned by `NoteEditor`.
+Insert text that is not bound to a Neo action stays browser/Zotero-owned. Earlier
+development builds that exposed selected `main-normal` shortcuts inside Note
+editors migrate those customizations and explicit unbindings into the Note scope.
 
 Text-entry surfaces are a separate boundary. Flash, Picker, and Tag Workspace
 use real HTML inputs and browser/Gecko composition behavior; Neo consumes
@@ -151,14 +160,14 @@ contract.
 
 Issue #29 owns the remaining structural cleanup before the 0.1.0 keymap freeze:
 
-1. **Note input grammar** — Note Normal currently has a local Vim editing grammar
-   while global Main/leader commands use the shared binding engine. Reuse the
-   shared sequence/count machinery without forcing browser-native Insert editing
-   into Neo.
-2. **Reader orchestration** — split the large Reader coordinator along existing
+1. **Reader orchestration** — split the large Reader coordinator along existing
    ownership boundaries while preserving the independently owned feature
    modules above.
-3. **Release freeze** — after those boundaries are accepted, issue #24 freezes
-   the default keymap and runs the full Zotero 10 host/release matrix.
+2. **Release freeze** — after that boundary is accepted, issue #24 freezes the
+   default keymap and runs the full Zotero 10 host/release matrix.
+
+The Note input grammar is already on the shared sequence/count/binding machinery;
+browser-native Insert editing remains outside Neo unless an explicit Note binding
+consumes the key.
 
 The goal is composability through explicit ownership, not maximum abstraction.
