@@ -20,12 +20,12 @@ const bindings: BindingMap = {
 describe('leader guide projection', () => {
   it('projects only executable Space-leader continuations and group metadata', () => {
     expect(leaderGuideEntries(bindings, 'reader-normal', ' ', 'en')).toEqual([
+      { key: ',', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
       {
         key: 'e',
         label: KEY_GUIDE_CONFIG.actionLabels.toggleReaderSidebarOutline!.en,
         isGroup: false,
       },
-      { key: ',', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
       { key: 'f', label: KEY_GUIDE_CONFIG.groupLabels.f.en, isGroup: true },
       { key: 'y', label: KEY_GUIDE_CONFIG.groupLabels.y.en, isGroup: true },
     ]);
