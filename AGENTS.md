@@ -112,9 +112,12 @@ before changing annotation navigation, text selection, PDF link hints, or iframe
 
 The plugin patches Zotero's reader key-forwarding callback (`_onKeyDown` on
 `PdfView` instances) so keys consumed by Neo are not re-handled by Zotero
-(Read Aloud on `l`/`r`, tools on `h`/`s`). Keep
-`ReaderSession.patchKeyForwarding()` and `readerConsumesKey()` together when
-touching reader input or iframe injection.
+(Read Aloud on `l`/`r`, tools on `h`/`s`). `ReaderHostKeyBridge` owns
+installation/restoration of that private callback and the
+`_textAnnotationFocused` seam; `ReaderSession.readerConsumesKey()` remains the
+policy source. `ReaderViewLifecycle` owns primary/secondary PDF-window discovery,
+the rescan timer, view-local DOM listeners, and detached-view release. Do not move
+feature semantics into either lifecycle owner.
 
 ## Key Files
 
@@ -123,7 +126,9 @@ touching reader input or iframe injection.
 | `src/bootstrap.ts` | Gecko Bootstrap lifecycle entry point |
 | `src/addon.ts` | Runtime composition and preference registration |
 | `src/input/` | Canonical bindings and bilingual action metadata |
-| `src/reader/controller.ts` | Reader injection, input, forwarding patches, and cleanup |
+| `src/reader/controller.ts` | Reader session orchestration, input, actions, selection, and navigation |
+| `src/reader/host-key-bridge.ts` | Private PdfView key/focus patch lifecycle |
+| `src/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
 | `src/main/controller.ts` | Main-window key dispatch and lifecycle |
 | `src/preferences/index.ts` | Preferences behavior and localization |
 | `tools/build.mjs` | esbuild/XPI package pipeline |
