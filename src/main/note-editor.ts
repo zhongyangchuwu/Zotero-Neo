@@ -209,9 +209,7 @@ export class NoteEditor {
       const count = decision.action === 'openCommandPalette' ? 0 : decision.count;
       const local = this.executeAction(decision.action, el, main, session, count);
       const external =
-        local === null
-          ? execute(decision.action, count, el, active.mode, active.bindings)
-          : local;
+        local === null ? execute(decision.action, count, el, active.mode, active.bindings) : local;
       if (external !== false) {
         event.preventDefault();
         event.stopPropagation();
@@ -323,7 +321,7 @@ export class NoteEditor {
       w: ['move', 'forward'],
       b: ['move', 'backward'],
       '0': ['move', 'backward'],
-      '$': ['move', 'forward'],
+      $: ['move', 'forward'],
     };
     if (command in move) {
       for (let i = 0; i < count; i += 1)

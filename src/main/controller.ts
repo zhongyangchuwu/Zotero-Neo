@@ -210,12 +210,8 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.preferences.get('noteEditor.enabled', true) &&
       this.#noteEditor.isStandalone(window)
     ) {
-      this.#noteEditor.onKeyDown(
-        event,
-        window,
-        session,
-        (action, count, target, mode, bindings) =>
-          this.executeFromNote(action, count, target, mode, bindings, window, session),
+      this.#noteEditor.onKeyDown(event, window, session, (action, count, target, mode, bindings) =>
+        this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
       return;
     }
@@ -370,12 +366,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.clearKeyGuide(window, session);
       return;
     }
-    const entries = leaderGuideEntries(
-      bindings,
-      mode,
-      prefix,
-      this.keyGuideLanguage(),
-    );
+    const entries = leaderGuideEntries(bindings, mode, prefix, this.keyGuideLanguage());
     if (!entries.length) {
       this.clearKeyGuide(window, session);
       return;

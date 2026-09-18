@@ -1,9 +1,6 @@
 import type { ActionId } from '../input/actions';
 import { NOTE_ACTION_IDS, type NoteActionId } from '../input/note-actions';
-import {
-  MAIN_NORMAL_ACTIONS,
-  type MainNormalAction,
-} from './action-capabilities';
+import { MAIN_NORMAL_ACTIONS, type MainNormalAction } from './action-capabilities';
 
 export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
   'openCommandPalette',

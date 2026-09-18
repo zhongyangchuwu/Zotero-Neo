@@ -114,9 +114,10 @@ const MOTION_LABELS = {
 function labelFor(action: NoteActionId): LocalizedActionLabel {
   const simple = SIMPLE_LABELS[action];
   if (simple) return simple;
-  const match = /^note(Delete|Yank|Change)(Left|Down|Up|Right|WordForward|WordBackward|ToLineStart|ToLineEnd|InnerWord)$/.exec(
-    action,
-  );
+  const match =
+    /^note(Delete|Yank|Change)(Left|Down|Up|Right|WordForward|WordBackward|ToLineStart|ToLineEnd|InnerWord)$/.exec(
+      action,
+    );
   if (!match) return { en: action, 'zh-CN': action };
   const operation = OPERATION_LABELS[match[1] as keyof typeof OPERATION_LABELS];
   const motion = MOTION_LABELS[match[2] as keyof typeof MOTION_LABELS];
