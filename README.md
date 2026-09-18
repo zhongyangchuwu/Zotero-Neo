@@ -53,22 +53,23 @@ verification in the current stable host.
 
 ### Search, Picker, and commands
 
-- Shared fuzzy Picker for all-library items, current-collection items, notes,
-  tabs, and tags, backed by the pinned `fuzzysort` matcher.
-- Command Palette in Reader and Main contexts, with actions projected from the
-  active resolved binding map.
-- Browser/Gecko-owned text input and IME composition for Picker, Tag Workspace,
-  and Flash instead of reconstructing text from keydown events.
+- Shared fuzzy chooser for all-library items, current-collection items, notes,
+  tabs, and action-specific tag candidates, backed by the pinned `fuzzysort` matcher.
+- Command Palette in Reader, Main, and Note Normal contexts, with actions projected
+  from the active resolved binding map.
+- Browser/Gecko-owned text input and IME composition for chooser queries, tag
+  candidates, and Flash instead of reconstructing text from keydown events.
 
 ### Tags
 
-- `<Space>fT` opens a keyboard-first **tag filter** workflow using Zotero's native
-  item-view tag filter with AND semantics.
-- `<Space>ta` opens a persistent **Tag Workspace** for Main/Reader/Note targets:
-  bulk add/remove/create, explicit all/mixed/none state, and repeated mutations
-  without reopening the UI.
-- Optional virtual tag-path completion such as `method/...` while Zotero keeps
-  ordinary flat tag strings as the authoritative data model.
+- `<Space>ta` **adds** one chosen tag to the current Main/Reader/Note target set;
+  `<Space>tr` explicitly **removes** one chosen tag.
+- Main-only `<Space>tf` toggles one tag in Zotero's native AND-filter state;
+  `<Space>tc` clears all active tag filters without opening a chooser.
+- Tag actions reuse the shared target chooser instead of exposing a persistent
+  tag-operation console. Add Tag may offer an explicit create candidate.
+- Optional virtual tag-path refinement such as `method/...` is presentation-only;
+  Zotero keeps ordinary flat tag strings as the authoritative data model.
 
 ### Notes
 
@@ -107,8 +108,8 @@ From File…** and restart when prompted.
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
   semantic actions, and Zotero host boundaries.
-- [Item Select and Tag Workspace](docs/TAG_WORKSPACE.md) — bulk item selection,
-  item-tag editing, and virtual tag-path semantics.
+- [Item Select and Tags](docs/TAGS.md) — native-backed item selection, explicit
+  tag actions, filtering, and virtual tag-path semantics.
 - [Input methods](docs/INPUT_METHODS.md) — Unicode/IME ownership and composition
   boundaries.
 - [Development guide](docs/DEVELOPMENT.md) — build, CI, release, host seams, and
