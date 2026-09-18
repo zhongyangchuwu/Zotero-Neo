@@ -605,6 +605,7 @@ describe('NoteEditor shared binding input', () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const focusReader = vi.fn();
     const test = harness();
+    Reflect.set(test.main, 'Zotero_Tabs', { selectedID: 'reader-tab' });
     try {
       Reflect.set(globalThis, 'Zotero', { Reader: { getByTabID: () => null } });
       const missing = test.press('h', { ctrlKey: true });
