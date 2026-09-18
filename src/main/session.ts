@@ -109,7 +109,7 @@ export class MainWindowSession {
     this.cleanup.add(() => this.theme.dispose());
     const doc = window.document;
     this.status = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
-    this.status.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:99999;font:bold 12px/1.4 monospace;color:${THEME_VARS.onAccent};background:${THEME_VARS.surface};padding:2px 8px;border:1px solid ${THEME_VARS.border};border-radius:3px;pointer-events:none;display:none;user-select:none;box-shadow:0 4px 16px ${THEME_VARS.shadow}`;
+    this.status.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:99999;font:bold 12px/1.4 monospace;color:${THEME_VARS.text};background:${THEME_VARS.surface};padding:2px 8px;border:1px solid ${THEME_VARS.border};border-radius:3px;pointer-events:none;display:none;user-select:none;box-shadow:0 4px 16px ${THEME_VARS.shadow}`;
     (doc.body ?? doc.documentElement).append(this.status);
     this.theme.add(this.status);
     this.cleanup.add(() => {
