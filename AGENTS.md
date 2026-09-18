@@ -118,8 +118,10 @@ installation/restoration of that private callback and the
 policy source. `ReaderViewLifecycle` owns primary/secondary PDF-window discovery,
 the rescan timer, view-local DOM listeners, and detached-view release.
 `ReaderNavigation` owns history/zoom/page/search/split/focus host delegation and
-active Reader-view resolution. Input policy, selection state, annotation mutations,
-and smooth-scroll behavior remain outside these host/lifecycle owners.
+active Reader-view resolution. `ReaderSelectionRange` owns the temporary DOM Select
+anchor/preferred-X state, range motions, endpoint swaps, and Select view markers.
+Input policy, native popup geometry, annotation mutations, and smooth-scroll behavior
+remain in their existing owners.
 
 ## Key Files
 
@@ -132,6 +134,7 @@ and smooth-scroll behavior remain outside these host/lifecycle owners.
 | `src/reader/host-key-bridge.ts` | Private PdfView key/focus patch lifecycle |
 | `src/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
 | `src/reader/navigation.ts` | Reader history/zoom/page/search/split/focus host operations |
+| `src/reader/selection-range.ts` | Temporary DOM Select range state, motions, and view markers |
 | `src/main/controller.ts` | Main-window key dispatch and lifecycle |
 | `src/preferences/index.ts` | Preferences behavior and localization |
 | `tools/build.mjs` | esbuild/XPI package pipeline |
