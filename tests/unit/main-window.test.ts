@@ -709,8 +709,7 @@ describe('Main tab picker routing', () => {
       } as unknown as KeyboardEvent);
 
     press(' ');
-    press('f');
-    press('t');
+    press(',');
     await vi.waitFor(() =>
       expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
     );
@@ -1298,8 +1297,7 @@ describe('Reader owner picker routing', () => {
       } as unknown as KeyboardEvent);
 
     press(' ');
-    press('f');
-    press('t');
+    press(',');
     await Promise.resolve();
     expect(second.bodyChildren.length).toBeGreaterThan(secondBodyCount);
     expect(first.bodyChildren).toHaveLength(firstBodyCount);
