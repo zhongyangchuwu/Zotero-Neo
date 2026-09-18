@@ -104,6 +104,8 @@ host/view lifecycle seams are owned separately:
   in the session callbacks;
 - `view-lifecycle.ts` — primary/secondary PDF-view discovery, periodic rescan,
   view-local DOM listeners, active-view fallback, and detached-view release;
+- `navigation.ts` — Reader history, zoom, page/search delegation, split control,
+  directional focus, and active primary/secondary host-view resolution;
 - `flash.ts` — visible-text targeting and hint lifecycle;
 - `link-hints.ts` — PDF link targeting;
 - `marks.ts` / `marks-explorer.ts` — persisted marks and explorer behavior;
@@ -118,10 +120,11 @@ state and host contracts differ and are already independently testable.
 
 `reader/controller.ts` is still the largest orchestration boundary. Reader
 discovery/session ownership remains there, and `ReaderSession` still combines input
-routing, semantic dispatch, selection/range mutation, and navigation. PDF-view
-discovery/listener ownership and the two private key seams have been extracted into
-the owners above. The remaining pre-release cleanup under issue #29 should continue
-along coherent responsibilities with direct tests, not arbitrary file-size splitting.
+routing, semantic dispatch, selection/range mutation, annotation operations, and
+scroll behavior. PDF-view discovery/listener ownership, the private key seams, and
+navigation-oriented Zotero host operations have been extracted into the owners above.
+The remaining pre-release cleanup under issue #29 should continue along coherent
+responsibilities with direct tests, not arbitrary file-size splitting.
 
 ### 4. Zotero host adapters
 

@@ -116,8 +116,10 @@ The plugin patches Zotero's reader key-forwarding callback (`_onKeyDown` on
 installation/restoration of that private callback and the
 `_textAnnotationFocused` seam; `ReaderSession.readerConsumesKey()` remains the
 policy source. `ReaderViewLifecycle` owns primary/secondary PDF-window discovery,
-the rescan timer, view-local DOM listeners, and detached-view release. Do not move
-feature semantics into either lifecycle owner.
+the rescan timer, view-local DOM listeners, and detached-view release.
+`ReaderNavigation` owns history/zoom/page/search/split/focus host delegation and
+active Reader-view resolution. Input policy, selection state, annotation mutations,
+and smooth-scroll behavior remain outside these host/lifecycle owners.
 
 ## Key Files
 
@@ -126,9 +128,10 @@ feature semantics into either lifecycle owner.
 | `src/bootstrap.ts` | Gecko Bootstrap lifecycle entry point |
 | `src/addon.ts` | Runtime composition and preference registration |
 | `src/input/` | Canonical bindings and bilingual action metadata |
-| `src/reader/controller.ts` | Reader session orchestration, input, actions, selection, and navigation |
+| `src/reader/controller.ts` | Reader session orchestration, input, actions, selection, annotation, and scroll behavior |
 | `src/reader/host-key-bridge.ts` | Private PdfView key/focus patch lifecycle |
 | `src/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
+| `src/reader/navigation.ts` | Reader history/zoom/page/search/split/focus host operations |
 | `src/main/controller.ts` | Main-window key dispatch and lifecycle |
 | `src/preferences/index.ts` | Preferences behavior and localization |
 | `tools/build.mjs` | esbuild/XPI package pipeline |
