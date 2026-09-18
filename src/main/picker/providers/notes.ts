@@ -73,7 +73,8 @@ export function createNotesProvider(window: MainWindow, logger: Logger): PickerP
           const preview = text(window.document, note.getNote());
           const item: PickerItem = {
             id: note.id,
-            title: note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim() || 'Untitled note',
+            title:
+              note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim() || 'Untitled note',
             search: '',
             preview: preview || '(empty note)',
             meta: current.has(note.id)

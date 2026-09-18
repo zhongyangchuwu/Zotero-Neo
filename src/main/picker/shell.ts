@@ -10,7 +10,12 @@ import {
 import type { MainWindowSession } from '../session';
 import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
-import type { PickerOpenOptions, PickerPane, PickerProvider, PickerProviderCommands } from './types';
+import type {
+  PickerOpenOptions,
+  PickerPane,
+  PickerProvider,
+  PickerProviderCommands,
+} from './types';
 import { fuzzyMatchScore } from './fuzzy';
 import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';

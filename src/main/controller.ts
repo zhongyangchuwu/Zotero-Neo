@@ -185,7 +185,8 @@ export class MainWindowController implements MainWindowControllerApi {
       commandContext: ownerContext,
       closeBeforeConfirm: true,
       confirm: (item) => {
-        if (isActionId(item.id) && item.id !== 'openCommandPalette') ownerContext.execute(item.id, 0);
+        if (isActionId(item.id) && item.id !== 'openCommandPalette')
+          ownerContext.execute(item.id, 0);
       },
     });
   }

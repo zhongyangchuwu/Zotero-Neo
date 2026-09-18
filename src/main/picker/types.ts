@@ -8,10 +8,7 @@ export interface PickerPreview {
   readonly body: string;
 }
 
-export type PickerConfirm = (
-  item: PickerItem,
-  openInWindow: boolean,
-) => Promise<void> | void;
+export type PickerConfirm = (item: PickerItem, openInWindow: boolean) => Promise<void> | void;
 
 export interface PickerOpenOptions {
   readonly confirm?: PickerConfirm;
