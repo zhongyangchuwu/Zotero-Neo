@@ -133,7 +133,7 @@ describe('Plugin Manager host adapter', () => {
     expect(disable).not.toHaveBeenCalled();
   });
 
-  it('opens a registered top-level Zotero preference pane and no-ops otherwise', () => {
+  it('opens an unambiguous Zotero preference pane and no-ops otherwise', () => {
     installHost([]);
     const zotero = Reflect.get(globalThis, 'Zotero');
     const openPreferences = zotero.Utilities.Internal.openPreferences as ReturnType<typeof vi.fn>;
@@ -144,6 +144,11 @@ describe('Plugin Manager host adapter', () => {
     expect(openPluginPreferences('prefs@example.test')).toBe(true);
     expect(openPreferences).toHaveBeenCalledWith('prefs-pane');
     expect(openPluginPreferences('missing@example.test')).toBe(false);
+    Reflect.set(zotero.PreferencePanes, 'pluginPanes', [
+      { id: 'first-pane', pluginID: 'ambiguous@example.test' },
+      { id: 'second-pane', pluginID: 'ambiguous@example.test' },
+    ]);
+    expect(openPluginPreferences('ambiguous@example.test')).toBe(false);
     expect(openPreferences).toHaveBeenCalledTimes(1);
   });
 });
