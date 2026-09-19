@@ -30,6 +30,11 @@ GitHub Release are complete.
 
 ## Next
 
+- Track the batteries-included workflow/distribution direction and the first Plugin Quick Manager
+  slice in [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). The initial manager is
+  intentionally a thin keyboard-first front end over Zotero's native plugin lifecycle: installed
+  plugin discovery and target resolution belong to Neo, while lifecycle UI and XPI handling remain
+  Zotero-owned. Remote catalogs and arbitrary GitHub XPI installation are out of scope.
 - Continue tracking native Zotero Reader semantic-selection integration in
   [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
   DOM-selection compatibility path remains acceptable until Zotero exposes or
