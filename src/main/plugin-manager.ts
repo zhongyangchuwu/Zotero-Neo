@@ -27,7 +27,8 @@ export function filterInstalledPlugins(
   if (!needle) return [...plugins];
   return plugins
     .flatMap((plugin, index) => {
-      const search = `${plugin.name} ${plugin.id} ${plugin.version} ${plugin.description}`.toLowerCase();
+      const search =
+        `${plugin.name} ${plugin.id} ${plugin.version} ${plugin.description}`.toLowerCase();
       const score = fuzzyMatchScore(search, needle);
       return score === null ? [] : [{ plugin, index, score }];
     })
@@ -533,7 +534,10 @@ export class PluginManagerPanel {
     links.style.cssText = `margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 14px;color:${THEME_VARS.muted}`;
     const linkEntries: Array<[string, string | undefined]> = [
       ['Homepage', plugin.homepageURL],
-      ['Repository', plugin.repositoryURL === plugin.homepageURL ? undefined : plugin.repositoryURL],
+      [
+        'Repository',
+        plugin.repositoryURL === plugin.homepageURL ? undefined : plugin.repositoryURL,
+      ],
       ['README', plugin.readmeURL],
       ['Git log', plugin.gitLogURL],
     ];
