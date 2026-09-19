@@ -84,6 +84,9 @@ family. Controllers coordinate them; they should not mirror child feature state.
   collection-item, note, and tab sources own candidate data/presentation only; the
   invoking semantic action owns confirmation and the resulting host operation.
   Command Palette reuses the same surface to choose an `ActionId`.
+- `main/plugin-manager.ts` — persistent installed-plugin management surface. It owns
+  Plugin Manager panel/filter/navigation lifecycle while `plugin-host.ts` projects
+  authoritative Mozilla/Zotero AddonManager state.
 - `main/tag-actions.ts` — semantic Add Tag / Remove Tag / Toggle Tag Filter /
   Clear Tag Filters orchestration; it invokes the shared chooser only when a tag
   target must be resolved.
@@ -98,11 +101,15 @@ one confirmed target to the invoking semantic action. Sources must not grow
 private mutation grammars such as create/delete/yank/open variants.
 
 Product semantics remain explicit even when implementation is shared: ordinary
-object choosing, Command Palette action selection, Tag actions/filtering, and any
-future Manager/Workspace may reuse search/ranking/rendering primitives without
-becoming one universal Picker application. Tag candidate sources may constrain
-or describe candidates, but item mutation and Main-view filter changes remain in
-the invoking semantic action.
+object choosing, Command Palette action selection, Tag actions/filtering, and
+Manager/Workspace surfaces may reuse search/ranking/rendering primitives without
+becoming one universal Picker application. A Picker resolves one transient target
+for an invoking action and normally closes; a Manager owns a bounded domain context
+that can remain open across browsing and repeated operations. Plugin Manager is the
+first concrete Manager surface. Do not extract a generic Manager framework until a
+second real consumer demonstrates a stable shared contract. Tag candidate sources
+may constrain or describe candidates, but item mutation and Main-view filter changes
+remain in the invoking semantic action.
 
 #### Reader
 
