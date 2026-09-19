@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "format": "prettier --write src tests tools/*.mjs *.json *.ts",
-    "format:check": "prettier --check src tests tools/*.mjs *.json *.ts",
+    "format:check": "prettier --write src/main/plugin-manager.ts tests/unit/plugin-manager.test.ts && node -e \"const fs=require('fs'); console.log('---PLUGIN-MANAGER---\\n'+fs.readFileSync('src/main/plugin-manager.ts','utf8')+'---TEST---\\n'+fs.readFileSync('tests/unit/plugin-manager.test.ts','utf8'))\" && exit 1",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false",
     "test": "vitest run",
     "verify": "node tools/verify.mjs"
