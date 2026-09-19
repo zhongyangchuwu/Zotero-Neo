@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  filterInstalledPlugins,
-  type PluginManagerLogger,
-} from '../../src/main/plugin-manager';
+import { filterInstalledPlugins } from '../../src/main/plugin-manager';
 import type { InstalledPlugin } from '../../src/main/plugin-host';
 
 const plugins: readonly InstalledPlugin[] = [
@@ -49,4 +46,3 @@ describe('plugin manager filtering', () => {
   });
 });
 
-void ({} as PluginManagerLogger);
