@@ -598,6 +598,8 @@ export class FuzzyPicker {
         return createNotesProvider(window, this.#logger);
       case 'tags':
         throw new Error('Tag chooser requires an explicit candidate source');
+      case 'plugins':
+        return createPluginsProvider();
       case 'commands':
         if (!commandContext) throw new Error('Command palette context missing');
         return createCommandsProvider(commandContext);
@@ -628,8 +630,7 @@ export class FuzzyPicker {
     const stack =
       typeof record?.stack === 'string'
         ? record.stack
-            .split(/\s*
-\s*/)
+            .split(/\s*\n\s*/)
             .slice(1, 7)
             .join(' <- ')
         : '';
