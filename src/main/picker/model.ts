@@ -1,4 +1,4 @@
-export type PickerScope = 'all' | 'collection' | 'tabs' | 'notes' | 'tags' | 'plugins' | 'commands';
+export type PickerScope = 'all' | 'collection' | 'tabs' | 'notes' | 'tags' | 'commands';
 
 export interface PickerItem {
   id: string | number;
