@@ -11,7 +11,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: true,
     canEnable: true,
     canDisable: true,
-    description: '',
+    description: 'Citation key management and BibTeX export',
   },
   {
     id: 'zotero-actions-tags@windingwind.com',
@@ -47,6 +47,9 @@ describe('plugin manager filtering', () => {
     ]);
     expect(filterInstalledPlugins(plugins, '3.0.0').map((plugin) => plugin.id)).toEqual([
       'translate-for-zotero@example.org',
+    ]);
+    expect(filterInstalledPlugins(plugins, 'citation key').map((plugin) => plugin.id)).toEqual([
+      'better-bibtex@iris-advies.com',
     ]);
   });
 
