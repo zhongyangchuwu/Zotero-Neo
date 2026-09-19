@@ -69,8 +69,7 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
       enabled: addon.isActive !== false,
       canEnable: canUsePermission(addon, manager.PERM_CAN_ENABLE),
       canDisable:
-        addon.id !== ZOTERO_NEO_PLUGIN_ID &&
-        canUsePermission(addon, manager.PERM_CAN_DISABLE),
+        addon.id !== ZOTERO_NEO_PLUGIN_ID && canUsePermission(addon, manager.PERM_CAN_DISABLE),
       preferencePaneID: preferencePaneForPlugin(addon.id)?.id,
     }))
     .sort((left, right) => left.name.localeCompare(right.name, Zotero.locale));
