@@ -15,7 +15,8 @@ import { fuzzyMatchScore } from './fuzzy';
 import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';
 import { createTabsProvider } from './providers/tabs';
-import { createCommandsProvider } from './providers/commands';\nimport { createPluginsProvider } from './providers/plugins';
+import { createCommandsProvider } from './providers/commands';
+import { createPluginsProvider } from './providers/plugins';
 
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
@@ -627,7 +628,8 @@ export class FuzzyPicker {
     const stack =
       typeof record?.stack === 'string'
         ? record.stack
-            .split(/\s*\n\s*/)
+            .split(/\s*
+\s*/)
             .slice(1, 7)
             .join(' <- ')
         : '';
