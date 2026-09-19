@@ -20,9 +20,9 @@ type AddonManagerLike = {
 };
 
 function addonManager(): AddonManagerLike {
-  const module = ChromeUtils.importESModule(
-    'resource://gre/modules/AddonManager.sys.mjs',
-  ) as { AddonManager?: AddonManagerLike };
+  const module = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs') as {
+    AddonManager?: AddonManagerLike;
+  };
   if (!module.AddonManager) throw new Error('Zotero AddonManager is unavailable');
   return module.AddonManager;
 }
@@ -51,10 +51,7 @@ export function openNativePluginManager(window: MainWindow): void {
     };
   };
   const zotero = Zotero as unknown as {
-    openInViewer?: (
-      uri: string,
-      options?: { onLoad?: (viewerWindow: Window) => void },
-    ) => void;
+    openInViewer?: (uri: string, options?: { onLoad?: (viewerWindow: Window) => void }) => void;
   };
   if (!zotero.openInViewer) throw new Error('Zotero plugin manager is unavailable');
   zotero.openInViewer('chrome://mozapps/content/extensions/aboutaddons.html', {
