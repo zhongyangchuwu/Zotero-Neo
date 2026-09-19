@@ -4,6 +4,7 @@ import { THEME_VARS } from '../ui/theme';
 import { fuzzyMatchScore } from './picker/fuzzy';
 import {
   installedPlugins,
+  openPluginInfoURL,
   openPluginPreferences,
   setPluginEnabled,
   ZOTERO_NEO_PLUGIN_ID,
@@ -26,7 +27,7 @@ export function filterInstalledPlugins(
   if (!needle) return [...plugins];
   return plugins
     .flatMap((plugin, index) => {
-      const search = `${plugin.name} ${plugin.id} ${plugin.version}`.toLowerCase();
+      const search = `${plugin.name} ${plugin.id} ${plugin.version} ${plugin.description}`.toLowerCase();
       const score = fuzzyMatchScore(search, needle);
       return score === null ? [] : [{ plugin, index, score }];
     })
@@ -218,6 +219,21 @@ export class PluginManagerPanel {
       this.openPreferences(session);
       return;
     }
+    if (key === 'o') {
+      consume();
+      this.openInfo(session, 'homepage');
+      return;
+    }
+    if (key === 'R') {
+      consume();
+      this.openInfo(session, 'readme');
+      return;
+    }
+    if (key === 'L') {
+      consume();
+      this.openInfo(session, 'git-log');
+      return;
+    }
     if (key === 'G' || key === 'end') {
       consume();
       this.select(session, Math.max(0, state.filtered.length - 1));
@@ -360,6 +376,35 @@ export class PluginManagerPanel {
     this.renderFooter(session);
   }
 
+  private openInfo(
+    session: MainWindowSession,
+    kind: 'homepage' | 'readme' | 'git-log',
+  ): void {
+    const state = session.pluginManager;
+    const plugin = state.filtered[state.selected];
+    if (!plugin || state.busy) return;
+
+    const target =
+      kind === 'homepage'
+        ? plugin.homepageURL
+        : kind === 'readme'
+          ? plugin.readmeURL
+          : plugin.gitLogURL;
+    const label = kind === 'git-log' ? 'git log' : kind;
+    if (!target) {
+      state.notice = `${plugin.name} has no ${label} link`;
+      this.renderFooter(session);
+      return;
+    }
+    if (!openPluginInfoURL(target)) {
+      state.notice = `Unable to open ${label} for ${plugin.name}`;
+      this.renderFooter(session);
+      return;
+    }
+    state.notice = `Opened ${label} for ${plugin.name}`;
+    this.renderFooter(session);
+  }
+
   private filter(session: MainWindowSession): void {
     const state = session.pluginManager;
     state.filtered = filterInstalledPlugins(state.plugins, state.query);
@@ -480,18 +525,46 @@ export class PluginManagerPanel {
     add('Plugin ID', plugin.id);
     add('Settings', plugin.preferencePaneID ? 'Available' : 'Not registered');
 
+    const description = doc.createElementNS(H, 'div');
+    description.style.cssText = `margin-top:18px;padding-top:16px;border-top:1px solid ${THEME_VARS.border};color:${plugin.description ? THEME_VARS.text : THEME_VARS.muted};white-space:pre-wrap;overflow-wrap:anywhere`;
+    description.textContent = plugin.description || 'No description provided by the plugin.';
+
+    const links = doc.createElementNS(H, 'div');
+    links.style.cssText = `margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 14px;color:${THEME_VARS.muted}`;
+    const linkEntries: Array<[string, string | undefined]> = [
+      ['Homepage', plugin.homepageURL],
+      ['Repository', plugin.repositoryURL],
+      ['README', plugin.readmeURL],
+      ['Git log', plugin.gitLogURL],
+    ];
+    for (const [labelText, url] of linkEntries) {
+      if (!url) continue;
+      const link = doc.createElementNS(H, 'button') as HTMLButtonElement;
+      link.type = 'button';
+      link.textContent = labelText;
+      link.title = url;
+      link.style.cssText = `padding:0;border:0;background:none;color:${THEME_VARS.accent};font:inherit;text-decoration:underline;cursor:pointer`;
+      link.addEventListener('click', () => openPluginInfoURL(url));
+      links.append(link);
+    }
+
     const actions = doc.createElementNS(H, 'div');
     actions.style.cssText = `margin-top:24px;padding-top:16px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted}`;
     const hints = [
       !plugin.enabled && plugin.canEnable ? 'e  Enable' : null,
       plugin.enabled && plugin.canDisable ? 'd  Disable' : null,
       plugin.preferencePaneID ? 'p  Settings' : null,
+      plugin.homepageURL ? 'o  Homepage' : null,
+      plugin.readmeURL ? 'R  README' : null,
+      plugin.gitLogURL ? 'L  Git log' : null,
     ].filter((hint): hint is string => !!hint);
     actions.textContent = hints.length
       ? `Actions\n${hints.join('  ·  ')}`
       : 'No lifecycle actions available';
 
-    details.append(title, status, meta, actions);
+    details.append(title, status, meta, description);
+    if (links.childElementCount) details.append(links);
+    details.append(actions);
   }
 
   private renderFooter(session: MainWindowSession, message?: string): void {
@@ -507,6 +580,9 @@ export class PluginManagerPanel {
           !plugin.enabled && plugin.canEnable ? 'e enable' : null,
           plugin.enabled && plugin.canDisable ? 'd disable' : null,
           plugin.preferencePaneID ? 'p settings' : null,
+          plugin.homepageURL ? 'o homepage' : null,
+          plugin.readmeURL ? 'R README' : null,
+          plugin.gitLogURL ? 'L git-log' : null,
         ].filter((hint): hint is string => !!hint)
       : [];
     const notice = state.notice ? ` · ${state.notice}` : '';
