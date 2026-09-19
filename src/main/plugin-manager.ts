@@ -487,7 +487,9 @@ export class PluginManagerPanel {
       plugin.enabled && plugin.canDisable ? 'd  Disable' : null,
       plugin.preferencePaneID ? 'p  Settings' : null,
     ].filter((hint): hint is string => !!hint);
-    actions.textContent = hints.length ? `Actions\n${hints.join('  ·  ')}` : 'No lifecycle actions available';
+    actions.textContent = hints.length
+      ? `Actions\n${hints.join('  ·  ')}`
+      : 'No lifecycle actions available';
 
     details.append(title, status, meta, actions);
   }
