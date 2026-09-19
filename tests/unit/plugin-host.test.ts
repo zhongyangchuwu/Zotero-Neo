@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  githubRepositoryURL,
   installedPlugins,
+  openPluginInfoURL,
   openPluginPreferences,
   setPluginEnabled,
   ZOTERO_NEO_PLUGIN_ID,
@@ -53,6 +55,8 @@ describe('Plugin Manager host adapter', () => {
       type: 'extension',
       isActive: true,
       permissions: 6,
+      description: 'Keyboard-first example plugin',
+      homepageURL: 'https://github.com/example/example-plugin/releases',
       enable,
       disable,
     };
@@ -70,9 +74,28 @@ describe('Plugin Manager host adapter', () => {
         enabled: true,
         canEnable: true,
         canDisable: true,
+        description: 'Keyboard-first example plugin',
+        homepageURL: 'https://github.com/example/example-plugin/releases',
+        repositoryURL: 'https://github.com/example/example-plugin',
+        readmeURL: 'https://github.com/example/example-plugin#readme',
+        gitLogURL: 'https://github.com/example/example-plugin/commits',
         preferencePaneID: 'example-root',
       },
     ]);
+  });
+
+  it('derives GitHub repository documentation links conservatively', () => {
+    expect(githubRepositoryURL('https://github.com/windingwind/zotero-actions-tags')).toBe(
+      'https://github.com/windingwind/zotero-actions-tags',
+    );
+    expect(githubRepositoryURL('https://github.com/windingwind/zotero-actions-tags/releases')).toBe(
+      'https://github.com/windingwind/zotero-actions-tags',
+    );
+    expect(githubRepositoryURL('https://github.com/windingwind/zotero-actions-tags.git')).toBe(
+      'https://github.com/windingwind/zotero-actions-tags',
+    );
+    expect(githubRepositoryURL('https://example.com/project')).toBeUndefined();
+    expect(githubRepositoryURL('javascript:alert(1)')).toBeUndefined();
   });
 
   it('protects Zotero Neo from self-disable while preserving host permissions', async () => {
@@ -131,6 +154,18 @@ describe('Plugin Manager host adapter', () => {
     await expect(setPluginEnabled(plugin.id, false)).rejects.toThrow('cannot be disabled');
     expect(enable).not.toHaveBeenCalled();
     expect(disable).not.toHaveBeenCalled();
+  });
+
+  it('opens safe plugin information URLs through Zotero', () => {
+    installHost([]);
+    const zotero = Reflect.get(globalThis, 'Zotero');
+    const launchURL = vi.fn();
+    Reflect.set(zotero, 'launchURL', launchURL);
+
+    expect(openPluginInfoURL('https://github.com/example/project#readme')).toBe(true);
+    expect(launchURL).toHaveBeenCalledWith('https://github.com/example/project#readme');
+    expect(openPluginInfoURL('javascript:alert(1)')).toBe(false);
+    expect(launchURL).toHaveBeenCalledTimes(1);
   });
 
   it('opens an unambiguous Zotero preference pane and no-ops otherwise', () => {
