@@ -50,7 +50,9 @@ function preferencePaneForPlugin(pluginID: string): PreferencePaneLike | undefin
   )?.pluginPanes;
   if (!panes?.length) return undefined;
   const matches = panes.filter((pane) => pane.pluginID === pluginID);
-  return matches.find((pane) => !pane.parent) ?? matches[0];
+  if (matches.length === 1) return matches[0];
+  const topLevel = matches.filter((pane) => !pane.parent);
+  return topLevel.length === 1 ? topLevel[0] : undefined;
 }
 
 function canUsePermission(addon: AddonLike, permission: number): boolean {
