@@ -163,8 +163,8 @@ export function openPluginPreferences(pluginID: string): boolean {
 export function openPluginInfoURL(url: string | undefined): boolean {
   const safe = safeHTTPURL(url);
   if (!safe) return false;
-  const launchURL = (Zotero as unknown as { launchURL?: (url: string) => unknown }).launchURL;
-  if (!launchURL) return false;
-  launchURL(safe);
+  const zotero = Zotero as unknown as { launchURL?: (url: string) => unknown };
+  if (!zotero.launchURL) return false;
+  zotero.launchURL(safe);
   return true;
 }
