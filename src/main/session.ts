@@ -7,6 +7,7 @@ import { KeyGuide } from '../ui/key-guide';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
+import type { InstalledPlugin } from './plugin-host';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -82,6 +83,47 @@ export class MainWindowSession {
     previousWindow: null,
     themeCleanup: null,
   };
+  pluginManager: {
+    open: boolean;
+    generation: number;
+    loading: boolean;
+    error: string;
+    plugins: InstalledPlugin[];
+    filtered: InstalledPlugin[];
+    selected: number;
+    query: string;
+    commandBuffer: string;
+    commandTimer: BrowserTimer | undefined;
+    overlay: HTMLElement | null;
+    list: HTMLElement | null;
+    details: HTMLElement | null;
+    count: HTMLElement | null;
+    input: HTMLInputElement | null;
+    footer: HTMLElement | null;
+    previousElement: Element | null;
+    inputCleanup: (() => void) | null;
+    themeCleanup: (() => void) | null;
+  } = {
+    open: false,
+    generation: 0,
+    loading: false,
+    error: '',
+    plugins: [],
+    filtered: [],
+    selected: 0,
+    query: '',
+    commandBuffer: '',
+    commandTimer: undefined,
+    overlay: null,
+    list: null,
+    details: null,
+    count: null,
+    input: null,
+    footer: null,
+    previousElement: null,
+    inputCleanup: null,
+    themeCleanup: null,
+  };
   note: {
     editorWindow: Window | null;
     editorDocument: Document | null;
@@ -120,6 +162,10 @@ export class MainWindowSession {
     this.cleanup.add(() => {
       this.window.clearTimeout(this.keyGuideTimer);
       this.keyGuide.hide();
+    });
+    this.cleanup.add(() => {
+      this.window.clearTimeout(this.pluginManager.commandTimer);
+      this.pluginManager.commandTimer = undefined;
     });
     this.cleanup.add(() => this.status.remove());
   }
