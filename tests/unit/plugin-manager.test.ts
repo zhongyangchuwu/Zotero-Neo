@@ -11,6 +11,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: true,
     canEnable: true,
     canDisable: true,
+    description: '',
   },
   {
     id: 'zotero-actions-tags@windingwind.com',
@@ -19,6 +20,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: false,
     canEnable: true,
     canDisable: true,
+    description: '',
   },
   {
     id: 'translate-for-zotero@example.org',
@@ -27,6 +29,7 @@ const plugins: readonly InstalledPlugin[] = [
     enabled: true,
     canEnable: true,
     canDisable: true,
+    description: '',
   },
 ];
 
