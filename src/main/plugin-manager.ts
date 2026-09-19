@@ -6,6 +6,7 @@ import {
   installedPlugins,
   openPluginPreferences,
   setPluginEnabled,
+  ZOTERO_NEO_PLUGIN_ID,
   type InstalledPlugin,
 } from './plugin-host';
 import type { MainWindowSession } from './session';
@@ -316,7 +317,7 @@ export class PluginManagerPanel {
     }
     if (!enabled && !plugin.canDisable) {
       state.notice =
-        plugin.id === 'zotero-neo@zotero-neo'
+        plugin.id === ZOTERO_NEO_PLUGIN_ID
           ? 'Zotero Neo cannot disable itself from inside Plugin Manager'
           : `${plugin.name} cannot be disabled by the user`;
       this.renderFooter(session);
