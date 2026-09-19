@@ -87,7 +87,9 @@ export class MainWindowSession {
     open: boolean;
     generation: number;
     loading: boolean;
+    busy: boolean;
     error: string;
+    notice: string;
     plugins: InstalledPlugin[];
     filtered: InstalledPlugin[];
     selected: number;
@@ -107,7 +109,9 @@ export class MainWindowSession {
     open: false,
     generation: 0,
     loading: false,
+    busy: false,
     error: '',
+    notice: '',
     plugins: [],
     filtered: [],
     selected: 0,
