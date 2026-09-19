@@ -1,5 +1,3 @@
-import type { MainWindow } from '../core/contracts';
-
 export interface InstalledPlugin {
   readonly id: string;
   readonly name: string;
@@ -38,23 +36,4 @@ export async function installedPlugins(): Promise<InstalledPlugin[]> {
       enabled: addon.isActive !== false,
     }))
     .sort((left, right) => left.name.localeCompare(right.name, Zotero.locale));
-}
-
-/**
- * Opens Zotero's own plugin manager. Neo deliberately does not own plugin
- * lifecycle UI or XPI installation; the native surface remains authoritative.
- */
-export function openNativePluginManager(window: MainWindow): void {
-  const host = window as MainWindow & {
-    readonly ZoteroStandalone?: {
-      updateAddonsPane?: (viewerWindow: Window) => void;
-    };
-  };
-  const zotero = Zotero as unknown as {
-    openInViewer?: (uri: string, options?: { onLoad?: (viewerWindow: Window) => void }) => void;
-  };
-  if (!zotero.openInViewer) throw new Error('Zotero plugin manager is unavailable');
-  zotero.openInViewer('chrome://mozapps/content/extensions/aboutaddons.html', {
-    onLoad: host.ZoteroStandalone?.updateAddonsPane,
-  });
 }
