@@ -377,10 +377,7 @@ export class PluginManagerPanel {
     this.renderFooter(session);
   }
 
-  private openInfo(
-    session: MainWindowSession,
-    kind: 'homepage' | 'readme' | 'git-log',
-  ): void {
+  private openInfo(session: MainWindowSession, kind: 'homepage' | 'readme' | 'git-log'): void {
     const state = session.pluginManager;
     const plugin = state.filtered[state.selected];
     if (!plugin || state.busy) return;
