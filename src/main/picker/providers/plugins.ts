@@ -9,18 +9,20 @@ export function createPluginsProvider(): PickerProvider {
     loadingText: 'Loading installed plugins…',
     async load() {
       const plugins = await installedPlugins();
-      return plugins.map((plugin): PickerItem => ({
-        id: plugin.id,
-        title: plugin.name,
-        search: `${plugin.name} ${plugin.id} ${plugin.version}`.toLowerCase(),
-        kind: 'Plugin',
-        meta: plugin.enabled ? 'Enabled' : 'Disabled',
-        preview: [
-          `Version: ${plugin.version || 'Unknown'}`,
-          `Status: ${plugin.enabled ? 'Enabled' : 'Disabled'}`,
-          `ID: ${plugin.id}`,
-        ].join('\n'),
-      }));
+      return plugins.map(
+        (plugin): PickerItem => ({
+          id: plugin.id,
+          title: plugin.name,
+          search: `${plugin.name} ${plugin.id} ${plugin.version}`.toLowerCase(),
+          kind: 'Plugin',
+          meta: plugin.enabled ? 'Enabled' : 'Disabled',
+          preview: [
+            `Version: ${plugin.version || 'Unknown'}`,
+            `Status: ${plugin.enabled ? 'Enabled' : 'Disabled'}`,
+            `ID: ${plugin.id}`,
+          ].join('\n'),
+        }),
+      );
     },
     rowText: (item) => `${item.title}${item.meta ? ` · ${item.meta}` : ''}`,
     preview: (item): PickerPreview => ({
