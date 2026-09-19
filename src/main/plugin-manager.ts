@@ -2,7 +2,12 @@ import type { MainWindow } from '../core/contracts';
 import { keyString } from '../input/keys';
 import { THEME_VARS } from '../ui/theme';
 import { fuzzyMatchScore } from './picker/fuzzy';
-import { installedPlugins, type InstalledPlugin } from './plugin-host';
+import {
+  installedPlugins,
+  openPluginPreferences,
+  setPluginEnabled,
+  type InstalledPlugin,
+} from './plugin-host';
 import type { MainWindowSession } from './session';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -90,7 +95,9 @@ export class PluginManagerPanel {
 
     state.open = true;
     state.loading = true;
+    state.busy = false;
     state.error = '';
+    state.notice = '';
     state.query = '';
     state.selected = 0;
     state.commandBuffer = '';
@@ -134,10 +141,12 @@ export class PluginManagerPanel {
     state.overlay?.remove();
     state.open = false;
     state.loading = false;
+    state.busy = false;
     state.plugins = [];
     state.filtered = [];
     state.selected = 0;
     state.query = '';
+    state.notice = '';
     state.commandBuffer = '';
     state.overlay = null;
     state.list = null;
@@ -193,6 +202,21 @@ export class PluginManagerPanel {
       void this.refresh(window, session);
       return;
     }
+    if (key === 'e') {
+      consume();
+      void this.setEnabled(window, session, true);
+      return;
+    }
+    if (key === 'd') {
+      consume();
+      void this.setEnabled(window, session, false);
+      return;
+    }
+    if (key === 'p') {
+      consume();
+      this.openPreferences(session);
+      return;
+    }
     if (key === 'G' || key === 'end') {
       consume();
       this.select(session, Math.max(0, state.filtered.length - 1));
@@ -241,6 +265,7 @@ export class PluginManagerPanel {
     const state = session.pluginManager;
     if (!state.open) return;
     const generation = ++state.generation;
+    const selectedID = state.filtered[state.selected]?.id;
     state.loading = true;
     state.error = '';
     this.render(session);
@@ -249,7 +274,13 @@ export class PluginManagerPanel {
       if (!state.open || state.generation !== generation) return;
       state.plugins = plugins;
       this.filter(session);
-      state.selected = Math.min(state.selected, Math.max(0, state.filtered.length - 1));
+      const selectedIndex = selectedID
+        ? state.filtered.findIndex((plugin) => plugin.id === selectedID)
+        : -1;
+      state.selected =
+        selectedIndex >= 0
+          ? selectedIndex
+          : Math.min(state.selected, Math.max(0, state.filtered.length - 1));
     } catch (error) {
       if (!state.open || state.generation !== generation) return;
       state.error = String(error);
@@ -262,6 +293,70 @@ export class PluginManagerPanel {
       state.overlay?.focus();
       void window;
     }
+  }
+
+  private async setEnabled(
+    window: MainWindow,
+    session: MainWindowSession,
+    enabled: boolean,
+  ): Promise<void> {
+    const state = session.pluginManager;
+    const plugin = state.filtered[state.selected];
+    if (!plugin || state.busy) return;
+
+    if (plugin.enabled === enabled) {
+      state.notice = `${plugin.name} is already ${enabled ? 'enabled' : 'disabled'}`;
+      this.renderFooter(session);
+      return;
+    }
+    if (enabled && !plugin.canEnable) {
+      state.notice = `${plugin.name} cannot be enabled by the user`;
+      this.renderFooter(session);
+      return;
+    }
+    if (!enabled && !plugin.canDisable) {
+      state.notice =
+        plugin.id === 'zotero-neo@zotero-neo'
+          ? 'Zotero Neo cannot disable itself from inside Plugin Manager'
+          : `${plugin.name} cannot be disabled by the user`;
+      this.renderFooter(session);
+      return;
+    }
+
+    state.busy = true;
+    state.notice = `${enabled ? 'Enabling' : 'Disabling'} ${plugin.name}…`;
+    this.render(session);
+    try {
+      await setPluginEnabled(plugin.id, enabled);
+      state.notice = `${enabled ? 'Enabled' : 'Disabled'} ${plugin.name}`;
+      await this.refresh(window, session);
+    } catch (error) {
+      state.notice = `Failed to ${enabled ? 'enable' : 'disable'} ${plugin.name}: ${String(error)}`;
+      this.#logger.debug(`plugin manager lifecycle action failed: ${String(error)}`);
+      this.#logger.diagnostic(`plugin manager lifecycle action failed: ${String(error)}`);
+    } finally {
+      if (!state.open) return;
+      state.busy = false;
+      this.render(session);
+    }
+  }
+
+  private openPreferences(session: MainWindowSession): void {
+    const state = session.pluginManager;
+    const plugin = state.filtered[state.selected];
+    if (!plugin || state.busy) return;
+    if (!plugin.preferencePaneID) {
+      state.notice = `${plugin.name} has no registered Zotero settings pane`;
+      this.renderFooter(session);
+      return;
+    }
+    if (!openPluginPreferences(plugin.id)) {
+      state.notice = `Unable to open settings for ${plugin.name}`;
+      this.renderFooter(session);
+      return;
+    }
+    state.notice = `Opened settings for ${plugin.name}`;
+    this.renderFooter(session);
   }
 
   private filter(session: MainWindowSession): void {
@@ -370,7 +465,7 @@ export class PluginManagerPanel {
     status.textContent = plugin.enabled ? 'Enabled' : 'Disabled';
     status.style.cssText = `display:inline-block;margin-bottom:18px;padding:3px 8px;border-radius:999px;color:${plugin.enabled ? THEME_VARS.success : THEME_VARS.muted};border:1px solid ${plugin.enabled ? THEME_VARS.success : THEME_VARS.border}`;
     const meta = doc.createElementNS(H, 'div');
-    meta.style.cssText = 'display:grid;grid-template-columns:80px 1fr;gap:8px 14px';
+    meta.style.cssText = 'display:grid;grid-template-columns:90px 1fr;gap:8px 14px';
     const add = (labelText: string, value: string): void => {
       const label = doc.createElementNS(H, 'span');
       label.textContent = labelText;
@@ -382,14 +477,37 @@ export class PluginManagerPanel {
     };
     add('Version', plugin.version || 'Unknown');
     add('Plugin ID', plugin.id);
-    details.append(title, status, meta);
+    add('Settings', plugin.preferencePaneID ? 'Available' : 'Not registered');
+
+    const actions = doc.createElementNS(H, 'div');
+    actions.style.cssText = `margin-top:24px;padding-top:16px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted}`;
+    const hints = [
+      !plugin.enabled && plugin.canEnable ? 'e  Enable' : null,
+      plugin.enabled && plugin.canDisable ? 'd  Disable' : null,
+      plugin.preferencePaneID ? 'p  Settings' : null,
+    ].filter((hint): hint is string => !!hint);
+    actions.textContent = hints.length ? `Actions\n${hints.join('  ·  ')}` : 'No lifecycle actions available';
+
+    details.append(title, status, meta, actions);
   }
 
   private renderFooter(session: MainWindowSession, message?: string): void {
     const state = session.pluginManager;
     if (!state.footer) return;
-    state.footer.textContent =
-      message ??
-      `j/k move · Ctrl+d/u fast · gg/G top/bottom · / filter · r refresh · Esc/q close${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}`;
+    if (message) {
+      state.footer.textContent = message;
+      return;
+    }
+    const plugin = state.filtered[state.selected];
+    const actions = plugin
+      ? [
+          !plugin.enabled && plugin.canEnable ? 'e enable' : null,
+          plugin.enabled && plugin.canDisable ? 'd disable' : null,
+          plugin.preferencePaneID ? 'p settings' : null,
+        ].filter((hint): hint is string => !!hint)
+      : [];
+    const notice = state.notice ? ` · ${state.notice}` : '';
+    const busy = state.busy ? ' · working…' : '';
+    state.footer.textContent = `j/k move · gg/G top/bottom · / filter · r refresh${actions.length ? ` · ${actions.join(' · ')}` : ''} · Esc/q close${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}${busy}${notice}`;
   }
 }
