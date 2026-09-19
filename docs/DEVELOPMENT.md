@@ -24,6 +24,64 @@ Both builders run the same `npm run verify` workflow: Prettier, strict
 TypeScript checks, Vitest contracts, the esbuild package build, and the XPI
 member check. Run `npm ci` before either builder.
 
+### Local GUI iteration from WSL
+
+Ordinary GUI work should not depend on a GitHub Actions artifact. Zotero can
+load an unpacked development add-on through an extension proxy, while Neo's
+existing build already produces a complete unpacked tree at `build/addon/`.
+
+Use a dedicated Zotero development profile and development library. Close
+Zotero, then run the one-time setup from WSL:
+
+```bash
+npm run dev:setup -- --profile /mnt/c/Users/YOU/AppData/Roaming/Zotero/Zotero/Profiles/DEV.default
+```
+
+The setup command:
+
+- builds Neo without changing the release/XPI pipeline;
+- mirrors `build/addon/` to `zotero-neo-dev/` inside the selected profile so
+  Windows Zotero has a native filesystem path;
+- creates `extensions/zotero-neo@zotero-neo` containing that Windows path;
+- removes only `extensions.lastAppBuildId` and `extensions.lastAppVersion`
+  from `prefs.js`, keeping a one-time `prefs.js.zotero-neo-dev.bak` backup;
+- remembers the selected profile in the ignored local file
+  `.zotero-neo-dev.json`.
+
+After that, the normal code-to-GUI loop is:
+
+```bash
+npm run dev
+```
+
+This rebuilds Neo and atomically refreshes the unpacked mirror. Restart or
+reload Zotero manually before GUI acceptance. The development helper never
+launches Zotero, PowerShell, `cmd.exe`, or another Windows executable.
+
+Inspect the configured profile/proxy without modifying it:
+
+```bash
+npm run dev:status
+```
+
+The startup diagnostic remains
+`<profile>/zotero-neo-startup.log`; it is useful for confirming lifecycle and
+reader injection after a manual restart.
+
+Keep three test modes distinct:
+
+1. **Fast GUI iteration:** `npm run dev`, unpacked proxy build, dedicated dev
+   profile, manual Zotero restart/reload.
+2. **Clean-install test:** use a fresh/reset development profile or explicitly
+   clear Neo preferences before validating defaults or preference migrations.
+3. **Packaged acceptance:** install the CI/release XPI when packaging,
+   install/update lifecycle, or release behavior changes.
+
+Uninstalling Neo does not intentionally clear `extensions.zotero-neo.*`
+preferences, and item mutations such as tags or persisted marks remain Zotero
+data. Reinstalling the same XPI is therefore not a clean-install or upgrade
+test.
+
 GitHub Actions runs the Linux and Windows builders on pushes and pull requests,
 then uploads separate XPI artifacts. A version tag runs a guarded release job:
 `tools/check-release.mjs` requires the tag, manifest version, compatibility

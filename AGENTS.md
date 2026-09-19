@@ -35,10 +35,12 @@ the esbuild package build, and the XPI member check. GitHub Actions runs this
 workflow through both native wrappers.
 
 Zotero GUI behavior still requires manual verification:
-1. Build (`npm ci && ./tools/build.sh`)
-2. Re-install the `.xpi` in Zotero
-3. Restart Zotero
-4. Exercise the changed reader, main-window, or preference surface
+1. For ordinary local iteration, use the one-time extension-proxy setup in
+   `docs/DEVELOPMENT.md`, then run `npm run dev`.
+2. Restart/reload the dedicated Zotero development profile manually.
+3. Exercise the changed reader, main-window, or preference surface.
+4. Use packaged XPI install/update testing separately when packaging or
+   lifecycle behavior changes.
 
 ## Code Style
 
