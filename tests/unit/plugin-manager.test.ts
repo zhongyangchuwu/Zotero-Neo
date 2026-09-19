@@ -45,4 +45,3 @@ describe('plugin manager filtering', () => {
     expect(filterInstalledPlugins(plugins, 'nonexistent plugin')).toEqual([]);
   });
 });
-
