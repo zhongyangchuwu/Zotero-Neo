@@ -22,8 +22,7 @@ export function createPluginsProvider(): PickerProvider {
         ].join('\n'),
       }));
     },
-    rowText: (item) =>
-      `${item.title}${item.meta ? ` · ${item.meta}` : ''}`,
+    rowText: (item) => `${item.title}${item.meta ? ` · ${item.meta}` : ''}`,
     preview: (item): PickerPreview => ({
       title: item.title,
       body: item.preview || String(item.id),
