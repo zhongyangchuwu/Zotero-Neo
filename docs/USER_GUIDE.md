@@ -136,9 +136,18 @@ source for plugin lifecycle state.
 - `r`: reload installed plugin state from AddonManager.
 - `Escape` / `q`: close the panel and restore the previous focus when possible.
 
-The first panel slice is intentionally read-only: it shows plugin name, version, ID, and
-enabled/disabled state. Enable/disable, update, preferences, local-XPI install, and uninstall
-remain follow-up lifecycle actions rather than picker commands.
+The panel shows plugin name, version, ID, enabled/disabled state, and the lifecycle actions
+that Zotero currently allows for the selected plugin.
+
+- `e`: enable the selected plugin when AddonManager exposes the enable permission.
+- `d`: disable the selected plugin when AddonManager exposes the disable permission.
+- `p`: open the selected plugin's Zotero settings pane when that plugin has registered one
+  through `Zotero.PreferencePanes`.
+- Zotero Neo deliberately cannot disable itself from inside its own manager; use Zotero's native
+  Plugins surface for that escape hatch.
+
+The panel always re-reads lifecycle state from AddonManager after a mutation. Update, local-XPI
+install, uninstall, and remote plugin discovery remain follow-up work rather than picker commands.
 
 #### Directional pane focus
 
