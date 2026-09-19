@@ -143,8 +143,15 @@ that Zotero currently allows for the selected plugin.
 - `d`: disable the selected plugin when AddonManager exposes the disable permission.
 - `p`: open the selected plugin's Zotero settings pane when that plugin has registered one
   through `Zotero.PreferencePanes`.
+- `o`: open the plugin homepage declared by AddonManager.
+- `R`: open README when the declared homepage can be unambiguously mapped to a GitHub repository.
+- `L`: open the GitHub commit history for that repository.
 - Zotero Neo deliberately cannot disable itself from inside its own manager; use Zotero's native
   Plugins surface for that escape hatch.
+
+The details pane also shows the description declared by the installed plugin plus available
+Homepage / Repository / README / Git log links. Plugin Manager does not fetch README or commit
+content when it opens; those links are opened explicitly in the external browser.
 
 The panel always re-reads lifecycle state from AddonManager after a mutation. Update, local-XPI
 install, uninstall, and remote plugin discovery remain follow-up work rather than picker commands.
