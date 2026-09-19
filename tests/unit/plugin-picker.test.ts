@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const installedPlugins = vi.fn();
+const { installedPlugins } = vi.hoisted(() => ({
+  installedPlugins: vi.fn(),
+}));
 
 vi.mock('../../src/main/plugin-host', () => ({
   installedPlugins,
