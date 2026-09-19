@@ -18,6 +18,7 @@ const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
   findAllItems: { en: 'Find all papers/items', 'zh-CN': '查找所有论文/条目' },
   findCollectionItems: { en: 'Find current collection', 'zh-CN': '查找当前分类' },
   findNotes: { en: 'Find note', 'zh-CN': '查找笔记' },
+  managePlugins: { en: 'Manage plugins', 'zh-CN': '管理插件' },
   mainOpenPDF: { en: 'Open selected PDF', 'zh-CN': '打开所选 PDF' },
   switchTab: { en: 'Switch tab', 'zh-CN': '切换标签页' },
   mainYankCitekey: { en: 'Copy citekey', 'zh-CN': '复制 citekey' },
@@ -47,6 +48,7 @@ export const KEY_GUIDE_CONFIG = {
     f: { en: 'Find', 'zh-CN': '查找' },
     w: { en: 'Panes', 'zh-CN': '窗格' },
     y: { en: 'Citations', 'zh-CN': '引用' },
+    p: { en: 'Plugins', 'zh-CN': '插件' },
   },
   actionLabels: ACTION_GUIDE_LABELS,
 } as const;
