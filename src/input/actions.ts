@@ -293,6 +293,10 @@ const BASE_ACTION_LABELS = {
     en: 'Find and open a note',
     'zh-CN': '查找并打开笔记',
   },
+  managePlugins: {
+    en: 'Manage installed Zotero plugins',
+    'zh-CN': '管理已安装的 Zotero 插件',
+  },
   mainTrashItems: {
     en: 'Main window: move selected items to trash',
     'zh-CN': '主窗口：将所选条目移到回收站',
