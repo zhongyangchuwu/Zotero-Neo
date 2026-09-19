@@ -267,19 +267,13 @@ export class PluginManagerPanel {
   private filter(session: MainWindowSession): void {
     const state = session.pluginManager;
     state.filtered = filterInstalledPlugins(state.plugins, state.query);
-    state.selected = Math.max(
-      0,
-      Math.min(state.selected, Math.max(0, state.filtered.length - 1)),
-    );
+    state.selected = Math.max(0, Math.min(state.selected, Math.max(0, state.filtered.length - 1)));
   }
 
   private move(session: MainWindowSession, amount: number): void {
     const state = session.pluginManager;
     if (!state.filtered.length) return;
-    this.select(
-      session,
-      Math.max(0, Math.min(state.filtered.length - 1, state.selected + amount)),
-    );
+    this.select(session, Math.max(0, Math.min(state.filtered.length - 1, state.selected + amount)));
   }
 
   private select(session: MainWindowSession, index: number): void {
