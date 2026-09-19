@@ -16,7 +16,6 @@ import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';
 import { createTabsProvider } from './providers/tabs';
 import { createCommandsProvider } from './providers/commands';
-import { createPluginsProvider } from './providers/plugins';
 
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
@@ -598,8 +597,6 @@ export class FuzzyPicker {
         return createNotesProvider(window, this.#logger);
       case 'tags':
         throw new Error('Tag chooser requires an explicit candidate source');
-      case 'plugins':
-        return createPluginsProvider();
       case 'commands':
         if (!commandContext) throw new Error('Command palette context missing');
         return createCommandsProvider(commandContext);
