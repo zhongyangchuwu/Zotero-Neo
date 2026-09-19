@@ -533,7 +533,7 @@ export class PluginManagerPanel {
     links.style.cssText = `margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 14px;color:${THEME_VARS.muted}`;
     const linkEntries: Array<[string, string | undefined]> = [
       ['Homepage', plugin.homepageURL],
-      ['Repository', plugin.repositoryURL],
+      ['Repository', plugin.repositoryURL === plugin.homepageURL ? undefined : plugin.repositoryURL],
       ['README', plugin.readmeURL],
       ['Git log', plugin.gitLogURL],
     ];
@@ -559,8 +559,8 @@ export class PluginManagerPanel {
       plugin.gitLogURL ? 'L  Git log' : null,
     ].filter((hint): hint is string => !!hint);
     actions.textContent = hints.length
-      ? `Actions\n${hints.join('  ·  ')}`
-      : 'No lifecycle actions available';
+      ? `Shortcuts\n${hints.join('  ·  ')}`
+      : 'No additional shortcuts available';
 
     details.append(title, status, meta, description);
     if (links.childElementCount) details.append(links);
