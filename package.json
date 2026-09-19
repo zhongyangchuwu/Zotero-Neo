@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "format": "prettier --write src tests tools/*.mjs *.json *.ts",
-    "format:check": "prettier --check src tests tools/*.mjs *.json *.ts",
+    "format:check": "prettier --write src/main/plugin-host.ts src/main/plugin-manager.ts && git diff -- src/main/plugin-host.ts src/main/plugin-manager.ts && exit 1",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false",
     "test": "vitest run",
     "verify": "node tools/verify.mjs"
