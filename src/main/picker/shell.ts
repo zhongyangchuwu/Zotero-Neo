@@ -15,7 +15,7 @@ import { fuzzyMatchScore } from './fuzzy';
 import { createNotesProvider } from './providers/notes';
 import { createItemsProvider } from './providers/items';
 import { createTabsProvider } from './providers/tabs';
-import { createCommandsProvider } from './providers/commands';
+import { createCommandsProvider } from './providers/commands';\nimport { createPluginsProvider } from './providers/plugins';
 
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
