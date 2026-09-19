@@ -40,6 +40,7 @@ import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
 import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
+import { openNativePluginManager } from './plugin-host';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -524,6 +525,12 @@ export class MainWindowController implements MainWindowControllerApi {
             if (pane?.openNote) await pane.openNote(id, { openInWindow });
             else await Zotero.Notes.open(id, null, { openInWindow });
           },
+        });
+        break;
+      case 'managePlugins':
+        void this.#picker.open(window, session, 'plugins', {
+          closeBeforeConfirm: true,
+          confirm: () => openNativePluginManager(window),
         });
         break;
       case 'mainTrashItems':
