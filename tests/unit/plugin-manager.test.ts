@@ -9,18 +9,24 @@ const plugins: readonly InstalledPlugin[] = [
     name: 'Better BibTeX for Zotero',
     version: '9.1.2',
     enabled: true,
+    canEnable: true,
+    canDisable: true,
   },
   {
     id: 'zotero-actions-tags@windingwind.com',
     name: 'Actions & Tags for Zotero',
     version: '2.1.0',
     enabled: false,
+    canEnable: true,
+    canDisable: true,
   },
   {
     id: 'translate-for-zotero@example.org',
     name: 'Translate for Zotero',
     version: '3.0.0',
     enabled: true,
+    canEnable: true,
+    canDisable: true,
   },
 ];
 
