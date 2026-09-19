@@ -30,6 +30,12 @@ GitHub Release are complete.
 
 ## Next
 
+- Track the batteries-included workflow/distribution direction and the first persistent Plugin
+  Manager surface in [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). The initial
+  panel is a read-only keyboard-first view over Zotero/Mozilla AddonManager state. It is deliberately
+  separate from the shared picker: pickers resolve transient targets, while managers keep a bounded
+  domain context open for repeated browsing and future lifecycle actions. Remote catalogs and
+  arbitrary GitHub XPI installation remain out of scope.
 - Continue tracking native Zotero Reader semantic-selection integration in
   [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
   DOM-selection compatibility path remains acceptable until Zotero exposes or

@@ -55,6 +55,7 @@ export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
   'findAllItems',
   'findCollectionItems',
   'findNotes',
+  'managePlugins',
   'switchTab',
   'mainFocusTree',
   'mainFocusLeft',

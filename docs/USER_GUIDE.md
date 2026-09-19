@@ -79,6 +79,7 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `<space>,`  | Choose and switch to an open Zotero tab                                   |
 | `<space>q`  | Close the active Zotero tab                                               |
 | `<space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
+| `<space>pp` | Open the persistent Plugin Manager panel |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
@@ -120,6 +121,24 @@ the current key hints. There is no `<space>:` alias.
 When **Preferences → Picker → Enable mouse row selection and double-click confirmation**
 is enabled, chooser and command rows also support pointer selection and double-click
 confirmation.
+
+#### Plugin Manager panel
+
+Press `<space>pp` in Reader Normal, Main Normal, or Note Normal to open Neo's persistent
+Plugin Manager panel. Unlike a picker, this surface stays open while you browse installed
+plugins and inspect their state. Zotero/Mozilla AddonManager remains the authoritative
+source for plugin lifecycle state.
+
+- `j` / `k` or `↑` / `↓`: move through installed plugins.
+- `Ctrl+d` / `Ctrl+u`: move quickly through the list.
+- `gg` / `G`: first / last plugin.
+- `/`: focus the fuzzy filter field; `Escape` leaves the field without closing the panel.
+- `r`: reload installed plugin state from AddonManager.
+- `Escape` / `q`: close the panel and restore the previous focus when possible.
+
+The first panel slice is intentionally read-only: it shows plugin name, version, ID, and
+enabled/disabled state. Enable/disable, update, preferences, local-XPI install, and uninstall
+remain follow-up lifecycle actions rather than picker commands.
 
 #### Directional pane focus
 
@@ -400,6 +419,7 @@ and focus context:
 | `<space>ff` | Find an item in the current library |
 | `<space>fc` | Find an item in the current collection |
 | `<space>fn` | Find and open a note |
+| `<space>pp` | Open the persistent Plugin Manager panel |
 | `<space>,` | Choose and switch to an open Zotero tab |
 | `<space>q` | Close the active Zotero tab |
 | `<space>ta` | Add one tag to the current target(s) |
@@ -655,6 +675,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `openCommandPalette`          | Open the command palette in the current Normal context                               |
 | `switchTab`                   | Choose and switch to an open Zotero tab                                               |
 | `findNotes`                   | Find and open a note                                                                  |
+| `managePlugins`               | Open the persistent Plugin Manager panel                                              |
 | `findAllItems`                | Find an item in the current library                                                   |
 | `findCollectionItems`         | Find an item in the current collection                                                |
 | `mainYankCitekey`             | Copy the selected item's citekey to the clipboard                                    |

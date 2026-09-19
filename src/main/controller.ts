@@ -40,6 +40,7 @@ import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
 import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
+import { PluginManagerPanel } from './plugin-manager';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -57,11 +58,13 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #noteEditor: NoteEditor;
   readonly #tags: TagActions;
   readonly #itemSelect: MainItemSelect;
+  readonly #pluginManager: PluginManagerPanel;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
+    this.#pluginManager = new PluginManagerPanel(dependencies.logger);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -138,6 +141,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.add(() => {
       this.#picker.close(session);
+      this.#pluginManager.close(session);
       this.#noteEditor.clear(session);
     });
   }
@@ -219,6 +223,10 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
+    if (session.pluginManager.open) {
+      this.#pluginManager.handleKey(event, window, session);
+      return;
+    }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
       return;
@@ -525,6 +533,9 @@ export class MainWindowController implements MainWindowControllerApi {
             else await Zotero.Notes.open(id, null, { openInWindow });
           },
         });
+        break;
+      case 'managePlugins':
+        this.#pluginManager.open(window, session);
         break;
       case 'mainTrashItems':
         void this.#navigation.trashSelectedItems(window, session);

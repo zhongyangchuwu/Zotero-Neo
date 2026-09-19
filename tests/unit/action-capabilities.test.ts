@@ -24,6 +24,7 @@ const expectedMainActions: readonly ActionId[] = [
   'findCollectionItems',
   'switchTab',
   'findNotes',
+  'managePlugins',
   'mainTrashItems',
   'mainRestoreTrashedItems',
   'mainFocusTree',
@@ -70,6 +71,7 @@ const expectedDelegableMainActions: readonly ActionId[] = [
   'findAllItems',
   'findCollectionItems',
   'findNotes',
+  'managePlugins',
   'switchTab',
   'mainYankCitekey',
   'closeCurrentTab',
@@ -131,6 +133,7 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'switchTab')).toBe(true);
     expect(isReaderActionForMode('normal', 'addTag')).toBe(true);
     expect(isReaderActionForMode('normal', 'removeTag')).toBe(true);
+    expect(isReaderActionForMode('normal', 'managePlugins')).toBe(true);
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
