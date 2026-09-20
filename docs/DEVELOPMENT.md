@@ -26,27 +26,27 @@ member check. Run `npm ci` before either builder.
 
 ### Local GUI iteration from WSL
 
-Ordinary GUI work should not depend on a GitHub Actions artifact. Zotero can
-load an unpacked development add-on through an extension proxy, while Neo's
-existing build already produces a complete unpacked tree at `build/addon/`.
+Ordinary GUI work should not depend on a GitHub Actions artifact. Use a
+dedicated Zotero development profile and a separate development data directory.
 
-Use a dedicated Zotero development profile and development library. Close
-Zotero, then run the one-time setup from WSL:
+Stock Zotero 10.0.3 does not reliably discover a first-time extension proxy in
+a fresh profile. Bootstrap the profile once with Zotero's normal plugin
+installer:
+
+1. run `npm run build`;
+2. start the dedicated Zotero development profile;
+3. Tools -> Plugins -> Install Add-on From File and choose `zotero-neo.xpi`;
+4. close/restart Zotero once and confirm Neo loads.
+
+After that one-time install, remember the development profile:
 
 ```bash
 npm run dev:setup -- --profile /mnt/c/Users/YOU/AppData/Roaming/Zotero/Zotero/Profiles/DEV.default
 ```
 
-The setup command:
-
-- builds Neo without changing the release/XPI pipeline;
-- mirrors `build/addon/` to `zotero-neo-dev/` inside the selected profile so
-  Windows Zotero has a native filesystem path;
-- creates `extensions/zotero-neo@zotero-neo` containing that Windows path;
-- removes only `extensions.lastAppBuildId` and `extensions.lastAppVersion`
-  from `prefs.js`, keeping a one-time `prefs.js.zotero-neo-dev.bak` backup;
-- remembers the selected profile in the ignored local file
-  `.zotero-neo-dev.json`.
+The setup command verifies that AddonManager has registered Neo and that
+`extensions/zotero-neo@zotero-neo.xpi` exists, then remembers the selected
+profile in the ignored local file `.zotero-neo-dev.json`.
 
 After that, the normal code-to-GUI loop is:
 
@@ -54,9 +54,10 @@ After that, the normal code-to-GUI loop is:
 npm run dev
 ```
 
-This rebuilds Neo and atomically refreshes the unpacked mirror. Restart or
-reload Zotero manually before GUI acceptance. The development helper never
-launches Zotero, PowerShell, `cmd.exe`, or another Windows executable.
+This rebuilds Neo and replaces the XPI that the dedicated profile already has
+registered. Restart or reload the development Zotero instance before GUI
+acceptance. This path does not reinstall/uninstall the add-on and does not
+touch the normal Zotero profile.
 
 Inspect the configured profile/proxy without modifying it:
 
@@ -70,8 +71,8 @@ reader injection after a manual restart.
 
 Keep three test modes distinct:
 
-1. **Fast GUI iteration:** `npm run dev`, unpacked proxy build, dedicated dev
-   profile, manual Zotero restart/reload.
+1. **Fast GUI iteration:** `npm run dev`, overwrite the already-registered
+   development XPI, restart/reload the dedicated dev profile.
 2. **Clean-install test:** use a fresh/reset development profile or explicitly
    clear Neo preferences before validating defaults or preference migrations.
 3. **Packaged acceptance:** install the CI/release XPI when packaging,

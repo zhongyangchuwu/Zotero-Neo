@@ -1,19 +1,9 @@
-import {
-  copyFileSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const ADDON_ID = 'zotero-neo@zotero-neo';
 const root = resolve(import.meta.dirname, '..');
-const buildAddon = resolve(root, 'build/addon');
+const outputXpi = resolve(root, 'zotero-neo.xpi');
 const localConfigPath = resolve(root, '.zotero-neo-dev.json');
 
 function fail(message) {
@@ -71,125 +61,68 @@ function resolveProfile(explicitProfile) {
   return profile;
 }
 
-export function wslMountPathToWindows(path) {
-  const normalized = resolve(path);
-  const match = /^\/mnt\/([A-Za-z])(?:\/(.*))?$/.exec(normalized);
-  if (!match) {
-    if (process.platform === 'win32') return normalized;
-    throw new Error(`Expected a Windows-mounted path under /mnt/<drive>, got: ${normalized}`);
-  }
-
-  const drive = match[1].toUpperCase();
-  const rest = (match[2] ?? '').split('/').filter(Boolean).join('/');
-  return rest ? `${drive}:/${rest}` : `${drive}:/`;
+function installedXpi(profile) {
+  return join(profile, 'extensions', `${ADDON_ID}.xpi`);
 }
 
-function mirrorBuild(profile) {
-  if (!existsSync(buildAddon)) {
-    fail('build/addon is missing. Run npm run build first.');
+function registeredAddon(profile) {
+  const registryPath = join(profile, 'extensions.json');
+  if (!existsSync(registryPath)) return null;
+  try {
+    const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+    return registry.addons?.find((addon) => addon.id === ADDON_ID) ?? null;
+  } catch {
+    return null;
   }
-
-  const mirror = join(profile, 'zotero-neo-dev');
-  const staging = join(profile, `.zotero-neo-dev-staging-${process.pid}`);
-  rmSync(staging, { recursive: true, force: true });
-  cpSync(buildAddon, staging, { recursive: true });
-  rmSync(mirror, { recursive: true, force: true });
-  renameSync(staging, mirror);
-  return mirror;
 }
 
-export function stripExtensionCachePrefs(source) {
-  const eol = source.includes('\r\n') ? '\r\n' : '\n';
-  const trailingEol = source.endsWith('\n');
-  const filtered = source
-    .split(/\r?\n/)
-    .filter(
-      (line) =>
-        !line.includes('extensions.lastAppBuildId') && !line.includes('extensions.lastAppVersion'),
+function requireInstalled(profile) {
+  const xpi = installedXpi(profile);
+  const addon = registeredAddon(profile);
+  if (!existsSync(xpi) || !addon) {
+    fail(
+      'Zotero Neo is not registered in this development profile. Install zotero-neo.xpi once through Zotero Tools -> Plugins -> Install Add-on From File, then rerun dev:setup.',
     );
-  let output = filtered.join(eol);
-  if (!trailingEol && output.endsWith(eol)) {
-    output = output.slice(0, -eol.length);
   }
-  return output;
-}
-
-function preparePrefs(profile) {
-  const prefs = join(profile, 'prefs.js');
-  if (!existsSync(prefs)) {
-    console.warn(`[dev-gui] prefs.js not found; skipping extension-cache reset: ${prefs}`);
-    return;
-  }
-
-  const original = readFileSync(prefs, 'utf8');
-  const cleaned = stripExtensionCachePrefs(original);
-  if (cleaned === original) return;
-
-  const backup = join(profile, 'prefs.js.zotero-neo-dev.bak');
-  if (!existsSync(backup)) copyFileSync(prefs, backup);
-  writeFileSync(prefs, cleaned);
-}
-
-function installProxy(profile, mirror) {
-  const extensionsDir = join(profile, 'extensions');
-  mkdirSync(extensionsDir, { recursive: true });
-  const proxy = join(extensionsDir, ADDON_ID);
-  const target = wslMountPathToWindows(mirror);
-  writeFileSync(proxy, `${target}\n`);
-  return { proxy, target };
-}
-
-function expectedProxyTarget(profile) {
-  return wslMountPathToWindows(join(profile, 'zotero-neo-dev'));
-}
-
-function proxyStatus(profile) {
-  const proxy = join(profile, 'extensions', ADDON_ID);
-  const target = expectedProxyTarget(profile);
-  if (!existsSync(proxy)) return { proxy, target, ok: false, actual: null };
-  const actual = readFileSync(proxy, 'utf8').trim();
-  return { proxy, target, ok: actual === target, actual };
+  return { addon, xpi };
 }
 
 function setup(profile) {
-  console.log('[dev-gui] Close Zotero before first-time setup so prefs.js is not overwritten.');
-  const mirror = mirrorBuild(profile);
-  const proxy = installProxy(profile, mirror);
-  preparePrefs(profile);
+  const { addon, xpi } = requireInstalled(profile);
   writeLocalConfig(profile);
   console.log(`[dev-gui] profile: ${profile}`);
-  console.log(`[dev-gui] mirror:  ${mirror}`);
-  console.log(`[dev-gui] proxy:   ${proxy.proxy} -> ${proxy.target}`);
-  console.log('[dev-gui] Setup complete. Start Zotero manually once to register the proxy add-on.');
+  console.log(`[dev-gui] installed XPI: ${xpi}`);
+  console.log(
+    `[dev-gui] registered: ${addon.id} version=${addon.version} active=${!!addon.active}`,
+  );
+  console.log('[dev-gui] Setup complete. Future builds can use npm run dev.');
 }
 
 function sync(profile) {
-  const proxy = proxyStatus(profile);
-  if (!proxy.ok) {
-    fail(
-      `Development proxy is not configured for this profile. Run npm run dev:setup -- --profile "${profile}" first.`,
-    );
+  if (!existsSync(outputXpi)) {
+    fail('zotero-neo.xpi is missing. Run npm run build first.');
   }
-
-  const mirror = mirrorBuild(profile);
-  console.log(`[dev-gui] synced build/addon -> ${mirror}`);
-  console.log('[dev-gui] Restart/reload Zotero manually, then perform GUI acceptance.');
+  const { addon, xpi } = requireInstalled(profile);
+  copyFileSync(outputXpi, xpi);
+  console.log(`[dev-gui] synced zotero-neo.xpi -> ${xpi}`);
+  console.log(
+    `[dev-gui] registered version=${addon.version}; restart/reload the dev Zotero instance.`,
+  );
 }
 
 function status(profile) {
-  const mirror = join(profile, 'zotero-neo-dev');
-  const proxy = proxyStatus(profile);
+  const xpi = installedXpi(profile);
+  const addon = registeredAddon(profile);
   const log = join(profile, 'zotero-neo-startup.log');
   console.log(
     JSON.stringify(
       {
         profile,
-        mirror,
-        mirrorExists: existsSync(mirror),
-        proxy: proxy.proxy,
-        proxyTarget: proxy.target,
-        proxyActual: proxy.actual,
-        proxyOk: proxy.ok,
+        installedXpi: xpi,
+        installedXpiExists: existsSync(xpi),
+        registered: !!addon,
+        registeredVersion: addon?.version ?? null,
+        active: addon?.active ?? null,
         startupLog: log,
         startupLogExists: existsSync(log),
       },
