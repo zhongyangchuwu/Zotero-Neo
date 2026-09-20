@@ -110,8 +110,8 @@ function wslPathToWindows(path) {
   const match = /^\/mnt\/([A-Za-z])(?:\/(.*))?$/.exec(normalized);
   if (!match) throw new Error(`Expected Windows-mounted path, got: ${normalized}`);
   const drive = match[1].toUpperCase();
-  const rest = (match[2] ?? '').split('/').filter(Boolean).join('/');
-  return rest ? `${drive}:/${rest}` : `${drive}:/`;
+  const rest = (match[2] ?? '').split('/').filter(Boolean).join('\\');
+  return rest ? `${drive}:\\${rest}` : `${drive}:\\`;
 }
 
 function upsertPrefs(profile) {
