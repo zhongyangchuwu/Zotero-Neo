@@ -35,9 +35,10 @@ the esbuild package build, and the XPI member check. GitHub Actions runs this
 workflow through both native wrappers.
 
 Zotero GUI behavior still requires manual verification:
-1. For ordinary local iteration, perform the one-time dev-profile XPI bootstrap
-   documented in `docs/DEVELOPMENT.md`, then run `npm run dev`.
-2. Restart/reload the dedicated Zotero development profile manually.
+1. Configure the dedicated profile once with `npm run dev:setup`, then launch
+   it with `npm run dev:start` as documented in `docs/DEVELOPMENT.md`.
+2. For ordinary local iteration, run `npm run dev` to rebuild and hot-reload
+   Neo over Firefox RDP without restarting Zotero.
 3. Exercise the changed reader, main-window, or preference surface.
 4. Use packaged XPI install/update testing separately when packaging or
    lifecycle behavior changes.

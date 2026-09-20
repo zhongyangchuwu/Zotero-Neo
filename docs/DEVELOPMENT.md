@@ -29,37 +29,43 @@ member check. Run `npm ci` before either builder.
 Ordinary GUI work should not depend on a GitHub Actions artifact. Use a
 dedicated Zotero development profile and a separate development data directory.
 
-Stock Zotero 10.0.3 does not reliably discover a first-time extension proxy in
-a fresh profile. Bootstrap the profile once with Zotero's normal plugin
-installer:
+Zotero 7+ exposes Firefox's Remote Debugging Protocol (RDP), including
+temporary add-on installation and add-on reload. Neo uses that development path
+instead of relying on extension-proxy discovery or repeated XPI installation.
 
-1. run `npm run build`;
-2. start the dedicated Zotero development profile;
-3. Tools -> Plugins -> Install Add-on From File and choose `zotero-neo.xpi`;
-4. close/restart Zotero once and confirm Neo loads.
-
-After that one-time install, remember the development profile:
+Configure the dedicated profile once while it is closed:
 
 ```bash
 npm run dev:setup -- --profile /mnt/c/Users/YOU/AppData/Roaming/Zotero/Zotero/Profiles/DEV.default
 ```
 
-The setup command verifies that AddonManager has registered Neo and that
-`extensions/zotero-neo@zotero-neo.xpi` exists, then remembers the selected
-profile in the ignored local file `.zotero-neo-dev.json`.
+The setup command enables local remote debugging in that profile, remembers the
+profile name/path and Zotero binary in the ignored local file
+`.zotero-neo-dev.json`, and mirrors the existing `build/addon/` tree to a
+Windows-readable directory inside the development profile.
 
-After that, the normal code-to-GUI loop is:
+Start the development Zotero instance:
+
+```bash
+npm run dev:start
+```
+
+This launches only the configured development profile with a local RDP server
+and installs Neo from the mirrored unpacked build as a temporary add-on. Leave
+that Zotero instance running.
+
+The normal code-to-GUI loop is then:
 
 ```bash
 npm run dev
 ```
 
-This rebuilds Neo and replaces the XPI that the dedicated profile already has
-registered. Restart or reload the development Zotero instance before GUI
-acceptance. This path does not reinstall/uninstall the add-on and does not
-touch the normal Zotero profile.
+This rebuilds Neo, refreshes the Windows-readable unpacked mirror, and asks
+Zotero's add-on actor to reload Neo in place. A normal UI change therefore
+requires no Zotero restart, XPI reinstall, browser artifact download, or GitHub
+Actions run.
 
-Inspect the configured profile/proxy without modifying it:
+Inspect the configured development connection:
 
 ```bash
 npm run dev:status
@@ -67,12 +73,17 @@ npm run dev:status
 
 The startup diagnostic remains
 `<profile>/zotero-neo-startup.log`; it is useful for confirming lifecycle and
-reader injection after a manual restart.
+reader injection after an RDP install/reload.
+
+The RDP client in `tools/dev-rdp-client.mjs` is a small development-only
+implementation adapted from `zotero-plugin-scaffold` / Mozilla `web-ext`.
+Neo keeps its existing `tools/build.mjs`, XPI packaging, and release pipeline;
+Scaffold does not own production builds.
 
 Keep three test modes distinct:
 
-1. **Fast GUI iteration:** `npm run dev`, overwrite the already-registered
-   development XPI, restart/reload the dedicated dev profile.
+1. **Fast GUI iteration:** `npm run dev`, unpacked temporary add-on hot reload
+   over RDP in the dedicated dev profile.
 2. **Clean-install test:** use a fresh/reset development profile or explicitly
    clear Neo preferences before validating defaults or preference migrations.
 3. **Packaged acceptance:** install the CI/release XPI when packaging,
@@ -82,6 +93,10 @@ Uninstalling Neo does not intentionally clear `extensions.zotero-neo.*`
 preferences, and item mutations such as tags or persisted marks remain Zotero
 data. Reinstalling the same XPI is therefore not a clean-install or upgrade
 test.
+
+The old extension-proxy path is intentionally not used for fast iteration:
+runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
+fresh profile, while RDP temporary installation and `reload` both succeeded.
 
 GitHub Actions runs the Linux and Windows builders on pushes and pull requests,
 then uploads separate XPI artifacts. A version tag runs a guarded release job:
