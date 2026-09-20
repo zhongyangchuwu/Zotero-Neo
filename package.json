@@ -6,6 +6,10 @@
   "description": "Keyboard-first Zotero interaction layer",
   "scripts": {
     "build": "node tools/build.mjs",
+    "dev": "npm run build && node tools/dev-gui.mjs reload",
+    "dev:start": "npm run build && node tools/dev-gui.mjs start",
+    "dev:setup": "npm run build && node tools/dev-gui.mjs setup",
+    "dev:status": "node tools/dev-gui.mjs status",
     "format": "prettier --write src tests tools/*.mjs *.json *.ts",
     "format:check": "prettier --check src tests tools/*.mjs *.json *.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false",

@@ -7,6 +7,9 @@ Zotero Neo — Product Requirements Document.md
 # Runtime diagnostics copied from a Zotero profile
 zotero-neo-startup.log
 
+# Local Zotero development-profile selection
+.zotero-neo-dev.json
+
 # AI session scratch data
 .sisyphus/
 
