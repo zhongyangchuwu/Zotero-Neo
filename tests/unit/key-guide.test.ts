@@ -12,11 +12,11 @@ import {
 } from '../../src/input/key-guide';
 
 const bindings: BindingMap = {
-  'reader-normal: e': 'toggleReaderSidebarOutline',
-  'reader-normal: ff': 'findAllItems',
-  'reader-normal: fc': 'findCollectionItems',
-  'reader-normal: ,': 'switchTab',
-  'reader-normal: yy': 'mainYankCitekey',
+  'reader-normal:<Space>e': 'toggleReaderSidebarOutline',
+  'reader-normal:<Space>ff': 'findAllItems',
+  'reader-normal:<Space>fc': 'findCollectionItems',
+  'reader-normal:<Space>,': 'switchTab',
+  'reader-normal:<Space>yy': 'mainYankCitekey',
 };
 
 describe('leader guide projection', () => {
@@ -66,7 +66,7 @@ describe('leader guide projection', () => {
   it('treats exact named keys as distinct from printable prefixes', () => {
     const named: BindingMap = {
       'main-normal:e': 'mainFocusTree',
-      'main-normal:enter': 'mainActivate',
+      'main-normal:<Enter>': 'mainActivate',
       'main-normal:yy': 'mainYankCitekey',
       'main-normal:y': 'switchTab',
     };
@@ -92,8 +92,8 @@ describe('leader guide projection', () => {
   });
 
   it('projects the explicit Tag action defaults without reviving retired picker aliases', () => {
-    expect(DEFAULT_BINDINGS['reader-normal: ta']).toBe('addTag');
-    expect(DEFAULT_BINDINGS['reader-normal: tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>tr']).toBe('removeTag');
     expect(DEFAULT_BINDINGS['main-normal:ta']).toBe('addTag');
     expect(DEFAULT_BINDINGS['main-normal:tr']).toBe('removeTag');
     expect(DEFAULT_BINDINGS['main-normal:tf']).toBe('toggleTagFilter');
