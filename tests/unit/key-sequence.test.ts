@@ -27,6 +27,9 @@ describe('Neovim-style key notation', () => {
     expect(bindingSequenceTokens('<S-Tab>')).toEqual(['shift+tab']);
     expect(bindingSequenceTokens('<C-S-Left>')).toEqual(['ctrl+shift+arrowleft']);
     expect(bindingSequenceTokens('<M-a>')).toEqual(['alt+a']);
+    expect(bindingSequenceTokens('<C-->')).toEqual(['ctrl+-']);
+    expect(bindingSequenceTokens('<C->>')).toEqual(['ctrl+>']);
+    expect(bindingSequenceTokens('<C-lt>')).toEqual(['ctrl+<']);
     expect(bindingSequenceIsStrictPrefix('e', '<Enter>')).toBe(false);
     expect(bindingSequenceIsStrictPrefix('f', '<F1>')).toBe(false);
     expect(bindingSequenceIsStrictPrefix('g', 'gg')).toBe(true);
