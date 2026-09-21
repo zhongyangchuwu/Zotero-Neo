@@ -215,6 +215,20 @@ describe('semantic Tag actions', () => {
     expect(selected.hasTag('robotics')).toBe(true);
   });
 
+  it('refuses a partial Main tag mutation when Selection contains an unavailable item', () => {
+    const selected = tagItem(2);
+    installZotero([selected], [{ tag: 'robotics' }]);
+    const h = harness({ items: [selected] });
+    h.session.selection.add({ libraryID: 1, itemID: 99 });
+
+    h.actions.add(h.window, h.session);
+
+    expect(() => h.open()).toThrow('Tag action did not open a chooser');
+    expect(h.session.status.textContent).toBe(
+      '✗ Selection contains unavailable items; refresh before changing tags',
+    );
+  });
+
   it('toggles one Main tag filter and clears all filters without mutating item tags', async () => {
     const item = tagItem(1, [{ tag: 'persistent', type: 0 }]);
     installZotero([item], [{ tag: 'alpha' }, { tag: 'beta' }]);
