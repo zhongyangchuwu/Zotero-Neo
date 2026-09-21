@@ -350,36 +350,40 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '清空标签筛选条件',
   },
   mainEnterSelect: {
-    en: 'Main window: enter item selection',
-    'zh-CN': '主窗口：进入条目选择',
+    en: 'Main window: enter Visual range',
+    'zh-CN': '主窗口：进入可视范围',
+  },
+  mainToggleSelection: {
+    en: 'Main window: toggle Cursor / Visual target in Selection',
+    'zh-CN': '主窗口：切换光标 / 可视范围的选择状态',
   },
   mainSelectDown: {
-    en: 'Item Select: extend down',
-    'zh-CN': '条目选择：向下扩展',
+    en: 'Visual: move head down',
+    'zh-CN': '可视范围：向下移动端点',
   },
   mainSelectUp: {
-    en: 'Item Select: extend up',
-    'zh-CN': '条目选择：向上扩展',
+    en: 'Visual: move head up',
+    'zh-CN': '可视范围：向上移动端点',
   },
   mainSelectFirst: {
-    en: 'Item Select: extend to first item',
-    'zh-CN': '条目选择：扩展到首项',
+    en: 'Visual: move head to first item',
+    'zh-CN': '可视范围：端点移到首项',
   },
   mainSelectLast: {
-    en: 'Item Select: extend to last item',
-    'zh-CN': '条目选择：扩展到末项',
+    en: 'Visual: move head to last item',
+    'zh-CN': '可视范围：端点移到末项',
   },
   mainSelectSwapEnds: {
-    en: 'Item Select: swap anchor and focus',
-    'zh-CN': '条目选择：交换锚点与焦点',
+    en: 'Visual: swap anchor and head',
+    'zh-CN': '可视范围：交换锚点与端点',
   },
   mainSelectFinish: {
     en: 'Item Select: finish and preserve selection',
     'zh-CN': '条目选择：完成并保留选择',
   },
   mainSelectCancel: {
-    en: 'Item Select: cancel to focused item',
-    'zh-CN': '条目选择：取消并保留焦点项',
+    en: 'Visual: cancel without changing Selection',
+    'zh-CN': '可视范围：取消且不修改选择集合',
   },
   mainNavDown: {
     en: 'Main window: navigate down',
