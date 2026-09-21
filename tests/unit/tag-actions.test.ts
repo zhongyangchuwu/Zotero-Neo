@@ -8,6 +8,7 @@ import type { PickerItem } from '../../src/main/picker/model';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import type { MainWindowSession } from '../../src/main/session';
 import { TagActions } from '../../src/main/tag-actions';
+import { SelectionStore } from '../../src/main/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -65,12 +66,25 @@ function harness(options: {
     ZoteroPane: {
       getSelectedItems: () => items,
       getCollectionTreeRow: () => row,
-      itemsView: { rowCount: 7, setFilter },
+      itemsView: {
+        rowCount: items.length,
+        selection: { focused: 0 },
+        getRow: (index: number) =>
+          items[index] ? { isObjectRow: true, ref: items[index] } : undefined,
+        getRowIndexByID: (id: number) => {
+          const index = items.findIndex((item) => item.id === id);
+          return index < 0 ? false : index;
+        },
+        setFilter,
+      },
       tagSelector,
     },
   } as unknown as MainWindow;
+  const selection = new SelectionStore();
+  for (const item of items) selection.add({ libraryID: item.libraryID, itemID: item.id });
   const session = {
     window,
+    selection,
     status: { textContent: '', style: {} },
     cleanup: { add: vi.fn() },
   } as unknown as MainWindowSession;
