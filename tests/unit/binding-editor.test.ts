@@ -232,16 +232,16 @@ describe('binding editor validation and capabilities', () => {
   it('uses semantic token boundaries for duplicate and prefix validation', () => {
     const namedKeys = validateBindingDraft([
       row(1, 'main-normal', 'e', 'mainFocusTree'),
-      row(2, 'main-normal', 'enter', 'mainActivate'),
+      row(2, 'main-normal', '<Enter>', 'mainActivate'),
       row(3, 'main-normal', 'd', 'mainNavDown'),
-      row(4, 'main-normal', 'delete', 'mainTrashItems'),
+      row(4, 'main-normal', '<Del>', 'mainTrashItems'),
     ]);
     expect(namedKeys.valid).toBe(true);
     expect(namedKeys.warnings).toEqual([]);
 
     const duplicateNamedKey = validateBindingDraft([
-      row(10, 'main-normal', 'enter', 'mainActivate'),
-      row(20, 'main-normal', '<enter>', 'mainFocusTree'),
+      row(10, 'main-normal', '<Enter>', 'mainActivate'),
+      row(20, 'main-normal', '<CR>', 'mainFocusTree'),
     ]);
     expect(duplicateNamedKey.valid).toBe(false);
     expect(duplicateNamedKey.errors).toEqual([
@@ -250,8 +250,8 @@ describe('binding editor validation and capabilities', () => {
     ]);
 
     const literalWord = validateBindingDraft([
-      row(30, 'main-normal', 'enter', 'mainActivate'),
-      row(40, 'main-normal', '<e>nter', 'mainFocusTree'),
+      row(30, 'main-normal', '<Enter>', 'mainActivate'),
+      row(40, 'main-normal', 'enter', 'mainFocusTree'),
     ]);
     expect(literalWord.valid).toBe(true);
     expect(literalWord.warnings).toEqual([]);
