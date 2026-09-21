@@ -42,7 +42,6 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainTreeCollapseAll',
   'mainToggleSelection',
   'mainEnterSelect',
-  'mainToggleSelection',
 ] as const satisfies readonly ActionId[]);
 
 /** Actions owned by Main Item Select. Ordinary Main actions remain available as fallbacks. */
@@ -52,6 +51,7 @@ export const MAIN_ITEM_SELECT_ACTIONS = Object.freeze([
   'mainSelectFirst',
   'mainSelectLast',
   'mainSelectSwapEnds',
+  'mainSelectFinish',
   'mainSelectCancel',
 ] as const satisfies readonly ActionId[]);
 
