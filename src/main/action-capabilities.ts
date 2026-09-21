@@ -10,6 +10,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'switchTab',
   'mainTrashItems',
   'mainRestoreTrashedItems',
+  'mainToggleSelection',
   'mainFocusTree',
   'mainFocusLeft',
   'mainFocusRight',
