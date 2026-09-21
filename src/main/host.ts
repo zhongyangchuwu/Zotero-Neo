@@ -57,7 +57,6 @@ type MainPane = {
   } | null;
 };
 
-
 type ItemCursorTree = {
   _onSelection?(
     index: number,
@@ -148,7 +147,6 @@ export function closeSelectedMainTab(window: MainWindow): void {
 export function mainPane(window: MainWindow): MainPane | undefined {
   return mainHost(window).ZoteroPane;
 }
-
 
 /**
  * Move the item-tree focus without changing native selected rows.
