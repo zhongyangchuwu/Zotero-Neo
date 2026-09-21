@@ -59,10 +59,10 @@ describe('0.1.0 default keymap freeze', () => {
   it('does not confuse named keys with printable prefixes', () => {
     const bindings: BindingMap = {
       'main-normal:e': 'mainFocusTree',
-      'main-normal:enter': 'mainActivate',
-      'main-normal:escape': 'mainSelectCancel',
+      'main-normal:<Enter>': 'mainActivate',
+      'main-normal:<Esc>': 'mainSelectCancel',
       'main-normal:d': 'mainNavDown',
-      'main-normal:delete': 'mainTrashItems',
+      'main-normal:<Del>': 'mainTrashItems',
     };
 
     expect(strictPrefixPairs(bindings)).toEqual([]);
