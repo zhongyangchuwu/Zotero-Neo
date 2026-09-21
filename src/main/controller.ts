@@ -39,7 +39,14 @@ import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
-import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
+import { MainSelectionActions } from './selection-actions';
+import {
+  mainHost,
+  mainReaderForTab,
+  projectMainItemSelection,
+  selectMainTab,
+  selectedMainTabID,
+} from './host';
 import { PluginManagerPanel } from './plugin-manager';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
@@ -58,12 +65,14 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #noteEditor: NoteEditor;
   readonly #tags: TagActions;
   readonly #itemSelect: MainItemSelect;
+  readonly #selectionActions: MainSelectionActions;
   readonly #pluginManager: PluginManagerPanel;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
+    this.#selectionActions = new MainSelectionActions(this.#navigation);
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
@@ -257,6 +266,8 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (session.inputMode === 'main-select' && !this.#itemSelect.itemsFocused(window)) {
       this.#itemSelect.leave(window);
+      projectMainItemSelection(window, session.selection.values());
+      this.#navigation.refreshSelectionIndicator(window, session);
       session.inputMode = 'main-normal';
       session.keyBuffer = '';
       session.countBuffer = '';
@@ -324,6 +335,10 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (decision.kind === 'execute') {
       if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
+      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
@@ -543,6 +558,20 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainRestoreTrashedItems':
         void this.#navigation.restoreLastTrashedItems(session);
         break;
+      case 'mainToggleSelection':
+        if (session.inputMode === 'main-select') {
+          this.#selectionActions.toggleTarget(
+            window,
+            session,
+            this.#itemSelect.target(window),
+            shouldDebounce,
+          );
+          this.#itemSelect.leave(window);
+          session.inputMode = 'main-normal';
+        } else {
+          this.#selectionActions.toggleCursor(window, session, shouldDebounce);
+        }
+        break;
       case 'mainFocusTree':
       case 'mainFocusLeft':
         this.#navigation.focusPanel(window, session, 'collections');
@@ -651,10 +680,14 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'mainSelectFinish':
         this.#itemSelect.finish(window);
+        projectMainItemSelection(window, session.selection.values());
+        this.#navigation.refreshSelectionIndicator(window, session);
         session.inputMode = 'main-normal';
         break;
       case 'mainSelectCancel':
         this.#itemSelect.cancel(window);
+        projectMainItemSelection(window, session.selection.values());
+        this.#navigation.refreshSelectionIndicator(window, session);
         session.inputMode = 'main-normal';
         break;
       default:
