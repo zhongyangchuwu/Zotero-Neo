@@ -11,6 +11,7 @@ import {
   cycleMainTab,
   mainHost,
   moveMainItemCursor,
+  projectMainItemSelection,
   visibleMainItemRefs,
 } from './host';
 
@@ -332,6 +333,9 @@ export class MainNavigation {
       if (!moveMainItemCursor(window, next, shouldDebounce)) {
         this.#logger.debug('Main item focus-only cursor movement is unavailable');
         return;
+      }
+      if (session.selection) {
+        projectMainItemSelection(window, session.selection.values(), shouldDebounce);
       }
       this.refreshSelectionIndicator(window, session);
       return;
