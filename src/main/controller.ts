@@ -29,7 +29,7 @@ import {
   keyGuideLanguage,
   type KeyGuideLanguage,
 } from '../input/key-guide-config';
-import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
+import { isLeaderPrefix, prefixGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { isEditableElement } from '../platform/dom';
 import { MainWindowSession } from './session';
@@ -402,11 +402,11 @@ export class MainWindowController implements MainWindowControllerApi {
     bindings: BindingMap = this.activeBindings(mode),
   ): void {
     const config = keyGuideConfig(this.#dependencies.preferences);
-    if (!config.enabled || !isLeaderPrefix(prefix)) {
+    if (!config.enabled || !prefix) {
       this.clearKeyGuide(window, session);
       return;
     }
-    const entries = leaderGuideEntries(bindings, mode, prefix, this.keyGuideLanguage());
+    const entries = prefixGuideEntries(bindings, mode, prefix, this.keyGuideLanguage());
     if (!entries.length) {
       this.clearKeyGuide(window, session);
       return;
