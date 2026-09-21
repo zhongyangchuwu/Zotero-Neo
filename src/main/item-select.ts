@@ -1,24 +1,26 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
-import { mainHost } from './host';
+import {
+  currentMainItemCursorRef,
+  mainHost,
+  mainItemRefAtRow,
+  mainItemRowCount,
+  mainItemRowForRef,
+  moveMainItemCursor,
+  projectMainSelection,
+  showMainVisualRange,
+  visibleMainSelectionCount,
+} from './host';
+import type { ItemRef, SelectionStore } from './selection-store';
 
-type NativeSelection = {
-  pivot?: number;
-  focused?: number;
-  count?: number;
-  select?(index: number, shouldDebounce?: boolean): boolean | void;
-  shiftSelect?(index: number, augment: boolean, shouldDebounce?: boolean): void;
-};
 type ItemView = {
-  rowCount?: number;
-  selection?: NativeSelection;
   tree?: unknown;
   domEl?: unknown;
-  ensureRowIsVisible?(index: number): void;
 };
 type ItemSelectDirection = 1 | -1 | 'first' | 'last';
 export type ItemSelectEnterResult = 'entered' | 'focus-items' | 'unavailable' | 'pass';
 type ItemSelectUi = { badge: HTMLElement | null; timer: number | undefined };
+type VisualState = { anchor: ItemRef; head: ItemRef };
 
 function containsTarget(root: unknown, node: unknown): boolean {
   if (!root || !node) return false;
@@ -45,10 +47,18 @@ export function nextItemSelectIndex(
   return Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
 }
 
-/** Thin host adapter over Zotero's native TreeSelection; input routing belongs to Main. */
+/**
+ * Main Visual owns only a transient anchor/head range.
+ *
+ * Neo's SelectionStore remains unchanged while Visual moves. Native TreeSelection
+ * is used only as a visible projection of the transient range, then restored
+ * from SelectionStore on commit/cancel.
+ */
 export class MainItemSelect {
   readonly #logger: Logger;
   readonly #ui = new Map<MainWindow, ItemSelectUi>();
+  readonly #visual = new Map<MainWindow, VisualState>();
+
   constructor(logger: Logger) {
     this.#logger = logger;
   }
@@ -56,29 +66,46 @@ export class MainItemSelect {
   entryRelevant(window: MainWindow): boolean {
     return this.treeFocused(window, 'items') || this.treeFocused(window, 'collections');
   }
+
   itemsFocused(window: MainWindow): boolean {
     return this.treeFocused(window, 'items');
   }
 
   enter(window: MainWindow): ItemSelectEnterResult {
     if (this.treeFocused(window, 'collections')) {
-      this.show(window, 'ITEM SELECT · focus items list', false);
+      this.show(window, 'VISUAL · focus items list', false);
       return 'focus-items';
     }
     if (!this.treeFocused(window, 'items')) return 'pass';
-    const view = this.itemView(window);
-    const selection = view?.selection;
-    const rowCount = view?.rowCount ?? 0;
-    if (!view || !selection?.select || !selection.shiftSelect || rowCount <= 0) {
-      this.show(window, 'ITEM SELECT · unavailable', false);
+
+    const cursor = currentMainItemCursorRef(window);
+    if (!cursor || showMainVisualRange(window, cursor, cursor) === undefined) {
+      this.show(window, 'VISUAL · unavailable', false);
       return 'unavailable';
     }
-    const focused = Math.max(0, Math.min(rowCount - 1, selection.focused ?? 0));
-    selection.select(focused);
-    view.ensureRowIsVisible?.(focused);
-    this.showMode(window, selection);
-    this.#logger.debug(`main item select entered row=${focused}`);
+
+    this.#visual.set(window, { anchor: cursor, head: cursor });
+    this.showMode(window, 1);
+    this.#logger.debug(`main visual entered item=${cursor.libraryID}:${cursor.itemID}`);
     return 'entered';
+  }
+
+  toggleCursor(window: MainWindow, selection: SelectionStore): boolean {
+    if (!this.itemsFocused(window)) return false;
+    const cursor = currentMainItemCursorRef(window);
+    const row = cursor ? mainItemRowForRef(window, cursor) : undefined;
+    if (!cursor || row === undefined) return false;
+
+    selection.toggleTarget([cursor]);
+    const visible = projectMainSelection(window, selection.values(), cursor);
+    const rowCount = mainItemRowCount(window);
+    if (rowCount > 0) moveMainItemCursor(window, Math.min(rowCount - 1, row + 1));
+
+    this.showSelection(window, selection.size, visible);
+    this.#logger.debug(
+      `main selection toggled item=${cursor.libraryID}:${cursor.itemID} count=${selection.size}`,
+    );
+    return true;
   }
 
   extend(
@@ -87,53 +114,62 @@ export class MainItemSelect {
     count: number,
     shouldDebounce = false,
   ): void {
-    const view = this.itemView(window);
-    const selection = view?.selection;
-    const rowCount = view?.rowCount ?? 0;
-    if (!view || !selection?.shiftSelect || rowCount <= 0) return;
-    const current = Math.max(0, Math.min(rowCount - 1, selection.focused ?? 0));
-    const next = nextItemSelectIndex(current, rowCount, direction, count);
-    selection.shiftSelect(next, false, shouldDebounce);
-    view.ensureRowIsVisible?.(next);
-    this.showMode(window, selection);
+    const visual = this.#visual.get(window);
+    if (!visual) return;
+
+    const rowCount = mainItemRowCount(window);
+    const current = mainItemRowForRef(window, visual.head);
+    if (current === undefined || rowCount <= 0) return;
+
+    const requested = nextItemSelectIndex(current, rowCount, direction, count);
+    const step = direction === 'first' ? 1 : direction === 'last' ? -1 : direction === 1 ? 1 : -1;
+    const next = this.itemRefAtOrToward(window, requested, step);
+    if (!next) return;
+
+    visual.head = next;
+    const size = showMainVisualRange(window, visual.anchor, visual.head, shouldDebounce);
+    if (size !== undefined) this.showMode(window, size);
   }
 
   swapEnds(window: MainWindow): void {
-    const view = this.itemView(window);
-    const selection = view?.selection;
-    const pivot = selection?.pivot;
-    const focused = selection?.focused;
-    if (!view || !selection?.shiftSelect || pivot === undefined || focused === undefined) return;
-    selection.pivot = focused;
-    selection.shiftSelect(pivot, false);
-    view.ensureRowIsVisible?.(pivot);
-    this.showMode(window, selection);
+    const visual = this.#visual.get(window);
+    if (!visual) return;
+    [visual.anchor, visual.head] = [visual.head, visual.anchor];
+    const size = showMainVisualRange(window, visual.anchor, visual.head);
+    if (size !== undefined) this.showMode(window, size);
   }
 
-  finish(window: MainWindow): number {
-    const count = this.itemView(window)?.selection?.count ?? 0;
-    this.show(window, `${count} item${count === 1 ? '' : 's'} selected`, false);
-    this.#logger.debug(`main item select exited preserve=true count=${count}`);
-    return count;
+  commit(window: MainWindow, selection: SelectionStore): number {
+    const visual = this.#visual.get(window);
+    if (!visual) return selection.size;
+
+    const refs = this.visualRefs(window, visual);
+    if (refs.length) selection.toggleTarget(refs);
+
+    const cursor = visual.head;
+    this.#visual.delete(window);
+    const visible = projectMainSelection(window, selection.values(), cursor);
+    this.showSelection(window, selection.size, visible);
+    this.#logger.debug(`main visual committed range=${refs.length} selection=${selection.size}`);
+    return selection.size;
   }
 
-  cancel(window: MainWindow): void {
-    const view = this.itemView(window);
-    const selection = view?.selection;
-    if (view && selection?.select) {
-      const last = Math.max(0, (view.rowCount ?? 1) - 1);
-      const focused = Math.max(0, Math.min(last, selection.focused ?? 0));
-      selection.select(focused);
-      view.ensureRowIsVisible?.(focused);
-    }
-    this.show(window, 'Item selection cancelled', false);
-    this.#logger.debug('main item select exited preserve=false');
+  cancel(window: MainWindow, selection: SelectionStore): void {
+    const visual = this.#visual.get(window);
+    const cursor = visual?.head ?? currentMainItemCursorRef(window);
+    this.#visual.delete(window);
+    const visible = projectMainSelection(window, selection.values(), cursor);
+    this.show(window, `Visual cancelled · Selection ${selection.size} · ${visible} visible`, false);
+    this.#logger.debug('main visual cancelled');
   }
 
   leave(window: MainWindow): void {
+    this.#visual.delete(window);
     this.hide(window);
   }
+
   removeWindow(window: MainWindow): void {
+    this.#visual.delete(window);
     const ui = this.#ui.get(window);
     if (!ui) return;
     window.clearTimeout(ui.timer);
@@ -141,9 +177,34 @@ export class MainItemSelect {
     this.#ui.delete(window);
   }
 
+  private visualRefs(window: MainWindow, visual: VisualState): ItemRef[] {
+    const anchor = mainItemRowForRef(window, visual.anchor);
+    const head = mainItemRowForRef(window, visual.head);
+    if (anchor === undefined || head === undefined) return [];
+
+    const start = Math.min(anchor, head);
+    const end = Math.max(anchor, head);
+    const refs: ItemRef[] = [];
+    for (let row = start; row <= end; row += 1) {
+      const ref = mainItemRefAtRow(window, row);
+      if (ref) refs.push(ref);
+    }
+    return refs;
+  }
+
+  private itemRefAtOrToward(window: MainWindow, start: number, step: 1 | -1): ItemRef | undefined {
+    const rowCount = mainItemRowCount(window);
+    for (let row = start; row >= 0 && row < rowCount; row += step) {
+      const ref = mainItemRefAtRow(window, row);
+      if (ref) return ref;
+    }
+    return undefined;
+  }
+
   private itemView(window: MainWindow): ItemView | undefined {
     return mainHost(window).ZoteroPane?.itemsView as unknown as ItemView | undefined;
   }
+
   private treeFocused(window: MainWindow, panel: 'items' | 'collections'): boolean {
     const active = window.document.activeElement;
     if (!active) return false;
@@ -171,10 +232,15 @@ export class MainItemSelect {
       (panel === 'items' ? id.includes('item-tree') : id.includes('collection'))
     );
   }
-  private showMode(window: MainWindow, selection: NativeSelection): void {
-    const count = selection.count ?? 0;
-    this.show(window, `-- ITEM SELECT -- · ${count} item${count === 1 ? '' : 's'}`, true);
+
+  private showMode(window: MainWindow, count: number): void {
+    this.show(window, `-- VISUAL -- · ${count} item${count === 1 ? '' : 's'}`, true);
   }
+
+  private showSelection(window: MainWindow, count: number, visible: number): void {
+    this.show(window, `Selection ${count} · ${visible} visible`, false);
+  }
+
   private show(window: MainWindow, text: string, persistent: boolean): void {
     let ui = this.#ui.get(window);
     if (!ui) {
@@ -195,6 +261,7 @@ export class MainItemSelect {
     ui.badge.style.display = 'block';
     if (!persistent) ui.timer = window.setTimeout(() => this.hide(window), 1200);
   }
+
   private hide(window: MainWindow): void {
     const ui = this.#ui.get(window);
     if (!ui) return;
