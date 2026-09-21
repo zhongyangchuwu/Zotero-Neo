@@ -66,10 +66,17 @@ type PrivateItemSelection = {
   _updateTree?(shouldDebounce?: boolean): void;
 };
 
+type MainItemViewEventBinding = {
+  addListener(listener: () => void | Promise<void>): void;
+  removeListener(listener: () => void | Promise<void>): void;
+};
+
 type MainPane = {
   readonly collectionsView?: TreeView;
   readonly itemsView?: TreeView & {
     readonly rowCount?: number;
+    readonly onRefresh?: MainItemViewEventBinding;
+    readonly onRowCountChange?: MainItemViewEventBinding;
     setFilter?(type: 'tags', tags: ReadonlySet<string>): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
@@ -163,6 +170,23 @@ export function mainItem(id: number): Zotero.Item | undefined {
 
 export function mainSelectedItems(window: MainWindow): Zotero.Item[] {
   return mainPane(window)?.getSelectedItems?.() ?? [];
+}
+
+export function observeMainItemView(
+  window: MainWindow,
+  listener: () => void,
+): (() => void) | null {
+  const view = mainPane(window)?.itemsView;
+  if (!view) return null;
+  const bindings = [view.onRefresh, view.onRowCountChange].filter(
+    (binding): binding is MainItemViewEventBinding => !!binding,
+  );
+  if (!bindings.length) return null;
+
+  for (const binding of bindings) binding.addListener(listener);
+  return () => {
+    for (const binding of bindings) binding.removeListener(listener);
+  };
 }
 
 export function mainItemRefAtRow(window: MainWindow, index: number): ItemRef | undefined {
