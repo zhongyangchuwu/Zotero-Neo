@@ -210,7 +210,7 @@ export class TagActions {
   }
 
   private targets(window: MainWindow, session: MainWindowSession): ItemTargetSet | null {
-    const targets = resolveItemTagTargets(window);
+    const targets = resolveItemTagTargets(window, session.selection);
     if (targets.items.length) return targets;
     this.#navigation.status(session, '✗ No taggable item target');
     return null;
