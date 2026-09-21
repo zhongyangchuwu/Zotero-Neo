@@ -333,6 +333,7 @@ describe('binding preferences', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 13,
       bindings: JSON.stringify({
+        'main-normal:<Space>': 'previousTab',
         'main-normal:<Space>zx': 'nextTab',
         'main-normal:<Space>ff': 'previousTab',
         'main-normal:ff': 'findNotes',
