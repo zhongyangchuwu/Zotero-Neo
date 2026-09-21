@@ -32,7 +32,10 @@ export function normalizeItemTargets(items: readonly Zotero.Item[]): Zotero.Item
   return [...byID.values()];
 }
 
-export function resolveItemTagTargets(window: MainWindow): ItemTargetSet {
+export function resolveItemTagTargets(
+  window: MainWindow,
+  mainItems: readonly Zotero.Item[] = mainSelectedItems(window),
+): ItemTargetSet {
   const contextNote = activeContextNoteItem(window);
   if (contextNote) return { source: 'note', items: normalizeItemTargets([contextNote]) };
 
@@ -49,7 +52,7 @@ export function resolveItemTagTargets(window: MainWindow): ItemTargetSet {
     return { source: 'note', items: normalizeItemTargets(item ? [item] : []) };
   }
 
-  return { source: 'main', items: normalizeItemTargets(mainSelectedItems(window)) };
+  return { source: 'main', items: normalizeItemTargets(mainItems) };
 }
 
 export function itemTagState(items: readonly Zotero.Item[], tag: string): ItemTagState {
