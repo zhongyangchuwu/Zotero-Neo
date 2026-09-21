@@ -1,27 +1,33 @@
-# Item Select and Tag Actions
+# Selection and Tag Actions
 
-Zotero Neo keeps item selection and tag mutation on Zotero's native data model.
-Neo resolves targets and executes explicit semantic actions; it does not maintain
-a second item-selection set, a private tag database, or a persistent tag-operation
-workspace.
+Zotero Neo keeps Zotero authoritative for Item data and mutations, while Main
+interaction state separates Cursor, persistent Selection, and transient Visual
+ranges. Selection stores only stable item identities for the current session;
+Zotero's native TreeSelection is used as a visible projection rather than the
+complete workset source of truth.
 
-## Main item selection
+## Main Selection and Visual
 
 With focus in Zotero's main item list:
 
-- `v` enters `ITEM SELECT` from the currently focused item.
-- `j` / `k` extend or shrink the native Zotero range; counts work (`5j`).
-- `gg` / `G` extend to the first or last row.
-- `o` swaps the active endpoint while keeping the same range.
-- `v` finishes Item Select and preserves the native multi-selection.
-- `Esc` cancels Item Select and collapses back to the focused item.
+- `j` / `k` move Cursor without changing Selection.
+- `Space` toggles the Cursor item in Selection, then advances Cursor down.
+- `v` enters a transient Visual range anchored at Cursor.
+- Visual `j` / `k` / `gg` / `G` move the range head.
+- Visual `o` swaps anchor and head.
+- Visual `Space` commits the whole range to Selection and returns to Normal.
+- Visual `v` / `Esc` cancel the range without modifying Selection.
 
-The selected rows remain Zotero's own `TreeSelection`. Semantic actions such as
-tag mutation and trash therefore operate on the same selection that Zotero sees.
+Range commit is all-or-none: if every item in the Visual range is already in
+Selection, the whole range is removed; otherwise the whole range is added.
 
-Item Select is intentionally limited to the main item list. The collection tree
-remains a single active collection/navigation context rather than a
-`TargetSet<Collection>` workflow.
+Visual temporarily uses Zotero's native row selection to render the contiguous
+range, then restores the visible Selection projection on commit/cancel.
+Selection itself is a Neo-owned session workset of stable item identities, so
+moving Cursor or editing a Visual range does not redefine it.
+
+The collection tree remains a separate scope/navigation context. Pressing Space
+there stays Zotero-native and does not toggle item Selection.
 
 ## Tag action vocabulary
 
