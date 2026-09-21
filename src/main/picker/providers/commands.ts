@@ -10,9 +10,6 @@ const UNBOUND_LABELS = {
   'zh-CN': '未绑定',
 } as const;
 
-function displayKey(sequence: string): string {
-  return sequence.startsWith(' ') ? `<space>${sequence.slice(1)}` : sequence;
-}
 function isSupportedAction(context: CommandPaletteContext, action: unknown): action is ActionId {
   return isActionId(action) && actionsForBindingMode(context.bindingMode).includes(action);
 }
@@ -23,7 +20,7 @@ function commandItems(context: CommandPaletteContext): PickerItem[] {
     const binding = parseBindingKey(bindingKey);
     if (!binding || binding.mode !== context.bindingMode || !isActionId(action)) continue;
     const keys = keysByAction.get(action) ?? new Set<string>();
-    keys.add(displayKey(binding.sequence));
+    keys.add(binding.sequence);
     keysByAction.set(action, keys);
   }
 
