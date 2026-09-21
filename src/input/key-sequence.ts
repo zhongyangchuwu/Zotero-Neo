@@ -351,6 +351,18 @@ export function migrateLegacyKeySequence(sequence: string): string | null {
   const tokens: string[] = [];
   let index = 0;
   while (index < sequence.length) {
+    if (sequence[index] === '<') {
+      const close = sequence.indexOf('>', index + 1);
+      if (close > index + 1) {
+        const symbolic = parseNotationToken(sequence.slice(index + 1, close));
+        if (symbolic) {
+          tokens.push(symbolic);
+          index = close + 1;
+          continue;
+        }
+      }
+    }
+
     const parsed = legacyTokenAt(sequence, index);
     if (!parsed) return null;
     tokens.push(parsed.token);
