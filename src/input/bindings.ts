@@ -488,7 +488,15 @@ export function migrateMainSpaceSelectionOverrides(raw: unknown): string {
     if (binding?.mode !== 'main-normal') continue;
 
     const tokens = bindingSequenceTokens(binding.sequence);
-    if (!tokens || tokens.length <= 1 || tokens[0] !== ' ') continue;
+    if (!tokens || tokens[0] !== ' ') continue;
+
+    // Main's exact Space is a new reserved semantic key in schema 14. Any
+    // historical exact override (including an explicit unbinding) must not
+    // shadow the Selection toggle after upgrade.
+    if (tokens.length === 1) {
+      delete overrides[key];
+      continue;
+    }
 
     const directSequence = serializeBindingTokens(tokens.slice(1));
     if (!directSequence) continue;
