@@ -15,6 +15,7 @@ function navigationHost() {
     count: 2,
     selected: new Set([0, 2]),
     select: vi.fn(),
+    _updateTree: vi.fn(),
   };
   const rows = [
     { ref: { id: 10, libraryID: 1 } },
@@ -32,7 +33,7 @@ function navigationHost() {
     rowCount: rows.length,
     domEl: { contains: (node: unknown) => node === active },
     selection,
-    tree: { _onSelection: onSelection },
+    tree: { _onSelection: onSelection, invalidate: vi.fn() },
     getRow: (index: number) => rows[index],
   };
   const document = {
@@ -53,16 +54,15 @@ function navigationHost() {
 }
 
 describe('MainNavigation v0.2 item cursor', () => {
-  it('moves item Cursor without collapsing native multi-selection', () => {
+  it('projects an empty explicit workset as the moved Cursor without calling select()', () => {
     const host = navigationHost();
     const navigation = new MainNavigation(logger, () => {});
-    const selectedBefore = [...host.selection.selected];
 
     navigation.navigate(host.window, host.session, 1, 1, true);
 
     expect(host.onSelection).toHaveBeenCalledWith(1, false, false, true, true);
     expect(host.selection.focused).toBe(1);
-    expect([...host.selection.selected]).toEqual(selectedBefore);
+    expect([...host.selection.selected]).toEqual([1]);
     expect(host.selection.select).not.toHaveBeenCalled();
   });
 
@@ -95,6 +95,8 @@ describe('MainNavigation v0.2 item cursor', () => {
       { libraryID: 1, itemID: 10 },
       { libraryID: 1, itemID: 12 },
     ]);
+    expect([...host.selection.selected]).toEqual([0, 2]);
+    expect(host.selection.focused).toBe(1);
     expect(indicator.textContent).toBe('Selection 2 · 2 visible');
     expect(append).toHaveBeenCalledWith(indicator);
   });
