@@ -150,23 +150,23 @@ export const DEFAULT_BINDINGS = {
   'note-insert:ctrl+j': 'focusReaderSplitDown',
   'note-insert:ctrl+k': 'focusReaderSplitUp',
   'note-insert:ctrl+l': 'focusReaderSplitRight',
-  'main-normal: ff': 'findAllItems',
+  'main-normal:ff': 'findAllItems',
   'main-normal::': 'openCommandPalette',
-  'main-normal: fc': 'findCollectionItems',
-  'main-normal: ,': 'switchTab',
-  'main-normal: ta': 'addTag',
-  'main-normal: tr': 'removeTag',
-  'main-normal: tf': 'toggleTagFilter',
-  'main-normal: tc': 'clearTagFilters',
-  'main-normal: q': 'closeCurrentTab',
-  'main-normal: fn': 'findNotes',
-  'main-normal: pp': 'managePlugins',
-  'main-normal: e': 'mainFocusTree',
-  'main-normal: yy': 'mainYankCitekey',
-  'main-normal: o': 'mainOpenPDF',
-  'main-normal: wh': 'mainFocusLeft',
-  'main-normal: wl': 'mainFocusRight',
-  'main-normal: ww': 'mainFocusItems',
+  'main-normal:fc': 'findCollectionItems',
+  'main-normal:,': 'switchTab',
+  'main-normal:ta': 'addTag',
+  'main-normal:tr': 'removeTag',
+  'main-normal:tf': 'toggleTagFilter',
+  'main-normal:tc': 'clearTagFilters',
+  'main-normal:q': 'closeCurrentTab',
+  'main-normal:fn': 'findNotes',
+  'main-normal:pp': 'managePlugins',
+  'main-normal:e': 'mainFocusTree',
+  'main-normal:yy': 'mainYankCitekey',
+  'main-normal:o': 'mainOpenPDF',
+  'main-normal:wh': 'mainFocusLeft',
+  'main-normal:wl': 'mainFocusRight',
+  'main-normal:ww': 'mainFocusItems',
   'main-normal:ctrl+h': 'focusReaderSplitLeft',
   'main-normal:ctrl+j': 'focusReaderSplitDown',
   'main-normal:ctrl+k': 'focusReaderSplitUp',
@@ -408,6 +408,46 @@ export function migrateSemanticKeymapOverrides(raw: unknown): string {
   for (const [key, action] of Object.entries({ ...overrides })) {
     const binding = parseBindingKey(key);
     if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
+  }
+
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Migrates Main semantic defaults away from the Space leader for v0.2.
+ *
+ * Compact overrides normally omit defaults. Explicit null tombstones must follow
+ * a moved default so an intentionally disabled command is not silently
+ * re-enabled at its new direct prefix. Custom old Space-prefixed bindings are
+ * preserved as custom bindings.
+ */
+export function migrateMainDirectPrefixOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const moveNull = (oldKey: string, newKey: string): void => {
+    if (overrides[oldKey] !== null) return;
+    delete overrides[oldKey];
+    if (!(newKey in overrides)) overrides[newKey] = null;
+  };
+
+  for (const [oldKey, newKey] of [
+    ['main-normal: ff', 'main-normal:ff'],
+    ['main-normal: fc', 'main-normal:fc'],
+    ['main-normal: ,', 'main-normal:,'],
+    ['main-normal: ta', 'main-normal:ta'],
+    ['main-normal: tr', 'main-normal:tr'],
+    ['main-normal: tf', 'main-normal:tf'],
+    ['main-normal: tc', 'main-normal:tc'],
+    ['main-normal: q', 'main-normal:q'],
+    ['main-normal: fn', 'main-normal:fn'],
+    ['main-normal: pp', 'main-normal:pp'],
+    ['main-normal: e', 'main-normal:e'],
+    ['main-normal: yy', 'main-normal:yy'],
+    ['main-normal: o', 'main-normal:o'],
+    ['main-normal: wh', 'main-normal:wh'],
+    ['main-normal: wl', 'main-normal:wl'],
+    ['main-normal: ww', 'main-normal:ww'],
+  ] as const) {
+    moveNull(oldKey, newKey);
   }
 
   return stringifyBindingOverrides(overrides);
