@@ -6,6 +6,7 @@ import { createTagCandidateProvider, type TagRecord } from './picker/providers/t
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
 import { applyMainTagFilter, currentTagSelection, mainHost } from './host';
+import { resolveMainEffectiveTargets } from './action-targets';
 import {
   itemTagState,
   resolveItemTagTargets,
@@ -210,7 +211,8 @@ export class TagActions {
   }
 
   private targets(window: MainWindow, session: MainWindowSession): ItemTargetSet | null {
-    const targets = resolveItemTagTargets(window);
+    const mainTargets = resolveMainEffectiveTargets(window, session);
+    const targets = resolveItemTagTargets(window, mainTargets.items);
     if (targets.items.length) return targets;
     this.#navigation.status(session, '✗ No taggable item target');
     return null;
