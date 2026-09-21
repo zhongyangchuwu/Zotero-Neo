@@ -278,7 +278,7 @@ Virtual tag namespaces such as `method/` may appear as non-terminal refinement
 candidates when `tags.separator` is configured. Confirming a namespace narrows
 the query; it never mutates item data.
 
-See [Item Select and Tag Actions](TAGS.md) for target-resolution and persistence
+See [Selection and Tag Actions](TAGS.md) for target-resolution and persistence
 semantics.
 
 ##### Notes
