@@ -22,7 +22,7 @@ import {
   keyGuideLanguage,
   type KeyGuideLanguage,
 } from '../input/key-guide-config';
-import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
+import { isLeaderPrefix, prefixGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { isReaderDelegableMainAction } from '../main/action-capabilities';
@@ -1375,11 +1375,11 @@ export class ReaderSession {
   private refreshKeyGuide(): void {
     const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
     const prefix = this.state.keyBuffer;
-    if (!config.enabled || this.state.mode !== 'normal' || !isLeaderPrefix(prefix)) {
+    if (!config.enabled || this.state.mode !== 'normal' || !prefix) {
       this.clearKeyGuide();
       return;
     }
-    const entries = leaderGuideEntries(
+    const entries = prefixGuideEntries(
       this.#dependencies.bindings(),
       readerBindingMode(this.state.mode),
       prefix,
