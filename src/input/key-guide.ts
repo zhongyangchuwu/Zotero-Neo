@@ -14,26 +14,42 @@ export function isLeaderPrefix(prefix: string): boolean {
   return prefix.startsWith(' ');
 }
 
+export function isGuidePrefix(bindings: BindingMap, mode: Mode, prefix: string): boolean {
+  if (!prefix || bindings[`${mode}:${prefix}`]) return false;
+  return Object.keys(bindings).some((bindingKey) => {
+    const binding = parseBindingKey(bindingKey);
+    return (
+      binding?.mode === mode &&
+      binding.sequence.startsWith(prefix) &&
+      binding.sequence.length > prefix.length
+    );
+  });
+}
+
 export function formatGuideKey(key: string): string {
   return key === ' ' ? 'SPC' : key;
 }
 
 export function formatGuidePrefix(prefix: string): string {
-  if (!isLeaderPrefix(prefix)) return '';
-  return ['SPC', ...[...prefix.slice(1)].map(formatGuideKey)].join(' › ');
+  return [...prefix].map(formatGuideKey).join(' › ');
+}
+
+function groupLabelKey(prefix: string, key: string): keyof typeof KEY_GUIDE_CONFIG.groupLabels {
+  return `${prefix}${key}`.trimStart() as keyof typeof KEY_GUIDE_CONFIG.groupLabels;
 }
 
 /**
- * Projects immediately valid Space-leader continuations from the same resolved binding map
- * used by the dispatcher. The projection deliberately creates no executable bindings.
+ * Projects immediately valid continuations from the same resolved binding map
+ * used by the dispatcher. The projection deliberately creates no executable
+ * bindings and works for both Space-leader and ordinary direct prefixes.
  */
-export function leaderGuideEntries(
+export function guideEntries(
   bindings: BindingMap,
   mode: Mode,
   prefix: string,
   language: KeyGuideLanguage,
 ): readonly KeyGuideEntry[] {
-  if (!isLeaderPrefix(prefix)) return [];
+  if (!isGuidePrefix(bindings, mode, prefix)) return [];
 
   const candidates = new Map<string, { action: ActionId | null; hasChildren: boolean }>();
   for (const [bindingKey, action] of Object.entries(bindings)) {
@@ -54,10 +70,7 @@ export function leaderGuideEntries(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, candidate]) => {
       const group = candidate.hasChildren;
-      const groupLabel =
-        KEY_GUIDE_CONFIG.groupLabels[
-          `${prefix}${key}`.slice(1) as keyof typeof KEY_GUIDE_CONFIG.groupLabels
-        ];
+      const groupLabel = KEY_GUIDE_CONFIG.groupLabels[groupLabelKey(prefix, key)];
       const actionLabel = candidate.action
         ? (KEY_GUIDE_CONFIG.actionLabels[candidate.action] ?? ACTION_LABELS[candidate.action])
         : null;
@@ -71,4 +84,14 @@ export function leaderGuideEntries(
         isGroup: group,
       };
     });
+}
+
+/** Space-leader compatibility wrapper for Reader/Note callers. */
+export function leaderGuideEntries(
+  bindings: BindingMap,
+  mode: Mode,
+  prefix: string,
+  language: KeyGuideLanguage,
+): readonly KeyGuideEntry[] {
+  return isLeaderPrefix(prefix) ? guideEntries(bindings, mode, prefix, language) : [];
 }
