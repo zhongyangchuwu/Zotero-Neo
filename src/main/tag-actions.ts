@@ -20,7 +20,7 @@ function sameTag(left: string, right: string): boolean {
 
 function targetLabel(targets: ItemTargetSet): string {
   const context =
-    targets.source === 'reader' ? 'Reader' : targets.source === 'note' ? 'Note' : 'Main selection';
+    targets.source === 'reader' ? 'Reader' : targets.source === 'note' ? 'Note' : 'Main target';
   return `${context} · ${targets.items.length} item${targets.items.length === 1 ? '' : 's'}`;
 }
 
