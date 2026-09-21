@@ -400,3 +400,8 @@ export function migrateLegacyKeySequence(sequence: string): string | null {
 export function formatInputSequence(buffer: string): readonly string[] {
   return inputBufferTokens(buffer) ?? [];
 }
+
+export function formatInputBuffer(buffer: string): string {
+  const tokens = inputBufferTokens(buffer);
+  return tokens ? serializeBindingTokens(tokens) : '';
+}
