@@ -25,9 +25,9 @@ verification in the current stable host.
 - Keyboard navigation across collections, saved searches, feeds, item lists, and
   tabs, including Vim-style `j/k`, `gg/G`, tree expansion/collapse, pane focus,
   PDF opening, tab switching/closing, trash, and restore.
-- Native-backed **Item Select** for range selection with counts, endpoint swap,
-  preserve/cancel semantics, and bulk actions without maintaining a parallel
-  selected-item model.
+- Independent Main **Cursor** plus an ephemeral session **Selection** workset keyed by stable
+  item identities. `Space` toggles the item under Cursor and advances; `v` opens a transient
+  Visual range whose `Space` commit adds/removes the whole range.
 - Better BibTeX citekey copying when Better BibTeX is available.
 
 ### Reader navigation
@@ -62,10 +62,10 @@ verification in the current stable host.
 
 ### Tags
 
-- `<Space>ta` **adds** one chosen tag to the current Main/Reader/Note target set;
-  `<Space>tr` explicitly **removes** one chosen tag.
-- Main-only `<Space>tf` toggles one tag in Zotero's native AND-filter state;
-  `<Space>tc` clears all active tag filters without opening a chooser.
+- Main uses direct `ta` / `tr` for Add/Remove Tag; Reader and Note keep
+  `<Space>ta` / `<Space>tr`.
+- Main-only `tf` toggles one tag in Zotero's native AND-filter state and `tc` clears active
+  tag filters without opening a chooser.
 - Tag actions reuse the shared target chooser instead of exposing a persistent
   tag-operation console. Add Tag may offer an explicit create candidate.
 - Optional virtual tag-path refinement such as `method/...` is presentation-only;
@@ -82,7 +82,8 @@ verification in the current stable host.
 
 - Configurable Reader/Main/Note bindings with multiple bindings per action,
   duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
-- Space-leader Key Guide derived from the active resolved keymap.
+- Pending-prefix Key Guide derived from the active resolved keymap; Reader/Note Space-leader
+  sequences remain one supported prefix family.
 - Auto, Light, and Dark appearance modes on Neo-owned surfaces.
 
 ## Install
@@ -116,8 +117,8 @@ From File…** and restart when prompted.
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
   semantic actions, and Zotero host boundaries.
-- [Item Select and Tags](docs/TAGS.md) — native-backed item selection, explicit
-  tag actions, filtering, and virtual tag-path semantics.
+- [Selection and Tags](docs/TAGS.md) — Main Cursor/Selection targeting, explicit tag actions,
+  filtering, and virtual tag-path semantics.
 - [Input methods](docs/INPUT_METHODS.md) — Unicode/IME ownership and composition
   boundaries.
 - [Development guide](docs/DEVELOPMENT.md) — build, CI, release, host seams, and
