@@ -1,6 +1,10 @@
 import { isActionId, type ActionId } from './actions';
 import { NOTE_LOCAL_DEFAULT_BINDINGS, isNoteCrossContextActionId } from './note-actions';
-import { canonicalBindingSequence, migrateLegacyKeySequence } from './key-sequence';
+import {
+  bindingSequenceTokens,
+  canonicalBindingSequence,
+  migrateLegacyKeySequence,
+} from './key-sequence';
 
 export const MODES = [
   'reader-normal',
@@ -89,7 +93,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>ff': 'findAllItems',
   'reader-normal:<Space>fc': 'findCollectionItems',
   'reader-normal:<Space>,': 'switchTab',
-  'reader-normal:<Space>q': 'closeCurrentTab',
+  'reader-normal: q': 'closeCurrentTab',
   'reader-normal:<Space>ta': 'addTag',
   'reader-normal:<Space>tr': 'removeTag',
   'reader-normal:<Space>fn': 'findNotes',
@@ -277,24 +281,24 @@ const RETIRED_DEFAULT_BINDINGS = {
   'reader-normal:K': 'nextTab',
   'main-normal:J': 'previousTab',
   'main-normal:K': 'nextTab',
-  'reader-normal:<Space>fb': 'findCollectionItems',
-  'reader-normal:<Space>bj': 'switchTab',
-  'reader-normal:<Space>o': 'mainOpenPDF',
-  'reader-normal:<Space>q': 'closeCurrentTab',
+  'reader-normal: fb': 'findCollectionItems',
+  'reader-normal: bj': 'switchTab',
+  'reader-normal: o': 'mainOpenPDF',
+  'reader-normal: q': 'closeCurrentTab',
   'main-normal: fb': 'findCollectionItems',
   'main-normal: bj': 'switchTab',
   'main-normal: q': 'closeCurrentTab',
-  'reader-normal:<Space>n': 'findNotes',
+  'reader-normal: n': 'findNotes',
   'main-normal: n': 'findNotes',
-  'reader-normal:<Space>tp': 'switchTab',
+  'reader-normal: tp': 'switchTab',
   'main-normal: tp': 'switchTab',
-  'reader-normal:<Space>ft': 'switchTab',
-  'note-normal:<Space>ft': 'switchTab',
+  'reader-normal: ft': 'switchTab',
+  'note-normal: ft': 'switchTab',
   'main-normal: ft': 'switchTab',
-  'reader-normal:<Space>td': 'closeCurrentTab',
-  'note-normal:<Space>td': 'closeCurrentTab',
+  'reader-normal: td': 'closeCurrentTab',
+  'note-normal: td': 'closeCurrentTab',
   'main-normal: td': 'closeCurrentTab',
-  'note-normal:<Space>fT': 'toggleTagFilter',
+  'note-normal: fT': 'toggleTagFilter',
   'main-normal: fT': 'toggleTagFilter',
   'main-normal:ctrl+u': 'mainRestoreTrashedItems',
 } as const;
@@ -324,7 +328,10 @@ export function migrateLegacyBindingOverrides(raw: unknown): string {
       RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS] === normalized
     )
       continue;
-    if (DEFAULT_BINDINGS[canonicalKey as keyof typeof DEFAULT_BINDINGS] !== normalized)
+
+    const migratedSequence = migrateLegacyKeySequence(binding.sequence);
+    const currentKey = migratedSequence ? `${binding.mode}:${migratedSequence}` : canonicalKey;
+    if (DEFAULT_BINDINGS[currentKey as keyof typeof DEFAULT_BINDINGS] !== normalized)
       overrides[canonicalKey] = normalized;
   }
   return stringifyBindingOverrides(overrides);
@@ -343,10 +350,14 @@ const NOTE_INHERITED_MAIN_SEQUENCES = new Set([
   'ctrl+j',
   'ctrl+k',
   'ctrl+l',
+  '<C-h>',
+  '<C-j>',
+  '<C-k>',
+  '<C-l>',
 ]);
 
 function noteInheritedMainSequence(sequence: string): boolean {
-  return sequence.startsWith(' ') || NOTE_INHERITED_MAIN_SEQUENCES.has(sequence);
+  return bindingSequenceTokens(sequence)?.[0] === ' ' || NOTE_INHERITED_MAIN_SEQUENCES.has(sequence);
 }
 
 /** Copies schema-8 Note-global Main overrides into the new explicit Note scope. */
@@ -398,15 +409,15 @@ export function migrateSemanticKeymapOverrides(raw: unknown): string {
     if (!(newKey in overrides)) overrides[newKey] = null;
   };
 
-  moveNull('reader-normal:<Space>ft', 'reader-normal:<Space>,');
-  moveNull('note-normal:<Space>ft', 'note-normal:<Space>,');
-  moveNull('main-normal: ft', 'main-normal: ,');
-  moveNull('reader-normal:<Space>td', 'reader-normal:<Space>q');
-  moveNull('note-normal:<Space>td', 'note-normal:<Space>q');
-  moveNull('main-normal: td', 'main-normal: q');
-  moveNull('main-normal: fT', 'main-normal: tf');
+  moveNull('reader-normal: ft', 'reader-normal:<Space>,');
+  moveNull('note-normal: ft', 'note-normal:<Space>,');
+  moveNull('main-normal:<Space>ft', 'main-normal:<Space>,');
+  moveNull('reader-normal: td', 'reader-normal: q');
+  moveNull('note-normal: td', 'note-normal:<Space>q');
+  moveNull('main-normal:<Space>td', 'main-normal:<Space>q');
+  moveNull('main-normal:<Space>fT', 'main-normal:<Space>tf');
 
-  if (overrides['note-normal:<Space>fT'] === null) delete overrides['note-normal:<Space>fT'];
+  if (overrides['note-normal: fT'] === null) delete overrides['note-normal: fT'];
   for (const [key, action] of Object.entries({ ...overrides })) {
     const binding = parseBindingKey(key);
     if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
@@ -432,22 +443,22 @@ export function migrateMainDirectPrefixOverrides(raw: unknown): string {
   };
 
   for (const [oldKey, newKey] of [
-    ['main-normal: ff', 'main-normal:ff'],
-    ['main-normal: fc', 'main-normal:fc'],
-    ['main-normal: ,', 'main-normal:,'],
-    ['main-normal: ta', 'main-normal:ta'],
-    ['main-normal: tr', 'main-normal:tr'],
-    ['main-normal: tf', 'main-normal:tf'],
-    ['main-normal: tc', 'main-normal:tc'],
-    ['main-normal: q', 'main-normal:q'],
-    ['main-normal: fn', 'main-normal:fn'],
-    ['main-normal: pp', 'main-normal:pp'],
-    ['main-normal: e', 'main-normal:e'],
-    ['main-normal: yy', 'main-normal:yy'],
-    ['main-normal: o', 'main-normal:o'],
-    ['main-normal: wh', 'main-normal:wh'],
-    ['main-normal: wl', 'main-normal:wl'],
-    ['main-normal: ww', 'main-normal:ww'],
+    ['main-normal:<Space>ff', 'main-normal:ff'],
+    ['main-normal:<Space>fc', 'main-normal:fc'],
+    ['main-normal:<Space>,', 'main-normal:,'],
+    ['main-normal:<Space>ta', 'main-normal:ta'],
+    ['main-normal:<Space>tr', 'main-normal:tr'],
+    ['main-normal:<Space>tf', 'main-normal:tf'],
+    ['main-normal:<Space>tc', 'main-normal:tc'],
+    ['main-normal:<Space>q', 'main-normal:q'],
+    ['main-normal:<Space>fn', 'main-normal:fn'],
+    ['main-normal:<Space>pp', 'main-normal:pp'],
+    ['main-normal:<Space>e', 'main-normal:e'],
+    ['main-normal:<Space>yy', 'main-normal:yy'],
+    ['main-normal:<Space>o', 'main-normal:o'],
+    ['main-normal:<Space>wh', 'main-normal:wh'],
+    ['main-normal:<Space>wl', 'main-normal:wl'],
+    ['main-normal:<Space>ww', 'main-normal:ww'],
   ] as const) {
     moveNull(oldKey, newKey);
   }
