@@ -779,8 +779,8 @@ describe('Reader leader timer guards', () => {
     vi.useFakeTimers();
     const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
     const bindings: BindingMap = {
-      'reader-normal: f': 'findAllItems',
-      'reader-normal: ff': 'switchTab',
+      'reader-normal:<Space>f': 'findAllItems',
+      'reader-normal:<Space>ff': 'switchTab',
     };
     const created = createHistorySession({}, delegateMain, bindings);
     const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
@@ -1152,7 +1152,7 @@ describe('reader sidebar coordination', () => {
     const bindings = {
       ...Object.fromEntries(
         Object.entries(DEFAULT_BINDINGS).filter(
-          ([binding]) => binding !== 'reader-normal: e' && binding !== 'reader-normal: m',
+          ([binding]) => binding !== 'reader-normal:<Space>e' && binding !== 'reader-normal:<Space>m',
         ),
       ),
       'reader-normal:q': 'toggleReaderSidebarOutline',
