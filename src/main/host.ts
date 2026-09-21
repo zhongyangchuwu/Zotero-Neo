@@ -1,5 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import type { TreeView } from './navigation';
+import type { ItemRef } from './selection-store';
 
 export type TagJson = _ZoteroTypes.Tags.TagJson;
 
@@ -37,6 +38,31 @@ type MainTabs = {
   selectTab?(id: string): void;
   showTab?(id: string): void;
   getTabInfo?(id?: string): MainTabInfo;
+};
+
+
+type ItemTreeRow = {
+  readonly ref?: {
+    readonly id?: number;
+    readonly libraryID?: number;
+  };
+};
+
+type PrivateItemTree = {
+  _onSelection?(
+    index: number,
+    shiftSelect: boolean,
+    toggleSelection: boolean,
+    moveFocused: boolean,
+    shouldDebounce?: boolean,
+  ): void;
+  invalidateRow?(index: number): void;
+};
+
+type PrivateItemSelection = {
+  focused?: number;
+  pivot?: number;
+  _updateTree?(shouldDebounce?: boolean): void;
 };
 
 type MainPane = {
@@ -136,6 +162,70 @@ export function mainItem(id: number): Zotero.Item | undefined {
 
 export function mainSelectedItems(window: MainWindow): Zotero.Item[] {
   return mainPane(window)?.getSelectedItems?.() ?? [];
+}
+
+
+export function mainItemRefAtRow(window: MainWindow, index: number): ItemRef | undefined {
+  const row = mainPane(window)?.itemsView?.getRow?.(index) as ItemTreeRow | undefined;
+  const id = row?.ref?.id;
+  const libraryID = row?.ref?.libraryID;
+  if (!Number.isInteger(id) || !Number.isInteger(libraryID)) return undefined;
+  return { itemID: id as number, libraryID: libraryID as number };
+}
+
+export function mainCursorItemRef(window: MainWindow): ItemRef | undefined {
+  const view = mainPane(window)?.itemsView;
+  const focused = view?.selection?.focused;
+  return typeof focused === 'number' ? mainItemRefAtRow(window, focused) : undefined;
+}
+
+export function visibleMainItemRefs(window: MainWindow): readonly ItemRef[] {
+  const view = mainPane(window)?.itemsView;
+  const count = view?.rowCount ?? 0;
+  const refs: ItemRef[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const ref = mainItemRefAtRow(window, index);
+    if (ref) refs.push(ref);
+  }
+  return refs;
+}
+
+export function mainItemRowIndex(window: MainWindow, itemID: number): number | undefined {
+  const row = mainPane(window)?.itemsView?.getRowIndexByID?.(String(itemID));
+  return typeof row === 'number' && row >= 0 ? row : undefined;
+}
+
+/**
+ * Move only the focused item row without mutating native TreeSelection membership.
+ *
+ * Zotero's VirtualizedTable exposes this behavior through its private _onSelection()
+ * moveFocused path. Keep the seam here so version changes fail closed rather than
+ * falling back to selection.select(), which would collapse an explicit workset.
+ */
+export function moveMainItemCursor(
+  window: MainWindow,
+  index: number,
+  shouldDebounce = false,
+): boolean {
+  const view = mainPane(window)?.itemsView;
+  const selection = view?.selection as (PrivateItemSelection & NonNullable<TreeView['selection']>) | undefined;
+  if (!view || !selection || index < 0 || index >= (view.rowCount ?? 0)) return false;
+
+  const tree = view.tree as (PrivateItemTree & { focus?(): void }) | undefined;
+  if (tree?._onSelection) {
+    tree._onSelection(index, false, false, true, shouldDebounce);
+    return true;
+  }
+
+  if (typeof selection._updateTree !== 'function') return false;
+  const previous = selection.focused;
+  selection.focused = index;
+  selection.pivot = index;
+  if (typeof previous === 'number') tree?.invalidateRow?.(previous);
+  tree?.invalidateRow?.(index);
+  selection._updateTree(shouldDebounce);
+  view.ensureRowIsVisible?.(index);
+  return true;
 }
 
 /**
