@@ -5,6 +5,7 @@ import type { FocusDirection } from '../input/actions';
 import { copyToClipboard } from '../platform/clipboard';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
+import { mainCursorItem, mainEffectiveItems } from './item-targets';
 import {
   closeSelectedMainTab,
   cycleMainTab,
@@ -383,9 +384,20 @@ export class MainNavigation {
       this.status(session, '✗ Focus the items list first');
       return;
     }
-    const ids = (mainHost(window).ZoteroPane?.getSelectedItems?.() ?? []).map((item) => item.id);
+    const selection = session.selection;
+    if (selection?.size) {
+      const visible = selection.countVisible(visibleMainItemRefs(window));
+      if (visible < selection.size) {
+        this.status(
+          session,
+          `✗ Trash blocked · ${selection.size - visible} hidden selection member${selection.size - visible === 1 ? '' : 's'}`,
+        );
+        return;
+      }
+    }
+    const ids = mainEffectiveItems(window, selection).map((item) => item.id);
     if (!ids.length) {
-      this.status(session, '✗ No items selected');
+      this.status(session, '✗ No item target');
       return;
     }
     try {
@@ -416,14 +428,9 @@ export class MainNavigation {
   async openPDF(window: MainWindow, session: MainWindowSession): Promise<void> {
     try {
       const pane = mainHost(window).ZoteroPane;
-      let items = pane?.getSelectedItems?.() ?? [];
-      if (!items.length) {
-        this.ensureSelection(pane?.itemsView);
-        items = pane?.getSelectedItems?.() ?? [];
-      }
-      const item = items[0];
+      const item = session.selection ? mainCursorItem(window) : pane?.getSelectedItems?.()[0];
       if (!item) {
-        this.status(session, '✗ No item selected');
+        this.status(session, '✗ No item under Cursor');
         return;
       }
       if (item.isAttachment()) {
@@ -471,7 +478,9 @@ export class MainNavigation {
   }
   yankCitekey(window: MainWindow, session: MainWindowSession): void {
     try {
-      const item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
+      const item = session.selection
+        ? mainCursorItem(window)
+        : mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
       const key = item ? citationKey(item) : '';
       if (!key) {
         this.status(session, '✗ No citekey (BBT not ready?)');
