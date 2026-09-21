@@ -8,6 +8,7 @@ import {
   inputStartsWithKey,
   inputTokenCount,
   nextBindingToken,
+  serializeBindingTokens,
 } from './key-sequence';
 
 export type { KeyGuideLanguage } from './key-guide-config';
@@ -35,7 +36,8 @@ export function isGuidePrefix(bindings: BindingMap, mode: Mode, prefix: string):
 }
 
 export function formatGuideKey(key: string): string {
-  return key === ' ' ? 'SPC' : key;
+  if (key === ' ') return 'SPC';
+  return serializeBindingTokens([key]) || key;
 }
 
 export function formatGuidePrefix(prefix: string): string {
