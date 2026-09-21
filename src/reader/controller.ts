@@ -2027,8 +2027,6 @@ export class ReaderSession {
     )
       return false;
     const bindings = this.#dependencies.bindings();
-    const directAction = bindings['reader-normal:' + key];
-    if (!this.state.keyBuffer && (!directAction || !smoothScrollSpec(directAction))) return false;
     const decision = advanceInput(
       {
         mode: 'reader-normal',
