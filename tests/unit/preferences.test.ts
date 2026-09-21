@@ -161,9 +161,9 @@ describe('binding preferences', () => {
     );
 
     expect(bindings['reader-normal:<Space>custom-add']).toBe('addTag');
-    expect(bindings['main-normal:<Space>custom-filter']).toBe('toggleTagFilter');
-    expect(bindings['main-normal:<Space>custom-find']).toBe('findAllItems');
-    expect(bindings['main-normal:<Space>custom-tab']).toBe('switchTab');
+    expect(bindings['main-normal:custom-filter']).toBe('toggleTagFilter');
+    expect(bindings['main-normal:custom-find']).toBe('findAllItems');
+    expect(bindings['main-normal:custom-tab']).toBe('switchTab');
   });
 
   it('migrates retired defaults and removes legacy native-search actions without dropping unrelated remaps', () => {
@@ -274,7 +274,7 @@ describe('binding preferences', () => {
     expect(resolved['main-normal:,']).toBeUndefined();
     expect(resolved['main-normal:q']).toBeUndefined();
     expect(resolved['main-normal:tf']).toBeUndefined();
-    expect(resolved['main-normal:<Space>custom-tab']).toBe('switchTab');
+    expect(resolved['main-normal:custom-tab']).toBe('switchTab');
     expect(resolved['main-normal:ta']).toBe('addTag');
   });
 
