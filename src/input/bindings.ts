@@ -195,13 +195,14 @@ export const DEFAULT_BINDINGS = {
   'main-normal:L': 'nextTab',
   'main-normal:<Enter>': 'mainActivate',
   'main-normal:<Return>': 'mainActivate',
+  'main-normal:<Space>': 'mainToggleSelection',
   'main-normal:v': 'mainEnterSelect',
   'main-select:j': 'mainSelectDown',
   'main-select:k': 'mainSelectUp',
   'main-select:gg': 'mainSelectFirst',
   'main-select:G': 'mainSelectLast',
   'main-select:o': 'mainSelectSwapEnds',
-  'main-select:v': 'mainSelectFinish',
+  'main-select:v': 'mainSelectCancel',
   'main-select:<Esc>': 'mainSelectCancel',
 } as const satisfies BindingMap;
 
