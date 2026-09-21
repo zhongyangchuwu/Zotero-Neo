@@ -56,11 +56,13 @@ type PrivateItemTree = {
     shouldDebounce?: boolean,
   ): void;
   invalidateRow?(index: number): void;
+  invalidate?(): void;
 };
 
 type PrivateItemSelection = {
   focused?: number;
   pivot?: number;
+  selected?: Set<number>;
   _updateTree?(shouldDebounce?: boolean): void;
 };
 
@@ -191,6 +193,39 @@ export function visibleMainItemRefs(window: MainWindow): readonly ItemRef[] {
 export function mainItemRowIndex(window: MainWindow, itemID: number): number | undefined {
   const row = mainPane(window)?.itemsView?.getRowIndexByID?.(String(itemID));
   return typeof row === 'number' && row >= 0 ? row : undefined;
+}
+
+/**
+ * Project the explicit workset into Zotero's visible row selection without changing Cursor.
+ *
+ * When the explicit workset is empty, the focused row is selected as a host compatibility
+ * projection of EffectiveSelection={Cursor}. Hidden workset members are intentionally absent.
+ */
+export function projectMainItemSelection(
+  window: MainWindow,
+  refs: readonly ItemRef[],
+  shouldDebounce = false,
+): boolean {
+  const view = mainPane(window)?.itemsView;
+  const selection = view?.selection as PrivateItemSelection | undefined;
+  const tree = view?.tree as PrivateItemTree | undefined;
+  if (!view || !selection || typeof selection._updateTree !== 'function') return false;
+
+  const selected = new Set<number>();
+  if (refs.length) {
+    const wanted = new Set(refs.map((ref) => `${ref.libraryID}:${ref.itemID}`));
+    for (let index = 0; index < (view.rowCount ?? 0); index += 1) {
+      const ref = mainItemRefAtRow(window, index);
+      if (ref && wanted.has(`${ref.libraryID}:${ref.itemID}`)) selected.add(index);
+    }
+  } else if (typeof selection.focused === 'number' && selection.focused >= 0) {
+    selected.add(selection.focused);
+  }
+
+  selection.selected = selected;
+  tree?.invalidate?.();
+  selection._updateTree(shouldDebounce);
+  return true;
 }
 
 /**
