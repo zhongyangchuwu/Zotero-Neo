@@ -42,6 +42,7 @@ import { MainItemSelect } from './item-select';
 import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
 import { mainCursorItem } from './action-targets';
 import { PluginManagerPanel } from './plugin-manager';
+import { SelectionPanel } from './selection-panel';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
 
@@ -62,12 +63,14 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #tags: TagActions;
   readonly #itemSelect: MainItemSelect;
   readonly #pluginManager: PluginManagerPanel;
+  readonly #selectionPanel: SelectionPanel;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
+    this.#selectionPanel = new SelectionPanel(dependencies.logger);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -145,6 +148,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.add(() => {
       this.#picker.close(session);
       this.#pluginManager.close(session);
+      this.#selectionPanel.close(session);
       this.#noteEditor.clear(session);
     });
   }
@@ -226,6 +230,10 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
+    if (session.selectionPanel.open) {
+      this.#selectionPanel.handleKey(event, window, session);
+      return;
+    }
     if (session.pluginManager.open) {
       this.#pluginManager.handleKey(event, window, session);
       return;
@@ -553,6 +561,9 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'managePlugins':
         this.#pluginManager.open(window, session);
+        break;
+      case 'manageSelection':
+        this.#selectionPanel.open(window, session);
         break;
       case 'mainTrashItems':
         void this.#navigation.trashSelectedItems(window, session);
