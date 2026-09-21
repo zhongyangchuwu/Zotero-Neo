@@ -305,6 +305,10 @@ const BASE_ACTION_LABELS = {
     en: 'Main window: restore the last trashed items',
     'zh-CN': '主窗口：恢复最近移到回收站的条目',
   },
+  mainToggleSelection: {
+    en: 'Main window: toggle Selection at Cursor / Visual range',
+    'zh-CN': '主窗口：切换光标 / 可视范围的选择状态',
+  },
   mainFocusTree: {
     en: 'Main window: focus collection tree',
     'zh-CN': '主窗口：聚焦分类树',
