@@ -1,5 +1,6 @@
 import { isActionId, type ActionId } from './actions';
 import { NOTE_LOCAL_DEFAULT_BINDINGS, isNoteCrossContextActionId } from './note-actions';
+import { canonicalBindingSequence } from './key-sequence';
 
 export const MODES = [
   'reader-normal',
@@ -161,7 +162,7 @@ export const DEFAULT_BINDINGS = {
   'main-normal:q': 'closeCurrentTab',
   'main-normal:fn': 'findNotes',
   'main-normal:pp': 'managePlugins',
-  'main-normal:wt': 'mainFocusTree',
+  'main-normal:e': 'mainFocusTree',
   'main-normal:yy': 'mainYankCitekey',
   'main-normal:o': 'mainOpenPDF',
   'main-normal:wh': 'mainFocusLeft',
@@ -210,7 +211,7 @@ export function parseBindingKey(value: string): ParsedBindingKey | null {
   if (separator < 1) return null;
   const mode = canonicalMode(value.slice(0, separator));
   const sequence = value.slice(separator + 1);
-  if (!mode || !sequence) return null;
+  if (!mode || !sequence || canonicalBindingSequence(sequence) === null) return null;
   return { mode, sequence };
 }
 
@@ -251,8 +252,9 @@ export function parseBindingOverrides(raw: unknown): Record<string, BindingOverr
   for (const [key, action] of parseBindingEntries(raw)) {
     const binding = parseBindingKey(key);
     const normalized = action === null ? null : canonicalAction(action);
-    if (!binding || (action !== null && !normalized)) continue;
-    result[`${binding.mode}:${binding.sequence}`] = normalized;
+    const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;
+    if (!binding || !sequence || (action !== null && !normalized)) continue;
+    result[`${binding.mode}:${sequence}`] = normalized;
   }
   return result;
 }
@@ -440,7 +442,7 @@ export function migrateMainDirectPrefixOverrides(raw: unknown): string {
     ['main-normal: q', 'main-normal:q'],
     ['main-normal: fn', 'main-normal:fn'],
     ['main-normal: pp', 'main-normal:pp'],
-    ['main-normal: e', 'main-normal:wt'],
+    ['main-normal: e', 'main-normal:e'],
     ['main-normal: yy', 'main-normal:yy'],
     ['main-normal: o', 'main-normal:o'],
     ['main-normal: wh', 'main-normal:wh'],
@@ -451,6 +453,11 @@ export function migrateMainDirectPrefixOverrides(raw: unknown): string {
   }
 
   return stringifyBindingOverrides(overrides);
+}
+
+/** Canonicalizes token boundaries so persisted multi-key sequences are unambiguous. */
+export function migrateKeySequenceOverrides(raw: unknown): string {
+  return stringifyBindingOverrides(parseBindingOverrides(raw));
 }
 
 export function encodeBindingOverrides(bindings: BindingMap): string {
