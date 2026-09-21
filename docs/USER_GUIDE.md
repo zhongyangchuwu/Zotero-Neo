@@ -426,7 +426,7 @@ list) when that pane has focus.
 In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
 `J` and `K` are not Neo defaults and remain available to native Zotero behavior.
 
-#### Main window `<space>` chords
+#### Main window command prefixes
 
 These bindings work in the main Zotero window, subject to the active capability
 and focus context:
@@ -759,7 +759,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Stop on release          | off                      | If enabled, stop immediately when key is released (accelerating mode)                                                                                 |
 | Persist marks            | off                      | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync                                            |
 | Default highlight colour | Yellow                   | Colour used when no explicit colour key is pressed                                                                                                    |
-| Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                                       |
+| Key guide                | on                       | Show valid pending continuations; Reader/Note retain Space-led groups while Main uses direct prefixes                                                                       |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
 | Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |
