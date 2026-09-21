@@ -61,5 +61,7 @@ describe('Neovim-style key notation', () => {
     expect(migrateLegacyKeySequence('ctrl+d')).toBe('<C-d>');
     expect(migrateLegacyKeySequence('ctrl+dg')).toBe('<C-d>g');
     expect(migrateLegacyKeySequence(' ff')).toBe('<Space>ff');
+    expect(migrateLegacyKeySequence('custom-tab')).toBe('custom-tab');
+    expect(migrateLegacyKeySequence('enterg')).toBe('enterg');
   });
 });
