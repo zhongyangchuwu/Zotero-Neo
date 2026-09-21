@@ -64,6 +64,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainSelectFirst',
   'mainSelectLast',
   'mainSelectSwapEnds',
+  'mainSelectFinish',
   'mainSelectCancel',
 ];
 
