@@ -115,6 +115,8 @@ describe('leader guide projection', () => {
     expect(formatGuideKey(' ')).toBe('SPC');
     expect(formatGuideKey('b')).toBe('b');
     expect(formatGuideKey('B')).toBe('B');
+    expect(formatGuideKey('ctrl+d')).toBe('<C-d>');
+    expect(formatGuideKey('enter')).toBe('<Enter>');
     expect(formatGuidePrefix(' f')).toBe('SPC › f');
     expect(formatGuidePrefix('tf')).toBe('t › f');
   });
