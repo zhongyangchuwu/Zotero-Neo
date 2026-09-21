@@ -93,7 +93,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>ff': 'findAllItems',
   'reader-normal:<Space>fc': 'findCollectionItems',
   'reader-normal:<Space>,': 'switchTab',
-  'reader-normal: q': 'closeCurrentTab',
+  'reader-normal:<Space>q': 'closeCurrentTab',
   'reader-normal:<Space>ta': 'addTag',
   'reader-normal:<Space>tr': 'removeTag',
   'reader-normal:<Space>fn': 'findNotes',
