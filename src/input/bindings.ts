@@ -196,7 +196,6 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Enter>': 'mainActivate',
   'main-normal:<Return>': 'mainActivate',
   'main-normal:<Space>': 'mainToggleSelection',
-  'main-normal:<Space>': 'mainToggleSelection',
   'main-normal:v': 'mainEnterSelect',
   'main-select:<Space>': 'mainSelectFinish',
   'main-select:j': 'mainSelectDown',
