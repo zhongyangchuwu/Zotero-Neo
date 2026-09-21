@@ -40,7 +40,10 @@ import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
 import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
+import { mainCursorItem } from './action-targets';
 import { PluginManagerPanel } from './plugin-manager';
+
+type MainInvocationContext = 'main' | 'reader' | 'note';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -178,7 +181,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.logger.debug(`ignored Reader action ${action}: owner window detached`);
       return;
     }
-    this.execute(action, ownerWindow, session, count);
+    this.execute(action, ownerWindow, session, count, false, 'reader');
   }
 
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void {
@@ -467,14 +470,14 @@ export class MainWindowController implements MainWindowControllerApi {
             isNoteCrossContextActionId(nextAction) &&
             isMainExecutableAction(nextAction)
           )
-            this.execute(nextAction, window, session, nextCount);
+            this.execute(nextAction, window, session, nextCount, false, 'note');
         },
       });
       return true;
     }
 
     if (!isNoteCrossContextActionId(action) || !isMainExecutableAction(action)) return false;
-    this.execute(action, window, session, count);
+    this.execute(action, window, session, count, false, 'note');
     return true;
   }
 
@@ -484,12 +487,13 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     count: number,
     shouldDebounce = false,
+    context: MainInvocationContext = 'main',
   ): void {
     if (!isMainExecutableAction(action)) {
       this.#dependencies.logger.debug(`ignored Main action: ${String(action)}`);
       return;
     }
-    this.executeMain(action, window, session, count, shouldDebounce);
+    this.executeMain(action, window, session, count, shouldDebounce, context);
   }
 
   private executeMain(
@@ -498,6 +502,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     count: number,
     shouldDebounce = false,
+    context: MainInvocationContext = 'main',
   ): void {
     switch (action) {
       case 'openCommandPalette':
@@ -576,10 +581,14 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.focusDirection(window, session, 'right');
         break;
       case 'mainYankCitekey':
-        this.#navigation.yankCitekey(window, session);
+        this.#navigation.yankCitekey(window, session, context);
         break;
       case 'mainOpenPDF':
-        void this.#navigation.openPDF(window, session);
+        void this.#navigation.openPDF(
+          window,
+          session,
+          context === 'main' ? mainCursorItem(window) : undefined,
+        );
         break;
       case 'mainActivate':
         void this.#navigation.activate(window, session);
