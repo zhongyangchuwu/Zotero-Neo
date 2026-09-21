@@ -43,6 +43,7 @@ import { MainSelectionActions } from './selection-actions';
 import {
   mainHost,
   mainReaderForTab,
+  observeMainItemView,
   projectMainItemSelection,
   selectMainTab,
   selectedMainTabID,
@@ -111,6 +112,22 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     let readerScanFailed = false;
+    let itemViewObserverCleanup: (() => void) | null = null;
+    const syncItemViewProjection = (): void => {
+      if (this.#sessions.get(window) !== session) return;
+      if (session.inputMode === 'main-select') {
+        this.#itemSelect.leave(window);
+        session.inputMode = 'main-normal';
+        session.keyBuffer = '';
+        session.countBuffer = '';
+        session.inputRevision += 1;
+        window.clearTimeout(session.keyTimer);
+        session.keyTimer = undefined;
+        this.clearKeyGuide(window, session);
+      }
+      projectMainItemSelection(window, session.selection.values());
+      this.#navigation.refreshSelectionIndicator(window, session);
+    };
     const scan = (): void => {
       try {
         this.rescan(window);
@@ -132,10 +149,17 @@ export class MainWindowController implements MainWindowControllerApi {
         (action, count, target, mode, bindings) =>
           this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
+      if (!itemViewObserverCleanup) {
+        itemViewObserverCleanup = observeMainItemView(window, syncItemViewProjection);
+      }
     };
     scan();
     const interval = window.setInterval(scan, 1000);
     session.cleanup.add(() => window.clearInterval(interval));
+    session.cleanup.add(() => {
+      itemViewObserverCleanup?.();
+      itemViewObserverCleanup = null;
+    });
     for (let count = 1; count <= 4; count += 1) {
       const timer = window.setTimeout(scan, count * 250);
       session.cleanup.add(() => window.clearTimeout(timer));
