@@ -8,6 +8,7 @@ import { THEME_VARS, ThemeManager } from '../ui/theme';
 import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
 import type { InstalledPlugin } from './plugin-host';
+import { SelectionStore } from './selection-store';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -19,6 +20,7 @@ export class MainWindowSession {
   readonly window: MainWindow;
   readonly status: HTMLElement;
   readonly theme: ThemeManager;
+  readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
   inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
   keyBuffer = '';
