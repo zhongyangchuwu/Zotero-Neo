@@ -1,6 +1,6 @@
 import { isActionId, type ActionId } from './actions';
 import { NOTE_LOCAL_DEFAULT_BINDINGS, isNoteCrossContextActionId } from './note-actions';
-import { canonicalBindingSequence } from './key-sequence';
+import { canonicalBindingSequence, migrateLegacyKeySequence } from './key-sequence';
 
 export const MODES = [
   'reader-normal',
@@ -39,18 +39,18 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:l': 'nextPage',
   'reader-normal:gg': 'firstPage',
   'reader-normal:G': 'lastPage',
-  'reader-normal:ctrl+d': 'halfPageDown',
-  'reader-normal:ctrl+u': 'halfPageUp',
-  'reader-normal:ctrl+f': 'fullPageDown',
-  'reader-normal:ctrl+b': 'fullPageUp',
+  'reader-normal:<C-d>': 'halfPageDown',
+  'reader-normal:<C-u>': 'halfPageUp',
+  'reader-normal:<C-f>': 'fullPageDown',
+  'reader-normal:<C-b>': 'fullPageUp',
   'reader-normal:+': 'zoomIn',
   'reader-normal:-': 'zoomOut',
   'reader-normal:zI': 'zoomIn',
   'reader-normal:zO': 'zoomOut',
   'reader-normal:=': 'zoomReset',
   'reader-normal:z0': 'zoomReset',
-  'reader-normal:ctrl+o': 'historyBack',
-  'reader-normal:ctrl+i': 'historyForward',
+  'reader-normal:<C-o>': 'historyBack',
+  'reader-normal:<C-i>': 'historyForward',
   'reader-normal:f': 'followLink',
   'reader-normal:/': 'openSearch',
   'reader-normal::': 'openCommandPalette',
@@ -58,8 +58,8 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:N': 'findPrevious',
   'reader-normal:[': 'prevAnnotation',
   'reader-normal:]': 'nextAnnotation',
-  'reader-normal:enter': 'editAnnotation',
-  'reader-normal:return': 'editAnnotation',
+  'reader-normal:<Enter>': 'editAnnotation',
+  'reader-normal:<Return>': 'editAnnotation',
   'reader-normal:dd': 'deleteAnnotation',
   'reader-normal:y': 'yankAnnotation',
   'reader-normal:Y': 'yankAnnotationComment',
@@ -78,28 +78,28 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:Za': 'filterClear',
   'reader-normal:v': 'enterVisual',
   'reader-normal:i': 'enterInsert',
-  'reader-normal:ctrl+h': 'focusReaderSplitLeft',
-  'reader-normal:ctrl+j': 'focusReaderSplitDown',
-  'reader-normal:ctrl+k': 'focusReaderSplitUp',
-  'reader-normal:ctrl+l': 'focusReaderSplitRight',
-  'reader-normal:escape': 'clearSearch',
-  'reader-normal: e': 'toggleReaderSidebarOutline',
-  'reader-normal: -': 'toggleReaderSplitHorizontal',
-  'reader-normal: |': 'toggleReaderSplitVertical',
-  'reader-normal: ff': 'findAllItems',
-  'reader-normal: fc': 'findCollectionItems',
-  'reader-normal: ,': 'switchTab',
-  'reader-normal: q': 'closeCurrentTab',
-  'reader-normal: ta': 'addTag',
-  'reader-normal: tr': 'removeTag',
-  'reader-normal: fn': 'findNotes',
-  'reader-normal: pp': 'managePlugins',
-  'reader-normal: yy': 'mainYankCitekey',
-  'reader-normal: m': 'toggleMarksExplorer',
+  'reader-normal:<C-h>': 'focusReaderSplitLeft',
+  'reader-normal:<C-j>': 'focusReaderSplitDown',
+  'reader-normal:<C-k>': 'focusReaderSplitUp',
+  'reader-normal:<C-l>': 'focusReaderSplitRight',
+  'reader-normal:<Esc>': 'clearSearch',
+  'reader-normal:<Space>e': 'toggleReaderSidebarOutline',
+  'reader-normal:<Space>-': 'toggleReaderSplitHorizontal',
+  'reader-normal:<Space>|': 'toggleReaderSplitVertical',
+  'reader-normal:<Space>ff': 'findAllItems',
+  'reader-normal:<Space>fc': 'findCollectionItems',
+  'reader-normal:<Space>,': 'switchTab',
+  'reader-normal:<Space>q': 'closeCurrentTab',
+  'reader-normal:<Space>ta': 'addTag',
+  'reader-normal:<Space>tr': 'removeTag',
+  'reader-normal:<Space>fn': 'findNotes',
+  'reader-normal:<Space>pp': 'managePlugins',
+  'reader-normal:<Space>yy': 'mainYankCitekey',
+  'reader-normal:<Space>m': 'toggleMarksExplorer',
   'reader-select:s': 'flashText',
   'reader-select:a': 'openSelectionActions',
-  'reader-select:enter': 'openSelectionActions',
-  'reader-select:return': 'openSelectionActions',
+  'reader-select:<Enter>': 'openSelectionActions',
+  'reader-select:<Return>': 'openSelectionActions',
   'reader-select:j': 'extendDown',
   'reader-select:k': 'extendUp',
   'reader-select:h': 'extendLeft',
@@ -123,34 +123,34 @@ export const DEFAULT_BINDINGS = {
   'reader-select:#': 'searchSelection',
   'reader-select:o': 'swapVisualEnds',
   'reader-select:v': 'exitMode',
-  'reader-select:escape': 'exitMode',
-  'reader-insert:escape': 'exitMode',
+  'reader-select:<Esc>': 'exitMode',
+  'reader-insert:<Esc>': 'exitMode',
   ...NOTE_LOCAL_DEFAULT_BINDINGS,
   'note-normal:i': 'enterInsert',
-  'note-normal:escape': 'exitMode',
+  'note-normal:<Esc>': 'exitMode',
   'note-normal::': 'openCommandPalette',
-  'note-normal: ff': 'findAllItems',
-  'note-normal: fc': 'findCollectionItems',
-  'note-normal: ,': 'switchTab',
-  'note-normal: ta': 'addTag',
-  'note-normal: tr': 'removeTag',
-  'note-normal: q': 'closeCurrentTab',
-  'note-normal: fn': 'findNotes',
-  'note-normal: pp': 'managePlugins',
-  'note-normal: e': 'mainFocusTree',
-  'note-normal: yy': 'mainYankCitekey',
-  'note-normal: o': 'mainOpenPDF',
+  'note-normal:<Space>ff': 'findAllItems',
+  'note-normal:<Space>fc': 'findCollectionItems',
+  'note-normal:<Space>,': 'switchTab',
+  'note-normal:<Space>ta': 'addTag',
+  'note-normal:<Space>tr': 'removeTag',
+  'note-normal:<Space>q': 'closeCurrentTab',
+  'note-normal:<Space>fn': 'findNotes',
+  'note-normal:<Space>pp': 'managePlugins',
+  'note-normal:<Space>e': 'mainFocusTree',
+  'note-normal:<Space>yy': 'mainYankCitekey',
+  'note-normal:<Space>o': 'mainOpenPDF',
   'note-normal:H': 'previousTab',
   'note-normal:L': 'nextTab',
-  'note-normal:ctrl+h': 'focusReaderSplitLeft',
-  'note-normal:ctrl+j': 'focusReaderSplitDown',
-  'note-normal:ctrl+k': 'focusReaderSplitUp',
-  'note-normal:ctrl+l': 'focusReaderSplitRight',
-  'note-insert:escape': 'exitMode',
-  'note-insert:ctrl+h': 'focusReaderSplitLeft',
-  'note-insert:ctrl+j': 'focusReaderSplitDown',
-  'note-insert:ctrl+k': 'focusReaderSplitUp',
-  'note-insert:ctrl+l': 'focusReaderSplitRight',
+  'note-normal:<C-h>': 'focusReaderSplitLeft',
+  'note-normal:<C-j>': 'focusReaderSplitDown',
+  'note-normal:<C-k>': 'focusReaderSplitUp',
+  'note-normal:<C-l>': 'focusReaderSplitRight',
+  'note-insert:<Esc>': 'exitMode',
+  'note-insert:<C-h>': 'focusReaderSplitLeft',
+  'note-insert:<C-j>': 'focusReaderSplitDown',
+  'note-insert:<C-k>': 'focusReaderSplitUp',
+  'note-insert:<C-l>': 'focusReaderSplitRight',
   'main-normal:ff': 'findAllItems',
   'main-normal::': 'openCommandPalette',
   'main-normal:fc': 'findCollectionItems',
@@ -168,10 +168,10 @@ export const DEFAULT_BINDINGS = {
   'main-normal:wh': 'mainFocusLeft',
   'main-normal:wl': 'mainFocusRight',
   'main-normal:ww': 'mainFocusItems',
-  'main-normal:ctrl+h': 'focusReaderSplitLeft',
-  'main-normal:ctrl+j': 'focusReaderSplitDown',
-  'main-normal:ctrl+k': 'focusReaderSplitUp',
-  'main-normal:ctrl+l': 'focusReaderSplitRight',
+  'main-normal:<C-h>': 'focusReaderSplitLeft',
+  'main-normal:<C-j>': 'focusReaderSplitDown',
+  'main-normal:<C-k>': 'focusReaderSplitUp',
+  'main-normal:<C-l>': 'focusReaderSplitRight',
   'main-normal:dd': 'mainTrashItems',
   'main-normal:x': 'mainTrashItems',
   'main-normal:u': 'mainRestoreTrashedItems',
@@ -184,13 +184,13 @@ export const DEFAULT_BINDINGS = {
   'main-normal:zc': 'mainTreeCloseOnly',
   'main-normal:R': 'mainTreeExpandAll',
   'main-normal:M': 'mainTreeCollapseAll',
-  'main-normal:backspace': 'mainTreeParent',
+  'main-normal:<BS>': 'mainTreeParent',
   'main-normal:gg': 'mainNavFirst',
   'main-normal:G': 'mainNavLast',
   'main-normal:H': 'previousTab',
   'main-normal:L': 'nextTab',
-  'main-normal:enter': 'mainActivate',
-  'main-normal:return': 'mainActivate',
+  'main-normal:<Enter>': 'mainActivate',
+  'main-normal:<Return>': 'mainActivate',
   'main-normal:v': 'mainEnterSelect',
   'main-select:j': 'mainSelectDown',
   'main-select:k': 'mainSelectUp',
@@ -198,7 +198,7 @@ export const DEFAULT_BINDINGS = {
   'main-select:G': 'mainSelectLast',
   'main-select:o': 'mainSelectSwapEnds',
   'main-select:v': 'mainSelectFinish',
-  'main-select:escape': 'mainSelectCancel',
+  'main-select:<Esc>': 'mainSelectCancel',
 } as const satisfies BindingMap;
 
 export interface ParsedBindingKey {
@@ -277,24 +277,24 @@ const RETIRED_DEFAULT_BINDINGS = {
   'reader-normal:K': 'nextTab',
   'main-normal:J': 'previousTab',
   'main-normal:K': 'nextTab',
-  'reader-normal: fb': 'findCollectionItems',
-  'reader-normal: bj': 'switchTab',
-  'reader-normal: o': 'mainOpenPDF',
-  'reader-normal: q': 'closeCurrentTab',
+  'reader-normal:<Space>fb': 'findCollectionItems',
+  'reader-normal:<Space>bj': 'switchTab',
+  'reader-normal:<Space>o': 'mainOpenPDF',
+  'reader-normal:<Space>q': 'closeCurrentTab',
   'main-normal: fb': 'findCollectionItems',
   'main-normal: bj': 'switchTab',
   'main-normal: q': 'closeCurrentTab',
-  'reader-normal: n': 'findNotes',
+  'reader-normal:<Space>n': 'findNotes',
   'main-normal: n': 'findNotes',
-  'reader-normal: tp': 'switchTab',
+  'reader-normal:<Space>tp': 'switchTab',
   'main-normal: tp': 'switchTab',
-  'reader-normal: ft': 'switchTab',
-  'note-normal: ft': 'switchTab',
+  'reader-normal:<Space>ft': 'switchTab',
+  'note-normal:<Space>ft': 'switchTab',
   'main-normal: ft': 'switchTab',
-  'reader-normal: td': 'closeCurrentTab',
-  'note-normal: td': 'closeCurrentTab',
+  'reader-normal:<Space>td': 'closeCurrentTab',
+  'note-normal:<Space>td': 'closeCurrentTab',
   'main-normal: td': 'closeCurrentTab',
-  'note-normal: fT': 'toggleTagFilter',
+  'note-normal:<Space>fT': 'toggleTagFilter',
   'main-normal: fT': 'toggleTagFilter',
   'main-normal:ctrl+u': 'mainRestoreTrashedItems',
 } as const;
@@ -398,15 +398,15 @@ export function migrateSemanticKeymapOverrides(raw: unknown): string {
     if (!(newKey in overrides)) overrides[newKey] = null;
   };
 
-  moveNull('reader-normal: ft', 'reader-normal: ,');
-  moveNull('note-normal: ft', 'note-normal: ,');
+  moveNull('reader-normal:<Space>ft', 'reader-normal:<Space>,');
+  moveNull('note-normal:<Space>ft', 'note-normal:<Space>,');
   moveNull('main-normal: ft', 'main-normal: ,');
-  moveNull('reader-normal: td', 'reader-normal: q');
-  moveNull('note-normal: td', 'note-normal: q');
+  moveNull('reader-normal:<Space>td', 'reader-normal:<Space>q');
+  moveNull('note-normal:<Space>td', 'note-normal:<Space>q');
   moveNull('main-normal: td', 'main-normal: q');
   moveNull('main-normal: fT', 'main-normal: tf');
 
-  if (overrides['note-normal: fT'] === null) delete overrides['note-normal: fT'];
+  if (overrides['note-normal:<Space>fT'] === null) delete overrides['note-normal:<Space>fT'];
   for (const [key, action] of Object.entries({ ...overrides })) {
     const binding = parseBindingKey(key);
     if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
@@ -457,7 +457,17 @@ export function migrateMainDirectPrefixOverrides(raw: unknown): string {
 
 /** Canonicalizes token boundaries so persisted multi-key sequences are unambiguous. */
 export function migrateKeySequenceOverrides(raw: unknown): string {
-  return stringifyBindingOverrides(parseBindingOverrides(raw));
+  const overrides: Record<string, BindingOverride> = {};
+  for (const [key, action] of parseBindingEntries(raw)) {
+    const separator = key.indexOf(':');
+    if (separator < 1) continue;
+    const mode = canonicalMode(key.slice(0, separator));
+    const sequence = migrateLegacyKeySequence(key.slice(separator + 1));
+    const normalized = action === null ? null : canonicalAction(action);
+    if (!mode || !sequence || (action !== null && !normalized)) continue;
+    overrides[`${mode}:${sequence}`] = normalized;
+  }
+  return stringifyBindingOverrides(overrides);
 }
 
 export function encodeBindingOverrides(bindings: BindingMap): string {
