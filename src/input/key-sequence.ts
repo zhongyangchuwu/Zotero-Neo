@@ -144,7 +144,7 @@ function parseNotationToken(source: string): string | null {
     return prefix.length ? `${prefix.join('+')}+${special}` : special;
   }
 
-  if (!isSingleKeyCharacter(terminalSource)) return null;
+  if (!isSingleKeyCharacter(terminalSource) || modifiers.length === 0) return null;
   const shifted = normalizeShiftedPrintable(terminalSource, normalizeModifiers(modifiers));
   if (!shifted) return null;
   return shifted.modifiers.length
