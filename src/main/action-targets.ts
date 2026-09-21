@@ -1,9 +1,5 @@
 import type { MainWindow } from '../core/contracts';
-import {
-  currentMainItemCursorRef,
-  mainItem,
-  visibleMainSelectionCount,
-} from './host';
+import { currentMainItemCursorRef, mainItem, visibleMainSelectionCount } from './host';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 
