@@ -10,6 +10,7 @@ import {
   type Mode,
 } from '../../src/input/bindings';
 import { advanceInput } from '../../src/input/engine';
+import { bindingSequenceIsStrictPrefix } from '../../src/input/key-sequence';
 
 function strictPrefixPairs(bindings: BindingMap): string[] {
   const byMode = new Map<Mode, string[]>();
@@ -25,7 +26,7 @@ function strictPrefixPairs(bindings: BindingMap): string[] {
   for (const [mode, sequences] of byMode) {
     for (const exact of sequences) {
       for (const longer of sequences) {
-        if (exact !== longer && longer.startsWith(exact))
+        if (bindingSequenceIsStrictPrefix(exact, longer))
           pairs.push(`${mode}:${exact} -> ${longer}`);
       }
     }
@@ -53,6 +54,34 @@ describe('0.1.0 default keymap freeze', () => {
 
     const mainSelect = bindingsForMode(DEFAULT_BINDINGS, 'main-select', ['main-normal']);
     expect(strictPrefixPairs(mainSelect)).toEqual([]);
+  });
+
+  it('does not confuse named keys with printable prefixes', () => {
+    const bindings: BindingMap = {
+      'main-normal:e': 'mainFocusTree',
+      'main-normal:enter': 'mainActivate',
+      'main-normal:escape': 'mainSelectCancel',
+      'main-normal:d': 'mainNavDown',
+      'main-normal:delete': 'mainTrashItems',
+    };
+
+    expect(strictPrefixPairs(bindings)).toEqual([]);
+    expect(press('main-normal', 'e', bindings)).toMatchObject({
+      kind: 'execute',
+      action: 'mainFocusTree',
+    });
+    expect(press('main-normal', 'enter', bindings)).toMatchObject({
+      kind: 'execute',
+      action: 'mainActivate',
+    });
+    expect(press('main-normal', 'd', bindings)).toMatchObject({
+      kind: 'execute',
+      action: 'mainNavDown',
+    });
+    expect(press('main-normal', 'delete', bindings)).toMatchObject({
+      kind: 'execute',
+      action: 'mainTrashItems',
+    });
   });
 
   it('keeps primary Reader yank/copy keys immediate', () => {
