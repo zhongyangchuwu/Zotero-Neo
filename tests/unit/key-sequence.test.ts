@@ -8,42 +8,58 @@ import {
   bindingSequenceTokens,
   canonicalBindingSequence,
   inputBufferTokens,
+  migrateLegacyKeySequence,
   popInputKey,
 } from '../../src/input/key-sequence';
 
-describe('semantic key sequences', () => {
-  it('separates named keys from printable character sequences', () => {
-    expect(bindingSequenceTokens('enter')).toEqual(['enter']);
-    expect(bindingSequenceTokens('<e>nter')).toEqual(['e', 'n', 't', 'e', 'r']);
-    expect(bindingSequenceTokens('gg')).toEqual(['g', 'g']);
-    expect(bindingSequenceIsStrictPrefix('e', 'enter')).toBe(false);
-    expect(bindingSequenceIsStrictPrefix('d', 'delete')).toBe(false);
+describe('Neovim-style key notation', () => {
+  it('keeps printable text literal and reserves angle notation for symbolic keys', () => {
+    expect(bindingSequenceTokens('enter')).toEqual(['e', 'n', 't', 'e', 'r']);
+    expect(bindingSequenceTokens('f1')).toEqual(['f', '1']);
+    expect(bindingSequenceTokens('<Enter>')).toEqual(['enter']);
+    expect(bindingSequenceTokens('<F1>')).toEqual(['f1']);
+    expect(bindingSequenceTokens('<f>')).toBeNull();
+    expect(bindingSequenceTokens('<lt>')).toEqual(['<']);
+  });
+
+  it('parses modifiers and longer mixed sequences by token boundaries', () => {
+    expect(bindingSequenceTokens('<C-d>g')).toEqual(['ctrl+d', 'g']);
+    expect(bindingSequenceTokens('<S-Tab>')).toEqual(['shift+tab']);
+    expect(bindingSequenceTokens('<C-S-Left>')).toEqual(['ctrl+shift+arrowleft']);
+    expect(bindingSequenceTokens('<M-a>')).toEqual(['alt+a']);
+    expect(bindingSequenceIsStrictPrefix('e', '<Enter>')).toBe(false);
+    expect(bindingSequenceIsStrictPrefix('f', '<F1>')).toBe(false);
     expect(bindingSequenceIsStrictPrefix('g', 'gg')).toBe(true);
   });
 
-  it('supports explicit token boundaries inside longer shortcuts', () => {
-    expect(bindingSequenceTokens('<enter>g')).toEqual(['enter', 'g']);
-    expect(bindingSequenceTokens('<ctrl+d>g')).toEqual(['ctrl+d', 'g']);
-    expect(bindingSequenceTokens('ctrl+dg')).toEqual(['ctrl+d', 'g']);
-    expect(canonicalBindingSequence('ctrl+dg')).toBe('<ctrl+d>g');
+  it('canonicalizes aliases without creating a second printable-key syntax', () => {
+    expect(canonicalBindingSequence('<CR>')).toBe('<Enter>');
+    expect(canonicalBindingSequence('<Escape>')).toBe('<Esc>');
+    expect(canonicalBindingSequence('<Backspace>')).toBe('<BS>');
+    expect(canonicalBindingSequence('<C-d>g')).toBe('<C-d>g');
+    expect(canonicalBindingSequence('enter')).toBe('enter');
   });
 
-  it('can express literal words that collide with named-key spellings', () => {
-    expect(canonicalBindingSequence('<e>nter')).toBe('<e>nter');
-    expect(bindingSequenceTokens('<<enter>>')).toEqual(['<', 'e', 'n', 't', 'e', 'r', '>']);
-  });
-
-  it('keeps runtime boundaries for multi-character event tokens', () => {
+  it('keeps runtime event tokens distinct from their printable spellings', () => {
     const enter = appendInputKey('', 'enter');
     expect(inputBufferTokens(enter)).toEqual(['enter']);
-    expect(bindingEqualsInput('enter', enter)).toBe(true);
-    expect(bindingMatchesInputPrefix('<enter>g', enter)).toBe(true);
+    expect(bindingEqualsInput('<Enter>', enter)).toBe(true);
+    expect(bindingEqualsInput('enter', enter)).toBe(false);
+    expect(bindingMatchesInputPrefix('<Enter>g', enter)).toBe(true);
     expect(bindingMatchesInputPrefix('enterg', enter)).toBe(false);
 
     const chord = appendInputKey(appendInputKey('', 'ctrl+d'), 'g');
     expect(inputBufferTokens(chord)).toEqual(['ctrl+d', 'g']);
-    expect(bindingEqualsInput('<ctrl+d>g', chord)).toBe(true);
+    expect(bindingEqualsInput('<C-d>g', chord)).toBe(true);
     expect(popInputKey(chord)).toBe(appendInputKey('', 'ctrl+d'));
     expect(popInputKey(popInputKey(chord))).toBe('');
+  });
+
+  it('migrates the ambiguous legacy flat grammar toward special-key behavior', () => {
+    expect(migrateLegacyKeySequence('enter')).toBe('<Enter>');
+    expect(migrateLegacyKeySequence('f1')).toBe('<F1>');
+    expect(migrateLegacyKeySequence('ctrl+d')).toBe('<C-d>');
+    expect(migrateLegacyKeySequence('ctrl+dg')).toBe('<C-d>g');
+    expect(migrateLegacyKeySequence(' ff')).toBe('<Space>ff');
   });
 });
