@@ -40,7 +40,6 @@ type MainTabs = {
   getTabInfo?(id?: string): MainTabInfo;
 };
 
-
 type ItemTreeRow = {
   readonly ref?: {
     readonly id?: number;
@@ -163,7 +162,6 @@ export function mainItem(id: number): Zotero.Item | undefined {
 export function mainSelectedItems(window: MainWindow): Zotero.Item[] {
   return mainPane(window)?.getSelectedItems?.() ?? [];
 }
-
 
 export function mainItemRefAtRow(window: MainWindow, index: number): ItemRef | undefined {
   const row = mainPane(window)?.itemsView?.getRow?.(index) as ItemTreeRow | undefined;
