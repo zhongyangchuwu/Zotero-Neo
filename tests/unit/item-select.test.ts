@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { MainItemSelect, nextItemSelectIndex } from '../../src/main/item-select';
+import { SelectionStore } from '../../src/main/selection-store';
 
 const logger = { debug: vi.fn(), diagnostic: vi.fn() };
 
-describe('Main Item Select', () => {
+describe('Main Visual Selection', () => {
   it('computes clamped Vim-style range targets', () => {
     expect(nextItemSelectIndex(3, 10, 1, 4)).toBe(7);
     expect(nextItemSelectIndex(3, 10, -1, 9)).toBe(0);
@@ -13,20 +14,40 @@ describe('Main Item Select', () => {
     expect(nextItemSelectIndex(3, 10, 'last', 5)).toBe(4);
   });
 
-  it('mutates only Zotero native pivot/focus selection while Main owns modal input', () => {
-    let pivot = 2;
-    let focused = 2;
-    let count = 1;
-    const active = { id: 'item-tree-row-2' } as unknown as Element;
+  it('keeps Visual transient, commits all-or-none to Selection, and advances Normal Space', () => {
+    const items = Array.from(
+      { length: 5 },
+      (_unused, index) => ({ id: 10 + index, libraryID: 1 }) as Zotero.Item,
+    );
+    let focused = 1;
+    let pivot = 1;
+    const selected = new Set<number>([0, 2]);
+    const active = { id: 'item-tree-row-1' } as unknown as Element;
     const root = { contains: (node: unknown) => node === active } as HTMLElement;
+
     const select = vi.fn((index: number) => {
       pivot = index;
       focused = index;
-      count = 1;
+      selected.clear();
+      selected.add(index);
     });
     const shiftSelect = vi.fn((index: number) => {
       focused = index;
-      count = Math.abs(pivot - focused) + 1;
+      selected.clear();
+      const start = Math.min(pivot, index);
+      const end = Math.max(pivot, index);
+      for (let row = start; row <= end; row += 1) selected.add(row);
+    });
+    const toggleSelect = vi.fn((index: number) => {
+      if (selected.has(index)) selected.delete(index);
+      else selected.add(index);
+      pivot = index;
+      focused = index;
+    });
+    const clearSelection = vi.fn(() => selected.clear());
+    const moveFocused = vi.fn((index: number) => {
+      focused = index;
+      pivot = index;
     });
     const badge = {
       id: '',
@@ -43,47 +64,75 @@ describe('Main Item Select', () => {
       documentElement: { append: vi.fn() },
     } as unknown as Document;
     const selection = {
-      get pivot() {
-        return pivot;
-      },
-      set pivot(value: number) {
-        pivot = value;
-      },
       get focused() {
         return focused;
       },
-      get count() {
-        return count;
-      },
       select,
       shiftSelect,
+      toggleSelect,
+      clearSelection,
+    };
+    const view = {
+      domEl: root,
+      rowCount: items.length,
+      selection,
+      tree: { _onSelection: moveFocused },
+      getRow: (index: number) => ({ isObjectRow: true, ref: items[index] }),
+      getRowIndexByID: (id: number) => {
+        const index = items.findIndex((item) => item.id === id);
+        return index < 0 ? false : index;
+      },
+      ensureRowIsVisible: vi.fn(),
     };
     const window = {
       document,
-      ZoteroPane: {
-        itemsView: { domEl: root, rowCount: 10, selection, ensureRowIsVisible: vi.fn() },
-      },
+      ZoteroPane: { itemsView: view },
       setTimeout: (fn: () => void) => setTimeout(fn, 5000) as unknown as number,
       clearTimeout: (timer: number) =>
         clearTimeout(timer as unknown as ReturnType<typeof setTimeout>),
     } as unknown as MainWindow;
+    const store = new SelectionStore();
+    store.add({ libraryID: 1, itemID: 10 });
+    store.add({ libraryID: 1, itemID: 12 });
     const feature = new MainItemSelect(logger);
 
     expect(feature.enter(window)).toBe('entered');
-    feature.extend(window, 1, 1, false);
-    feature.extend(window, 1, 3, false);
-    expect(count).toBe(5);
-    feature.swapEnds(window);
-    expect(pivot).toBe(6);
-    expect(focused).toBe(2);
-    expect(feature.finish(window)).toBe(5);
+    expect(store.values()).toEqual([
+      { libraryID: 1, itemID: 10 },
+      { libraryID: 1, itemID: 12 },
+    ]);
+    expect([...selected]).toEqual([1]);
 
-    feature.enter(window);
-    feature.extend(window, 1, 2, false);
-    const focusedBeforeCancel = focused;
-    feature.cancel(window);
-    expect(count).toBe(1);
-    expect(focused).toBe(focusedBeforeCancel);
+    feature.extend(window, 1, 2);
+    expect([...selected]).toEqual([1, 2, 3]);
+    expect(store.size).toBe(2);
+
+    feature.swapEnds(window);
+    expect([...selected]).toEqual([1, 2, 3]);
+
+    feature.cancel(window, store);
+    expect(new Set(selected)).toEqual(new Set([0, 2]));
+    expect(focused).toBe(1);
+    expect(store.size).toBe(2);
+
+    expect(feature.enter(window)).toBe('entered');
+    feature.extend(window, 1, 2);
+    expect(feature.commit(window, store)).toBe(4);
+    expect(store.values()).toEqual([
+      { libraryID: 1, itemID: 10 },
+      { libraryID: 1, itemID: 12 },
+      { libraryID: 1, itemID: 11 },
+      { libraryID: 1, itemID: 13 },
+    ]);
+    expect(new Set(selected)).toEqual(new Set([0, 1, 2, 3]));
+    expect(focused).toBe(3);
+
+    expect(feature.toggleCursor(window, store)).toBe(true);
+    expect(store.has({ libraryID: 1, itemID: 13 })).toBe(false);
+    expect(store.size).toBe(3);
+    expect(new Set(selected)).toEqual(new Set([0, 1, 2]));
+    expect(focused).toBe(4);
+
     feature.removeWindow(window);
   });
 });
