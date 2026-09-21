@@ -357,7 +357,9 @@ const NOTE_INHERITED_MAIN_SEQUENCES = new Set([
 ]);
 
 function noteInheritedMainSequence(sequence: string): boolean {
-  return bindingSequenceTokens(sequence)?.[0] === ' ' || NOTE_INHERITED_MAIN_SEQUENCES.has(sequence);
+  return (
+    bindingSequenceTokens(sequence)?.[0] === ' ' || NOTE_INHERITED_MAIN_SEQUENCES.has(sequence)
+  );
 }
 
 /** Copies schema-8 Note-global Main overrides into the new explicit Note scope. */
