@@ -1,9 +1,8 @@
-# Item Select and Tag Actions
+# Selection and Tag Actions
 
-Zotero Neo keeps item selection and tag mutation on Zotero's native data model.
-Neo resolves targets and executes explicit semantic actions; it does not maintain
-a second item-selection set, a private tag database, or a persistent tag-operation
-workspace.
+Zotero Neo keeps item data and tag mutation on Zotero's native data model while Main owns a
+small ephemeral Selection workset of stable item identities. Neo does not duplicate Zotero Item
+data, maintain a private tag database, or expose a persistent tag-operation workspace.
 
 ## Main item selection
 
@@ -19,9 +18,9 @@ With focus in Zotero's main item list:
 The selected rows remain Zotero's own `TreeSelection`. Semantic actions such as
 tag mutation and trash therefore operate on the same selection that Zotero sees.
 
-Item Select is intentionally limited to the main item list. The collection tree
-remains a single active collection/navigation context rather than a
-`TargetSet<Collection>` workflow.
+Main Selection is intentionally an item workset, separate from the collection-tree Scope layer.
+Collection multi-selection/ScopeSet is tracked separately in #55 and is not inferred from the item
+Selection workset.
 
 ## Tag action vocabulary
 
@@ -29,10 +28,10 @@ The default Tag namespace is explicit:
 
 | Key | Action |
 | --- | --- |
-| `<Space>ta` | Add one tag to the current target(s) |
-| `<Space>tr` | Remove one tag from the current target(s) |
-| `<Space>tf` | Toggle one Main-window tag filter |
-| `<Space>tc` | Clear all Main-window tag filters |
+| Main `ta`; Reader/Note `<Space>ta` | Add one tag to the current target(s) |
+| Main `tr`; Reader/Note `<Space>tr` | Remove one tag from the current target(s) |
+| Main `tf` | Toggle one Main-window tag filter |
+| Main `tc` | Clear all Main-window tag filters |
 
 `ta` and `tr` mutate item data. `tf` and `tc` only change the Main item
 view. The filter actions are Main-only so Reader/Note commands do not silently
@@ -43,7 +42,8 @@ change an off-screen Main filter.
 `ta` and `tr` are available from Main, Reader, and Note when Neo can resolve
 a taggable target set:
 
-- **Main**: all currently selected main-window items.
+- **Main**: `EffectiveSelection` — the explicit Neo Selection workset when non-empty,
+  otherwise the item under Cursor.
 - **Reader**: the active attachment's parent bibliographic item when one exists.
 - **Note**: a child note's parent bibliographic item when one exists; otherwise
   the standalone note itself.
