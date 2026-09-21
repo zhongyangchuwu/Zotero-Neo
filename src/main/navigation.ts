@@ -5,7 +5,7 @@ import type { FocusDirection } from '../input/actions';
 import { copyToClipboard } from '../platform/clipboard';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
-import { closeSelectedMainTab, cycleMainTab, mainHost } from './host';
+import { closeSelectedMainTab, cycleMainTab, mainHost, moveMainItemCursor } from './host';
 
 type Selection = {
   focused?: number;
@@ -282,8 +282,9 @@ export class MainNavigation {
     count: number,
     shouldDebounce = false,
   ): void {
+    const panel = this.panel(window, session);
     const view =
-      this.panel(window, session) === 'collections'
+      panel === 'collections'
         ? mainHost(window).ZoteroPane?.collectionsView
         : mainHost(window).ZoteroPane?.itemsView;
     if (!view?.selection) return;
@@ -297,6 +298,14 @@ export class MainNavigation {
             ? Math.min(count - 1, last)
             : last
           : Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
+
+    if (panel === 'items') {
+      if (!moveMainItemCursor(window, next, shouldDebounce)) {
+        this.#logger.debug('focus-only item cursor movement is unavailable');
+      }
+      return;
+    }
+
     view.selection.select?.(next, shouldDebounce);
   }
   activate(window: MainWindow, session: MainWindowSession): void {
