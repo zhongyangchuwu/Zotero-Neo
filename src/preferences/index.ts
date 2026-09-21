@@ -62,8 +62,8 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.marks.staged': 'Marks settings save automatically on change.',
     'zv.keyGuide': 'Key guide',
     'zv.keyGuide.help':
-      'Show valid Space-leader continuations in Normal mode without intercepting text input.',
-    'zv.keyGuide.enabled': 'Show the Space-leader key guide',
+      'Show valid pending-prefix continuations in Normal mode without intercepting text input.',
+    'zv.keyGuide.enabled': 'Show the prefix key guide',
     'zv.keyGuide.delay': 'Display delay (ms)',
     'zv.keyGuide.fontSize': 'Font size (px)',
     'zv.picker': 'Picker',
