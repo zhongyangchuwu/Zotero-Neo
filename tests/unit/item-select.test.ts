@@ -119,6 +119,22 @@ describe('Main Visual Selection', () => {
     expect(nextItemSelectIndex(3, 10, 'last', 5)).toBe(4);
   });
 
+  it('does not toggle the item workset when the collection tree owns focus', () => {
+    const host = harness(1);
+    const collectionActive = { id: 'collection-tree-row-0' } as unknown as Element;
+    const collectionRoot = {
+      contains: (node: unknown) => node === collectionActive,
+    } as HTMLElement;
+    Reflect.set(host.window.document, 'activeElement', collectionActive);
+    Reflect.set(host.window.ZoteroPane, 'collectionsView', { domEl: collectionRoot });
+
+    const store = new SelectionStore();
+    const feature = new MainItemSelect(logger);
+
+    expect(feature.toggleCursor(host.window, store)).toBe(false);
+    expect(store.empty).toBe(true);
+  });
+
   it('toggles Cursor items into the workset and advances without collapsing it', () => {
     const host = harness(1);
     const store = new SelectionStore();
