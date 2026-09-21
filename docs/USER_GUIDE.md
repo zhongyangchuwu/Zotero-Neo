@@ -604,7 +604,12 @@ Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to t
 
 - Every row in the **Keybindings** table maps a _mode + key sequence_ to an _action_. Multiple rows may bind keys to the same action.
 - Edit the key sequence directly in its cell. Key sequences preserve case: `b` and `B` are different. Use prefixes such as `ctrl+` for modified keys.
-- Multi-key sequences such as `gg`, `zy`, or `yy` are supported.
+- Multi-key sequences such as `gg`, `zy`, or `yy` are supported. Named keys
+  such as `enter`, `escape`, `tab`, and `arrowdown` are single semantic
+  tokens, not letter sequences. When a named key or modifier chord participates
+  in a longer shortcut, make the boundary explicit, for example `<enter>g` or
+  `<ctrl+d>g`. If you really want the literal letters of a named key, force a
+  character boundary such as `<e>nter`.
 - Click **+ Add binding** to insert a new row immediately below the table header. The row is visible at once, starts in Normal mode with an empty Key Sequence and no selected Action, and focuses/selects the Key Sequence field. Click **×** to remove a row; removing a row truly unbinds that mode-and-sequence once the change is applied.
 - The native **Mode** menu is available on every row. Changing a row's Mode updates the Action choices to show only actions supported by that Mode.
 - The Action selector is searchable by localized action label or action identifier (case-insensitive). Use `↑` / `↓`, `Enter`, or `Escape`, or click an option to choose it.
