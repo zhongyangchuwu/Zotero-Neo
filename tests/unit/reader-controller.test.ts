@@ -1152,7 +1152,8 @@ describe('reader sidebar coordination', () => {
     const bindings = {
       ...Object.fromEntries(
         Object.entries(DEFAULT_BINDINGS).filter(
-          ([binding]) => binding !== 'reader-normal:<Space>e' && binding !== 'reader-normal:<Space>m',
+          ([binding]) =>
+            binding !== 'reader-normal:<Space>e' && binding !== 'reader-normal:<Space>m',
         ),
       ),
       'reader-normal:q': 'toggleReaderSidebarOutline',
