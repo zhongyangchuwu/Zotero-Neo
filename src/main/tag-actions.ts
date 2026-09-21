@@ -213,6 +213,13 @@ export class TagActions {
   private targets(window: MainWindow, session: MainWindowSession): ItemTargetSet | null {
     const mainTargets = resolveMainEffectiveTargets(window, session);
     const targets = resolveItemTagTargets(window, mainTargets.items);
+    if (targets.source === 'main' && mainTargets.missing > 0) {
+      this.#navigation.status(
+        session,
+        '✗ Selection contains unavailable items; refresh before changing tags',
+      );
+      return null;
+    }
     if (targets.items.length) return targets;
     this.#navigation.status(session, '✗ No taggable item target');
     return null;
