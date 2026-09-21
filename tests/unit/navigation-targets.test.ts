@@ -103,7 +103,7 @@ describe('Main action target contracts', () => {
     const cursor = attachment(11);
     const h = harness([nativeSelected, cursor], 1);
 
-    await h.navigation.openPDF(h.window, h.session);
+    await h.navigation.openPDF(h.window, h.session, cursor);
 
     expect(h.viewAttachment).toHaveBeenCalledWith(cursor.id);
     expect(h.viewAttachment).not.toHaveBeenCalledWith(nativeSelected.id);
