@@ -271,6 +271,7 @@ describe('binding parsing and overrides', () => {
         'main-normal: ff': null,
         'main-normal: ta': null,
         'main-normal: q': null,
+        'main-normal: e': null,
         'main-normal: custom': 'nextTab',
         'reader-normal: ff': null,
       }),
@@ -278,6 +279,7 @@ describe('binding parsing and overrides', () => {
 
     expect(JSON.parse(migrated)).toEqual({
       'main-normal: custom': 'nextTab',
+      'main-normal:e': null,
       'main-normal:ff': null,
       'main-normal:q': null,
       'main-normal:ta': null,
