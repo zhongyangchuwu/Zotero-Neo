@@ -326,7 +326,7 @@ export class SelectionPanel {
         entries.forEach((entry, index) => {
           const row = window.document.createElementNS(H, 'div');
           row.dataset.index = String(index);
-          row.style.cssText = `padding:7px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${index === state.selected ? `background:${THEME_VARS.selection};color:${THEME_VARS.selectionText};` : ''}`;
+          row.style.cssText = `padding:7px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${index === state.selected ? `background:${THEME_VARS.selected};color:${THEME_VARS.selectedText};` : ''}`;
           const marker =
             entry.state === 'visible' ? 'V' : entry.state === 'hidden' ? 'H' : '!';
           row.textContent = `[${marker}] ${entry.title}`;
