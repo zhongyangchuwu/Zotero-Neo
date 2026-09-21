@@ -4,6 +4,7 @@ import {
   bindingSequenceTokens,
   canonicalBindingSequence,
   migrateLegacyKeySequence,
+  serializeBindingTokens,
 } from './key-sequence';
 
 export const MODES = [
@@ -465,6 +466,36 @@ export function migrateMainDirectPrefixOverrides(raw: unknown): string {
     ['main-normal:<Space>ww', 'main-normal:ww'],
   ] as const) {
     moveNull(oldKey, newKey);
+  }
+
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Releases Main Space completely for the v0.2 Selection toggle.
+ *
+ * Schema 13 may still contain custom Main <Space>... overrides preserved by the
+ * direct-prefix migration. Move them to the equivalent direct sequence so the
+ * exact <Space> selection action never acquires an 800 ms exact/prefix delay.
+ * If an explicit direct override already exists, it wins and the stale
+ * Space-prefixed override is dropped.
+ */
+export function migrateMainSpaceSelectionOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+
+  for (const [key, action] of Object.entries({ ...overrides })) {
+    const binding = parseBindingKey(key);
+    if (binding?.mode !== 'main-normal') continue;
+
+    const tokens = bindingSequenceTokens(binding.sequence);
+    if (!tokens || tokens.length <= 1 || tokens[0] !== ' ') continue;
+
+    const directSequence = serializeBindingTokens(tokens.slice(1));
+    if (!directSequence) continue;
+    const directKey = `main-normal:${directSequence}`;
+
+    delete overrides[key];
+    if (!(directKey in overrides)) overrides[directKey] = action;
   }
 
   return stringifyBindingOverrides(overrides);
