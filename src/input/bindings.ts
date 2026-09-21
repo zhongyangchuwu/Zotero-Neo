@@ -411,15 +411,15 @@ export function migrateSemanticKeymapOverrides(raw: unknown): string {
     if (!(newKey in overrides)) overrides[newKey] = null;
   };
 
-  moveNull('reader-normal: ft', 'reader-normal:<Space>,');
-  moveNull('note-normal: ft', 'note-normal:<Space>,');
+  moveNull('reader-normal:<Space>ft', 'reader-normal:<Space>,');
+  moveNull('note-normal:<Space>ft', 'note-normal:<Space>,');
   moveNull('main-normal:<Space>ft', 'main-normal:<Space>,');
-  moveNull('reader-normal: td', 'reader-normal: q');
-  moveNull('note-normal: td', 'note-normal:<Space>q');
+  moveNull('reader-normal:<Space>td', 'reader-normal:<Space>q');
+  moveNull('note-normal:<Space>td', 'note-normal:<Space>q');
   moveNull('main-normal:<Space>td', 'main-normal:<Space>q');
   moveNull('main-normal:<Space>fT', 'main-normal:<Space>tf');
 
-  if (overrides['note-normal: fT'] === null) delete overrides['note-normal: fT'];
+  if (overrides['note-normal:<Space>fT'] === null) delete overrides['note-normal:<Space>fT'];
   for (const [key, action] of Object.entries({ ...overrides })) {
     const binding = parseBindingKey(key);
     if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
