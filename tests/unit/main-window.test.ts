@@ -1058,7 +1058,11 @@ describe('repeated tab switching', () => {
 describe('Main Space Selection ownership', () => {
   it('toggles and advances in the items list but leaves collection-tree Space native', () => {
     let keydown: EventListener | undefined;
-    const itemActive = { id: 'item-tree-row-0', localName: 'div', tagName: 'DIV' } as Element;
+    const itemActive = {
+      id: 'item-tree-row-0',
+      localName: 'div',
+      tagName: 'DIV',
+    } as Element;
     const collectionActive = {
       id: 'collection-tree-row-0',
       localName: 'div',
@@ -1076,12 +1080,7 @@ describe('Main Space Selection ownership', () => {
     };
     const itemTree = {
       _onSelection: vi.fn(
-        (
-          index: number,
-          _shiftSelect: boolean,
-          _toggleSelection: boolean,
-          moveFocused: boolean,
-        ) => {
+        (index: number, _shiftSelect: boolean, _toggleSelection: boolean, moveFocused: boolean) => {
           if (!moveFocused) return;
           selection.focused = index;
           selection.pivot = index;
