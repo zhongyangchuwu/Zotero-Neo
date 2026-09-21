@@ -268,6 +268,14 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     const key = keyString(event);
     if (!key) return;
+    if (
+      session.inputMode === 'main-normal' &&
+      key === ' ' &&
+      !this.#itemSelect.itemsFocused(window)
+    ) {
+      this.clearKeyGuide(window, session);
+      return;
+    }
     const bindings = this.activeBindings(session.inputMode);
     const leaderState = {
       mode: session.inputMode,
@@ -324,6 +332,10 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (decision.kind === 'execute') {
       if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
+      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
