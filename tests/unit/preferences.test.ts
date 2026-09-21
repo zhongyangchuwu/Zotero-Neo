@@ -329,6 +329,34 @@ describe('binding preferences', () => {
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
+  it('moves schema-13 custom Main Space prefixes to direct keys before Space becomes Selection', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 13,
+      bindings: JSON.stringify({
+        'main-normal:<Space>zx': 'nextTab',
+        'main-normal:<Space>ff': 'previousTab',
+        'main-normal:ff': 'findNotes',
+        'reader-normal:<Space>zx': 'nextTab',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main-normal:ff': 'findNotes',
+      'main-normal:zx': 'nextTab',
+      'reader-normal:<Space>zx': 'nextTab',
+    });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['main-normal:<Space>']).toBe('mainToggleSelection');
+    expect(resolved['main-normal:<Space>zx']).toBeUndefined();
+    expect(resolved['main-normal:zx']).toBe('nextTab');
+    expect(resolved['main-normal:ff']).toBe('findNotes');
+    expect(resolved['reader-normal:<Space>zx']).toBe('nextTab');
+  });
+
   it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {
     const unbound = new TestPreferences({
       'bindings.schemaVersion': 9,
