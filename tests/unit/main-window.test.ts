@@ -1055,6 +1055,121 @@ describe('repeated tab switching', () => {
   });
 });
 
+describe('Main Space Selection ownership', () => {
+  it('toggles and advances in the items list but leaves collection-tree Space native', () => {
+    let keydown: EventListener | undefined;
+    const itemActive = { id: 'item-tree-row-0', localName: 'div', tagName: 'DIV' } as Element;
+    const collectionActive = {
+      id: 'collection-tree-row-0',
+      localName: 'div',
+      tagName: 'DIV',
+    } as Element;
+    const rows = [
+      { ref: { id: 10, libraryID: 1 } },
+      { ref: { id: 11, libraryID: 1 } },
+    ];
+    const selection = {
+      focused: 0,
+      pivot: 0,
+      selected: new Set([0]),
+      _updateTree: vi.fn(),
+    };
+    const itemTree = {
+      _onSelection: vi.fn(
+        (
+          index: number,
+          _shiftSelect: boolean,
+          _toggleSelection: boolean,
+          moveFocused: boolean,
+        ) => {
+          if (!moveFocused) return;
+          selection.focused = index;
+          selection.pivot = index;
+        },
+      ),
+      invalidate: vi.fn(),
+    };
+    const document = {
+      activeElement: itemActive,
+      body: { append: () => {}, appendChild: () => {} },
+      documentElement: { append: () => {}, appendChild: () => {} },
+      createElementNS: () => statusElement(),
+      getElementById: () => null,
+      querySelector: () => null,
+      addEventListener: (type: string, listener: EventListener) => {
+        if (type === 'keydown') keydown = listener;
+      },
+      removeEventListener: () => {},
+    } as unknown as Document;
+    const window = {
+      document,
+      ZoteroPane: {
+        itemsView: {
+          rowCount: rows.length,
+          selection,
+          tree: itemTree,
+          domEl: { contains: (node: unknown) => node === itemActive },
+          getRow: (index: number) => rows[index],
+        },
+        collectionsView: {
+          rowCount: 1,
+          selection: { focused: 0, count: 1, select: vi.fn() },
+          domEl: { contains: (node: unknown) => node === collectionActive },
+        },
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 0,
+      clearInterval: () => {},
+      setTimeout,
+      clearTimeout,
+    } as unknown as MainWindow;
+    const controller = createMainWindowController({
+      preferences: {
+        has: () => false,
+        get: (key, fallback) => (key === 'noteEditor.enabled' ? false : fallback),
+        set: () => {},
+      },
+      logger,
+      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    controller.addWindow(window);
+
+    const pressSpace = () => {
+      const preventDefault = vi.fn();
+      const stopPropagation = vi.fn();
+      keydown?.({
+        key: ' ',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault,
+        stopPropagation,
+      } as unknown as KeyboardEvent);
+      return { preventDefault, stopPropagation };
+    };
+
+    const first = pressSpace();
+    expect(first.preventDefault).toHaveBeenCalledOnce();
+    expect(first.stopPropagation).toHaveBeenCalledOnce();
+    expect(selection.focused).toBe(1);
+    expect([...selection.selected]).toEqual([0]);
+
+    const second = pressSpace();
+    expect(second.preventDefault).toHaveBeenCalledOnce();
+    expect([...selection.selected]).toEqual([0, 1]);
+
+    Reflect.set(document, 'activeElement', collectionActive);
+    const before = [...selection.selected];
+    const collectionSpace = pressSpace();
+    expect(collectionSpace.preventDefault).not.toHaveBeenCalled();
+    expect(collectionSpace.stopPropagation).not.toHaveBeenCalled();
+    expect([...selection.selected]).toEqual(before);
+
+    controller.shutdown();
+  });
+});
+
 describe('main pending-prefix key guide', () => {
   describe('main engine dispatch', () => {
     it('waits for an ambiguous direct binding and leaves unavailable focus native', () => {
