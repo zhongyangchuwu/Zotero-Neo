@@ -88,7 +88,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help3b': ' for Ctrl/Cmd.',
     'zv.bindings.help4a': 'Multi-key sequences such as ',
     'zv.bindings.help4b': ' or ',
-    'zv.bindings.help4c': ' are supported.',
+    'zv.bindings.help4c': ' are supported. Use <enter>g or <ctrl+d>g when a named key/chord is part of a longer sequence.',
     'zv.bindings.add': '+ Add binding',
     'zv.bindings.footer':
       'Appearance, key guide, modes, marks, colour, picker and scroll settings save automatically.',
