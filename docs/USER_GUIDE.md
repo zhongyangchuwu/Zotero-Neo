@@ -84,19 +84,20 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
 
-### Space-leader key guide
+### Prefix Guide
 
-In Reader Normal mode, main-window navigation, and Note Normal mode, pause after
-pressing `Space` to show a small bottom-center list of valid next keys. It reads
-the active keybinding configuration, so remapped Space-leader commands appear
-without a second display-only keymap.
+The guide follows any pending multi-key prefix in the active resolved keymap.
+Reader and Note still use Space-led command groups, while Main uses direct
+prefixes such as `f`, `t`, `p`, `w`, and `y`. Pause after the first key to
+show the small bottom-center list of valid continuations. Remaps appear without a
+second display-only keymap.
 
 - The guide is enabled by default and appears after 200 ms; its delay and
   15 px default font size are configurable under **Preferences → Key guide**.
 - Letter labels preserve case: `b` and `B` are distinct bindings.
-- It updates after nested prefixes such as `<space>f`.
-- `Escape` cancels the leader sequence. `Backspace` returns to the previous
-  leader prefix; at the root it closes the guide.
+- It updates after nested prefixes such as `<space>f` in Reader/Note or `f` / `t` in Main.
+- `Escape` cancels the pending sequence. `Backspace` returns to the previous
+  pending prefix; at the root it closes the guide.
 - It never appears in Insert mode, native/editor text input, picker input, or
   other Neo-owned modal input.
 
@@ -124,7 +125,7 @@ confirmation.
 
 #### Plugin Manager panel
 
-Press `<space>pp` in Reader Normal, Main Normal, or Note Normal to open Neo's persistent
+Press `<space>pp` in Reader/Note Normal, or `pp` in Main Normal, to open Neo's persistent
 Plugin Manager panel. Unlike a picker, this surface stays open while you browse installed
 plugins and inspect their state. Zotero/Mozilla AddonManager remains the authoritative
 source for plugin lifecycle state.
