@@ -73,7 +73,9 @@ describe('Main item cursor host adapter', () => {
     expect([...host.selection.selected]).toEqual(selectedBefore);
   });
 
-  it('fails closed instead of collapsing selection when focus-only host seams are unavailable', () => {
+  it(
+    'fails closed instead of collapsing selection when focus-only host seams are unavailable',
+    () => {
     const selection = {
       focused: 1,
       pivot: 1,
@@ -90,9 +92,10 @@ describe('Main item cursor host adapter', () => {
       },
     } as unknown as MainWindow;
 
-    expect(moveMainItemCursor(window, 2)).toBe(false);
-    expect(select).not.toHaveBeenCalled();
-  });
+      expect(moveMainItemCursor(window, 2)).toBe(false);
+      expect(select).not.toHaveBeenCalled();
+    },
+  );
 
   it('supports the equivalent private focused/pivot seam as a guarded fallback', () => {
     const update = vi.fn();
