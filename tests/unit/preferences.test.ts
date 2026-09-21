@@ -258,7 +258,7 @@ describe('binding preferences', () => {
 
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
       'main-normal:,': null,
-      'main-normal: custom-tab': 'switchTab',
+      'main-normal:<Space>custom-tab': 'switchTab',
       'main-normal:q': null,
       'main-normal:tf': null,
       'note-normal:<Space>,': null,
@@ -274,7 +274,7 @@ describe('binding preferences', () => {
     expect(resolved['main-normal:,']).toBeUndefined();
     expect(resolved['main-normal:q']).toBeUndefined();
     expect(resolved['main-normal:tf']).toBeUndefined();
-    expect(resolved['main-normal: custom-tab']).toBe('switchTab');
+    expect(resolved['main-normal:<Space>custom-tab']).toBe('switchTab');
     expect(resolved['main-normal:ta']).toBe('addTag');
   });
 
