@@ -2,10 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
 import type { MainNavigation } from '../../src/main/navigation';
-import {
-  MainSelectionActions,
-  toggleSelectionTarget,
-} from '../../src/main/selection-actions';
+import { MainSelectionActions, toggleSelectionTarget } from '../../src/main/selection-actions';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 
