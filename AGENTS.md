@@ -80,7 +80,7 @@ vendor/                    pinned, licensed third-party source/build snapshots
 - Use semicolons and 2-space indentation. Prettier is authoritative.
 - Methods and variables use `camelCase`; internal fields use native `#private`
   fields. Constants use `SCREAMING_SNAKE_CASE`.
-- Binding mode prefixes remain `'normal:j'`, `'visual:zy'`, and `'main: ff'`.
+- Binding mode prefixes use canonical scopes such as `'reader-normal:j'`, `'reader-select:zy'`, and `'main-normal:ff'`.
 
 ### Formatting
 - Use single quotes unless a host format requires otherwise.
