@@ -256,7 +256,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (session.inputMode === 'main-select' && !this.#itemSelect.itemsFocused(window)) {
-      this.#itemSelect.leave(window);
+      this.#itemSelect.cancel(window, session.selection);
       session.inputMode = 'main-normal';
       session.keyBuffer = '';
       session.countBuffer = '';
@@ -324,6 +324,10 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (decision.kind === 'execute') {
       if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
+      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
@@ -629,6 +633,14 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainTreeCollapseAll':
         this.#navigation.collapseAll(window, session);
         break;
+      case 'mainToggleSelection':
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.commit(window, session.selection);
+          session.inputMode = 'main-normal';
+        } else {
+          this.#itemSelect.toggleCursor(window, session.selection);
+        }
+        break;
       case 'mainEnterSelect': {
         const result = this.#itemSelect.enter(window);
         if (result === 'entered') session.inputMode = 'main-select';
@@ -649,12 +661,8 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainSelectSwapEnds':
         this.#itemSelect.swapEnds(window);
         break;
-      case 'mainSelectFinish':
-        this.#itemSelect.finish(window);
-        session.inputMode = 'main-normal';
-        break;
       case 'mainSelectCancel':
-        this.#itemSelect.cancel(window);
+        this.#itemSelect.cancel(window, session.selection);
         session.inputMode = 'main-normal';
         break;
       default:
