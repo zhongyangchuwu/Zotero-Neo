@@ -27,6 +27,7 @@ const expectedMainActions: readonly ActionId[] = [
   'managePlugins',
   'mainTrashItems',
   'mainRestoreTrashedItems',
+  'mainToggleSelection',
   'mainFocusTree',
   'mainFocusLeft',
   'mainFocusRight',
