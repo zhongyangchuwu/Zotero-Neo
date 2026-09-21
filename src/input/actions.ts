@@ -298,8 +298,8 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '管理已安装的 Zotero 插件',
   },
   mainTrashItems: {
-    en: 'Main window: move selected items to trash',
-    'zh-CN': '主窗口：将所选条目移到回收站',
+    en: 'Main window: move EffectiveSelection to trash',
+    'zh-CN': '主窗口：将有效选择集移到回收站',
   },
   mainRestoreTrashedItems: {
     en: 'Main window: restore the last trashed items',
@@ -330,8 +330,8 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '主窗口：复制 BetterBibTeX citekey',
   },
   mainOpenPDF: {
-    en: 'Main window: open PDF of selected item',
-    'zh-CN': '主窗口：打开所选条目的 PDF',
+    en: 'Main window: open PDF at Cursor',
+    'zh-CN': '主窗口：打开光标条目的 PDF',
   },
   closeCurrentTab: {
     en: 'Close current tab',
@@ -354,36 +354,36 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '清空标签筛选条件',
   },
   mainEnterSelect: {
-    en: 'Main window: enter item selection',
-    'zh-CN': '主窗口：进入条目选择',
+    en: 'Main window: enter Visual range',
+    'zh-CN': '主窗口：进入可视范围',
   },
   mainSelectDown: {
-    en: 'Item Select: extend down',
-    'zh-CN': '条目选择：向下扩展',
+    en: 'Visual range: move head down',
+    'zh-CN': '可视范围：向下移动活动端',
   },
   mainSelectUp: {
-    en: 'Item Select: extend up',
-    'zh-CN': '条目选择：向上扩展',
+    en: 'Visual range: move head up',
+    'zh-CN': '可视范围：向上移动活动端',
   },
   mainSelectFirst: {
-    en: 'Item Select: extend to first item',
-    'zh-CN': '条目选择：扩展到首项',
+    en: 'Visual range: move head to first item',
+    'zh-CN': '可视范围：活动端移到首项',
   },
   mainSelectLast: {
-    en: 'Item Select: extend to last item',
-    'zh-CN': '条目选择：扩展到末项',
+    en: 'Visual range: move head to last item',
+    'zh-CN': '可视范围：活动端移到末项',
   },
   mainSelectSwapEnds: {
-    en: 'Item Select: swap anchor and focus',
-    'zh-CN': '条目选择：交换锚点与焦点',
+    en: 'Visual range: swap anchor and head',
+    'zh-CN': '可视范围：交换锚点与活动端',
   },
   mainSelectFinish: {
-    en: 'Item Select: finish and preserve selection',
-    'zh-CN': '条目选择：完成并保留选择',
+    en: 'Visual range: cancel and return to Normal',
+    'zh-CN': '可视范围：取消并返回普通状态',
   },
   mainSelectCancel: {
-    en: 'Item Select: cancel to focused item',
-    'zh-CN': '条目选择：取消并保留焦点项',
+    en: 'Visual range: cancel',
+    'zh-CN': '可视范围：取消',
   },
   mainNavDown: {
     en: 'Main window: navigate down',
@@ -402,8 +402,8 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '主窗口：跳到最后一个条目',
   },
   mainActivate: {
-    en: 'Main window: open PDF of selected item',
-    'zh-CN': '主窗口：打开所选条目的 PDF',
+    en: 'Main window: open PDF at Cursor',
+    'zh-CN': '主窗口：打开光标条目的 PDF',
   },
   switchTab: {
     en: 'Switch to an open tab',
