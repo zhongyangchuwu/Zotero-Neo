@@ -5,7 +5,13 @@ import type { FocusDirection } from '../input/actions';
 import { copyToClipboard } from '../platform/clipboard';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
-import { closeSelectedMainTab, cycleMainTab, mainHost } from './host';
+import {
+  closeSelectedMainTab,
+  cycleMainTab,
+  mainHost,
+  moveMainItemCursor,
+  visibleMainItemRefs,
+} from './host';
 
 type Selection = {
   focused?: number;
@@ -275,6 +281,28 @@ export class MainNavigation {
       });
     return ranked.some(({ target }) => target.focus());
   }
+  refreshSelectionIndicator(window: MainWindow, session: MainWindowSession): void {
+    const total = session.selection.size;
+    if (!total) {
+      session.selectionIndicator?.remove();
+      session.selectionIndicator = null;
+      return;
+    }
+
+    const visible = session.selection.countVisible(visibleMainItemRefs(window));
+    let indicator = session.selectionIndicator;
+    if (!indicator) {
+      const doc = window.document;
+      indicator = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
+      indicator.id = 'zotero-neo-selection-indicator';
+      indicator.style.cssText = `position:fixed;bottom:10px;left:14px;z-index:99998;font:bold 12px/1.4 monospace;color:${THEME_VARS.text};background:${THEME_VARS.surface};padding:2px 8px;border:1px solid ${THEME_VARS.border};border-radius:3px;pointer-events:none;user-select:none;box-shadow:0 4px 16px ${THEME_VARS.shadow}`;
+      (doc.body ?? doc.documentElement).append(indicator);
+      session.theme.add(indicator);
+      session.selectionIndicator = indicator;
+    }
+    indicator.textContent = `Selection ${total} · ${visible} visible`;
+  }
+
   navigate(
     window: MainWindow,
     session: MainWindowSession,
@@ -282,8 +310,9 @@ export class MainNavigation {
     count: number,
     shouldDebounce = false,
   ): void {
+    const panel = this.panel(window, session);
     const view =
-      this.panel(window, session) === 'collections'
+      panel === 'collections'
         ? mainHost(window).ZoteroPane?.collectionsView
         : mainHost(window).ZoteroPane?.itemsView;
     if (!view?.selection) return;
@@ -297,6 +326,16 @@ export class MainNavigation {
             ? Math.min(count - 1, last)
             : last
           : Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
+
+    if (panel === 'items') {
+      if (!moveMainItemCursor(window, next, shouldDebounce)) {
+        this.#logger.debug('Main item focus-only cursor movement is unavailable');
+        return;
+      }
+      this.refreshSelectionIndicator(window, session);
+      return;
+    }
+
     view.selection.select?.(next, shouldDebounce);
   }
   activate(window: MainWindow, session: MainWindowSession): void {
