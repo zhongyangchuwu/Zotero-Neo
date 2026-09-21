@@ -12,7 +12,6 @@ import {
   mainHost,
   moveMainItemCursor,
   projectMainSelection,
-  selectedMainTabID,
 } from './host';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 
@@ -323,7 +322,7 @@ export class MainNavigation {
       this.status(session, '▶ items', 900);
       return;
     }
-    void this.openPDF(window, session);
+    void this.openPDF(window, session, mainCursorItem(window));
   }
 
   async trashItems(ids: readonly number[]): Promise<boolean> {
@@ -409,12 +408,24 @@ export class MainNavigation {
       this.status(session, '✗ Unable to restore items');
     }
   }
-  async openPDF(window: MainWindow, session: MainWindowSession): Promise<void> {
+  async openPDF(
+    window: MainWindow,
+    session: MainWindowSession,
+    target?: Zotero.Item,
+  ): Promise<void> {
     try {
       const pane = mainHost(window).ZoteroPane;
-      const item = mainCursorItem(window);
+      let item = target;
       if (!item) {
-        this.status(session, '✗ No item under cursor');
+        let items = pane?.getSelectedItems?.() ?? [];
+        if (!items.length) {
+          this.ensureSelection(pane?.itemsView);
+          items = pane?.getSelectedItems?.() ?? [];
+        }
+        item = items[0];
+      }
+      if (!item) {
+        this.status(session, target === undefined ? '✗ No item selected' : '✗ No item under cursor');
         return;
       }
       if (item.isAttachment()) {
@@ -460,14 +471,18 @@ export class MainNavigation {
     cycleMainTab(window, direction);
     this.afterTabSwitch(window);
   }
-  yankCitekey(window: MainWindow, session: MainWindowSession): void {
+  yankCitekey(
+    window: MainWindow,
+    session: MainWindowSession,
+    context: 'main' | 'reader' | 'note' = 'main',
+  ): void {
     try {
-      const tabID = selectedMainTabID(window);
-      const readerActive = !!(tabID && mainHost(window).Zotero_Tabs?.getTabInfo?.(tabID)?.type === 'reader');
       let item: Zotero.Item | undefined;
 
-      if (readerActive) {
+      if (context === 'reader') {
         item = currentMainItem(window);
+      } else if (context === 'note') {
+        item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
       } else {
         const targets = resolveMainEffectiveTargets(window, session);
         if (targets.total > 1) {
