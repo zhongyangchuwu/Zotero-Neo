@@ -1,5 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import type { TreeView } from './navigation';
+import type { ItemRef } from './selection-store';
 
 export type TagJson = _ZoteroTypes.Tags.TagJson;
 
@@ -67,12 +68,19 @@ type ItemCursorTree = {
   ): void;
 };
 
+type ItemTreeRow = {
+  readonly isObjectRow?: boolean;
+  readonly ref?: Zotero.Item;
+};
+
 type ItemCursorView = {
   readonly rowCount?: number;
   readonly tree?: ItemCursorTree;
   readonly selection?: {
     readonly focused?: number;
   };
+  getRow?(index: number): ItemTreeRow | undefined;
+  getRowIndexByID?(id: number): number | false;
   ensureRowIsVisible?(index: number): void;
 };
 
@@ -155,6 +163,44 @@ export function mainPane(window: MainWindow): MainPane | undefined {
  * _onSelection(..., moveFocused=true) seam. Keep that dependency isolated here
  * so a host-version change does not leak into navigation semantics.
  */
+export function mainItemRefAtRow(window: MainWindow, index: number): ItemRef | undefined {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const row = view?.getRow?.(index);
+  const item = row?.ref;
+  if (!item || row?.isObjectRow === false) return undefined;
+  if (!Number.isInteger(item.id) || item.id <= 0) return undefined;
+  if (!Number.isInteger(item.libraryID) || item.libraryID <= 0) return undefined;
+  return { libraryID: item.libraryID, itemID: item.id };
+}
+
+export function currentMainItemCursorRef(window: MainWindow): ItemRef | undefined {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const focused = view?.selection?.focused;
+  return focused === undefined ? undefined : mainItemRefAtRow(window, focused);
+}
+
+export function mainItemRowForRef(window: MainWindow, ref: ItemRef): number | undefined {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const index = view?.getRowIndexByID?.(ref.itemID);
+  if (index === undefined || index === false || index < 0) return undefined;
+  const visible = mainItemRefAtRow(window, index);
+  if (!visible || visible.itemID !== ref.itemID || visible.libraryID !== ref.libraryID)
+    return undefined;
+  return index;
+}
+
+export function visibleMainSelectionCount(window: MainWindow, refs: readonly ItemRef[]): number {
+  let count = 0;
+  const seen = new Set<string>();
+  for (const ref of refs) {
+    const key = `${ref.libraryID}:${ref.itemID}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (mainItemRowForRef(window, ref) !== undefined) count += 1;
+  }
+  return count;
+}
+
 export function moveMainItemCursor(
   window: MainWindow,
   index: number,
@@ -169,6 +215,15 @@ export function moveMainItemCursor(
   move.call(view.tree, next, false, false, true, shouldDebounce);
   view.ensureRowIsVisible?.(next);
   return true;
+}
+
+export function restoreMainItemCursor(
+  window: MainWindow,
+  ref: ItemRef,
+  shouldDebounce = false,
+): boolean {
+  const row = mainItemRowForRef(window, ref);
+  return row === undefined ? false : moveMainItemCursor(window, row, shouldDebounce);
 }
 
 export function mainItem(id: number): Zotero.Item | undefined {
