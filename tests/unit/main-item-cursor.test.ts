@@ -21,12 +21,7 @@ function itemWindow() {
     selected: new Set([0, 2]),
   };
   const onSelection = vi.fn(
-    (
-      index: number,
-      _shiftSelect: boolean,
-      _toggleSelection: boolean,
-      moveFocused: boolean,
-    ) => {
+    (index: number, _shiftSelect: boolean, _toggleSelection: boolean, moveFocused: boolean) => {
       if (!moveFocused) return;
       selection.focused = index;
       selection.pivot = index;
@@ -76,21 +71,21 @@ describe('Main item cursor host adapter', () => {
   it(
     'fails closed instead of collapsing selection when focus-only host seams are unavailable',
     () => {
-    const selection = {
-      focused: 1,
-      pivot: 1,
-      selected: new Set([0, 1]),
-    };
-    const select = vi.fn();
-    const window = {
-      ZoteroPane: {
-        itemsView: {
-          rowCount: 3,
-          selection: { ...selection, select },
-          tree: {},
+      const selection = {
+        focused: 1,
+        pivot: 1,
+        selected: new Set([0, 1]),
+      };
+      const select = vi.fn();
+      const window = {
+        ZoteroPane: {
+          itemsView: {
+            rowCount: 3,
+            selection: { ...selection, select },
+            tree: {},
+          },
         },
-      },
-    } as unknown as MainWindow;
+      } as unknown as MainWindow;
 
       expect(moveMainItemCursor(window, 2)).toBe(false);
       expect(select).not.toHaveBeenCalled();
