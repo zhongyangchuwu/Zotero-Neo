@@ -285,6 +285,7 @@ describe('binding preferences', () => {
         'main-normal: ff': null,
         'main-normal: ta': null,
         'main-normal: q': null,
+        'main-normal: e': null,
         'main-normal: custom': 'nextTab',
       }),
     });
@@ -293,6 +294,7 @@ describe('binding preferences', () => {
 
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
       'main-normal: custom': 'nextTab',
+      'main-normal:e': null,
       'main-normal:ff': null,
       'main-normal:q': null,
       'main-normal:ta': null,
@@ -302,8 +304,27 @@ describe('binding preferences', () => {
     expect(resolved['main-normal:ff']).toBeUndefined();
     expect(resolved['main-normal:ta']).toBeUndefined();
     expect(resolved['main-normal:q']).toBeUndefined();
+    expect(resolved['main-normal:e']).toBeUndefined();
     expect(resolved['main-normal:fc']).toBe('findCollectionItems');
     expect(resolved['reader-normal: ff']).toBe('findAllItems');
+  });
+
+  it('canonicalizes schema-12 multi-key token boundaries', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 12,
+      bindings: JSON.stringify({
+        'main-normal:ctrl+dg': 'mainActivate',
+        'main-normal:<e>nter': 'mainFocusTree',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main-normal:<ctrl+d>g': 'mainActivate',
+      'main-normal:<e>nter': 'mainFocusTree',
+    });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
   it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {
