@@ -7,6 +7,7 @@ import {
   formatGuidePrefix,
   isLeaderPrefix,
   leaderGuideEntries,
+  prefixGuideEntries,
 } from '../../src/input/key-guide';
 
 const bindings: BindingMap = {
@@ -46,20 +47,17 @@ describe('leader guide projection', () => {
     ]);
   });
 
-  it('uses custom bindings as its only command source and hides non-leader prefixes', () => {
+  it('projects direct pending prefixes without turning them into Space leaders', () => {
     const custom: BindingMap = {
-      'main-normal: xx': 'switchTab',
-      'main-normal: xy': 'findAllItems',
+      'main-normal:xx': 'switchTab',
+      'main-normal:xy': 'findAllItems',
     };
 
-    expect(leaderGuideEntries(custom, 'main-normal', ' ', 'en')).toEqual([
-      { key: 'x', label: KEY_GUIDE_CONFIG.genericGroupLabel.en, isGroup: true },
-    ]);
-    expect(leaderGuideEntries(custom, 'main-normal', ' x', 'en')).toEqual([
+    expect(prefixGuideEntries(custom, 'main-normal', 'x', 'en')).toEqual([
       { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
       { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!.en, isGroup: false },
     ]);
-    expect(leaderGuideEntries(custom, 'main-normal', 'g', 'en')).toEqual([]);
+    expect(leaderGuideEntries(custom, 'main-normal', 'x', 'en')).toEqual([]);
   });
 
   it('keeps the runtime defaults alongside the display metadata', () => {
@@ -72,10 +70,11 @@ describe('leader guide projection', () => {
   it('projects the explicit Tag action defaults without reviving retired picker aliases', () => {
     expect(DEFAULT_BINDINGS['reader-normal: ta']).toBe('addTag');
     expect(DEFAULT_BINDINGS['reader-normal: tr']).toBe('removeTag');
-    expect(DEFAULT_BINDINGS['main-normal: ta']).toBe('addTag');
-    expect(DEFAULT_BINDINGS['main-normal: tr']).toBe('removeTag');
-    expect(DEFAULT_BINDINGS['main-normal: tf']).toBe('toggleTagFilter');
-    expect(DEFAULT_BINDINGS['main-normal: tc']).toBe('clearTagFilters');
+    expect(DEFAULT_BINDINGS['main-normal:ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['main-normal:tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['main-normal:tf']).toBe('toggleTagFilter');
+    expect(DEFAULT_BINDINGS['main-normal:tc']).toBe('clearTagFilters');
+    expect(DEFAULT_BINDINGS['main-normal: ']).toBe('mainToggleSelection');
     expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
     expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
   });
@@ -94,5 +93,6 @@ describe('leader guide projection', () => {
     expect(formatGuideKey('b')).toBe('b');
     expect(formatGuideKey('B')).toBe('B');
     expect(formatGuidePrefix(' f')).toBe('SPC › f');
+    expect(formatGuidePrefix('f')).toBe('f');
   });
 });
