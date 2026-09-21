@@ -1,130 +1,3 @@
-import type {
-  ReaderControllerApi,
-  ReaderControllerDependencies,
-  MainWindow,
-  ReaderSelectionActionDefinition,
-  ReaderSelectionContext,
-} from '../core/contracts';
-import { CleanupScope } from '../core/cleanup';
-import { keyGuideConfig } from '../core/preferences';
-import { copyToClipboard } from '../platform/clipboard';
-import { cloneInto } from '../platform/cross-compartment';
-import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
-import {
-  advanceInput,
-  backspaceLeaderInput,
-  cancelLeaderInput,
-  inputWouldConsume,
-  resolveInputTimeout,
-} from '../input/engine';
-import {
-  KEY_GUIDE_CONFIG,
-  keyGuideLanguage,
-  type KeyGuideLanguage,
-} from '../input/key-guide-config';
-import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
-import { keyString } from '../input/keys';
-import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
-import { isReaderDelegableMainAction } from '../main/action-capabilities';
-import {
-  READER_NORMAL_ACTIONS,
-  isReaderActionForMode,
-  type ReaderAction,
-} from './action-capabilities';
-import { ACTION_LABELS, focusDirectionForAction, type ActionId } from '../input/actions';
-import { KeyGuide } from '../ui/key-guide';
-import { THEME_VARS, ThemeManager } from '../ui/theme';
-import { ReaderMarks } from './marks';
-import { ReaderOutline, type OutlineHost } from './outline';
-import { ReaderSidebarOverlay } from './sidebar-overlay';
-import { ReaderMarksExplorer } from './marks-explorer';
-import { ReaderLinkHints } from './link-hints';
-import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
-import { ReaderHostKeyBridge } from './host-key-bridge';
-import { ReaderNavigation } from './navigation';
-import { ReaderViewLifecycle } from './view-lifecycle';
-import { ReaderFlash } from './flash';
-import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
-import { ReaderSelectionRange } from './selection-range';
-import { selectionClipboardText } from './selection-text';
-import { ReaderSmoothScroller, smoothScrollSpec } from './smooth-scroll';
-import {
-  COLORS,
-  type AnnotationColor,
-  type AnnotationDraft,
-  type AnnotationRuntime,
-  type AnnotationSelectionParams,
-  type ItemRuntime,
-  type PdfWindow,
-  type ReaderEventRuntime,
-  type ReaderMode,
-  type ReaderRuntime,
-  type ReaderSessionState,
-  type ReaderTimer,
-  type ReaderViewRuntime,
-} from './types';
-
-interface ReaderService {
-  readonly _readers?: readonly ReaderRuntime[] | ReadonlyMap<unknown, ReaderRuntime>;
-  registerEventListener(
-    name: 'renderToolbar' | 'renderTextSelectionPopup',
-    listener: (event: ReaderEventRuntime) => void,
-    pluginID: string,
-  ): unknown;
-  unregisterEventListener(listenerID: unknown): void;
-  getByTabID?(tabID: string): ReaderRuntime | null;
-}
-
-interface ZoteroRuntime {
-  readonly Reader: ReaderService;
-  readonly Items: {
-    get(id: number): ItemRuntime | null | false;
-    getByLibraryAndKey?(libraryID: number, key: string): AnnotationRuntime | null | false;
-    getByLibraryAndKeyAsync?(
-      libraryID: number,
-      key: string,
-    ): Promise<AnnotationRuntime | null | false>;
-  };
-  readonly Item: new (itemType: 'annotation') => AnnotationDraft;
-  readonly PDFTranslate?: {
-    readonly api?: {
-      translate?(
-        raw: string,
-        options: { readonly pluginID: string; readonly itemID?: number },
-      ): Promise<{ readonly result?: string }>;
-    };
-  };
-  readonly locale?: string;
-}
-
-interface TabRuntime {
-  readonly id?: string;
-}
-
-type MainWindowRuntime = MainWindow & {
-  readonly Zotero_Tabs?: {
-    readonly selectedID?: string;
-    readonly _tabs?: readonly TabRuntime[];
-    readonly tabs?: readonly TabRuntime[];
-  };
-};
-
-interface SessionSelectionBridge {
-  readonly registered: (
-    context: ReaderSelectionContext,
-  ) => readonly ReaderSelectionActionDefinition[];
-  readonly noteOwner: (session: ReaderSession) => void;
-  readonly clearOwner: (session: ReaderSession) => void;
-  readonly pluginID: () => string | null;
-}
-
-interface SessionDependencies {
-  readonly controller: ReaderController;
-  readonly reader: ReaderRuntime;
-  readonly firstPdfWindow: PdfWindow;
-  readonly bindings: () => BindingMap;
-  readonly release: () => void;
-  readonly selection?: SessionSelectionBridge;
 }
 
 interface ComputedAnnotationPosition {
@@ -862,12 +735,12 @@ export class ReaderSession {
       .filter(([binding, boundAction]) => binding.startsWith(modePrefix) && boundAction === action)
       .map(([binding]) => binding.slice(modePrefix.length));
     const matching = (buffer: string): string[] =>
-      sequences.filter((sequence) => sequence.startsWith(buffer));
+      sequences.filter((sequence) => bindingMatchesInputPrefix(sequence, buffer));
 
-    let next = `${this.#sidebarToggleBuffer}${key}`;
+    let next = appendInputKey(this.#sidebarToggleBuffer, key);
     let matches = matching(next);
     if (!matches.length && this.#sidebarToggleBuffer) {
-      next = key;
+      next = appendInputKey('', key);
       matches = matching(next);
     }
     if (!matches.length) {
@@ -877,7 +750,7 @@ export class ReaderSession {
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (matches.includes(next)) {
+    if (matches.some((sequence) => bindingEqualsInput(sequence, next))) {
       this.clearSidebarToggleInput();
       if (action === 'toggleReaderSidebarOutline') this.#outline.close(pdfWindow);
       else this.#marksExplorer.close(pdfWindow);
