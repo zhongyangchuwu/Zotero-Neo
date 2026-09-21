@@ -75,7 +75,10 @@ describe('binding parsing and overrides', () => {
       mode: 'reader-normal',
       sequence: '<C-d>',
     });
-    expect(parseBindingKey('main-normal:<Space>gg')).toEqual({ mode: 'main-normal', sequence: '<Space>gg' });
+    expect(parseBindingKey('main-normal:<Space>gg')).toEqual({
+      mode: 'main-normal',
+      sequence: '<Space>gg',
+    });
     expect(parseBindingKey('note-normal:diw')).toEqual({ mode: 'note-normal', sequence: 'diw' });
     expect(parseBindingKey('note-insert:<Esc>')).toEqual({
       mode: 'note-insert',
