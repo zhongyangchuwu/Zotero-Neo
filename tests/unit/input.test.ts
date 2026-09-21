@@ -308,6 +308,14 @@ describe('binding parsing and overrides', () => {
     expect(encodeBindingOverrides(reordered)).toBe(expected);
   });
 
+  it('canonicalizes symbolic aliases before encoding binding overrides', () => {
+    const aliases: Record<string, ActionId> = { ...DEFAULT_BINDINGS };
+    delete aliases['reader-normal:<Enter>'];
+    aliases['reader-normal:<CR>'] = 'editAnnotation';
+
+    expect(encodeBindingOverrides(aliases)).toBe('');
+  });
+
   it('encodes null tombstones for defaults missing from the effective map', () => {
     const missingDefault: Record<string, ActionId> = { ...DEFAULT_BINDINGS };
     delete missingDefault['reader-normal:j'];
