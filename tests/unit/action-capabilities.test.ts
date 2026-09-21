@@ -58,12 +58,12 @@ const expectedMainActions: readonly ActionId[] = [
   'mainTreeExpandAll',
   'mainTreeCollapseAll',
   'mainEnterSelect',
+  'mainToggleSelection',
   'mainSelectDown',
   'mainSelectUp',
   'mainSelectFirst',
   'mainSelectLast',
   'mainSelectSwapEnds',
-  'mainSelectFinish',
   'mainSelectCancel',
 ];
 
