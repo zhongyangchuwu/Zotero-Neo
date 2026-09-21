@@ -205,8 +205,7 @@ export function inputBufferTokens(buffer: string): readonly string[] | null {
 
 function tokenPrefix(prefix: readonly string[], candidate: readonly string[]): boolean {
   return (
-    prefix.length <= candidate.length &&
-    prefix.every((token, index) => candidate[index] === token)
+    prefix.length <= candidate.length && prefix.every((token, index) => candidate[index] === token)
   );
 }
 
@@ -247,10 +246,7 @@ export function nextBindingToken(sequence: string, buffer: string): string | nul
 export function popInputKey(buffer: string): string {
   const tokens = inputBufferTokens(buffer);
   if (!tokens?.length) return '';
-  return tokens
-    .slice(0, -1)
-    .map(encodeRuntimeToken)
-    .join('');
+  return tokens.slice(0, -1).map(encodeRuntimeToken).join('');
 }
 
 export function inputStartsWithKey(buffer: string, key: string): boolean {
