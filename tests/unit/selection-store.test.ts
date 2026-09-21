@@ -44,12 +44,7 @@ describe('SelectionStore', () => {
     const store = new SelectionStore();
 
     expect(
-      store.toggleTarget([
-        a,
-        { ...a },
-        { libraryID: 0, itemID: 20 },
-        { libraryID: 1, itemID: -1 },
-      ]),
+      store.toggleTarget([a, { ...a }, { libraryID: 0, itemID: 20 }, { libraryID: 1, itemID: -1 }]),
     ).toBe('added');
     expect(store.values()).toEqual([a]);
 
