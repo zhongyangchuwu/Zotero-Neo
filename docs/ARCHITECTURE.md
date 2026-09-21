@@ -40,12 +40,12 @@ model from being confused with the persisted keymap schema.
 Development builds using the earlier `normal | visual | insert | main` binding
 keys are migrated to the canonical scopes. Explicit unbindings remain explicit.
 
-Main Item Select also uses the shared input engine and resolved binding map. Its
-`src/main/item-select.ts` module no longer parses keys or owns count/prefix state;
-it is a thin feature/host adapter over Zotero's native `TreeSelection` plus its
-transient status UI. While `main-select` is active, ordinary `main-normal`
-bindings are available as fallbacks so semantic operations such as Add Tag or
-Remove Tag can act on the preserved native selection.
+The v0.2 Main-library interaction contract is defined in
+[INTERACTION_MODEL.md](INTERACTION_MODEL.md). In that model, Cursor, persistent
+Selection, VisualTarget, View, and Scope are distinct concepts. The persisted
+`main-select` binding scope may remain temporarily for compatibility, but its
+user-facing meaning is Visual range editing rather than a generic selection mode.
+Selection itself has no mode.
 
 Note Normal and Insert use the same reducer and binding source through explicit
 `note-normal` and `note-insert` scopes. Note-local motions and operators are
@@ -77,9 +77,11 @@ family. Controllers coordinate them; they should not mirror child feature state.
 #### Main
 
 - `main/controller.ts` — Main session orchestration and semantic action dispatch.
-- `main/navigation.ts` — collection/item tree navigation operations.
-- `main/item-select.ts` — native `TreeSelection` range operations and mode UI;
-  shared input state stays in Main session/controller.
+- `main/navigation.ts` — collection/item tree navigation operations; v0.2 item
+  motion must preserve the Neo Selection workset and move Cursor independently.
+- `main/item-select.ts` — current v0.1 native range implementation. In v0.2 this
+  owner is being narrowed to transient Visual anchor/head behavior; Selection is
+  session-owned and not defined by native range state.
 - `main/picker/` — shared candidate search/list/preview surface. Ordinary item,
   collection-item, note, and tab sources own candidate data/presentation only; the
   invoking semantic action owns confirmation and the resulting host operation.
@@ -150,17 +152,24 @@ responsibilities with direct tests, not arbitrary file-size splitting.
 
 Zotero state is authoritative wherever possible:
 
-- Main multi-selection uses Zotero `TreeSelection`.
+- Zotero owns Item data, native queries/result trees, and host operations.
+- v0.2 Main Selection is an ephemeral Neo-owned set of stable item identities,
+  because native `TreeSelection` stores row indexes in the current rendered View
+  and cannot represent hidden workset members across filter/scope/sort changes.
+  The visible tree may project the visible subset, but it is not the complete
+  Selection source of truth. See [INTERACTION_MODEL.md](INTERACTION_MODEL.md).
 - Item/tag mutations use Zotero item APIs and database transactions.
 - Main private APIs are concentrated in `main/host.ts` where practical.
 - Reader actions use stable native operations when available and guarded private
   seams only where Zotero currently exposes no public equivalent.
 
-Neo must not create a parallel source of truth merely to make an abstraction
-look uniform. The current PDF keyboard Select compatibility layer is the notable
-exception: Zotero's private semantic selection cannot currently be updated
-through a supported API, so Neo owns a DOM range. Issue #20 tracks replacing
-that compatibility path when Zotero exposes a supported seam.
+Neo must not duplicate Zotero domain data merely to make an abstraction look
+uniform. Neo-owned interaction state is acceptable where the host cannot
+represent the required interaction contract: v0.2 Main Selection stores only
+stable item identities, and the current PDF keyboard Select compatibility layer
+owns a temporary DOM range because Zotero's private semantic selection cannot
+currently be updated through a supported API. Issue #20 tracks replacing the
+Reader compatibility path when Zotero exposes a supported seam.
 
 ## Shared primitives, not generic frameworks
 

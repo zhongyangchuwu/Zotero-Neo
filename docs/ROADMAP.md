@@ -30,6 +30,14 @@ GitHub Release are complete.
 
 ## Next
 
+- Establish the v0.2 Library interaction substrate in
+  [#55](https://github.com/zhongyangchuwu/Zotero-Neo/issues/55), following
+  [INTERACTION_MODEL.md](INTERACTION_MODEL.md): separate View, Cursor, Selection,
+  VisualTarget, and Scope; make Selection a session-scoped stable-item workset;
+  preserve it across filtering/sorting; migrate Main Space to Toggle Selection;
+  generalize Key Guide into a pending-prefix guide; then audit action target
+  contracts before layering local find, filtering, ScopeSet, and batch triage
+  operations.
 - Track the batteries-included workflow/distribution direction and the first persistent Plugin
   Manager surface in [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). The initial
   panel is a read-only keyboard-first view over Zotero/Mozilla AddonManager state. It is deliberately
