@@ -208,7 +208,7 @@ export function moveMainItemCursor(
   shouldDebounce = false,
 ): boolean {
   const view = mainPane(window)?.itemsView;
-  const selection = view?.selection as (PrivateItemSelection & NonNullable<TreeView['selection']>) | undefined;
+  const selection = view?.selection as PrivateItemSelection | undefined;
   if (!view || !selection || index < 0 || index >= (view.rowCount ?? 0)) return false;
 
   const tree = view.tree as (PrivateItemTree & { focus?(): void }) | undefined;
