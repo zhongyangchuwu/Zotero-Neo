@@ -27,16 +27,17 @@ remains a single active collection/navigation context rather than a
 
 The default Tag namespace is explicit:
 
-| Key | Action |
-| --- | --- |
-| `<Space>ta` | Add one tag to the current target(s) |
-| `<Space>tr` | Remove one tag from the current target(s) |
-| `<Space>tf` | Toggle one Main-window tag filter |
-| `<Space>tc` | Clear all Main-window tag filters |
+| Action | Main | Reader / Note |
+| --- | --- | --- |
+| Add one tag to the current target(s) | `ta` | `<Space>ta` |
+| Remove one tag from the current target(s) | `tr` | `<Space>tr` |
+| Toggle one Main-window tag filter | `tf` | — |
+| Clear all Main-window tag filters | `tc` | — |
 
-`ta` and `tr` mutate item data. `tf` and `tc` only change the Main item
-view. The filter actions are Main-only so Reader/Note commands do not silently
-change an off-screen Main filter.
+`ta` and `tr` are the Main bindings for the same semantic actions exposed as
+`<Space>ta` / `<Space>tr` in Reader and Note. `tf` and `tc` only change the
+Main item view. The filter actions are Main-only so Reader/Note commands do not
+silently change an off-screen Main filter.
 
 ## Target resolution for tag mutation
 
