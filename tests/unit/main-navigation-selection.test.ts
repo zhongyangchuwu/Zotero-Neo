@@ -22,12 +22,7 @@ function navigationHost() {
     { ref: { id: 12, libraryID: 1 } },
   ];
   const onSelection = vi.fn(
-    (
-      index: number,
-      _shiftSelect: boolean,
-      _toggleSelection: boolean,
-      moveFocused: boolean,
-    ) => {
+    (index: number, _shiftSelect: boolean, _toggleSelection: boolean, moveFocused: boolean) => {
       if (!moveFocused) return;
       selection.focused = index;
       selection.pivot = index;
