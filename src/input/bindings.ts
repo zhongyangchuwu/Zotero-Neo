@@ -482,10 +482,18 @@ export function migrateKeySequenceOverrides(raw: unknown): string {
 }
 
 export function encodeBindingOverrides(bindings: BindingMap): string {
+  const canonical: Record<string, ActionId> = {};
+  for (const [key, action] of Object.entries(bindings)) {
+    const binding = parseBindingKey(key);
+    const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;
+    if (!binding || !sequence) continue;
+    canonical[`${binding.mode}:${sequence}`] = action;
+  }
+
   const overrides: Record<string, BindingOverride> = {};
-  const keys = new Set([...Object.keys(DEFAULT_BINDINGS), ...Object.keys(bindings)]);
+  const keys = new Set([...Object.keys(DEFAULT_BINDINGS), ...Object.keys(canonical)]);
   for (const key of keys) {
-    const action = bindings[key];
+    const action = canonical[key];
     const defaultAction: ActionId | undefined =
       DEFAULT_BINDINGS[key as keyof typeof DEFAULT_BINDINGS];
     if (action === undefined) {
@@ -514,12 +522,14 @@ export function bindingsForMode(
   for (const sourceMode of [...fallbacks].reverse()) {
     for (const [key, action] of Object.entries(bindings)) {
       const binding = parseBindingKey(key);
-      if (binding?.mode === sourceMode) result[`${mode}:${binding.sequence}`] = action;
+      const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;
+      if (binding?.mode === sourceMode && sequence) result[`${mode}:${sequence}`] = action;
     }
   }
   for (const [key, action] of Object.entries(bindings)) {
     const binding = parseBindingKey(key);
-    if (binding?.mode === mode) result[`${mode}:${binding.sequence}`] = action;
+    const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;
+    if (binding?.mode === mode && sequence) result[`${mode}:${sequence}`] = action;
   }
   return Object.freeze(result);
 }
