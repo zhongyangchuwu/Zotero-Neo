@@ -311,7 +311,7 @@ function legacyNamedKeyAt(value: string, index: number): string | null {
   return winner;
 }
 
-function legacyTokenAt(
+function legacyModifiedTokenAt(
   value: string,
   index: number,
 ): { readonly token: string; readonly end: number } | null {
@@ -332,20 +332,20 @@ function legacyTokenAt(
       break;
     }
   }
+  if (!modifiers.length) return null;
 
   const named = legacyNamedKeyAt(value, cursor);
   const terminal = named ?? codePointAt(value, cursor);
   if (!terminal) return null;
   const end = cursor + terminal.length;
-  const prefix = normalizeModifiers(modifiers);
-  if (!prefix.length) return { token: terminal, end };
-  return { token: `${prefix.join('+')}+${terminal}`, end };
+  return { token: `${normalizeModifiers(modifiers).join('+')}+${terminal}`, end };
 }
 
 export function migrateLegacyKeySequence(sequence: string): string | null {
   if (!sequence || sequence.includes(RUNTIME_TOKEN_SEPARATOR)) return null;
   const tokens: string[] = [];
   let index = 0;
+
   while (index < sequence.length) {
     if (sequence[index] === '<') {
       const close = sequence.indexOf('>', index + 1);
@@ -359,11 +359,32 @@ export function migrateLegacyKeySequence(sequence: string): string | null {
       }
     }
 
-    const parsed = legacyTokenAt(sequence, index);
-    if (!parsed) return null;
-    tokens.push(parsed.token);
-    index = parsed.end;
+    const modified = legacyModifiedTokenAt(sequence, index);
+    if (modified) {
+      tokens.push(modified.token);
+      index = modified.end;
+      continue;
+    }
+
+    // In the old flat grammar a whole value such as "enter" or "f1" was
+    // indistinguishable from the named key emitted by KeyboardEvent.key.
+    // Prefer named-key behavior only for the whole legacy sequence. Do not
+    // greedily reinterpret words such as "custom-tab" as containing Tab.
+    if (index === 0) {
+      const named = legacyNamedKeyAt(sequence, 0);
+      if (named && named.length === sequence.length) {
+        tokens.push(named);
+        index = sequence.length;
+        continue;
+      }
+    }
+
+    const token = codePointAt(sequence, index);
+    if (!token) return null;
+    tokens.push(token);
+    index += token.length;
   }
+
   const canonical = serializeBindingTokens(tokens);
   return canonical || null;
 }
