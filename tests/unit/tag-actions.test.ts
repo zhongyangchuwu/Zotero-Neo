@@ -8,6 +8,7 @@ import type { PickerItem } from '../../src/main/picker/model';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import type { MainWindowSession } from '../../src/main/session';
 import { TagActions } from '../../src/main/tag-actions';
+import { SelectionStore } from '../../src/main/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -65,12 +66,25 @@ function harness(options: {
     ZoteroPane: {
       getSelectedItems: () => items,
       getCollectionTreeRow: () => row,
-      itemsView: { rowCount: 7, setFilter },
+      itemsView: {
+        rowCount: items.length,
+        selection: { focused: 0 },
+        getRow: (index: number) =>
+          items[index] ? { isObjectRow: true, ref: items[index] } : undefined,
+        getRowIndexByID: (id: number) => {
+          const index = items.findIndex((item) => item.id === id);
+          return index < 0 ? false : index;
+        },
+        setFilter,
+      },
       tagSelector,
     },
   } as unknown as MainWindow;
+  const selection = new SelectionStore();
+  for (const item of items) selection.add({ libraryID: item.libraryID, itemID: item.id });
   const session = {
     window,
+    selection,
     status: { textContent: '', style: {} },
     cleanup: { add: vi.fn() },
   } as unknown as MainWindowSession;
@@ -174,6 +188,45 @@ describe('semantic Tag actions', () => {
     );
     expect(first.hasTag('robotics')).toBe(false);
     expect(second.hasTag('robotics')).toBe(false);
+  });
+
+  it('uses Neo EffectiveSelection instead of native Main tree selection', async () => {
+    const nativeOnly = tagItem(1);
+    const selected = tagItem(2);
+    installZotero([nativeOnly, selected], [{ tag: 'robotics' }]);
+    const h = harness({ items: [nativeOnly, selected] });
+    h.session.selection.clear();
+    h.session.selection.add({ libraryID: selected.libraryID, itemID: selected.id });
+
+    h.actions.add(h.window, h.session);
+    const add = h.open();
+    await add.options.confirm?.(
+      {
+        id: 'tag:robotics',
+        title: 'robotics',
+        search: 'robotics',
+        tagName: 'robotics',
+        tagCandidate: 'tag',
+      } as PickerItem,
+      false,
+    );
+
+    expect(nativeOnly.hasTag('robotics')).toBe(false);
+    expect(selected.hasTag('robotics')).toBe(true);
+  });
+
+  it('refuses a partial Main tag mutation when Selection contains an unavailable item', () => {
+    const selected = tagItem(2);
+    installZotero([selected], [{ tag: 'robotics' }]);
+    const h = harness({ items: [selected] });
+    h.session.selection.add({ libraryID: 1, itemID: 99 });
+
+    h.actions.add(h.window, h.session);
+
+    expect(() => h.open()).toThrow('Tag action did not open a chooser');
+    expect(h.session.status.textContent).toBe(
+      '✗ Selection contains unavailable items; refresh before changing tags',
+    );
   });
 
   it('toggles one Main tag filter and clears all filters without mutating item tags', async () => {

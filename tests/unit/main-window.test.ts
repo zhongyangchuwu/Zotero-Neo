@@ -21,6 +21,7 @@ import {
   type TreeView,
 } from '../../src/main/navigation';
 import type { MainWindowSession } from '../../src/main/session';
+import { SelectionStore } from '../../src/main/selection-store';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
 
@@ -257,7 +258,11 @@ describe('main item trash and restore', () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const active = { id: 'item-tree-row-1' } as Element;
     const itemsRoot = { contains: (node: unknown) => node === active } as HTMLElement;
-    const selected = [{ id: 41 }, { id: 42 }] as Zotero.Item[];
+    const selected = [
+      { id: 41, libraryID: 1 },
+      { id: 42, libraryID: 1 },
+    ] as Zotero.Item[];
+    const rows = selected.map((ref) => ({ isObjectRow: true, ref }));
     const trashTx = vi.fn(async () => {});
     const undo = vi.fn(async () => true);
     const window = {
@@ -267,13 +272,23 @@ describe('main item trash and restore', () => {
         querySelector: () => null,
       },
       ZoteroPane: {
-        itemsView: { domEl: itemsRoot },
-        getSelectedItems: () => selected,
+        itemsView: {
+          domEl: itemsRoot,
+          rowCount: rows.length,
+          getRow: (index: number) => rows[index],
+          getRowIndexByID: (id: number) => {
+            const index = rows.findIndex((row) => row.ref.id === id);
+            return index < 0 ? false : index;
+          },
+        },
       },
     } as unknown as MainWindow;
+    const selection = new SelectionStore();
+    for (const item of selected) selection.add({ libraryID: item.libraryID, itemID: item.id });
     const session = {
       window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
       activePanel: 'items',
+      selection,
       trashedItemIDs: [],
       status: { textContent: '', style: {} },
       cleanup: { add: () => {} },
@@ -281,13 +296,14 @@ describe('main item trash and restore', () => {
     const navigation = new MainNavigation(logger, () => {});
     try {
       Reflect.set(globalThis, 'Zotero', {
-        Items: { trashTx, get: () => false },
+        Items: { trashTx, get: (id: number) => selected.find((item) => item.id === id) ?? false },
         UndoHistory: { getUndoAction: () => ({ action: 'undo-action-trash' }), undo },
       });
 
       await navigation.trashSelectedItems(window, session);
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
       expect(session.trashedItemIDs).toEqual([41, 42]);
+      expect(session.selection.empty).toBe(true);
       await navigation.restoreLastTrashedItems(session);
 
       expect(undo).toHaveBeenCalledOnce();

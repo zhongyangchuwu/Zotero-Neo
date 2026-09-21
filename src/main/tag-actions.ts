@@ -6,6 +6,7 @@ import { createTagCandidateProvider, type TagRecord } from './picker/providers/t
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
 import { applyMainTagFilter, currentTagSelection, mainHost } from './host';
+import { resolveMainEffectiveTargets } from './action-targets';
 import {
   itemTagState,
   resolveItemTagTargets,
@@ -19,7 +20,7 @@ function sameTag(left: string, right: string): boolean {
 
 function targetLabel(targets: ItemTargetSet): string {
   const context =
-    targets.source === 'reader' ? 'Reader' : targets.source === 'note' ? 'Note' : 'Main selection';
+    targets.source === 'reader' ? 'Reader' : targets.source === 'note' ? 'Note' : 'Main target';
   return `${context} · ${targets.items.length} item${targets.items.length === 1 ? '' : 's'}`;
 }
 
@@ -210,7 +211,15 @@ export class TagActions {
   }
 
   private targets(window: MainWindow, session: MainWindowSession): ItemTargetSet | null {
-    const targets = resolveItemTagTargets(window);
+    const mainTargets = resolveMainEffectiveTargets(window, session);
+    const targets = resolveItemTagTargets(window, mainTargets.items);
+    if (targets.source === 'main' && mainTargets.missing > 0) {
+      this.#navigation.status(
+        session,
+        '✗ Selection contains unavailable items; refresh before changing tags',
+      );
+      return null;
+    }
     if (targets.items.length) return targets;
     this.#navigation.status(session, '✗ No taggable item target');
     return null;
