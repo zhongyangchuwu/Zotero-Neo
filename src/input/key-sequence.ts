@@ -125,18 +125,18 @@ function normalizeShiftedPrintable(
 
 function parseNotationToken(source: string): string | null {
   if (!source) return null;
-  const parts = source.split('-');
-  const terminalSource = parts.pop();
-  if (!terminalSource) return null;
 
   const modifiers: Modifier[] = [];
-  for (const part of parts) {
-    const normalized = part.toLowerCase();
-    if (normalized === 'c') modifiers.push('ctrl');
-    else if (normalized === 'm') modifiers.push('alt');
-    else if (normalized === 's') modifiers.push('shift');
-    else return null;
+  let terminalSource = source;
+  while (terminalSource.length >= 2 && terminalSource[1] === '-') {
+    const modifier = terminalSource[0]?.toLowerCase();
+    if (modifier === 'c') modifiers.push('ctrl');
+    else if (modifier === 'm') modifiers.push('alt');
+    else if (modifier === 's') modifiers.push('shift');
+    else break;
+    terminalSource = terminalSource.slice(2);
   }
+  if (!terminalSource) return null;
 
   const special = normalizeSpecialKey(terminalSource);
   if (special !== null) {
@@ -152,18 +152,29 @@ function parseNotationToken(source: string): string | null {
     : shifted.terminal;
 }
 
+function notationTokenAt(
+  sequence: string,
+  index: number,
+): { readonly token: string; readonly end: number } | null {
+  let close = sequence.indexOf('>', index + 1);
+  while (close >= 0) {
+    const token = parseNotationToken(sequence.slice(index + 1, close));
+    if (token) return { token, end: close + 1 };
+    close = sequence.indexOf('>', close + 1);
+  }
+  return null;
+}
+
 export function bindingSequenceTokens(sequence: string): readonly string[] | null {
   if (!sequence || sequence.includes(RUNTIME_TOKEN_SEPARATOR)) return null;
   const tokens: string[] = [];
   let index = 0;
   while (index < sequence.length) {
     if (sequence[index] === '<') {
-      const close = sequence.indexOf('>', index + 1);
-      if (close < 0) return null;
-      const token = parseNotationToken(sequence.slice(index + 1, close));
-      if (!token) return null;
-      tokens.push(token);
-      index = close + 1;
+      const notation = notationTokenAt(sequence, index);
+      if (!notation) return null;
+      tokens.push(notation.token);
+      index = notation.end;
       continue;
     }
     const token = codePointAt(sequence, index);
@@ -348,14 +359,11 @@ export function migrateLegacyKeySequence(sequence: string): string | null {
 
   while (index < sequence.length) {
     if (sequence[index] === '<') {
-      const close = sequence.indexOf('>', index + 1);
-      if (close > index + 1) {
-        const symbolic = parseNotationToken(sequence.slice(index + 1, close));
-        if (symbolic) {
-          tokens.push(symbolic);
-          index = close + 1;
-          continue;
-        }
+      const notation = notationTokenAt(sequence, index);
+      if (notation) {
+        tokens.push(notation.token);
+        index = notation.end;
+        continue;
       }
     }
 
