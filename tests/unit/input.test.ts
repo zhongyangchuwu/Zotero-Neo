@@ -257,12 +257,12 @@ describe('binding parsing and overrides', () => {
     );
 
     expect(JSON.parse(migrated)).toEqual({
-      'main-normal: ff': 'switchTab',
+      'main-normal:<Space>ff': 'switchTab',
       'main-normal:H': 'nextTab',
       'main-normal:L': 'mainTrashItems',
       'main-normal:ctrl+h': null,
       'main-normal:j': 'mainNavUp',
-      'note-normal: ff': 'switchTab',
+      'note-normal:<Space>ff': 'switchTab',
       'note-normal:H': 'nextTab',
       'note-normal:ctrl+h': null,
     });
@@ -281,12 +281,12 @@ describe('binding parsing and overrides', () => {
     );
 
     expect(JSON.parse(migrated)).toEqual({
-      'main-normal: custom': 'nextTab',
+      'main-normal:<Space>custom': 'nextTab',
       'main-normal:e': null,
       'main-normal:ff': null,
       'main-normal:q': null,
       'main-normal:ta': null,
-      'reader-normal: ff': null,
+      'reader-normal:<Space>ff': null,
     });
   });
 
