@@ -150,23 +150,24 @@ export const DEFAULT_BINDINGS = {
   'note-insert:ctrl+j': 'focusReaderSplitDown',
   'note-insert:ctrl+k': 'focusReaderSplitUp',
   'note-insert:ctrl+l': 'focusReaderSplitRight',
-  'main-normal: ff': 'findAllItems',
+  'main-normal:ff': 'findAllItems',
   'main-normal::': 'openCommandPalette',
-  'main-normal: fc': 'findCollectionItems',
-  'main-normal: ,': 'switchTab',
-  'main-normal: ta': 'addTag',
-  'main-normal: tr': 'removeTag',
-  'main-normal: tf': 'toggleTagFilter',
-  'main-normal: tc': 'clearTagFilters',
-  'main-normal: q': 'closeCurrentTab',
-  'main-normal: fn': 'findNotes',
-  'main-normal: pp': 'managePlugins',
-  'main-normal: e': 'mainFocusTree',
-  'main-normal: yy': 'mainYankCitekey',
-  'main-normal: o': 'mainOpenPDF',
-  'main-normal: wh': 'mainFocusLeft',
-  'main-normal: wl': 'mainFocusRight',
-  'main-normal: ww': 'mainFocusItems',
+  'main-normal:fc': 'findCollectionItems',
+  'main-normal:,': 'switchTab',
+  'main-normal:ta': 'addTag',
+  'main-normal:tr': 'removeTag',
+  'main-normal:tf': 'toggleTagFilter',
+  'main-normal:tc': 'clearTagFilters',
+  'main-normal:q': 'closeCurrentTab',
+  'main-normal:fn': 'findNotes',
+  'main-normal:pp': 'managePlugins',
+  'main-normal:e': 'mainFocusTree',
+  'main-normal:yy': 'mainYankCitekey',
+  'main-normal:o': 'mainOpenPDF',
+  'main-normal:wh': 'mainFocusLeft',
+  'main-normal:wl': 'mainFocusRight',
+  'main-normal:ww': 'mainFocusItems',
+  'main-normal: ': 'mainToggleSelection',
   'main-normal:ctrl+h': 'focusReaderSplitLeft',
   'main-normal:ctrl+j': 'focusReaderSplitDown',
   'main-normal:ctrl+k': 'focusReaderSplitUp',
@@ -295,6 +296,22 @@ const RETIRED_DEFAULT_BINDINGS = {
   'note-normal: fT': 'toggleTagFilter',
   'main-normal: fT': 'toggleTagFilter',
   'main-normal:ctrl+u': 'mainRestoreTrashedItems',
+  'main-normal: ff': 'findAllItems',
+  'main-normal: fc': 'findCollectionItems',
+  'main-normal: ,': 'switchTab',
+  'main-normal: ta': 'addTag',
+  'main-normal: tr': 'removeTag',
+  'main-normal: tf': 'toggleTagFilter',
+  'main-normal: tc': 'clearTagFilters',
+  'main-normal: q': 'closeCurrentTab',
+  'main-normal: fn': 'findNotes',
+  'main-normal: pp': 'managePlugins',
+  'main-normal: e': 'mainFocusTree',
+  'main-normal: yy': 'mainYankCitekey',
+  'main-normal: o': 'mainOpenPDF',
+  'main-normal: wh': 'mainFocusLeft',
+  'main-normal: wl': 'mainFocusRight',
+  'main-normal: ww': 'mainFocusItems',
 } as const;
 
 const REMOVED_ACTIONS: Readonly<Record<string, true>> = {
@@ -410,6 +427,43 @@ export function migrateSemanticKeymapOverrides(raw: unknown): string {
     if (binding?.mode === 'note-normal' && action === 'toggleTagFilter') delete overrides[key];
   }
 
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Releases Space as Main's high-frequency Selection key while keeping Reader/Note leaders intact.
+ *
+ * Compact overrides store explicit null tombstones for defaults the user disabled. When a Main
+ * default moves from a Space-leader sequence to a direct prefix, carry that tombstone to the new
+ * default so an upgrade never silently re-enables the action. Non-null custom bindings remain
+ * key-specific and are intentionally not moved.
+ */
+export function migrateMainWorksetKeymapOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const moves = [
+    ['main-normal: ff', 'main-normal:ff'],
+    ['main-normal: fc', 'main-normal:fc'],
+    ['main-normal: ,', 'main-normal:,'],
+    ['main-normal: ta', 'main-normal:ta'],
+    ['main-normal: tr', 'main-normal:tr'],
+    ['main-normal: tf', 'main-normal:tf'],
+    ['main-normal: tc', 'main-normal:tc'],
+    ['main-normal: q', 'main-normal:q'],
+    ['main-normal: fn', 'main-normal:fn'],
+    ['main-normal: pp', 'main-normal:pp'],
+    ['main-normal: e', 'main-normal:e'],
+    ['main-normal: yy', 'main-normal:yy'],
+    ['main-normal: o', 'main-normal:o'],
+    ['main-normal: wh', 'main-normal:wh'],
+    ['main-normal: wl', 'main-normal:wl'],
+    ['main-normal: ww', 'main-normal:ww'],
+  ] as const;
+
+  for (const [oldKey, newKey] of moves) {
+    if (overrides[oldKey] !== null) continue;
+    delete overrides[oldKey];
+    if (!(newKey in overrides)) overrides[newKey] = null;
+  }
   return stringifyBindingOverrides(overrides);
 }
 
