@@ -63,6 +63,27 @@ describe('leader guide projection', () => {
     expect(leaderGuideEntries(custom, 'main-normal', 'x', 'en')).toEqual([]);
   });
 
+  it('treats exact named keys as distinct from printable prefixes', () => {
+    const named: BindingMap = {
+      'main-normal:e': 'mainFocusTree',
+      'main-normal:enter': 'mainActivate',
+      'main-normal:yy': 'mainYankCitekey',
+      'main-normal:y': 'switchTab',
+    };
+
+    expect(isGuidePrefix(named, 'main-normal', 'e')).toBe(false);
+    expect(guideEntries(named, 'main-normal', 'e', 'en')).toEqual([]);
+
+    expect(isGuidePrefix(named, 'main-normal', 'y')).toBe(true);
+    expect(guideEntries(named, 'main-normal', 'y', 'en')).toEqual([
+      {
+        key: 'y',
+        label: KEY_GUIDE_CONFIG.actionLabels.mainYankCitekey!.en,
+        isGroup: false,
+      },
+    ]);
+  });
+
   it('keeps the runtime defaults alongside the display metadata', () => {
     expect(KEY_GUIDE_CONFIG.defaultDelayMs).toBe(200);
     expect(KEY_GUIDE_CONFIG.maxDelayMs).toBe(1000);
