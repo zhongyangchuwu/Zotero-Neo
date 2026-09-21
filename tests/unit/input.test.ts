@@ -5,6 +5,7 @@ import {
   DEFAULT_BINDINGS,
   encodeBindingOverrides,
   migrateLegacyBindingOverrides,
+  migrateMainDirectPrefixOverrides,
   migrateNoteBindingOverrides,
   parseBindingKey,
   parseBindingOverrides,
@@ -15,7 +16,9 @@ import {
 import {
   advanceInput,
   backspaceLeaderInput,
+  backspacePendingInput,
   cancelLeaderInput,
+  cancelPendingInput,
   inputWouldConsume,
   resolveInputTimeout,
   type InputContext,
@@ -50,10 +53,16 @@ describe('keyString', () => {
     expect(keyString({ key: 'd', metaKey: true })).toBe('ctrl+d');
     expect(keyString({ key: 'f', ctrlKey: true, altKey: true })).toBe('ctrl+alt+f');
     expect(keyString({ key: 'ArrowDown' })).toBe('arrowdown');
+    expect(keyString({ key: 'Tab', shiftKey: true })).toBe('shift+tab');
+    expect(keyString({ key: ' ', shiftKey: true })).toBe('shift+ ');
+    expect(keyString({ key: 'ArrowDown', ctrlKey: true, shiftKey: true })).toBe(
+      'ctrl+shift+arrowdown',
+    );
   });
 
   it('preserves printable key case and ignores modifier-only or unusable events', () => {
     expect(keyString({ key: 'G' })).toBe('G');
+    expect(keyString({ key: '🙂' })).toBe('🙂');
     expect(keyString({ key: 'Control', ctrlKey: true })).toBe('');
     expect(keyString({ key: 'Dead' })).toBe('');
     expect(keyString({ key: 'Unidentified' })).toBe('');
@@ -63,15 +72,18 @@ describe('keyString', () => {
 
 describe('binding parsing and overrides', () => {
   it('parses known modes and retains complete key sequences', () => {
-    expect(parseBindingKey('reader-normal:ctrl+d')).toEqual({
+    expect(parseBindingKey('reader-normal:<C-d>')).toEqual({
       mode: 'reader-normal',
-      sequence: 'ctrl+d',
+      sequence: '<C-d>',
     });
-    expect(parseBindingKey('main-normal: gg')).toEqual({ mode: 'main-normal', sequence: ' gg' });
+    expect(parseBindingKey('main-normal:<Space>gg')).toEqual({
+      mode: 'main-normal',
+      sequence: '<Space>gg',
+    });
     expect(parseBindingKey('note-normal:diw')).toEqual({ mode: 'note-normal', sequence: 'diw' });
-    expect(parseBindingKey('note-insert:escape')).toEqual({
+    expect(parseBindingKey('note-insert:<Esc>')).toEqual({
       mode: 'note-insert',
-      sequence: 'escape',
+      sequence: '<Esc>',
     });
   });
 
@@ -150,7 +162,7 @@ describe('binding parsing and overrides', () => {
       JSON.stringify({
         'reader-normal:j': null,
         'reader-normal:x': 'scrollDown',
-        'main-normal:enter': null,
+        'main-normal:<Enter>': null,
       }),
     );
 
@@ -158,29 +170,29 @@ describe('binding parsing and overrides', () => {
     expect(bindings['reader-normal:x']).toBe('scrollDown');
     expect(bindings['reader-normal:k']).toBe('scrollUp');
     expect(bindings['reader-normal:h']).toBe('prevPage');
-    expect(bindings['main-normal:enter']).toBeUndefined();
-    expect(bindings['main-normal:return']).toBe('mainActivate');
+    expect(bindings['main-normal:<Enter>']).toBeUndefined();
+    expect(bindings['main-normal:<Return>']).toBe('mainActivate');
   });
 
   it('provides native history, Follow Link, and Select-first Flash defaults that remain remappable', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:ctrl+o']).toBe('historyBack');
-    expect(DEFAULT_BINDINGS['reader-normal:ctrl+i']).toBe('historyForward');
+    expect(DEFAULT_BINDINGS['reader-normal:<C-o>']).toBe('historyBack');
+    expect(DEFAULT_BINDINGS['reader-normal:<C-i>']).toBe('historyForward');
     expect(DEFAULT_BINDINGS['reader-normal:f']).toBe('followLink');
     expect(DEFAULT_BINDINGS['reader-normal:v']).toBe('enterVisual');
     expect('reader-normal:s' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['reader-select:s']).toBe('flashText');
-    expect(DEFAULT_BINDINGS['reader-select:enter']).toBe('openSelectionActions');
+    expect(DEFAULT_BINDINGS['reader-select:<Enter>']).toBe('openSelectionActions');
     expect(Object.keys(DEFAULT_BINDINGS).some((key) => key.startsWith('cursor:'))).toBe(false);
-    expect('reader-insert:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal:ctrl+o' in DEFAULT_BINDINGS).toBe(false);
+    expect('reader-insert:<C-o>' in DEFAULT_BINDINGS).toBe(false);
+    expect('main-normal:<C-o>' in DEFAULT_BINDINGS).toBe(false);
     expect('reader-insert:f' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:f' in DEFAULT_BINDINGS).toBe(false);
 
     const bindings = resolveBindings(
-      '{"reader-normal:ctrl+o":"scrollDown","reader-normal:f":"scrollUp"}',
+      '{"reader-normal:<C-o>":"scrollDown","reader-normal:f":"scrollUp"}',
     );
-    expect(bindings['reader-normal:ctrl+o']).toBe('scrollDown');
-    expect(bindings['reader-normal:ctrl+i']).toBe('historyForward');
+    expect(bindings['reader-normal:<C-o>']).toBe('scrollDown');
+    expect(bindings['reader-normal:<C-i>']).toBe('historyForward');
     expect(bindings['reader-normal:f']).toBe('scrollUp');
   });
   it('provides Reader zoom, H/L tab, and zh/zl pan defaults', () => {
@@ -192,10 +204,10 @@ describe('binding parsing and overrides', () => {
     expect('reader-normal:K' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
     expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
-    expect(DEFAULT_BINDINGS['reader-normal: ,']).toBe('switchTab');
-    expect(DEFAULT_BINDINGS['main-normal: ,']).toBe('switchTab');
-    expect(DEFAULT_BINDINGS['reader-normal: q']).toBe('closeCurrentTab');
-    expect(DEFAULT_BINDINGS['main-normal: q']).toBe('closeCurrentTab');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['main-normal:,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>q']).toBe('closeCurrentTab');
+    expect(DEFAULT_BINDINGS['main-normal:q']).toBe('closeCurrentTab');
     expect('reader-normal: ft' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal: td' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);
@@ -246,14 +258,36 @@ describe('binding parsing and overrides', () => {
     );
 
     expect(JSON.parse(migrated)).toEqual({
-      'main-normal: ff': 'switchTab',
+      'main-normal:<Space>ff': 'switchTab',
       'main-normal:H': 'nextTab',
       'main-normal:L': 'mainTrashItems',
       'main-normal:ctrl+h': null,
       'main-normal:j': 'mainNavUp',
-      'note-normal: ff': 'switchTab',
+      'note-normal:<Space>ff': 'switchTab',
       'note-normal:H': 'nextTab',
       'note-normal:ctrl+h': null,
+    });
+  });
+
+  it('migrates Main explicit unbindings to the v0.2 direct-prefix defaults', () => {
+    const migrated = migrateMainDirectPrefixOverrides(
+      JSON.stringify({
+        'main-normal: ff': null,
+        'main-normal: ta': null,
+        'main-normal: q': null,
+        'main-normal: e': null,
+        'main-normal: custom': 'nextTab',
+        'reader-normal: ff': null,
+      }),
+    );
+
+    expect(JSON.parse(migrated)).toEqual({
+      'main-normal:<Space>custom': 'nextTab',
+      'main-normal:e': null,
+      'main-normal:ff': null,
+      'main-normal:q': null,
+      'main-normal:ta': null,
+      'reader-normal:<Space>ff': null,
     });
   });
 
@@ -273,6 +307,14 @@ describe('binding parsing and overrides', () => {
 
     expect(encodeBindingOverrides(changed)).toBe(expected);
     expect(encodeBindingOverrides(reordered)).toBe(expected);
+  });
+
+  it('canonicalizes symbolic aliases before encoding binding overrides', () => {
+    const aliases: Record<string, ActionId> = { ...DEFAULT_BINDINGS };
+    delete aliases['reader-normal:<Enter>'];
+    aliases['reader-normal:<CR>'] = 'editAnnotation';
+
+    expect(encodeBindingOverrides(aliases)).toBe('');
   });
 
   it('encodes null tombstones for defaults missing from the effective map', () => {
@@ -415,6 +457,23 @@ describe('input matcher', () => {
     });
   });
 
+  it('matches named-key and modifier tokens inside multi-key sequences', () => {
+    const special: BindingMap = { 'reader-normal:<Enter>g': 'firstPage' };
+    const firstSpecial = expectPending(advanceInput(context(normalState(), special), 'enter'));
+    expect(advanceInput(context(firstSpecial.state, special), 'g')).toMatchObject({
+      kind: 'execute',
+      action: 'firstPage',
+    });
+
+    const chord: BindingMap = { 'reader-normal:<C-d>g': 'lastPage' };
+    const firstChord = expectPending(advanceInput(context(normalState(), chord), 'ctrl+d'));
+    expect(advanceInput(context(firstChord.state, chord), 'g')).toMatchObject({
+      kind: 'execute',
+      action: 'lastPage',
+    });
+    expect(backspacePendingInput(firstChord.state)).toEqual(normalState());
+  });
+
   it('keeps a prefix-only binding pending longer and passes after its timeout', () => {
     const bindings: BindingMap = { 'reader-normal:gg': 'firstPage' };
     const pending = expectPending(advanceInput(context(normalState(), bindings), 'g'));
@@ -467,8 +526,8 @@ describe('input matcher', () => {
 
   it('does not mistake an unmodified key for a ctrl or alt chord prefix', () => {
     const bindings: BindingMap = {
-      'reader-normal:ctrl+d': 'halfPageDown',
-      'reader-normal:alt+d': 'scrollDown',
+      'reader-normal:<C-d>': 'halfPageDown',
+      'reader-normal:<M-d>': 'scrollDown',
     };
 
     expect(advanceInput(context(normalState(), bindings), 'd')).toEqual({
@@ -498,13 +557,19 @@ describe('input matcher', () => {
     expect(inputWouldConsume(initial, 'g')).toBe(advanceInput(initial, 'g').kind !== 'pass');
   });
 
-  it('cancels and backspaces only leader input while preserving other state', () => {
+  it('keeps leader-only helpers and supports generic pending-prefix cancellation', () => {
     const leader = normalState({ keyBuffer: ' ff', countBuffer: '2' });
     expect(cancelLeaderInput(leader)).toEqual(normalState({ countBuffer: '2' }));
     expect(backspaceLeaderInput(leader)).toEqual(
       normalState({ keyBuffer: ' f', countBuffer: '2' }),
     );
     expect(cancelLeaderInput(normalState({ keyBuffer: 'g' }))).toBeNull();
-    expect(backspaceLeaderInput(normalState())).toBeNull();
+
+    const direct = normalState({ keyBuffer: 'ff', countBuffer: '2' });
+    expect(cancelPendingInput(direct)).toEqual(normalState({ countBuffer: '2' }));
+    expect(backspacePendingInput(direct)).toEqual(
+      normalState({ keyBuffer: 'f', countBuffer: '2' }),
+    );
+    expect(backspacePendingInput(normalState())).toBeNull();
   });
 });

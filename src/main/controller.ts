@@ -20,8 +20,8 @@ import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
 import {
   advanceInput,
-  backspaceLeaderInput,
-  cancelLeaderInput,
+  backspacePendingInput,
+  cancelPendingInput,
   resolveInputTimeout,
 } from '../input/engine';
 import {
@@ -29,7 +29,7 @@ import {
   keyGuideLanguage,
   type KeyGuideLanguage,
 } from '../input/key-guide-config';
-import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
+import { guideEntries, isGuidePrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { isEditableElement } from '../platform/dom';
 import { MainWindowSession } from './session';
@@ -275,7 +275,7 @@ export class MainWindowController implements MainWindowControllerApi {
       countBuffer: session.countBuffer,
     };
     if (event.key.toLowerCase() === 'escape') {
-      const cancelled = cancelLeaderInput(leaderState);
+      const cancelled = cancelPendingInput(leaderState);
       if (cancelled) {
         event.preventDefault();
         event.stopPropagation();
@@ -289,7 +289,7 @@ export class MainWindowController implements MainWindowControllerApi {
       }
     }
     if (event.key.toLowerCase() === 'backspace') {
-      const backed = backspaceLeaderInput(leaderState);
+      const backed = backspacePendingInput(leaderState);
       if (backed) {
         event.preventDefault();
         event.stopPropagation();
@@ -350,7 +350,7 @@ export class MainWindowController implements MainWindowControllerApi {
     event.preventDefault();
     event.stopPropagation();
     this.refreshKeyGuide(window, session);
-    const timeoutMs = isLeaderPrefix(decision.state.keyBuffer)
+    const timeoutMs = isGuidePrefix(bindings, session.inputMode, decision.state.keyBuffer)
       ? KEY_GUIDE_CONFIG.idleTimeoutMs
       : decision.timeoutMs;
     if (timeoutMs !== null) {
@@ -387,11 +387,11 @@ export class MainWindowController implements MainWindowControllerApi {
     bindings: BindingMap = this.activeBindings(mode),
   ): void {
     const config = keyGuideConfig(this.#dependencies.preferences);
-    if (!config.enabled || !isLeaderPrefix(prefix)) {
+    if (!config.enabled || !isGuidePrefix(bindings, mode, prefix)) {
       this.clearKeyGuide(window, session);
       return;
     }
-    const entries = leaderGuideEntries(bindings, mode, prefix, this.keyGuideLanguage());
+    const entries = guideEntries(bindings, mode, prefix, this.keyGuideLanguage());
     if (!entries.length) {
       this.clearKeyGuide(window, session);
       return;

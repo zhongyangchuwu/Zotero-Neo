@@ -62,10 +62,10 @@ verification in the current stable host.
 
 ### Tags
 
-- `<Space>ta` **adds** one chosen tag to the current Main/Reader/Note target set;
-  `<Space>tr` explicitly **removes** one chosen tag.
-- Main-only `<Space>tf` toggles one tag in Zotero's native AND-filter state;
-  `<Space>tc` clears all active tag filters without opening a chooser.
+- Main uses direct `ta` / `tr` tag actions; Reader and Note retain
+  `<Space>ta` / `<Space>tr`.
+- Main-only `tf` toggles one tag in Zotero's native AND-filter state;
+  `tc` clears all active tag filters without opening a chooser.
 - Tag actions reuse the shared target chooser instead of exposing a persistent
   tag-operation console. Add Tag may offer an explicit create candidate.
 - Optional virtual tag-path refinement such as `method/...` is presentation-only;
@@ -82,7 +82,7 @@ verification in the current stable host.
 
 - Configurable Reader/Main/Note bindings with multiple bindings per action,
   duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
-- Space-leader Key Guide derived from the active resolved keymap.
+- Prefix Guide derived from the active resolved keymap; Reader/Note may use Space while Main can expose direct prefixes.
 - Auto, Light, and Dark appearance modes on Neo-owned surfaces.
 
 ## Install

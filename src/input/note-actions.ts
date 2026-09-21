@@ -16,7 +16,7 @@ export const NOTE_COMMAND_BY_ACTION = {
   noteOpenLineBelow: 'o',
   noteOpenLineAbove: 'O',
   noteUndo: 'u',
-  noteRedo: 'ctrl+r',
+  noteRedo: '<C-r>',
   notePutAfter: 'p',
   notePutBefore: 'P',
   noteDeleteLine: 'dd',

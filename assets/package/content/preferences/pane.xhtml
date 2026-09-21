@@ -259,11 +259,11 @@
   <groupbox>
     <label data-i18n="zv.keyGuide" value="Key guide" style="font-weight: bold;" />
     <html:p style="margin: 4px 0 8px; font-size: 0.9em;" data-i18n="zv.keyGuide.help">
-      Show valid Space-leader continuations in Normal mode without intercepting text input.
+      Show valid pending-key continuations in Normal mode without intercepting text input.
     </html:p>
     <hbox align="center">
       <checkbox id="zv-key-guide-enabled" data-i18n="zv.keyGuide.enabled"
-        label="Show the Space-leader key guide" />
+        label="Show the Prefix Guide" />
     </hbox>
     <hbox align="center" style="margin-top: 8px;">
       <html:label for="zv-key-guide-delay" data-i18n="zv.keyGuide.delay"
@@ -328,9 +328,9 @@
       <html:br />
       <html:span data-i18n="zv.bindings.help2a">Click a </html:span><html:strong data-i18n="zv.bindings.help2b">Key sequence</html:strong><html:span data-i18n="zv.bindings.help2c"> cell to edit it.</html:span>
       <html:br />
-      <html:span data-i18n="zv.bindings.help3a">Letter case is preserved; prefix with </html:span><html:code>ctrl+</html:code><html:span data-i18n="zv.bindings.help3b"> for Ctrl/Cmd.</html:span>
+      <html:span data-i18n="zv.bindings.help3a">Letter case is preserved; use </html:span><html:code>&lt;C-d&gt;</html:code><html:span data-i18n="zv.bindings.help3b"> for Ctrl/Cmd (Neovim notation).</html:span>
       <html:br />
-      <html:span data-i18n="zv.bindings.help4a">Multi-key sequences such as </html:span><html:code>gg</html:code><html:span data-i18n="zv.bindings.help4b"> or </html:span><html:code>zy</html:code><html:span data-i18n="zv.bindings.help4c"> are supported.</html:span>
+      <html:span data-i18n="zv.bindings.help4a">Multi-key sequences such as </html:span><html:code>gg</html:code><html:span data-i18n="zv.bindings.help4b"> or </html:span><html:code>zy</html:code><html:span data-i18n="zv.bindings.help4c"> are supported. Named keys use &lt;Enter&gt;, &lt;Esc&gt;, &lt;F1&gt;, &lt;Space&gt;; chords use forms such as &lt;C-d&gt;.</html:span>
     </html:p>
 
     <hbox style="margin-bottom: 6px;">

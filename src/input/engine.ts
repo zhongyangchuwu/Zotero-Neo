@@ -1,5 +1,14 @@
 import type { ActionId } from './actions';
 import type { BindingMap, Mode } from './bindings';
+import {
+  appendInputKey,
+  bindingEqualsInput,
+  bindingMatchesInputPrefix,
+  bindingTokenCount,
+  inputStartsWithKey,
+  inputTokenCount,
+  popInputKey,
+} from './key-sequence';
 
 export interface InputState {
   readonly mode: Mode;
@@ -45,42 +54,52 @@ function countValue(buffer: string): number {
 export function bindingMatchesPrefix(bindingKey: string, mode: Mode, buffer: string): boolean {
   const modePrefix = `${mode}:`;
   if (!bindingKey.startsWith(modePrefix)) return false;
-  const tail = bindingKey.slice(modePrefix.length);
-  if (!tail.startsWith(buffer)) return false;
-
-  if (!buffer.includes('+') && buffer.length === 1 && /^[A-Za-z]$/.test(buffer)) {
-    if (tail.startsWith('ctrl+') || tail.startsWith('alt+')) return false;
-  }
-  return true;
+  return bindingMatchesInputPrefix(bindingKey.slice(modePrefix.length), buffer);
 }
 
-function processMatch(
-  state: InputState,
-  buffer: string,
-  exact: ActionId | undefined,
-  possible: readonly string[],
-  bindings: BindingMap,
-): InputDecision {
-  const fullLength = `${state.mode}:`.length + buffer.length;
-  const longerPossible = possible.filter((key) => key.length > fullLength);
+interface MatchSummary {
+  readonly exact: ActionId | undefined;
+  readonly longer: boolean;
+}
 
-  if (exact && longerPossible.length === 0) {
+function summarizeMatches(bindings: BindingMap, mode: Mode, buffer: string): MatchSummary {
+  const inputLength = inputTokenCount(buffer);
+  if (inputLength === null) return { exact: undefined, longer: false };
+
+  let exact: ActionId | undefined;
+  let longer = false;
+  const modePrefix = `${mode}:`;
+  for (const [bindingKey, action] of Object.entries(bindings)) {
+    if (!bindingKey.startsWith(modePrefix)) continue;
+    const sequence = bindingKey.slice(modePrefix.length);
+    if (!bindingMatchesInputPrefix(sequence, buffer)) continue;
+
+    const length = bindingTokenCount(sequence);
+    if (length === null) continue;
+    if (bindingEqualsInput(sequence, buffer)) exact = action;
+    else if (length > inputLength) longer = true;
+  }
+  return { exact, longer };
+}
+
+function processMatch(state: InputState, buffer: string, match: MatchSummary): InputDecision {
+  if (match.exact && !match.longer) {
     return {
       kind: 'execute',
       state: resetState(state),
       consumed: true,
-      action: exact,
+      action: match.exact,
       count: countValue(state.countBuffer),
     };
   }
 
-  if (exact) {
+  if (match.exact) {
     return {
       kind: 'pending',
       state: { ...state, keyBuffer: buffer },
       consumed: true,
       timeoutMs: 800,
-      timeoutAction: bindings[`${state.mode}:${buffer}`] ?? null,
+      timeoutAction: match.exact,
     };
   }
 
@@ -113,27 +132,19 @@ export function advanceInput(context: InputContext, key: string): InputTransitio
     };
   }
 
-  const nextBuffer = `${state.keyBuffer}${key}`;
-  const nextKey = `${state.mode}:${nextBuffer}`;
-  const possible = Object.keys(bindings).filter((binding) =>
-    bindingMatchesPrefix(binding, state.mode, nextBuffer),
-  );
-  const exact = bindings[nextKey];
-
-  if (possible.length > 0 || exact) {
-    return processMatch(state, nextBuffer, exact, possible, bindings);
+  const nextBuffer = appendInputKey(state.keyBuffer, key);
+  const nextMatch = summarizeMatches(bindings, mode, nextBuffer);
+  if (nextMatch.exact || nextMatch.longer) {
+    return processMatch(state, nextBuffer, nextMatch);
   }
 
   const fallbackState = resetState(state);
-  const fallbackKey = `${state.mode}:${key}`;
-  const fallbackPossible = Object.keys(bindings).filter((binding) =>
-    bindingMatchesPrefix(binding, state.mode, key),
-  );
-  const fallbackExact = bindings[fallbackKey];
-  if (fallbackPossible.length === 0 && !fallbackExact) {
+  const fallbackBuffer = appendInputKey('', key);
+  const fallbackMatch = summarizeMatches(bindings, mode, fallbackBuffer);
+  if (!fallbackMatch.exact && !fallbackMatch.longer) {
     return { kind: 'pass', state: fallbackState };
   }
-  return processMatch(fallbackState, key, fallbackExact, fallbackPossible, bindings);
+  return processMatch(fallbackState, fallbackBuffer, fallbackMatch);
 }
 
 export function resolveInputTimeout(
@@ -155,12 +166,22 @@ export function inputWouldConsume(context: InputContext, key: string): boolean {
   return advanceInput(context, key).kind !== 'pass';
 }
 
+export function cancelPendingInput(state: InputState): InputState | null {
+  if (!state.keyBuffer) return null;
+  return { ...state, keyBuffer: '' };
+}
+
+export function backspacePendingInput(state: InputState): InputState | null {
+  if (!state.keyBuffer) return null;
+  return { ...state, keyBuffer: popInputKey(state.keyBuffer) };
+}
+
 export function cancelLeaderInput(state: InputState): InputState | null {
-  if (!state.keyBuffer.startsWith(' ')) return null;
+  if (!inputStartsWithKey(state.keyBuffer, ' ')) return null;
   return { ...state, keyBuffer: '' };
 }
 
 export function backspaceLeaderInput(state: InputState): InputState | null {
-  if (!state.keyBuffer.startsWith(' ')) return null;
-  return { ...state, keyBuffer: state.keyBuffer.slice(0, -1) };
+  if (!inputStartsWithKey(state.keyBuffer, ' ')) return null;
+  return { ...state, keyBuffer: popInputKey(state.keyBuffer) };
 }

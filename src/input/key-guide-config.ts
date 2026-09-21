@@ -29,7 +29,7 @@ const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
 };
 
 /**
- * The only configurable presentation data for the Space-leader guide. Commands remain
+ * The only configurable presentation data for the pending-prefix guide. Commands remain
  * exclusively in the resolved binding map; unlisted actions fall back to ACTION_LABELS.
  */
 export const KEY_GUIDE_CONFIG = {

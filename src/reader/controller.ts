@@ -24,6 +24,11 @@ import {
 } from '../input/key-guide-config';
 import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
+import {
+  appendInputKey,
+  bindingEqualsInput,
+  bindingMatchesInputPrefix,
+} from '../input/key-sequence';
 import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { isReaderDelegableMainAction } from '../main/action-capabilities';
 import {
@@ -862,12 +867,12 @@ export class ReaderSession {
       .filter(([binding, boundAction]) => binding.startsWith(modePrefix) && boundAction === action)
       .map(([binding]) => binding.slice(modePrefix.length));
     const matching = (buffer: string): string[] =>
-      sequences.filter((sequence) => sequence.startsWith(buffer));
+      sequences.filter((sequence) => bindingMatchesInputPrefix(sequence, buffer));
 
-    let next = `${this.#sidebarToggleBuffer}${key}`;
+    let next = appendInputKey(this.#sidebarToggleBuffer, key);
     let matches = matching(next);
     if (!matches.length && this.#sidebarToggleBuffer) {
-      next = key;
+      next = appendInputKey('', key);
       matches = matching(next);
     }
     if (!matches.length) {
@@ -877,7 +882,7 @@ export class ReaderSession {
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (matches.includes(next)) {
+    if (matches.some((sequence) => bindingEqualsInput(sequence, next))) {
       this.clearSidebarToggleInput();
       if (action === 'toggleReaderSidebarOutline') this.#outline.close(pdfWindow);
       else this.#marksExplorer.close(pdfWindow);
@@ -2022,8 +2027,6 @@ export class ReaderSession {
     )
       return false;
     const bindings = this.#dependencies.bindings();
-    const directAction = bindings['reader-normal:' + key];
-    if (!this.state.keyBuffer && (!directAction || !smoothScrollSpec(directAction))) return false;
     const decision = advanceInput(
       {
         mode: 'reader-normal',

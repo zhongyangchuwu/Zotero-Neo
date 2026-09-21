@@ -76,27 +76,28 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `G`         | Last page                                                                 |
 | `H`         | Switch to previous open tab                                               |
 | `L`         | Switch to next open tab                                                   |
-| `<space>,`  | Choose and switch to an open Zotero tab                                   |
-| `<space>q`  | Close the active Zotero tab                                               |
-| `<space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
-| `<space>pp` | Open the persistent Plugin Manager panel |
+| `,`  | Choose and switch to an open Zotero tab                                   |
+| `q`  | Close the active Zotero tab                                               |
+| `fn` | Search all notes in the shared picker (left: note titles, right: preview) |
+| `pp` | Open the persistent Plugin Manager panel |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
 
-### Space-leader key guide
+### Prefix Guide
 
-In Reader Normal mode, main-window navigation, and Note Normal mode, pause after
-pressing `Space` to show a small bottom-center list of valid next keys. It reads
-the active keybinding configuration, so remapped Space-leader commands appear
-without a second display-only keymap.
+The guide follows any pending multi-key prefix in the active resolved keymap.
+Reader and Note still use Space-led command groups, while Main uses direct
+prefixes such as `f`, `t`, `p`, `w`, and `y`. Pause after the first key to
+show the small bottom-center list of valid continuations. Remaps appear without a
+second display-only keymap.
 
 - The guide is enabled by default and appears after 200 ms; its delay and
   15 px default font size are configurable under **Preferences → Key guide**.
 - Letter labels preserve case: `b` and `B` are distinct bindings.
-- It updates after nested prefixes such as `<space>f`.
-- `Escape` cancels the leader sequence. `Backspace` returns to the previous
-  leader prefix; at the root it closes the guide.
+- It updates after nested prefixes such as `<space>f` in Reader/Note or `f` / `t` in Main.
+- `Escape` cancels the pending sequence. `Backspace` returns to the previous
+  pending prefix; at the root it closes the guide.
 - It never appears in Insert mode, native/editor text input, picker input, or
   other Neo-owned modal input.
 
@@ -124,7 +125,7 @@ confirmation.
 
 #### Plugin Manager panel
 
-Press `<space>pp` in Reader Normal, Main Normal, or Note Normal to open Neo's persistent
+Press `pp` in Reader/Note Normal, or `pp` in Main Normal, to open Neo's persistent
 Plugin Manager panel. Unlike a picker, this surface stays open while you browse installed
 plugins and inspect their state. Zotero/Mozilla AddonManager remains the authoritative
 source for plugin lifecycle state.
@@ -227,14 +228,14 @@ chosen first; the chooser only answers which object/tag that action should use.
 
 | Key | Intent |
 | --- | --- |
-| `<space>ff` | Find and open an item in the current library |
-| `<space>fc` | Find and open an item in the current collection |
-| `<space>fn` | Find and open a note in the active library |
-| `<space>,` | Switch to an already-open Zotero tab |
-| `<space>ta` | Add one chosen tag to the current target(s) |
-| `<space>tr` | Remove one chosen tag from the current target(s) |
-| `<space>tf` | Main only: toggle one chosen tag filter |
-| `<space>tc` | Main only: clear all tag filters directly |
+| `ff` | Find and open an item in the current library |
+| `fc` | Find and open an item in the current collection |
+| `fn` | Find and open a note in the active library |
+| `,` | Switch to an already-open Zotero tab |
+| `ta` | Add one chosen tag to the current target(s) |
+| `tr` | Remove one chosen tag from the current target(s) |
+| `tf` | Main only: toggle one chosen tag filter |
+| `tc` | Main only: clear all tag filters directly |
 
 The shared surface owns query input, fuzzy ranking, highlighted-row navigation,
 preview, IME/composition handling, confirmation, and cancellation. It does not
@@ -262,16 +263,16 @@ copying remain separate semantic actions rather than hidden chooser commands.
 
 ##### Tag actions and tag candidates
 
-`<space>ta` and `<space>tr` are available from Main, Reader, and Note when a
+`ta` and `tr` are available from Main, Reader, and Note when a
 taggable target set can be resolved. `ta` searches existing tags and can offer
 an explicit `+ Create "..."` candidate. `tr` lists only tags currently
 assigned to at least one target. For multi-item targets the preview may show
 all/mixed assignment metadata, but the action itself remains explicit: add means
 ensure-present; remove means ensure-absent.
 
-Main-only `<space>tf` uses the same candidate surface to toggle one member of
+Main-only `tf` uses the same candidate surface to toggle one member of
 Zotero's native tag-filter set, then closes. Active filters use Zotero's native
-**AND** semantics. `<space>tc` clears all filters without opening a chooser.
+**AND** semantics. `tc` clears all filters without opening a chooser.
 
 Virtual tag namespaces such as `method/` may appear as non-terminal refinement
 candidates when `tags.separator` is configured. Confirming a namespace narrows
@@ -282,7 +283,7 @@ semantics.
 
 ##### Notes
 
-`<space>fn` searches normalized note titles and note body content. Notes related
+`fn` searches normalized note titles and note body content. Notes related
 to the current item are grouped ahead of the remaining notes in the active
 library. Confirming a note opens it through Zotero; `Shift+Enter` requests the
 alternate window presentation.
@@ -295,7 +296,7 @@ engine in the editor itself.
 
 | Key                 | Action                                                   |
 | ------------------- | -------------------------------------------------------- |
-| `<space>e`          | Toggle custom outline explorer overlay                   |
+| `e`          | Toggle custom outline explorer overlay                   |
 | `j` / `k`           | Move outline selection down / up                         |
 | `Ctrl+d` / `Ctrl+u` | Fast move down / up                                      |
 | `l`                 | Expand selected outline node                             |
@@ -388,7 +389,7 @@ Note Insert stay native to Zotero/browser editing.
 | `diw` / `yiw` / `ciw` | Delete / yank / change the current word |
 | `p` / `P` | Paste the internal Note register after / before the caret |
 | `u` / `Ctrl+r` | Undo / redo bridge |
-| `<space>...` | Note Normal leader bindings; defaults mirror useful Main workflows such as `<space>fn` and `<space>ff` |
+| `<space>...` | Note Normal leader bindings; defaults mirror useful Main workflows such as `fn` and `ff` |
 | `H` / `L` | Switch to previous / next tab |
 | `Ctrl+h/j/k/l` | Directional pane/Reader focus when a target exists |
 | `:` | Open the Note command palette |
@@ -425,29 +426,29 @@ list) when that pane has focus.
 In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
 `J` and `K` are not Neo defaults and remain available to native Zotero behavior.
 
-#### Main window `<space>` chords
+#### Main window command prefixes
 
 These bindings work in the main Zotero window, subject to the active capability
 and focus context:
 
 | Key | Action |
 | --- | --- |
-| `<space>ff` | Find an item in the current library |
-| `<space>fc` | Find an item in the current collection |
-| `<space>fn` | Find and open a note |
-| `<space>pp` | Open the persistent Plugin Manager panel |
-| `<space>,` | Choose and switch to an open Zotero tab |
-| `<space>q` | Close the active Zotero tab |
-| `<space>ta` | Add one tag to the current target(s) |
-| `<space>tr` | Remove one tag from the current target(s) |
-| `<space>tf` | Toggle one Main-window tag filter |
-| `<space>tc` | Clear all Main-window tag filters |
-| `<space>e` | Focus the collection tree |
-| `<space>yy` | Copy the selected item's citekey to the clipboard |
-| `<space>o` | Open the selected item's PDF |
-| `<space>wh` | Focus the collection tree (left pane) |
-| `<space>wl` | Focus the detail pane (right pane) |
-| `<space>ww` | Focus the item list (middle pane) |
+| `ff` | Find an item in the current library |
+| `fc` | Find an item in the current collection |
+| `fn` | Find and open a note |
+| `pp` | Open the persistent Plugin Manager panel |
+| `,` | Choose and switch to an open Zotero tab |
+| `q` | Close the active Zotero tab |
+| `ta` | Add one tag to the current target(s) |
+| `tr` | Remove one tag from the current target(s) |
+| `tf` | Toggle one Main-window tag filter |
+| `tc` | Clear all Main-window tag filters |
+| `e` | Focus the collection tree |
+| `yy` | Copy the selected item's citekey to the clipboard |
+| `o` | Open the selected item's PDF |
+| `wh` | Focus the collection tree (left pane) |
+| `wl` | Focus the detail pane (right pane) |
+| `ww` | Focus the item list (middle pane) |
 
 #### Viewport positioning (like Vim's z commands)
 
@@ -602,8 +603,15 @@ Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to t
 **Zotero Neo** tab.
 
 - Every row in the **Keybindings** table maps a _mode + key sequence_ to an _action_. Multiple rows may bind keys to the same action.
-- Edit the key sequence directly in its cell. Key sequences preserve case: `b` and `B` are different. Use prefixes such as `ctrl+` for modified keys.
-- Multi-key sequences such as `gg`, `zy`, or `yy` are supported.
+- Edit the key sequence directly in its cell. Key sequences preserve case: `b` and `B` are different.
+- Neo uses a Neovim-style notation for symbolic keys: `<C-d>`, `<Enter>`,
+  `<Esc>`, `<S-Tab>`, `<F1>`, and `<Space>`. Printable characters remain
+  literal, so `gg` is two `g` keys, `f1` is `f` then `1`, and the word
+  `enter` is five printable letters. Only `<Enter>` means the Enter key.
+- Symbolic tokens compose directly with printable sequences, for example
+  `<C-d>g`. A literal `<` is written `<lt>`. Unmodified printable
+  characters do not have an angle-bracket form, so `<f>` is intentionally
+  invalid rather than becoming a second spelling of `f`.
 - Click **+ Add binding** to insert a new row immediately below the table header. The row is visible at once, starts in Normal mode with an empty Key Sequence and no selected Action, and focuses/selects the Key Sequence field. Click **×** to remove a row; removing a row truly unbinds that mode-and-sequence once the change is applied.
 - The native **Mode** menu is available on every row. Changing a row's Mode updates the Action choices to show only actions supported by that Mode.
 - The Action selector is searchable by localized action label or action identifier (case-insensitive). Use `↑` / `↓`, `Enter`, or `Escape`, or click an option to choose it.
@@ -751,7 +759,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Stop on release          | off                      | If enabled, stop immediately when key is released (accelerating mode)                                                                                 |
 | Persist marks            | off                      | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync                                            |
 | Default highlight colour | Yellow                   | Colour used when no explicit colour key is pressed                                                                                                    |
-| Key guide                | on                       | Show valid Space-leader continuations in Reader, Main, and Note Normal contexts                                                                       |
+| Key guide                | on                       | Show valid pending continuations; Reader/Note retain Space-led groups while Main uses direct prefixes                                                                       |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
 | Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |

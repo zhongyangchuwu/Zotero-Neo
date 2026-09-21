@@ -14,8 +14,10 @@ than one concrete workflow needs the same contract.
 
 ### 1. Input and interaction scope
 
-`src/input/` owns key normalization, sequence/count matching, resolved bindings,
-Key Guide projection, and composition boundaries. The shared input engine is a
+`src/input/` owns key normalization, semantic key-token parsing, sequence/count matching,
+resolved bindings, Key Guide projection, and composition boundaries. Named keys and modifier
+chords are matched as tokens rather than raw string prefixes, so `e` is distinct from `enter`
+and `escape`. The shared input engine is a
 pure reducer; Main and Reader still own event gating, timers, focus, and action
 execution.
 

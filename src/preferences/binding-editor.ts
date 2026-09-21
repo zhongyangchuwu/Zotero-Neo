@@ -7,6 +7,7 @@ import {
   type BindingMap,
   type Mode,
 } from '../input/bindings';
+import { canonicalBindingSequence, bindingSequenceIsStrictPrefix } from '../input/key-sequence';
 
 export type BindingEditorLanguage = 'en' | 'zh-CN';
 export type BindingRowId = number;
@@ -139,11 +140,13 @@ function parseRows(rows: readonly BindingEditorRow[]): {
       continue;
     }
     const binding = parseBindingKey(`${mode}:${key}`);
-    if (!binding || binding.mode !== mode || binding.sequence !== key) {
+    const sequence = canonicalBindingSequence(key);
+    if (!binding || binding.mode !== mode || !sequence) {
       errors.push({ rowId, kind: 'malformed' });
       continue;
     }
-    keyRows.push({ rowId, ...binding });
+    const canonicalBinding = { mode: binding.mode, sequence };
+    keyRows.push({ rowId, ...canonicalBinding });
     if (!action) {
       errors.push({ rowId, kind: 'empty' });
       continue;
@@ -152,7 +155,7 @@ function parseRows(rows: readonly BindingEditorRow[]): {
       errors.push({ rowId, kind: 'malformed' });
       continue;
     }
-    parsed.push({ rowId, ...binding, action });
+    parsed.push({ rowId, ...canonicalBinding, action });
     if (!actionsForBindingMode(binding.mode).includes(action)) {
       errors.push({ rowId, kind: 'incompatible' });
     }
@@ -190,8 +193,8 @@ function prefixIssues(rows: readonly ParsedEditorRow[]): BindingEditorIssue[] {
       )
         continue;
       if (
-        !second.sequence.startsWith(first.sequence) &&
-        !first.sequence.startsWith(second.sequence)
+        !bindingSequenceIsStrictPrefix(first.sequence, second.sequence) &&
+        !bindingSequenceIsStrictPrefix(second.sequence, first.sequence)
       )
         continue;
       const firstBinding = `${first.mode}:${first.sequence}`;

@@ -355,10 +355,10 @@ describe('directional pane focus', () => {
     const navigation = new MainNavigation(logger, () => {});
 
     expect(DEFAULT_BINDINGS).toMatchObject({
-      'main-normal:ctrl+h': 'focusReaderSplitLeft',
-      'main-normal:ctrl+j': 'focusReaderSplitDown',
-      'main-normal:ctrl+k': 'focusReaderSplitUp',
-      'main-normal:ctrl+l': 'focusReaderSplitRight',
+      'main-normal:<C-h>': 'focusReaderSplitLeft',
+      'main-normal:<C-j>': 'focusReaderSplitDown',
+      'main-normal:<C-k>': 'focusReaderSplitUp',
+      'main-normal:<C-l>': 'focusReaderSplitRight',
     });
     expect(navigation.focusDirection(window, session, 'right')).toBe(true);
     expect(active).toBe(items);
@@ -522,8 +522,8 @@ describe('NoteEditor shared binding input', () => {
 
   it('resolves Note-scoped ambiguous leader remaps on continuation or timeout', () => {
     const test = harness({
-      'note-normal: f': 'nextTab',
-      'note-normal: ff': 'previousTab',
+      'note-normal:<Space>f': 'nextTab',
+      'note-normal:<Space>ff': 'previousTab',
     });
 
     test.press(' ');
@@ -1055,7 +1055,7 @@ describe('repeated tab switching', () => {
   });
 });
 
-describe('main Space-leader key guide', () => {
+describe('main pending-prefix key guide', () => {
   describe('main engine dispatch', () => {
     it('waits for an ambiguous direct binding and leaves unavailable focus native', () => {
       vi.useFakeTimers();
@@ -1247,7 +1247,7 @@ describe('main Space-leader key guide', () => {
         preventDefault: () => {},
         stopPropagation: () => {},
       } as KeyboardEvent);
-    press(' ');
+    press('f');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
     expect(children.some((child) => child.id === 'zotero-neo-key-guide')).toBe(true);
     expect(children.find((child) => child.id === 'zotero-neo-key-guide')?.style.fontSize).toBe(

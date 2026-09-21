@@ -274,6 +274,12 @@ export class NoteEditor {
 
     if (!isNoteActionId(action)) return null;
 
+    if (action === 'noteUndo' || action === 'noteRedo') {
+      const handled = el.ownerDocument.execCommand(action === 'noteUndo' ? 'undo' : 'redo');
+      if (handled) this.style(el.ownerDocument, session.note.mode);
+      return handled;
+    }
+
     const handled = this.command(el, NOTE_COMMAND_BY_ACTION[action], count || 1, session);
     if (handled) this.style(el.ownerDocument, session.note.mode);
     return handled;
@@ -382,8 +388,6 @@ export class NoteEditor {
       session.note.mode = 'insert';
       return true;
     }
-    if (command === 'u' || command === 'ctrl+r')
-      return doc.execCommand(command === 'u' ? 'undo' : 'redo');
     if (command === 'p' || command === 'P')
       return this.insert(el, session.note.yank, command === 'P');
     if (command === 'dd' || command === 'yy') {
