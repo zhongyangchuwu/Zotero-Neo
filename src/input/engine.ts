@@ -155,6 +155,17 @@ export function inputWouldConsume(context: InputContext, key: string): boolean {
   return advanceInput(context, key).kind !== 'pass';
 }
 
+export function cancelPendingInput(state: InputState): InputState | null {
+  if (!state.keyBuffer) return null;
+  return { ...state, keyBuffer: '' };
+}
+
+export function backspacePendingInput(state: InputState): InputState | null {
+  if (!state.keyBuffer) return null;
+  if (!state.keyBuffer.startsWith(' ') && state.keyBuffer.includes('+')) return null;
+  return { ...state, keyBuffer: state.keyBuffer.slice(0, -1) };
+}
+
 export function cancelLeaderInput(state: InputState): InputState | null {
   if (!state.keyBuffer.startsWith(' ')) return null;
   return { ...state, keyBuffer: '' };
