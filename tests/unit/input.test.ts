@@ -54,6 +54,7 @@ describe('keyString', () => {
     expect(keyString({ key: 'f', ctrlKey: true, altKey: true })).toBe('ctrl+alt+f');
     expect(keyString({ key: 'ArrowDown' })).toBe('arrowdown');
     expect(keyString({ key: 'Tab', shiftKey: true })).toBe('shift+tab');
+    expect(keyString({ key: ' ', shiftKey: true })).toBe('shift+ ');
     expect(keyString({ key: 'ArrowDown', ctrlKey: true, shiftKey: true })).toBe(
       'ctrl+shift+arrowdown',
     );
