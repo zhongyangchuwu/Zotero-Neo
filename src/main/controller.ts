@@ -587,7 +587,7 @@ export class MainWindowController implements MainWindowControllerApi {
         void this.#navigation.openPDF(
           window,
           session,
-          context === 'main' ? mainCursorItem(window) : undefined,
+          context === 'main' ? (mainCursorItem(window) ?? null) : undefined,
         );
         break;
       case 'mainActivate':
