@@ -322,7 +322,7 @@ export class MainNavigation {
       this.status(session, '▶ items', 900);
       return;
     }
-    void this.openPDF(window, session, mainCursorItem(window));
+    void this.openPDF(window, session, mainCursorItem(window) ?? null);
   }
 
   async trashItems(ids: readonly number[]): Promise<boolean> {
@@ -366,15 +366,15 @@ export class MainNavigation {
       this.status(session, '✗ No item target');
       return;
     }
+    if (targets.missing > 0) {
+      this.status(session, '✗ Selection contains unavailable items; refresh before trash');
+      return;
+    }
     if (targets.source === 'selection' && targets.hidden > 0) {
       this.status(
         session,
         `✗ Selection includes ${targets.hidden} hidden item${targets.hidden === 1 ? '' : 's'}; reveal or clear before trash`,
       );
-      return;
-    }
-    if (targets.missing > 0) {
-      this.status(session, '✗ Selection contains unavailable items; refresh before trash');
       return;
     }
 
@@ -411,12 +411,16 @@ export class MainNavigation {
   async openPDF(
     window: MainWindow,
     session: MainWindowSession,
-    target?: Zotero.Item,
+    target?: Zotero.Item | null,
   ): Promise<void> {
     try {
       const pane = mainHost(window).ZoteroPane;
+      if (target === null) {
+        this.status(session, '✗ No item under cursor');
+        return;
+      }
       let item = target;
-      if (!item) {
+      if (target === undefined) {
         let items = pane?.getSelectedItems?.() ?? [];
         if (!items.length) {
           this.ensureSelection(pane?.itemsView);
@@ -425,7 +429,7 @@ export class MainNavigation {
         item = items[0];
       }
       if (!item) {
-        this.status(session, target === undefined ? '✗ No item selected' : '✗ No item under cursor');
+        this.status(session, '✗ No item selected');
         return;
       }
       if (item.isAttachment()) {
