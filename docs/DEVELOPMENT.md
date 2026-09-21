@@ -392,9 +392,10 @@ src/
 ```
 
 `src/input/` is the canonical source for executable bindings and bilingual
-action labels. `key-guide-config.ts` contains only localized Space-leader group
-and display labels plus timing and sizing defaults; `key-guide.ts` projects currently valid
-continuations from resolved bindings, so it never owns a second command map.
+action labels. `key-guide-config.ts` contains only localized pending-prefix group/display labels plus timing
+and sizing defaults; `key-guide.ts` projects currently valid continuations from resolved
+bindings, so it never owns a second command map. Space-leader timing remains a special case for
+Reader/Note and custom bindings, not the guide's only prefix model.
 The preference pane imports this metadata directly. `tools/build.mjs` creates
 deterministic ZIP bytes with the twelve packaged members verified by
 `tools/check-package.mjs`.
