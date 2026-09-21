@@ -19,21 +19,28 @@ export function formatGuideKey(key: string): string {
 }
 
 export function formatGuidePrefix(prefix: string): string {
-  if (!isLeaderPrefix(prefix)) return '';
-  return ['SPC', ...[...prefix.slice(1)].map(formatGuideKey)].join(' › ');
+  if (!prefix) return '';
+  return [...prefix].map(formatGuideKey).join(' › ');
+}
+
+function groupKey(prefix: string): keyof typeof KEY_GUIDE_CONFIG.groupLabels | undefined {
+  const normalized = prefix.startsWith(' ') ? prefix.slice(1) : prefix;
+  return normalized in KEY_GUIDE_CONFIG.groupLabels
+    ? (normalized as keyof typeof KEY_GUIDE_CONFIG.groupLabels)
+    : undefined;
 }
 
 /**
- * Projects immediately valid Space-leader continuations from the same resolved binding map
- * used by the dispatcher. The projection deliberately creates no executable bindings.
+ * Projects immediately valid continuations from the same resolved binding map used by the
+ * dispatcher. The projection deliberately creates no executable bindings.
  */
-export function leaderGuideEntries(
+export function prefixGuideEntries(
   bindings: BindingMap,
   mode: Mode,
   prefix: string,
   language: KeyGuideLanguage,
 ): readonly KeyGuideEntry[] {
-  if (!isLeaderPrefix(prefix)) return [];
+  if (!prefix) return [];
 
   const candidates = new Map<string, { action: ActionId | null; hasChildren: boolean }>();
   for (const [bindingKey, action] of Object.entries(bindings)) {
@@ -54,10 +61,8 @@ export function leaderGuideEntries(
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, candidate]) => {
       const group = candidate.hasChildren;
-      const groupLabel =
-        KEY_GUIDE_CONFIG.groupLabels[
-          `${prefix}${key}`.slice(1) as keyof typeof KEY_GUIDE_CONFIG.groupLabels
-        ];
+      const keyForGroup = groupKey(`${prefix}${key}`);
+      const groupLabel = keyForGroup ? KEY_GUIDE_CONFIG.groupLabels[keyForGroup] : undefined;
       const actionLabel = candidate.action
         ? (KEY_GUIDE_CONFIG.actionLabels[candidate.action] ?? ACTION_LABELS[candidate.action])
         : null;
@@ -71,4 +76,14 @@ export function leaderGuideEntries(
         isGroup: group,
       };
     });
+}
+
+/** Compatibility wrapper for surfaces that intentionally expose only Space-leader guides. */
+export function leaderGuideEntries(
+  bindings: BindingMap,
+  mode: Mode,
+  prefix: string,
+  language: KeyGuideLanguage,
+): readonly KeyGuideEntry[] {
+  return isLeaderPrefix(prefix) ? prefixGuideEntries(bindings, mode, prefix, language) : [];
 }
