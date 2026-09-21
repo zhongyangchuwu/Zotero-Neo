@@ -297,6 +297,10 @@ const BASE_ACTION_LABELS = {
     en: 'Manage installed Zotero plugins',
     'zh-CN': '管理已安装的 Zotero 插件',
   },
+  manageSelection: {
+    en: 'Inspect Main Selection workset',
+    'zh-CN': '检查主窗口 Selection 集合',
+  },
   mainTrashItems: {
     en: 'Main window: move selected items to trash',
     'zh-CN': '主窗口：将所选条目移到回收站',
