@@ -1,6 +1,14 @@
 import { ACTION_LABELS, type ActionId } from './actions';
 import { type KeyGuideLanguage, KEY_GUIDE_CONFIG } from './key-guide-config';
 import { parseBindingKey, type BindingMap, type Mode } from './bindings';
+import {
+  bindingMatchesInputPrefix,
+  bindingSequenceTokens,
+  inputBufferTokens,
+  inputStartsWithKey,
+  inputTokenCount,
+  nextBindingToken,
+} from './key-sequence';
 
 export type { KeyGuideLanguage } from './key-guide-config';
 
@@ -11,18 +19,18 @@ export interface KeyGuideEntry {
 }
 
 export function isLeaderPrefix(prefix: string): boolean {
-  return prefix.startsWith(' ');
+  return inputStartsWithKey(prefix, ' ');
 }
 
 export function isGuidePrefix(bindings: BindingMap, mode: Mode, prefix: string): boolean {
-  if (!prefix || bindings[`${mode}:${prefix}`]) return false;
+  const prefixLength = inputTokenCount(prefix);
+  if (!prefix || !prefixLength) return false;
+
   return Object.keys(bindings).some((bindingKey) => {
     const binding = parseBindingKey(bindingKey);
-    return (
-      binding?.mode === mode &&
-      binding.sequence.startsWith(prefix) &&
-      binding.sequence.length > prefix.length
-    );
+    if (!binding || binding.mode !== mode || !bindingMatchesInputPrefix(binding.sequence, prefix))
+      return false;
+    return (bindingSequenceTokens(binding.sequence)?.length ?? 0) > prefixLength;
   });
 }
 
@@ -31,11 +39,13 @@ export function formatGuideKey(key: string): string {
 }
 
 export function formatGuidePrefix(prefix: string): string {
-  return [...prefix].map(formatGuideKey).join(' › ');
+  return (inputBufferTokens(prefix) ?? []).map(formatGuideKey).join(' › ');
 }
 
 function groupLabelKey(prefix: string, key: string): keyof typeof KEY_GUIDE_CONFIG.groupLabels {
-  return `${prefix}${key}`.trimStart() as keyof typeof KEY_GUIDE_CONFIG.groupLabels;
+  const tokens = [...(inputBufferTokens(prefix) ?? []), key];
+  if (tokens[0] === ' ') tokens.shift();
+  return tokens.join('') as keyof typeof KEY_GUIDE_CONFIG.groupLabels;
 }
 
 /**
@@ -51,17 +61,21 @@ export function guideEntries(
 ): readonly KeyGuideEntry[] {
   if (!isGuidePrefix(bindings, mode, prefix)) return [];
 
+  const prefixLength = inputTokenCount(prefix);
+  if (!prefixLength) return [];
+
   const candidates = new Map<string, { action: ActionId | null; hasChildren: boolean }>();
   for (const [bindingKey, action] of Object.entries(bindings)) {
     const binding = parseBindingKey(bindingKey);
-    if (!binding || binding.mode !== mode || !binding.sequence.startsWith(prefix)) continue;
-    const suffix = binding.sequence.slice(prefix.length);
-    const nextKey = suffix[0];
-    if (!nextKey) continue;
+    if (!binding || binding.mode !== mode || !bindingMatchesInputPrefix(binding.sequence, prefix))
+      continue;
 
-    const candidatePrefix = `${prefix}${nextKey}`;
+    const tokens = bindingSequenceTokens(binding.sequence);
+    const nextKey = nextBindingToken(binding.sequence, prefix);
+    if (!tokens || !nextKey) continue;
+
     const current = candidates.get(nextKey) ?? { action: null, hasChildren: false };
-    if (binding.sequence === candidatePrefix) current.action = action;
+    if (tokens.length === prefixLength + 1) current.action = action;
     else current.hasChildren = true;
     candidates.set(nextKey, current);
   }
