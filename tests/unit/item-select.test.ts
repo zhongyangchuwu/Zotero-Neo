@@ -18,12 +18,7 @@ function visualHost() {
   };
   const tree = {
     _onSelection: vi.fn(
-      (
-        index: number,
-        _shiftSelect: boolean,
-        _toggleSelection: boolean,
-        moveFocused: boolean,
-      ) => {
+      (index: number, _shiftSelect: boolean, _toggleSelection: boolean, moveFocused: boolean) => {
         if (!moveFocused) return;
         selection.focused = index;
         selection.pivot = index;
@@ -81,7 +76,9 @@ describe('Main Visual range', () => {
     expect([...host.selection.selected]).toEqual([2]);
 
     feature.extend(host.window, 1, 3);
-    expect(feature.target(host.window).map((ref) => ref.itemID)).toEqual([102, 103, 104, 105]);
+    expect(feature.target(host.window).map((ref) => ref.itemID)).toEqual([
+      102, 103, 104, 105,
+    ]);
     expect([...host.selection.selected]).toEqual([2, 3, 4, 5]);
     expect(host.selection.focused).toBe(5);
 
