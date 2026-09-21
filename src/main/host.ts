@@ -57,6 +57,26 @@ type MainPane = {
   } | null;
 };
 
+
+type ItemCursorTree = {
+  _onSelection?(
+    index: number,
+    shiftSelect: boolean,
+    toggleSelection: boolean,
+    moveFocused: boolean,
+    shouldDebounce?: boolean,
+  ): void;
+};
+
+type ItemCursorView = {
+  readonly rowCount?: number;
+  readonly tree?: ItemCursorTree;
+  readonly selection?: {
+    readonly focused?: number;
+  };
+  ensureRowIsVisible?(index: number): void;
+};
+
 type ContextNoteEditor = {
   readonly item?: Zotero.Item;
   readonly _iframe?: { readonly contentWindow?: Window };
@@ -127,6 +147,30 @@ export function closeSelectedMainTab(window: MainWindow): void {
 
 export function mainPane(window: MainWindow): MainPane | undefined {
   return mainHost(window).ZoteroPane;
+}
+
+
+/**
+ * Move the item-tree focus without changing native selected rows.
+ *
+ * Zotero's virtualized table exposes this behavior through its private
+ * _onSelection(..., moveFocused=true) seam. Keep that dependency isolated here
+ * so a host-version change does not leak into navigation semantics.
+ */
+export function moveMainItemCursor(
+  window: MainWindow,
+  index: number,
+  shouldDebounce = false,
+): boolean {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const move = view?.tree?._onSelection;
+  const rowCount = view?.rowCount ?? 0;
+  if (!move || rowCount <= 0) return false;
+
+  const next = Math.max(0, Math.min(rowCount - 1, index));
+  move.call(view.tree, next, false, false, true, shouldDebounce);
+  view.ensureRowIsVisible?.(next);
+  return true;
 }
 
 export function mainItem(id: number): Zotero.Item | undefined {
