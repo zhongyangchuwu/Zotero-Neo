@@ -257,10 +257,10 @@ describe('binding preferences', () => {
     migrateBindingPreferences(preferences);
 
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
-      'main-normal: ,': null,
+      'main-normal:,': null,
       'main-normal: custom-tab': 'switchTab',
-      'main-normal: q': null,
-      'main-normal: tf': null,
+      'main-normal:q': null,
+      'main-normal:tf': null,
       'note-normal: ,': null,
       'note-normal: q': null,
       'reader-normal: ,': null,
@@ -292,7 +292,7 @@ describe('binding preferences', () => {
     migrateBindingPreferences(preferences);
 
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
-      'main-normal:custom': 'nextTab',
+      'main-normal: custom': 'nextTab',
       'main-normal:ff': null,
       'main-normal:q': null,
       'main-normal:ta': null,
