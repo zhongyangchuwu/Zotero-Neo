@@ -127,18 +127,18 @@ describe('binding preferences', () => {
     expect(bindings['reader-normal:j']).toBe('scrollDown');
     expect(bindings['main-normal:enter']).toBe('mainActivate');
     expect(bindings['reader-normal: fn']).toBe('findNotes');
-    expect(bindings['main-normal: fn']).toBe('findNotes');
+    expect(bindings['main-normal:fn']).toBe('findNotes');
     expect(bindings['reader-normal: n']).toBeUndefined();
     expect(bindings['main-normal: n']).toBeUndefined();
     expect(bindings['reader-normal: ,']).toBe('switchTab');
-    expect(bindings['main-normal: ,']).toBe('switchTab');
-    expect(bindings['main-normal: ta']).toBe('addTag');
-    expect(bindings['main-normal: tr']).toBe('removeTag');
-    expect(bindings['main-normal: tf']).toBe('toggleTagFilter');
-    expect(bindings['main-normal: tc']).toBe('clearTagFilters');
+    expect(bindings['main-normal:,']).toBe('switchTab');
+    expect(bindings['main-normal:ta']).toBe('addTag');
+    expect(bindings['main-normal:tr']).toBe('removeTag');
+    expect(bindings['main-normal:tf']).toBe('toggleTagFilter');
+    expect(bindings['main-normal:tc']).toBe('clearTagFilters');
     expect(bindings['main-normal: fT']).toBeUndefined();
     expect(bindings['reader-normal: q']).toBe('closeCurrentTab');
-    expect(bindings['main-normal: q']).toBe('closeCurrentTab');
+    expect(bindings['main-normal:q']).toBe('closeCurrentTab');
     expect(bindings['reader-normal: ft']).toBeUndefined();
     expect(bindings['main-normal: ft']).toBeUndefined();
     expect(bindings['main-normal: td']).toBeUndefined();
@@ -238,7 +238,7 @@ describe('binding preferences', () => {
     expect(bindingsFromPreferences(custom)['reader-normal:H']).toBe('scrollRight');
     expect(bindingsFromPreferences(custom)['main-normal:J']).toBe('nextTab');
   });
-  it('moves schema-10 explicit unbindings to the final semantic leader keys', () => {
+  it('carries schema-10 explicit unbindings through semantic and Main direct-prefix moves', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 10,
       bindings: JSON.stringify({
@@ -257,10 +257,10 @@ describe('binding preferences', () => {
     migrateBindingPreferences(preferences);
 
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
-      'main-normal: ,': null,
+      'main-normal:,': null,
       'main-normal: custom-tab': 'switchTab',
-      'main-normal: q': null,
-      'main-normal: tf': null,
+      'main-normal:q': null,
+      'main-normal:tf': null,
       'note-normal: ,': null,
       'note-normal: q': null,
       'reader-normal: ,': null,
@@ -271,11 +271,37 @@ describe('binding preferences', () => {
     expect(resolved['reader-normal: q']).toBeUndefined();
     expect(resolved['note-normal: ,']).toBeUndefined();
     expect(resolved['note-normal: q']).toBeUndefined();
-    expect(resolved['main-normal: ,']).toBeUndefined();
-    expect(resolved['main-normal: q']).toBeUndefined();
-    expect(resolved['main-normal: tf']).toBeUndefined();
+    expect(resolved['main-normal:,']).toBeUndefined();
+    expect(resolved['main-normal:q']).toBeUndefined();
+    expect(resolved['main-normal:tf']).toBeUndefined();
     expect(resolved['main-normal: custom-tab']).toBe('switchTab');
-    expect(resolved['main-normal: ta']).toBe('addTag');
+    expect(resolved['main-normal:ta']).toBe('addTag');
+  });
+
+  it('moves schema-11 Main leader tombstones to direct-prefix defaults', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 11,
+      bindings: JSON.stringify({
+        'main-normal: ff': null,
+        'main-normal: ta': null,
+        'main-normal: q': 'nextTab',
+      }),
+    });
+
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'main-normal: q': 'nextTab',
+      'main-normal:ff': null,
+      'main-normal:ta': null,
+    });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    const resolved = bindingsFromPreferences(preferences);
+    expect(resolved['main-normal:ff']).toBeUndefined();
+    expect(resolved['main-normal:ta']).toBeUndefined();
+    expect(resolved['main-normal:q']).toBe('closeCurrentTab');
+    expect(resolved['main-normal: q']).toBe('nextTab');
+    expect(resolved['main-normal: ']).toBe('mainToggleSelection');
   });
 
   it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {
