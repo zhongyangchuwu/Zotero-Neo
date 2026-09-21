@@ -77,11 +77,13 @@ family. Controllers coordinate them; they should not mirror child feature state.
 #### Main
 
 - `main/controller.ts` — Main session orchestration and semantic action dispatch.
-- `main/navigation.ts` — collection/item tree navigation operations; v0.2 item
-  motion must preserve the Neo Selection workset and move Cursor independently.
-- `main/item-select.ts` — current v0.1 native range implementation. In v0.2 this
-  owner is being narrowed to transient Visual anchor/head behavior; Selection is
-  session-owned and not defined by native range state.
+- `main/navigation.ts` — collection/item tree navigation plus Cursor-oriented host actions;
+  item motion preserves the Neo Selection workset and moves Cursor independently.
+- `main/selection-store.ts` — session-scoped stable-item Selection identities.
+- `main/selection-actions.ts` — committed Selection operations such as all-or-none target toggle.
+- `main/item-targets.ts` — narrow Cursor / EffectiveSelection resolution for Main actions.
+- `main/item-select.ts` — transient Visual anchor/head range behavior; it does not own committed
+  Selection.
 - `main/picker/` — shared candidate search/list/preview surface. Ordinary item,
   collection-item, note, and tab sources own candidate data/presentation only; the
   invoking semantic action owns confirmation and the resulting host operation.
@@ -95,7 +97,9 @@ family. Controllers coordinate them; they should not mirror child feature state.
 - `main/tag-targets.ts` — Main/Reader/Note target normalization and batched
   item-tag mutation primitives.
 - `main/note-editor.ts` — note-editor Normal/Insert integration.
-- `main/host.ts` — named adapters over private Main-window host seams.
+- `main/host.ts` — named adapters over private Main-window host seams, including focus-only item
+  Cursor movement, stable row/item mapping, visible Selection projection, and item-view refresh
+  observation.
 
 The shared candidate surface is a **target resolver**, not an operation console.
 For ordinary object choices its sources load/search/render candidates and return
