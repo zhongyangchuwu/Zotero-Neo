@@ -53,10 +53,15 @@ describe('keyString', () => {
     expect(keyString({ key: 'd', metaKey: true })).toBe('ctrl+d');
     expect(keyString({ key: 'f', ctrlKey: true, altKey: true })).toBe('ctrl+alt+f');
     expect(keyString({ key: 'ArrowDown' })).toBe('arrowdown');
+    expect(keyString({ key: 'Tab', shiftKey: true })).toBe('shift+tab');
+    expect(keyString({ key: 'ArrowDown', ctrlKey: true, shiftKey: true })).toBe(
+      'ctrl+shift+arrowdown',
+    );
   });
 
   it('preserves printable key case and ignores modifier-only or unusable events', () => {
     expect(keyString({ key: 'G' })).toBe('G');
+    expect(keyString({ key: '🙂' })).toBe('🙂');
     expect(keyString({ key: 'Control', ctrlKey: true })).toBe('');
     expect(keyString({ key: 'Dead' })).toBe('');
     expect(keyString({ key: 'Unidentified' })).toBe('');
@@ -436,6 +441,23 @@ describe('input matcher', () => {
       action: 'yankAnnotationComment',
       count: 3,
     });
+  });
+
+  it('matches named-key and modifier tokens inside multi-key sequences', () => {
+    const special: BindingMap = { 'reader-normal:<enter>g': 'firstPage' };
+    const firstSpecial = expectPending(advanceInput(context(normalState(), special), 'enter'));
+    expect(advanceInput(context(firstSpecial.state, special), 'g')).toMatchObject({
+      kind: 'execute',
+      action: 'firstPage',
+    });
+
+    const chord: BindingMap = { 'reader-normal:ctrl+dg': 'lastPage' };
+    const firstChord = expectPending(advanceInput(context(normalState(), chord), 'ctrl+d'));
+    expect(advanceInput(context(firstChord.state, chord), 'g')).toMatchObject({
+      kind: 'execute',
+      action: 'lastPage',
+    });
+    expect(backspacePendingInput(firstChord.state)).toEqual(normalState());
   });
 
   it('keeps a prefix-only binding pending longer and passes after its timeout', () => {
