@@ -973,6 +973,18 @@ describe('Reader smooth horizontal pan', () => {
       releaseSmoothHold(created, key);
       created.session.dispose();
     }
+
+    const namedBindings = {
+      ...DEFAULT_BINDINGS,
+      'reader-normal:<Down>': 'scrollDown',
+    } as BindingMap;
+    const named = smoothSession('follow', {}, namedBindings);
+    const down = readerKey('ArrowDown');
+    named.session.focusAndHandle(down.event);
+    expect(named.container.scrollBy).toHaveBeenCalledWith(0, 10);
+    expect(named.animationFrameTasks).toHaveLength(1);
+    releaseSmoothHold(named, 'ArrowDown');
+    named.session.dispose();
   });
 });
 describe('reader split shortcuts', () => {
