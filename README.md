@@ -25,9 +25,9 @@ verification in the current stable host.
 - Keyboard navigation across collections, saved searches, feeds, item lists, and
   tabs, including Vim-style `j/k`, `gg/G`, tree expansion/collapse, pane focus,
   PDF opening, tab switching/closing, trash, and restore.
-- Native-backed **Item Select** for range selection with counts, endpoint swap,
-  preserve/cancel semantics, and bulk actions without maintaining a parallel
-  selected-item model.
+- Main **Selection** workset with detached Cursor navigation, Yazi-style Space
+  toggle/advance, and transient **Visual** ranges whose commit/cancel semantics
+  are independent from Zotero's row-index TreeSelection.
 - Better BibTeX citekey copying when Better BibTeX is available.
 
 ### Reader navigation
@@ -116,7 +116,7 @@ From File…** and restart when prompted.
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
   semantic actions, and Zotero host boundaries.
-- [Item Select and Tags](docs/TAGS.md) — native-backed item selection, explicit
+- [Selection and Tags](docs/TAGS.md) — Main Selection/Visual semantics, explicit
   tag actions, filtering, and virtual tag-path semantics.
 - [Input methods](docs/INPUT_METHODS.md) — Unicode/IME ownership and composition
   boundaries.
