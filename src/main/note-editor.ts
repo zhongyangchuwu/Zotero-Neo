@@ -301,7 +301,7 @@ export class NoteEditor {
   }
 
   private refreshGuide(main: MainWindow, session: MainWindowSession): void {
-    if (isLeaderPrefix(session.note.buffer)) this.#leaderGuide.refresh(main, session);
+    if (session.note.buffer) this.#leaderGuide.refresh(main, session);
     else this.#leaderGuide.clear(main, session);
   }
 
