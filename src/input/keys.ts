@@ -25,9 +25,10 @@ export function keyString(event: KeyEventLike): string {
   const parts: string[] = [];
   if (event.ctrlKey || event.metaKey) parts.push('ctrl');
   if (event.altKey) parts.push('alt');
-  // Printable keys already encode Shift in event.key (D, ?, etc.). Named keys
-  // such as Tab/ArrowDown do not, so retain Shift explicitly for those.
-  if (event.shiftKey && !printable) parts.push('shift');
+  // Printable keys normally encode Shift in event.key (D, ?, etc.). Space is
+  // the exception: Shift+Space still reports " ", so retain Shift explicitly.
+  // Named keys such as Tab/ArrowDown also need an explicit Shift token.
+  if (event.shiftKey && (!printable || key === ' ')) parts.push('shift');
   parts.push(printable ? key : key.toLowerCase());
   return parts.join('+');
 }
