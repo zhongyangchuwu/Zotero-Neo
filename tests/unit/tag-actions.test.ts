@@ -190,6 +190,31 @@ describe('semantic Tag actions', () => {
     expect(second.hasTag('robotics')).toBe(false);
   });
 
+  it('uses Neo EffectiveSelection instead of native Main tree selection', async () => {
+    const nativeOnly = tagItem(1);
+    const selected = tagItem(2);
+    installZotero([nativeOnly, selected], [{ tag: 'robotics' }]);
+    const h = harness({ items: [nativeOnly, selected] });
+    h.session.selection.clear();
+    h.session.selection.add({ libraryID: selected.libraryID, itemID: selected.id });
+
+    h.actions.add(h.window, h.session);
+    const add = h.open();
+    await add.options.confirm?.(
+      {
+        id: 'tag:robotics',
+        title: 'robotics',
+        search: 'robotics',
+        tagName: 'robotics',
+        tagCandidate: 'tag',
+      } as PickerItem,
+      false,
+    );
+
+    expect(nativeOnly.hasTag('robotics')).toBe(false);
+    expect(selected.hasTag('robotics')).toBe(true);
+  });
+
   it('toggles one Main tag filter and clears all filters without mutating item tags', async () => {
     const item = tagItem(1, [{ tag: 'persistent', type: 0 }]);
     installZotero([item], [{ tag: 'alpha' }, { tag: 'beta' }]);
