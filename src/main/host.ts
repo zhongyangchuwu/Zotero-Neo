@@ -78,6 +78,10 @@ type ItemCursorView = {
   readonly tree?: ItemCursorTree;
   readonly selection?: {
     readonly focused?: number;
+    select?(index: number, shouldDebounce?: boolean): boolean | void;
+    toggleSelect?(index: number, shouldDebounce?: boolean): void;
+    clearSelection?(shouldDebounce?: boolean): void;
+    shiftSelect?(index: number, augment: boolean, shouldDebounce?: boolean): void;
   };
   getRow?(index: number): ItemTreeRow | undefined;
   getRowIndexByID?(id: number): number | false;
@@ -199,6 +203,72 @@ export function visibleMainSelectionCount(window: MainWindow, refs: readonly Ite
     if (mainItemRowForRef(window, ref) !== undefined) count += 1;
   }
   return count;
+}
+
+export function mainItemCursorRow(window: MainWindow): number | undefined {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const focused = view?.selection?.focused;
+  return focused === undefined ? undefined : focused;
+}
+
+export function mainItemRowCount(window: MainWindow): number {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  return Math.max(0, view?.rowCount ?? 0);
+}
+
+export function showMainVisualRange(
+  window: MainWindow,
+  anchor: ItemRef,
+  head: ItemRef,
+  shouldDebounce = false,
+): number | undefined {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const selection = view?.selection;
+  const anchorRow = mainItemRowForRef(window, anchor);
+  const headRow = mainItemRowForRef(window, head);
+  if (
+    anchorRow === undefined ||
+    headRow === undefined ||
+    !selection?.select ||
+    !selection.shiftSelect
+  )
+    return undefined;
+
+  selection.select(anchorRow, shouldDebounce);
+  selection.shiftSelect(headRow, false, shouldDebounce);
+  view?.ensureRowIsVisible?.(headRow);
+  return Math.abs(headRow - anchorRow) + 1;
+}
+
+export function projectMainSelection(
+  window: MainWindow,
+  refs: readonly ItemRef[],
+  cursor?: ItemRef,
+  shouldDebounce = false,
+): number {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const selection = view?.selection;
+  if (!selection) return 0;
+
+  const rows = [
+    ...new Set(
+      refs
+        .map((ref) => mainItemRowForRef(window, ref))
+        .filter((row): row is number => row !== undefined),
+    ),
+  ].sort((left, right) => left - right);
+
+  if (!rows.length) selection.clearSelection?.(shouldDebounce);
+  else if (selection.select) {
+    selection.select(rows[0]!, shouldDebounce);
+    for (const row of rows.slice(1)) {
+      if (selection.toggleSelect) selection.toggleSelect(row, shouldDebounce);
+      else view?.tree?._onSelection?.(row, false, true, false, shouldDebounce);
+    }
+  }
+
+  if (cursor) restoreMainItemCursor(window, cursor, shouldDebounce);
+  return rows.length;
 }
 
 export function moveMainItemCursor(
