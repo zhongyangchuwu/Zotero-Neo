@@ -56,6 +56,18 @@ describe('0.1.0 default keymap freeze', () => {
     expect(strictPrefixPairs(mainSelect)).toEqual([]);
   });
 
+  it('reserves Main Space for Selection and Visual commit without restoring a leader prefix', () => {
+    expect(DEFAULT_BINDINGS['main-normal:<Space>']).toBe('mainToggleSelection');
+    expect(DEFAULT_BINDINGS['main-select:<Space>']).toBe('mainSelectFinish');
+    expect(DEFAULT_BINDINGS['main-select:v']).toBe('mainSelectCancel');
+    expect(DEFAULT_BINDINGS['main-select:<Esc>']).toBe('mainSelectCancel');
+    expect(
+      Object.keys(DEFAULT_BINDINGS).some(
+        (key) => key.startsWith('main-normal:<Space>') && key !== 'main-normal:<Space>',
+      ),
+    ).toBe(false);
+  });
+
   it('does not confuse named keys with printable prefixes', () => {
     const bindings: BindingMap = {
       'main-normal:e': 'mainFocusTree',

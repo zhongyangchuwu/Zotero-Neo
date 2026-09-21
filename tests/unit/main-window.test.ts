@@ -1101,8 +1101,8 @@ describe('main pending-prefix key guide', () => {
                     'main-normal:x': 'nextTab',
                     'main-normal:xy': 'previousTab',
                     'main-normal:q': 'focusReaderSplitLeft',
-                    'main-normal: f': 'nextTab',
-                    'main-normal: ff': 'previousTab',
+                    'main-normal:f': 'nextTab',
+                    'main-normal:ff': 'previousTab',
                   })
                 : fallback,
           set: () => {},
@@ -1137,24 +1137,24 @@ describe('main pending-prefix key guide', () => {
       const unavailable = press('q');
       expect(unavailable.preventDefault).not.toHaveBeenCalled();
       expect(unavailable.stopPropagation).not.toHaveBeenCalled();
-      press(' ');
+      const nativeSpace = press(' ');
+      expect(nativeSpace.preventDefault).not.toHaveBeenCalled();
+      expect(nativeSpace.stopPropagation).not.toHaveBeenCalled();
+
       press('f');
       vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
       expect(next).toBe(1);
 
-      press(' ');
       press('f');
       press('z');
       vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
       expect(next).toBe(1);
 
-      press(' ');
       press('f');
       press('Escape');
       vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
       expect(next).toBe(1);
 
-      press(' ');
       press('f');
       press('Backspace');
       vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);

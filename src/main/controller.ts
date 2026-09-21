@@ -256,7 +256,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (session.inputMode === 'main-select' && !this.#itemSelect.itemsFocused(window)) {
-      this.#itemSelect.leave(window);
+      this.#itemSelect.leave(window, session.selection);
       session.inputMode = 'main-normal';
       session.keyBuffer = '';
       session.countBuffer = '';
@@ -268,6 +268,14 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     const key = keyString(event);
     if (!key) return;
+    if (
+      session.inputMode === 'main-normal' &&
+      key === ' ' &&
+      !this.#itemSelect.itemsFocused(window)
+    ) {
+      this.clearKeyGuide(window, session);
+      return;
+    }
     const bindings = this.activeBindings(session.inputMode);
     const leaderState = {
       mode: session.inputMode,
@@ -324,6 +332,10 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (decision.kind === 'execute') {
       if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
+      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
@@ -629,32 +641,35 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainTreeCollapseAll':
         this.#navigation.collapseAll(window, session);
         break;
+      case 'mainToggleSelection':
+        this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
+        break;
       case 'mainEnterSelect': {
-        const result = this.#itemSelect.enter(window);
+        const result = this.#itemSelect.enter(window, session.selection);
         if (result === 'entered') session.inputMode = 'main-select';
         break;
       }
       case 'mainSelectDown':
-        this.#itemSelect.extend(window, 1, count, shouldDebounce);
+        this.#itemSelect.extend(window, 1, count, session.selection, shouldDebounce);
         break;
       case 'mainSelectUp':
-        this.#itemSelect.extend(window, -1, count, shouldDebounce);
+        this.#itemSelect.extend(window, -1, count, session.selection, shouldDebounce);
         break;
       case 'mainSelectFirst':
-        this.#itemSelect.extend(window, 'first', count);
+        this.#itemSelect.extend(window, 'first', count, session.selection);
         break;
       case 'mainSelectLast':
-        this.#itemSelect.extend(window, 'last', count);
+        this.#itemSelect.extend(window, 'last', count, session.selection);
         break;
       case 'mainSelectSwapEnds':
-        this.#itemSelect.swapEnds(window);
+        this.#itemSelect.swapEnds(window, session.selection);
         break;
       case 'mainSelectFinish':
-        this.#itemSelect.finish(window);
+        this.#itemSelect.finish(window, session.selection);
         session.inputMode = 'main-normal';
         break;
       case 'mainSelectCancel':
-        this.#itemSelect.cancel(window);
+        this.#itemSelect.cancel(window, session.selection);
         session.inputMode = 'main-normal';
         break;
       default:

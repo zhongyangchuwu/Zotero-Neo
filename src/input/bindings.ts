@@ -4,6 +4,7 @@ import {
   bindingSequenceTokens,
   canonicalBindingSequence,
   migrateLegacyKeySequence,
+  serializeBindingTokens,
 } from './key-sequence';
 
 export const MODES = [
@@ -195,13 +196,15 @@ export const DEFAULT_BINDINGS = {
   'main-normal:L': 'nextTab',
   'main-normal:<Enter>': 'mainActivate',
   'main-normal:<Return>': 'mainActivate',
+  'main-normal:<Space>': 'mainToggleSelection',
   'main-normal:v': 'mainEnterSelect',
+  'main-select:<Space>': 'mainSelectFinish',
   'main-select:j': 'mainSelectDown',
   'main-select:k': 'mainSelectUp',
   'main-select:gg': 'mainSelectFirst',
   'main-select:G': 'mainSelectLast',
   'main-select:o': 'mainSelectSwapEnds',
-  'main-select:v': 'mainSelectFinish',
+  'main-select:v': 'mainSelectCancel',
   'main-select:<Esc>': 'mainSelectCancel',
 } as const satisfies BindingMap;
 
@@ -463,6 +466,44 @@ export function migrateMainDirectPrefixOverrides(raw: unknown): string {
     ['main-normal:<Space>ww', 'main-normal:ww'],
   ] as const) {
     moveNull(oldKey, newKey);
+  }
+
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Releases Main Space completely for the v0.2 Selection toggle.
+ *
+ * Schema 13 may still contain custom Main <Space>... overrides preserved by the
+ * direct-prefix migration. Move them to the equivalent direct sequence so the
+ * exact <Space> selection action never acquires an 800 ms exact/prefix delay.
+ * If an explicit direct override already exists, it wins and the stale
+ * Space-prefixed override is dropped.
+ */
+export function migrateMainSpaceSelectionOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+
+  for (const [key, action] of Object.entries({ ...overrides })) {
+    const binding = parseBindingKey(key);
+    if (binding?.mode !== 'main-normal') continue;
+
+    const tokens = bindingSequenceTokens(binding.sequence);
+    if (!tokens || tokens[0] !== ' ') continue;
+
+    // Main's exact Space is a new reserved semantic key in schema 14. Any
+    // historical exact override (including an explicit unbinding) must not
+    // shadow the Selection toggle after upgrade.
+    if (tokens.length === 1) {
+      delete overrides[key];
+      continue;
+    }
+
+    const directSequence = serializeBindingTokens(tokens.slice(1));
+    if (!directSequence) continue;
+    const directKey = `main-normal:${directSequence}`;
+
+    delete overrides[key];
+    if (!(directKey in overrides)) overrides[directKey] = action;
   }
 
   return stringifyBindingOverrides(overrides);
