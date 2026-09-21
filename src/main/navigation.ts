@@ -5,7 +5,16 @@ import type { FocusDirection } from '../input/actions';
 import { copyToClipboard } from '../platform/clipboard';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
-import { closeSelectedMainTab, cycleMainTab, mainHost, moveMainItemCursor } from './host';
+import {
+  closeSelectedMainTab,
+  currentMainItem,
+  cycleMainTab,
+  mainHost,
+  moveMainItemCursor,
+  projectMainSelection,
+  selectedMainTabID,
+} from './host';
+import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 
 type Selection = {
   focused?: number;
@@ -353,18 +362,35 @@ export class MainNavigation {
       this.status(session, '✗ Focus the items list first');
       return;
     }
-    const ids = (mainHost(window).ZoteroPane?.getSelectedItems?.() ?? []).map((item) => item.id);
-    if (!ids.length) {
-      this.status(session, '✗ No items selected');
+    const targets = resolveMainEffectiveTargets(window, session);
+    if (!targets.total || !targets.items.length) {
+      this.status(session, '✗ No item target');
       return;
     }
+    if (targets.source === 'selection' && targets.hidden > 0) {
+      this.status(
+        session,
+        `✗ Selection includes ${targets.hidden} hidden item${targets.hidden === 1 ? '' : 's'}; reveal or clear before trash`,
+      );
+      return;
+    }
+    if (targets.missing > 0) {
+      this.status(session, '✗ Selection contains unavailable items; refresh before trash');
+      return;
+    }
+
+    const ids = targets.items.map((item) => item.id);
     try {
       await this.trashItems(ids);
       session.trashedItemIDs = ids;
+      if (targets.source === 'selection') {
+        for (const ref of targets.refs) session.selection.remove(ref);
+        projectMainSelection(window, session.selection.values());
+      }
       this.status(session, `✓ Moved ${ids.length} item${ids.length === 1 ? '' : 's'} to trash`);
     } catch (error) {
-      this.#logger.debug(`trash selected items failed: ${String(error)}`);
-      this.status(session, '✗ Unable to move selected items to trash');
+      this.#logger.debug(`trash target items failed: ${String(error)}`);
+      this.status(session, '✗ Unable to move target items to trash');
     }
   }
 
@@ -386,14 +412,9 @@ export class MainNavigation {
   async openPDF(window: MainWindow, session: MainWindowSession): Promise<void> {
     try {
       const pane = mainHost(window).ZoteroPane;
-      let items = pane?.getSelectedItems?.() ?? [];
-      if (!items.length) {
-        this.ensureSelection(pane?.itemsView);
-        items = pane?.getSelectedItems?.() ?? [];
-      }
-      const item = items[0];
+      const item = mainCursorItem(window);
       if (!item) {
-        this.status(session, '✗ No item selected');
+        this.status(session, '✗ No item under cursor');
         return;
       }
       if (item.isAttachment()) {
@@ -441,7 +462,24 @@ export class MainNavigation {
   }
   yankCitekey(window: MainWindow, session: MainWindowSession): void {
     try {
-      const item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
+      const tabID = selectedMainTabID(window);
+      const readerActive = !!(tabID && mainHost(window).Zotero_Tabs?.getTabInfo?.(tabID)?.type === 'reader');
+      let item: Zotero.Item | undefined;
+
+      if (readerActive) {
+        item = currentMainItem(window);
+      } else {
+        const targets = resolveMainEffectiveTargets(window, session);
+        if (targets.total > 1) {
+          this.status(
+            session,
+            `✗ Citekey copy requires one target; Selection has ${targets.total} items`,
+          );
+          return;
+        }
+        item = targets.items[0];
+      }
+
       const key = item ? citationKey(item) : '';
       if (!key) {
         this.status(session, '✗ No citekey (BBT not ready?)');
