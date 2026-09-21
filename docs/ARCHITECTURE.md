@@ -81,9 +81,9 @@ family. Controllers coordinate them; they should not mirror child feature state.
 - `main/controller.ts` — Main session orchestration and semantic action dispatch.
 - `main/navigation.ts` — collection/item tree navigation operations; v0.2 item
   motion must preserve the Neo Selection workset and move Cursor independently.
-- `main/item-select.ts` — current v0.1 native range implementation. In v0.2 this
-  owner is being narrowed to transient Visual anchor/head behavior; Selection is
-  session-owned and not defined by native range state.
+- `main/item-select.ts` — transient Main Visual anchor/head state plus visible
+  projection of Visual/Selection into Zotero's native item tree. Persistent
+  Selection remains session-owned and is not defined by native row selection.
 - `main/picker/` — shared candidate search/list/preview surface. Ordinary item,
   collection-item, note, and tab sources own candidate data/presentation only; the
   invoking semantic action owns confirmation and the resulting host operation.
