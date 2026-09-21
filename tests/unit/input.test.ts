@@ -272,7 +272,7 @@ describe('binding parsing and overrides', () => {
     );
 
     expect(JSON.parse(migrated)).toEqual({
-      'main-normal:custom': 'nextTab',
+      'main-normal: custom': 'nextTab',
       'main-normal:ff': null,
       'main-normal:q': null,
       'main-normal:ta': null,
