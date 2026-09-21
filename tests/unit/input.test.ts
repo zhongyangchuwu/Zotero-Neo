@@ -5,6 +5,7 @@ import {
   DEFAULT_BINDINGS,
   encodeBindingOverrides,
   migrateLegacyBindingOverrides,
+  migrateMainDirectPrefixOverrides,
   migrateNoteBindingOverrides,
   parseBindingKey,
   parseBindingOverrides,
@@ -15,7 +16,9 @@ import {
 import {
   advanceInput,
   backspaceLeaderInput,
+  backspacePendingInput,
   cancelLeaderInput,
+  cancelPendingInput,
   inputWouldConsume,
   resolveInputTimeout,
   type InputContext,
@@ -193,9 +196,9 @@ describe('binding parsing and overrides', () => {
     expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
     expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
     expect(DEFAULT_BINDINGS['reader-normal: ,']).toBe('switchTab');
-    expect(DEFAULT_BINDINGS['main-normal: ,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['main-normal:,']).toBe('switchTab');
     expect(DEFAULT_BINDINGS['reader-normal: q']).toBe('closeCurrentTab');
-    expect(DEFAULT_BINDINGS['main-normal: q']).toBe('closeCurrentTab');
+    expect(DEFAULT_BINDINGS['main-normal:q']).toBe('closeCurrentTab');
     expect('reader-normal: ft' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal: td' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);
@@ -254,6 +257,26 @@ describe('binding parsing and overrides', () => {
       'note-normal: ff': 'switchTab',
       'note-normal:H': 'nextTab',
       'note-normal:ctrl+h': null,
+    });
+  });
+
+  it('migrates Main explicit unbindings to the v0.2 direct-prefix defaults', () => {
+    const migrated = migrateMainDirectPrefixOverrides(
+      JSON.stringify({
+        'main-normal: ff': null,
+        'main-normal: ta': null,
+        'main-normal: q': null,
+        'main-normal: custom': 'nextTab',
+        'reader-normal: ff': null,
+      }),
+    );
+
+    expect(JSON.parse(migrated)).toEqual({
+      'main-normal:custom': 'nextTab',
+      'main-normal:ff': null,
+      'main-normal:q': null,
+      'main-normal:ta': null,
+      'reader-normal: ff': null,
     });
   });
 
@@ -498,13 +521,20 @@ describe('input matcher', () => {
     expect(inputWouldConsume(initial, 'g')).toBe(advanceInput(initial, 'g').kind !== 'pass');
   });
 
-  it('cancels and backspaces only leader input while preserving other state', () => {
+  it('keeps leader-only helpers and supports generic pending-prefix cancellation', () => {
     const leader = normalState({ keyBuffer: ' ff', countBuffer: '2' });
     expect(cancelLeaderInput(leader)).toEqual(normalState({ countBuffer: '2' }));
     expect(backspaceLeaderInput(leader)).toEqual(
       normalState({ keyBuffer: ' f', countBuffer: '2' }),
     );
     expect(cancelLeaderInput(normalState({ keyBuffer: 'g' }))).toBeNull();
-    expect(backspaceLeaderInput(normalState())).toBeNull();
+
+    const direct = normalState({ keyBuffer: 'ff', countBuffer: '2' });
+    expect(cancelPendingInput(direct)).toEqual(normalState({ countBuffer: '2' }));
+    expect(backspacePendingInput(direct)).toEqual(
+      normalState({ keyBuffer: 'f', countBuffer: '2' }),
+    );
+    expect(backspacePendingInput(normalState({ keyBuffer: 'ctrl+' }))).toBeNull();
+    expect(backspacePendingInput(normalState())).toBeNull();
   });
 });
