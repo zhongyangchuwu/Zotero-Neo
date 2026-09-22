@@ -613,7 +613,7 @@ highlighted in the PDF and scrolled to in the sidebar.
 | `v` / `Escape` | Cancel Select and return to Normal |
 
 Selection Actions is a keyboard palette for lower-frequency or extensible operations rather than a
-duplicate of every Select shortcut. Built-ins currently keep **Underline** and **Add note** in the palette;
+duplicate of every Select shortcut. Built-ins currently include **Capture to note**, **Underline**, and **Add note**;
 coloured highlights stay on `zy/zr/zg/zb/zp`, copy stays on `y`, and search stays on `#`. If
 **Translate for Zotero** is installed, **Translate** appears automatically and uses that plugin's public
 translation API; its result stays in the palette and can be copied with `y`. Other plugins can add
@@ -649,7 +649,8 @@ context. Zotero's own popup is not used at all.
 | `Escape` | Save as the official annotation comment and close the overlay → Normal mode |
 
 The comment is also autosaved 2 seconds after the last keystroke, and `visual i`
-(add note) opens the same overlay for the newly created annotation.
+(Add note) opens the same overlay for the newly created annotation. This is an
+annotation comment workflow; it is distinct from **Capture to note**.
 
 Zotero's own annotation popup and sidebar comment fields remain fully usable
 for mouse editing: clicking into either while the overlay is open saves and
@@ -659,6 +660,25 @@ editors keeps its Zotero behavior).
 > **Note:** if pressing `i` shows a red `✗` status instead, the plugin writes
 > detailed diagnostics to `zotero-neo-startup.log` in your Zotero profile directory
 > (`%APPDATA%\Zotero\Zotero\Profiles\...` on Windows).
+
+---
+
+## Knowledge Capture workflow
+
+While a Reader Visual selection is active, press `a` or `Enter` and choose
+**Capture to note**. Neo snapshots the selected text and Reader item context,
+then opens the shared Notes picker. Notes belonging to the current paper are
+ranked first, followed by other notes in the same library.
+
+Confirming a note appends a blockquote containing the captured text and the PDF
+page label when available. Existing note content is preserved. The target note
+is revalidated before writing; deleted, non-note, or cross-library targets are
+refused. Cancelling the chooser leaves notes unchanged and returns focus to the
+Reader.
+
+The first v0.2 slice only captures into an existing note. It does not create a
+new note automatically and does not redefine `visual i`, which still creates
+a highlight and opens its annotation comment editor.
 
 ---
 
