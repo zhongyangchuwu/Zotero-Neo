@@ -13,6 +13,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainAdvancedSearch',
   'managePlugins',
   'manageSelection',
+  'mainReturnContext',
   'switchTab',
   'mainTrashItems',
   'mainRestoreTrashedItems',
