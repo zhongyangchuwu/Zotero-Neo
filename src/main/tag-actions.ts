@@ -223,7 +223,9 @@ export class TagActions {
     if (targets.missing > 0) {
       this.#navigation.status(
         session,
-        `✗ ${context === 'main' ? 'Selection contains' : 'Context item is'} unavailable; refresh before changing tags`,
+        context === 'main'
+          ? '✗ Selection contains unavailable items; refresh before changing tags'
+          : '✗ Context item is unavailable; refresh before changing tags',
       );
       return null;
     }
