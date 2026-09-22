@@ -110,6 +110,45 @@ describe('Main action target contracts', () => {
     expect(h.viewAttachment).not.toHaveBeenCalledWith(nativeSelected.id);
   });
 
+  it('captures only real reading navigation and rolls back when the host open fails', async () => {
+    const target = attachment(10);
+    const h = harness([target], 0);
+    const rollback = vi.fn();
+    const beforeNavigate = vi.fn(() => rollback);
+
+    await expect(
+      h.navigation.openPDF(h.window, h.session, target, beforeNavigate),
+    ).resolves.toBe(true);
+    expect(beforeNavigate).toHaveBeenCalledOnce();
+    expect(rollback).not.toHaveBeenCalled();
+    expect(h.viewAttachment).toHaveBeenCalledWith(target.id);
+
+    h.viewAttachment.mockReset();
+    h.viewAttachment.mockImplementation(() => {
+      throw new Error('viewer failed');
+    });
+    await expect(
+      h.navigation.openPDF(h.window, h.session, target, beforeNavigate),
+    ).resolves.toBe(false);
+    expect(beforeNavigate).toHaveBeenCalledTimes(2);
+    expect(rollback).toHaveBeenCalledOnce();
+
+    const noTarget = {
+      id: 20,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+      getBestAttachment: async () => false,
+      getAttachments: () => [],
+      getField: () => '',
+    } as unknown as Zotero.Item;
+    await expect(
+      h.navigation.openPDF(h.window, h.session, noTarget, beforeNavigate),
+    ).resolves.toBe(false);
+    expect(beforeNavigate).toHaveBeenCalledTimes(2);
+    expect(h.session.status.textContent).toBe('✗ No attachment');
+  });
+
   it('blocks trash when explicit Selection contains hidden targets', async () => {
     const visible = attachment(10);
     const cursor = attachment(11);
