@@ -14,7 +14,11 @@ afterEach(() => {
 
 function item(
   id: number,
-  options: { libraryID?: number; parentItemID?: number; kind?: 'regular' | 'attachment' | 'note' } = {},
+  options: {
+    libraryID?: number;
+    parentItemID?: number;
+    kind?: 'regular' | 'attachment' | 'note';
+  } = {},
 ): Zotero.Item {
   return {
     id,

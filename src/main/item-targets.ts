@@ -52,7 +52,10 @@ export function normalizeTopLevelItemTargets(items: readonly Zotero.Item[]): Zot
   return [...byRef.values()];
 }
 
-function contextualItem(window: MainWindow, context: 'reader' | 'note'): {
+function contextualItem(
+  window: MainWindow,
+  context: 'reader' | 'note',
+): {
   item?: Zotero.Item;
   missing: number;
 } {

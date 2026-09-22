@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  itemTagState,
-  normalizeItemTargets,
-  setTagOnTargets,
-} from '../../src/main/tag-targets';
+import { itemTagState, normalizeItemTargets, setTagOnTargets } from '../../src/main/tag-targets';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -73,7 +69,6 @@ describe('item tag target normalization', () => {
       parent.id,
     ]);
   });
-
 });
 
 describe('semantic multi-target tag action', () => {

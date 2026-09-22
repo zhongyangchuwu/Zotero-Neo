@@ -5,10 +5,7 @@ import { createCollectionCandidateProvider } from './picker/providers/collection
 import type { FuzzyPicker } from './picker';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
-import {
-  resolveItemTargets,
-  type ItemTargetContext,
-} from './item-targets';
+import { resolveItemTargets, type ItemTargetContext } from './item-targets';
 
 export interface CollectionMembershipTargets {
   readonly items: readonly Zotero.Item[];

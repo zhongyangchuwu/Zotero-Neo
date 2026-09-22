@@ -8,11 +8,7 @@ import type { MainWindowSession } from './session';
 import { mainHost } from './host';
 import type { MainViewActions } from './view-actions';
 import { itemTagState, setTagOnTargets } from './tag-targets';
-import {
-  resolveItemTargets,
-  type ItemTargetContext,
-  type ItemTargetSet,
-} from './item-targets';
+import { resolveItemTargets, type ItemTargetContext, type ItemTargetSet } from './item-targets';
 
 function sameTag(left: string, right: string): boolean {
   return left.toLocaleLowerCase() === right.toLocaleLowerCase();
@@ -92,11 +88,7 @@ export class TagActions {
     this.#viewActions = viewActions;
   }
 
-  add(
-    window: MainWindow,
-    session: MainWindowSession,
-    context: ItemTargetContext = 'main',
-  ): void {
+  add(window: MainWindow, session: MainWindowSession, context: ItemTargetContext = 'main'): void {
     const targets = this.targets(window, session, context);
     if (!targets) return;
     const libraryID = targetLibraryID(targets);
