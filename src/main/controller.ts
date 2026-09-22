@@ -697,10 +697,10 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.cycleTab(window, 1);
         break;
       case 'addTag':
-        this.#tags.add(window, session);
+        this.#tags.add(window, session, context);
         break;
       case 'removeTag':
-        this.#tags.remove(window, session);
+        this.#tags.remove(window, session, context);
         break;
       case 'toggleTagFilter':
         this.#tags.toggleFilter(window, session);
@@ -709,10 +709,10 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#tags.clearFilters(window, session);
         break;
       case 'addToCollection':
-        this.#collections.open(window, session, true);
+        this.#collections.open(window, session, true, context);
         break;
       case 'removeFromCollection':
-        this.#collections.open(window, session, false);
+        this.#collections.open(window, session, false, context);
         break;
       case 'mainNavDown':
         this.#navigation.navigate(window, session, 1, count, shouldDebounce);
