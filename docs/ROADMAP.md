@@ -38,6 +38,10 @@ GitHub Release are complete.
   generalize Key Guide into a pending-prefix guide; then audit action target
   contracts before layering local find, filtering, ScopeSet, and batch triage
   operations.
+- Build the first concrete v0.2 Library Triage batch workflow in
+  [#75](https://github.com/zhongyangchuwu/Zotero-Neo/issues/75): collection
+  membership over EffectiveSelection with explicit single-library preflight,
+  target selection through Picker, and Zotero-native membership mutation.
 - Track the batteries-included workflow/distribution direction and the first persistent Plugin
   Manager surface in [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). The initial
   panel is a read-only keyboard-first view over Zotero/Mozilla AddonManager state. It is deliberately

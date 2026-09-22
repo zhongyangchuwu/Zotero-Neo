@@ -597,6 +597,8 @@ export class FuzzyPicker {
         return createNotesProvider(window, this.#logger);
       case 'tags':
         throw new Error('Tag chooser requires an explicit candidate source');
+      case 'collections':
+        throw new Error('Collection chooser requires an explicit candidate source');
       case 'commands':
         if (!commandContext) throw new Error('Command palette context missing');
         return createCommandsProvider(commandContext);

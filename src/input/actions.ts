@@ -365,6 +365,14 @@ const BASE_ACTION_LABELS = {
     en: 'Clear tag filters',
     'zh-CN': '清空标签筛选条件',
   },
+  addToCollection: {
+    en: 'Add current item target(s) to collection',
+    'zh-CN': '将当前条目目标添加到分类',
+  },
+  removeFromCollection: {
+    en: 'Remove current item target(s) from collection',
+    'zh-CN': '将当前条目目标移出分类',
+  },
   mainEnterSelect: {
     en: 'Main window: enter Visual range',
     'zh-CN': '主窗口：进入可视范围',

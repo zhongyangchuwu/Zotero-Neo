@@ -35,6 +35,8 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'removeTag',
   'toggleTagFilter',
   'clearTagFilters',
+  'addToCollection',
+  'removeFromCollection',
   'mainNavDown',
   'mainNavUp',
   'mainNavFirst',

@@ -21,6 +21,8 @@ const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
   mainQuickSearch: { en: 'Quick Search', 'zh-CN': '快速搜索' },
   mainAdvancedSearch: { en: 'Advanced Search', 'zh-CN': '高级搜索' },
   mainReturnContext: { en: 'Return context', 'zh-CN': '返回上下文' },
+  addToCollection: { en: 'Add to collection', 'zh-CN': '添加到分类' },
+  removeFromCollection: { en: 'Remove from collection', 'zh-CN': '移出分类' },
   managePlugins: { en: 'Manage plugins', 'zh-CN': '管理插件' },
   mainOpenPDF: { en: 'Open selected PDF', 'zh-CN': '打开所选 PDF' },
   switchTab: { en: 'Switch tab', 'zh-CN': '切换标签页' },
@@ -48,6 +50,7 @@ export const KEY_GUIDE_CONFIG = {
   },
   groupLabels: {
     t: { en: 'Tags', 'zh-CN': '标签' },
+    c: { en: 'Collections', 'zh-CN': '分类' },
     f: { en: 'Find', 'zh-CN': '查找' },
     w: { en: 'Panes', 'zh-CN': '窗格' },
     y: { en: 'Citations', 'zh-CN': '引用' },

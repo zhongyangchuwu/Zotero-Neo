@@ -46,6 +46,7 @@ import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
 import { MainReturnContext } from './return-context';
+import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
@@ -71,6 +72,7 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #localFind: MainLocalFind;
   readonly #viewActions: MainViewActions;
   readonly #returnContext: MainReturnContext;
+  readonly #collections: CollectionMembershipActions;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -87,6 +89,11 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#selectionPanel = new SelectionPanel(dependencies.logger, this.#returnContext);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
+    );
+    this.#collections = new CollectionMembershipActions(
+      dependencies.logger,
+      this.#navigation,
+      this.#picker,
     );
     this.#tags = new TagActions(
       dependencies.logger,
@@ -700,6 +707,12 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'clearTagFilters':
         this.#tags.clearFilters(window, session);
+        break;
+      case 'addToCollection':
+        this.#collections.open(window, session, true);
+        break;
+      case 'removeFromCollection':
+        this.#collections.open(window, session, false);
         break;
       case 'mainNavDown':
         this.#navigation.navigate(window, session, 1, count, shouldDebounce);
