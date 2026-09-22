@@ -42,6 +42,7 @@ import { MainItemSelect } from './item-select';
 import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
 import { mainCursorItem } from './action-targets';
 import { PluginManagerPanel } from './plugin-manager';
+import { installMainViewLifecycle } from './view-lifecycle';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
 
@@ -102,6 +103,7 @@ export class MainWindowController implements MainWindowControllerApi {
     if (this.#sessions.has(window)) return;
     const session = new MainWindowSession(window, this.#dependencies.preferences);
     this.#sessions.set(window, session);
+    session.cleanup.add(installMainViewLifecycle(window, session, this.#dependencies.logger));
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     let readerScanFailed = false;
