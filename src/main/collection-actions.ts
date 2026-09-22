@@ -5,7 +5,10 @@ import { createCollectionCandidateProvider } from './picker/providers/collection
 import type { FuzzyPicker } from './picker';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
-import { resolveMainEffectiveTargets } from './action-targets';
+import {
+  resolveItemTargets,
+  type ItemTargetContext,
+} from './item-targets';
 
 export interface CollectionMembershipTargets {
   readonly items: readonly Zotero.Item[];
@@ -28,23 +31,16 @@ function collectionIDs(item: Zotero.Item): readonly number[] {
 export function resolveCollectionMembershipTargets(
   window: MainWindow,
   session: MainWindowSession,
+  context: ItemTargetContext = 'main',
 ): CollectionMembershipTargets {
-  const resolved = resolveMainEffectiveTargets(window, session);
-  if (!resolved.total) throw new Error('No item target');
-  if (resolved.missing) throw new Error('Selection contains unavailable items');
+  const resolved = resolveItemTargets(window, session, context);
+  if (resolved.missing)
+    throw new Error(
+      context === 'main' ? 'Selection contains unavailable items' : 'Context item is unavailable',
+    );
+  if (!resolved.total || !resolved.items.length) throw new Error('No item target');
 
-  const keepTopLevel = (
-    Zotero.Items as unknown as {
-      keepTopLevel?(items: Zotero.Item[]): Zotero.Item[];
-    }
-  ).keepTopLevel;
-  const normalized = keepTopLevel
-    ? keepTopLevel([...resolved.items])
-    : [...resolved.items].filter((item) => item.isTopLevelItem?.() !== false);
-
-  const byID = new Map<number, Zotero.Item>();
-  for (const item of normalized) byID.set(item.id, item);
-  const items = [...byID.values()];
+  const items = [...resolved.items];
   if (!items.length) throw new Error('No top-level item target');
 
   const libraries = new Set(items.map((item) => item.libraryID));
@@ -110,10 +106,15 @@ export class CollectionMembershipActions {
     this.#picker = picker;
   }
 
-  open(window: MainWindow, session: MainWindowSession, present: boolean): void {
+  open(
+    window: MainWindow,
+    session: MainWindowSession,
+    present: boolean,
+    context: ItemTargetContext = 'main',
+  ): void {
     let initial: CollectionMembershipTargets;
     try {
-      initial = resolveCollectionMembershipTargets(window, session);
+      initial = resolveCollectionMembershipTargets(window, session, context);
     } catch (error) {
       this.#navigation.status(session, `✗ ${String((error as Error).message ?? error)}`);
       return;
@@ -124,7 +125,7 @@ export class CollectionMembershipActions {
       source: createCollectionCandidateProvider(initial.libraryID),
       confirm: async (candidate: PickerItem) => {
         try {
-          const current = resolveCollectionMembershipTargets(window, session);
+          const current = resolveCollectionMembershipTargets(window, session, context);
           if (current.libraryID !== initial.libraryID || current.signature !== initial.signature) {
             this.#navigation.status(session, '✗ Collection target changed; retry');
             return;
