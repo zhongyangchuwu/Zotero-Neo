@@ -171,7 +171,7 @@ export class MainNavigation {
       (collectionTargets.some(
         (target) => containsTarget(target, current) || containsTarget(current, target),
       ) ||
-        current.id.includes('collection'))
+        (typeof current.id === 'string' && current.id.includes('collection')))
     ) {
       session.activePanel = 'collections';
     } else if (this.itemPaneContainsFocus(window)) {
