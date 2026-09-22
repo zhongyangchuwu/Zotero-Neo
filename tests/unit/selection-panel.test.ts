@@ -97,7 +97,17 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
       stopImmediatePropagation: vi.fn(),
     }) as unknown as KeyboardEvent;
 
-  return { window, session, panel, select, clearSelection, toggleSelect, moveFocused, selectItem, key };
+  return {
+    window,
+    session,
+    panel,
+    select,
+    clearSelection,
+    toggleSelect,
+    moveFocused,
+    selectItem,
+    key,
+  };
 }
 
 describe('Selection Panel', () => {

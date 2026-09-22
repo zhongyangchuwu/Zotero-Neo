@@ -49,11 +49,7 @@ export function selectionPanelEntries(
       ref,
       title: itemTitle(item, ref),
       state:
-        mainItemRowForRef(window, ref) !== undefined
-          ? 'visible'
-          : item
-            ? 'hidden'
-            : 'unavailable',
+        mainItemRowForRef(window, ref) !== undefined ? 'visible' : item ? 'hidden' : 'unavailable',
     };
   });
 }
@@ -327,8 +323,7 @@ export class SelectionPanel {
           const row = window.document.createElementNS(H, 'div');
           row.dataset.index = String(index);
           row.style.cssText = `padding:7px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${index === state.selected ? `background:${THEME_VARS.selected};color:${THEME_VARS.selectedText};` : ''}`;
-          const marker =
-            entry.state === 'visible' ? 'V' : entry.state === 'hidden' ? 'H' : '!';
+          const marker = entry.state === 'visible' ? 'V' : entry.state === 'hidden' ? 'H' : '!';
           row.textContent = `[${marker}] ${entry.title}`;
           list.append(row);
         });
