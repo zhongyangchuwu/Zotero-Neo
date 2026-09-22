@@ -656,7 +656,8 @@ export class MainNavigation {
     return (
       targets.some(
         (target) => containsTarget(target, current) || containsTarget(current, target),
-      ) || (typeof current.id === 'string' && current.id.includes('item-tree'))
+      ) ||
+      (typeof current.id === 'string' && current.id.includes('item-tree'))
     );
   }
 
