@@ -319,6 +319,76 @@ describe('current Zotero collection APIs', () => {
     expect(focused).toBe(4);
   });
 
+  it('collapses ScopeSet to ScopeCursor before Enter moves into items', () => {
+    let focused = 4;
+    const selected = new Set([1, 2]);
+    const select = vi.fn((index: number) => {
+      selected.clear();
+      selected.add(index);
+    });
+    const collectionActive = { id: 'collection-tree-row-4' } as Element;
+    const itemActive = { id: 'item-tree-row-0' } as Element;
+    let active: Element = collectionActive;
+    const collectionTree = {
+      focus: () => {
+        active = collectionActive;
+      },
+      _onSelection: vi.fn((index: number) => {
+        focused = index;
+      }),
+    };
+    const itemTree = {
+      focus: () => {
+        active = itemActive;
+      },
+    };
+    const collectionsView = {
+      tree: collectionTree,
+      domEl: { contains: (node: unknown) => node === collectionActive } as HTMLElement,
+      rowCount: 6,
+      selection: {
+        get count() {
+          return selected.size;
+        },
+        selected,
+        get focused() {
+          return focused;
+        },
+        select,
+      },
+    } as unknown as TreeView;
+    const itemsView = {
+      tree: itemTree,
+      domEl: { contains: (node: unknown) => node === itemActive } as HTMLElement,
+      rowCount: 1,
+      selection: { focused: 0, count: 1, select: vi.fn() },
+    } as unknown as TreeView;
+    const document = {
+      get activeElement() {
+        return active;
+      },
+      getElementById: () => null,
+      querySelector: () => null,
+    } as unknown as Document;
+    const window = {
+      document,
+      ZoteroPane: { collectionsView, itemsView },
+    } as unknown as MainWindow;
+    const session = {
+      window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
+      activePanel: 'collections',
+      status: { textContent: '', style: {} },
+      cleanup: { add: vi.fn() },
+    } as unknown as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    navigation.activate(window, session);
+
+    expect(select).toHaveBeenCalledWith(4, false);
+    expect([...selected]).toEqual([4]);
+    expect(session.activePanel).toBe('items');
+  });
+
   it('uses Zotero repeat debouncing and native selection scrolling for held j/k', () => {
     const active = { id: 'collection-tree-row-2' } as Element;
     const select = vi.fn();
