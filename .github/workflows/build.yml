@@ -47,29 +47,6 @@ jobs:
           compression-level: 0
           retention-days: 14
 
-  build-windows:
-    name: Build on Windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Build XPI
-        shell: pwsh
-        run: ./tools/build.ps1
-      - name: Upload Windows XPI
-        uses: actions/upload-artifact@v7
-        with:
-          name: zotero-neo-windows
-          path: zotero-neo.xpi
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
   release:
     name: Publish GitHub Release
     if: >-
@@ -77,7 +54,6 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.release_tag != '')
     needs:
       - build-linux
-      - build-windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
