@@ -55,7 +55,7 @@ export interface MainActionDelegate {
   captureReaderSelectionToNote(
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
-  ): Promise<ReaderSelectionActionOutcome | void>;
+  ): Promise<boolean>;
 }
 
 export interface ReaderControllerApi extends ReaderSelectionApi {
@@ -83,7 +83,7 @@ export interface ReaderControllerDependencies {
   readonly captureReaderSelectionToNote: (
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
-  ) => Promise<ReaderSelectionActionOutcome | void>;
+  ) => Promise<boolean>;
 }
 
 export interface MainWindowControllerDependencies {
