@@ -7,13 +7,12 @@ import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
 import { mainHost } from './host';
 import type { MainViewActions } from './view-actions';
-import { resolveMainEffectiveTargets } from './action-targets';
+import { itemTagState, setTagOnTargets } from './tag-targets';
 import {
-  itemTagState,
-  resolveItemTagTargets,
-  setTagOnTargets,
+  resolveItemTargets,
+  type ItemTargetContext,
   type ItemTargetSet,
-} from './tag-targets';
+} from './item-targets';
 
 function sameTag(left: string, right: string): boolean {
   return left.toLocaleLowerCase() === right.toLocaleLowerCase();
@@ -93,8 +92,12 @@ export class TagActions {
     this.#viewActions = viewActions;
   }
 
-  add(window: MainWindow, session: MainWindowSession): void {
-    const targets = this.targets(window, session);
+  add(
+    window: MainWindow,
+    session: MainWindowSession,
+    context: ItemTargetContext = 'main',
+  ): void {
+    const targets = this.targets(window, session, context);
     if (!targets) return;
     const libraryID = targetLibraryID(targets);
     if (libraryID === null) {
@@ -126,8 +129,12 @@ export class TagActions {
     });
   }
 
-  remove(window: MainWindow, session: MainWindowSession): void {
-    const targets = this.targets(window, session);
+  remove(
+    window: MainWindow,
+    session: MainWindowSession,
+    context: ItemTargetContext = 'main',
+  ): void {
+    const targets = this.targets(window, session, context);
     if (!targets) return;
     const tags = targetTags(targets);
     if (!tags.length) {
@@ -215,13 +222,16 @@ export class TagActions {
       });
   }
 
-  private targets(window: MainWindow, session: MainWindowSession): ItemTargetSet | null {
-    const mainTargets = resolveMainEffectiveTargets(window, session);
-    const targets = resolveItemTagTargets(window, mainTargets.items);
-    if (targets.source === 'main' && mainTargets.missing > 0) {
+  private targets(
+    window: MainWindow,
+    session: MainWindowSession,
+    context: ItemTargetContext,
+  ): ItemTargetSet | null {
+    const targets = resolveItemTargets(window, session, context);
+    if (targets.missing > 0) {
       this.#navigation.status(
         session,
-        '✗ Selection contains unavailable items; refresh before changing tags',
+        `✗ ${context === 'main' ? 'Selection contains' : 'Context item is'} unavailable; refresh before changing tags`,
       );
       return null;
     }
