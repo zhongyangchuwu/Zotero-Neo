@@ -523,9 +523,9 @@ describe('Reader Selection Actions capture', () => {
       },
       created.reader._window,
     );
-    expect(created.bodyChildren.some((node) => node.dataset.zoteroNeoSelectionActions === '1')).toBe(
-      false,
-    );
+    expect(
+      created.bodyChildren.some((node) => node.dataset.zoteroNeoSelectionActions === '1'),
+    ).toBe(false);
     expect(created.indicator.textContent).toBe('✓ captured to note');
     created.session.dispose();
   });
