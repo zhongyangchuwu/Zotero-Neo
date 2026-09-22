@@ -27,7 +27,10 @@ Selection itself is a Neo-owned session workset of stable item identities, so
 moving Cursor or editing a Visual range does not redefine it.
 
 The collection tree remains a separate scope/navigation context. Pressing Space
-there stays Zotero-native and does not toggle item Selection.
+there never toggles item Selection; it operates on Zotero's native ScopeSet
+instead. A sole selected scope is pinned and ScopeCursor advances, after which
+Space can add/remove native scope rows without introducing a second Neo-owned
+scope store.
 
 ## Tag action vocabulary
 

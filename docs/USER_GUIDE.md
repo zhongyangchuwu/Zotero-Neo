@@ -409,11 +409,11 @@ list) when that pane has focus.
 
 | Key         | Action                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`   | Move selection down / up (collections tree and item list)                                                            |
+| `j` / `k`   | Move Cursor down / up; single-scope collection navigation follows View, pinned/multi ScopeSet preserves its members |
 | `gg` / `G`  | Jump to the first / last row                                                                                         |
 | `h`         | In item list, move focus back to collection tree; in collection tree, collapse selected collection or jump to parent |
 | `l`         | In collection tree, expand selected collection; if already expanded or a leaf, move focus into item list             |
-| `Enter`     | In collection tree, move focus into item list; in item list, open the selected item/PDF                              |
+| `Enter`     | In collection tree, collapse ScopeSet to ScopeCursor then enter items; in item list, open the Cursor item/PDF        |
 | `Backspace` | Jump to parent collection                                                                                            |
 | `dd` / `x`  | Move selected item rows to Zotero Trash                                                                              |
 | `u`         | Restore the last item batch trashed by Neo                                                                           |
@@ -422,6 +422,13 @@ list) when that pane has focus.
 | `zc`        | Collapse the current collection row (if already closed, keep it closed)                                              |
 | `R`         | Expand all collections in the current library tree                                                                   |
 | `M`         | Collapse all collections in the current library tree                                                                 |
+
+In the collection tree, `Space` builds Zotero's native ScopeSet without touching
+Neo item Selection. With one selected scope it pins that scope and advances
+ScopeCursor; subsequent Space presses toggle additional scope rows. While the
+ScopeCursor is detached from ScopeSet or multiple scopes are selected,
+`j/k/gg/G` move only ScopeCursor. `Enter` returns to a single scope at the
+current ScopeCursor and enters the item list.
 
 In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
 `J` and `K` are not Neo defaults and remain available to native Zotero behavior.

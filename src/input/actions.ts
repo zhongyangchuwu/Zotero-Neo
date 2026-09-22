@@ -366,8 +366,8 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '主窗口：进入可视范围',
   },
   mainToggleSelection: {
-    en: 'Main window: toggle Cursor / Visual target in Selection',
-    'zh-CN': '主窗口：切换光标 / 可视范围的选择状态',
+    en: 'Main window: toggle item Selection / collection ScopeSet',
+    'zh-CN': '主窗口：切换条目 Selection / 分类 ScopeSet',
   },
   mainSelectDown: {
     en: 'Visual: move head down',

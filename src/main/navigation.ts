@@ -10,15 +10,23 @@ import {
   currentMainItem,
   cycleMainTab,
   mainHost,
+  mainScopeCursorDetached,
+  mainScopeCursorRow,
+  mainScopeSelectedRows,
   moveMainItemCursor,
+  moveMainScopeCursor,
   projectMainSelection,
+  selectOnlyMainScopeCursor,
+  toggleMainScopeAtCursor,
 } from './host';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 
 type Selection = {
   focused?: number;
   count?: number;
+  selected?: Iterable<number>;
   select?(index: number, shouldDebounce?: boolean): void;
+  toggleSelect?(index: number, shouldDebounce?: boolean): void;
 };
 type TreeFocusTarget = { focus?(): void };
 export type TreeView = {
@@ -163,7 +171,7 @@ export class MainNavigation {
       (collectionTargets.some(
         (target) => containsTarget(target, current) || containsTarget(current, target),
       ) ||
-        current.id.includes('collection'))
+        (typeof current.id === 'string' && current.id.includes('collection')))
     ) {
       session.activePanel = 'collections';
     } else if (this.itemPaneContainsFocus(window)) {
@@ -314,10 +322,46 @@ export class MainNavigation {
       return;
     }
 
+    const preserveScopeSet =
+      mainScopeSelectedRows(window).length > 1 || mainScopeCursorDetached(window);
+    if (preserveScopeSet) {
+      if (!moveMainScopeCursor(window, next, shouldDebounce))
+        this.#logger.debug('focus-only scope cursor movement is unavailable');
+      return;
+    }
     view.selection.select?.(next, shouldDebounce);
   }
+
+  toggleScope(window: MainWindow, session: MainWindowSession, shouldDebounce = false): boolean {
+    if (this.panel(window, session) !== 'collections') return false;
+    const view = mainHost(window).ZoteroPane?.collectionsView;
+    const focused = mainScopeCursorRow(window);
+    if (focused === undefined || !view) return false;
+
+    const selected = mainScopeSelectedRows(window);
+    const pinnedSingle = selected.length === 1 && selected[0] === focused;
+    const changed = pinnedSingle ? false : toggleMainScopeAtCursor(window, shouldDebounce);
+
+    const last = Math.max(0, (view.rowCount ?? 1) - 1);
+    const next = Math.min(last, focused + 1);
+    if (next !== focused) moveMainScopeCursor(window, next, shouldDebounce);
+
+    const count = mainScopeSelectedRows(window).length;
+    this.status(
+      session,
+      pinnedSingle
+        ? `→ Scope pinned · ${count} selected`
+        : changed
+          ? `→ ScopeSet · ${count} selected`
+          : '✗ Unable to change ScopeSet',
+      1200,
+    );
+    return pinnedSingle || changed;
+  }
+
   activate(window: MainWindow, session: MainWindowSession): void {
     if (this.panel(window, session) === 'collections') {
+      selectOnlyMainScopeCursor(window);
       this.focusPanel(window, session, 'items');
       this.status(session, '▶ items', 900);
       return;
@@ -612,7 +656,8 @@ export class MainNavigation {
     return (
       targets.some(
         (target) => containsTarget(target, current) || containsTarget(current, target),
-      ) || current.id.includes('item-tree')
+      ) ||
+      (typeof current.id === 'string' && current.id.includes('item-tree'))
     );
   }
 

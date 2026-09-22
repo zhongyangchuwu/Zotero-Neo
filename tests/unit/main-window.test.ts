@@ -223,6 +223,172 @@ describe('current Zotero collection APIs', () => {
     expect(session.activePanel).toBe('collections');
   });
 
+  it('preserves a native multi-scope selection while moving only ScopeCursor', () => {
+    let focused = 2;
+    const selected = new Set([1, 2]);
+    const select = vi.fn();
+    const moveFocused = vi.fn((index: number) => {
+      focused = index;
+    });
+    const active = { id: 'collection-tree-row-2' } as Element;
+    const view = {
+      tree: { focus: () => {}, _onSelection: moveFocused },
+      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
+      rowCount: 6,
+      selection: {
+        count: 2,
+        selected,
+        get focused() {
+          return focused;
+        },
+        select,
+      },
+      ensureRowIsVisible: vi.fn(),
+    } as unknown as TreeView;
+    const window = {
+      document: {
+        activeElement: active,
+        getElementById: () => null,
+        querySelector: () => null,
+      },
+      ZoteroPane: { collectionsView: view },
+    } as unknown as MainWindow;
+    const session = { activePanel: 'items' } as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    navigation.navigate(window, session, 1, 1);
+
+    expect(select).not.toHaveBeenCalled();
+    expect(moveFocused).toHaveBeenCalledWith(3, false, false, true, false);
+    expect([...selected]).toEqual([1, 2]);
+    expect(focused).toBe(3);
+  });
+
+  it('pins a single native scope with Space and can add the detached ScopeCursor', () => {
+    let focused = 2;
+    const selected = new Set([2]);
+    const toggleSelect = vi.fn((index: number) => {
+      if (selected.has(index)) selected.delete(index);
+      else selected.add(index);
+    });
+    const moveFocused = vi.fn((index: number) => {
+      focused = index;
+    });
+    const active = { id: 'collection-tree-row-2' } as Element;
+    const view = {
+      tree: { focus: () => {}, _onSelection: moveFocused },
+      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
+      rowCount: 6,
+      selection: {
+        get count() {
+          return selected.size;
+        },
+        selected,
+        get focused() {
+          return focused;
+        },
+        toggleSelect,
+        select: vi.fn(),
+      },
+      ensureRowIsVisible: vi.fn(),
+    } as unknown as TreeView;
+    const window = {
+      document: {
+        activeElement: active,
+        getElementById: () => null,
+        querySelector: () => null,
+      },
+      ZoteroPane: { collectionsView: view },
+    } as unknown as MainWindow;
+    const session = {
+      window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
+      activePanel: 'collections',
+      status: { textContent: '', style: {} },
+      cleanup: { add: vi.fn() },
+    } as unknown as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    expect(navigation.toggleScope(window, session)).toBe(true);
+    expect(toggleSelect).not.toHaveBeenCalled();
+    expect([...selected]).toEqual([2]);
+    expect(focused).toBe(3);
+
+    expect(navigation.toggleScope(window, session)).toBe(true);
+    expect(toggleSelect).toHaveBeenCalledWith(3, false);
+    expect([...selected]).toEqual([2, 3]);
+    expect(focused).toBe(4);
+  });
+
+  it('collapses ScopeSet to ScopeCursor before Enter moves into items', () => {
+    let focused = 4;
+    const selected = new Set([1, 2]);
+    const select = vi.fn((index: number) => {
+      selected.clear();
+      selected.add(index);
+    });
+    const collectionActive = { id: 'collection-tree-row-4' } as Element;
+    const itemActive = { id: 'item-tree-row-0' } as Element;
+    let active: Element = collectionActive;
+    const collectionTree = {
+      focus: () => {
+        active = collectionActive;
+      },
+      _onSelection: vi.fn((index: number) => {
+        focused = index;
+      }),
+    };
+    const itemTree = {
+      focus: () => {
+        active = itemActive;
+      },
+    };
+    const collectionsView = {
+      tree: collectionTree,
+      domEl: { contains: (node: unknown) => node === collectionActive } as HTMLElement,
+      rowCount: 6,
+      selection: {
+        get count() {
+          return selected.size;
+        },
+        selected,
+        get focused() {
+          return focused;
+        },
+        select,
+      },
+    } as unknown as TreeView;
+    const itemsView = {
+      tree: itemTree,
+      domEl: { contains: (node: unknown) => node === itemActive } as HTMLElement,
+      rowCount: 1,
+      selection: { focused: 0, count: 1, select: vi.fn() },
+    } as unknown as TreeView;
+    const document = {
+      get activeElement() {
+        return active;
+      },
+      getElementById: () => null,
+      querySelector: () => null,
+    } as unknown as Document;
+    const window = {
+      document,
+      ZoteroPane: { collectionsView, itemsView },
+    } as unknown as MainWindow;
+    const session = {
+      window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
+      activePanel: 'collections',
+      status: { textContent: '', style: {} },
+      cleanup: { add: vi.fn() },
+    } as unknown as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    navigation.activate(window, session);
+
+    expect(select).toHaveBeenCalledWith(4, false);
+    expect([...selected]).toEqual([4]);
+    expect(session.activePanel).toBe('items');
+  });
+
   it('uses Zotero repeat debouncing and native selection scrolling for held j/k', () => {
     const active = { id: 'collection-tree-row-2' } as Element;
     const select = vi.fn();
