@@ -8,6 +8,7 @@ import type { PickerItem } from '../../src/main/picker/model';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import type { MainWindowSession } from '../../src/main/session';
 import { TagActions } from '../../src/main/tag-actions';
+import { MainViewActions } from '../../src/main/view-actions';
 import { SelectionStore } from '../../src/main/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -56,7 +57,7 @@ function harness(options: {
     getTags: vi.fn(async () => scopedTags),
   };
   const window = {
-    document: { activeElement: null },
+    document: { activeElement: null, getElementById: () => null },
     setTimeout: () => 1,
     clearTimeout: () => undefined,
     Zotero_Tabs: {
@@ -111,7 +112,8 @@ function harness(options: {
   const preferences: PreferenceReader = {
     get: (_key: string, fallback: boolean | number | string) => fallback,
   } as PreferenceReader;
-  const actions = new TagActions(logger, navigation, preferences, picker);
+  const viewActions = new MainViewActions(logger, navigation);
+  const actions = new TagActions(logger, navigation, preferences, picker, viewActions);
 
   return {
     actions,
