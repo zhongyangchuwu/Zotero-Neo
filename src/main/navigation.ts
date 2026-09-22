@@ -362,7 +362,7 @@ export class MainNavigation {
   activate(
     window: MainWindow,
     session: MainWindowSession,
-    beforeNavigate?: () => void,
+    beforeNavigate?: () => void | (() => void),
   ): void {
     if (this.panel(window, session) === 'collections') {
       selectOnlyMainScopeCursor(window);
@@ -460,10 +460,20 @@ export class MainNavigation {
     window: MainWindow,
     session: MainWindowSession,
     target?: Zotero.Item | null,
-    beforeNavigate?: () => void,
+    beforeNavigate?: () => void | (() => void),
   ): Promise<boolean> {
     try {
       const pane = mainHost(window).ZoteroPane;
+      const navigate = async (run: () => void | Promise<void>): Promise<boolean> => {
+        const rollback = beforeNavigate?.();
+        try {
+          await run();
+          return true;
+        } catch (error) {
+          rollback?.();
+          throw error;
+        }
+      };
       if (target === null) {
         this.status(session, '✗ No item under cursor');
         return false;
@@ -482,14 +492,18 @@ export class MainNavigation {
         return false;
       }
       if (item.isAttachment()) {
-        beforeNavigate?.();
-        pane?.viewAttachment?.(item.id);
-        return true;
+        if (!pane?.viewAttachment) {
+          this.status(session, '✗ Attachment viewer is unavailable');
+          return false;
+        }
+        return navigate(() => pane.viewAttachment?.(item.id));
       }
       if (item.isNote()) {
-        beforeNavigate?.();
-        await pane?.openNote?.(item.id);
-        return true;
+        if (!pane?.openNote) {
+          this.status(session, '✗ Note viewer is unavailable');
+          return false;
+        }
+        return navigate(() => pane.openNote?.(item.id));
       }
       let attachment: Zotero.Item | undefined = (await item.getBestAttachment?.()) || undefined;
       if (!attachment) {
@@ -505,18 +519,22 @@ export class MainNavigation {
         attachment = candidate ?? undefined;
       }
       if (attachment) {
-        beforeNavigate?.();
-        pane?.viewAttachment?.(attachment.id);
-        return true;
+        if (!pane?.viewAttachment) {
+          this.status(session, '✗ Attachment viewer is unavailable');
+          return false;
+        }
+        return navigate(() => pane.viewAttachment?.(attachment.id));
       }
       const doi = item.getField('DOI');
       const url =
         item.getField('url') ||
         (doi ? `https://doi.org/${Zotero.Utilities.cleanDOI?.(doi) ?? doi}` : '');
       if (url) {
-        beforeNavigate?.();
-        pane?.loadURI?.(url);
-        return true;
+        if (!pane?.loadURI) {
+          this.status(session, '✗ URI navigation is unavailable');
+          return false;
+        }
+        return navigate(() => pane.loadURI?.(url));
       }
       this.status(session, '✗ No attachment');
       return false;
