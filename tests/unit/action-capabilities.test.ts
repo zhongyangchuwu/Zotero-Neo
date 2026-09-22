@@ -52,6 +52,8 @@ const expectedMainActions: readonly ActionId[] = [
   'removeTag',
   'toggleTagFilter',
   'clearTagFilters',
+  'addToCollection',
+  'removeFromCollection',
   'mainNavDown',
   'mainNavUp',
   'mainNavFirst',
@@ -117,6 +119,8 @@ describe('action capability ownership', () => {
       'mainActivate',
       'toggleTagFilter',
       'clearTagFilters',
+      'addToCollection',
+      'removeFromCollection',
       'mainTreeExpand',
     ] as const)
       expect(isReaderDelegableMainAction(action)).toBe(false);
