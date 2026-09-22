@@ -236,6 +236,8 @@ chosen first; the chooser only answers which object/tag that action should use.
 | `tr` | Remove one chosen tag from the current target(s) |
 | `tf` | Main only: toggle one chosen tag filter |
 | `tc` | Main only: clear all tag filters directly |
+| `ca` | Main only: add EffectiveSelection (or Cursor fallback) to one chosen collection |
+| `cr` | Main only: remove EffectiveSelection (or Cursor fallback) from one chosen collection |
 
 The shared surface owns query input, fuzzy ranking, highlighted-row navigation,
 preview, IME/composition handling, confirmation, and cancellation. It does not
@@ -280,6 +282,20 @@ the query; it never mutates item data.
 
 See [Selection and Tag Actions](TAGS.md) for target-resolution and persistence
 semantics.
+
+##### Collection membership
+
+`ca` and `cr` use the Main EffectiveSelection contract: an explicit Neo
+Selection wins; otherwise the current Cursor is the target. Child
+attachments/notes are normalized with Zotero's native top-level-item semantics.
+
+The target set must resolve to one library. Neo then opens the shared chooser
+with only collections from that library. Before applying the confirmation, Neo
+re-resolves the item identities; if the workset changed while the chooser was
+open, the entire batch is refused.
+
+`ca` skips items already in the destination and `cr` skips items already
+absent. Membership changes do not redefine Neo Selection.
 
 ##### Notes
 
@@ -766,6 +782,8 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `removeTag`                   | Remove one tag from the current target(s)                                             |
 | `toggleTagFilter`             | Main only: toggle one tag filter                                                      |
 | `clearTagFilters`             | Main only: clear all tag filters                                                      |
+| `addToCollection`              | Main only: add EffectiveSelection/Cursor fallback to a chosen collection              |
+| `removeFromCollection`         | Main only: remove EffectiveSelection/Cursor fallback from a chosen collection         |
 | `mainNavDown`                 | Move selection down (collections tree / item list)                                   |
 | `mainNavUp`                   | Move selection up (collections tree / item list)                                     |
 | `mainNavFirst`                | Jump to the first row                                                                |
