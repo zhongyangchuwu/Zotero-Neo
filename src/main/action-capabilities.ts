@@ -3,6 +3,9 @@ import type { ActionId } from '../input/actions';
 /** Actions exposed by the ordinary Main-window interaction mode. */
 export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'openCommandPalette',
+  'openSearch',
+  'findNext',
+  'findPrevious',
   'findAllItems',
   'findCollectionItems',
   'findNotes',
