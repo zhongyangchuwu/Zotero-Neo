@@ -536,6 +536,17 @@ export class MainWindowController implements MainWindowControllerApi {
     shouldDebounce = false,
     context: MainInvocationContext = 'main',
   ): void {
+    const beforeMainReadingNavigation =
+      context === 'main'
+        ? () => {
+            const previous = session.returnBookmark;
+            this.#returnContext.capture(window, session);
+            return () => {
+              session.returnBookmark = previous;
+            };
+          }
+        : undefined;
+
     switch (action) {
       case 'openSearch':
         if (!this.#itemSelect.itemsFocused(window)) {
@@ -673,10 +684,11 @@ export class MainWindowController implements MainWindowControllerApi {
           window,
           session,
           context === 'main' ? (mainCursorItem(window) ?? null) : undefined,
+          beforeMainReadingNavigation,
         );
         break;
       case 'mainActivate':
-        void this.#navigation.activate(window, session);
+        this.#navigation.activate(window, session, beforeMainReadingNavigation);
         break;
       case 'closeCurrentTab':
         this.#navigation.closePDF(window);

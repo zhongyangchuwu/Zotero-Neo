@@ -381,9 +381,11 @@ describe('current Zotero collection APIs', () => {
       cleanup: { add: vi.fn() },
     } as unknown as MainWindowSession;
     const navigation = new MainNavigation(logger, () => {});
+    const beforeNavigate = vi.fn();
 
-    navigation.activate(window, session);
+    navigation.activate(window, session, beforeNavigate);
 
+    expect(beforeNavigate).not.toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith(4, false);
     expect([...selected]).toEqual([4]);
     expect(session.activePanel).toBe('items');

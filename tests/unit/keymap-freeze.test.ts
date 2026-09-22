@@ -73,6 +73,25 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
+  it('shares gr return-context navigation with Reader', () => {
+    expect(DEFAULT_BINDINGS['reader-normal:gr']).toBe('mainReturnContext');
+    const bindings = resolveBindings('');
+    const pending = press('reader-normal', 'g', bindings);
+    expect(pending).toMatchObject({ kind: 'pending' });
+    const next = advanceInput(
+      {
+        ...pending.state,
+        bindings,
+        allowCountPrefix: true,
+      },
+      'r',
+    );
+    expect(next).toMatchObject({
+      kind: 'execute',
+      action: 'mainReturnContext',
+    });
+  });
+
   it('keeps Main return context under the g prefix', () => {
     expect(DEFAULT_BINDINGS['main-normal:gr']).toBe('mainReturnContext');
     const bindings = resolveBindings('');

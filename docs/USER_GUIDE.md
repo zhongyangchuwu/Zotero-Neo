@@ -73,6 +73,7 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `h`         | Previous page                                                             |
 | `l`         | Next page                                                                 |
 | `gg`        | First page                                                                |
+| `gr`        | Return to the saved originating Main work context                         |
 | `G`         | Last page                                                                 |
 | `H`         | Switch to previous open tab                                               |
 | `L`         | Switch to next open tab                                                   |
@@ -83,6 +84,13 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
+
+When Main `o` or item-list `Enter` actually opens an attachment, note, or
+external URI, Neo saves the originating Main context immediately before the host
+navigation. Reader `gr` returns to that saved Main tab/View/Cursor/focus state
+without closing the Reader tab. Failed/no-op opens do not replace an older
+bookmark, and Reader item actions such as tag/collection/citekey commands do not
+overwrite it.
 
 ### Prefix Guide
 

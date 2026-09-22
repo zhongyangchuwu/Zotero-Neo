@@ -52,6 +52,7 @@ export const KEY_GUIDE_CONFIG = {
     t: { en: 'Tags', 'zh-CN': '标签' },
     c: { en: 'Collections', 'zh-CN': '分类' },
     f: { en: 'Find', 'zh-CN': '查找' },
+    g: { en: 'Navigation', 'zh-CN': '导航' },
     w: { en: 'Panes', 'zh-CN': '窗格' },
     y: { en: 'Citations', 'zh-CN': '引用' },
     p: { en: 'Plugins', 'zh-CN': '插件' },

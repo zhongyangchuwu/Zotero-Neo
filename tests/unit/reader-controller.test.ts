@@ -482,6 +482,19 @@ describe('reader keymap forwarding', () => {
     created.session.dispose();
   });
 });
+describe('reader return-context navigation', () => {
+  it('delegates gr to the owning Main return context', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+
+    created.session.focusAndHandle(readerKey('g').event);
+    created.session.focusAndHandle(readerKey('r').event);
+
+    expect(delegateMain).toHaveBeenCalledWith('mainReturnContext', 0, created.reader._window);
+    created.session.dispose();
+  });
+});
+
 describe('reader zoom shortcuts', () => {
   it('dispatches zoom commands and repeats count prefixes', () => {
     const zoomIn = vi.fn();
