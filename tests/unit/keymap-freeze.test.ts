@@ -64,8 +64,18 @@ describe('0.1.0 default keymap freeze', () => {
 
   it('keeps Main return context under the g prefix', () => {
     expect(DEFAULT_BINDINGS['main-normal:gr']).toBe('mainReturnContext');
-    expect(press('main-normal', 'g')).toMatchObject({ kind: 'pending' });
-    expect(press('main-normal', 'r')).toMatchObject({
+    const bindings = resolveBindings('');
+    const pending = press('main-normal', 'g', bindings);
+    expect(pending).toMatchObject({ kind: 'pending' });
+    const next = advanceInput(
+      {
+        ...pending.state,
+        bindings,
+        allowCountPrefix: true,
+      },
+      'r',
+    );
+    expect(next).toMatchObject({
       kind: 'execute',
       action: 'mainReturnContext',
     });
