@@ -72,6 +72,8 @@ function createHistorySession(
   bindings: BindingMap = DEFAULT_BINDINGS,
   openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
+  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] =
+    async () => undefined,
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -180,6 +182,7 @@ function createHistorySession(
       },
       delegateMain,
       openCommandPalette,
+      captureReaderSelectionToNote,
     },
   };
   const session = new ReaderSession({
@@ -483,6 +486,39 @@ describe('reader keymap forwarding', () => {
     created.session.dispose();
   });
 });
+describe('Reader Selection Actions capture', () => {
+  it('passes a Visual selection snapshot to the Main note-capture owner', async () => {
+    const capture = vi.fn<
+      ReaderControllerDependencies['captureReaderSelectionToNote']
+    >(async () => undefined);
+    const created = createHistorySession({}, () => {}, DEFAULT_BINDINGS, () => {}, {}, capture);
+    Reflect.set(created.reader, 'itemID', 42);
+    Reflect.set(created.pdfWindow, 'getSelection', () => ({
+      isCollapsed: false,
+      rangeCount: 0,
+      toString: () => 'snapshot text',
+      removeAllRanges: vi.fn(),
+    }));
+    created.session.state.mode = 'visual';
+
+    created.session.focusAndHandle(readerKey('a').event);
+    created.session.focusAndHandle(readerKey('1').event);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(capture).toHaveBeenCalledWith(
+      {
+        text: 'snapshot text',
+        itemID: 42,
+        pageLabel: null,
+        position: null,
+      },
+      created.reader._window,
+    );
+    created.session.dispose();
+  });
+});
+
 describe('reader return-context navigation', () => {
   it('delegates gr to the owning Main return context', () => {
     const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
