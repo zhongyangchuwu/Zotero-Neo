@@ -43,6 +43,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:h': 'prevPage',
   'reader-normal:l': 'nextPage',
   'reader-normal:gg': 'firstPage',
+  'reader-normal:gr': 'mainReturnContext',
   'reader-normal:G': 'lastPage',
   'reader-normal:<C-d>': 'halfPageDown',
   'reader-normal:<C-u>': 'halfPageUp',
