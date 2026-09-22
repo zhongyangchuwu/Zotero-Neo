@@ -51,7 +51,7 @@ describe('reader discovery diagnostics', () => {
       },
       delegateMain: () => {},
       openCommandPalette: () => {},
-      captureReaderSelectionToNote: async () => undefined,
+      captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
@@ -523,6 +523,10 @@ describe('Reader Selection Actions capture', () => {
       },
       created.reader._window,
     );
+    expect(created.bodyChildren.some((node) => node.dataset.zoteroNeoSelectionActions === '1')).toBe(
+      false,
+    );
+    expect(created.indicator.textContent).toBe('✓ captured to note');
     created.session.dispose();
   });
 });
