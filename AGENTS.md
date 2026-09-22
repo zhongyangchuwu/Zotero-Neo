@@ -140,6 +140,12 @@ vendor/                    pinned, licensed third-party source/build snapshots
 - Methods and variables use `camelCase`; internal fields use native `#private`
   fields. Constants use `SCREAMING_SNAKE_CASE`.
 - Binding mode prefixes remain `'normal:j'`, `'visual:zy'`, and `'main: ff'`.
+- Do not conflate persisted/display key notation with runtime event tokens.
+  `keyString(event)` currently returns lowercase named-key tokens such as
+  `escape`, `enter`, `home`, and `arrowdown`; Neovim forms such as
+  `<Esc>` and `<Enter>` belong to the binding grammar/display layer. Follow
+  an existing runtime consumer such as Plugin Manager when handling raw key
+  events.
 
 ### Formatting
 - Use single quotes unless a host format requires otherwise.
