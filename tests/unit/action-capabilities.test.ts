@@ -27,6 +27,8 @@ const expectedMainActions: readonly ActionId[] = [
   'findCollectionItems',
   'switchTab',
   'findNotes',
+  'mainQuickSearch',
+  'mainAdvancedSearch',
   'managePlugins',
   'manageSelection',
   'mainTrashItems',
