@@ -234,6 +234,18 @@ selection.
 
 ## Action target contracts
 
+Neo distinguishes **item actions** from View/local-surface actions.
+
+Item actions share one contextual item-target resolver:
+
+- Main -> EffectiveSelection (explicit Selection, otherwise Cursor);
+- Reader -> the active Reader item, normalized to its parent bibliographic item when present;
+- Note -> the active note-context item, with the same parent normalization.
+
+The semantic action still owns cardinality, mutation safety, and any additional
+preflight. Main View actions and Reader-local PDF actions do not use this item
+resolver.
+
 There is intentionally no universal Target resolver for every command.
 
 Each semantic action must document:
@@ -252,12 +264,12 @@ Initial target policy:
 | --- | --- |
 | `j/k/gg/G`, local find | Cursor only |
 | inspect/open current item or PDF | Cursor |
-| Add/Remove Tag | EffectiveSelection, then tag-specific parent normalization |
+| Add/Remove Tag | shared contextual item target; Main may be batch, Reader/Note contextual single target |
 | Trash/restore batch operations | EffectiveSelection with destructive preflight policy |
-| Add/remove collection membership | EffectiveSelection |
+| Add/remove collection membership | shared contextual item target; Main batch or Reader contextual item |
 | Visual selection operation | VisualTarget -> Selection |
 | Quick/Advanced/tag filtering, sort | View only |
-| citekey/citation copy | Main supports EffectiveSelection batches; Reader/Note remain contextual single-target; never silently use index 0 |
+| citekey/citation copy | shared contextual item target; Main supports batches, Reader/Note remain contextual single-target |
 
 Action-specific normalization remains important. For example, tagging an
 attachment may intentionally normalize to its parent while deleting an
