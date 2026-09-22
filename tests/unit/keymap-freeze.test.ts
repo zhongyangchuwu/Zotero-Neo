@@ -56,6 +56,15 @@ describe('0.1.0 default keymap freeze', () => {
     expect(strictPrefixPairs(mainSelect)).toEqual([]);
   });
 
+  it('reserves Vim-style Main local find keys without colliding with direct prefixes', () => {
+    expect(DEFAULT_BINDINGS['main-normal:/']).toBe('openSearch');
+    expect(DEFAULT_BINDINGS['main-normal:n']).toBe('findNext');
+    expect(DEFAULT_BINDINGS['main-normal:N']).toBe('findPrevious');
+    expect(press('main-normal', '/')).toMatchObject({ kind: 'execute', action: 'openSearch' });
+    expect(press('main-normal', 'n')).toMatchObject({ kind: 'execute', action: 'findNext' });
+    expect(press('main-normal', 'N')).toMatchObject({ kind: 'execute', action: 'findPrevious' });
+  });
+
   it('reserves Main Space for Selection and Visual commit without restoring a leader prefix', () => {
     expect(DEFAULT_BINDINGS['main-normal:<Space>']).toBe('mainToggleSelection');
     expect(DEFAULT_BINDINGS['main-select:<Space>']).toBe('mainSelectFinish');
