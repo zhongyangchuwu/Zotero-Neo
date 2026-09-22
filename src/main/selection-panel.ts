@@ -176,7 +176,7 @@ export class SelectionPanel {
       return;
     }
 
-    if (key === 'escape' || key === 'q') {
+    if (key === '<Esc>' || key === 'q') {
       consume();
       this.close(session);
       return;
@@ -196,12 +196,12 @@ export class SelectionPanel {
       this.select(session, Math.max(0, state.selected - 1));
       return;
     }
-    if (key === 'G' || key === 'end') {
+    if (key === 'G' || key === '<End>') {
       consume();
       this.select(session, Math.max(0, state.refs.length - 1));
       return;
     }
-    if (key === 'home') {
+    if (key === '<Home>') {
       consume();
       this.select(session, 0);
       return;
@@ -229,7 +229,7 @@ export class SelectionPanel {
       this.clear(window, session);
       return;
     }
-    if (key === 'enter' || key === 'return') {
+    if (key === '<Enter>') {
       consume();
       this.reveal(window, session);
       return;
