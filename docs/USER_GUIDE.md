@@ -298,7 +298,7 @@ Reader and Note keep their existing contextual single-target `yy` behavior.
 
 ##### Collection membership
 
-`ca` and `cr` are item actions shared by Main and Reader. In Main, explicit
+`<Space>ca` and `<Space>cr` are item actions shared by Main and Reader. In Main, explicit
 Neo Selection wins and Cursor is the fallback. In Reader, the target is the
 active Reader item's parent bibliographic item when one exists; Main Selection
 is not consulted.
@@ -308,7 +308,7 @@ Neo then opens the same shared chooser with only collections from that library.
 Before applying the confirmation, Neo re-resolves the contextual item targets;
 if they changed while the chooser was open, the entire operation is refused.
 
-`ca` skips items already in the destination and `cr` skips items already
+`<Space>ca` skips items already in the destination and `<Space>cr` skips items already
 absent. Membership changes do not redefine Neo Selection.
 
 ##### Notes
@@ -440,6 +440,7 @@ list) when that pane has focus.
 | Key         | Action                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- |
 | `j` / `k`   | Move Cursor down / up; single-scope collection navigation follows View, pinned/multi ScopeSet preserves its members |
+| `s`         | Item list: toggle Selection + advance; collection tree: pin/toggle ScopeSet + advance                              |
 | `gg` / `G`  | Jump to the first / last row                                                                                         |
 | `h`         | In item list, move focus back to collection tree; in collection tree, collapse selected collection or jump to parent |
 | `l`         | In collection tree, expand selected collection; if already expanded or a leaf, move focus into item list             |
@@ -842,7 +843,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Stop on release          | off                      | If enabled, stop immediately when key is released (accelerating mode)                                                                                 |
 | Persist marks            | off                      | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync                                            |
 | Default highlight colour | Yellow                   | Colour used when no explicit colour key is pressed                                                                                                    |
-| Key guide                | on                       | Show valid pending continuations; Reader/Note retain Space-led groups while Main uses direct prefixes                                                                       |
+| Key guide                | on                       | Show valid pending continuations; Space is the default semantic command root across Reader/Main/Note                                                                        |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
 | Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |
