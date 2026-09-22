@@ -9,6 +9,7 @@ import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
 import type { InstalledPlugin } from './plugin-host';
 import { SelectionStore, type ItemRef } from './selection-store';
+import type { MainReturnBookmark } from './return-context';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -30,6 +31,7 @@ export class MainWindowSession {
   readonly keyGuide = new KeyGuide();
   keyGuideTimer: BrowserTimer | undefined;
   trashedItemIDs: number[] = [];
+  returnBookmark: MainReturnBookmark | null = null;
   picker: {
     open: boolean;
     generation: number;

@@ -293,15 +293,28 @@ It is not an operation console.
 "Reveal in Library" and "return to previous work context" are distinct actions.
 
 Native Zotero item selection can clear Quick Search, tag filters, or Advanced
-Search when an item is not found in the current result set. Therefore returning
-from Reader/Note after a navigation excursion requires a separate context
-contract that may include:
+Search when an item is not found in the current result set. Neo therefore keeps
+one session-owned return bookmark for explicit reveal/navigation excursions.
 
-- originating View/query state;
-- Cursor identity;
-- Selection identities;
-- scroll position;
-- active Reader/Note context.
+The initial bookmark stores only restorable navigation state:
+
+- native ScopeSet row identities;
+- Quick Search text and tag predicates;
+- whether Advanced Search was active;
+- Cursor item identity;
+- originating Main panel/focus and tab identity.
+
+Neo Selection is **not** copied into the bookmark. It remains the same
+session-owned workset across reveal and return.
+
+Return restores in dependency order: scope, View predicates, visible Selection
+projection/Cursor, then tab/focus context. Advanced Search absence is reversible
+by closing the native editor. If a reveal destroys an existing Advanced Search
+condition set, Neo reports a partial return rather than inventing conditions it
+cannot reconstruct.
+
+The bookmark is single-level, not a history stack. `gr` performs explicit
+return; closing Reader/Note does not automatically restore it.
 
 Do not claim that a native reveal operation preserves triage context unless that
 behavior is explicitly verified.

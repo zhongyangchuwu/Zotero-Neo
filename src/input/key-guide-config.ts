@@ -20,6 +20,7 @@ const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
   findNotes: { en: 'Find note', 'zh-CN': '查找笔记' },
   mainQuickSearch: { en: 'Quick Search', 'zh-CN': '快速搜索' },
   mainAdvancedSearch: { en: 'Advanced Search', 'zh-CN': '高级搜索' },
+  mainReturnContext: { en: 'Return context', 'zh-CN': '返回上下文' },
   managePlugins: { en: 'Manage plugins', 'zh-CN': '管理插件' },
   mainOpenPDF: { en: 'Open selected PDF', 'zh-CN': '打开所选 PDF' },
   switchTab: { en: 'Switch tab', 'zh-CN': '切换标签页' },

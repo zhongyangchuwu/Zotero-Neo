@@ -62,6 +62,25 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 'f')).toMatchObject({ kind: 'pending' });
   });
 
+  it('keeps Main return context under the g prefix', () => {
+    expect(DEFAULT_BINDINGS['main-normal:gr']).toBe('mainReturnContext');
+    const bindings = resolveBindings('');
+    const pending = press('main-normal', 'g', bindings);
+    expect(pending).toMatchObject({ kind: 'pending' });
+    const next = advanceInput(
+      {
+        ...pending.state,
+        bindings,
+        allowCountPrefix: true,
+      },
+      'r',
+    );
+    expect(next).toMatchObject({
+      kind: 'execute',
+      action: 'mainReturnContext',
+    });
+  });
+
   it('reserves Vim-style Main local find keys without colliding with direct prefixes', () => {
     expect(DEFAULT_BINDINGS['main-normal:/']).toBe('openSearch');
     expect(DEFAULT_BINDINGS['main-normal:n']).toBe('findNext');

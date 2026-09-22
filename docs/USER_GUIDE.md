@@ -458,6 +458,24 @@ and focus context:
 | `wh` | Focus the collection tree (left pane) |
 | `wl` | Focus the detail pane (right pane) |
 | `ww` | Focus the item list (middle pane) |
+| `gr` | Return to the last saved Main work context after an explicit reveal/navigation excursion |
+
+#### Return context
+
+Some explicit navigation actions, such as revealing a hidden Selection member
+or choosing an item from the library-wide finder, may let Zotero change the
+current scope or filters so the target becomes visible. Before those excursions,
+Neo saves one Main return bookmark.
+
+Press `gr` to restore the saved scope, Quick Search, tag predicates, Cursor,
+tab, and pane focus where the corresponding host state remains available.
+Selection itself is not replaced: the same Neo workset continues across reveal
+and return.
+
+This is a single-level bookmark, not a navigation history stack. If Zotero has
+discarded an existing Advanced Search condition set, return reports partial
+restoration instead of synthesizing a different query. Reader/Note close does
+not trigger automatic return.
 
 #### Main local find
 

@@ -88,7 +88,8 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     },
   } as unknown as MainWindowSession;
 
-  const panel = new SelectionPanel({ debug: vi.fn() });
+  const captureReturn = vi.fn();
+  const panel = new SelectionPanel({ debug: vi.fn() }, { capture: captureReturn } as never);
   const key = (value: string): KeyboardEvent =>
     ({
       key: value,
@@ -106,6 +107,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     toggleSelect,
     moveFocused,
     selectItem,
+    captureReturn,
     key,
   };
 }
@@ -157,6 +159,7 @@ describe('Selection Panel', () => {
 
     h.panel.handleKey(h.key('Enter'), h.window, h.session);
 
+    expect(h.captureReturn).toHaveBeenCalledWith(h.window, h.session);
     expect(h.selectItem).toHaveBeenCalledWith(7);
     expect(h.session.selectionPanel.open).toBe(false);
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 7 }]);

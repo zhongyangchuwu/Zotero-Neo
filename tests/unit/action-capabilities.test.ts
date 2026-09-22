@@ -31,6 +31,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainAdvancedSearch',
   'managePlugins',
   'manageSelection',
+  'mainReturnContext',
   'mainTrashItems',
   'mainRestoreTrashedItems',
   'mainFocusTree',

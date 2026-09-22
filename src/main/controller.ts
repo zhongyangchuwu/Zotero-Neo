@@ -45,6 +45,7 @@ import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
+import { MainReturnContext } from './return-context';
 import { installMainViewLifecycle } from './view-lifecycle';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
@@ -69,15 +70,21 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #selectionPanel: SelectionPanel;
   readonly #localFind: MainLocalFind;
   readonly #viewActions: MainViewActions;
+  readonly #returnContext: MainReturnContext;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
-    this.#selectionPanel = new SelectionPanel(dependencies.logger);
     this.#localFind = new MainLocalFind((session, text) => this.#navigation.status(session, text));
     this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
+    this.#returnContext = new MainReturnContext(
+      dependencies.logger,
+      this.#navigation,
+      this.#viewActions,
+    );
+    this.#selectionPanel = new SelectionPanel(dependencies.logger, this.#returnContext);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -585,6 +592,7 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'findAllItems':
         void this.#picker.open(window, session, 'all', {
           confirm: async (item) => {
+            this.#returnContext.capture(window, session);
             await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
           },
         });
@@ -609,6 +617,7 @@ export class MainWindowController implements MainWindowControllerApi {
           confirm: async (item, openInWindow) => {
             const pane = mainHost(window).ZoteroPane;
             const id = Number(item.id);
+            this.#returnContext.capture(window, session);
             await pane?.selectItem?.(id);
             if (pane?.openNote) await pane.openNote(id, { openInWindow });
             else await Zotero.Notes.open(id, null, { openInWindow });
@@ -617,6 +626,13 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'managePlugins':
         this.#pluginManager.open(window, session);
+        break;
+      case 'mainReturnContext':
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        void this.#returnContext.restore(window, session);
         break;
       case 'manageSelection':
         if (session.inputMode === 'main-select') {
