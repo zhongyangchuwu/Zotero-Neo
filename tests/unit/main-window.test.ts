@@ -264,7 +264,7 @@ describe('current Zotero collection APIs', () => {
     expect(focused).toBe(3);
   });
 
-  it('pins a single native scope with Space and can add the detached ScopeCursor', () => {
+  it('pins a single native scope with s semantics and can add the detached ScopeCursor', () => {
     let focused = 2;
     const selected = new Set([2]);
     const toggleSelect = vi.fn((index: number) => {
@@ -1239,7 +1239,7 @@ describe('repeated tab switching', () => {
 
 describe('main pending-prefix key guide', () => {
   describe('main engine dispatch', () => {
-    it('waits for an ambiguous direct binding and leaves unavailable focus native', () => {
+    it('waits for ambiguous custom bindings, leaves unavailable focus native, and consumes Space as leader', () => {
       vi.useFakeTimers();
       let keydown: EventListener | undefined;
       let next = 0;
@@ -1319,9 +1319,10 @@ describe('main pending-prefix key guide', () => {
       const unavailable = press('q');
       expect(unavailable.preventDefault).not.toHaveBeenCalled();
       expect(unavailable.stopPropagation).not.toHaveBeenCalled();
-      const nativeSpace = press(' ');
-      expect(nativeSpace.preventDefault).not.toHaveBeenCalled();
-      expect(nativeSpace.stopPropagation).not.toHaveBeenCalled();
+      const leaderSpace = press(' ');
+      expect(leaderSpace.preventDefault).toHaveBeenCalledOnce();
+      expect(leaderSpace.stopPropagation).toHaveBeenCalledOnce();
+      press('Escape');
 
       press('f');
       vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
@@ -1429,7 +1430,7 @@ describe('main pending-prefix key guide', () => {
         preventDefault: () => {},
         stopPropagation: () => {},
       } as KeyboardEvent);
-    press('f');
+    press(' ');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
     expect(children.some((child) => child.id === 'zotero-neo-key-guide')).toBe(true);
     expect(children.find((child) => child.id === 'zotero-neo-key-guide')?.style.fontSize).toBe(
