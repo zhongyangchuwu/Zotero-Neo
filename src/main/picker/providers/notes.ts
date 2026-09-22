@@ -36,14 +36,12 @@ export function createNotesProvider(
     title: 'Notes',
     placeholder: '> Search note names…',
     async load() {
-      const selected =
-        context.baseItem === undefined ? currentMainItem(window) : context.baseItem;
+      const selected = context.baseItem === undefined ? currentMainItem(window) : context.baseItem;
       const base =
         selected?.isAttachment() && selected.parentItemID
           ? mainItem(selected.parentItemID)
           : selected;
-      const libraryID =
-        context.libraryID ?? base?.libraryID ?? Zotero.Libraries.userLibraryID;
+      const libraryID = context.libraryID ?? base?.libraryID ?? Zotero.Libraries.userLibraryID;
       const current = new Set(base?.isNote() ? [base.id] : (base?.getNotes?.() ?? []));
       let notes: Zotero.Item[];
       try {

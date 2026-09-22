@@ -54,7 +54,7 @@ describe('notes provider explicit context', () => {
         get: (value: number | number[]) =>
           Array.isArray(value)
             ? value.map((id) => byID.get(id)).filter(Boolean)
-            : byID.get(value) ?? false,
+            : (byID.get(value) ?? false),
       },
       Libraries: { userLibraryID: 1 },
     });
@@ -79,11 +79,10 @@ describe('notes provider explicit context', () => {
       },
     } as unknown as MainWindow;
 
-    const provider = createNotesProvider(
-      window,
-      { debug: vi.fn() } as never,
-      { baseItem: base, libraryID: 7 },
-    );
+    const provider = createNotesProvider(window, { debug: vi.fn() } as never, {
+      baseItem: base,
+      libraryID: 7,
+    });
     const items = await provider.load();
 
     expect(conditions).toContainEqual(['libraryID', 'is', 7]);

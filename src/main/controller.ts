@@ -51,10 +51,7 @@ import { MainReturnContext } from './return-context';
 import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
-import {
-  appendReaderSelectionToNote,
-  readerCaptureBaseItem,
-} from './note-capture';
+import { appendReaderSelectionToNote, readerCaptureBaseItem } from './note-capture';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
 

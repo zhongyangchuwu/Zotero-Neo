@@ -72,8 +72,8 @@ function createHistorySession(
   bindings: BindingMap = DEFAULT_BINDINGS,
   openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
-  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] =
-    async () => undefined,
+  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] = async () =>
+    undefined,
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -488,10 +488,17 @@ describe('reader keymap forwarding', () => {
 });
 describe('Reader Selection Actions capture', () => {
   it('passes a Visual selection snapshot to the Main note-capture owner', async () => {
-    const capture = vi.fn<
-      ReaderControllerDependencies['captureReaderSelectionToNote']
-    >(async () => undefined);
-    const created = createHistorySession({}, () => {}, DEFAULT_BINDINGS, () => {}, {}, capture);
+    const capture = vi.fn<ReaderControllerDependencies['captureReaderSelectionToNote']>(
+      async () => undefined,
+    );
+    const created = createHistorySession(
+      {},
+      () => {},
+      DEFAULT_BINDINGS,
+      () => {},
+      {},
+      capture,
+    );
     Reflect.set(created.reader, 'itemID', 42);
     Reflect.set(created.pdfWindow, 'getSelection', () => ({
       isCollapsed: false,

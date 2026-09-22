@@ -54,17 +54,16 @@ describe('Reader note capture', () => {
   });
 
   it('uses Zotero text2html and includes the page label in the captured fragment', () => {
-    const text2html = vi.fn((value: string) =>
-      `<p>${value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`,
+    const text2html = vi.fn(
+      (value: string) =>
+        `<p>${value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`,
     );
     vi.stubGlobal('Zotero', { Utilities: { text2html } });
 
     const fragment = readerSelectionNoteFragment(context());
 
     expect(text2html).toHaveBeenCalledWith('Selected <text>\n\nPage 12');
-    expect(fragment).toBe(
-      '<blockquote><p>Selected &lt;text&gt;\n\nPage 12</p></blockquote>',
-    );
+    expect(fragment).toBe('<blockquote><p>Selected &lt;text&gt;\n\nPage 12</p></blockquote>');
   });
 
   it('appends to existing note HTML and saves once', async () => {
@@ -88,15 +87,15 @@ describe('Reader note capture', () => {
     const notNote = note(12, 7);
     Reflect.set(notNote, 'isNote', () => false);
 
-    await expect(
-      appendReaderSelectionToNote(deleted, context(), 7),
-    ).rejects.toThrow('Note target is unavailable');
-    await expect(
-      appendReaderSelectionToNote(notNote, context(), 7),
-    ).rejects.toThrow('Note target is unavailable');
-    await expect(
-      appendReaderSelectionToNote(crossLibrary, context(), 7),
-    ).rejects.toThrow('another library');
+    await expect(appendReaderSelectionToNote(deleted, context(), 7)).rejects.toThrow(
+      'Note target is unavailable',
+    );
+    await expect(appendReaderSelectionToNote(notNote, context(), 7)).rejects.toThrow(
+      'Note target is unavailable',
+    );
+    await expect(appendReaderSelectionToNote(crossLibrary, context(), 7)).rejects.toThrow(
+      'another library',
+    );
 
     expect(deleted.saveTx).not.toHaveBeenCalled();
     expect(notNote.saveTx).not.toHaveBeenCalled();
