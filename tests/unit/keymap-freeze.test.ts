@@ -62,6 +62,12 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 'f')).toMatchObject({ kind: 'pending' });
   });
 
+  it('keeps collection membership under the c prefix', () => {
+    expect(DEFAULT_BINDINGS['main-normal:ca']).toBe('addToCollection');
+    expect(DEFAULT_BINDINGS['main-normal:cr']).toBe('removeFromCollection');
+    expect(press('main-normal', 'c')).toMatchObject({ kind: 'pending' });
+  });
+
   it('keeps Main return context under the g prefix', () => {
     expect(DEFAULT_BINDINGS['main-normal:gr']).toBe('mainReturnContext');
     const bindings = resolveBindings('');
