@@ -160,6 +160,25 @@ describe('Main action target contracts', () => {
     expect(h.session.status.textContent).toBe('✓ @cursor');
   });
 
+  it('Reader citekey copy uses only the active Reader item and ignores Main Selection', () => {
+    const main = attachment(10, 'main');
+    const reader = attachment(11, 'reader');
+    const h = harness([main], 0);
+    h.install(reader);
+    h.session.selection.add({ libraryID: 1, itemID: main.id });
+    (Zotero as unknown as { Reader: { getByTabID: () => { itemID: number } } }).Reader = {
+      getByTabID: () => ({ itemID: reader.id }),
+    };
+    (h.window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs = {
+      selectedID: 'reader-tab',
+    };
+
+    h.navigation.yankCitekey(h.window, h.session, 'reader');
+
+    expect(h.copied).toEqual(['reader']);
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+  });
+
   it('refuses the entire citekey batch when a target is stale or missing a citekey', () => {
     const first = attachment(10, 'first');
     const missingKey = attachment(11, '');
