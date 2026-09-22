@@ -139,7 +139,7 @@ vendor/                    pinned, licensed third-party source/build snapshots
 - Use semicolons and 2-space indentation. Prettier is authoritative.
 - Methods and variables use `camelCase`; internal fields use native `#private`
   fields. Constants use `SCREAMING_SNAKE_CASE`.
-- Binding mode prefixes remain `'normal:j'`, `'visual:zy'`, and `'main: ff'`.
+- Canonical binding examples are `reader-normal:j`, `reader-select:zy`, and `main-normal:<Space>ff`; Space is the default semantic command root across Reader/Main/Note.
 - Do not conflate persisted/display key notation with runtime event tokens.
   `keyString(event)` currently returns lowercase named-key tokens such as
   `escape`, `enter`, `home`, and `arrowdown`; Neovim forms such as

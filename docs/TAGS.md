@@ -11,11 +11,11 @@ complete workset source of truth.
 With focus in Zotero's main item list:
 
 - `j` / `k` move Cursor without changing Selection.
-- `Space` toggles the Cursor item in Selection, then advances Cursor down.
+- `s` toggles the Cursor item in Selection, then advances Cursor down.
 - `v` enters a transient Visual range anchored at Cursor.
 - Visual `j` / `k` / `gg` / `G` move the range head.
 - Visual `o` swaps anchor and head.
-- Visual `Space` commits the whole range to Selection and returns to Normal.
+- Visual `s` commits the whole range to Selection and returns to Normal.
 - Visual `v` / `Esc` cancel the range without modifying Selection.
 
 Range commit is all-or-none: if every item in the Visual range is already in
@@ -26,11 +26,11 @@ range, then restores the visible Selection projection on commit/cancel.
 Selection itself is a Neo-owned session workset of stable item identities, so
 moving Cursor or editing a Visual range does not redefine it.
 
-The collection tree remains a separate scope/navigation context. Pressing Space
+The collection tree remains a separate scope/navigation context. Pressing `s`
 there never toggles item Selection; it operates on Zotero's native ScopeSet
 instead. A sole selected scope is pinned and ScopeCursor advances, after which
-Space can add/remove native scope rows without introducing a second Neo-owned
-scope store.
+`s` can add/remove native scope rows without introducing a second Neo-owned
+scope store. Space remains the command leader in both item and collection panes.
 
 ## Tag action vocabulary
 
@@ -38,13 +38,13 @@ The default Tag namespace is explicit:
 
 | Action | Main | Reader / Note |
 | --- | --- | --- |
-| Add one tag to the current target(s) | `ta` | `<Space>ta` |
-| Remove one tag from the current target(s) | `tr` | `<Space>tr` |
-| Toggle one Main-window tag filter | `tf` | — |
-| Clear all Main-window tag filters | `tc` | — |
+| Add one tag to the current target(s) | `<Space>ta` | `<Space>ta` |
+| Remove one tag from the current target(s) | `<Space>tr` | `<Space>tr` |
+| Toggle one Main-window tag filter | `<Space>tf` | — |
+| Clear all Main-window tag filters | `<Space>tc` | — |
 
-`ta` and `tr` are the Main bindings for the same semantic actions exposed as
-`<Space>ta` / `<Space>tr` in Reader and Note. `tf` and `tc` only change the
+`<Space>ta` and `<Space>tr` use the same semantic item actions across Main,
+Reader, and Note. `<Space>tf` and `<Space>tc` only change the
 Main item View. Tag candidate choice remains in `TagActions`, while the actual
 tag-predicate View mutation is delegated to `MainViewActions`. The filter
 actions are Main-only so Reader/Note commands do not silently change an
@@ -52,7 +52,7 @@ off-screen Main filter.
 
 ## Target resolution for tag mutation
 
-`ta` and `tr` are available from Main, Reader, and Note when Neo can resolve
+Add/Remove Tag are available from Main, Reader, and Note when Neo can resolve
 a taggable target set:
 
 - **Main**: EffectiveSelection (explicit Neo Selection, otherwise Cursor).
@@ -90,18 +90,18 @@ Common controls:
 - `Enter` confirms one terminal tag candidate;
 - `Escape` cancels.
 
-`ta` searches the current library tag catalogue plus tags already present on
+Add Tag searches the current library tag catalogue plus tags already present on
 the targets. If the query does not exactly match an existing tag, Neo offers an
 explicit `+ Create "..."` candidate.
 
-`tr` lists only tags currently present on at least one target.
+Remove Tag lists only tags currently present on at least one target.
 
-`tf` lists tags relevant to the current Main collection/library view together
+`<Space>tf` lists tags relevant to the current Main collection/library view together
 with already-active filters. Confirming one candidate toggles only that tag and
 then closes the chooser. Active filters continue to use Zotero's native **AND**
 semantics.
 
-`tc` is direct and opens no chooser. It is safe when no tag filter is active.
+`<Space>tc` opens no chooser. It is safe when no tag filter is active.
 
 ## Virtual tag paths
 

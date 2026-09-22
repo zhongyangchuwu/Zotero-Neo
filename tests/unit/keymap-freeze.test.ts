@@ -56,10 +56,10 @@ describe('0.1.0 default keymap freeze', () => {
     expect(strictPrefixPairs(mainSelect)).toEqual([]);
   });
 
-  it('keeps Main native View search actions under the Find prefix', () => {
-    expect(DEFAULT_BINDINGS['main-normal:fq']).toBe('mainQuickSearch');
-    expect(DEFAULT_BINDINGS['main-normal:fa']).toBe('mainAdvancedSearch');
-    expect(press('main-normal', 'f')).toMatchObject({ kind: 'pending' });
+  it('keeps Main native View search actions under the shared Space Find group', () => {
+    expect(DEFAULT_BINDINGS['main-normal:<Space>fq']).toBe('mainQuickSearch');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>fa']).toBe('mainAdvancedSearch');
+    expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
   it('shares collection membership keys with Reader item context', () => {
@@ -67,10 +67,10 @@ describe('0.1.0 default keymap freeze', () => {
     expect(DEFAULT_BINDINGS['reader-normal:<Space>cr']).toBe('removeFromCollection');
   });
 
-  it('keeps collection membership under the c prefix', () => {
-    expect(DEFAULT_BINDINGS['main-normal:ca']).toBe('addToCollection');
-    expect(DEFAULT_BINDINGS['main-normal:cr']).toBe('removeFromCollection');
-    expect(press('main-normal', 'c')).toMatchObject({ kind: 'pending' });
+  it('shares collection membership under the Space c group', () => {
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ca']).toBe('addToCollection');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>cr']).toBe('removeFromCollection');
+    expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
   it('keeps Main return context under the g prefix', () => {
@@ -101,16 +101,27 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 'N')).toMatchObject({ kind: 'execute', action: 'findPrevious' });
   });
 
-  it('reserves Main Space for Selection and Visual commit without restoring a leader prefix', () => {
-    expect(DEFAULT_BINDINGS['main-normal:<Space>']).toBe('mainToggleSelection');
-    expect(DEFAULT_BINDINGS['main-select:<Space>']).toBe('mainSelectFinish');
+  it('uses Space only as Main leader and s as the persistent-set operation', () => {
+    expect(DEFAULT_BINDINGS['main-normal:s']).toBe('mainToggleSelection');
+    expect(DEFAULT_BINDINGS['main-select:s']).toBe('mainSelectFinish');
+    expect('main-normal:<Space>' in DEFAULT_BINDINGS).toBe(false);
+    expect('main-select:<Space>' in DEFAULT_BINDINGS).toBe(false);
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ff']).toBe('findAllItems');
     expect(DEFAULT_BINDINGS['main-select:v']).toBe('mainSelectCancel');
     expect(DEFAULT_BINDINGS['main-select:<Esc>']).toBe('mainSelectCancel');
-    expect(
-      Object.keys(DEFAULT_BINDINGS).some(
-        (key) => key.startsWith('main-normal:<Space>') && key !== 'main-normal:<Space>',
-      ),
-    ).toBe(false);
+    expect(press('main-normal', 's')).toMatchObject({
+      kind: 'execute',
+      action: 'mainToggleSelection',
+    });
+    expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
+
+    const visualBindings = bindingsForMode(DEFAULT_BINDINGS, 'main-select', ['main-normal']);
+    expect(press('main-select', 's', visualBindings)).toMatchObject({
+      kind: 'execute',
+      action: 'mainSelectFinish',
+    });
+    expect(press('main-select', ' ', visualBindings)).toMatchObject({ kind: 'pending' });
   });
 
   it('does not confuse named keys with printable prefixes', () => {

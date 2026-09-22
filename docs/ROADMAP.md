@@ -34,8 +34,9 @@ GitHub Release are complete.
   [#55](https://github.com/zhongyangchuwu/Zotero-Neo/issues/55), following
   [INTERACTION_MODEL.md](INTERACTION_MODEL.md): separate View, Cursor, Selection,
   VisualTarget, and Scope; make Selection a session-scoped stable-item workset;
-  preserve it across filtering/sorting; migrate Main Space to Toggle Selection;
-  generalize Key Guide into a pending-prefix guide; then audit action target
+  preserve it across filtering/sorting; keep Space as the shared command namespace
+  while Main uses `s` for persistent-set operations; generalize Key Guide into a
+  pending-prefix guide; then audit action target
   contracts before layering local find, filtering, ScopeSet, and batch triage
   operations.
 - Build the first concrete v0.2 Library Triage batch workflow in

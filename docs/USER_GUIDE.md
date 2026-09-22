@@ -76,10 +76,10 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `G`         | Last page                                                                 |
 | `H`         | Switch to previous open tab                                               |
 | `L`         | Switch to next open tab                                                   |
-| `,`  | Choose and switch to an open Zotero tab                                   |
-| `q`  | Close the active Zotero tab                                               |
-| `fn` | Search all notes in the shared picker (left: note titles, right: preview) |
-| `pp` | Open the persistent Plugin Manager panel |
+| `<Space>,`  | Choose and switch to an open Zotero tab                                   |
+| `<Space>q`  | Close the active Zotero tab                                               |
+| `<Space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
+| `<Space>pp` | Open the persistent Plugin Manager panel |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
@@ -87,15 +87,15 @@ with a count jump to that page number (`5G` / `5gg` = page 5).
 ### Prefix Guide
 
 The guide follows any pending multi-key prefix in the active resolved keymap.
-Reader and Note still use Space-led command groups, while Main uses direct
-prefixes such as `f`, `t`, `p`, `w`, and `y`. Pause after the first key to
-show the small bottom-center list of valid continuations. Remaps appear without a
-second display-only keymap.
+Reader, Main, and Note use Space as the default semantic command namespace.
+Pause after Space (or any other pending prefix such as `g` / `z`) to show the
+small bottom-center list of valid continuations. Remaps appear without a second
+display-only keymap.
 
 - The guide is enabled by default and appears after 200 ms; its delay and
   15 px default font size are configurable under **Preferences → Key guide**.
 - Letter labels preserve case: `b` and `B` are distinct bindings.
-- It updates after nested prefixes such as `<space>f` in Reader/Note or `f` / `t` in Main.
+- It updates after nested prefixes such as `<Space>f` or `<Space>t` on any surface where those groups are available.
 - `Escape` cancels the pending sequence. `Backspace` returns to the previous
   pending prefix; at the root it closes the guide.
 - It never appears in Insert mode, native/editor text input, picker input, or
@@ -125,7 +125,7 @@ confirmation.
 
 #### Plugin Manager panel
 
-Press `pp` in Reader/Note Normal, or `pp` in Main Normal, to open Neo's persistent
+Press `<Space>pp` in Reader, Main, or Note Normal to open Neo's persistent
 Plugin Manager panel. Unlike a picker, this surface stays open while you browse installed
 plugins and inspect their state. Zotero/Mozilla AddonManager remains the authoritative
 source for plugin lifecycle state.
@@ -228,16 +228,16 @@ chosen first; the chooser only answers which object/tag that action should use.
 
 | Key | Intent |
 | --- | --- |
-| `ff` | Find and open an item in the current library |
-| `fc` | Find and open an item in the current collection |
-| `fn` | Find and open a note in the active library |
-| `,` | Switch to an already-open Zotero tab |
-| `ta` | Add one chosen tag to the current target(s) |
-| `tr` | Remove one chosen tag from the current target(s) |
-| `tf` | Main only: toggle one chosen tag filter |
-| `tc` | Main only: clear all tag filters directly |
-| `ca` | Main: add EffectiveSelection; Reader: add the active Reader item to one chosen collection |
-| `cr` | Main: remove EffectiveSelection; Reader: remove the active Reader item from one chosen collection |
+| `<Space>ff` | Find and open an item in the current library |
+| `<Space>fc` | Find and open an item in the current collection |
+| `<Space>fn` | Find and open a note in the active library |
+| `<Space>,` | Switch to an already-open Zotero tab |
+| `<Space>ta` | Add one chosen tag to the current target(s) |
+| `<Space>tr` | Remove one chosen tag from the current target(s) |
+| `<Space>tf` | Main only: toggle one chosen tag filter |
+| `<Space>tc` | Main only: clear all tag filters directly |
+| `<Space>ca` | Main: add EffectiveSelection; Reader: add the active Reader item to one chosen collection |
+| `<Space>cr` | Main: remove EffectiveSelection; Reader: remove the active Reader item from one chosen collection |
 
 The shared surface owns query input, fuzzy ranking, highlighted-row navigation,
 preview, IME/composition handling, confirmation, and cancellation. It does not
@@ -298,7 +298,7 @@ Reader and Note keep their existing contextual single-target `yy` behavior.
 
 ##### Collection membership
 
-`ca` and `cr` are item actions shared by Main and Reader. In Main, explicit
+`<Space>ca` and `<Space>cr` are item actions shared by Main and Reader. In Main, explicit
 Neo Selection wins and Cursor is the fallback. In Reader, the target is the
 active Reader item's parent bibliographic item when one exists; Main Selection
 is not consulted.
@@ -308,7 +308,7 @@ Neo then opens the same shared chooser with only collections from that library.
 Before applying the confirmation, Neo re-resolves the contextual item targets;
 if they changed while the chooser was open, the entire operation is refused.
 
-`ca` skips items already in the destination and `cr` skips items already
+`<Space>ca` skips items already in the destination and `<Space>cr` skips items already
 absent. Membership changes do not redefine Neo Selection.
 
 ##### Notes
@@ -440,6 +440,7 @@ list) when that pane has focus.
 | Key         | Action                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- |
 | `j` / `k`   | Move Cursor down / up; single-scope collection navigation follows View, pinned/multi ScopeSet preserves its members |
+| `s`         | Item list: toggle Selection + advance; collection tree: pin/toggle ScopeSet + advance                              |
 | `gg` / `G`  | Jump to the first / last row                                                                                         |
 | `h`         | In item list, move focus back to collection tree; in collection tree, collapse selected collection or jump to parent |
 | `l`         | In collection tree, expand selected collection; if already expanded or a leaf, move focus into item list             |
@@ -453,9 +454,9 @@ list) when that pane has focus.
 | `R`         | Expand all collections in the current library tree                                                                   |
 | `M`         | Collapse all collections in the current library tree                                                                 |
 
-In the collection tree, `Space` builds Zotero's native ScopeSet without touching
+In the collection tree, `s` builds Zotero's native ScopeSet without touching
 Neo item Selection. With one selected scope it pins that scope and advances
-ScopeCursor; subsequent Space presses toggle additional scope rows. While the
+ScopeCursor; subsequent `s` presses toggle additional scope rows. While the
 ScopeCursor is detached from ScopeSet or multiple scopes are selected,
 `j/k/gg/G` move only ScopeCursor. `Enter` returns to a single scope at the
 current ScopeCursor and enters the item list.
@@ -470,20 +471,22 @@ and focus context:
 
 | Key | Action |
 | --- | --- |
-| `ff` | Find an item in the current library |
-| `fc` | Find an item in the current collection |
-| `fn` | Find and open a note |
-| `fq` | Focus/select Zotero's native Quick Search field |
-| `fa` | Open Zotero's native Advanced Search; convert current Quick Search text when present |
-| `pp` | Open the persistent Plugin Manager panel |
-| `,` | Choose and switch to an open Zotero tab |
-| `q` | Close the active Zotero tab |
-| `ta` | Add one tag to the current target(s) |
-| `tr` | Remove one tag from the current target(s) |
-| `tf` | Toggle one Main-window tag filter |
-| `tc` | Clear all Main-window tag filters |
+| `<Space>ff` | Find an item in the current library |
+| `<Space>fc` | Find an item in the current collection |
+| `<Space>fn` | Find and open a note |
+| `<Space>fq` | Focus/select Zotero's native Quick Search field |
+| `<Space>fa` | Open Zotero's native Advanced Search; convert current Quick Search text when present |
+| `<Space>pp` | Open the persistent Plugin Manager panel |
+| `<Space>,` | Choose and switch to an open Zotero tab |
+| `<Space>q` | Close the active Zotero tab |
+| `<Space>ta` | Add one tag to the current target(s) |
+| `<Space>tr` | Remove one tag from the current target(s) |
+| `<Space>tf` | Toggle one Main-window tag filter |
+| `<Space>tc` | Clear all Main-window tag filters |
+| `<Space>ca` | Add current item target(s) to a collection |
+| `<Space>cr` | Remove current item target(s) from a collection |
+| `<Space>yy` | Copy current target citekey(s) to the clipboard |
 | `e` | Focus the collection tree |
-| `yy` | Copy the selected item's citekey to the clipboard |
 | `o` | Open the selected item's PDF |
 | `wh` | Focus the collection tree (left pane) |
 | `wl` | Focus the detail pane (right pane) |
@@ -524,9 +527,9 @@ wrapping once through the current row order. Matching is case-insensitive over
 compact item metadata (title/display text, first creator, year, and citekey when
 available). `Escape` cancels the prompt without replacing the previous query.
 A miss leaves Cursor and the current View unchanged. This is deliberately
-different from `ff` / `fc`: those open a fuzzy target chooser, while local
-find is relative, repeatable Cursor motion. It is also different from `fq` and
-`fa`: those edit Zotero's actual View through its native Quick/Advanced Search
+different from `<Space>ff` / `<Space>fc`: those open a fuzzy target chooser, while local
+find is relative, repeatable Cursor motion. It is also different from `<Space>fq` and
+`<Space>fa`: those edit Zotero's actual View through its native Quick/Advanced Search
 interfaces, so they may change which item rows are visible.
 
 #### Viewport positioning (like Vim's z commands)
@@ -840,7 +843,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Stop on release          | off                      | If enabled, stop immediately when key is released (accelerating mode)                                                                                 |
 | Persist marks            | off                      | Save marks in the parent item's Extra field (`zv-marks-<attachmentKey>`) so they survive restarts and sync                                            |
 | Default highlight colour | Yellow                   | Colour used when no explicit colour key is pressed                                                                                                    |
-| Key guide                | on                       | Show valid pending continuations; Reader/Note retain Space-led groups while Main uses direct prefixes                                                                       |
+| Key guide                | on                       | Show valid pending continuations; Space is the default semantic command root across Reader/Main/Note                                                                        |
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
 | Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |

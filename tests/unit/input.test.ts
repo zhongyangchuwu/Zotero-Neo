@@ -205,9 +205,9 @@ describe('binding parsing and overrides', () => {
     expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
     expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>,']).toBe('switchTab');
-    expect(DEFAULT_BINDINGS['main-normal:,']).toBe('switchTab');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>,']).toBe('switchTab');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>q']).toBe('closeCurrentTab');
-    expect(DEFAULT_BINDINGS['main-normal:q']).toBe('closeCurrentTab');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>q']).toBe('closeCurrentTab');
     expect('reader-normal: ft' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal: td' in DEFAULT_BINDINGS).toBe(false);
     expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);

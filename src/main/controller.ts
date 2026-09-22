@@ -307,15 +307,6 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     const key = keyString(event);
     if (!key) return;
-    if (
-      session.inputMode === 'main-normal' &&
-      key === ' ' &&
-      !this.#itemSelect.itemsFocused(window) &&
-      this.#navigation.panel(window, session) !== 'collections'
-    ) {
-      this.clearKeyGuide(window, session);
-      return;
-    }
     const bindings = this.activeBindings(session.inputMode);
     const leaderState = {
       mode: session.inputMode,
