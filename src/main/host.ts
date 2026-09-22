@@ -256,7 +256,6 @@ export async function openMainAdvancedSearch(window: MainWindow): Promise<boolea
   return true;
 }
 
-
 function mainScopeView(window: MainWindow): ScopeCursorView | undefined {
   return mainPane(window)?.collectionsView as unknown as ScopeCursorView | undefined;
 }
@@ -291,10 +290,7 @@ export function moveMainScopeCursor(
   return true;
 }
 
-export function toggleMainScopeAtCursor(
-  window: MainWindow,
-  shouldDebounce = false,
-): boolean {
+export function toggleMainScopeAtCursor(window: MainWindow, shouldDebounce = false): boolean {
   const view = mainScopeView(window);
   const focused = view?.selection?.focused;
   if (focused === undefined || !view?.selection?.toggleSelect) return false;
@@ -304,10 +300,7 @@ export function toggleMainScopeAtCursor(
   return true;
 }
 
-export function selectOnlyMainScopeCursor(
-  window: MainWindow,
-  shouldDebounce = false,
-): boolean {
+export function selectOnlyMainScopeCursor(window: MainWindow, shouldDebounce = false): boolean {
   const view = mainScopeView(window);
   const focused = view?.selection?.focused;
   if (focused === undefined || !view?.selection?.select) return false;
