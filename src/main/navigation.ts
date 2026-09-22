@@ -496,14 +496,14 @@ export class MainNavigation {
           this.status(session, '✗ Attachment viewer is unavailable');
           return false;
         }
-        return navigate(() => pane.viewAttachment?.(item.id));
+        return await navigate(() => pane.viewAttachment?.(item.id));
       }
       if (item.isNote()) {
         if (!pane?.openNote) {
           this.status(session, '✗ Note viewer is unavailable');
           return false;
         }
-        return navigate(() => pane.openNote?.(item.id));
+        return await navigate(() => pane.openNote?.(item.id));
       }
       let attachment: Zotero.Item | undefined = (await item.getBestAttachment?.()) || undefined;
       if (!attachment) {
@@ -523,7 +523,7 @@ export class MainNavigation {
           this.status(session, '✗ Attachment viewer is unavailable');
           return false;
         }
-        return navigate(() => pane.viewAttachment?.(attachment.id));
+        return await navigate(() => pane.viewAttachment?.(attachment.id));
       }
       const doi = item.getField('DOI');
       const url =
@@ -534,7 +534,7 @@ export class MainNavigation {
           this.status(session, '✗ URI navigation is unavailable');
           return false;
         }
-        return navigate(() => pane.loadURI?.(url));
+        return await navigate(() => pane.loadURI?.(url));
       }
       this.status(session, '✗ No attachment');
       return false;
