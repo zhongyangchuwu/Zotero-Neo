@@ -60,7 +60,6 @@ export function createCollectionCandidateProvider(libraryID: number): PickerProv
         body: [item.preview ?? item.title, `Collection ID: ${item.id}`].join('\n'),
       };
     },
-    emptyText: (query) =>
-      query ? `No collections match “${query}”` : 'No collections available',
+    emptyText: (query) => (query ? `No collections match “${query}”` : 'No collections available'),
   };
 }

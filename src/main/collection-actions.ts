@@ -50,7 +50,8 @@ export function resolveCollectionMembershipTargets(
   const libraries = new Set(items.map((item) => item.libraryID));
   if (libraries.size !== 1) throw new Error('Collection membership requires one library');
   const libraryID = items[0]!.libraryID;
-  if (!Number.isInteger(libraryID) || libraryID <= 0) throw new Error('Target library is unavailable');
+  if (!Number.isInteger(libraryID) || libraryID <= 0)
+    throw new Error('Target library is unavailable');
 
   return {
     items,
@@ -124,21 +125,14 @@ export class CollectionMembershipActions {
       confirm: async (candidate: PickerItem) => {
         try {
           const current = resolveCollectionMembershipTargets(window, session);
-          if (
-            current.libraryID !== initial.libraryID ||
-            current.signature !== initial.signature
-          ) {
+          if (current.libraryID !== initial.libraryID || current.signature !== initial.signature) {
             this.#navigation.status(session, '✗ Collection target changed; retry');
             return;
           }
 
           const collectionID = Number(candidate.id);
           const collection = Zotero.Collections.get(collectionID);
-          if (
-            !collection ||
-            collection === false ||
-            collection.libraryID !== current.libraryID
-          ) {
+          if (!collection || collection === false || collection.libraryID !== current.libraryID) {
             this.#navigation.status(session, '✗ Collection target is unavailable');
             return;
           }

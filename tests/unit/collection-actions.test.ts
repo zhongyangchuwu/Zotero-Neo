@@ -37,7 +37,10 @@ function item(id: number, libraryID = 1, collections: number[] = []): Zotero.Ite
   } as unknown as Zotero.Item;
 }
 
-function targetHarness(items: readonly Zotero.Item[], visibleIDs: readonly number[] = items.map((x) => x.id)) {
+function targetHarness(
+  items: readonly Zotero.Item[],
+  visibleIDs: readonly number[] = items.map((x) => x.id),
+) {
   const byID = new Map(items.map((value) => [value.id, value]));
   vi.stubGlobal('Zotero', {
     Items: {
@@ -182,10 +185,7 @@ describe('CollectionMembershipActions', () => {
     expect(confirm).toBeDefined();
     await confirm!({ id: 10 });
 
-    expect(status).toHaveBeenLastCalledWith(
-      h.session,
-      '✗ Collection target changed; retry',
-    );
+    expect(status).toHaveBeenLastCalledWith(h.session, '✗ Collection target changed; retry');
     expect(first.addToCollection).not.toHaveBeenCalled();
     expect(second.addToCollection).not.toHaveBeenCalled();
   });
