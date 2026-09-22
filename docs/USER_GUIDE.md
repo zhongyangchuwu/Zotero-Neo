@@ -283,6 +283,19 @@ the query; it never mutates item data.
 See [Selection and Tag Actions](TAGS.md) for target-resolution and persistence
 semantics.
 
+##### Batch citekey copy
+
+In Main, `yy` copies Better BibTeX citekeys from EffectiveSelection: explicit
+Neo Selection first, otherwise Cursor. Targets are normalized with Zotero's
+top-level-item semantics and duplicate normalized items are emitted once.
+
+Clipboard output preserves the existing raw-key convention. A single target
+still copies `Smith2026`; a batch copies `Smith2026 Jones2025`. If any target
+is stale or lacks a citekey, the whole batch is refused so the clipboard never
+contains a silent partial result.
+
+Reader and Note keep their existing contextual single-target `yy` behavior.
+
 ##### Collection membership
 
 `ca` and `cr` use the Main EffectiveSelection contract: an explicit Neo
@@ -767,7 +780,7 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | `managePlugins`               | Open the persistent Plugin Manager panel                                              |
 | `findAllItems`                | Find an item in the current library                                                   |
 | `findCollectionItems`         | Find an item in the current collection                                                |
-| `mainYankCitekey`             | Copy the selected item's citekey to the clipboard                                    |
+| `mainYankCitekey`             | Main: copy EffectiveSelection citekey(s); Reader/Note: copy contextual citekey       |
 | `mainOpenPDF`                 | Open the selected item's PDF                                                         |
 | `mainTrashItems`              | Move selected main item-list rows to Zotero Trash                                    |
 | `mainRestoreTrashedItems`     | Restore the last item batch trashed by Neo                                           |

@@ -533,14 +533,44 @@ export class MainNavigation {
         item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
       } else {
         const targets = resolveMainEffectiveTargets(window, session);
-        if (targets.total > 1) {
+        if (targets.missing > 0) {
           this.status(
             session,
-            `✗ Citekey copy requires one target; Selection has ${targets.total} items`,
+            '✗ Selection contains unavailable items; refresh before citekey copy',
           );
           return;
         }
-        item = targets.items[0];
+        if (!targets.total || !targets.items.length) {
+          this.status(session, '✗ No item target');
+          return;
+        }
+
+        const keepTopLevel = (
+          Zotero.Items as unknown as {
+            keepTopLevel?(items: Zotero.Item[]): Zotero.Item[];
+          }
+        ).keepTopLevel;
+        const normalized = keepTopLevel ? keepTopLevel([...targets.items]) : [...targets.items];
+
+        const byID = new Map<number, Zotero.Item>();
+        for (const target of normalized) byID.set(target.id, target);
+        const items = [...byID.values()];
+        const keys = items.map((target) => citationKey(target));
+        const missing = keys.filter((key) => !key).length;
+        if (missing) {
+          this.status(
+            session,
+            `✗ ${missing} target${missing === 1 ? '' : 's'} without citekey (BBT not ready?)`,
+          );
+          return;
+        }
+
+        copyToClipboard(keys.join(' '));
+        this.status(
+          session,
+          keys.length === 1 ? `✓ @${keys[0]}` : `✓ Copied ${keys.length} citekeys`,
+        );
+        return;
       }
 
       const key = item ? citationKey(item) : '';
