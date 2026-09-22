@@ -3,7 +3,6 @@ import type {
   MainWindowControllerApi,
   MainWindowControllerDependencies,
   MainWindow,
-  ReaderSelectionActionOutcome,
   ReaderSelectionContext,
 } from '../core/contracts';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
@@ -219,47 +218,42 @@ export class MainWindowController implements MainWindowControllerApi {
   async captureReaderSelectionToNote(
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
-  ): Promise<ReaderSelectionActionOutcome | void> {
+  ): Promise<boolean> {
     if (!ownerWindow) {
       this.#dependencies.logger.debug('ignored Reader note capture: no owner window');
-      return;
+      return false;
     }
     const session = this.#sessions.get(ownerWindow);
     if (!session) {
       this.#dependencies.logger.debug('ignored Reader note capture: owner window detached');
-      return;
+      return false;
     }
     if (session.picker.open) {
       this.#navigation.status(session, '✗ Close the current picker before capturing');
-      return;
+      return false;
     }
 
     const snapshot: ReaderSelectionContext = Object.freeze({ ...context });
     const base = readerCaptureBaseItem(snapshot);
     if (!base || !Number.isInteger(base.libraryID) || base.libraryID <= 0) {
       this.#navigation.status(session, '✗ Reader item is unavailable');
-      return;
+      return false;
     }
     const libraryID = base.libraryID;
-    let outcome: ReaderSelectionActionOutcome | void;
+    let captured = false;
 
-    return await new Promise<ReaderSelectionActionOutcome | void>((resolve) => {
+    return await new Promise<boolean>((resolve) => {
       void this.#picker.open(ownerWindow, session, 'notes', {
         source: createNotesProvider(ownerWindow, this.#dependencies.logger, {
           baseItem: base,
           libraryID,
         }),
-        onClose: () => resolve(outcome),
+        onClose: () => resolve(captured),
         confirm: async (candidate) => {
           const note = Zotero.Items.get(Number(candidate.id));
           if (!note) throw new Error('Note target is unavailable');
           await appendReaderSelectionToNote(note, snapshot, libraryID);
-          const title =
-            note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim() || 'Untitled note';
-          outcome = {
-            title: 'Captured to note',
-            body: `Appended selection to ${title}`,
-          };
+          captured = true;
         },
       });
     });
