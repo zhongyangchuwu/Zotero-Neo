@@ -4,6 +4,7 @@ import type {
   MainWindowControllerApi,
   ReaderControllerApi,
   ReaderSelectionActionDefinition,
+  ReaderSelectionContext,
   ReaderSelectionApi,
 } from './core/contracts';
 import { ZoteroLogger } from './core/logging';
@@ -53,6 +54,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       },
       openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
         main?.openCommandPalette(window, context);
+      },
+      appendSelectionToNote(context: ReaderSelectionContext, ownerWindow: MainWindow | null) {
+        main?.appendReaderSelectionToNote(context, ownerWindow);
       },
     });
     this.#main = createMainWindowController({
