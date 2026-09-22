@@ -216,7 +216,7 @@ but Add/Remove Tag and Main-view filter mutation stay in the semantic `TagAction
 | `tools/build.mjs` | esbuild/XPI package pipeline |
 | `tools/check-package.mjs` | Generated-XPI member contract |
 | `tools/check-release.mjs` | Release metadata validator |
-| `.github/workflows/build.yml` | Linux/Windows build and guarded tag release |
+| `.github/workflows/build.yml` | Ubuntu verification/build and guarded tag release |
 | `docs/DEVELOPMENT.md` | Build, architecture, release, and maintenance constraints |
 | `manifest.json` | Extension manifest |
 | `tools/build.sh` / `tools/build.ps1` | POSIX and Windows verification/build wrappers |

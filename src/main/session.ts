@@ -85,6 +85,21 @@ export class MainWindowSession {
     previousWindow: null,
     themeCleanup: null,
   };
+  localFind: {
+    open: boolean;
+    query: string;
+    overlay: HTMLElement | null;
+    input: HTMLInputElement | null;
+    previousElement: Element | null;
+    themeCleanup: (() => void) | null;
+  } = {
+    open: false,
+    query: '',
+    overlay: null,
+    input: null,
+    previousElement: null,
+    themeCleanup: null,
+  };
   selectionPanel: {
     open: boolean;
     refs: ItemRef[];

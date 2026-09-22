@@ -43,6 +43,7 @@ import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './
 import { mainCursorItem } from './action-targets';
 import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
+import { MainLocalFind } from './local-find';
 import { installMainViewLifecycle } from './view-lifecycle';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
@@ -65,6 +66,7 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #itemSelect: MainItemSelect;
   readonly #pluginManager: PluginManagerPanel;
   readonly #selectionPanel: SelectionPanel;
+  readonly #localFind: MainLocalFind;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -72,6 +74,7 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#itemSelect = new MainItemSelect(dependencies.logger);
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
     this.#selectionPanel = new SelectionPanel(dependencies.logger);
+    this.#localFind = new MainLocalFind((session, text) => this.#navigation.status(session, text));
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -151,6 +154,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#picker.close(session);
       this.#pluginManager.close(session);
       this.#selectionPanel.close(session);
+      this.#localFind.close(session);
       this.#noteEditor.clear(session);
     });
   }
@@ -232,6 +236,10 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
+    if (session.localFind.open) {
+      this.#localFind.handleKey(event, window, session);
+      return;
+    }
     if (session.selectionPanel.open) {
       this.#selectionPanel.handleKey(event, window, session);
       return;
@@ -515,6 +523,29 @@ export class MainWindowController implements MainWindowControllerApi {
     context: MainInvocationContext = 'main',
   ): void {
     switch (action) {
+      case 'openSearch':
+        if (!this.#itemSelect.itemsFocused(window)) {
+          this.#navigation.status(session, '✗ Focus the items list first');
+          break;
+        }
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        this.#localFind.open(window, session);
+        break;
+      case 'findNext':
+      case 'findPrevious':
+        if (!this.#itemSelect.itemsFocused(window)) {
+          this.#navigation.status(session, '✗ Focus the items list first');
+          break;
+        }
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        this.#localFind.repeat(window, session, action === 'findNext' ? 1 : -1);
+        break;
       case 'openCommandPalette':
         this.openCommandPalette(window, {
           mode: 'main',
