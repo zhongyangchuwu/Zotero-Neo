@@ -490,11 +490,7 @@ describe('reader return-context navigation', () => {
     created.session.focusAndHandle(readerKey('g').event);
     created.session.focusAndHandle(readerKey('r').event);
 
-    expect(delegateMain).toHaveBeenCalledWith(
-      'mainReturnContext',
-      0,
-      created.reader._window,
-    );
+    expect(delegateMain).toHaveBeenCalledWith('mainReturnContext', 0, created.reader._window);
     created.session.dispose();
   });
 });

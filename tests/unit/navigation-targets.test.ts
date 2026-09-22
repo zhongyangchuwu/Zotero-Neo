@@ -116,9 +116,9 @@ describe('Main action target contracts', () => {
     const rollback = vi.fn();
     const beforeNavigate = vi.fn(() => rollback);
 
-    await expect(
-      h.navigation.openPDF(h.window, h.session, target, beforeNavigate),
-    ).resolves.toBe(true);
+    await expect(h.navigation.openPDF(h.window, h.session, target, beforeNavigate)).resolves.toBe(
+      true,
+    );
     expect(beforeNavigate).toHaveBeenCalledOnce();
     expect(rollback).not.toHaveBeenCalled();
     expect(h.viewAttachment).toHaveBeenCalledWith(target.id);
@@ -127,9 +127,9 @@ describe('Main action target contracts', () => {
     h.viewAttachment.mockImplementation(() => {
       throw new Error('viewer failed');
     });
-    await expect(
-      h.navigation.openPDF(h.window, h.session, target, beforeNavigate),
-    ).resolves.toBe(false);
+    await expect(h.navigation.openPDF(h.window, h.session, target, beforeNavigate)).resolves.toBe(
+      false,
+    );
     expect(beforeNavigate).toHaveBeenCalledTimes(2);
     expect(rollback).toHaveBeenCalledOnce();
 
@@ -142,9 +142,9 @@ describe('Main action target contracts', () => {
       getAttachments: () => [],
       getField: () => '',
     } as unknown as Zotero.Item;
-    await expect(
-      h.navigation.openPDF(h.window, h.session, noTarget, beforeNavigate),
-    ).resolves.toBe(false);
+    await expect(h.navigation.openPDF(h.window, h.session, noTarget, beforeNavigate)).resolves.toBe(
+      false,
+    );
     expect(beforeNavigate).toHaveBeenCalledTimes(2);
     expect(h.session.status.textContent).toBe('✗ No attachment');
   });
