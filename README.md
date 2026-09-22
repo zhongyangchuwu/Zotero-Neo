@@ -25,7 +25,7 @@ verification in the current stable host.
 - Keyboard navigation across collections, saved searches, feeds, item lists, and
   tabs, including Vim-style `j/k`, `gg/G`, tree expansion/collapse, pane focus,
   PDF opening, tab switching/closing, trash, and restore.
-- Main **Selection** workset with detached Cursor navigation, Yazi-style Space
+- Main **Selection** workset with detached Cursor navigation, Yazi-style `s`
   toggle/advance, and transient **Visual** ranges whose commit/cancel semantics
   are independent from Zotero's row-index TreeSelection.
 - Better BibTeX citekey copying when Better BibTeX is available.
@@ -62,10 +62,10 @@ verification in the current stable host.
 
 ### Tags
 
-- Main uses direct `ta` / `tr` tag actions; Reader and Note retain
-  `<Space>ta` / `<Space>tr`.
-- Main-only `tf` toggles one tag in Zotero's native AND-filter state;
-  `tc` clears all active tag filters without opening a chooser.
+- Main, Reader, and Note share the Space-led item-action vocabulary where the
+  capability exists, including `<Space>ta` / `<Space>tr`.
+- Main-only `<Space>tf` toggles one tag in Zotero's native AND-filter state;
+  `<Space>tc` clears all active tag filters without opening a chooser.
 - Tag actions reuse the shared target chooser instead of exposing a persistent
   tag-operation console. Add Tag may offer an explicit create candidate.
 - Optional virtual tag-path refinement such as `method/...` is presentation-only;
@@ -82,7 +82,7 @@ verification in the current stable host.
 
 - Configurable Reader/Main/Note bindings with multiple bindings per action,
   duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
-- Prefix Guide derived from the active resolved keymap; Reader/Note may use Space while Main can expose direct prefixes.
+- Prefix Guide derived from the active resolved keymap; Space is the default semantic command namespace across Reader/Main/Note.
 - Auto, Light, and Dark appearance modes on Neo-owned surfaces.
 
 ## Install
