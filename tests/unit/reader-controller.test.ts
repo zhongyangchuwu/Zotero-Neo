@@ -488,6 +488,7 @@ describe('reader keymap forwarding', () => {
 });
 describe('Reader Selection Actions capture', () => {
   it('passes a Visual selection snapshot to the Main note-capture owner', async () => {
+    vi.stubGlobal('Zotero', {});
     const capture = vi.fn<ReaderControllerDependencies['captureReaderSelectionToNote']>(
       async () => undefined,
     );
