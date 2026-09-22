@@ -1792,6 +1792,16 @@ export class ReaderSession {
         run: () => this.executeAction(action, 1, pdfWindow),
       });
     };
+    actions.push({
+      id: 'neo.capture-note',
+      label: language === 'zh-CN' ? '捕获到笔记' : 'Capture to note',
+      isAvailable: (selection) => selection.itemID !== null && !!selection.text.trim(),
+      run: (selection) =>
+        this.#dependencies.controller.dependencies.captureReaderSelectionToNote(
+          selection,
+          this.#dependencies.reader._window ?? null,
+        ),
+    });
     addBuiltIn('neo.underline', 'underlineSelection');
     addBuiltIn('neo.add-note', 'addNote');
     actions.push(...(this.#dependencies.selection?.registered(context) ?? []));
