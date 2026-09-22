@@ -102,7 +102,7 @@ export function guideEntries(
     });
 }
 
-/** Space-leader compatibility wrapper for Reader/Note callers. */
+/** Space-leader convenience wrapper over the generic pending-prefix guide. */
 export function leaderGuideEntries(
   bindings: BindingMap,
   mode: Mode,
