@@ -247,9 +247,10 @@ create/trash/restore operations are deliberately outside the chooser contract.
 
 Tag candidate sources follow the same chooser contract as ordinary object sources. They may
 project virtual namespaces, explicit create candidates, and action-specific metadata, but they do
-not mutate item tags or Main filter state. `TagActions` owns `ta/tr/tf/tc`: tag filtering remains
-view state, item-tag mutation remains persistent data mutation, and the two stay distinct even when
-they reuse candidate-search primitives.
+not mutate item tags or Main filter state. `TagActions` owns tag candidate resolution and
+persistent `ta/tr` item mutation. `MainViewActions` owns Main View mutation for Quick Search,
+Advanced Search, and the tag-filter application behind `tf/tc`. These remain distinct from
+persistent data mutation even when they reuse tag candidate-search primitives.
 
 ## Reader Flash visible-text targeting
 
