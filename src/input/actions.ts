@@ -309,6 +309,10 @@ const BASE_ACTION_LABELS = {
     en: 'Inspect Main Selection workset',
     'zh-CN': '检查主窗口 Selection 集合',
   },
+  mainReturnContext: {
+    en: 'Main window: return to saved work context',
+    'zh-CN': '主窗口：返回已保存的工作上下文',
+  },
   mainTrashItems: {
     en: 'Main window: move selected items to trash',
     'zh-CN': '主窗口：将所选条目移到回收站',
