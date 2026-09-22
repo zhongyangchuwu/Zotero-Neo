@@ -470,8 +470,17 @@ Start with actions that expose different target semantics:
 3. Trash/restore;
 4. Add/Remove Tag.
 
-Then extend the same explicit contract to collection membership and later batch
-actions.
+Collection membership is the first batch workflow built on this contract:
+
+- `ca` / `cr` operate on EffectiveSelection;
+- normalize targets with Zotero's native `Items.keepTopLevel()`;
+- require one library before resolving a collection target;
+- Picker resolves one collection from that library but does not own mutation;
+- confirmation re-resolves the item target signature so stale/changed worksets
+  cannot receive a partial batch;
+- add/remove skips existing no-op memberships and leaves Neo Selection unchanged.
+
+Later batch actions should preserve the same owner/target/preflight separation.
 
 ### Phase F - Selection inspection and safety
 
