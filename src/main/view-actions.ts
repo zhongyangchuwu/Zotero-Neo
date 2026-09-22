@@ -3,6 +3,7 @@ import type { Logger } from '../core/logging';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
 import {
+  applyMainQuickSearch,
   applyMainTagFilter,
   focusMainQuickSearch,
   mainViewFilterState,
@@ -43,6 +44,10 @@ export class MainViewActions {
         this.#logger.debug(`open Advanced Search failed: ${String(error)}`);
         this.#navigation.status(session, '✗ Unable to open Advanced Search');
       });
+  }
+
+  applyQuickSearch(window: MainWindow, text: string): Promise<boolean> {
+    return applyMainQuickSearch(window, text);
   }
 
   applyTagFilter(window: MainWindow, tags: readonly string[]): Promise<number> {
