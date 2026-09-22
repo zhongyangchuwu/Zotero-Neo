@@ -717,7 +717,11 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.collapseAll(window, session);
         break;
       case 'mainToggleSelection':
-        this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
+        if (this.#navigation.panel(window, session) === 'collections') {
+          this.#navigation.toggleScope(window, session, shouldDebounce);
+        } else {
+          this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
+        }
         break;
       case 'mainEnterSelect': {
         const result = this.#itemSelect.enter(window, session.selection);
