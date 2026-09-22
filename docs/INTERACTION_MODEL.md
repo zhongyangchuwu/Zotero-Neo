@@ -160,10 +160,10 @@ part of a range was already selected.
 
 ### Normal Cursor toggle
 
-The proposed default interaction is Yazi-like:
+The default persistent-set interaction is Yazi-like:
 
 ```text
-Space -> toggle item under Cursor -> move Cursor down
+s -> toggle item under Cursor -> move Cursor down
 ```
 
 The move-after-toggle behavior is part of the workflow contract to dogfood, not
@@ -175,7 +175,7 @@ remains clamped to the last valid item.
 In Visual:
 
 ```text
-Space -> apply Toggle Selection to VisualTarget -> return to Normal
+s -> apply Toggle Selection to VisualTarget -> return to Normal
 ```
 
 Visual commit does not require a second independent "finish selection mode"
@@ -335,18 +335,26 @@ behavior is explicitly verified.
 
 ### Main
 
-The proposed Main grammar is:
+The v0.2 Main grammar is:
 
 ```text
-Space       Toggle Selection at Cursor / VisualTarget
+Space       command namespace / leader
+s           toggle Cursor item in Selection / ScopeCursor in ScopeSet
 j/k         move Cursor
+<num>j/k    relative Cursor jump
 gg/G        first/last Cursor
+/ n N       local find/repeat without changing View
 v           enter Visual
 Visual j/k  move Visual head
 Visual o    swap endpoints
-Visual Space commit Toggle Selection and exit
+Visual s    commit Toggle Selection and exit
 Visual Esc/v cancel Visual and exit
 ```
+
+The same Space-led semantic groups are used across Main, Reader, and Note where
+the action exists. Main keeps navigation and activation direct: local find,
+motions, pane/tree navigation, `o`, `gr`, `H/L`, and `:` do not require the
+leader.
 
 `Ctrl+h/j/k/l` remains directional pane focus and is not reused for item
 selection.
@@ -355,61 +363,48 @@ selection.
 semantics, the current key-token representation does not encode Shift as an
 independent modifier for keys such as Tab/Arrow.
 
-### Releasing Space in Main
+### Unified Space command namespace
 
-Current Main semantic commands such as:
+Main semantic command groups use the same root as Reader/Note:
 
 ```text
-<Space>ff  <Space>fc  <Space>fn
+<Space>ff  <Space>fc  <Space>fq  <Space>fa  <Space>fn
 <Space>ta  <Space>tr  <Space>tf  <Space>tc
-<Space>pp
-<Space>yy  <Space>o  <Space>q  <Space>,
-<Space>e
-<Space>wh  <Space>wl  <Space>ww
+<Space>ca  <Space>cr
+<Space>yy  <Space>pp
+<Space>,   <Space>q
 ```
 
-should be evaluated as direct Main prefixes without the leading Space:
-
-```text
-ff fc fn
-ta tr tf tc
-pp
-yy o q ,
-e
-wh wl ww
-```
-
-Reader and Note do not need to lose their Space leader merely because Main uses
-Space for Toggle Selection.
+Space has no exact Main action. Persistent-set manipulation belongs to `s`, so
+the leader never competes with Selection for timeout/prefix ownership.
 
 This migration must go through the binding engine and keymap migration machinery;
 do not special-case raw Space in the Main controller.
 
-## Prefix Guide, not Leader Guide
+## Prefix Guide
 
-The current Key Guide is hard-coded to Space-prefixed sequences. If Main releases
-Space, discoverability must be generalized to any pending binding prefix.
+The Prefix Guide is a projection of the resolved binding map. Space is the
+default command root across Main, Reader, and Note, while the same guide engine
+also supports non-Space pending prefixes such as `g` or `z`.
 
 Examples:
 
 ```text
-t
+SPC › t
 |- a  Add Tag
 |- r  Remove Tag
 |- f  Toggle Tag Filter
 '- c  Clear Tag Filters
 
-f
+SPC › f
 |- f  Find Items
 |- c  Find Collection Items
+|- q  Quick Search
+|- a  Advanced Search
 '- n  Find Notes
 ```
 
-The guide must remain a projection of the resolved binding map. It must not
-create a second command registry.
-
-Space-leader behavior may remain one instance of this more general Prefix Guide
-on Reader/Note surfaces.
+The guide must not create a second command registry.
 
 ## Host/state ownership
 
@@ -453,11 +448,10 @@ Use narrow feature owners and action contracts.
 
 ### Phase C - Main keymap and Prefix Guide
 
-1. Migrate Main semantic Space-leader defaults to direct prefixes.
-2. Bind Space to Toggle Selection.
-3. Preserve `Ctrl+h/j/k/l` pane-focus grammar.
-4. Generalize Key Guide from Space-only leader prefixes to arbitrary pending
-   prefixes.
+1. Generalize Key Guide from a hard-coded leader UI to arbitrary pending prefixes.
+2. Keep Space as the shared command namespace across Main/Reader/Note.
+3. Bind Main persistent-set operations to `s` in Normal and Visual.
+4. Preserve `Ctrl+h/j/k/l` pane-focus grammar and direct local navigation.
 5. Add migration/override tests so existing user customizations are not silently
    re-enabled or reassigned.
 
