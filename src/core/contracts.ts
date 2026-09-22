@@ -35,6 +35,8 @@ export interface ReaderSelectionActionDefinition {
   readonly id: string;
   readonly label: string;
   readonly isAvailable?: (context: ReaderSelectionContext) => boolean;
+  /** True when the action opens another UI surface that owns focus restoration. */
+  readonly managesFocus?: boolean;
   readonly run: (
     context: ReaderSelectionContext,
   ) => void | ReaderSelectionActionOutcome | Promise<void | ReaderSelectionActionOutcome>;
@@ -80,7 +82,7 @@ export interface ReaderControllerDependencies {
     ownerWindow: MainWindow | null,
   ) => void;
   readonly openCommandPalette: (window: MainWindow, context: CommandPaletteContext) => void;
-  readonly appendSelectionToNote: (
+  readonly appendSelectionToNote?: (
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
   ) => void;
