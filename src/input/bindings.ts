@@ -196,6 +196,7 @@ export const DEFAULT_BINDINGS = {
   'main-normal:M': 'mainTreeCollapseAll',
   'main-normal:<BS>': 'mainTreeParent',
   'main-normal:gg': 'mainNavFirst',
+  'main-normal:gr': 'mainReturnContext',
   'main-normal:G': 'mainNavLast',
   'main-normal:H': 'previousTab',
   'main-normal:L': 'nextTab',
