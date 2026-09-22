@@ -51,6 +51,7 @@ describe('reader discovery diagnostics', () => {
       },
       delegateMain: () => {},
       openCommandPalette: () => {},
+      captureReaderSelectionToNote: async () => undefined,
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
