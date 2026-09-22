@@ -533,15 +533,15 @@ export class MainNavigation {
         item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
       } else {
         const targets = resolveMainEffectiveTargets(window, session);
-        if (!targets.total || !targets.items.length) {
-          this.status(session, '✗ No item target');
-          return;
-        }
         if (targets.missing > 0) {
           this.status(
             session,
             '✗ Selection contains unavailable items; refresh before citekey copy',
           );
+          return;
+        }
+        if (!targets.total || !targets.items.length) {
+          this.status(session, '✗ No item target');
           return;
         }
 
