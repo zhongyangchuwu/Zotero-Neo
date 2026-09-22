@@ -52,6 +52,10 @@ export interface MainActionDelegate {
     ownerWindow: MainWindow | null,
   ): void;
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void;
+  appendReaderSelectionToNote(
+    context: ReaderSelectionContext,
+    ownerWindow: MainWindow | null,
+  ): void;
 }
 
 export interface ReaderControllerApi extends ReaderSelectionApi {
@@ -76,6 +80,10 @@ export interface ReaderControllerDependencies {
     ownerWindow: MainWindow | null,
   ) => void;
   readonly openCommandPalette: (window: MainWindow, context: CommandPaletteContext) => void;
+  readonly appendSelectionToNote: (
+    context: ReaderSelectionContext,
+    ownerWindow: MainWindow | null,
+  ) => void;
 }
 
 export interface MainWindowControllerDependencies {
