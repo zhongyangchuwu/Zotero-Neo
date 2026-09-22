@@ -2,6 +2,7 @@ import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
 import {
   currentMainItemCursorRef,
+  mainItemViewGenerationToken,
   mainItemViewSettled,
   observeMainItemView,
   projectMainSelection,
@@ -19,10 +20,14 @@ export function installMainViewLifecycle(
   logger: Logger,
 ): () => void {
   let cursor: ItemRef | undefined = currentMainItemCursorRef(window);
+  let viewGeneration = mainItemViewGenerationToken(window);
   let applying = false;
 
   const rememberCursor = (): void => {
     if (applying || !mainItemViewSettled(window)) return;
+    // Zotero can emit onSelect after replacing the View rows but before onRefresh.
+    // Keep the stable Cursor from the previous item-tree generation in that window.
+    if (mainItemViewGenerationToken(window) !== viewGeneration) return;
     cursor = currentMainItemCursorRef(window);
   };
 
@@ -37,6 +42,7 @@ export function installMainViewLifecycle(
     } catch (error) {
       logger.debug(`Main View refresh projection failed: ${String(error)}`);
     } finally {
+      viewGeneration = mainItemViewGenerationToken(window);
       applying = false;
     }
   };

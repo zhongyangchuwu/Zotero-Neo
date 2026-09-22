@@ -130,6 +130,7 @@ type ItemCursorView = {
   readonly tree?: ItemCursorTree;
   readonly onSelect?: MainEventBinding;
   readonly onRefresh?: MainEventBinding;
+  readonly _itemTreeLoadingDeferred?: unknown;
   readonly _loadingDeferredResolved?: boolean;
   readonly selection?: {
     readonly focused?: number;
@@ -423,6 +424,12 @@ export function mainItemCursorRow(window: MainWindow): number | undefined {
 export function mainItemViewSettled(window: MainWindow): boolean {
   const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
   return view?._loadingDeferredResolved !== false;
+}
+
+/** Returns Zotero's current item-tree rebuild generation token. */
+export function mainItemViewGenerationToken(window: MainWindow): unknown {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  return view?._itemTreeLoadingDeferred;
 }
 
 export function observeMainItemView(

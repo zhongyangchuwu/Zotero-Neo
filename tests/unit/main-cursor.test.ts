@@ -89,6 +89,80 @@ describe('Main View lifecycle', () => {
     cleanup();
   });
 
+  it('keeps the previous Cursor when Zotero selects a fallback row before View refresh', () => {
+    const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
+    const itemB = { id: 11, libraryID: 1 } as Zotero.Item;
+    const itemC = { id: 12, libraryID: 1 } as Zotero.Item;
+    let rows = [
+      { isObjectRow: true, ref: itemA },
+      { isObjectRow: true, ref: itemB },
+      { isObjectRow: true, ref: itemC },
+    ];
+    let focused = 2;
+    let refreshToken: object = {};
+    const selected = new Set<number>();
+    const selectListeners = new Set<() => void>();
+    const refreshListeners = new Set<() => void>();
+    const binding = (listeners: Set<() => void>) => ({
+      addListener: (listener: () => void) => listeners.add(listener),
+      removeListener: (listener: () => void) => listeners.delete(listener),
+    });
+    const view = {
+      get rowCount() {
+        return rows.length;
+      },
+      get _itemTreeLoadingDeferred() {
+        return refreshToken;
+      },
+      _loadingDeferredResolved: true,
+      onSelect: binding(selectListeners),
+      onRefresh: binding(refreshListeners),
+      tree: { _onSelection: vi.fn((index: number) => (focused = index)) },
+      selection: {
+        get focused() {
+          return focused;
+        },
+        select: vi.fn((index: number) => {
+          selected.clear();
+          selected.add(index);
+          focused = index;
+        }),
+        toggleSelect: vi.fn((index: number) => selected.add(index)),
+        clearSelection: vi.fn(() => selected.clear()),
+      },
+      getRow: (index: number) => rows[index],
+      getRowIndexByID: (id: number) => {
+        const index = rows.findIndex((row) => row.ref.id === id);
+        return index < 0 ? false : index;
+      },
+      ensureRowIsVisible: vi.fn(),
+    };
+    const window = { ZoteroPane: { itemsView: view } } as unknown as MainWindow;
+    const workset = new SelectionStore();
+    workset.add({ libraryID: 1, itemID: 10 });
+    workset.add({ libraryID: 1, itemID: 12 });
+    const cleanup = installMainViewLifecycle(
+      window,
+      { selection: workset } as unknown as import('../../src/main/session').MainWindowSession,
+      { debug: vi.fn(), diagnostic: vi.fn() },
+    );
+
+    rows = [rows[0]!, rows[2]!, rows[1]!];
+    focused = 0;
+    refreshToken = {};
+    [...selectListeners][0]!();
+    [...refreshListeners][0]!();
+
+    expect(focused).toBe(1);
+    expect([...selected].sort()).toEqual([0, 1]);
+    expect(workset.values()).toEqual([
+      { libraryID: 1, itemID: 10 },
+      { libraryID: 1, itemID: 12 },
+    ]);
+
+    cleanup();
+  });
+
   it('keeps hidden workset members and does not restore a hidden Cursor to another row', () => {
     const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
     const itemB = { id: 11, libraryID: 1 } as Zotero.Item;
