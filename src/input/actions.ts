@@ -338,8 +338,8 @@ const BASE_ACTION_LABELS = {
     'zh-CN': '主窗口：聚焦条目列表',
   },
   mainYankCitekey: {
-    en: 'Main window: copy BetterBibTeX citekey',
-    'zh-CN': '主窗口：复制 BetterBibTeX citekey',
+    en: 'Copy BetterBibTeX citekey(s)',
+    'zh-CN': '复制 BetterBibTeX citekey',
   },
   mainOpenPDF: {
     en: 'Main window: open PDF of selected item',
