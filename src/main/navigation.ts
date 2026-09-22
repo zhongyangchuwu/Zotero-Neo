@@ -7,7 +7,6 @@ import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 import {
   closeSelectedMainTab,
-  currentMainItem,
   cycleMainTab,
   mainHost,
   mainScopeCursorDetached,
