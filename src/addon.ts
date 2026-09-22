@@ -54,6 +54,12 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
         main?.openCommandPalette(window, context);
       },
+      captureReaderSelectionToNote(context, ownerWindow) {
+        return (
+          main?.captureReaderSelectionToNote(context, ownerWindow) ??
+          Promise.resolve()
+        );
+      },
     });
     this.#main = createMainWindowController({
       preferences: this.#preferences,
