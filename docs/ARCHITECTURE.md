@@ -71,6 +71,11 @@ This separation lets the same semantic action be reached from a key binding or a
 Command Palette without synthetic keyboard events. It also keeps Key Guide,
 Binding Editor, and Command Palette projections tied to the same resolved source.
 
+Item-targeted actions also share a contextual target contract: Main resolves
+EffectiveSelection, Reader resolves the active Reader item (normally its parent
+bibliographic item), and Note resolves its active note context. View actions and
+Reader-local PDF actions remain surface-owned and do not use that resolver.
+
 ### 3. Feature owners
 
 Feature modules should own one coherent state/lifecycle or one host operation
@@ -94,8 +99,10 @@ family. Controllers coordinate them; they should not mirror child feature state.
 - `main/tag-actions.ts` — semantic Add Tag / Remove Tag / Toggle Tag Filter /
   Clear Tag Filters orchestration; it invokes the shared chooser only when a tag
   target must be resolved.
-- `main/tag-targets.ts` — Main/Reader/Note target normalization and batched
-  item-tag mutation primitives.
+- `main/item-targets.ts` — shared contextual item-target resolution for Main
+  EffectiveSelection and Reader/Note contextual items; item actions reuse this
+  contract instead of borrowing another surface's selection.
+- `main/tag-targets.ts` — batched item-tag mutation primitives.
 - `main/note-editor.ts` — note-editor Normal/Insert integration.
 - `main/host.ts` — named adapters over private Main-window host seams.
 
