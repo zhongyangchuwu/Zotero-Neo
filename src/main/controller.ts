@@ -1,6 +1,7 @@
 import type {
   CommandPaletteContext,
   MainWindowControllerApi,
+  ReaderSelectionContext,
   MainWindowControllerDependencies,
   MainWindow,
 } from '../core/contracts';
@@ -47,6 +48,7 @@ import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
 import { MainReturnContext } from './return-context';
 import { CollectionMembershipActions } from './collection-actions';
+import { NoteCaptureActions } from './note-capture-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
@@ -73,6 +75,7 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #viewActions: MainViewActions;
   readonly #returnContext: MainReturnContext;
   readonly #collections: CollectionMembershipActions;
+  readonly #noteCapture: NoteCaptureActions;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -91,6 +94,11 @@ export class MainWindowController implements MainWindowControllerApi {
       pickerMouseEnabled(dependencies.preferences),
     );
     this.#collections = new CollectionMembershipActions(
+      dependencies.logger,
+      this.#navigation,
+      this.#picker,
+    );
+    this.#noteCapture = new NoteCaptureActions(
       dependencies.logger,
       this.#navigation,
       this.#picker,
@@ -210,6 +218,22 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     this.execute(action, ownerWindow, session, count, false, 'reader');
+  }
+
+  appendReaderSelectionToNote(
+    context: ReaderSelectionContext,
+    ownerWindow: MainWindow | null,
+  ): void {
+    if (!ownerWindow) {
+      this.#dependencies.logger.debug('ignored Reader note capture: no owner window');
+      return;
+    }
+    const session = this.#sessions.get(ownerWindow);
+    if (!session) {
+      this.#dependencies.logger.debug('ignored Reader note capture: owner window detached');
+      return;
+    }
+    this.#noteCapture.open(ownerWindow, session, context);
   }
 
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void {
