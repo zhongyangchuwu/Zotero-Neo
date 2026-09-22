@@ -75,8 +75,8 @@ All notable changes to Zotero Neo are documented here.
   operation console: `ta/tr` mutate item data, while Main-only `tf/tc` change view state.
 - Picker/chooser providers no longer own create/delete/yank/open mini-grammars; the invoking
   semantic action owns confirmation and host mutation.
-- Space-leader defaults are organized around semantic namespaces: `ff/fc/fn` find targets,
-  `<Space>,` switches tabs, `<Space>q` closes the current tab, and `t*` is reserved for Tags.
+- Space-leader defaults are organized around semantic namespaces across Reader/Main/Note: `<Space>ff/fc/fn` find targets, `<Space>,` switches tabs, `<Space>q` closes the current tab, and `<Space>t*` is reserved for Tags.
+- Main persistent-set operations use `s`: item Selection and native ScopeSet toggle/advance in Normal, and VisualTarget commit in Visual.
 - PDF Select currently owns a DOM range and scoped native-style selection rendering rather than
   pretending it is synchronized with Zotero Reader's private semantic selection state; native
   semantic-selection integration is tracked separately in issue #20.
