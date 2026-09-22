@@ -103,6 +103,9 @@ family. Controllers coordinate them; they should not mirror child feature state.
   EffectiveSelection and Reader/Note contextual items; item actions reuse this
   contract instead of borrowing another surface's selection.
 - `main/tag-targets.ts` — batched item-tag mutation primitives.
+- `main/note-capture.ts` — persistent Reader-selection capture mutation into an
+  existing Zotero note. Reader supplies a DOM-free selection snapshot; Main owns
+  note target resolution and persistence.
 - `main/note-editor.ts` — note-editor Normal/Insert integration.
 - `main/host.ts` — named adapters over private Main-window host seams.
 
@@ -143,7 +146,9 @@ host/view lifecycle seams are owned separately:
 - `marks.ts` / `marks-explorer.ts` — persisted marks and explorer behavior;
 - `outline.ts` — outline tree/navigation;
 - `comment-editor.ts` — transient annotation-comment editor state;
-- `selection-actions.ts` — selection action registry/palette;
+- `selection-actions.ts` — selection action registry/palette. Cross-surface
+  capture actions pass immutable selection context to their semantic owner and
+  remain pending until the owner's chooser closes;
 - `smooth-scroll.ts` — smooth-hold state;
 - `sidebar-overlay.ts` — only the shared Outline/Marks overlay lifecycle.
 

@@ -53,6 +53,7 @@ export class MainWindowSession {
     provider: PickerProvider | null;
     confirm: PickerConfirm | null;
     closeBeforeConfirm: boolean;
+    onClose: (() => void) | null;
     queue: Promise<void>;
     inputCleanup: (() => void) | null;
     layout: 'dual' | 'single';
@@ -81,6 +82,7 @@ export class MainWindowSession {
     provider: null,
     confirm: null,
     closeBeforeConfirm: false,
+    onClose: null,
     queue: Promise.resolve(),
     inputCleanup: null,
     layout: 'dual',

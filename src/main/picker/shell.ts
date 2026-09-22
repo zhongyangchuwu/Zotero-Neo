@@ -78,6 +78,7 @@ export class FuzzyPicker {
       session.picker.provider = provider;
       session.picker.confirm = options.confirm ?? null;
       session.picker.closeBeforeConfirm = options.closeBeforeConfirm ?? false;
+      session.picker.onClose = options.onClose ?? null;
       session.picker.queue = Promise.resolve();
       const doc = window.document;
       const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
@@ -261,7 +262,14 @@ export class FuzzyPicker {
         session.picker.provider = null;
         session.picker.confirm = null;
         session.picker.closeBeforeConfirm = false;
+        const onClose = session.picker.onClose;
+        session.picker.onClose = null;
         session.picker.queue = Promise.resolve();
+        try {
+          onClose?.();
+        } catch (closeError) {
+          this.failure('picker onClose after open failure', closeError);
+        }
       }
       this.#navigation.status(session, `✗ Unable to open ${scope} picker`);
     }
@@ -269,10 +277,11 @@ export class FuzzyPicker {
   close(session: MainWindowSession): void {
     if (!session.picker.open) return;
     this.trace(`picker close scope=${session.picker.scope}`);
-    const { overlay, previousElement, previousWindow, themeCleanup } = session.picker;
+    const { overlay, previousElement, previousWindow, themeCleanup, onClose } = session.picker;
     session.picker.provider = null;
     session.picker.confirm = null;
     session.picker.closeBeforeConfirm = false;
+    session.picker.onClose = null;
     session.picker.queue = Promise.resolve();
     session.picker.inputCleanup?.();
     session.picker.inputCleanup = null;
@@ -297,6 +306,11 @@ export class FuzzyPicker {
       if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
       else previousWindow?.focus();
     } catch {}
+    try {
+      onClose?.();
+    } catch (error) {
+      this.failure('picker onClose', error);
+    }
   }
 
   onKeyDown(event: HandledKey, window: MainWindow, session: MainWindowSession): void {

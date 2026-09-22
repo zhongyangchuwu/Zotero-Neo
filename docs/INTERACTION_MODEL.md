@@ -300,6 +300,30 @@ A future Selection Panel is an inspector/manager for the workset:
 
 It is not an operation console.
 
+## Knowledge capture
+
+Reader text capture is a cross-surface workflow but not a cross-surface target
+ambiguity. Reader owns the transient Visual selection and passes a DOM-free
+`ReaderSelectionContext` snapshot to Main. Main owns the persistent Notes
+picker and note mutation.
+
+The initial capture contract is:
+
+- snapshot selected text, Reader item identity, page label, and position before
+  opening any chooser;
+- resolve the Reader attachment to its bibliographic parent for note ranking and
+  library scope;
+- list existing notes from only that library, with current-item child notes
+  first;
+- re-resolve and validate the chosen note before mutation;
+- append through Zotero-native `getNote()/setNote()/saveTx()`;
+- keep annotation-comment creation (`Add note`) separate from persistent
+  Zotero-note capture (`Capture to note`);
+- cancellation or target invalidation performs no mutation.
+
+Picker remains a target resolver. It does not own note creation, append
+semantics, or Reader selection state.
+
 ## Return context
 
 "Reveal in Library" and "return to previous work context" are distinct actions.

@@ -578,12 +578,21 @@ describe('command palette provider', () => {
       bindings: { 'main-normal:x': 'nextTab' },
       execute: () => {},
     };
-    await picker.open(window, session, 'commands', commandPickerOptions(context));
     const restore = { isConnected: true, focus: vi.fn() } as unknown as HTMLElement;
+    const onClose = vi.fn(() => {
+      expect(restore.focus).toHaveBeenCalledOnce();
+    });
+    await picker.open(window, session, 'commands', {
+      ...commandPickerOptions(context),
+      onClose,
+    });
     session.picker.previousElement = restore;
     picker.onKeyDown(pickerKey('Escape', session.picker.input), window, session);
     expect(session.picker.open).toBe(false);
     expect(restore.focus).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+    picker.close(session);
+    expect(onClose).toHaveBeenCalledOnce();
   });
   it('discards a queued command after close and reopen', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });

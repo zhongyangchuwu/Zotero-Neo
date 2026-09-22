@@ -1020,6 +1020,8 @@ describe('Reader to Main command palette integration', () => {
       delegateMain: (action, count, ownerWindow) =>
         main?.executeFromReader(action, count, ownerWindow),
       openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
+      captureReaderSelectionToNote: (context, ownerWindow) =>
+        main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false),
     });
     main = createMainWindowController({ preferences, logger, reader: readerController });
     readerController.start('zotero-neo@zotero-neo');

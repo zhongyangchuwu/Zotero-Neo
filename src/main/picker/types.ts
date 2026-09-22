@@ -21,6 +21,7 @@ export interface PickerOpenOptions {
   readonly closeBeforeConfirm?: boolean;
   readonly commandContext?: CommandPaletteContext;
   readonly source?: PickerProvider;
+  readonly onClose?: () => void;
 }
 
 /** Candidate data/presentation contract for the shared search/list/preview surface. */
