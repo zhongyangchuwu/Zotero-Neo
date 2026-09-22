@@ -538,7 +538,10 @@ export class MainNavigation {
           return;
         }
         if (targets.missing > 0) {
-          this.status(session, '✗ Selection contains unavailable items; refresh before citekey copy');
+          this.status(
+            session,
+            '✗ Selection contains unavailable items; refresh before citekey copy',
+          );
           return;
         }
 
@@ -547,9 +550,7 @@ export class MainNavigation {
             keepTopLevel?(items: Zotero.Item[]): Zotero.Item[];
           }
         ).keepTopLevel;
-        const normalized = keepTopLevel
-          ? keepTopLevel([...targets.items])
-          : [...targets.items];
+        const normalized = keepTopLevel ? keepTopLevel([...targets.items]) : [...targets.items];
 
         const byID = new Map<number, Zotero.Item>();
         for (const target of normalized) byID.set(target.id, target);
