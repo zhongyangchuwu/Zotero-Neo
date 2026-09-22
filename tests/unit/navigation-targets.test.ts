@@ -38,6 +38,7 @@ function harness(visible: readonly Zotero.Item[], focused = 0) {
     Items: {
       get: (id: number) => byID.get(id) ?? false,
       trashTx,
+      keepTopLevel: (items: Zotero.Item[]) => items,
     },
   });
   vi.stubGlobal('Components', {
@@ -139,7 +140,7 @@ describe('Main action target contracts', () => {
     expect(h.session.selection.empty).toBe(true);
   });
 
-  it('rejects ambiguous multi-item citekey copy and uses Cursor as the single fallback target', () => {
+  it('copies citekeys from EffectiveSelection and preserves Cursor fallback behavior', () => {
     const first = attachment(10, 'first');
     const cursor = attachment(11, 'cursor');
     const h = harness([first, cursor], 1);
@@ -148,12 +149,51 @@ describe('Main action target contracts', () => {
 
     h.navigation.yankCitekey(h.window, h.session);
 
-    expect(h.copied).toEqual([]);
-    expect(h.session.status.textContent).toContain('Selection has 2 items');
+    expect(h.copied).toEqual(['first cursor']);
+    expect(h.session.status.textContent).toContain('Copied 2 citekeys');
+    expect(h.session.selection.size).toBe(2);
 
     h.session.selection.clear();
     h.navigation.yankCitekey(h.window, h.session);
 
-    expect(h.copied).toEqual(['cursor']);
+    expect(h.copied).toEqual(['first cursor', 'cursor']);
+    expect(h.session.status.textContent).toBe('✓ @cursor');
+  });
+
+  it('refuses the entire citekey batch when a target is stale or missing a citekey', () => {
+    const first = attachment(10, 'first');
+    const missingKey = attachment(11, '');
+    const h = harness([first, missingKey], 0);
+    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    h.session.selection.add({ libraryID: 1, itemID: missingKey.id });
+
+    h.navigation.yankCitekey(h.window, h.session);
+
+    expect(h.copied).toEqual([]);
+    expect(h.session.status.textContent).toContain('1 target without citekey');
+
+    h.session.selection.clear();
+    h.session.selection.add({ libraryID: 1, itemID: 999 });
+    h.navigation.yankCitekey(h.window, h.session);
+
+    expect(h.copied).toEqual([]);
+    expect(h.session.status.textContent).toContain('unavailable items');
+  });
+
+  it('uses Zotero keepTopLevel normalization and deduplicates normalized citekey targets', () => {
+    const childA = attachment(10, '');
+    const childB = attachment(11, '');
+    const parent = attachment(20, 'parent');
+    const h = harness([childA, childB], 0);
+    h.install(parent);
+    h.session.selection.add({ libraryID: 1, itemID: childA.id });
+    h.session.selection.add({ libraryID: 1, itemID: childB.id });
+    const keepTopLevel = vi.fn(() => [parent, parent]);
+    (Zotero.Items as unknown as { keepTopLevel: typeof keepTopLevel }).keepTopLevel = keepTopLevel;
+
+    h.navigation.yankCitekey(h.window, h.session);
+
+    expect(keepTopLevel).toHaveBeenCalledWith([childA, childB]);
+    expect(h.copied).toEqual(['parent']);
   });
 });
