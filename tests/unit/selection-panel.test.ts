@@ -89,10 +89,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
   } as unknown as MainWindowSession;
 
   const captureReturn = vi.fn();
-  const panel = new SelectionPanel(
-    { debug: vi.fn() },
-    { capture: captureReturn } as never,
-  );
+  const panel = new SelectionPanel({ debug: vi.fn() }, { capture: captureReturn } as never);
   const key = (value: string): KeyboardEvent =>
     ({
       key: value,

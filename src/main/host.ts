@@ -46,10 +46,7 @@ type MainPane = {
   readonly collectionsView?: TreeView;
   readonly itemsView?: TreeView & {
     readonly rowCount?: number;
-    setFilter?(
-      type: 'tags' | 'search',
-      value: ReadonlySet<string> | string,
-    ): Promise<void> | void;
+    setFilter?(type: 'tags' | 'search', value: ReadonlySet<string> | string): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
   toggleAdvancedSearchState?(state: 'open' | 'collapsed' | 'closed'): Promise<void> | void;
