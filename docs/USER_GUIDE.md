@@ -450,6 +450,26 @@ and focus context:
 | `wl` | Focus the detail pane (right pane) |
 | `ww` | Focus the item list (middle pane) |
 
+#### Main local find
+
+Local find is Cursor navigation inside the item rows already visible in the
+current Main View. It does not change Zotero Quick Search, tag filters,
+collection scope, sort order, or Neo Selection.
+
+| Key | Action |
+| --- | --- |
+| `/` | Open the local-find prompt for visible items |
+| `n` | Repeat the last committed local find forward |
+| `N` | Repeat the last committed local find backward |
+
+Enter commits a non-empty query and moves Cursor to the next visible match,
+wrapping once through the current row order. Matching is case-insensitive over
+compact item metadata (title/display text, first creator, year, and citekey when
+available). `Escape` cancels the prompt without replacing the previous query.
+A miss leaves Cursor and the current View unchanged. This is deliberately
+different from `ff` / `fc`: those open a fuzzy target chooser, while local
+find is relative, repeatable Cursor motion.
+
 #### Viewport positioning (like Vim's z commands)
 
 | Key  | Action                                                      |
