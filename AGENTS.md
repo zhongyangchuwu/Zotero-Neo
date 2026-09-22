@@ -203,6 +203,11 @@ Cross-context item actions should resolve targets through `main/item-targets.ts`
 Main uses EffectiveSelection, Reader uses the active Reader item, and Note uses
 its active note context. Do not make Reader item actions borrow Main Selection.
 Main View actions and Reader-local PDF actions remain surface-specific.
+Cross-surface knowledge capture follows the same ownership rule: Reader owns the
+transient text selection and passes a DOM-free `ReaderSelectionContext`
+snapshot; Main owns the persistent Notes picker and Zotero note mutation. Keep
+Picker providers candidate-only, and do not let Reader capture code borrow Main
+Selection or mutate notes directly.
 
 ## Key Files
 
