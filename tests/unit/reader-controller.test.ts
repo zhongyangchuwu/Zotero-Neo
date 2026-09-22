@@ -72,8 +72,8 @@ function createHistorySession(
   bindings: BindingMap = DEFAULT_BINDINGS,
   openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
-  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] =
-    async () => false,
+  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] = async () =>
+    false,
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
