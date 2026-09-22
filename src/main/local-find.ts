@@ -31,9 +31,7 @@ function itemSearchText(item: Zotero.Item): string {
   } catch {}
 
   try {
-    const creator = item.getCreators?.()[0] as
-      | { lastName?: string; name?: string }
-      | undefined;
+    const creator = item.getCreators?.()[0] as { lastName?: string; name?: string } | undefined;
     author = creator?.lastName ?? creator?.name ?? '';
   } catch {}
 
@@ -66,14 +64,10 @@ export function findVisibleMainItemRow(
 
   const current = mainItemCursorRow(window);
   const start =
-    current !== undefined && current >= 0 && current < rowCount
-      ? current
-      : direction > 0
-        ? -1
-        : 0;
+    current !== undefined && current >= 0 && current < rowCount ? current : direction > 0 ? -1 : 0;
 
   for (let step = 1; step <= rowCount; step += 1) {
-    const row = ((start + direction * step) % rowCount + rowCount) % rowCount;
+    const row = (((start + direction * step) % rowCount) + rowCount) % rowCount;
     const ref = mainItemRefAtRow(window, row);
     if (!ref) continue;
     const item = mainItem(ref.itemID);
@@ -186,11 +180,7 @@ export class MainLocalFind {
     event.stopPropagation();
   }
 
-  repeat(
-    window: MainWindow,
-    session: MainWindowSession,
-    direction: LocalFindDirection,
-  ): boolean {
+  repeat(window: MainWindow, session: MainWindowSession, direction: LocalFindDirection): boolean {
     const query = session.localFind.query.trim();
     if (!query) {
       this.#status(session, '✗ No local find query');

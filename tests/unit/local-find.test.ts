@@ -39,11 +39,7 @@ function item(
   } as unknown as Zotero.Item;
 }
 
-function harness(
-  items: readonly Zotero.Item[],
-  visibleIDs: readonly number[],
-  initialFocused = 0,
-) {
+function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], initialFocused = 0) {
   const byID = new Map(items.map((value) => [value.id, value]));
   vi.stubGlobal('Zotero', {
     Items: { get: (id: number) => byID.get(id) ?? false },
