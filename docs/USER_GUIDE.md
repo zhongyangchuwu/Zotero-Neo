@@ -236,8 +236,8 @@ chosen first; the chooser only answers which object/tag that action should use.
 | `tr` | Remove one chosen tag from the current target(s) |
 | `tf` | Main only: toggle one chosen tag filter |
 | `tc` | Main only: clear all tag filters directly |
-| `ca` | Main only: add EffectiveSelection (or Cursor fallback) to one chosen collection |
-| `cr` | Main only: remove EffectiveSelection (or Cursor fallback) from one chosen collection |
+| `ca` | Main: add EffectiveSelection; Reader: add the active Reader item to one chosen collection |
+| `cr` | Main: remove EffectiveSelection; Reader: remove the active Reader item from one chosen collection |
 
 The shared surface owns query input, fuzzy ranking, highlighted-row navigation,
 preview, IME/composition handling, confirmation, and cancellation. It does not
@@ -298,14 +298,15 @@ Reader and Note keep their existing contextual single-target `yy` behavior.
 
 ##### Collection membership
 
-`ca` and `cr` use the Main EffectiveSelection contract: an explicit Neo
-Selection wins; otherwise the current Cursor is the target. Child
-attachments/notes are normalized with Zotero's native top-level-item semantics.
+`ca` and `cr` are item actions shared by Main and Reader. In Main, explicit
+Neo Selection wins and Cursor is the fallback. In Reader, the target is the
+active Reader item's parent bibliographic item when one exists; Main Selection
+is not consulted.
 
-The target set must resolve to one library. Neo then opens the shared chooser
-with only collections from that library. Before applying the confirmation, Neo
-re-resolves the item identities; if the workset changed while the chooser was
-open, the entire batch is refused.
+Targets use Zotero's top-level-item semantics and must resolve to one library.
+Neo then opens the same shared chooser with only collections from that library.
+Before applying the confirmation, Neo re-resolves the contextual item targets;
+if they changed while the chooser was open, the entire operation is refused.
 
 `ca` skips items already in the destination and `cr` skips items already
 absent. Membership changes do not redefine Neo Selection.
