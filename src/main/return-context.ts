@@ -5,6 +5,7 @@ import type { MainPanel, MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 import {
   currentMainItemCursorRef,
+  mainItemRowForRef,
   mainScopeSelectedIDs,
   projectMainSelection,
   restoreMainScopeIDs,
@@ -94,16 +95,10 @@ export class MainReturnContext {
       partial.push('advanced search');
     }
 
-    const projected = projectMainSelection(
-      window,
-      session.selection.values(),
-      bookmark.cursor,
-    );
-    if (bookmark.cursor && !projected && session.selection.size === 0) {
-      // Projection can legitimately be zero with a non-empty hidden Selection.
-      // Verify Cursor independently in that case via visible projection below.
+    if (bookmark.cursor && mainItemRowForRef(window, bookmark.cursor) === undefined) {
       partial.push('cursor');
     }
+    projectMainSelection(window, session.selection.values(), bookmark.cursor);
 
     if (bookmark.tabID) {
       try {
