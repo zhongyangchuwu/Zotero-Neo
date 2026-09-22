@@ -77,6 +77,29 @@ export interface MainViewFilterState {
   readonly advancedSearch: boolean;
 }
 
+type ScopeCursorTree = {
+  _onSelection?(
+    index: number,
+    shiftSelect: boolean,
+    toggleSelection: boolean,
+    moveFocused: boolean,
+    shouldDebounce?: boolean,
+  ): void;
+};
+
+type ScopeCursorView = {
+  readonly rowCount?: number;
+  readonly tree?: ScopeCursorTree;
+  readonly selection?: {
+    readonly focused?: number;
+    readonly selected?: Iterable<number>;
+    readonly count?: number;
+    select?(index: number, shouldDebounce?: boolean): boolean | void;
+    toggleSelect?(index: number, shouldDebounce?: boolean): void;
+  };
+  ensureRowIsVisible?(index: number): void;
+};
+
 type ItemCursorTree = {
   _onSelection?(
     index: number,
@@ -230,6 +253,67 @@ export async function openMainAdvancedSearch(window: MainWindow): Promise<boolea
 
   if (!pane.toggleAdvancedSearchState) return false;
   await pane.toggleAdvancedSearchState('open');
+  return true;
+}
+
+
+function mainScopeView(window: MainWindow): ScopeCursorView | undefined {
+  return mainPane(window)?.collectionsView as unknown as ScopeCursorView | undefined;
+}
+
+export function mainScopeCursorRow(window: MainWindow): number | undefined {
+  return mainScopeView(window)?.selection?.focused;
+}
+
+export function mainScopeSelectedRows(window: MainWindow): number[] {
+  const selection = mainScopeView(window)?.selection;
+  if (!selection) return [];
+  if (selection.selected) return [...selection.selected].filter((row) => Number.isInteger(row));
+  const focused = selection.focused;
+  return selection.count && focused !== undefined ? [focused] : [];
+}
+
+export function mainScopeCursorDetached(window: MainWindow): boolean {
+  const focused = mainScopeCursorRow(window);
+  return focused !== undefined && !mainScopeSelectedRows(window).includes(focused);
+}
+
+export function moveMainScopeCursor(
+  window: MainWindow,
+  index: number,
+  shouldDebounce = false,
+): boolean {
+  const view = mainScopeView(window);
+  const last = Math.max(0, (view?.rowCount ?? 1) - 1);
+  if (!view?.tree?._onSelection || index < 0 || index > last) return false;
+  view.tree._onSelection(index, false, false, true, shouldDebounce);
+  view.ensureRowIsVisible?.(index);
+  return true;
+}
+
+export function toggleMainScopeAtCursor(
+  window: MainWindow,
+  shouldDebounce = false,
+): boolean {
+  const view = mainScopeView(window);
+  const focused = view?.selection?.focused;
+  if (focused === undefined || !view?.selection?.toggleSelect) return false;
+  const selected = mainScopeSelectedRows(window);
+  if (selected.length === 1 && selected[0] === focused) return false;
+  view.selection.toggleSelect(focused, shouldDebounce);
+  return true;
+}
+
+export function selectOnlyMainScopeCursor(
+  window: MainWindow,
+  shouldDebounce = false,
+): boolean {
+  const view = mainScopeView(window);
+  const focused = view?.selection?.focused;
+  if (focused === undefined || !view?.selection?.select) return false;
+  const selected = mainScopeSelectedRows(window);
+  if (selected.length === 1 && selected[0] === focused) return false;
+  view.selection.select(focused, shouldDebounce);
   return true;
 }
 
