@@ -158,26 +158,26 @@ export const DEFAULT_BINDINGS = {
   'note-insert:<C-j>': 'focusReaderSplitDown',
   'note-insert:<C-k>': 'focusReaderSplitUp',
   'note-insert:<C-l>': 'focusReaderSplitRight',
-  'main-normal:ff': 'findAllItems',
-  'main-normal:fq': 'mainQuickSearch',
-  'main-normal:fa': 'mainAdvancedSearch',
+  'main-normal:<Space>ff': 'findAllItems',
+  'main-normal:<Space>fq': 'mainQuickSearch',
+  'main-normal:<Space>fa': 'mainAdvancedSearch',
   'main-normal:/': 'openSearch',
   'main-normal:n': 'findNext',
   'main-normal:N': 'findPrevious',
   'main-normal::': 'openCommandPalette',
-  'main-normal:fc': 'findCollectionItems',
-  'main-normal:,': 'switchTab',
-  'main-normal:ta': 'addTag',
-  'main-normal:tr': 'removeTag',
-  'main-normal:ca': 'addToCollection',
-  'main-normal:cr': 'removeFromCollection',
-  'main-normal:tf': 'toggleTagFilter',
-  'main-normal:tc': 'clearTagFilters',
-  'main-normal:q': 'closeCurrentTab',
-  'main-normal:fn': 'findNotes',
-  'main-normal:pp': 'managePlugins',
+  'main-normal:<Space>fc': 'findCollectionItems',
+  'main-normal:<Space>,': 'switchTab',
+  'main-normal:<Space>ta': 'addTag',
+  'main-normal:<Space>tr': 'removeTag',
+  'main-normal:<Space>ca': 'addToCollection',
+  'main-normal:<Space>cr': 'removeFromCollection',
+  'main-normal:<Space>tf': 'toggleTagFilter',
+  'main-normal:<Space>tc': 'clearTagFilters',
+  'main-normal:<Space>q': 'closeCurrentTab',
+  'main-normal:<Space>fn': 'findNotes',
+  'main-normal:<Space>pp': 'managePlugins',
   'main-normal:e': 'mainFocusTree',
-  'main-normal:yy': 'mainYankCitekey',
+  'main-normal:<Space>yy': 'mainYankCitekey',
   'main-normal:o': 'mainOpenPDF',
   'main-normal:wh': 'mainFocusLeft',
   'main-normal:wl': 'mainFocusRight',
@@ -206,9 +206,9 @@ export const DEFAULT_BINDINGS = {
   'main-normal:L': 'nextTab',
   'main-normal:<Enter>': 'mainActivate',
   'main-normal:<Return>': 'mainActivate',
-  'main-normal:<Space>': 'mainToggleSelection',
+  'main-normal:s': 'mainToggleSelection',
   'main-normal:v': 'mainEnterSelect',
-  'main-select:<Space>': 'mainSelectFinish',
+  'main-select:s': 'mainSelectFinish',
   'main-select:j': 'mainSelectDown',
   'main-select:k': 'mainSelectUp',
   'main-select:gg': 'mainSelectFirst',
@@ -515,6 +515,53 @@ export function migrateMainSpaceSelectionOverrides(raw: unknown): string {
     delete overrides[key];
     if (!(directKey in overrides)) overrides[directKey] = action;
   }
+
+  return stringifyBindingOverrides(overrides);
+}
+
+/**
+ * Restores one Space-led command namespace across Main/Reader/Note.
+ *
+ * Schema 14 used exact Main Space for Selection and direct Main semantic
+ * prefixes. Schema 15 moves Selection/Visual commit to s and moves only
+ * explicit default tombstones back to the Space-led defaults. Deliberate custom
+ * direct bindings remain direct custom bindings.
+ */
+export function migrateUnifiedSpaceLeaderOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const move = (oldKey: string, newKey: string, onlyNull = false): void => {
+    if (!(oldKey in overrides)) return;
+    const action = overrides[oldKey];
+    if (onlyNull && action !== null) return;
+    delete overrides[oldKey];
+    if (!(newKey in overrides)) overrides[newKey] = action;
+  };
+
+  for (const [oldKey, newKey] of [
+    ['main-normal:ff', 'main-normal:<Space>ff'],
+    ['main-normal:fq', 'main-normal:<Space>fq'],
+    ['main-normal:fa', 'main-normal:<Space>fa'],
+    ['main-normal:fc', 'main-normal:<Space>fc'],
+    ['main-normal:,', 'main-normal:<Space>,'],
+    ['main-normal:ta', 'main-normal:<Space>ta'],
+    ['main-normal:tr', 'main-normal:<Space>tr'],
+    ['main-normal:ca', 'main-normal:<Space>ca'],
+    ['main-normal:cr', 'main-normal:<Space>cr'],
+    ['main-normal:tf', 'main-normal:<Space>tf'],
+    ['main-normal:tc', 'main-normal:<Space>tc'],
+    ['main-normal:q', 'main-normal:<Space>q'],
+    ['main-normal:fn', 'main-normal:<Space>fn'],
+    ['main-normal:pp', 'main-normal:<Space>pp'],
+    ['main-normal:yy', 'main-normal:<Space>yy'],
+  ] as const) {
+    move(oldKey, newKey, true);
+  }
+
+  // Exact Space used to be the reserved persistent-set operation, so any
+  // explicit override belongs with that semantic slot rather than with the new
+  // leader root.
+  move('main-normal:<Space>', 'main-normal:s');
+  move('main-select:<Space>', 'main-select:s');
 
   return stringifyBindingOverrides(overrides);
 }
