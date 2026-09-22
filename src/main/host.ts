@@ -275,6 +275,13 @@ export async function openMainAdvancedSearch(window: MainWindow): Promise<boolea
   return true;
 }
 
+export async function closeMainAdvancedSearch(window: MainWindow): Promise<boolean> {
+  const pane = mainPane(window);
+  if (!pane?.toggleAdvancedSearchState) return false;
+  await pane.toggleAdvancedSearchState('closed');
+  return true;
+}
+
 function mainScopeView(window: MainWindow): ScopeCursorView | undefined {
   return mainPane(window)?.collectionsView as unknown as ScopeCursorView | undefined;
 }
