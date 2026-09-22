@@ -296,7 +296,8 @@ export class MainWindowController implements MainWindowControllerApi {
     if (
       session.inputMode === 'main-normal' &&
       key === ' ' &&
-      !this.#itemSelect.itemsFocused(window)
+      !this.#itemSelect.itemsFocused(window) &&
+      this.#navigation.panel(window, session) !== 'collections'
     ) {
       this.clearKeyGuide(window, session);
       return;
@@ -360,7 +361,11 @@ export class MainWindowController implements MainWindowControllerApi {
         this.clearKeyGuide(window, session);
         return;
       }
-      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
+      if (
+        decision.action === 'mainToggleSelection' &&
+        !this.#itemSelect.itemsFocused(window) &&
+        this.#navigation.panel(window, session) !== 'collections'
+      ) {
         this.clearKeyGuide(window, session);
         return;
       }
