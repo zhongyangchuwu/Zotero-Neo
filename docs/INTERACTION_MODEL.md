@@ -257,7 +257,7 @@ Initial target policy:
 | Add/remove collection membership | EffectiveSelection |
 | Visual selection operation | VisualTarget -> Selection |
 | Quick/Advanced/tag filtering, sort | View only |
-| citekey/citation copy | explicitly support multiple items or reject unsupported cardinality; never silently use index 0 |
+| citekey/citation copy | Main supports EffectiveSelection batches; Reader/Note remain contextual single-target; never silently use index 0 |
 
 Action-specific normalization remains important. For example, tagging an
 attachment may intentionally normalize to its parent while deleting an
@@ -469,6 +469,12 @@ Start with actions that expose different target semantics:
 2. citekey/citation copy;
 3. Trash/restore;
 4. Add/Remove Tag.
+
+Main citekey copy is the second batch workflow built on the same target contract:
+`yy` uses EffectiveSelection, normalizes through Zotero `Items.keepTopLevel()`,
+deduplicates normalized targets, refuses stale or partially missing citekeys, and
+copies raw Better BibTeX keys separated by one space. Reader/Note delegation
+remains contextual single-target behavior.
 
 Collection membership is the first batch workflow built on this contract:
 
