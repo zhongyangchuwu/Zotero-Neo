@@ -537,7 +537,15 @@ export class MainWindowController implements MainWindowControllerApi {
     context: MainInvocationContext = 'main',
   ): void {
     const beforeMainReadingNavigation =
-      context === 'main' ? () => this.#returnContext.capture(window, session) : undefined;
+      context === 'main'
+        ? () => {
+            const previous = session.returnBookmark;
+            this.#returnContext.capture(window, session);
+            return () => {
+              session.returnBookmark = previous;
+            };
+          }
+        : undefined;
 
     switch (action) {
       case 'openSearch':
