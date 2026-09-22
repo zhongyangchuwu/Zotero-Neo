@@ -22,12 +22,16 @@ function machine(item: PickerItem): boolean {
   );
 }
 
-export function createNotesProvider(window: MainWindow, logger: Logger): PickerProvider {
+export function createNotesProvider(
+  window: MainWindow,
+  logger: Logger,
+  baseItem?: Zotero.Item,
+): PickerProvider {
   return {
     title: 'Notes',
     placeholder: '> Search note names…',
     async load() {
-      const selected = currentMainItem(window);
+      const selected = baseItem ?? currentMainItem(window);
       const base =
         selected?.isAttachment() && selected.parentItemID
           ? mainItem(selected.parentItemID)
