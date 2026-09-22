@@ -62,6 +62,11 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 'f')).toMatchObject({ kind: 'pending' });
   });
 
+  it('shares collection membership keys with Reader item context', () => {
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>ca']).toBe('addToCollection');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>cr']).toBe('removeFromCollection');
+  });
+
   it('keeps collection membership under the c prefix', () => {
     expect(DEFAULT_BINDINGS['main-normal:ca']).toBe('addToCollection');
     expect(DEFAULT_BINDINGS['main-normal:cr']).toBe('removeFromCollection');

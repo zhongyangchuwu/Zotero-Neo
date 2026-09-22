@@ -199,6 +199,10 @@ open grammars or move domain mutation into Picker to save a dispatch step. Comma
 reuse the candidate surface to choose an `ActionId`. Tag sources may constrain/project candidates.
 `TagActions` owns tag candidate choice and persistent item-tag mutation; `MainViewActions` owns
 Main Quick/Advanced/tag View mutations while Zotero's native filter UIs remain authoritative.
+Cross-context item actions should resolve targets through `main/item-targets.ts`:
+Main uses EffectiveSelection, Reader uses the active Reader item, and Note uses
+its active note context. Do not make Reader item actions borrow Main Selection.
+Main View actions and Reader-local PDF actions remain surface-specific.
 
 ## Key Files
 

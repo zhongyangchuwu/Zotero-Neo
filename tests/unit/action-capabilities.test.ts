@@ -89,6 +89,8 @@ const expectedDelegableMainActions: readonly ActionId[] = [
   'nextTab',
   'addTag',
   'removeTag',
+  'addToCollection',
+  'removeFromCollection',
 ];
 
 function sameActions(actual: readonly ActionId[], expected: readonly ActionId[]): void {
@@ -119,8 +121,6 @@ describe('action capability ownership', () => {
       'mainActivate',
       'toggleTagFilter',
       'clearTagFilters',
-      'addToCollection',
-      'removeFromCollection',
       'mainTreeExpand',
     ] as const)
       expect(isReaderDelegableMainAction(action)).toBe(false);
@@ -145,6 +145,8 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'switchTab')).toBe(true);
     expect(isReaderActionForMode('normal', 'addTag')).toBe(true);
     expect(isReaderActionForMode('normal', 'removeTag')).toBe(true);
+    expect(isReaderActionForMode('normal', 'addToCollection')).toBe(true);
+    expect(isReaderActionForMode('normal', 'removeFromCollection')).toBe(true);
     expect(isReaderActionForMode('normal', 'managePlugins')).toBe(true);
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);

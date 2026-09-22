@@ -1,59 +1,9 @@
-import type { MainWindow } from '../core/contracts';
-import {
-  activeContextNoteItem,
-  mainItem,
-  mainReaderForTab,
-  mainSelectedItems,
-  selectedMainTabID,
-  selectedMainTabInfo,
-} from './host';
+import { normalizeTopLevelItemTargets } from './item-targets';
 
-export type ItemTargetSource = 'main' | 'reader' | 'note';
 export type ItemTagState = 'all' | 'mixed' | 'none';
 
-export interface ItemTargetSet {
-  readonly source: ItemTargetSource;
-  readonly items: readonly Zotero.Item[];
-}
-
-function normalizedItem(item: Zotero.Item | undefined): Zotero.Item | undefined {
-  if (!item) return undefined;
-  if ((item.isAttachment() || item.isNote()) && item.parentItemID)
-    return mainItem(item.parentItemID) ?? item;
-  return item;
-}
-
-export function normalizeItemTargets(items: readonly Zotero.Item[]): Zotero.Item[] {
-  const byID = new Map<number, Zotero.Item>();
-  for (const item of items) {
-    const normalized = normalizedItem(item);
-    if (normalized) byID.set(normalized.id, normalized);
-  }
-  return [...byID.values()];
-}
-
-export function resolveItemTagTargets(
-  window: MainWindow,
-  mainItems: readonly Zotero.Item[] = mainSelectedItems(window),
-): ItemTargetSet {
-  const contextNote = activeContextNoteItem(window);
-  if (contextNote) return { source: 'note', items: normalizeItemTargets([contextNote]) };
-
-  const tabID = selectedMainTabID(window);
-  const reader = tabID ? mainReaderForTab(tabID) : null;
-  if (reader) {
-    const item = reader.itemID ? mainItem(reader.itemID) : undefined;
-    return { source: 'reader', items: normalizeItemTargets(item ? [item] : []) };
-  }
-
-  const tab = selectedMainTabInfo(window);
-  if (tab?.type?.startsWith('note')) {
-    const item = tab.data?.itemID ? mainItem(tab.data.itemID) : undefined;
-    return { source: 'note', items: normalizeItemTargets(item ? [item] : []) };
-  }
-
-  return { source: 'main', items: normalizeItemTargets(mainItems) };
-}
+/** @deprecated Use normalizeTopLevelItemTargets from item-targets. */
+export const normalizeItemTargets = normalizeTopLevelItemTargets;
 
 export function itemTagState(items: readonly Zotero.Item[], tag: string): ItemTagState {
   if (!items.length) return 'none';

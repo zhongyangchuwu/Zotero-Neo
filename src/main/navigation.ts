@@ -7,7 +7,6 @@ import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 import {
   closeSelectedMainTab,
-  currentMainItem,
   cycleMainTab,
   mainHost,
   mainScopeCursorDetached,
@@ -20,6 +19,7 @@ import {
   toggleMainScopeAtCursor,
 } from './host';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
+import { resolveItemTargets, type ItemTargetContext } from './item-targets';
 
 type Selection = {
   focused?: number;
@@ -522,64 +522,39 @@ export class MainNavigation {
   yankCitekey(
     window: MainWindow,
     session: MainWindowSession,
-    context: 'main' | 'reader' | 'note' = 'main',
+    context: ItemTargetContext = 'main',
   ): void {
     try {
-      let item: Zotero.Item | undefined;
-
-      if (context === 'reader') {
-        item = currentMainItem(window);
-      } else if (context === 'note') {
-        item = mainHost(window).ZoteroPane?.getSelectedItems?.()[0];
-      } else {
-        const targets = resolveMainEffectiveTargets(window, session);
-        if (targets.missing > 0) {
-          this.status(
-            session,
-            '✗ Selection contains unavailable items; refresh before citekey copy',
-          );
-          return;
-        }
-        if (!targets.total || !targets.items.length) {
-          this.status(session, '✗ No item target');
-          return;
-        }
-
-        const keepTopLevel = (
-          Zotero.Items as unknown as {
-            keepTopLevel?(items: Zotero.Item[]): Zotero.Item[];
-          }
-        ).keepTopLevel;
-        const normalized = keepTopLevel ? keepTopLevel([...targets.items]) : [...targets.items];
-
-        const byID = new Map<number, Zotero.Item>();
-        for (const target of normalized) byID.set(target.id, target);
-        const items = [...byID.values()];
-        const keys = items.map((target) => citationKey(target));
-        const missing = keys.filter((key) => !key).length;
-        if (missing) {
-          this.status(
-            session,
-            `✗ ${missing} target${missing === 1 ? '' : 's'} without citekey (BBT not ready?)`,
-          );
-          return;
-        }
-
-        copyToClipboard(keys.join(' '));
+      const targets = resolveItemTargets(window, session, context);
+      if (targets.missing > 0) {
         this.status(
           session,
-          keys.length === 1 ? `✓ @${keys[0]}` : `✓ Copied ${keys.length} citekeys`,
+          context === 'main'
+            ? '✗ Selection contains unavailable items; refresh before citekey copy'
+            : '✗ Context item is unavailable; refresh before citekey copy',
+        );
+        return;
+      }
+      if (!targets.total || !targets.items.length) {
+        this.status(session, '✗ No item target');
+        return;
+      }
+
+      const keys = targets.items.map((target) => citationKey(target));
+      const missing = keys.filter((key) => !key).length;
+      if (missing) {
+        this.status(
+          session,
+          `✗ ${missing} target${missing === 1 ? '' : 's'} without citekey (BBT not ready?)`,
         );
         return;
       }
 
-      const key = item ? citationKey(item) : '';
-      if (!key) {
-        this.status(session, '✗ No citekey (BBT not ready?)');
-        return;
-      }
-      copyToClipboard(key);
-      this.status(session, `✓ @${key}`);
+      copyToClipboard(keys.join(' '));
+      this.status(
+        session,
+        keys.length === 1 ? `✓ @${keys[0]}` : `✓ Copied ${keys.length} citekeys`,
+      );
     } catch (error) {
       this.status(session, `✗ ${String(error).slice(0, 40)}`);
     }

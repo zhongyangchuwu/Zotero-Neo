@@ -55,11 +55,14 @@ off-screen Main filter.
 `ta` and `tr` are available from Main, Reader, and Note when Neo can resolve
 a taggable target set:
 
-- **Main**: all currently selected main-window items.
-- **Reader**: the active attachment's parent bibliographic item when one exists.
-- **Note**: a child note's parent bibliographic item when one exists; otherwise
-  the standalone note itself.
-- A focused Reader context-note editor owns the target while it has focus.
+- **Main**: EffectiveSelection (explicit Neo Selection, otherwise Cursor).
+- **Reader**: the active Reader item's parent bibliographic item when one exists;
+  Main Selection is never borrowed.
+- **Note**: the active note-context item's parent bibliographic item when one
+  exists; otherwise the standalone note itself.
+
+These rules come from the shared contextual item-target resolver rather than a
+Tag-specific context detector.
 
 Child attachments/notes are normalized and deduplicated before mutation.
 Cross-library target sets are rejected rather than silently mixing library tag
