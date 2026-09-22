@@ -24,7 +24,9 @@ import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 type Selection = {
   focused?: number;
   count?: number;
+  selected?: Iterable<number>;
   select?(index: number, shouldDebounce?: boolean): void;
+  toggleSelect?(index: number, shouldDebounce?: boolean): void;
 };
 type TreeFocusTarget = { focus?(): void };
 export type TreeView = {
