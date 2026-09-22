@@ -132,7 +132,7 @@ export class CollectionMembershipActions {
 
           const collectionID = Number(candidate.id);
           const collection = Zotero.Collections.get(collectionID);
-          if (!collection || collection === false || collection.libraryID !== current.libraryID) {
+          if (!collection || collection.libraryID !== current.libraryID) {
             this.#navigation.status(session, '✗ Collection target is unavailable');
             return;
           }
