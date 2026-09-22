@@ -461,7 +461,7 @@ Use narrow feature owners and action contracts.
 2. Keep Selection unchanged while Visual moves.
 3. Implement grow/shrink/swap by anchor/head, not accumulated native range
    union.
-4. Commit Toggle Selection on Space.
+4. Commit Toggle Selection on `s`.
 5. Cancel on Esc/`v` without Selection mutation.
 
 The persisted binding scope may temporarily remain `main-select`; renaming it
@@ -477,14 +477,14 @@ Start with actions that expose different target semantics:
 4. Add/Remove Tag.
 
 Main citekey copy is the second batch workflow built on the same target contract:
-`yy` uses EffectiveSelection, normalizes through Zotero `Items.keepTopLevel()`,
+`<Space>yy` uses EffectiveSelection, normalizes through Zotero `Items.keepTopLevel()`,
 deduplicates normalized targets, refuses stale or partially missing citekeys, and
 copies raw Better BibTeX keys separated by one space. Reader/Note delegation
 remains contextual single-target behavior.
 
 Collection membership is the first batch workflow built on this contract:
 
-- `ca` / `cr` operate on EffectiveSelection;
+- `<Space>ca` / `<Space>cr` operate on EffectiveSelection;
 - normalize targets with Zotero's native `Items.keepTopLevel()`;
 - require one library before resolving a collection target;
 - Picker resolves one collection from that library but does not own mutation;
@@ -511,20 +511,20 @@ Only after Cursor/Selection/Visual semantics are stable:
 
 Before the model is considered stable, dogfood at least these scenarios:
 
-1. Press Space repeatedly on adjacent rows: each item toggles and Cursor advances.
+1. Press `s` repeatedly on adjacent rows: each item toggles and Cursor advances.
 2. Selection contains A/C; move Cursor from C to F: A/C remains selected.
 3. With Selection A/C and Visual B..E, grow, shrink, swap endpoints, then cancel:
    Selection remains A/C.
-4. Commit the same Visual range with Space: the all-or-none target rule is
+4. Commit the same Visual range with `s`: the all-or-none target rule is
    applied.
 5. Change a filter so only three of seven selected items remain visible:
    Selection still contains seven stable item identities and UI reports the
    visible subset.
 6. Sort or refresh: Cursor and Selection recover by item identity, not stale row
    index.
-7. Move focus to the collection tree and press Space: item Selection is not
+7. Move focus to the collection tree and press `s`: item Selection is not
    accidentally toggled.
-8. Reader/Note Space leader, IME handling, and `Ctrl+h/j/k/l` focus behavior do
+8. Reader/Main/Note Space leader, IME handling, and `Ctrl+h/j/k/l` focus behavior do
    not regress.
 9. Selection A/B with Cursor on unselected C: inspect/open targets C while
    workset actions target A/B according to their explicit contracts.
