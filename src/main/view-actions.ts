@@ -5,6 +5,7 @@ import type { MainWindowSession } from './session';
 import {
   applyMainQuickSearch,
   applyMainTagFilter,
+  closeMainAdvancedSearch,
   focusMainQuickSearch,
   mainViewFilterState,
   openMainAdvancedSearch,
@@ -48,6 +49,10 @@ export class MainViewActions {
 
   applyQuickSearch(window: MainWindow, text: string): Promise<boolean> {
     return applyMainQuickSearch(window, text);
+  }
+
+  closeAdvancedSearch(window: MainWindow): Promise<boolean> {
+    return closeMainAdvancedSearch(window);
   }
 
   applyTagFilter(window: MainWindow, tags: readonly string[]): Promise<number> {
