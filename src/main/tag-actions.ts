@@ -201,7 +201,8 @@ export class TagActions {
       this.#navigation.status(session, '→ No tag filters active');
       return;
     }
-    void this.#viewActions.applyTagFilter(window, [])
+    void this.#viewActions
+      .applyTagFilter(window, [])
       .then((matches) =>
         this.#navigation.status(
           session,

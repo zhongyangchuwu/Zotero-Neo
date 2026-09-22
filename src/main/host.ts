@@ -188,7 +188,9 @@ export function mainPane(window: MainWindow): MainPane | undefined {
 }
 
 function mainQuickSearch(window: MainWindow): MainQuickSearch | undefined {
-  return (window.document.getElementById('zotero-tb-search') as MainQuickSearch | null) ?? undefined;
+  return (
+    (window.document.getElementById('zotero-tb-search') as MainQuickSearch | null) ?? undefined
+  );
 }
 
 export function mainViewFilterState(window: MainWindow): MainViewFilterState {

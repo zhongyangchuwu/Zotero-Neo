@@ -15,11 +15,7 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Zotero', originalZotero);
 });
 
-function harness(options: {
-  quick?: string;
-  tags?: string[];
-  advanced?: boolean;
-}) {
+function harness(options: { quick?: string; tags?: string[]; advanced?: boolean }) {
   const quick = options.quick ?? '';
   const activeTags = new Set(options.tags ?? []);
   const select = vi.fn();
