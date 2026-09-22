@@ -1785,6 +1785,18 @@ export class ReaderSession {
         },
       });
     }
+    const appendSelectionToNote =
+      this.#dependencies.controller.dependencies.appendSelectionToNote;
+    const ownerWindow = this.#dependencies.reader._window ?? null;
+    if (appendSelectionToNote && ownerWindow) {
+      actions.push({
+        id: 'neo.append-to-note',
+        label: language === 'zh-CN' ? '追加到 Zotero 笔记' : 'Append to Zotero note',
+        managesFocus: true,
+        run: (selection) => appendSelectionToNote(selection, ownerWindow),
+      });
+    }
+
     const addBuiltIn = (id: string, action: ActionId): void => {
       actions.push({
         id,
