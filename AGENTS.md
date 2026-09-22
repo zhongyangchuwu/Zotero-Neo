@@ -31,8 +31,67 @@ bundles, the preference pane markup, the manifest, and icons.
 
 ### Testing
 `npm run verify` runs formatting, strict TypeScript checks, Vitest contracts,
-the esbuild package build, and the XPI member check. GitHub Actions runs this
-workflow through both native wrappers.
+the esbuild package build, and the XPI member check. GitHub Actions runs the
+repository CI workflow; inspect the current workflow definition rather than
+assuming a fixed OS matrix.
+
+### GitHub MCP development workflow
+
+When development is performed through GitHub MCP rather than a local checkout,
+keep repository writes, workflow execution, and CI diagnosis explicit and
+SHA-guarded.
+
+1. **Read before writing.**
+   - Read the current PR/base/head state and the exact file SHA before updating a
+     file.
+   - Keep feature work on a branch; avoid writing directly to `main`.
+   - Use the current PR head SHA as an optimistic-concurrency guard where the
+     GitHub operation supports one.
+
+2. **Use GitHub Actions MCP for workflow operations.**
+   - Inspect workflow runs, jobs, and job logs before changing code in response
+     to CI failure. A failed `Build XPI` step may actually be
+     `npm run verify` failing on format, typecheck, tests, or packaging.
+   - Do not infer a platform-specific bug merely because both Linux and Windows
+     jobs fail at the same outer step; read the inner log first.
+
+3. **Use the repository Format workflow instead of hand-formatting through MCP.**
+   - The canonical formatter workflow is
+     `.github/workflows/format.yml` (`Format branch`).
+   - Dispatch the workflow definition from `main` with:
+     - `target_ref`: the same-repository feature branch to format;
+     - `expected_sha`: that branch's **current** HEAD.
+   - The workflow runs `npm run format`, validates the diff, commits
+     `style: apply prettier`, and pushes back to the target branch.
+   - If any commit lands on the branch after reading its SHA, refresh the head
+     and dispatch again with the new `expected_sha`; the workflow intentionally
+     rejects stale SHAs.
+   - Do not temporarily add Prettier writes, diagnostic `git diff`, or
+     unconditional `exit 1` statements to `tools/build.sh` just to repair a
+     formatting failure. Use the dedicated formatter or a dedicated diagnostic
+     workflow.
+
+4. **Keep CI topology internally consistent.**
+   - If a platform job is temporarily disabled in `build.yml`, update
+     downstream `needs` lists in the same change.
+   - Treat this as a CI configuration change, not as evidence that the disabled
+     platform was the cause of an unrelated failure.
+
+5. **Handle PR branch rewrites carefully.**
+   - Force-resetting an open PR branch exactly to its base can cause GitHub to
+     auto-close the PR because it temporarily has no commits.
+   - Prefer a normal rebase/update when practical. If a deliberate reset is
+     needed, restore the feature commits and verify/reopen the PR before
+     continuing.
+
+6. **Merge only from a verified head.**
+   - Re-read PR mergeability and the latest head SHA after formatter/CI commits.
+   - Require the relevant CI jobs to pass and use `expected_head_sha` when
+     merging so a concurrent push cannot be merged accidentally.
+
+This workflow is the reference path for ChatGPT/GitHub-MCP changes in this
+repository. Prefer existing repository workflows and narrow GitHub operations
+over ad-hoc build-script edits.
 
 Zotero GUI behavior still requires manual verification:
 1. Configure the dedicated profile once with `npm run dev:setup`, then launch
@@ -81,6 +140,12 @@ vendor/                    pinned, licensed third-party source/build snapshots
 - Methods and variables use `camelCase`; internal fields use native `#private`
   fields. Constants use `SCREAMING_SNAKE_CASE`.
 - Binding mode prefixes remain `'normal:j'`, `'visual:zy'`, and `'main: ff'`.
+- Do not conflate persisted/display key notation with runtime event tokens.
+  `keyString(event)` currently returns lowercase named-key tokens such as
+  `escape`, `enter`, `home`, and `arrowdown`; Neovim forms such as
+  `<Esc>` and `<Enter>` belong to the binding grammar/display layer. Follow
+  an existing runtime consumer such as Plugin Manager when handling raw key
+  events.
 
 ### Formatting
 - Use single quotes unless a host format requires otherwise.
