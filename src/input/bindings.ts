@@ -167,6 +167,8 @@ export const DEFAULT_BINDINGS = {
   'main-normal:,': 'switchTab',
   'main-normal:ta': 'addTag',
   'main-normal:tr': 'removeTag',
+  'main-normal:ca': 'addToCollection',
+  'main-normal:cr': 'removeFromCollection',
   'main-normal:tf': 'toggleTagFilter',
   'main-normal:tc': 'clearTagFilters',
   'main-normal:q': 'closeCurrentTab',
