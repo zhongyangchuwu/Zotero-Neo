@@ -4,7 +4,7 @@ import { normalizeTopLevelItemTargets } from './item-targets';
 export function readerCaptureBaseItem(context: ReaderSelectionContext): Zotero.Item | null {
   if (context.itemID === null) return null;
   const item = Zotero.Items.get(context.itemID);
-  if (!item || item === false) return null;
+  if (!item) return null;
   return normalizeTopLevelItemTargets([item])[0] ?? null;
 }
 
