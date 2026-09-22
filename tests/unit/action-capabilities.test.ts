@@ -20,6 +20,9 @@ import { actionsForBindingMode } from '../../src/input/binding-capabilities';
 
 const expectedMainActions: readonly ActionId[] = [
   'openCommandPalette',
+  'openSearch',
+  'findNext',
+  'findPrevious',
   'findAllItems',
   'findCollectionItems',
   'switchTab',
