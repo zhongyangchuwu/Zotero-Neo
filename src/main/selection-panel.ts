@@ -9,6 +9,7 @@ import {
   projectMainSelection,
 } from './host';
 import type { MainWindowSession } from './session';
+import type { MainReturnContext } from './return-context';
 import type { ItemRef } from './selection-store';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -62,9 +63,11 @@ export function selectionPanelEntries(
  */
 export class SelectionPanel {
   readonly #logger: SelectionPanelLogger;
+  readonly #returnContext: MainReturnContext;
 
-  constructor(logger: SelectionPanelLogger) {
+  constructor(logger: SelectionPanelLogger, returnContext: MainReturnContext) {
     this.#logger = logger;
+    this.#returnContext = returnContext;
   }
 
   open(window: MainWindow, session: MainWindowSession): void {
@@ -291,6 +294,7 @@ export class SelectionPanel {
       this.renderFooter(session, 'Reveal is unavailable in this Zotero view');
       return;
     }
+    this.#returnContext.capture(window, session);
     this.close(session);
     try {
       void Promise.resolve(selectItem.call(pane, ref.itemID)).catch((error) =>
