@@ -46,7 +46,10 @@ type MainPane = {
   readonly collectionsView?: TreeView;
   readonly itemsView?: TreeView & {
     readonly rowCount?: number;
-    setFilter?(type: 'tags', tags: ReadonlySet<string>): Promise<void> | void;
+    setFilter?(
+      type: 'tags' | 'search',
+      value: ReadonlySet<string> | string,
+    ): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
   toggleAdvancedSearchState?(state: 'open' | 'collapsed' | 'closed'): Promise<void> | void;
@@ -63,12 +66,12 @@ type MainPane = {
 };
 
 type MainQuickSearch = HTMLElement & {
-  readonly searchTextbox?: {
-    readonly value?: string;
+  searchTextbox?: {
+    value?: string;
     select?(): void;
     focus?(): void;
   };
-  readonly value?: string;
+  value?: string;
 };
 
 export interface MainViewFilterState {
@@ -87,6 +90,8 @@ type ScopeCursorTree = {
   ): void;
 };
 
+type ScopeRow = { readonly id?: string };
+
 type ScopeCursorView = {
   readonly rowCount?: number;
   readonly tree?: ScopeCursorTree;
@@ -97,6 +102,9 @@ type ScopeCursorView = {
     select?(index: number, shouldDebounce?: boolean): boolean | void;
     toggleSelect?(index: number, shouldDebounce?: boolean): void;
   };
+  getRow?(index: number): ScopeRow | undefined;
+  getRowIndexByID?(id: string): number | false;
+  selectByID?(id: string, ensureRowVisible?: boolean): Promise<void> | void;
   ensureRowIsVisible?(index: number): void;
 };
 
@@ -236,6 +244,17 @@ export function focusMainQuickSearch(window: MainWindow): boolean {
   return true;
 }
 
+export async function applyMainQuickSearch(window: MainWindow, text: string): Promise<boolean> {
+  const pane = mainPane(window);
+  const quick = mainQuickSearch(window);
+  if (!pane?.itemsView?.setFilter || !quick) return false;
+
+  quick.value = text;
+  if (quick.searchTextbox) quick.searchTextbox.value = text;
+  await pane.itemsView.setFilter('search', text);
+  return true;
+}
+
 export async function openMainAdvancedSearch(window: MainWindow): Promise<boolean> {
   const pane = mainPane(window);
   if (!pane) return false;
@@ -270,6 +289,42 @@ export function mainScopeSelectedRows(window: MainWindow): number[] {
   if (selection.selected) return [...selection.selected].filter((row) => Number.isInteger(row));
   const focused = selection.focused;
   return selection.count && focused !== undefined ? [focused] : [];
+}
+
+export function mainScopeSelectedIDs(window: MainWindow): string[] {
+  const view = mainScopeView(window);
+  if (!view) return [];
+  return mainScopeSelectedRows(window)
+    .map((row) => view.getRow?.(row)?.id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
+
+export async function restoreMainScopeIDs(
+  window: MainWindow,
+  ids: readonly string[],
+): Promise<boolean> {
+  const view = mainScopeView(window);
+  if (!view?.selection || !ids.length) return false;
+
+  const [first, ...rest] = ids;
+  if (!first) return false;
+  if (view.selectByID) await view.selectByID(first, true);
+  else {
+    const row = view.getRowIndexByID?.(first);
+    if (row === undefined || row === false || row < 0 || !view.selection.select) return false;
+    view.selection.select(row, false);
+  }
+
+  for (const id of rest) {
+    const row = view.getRowIndexByID?.(id);
+    if (row === undefined || row === false || row < 0) continue;
+    if (!mainScopeSelectedRows(window).includes(row)) view.selection.toggleSelect?.(row, false);
+  }
+
+  return ids.every((id) => {
+    const row = view.getRowIndexByID?.(id);
+    return row !== undefined && row !== false && mainScopeSelectedRows(window).includes(row);
+  });
 }
 
 export function mainScopeCursorDetached(window: MainWindow): boolean {
