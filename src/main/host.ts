@@ -73,9 +73,17 @@ type ItemTreeRow = {
   readonly ref?: Zotero.Item;
 };
 
+type MainEventBinding = {
+  addListener(listener: () => void | Promise<void>): void;
+  removeListener(listener: () => void | Promise<void>): void;
+};
+
 type ItemCursorView = {
   readonly rowCount?: number;
   readonly tree?: ItemCursorTree;
+  readonly onSelect?: MainEventBinding;
+  readonly onRefresh?: MainEventBinding;
+  readonly _loadingDeferredResolved?: boolean;
   readonly selection?: {
     readonly focused?: number;
     select?(index: number, shouldDebounce?: boolean): boolean | void;
@@ -209,6 +217,31 @@ export function mainItemCursorRow(window: MainWindow): number | undefined {
   const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
   const focused = view?.selection?.focused;
   return focused === undefined ? undefined : focused;
+}
+
+export function mainItemViewSettled(window: MainWindow): boolean {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  return view?._loadingDeferredResolved !== false;
+}
+
+export function observeMainItemView(
+  window: MainWindow,
+  handlers: {
+    readonly onSelect?: () => void | Promise<void>;
+    readonly onRefresh?: () => void | Promise<void>;
+  },
+): () => void {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const select = handlers.onSelect;
+  const refresh = handlers.onRefresh;
+
+  if (select) view?.onSelect?.addListener(select);
+  if (refresh) view?.onRefresh?.addListener(refresh);
+
+  return () => {
+    if (select) view?.onSelect?.removeListener(select);
+    if (refresh) view?.onRefresh?.removeListener(refresh);
+  };
 }
 
 export function mainItemRowCount(window: MainWindow): number {
