@@ -325,8 +325,11 @@ by closing the native editor. If a reveal destroys an existing Advanced Search
 condition set, Neo reports a partial return rather than inventing conditions it
 cannot reconstruct.
 
-The bookmark is single-level, not a history stack. `gr` performs explicit
-return; closing Reader/Note does not automatically restore it.
+The bookmark is single-level, not a history stack. Main and Reader share
+`gr` as explicit return navigation. Opening a Main item into Reader/Note captures
+the bookmark only immediately before a real host navigation; failed opens restore
+the previous bookmark. Reader `gr` returns to the originating Main tab/View but
+does not close the Reader tab. Closing Reader/Note does not automatically restore it.
 
 Do not claim that a native reveal operation preserves triage context unless that
 behavior is explicitly verified.
