@@ -90,8 +90,16 @@ export class MainReturnContext {
       partial.push('tags');
     }
 
-    const restoredView = this.#viewActions.state(window);
-    if (bookmark.advancedSearch && !restoredView.advancedSearch) {
+    let restoredView = this.#viewActions.state(window);
+    if (!bookmark.advancedSearch && restoredView.advancedSearch) {
+      try {
+        if (!(await this.#viewActions.closeAdvancedSearch(window))) partial.push('advanced search');
+        restoredView = this.#viewActions.state(window);
+      } catch (error) {
+        this.#logger.debug(`return Advanced Search close failed: ${String(error)}`);
+        partial.push('advanced search');
+      }
+    } else if (bookmark.advancedSearch && !restoredView.advancedSearch) {
       partial.push('advanced search');
     }
 
