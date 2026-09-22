@@ -81,6 +81,7 @@ export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
   'findCollectionItems',
   'findNotes',
   'managePlugins',
+  'mainReturnContext',
   'switchTab',
   'mainYankCitekey',
   'closeCurrentTab',
