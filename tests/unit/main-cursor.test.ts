@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
+import type { Logger } from '../../src/core/logging';
 import {
   currentMainItemCursorRef,
   mainItemRefAtRow,
@@ -10,6 +11,138 @@ import {
   restoreMainItemCursor,
   visibleMainSelectionCount,
 } from '../../src/main/host';
+import { installMainViewLifecycle } from '../../src/main/view-lifecycle';
+import { SelectionStore } from '../../src/main/selection-store';
+
+describe('Main View lifecycle', () => {
+  it('restores Cursor and visible Selection by identity after a View reorder', () => {
+    const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
+    const itemB = { id: 11, libraryID: 1 } as Zotero.Item;
+    const itemC = { id: 12, libraryID: 1 } as Zotero.Item;
+    let rows = [
+      { isObjectRow: true, ref: itemA },
+      { isObjectRow: true, ref: itemB },
+      { isObjectRow: true, ref: itemC },
+    ];
+    let focused = 1;
+    const selected = new Set<number>([0, 2]);
+    const selectListeners = new Set<() => void>();
+    const refreshListeners = new Set<() => void>();
+    const binding = (listeners: Set<() => void>) => ({
+      addListener: (listener: () => void) => listeners.add(listener),
+      removeListener: (listener: () => void) => listeners.delete(listener),
+    });
+    const selection = {
+      get focused() {
+        return focused;
+      },
+      select: vi.fn((index: number) => {
+        selected.clear();
+        selected.add(index);
+        focused = index;
+      }),
+      toggleSelect: vi.fn((index: number) => selected.add(index)),
+      clearSelection: vi.fn(() => selected.clear()),
+    };
+    const view = {
+      get rowCount() {
+        return rows.length;
+      },
+      _loadingDeferredResolved: true,
+      onSelect: binding(selectListeners),
+      onRefresh: binding(refreshListeners),
+      tree: {
+        _onSelection: vi.fn((index: number) => {
+          focused = index;
+        }),
+      },
+      selection,
+      getRow: (index: number) => rows[index],
+      getRowIndexByID: (id: number) => {
+        const index = rows.findIndex((row) => row.ref.id === id);
+        return index < 0 ? false : index;
+      },
+      ensureRowIsVisible: vi.fn(),
+    };
+    const window = { ZoteroPane: { itemsView: view } } as unknown as MainWindow;
+    const workset = new SelectionStore();
+    workset.add({ libraryID: 1, itemID: 10 });
+    workset.add({ libraryID: 1, itemID: 12 });
+    const logger = { debug: vi.fn(), diagnostic: vi.fn() } satisfies Logger;
+
+    const cleanup = installMainViewLifecycle(
+      window,
+      { selection: workset } as unknown as import('../../src/main/session').MainWindowSession,
+      logger,
+    );
+
+    rows = [rows[2]!, rows[0]!, rows[1]!];
+    [...refreshListeners][0]!();
+
+    expect(focused).toBe(2);
+    expect([...selected].sort()).toEqual([0, 1]);
+    expect(workset.values()).toEqual([
+      { libraryID: 1, itemID: 10 },
+      { libraryID: 1, itemID: 12 },
+    ]);
+
+    cleanup();
+  });
+
+  it('keeps hidden workset members and does not restore a hidden Cursor to another row', () => {
+    const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
+    const itemB = { id: 11, libraryID: 1 } as Zotero.Item;
+    let rows = [
+      { isObjectRow: true, ref: itemA },
+      { isObjectRow: true, ref: itemB },
+    ];
+    let focused = 1;
+    const refreshListeners = new Set<() => void>();
+    const view = {
+      get rowCount() {
+        return rows.length;
+      },
+      _loadingDeferredResolved: true,
+      onSelect: { addListener: () => {}, removeListener: () => {} },
+      onRefresh: {
+        addListener: (listener: () => void) => refreshListeners.add(listener),
+        removeListener: (listener: () => void) => refreshListeners.delete(listener),
+      },
+      tree: { _onSelection: vi.fn((index: number) => (focused = index)) },
+      selection: {
+        get focused() {
+          return focused;
+        },
+        select: vi.fn((index: number) => (focused = index)),
+        clearSelection: vi.fn(),
+      },
+      getRow: (index: number) => rows[index],
+      getRowIndexByID: (id: number) => {
+        const index = rows.findIndex((row) => row.ref.id === id);
+        return index < 0 ? false : index;
+      },
+    };
+    const window = { ZoteroPane: { itemsView: view } } as unknown as MainWindow;
+    const workset = new SelectionStore();
+    workset.add({ libraryID: 1, itemID: 10 });
+    workset.add({ libraryID: 1, itemID: 11 });
+    const cleanup = installMainViewLifecycle(
+      window,
+      { selection: workset } as unknown as import('../../src/main/session').MainWindowSession,
+      { debug: vi.fn(), diagnostic: vi.fn() },
+    );
+
+    rows = [rows[0]!];
+    focused = 0;
+    [...refreshListeners][0]!();
+
+    expect(view.tree._onSelection).not.toHaveBeenCalled();
+    expect(workset.size).toBe(2);
+    expect(workset.has({ libraryID: 1, itemID: 11 })).toBe(true);
+
+    cleanup();
+  });
+});
 
 describe('Main item Cursor host adapter', () => {
   it('uses Zotero focus-only selection movement without collapsing native selection', () => {
