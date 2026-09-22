@@ -23,6 +23,8 @@ type MainTabInfo = {
 type TagScopeRow = {
   readonly ref?: { readonly libraryID?: number };
   readonly tags?: Iterable<string>;
+  readonly searchText?: string;
+  readonly advancedSearch?: unknown;
   getTags?(): Promise<readonly TagJson[]>;
 };
 
@@ -47,6 +49,8 @@ type MainPane = {
     setFilter?(type: 'tags', tags: ReadonlySet<string>): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
+  toggleAdvancedSearchState?(state: 'open' | 'collapsed' | 'closed'): Promise<void> | void;
+  openAdvancedSearchFromQuickSearch?(text: string, mode?: string): Promise<void> | void;
   selectItem?(id: number): Promise<void> | void;
   viewAttachment?(id: number): void;
   openNote?(id: number, options?: { openInWindow: boolean }): Promise<void> | void;
@@ -57,6 +61,21 @@ type MainPane = {
     selectedTags?: Set<string>;
   } | null;
 };
+
+type MainQuickSearch = HTMLElement & {
+  readonly searchTextbox?: {
+    readonly value?: string;
+    select?(): void;
+    focus?(): void;
+  };
+  readonly value?: string;
+};
+
+export interface MainViewFilterState {
+  readonly quickSearchText: string;
+  readonly tags: readonly string[];
+  readonly advancedSearch: boolean;
+}
 
 type ItemCursorTree = {
   _onSelection?(
@@ -166,6 +185,52 @@ export function closeSelectedMainTab(window: MainWindow): void {
 
 export function mainPane(window: MainWindow): MainPane | undefined {
   return mainHost(window).ZoteroPane;
+}
+
+function mainQuickSearch(window: MainWindow): MainQuickSearch | undefined {
+  return (
+    (window.document.getElementById('zotero-tb-search') as MainQuickSearch | null) ?? undefined
+  );
+}
+
+export function mainViewFilterState(window: MainWindow): MainViewFilterState {
+  const row = mainPane(window)?.getCollectionTreeRow?.();
+  const quick = mainQuickSearch(window);
+  const quickSearchText = String(
+    quick?.value ?? quick?.searchTextbox?.value ?? row?.searchText ?? '',
+  );
+  return {
+    quickSearchText,
+    tags: currentTagSelection(window),
+    advancedSearch: !!row?.advancedSearch,
+  };
+}
+
+export function focusMainQuickSearch(window: MainWindow): boolean {
+  const textbox = mainQuickSearch(window)?.searchTextbox;
+  if (!textbox?.select) return false;
+  textbox.select();
+  return true;
+}
+
+export async function openMainAdvancedSearch(window: MainWindow): Promise<boolean> {
+  const pane = mainPane(window);
+  if (!pane) return false;
+  const quick = mainQuickSearch(window);
+  const text = String(quick?.value ?? quick?.searchTextbox?.value ?? '').trim();
+
+  if (text && pane.openAdvancedSearchFromQuickSearch) {
+    let mode = 'fields';
+    try {
+      mode = String(Zotero.Prefs.get('search.quicksearch-mode') ?? mode);
+    } catch {}
+    await pane.openAdvancedSearchFromQuickSearch(text, mode);
+    return true;
+  }
+
+  if (!pane.toggleAdvancedSearchState) return false;
+  await pane.toggleAdvancedSearchState('open');
+  return true;
 }
 
 /**

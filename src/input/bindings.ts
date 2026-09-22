@@ -157,6 +157,8 @@ export const DEFAULT_BINDINGS = {
   'note-insert:<C-k>': 'focusReaderSplitUp',
   'note-insert:<C-l>': 'focusReaderSplitRight',
   'main-normal:ff': 'findAllItems',
+  'main-normal:fq': 'mainQuickSearch',
+  'main-normal:fa': 'mainAdvancedSearch',
   'main-normal:/': 'openSearch',
   'main-normal:n': 'findNext',
   'main-normal:N': 'findPrevious',

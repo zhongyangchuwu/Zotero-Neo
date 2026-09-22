@@ -9,6 +9,8 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'findAllItems',
   'findCollectionItems',
   'findNotes',
+  'mainQuickSearch',
+  'mainAdvancedSearch',
   'managePlugins',
   'manageSelection',
   'switchTab',

@@ -56,6 +56,12 @@ describe('0.1.0 default keymap freeze', () => {
     expect(strictPrefixPairs(mainSelect)).toEqual([]);
   });
 
+  it('keeps Main native View search actions under the Find prefix', () => {
+    expect(DEFAULT_BINDINGS['main-normal:fq']).toBe('mainQuickSearch');
+    expect(DEFAULT_BINDINGS['main-normal:fa']).toBe('mainAdvancedSearch');
+    expect(press('main-normal', 'f')).toMatchObject({ kind: 'pending' });
+  });
+
   it('reserves Vim-style Main local find keys without colliding with direct prefixes', () => {
     expect(DEFAULT_BINDINGS['main-normal:/']).toBe('openSearch');
     expect(DEFAULT_BINDINGS['main-normal:n']).toBe('findNext');

@@ -112,8 +112,9 @@ for an invoking action and normally closes; a Manager owns a bounded domain cont
 that can remain open across browsing and repeated operations. Plugin Manager is the
 first concrete Manager surface. Do not extract a generic Manager framework until a
 second real consumer demonstrates a stable shared contract. Tag candidate sources
-may constrain or describe candidates, but item mutation and Main-view filter changes
-remain in the invoking semantic action.
+may constrain or describe candidates. Persistent item-tag mutation remains in
+`TagActions`; Quick Search, Advanced Search, and tag-predicate View mutation are
+coordinated by `MainViewActions` through narrow `main/host.ts` seams.
 
 #### Reader
 

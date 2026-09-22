@@ -44,6 +44,7 @@ import { mainCursorItem } from './action-targets';
 import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
+import { MainViewActions } from './view-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 
 type MainInvocationContext = 'main' | 'reader' | 'note';
@@ -67,6 +68,7 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #pluginManager: PluginManagerPanel;
   readonly #selectionPanel: SelectionPanel;
   readonly #localFind: MainLocalFind;
+  readonly #viewActions: MainViewActions;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -75,6 +77,7 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
     this.#selectionPanel = new SelectionPanel(dependencies.logger);
     this.#localFind = new MainLocalFind((session, text) => this.#navigation.status(session, text));
+    this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -83,6 +86,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#navigation,
       dependencies.preferences,
       this.#picker,
+      this.#viewActions,
     );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,
@@ -558,6 +562,20 @@ export class MainWindowController implements MainWindowControllerApi {
               this.execute(nextAction, window, session, nextCount);
           },
         });
+        break;
+      case 'mainQuickSearch':
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        this.#viewActions.focusQuickSearch(window, session);
+        break;
+      case 'mainAdvancedSearch':
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        this.#viewActions.openAdvancedSearch(window, session);
         break;
       case 'findAllItems':
         void this.#picker.open(window, session, 'all', {

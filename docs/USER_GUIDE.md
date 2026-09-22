@@ -436,6 +436,8 @@ and focus context:
 | `ff` | Find an item in the current library |
 | `fc` | Find an item in the current collection |
 | `fn` | Find and open a note |
+| `fq` | Focus/select Zotero's native Quick Search field |
+| `fa` | Open Zotero's native Advanced Search; convert current Quick Search text when present |
 | `pp` | Open the persistent Plugin Manager panel |
 | `,` | Choose and switch to an open Zotero tab |
 | `q` | Close the active Zotero tab |
@@ -468,7 +470,9 @@ compact item metadata (title/display text, first creator, year, and citekey when
 available). `Escape` cancels the prompt without replacing the previous query.
 A miss leaves Cursor and the current View unchanged. This is deliberately
 different from `ff` / `fc`: those open a fuzzy target chooser, while local
-find is relative, repeatable Cursor motion.
+find is relative, repeatable Cursor motion. It is also different from `fq` and
+`fa`: those edit Zotero's actual View through its native Quick/Advanced Search
+interfaces, so they may change which item rows are visible.
 
 #### Viewport positioning (like Vim's z commands)
 

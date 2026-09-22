@@ -5,7 +5,8 @@ import type { FuzzyPicker } from './picker';
 import { createTagCandidateProvider, type TagRecord } from './picker/providers/tags';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
-import { applyMainTagFilter, currentTagSelection, mainHost } from './host';
+import { mainHost } from './host';
+import type { MainViewActions } from './view-actions';
 import { resolveMainEffectiveTargets } from './action-targets';
 import {
   itemTagState,
@@ -76,17 +77,20 @@ export class TagActions {
   readonly #navigation: MainNavigation;
   readonly #preferences: PreferenceReader;
   readonly #picker: FuzzyPicker;
+  readonly #viewActions: MainViewActions;
 
   constructor(
     logger: Logger,
     navigation: MainNavigation,
     preferences: PreferenceReader,
     picker: FuzzyPicker,
+    viewActions: MainViewActions,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#preferences = preferences;
     this.#picker = picker;
+    this.#viewActions = viewActions;
   }
 
   add(window: MainWindow, session: MainWindowSession): void {
@@ -154,7 +158,7 @@ export class TagActions {
   }
 
   toggleFilter(window: MainWindow, session: MainWindowSession): void {
-    const active = currentTagSelection(window);
+    const active = [...this.#viewActions.state(window).tags];
     const activeSet = new Set(active);
     const pane = mainHost(window).ZoteroPane;
     const row = pane?.getCollectionTreeRow?.();
@@ -181,7 +185,7 @@ export class TagActions {
         if (!name) return;
         const wasActive = active.some((tag) => sameTag(tag, name));
         const next = wasActive ? active.filter((tag) => !sameTag(tag, name)) : [...active, name];
-        const matches = await applyMainTagFilter(window, next);
+        const matches = await this.#viewActions.applyTagFilter(window, next);
         this.#navigation.status(
           session,
           `✓ ${wasActive ? 'Removed' : 'Added'} tag filter “${name}” · ${matches} item${
@@ -193,11 +197,12 @@ export class TagActions {
   }
 
   clearFilters(window: MainWindow, session: MainWindowSession): void {
-    if (!currentTagSelection(window).length) {
+    if (!this.#viewActions.state(window).tags.length) {
       this.#navigation.status(session, '→ No tag filters active');
       return;
     }
-    void applyMainTagFilter(window, [])
+    void this.#viewActions
+      .applyTagFilter(window, [])
       .then((matches) =>
         this.#navigation.status(
           session,

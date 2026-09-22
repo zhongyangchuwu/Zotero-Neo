@@ -18,6 +18,8 @@ const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
   findAllItems: { en: 'Find all papers/items', 'zh-CN': '查找所有论文/条目' },
   findCollectionItems: { en: 'Find current collection', 'zh-CN': '查找当前分类' },
   findNotes: { en: 'Find note', 'zh-CN': '查找笔记' },
+  mainQuickSearch: { en: 'Quick Search', 'zh-CN': '快速搜索' },
+  mainAdvancedSearch: { en: 'Advanced Search', 'zh-CN': '高级搜索' },
   managePlugins: { en: 'Manage plugins', 'zh-CN': '管理插件' },
   mainOpenPDF: { en: 'Open selected PDF', 'zh-CN': '打开所选 PDF' },
   switchTab: { en: 'Switch tab', 'zh-CN': '切换标签页' },

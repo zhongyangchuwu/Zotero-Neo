@@ -293,6 +293,14 @@ const BASE_ACTION_LABELS = {
     en: 'Find and open a note',
     'zh-CN': '查找并打开笔记',
   },
+  mainQuickSearch: {
+    en: 'Main window: focus Zotero Quick Search',
+    'zh-CN': '主窗口：聚焦 Zotero 快速搜索',
+  },
+  mainAdvancedSearch: {
+    en: 'Main window: open Zotero Advanced Search',
+    'zh-CN': '主窗口：打开 Zotero 高级搜索',
+  },
   managePlugins: {
     en: 'Manage installed Zotero plugins',
     'zh-CN': '管理已安装的 Zotero 插件',

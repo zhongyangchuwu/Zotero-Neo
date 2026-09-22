@@ -196,8 +196,9 @@ ranking, rendering, preview, focus, IME, confirmation/cancellation, and stale-wo
 Ordinary item/note/tab candidate sources own data and presentation only; the semantic action that
 opens the chooser injects what confirmation means. Do not add provider-local create/delete/yank/
 open grammars or move domain mutation into Picker to save a dispatch step. Command Palette may
-reuse the candidate surface to choose an `ActionId`. Tag sources may constrain/project candidates,
-but Add/Remove Tag and Main-view filter mutation stay in the semantic `TagActions` owner.
+reuse the candidate surface to choose an `ActionId`. Tag sources may constrain/project candidates.
+`TagActions` owns tag candidate choice and persistent item-tag mutation; `MainViewActions` owns
+Main Quick/Advanced/tag View mutations while Zotero's native filter UIs remain authoritative.
 
 ## Key Files
 
