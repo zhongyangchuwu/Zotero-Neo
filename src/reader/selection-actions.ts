@@ -198,8 +198,9 @@ export class ReaderSelectionActions {
         this.#renderResult(outcome);
         return;
       }
+      const managesFocus = action.managesFocus === true;
       this.close();
-      pdfWindow.focus();
+      if (!managesFocus) pdfWindow.focus();
     } catch (error) {
       if (generation !== this.#generation) return;
       this.#host.debug(`selection action ${action.id} failed: ${String(error)}`);
