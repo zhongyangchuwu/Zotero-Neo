@@ -4,6 +4,8 @@ import {
   currentMainItemCursorRef,
   mainItemRefAtRow,
   mainItemRowForRef,
+  mainItemViewSettled,
+  observeMainItemView,
   moveMainItemCursor,
   restoreMainItemCursor,
   visibleMainSelectionCount,
@@ -102,6 +104,40 @@ describe('Main item Cursor host adapter', () => {
     expect(restoreMainItemCursor(window, bookmark)).toBe(true);
     expect(focused).toBe(2);
     expect(onSelection).toHaveBeenLastCalledWith(2, false, false, true, false);
+  });
+
+  it('observes settled item-tree selection and refresh lifecycle events with cleanup', () => {
+    const selectListeners = new Set<() => void>();
+    const refreshListeners = new Set<() => void>();
+    const binding = (listeners: Set<() => void>) => ({
+      addListener: (listener: () => void) => listeners.add(listener),
+      removeListener: (listener: () => void) => listeners.delete(listener),
+    });
+    const view = {
+      _loadingDeferredResolved: true,
+      onSelect: binding(selectListeners),
+      onRefresh: binding(refreshListeners),
+    };
+    const window = { ZoteroPane: { itemsView: view } } as unknown as MainWindow;
+    const onSelect = vi.fn();
+    const onRefresh = vi.fn();
+
+    expect(mainItemViewSettled(window)).toBe(true);
+    const cleanup = observeMainItemView(window, { onSelect, onRefresh });
+    expect(selectListeners.size).toBe(1);
+    expect(refreshListeners.size).toBe(1);
+
+    [...selectListeners][0]!();
+    [...refreshListeners][0]!();
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(onRefresh).toHaveBeenCalledOnce();
+
+    Reflect.set(view, '_loadingDeferredResolved', false);
+    expect(mainItemViewSettled(window)).toBe(false);
+
+    cleanup();
+    expect(selectListeners.size).toBe(0);
+    expect(refreshListeners.size).toBe(0);
   });
 
   it('counts only visible members and rejects an identity from the wrong library', () => {
