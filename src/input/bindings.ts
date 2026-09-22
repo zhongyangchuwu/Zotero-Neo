@@ -97,6 +97,8 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>q': 'closeCurrentTab',
   'reader-normal:<Space>ta': 'addTag',
   'reader-normal:<Space>tr': 'removeTag',
+  'reader-normal:<Space>ca': 'addToCollection',
+  'reader-normal:<Space>cr': 'removeFromCollection',
   'reader-normal:<Space>fn': 'findNotes',
   'reader-normal:<Space>pp': 'managePlugins',
   'reader-normal:<Space>yy': 'mainYankCitekey',
