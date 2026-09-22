@@ -72,8 +72,8 @@ function createHistorySession(
   bindings: BindingMap = DEFAULT_BINDINGS,
   openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
-  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] = async () =>
-    undefined,
+  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] =
+    async () => false,
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -490,7 +490,7 @@ describe('Reader Selection Actions capture', () => {
   it('passes a Visual selection snapshot to the Main note-capture owner', async () => {
     vi.stubGlobal('Zotero', {});
     const capture = vi.fn<ReaderControllerDependencies['captureReaderSelectionToNote']>(
-      async () => undefined,
+      async () => true,
     );
     const created = createHistorySession(
       {},
