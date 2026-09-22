@@ -94,10 +94,10 @@ describe('leader guide projection', () => {
   it('projects the explicit Tag action defaults without reviving retired picker aliases', () => {
     expect(DEFAULT_BINDINGS['reader-normal:<Space>ta']).toBe('addTag');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>tr']).toBe('removeTag');
-    expect(DEFAULT_BINDINGS['main-normal:ta']).toBe('addTag');
-    expect(DEFAULT_BINDINGS['main-normal:tr']).toBe('removeTag');
-    expect(DEFAULT_BINDINGS['main-normal:tf']).toBe('toggleTagFilter');
-    expect(DEFAULT_BINDINGS['main-normal:tc']).toBe('clearTagFilters');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ta']).toBe('addTag');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>tr']).toBe('removeTag');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>tf']).toBe('toggleTagFilter');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>tc']).toBe('clearTagFilters');
     expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
     expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
   });
@@ -118,6 +118,6 @@ describe('leader guide projection', () => {
     expect(formatGuideKey('ctrl+d')).toBe('<C-d>');
     expect(formatGuideKey('enter')).toBe('<Enter>');
     expect(formatGuidePrefix(' f')).toBe('SPC › f');
-    expect(formatGuidePrefix('tf')).toBe('t › f');
+    expect(formatGuidePrefix(' tf')).toBe('SPC › t › f');
   });
 });
