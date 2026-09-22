@@ -112,6 +112,25 @@ describe('collection membership targets', () => {
     );
   });
 
+  it('Reader uses only the active Reader item and ignores Main Selection', () => {
+    const main = item(1, 7);
+    const reader = item(2, 7);
+    const h = targetHarness([main, reader], [main.id]);
+    h.selection.add({ libraryID: 7, itemID: main.id });
+    (Zotero as unknown as { Reader: { getByTabID: () => { itemID: number } } }).Reader = {
+      getByTabID: () => ({ itemID: reader.id }),
+    };
+    (h.window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs = {
+      selectedID: 'reader-tab',
+    };
+
+    const resolved = resolveCollectionMembershipTargets(h.window, h.session, 'reader');
+
+    expect(resolved.items.map((value) => value.id)).toEqual([reader.id]);
+    expect(resolved.libraryID).toBe(7);
+    expect(resolved.signature).toBe('7:2');
+  });
+
   it('delegates child normalization to Zotero keepTopLevel', () => {
     const child = item(2, 1);
     const parent = item(1, 1);
