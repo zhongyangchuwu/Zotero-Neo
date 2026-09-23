@@ -232,8 +232,8 @@ describe('Main Visual Selection', () => {
       'zotero-neo-status-selection',
       'zotero-neo-status-detail',
     ]);
-    expect(selectionHost.badge.style.cssText).toContain('background:#F6F8FA');
-    expect(selectionHost.badge.style.cssText).toContain('color:#1F2328');
+    expect(selectionHost.badge.style.cssText).toContain('background:#ECEFF4');
+    expect(selectionHost.badge.style.cssText).toContain('color:#3B4252');
     neutralFeature.removeWindow(selectionHost.window);
 
     const visualHost = harness(1);
@@ -253,8 +253,8 @@ describe('Main Visual Selection', () => {
       'zotero-neo-status-selection',
       'zotero-neo-status-detail',
     ]);
-    expect(visualHost.badge.style.cssText).toContain('background:#DAFBE1');
-    expect(visualHost.badge.style.cssText).toContain('color:#116329');
+    expect(visualHost.badge.style.cssText).toContain('background:#CDDCD8');
+    expect(visualHost.badge.style.cssText).toContain('color:#3B4252');
     tintedFeature.removeWindow(visualHost.window);
   });
 

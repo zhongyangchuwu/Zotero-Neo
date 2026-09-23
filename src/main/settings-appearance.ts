@@ -5,35 +5,38 @@ import {
   DEFAULT_INTERACTION_COLOR_PRESET,
   INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
   INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
+  INTERACTION_MARKER_WIDTH_PREFERENCE_KEY,
+  INTERACTION_STATUS_STYLE_PREFERENCE_KEY,
   deleteCustomInteractionTheme,
+  INTERACTION_THEME_CATALOG,
   findCustomInteractionTheme,
   generateCustomInteractionThemeId,
   interactionStatusColors,
+  normalizeInteractionColorPreset,
   parseCustomInteractionThemes,
   resolveInteractionAppearance,
   seedCustomInteractionTheme,
   serializeCustomInteractionThemes,
   upsertCustomInteractionTheme,
-  type CustomInteractionPalette,
+  type InteractionPalette8,
   type CustomInteractionTheme,
   type InteractionAppearanceManager,
   type InteractionStatusStyle,
 } from './interaction-appearance';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const BUILT_INS = [
-  { id: 'primer-neutral', name: 'Primer Neutral' },
-  { id: 'soft-academic', name: 'Soft Academic' },
-  { id: 'yazi-like', name: 'Yazi-like' },
-] as const;
+const BUILT_INS = INTERACTION_THEME_CATALOG;
 const COLORS = [
-  ['selection', 'Selection color'],
-  ['visual', 'Visual color'],
-  ['statusBackground', 'Status background'],
-  ['statusForeground', 'Status foreground'],
-  ['statusBorder', 'Status border'],
+  ['black', 'Black'],
+  ['red', 'Red'],
+  ['green', 'Green'],
+  ['yellow', 'Yellow'],
+  ['blue', 'Blue'],
+  ['magenta', 'Magenta'],
+  ['cyan', 'Cyan'],
+  ['white', 'White'],
 ] as const;
-type PaletteKey = keyof CustomInteractionPalette;
+type PaletteKey = keyof InteractionPalette8;
 type PaletteMode = 'light' | 'dark';
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const NAME = /^[^\x00-\x1f\x7f]{1,100}$/;
@@ -50,6 +53,7 @@ export class SettingsAppearance {
   #mode: PaletteMode = 'light';
   #name = '';
   #width = '';
+  #style: InteractionStatusStyle = 'neutral';
   #hexText: Record<PaletteMode, Record<PaletteKey, string>> | null = null;
   #status: HTMLElement | null = null;
   #preview: HTMLElement | null = null;
@@ -132,10 +136,12 @@ export class SettingsAppearance {
       INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
       DEFAULT_INTERACTION_COLOR_PRESET,
     );
-    return [...BUILT_INS].some((builtIn) => builtIn.id === id) ||
+    if (
+      BUILT_INS.some((builtIn) => builtIn.id === id) ||
       findCustomInteractionTheme(this.#store(), id)
-      ? id
-      : DEFAULT_INTERACTION_COLOR_PRESET;
+    )
+      return id;
+    return normalizeInteractionColorPreset(id);
   }
 
   #renderLibrary(): void {
@@ -177,8 +183,8 @@ export class SettingsAppearance {
       const swatches = this.#create('div');
       swatches.style.cssText = 'display:flex;gap:12px;margin:7px 0';
       for (const [label, color] of [
-        ['Selection', palette.selection],
-        ['Visual', palette.visual],
+        ['Selection', palette.yellow],
+        ['Visual', palette.green],
       ]) {
         const swatch = this.#create('span', `${label} ${color}`);
         swatch.style.cssText = `border-left:8px solid ${color};padding-left:5px`;
@@ -275,7 +281,8 @@ export class SettingsAppearance {
       existing && !duplicate ? existing.name : duplicate ? `${sourceName} copy` : 'New theme',
     );
     this.#name = this.#draft.name;
-    this.#width = String(this.#draft.markerWidth);
+    this.#width = String(this.#appearance.appearance.marker.width);
+    this.#style = this.#appearance.appearance.statusStyle;
     this.#hexText = { light: { ...this.#draft.light }, dark: { ...this.#draft.dark } };
     this.#mode = this.#appearance.appearance.theme;
     this.#confirmedDelete = null;
@@ -373,7 +380,7 @@ export class SettingsAppearance {
     width.style.width = '56px';
     const onWidth = (): void => {
       this.#width = width.value;
-      if (this.#validWidth()) this.#updateDraft({ markerWidth: Number(this.#width) });
+      if (this.#validWidth()) this.#updatePreview();
       this.#validate();
     };
     width.addEventListener('input', onWidth);
@@ -385,13 +392,14 @@ export class SettingsAppearance {
     styles.append(widthLabel, this.#create('span', 'Status style'));
     const styleButtons = (['neutral', 'tinted'] as const).map((style) =>
       this.#button(style === 'neutral' ? 'Neutral' : 'Tinted', () => {
-        this.#updateDraft({ statusStyle: style });
+        this.#style = style;
+        this.#updatePreview();
         syncStyle();
       }),
     );
     const syncStyle = (): void =>
       styleButtons.forEach((button, index) =>
-        this.#setPressed(button, this.#draft?.statusStyle === (index ? 'tinted' : 'neutral')),
+        this.#setPressed(button, this.#style === (index ? 'tinted' : 'neutral')),
       );
     styles.append(...styleButtons);
     const preview = this.#create('div');
@@ -472,19 +480,19 @@ export class SettingsAppearance {
 
   #updatePreview(): void {
     if (!this.#preview || !this.#draft) return;
-    const appearance = resolveInteractionAppearance(this.#preferences, this.#mode, this.#draft);
     const palette = this.#draft[this.#mode];
-    this.#preview.style.background = palette.statusBackground;
-    this.#preview.style.color = palette.statusForeground;
-    this.#preview.style.border = `1px solid ${palette.statusBorder}`;
-    this.#preview.textContent = `${this.#mode === 'light' ? 'Light' : 'Dark'} palette · Selection ${palette.selection} · Visual ${palette.visual}`;
+    const appearance = resolveInteractionAppearance(this.#preferences, this.#mode, this.#draft);
+    this.#preview.style.background = appearance.colors.neutralStatusBackground;
+    this.#preview.style.color = appearance.colors.neutralStatusForeground;
+    this.#preview.style.border = `1px solid ${appearance.colors.neutralStatusBorder}`;
+    this.#preview.textContent = `${this.#mode === 'light' ? 'Light' : 'Dark'} palette · Selection ${palette.yellow} · Visual ${palette.green}`;
     const samples = this.#create('div');
     samples.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:5px';
     for (const kind of ['selection', 'visual'] as const) {
-      const status = interactionStatusColors(appearance, kind);
-      const marker = kind === 'selection' ? palette.selection : palette.visual;
+      const status = interactionStatusColors({ ...appearance, statusStyle: this.#style }, kind);
+      const marker = kind === 'selection' ? palette.yellow : palette.green;
       const sample = this.#create('span', kind === 'selection' ? 'SEL' : 'VISUAL');
-      sample.style.cssText = `padding:2px 6px;background:${status.background};color:${status.foreground};border:1px solid ${status.border};border-left:${appearance.marker.width}px solid ${marker};border-radius:3px`;
+      sample.style.cssText = `padding:2px 6px;background:${status.background};color:${status.foreground};border:1px solid ${status.border};border-left:${this.#width}px solid ${marker};border-radius:3px`;
       samples.append(sample);
     }
     this.#preview.append(samples);
@@ -508,6 +516,10 @@ export class SettingsAppearance {
       );
       try {
         this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, theme.id);
+        if (Number(this.#width) !== this.#appearance.appearance.marker.width)
+          this.#preferences.set(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, Number(this.#width));
+        if (this.#style !== this.#appearance.appearance.statusStyle)
+          this.#preferences.set(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, this.#style);
       } catch (error) {
         try {
           this.#preferences.set(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, previous);

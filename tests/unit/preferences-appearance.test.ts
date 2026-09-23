@@ -49,29 +49,33 @@ class MenuElement {
 const theme = {
   id: 'custom:study',
   name: 'Study',
-  version: 1 as const,
+  version: 2 as const,
   light: {
-    selection: '#FF0000',
-    visual: '#00FF00',
-    statusBackground: '#FAFAFA',
-    statusForeground: '#202020',
-    statusBorder: '#AAAAAA',
+    black: '#202020',
+    red: '#AA0000',
+    green: '#00FF00',
+    yellow: '#FF0000',
+    blue: '#0000AA',
+    magenta: '#AA00AA',
+    cyan: '#00AAAA',
+    white: '#FAFAFA',
   },
   dark: {
-    selection: '#FF00FF',
-    visual: '#00FFFF',
-    statusBackground: '#161616',
-    statusForeground: '#F0F0F0',
-    statusBorder: '#555555',
+    black: '#161616',
+    red: '#FF2222',
+    green: '#00FFFF',
+    yellow: '#FF00FF',
+    blue: '#2222FF',
+    magenta: '#AA00AA',
+    cyan: '#00AAAA',
+    white: '#F0F0F0',
   },
-  markerWidth: 2,
-  statusStyle: 'neutral' as const,
 };
 
 function setup() {
   const values = new Map<string, string>([
     [PRESET, theme.id],
-    [CUSTOM, serializeCustomInteractionThemes({ version: 1, themes: [theme] })],
+    [CUSTOM, serializeCustomInteractionThemes({ version: 2, themes: [theme] })],
   ]);
   const listeners = new Map<string, Set<() => void>>();
   const writes: Array<[string, string]> = [];
@@ -109,9 +113,24 @@ describe('legacy interaction appearance selector', () => {
     });
     test.values.set(PRESET, 'missing');
     expect(legacyInteractionThemeSelection(test.preferences)).toEqual({
-      value: 'primer-neutral',
-      customLabel: null,
+      value: 'zotero',
+      customLabel: 'Zotero',
     });
+  });
+
+  it('displays modern built-in themes without rewriting the legacy menu preference', () => {
+    const test = setup();
+    test.values.set(PRESET, 'gruvbox');
+    const dispose = bindLegacyInteractionThemeSelect(
+      test.select as never,
+      test.doc,
+      test.preferences,
+      vi.fn(),
+    );
+    expect(test.select.value).toBe('gruvbox');
+    expect(test.popup.children[0]?.getAttribute('label')).toBe('Gruvbox');
+    expect(test.writes).toEqual([]);
+    dispose();
   });
 
   it('selects a temporary custom menu item and still switches built-ins', () => {

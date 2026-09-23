@@ -2,6 +2,7 @@ import type { PreferenceReader } from '../core/preferences';
 import type { PreferenceStore } from '../core/preference-store';
 import {
   DEFAULT_INTERACTION_COLOR_PRESET,
+  INTERACTION_THEME_CATALOG,
   INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
   INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
   findCustomInteractionTheme,
@@ -21,13 +22,15 @@ export function legacyInteractionThemeSelection(preferences: PreferenceReader): 
     DEFAULT_INTERACTION_COLOR_PRESET,
   );
   if (BUILT_INS.some((builtIn) => builtIn === id)) return { value: id, customLabel: null };
+  const builtIn = INTERACTION_THEME_CATALOG.find((entry) => entry.id === id);
+  if (builtIn) return { value: id, customLabel: builtIn.name };
   const custom = findCustomInteractionTheme(
     parseCustomInteractionThemes(preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, '')),
     id,
   );
   return custom
     ? { value: id, customLabel: `Custom: ${custom.name}` }
-    : { value: DEFAULT_INTERACTION_COLOR_PRESET, customLabel: null };
+    : { value: DEFAULT_INTERACTION_COLOR_PRESET, customLabel: INTERACTION_THEME_CATALOG[0]!.name };
 }
 
 /** Keeps a temporary custom menu item current while retaining built-in commands. */

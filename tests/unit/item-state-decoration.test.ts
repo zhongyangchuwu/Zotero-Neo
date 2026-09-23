@@ -232,11 +232,11 @@ describe('Main item state decoration', () => {
     host.flush();
 
     const css = host.style.textContent;
-    expect(css).toMatch(/\.row\.zotero-neo-selection::before\s*\{[^}]*left: 1px/s);
+    expect(css).toMatch(/\.row\.zotero-neo-selection::before\s*\{[^}]*left: 0px/s);
     expect(css).toMatch(/\.row\.zotero-neo-visual::after\s*\{[^}]*left: 13px/s);
     expect(css).toContain('width: 3px');
     expect(css).toContain('background: #9A6700');
-    expect(css).toContain('background: #1A7F37');
+    expect(css).toContain('background: #287A43');
     expect(css).not.toContain('.zotero-neo-selection.zotero-neo-visual::after');
     expect(css).not.toContain('.row.zotero-neo-selection {');
     expect(css).not.toContain('.row.zotero-neo-visual {');

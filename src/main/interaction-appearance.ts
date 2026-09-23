@@ -5,39 +5,52 @@ export const INTERACTION_COLOR_PRESET_PREFERENCE_KEY =
   'appearance.interaction.colorPreset' as const;
 export const INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY =
   'appearance.interaction.markerWeight' as const;
+export const INTERACTION_MARKER_WIDTH_PREFERENCE_KEY =
+  'appearance.interaction.markerWidth' as const;
 export const INTERACTION_STATUS_STYLE_PREFERENCE_KEY =
   'appearance.interaction.statusStyle' as const;
 export const INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY =
   'appearance.interaction.customThemes' as const;
 
-export type InteractionColorPreset = 'primer-neutral' | 'soft-academic' | 'yazi-like';
+export type InteractionColorPreset = 'zotero' | 'catppuccin' | 'tokyo-night' | 'gruvbox';
 export type InteractionMarkerWeight = 'compact' | 'balanced' | 'strong';
 export type InteractionStatusStyle = 'neutral' | 'tinted';
 
-export const DEFAULT_INTERACTION_COLOR_PRESET: InteractionColorPreset = 'primer-neutral';
+export const DEFAULT_INTERACTION_COLOR_PRESET: InteractionColorPreset = 'zotero';
 export const DEFAULT_INTERACTION_MARKER_WEIGHT: InteractionMarkerWeight = 'balanced';
 export const DEFAULT_INTERACTION_STATUS_STYLE: InteractionStatusStyle = 'neutral';
 
-export interface CustomInteractionPalette {
-  readonly selection: string;
-  readonly visual: string;
-  readonly statusBackground: string;
-  readonly statusForeground: string;
-  readonly statusBorder: string;
+export interface InteractionPalette8 {
+  readonly black: string;
+  readonly red: string;
+  readonly green: string;
+  readonly yellow: string;
+  readonly blue: string;
+  readonly magenta: string;
+  readonly cyan: string;
+  readonly white: string;
 }
+
+/** Semantic roles always select the same slot in either palette mode. */
+export const INTERACTION_SEMANTIC_SLOTS = {
+  selection: 'yellow',
+  visual: 'green',
+  primary: 'blue',
+  danger: 'red',
+  info: 'cyan',
+  secondary: 'magenta',
+} as const satisfies Record<string, keyof InteractionPalette8>;
 
 export interface CustomInteractionTheme {
   readonly id: string;
   readonly name: string;
-  readonly version: 1;
-  readonly light: CustomInteractionPalette;
-  readonly dark: CustomInteractionPalette;
-  readonly markerWidth: number;
-  readonly statusStyle: InteractionStatusStyle;
+  readonly version: 2;
+  readonly light: InteractionPalette8;
+  readonly dark: InteractionPalette8;
 }
 
 export interface CustomInteractionThemeStore {
-  readonly version: 1;
+  readonly version: 2;
   readonly themes: readonly CustomInteractionTheme[];
 }
 
@@ -57,8 +70,10 @@ export interface InteractionAppearanceColors {
   readonly neutralStatusBorder: string;
   readonly selectionTintBackground: string;
   readonly selectionTintForeground: string;
+  readonly selectionTintBorder: string;
   readonly visualTintBackground: string;
   readonly visualTintForeground: string;
+  readonly visualTintBorder: string;
   readonly shadow: string;
 }
 
@@ -93,93 +108,122 @@ export interface InteractionStatusColors {
   readonly visualPrefix: string;
   readonly shadow: string;
 }
-const PRIMER_NEUTRAL: Readonly<Record<ResolvedTheme, InteractionAppearanceColors>> = {
-  light: {
-    selectionMarker: '#9A6700',
-    visualMarker: '#1A7F37',
-    neutralStatusBackground: '#F6F8FA',
-    neutralStatusForeground: '#1F2328',
-    neutralStatusBorder: '#D0D7DE',
-    selectionTintBackground: '#FFF8C5',
-    selectionTintForeground: '#633C01',
-    visualTintBackground: '#DAFBE1',
-    visualTintForeground: '#116329',
-    shadow: 'rgba(31,35,40,0.12)',
+/** Canonical built-in catalog for palette resolution and future Settings presentation. */
+export const INTERACTION_THEME_CATALOG: readonly {
+  readonly id: InteractionColorPreset;
+  readonly name: string;
+  readonly light: InteractionPalette8;
+  readonly dark: InteractionPalette8;
+}[] = [
+  {
+    id: 'zotero',
+    name: 'Zotero',
+    light: {
+      black: '#3B4252',
+      red: '#B42318',
+      green: '#287A43',
+      yellow: '#9A6700',
+      blue: '#2563EB',
+      magenta: '#7C3AED',
+      cyan: '#0E7490',
+      white: '#ECEFF4',
+    },
+    dark: {
+      black: '#2E3440',
+      red: '#FF7B72',
+      green: '#56D364',
+      yellow: '#E3B341',
+      blue: '#58A6FF',
+      magenta: '#BC8CFF',
+      cyan: '#39C5CF',
+      white: '#D8DEE9',
+    },
   },
-  dark: {
-    selectionMarker: '#D29922',
-    visualMarker: '#3FB950',
-    neutralStatusBackground: '#161B22',
-    neutralStatusForeground: '#F0F6FC',
-    neutralStatusBorder: '#30363D',
-    selectionTintBackground: '#3B2E00',
-    selectionTintForeground: '#E3B341',
-    visualTintBackground: '#12261E',
-    visualTintForeground: '#56D364',
-    shadow: 'rgba(0,0,0,0.35)',
+  {
+    id: 'catppuccin',
+    name: 'Catppuccin',
+    light: {
+      black: '#4C4F69',
+      red: '#D20F39',
+      green: '#40A02B',
+      yellow: '#DF8E1D',
+      blue: '#1E66F5',
+      magenta: '#EA76CB',
+      cyan: '#179299',
+      white: '#EFF1F5',
+    },
+    dark: {
+      black: '#1E1E2E',
+      red: '#F38BA8',
+      green: '#A6E3A1',
+      yellow: '#F9E2AF',
+      blue: '#89B4FA',
+      magenta: '#F5C2E7',
+      cyan: '#94E2D5',
+      white: '#CDD6F4',
+    },
   },
-};
-const SOFT_ACADEMIC: Readonly<Record<ResolvedTheme, InteractionAppearanceColors>> = {
-  light: {
-    selectionMarker: '#A8792A',
-    visualMarker: '#4B8065',
-    neutralStatusBackground: '#FAFAF9',
-    neutralStatusForeground: '#292524',
-    neutralStatusBorder: '#D6D3D1',
-    selectionTintBackground: '#F8F0DE',
-    selectionTintForeground: '#6C501B',
-    visualTintBackground: '#E8F1EC',
-    visualTintForeground: '#315C49',
-    shadow: 'rgba(41,37,36,0.10)',
+  {
+    id: 'tokyo-night',
+    name: 'Tokyo Night',
+    light: {
+      black: '#3760BF',
+      red: '#F52A65',
+      green: '#587539',
+      yellow: '#8C6C3E',
+      blue: '#2E7DE9',
+      magenta: '#9854F1',
+      cyan: '#007197',
+      white: '#E1E2E7',
+    },
+    dark: {
+      black: '#1A1B26',
+      red: '#F7768E',
+      green: '#9ECE6A',
+      yellow: '#E0AF68',
+      blue: '#7AA2F7',
+      magenta: '#BB9AF7',
+      cyan: '#7DCFFF',
+      white: '#C0CAF5',
+    },
   },
-  dark: {
-    selectionMarker: '#D2A75C',
-    visualMarker: '#7EAD96',
-    neutralStatusBackground: '#242321',
-    neutralStatusForeground: '#F5F5F4',
-    neutralStatusBorder: '#514E49',
-    selectionTintBackground: '#3A3020',
-    selectionTintForeground: '#F0CF8A',
-    visualTintBackground: '#22352D',
-    visualTintForeground: '#B9D8C8',
-    shadow: 'rgba(0,0,0,0.32)',
+  {
+    id: 'gruvbox',
+    name: 'Gruvbox',
+    light: {
+      black: '#3C3836',
+      red: '#9D0006',
+      green: '#79740E',
+      yellow: '#B57614',
+      blue: '#076678',
+      magenta: '#8F3F71',
+      cyan: '#427B58',
+      white: '#FBF1C7',
+    },
+    dark: {
+      black: '#282828',
+      red: '#FB4934',
+      green: '#B8BB26',
+      yellow: '#FABD2F',
+      blue: '#83A598',
+      magenta: '#D3869B',
+      cyan: '#8EC07C',
+      white: '#EBDBB2',
+    },
   },
-};
-const YAZI_LIKE: Readonly<Record<ResolvedTheme, InteractionAppearanceColors>> = {
-  light: {
-    selectionMarker: '#E0A000',
-    visualMarker: '#26A269',
-    neutralStatusBackground: '#F3F4F6',
-    neutralStatusForeground: '#111827',
-    neutralStatusBorder: '#CBD5E1',
-    selectionTintBackground: '#FFF3C4',
-    selectionTintForeground: '#654900',
-    visualTintBackground: '#DCFCE7',
-    visualTintForeground: '#14532D',
-    shadow: 'rgba(17,24,39,0.12)',
-  },
-  dark: {
-    selectionMarker: '#FACC15',
-    visualMarker: '#4ADE80',
-    neutralStatusBackground: '#1F2937',
-    neutralStatusForeground: '#F8FAFC',
-    neutralStatusBorder: '#475569',
-    selectionTintBackground: '#42350B',
-    selectionTintForeground: '#FDE68A',
-    visualTintBackground: '#153A24',
-    visualTintForeground: '#BBF7D0',
-    shadow: 'rgba(0,0,0,0.35)',
-  },
-};
-const COLOR_PRESETS: Readonly<
-  Record<InteractionColorPreset, Readonly<Record<ResolvedTheme, InteractionAppearanceColors>>>
-> = {
-  'primer-neutral': PRIMER_NEUTRAL,
-  'soft-academic': SOFT_ACADEMIC,
-  'yazi-like': YAZI_LIKE,
-};
+];
 
-const EMPTY_CUSTOM_THEMES: CustomInteractionThemeStore = { version: 1, themes: [] };
+const COLOR_PRESETS: Readonly<
+  Record<InteractionColorPreset, Readonly<Record<ResolvedTheme, InteractionPalette8>>>
+> = Object.fromEntries(
+  INTERACTION_THEME_CATALOG.map(({ id, light, dark }) => [id, { light, dark }]),
+) as Record<InteractionColorPreset, Record<ResolvedTheme, InteractionPalette8>>;
+const LEGACY_PRESETS: Readonly<Record<string, InteractionColorPreset>> = {
+  'primer-neutral': 'zotero',
+  'soft-academic': 'zotero',
+  'yazi-like': 'catppuccin',
+};
+const EMPTY_CUSTOM_THEMES: CustomInteractionThemeStore = { version: 2, themes: [] };
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 const THEME_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
@@ -189,57 +233,93 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function palette(value: unknown): CustomInteractionPalette | null {
+const PALETTE_KEYS = [
+  'black',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan',
+  'white',
+] as const;
+
+function palette(value: unknown): InteractionPalette8 | null {
   const fields = record(value);
-  if (!fields) return null;
-  for (const key of [
-    'selection',
-    'visual',
-    'statusBackground',
-    'statusForeground',
-    'statusBorder',
-  ]) {
-    if (typeof fields[key] !== 'string' || !HEX_COLOR.test(fields[key])) return null;
-  }
-  return {
-    selection: (fields.selection as string).toUpperCase(),
-    visual: (fields.visual as string).toUpperCase(),
-    statusBackground: (fields.statusBackground as string).toUpperCase(),
-    statusForeground: (fields.statusForeground as string).toUpperCase(),
-    statusBorder: (fields.statusBorder as string).toUpperCase(),
-  };
+  if (
+    !fields ||
+    PALETTE_KEYS.some((key) => typeof fields[key] !== 'string' || !HEX_COLOR.test(fields[key]))
+  )
+    return null;
+  return Object.fromEntries(
+    PALETTE_KEYS.map((key) => [key, (fields[key] as string).toUpperCase()]),
+  ) as unknown as InteractionPalette8;
+}
+
+function validIdentity(
+  fields: Record<string, unknown> | null,
+): fields is Record<string, unknown> & { id: string; name: string } {
+  return (
+    !!fields &&
+    typeof fields.id === 'string' &&
+    THEME_ID.test(fields.id) &&
+    !Object.prototype.hasOwnProperty.call(COLOR_PRESETS, fields.id) &&
+    !Object.prototype.hasOwnProperty.call(LEGACY_PRESETS, fields.id) &&
+    typeof fields.name === 'string' &&
+    !!fields.name.trim() &&
+    fields.name.trim().length <= 100 &&
+    !/[\x00-\x1f\x7f]/.test(fields.name)
+  );
 }
 
 function validTheme(value: unknown): CustomInteractionTheme | null {
   const fields = record(value);
+  if (!validIdentity(fields) || fields.version !== 2) return null;
+  const light = palette(fields.light);
+  const dark = palette(fields.dark);
+  return light && dark
+    ? { id: fields.id, name: fields.name.trim(), version: 2, light, dark }
+    : null;
+}
+
+/** Converts only valid v1 records in memory; former geometry and style belong to preferences. */
+function legacyTheme(value: unknown): CustomInteractionTheme | null {
+  const fields = record(value);
   if (
-    !fields ||
+    !validIdentity(fields) ||
     fields.version !== 1 ||
-    typeof fields.id !== 'string' ||
-    !THEME_ID.test(fields.id) ||
-    Object.prototype.hasOwnProperty.call(COLOR_PRESETS, fields.id) ||
-    typeof fields.name !== 'string' ||
-    !fields.name.trim() ||
-    fields.name.trim().length > 100 ||
-    /[\x00-\x1f\x7f]/.test(fields.name) ||
     !Number.isInteger(fields.markerWidth) ||
     (fields.markerWidth as number) < 1 ||
     (fields.markerWidth as number) > 4 ||
     (fields.statusStyle !== 'neutral' && fields.statusStyle !== 'tinted')
   )
     return null;
-  const light = palette(fields.light);
-  const dark = palette(fields.dark);
-  if (!light || !dark) return null;
-  return {
-    id: fields.id,
-    name: fields.name.trim(),
-    version: 1,
-    light,
-    dark,
-    markerWidth: fields.markerWidth as number,
-    statusStyle: fields.statusStyle,
+  const convert = (mode: ResolvedTheme): InteractionPalette8 | null => {
+    const old = record(fields[mode]);
+    if (
+      !old ||
+      ['selection', 'visual', 'statusBackground', 'statusForeground', 'statusBorder'].some(
+        (key) => typeof old[key] !== 'string' || !HEX_COLOR.test(old[key]),
+      )
+    )
+      return null;
+    return {
+      ...COLOR_PRESETS.zotero[mode],
+      yellow: (old.selection as string).toUpperCase(),
+      green: (old.visual as string).toUpperCase(),
+      black: (
+        old[mode === 'light' ? 'statusForeground' : 'statusBackground'] as string
+      ).toUpperCase(),
+      white: (
+        old[mode === 'light' ? 'statusBackground' : 'statusForeground'] as string
+      ).toUpperCase(),
+    };
   };
+  const light = convert('light');
+  const dark = convert('dark');
+  return light && dark
+    ? { id: fields.id, name: fields.name.trim(), version: 2, light, dark }
+    : null;
 }
 
 /** Parses untrusted preference data; invalid entries are skipped, keeping the first valid ID. */
@@ -253,20 +333,21 @@ export function parseCustomInteractionThemes(raw: unknown): CustomInteractionThe
     }
   }
   const data = record(input);
-  if (data?.version !== 1 || !Array.isArray(data.themes)) return EMPTY_CUSTOM_THEMES;
+  if ((data?.version !== 1 && data?.version !== 2) || !Array.isArray(data.themes))
+    return EMPTY_CUSTOM_THEMES;
   const themes: CustomInteractionTheme[] = [];
   const seen = new Set<string>();
   for (const value of data.themes) {
-    const theme = validTheme(value);
+    const theme = data.version === 1 ? legacyTheme(value) : validTheme(value);
     if (!theme || seen.has(theme.id)) continue;
     themes.push(theme);
     seen.add(theme.id);
   }
-  return { version: 1, themes };
+  return { version: 2, themes };
 }
 
 function checkedStore(store: CustomInteractionThemeStore): CustomInteractionThemeStore {
-  if (store?.version !== 1 || !Array.isArray(store.themes)) throw new Error('Invalid theme store');
+  if (store?.version !== 2 || !Array.isArray(store.themes)) throw new Error('Invalid theme store');
   const themes: CustomInteractionTheme[] = [];
   const seen = new Set<string>();
   for (const entry of store.themes) {
@@ -275,7 +356,7 @@ function checkedStore(store: CustomInteractionThemeStore): CustomInteractionThem
     themes.push(theme);
     seen.add(theme.id);
   }
-  return { version: 1, themes };
+  return { version: 2, themes };
 }
 
 export function serializeCustomInteractionThemes(store: CustomInteractionThemeStore): string {
@@ -303,10 +384,10 @@ export function upsertCustomInteractionTheme(
   const theme = validTheme(value);
   if (!theme) throw new Error('Invalid custom theme');
   const index = current.themes.findIndex((entry) => entry.id === theme.id);
-  if (index < 0) return { version: 1, themes: [...current.themes, theme] };
+  if (index < 0) return { version: 2, themes: [...current.themes, theme] };
   const themes = [...current.themes];
   themes[index] = theme;
-  return { version: 1, themes };
+  return { version: 2, themes };
 }
 
 export function deleteCustomInteractionTheme(
@@ -314,10 +395,10 @@ export function deleteCustomInteractionTheme(
   id: string,
 ): CustomInteractionThemeStore {
   const current = checkedStore(store);
-  return { version: 1, themes: current.themes.filter((theme) => theme.id !== id) };
+  return { version: 2, themes: current.themes.filter((theme) => theme.id !== id) };
 }
 
-/** Copies both semantic palettes, preserving a custom source's geometry and style. */
+/** Copies all eight colors in both modes, never appearance settings. */
 export function seedCustomInteractionTheme(
   preferences: PreferenceReader,
   sourceId: string,
@@ -329,28 +410,13 @@ export function seedCustomInteractionTheme(
     sourceId,
   );
   if (custom) return { ...custom, id, name, light: { ...custom.light }, dark: { ...custom.dark } };
-  const preset = Object.prototype.hasOwnProperty.call(COLOR_PRESETS, sourceId)
-    ? (sourceId as InteractionColorPreset)
-    : DEFAULT_INTERACTION_COLOR_PRESET;
-  const semantic = (theme: ResolvedTheme): CustomInteractionPalette => {
-    const colors = COLOR_PRESETS[preset][theme];
-    return {
-      selection: colors.selectionMarker,
-      visual: colors.visualMarker,
-      statusBackground: colors.neutralStatusBackground,
-      statusForeground: colors.neutralStatusForeground,
-      statusBorder: colors.neutralStatusBorder,
-    };
-  };
-  const width = { compact: 2, balanced: 3, strong: 4 } as const;
+  const preset = normalizeInteractionColorPreset(sourceId);
   return {
     id,
     name,
-    version: 1,
-    light: semantic('light'),
-    dark: semantic('dark'),
-    markerWidth: width[interactionMarkerWeightFromPreferences(preferences)],
-    statusStyle: interactionStatusStyleFromPreferences(preferences),
+    version: 2,
+    light: { ...COLOR_PRESETS[preset].light },
+    dark: { ...COLOR_PRESETS[preset].dark },
   };
 }
 
@@ -361,7 +427,10 @@ export function generateCustomInteractionThemeId(
 ): string {
   const taken = new Set(existing);
   const available = (id: string): boolean =>
-    THEME_ID.test(id) && !Object.prototype.hasOwnProperty.call(COLOR_PRESETS, id) && !taken.has(id);
+    THEME_ID.test(id) &&
+    !Object.prototype.hasOwnProperty.call(COLOR_PRESETS, id) &&
+    !Object.prototype.hasOwnProperty.call(LEGACY_PRESETS, id) &&
+    !taken.has(id);
   let candidate = '';
   try {
     candidate = generate();
@@ -373,24 +442,18 @@ export function generateCustomInteractionThemeId(
   }
 }
 
-const MARKER_GEOMETRIES: Readonly<Record<InteractionMarkerWeight, InteractionMarkerGeometry>> = {
-  compact: { width: 2, selectionLeft: 1, visualLeft: 13, radius: 1 },
-  balanced: { width: 3, selectionLeft: 1, visualLeft: 13, radius: 2 },
-  strong: { width: 4, selectionLeft: 0, visualLeft: 12, radius: 2 },
-};
-
 function markerGeometry(width: number): InteractionMarkerGeometry {
   const selectionLeft = Math.floor((4 - width) / 2);
   const visualLeft = 12 + Math.ceil((4 - width) / 2);
   return { width, selectionLeft, visualLeft, radius: Math.ceil(width / 2) };
 }
 
-function tintedBackground(semantic: string, background: string): string {
+function blend(foreground: string, background: string, strength: number): string {
   let result = '#';
   for (const offset of [1, 3, 5]) {
     const mixed = Math.round(
-      Number.parseInt(semantic.slice(offset, offset + 2), 16) * 0.16 +
-        Number.parseInt(background.slice(offset, offset + 2), 16) * 0.84,
+      Number.parseInt(foreground.slice(offset, offset + 2), 16) * strength +
+        Number.parseInt(background.slice(offset, offset + 2), 16) * (1 - strength),
     );
     result += mixed.toString(16).padStart(2, '0').toUpperCase();
   }
@@ -405,11 +468,15 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
 }
 
-function readableForeground(background: string, preferred: string, semantic: string): string {
+function readableForeground(
+  background: string,
+  neutral: string,
+  palette: InteractionPalette8,
+): string {
   const backgroundLuminance = relativeLuminance(background);
-  let best = preferred;
+  let best = neutral;
   let bestRatio = 0;
-  for (const candidate of [preferred, semantic, '#000000', '#FFFFFF']) {
+  for (const candidate of [neutral, palette.black, palette.white, '#000000', '#FFFFFF']) {
     const luminance = relativeLuminance(candidate);
     const ratio =
       (Math.max(backgroundLuminance, luminance) + 0.05) /
@@ -423,42 +490,45 @@ function readableForeground(background: string, preferred: string, semantic: str
   return best;
 }
 
-function customColors(
-  palette: CustomInteractionPalette,
+function paletteColors(
+  palette: InteractionPalette8,
   theme: ResolvedTheme,
 ): InteractionAppearanceColors {
-  const selectionTintBackground = tintedBackground(palette.selection, palette.statusBackground);
-  const visualTintBackground = tintedBackground(palette.visual, palette.statusBackground);
+  const background = theme === 'light' ? palette.white : palette.black;
+  const foreground = theme === 'light' ? palette.black : palette.white;
+  const selectionColor = palette[INTERACTION_SEMANTIC_SLOTS.selection];
+  const visualColor = palette[INTERACTION_SEMANTIC_SLOTS.visual];
+  const selectionTintBackground = blend(selectionColor, background, 0.16);
+  const visualTintBackground = blend(visualColor, background, 0.16);
   return {
-    selectionMarker: palette.selection,
-    visualMarker: palette.visual,
-    neutralStatusBackground: palette.statusBackground,
-    neutralStatusForeground: palette.statusForeground,
-    neutralStatusBorder: palette.statusBorder,
+    selectionMarker: selectionColor,
+    visualMarker: visualColor,
+    neutralStatusBackground: background,
+    neutralStatusForeground: foreground,
+    neutralStatusBorder: blend(foreground, background, 0.22),
     selectionTintBackground,
-    selectionTintForeground: readableForeground(
-      selectionTintBackground,
-      palette.statusForeground,
-      palette.selection,
-    ),
+    selectionTintForeground: readableForeground(selectionTintBackground, foreground, palette),
+    selectionTintBorder: blend(selectionColor, background, 0.55),
     visualTintBackground,
-    visualTintForeground: readableForeground(
-      visualTintBackground,
-      palette.statusForeground,
-      palette.visual,
-    ),
-    shadow: PRIMER_NEUTRAL[theme].shadow,
+    visualTintForeground: readableForeground(visualTintBackground, foreground, palette),
+    visualTintBorder: blend(visualColor, background, 0.55),
+    shadow: theme === 'light' ? 'rgba(31,35,40,0.12)' : 'rgba(0,0,0,0.35)',
   };
+}
+
+/** Resolves legacy aliases without rewriting the stored preference. */
+export function normalizeInteractionColorPreset(value: string): InteractionColorPreset {
+  if (Object.prototype.hasOwnProperty.call(COLOR_PRESETS, value))
+    return value as InteractionColorPreset;
+  return LEGACY_PRESETS[value] ?? DEFAULT_INTERACTION_COLOR_PRESET;
 }
 
 export function interactionColorPresetFromPreferences(
   preferences: PreferenceReader,
 ): InteractionColorPreset {
-  const value = preferences.get(
-    INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
-    DEFAULT_INTERACTION_COLOR_PRESET,
+  return normalizeInteractionColorPreset(
+    preferences.get(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, DEFAULT_INTERACTION_COLOR_PRESET),
   );
-  return value === 'soft-academic' || value === 'yazi-like' ? value : 'primer-neutral';
 }
 export function interactionMarkerWeightFromPreferences(
   preferences: PreferenceReader,
@@ -468,6 +538,13 @@ export function interactionMarkerWeightFromPreferences(
     DEFAULT_INTERACTION_MARKER_WEIGHT,
   );
   return value === 'compact' || value === 'strong' ? value : 'balanced';
+}
+/** Uses an explicit integer preference when valid, otherwise the legacy weight mapping. */
+export function interactionMarkerWidthFromPreferences(preferences: PreferenceReader): number {
+  const width = preferences.get(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, 0);
+  if (Number.isInteger(width) && width >= 1 && width <= 4) return width;
+  const legacy = interactionMarkerWeightFromPreferences(preferences);
+  return { compact: 2, balanced: 3, strong: 4 }[legacy];
 }
 
 export function interactionStatusStyleFromPreferences(
@@ -489,9 +566,9 @@ export function resolveInteractionAppearance(
     INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
     DEFAULT_INTERACTION_COLOR_PRESET,
   );
-  const builtIn = Object.prototype.hasOwnProperty.call(COLOR_PRESETS, activeId)
-    ? (activeId as InteractionColorPreset)
-    : null;
+  const builtIn =
+    Object.prototype.hasOwnProperty.call(COLOR_PRESETS, activeId) ||
+    Object.prototype.hasOwnProperty.call(LEGACY_PRESETS, activeId);
   const custom = draft
     ? validTheme(draft)
     : builtIn
@@ -499,17 +576,18 @@ export function resolveInteractionAppearance(
       : (parseCustomInteractionThemes(
           preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, ''),
         ).themes.find((entry) => entry.id === activeId) ?? null);
-  const colorPreset = custom?.id ?? builtIn ?? DEFAULT_INTERACTION_COLOR_PRESET;
+  const colorPreset = custom?.id ?? normalizeInteractionColorPreset(activeId);
   const markerWeight = interactionMarkerWeightFromPreferences(preferences);
   return {
     theme,
     colorPreset,
     markerWeight,
-    statusStyle: custom?.statusStyle ?? interactionStatusStyleFromPreferences(preferences),
-    colors: custom
-      ? customColors(custom[theme], theme)
-      : COLOR_PRESETS[colorPreset as InteractionColorPreset][theme],
-    marker: custom ? markerGeometry(custom.markerWidth) : MARKER_GEOMETRIES[markerWeight],
+    statusStyle: interactionStatusStyleFromPreferences(preferences),
+    colors: paletteColors(
+      custom ? custom[theme] : COLOR_PRESETS[normalizeInteractionColorPreset(activeId)][theme],
+      theme,
+    ),
+    marker: markerGeometry(interactionMarkerWidthFromPreferences(preferences)),
   };
 }
 export function interactionStatusColors(
@@ -521,7 +599,7 @@ export function interactionStatusColors(
     return {
       background: colors.selectionTintBackground,
       foreground: colors.selectionTintForeground,
-      border: colors.selectionMarker,
+      border: colors.selectionTintBorder,
       selectionPrefix: colors.selectionTintForeground,
       visualPrefix: colors.visualTintForeground,
       shadow: colors.shadow,
@@ -531,7 +609,7 @@ export function interactionStatusColors(
     return {
       background: colors.visualTintBackground,
       foreground: colors.visualTintForeground,
-      border: colors.visualMarker,
+      border: colors.visualTintBorder,
       selectionPrefix: colors.selectionTintForeground,
       visualPrefix: colors.visualTintForeground,
       shadow: colors.shadow,
@@ -562,6 +640,8 @@ function sameAppearance(left: InteractionAppearance, right: InteractionAppearanc
     a.neutralStatusForeground === b.neutralStatusForeground &&
     a.neutralStatusBorder === b.neutralStatusBorder &&
     a.selectionTintBackground === b.selectionTintBackground &&
+    a.selectionTintBorder === b.selectionTintBorder &&
+    a.visualTintBorder === b.visualTintBorder &&
     a.selectionTintForeground === b.selectionTintForeground &&
     a.visualTintBackground === b.visualTintBackground &&
     a.visualTintForeground === b.visualTintForeground &&
@@ -593,6 +673,7 @@ export class InteractionAppearanceManager {
     for (const key of [
       INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
       INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY,
+      INTERACTION_MARKER_WIDTH_PREFERENCE_KEY,
       INTERACTION_STATUS_STYLE_PREFERENCE_KEY,
       INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
     ]) {

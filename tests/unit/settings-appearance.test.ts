@@ -85,7 +85,7 @@ class Preferences implements PreferenceStore {
   readonly observers = new Map<string, Set<() => void>>();
   readonly writes: Array<[string, boolean | number | string]> = [];
   failPreset = false;
-  constructor(initial: Record<string, string> = {}) {
+  constructor(initial: Record<string, boolean | number | string> = {}) {
     for (const [key, value] of Object.entries(initial)) this.data.set(key, value);
   }
   has(key: string): boolean {
@@ -117,27 +117,31 @@ class Preferences implements PreferenceStore {
 const custom: CustomInteractionTheme = {
   id: 'custom:study',
   name: 'Study',
-  version: 1,
+  version: 2,
   light: {
-    selection: '#FF0000',
-    visual: '#00FF00',
-    statusBackground: '#FAFAFA',
-    statusForeground: '#202020',
-    statusBorder: '#AAAAAA',
+    black: '#202020',
+    red: '#AA0000',
+    green: '#00FF00',
+    yellow: '#FF0000',
+    blue: '#0000AA',
+    magenta: '#AA00AA',
+    cyan: '#00AAAA',
+    white: '#FAFAFA',
   },
   dark: {
-    selection: '#FF00FF',
-    visual: '#00FFFF',
-    statusBackground: '#161616',
-    statusForeground: '#F0F0F0',
-    statusBorder: '#555555',
+    black: '#161616',
+    red: '#FF2222',
+    green: '#00FFFF',
+    yellow: '#FF00FF',
+    blue: '#2222FF',
+    magenta: '#AA00AA',
+    cyan: '#00AAAA',
+    white: '#F0F0F0',
   },
-  markerWidth: 1,
-  statusStyle: 'tinted',
 };
-const stored = serializeCustomInteractionThemes({ version: 1, themes: [custom] });
+const stored = serializeCustomInteractionThemes({ version: 2, themes: [custom] });
 
-function mount(initial: Record<string, string> = {}) {
+function mount(initial: Record<string, boolean | number | string> = {}) {
   const preferences = new Preferences(initial);
   const source = { theme: 'light' as const, observe: () => () => {} };
   const manager = new InteractionAppearanceManager(preferences, source);
@@ -158,13 +162,13 @@ function mount(initial: Record<string, string> = {}) {
 describe('Settings Appearance', () => {
   it('renders built-in and custom cards, swatches, active state, and selects without unrelated writes', () => {
     const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id });
-    for (const name of ['Primer Neutral', 'Soft Academic', 'Yazi-like', 'Study'])
+    for (const name of ['Zotero', 'Catppuccin', 'Tokyo Night', 'Gruvbox', 'Study'])
       expect(test.root.textContent).toContain(name);
     expect(
       test.root
         .all()
         .filter((node) => node.textContent.includes('Selection #') && node.tag === 'span'),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
     expect(
       test.root
         .all()
@@ -176,18 +180,31 @@ describe('Settings Appearance', () => {
     expect(activeCard.style.cssText).toContain('background:var(--zotero-neo-selected)');
     expect(test.root.labelled('Select Study').style.background).toBe('var(--zotero-neo-accent)');
     test.root.click('button', 'Select');
-    expect(test.preferences.writes).toEqual([[PRESET, 'primer-neutral']]);
-    expect(test.manager.appearance.colorPreset).toBe('primer-neutral');
+    expect(test.preferences.writes).toEqual([[PRESET, 'zotero']]);
+    expect(test.manager.appearance.colorPreset).toBe('zotero');
     test.root.labelled('Select Study').fire('click');
     expect(test.preferences.writes.at(-1)).toEqual([PRESET, custom.id]);
     test.appearance.dispose();
   });
 
+  it('shows the normalized active card for a legacy persisted ID without writing it', () => {
+    const test = mount({ [PRESET]: 'yazi-like' });
+    expect(
+      test.root
+        .all()
+        .find((node) => node.dataset.themeId === 'catppuccin')
+        ?.getAttribute('aria-current'),
+    ).toBe('true');
+    expect(test.preferences.get(PRESET, '')).toBe('yazi-like');
+    expect(test.preferences.writes).toEqual([]);
+    test.appearance.dispose();
+  });
+
   it('opens New and Duplicate with seeded independent palettes, preserving inputs through live preview', () => {
-    const test = mount({ [PRESET]: 'soft-academic' });
+    const test = mount({ [PRESET]: 'catppuccin' });
     test.root.click('button', '+ New theme');
     const editor = test.root.children[0];
-    const hex = test.root.labelled('Selection color hex');
+    const hex = test.root.labelled('Yellow hex');
     hex.value = '#abcdef';
     hex.fire('input');
     expect(test.root.children[0]).toBe(editor);
@@ -202,17 +219,17 @@ describe('Settings Appearance', () => {
     expect(test.root.find('button', 'Dark').style.background).toBe('var(--zotero-neo-selected)');
     expect(test.root.find('button', 'Light').style.background).toBe('var(--zotero-neo-input)');
     expect(test.root.labelled('Theme preview').textContent).toContain('Dark');
-    test.root.input('#123456', 'Selection color hex');
+    test.root.input('#123456', 'Yellow hex');
     expect(test.manager.appearance.colors.selectionMarker).toBe('#ABCDEF');
     expect(test.root.labelled('Theme preview').textContent).toContain('#123456');
     test.root.click('button', 'Light');
-    expect(test.root.labelled('Selection color hex').value).toBe('#abcdef');
+    expect(test.root.labelled('Yellow hex').value).toBe('#abcdef');
     expect(test.root.labelled('Theme preview').textContent).toContain('#ABCDEF');
     test.root.click('button', 'Cancel / Back');
-    expect(test.manager.appearance.colorPreset).toBe('soft-academic');
+    expect(test.manager.appearance.colorPreset).toBe('catppuccin');
     expect(test.preferences.writes).toEqual([]);
     test.root.click('button', 'Duplicate current');
-    expect(test.root.find('label', 'Theme name').children[0]?.value).toBe('Soft Academic copy');
+    expect(test.root.find('label', 'Theme name').children[0]?.value).toBe('Catppuccin copy');
     test.appearance.dispose();
   });
 
@@ -221,7 +238,7 @@ describe('Settings Appearance', () => {
     const draft = vi.spyOn(test.manager, 'setDraft');
     test.root.click('button', '+ New theme');
     const initial = draft.mock.calls.length;
-    const hex = test.root.input('oops', 'Selection color hex');
+    const hex = test.root.input('oops', 'Yellow hex');
     expect(hex.value).toBe('oops');
     expect(hex.getAttribute('aria-invalid')).toBe('true');
     expect(draft).toHaveBeenCalledTimes(initial);
@@ -232,14 +249,14 @@ describe('Settings Appearance', () => {
     expect(test.root.find('button', 'Save').disabled).toBe(true);
     name.value = 'Personal';
     name.fire('input');
-    test.root.input('#112233', 'Selection color hex');
+    test.root.input('#112233', 'Yellow hex');
     const width = test.root.find('label', 'Marker width (1–4 CSS px) ').children[0]!;
     width.value = '4';
     width.fire('input');
     test.root.click('button', 'Tinted');
     expect(test.manager.appearance.colors.selectionMarker).toBe('#112233');
-    expect(test.manager.appearance.marker.width).toBe(4);
-    expect(test.manager.appearance.statusStyle).toBe('tinted');
+    expect(test.manager.appearance.marker.width).toBe(3);
+    expect(test.manager.appearance.statusStyle).toBe('neutral');
     expect(test.root.find('button', 'Tinted').getAttribute('aria-pressed')).toBe('true');
     expect(test.root.find('button', 'Tinted').style.background).toBe('var(--zotero-neo-selected)');
     expect(test.root.find('button', 'Neutral').style.background).toBe('var(--zotero-neo-input)');
@@ -248,7 +265,12 @@ describe('Settings Appearance', () => {
     test.appearance.dispose();
   });
   it('keeps actions anchored and previews derived status for either palette without writes', () => {
-    const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id });
+    const test = mount({
+      [CUSTOM]: stored,
+      [PRESET]: custom.id,
+      ['appearance.interaction.markerWidth']: 1,
+      ['appearance.interaction.statusStyle']: 'tinted',
+    });
     test.root.click('button', 'Edit');
     expect(test.root.style.display).toBe('flex');
     expect(test.root.children[0]?.style.cssText).toContain('overflow:auto');
@@ -274,7 +296,7 @@ describe('Settings Appearance', () => {
     expect(test.root.find('button', 'Neutral').style.background).toBe('var(--zotero-neo-selected)');
     test.root.click('button', 'Dark');
     expect(test.root.children[0]).toBe(editorBody);
-    expect(test.root.labelled('Selection color hex').value).toBe('#FF00FF');
+    expect(test.root.labelled('Yellow hex').value).toBe('#FF00FF');
     expect(preview.textContent).toContain('Dark palette');
     expect(sample('SEL')).toContain('background:#161616');
     expect(sample('SEL')).toContain('border-left:1px solid #FF00FF');
@@ -291,16 +313,14 @@ describe('Settings Appearance', () => {
     const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id });
     test.root.click('button', 'Edit');
     expect(test.root.find('label', 'Theme name').children[0]?.value).toBe('Study');
-    test.root.input('#123456', 'Visual color hex');
+    test.root.input('#123456', 'Green hex');
     test.root.click('button', 'Save');
     const themes = parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes;
     expect(themes).toHaveLength(1);
     expect(themes[0]).toMatchObject({
       id: custom.id,
-      light: { visual: '#123456' },
+      light: { green: '#123456' },
       dark: custom.dark,
-      markerWidth: 1,
-      statusStyle: 'tinted',
     });
     expect(test.preferences.get(PRESET, '')).toBe(custom.id);
     test.appearance.dispose();
@@ -309,12 +329,12 @@ describe('Settings Appearance', () => {
   it('saves store before active preset, clears draft and rolls back when preset persistence fails', () => {
     const test = mount();
     test.root.click('button', '+ New theme');
-    test.root.input('#123456', 'Selection color hex');
+    test.root.input('#123456', 'Yellow hex');
     test.root.click('button', 'Save');
     expect(test.preferences.writes.map(([key]) => key)).toEqual([CUSTOM, PRESET]);
     const id = test.preferences.get(PRESET, '');
     expect(
-      parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes[0]?.light.selection,
+      parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes[0]?.light.yellow,
     ).toBe('#123456');
     expect(test.manager.appearance.colorPreset).toBe(id);
     expect(test.root.textContent).toContain('Active');
@@ -328,8 +348,33 @@ describe('Settings Appearance', () => {
     expect(failed.preferences.get(PRESET, '')).toBe('soft-academic');
     expect(failed.root.textContent).toContain('Could not save theme');
     failed.root.click('button', 'Cancel / Back');
-    expect(failed.manager.appearance.colorPreset).toBe('soft-academic');
+    expect(failed.manager.appearance.colorPreset).toBe('zotero');
     failed.appearance.dispose();
+  });
+
+  it('saves edited width and style as appearance preferences, not theme properties', () => {
+    const test = mount({ [PRESET]: 'gruvbox' });
+    test.root.click('button', '+ New theme');
+    const width = test.root.find('label', 'Marker width (1–4 CSS px) ').children[0]!;
+    width.value = '1';
+    width.fire('input');
+    test.root.click('button', 'Tinted');
+    test.root.click('button', 'Save');
+    expect(test.preferences.writes.map(([key]) => key)).toEqual([
+      CUSTOM,
+      PRESET,
+      'appearance.interaction.markerWidth',
+      'appearance.interaction.statusStyle',
+    ]);
+    expect(test.manager.appearance.marker.width).toBe(1);
+    expect(test.manager.appearance.statusStyle).toBe('tinted');
+    expect(
+      parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes[0],
+    ).not.toHaveProperty('markerWidth');
+    expect(
+      parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes[0],
+    ).not.toHaveProperty('statusStyle');
+    test.appearance.dispose();
   });
 
   it('requires two steps to delete custom themes and falls back if active', () => {
@@ -339,8 +384,8 @@ describe('Settings Appearance', () => {
     expect(test.root.textContent).toContain('Confirm delete');
     test.root.click('button', 'Confirm delete');
     expect(parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes).toEqual([]);
-    expect(test.preferences.get(PRESET, '')).toBe('primer-neutral');
-    expect(test.manager.appearance.colorPreset).toBe('primer-neutral');
+    expect(test.preferences.get(PRESET, '')).toBe('zotero');
+    expect(test.manager.appearance.colorPreset).toBe('zotero');
     expect(test.root.textContent).not.toContain('Study');
     test.appearance.dispose();
   });
@@ -348,11 +393,11 @@ describe('Settings Appearance', () => {
   it('disposes drafts and preference observers without writing state', () => {
     const test = mount({ [PRESET]: 'yazi-like' });
     test.root.click('button', '+ New theme');
-    test.root.input('#abcdef', 'Selection color hex');
+    test.root.input('#abcdef', 'Yellow hex');
     test.appearance.dispose();
-    expect(test.manager.appearance.colorPreset).toBe('yazi-like');
+    expect(test.manager.appearance.colorPreset).toBe('catppuccin');
     expect(test.preferences.writes).toEqual([]);
-    expect(test.preferences.listenerCount()).toBe(4);
+    expect(test.preferences.listenerCount()).toBe(5);
     test.manager.dispose();
     expect(test.preferences.listenerCount()).toBe(0);
   });
