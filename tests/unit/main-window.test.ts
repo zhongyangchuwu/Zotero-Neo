@@ -1022,6 +1022,49 @@ describe('Main Settings Center shell', () => {
     }
   });
 
+  it('preserves Appearance editor DOM during draft changes and cancels it on navigation and close', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    const click = (text: string): void => {
+      const button = all(host.drawer()!).find(
+        (node) => node.localName === 'button' && node.textContent === text,
+      ) as HTMLElement & { emit(type: string): void };
+      expect(button).toBeDefined();
+      button.emit('click');
+    };
+    try {
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      click('+ New theme');
+      const editor = host.drawer()!.children[2]!.children[0];
+      // The Stage 2A fake returns null for attributes; use the editor's color row.
+      const field = host.drawer()!.children[2]!.children[3]!.children[0]!
+        .children[2] as HTMLInputElement & { emit(type: string): void };
+      field.focus();
+      field.value = '#123456';
+      field.emit('input');
+      expect(host.drawer()!.children[2]!.children[0]).toBe(editor);
+      expect(host.window.document.activeElement).toBe(field);
+      const reader = host.drawer()!.children[1]!.children[2] as HTMLElement & {
+        emit(type: string): void;
+      };
+      reader.emit('click');
+      expect(host.drawer()!.children[2]!.textContent).toContain('not migrated yet');
+      const appearance = host.drawer()!.children[1]!.children[0] as HTMLElement & {
+        emit(type: string): void;
+      };
+      appearance.emit('click');
+      expect(host.drawer()!.children[2]!.children[0]).not.toBe(editor);
+      click('+ New theme');
+      click('Close');
+      expect(host.drawer()).toBeUndefined();
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
   it('rejects ambiguous ownerless opens and uses only an attached owner or sole fallback', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const first = pickerMainWindow();

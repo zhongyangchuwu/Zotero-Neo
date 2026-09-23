@@ -16,6 +16,8 @@ import {
   parseCustomInteractionThemes,
   resolveInteractionAppearance,
   serializeCustomInteractionThemes,
+  seedCustomInteractionTheme,
+  generateCustomInteractionThemeId,
   upsertCustomInteractionTheme,
   type CustomInteractionPalette,
   type CustomInteractionTheme,
@@ -467,5 +469,76 @@ describe('Main interaction appearance preferences', () => {
     expect(manager.appearance.colors.selectionMarker).toBe('#123456');
     expect(seen).toHaveBeenCalledTimes(1);
     manager.dispose();
+  });
+});
+
+describe('theme editor seeds and identifiers', () => {
+  it('copies both light and dark semantic roles from each built-in', () => {
+    for (const id of ['primer-neutral', 'soft-academic', 'yazi-like']) {
+      const preferences = new Preferences({
+        [INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY]: 'strong',
+        [INTERACTION_STATUS_STYLE_PREFERENCE_KEY]: 'tinted',
+      });
+      const seeded = seedCustomInteractionTheme(preferences, id, 'custom:copy', 'Copy');
+      for (const mode of ['light', 'dark'] as const) {
+        const effective = resolveInteractionAppearance(
+          new Preferences({ [INTERACTION_COLOR_PRESET_PREFERENCE_KEY]: id }),
+          mode,
+        );
+        expect(seeded[mode]).toEqual({
+          selection: effective.colors.selectionMarker,
+          visual: effective.colors.visualMarker,
+          statusBackground: effective.colors.neutralStatusBackground,
+          statusForeground: effective.colors.neutralStatusForeground,
+          statusBorder: effective.colors.neutralStatusBorder,
+        });
+      }
+      expect(seeded.markerWidth).toBe(4);
+      expect(seeded.statusStyle).toBe('tinted');
+    }
+  });
+
+  it('copies a custom source without replacing its stored geometry or either palette', () => {
+    const source = customTheme({ markerWidth: 1, statusStyle: 'neutral' });
+    const preferences = new Preferences({
+      [INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY]: serializeCustomInteractionThemes({
+        version: 1,
+        themes: [source],
+      }),
+      [INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY]: 'strong',
+      [INTERACTION_STATUS_STYLE_PREFERENCE_KEY]: 'tinted',
+    });
+    expect(seedCustomInteractionTheme(preferences, source.id, 'custom:new', 'New')).toEqual({
+      ...source,
+      id: 'custom:new',
+      name: 'New',
+      light: LIGHT_PALETTE,
+      dark: DARK_PALETTE,
+    });
+    const unknown = seedCustomInteractionTheme(preferences, 'unknown', 'custom:new', 'New');
+    expect(unknown.light.selection).toBe('#9A6700');
+    expect(unknown.dark.visual).toBe('#3FB950');
+  });
+
+  it('rejects reserved, existing and invalid candidates with stable valid fallbacks', () => {
+    for (const candidate of ['primer-neutral', 'custom:used', 'bad id', '']) {
+      const id = generateCustomInteractionThemeId(
+        ['custom:used', 'custom:theme-1'],
+        () => candidate,
+      );
+      expect(id).toBe('custom:theme-2');
+      expect(
+        parseCustomInteractionThemes(JSON.stringify({ version: 1, themes: [customTheme({ id })] }))
+          .themes,
+      ).toHaveLength(1);
+    }
+    expect(generateCustomInteractionThemeId([], () => 'custom:opaque-123')).toBe(
+      'custom:opaque-123',
+    );
+    expect(
+      generateCustomInteractionThemeId([], () => {
+        throw new Error('no crypto');
+      }),
+    ).toBe('custom:theme-1');
   });
 });

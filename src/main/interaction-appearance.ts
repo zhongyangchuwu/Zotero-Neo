@@ -317,6 +317,62 @@ export function deleteCustomInteractionTheme(
   return { version: 1, themes: current.themes.filter((theme) => theme.id !== id) };
 }
 
+/** Copies both semantic palettes, preserving a custom source's geometry and style. */
+export function seedCustomInteractionTheme(
+  preferences: PreferenceReader,
+  sourceId: string,
+  id: string,
+  name: string,
+): CustomInteractionTheme {
+  const custom = findCustomInteractionTheme(
+    parseCustomInteractionThemes(preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, '')),
+    sourceId,
+  );
+  if (custom) return { ...custom, id, name, light: { ...custom.light }, dark: { ...custom.dark } };
+  const preset = Object.prototype.hasOwnProperty.call(COLOR_PRESETS, sourceId)
+    ? (sourceId as InteractionColorPreset)
+    : DEFAULT_INTERACTION_COLOR_PRESET;
+  const semantic = (theme: ResolvedTheme): CustomInteractionPalette => {
+    const colors = COLOR_PRESETS[preset][theme];
+    return {
+      selection: colors.selectionMarker,
+      visual: colors.visualMarker,
+      statusBackground: colors.neutralStatusBackground,
+      statusForeground: colors.neutralStatusForeground,
+      statusBorder: colors.neutralStatusBorder,
+    };
+  };
+  const width = { compact: 2, balanced: 3, strong: 4 } as const;
+  return {
+    id,
+    name,
+    version: 1,
+    light: semantic('light'),
+    dark: semantic('dark'),
+    markerWidth: width[interactionMarkerWeightFromPreferences(preferences)],
+    statusStyle: interactionStatusStyleFromPreferences(preferences),
+  };
+}
+
+/** Tries an opaque candidate, then uses a deterministic unused valid ID. */
+export function generateCustomInteractionThemeId(
+  existing: readonly string[],
+  generate: () => string,
+): string {
+  const taken = new Set(existing);
+  const available = (id: string): boolean =>
+    THEME_ID.test(id) && !Object.prototype.hasOwnProperty.call(COLOR_PRESETS, id) && !taken.has(id);
+  let candidate = '';
+  try {
+    candidate = generate();
+  } catch {}
+  if (available(candidate)) return candidate;
+  for (let index = 1; ; index++) {
+    const fallback = `custom:theme-${index}`;
+    if (available(fallback)) return fallback;
+  }
+}
+
 const MARKER_GEOMETRIES: Readonly<Record<InteractionMarkerWeight, InteractionMarkerGeometry>> = {
   compact: { width: 2, selectionLeft: 1, visualLeft: 13, radius: 1 },
   balanced: { width: 3, selectionLeft: 1, visualLeft: 13, radius: 2 },

@@ -6,7 +6,6 @@ import {
   INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
   INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY,
   INTERACTION_STATUS_STYLE_PREFERENCE_KEY,
-  interactionColorPresetFromPreferences,
   interactionMarkerWeightFromPreferences,
   interactionStatusStyleFromPreferences,
 } from '../main/interaction-appearance';
@@ -20,6 +19,7 @@ import {
 } from '../ui/theme';
 import { mountBindingEditor, type MountedBindingEditor } from './binding-editor-view';
 import { bindOpenNeoSettingsButton, type NeoSettingsRuntime } from './open-settings';
+import { bindLegacyInteractionThemeSelect } from './interaction-theme';
 
 const PREFERENCE_BRANCH = `${PREFERENCE_PREFIX}.`;
 const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
@@ -449,15 +449,17 @@ function initializePane(doc: Document): void {
   const interactionAppearanceStatus = byId<HTMLElement>(doc, 'zv-interaction-appearance-status');
   const colorPresetSelect = byId<XulMenuList>(doc, 'zv-interaction-color-preset');
   if (colorPresetSelect) {
-    colorPresetSelect.value = interactionColorPresetFromPreferences(preferenceStore);
-    colorPresetSelect.addEventListener('command', () => {
-      const next =
-        colorPresetSelect.value === 'soft-academic' || colorPresetSelect.value === 'yazi-like'
-          ? colorPresetSelect.value
-          : 'primer-neutral';
-      setPreference(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, next);
-      flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
-    });
+    const unbind = bindLegacyInteractionThemeSelect(
+      colorPresetSelect,
+      doc,
+      preferenceStore,
+      (id) => {
+        if (setPreference(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, id)) {
+          flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
+        }
+      },
+    );
+    view?.addEventListener('unload', unbind, { once: true });
   }
 
   const markerWeightSelect = byId<XulMenuList>(doc, 'zv-interaction-marker-weight');

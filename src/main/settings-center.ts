@@ -1,42 +1,34 @@
 import type { MainWindow } from '../core/contracts';
-import type { PreferenceReader } from '../core/preferences';
+import type { PreferenceStore } from '../core/preference-store';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
-import {
-  INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
-  parseCustomInteractionThemes,
-  type InteractionAppearanceSource,
-} from './interaction-appearance';
+import type { InteractionAppearanceManager } from './interaction-appearance';
+import { SettingsAppearance } from './settings-appearance';
 
 const H = 'http://www.w3.org/1999/xhtml';
 const SECTIONS = ['Appearance', 'Interaction', 'Reader', 'Keybindings', 'Advanced'] as const;
 type SettingsSection = (typeof SECTIONS)[number];
-const BUILT_IN_NAMES: Readonly<Record<string, string>> = {
-  'primer-neutral': 'Primer Neutral',
-  'soft-academic': 'Soft Academic',
-  'yazi-like': 'Yazi-like',
-};
 
 /** One Main-window-owned, modeless shell; only Appearance has content in this slice. */
 export class SettingsCenter {
   readonly #window: MainWindow;
   readonly #theme: ThemeManager;
-  readonly #appearance: InteractionAppearanceSource;
-  readonly #preferences: PreferenceReader;
+  readonly #appearance: InteractionAppearanceManager;
+  readonly #preferences: PreferenceStore;
   #drawer: HTMLElement | null = null;
   #heading: HTMLElement | null = null;
   #content: HTMLElement | null = null;
   #navigation: HTMLElement | null = null;
   #previousElement: Element | null = null;
   #themeCleanup: (() => void) | null = null;
-  #appearanceCleanup: (() => void) | null = null;
+  #appearanceChild: SettingsAppearance | null = null;
   #listeners: Array<() => void> = [];
   #section: SettingsSection = 'Appearance';
 
   constructor(
     window: MainWindow,
     theme: ThemeManager,
-    appearance: InteractionAppearanceSource,
-    preferences: PreferenceReader,
+    appearance: InteractionAppearanceManager,
+    preferences: PreferenceStore,
   ) {
     this.#window = window;
     this.#theme = theme;
@@ -113,7 +105,6 @@ export class SettingsCenter {
     this.#content = content;
     (doc.body ?? doc.documentElement).append(drawer);
     this.#themeCleanup = this.#theme.add(drawer);
-    this.#appearanceCleanup = this.#appearance.observe(() => this.render());
     this.render();
     heading.focus();
   }
@@ -122,9 +113,9 @@ export class SettingsCenter {
     const drawer = this.#drawer;
     if (!drawer) return;
     const restoreFocus = this.contains(this.#window.document.activeElement);
+    this.#appearanceChild?.dispose();
+    this.#appearanceChild = null;
     for (const remove of this.#listeners.splice(0)) remove();
-    this.#appearanceCleanup?.();
-    this.#appearanceCleanup = null;
     this.#themeCleanup?.();
     this.#themeCleanup = null;
     drawer.remove();
@@ -150,14 +141,19 @@ export class SettingsCenter {
       );
     }
     if (this.#section !== 'Appearance') {
+      this.#appearanceChild?.dispose();
+      this.#appearanceChild = null;
       content.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
       return;
     }
-    const id = this.#appearance.appearance.colorPreset;
-    const custom = parseCustomInteractionThemes(
-      this.#preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, ''),
-    ).themes.find((theme) => theme.id === id);
-    content.textContent = `Appearance\n\nCursor keeps Zotero's native selected style.\n\nCurrent interaction theme: ${custom?.name ?? BUILT_IN_NAMES[id] ?? id} (${id}).\n\nTheme editing will be added in the next stage.`;
-    content.style.whiteSpace = 'pre-line';
+    if (this.#appearanceChild) return;
+    content.replaceChildren();
+    content.style.whiteSpace = '';
+    this.#appearanceChild = new SettingsAppearance(
+      this.#window,
+      content,
+      this.#preferences,
+      this.#appearance,
+    );
   }
 }
