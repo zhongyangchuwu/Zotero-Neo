@@ -11,6 +11,7 @@ import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 
 import { NoteEditor } from '../../src/main/note-editor';
+import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
@@ -22,6 +23,7 @@ import {
 } from '../../src/main/navigation';
 import type { MainWindowSession } from '../../src/main/session';
 import { SelectionStore } from '../../src/main/selection-store';
+import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
 
@@ -49,6 +51,7 @@ function pickerMainWindow(): {
   const bodyChildren: HTMLElement[] = [];
   let document: Document;
   let keydown: EventListener | undefined;
+  let focusin: EventListener | undefined;
   const createElement = (tag: string): HTMLElement => {
     const children: HTMLElement[] = [];
     const listeners = new Map<string, EventListener[]>();
@@ -97,11 +100,25 @@ function pickerMainWindow(): {
       addEventListener: (type: string, listener: EventListener) => {
         listeners.set(type, [...(listeners.get(type) ?? []), listener]);
       },
-      removeEventListener: () => {},
+      removeEventListener: (type: string, listener: EventListener) => {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((entry) => entry !== listener),
+        );
+      },
+      listenerCount: (type: string) => listeners.get(type)?.length ?? 0,
       closest: (selector: string) => {
         if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
           return element as unknown as HTMLElement;
         return element.parentElement?.closest?.(selector) ?? null;
+      },
+      contains: (node: Node) => {
+        let current = node as (Node & { parentElement?: HTMLElement | null }) | null;
+        while (current) {
+          if (current === (element as unknown as Node)) return true;
+          current = current.parentElement ?? null;
+        }
+        return false;
       },
       emit: (type: string, event: Partial<Event> = {}) => {
         let stopped = false;
@@ -128,6 +145,7 @@ function pickerMainWindow(): {
       },
       focus: () => {
         Reflect.set(document, 'activeElement', element);
+        focusin?.({ target: element } as unknown as Event);
       },
       select: vi.fn(),
       scrollBy: vi.fn(),
@@ -135,6 +153,7 @@ function pickerMainWindow(): {
       remove: () => {
         const index = bodyChildren.indexOf(element as unknown as HTMLElement);
         if (index >= 0) bodyChildren.splice(index, 1);
+        Reflect.set(element, 'isConnected', false);
       },
     };
     element.ownerDocument = document;
@@ -158,8 +177,12 @@ function pickerMainWindow(): {
     },
     addEventListener: (type: string, listener: EventListener) => {
       if (type === 'keydown') keydown = listener;
+      if (type === 'focusin') focusin = listener;
     },
-    removeEventListener: () => {},
+    removeEventListener: (type: string, listener: EventListener) => {
+      if (type === 'keydown' && keydown === listener) keydown = undefined;
+      if (type === 'focusin' && focusin === listener) focusin = undefined;
+    },
     getElementById: () => null,
     querySelector: () => null,
     querySelectorAll: () => [],
@@ -168,6 +191,7 @@ function pickerMainWindow(): {
     document,
     innerWidth: 1200,
     Zotero_Tabs: { _tabs: [{ id: 'tab-b', title: 'Reader B' }], selectedID: 'tab-b' },
+    focus: vi.fn(),
     addEventListener: () => {},
     removeEventListener: () => {},
     setInterval: () => 0,
@@ -862,6 +886,182 @@ describe('NoteEditor shared binding input', () => {
       else Reflect.set(globalThis, 'Zotero', originalZotero);
       vi.useRealTimers();
     }
+  });
+});
+
+function settingsMainHost() {
+  vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+  const host = pickerMainWindow();
+  const controller = createMainWindowController({
+    preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+    logger,
+    reader: { rescan: () => {}, forwardKey: () => {} },
+  } as MainWindowControllerDependencies);
+  controller.addWindow(host.window);
+  const press = (key: string): KeyboardEvent => {
+    const event = {
+      key,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      stopImmediatePropagation: vi.fn(),
+    } as unknown as KeyboardEvent;
+    host.keydown(event);
+    return event;
+  };
+  const drawer = () => host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-center');
+  return { ...host, controller, press, drawer };
+}
+
+describe('Main Settings Center shell', () => {
+  it('opens through Space p s once, remembers its section, and refocuses on repeat', () => {
+    const host = settingsMainHost();
+    const prior = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+    host.window.document.body?.append(prior);
+    prior.focus();
+    host.press(' ');
+    host.press('p');
+    host.press('s');
+    const first = host.drawer();
+    expect(first).toBeDefined();
+    expect(first?.style.cssText).not.toContain('inset:0');
+    expect(first?.children[0]?.children[0]).toBe(host.window.document.activeElement);
+    const section = first?.children[1]?.children[2] as HTMLElement & { emit(type: string): void };
+    section.emit('click');
+    expect(first?.children[2]?.textContent).toContain('not migrated yet');
+    expect(host.controller.openSettings(host.window)).toBe(true);
+    expect(host.drawer()).toBe(first);
+    expect(
+      host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-center'),
+    ).toHaveLength(1);
+    expect(first?.children[0]?.children[0]).toBe(host.window.document.activeElement);
+    const close = first?.children[0]?.children[1] as HTMLElement & {
+      emit(type: string): void;
+      listenerCount(type: string): number;
+    };
+    close.emit('click');
+    expect(host.drawer()).toBeUndefined();
+    expect(host.window.document.activeElement).toBe(prior);
+    expect(close.listenerCount('click')).toBe(0);
+    expect(host.controller.openSettings(host.window)).toBe(true);
+    expect(host.drawer()?.children[2]?.textContent).toContain('not migrated yet');
+    host.controller.shutdown();
+    expect(host.drawer()).toBeUndefined();
+  });
+
+  it('lets the list retain focus and never steals it when closed from outside', () => {
+    const host = settingsMainHost();
+    const list = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+    host.window.document.body?.append(list);
+    expect(host.controller.openSettings(host.window)).toBe(true);
+    list.focus();
+    expect(host.drawer()).toBeDefined();
+    const close = host.drawer()?.children[0]?.children[1] as HTMLElement & {
+      emit(type: string): void;
+    };
+    close.emit('click');
+    expect(host.drawer()).toBeUndefined();
+    expect(host.window.document.activeElement).toBe(list);
+    host.controller.shutdown();
+  });
+
+  it('routes Escape through normal Main Selection handling when focus is outside Settings', () => {
+    const host = settingsMainHost();
+    const clear = vi.spyOn(MainItemSelect.prototype, 'clearSelection');
+    const itemsFocused = vi.spyOn(MainItemSelect.prototype, 'itemsFocused').mockReturnValue(true);
+    const notEmpty = vi.spyOn(SelectionStore.prototype, 'empty', 'get').mockReturnValue(false);
+    try {
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      const list = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+      host.window.document.body?.append(list);
+      list.focus();
+      const escape = host.press('Escape');
+      expect(host.drawer()).toBeDefined();
+      expect(clear).toHaveBeenCalledOnce();
+      expect(escape.preventDefault).toHaveBeenCalledOnce();
+      expect(host.window.document.activeElement).toBe(list);
+    } finally {
+      host.controller.shutdown();
+      clear.mockRestore();
+      itemsFocused.mockRestore();
+      notEmpty.mockRestore();
+    }
+  });
+
+  it('blocks Main keys while focused inside, then resumes modeless input outside', () => {
+    const host = settingsMainHost();
+    const clear = vi.spyOn(SelectionStore.prototype, 'clear');
+    const itemsFocused = vi.spyOn(MainItemSelect.prototype, 'itemsFocused').mockReturnValue(true);
+    const notEmpty = vi.spyOn(SelectionStore.prototype, 'empty', 'get').mockReturnValue(false);
+    try {
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      host.press('j');
+      host.press(':');
+      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
+      const escape = host.press('Escape');
+      expect(escape.preventDefault).toHaveBeenCalledOnce();
+      expect(clear).not.toHaveBeenCalled();
+      expect(host.drawer()).toBeUndefined();
+      const outside = host.window.document.createElementNS(
+        'http://www.w3.org/1999/xhtml',
+        'button',
+      );
+      host.window.document.body?.append(outside);
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      outside.focus();
+      host.press(':');
+      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(true);
+    } finally {
+      host.controller.shutdown();
+      clear.mockRestore();
+      itemsFocused.mockRestore();
+      notEmpty.mockRestore();
+    }
+  });
+
+  it('rejects ambiguous ownerless opens and uses only an attached owner or sole fallback', () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const first = pickerMainWindow();
+    const second = pickerMainWindow();
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    expect(controller.openSettings()).toBe(false);
+    controller.addWindow(first.window);
+    controller.addWindow(second.window);
+    expect(controller.openSettings()).toBe(false);
+    expect(controller.openSettings({} as Window)).toBe(false);
+    expect(controller.openSettings(second.window)).toBe(true);
+    expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(false);
+    expect(second.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(true);
+    controller.removeWindow(second.window);
+    expect(controller.openSettings()).toBe(true);
+    expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(true);
+    controller.shutdown();
+    expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(false);
+  });
+
+  it('includes the canonical Neo Settings action in Main Command Palette candidates', async () => {
+    const commands = createCommandsProvider({
+      mode: 'main',
+      bindingMode: 'main-normal',
+      actions: ['openNeoSettings'],
+      bindings: resolveBindings(''),
+      language: 'en',
+      execute: () => {},
+    });
+    expect(await commands.load()).toContainEqual(
+      expect.objectContaining({
+        id: 'openNeoSettings',
+        title: 'Neo: Settings',
+        meta: '<Space>ps',
+      }),
+    );
   });
 });
 

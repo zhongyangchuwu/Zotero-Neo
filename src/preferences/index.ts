@@ -19,6 +19,7 @@ import {
   type ThemeRoot,
 } from '../ui/theme';
 import { mountBindingEditor, type MountedBindingEditor } from './binding-editor-view';
+import { bindOpenNeoSettingsButton, type NeoSettingsRuntime } from './open-settings';
 
 const PREFERENCE_BRANCH = `${PREFERENCE_PREFIX}.`;
 const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
@@ -46,6 +47,9 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.appearance.auto': 'Auto',
     'zv.appearance.light': 'Light',
     'zv.appearance.dark': 'Dark',
+    'zv.settings.open': 'Open Neo Settings',
+    'zv.settings.unavailable': 'Open a single Zotero Main window, then try again.',
+    'zv.settings.opened': 'Neo Settings opened in the Main window.',
     'zv.mainAppearance': 'Main interaction appearance',
     'zv.mainAppearance.help':
       "Cursor keeps Zotero's native selected style; tune Selection and Visual markers and status.",
@@ -139,6 +143,9 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.appearance.auto': '自动',
     'zv.appearance.light': '浅色',
     'zv.appearance.dark': '深色',
+    'zv.settings.open': '打开 Neo 设置',
+    'zv.settings.unavailable': '请先打开一个 Zotero 主窗口，再重试。',
+    'zv.settings.opened': '已在主窗口打开 Neo 设置。',
     'zv.mainAppearance': '主列表交互外观',
     'zv.mainAppearance.help':
       'Cursor 保持 Zotero 原生选中样式；这里调整 Selection / Visual 标记和状态提示。',
@@ -414,6 +421,14 @@ function initializePane(doc: Document): void {
     });
   }
   applyTranslations(doc, language);
+  bindOpenNeoSettingsButton(
+    byId<HTMLElement>(doc, 'zv-open-neo-settings'),
+    byId<HTMLElement>(doc, 'zv-open-neo-settings-status'),
+    view,
+    () => (Zotero as typeof Zotero & { Neo?: NeoSettingsRuntime }).Neo,
+    (opened) =>
+      translate(opened ? 'zv.settings.opened' : 'zv.settings.unavailable', currentLanguage()),
+  );
   const appearanceSelect = byId<XulMenuList>(doc, 'zv-appearance-theme');
   if (appearanceSelect) {
     appearanceSelect.value = appearanceModeFromPreferences(preferenceStore);

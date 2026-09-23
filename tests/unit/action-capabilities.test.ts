@@ -30,6 +30,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainQuickSearch',
   'mainAdvancedSearch',
   'managePlugins',
+  'openNeoSettings',
   'manageSelection',
   'mainReturnContext',
   'mainTrashItems',
@@ -153,6 +154,10 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'mainReturnContext')).toBe(true);
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
+    expect(READER_NORMAL_ACTIONS).not.toContain('openNeoSettings');
+    expect(actionsForBindingMode('note-normal')).not.toContain('openNeoSettings');
+    expect(MAIN_NORMAL_ACTIONS).toContain('openNeoSettings');
+    expect(MAIN_SELECT_ACTIONS).toContain('openNeoSettings');
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
     expect(isReaderActionForMode('visual', 'openSelectionActions')).toBe(true);

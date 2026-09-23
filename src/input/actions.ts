@@ -281,6 +281,10 @@ const BASE_ACTION_LABELS = {
     en: 'Open command palette',
     'zh-CN': '打开命令面板',
   },
+  openNeoSettings: {
+    en: 'Neo: Settings',
+    'zh-CN': 'Neo 设置',
+  },
   findAllItems: {
     en: 'Find an item in the library',
     'zh-CN': '在文库中查找条目',

@@ -62,6 +62,24 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
+  it('resolves Space p s under Plugins without a strict-prefix collision', () => {
+    expect(DEFAULT_BINDINGS['main-normal:<Space>pp']).toBe('managePlugins');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ps']).toBe('openNeoSettings');
+    const bindings = resolveBindings('');
+    const start = advanceInput(
+      { mode: 'main-normal', keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
+      ' ',
+    );
+    const prefix = advanceInput(
+      { ...start.state, mode: 'main-normal', bindings, allowCountPrefix: true },
+      'p',
+    );
+    expect(prefix.kind).toBe('pending');
+    expect(
+      advanceInput({ ...prefix.state, mode: 'main-normal', bindings, allowCountPrefix: true }, 's'),
+    ).toMatchObject({ kind: 'execute', action: 'openNeoSettings' });
+  });
+
   it('shares collection membership keys with Reader item context', () => {
     expect(DEFAULT_BINDINGS['reader-normal:<Space>ca']).toBe('addToCollection');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>cr']).toBe('removeFromCollection');

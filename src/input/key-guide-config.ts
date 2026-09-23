@@ -24,6 +24,7 @@ const ACTION_GUIDE_LABELS: Partial<Record<ActionId, LocalizedGuideText>> = {
   addToCollection: { en: 'Add to collection', 'zh-CN': '添加到分类' },
   removeFromCollection: { en: 'Remove from collection', 'zh-CN': '移出分类' },
   managePlugins: { en: 'Manage plugins', 'zh-CN': '管理插件' },
+  openNeoSettings: { en: 'Neo Settings', 'zh-CN': 'Neo 设置' },
   mainOpenPDF: { en: 'Open selected PDF', 'zh-CN': '打开所选 PDF' },
   switchTab: { en: 'Switch tab', 'zh-CN': '切换标签页' },
   mainYankCitekey: { en: 'Copy citekey', 'zh-CN': '复制 citekey' },

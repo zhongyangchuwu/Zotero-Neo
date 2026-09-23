@@ -20,6 +20,7 @@ export interface AddonContext {
 
 export interface ZoteroNeoPublicApi {
   readonly reader: ReaderSelectionApi;
+  openSettings(owner?: Window | null): boolean;
 }
 
 export interface ZoteroNeoController {
@@ -65,6 +66,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     });
     main = this.#main;
     this.api = {
+      openSettings: (owner) => this.#main.openSettings(owner),
       reader: {
         getSelection: () => this.#reader.getSelection(),
         registerSelectionAction: (action: ReaderSelectionActionDefinition) =>

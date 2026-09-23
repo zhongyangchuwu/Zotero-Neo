@@ -180,6 +180,9 @@ export class MainWindowController implements MainWindowControllerApi {
     };
     session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
+    session.cleanup.addEventListener(window.document, 'focusin', (event) => {
+      if (session.settings.contains(event.target)) this.resetMainInput(window, session);
+    });
     session.cleanup.add(() => {
       this.#picker.close(session);
       this.#pluginManager.close(session);
@@ -201,6 +204,37 @@ export class MainWindowController implements MainWindowControllerApi {
 
   shutdown(): void {
     for (const window of [...this.#sessions.keys()]) this.removeWindow(window);
+  }
+
+  openSettings(owner?: Window | null): boolean {
+    const session = owner ? this.#sessions.get(owner as MainWindow) : undefined;
+    const resolved =
+      session ?? (this.#sessions.size === 1 ? this.#sessions.values().next().value : undefined);
+    if (!resolved) return false;
+    const window = resolved.window;
+    this.#picker.close(resolved);
+    this.#pluginManager.close(resolved);
+    this.#selectionPanel.close(resolved);
+    this.#localFind.close(resolved);
+    this.resetMainInput(window, resolved);
+    try {
+      window.focus();
+      resolved.settings.openDrawer();
+      return true;
+    } catch (error) {
+      this.#dependencies.logger.debug(`Settings open failed: ${String(error)}`);
+      resolved.settings.close();
+      return false;
+    }
+  }
+
+  private resetMainInput(window: MainWindow, session: MainWindowSession): void {
+    session.keyBuffer = '';
+    session.countBuffer = '';
+    session.inputRevision += 1;
+    window.clearTimeout(session.keyTimer);
+    session.keyTimer = undefined;
+    this.clearKeyGuide(window, session);
   }
 
   executeFromReader(
@@ -324,6 +358,21 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
+      return;
+    }
+    const settingsOwnsKey =
+      session.settings.open &&
+      (session.settings.contains(event.target) ||
+        session.settings.contains(window.document.activeElement));
+    if (settingsOwnsKey) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
+        session.settings.close();
+        return;
+      }
+      this.resetMainInput(window, session);
       return;
     }
     if (
@@ -647,6 +696,9 @@ export class MainWindowController implements MainWindowControllerApi {
               this.execute(nextAction, window, session, nextCount);
           },
         });
+        break;
+      case 'openNeoSettings':
+        this.openSettings(window);
         break;
       case 'mainQuickSearch':
         if (session.inputMode === 'main-select') {

@@ -177,6 +177,7 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Space>q': 'closeCurrentTab',
   'main-normal:<Space>fn': 'findNotes',
   'main-normal:<Space>pp': 'managePlugins',
+  'main-normal:<Space>ps': 'openNeoSettings',
   'main-normal:<Space>ss': 'manageSelection',
   'main-normal:<Space>sc': 'mainClearSelection',
   'main-normal:e': 'mainFocusTree',
