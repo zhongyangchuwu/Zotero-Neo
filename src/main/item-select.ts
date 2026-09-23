@@ -1,5 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
+import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import {
   currentMainItemCursorRef,
   mainHost,
@@ -14,11 +15,22 @@ import {
 } from './host';
 import type { ItemRef } from './selection-store';
 import type { SelectionStore } from './selection-store';
+import { MainItemStateDecoration, type MainVisualRange } from './item-state-decoration';
 
 type ItemSelectDirection = 1 | -1 | 'first' | 'last';
 export type ItemSelectEnterResult = 'entered' | 'focus-items' | 'unavailable' | 'pass';
-type ItemSelectUi = { badge: HTMLElement | null; timer: number | undefined };
-type VisualState = { anchor: ItemRef; head: ItemRef };
+type ItemSelectUi = {
+  badge: HTMLElement | null;
+  timer: number | undefined;
+  readonly theme: ThemeManager;
+  selectionCleanup: (() => void) | null;
+  themeCleanup: (() => void) | null;
+};
+type VisualState = {
+  readonly anchor: ItemRef;
+  readonly head: ItemRef;
+  readonly range: MainVisualRange | undefined;
+};
 
 function containsTarget(root: unknown, node: unknown): boolean {
   if (!root || !node) return false;
@@ -45,6 +57,15 @@ export function nextItemSelectIndex(
   return Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
 }
 
+export function selectionStatusText(total: number, visible: number): string {
+  const hidden = Math.max(0, total - visible);
+  return `SEL ${total} · ${visible} visible${hidden ? ` · ${hidden} hidden` : ''}`;
+}
+
+export function visualStatusText(targetCount: number, selectionCount: number): string {
+  return `VISUAL ${targetCount} · SEL ${selectionCount}`;
+}
+
 /**
  * Main Library selection feature.
  *
@@ -56,9 +77,49 @@ export class MainItemSelect {
   readonly #logger: Logger;
   readonly #ui = new Map<MainWindow, ItemSelectUi>();
   readonly #visual = new Map<MainWindow, VisualState>();
+  readonly #decoration = new MainItemStateDecoration();
 
   constructor(logger: Logger) {
     this.#logger = logger;
+  }
+
+  addWindow(window: MainWindow, selection: SelectionStore, theme: ThemeManager): void {
+    if (this.#ui.has(window)) return;
+    const ui: ItemSelectUi = {
+      badge: null,
+      timer: undefined,
+      theme,
+      selectionCleanup: null,
+      themeCleanup: null,
+    };
+    this.#ui.set(window, ui);
+    this.#decoration.addWindow(window, selection, () => this.#visual.get(window)?.range, theme);
+    ui.selectionCleanup = selection.observe(() => {
+      const visual = this.#visual.get(window);
+      if (visual) this.showMode(window, visual.range?.count ?? 0, selection);
+      else
+        this.renderSelectionStatus(
+          window,
+          selection.size,
+          visibleMainSelectionCount(window, selection.values()),
+        );
+    });
+  }
+
+  refresh(window: MainWindow, selection: SelectionStore): void {
+    this.#decoration.refresh(window);
+    const visual = this.#visual.get(window);
+    if (visual) {
+      const range = this.resolveVisualRange(window, visual.anchor, visual.head);
+      this.#visual.set(window, { ...visual, range });
+      this.showMode(window, range?.count ?? 0, selection);
+      return;
+    }
+    this.renderSelectionStatus(
+      window,
+      selection.size,
+      visibleMainSelectionCount(window, selection.values()),
+    );
   }
 
   entryRelevant(window: MainWindow): boolean {
@@ -81,7 +142,7 @@ export class MainItemSelect {
 
     const next = Math.min(rowCount - 1, row + 1);
     moveMainItemCursor(window, next, shouldDebounce);
-    this.showSelection(window, selection.size, visible);
+    this.#decoration.refresh(window);
     this.#logger.debug(
       `main selection cursor toggle item=${cursor.itemID} selected=${selected} total=${selection.size} visible=${visible}`,
     );
@@ -107,8 +168,10 @@ export class MainItemSelect {
       return 'unavailable';
     }
 
-    this.#visual.set(window, { anchor: cursor, head: cursor });
-    this.showMode(window, shown, selection);
+    const range = this.resolveVisualRange(window, cursor, cursor);
+    this.#visual.set(window, { anchor: cursor, head: cursor, range });
+    this.#decoration.refresh(window);
+    this.showMode(window, range?.count ?? shown, selection);
     this.#logger.debug(`main visual entered item=${cursor.itemID}`);
     return 'entered';
   }
@@ -134,7 +197,12 @@ export class MainItemSelect {
     const head = mainItemRefAtRow(window, next);
     if (!head) return;
 
-    const nextState = { anchor: state.anchor, head };
+    const range = this.resolveVisualRange(window, state.anchor, head);
+    if (!range) {
+      this.cancel(window, selection);
+      return;
+    }
+    const nextState = { anchor: state.anchor, head, range };
     const shown = showMainVisualRange(window, nextState.anchor, nextState.head, shouldDebounce);
     if (shown === undefined) {
       this.cancel(window, selection);
@@ -142,6 +210,7 @@ export class MainItemSelect {
     }
 
     this.#visual.set(window, nextState);
+    this.#decoration.refresh(window);
     this.showMode(window, shown, selection);
   }
 
@@ -149,7 +218,12 @@ export class MainItemSelect {
     const state = this.#visual.get(window);
     if (!state) return;
 
-    const nextState = { anchor: state.head, head: state.anchor };
+    const range = this.resolveVisualRange(window, state.head, state.anchor);
+    if (!range) {
+      this.cancel(window, selection);
+      return;
+    }
+    const nextState = { anchor: state.head, head: state.anchor, range };
     const shown = showMainVisualRange(window, nextState.anchor, nextState.head);
     if (shown === undefined) {
       this.cancel(window, selection);
@@ -157,6 +231,7 @@ export class MainItemSelect {
     }
 
     this.#visual.set(window, nextState);
+    this.#decoration.refresh(window);
     this.showMode(window, shown, selection);
   }
 
@@ -168,8 +243,9 @@ export class MainItemSelect {
     const result = selection.toggleTarget(target);
     const visible = projectMainSelection(window, selection.values(), state.head);
     this.#visual.delete(window);
+    this.#decoration.refresh(window);
 
-    this.showSelection(window, selection.size, visible);
+    this.renderSelectionStatus(window, selection.size, visible);
     this.#logger.debug(
       `main visual committed target=${target.length} result=${result} total=${selection.size} visible=${visible}`,
     );
@@ -181,7 +257,8 @@ export class MainItemSelect {
     const cursor = state?.head ?? currentMainItemCursorRef(window);
     const visible = projectMainSelection(window, selection.values(), cursor);
     this.#visual.delete(window);
-    this.show(window, `Visual cancelled · Selection ${selection.size} · ${visible} visible`, false);
+    this.#decoration.refresh(window);
+    this.renderSelectionStatus(window, selection.size, visible);
     this.#logger.debug(`main visual cancelled total=${selection.size} visible=${visible}`);
   }
 
@@ -189,28 +266,55 @@ export class MainItemSelect {
     const state = this.#visual.get(window);
     if (state) projectMainSelection(window, selection.values(), state.head);
     this.#visual.delete(window);
-    this.hide(window);
+    this.#decoration.refresh(window);
+    this.renderSelectionStatus(
+      window,
+      selection.size,
+      visibleMainSelectionCount(window, selection.values()),
+    );
   }
 
   removeWindow(window: MainWindow): void {
     const ui = this.#ui.get(window);
     if (ui) {
       window.clearTimeout(ui.timer);
+      ui.selectionCleanup?.();
+      ui.themeCleanup?.();
       ui.badge?.remove();
       this.#ui.delete(window);
     }
     this.#visual.delete(window);
+    this.#decoration.removeWindow(window);
+  }
+
+  clearSelection(window: MainWindow, selection: SelectionStore): boolean {
+    const changed = selection.clear();
+    const cursor = currentMainItemCursorRef(window);
+    projectMainSelection(window, selection.values(), cursor);
+    this.#decoration.refresh(window);
+    if (changed) this.show(window, 'Selection cleared', false);
+    else this.hide(window);
+    this.#logger.debug(`main selection cleared changed=${changed}`);
+    return changed;
+  }
+
+  private resolveVisualRange(
+    window: MainWindow,
+    anchorRef: ItemRef,
+    headRef: ItemRef,
+  ): MainVisualRange | undefined {
+    const anchor = mainItemRowForRef(window, anchorRef);
+    const head = mainItemRowForRef(window, headRef);
+    if (anchor === undefined || head === undefined) return undefined;
+    const first = Math.min(anchor, head);
+    const last = Math.max(anchor, head);
+    return { first, last, count: last - first + 1 };
   }
 
   private visualRefs(window: MainWindow, state: VisualState): ItemRef[] {
-    const anchor = mainItemRowForRef(window, state.anchor);
-    const head = mainItemRowForRef(window, state.head);
-    if (anchor === undefined || head === undefined) return [];
-
-    const first = Math.min(anchor, head);
-    const last = Math.max(anchor, head);
+    if (!state.range) return [];
     const refs: ItemRef[] = [];
-    for (let row = first; row <= last; row += 1) {
+    for (let row = state.range.first; row <= state.range.last; row += 1) {
       const ref = mainItemRefAtRow(window, row);
       if (ref) refs.push(ref);
     }
@@ -246,32 +350,28 @@ export class MainItemSelect {
   }
 
   private showMode(window: MainWindow, targetCount: number, selection: SelectionStore): void {
-    const visible = visibleMainSelectionCount(window, selection.values());
-    this.show(
-      window,
-      `-- VISUAL -- · ${targetCount} target${targetCount === 1 ? '' : 's'} · Selection ${selection.size} · ${visible} visible`,
-      true,
-    );
+    this.show(window, visualStatusText(targetCount, selection.size), true);
   }
 
-  private showSelection(window: MainWindow, total: number, visible: number): void {
-    this.show(window, `Selection ${total} · ${visible} visible`, false);
+  private renderSelectionStatus(window: MainWindow, total: number, visible: number): void {
+    if (total <= 0) {
+      this.hide(window);
+      return;
+    }
+    this.show(window, selectionStatusText(total, visible), true);
   }
 
   private show(window: MainWindow, text: string, persistent: boolean): void {
-    let ui = this.#ui.get(window);
-    if (!ui) {
-      ui = { badge: null, timer: undefined };
-      this.#ui.set(window, ui);
-    }
+    const ui = this.#ui.get(window);
+    if (!ui) return;
     window.clearTimeout(ui.timer);
     ui.timer = undefined;
     if (!ui.badge) {
       const badge = window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
       badge.id = 'zotero-neo-item-select-status';
-      badge.style.cssText =
-        'position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:99998;font:bold 12px/1.4 monospace;padding:3px 9px;border-radius:3px;background:Highlight;color:HighlightText;pointer-events:none;user-select:none';
+      badge.style.cssText = `position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:99998;font:bold 12px/1.4 monospace;padding:3px 9px;border:1px solid ${THEME_VARS.border};border-radius:3px;background:${THEME_VARS.surface};color:${THEME_VARS.text};box-shadow:0 4px 16px ${THEME_VARS.shadow};pointer-events:none;user-select:none`;
       (window.document.body ?? window.document.documentElement).append(badge);
+      ui.themeCleanup = ui.theme.add(badge);
       ui.badge = badge;
     }
     ui.badge.textContent = text;
@@ -284,6 +384,8 @@ export class MainItemSelect {
     if (!ui) return;
     window.clearTimeout(ui.timer);
     ui.timer = undefined;
+    ui.themeCleanup?.();
+    ui.themeCleanup = null;
     ui.badge?.remove();
     ui.badge = null;
   }

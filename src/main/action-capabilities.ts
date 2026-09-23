@@ -50,6 +50,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainTreeExpandAll',
   'mainTreeCollapseAll',
   'mainToggleSelection',
+  'mainClearSelection',
   'mainEnterSelect',
 ] as const satisfies readonly ActionId[]);
 

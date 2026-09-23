@@ -18,6 +18,7 @@ export function installMainViewLifecycle(
   window: MainWindow,
   session: MainWindowSession,
   logger: Logger,
+  onStateChange?: () => void,
 ): () => void {
   let cursor: ItemRef | undefined = currentMainItemCursorRef(window);
   let viewGeneration = mainItemViewGenerationToken(window);
@@ -29,6 +30,7 @@ export function installMainViewLifecycle(
     // Keep the stable Cursor from the previous item-tree generation in that window.
     if (mainItemViewGenerationToken(window) !== viewGeneration) return;
     cursor = currentMainItemCursorRef(window);
+    onStateChange?.();
   };
 
   const restoreProjection = (): void => {
@@ -44,6 +46,7 @@ export function installMainViewLifecycle(
     } finally {
       viewGeneration = mainItemViewGenerationToken(window);
       applying = false;
+      onStateChange?.();
     }
   };
 

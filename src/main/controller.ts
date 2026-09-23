@@ -130,7 +130,12 @@ export class MainWindowController implements MainWindowControllerApi {
     if (this.#sessions.has(window)) return;
     const session = new MainWindowSession(window, this.#dependencies.preferences);
     this.#sessions.set(window, session);
-    session.cleanup.add(installMainViewLifecycle(window, session, this.#dependencies.logger));
+    this.#itemSelect.addWindow(window, session.selection, session.theme);
+    session.cleanup.add(
+      installMainViewLifecycle(window, session, this.#dependencies.logger, () =>
+        this.#itemSelect.refresh(window, session.selection),
+      ),
+    );
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     let readerScanFailed = false;
@@ -409,6 +414,14 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (decision.kind === 'execute') {
+      if (
+        decision.action === 'mainClearSelection' &&
+        event.key.toLowerCase() === 'escape' &&
+        (session.selection.empty || !this.#itemSelect.itemsFocused(window))
+      ) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
       if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
         this.clearKeyGuide(window, session);
         return;
@@ -806,6 +819,9 @@ export class MainWindowController implements MainWindowControllerApi {
         } else {
           this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
         }
+        break;
+      case 'mainClearSelection':
+        this.#itemSelect.clearSelection(window, session.selection);
         break;
       case 'mainEnterSelect': {
         const result = this.#itemSelect.enter(window, session.selection);

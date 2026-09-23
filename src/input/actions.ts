@@ -381,6 +381,10 @@ const BASE_ACTION_LABELS = {
     en: 'Main window: toggle item Selection / collection ScopeSet',
     'zh-CN': '主窗口：切换条目 Selection / 分类 ScopeSet',
   },
+  mainClearSelection: {
+    en: 'Main window: clear persistent Selection',
+    'zh-CN': '主窗口：清空持久 Selection 集合',
+  },
   mainSelectDown: {
     en: 'Visual: move head down',
     'zh-CN': '可视范围：向下移动端点',

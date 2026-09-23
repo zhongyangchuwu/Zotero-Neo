@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
+import { advanceInput } from '../../src/input/engine';
+import { bindingsForMode } from '../../src/input/bindings';
 
 import {
   BINDING_SCHEMA_VERSION,
@@ -391,6 +393,58 @@ describe('binding preferences', () => {
     expect(resolved['main-select:s']).toBeUndefined();
     expect(resolved['main-normal:custom']).toBe('nextTab');
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+  });
+
+  it('preserves schema-15 custom Space-s dispatch around new Selection defaults', () => {
+    const exact = new TestPreferences({
+      'bindings.schemaVersion': 15,
+      bindings: JSON.stringify({ 'main-normal:<Space>s': 'nextTab' }),
+    });
+    migrateBindingPreferences(exact);
+    expect(JSON.parse(exact.get('bindings', ''))).toEqual({
+      'main-normal:<Space>s': 'nextTab',
+      'main-normal:<Space>sc': null,
+      'main-normal:<Space>ss': null,
+    });
+    const bindings = bindingsForMode(bindingsFromPreferences(exact), 'main-normal');
+    const leader = advanceInput(
+      { mode: 'main-normal', keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
+      ' ',
+    );
+    expect(leader.kind).toBe('pending');
+    expect(advanceInput({ ...leader.state, bindings, allowCountPrefix: true }, 's')).toMatchObject({
+      kind: 'execute',
+      action: 'nextTab',
+    });
+
+    const descendants = new TestPreferences({
+      'bindings.schemaVersion': 15,
+      bindings: JSON.stringify({
+        'main-normal:<Space>ssx': 'nextTab',
+        'main-normal:<Space>scx': 'previousTab',
+      }),
+    });
+    migrateBindingPreferences(descendants);
+    expect(JSON.parse(descendants.get('bindings', ''))).toEqual({
+      'main-normal:<Space>sc': null,
+      'main-normal:<Space>scx': 'previousTab',
+      'main-normal:<Space>ss': null,
+      'main-normal:<Space>ssx': 'nextTab',
+    });
+
+    const explicit = new TestPreferences({
+      'bindings.schemaVersion': 15,
+      bindings: JSON.stringify({
+        'main-normal:<Space>s': 'nextTab',
+        'main-normal:<Space>ss': 'manageSelection',
+      }),
+    });
+    migrateBindingPreferences(explicit);
+    expect(JSON.parse(explicit.get('bindings', ''))).toEqual({
+      'main-normal:<Space>s': 'nextTab',
+      'main-normal:<Space>sc': null,
+      'main-normal:<Space>ss': 'manageSelection',
+    });
   });
 
   it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {

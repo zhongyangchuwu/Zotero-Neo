@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
-import { MainItemSelect, nextItemSelectIndex } from '../../src/main/item-select';
+import {
+  MainItemSelect,
+  nextItemSelectIndex,
+  selectionStatusText,
+  visualStatusText,
+} from '../../src/main/item-select';
 import { SelectionStore } from '../../src/main/selection-store';
+import type { ThemeManager } from '../../src/ui/theme';
 
 const logger = { debug: vi.fn(), diagnostic: vi.fn() };
 
@@ -25,6 +31,11 @@ function harness(focusedRow = 0) {
     textContent: '',
     remove: vi.fn(),
   } as unknown as HTMLElement;
+  const style = {
+    id: '',
+    textContent: '',
+    remove: vi.fn(),
+  } as unknown as HTMLStyleElement;
 
   const select = vi.fn((index: number) => {
     pivot = index;
@@ -83,7 +94,7 @@ function harness(focusedRow = 0) {
     activeElement: active,
     getElementById: () => null,
     querySelector: () => null,
-    createElementNS: () => badge,
+    createElementNS: (_namespace: string, tag: string) => (tag === 'style' ? style : badge),
     body: { append: vi.fn() },
     documentElement: { append: vi.fn() },
   } as unknown as Document;
@@ -98,6 +109,7 @@ function harness(focusedRow = 0) {
     window,
     rows,
     selection,
+    badge,
     selectedRows: () => [...selected].sort((left, right) => left - right),
     focusedRow: () => focused,
   };
@@ -117,6 +129,12 @@ describe('Main Visual Selection', () => {
     expect(nextItemSelectIndex(3, 10, 'first', 0)).toBe(0);
     expect(nextItemSelectIndex(3, 10, 'last', 0)).toBe(9);
     expect(nextItemSelectIndex(3, 10, 'last', 5)).toBe(4);
+  });
+
+  it('reports persistent Selection visibility and compact Visual state', () => {
+    expect(selectionStatusText(7, 3)).toBe('SEL 7 · 3 visible · 4 hidden');
+    expect(selectionStatusText(2, 2)).toBe('SEL 2 · 2 visible');
+    expect(visualStatusText(4, 7)).toBe('VISUAL 4 · SEL 7');
   });
 
   it('does not toggle the item workset when the collection tree owns focus', () => {
@@ -181,6 +199,52 @@ describe('Main Visual Selection', () => {
     expect(host.focusedRow()).toBe(1);
   });
 
+  it('hides empty Selection status after Visual cancel or focus loss', () => {
+    const theme = {
+      theme: 'light',
+      add: () => () => {},
+      observe: () => () => {},
+    } as unknown as ThemeManager;
+
+    for (const exit of ['cancel', 'leave'] as const) {
+      const host = harness(1);
+      const store = new SelectionStore();
+      const feature = new MainItemSelect(logger);
+      feature.addWindow(host.window, store, theme);
+
+      expect(feature.enter(host.window, store)).toBe('entered');
+      expect(host.badge.textContent).toBe('VISUAL 1 · SEL 0');
+      feature[exit](host.window, store);
+
+      expect(store.empty).toBe(true);
+      expect(host.badge.remove).toHaveBeenCalled();
+      feature.removeWindow(host.window);
+    }
+  });
+
+  it('restores persistent Selection status after Visual cancel or focus loss', () => {
+    const theme = {
+      theme: 'light',
+      add: () => () => {},
+      observe: () => () => {},
+    } as unknown as ThemeManager;
+
+    for (const exit of ['cancel', 'leave'] as const) {
+      const host = harness(1);
+      const store = new SelectionStore();
+      store.add({ libraryID: 1, itemID: 10 });
+      const feature = new MainItemSelect(logger);
+      feature.addWindow(host.window, store, theme);
+
+      expect(feature.enter(host.window, store)).toBe('entered');
+      feature[exit](host.window, store);
+
+      expect(selectedIDs(store)).toEqual([10]);
+      expect(host.badge.textContent).toBe('SEL 1 · 1 visible');
+      expect(host.badge.remove).not.toHaveBeenCalled();
+      feature.removeWindow(host.window);
+    }
+  });
   it('commits Visual with the all-or-none target rule', () => {
     const host = harness(1);
     const store = new SelectionStore();
