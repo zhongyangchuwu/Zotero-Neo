@@ -391,6 +391,44 @@ describe('current Zotero collection APIs', () => {
     expect(session.activePanel).toBe('items');
   });
 
+  it('moves item Cursor with one select-only native anchor', () => {
+    const active = { id: 'item-tree-main-default-row-2' } as Element;
+    let focused = 2;
+    let selected = new Set([1, 2, 4]);
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected = new Set([index]);
+    });
+    const ensureRowIsVisible = vi.fn();
+    const itemsView = {
+      rowCount: 6,
+      selection: {
+        get focused() {
+          return focused;
+        },
+        select,
+      },
+      ensureRowIsVisible,
+    };
+    const window = {
+      document: {
+        activeElement: active,
+        getElementById: () => null,
+        querySelector: () => null,
+      },
+      ZoteroPane: { itemsView },
+    } as unknown as MainWindow;
+    const session = { activePanel: 'items' } as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    navigation.navigate(window, session, 1, 1, true);
+
+    expect(select).toHaveBeenCalledWith(3, true);
+    expect([...selected]).toEqual([3]);
+    expect(focused).toBe(3);
+    expect(ensureRowIsVisible).toHaveBeenCalledWith(3);
+  });
+
   it('uses Zotero repeat debouncing and native selection scrolling for held j/k', () => {
     const active = { id: 'collection-tree-row-2' } as Element;
     const select = vi.fn();

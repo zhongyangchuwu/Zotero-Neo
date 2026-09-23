@@ -127,8 +127,8 @@ describe('appearance theme contract', () => {
     expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#14532d');
     expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#fff8e1');
     expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#713f12');
-    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#7c3aed');
-    expect(panel.values.get('--zotero-neo-item-visual')).toBe('#16a34a');
+    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#eab308');
+    expect(panel.values.get('--zotero-neo-item-visual')).toBe('#22c55e');
     expect(panel.values.get('--zotero-neo-status-success')).toBe('#dcfce7');
     expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#166534');
     expect(panel.values.get('--zotero-neo-status-info')).toBe('#dbeafe');
@@ -141,7 +141,7 @@ describe('appearance theme contract', () => {
     expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#dcfce7');
     expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#332800');
     expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#fef3c7');
-    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#a78bfa');
+    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#facc15');
     expect(panel.values.get('--zotero-neo-item-visual')).toBe('#4ade80');
     expect(panel.values.get('--zotero-neo-status-success')).toBe('#16301f');
     expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#bbf7d0');

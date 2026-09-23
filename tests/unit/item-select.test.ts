@@ -15,14 +15,14 @@ function item(id: number): Zotero.Item {
   return { id, libraryID: 1 } as Zotero.Item;
 }
 
-function harness(focusedRow = 0) {
+function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRow]) {
   const rows = [item(10), item(11), item(12), item(13), item(14)].map((ref) => ({
     isObjectRow: true,
     ref,
   }));
   let focused = focusedRow;
   let pivot = focusedRow;
-  let selected = new Set<number>([focusedRow]);
+  let selected = new Set<number>(initialSelected);
   const active = { id: `item-tree-row-${focusedRow}` } as unknown as Element;
   const root = { contains: (node: unknown) => node === active } as HTMLElement;
   const badge = {
@@ -122,6 +122,56 @@ function selectedIDs(store: SelectionStore): number[] {
     .sort((left, right) => left - right);
 }
 
+describe('Main item attach', () => {
+  const theme = {
+    theme: 'light',
+    observe: () => () => {},
+  } as unknown as ThemeManager;
+
+  it('establishes a zero-selection focused row as the sole native Cursor anchor', () => {
+    const host = harness(2, []);
+    const feature = new MainItemSelect(logger);
+
+    feature.addWindow(host.window, new SelectionStore(), theme);
+
+    expect(host.selection.select).toHaveBeenCalledOnce();
+    expect(host.selection.select).toHaveBeenCalledWith(2, false);
+    expect(host.selectedRows()).toEqual([2]);
+    expect(host.focusedRow()).toBe(2);
+    feature.removeWindow(host.window);
+  });
+
+  it('collapses pre-existing native multi-selection to the focused Cursor row', () => {
+    const host = harness(2, [0, 2, 4]);
+    const feature = new MainItemSelect(logger);
+
+    feature.addWindow(host.window, new SelectionStore(), theme);
+
+    expect(host.selection.select).toHaveBeenCalledOnce();
+    expect(host.selectedRows()).toEqual([2]);
+    feature.removeWindow(host.window);
+  });
+
+  it('fails safely when the focused row or native select seam is unavailable', () => {
+    const missingCursor = harness(-1, []);
+    const missingCursorFeature = new MainItemSelect(logger);
+    expect(() =>
+      missingCursorFeature.addWindow(missingCursor.window, new SelectionStore(), theme),
+    ).not.toThrow();
+    expect(missingCursor.selection.select).not.toHaveBeenCalled();
+    missingCursorFeature.removeWindow(missingCursor.window);
+
+    const missingSelect = harness(1, [0, 1]);
+    Reflect.deleteProperty(missingSelect.selection, 'select');
+    const missingSelectFeature = new MainItemSelect(logger);
+    expect(() =>
+      missingSelectFeature.addWindow(missingSelect.window, new SelectionStore(), theme),
+    ).not.toThrow();
+    expect(missingSelect.selectedRows()).toEqual([0, 1]);
+    missingSelectFeature.removeWindow(missingSelect.window);
+  });
+});
+
 describe('Main Visual Selection', () => {
   it('computes clamped Vim-style range targets', () => {
     expect(nextItemSelectIndex(3, 10, 1, 4)).toBe(7);
@@ -160,12 +210,12 @@ describe('Main Visual Selection', () => {
 
     expect(feature.toggleCursor(host.window, store)).toBe(true);
     expect(selectedIDs(store)).toEqual([11]);
-    expect(host.selectedRows()).toEqual([1]);
+    expect(host.selectedRows()).toEqual([2]);
     expect(host.focusedRow()).toBe(2);
 
     expect(feature.toggleCursor(host.window, store)).toBe(true);
     expect(selectedIDs(store)).toEqual([11, 12]);
-    expect(host.selectedRows()).toEqual([1, 2]);
+    expect(host.selectedRows()).toEqual([3]);
     expect(host.focusedRow()).toBe(3);
   });
 
@@ -181,22 +231,24 @@ describe('Main Visual Selection', () => {
     expect(selectedIDs(store)).toEqual([10, 12]);
 
     feature.extend(host.window, 1, 3, store);
-    expect(host.selectedRows()).toEqual([1, 2, 3, 4]);
+    expect(host.selectedRows()).toEqual([4]);
     expect(selectedIDs(store)).toEqual([10, 12]);
 
     feature.extend(host.window, -1, 2, store);
-    expect(host.selectedRows()).toEqual([1, 2]);
+    expect(host.selectedRows()).toEqual([2]);
     expect(selectedIDs(store)).toEqual([10, 12]);
 
     feature.swapEnds(host.window, store);
-    expect(host.selectedRows()).toEqual([1, 2]);
+    expect(host.selectedRows()).toEqual([1]);
     expect(host.focusedRow()).toBe(1);
     expect(selectedIDs(store)).toEqual([10, 12]);
 
     feature.cancel(host.window, store);
     expect(selectedIDs(store)).toEqual([10, 12]);
-    expect(host.selectedRows()).toEqual([0, 2]);
+    expect(host.selectedRows()).toEqual([1]);
     expect(host.focusedRow()).toBe(1);
+    expect(host.selection.shiftSelect).not.toHaveBeenCalled();
+    expect(host.selection.toggleSelect).not.toHaveBeenCalled();
   });
 
   it('hides empty Selection status after Visual cancel or focus loss', () => {
@@ -256,14 +308,16 @@ describe('Main Visual Selection', () => {
     feature.extend(host.window, 1, 2, store);
     expect(feature.finish(host.window, store)).toBe(3);
     expect(selectedIDs(store)).toEqual([10, 11, 12, 13]);
-    expect(host.selectedRows()).toEqual([0, 1, 2, 3]);
+    expect(host.selectedRows()).toEqual([3]);
     expect(host.focusedRow()).toBe(3);
 
     expect(feature.enter(host.window, store)).toBe('entered');
     feature.extend(host.window, -1, 2, store);
     expect(feature.finish(host.window, store)).toBe(3);
     expect(selectedIDs(store)).toEqual([10]);
-    expect(host.selectedRows()).toEqual([0]);
+    expect(host.selectedRows()).toEqual([1]);
     expect(host.focusedRow()).toBe(1);
+    expect(host.selection.shiftSelect).not.toHaveBeenCalled();
+    expect(host.selection.toggleSelect).not.toHaveBeenCalled();
   });
 });

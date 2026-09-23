@@ -5,18 +5,13 @@ import {
   mainItemViewGenerationToken,
   mainItemViewSettled,
   observeMainItemView,
-  projectMainSelection,
+  restoreMainItemCursorAnchor,
 } from './host';
-import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 
-/**
- * Keeps Neo's stable Cursor/Selection identities projected onto Zotero's current
- * item-tree View. Zotero remains authoritative for the View itself.
- */
+/** Keeps Neo's stable Cursor identity anchored to Zotero's current item-tree View. */
 export function installMainViewLifecycle(
   window: MainWindow,
-  session: MainWindowSession,
   logger: Logger,
   onStateChange?: () => void,
 ): () => void {
@@ -33,16 +28,14 @@ export function installMainViewLifecycle(
     onStateChange?.();
   };
 
-  const restoreProjection = (): void => {
+  const restoreCursor = (): void => {
     if (applying) return;
     applying = true;
     try {
-      const visible = projectMainSelection(window, session.selection.values(), cursor);
-      logger.debug(
-        `Main View refresh projected Selection visible=${visible}/${session.selection.size}`,
-      );
+      const restored = cursor ? restoreMainItemCursorAnchor(window, cursor) : false;
+      logger.debug(`Main View refresh restored Cursor anchor=${restored}`);
     } catch (error) {
-      logger.debug(`Main View refresh projection failed: ${String(error)}`);
+      logger.debug(`Main View Cursor restore failed: ${String(error)}`);
     } finally {
       viewGeneration = mainItemViewGenerationToken(window);
       applying = false;
@@ -52,7 +45,7 @@ export function installMainViewLifecycle(
 
   const removeObservers = observeMainItemView(window, {
     onSelect: rememberCursor,
-    onRefresh: restoreProjection,
+    onRefresh: restoreCursor,
   });
 
   // Capture the initial Cursor after observers are attached so the lifecycle

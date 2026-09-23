@@ -191,7 +191,7 @@ describe('Main Selection Escape grammar', () => {
     const clear = host.press('Escape');
     expect(clear.preventDefault).toHaveBeenCalledOnce();
     expect(clear.stopPropagation).toHaveBeenCalledOnce();
-    expect(host.clearSelection).toHaveBeenCalledOnce();
+    expect(host.clearSelection).not.toHaveBeenCalled();
     expect(host.focused()).toBe(1);
 
     host.press('s');
@@ -199,7 +199,7 @@ describe('Main Selection Escape grammar', () => {
     const collection = host.press('Escape');
     expect(collection.preventDefault).not.toHaveBeenCalled();
     expect(collection.stopPropagation).not.toHaveBeenCalled();
-    expect(host.clearSelection).toHaveBeenCalledOnce();
+    expect(host.clearSelection).not.toHaveBeenCalled();
 
     host.controller.shutdown();
   });
@@ -216,7 +216,7 @@ describe('Main Selection Escape grammar', () => {
 
     const normalEscape = host.press('Escape');
     expect(normalEscape.preventDefault).toHaveBeenCalledOnce();
-    expect(host.clearSelection).toHaveBeenCalledTimes(clearCalls + 1);
+    expect(host.clearSelection).not.toHaveBeenCalled();
     host.controller.shutdown();
   });
 
@@ -230,7 +230,7 @@ describe('Main Selection Escape grammar', () => {
     expect(editableHost.clearSelection).not.toHaveBeenCalled();
     editableHost.focusItems();
     editableHost.press('Escape');
-    expect(editableHost.clearSelection).toHaveBeenCalledOnce();
+    expect(editableHost.clearSelection).not.toHaveBeenCalled();
     editableHost.controller.shutdown();
 
     const readerHost = harness();
@@ -242,7 +242,7 @@ describe('Main Selection Escape grammar', () => {
     expect(readerEscape.preventDefault).not.toHaveBeenCalled();
     readerHost.focusItems();
     readerHost.press('Escape');
-    expect(readerHost.clearSelection).toHaveBeenCalledOnce();
+    expect(readerHost.clearSelection).not.toHaveBeenCalled();
     readerHost.controller.shutdown();
   });
 });

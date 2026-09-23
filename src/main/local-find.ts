@@ -7,7 +7,7 @@ import {
   mainItemCursorRow,
   mainItemRefAtRow,
   mainItemRowCount,
-  moveMainItemCursor,
+  selectMainItemCursorAnchor,
 } from './host';
 import type { MainWindowSession } from './session';
 
@@ -193,7 +193,7 @@ export class MainLocalFind {
       return false;
     }
 
-    if (!moveMainItemCursor(window, row)) {
+    if (!selectMainItemCursorAnchor(window, row)) {
       this.#status(session, '✗ Local find Cursor move is unavailable');
       return false;
     }

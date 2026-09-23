@@ -29,9 +29,7 @@ export const THEME_VARS = {
   focusRing: 'var(--zotero-neo-focus-ring)',
   shadow: 'var(--zotero-neo-shadow)',
   itemSelection: 'var(--zotero-neo-item-selection)',
-  itemSelectionFill: 'var(--zotero-neo-item-selection-fill)',
   itemVisual: 'var(--zotero-neo-item-visual)',
-  itemVisualFill: 'var(--zotero-neo-item-visual-fill)',
   modeNormal: 'var(--zotero-neo-mode-normal)',
   modeNormalText: 'var(--zotero-neo-mode-normal-text)',
   modeVisual: 'var(--zotero-neo-mode-visual)',
@@ -66,10 +64,8 @@ const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>
     '--zotero-neo-error': '#b42318',
     '--zotero-neo-focus-ring': '#2563eb',
     '--zotero-neo-shadow': 'rgba(15, 23, 42, 0.24)',
-    '--zotero-neo-item-selection': '#7c3aed',
-    '--zotero-neo-item-selection-fill': 'rgba(124, 58, 237, 0.12)',
-    '--zotero-neo-item-visual': '#16a34a',
-    '--zotero-neo-item-visual-fill': 'rgba(34, 197, 94, 0.16)',
+    '--zotero-neo-item-selection': '#eab308',
+    '--zotero-neo-item-visual': '#22c55e',
     '--zotero-neo-mode-normal': '#e8f0fe',
     '--zotero-neo-mode-normal-text': '#1e3a8a',
     '--zotero-neo-mode-visual': '#e8f5e9',
@@ -102,10 +98,8 @@ const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>
     '--zotero-neo-error': '#c94b4b',
     '--zotero-neo-focus-ring': '#66adff',
     '--zotero-neo-shadow': 'rgba(0, 0, 0, 0.55)',
-    '--zotero-neo-item-selection': '#a78bfa',
-    '--zotero-neo-item-selection-fill': 'rgba(167, 139, 250, 0.18)',
+    '--zotero-neo-item-selection': '#facc15',
     '--zotero-neo-item-visual': '#4ade80',
-    '--zotero-neo-item-visual-fill': 'rgba(74, 222, 128, 0.2)',
     '--zotero-neo-mode-normal': '#1e2d50',
     '--zotero-neo-mode-normal-text': '#dbeafe',
     '--zotero-neo-mode-visual': '#1a3020',
@@ -124,21 +118,15 @@ const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>
 };
 
 export interface ItemStateColors {
-  readonly cursor: string;
   readonly selection: string;
-  readonly selectionFill: string;
   readonly visual: string;
-  readonly visualFill: string;
 }
 
 export function itemStateColors(theme: ResolvedTheme): ItemStateColors {
   const palette = PALETTES[theme];
   return {
-    cursor: palette['--zotero-neo-focus-ring']!,
     selection: palette['--zotero-neo-item-selection']!,
-    selectionFill: palette['--zotero-neo-item-selection-fill']!,
     visual: palette['--zotero-neo-item-visual']!,
-    visualFill: palette['--zotero-neo-item-visual-fill']!,
   };
 }
 

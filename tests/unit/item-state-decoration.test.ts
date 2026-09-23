@@ -217,6 +217,35 @@ describe('Main item state decoration', () => {
     ).toEqual(['zotero-neo-selection']);
   });
 
+  it('uses fixed marker lanes without styling row fill, foreground, or Cursor', () => {
+    const host = decorationHarness([0], { first: 0, last: 0, count: 1 });
+    host.selection.add({ libraryID: 1, itemID: 1 });
+    host.decoration.addWindow(host.window, host.selection, host.visual, host.theme);
+    host.flush();
+
+    const css = host.style.textContent;
+    expect(css).toContain('--zotero-neo-item-selection: #eab308');
+    expect(css).toContain('--zotero-neo-item-visual: #22c55e');
+    expect(css).toMatch(/\.row\.zotero-neo-selection::before\s*\{[^}]*left: 2px/s);
+    expect(css).toMatch(/\.row\.zotero-neo-visual::after\s*\{[^}]*left: 6px/s);
+    expect(css).not.toContain('.zotero-neo-selection.zotero-neo-visual::after');
+    expect(css).not.toContain('.row.zotero-neo-selection {');
+    expect(css).not.toContain('.row.zotero-neo-visual {');
+    expect(css).not.toContain('.row.zotero-neo-cursor');
+    expect(css).not.toMatch(/(^|[;{]\s*)color\s*:/m);
+    expect(css).not.toMatch(/(^|[;{]\s*)outline\s*:/m);
+
+    expect(host.root().rows[0]!.classes).toEqual(
+      new Set([
+        'zotero-neo-cursor',
+        'zotero-neo-selection',
+        'zotero-neo-visual',
+        'zotero-neo-visual-first',
+        'zotero-neo-visual-last',
+      ]),
+    );
+  });
+
   it('keeps large Visual renders proportional to rendered rows and coalesces relevant mutations', () => {
     const host = decorationHarness([0, 4_999, 9_999], { first: 0, last: 9_999, count: 10_000 });
     host.setFocused(4_999);

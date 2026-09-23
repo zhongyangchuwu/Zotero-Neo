@@ -89,7 +89,11 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#navigation,
       this.#viewActions,
     );
-    this.#selectionPanel = new SelectionPanel(dependencies.logger, this.#returnContext);
+    this.#selectionPanel = new SelectionPanel(
+      dependencies.logger,
+      this.#returnContext,
+      (window, session) => this.#itemSelect.refresh(window, session.selection),
+    );
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -132,7 +136,7 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#sessions.set(window, session);
     this.#itemSelect.addWindow(window, session.selection, session.theme);
     session.cleanup.add(
-      installMainViewLifecycle(window, session, this.#dependencies.logger, () =>
+      installMainViewLifecycle(window, this.#dependencies.logger, () =>
         this.#itemSelect.refresh(window, session.selection),
       ),
     );

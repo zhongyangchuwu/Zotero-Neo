@@ -47,45 +47,40 @@ function decorationCss(theme: ResolvedTheme): string {
   const colors = itemStateColors(theme);
   return `
 #item-tree-main-default {
-  --zotero-neo-focus-ring: ${colors.cursor};
   --zotero-neo-item-selection: ${colors.selection};
-  --zotero-neo-item-selection-fill: ${colors.selectionFill};
   --zotero-neo-item-visual: ${colors.visual};
-  --zotero-neo-item-visual-fill: ${colors.visualFill};
 }
-#item-tree-main-default .row.zotero-neo-cursor:not(.zotero-neo-selection):not(.zotero-neo-visual),
-#item-tree-main-default .row.zotero-neo-cursor:not(.zotero-neo-selection):not(.zotero-neo-visual) .cell {
-  background-color: transparent !important;
+#item-tree-main-default .row.zotero-neo-selection::before,
+#item-tree-main-default .row.zotero-neo-visual::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  pointer-events: none;
+  z-index: 4;
 }
-#item-tree-main-default .row.zotero-neo-selection {
-  background: linear-gradient(to right, ${THEME_VARS.itemSelection} 0 3px, ${THEME_VARS.itemSelectionFill} 3px) !important;
+#item-tree-main-default .row.zotero-neo-selection::before {
+  left: 2px;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 2px;
+  background: ${THEME_VARS.itemSelection};
 }
-#item-tree-main-default .row.zotero-neo-visual {
-  background: ${THEME_VARS.itemVisualFill} !important;
+#item-tree-main-default .row.zotero-neo-visual::after {
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  background: ${THEME_VARS.itemVisual};
 }
-#item-tree-main-default .row.zotero-neo-selection.zotero-neo-visual {
-  background: linear-gradient(to right, ${THEME_VARS.itemSelection} 0 3px, ${THEME_VARS.itemVisualFill} 3px) !important;
+#item-tree-main-default .row.zotero-neo-visual-first::after {
+  top: 2px;
+  border-radius: 2px 2px 0 0;
 }
-#item-tree-main-default .row.zotero-neo-visual-first {
-  box-shadow: inset 0 1px 0 ${THEME_VARS.itemVisual} !important;
+#item-tree-main-default .row.zotero-neo-visual-last::after {
+  bottom: 2px;
+  border-radius: 0 0 2px 2px;
 }
-#item-tree-main-default .row.zotero-neo-visual-last {
-  box-shadow: inset 0 -1px 0 ${THEME_VARS.itemVisual} !important;
-}
-#item-tree-main-default .row.zotero-neo-visual-first.zotero-neo-visual-last {
-  box-shadow: inset 0 1px 0 ${THEME_VARS.itemVisual}, inset 0 -1px 0 ${THEME_VARS.itemVisual} !important;
-}
-#item-tree-main-default .row.zotero-neo-selection,
-#item-tree-main-default .row.zotero-neo-selection .cell,
-#item-tree-main-default .row.zotero-neo-visual,
-#item-tree-main-default .row.zotero-neo-visual .cell {
-  color: var(--fill-primary) !important;
-}
-#item-tree-main-default .row.zotero-neo-cursor {
-  outline: 2px solid ${THEME_VARS.focusRing} !important;
-  outline-offset: -2px !important;
-  position: relative;
-  z-index: 2;
+#item-tree-main-default .row.zotero-neo-visual-first.zotero-neo-visual-last::after {
+  border-radius: 2px;
 }
 `;
 }

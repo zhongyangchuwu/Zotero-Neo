@@ -1,13 +1,7 @@
 import type { MainWindow } from '../core/contracts';
 import { keyString } from '../input/keys';
 import { THEME_VARS } from '../ui/theme';
-import {
-  currentMainItemCursorRef,
-  mainHost,
-  mainItem,
-  mainItemRowForRef,
-  projectMainSelection,
-} from './host';
+import { mainHost, mainItem, mainItemRowForRef } from './host';
 import type { MainWindowSession } from './session';
 import type { MainReturnContext } from './return-context';
 import type { ItemRef } from './selection-store';
@@ -25,6 +19,7 @@ export interface SelectionPanelEntry {
 export interface SelectionPanelLogger {
   debug(message: string): void;
 }
+export type SelectionPanelChangeListener = (window: MainWindow, session: MainWindowSession) => void;
 
 function itemForRef(ref: ItemRef): Zotero.Item | undefined {
   const item = mainItem(ref.itemID);
@@ -64,10 +59,16 @@ export function selectionPanelEntries(
 export class SelectionPanel {
   readonly #logger: SelectionPanelLogger;
   readonly #returnContext: MainReturnContext;
+  readonly #onSelectionChange: SelectionPanelChangeListener;
 
-  constructor(logger: SelectionPanelLogger, returnContext: MainReturnContext) {
+  constructor(
+    logger: SelectionPanelLogger,
+    returnContext: MainReturnContext,
+    onSelectionChange: SelectionPanelChangeListener,
+  ) {
     this.#logger = logger;
     this.#returnContext = returnContext;
+    this.#onSelectionChange = onSelectionChange;
   }
 
   open(window: MainWindow, session: MainWindowSession): void {
@@ -222,12 +223,12 @@ export class SelectionPanel {
     }
     if (key === 'x') {
       consume();
-      this.removeCurrent(window, session);
+      this.removeCurrent(session);
       return;
     }
     if (key === 'c') {
       consume();
-      this.clear(window, session);
+      this.clear(session);
       return;
     }
     if (key === 'enter') {
@@ -264,21 +265,18 @@ export class SelectionPanel {
     this.render(session.window, session);
   }
 
-  private removeCurrent(window: MainWindow, session: MainWindowSession): void {
+  private removeCurrent(session: MainWindowSession): void {
     const state = session.selectionPanel;
     const ref = state.refs[state.selected];
-    if (!ref) return;
-    const cursor = currentMainItemCursorRef(window);
-    session.selection.remove(ref);
-    projectMainSelection(window, session.selection.values(), cursor);
-    this.refresh(window, session);
+    if (!ref || !session.selection.remove(ref)) return;
+    this.refresh(session.window, session);
+    this.#onSelectionChange(session.window, session);
   }
 
-  private clear(window: MainWindow, session: MainWindowSession): void {
-    const cursor = currentMainItemCursorRef(window);
-    session.selection.clear();
-    projectMainSelection(window, [], cursor);
-    this.refresh(window, session);
+  private clear(session: MainWindowSession): void {
+    if (!session.selection.clear()) return;
+    this.refresh(session.window, session);
+    this.#onSelectionChange(session.window, session);
   }
 
   private reveal(window: MainWindow, session: MainWindowSession): void {

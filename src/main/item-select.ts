@@ -8,9 +8,7 @@ import {
   mainItemRefAtRow,
   mainItemRowCount,
   mainItemRowForRef,
-  moveMainItemCursor,
-  projectMainSelection,
-  showMainVisualRange,
+  selectMainItemCursorAnchor,
   visibleMainSelectionCount,
 } from './host';
 import type { ItemRef } from './selection-store';
@@ -70,8 +68,8 @@ export function visualStatusText(targetCount: number, selectionCount: number): s
  * Main Library selection feature.
  *
  * Persistent Selection belongs to MainWindowSession.SelectionStore. This owner
- * keeps only transient Visual anchor/head state and projects both VisualTarget
- * and the visible Selection subset into Zotero's native item tree.
+ * keeps transient Visual anchor/head state; Zotero TreeSelection remains one
+ * native Cursor host anchor for current-item semantics only.
  */
 export class MainItemSelect {
   readonly #logger: Logger;
@@ -104,6 +102,13 @@ export class MainItemSelect {
           visibleMainSelectionCount(window, selection.values()),
         );
     });
+
+    // MainItemSelect owns every Neo Cursor transition. Normalize the initial
+    // native host anchor here before Main view lifecycle captures its identity.
+    const cursorRow = mainItemCursorRow(window);
+    if (cursorRow !== undefined && currentMainItemCursorRef(window)) {
+      selectMainItemCursorAnchor(window, cursorRow);
+    }
   }
 
   refresh(window: MainWindow, selection: SelectionStore): void {
@@ -137,11 +142,14 @@ export class MainItemSelect {
     const rowCount = mainItemRowCount(window);
     if (!cursor || row === undefined || rowCount <= 0) return false;
 
-    const selected = selection.toggle(cursor);
-    const visible = projectMainSelection(window, selection.values(), cursor, shouldDebounce);
-
     const next = Math.min(rowCount - 1, row + 1);
-    moveMainItemCursor(window, next, shouldDebounce);
+    const selected = selection.toggle(cursor);
+    if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
+      selection.toggle(cursor);
+      return false;
+    }
+
+    const visible = visibleMainSelectionCount(window, selection.values());
     this.#decoration.refresh(window);
     this.#logger.debug(
       `main selection cursor toggle item=${cursor.itemID} selected=${selected} total=${selection.size} visible=${visible}`,
@@ -162,16 +170,15 @@ export class MainItemSelect {
       return 'unavailable';
     }
 
-    const shown = showMainVisualRange(window, cursor, cursor);
-    if (shown === undefined) {
+    const range = this.resolveVisualRange(window, cursor, cursor);
+    if (!range || !selectMainItemCursorAnchor(window, range.first)) {
       this.show(window, 'VISUAL · unavailable', false);
       return 'unavailable';
     }
 
-    const range = this.resolveVisualRange(window, cursor, cursor);
     this.#visual.set(window, { anchor: cursor, head: cursor, range });
     this.#decoration.refresh(window);
-    this.showMode(window, range?.count ?? shown, selection);
+    this.showMode(window, range.count, selection);
     this.#logger.debug(`main visual entered item=${cursor.itemID}`);
     return 'entered';
   }
@@ -203,15 +210,14 @@ export class MainItemSelect {
       return;
     }
     const nextState = { anchor: state.anchor, head, range };
-    const shown = showMainVisualRange(window, nextState.anchor, nextState.head, shouldDebounce);
-    if (shown === undefined) {
+    if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
       this.cancel(window, selection);
       return;
     }
 
     this.#visual.set(window, nextState);
     this.#decoration.refresh(window);
-    this.showMode(window, shown, selection);
+    this.showMode(window, range.count, selection);
   }
 
   swapEnds(window: MainWindow, selection: SelectionStore): void {
@@ -224,15 +230,15 @@ export class MainItemSelect {
       return;
     }
     const nextState = { anchor: state.head, head: state.anchor, range };
-    const shown = showMainVisualRange(window, nextState.anchor, nextState.head);
-    if (shown === undefined) {
+    const headRow = mainItemRowForRef(window, nextState.head);
+    if (headRow === undefined || !selectMainItemCursorAnchor(window, headRow)) {
       this.cancel(window, selection);
       return;
     }
 
     this.#visual.set(window, nextState);
     this.#decoration.refresh(window);
-    this.showMode(window, shown, selection);
+    this.showMode(window, range.count, selection);
   }
 
   finish(window: MainWindow, selection: SelectionStore): number {
@@ -241,7 +247,9 @@ export class MainItemSelect {
 
     const target = this.visualRefs(window, state);
     const result = selection.toggleTarget(target);
-    const visible = projectMainSelection(window, selection.values(), state.head);
+    const headRow = mainItemRowForRef(window, state.head);
+    if (headRow !== undefined) selectMainItemCursorAnchor(window, headRow);
+    const visible = visibleMainSelectionCount(window, selection.values());
     this.#visual.delete(window);
     this.#decoration.refresh(window);
 
@@ -255,7 +263,9 @@ export class MainItemSelect {
   cancel(window: MainWindow, selection: SelectionStore): void {
     const state = this.#visual.get(window);
     const cursor = state?.head ?? currentMainItemCursorRef(window);
-    const visible = projectMainSelection(window, selection.values(), cursor);
+    const cursorRow = cursor ? mainItemRowForRef(window, cursor) : undefined;
+    if (cursorRow !== undefined) selectMainItemCursorAnchor(window, cursorRow);
+    const visible = visibleMainSelectionCount(window, selection.values());
     this.#visual.delete(window);
     this.#decoration.refresh(window);
     this.renderSelectionStatus(window, selection.size, visible);
@@ -264,7 +274,8 @@ export class MainItemSelect {
 
   leave(window: MainWindow, selection: SelectionStore): void {
     const state = this.#visual.get(window);
-    if (state) projectMainSelection(window, selection.values(), state.head);
+    const headRow = state ? mainItemRowForRef(window, state.head) : undefined;
+    if (headRow !== undefined) selectMainItemCursorAnchor(window, headRow);
     this.#visual.delete(window);
     this.#decoration.refresh(window);
     this.renderSelectionStatus(
@@ -289,8 +300,6 @@ export class MainItemSelect {
 
   clearSelection(window: MainWindow, selection: SelectionStore): boolean {
     const changed = selection.clear();
-    const cursor = currentMainItemCursorRef(window);
-    projectMainSelection(window, selection.values(), cursor);
     this.#decoration.refresh(window);
     if (changed) this.show(window, 'Selection cleared', false);
     else this.hide(window);
