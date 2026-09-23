@@ -8,7 +8,9 @@ import {
   deleteCustomInteractionTheme,
   findCustomInteractionTheme,
   generateCustomInteractionThemeId,
+  interactionStatusColors,
   parseCustomInteractionThemes,
+  resolveInteractionAppearance,
   seedCustomInteractionTheme,
   serializeCustomInteractionThemes,
   upsertCustomInteractionTheme,
@@ -104,6 +106,13 @@ export class SettingsAppearance {
     return button;
   }
 
+  #setPressed(button: HTMLButtonElement, pressed: boolean): void {
+    button.setAttribute('aria-pressed', String(pressed));
+    button.style.background = pressed ? THEME_VARS.selected : THEME_VARS.input;
+    button.style.color = pressed ? THEME_VARS.selectedText : THEME_VARS.text;
+    button.style.borderColor = pressed ? THEME_VARS.accent : THEME_VARS.border;
+  }
+
   #clearDom(): void {
     for (const cleanup of this.#domCleanups.splice(0)) cleanup();
     this.#root.replaceChildren();
@@ -132,6 +141,9 @@ export class SettingsAppearance {
   #renderLibrary(): void {
     if (this.#draft) return;
     this.#clearDom();
+    this.#root.style.display = 'block';
+    this.#root.style.overflow = 'auto';
+    this.#root.style.padding = '12px 14px';
     const title = this.#create('h3', 'Interaction themes');
     title.style.cssText = 'margin:0 0 5px;font-size:15px';
     const description = this.#create(
@@ -153,7 +165,7 @@ export class SettingsAppearance {
       const custom = themes.find((theme) => theme.id === id);
       const card = this.#create('div');
       card.dataset.themeId = id;
-      card.style.cssText = `padding:10px;border:1px solid ${THEME_VARS.border};border-radius:6px;background:${THEME_VARS.elevated}`;
+      card.style.cssText = `padding:9px;border:2px solid ${id === active ? THEME_VARS.accent : THEME_VARS.border};border-radius:6px;background:${id === active ? THEME_VARS.selected : THEME_VARS.elevated};color:${id === active ? THEME_VARS.selectedText : THEME_VARS.text}`;
       const heading = this.#create('div', `${name}${id === active ? ' · Active' : ''}`);
       heading.style.fontWeight = 'bold';
       if (id === active) card.setAttribute('aria-current', 'true');
@@ -185,6 +197,11 @@ export class SettingsAppearance {
         }
       });
       select.setAttribute('aria-label', `Select ${name}`);
+      if (id === active) {
+        select.style.background = THEME_VARS.accent;
+        select.style.color = THEME_VARS.onAccent;
+        select.style.borderColor = THEME_VARS.accent;
+      }
       controls.append(select);
       if (custom) {
         controls.append(this.#button('Edit', () => this.#openEditor(custom, false)));
@@ -270,8 +287,14 @@ export class SettingsAppearance {
     const draft = this.#draft;
     if (!draft) return;
     this.#clearDom();
+    this.#root.style.display = 'flex';
+    this.#root.style.flexDirection = 'column';
+    this.#root.style.overflow = 'hidden';
+    this.#root.style.padding = '0';
+    const body = this.#create('div');
+    body.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:10px 14px 16px';
     const title = this.#create('h3', 'Theme editor');
-    title.style.cssText = 'margin:0 0 10px;font-size:15px';
+    title.style.cssText = 'margin:0 0 5px;font-size:15px';
     const name = this.#create('input') as HTMLInputElement;
     name.type = 'text';
     name.value = this.#name;
@@ -285,10 +308,10 @@ export class SettingsAppearance {
     name.addEventListener('input', onName);
     this.#domCleanups.push(() => name.removeEventListener('input', onName));
     const nameLabel = this.#create('label', 'Theme name');
-    nameLabel.style.cssText = 'display:block;margin-bottom:10px';
+    nameLabel.style.cssText = 'display:block;margin-bottom:6px';
     nameLabel.append(name);
     const modes = this.#create('div');
-    modes.style.cssText = 'display:flex;gap:6px;margin-bottom:10px';
+    modes.style.cssText = 'display:flex;gap:6px;margin-bottom:6px';
     const modeButtons = (['light', 'dark'] as const).map((mode) =>
       this.#button(mode === 'light' ? 'Light' : 'Dark', () => {
         this.#mode = mode;
@@ -303,7 +326,7 @@ export class SettingsAppearance {
     >();
     for (const [key, label] of COLORS) {
       const row = this.#create('div');
-      row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:6px 0';
+      row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:3px 0';
       const picker = this.#create('input') as HTMLInputElement;
       picker.type = 'color';
       picker.setAttribute('aria-label', `${label} color picker`);
@@ -358,8 +381,8 @@ export class SettingsAppearance {
     const widthLabel = this.#create('label', 'Marker width (1–4 CSS px) ');
     widthLabel.append(width);
     const styles = this.#create('div');
-    styles.style.cssText = 'display:flex;align-items:center;gap:6px;margin:10px 0';
-    styles.append(this.#create('span', 'Status style'));
+    styles.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:6px';
+    styles.append(widthLabel, this.#create('span', 'Status style'));
     const styleButtons = (['neutral', 'tinted'] as const).map((style) =>
       this.#button(style === 'neutral' ? 'Neutral' : 'Tinted', () => {
         this.#updateDraft({ statusStyle: style });
@@ -368,18 +391,15 @@ export class SettingsAppearance {
     );
     const syncStyle = (): void =>
       styleButtons.forEach((button, index) =>
-        button.setAttribute(
-          'aria-pressed',
-          String(this.#draft?.statusStyle === (index ? 'tinted' : 'neutral')),
-        ),
+        this.#setPressed(button, this.#draft?.statusStyle === (index ? 'tinted' : 'neutral')),
       );
     styles.append(...styleButtons);
     const preview = this.#create('div');
     preview.setAttribute('aria-label', 'Theme preview');
-    preview.style.cssText = 'padding:9px;margin:10px 0;border-radius:4px';
+    preview.style.cssText = 'padding:7px;margin:6px 0;border-radius:4px';
     this.#preview = preview;
     const footer = this.#create('div');
-    footer.style.cssText = 'display:flex;gap:8px';
+    footer.style.cssText = `position:sticky;bottom:0;z-index:1;flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;background:${THEME_VARS.surface};border-top:1px solid ${THEME_VARS.border}`;
     const save = this.#button('Save', () => this.#saveTheme());
     this.#save = save;
     footer.append(
@@ -388,11 +408,14 @@ export class SettingsAppearance {
     );
     const status = this.#create('p');
     status.setAttribute('role', 'status');
+    status.style.cssText = 'margin:0;min-height:1em;flex-basis:100%';
     this.#status = status;
-    this.#root.append(title, nameLabel, modes, fields, widthLabel, styles, preview, footer, status);
+    footer.append(status);
+    body.append(title, nameLabel, modes, preview, fields, styles);
+    this.#root.append(body, footer);
     const syncStyleAndPalette = (): void => {
       modeButtons.forEach((button, index) =>
-        button.setAttribute('aria-pressed', String(this.#mode === (index ? 'dark' : 'light'))),
+        this.#setPressed(button, this.#mode === (index ? 'dark' : 'light')),
       );
       for (const [key, controls] of inputs) {
         controls.hex.value = this.#hexText![this.#mode][key];
@@ -449,16 +472,22 @@ export class SettingsAppearance {
 
   #updatePreview(): void {
     if (!this.#preview || !this.#draft) return;
+    const appearance = resolveInteractionAppearance(this.#preferences, this.#mode, this.#draft);
     const palette = this.#draft[this.#mode];
     this.#preview.style.background = palette.statusBackground;
     this.#preview.style.color = palette.statusForeground;
     this.#preview.style.border = `1px solid ${palette.statusBorder}`;
-    this.#preview.textContent = `${this.#mode === 'light' ? 'Light' : 'Dark'} · Selection ${palette.selection} · Visual ${palette.visual}`;
-    const selection = this.#create('span', ' SEL ');
-    selection.style.cssText = `border-left:${this.#draft.markerWidth}px solid ${palette.selection};margin-left:8px`;
-    const visual = this.#create('span', ' VISUAL ');
-    visual.style.cssText = `border-left:${this.#draft.markerWidth}px solid ${palette.visual};margin-left:8px`;
-    this.#preview.append(selection, visual);
+    this.#preview.textContent = `${this.#mode === 'light' ? 'Light' : 'Dark'} palette · Selection ${palette.selection} · Visual ${palette.visual}`;
+    const samples = this.#create('div');
+    samples.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:5px';
+    for (const kind of ['selection', 'visual'] as const) {
+      const status = interactionStatusColors(appearance, kind);
+      const marker = kind === 'selection' ? palette.selection : palette.visual;
+      const sample = this.#create('span', kind === 'selection' ? 'SEL' : 'VISUAL');
+      sample.style.cssText = `padding:2px 6px;background:${status.background};color:${status.foreground};border:1px solid ${status.border};border-left:${appearance.marker.width}px solid ${marker};border-radius:3px`;
+      samples.append(sample);
+    }
+    this.#preview.append(samples);
   }
 
   #cancel(): void {

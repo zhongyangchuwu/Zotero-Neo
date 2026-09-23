@@ -928,9 +928,18 @@ describe('Main Settings Center shell', () => {
     const first = host.drawer();
     expect(first).toBeDefined();
     expect(first?.style.cssText).not.toContain('inset:0');
+    expect(first?.style.cssText).toContain('width:min(500px,50vw,calc(100vw - 24px))');
+    const navigation = first?.children[1] as HTMLElement | undefined;
+    expect(navigation?.style.cssText).toContain('grid-template-columns:repeat(5,minmax(0,1fr))');
+    expect(navigation?.children).toHaveLength(5);
+    const appearanceButton = navigation?.children[0] as HTMLElement;
+    expect(appearanceButton.style.background).toBe('var(--zotero-neo-selected)');
+    expect(appearanceButton.style.borderColor).toBe('var(--zotero-neo-accent)');
     expect(first?.children[0]?.children[0]).toBe(host.window.document.activeElement);
     const section = first?.children[1]?.children[2] as HTMLElement & { emit(type: string): void };
     section.emit('click');
+    expect(section.style.background).toBe('var(--zotero-neo-selected)');
+    expect(appearanceButton.style.background).toBe('var(--zotero-neo-input)');
     expect(first?.children[2]?.textContent).toContain('not migrated yet');
     expect(host.controller.openSettings(host.window)).toBe(true);
     expect(host.drawer()).toBe(first);
@@ -1039,9 +1048,9 @@ describe('Main Settings Center shell', () => {
       expect(host.controller.openSettings(host.window)).toBe(true);
       click('+ New theme');
       const editor = host.drawer()!.children[2]!.children[0];
-      // The Stage 2A fake returns null for attributes; use the editor's color row.
-      const field = host.drawer()!.children[2]!.children[3]!.children[0]!
-        .children[2] as HTMLInputElement & { emit(type: string): void };
+      const field = all(host.drawer()!).filter(
+        (node) => node.localName === 'input' && (node as HTMLInputElement).type === 'text',
+      )[1] as HTMLInputElement & { emit(type: string): void };
       field.focus();
       field.value = '#123456';
       field.emit('input');

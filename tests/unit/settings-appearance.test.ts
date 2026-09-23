@@ -171,6 +171,10 @@ describe('Settings Appearance', () => {
         .find((node) => node.dataset.themeId === custom.id)
         ?.getAttribute('aria-current'),
     ).toBe('true');
+    const activeCard = test.root.all().find((node) => node.dataset.themeId === custom.id)!;
+    expect(activeCard.style.cssText).toContain('border:2px solid var(--zotero-neo-accent)');
+    expect(activeCard.style.cssText).toContain('background:var(--zotero-neo-selected)');
+    expect(test.root.labelled('Select Study').style.background).toBe('var(--zotero-neo-accent)');
     test.root.click('button', 'Select');
     expect(test.preferences.writes).toEqual([[PRESET, 'primer-neutral']]);
     expect(test.manager.appearance.colorPreset).toBe('primer-neutral');
@@ -188,9 +192,15 @@ describe('Settings Appearance', () => {
     hex.fire('input');
     expect(test.root.children[0]).toBe(editor);
     expect(test.manager.appearance.colors.selectionMarker).toBe('#ABCDEF');
+    expect(test.root.find('button', 'Light').getAttribute('aria-pressed')).toBe('true');
+    expect(test.root.find('button', 'Light').style.background).toBe('var(--zotero-neo-selected)');
+    expect(test.root.find('button', 'Dark').style.background).toBe('var(--zotero-neo-input)');
     expect(test.preferences.writes).toEqual([]);
     expect(test.root.labelled('Theme preview').textContent).toContain('#ABCDEF');
     test.root.click('button', 'Dark');
+    expect(test.root.find('button', 'Dark').getAttribute('aria-pressed')).toBe('true');
+    expect(test.root.find('button', 'Dark').style.background).toBe('var(--zotero-neo-selected)');
+    expect(test.root.find('button', 'Light').style.background).toBe('var(--zotero-neo-input)');
     expect(test.root.labelled('Theme preview').textContent).toContain('Dark');
     test.root.input('#123456', 'Selection color hex');
     expect(test.manager.appearance.colors.selectionMarker).toBe('#ABCDEF');
@@ -231,7 +241,48 @@ describe('Settings Appearance', () => {
     expect(test.manager.appearance.marker.width).toBe(4);
     expect(test.manager.appearance.statusStyle).toBe('tinted');
     expect(test.root.find('button', 'Tinted').getAttribute('aria-pressed')).toBe('true');
+    expect(test.root.find('button', 'Tinted').style.background).toBe('var(--zotero-neo-selected)');
+    expect(test.root.find('button', 'Neutral').style.background).toBe('var(--zotero-neo-input)');
     expect(test.root.find('button', 'Save').disabled).toBe(false);
+    expect(test.preferences.writes).toEqual([]);
+    test.appearance.dispose();
+  });
+  it('keeps actions anchored and previews derived status for either palette without writes', () => {
+    const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id });
+    test.root.click('button', 'Edit');
+    expect(test.root.style.display).toBe('flex');
+    expect(test.root.children[0]?.style.cssText).toContain('overflow:auto');
+    const footer = test.root.children[1]!;
+    expect(footer.style.cssText).toContain('position:sticky;bottom:0');
+    expect(footer.style.cssText).toContain('background:var(--zotero-neo-surface)');
+    expect(footer.all().some((node) => node.tag === 'button' && node.textContent === 'Save')).toBe(
+      true,
+    );
+    expect(
+      footer.all().some((node) => node.tag === 'button' && node.textContent === 'Cancel / Back'),
+    ).toBe(true);
+    const editorBody = test.root.children[0];
+    const preview = test.root.labelled('Theme preview');
+    const sample = (label: string) => preview.find('span', label).style.cssText;
+    const tintedLight = sample('SEL');
+    expect(tintedLight).toContain('border-left:1px solid #FF0000');
+    expect(sample('VISUAL')).toContain('border-left:1px solid #00FF00');
+    test.root.click('button', 'Neutral');
+    expect(sample('SEL')).toContain('background:#FAFAFA');
+    expect(sample('VISUAL')).toContain('background:#FAFAFA');
+    expect(sample('SEL')).not.toBe(tintedLight);
+    expect(test.root.find('button', 'Neutral').style.background).toBe('var(--zotero-neo-selected)');
+    test.root.click('button', 'Dark');
+    expect(test.root.children[0]).toBe(editorBody);
+    expect(test.root.labelled('Selection color hex').value).toBe('#FF00FF');
+    expect(preview.textContent).toContain('Dark palette');
+    expect(sample('SEL')).toContain('background:#161616');
+    expect(sample('SEL')).toContain('border-left:1px solid #FF00FF');
+    test.root.click('button', 'Tinted');
+    expect(sample('SEL')).not.toContain('background:#161616');
+    expect(test.preferences.writes).toEqual([]);
+    test.root.click('button', 'Cancel / Back');
+    expect(test.manager.appearance.colorPreset).toBe(custom.id);
     expect(test.preferences.writes).toEqual([]);
     test.appearance.dispose();
   });

@@ -59,7 +59,7 @@ export class SettingsCenter {
     drawer.id = 'zotero-neo-settings-center';
     drawer.setAttribute('role', 'complementary');
     drawer.setAttribute('aria-label', 'Zotero Neo Settings');
-    drawer.style.cssText = `position:fixed;top:48px;right:12px;bottom:48px;width:min(380px,42vw);box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:13px/1.5 sans-serif`;
+    drawer.style.cssText = `position:fixed;top:48px;right:12px;bottom:48px;width:min(500px,50vw,calc(100vw - 24px));box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:13px/1.5 sans-serif`;
 
     const header = create('header');
     header.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}`;
@@ -79,13 +79,13 @@ export class SettingsCenter {
 
     const navigation = create('nav');
     navigation.setAttribute('aria-label', 'Settings sections');
-    navigation.style.cssText = `display:flex;flex-wrap:wrap;gap:5px;padding:10px 12px;border-bottom:1px solid ${THEME_VARS.border}`;
+    navigation.style.cssText = `display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid ${THEME_VARS.border}`;
     for (const section of SECTIONS) {
       const button = create('button') as HTMLButtonElement;
       button.type = 'button';
       button.textContent = section;
       button.dataset.section = section;
-      button.style.cssText = `padding:5px 7px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
+      button.style.cssText = `min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 3px;font-size:11px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
       const onSelect = (): void => {
         this.#section = section;
         this.render();
@@ -96,7 +96,7 @@ export class SettingsCenter {
     }
 
     const content = create('section');
-    content.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:18px 16px';
+    content.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:12px 14px';
     drawer.append(header, navigation, content);
     this.#previousElement = doc.activeElement;
     this.#drawer = drawer;
@@ -135,14 +135,19 @@ export class SettingsCenter {
     const content = this.#content;
     if (!content) return;
     for (const button of Array.from(this.#navigation?.children ?? [])) {
-      button.setAttribute(
-        'aria-current',
-        (button as HTMLElement).dataset.section === this.#section ? 'page' : 'false',
-      );
+      const selected = (button as HTMLElement).dataset.section === this.#section;
+      button.setAttribute('aria-current', selected ? 'page' : 'false');
+      const control = button as HTMLElement;
+      control.style.background = selected ? THEME_VARS.selected : THEME_VARS.input;
+      control.style.color = selected ? THEME_VARS.selectedText : THEME_VARS.text;
+      control.style.borderColor = selected ? THEME_VARS.accent : THEME_VARS.border;
     }
     if (this.#section !== 'Appearance') {
       this.#appearanceChild?.dispose();
       this.#appearanceChild = null;
+      content.style.display = 'block';
+      content.style.overflow = 'auto';
+      content.style.padding = '12px 14px';
       content.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
       return;
     }
