@@ -6,7 +6,11 @@ import {
   type MainVisualRange,
 } from '../../src/main/item-state-decoration';
 import { SelectionStore } from '../../src/main/selection-store';
-import type { ThemeManager } from '../../src/ui/theme';
+import {
+  resolveInteractionAppearance,
+  type InteractionAppearanceSource,
+} from '../../src/main/interaction-appearance';
+import type { PreferenceReader } from '../../src/core/preferences';
 
 type TestRow = HTMLElement & { readonly classes: Set<string> };
 
@@ -114,10 +118,14 @@ function decorationHarness(
     },
   } as unknown as MainWindow;
   const selection = new SelectionStore();
-  const theme = {
-    theme: 'light',
+  const preferences = {
+    get: ((_key: string, fallback: boolean | number | string) =>
+      fallback) as PreferenceReader['get'],
+  };
+  const appearance = {
+    appearance: resolveInteractionAppearance(preferences, 'light'),
     observe: () => () => {},
-  } as unknown as ThemeManager;
+  } as InteractionAppearanceSource;
   const decoration = new MainItemStateDecoration();
 
   const flush = (): void => {
@@ -150,7 +158,7 @@ function decorationHarness(
     parent,
     style,
     selection,
-    theme,
+    appearance,
     decoration,
     mutations,
     timers,
@@ -220,14 +228,15 @@ describe('Main item state decoration', () => {
   it('uses fixed marker lanes without styling row fill, foreground, or Cursor', () => {
     const host = decorationHarness([0], { first: 0, last: 0, count: 1 });
     host.selection.add({ libraryID: 1, itemID: 1 });
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.theme);
+    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
     host.flush();
 
     const css = host.style.textContent;
-    expect(css).toContain('--zotero-neo-item-selection: #eab308');
-    expect(css).toContain('--zotero-neo-item-visual: #22c55e');
-    expect(css).toMatch(/\.row\.zotero-neo-selection::before\s*\{[^}]*left: 2px/s);
-    expect(css).toMatch(/\.row\.zotero-neo-visual::after\s*\{[^}]*left: 6px/s);
+    expect(css).toMatch(/\.row\.zotero-neo-selection::before\s*\{[^}]*left: 1px/s);
+    expect(css).toMatch(/\.row\.zotero-neo-visual::after\s*\{[^}]*left: 13px/s);
+    expect(css).toContain('width: 3px');
+    expect(css).toContain('background: #9A6700');
+    expect(css).toContain('background: #1A7F37');
     expect(css).not.toContain('.zotero-neo-selection.zotero-neo-visual::after');
     expect(css).not.toContain('.row.zotero-neo-selection {');
     expect(css).not.toContain('.row.zotero-neo-visual {');
@@ -249,7 +258,7 @@ describe('Main item state decoration', () => {
   it('keeps large Visual renders proportional to rendered rows and coalesces relevant mutations', () => {
     const host = decorationHarness([0, 4_999, 9_999], { first: 0, last: 9_999, count: 10_000 });
     host.setFocused(4_999);
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.theme);
+    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
     host.flush();
 
     expect(host.getRow).toHaveBeenCalledTimes(4);
@@ -273,7 +282,7 @@ describe('Main item state decoration', () => {
   it('rebinds replacement roots and disconnects every observer during cleanup', () => {
     const host = decorationHarness([0, 1], { first: 0, last: 1, count: 2 });
     host.selection.add({ libraryID: 1, itemID: 1 });
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.theme);
+    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
     host.flush();
     const previous = host.replaceRoot([1, 2]);
     const previousRows = previous.rows;

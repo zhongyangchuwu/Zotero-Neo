@@ -3,6 +3,14 @@ import { PREFERENCE_PREFIX, PICKER_MOUSE_ENABLED_PREFERENCE_KEY } from '../core/
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { encodeBindingOverrides, resolveBindings } from '../input/bindings';
 import {
+  INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
+  INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY,
+  INTERACTION_STATUS_STYLE_PREFERENCE_KEY,
+  interactionColorPresetFromPreferences,
+  interactionMarkerWeightFromPreferences,
+  interactionStatusStyleFromPreferences,
+} from '../main/interaction-appearance';
+import {
   APPEARANCE_PREFERENCE_KEY,
   THEME_VARS,
   ThemeManager,
@@ -38,6 +46,20 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.appearance.auto': 'Auto',
     'zv.appearance.light': 'Light',
     'zv.appearance.dark': 'Dark',
+    'zv.mainAppearance': 'Main interaction appearance',
+    'zv.mainAppearance.help':
+      "Cursor keeps Zotero's native selected style; tune Selection and Visual markers and status.",
+    'zv.mainAppearance.colorPreset': 'Color preset',
+    'zv.mainAppearance.color.primer': 'Primer Neutral',
+    'zv.mainAppearance.color.academic': 'Soft Academic',
+    'zv.mainAppearance.color.yazi': 'Yazi-like',
+    'zv.mainAppearance.markerWeight': 'Marker weight',
+    'zv.mainAppearance.marker.compact': 'Compact',
+    'zv.mainAppearance.marker.balanced': 'Balanced',
+    'zv.mainAppearance.marker.strong': 'Strong',
+    'zv.mainAppearance.statusStyle': 'Status indicator',
+    'zv.mainAppearance.status.neutral': 'Neutral',
+    'zv.mainAppearance.status.tinted': 'Tinted',
     'zv.modes': 'Modes',
     'zv.mode.visual': 'Enable Select mode (v — Flash-select text and run actions)',
     'zv.mode.insert': 'Enable Insert / passthrough mode (i — disable vim keys temporarily)',
@@ -117,6 +139,20 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.appearance.auto': '自动',
     'zv.appearance.light': '浅色',
     'zv.appearance.dark': '深色',
+    'zv.mainAppearance': '主列表交互外观',
+    'zv.mainAppearance.help':
+      'Cursor 保持 Zotero 原生选中样式；这里调整 Selection / Visual 标记和状态提示。',
+    'zv.mainAppearance.colorPreset': '配色方案',
+    'zv.mainAppearance.color.primer': 'Primer 中性',
+    'zv.mainAppearance.color.academic': '柔和学术',
+    'zv.mainAppearance.color.yazi': 'Yazi 风格',
+    'zv.mainAppearance.markerWeight': '标记粗细',
+    'zv.mainAppearance.marker.compact': '紧凑',
+    'zv.mainAppearance.marker.balanced': '均衡',
+    'zv.mainAppearance.marker.strong': '醒目',
+    'zv.mainAppearance.statusStyle': '状态提示',
+    'zv.mainAppearance.status.neutral': '中性',
+    'zv.mainAppearance.status.tinted': '着色',
     'zv.modes': '模式',
     'zv.mode.visual': '启用选择模式（v — 用 Flash 选择文本并执行操作）',
     'zv.mode.insert': '启用插入 / 透传模式（i — 临时禁用 vim 按键）',
@@ -392,6 +428,43 @@ function initializePane(doc: Document): void {
         byId<HTMLElement>(doc, 'zv-appearance-status'),
         translate('zv.status.saved', currentLanguage()),
       );
+    });
+  }
+
+  const interactionAppearanceStatus = byId<HTMLElement>(doc, 'zv-interaction-appearance-status');
+  const colorPresetSelect = byId<XulMenuList>(doc, 'zv-interaction-color-preset');
+  if (colorPresetSelect) {
+    colorPresetSelect.value = interactionColorPresetFromPreferences(preferenceStore);
+    colorPresetSelect.addEventListener('command', () => {
+      const next =
+        colorPresetSelect.value === 'soft-academic' || colorPresetSelect.value === 'yazi-like'
+          ? colorPresetSelect.value
+          : 'primer-neutral';
+      setPreference(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, next);
+      flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
+    });
+  }
+
+  const markerWeightSelect = byId<XulMenuList>(doc, 'zv-interaction-marker-weight');
+  if (markerWeightSelect) {
+    markerWeightSelect.value = interactionMarkerWeightFromPreferences(preferenceStore);
+    markerWeightSelect.addEventListener('command', () => {
+      const next =
+        markerWeightSelect.value === 'compact' || markerWeightSelect.value === 'strong'
+          ? markerWeightSelect.value
+          : 'balanced';
+      setPreference(INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY, next);
+      flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
+    });
+  }
+
+  const statusStyleSelect = byId<XulMenuList>(doc, 'zv-interaction-status-style');
+  if (statusStyleSelect) {
+    statusStyleSelect.value = interactionStatusStyleFromPreferences(preferenceStore);
+    statusStyleSelect.addEventListener('command', () => {
+      const next = statusStyleSelect.value === 'tinted' ? 'tinted' : 'neutral';
+      setPreference(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, next);
+      flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
     });
   }
 

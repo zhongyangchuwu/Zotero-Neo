@@ -9,6 +9,7 @@ import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
 import type { InstalledPlugin } from './plugin-host';
 import { SelectionStore, type ItemRef } from './selection-store';
+import { InteractionAppearanceManager } from './interaction-appearance';
 import type { MainReturnBookmark } from './return-context';
 
 export type MainPanel = 'collections' | 'items';
@@ -21,6 +22,7 @@ export class MainWindowSession {
   readonly window: MainWindow;
   readonly status: HTMLElement;
   readonly theme: ThemeManager;
+  readonly interactionAppearance: InteractionAppearanceManager;
   readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
   inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
@@ -200,6 +202,8 @@ export class MainWindowSession {
   constructor(window: MainWindow, preferences: PreferenceStore) {
     this.window = window;
     this.theme = new ThemeManager(window, preferences);
+    this.interactionAppearance = new InteractionAppearanceManager(preferences, this.theme);
+    this.cleanup.add(() => this.interactionAppearance.dispose());
     this.cleanup.add(() => this.theme.dispose());
     const doc = window.document;
     this.status = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');

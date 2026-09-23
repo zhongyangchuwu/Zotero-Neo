@@ -1,6 +1,5 @@
 import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
-import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import {
   currentMainItemCursorRef,
   mainHost,
@@ -14,15 +13,26 @@ import {
 import type { ItemRef } from './selection-store';
 import type { SelectionStore } from './selection-store';
 import { MainItemStateDecoration, type MainVisualRange } from './item-state-decoration';
+import {
+  interactionStatusColors,
+  type InteractionAppearanceSource,
+  type InteractionStatusKind,
+} from './interaction-appearance';
 
 type ItemSelectDirection = 1 | -1 | 'first' | 'last';
 export type ItemSelectEnterResult = 'entered' | 'focus-items' | 'unavailable' | 'pass';
+type ItemSelectStatus =
+  | { readonly kind: 'message'; readonly text: string }
+  | { readonly kind: 'selection'; readonly total: number; readonly visible: number }
+  | { readonly kind: 'visual'; readonly targetCount: number; readonly selectionCount: number };
+
 type ItemSelectUi = {
   badge: HTMLElement | null;
   timer: number | undefined;
-  readonly theme: ThemeManager;
+  readonly appearance: InteractionAppearanceSource;
   selectionCleanup: (() => void) | null;
-  themeCleanup: (() => void) | null;
+  appearanceCleanup: (() => void) | null;
+  status: ItemSelectStatus | null;
 };
 type VisualState = {
   readonly anchor: ItemRef;
@@ -81,17 +91,27 @@ export class MainItemSelect {
     this.#logger = logger;
   }
 
-  addWindow(window: MainWindow, selection: SelectionStore, theme: ThemeManager): void {
+  addWindow(
+    window: MainWindow,
+    selection: SelectionStore,
+    appearance: InteractionAppearanceSource,
+  ): void {
     if (this.#ui.has(window)) return;
     const ui: ItemSelectUi = {
       badge: null,
       timer: undefined,
-      theme,
+      appearance,
       selectionCleanup: null,
-      themeCleanup: null,
+      appearanceCleanup: null,
+      status: null,
     };
     this.#ui.set(window, ui);
-    this.#decoration.addWindow(window, selection, () => this.#visual.get(window)?.range, theme);
+    this.#decoration.addWindow(
+      window,
+      selection,
+      () => this.#visual.get(window)?.range,
+      appearance,
+    );
     ui.selectionCleanup = selection.observe(() => {
       const visual = this.#visual.get(window);
       if (visual) this.showMode(window, visual.range?.count ?? 0, selection);
@@ -101,6 +121,9 @@ export class MainItemSelect {
           selection.size,
           visibleMainSelectionCount(window, selection.values()),
         );
+    });
+    ui.appearanceCleanup = appearance.observe(() => {
+      if (ui.status) this.renderBadge(window, ui, ui.status);
     });
 
     // MainItemSelect owns every Neo Cursor transition. Normalize the initial
@@ -159,20 +182,20 @@ export class MainItemSelect {
 
   enter(window: MainWindow, selection: SelectionStore): ItemSelectEnterResult {
     if (this.treeFocused(window, 'collections')) {
-      this.show(window, 'VISUAL · focus items list', false);
+      this.show(window, { kind: 'message', text: 'VISUAL · focus items list' }, false);
       return 'focus-items';
     }
     if (!this.treeFocused(window, 'items')) return 'pass';
 
     const cursor = currentMainItemCursorRef(window);
     if (!cursor) {
-      this.show(window, 'VISUAL · unavailable', false);
+      this.show(window, { kind: 'message', text: 'VISUAL · unavailable' }, false);
       return 'unavailable';
     }
 
     const range = this.resolveVisualRange(window, cursor, cursor);
     if (!range || !selectMainItemCursorAnchor(window, range.first)) {
-      this.show(window, 'VISUAL · unavailable', false);
+      this.show(window, { kind: 'message', text: 'VISUAL · unavailable' }, false);
       return 'unavailable';
     }
 
@@ -290,7 +313,7 @@ export class MainItemSelect {
     if (ui) {
       window.clearTimeout(ui.timer);
       ui.selectionCleanup?.();
-      ui.themeCleanup?.();
+      ui.appearanceCleanup?.();
       ui.badge?.remove();
       this.#ui.delete(window);
     }
@@ -301,7 +324,7 @@ export class MainItemSelect {
   clearSelection(window: MainWindow, selection: SelectionStore): boolean {
     const changed = selection.clear();
     this.#decoration.refresh(window);
-    if (changed) this.show(window, 'Selection cleared', false);
+    if (changed) this.show(window, { kind: 'message', text: 'Selection cleared' }, false);
     else this.hide(window);
     this.#logger.debug(`main selection cleared changed=${changed}`);
     return changed;
@@ -359,7 +382,7 @@ export class MainItemSelect {
   }
 
   private showMode(window: MainWindow, targetCount: number, selection: SelectionStore): void {
-    this.show(window, visualStatusText(targetCount, selection.size), true);
+    this.show(window, { kind: 'visual', targetCount, selectionCount: selection.size }, true);
   }
 
   private renderSelectionStatus(window: MainWindow, total: number, visible: number): void {
@@ -367,25 +390,79 @@ export class MainItemSelect {
       this.hide(window);
       return;
     }
-    this.show(window, selectionStatusText(total, visible), true);
+    this.show(window, { kind: 'selection', total, visible }, true);
   }
 
-  private show(window: MainWindow, text: string, persistent: boolean): void {
+  private show(window: MainWindow, status: ItemSelectStatus, persistent: boolean): void {
     const ui = this.#ui.get(window);
     if (!ui) return;
     window.clearTimeout(ui.timer);
     ui.timer = undefined;
+    ui.status = status;
+    this.renderBadge(window, ui, status);
+    if (!persistent) ui.timer = window.setTimeout(() => this.hide(window), 1200);
+  }
+
+  private renderBadge(window: MainWindow, ui: ItemSelectUi, status: ItemSelectStatus): void {
     if (!ui.badge) {
       const badge = window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
       badge.id = 'zotero-neo-item-select-status';
-      badge.style.cssText = `position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:99998;font:bold 12px/1.4 monospace;padding:3px 9px;border:1px solid ${THEME_VARS.border};border-radius:3px;background:${THEME_VARS.surface};color:${THEME_VARS.text};box-shadow:0 4px 16px ${THEME_VARS.shadow};pointer-events:none;user-select:none`;
       (window.document.body ?? window.document.documentElement).append(badge);
-      ui.themeCleanup = ui.theme.add(badge);
       ui.badge = badge;
     }
-    ui.badge.textContent = text;
-    ui.badge.style.display = 'block';
-    if (!persistent) ui.timer = window.setTimeout(() => this.hide(window), 1200);
+    const badge = ui.badge;
+    const kind: InteractionStatusKind = status.kind === 'message' ? 'neutral' : status.kind;
+    const appearance = ui.appearance.appearance;
+    const colors = interactionStatusColors(appearance, kind);
+    badge.style.cssText = `position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:99998;font:600 12px/1.4 monospace;padding:3px 9px;border:1px solid ${colors.border};border-radius:6px;background:${colors.background};color:${colors.foreground};box-shadow:0 2px 8px ${colors.shadow};pointer-events:none;user-select:none;display:block`;
+    badge.replaceChildren();
+
+    if (status.kind === 'message') {
+      this.appendStatusSpan(window, badge, status.text, 'zotero-neo-status-message');
+      return;
+    }
+    if (status.kind === 'selection') {
+      this.appendStatusSpan(
+        window,
+        badge,
+        'SEL',
+        'zotero-neo-status-selection',
+        colors.selectionPrefix,
+      );
+      const hidden = Math.max(0, status.total - status.visible);
+      this.appendStatusSpan(
+        window,
+        badge,
+        ` ${status.total} · ${status.visible} visible${hidden ? ` · ${hidden} hidden` : ''}`,
+        'zotero-neo-status-detail',
+      );
+      return;
+    }
+
+    this.appendStatusSpan(window, badge, 'VISUAL', 'zotero-neo-status-visual', colors.visualPrefix);
+    this.appendStatusSpan(window, badge, ` ${status.targetCount} · `, 'zotero-neo-status-detail');
+    this.appendStatusSpan(
+      window,
+      badge,
+      'SEL',
+      'zotero-neo-status-selection',
+      colors.selectionPrefix,
+    );
+    this.appendStatusSpan(window, badge, ` ${status.selectionCount}`, 'zotero-neo-status-detail');
+  }
+
+  private appendStatusSpan(
+    window: MainWindow,
+    badge: HTMLElement,
+    text: string,
+    className: string,
+    color?: string,
+  ): void {
+    const span = window.document.createElementNS('http://www.w3.org/1999/xhtml', 'span');
+    span.className = className;
+    span.textContent = text;
+    if (color) span.style.color = color;
+    badge.append(span);
   }
 
   private hide(window: MainWindow): void {
@@ -393,8 +470,7 @@ export class MainItemSelect {
     if (!ui) return;
     window.clearTimeout(ui.timer);
     ui.timer = undefined;
-    ui.themeCleanup?.();
-    ui.themeCleanup = null;
+    ui.status = null;
     ui.badge?.remove();
     ui.badge = null;
   }

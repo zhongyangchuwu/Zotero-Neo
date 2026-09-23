@@ -137,6 +137,57 @@
     </hbox>
   </groupbox>
 
+  <!-- ── Main interaction appearance ───────────────────────────────── -->
+  <groupbox>
+    <label data-i18n="zv.mainAppearance" value="Main interaction appearance"
+      style="font-weight: bold;" />
+    <html:p style="margin: 4px 0 10px; font-size: 0.9em;" data-i18n="zv.mainAppearance.help">
+      Cursor keeps Zotero's native selected style; tune Selection and Visual markers and status.
+    </html:p>
+    <hbox align="center">
+      <html:label for="zv-interaction-color-preset" data-i18n="zv.mainAppearance.colorPreset"
+        style="min-width: 180px; font-weight: 600;">Color preset</html:label>
+      <menulist id="zv-interaction-color-preset">
+        <menupopup>
+          <menuitem value="primer-neutral" data-i18n="zv.mainAppearance.color.primer"
+            label="Primer Neutral" />
+          <menuitem value="soft-academic" data-i18n="zv.mainAppearance.color.academic"
+            label="Soft Academic" />
+          <menuitem value="yazi-like" data-i18n="zv.mainAppearance.color.yazi"
+            label="Yazi-like" />
+        </menupopup>
+      </menulist>
+    </hbox>
+    <hbox align="center" style="margin-top: 6px;">
+      <html:label for="zv-interaction-marker-weight" data-i18n="zv.mainAppearance.markerWeight"
+        style="min-width: 180px; font-weight: 600;">Marker weight</html:label>
+      <menulist id="zv-interaction-marker-weight">
+        <menupopup>
+          <menuitem value="compact" data-i18n="zv.mainAppearance.marker.compact"
+            label="Compact" />
+          <menuitem value="balanced" data-i18n="zv.mainAppearance.marker.balanced"
+            label="Balanced" />
+          <menuitem value="strong" data-i18n="zv.mainAppearance.marker.strong"
+            label="Strong" />
+        </menupopup>
+      </menulist>
+    </hbox>
+    <hbox align="center" style="margin-top: 6px;">
+      <html:label for="zv-interaction-status-style" data-i18n="zv.mainAppearance.statusStyle"
+        style="min-width: 180px; font-weight: 600;">Status indicator</html:label>
+      <menulist id="zv-interaction-status-style">
+        <menupopup>
+          <menuitem value="neutral" data-i18n="zv.mainAppearance.status.neutral"
+            label="Neutral" />
+          <menuitem value="tinted" data-i18n="zv.mainAppearance.status.tinted"
+            label="Tinted" />
+        </menupopup>
+      </menulist>
+      <html:span id="zv-interaction-appearance-status" class="zv-status"
+        style="margin-left: 10px; font-size: 0.9em;"></html:span>
+    </hbox>
+  </groupbox>
+
   <!-- ── Modes ──────────────────────────────────────────────────────── -->
   <groupbox>
     <label data-i18n="zv.modes" value="Modes" style="font-weight: bold;" />

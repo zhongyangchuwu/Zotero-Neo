@@ -20,6 +20,7 @@ function themedElement(id = ''): HTMLElement {
     setAttribute: (name: string, value: string) => attributes.set(name, value),
     append: () => {},
     appendChild: () => null,
+    replaceChildren: () => {},
     remove: vi.fn(),
   } as unknown as HTMLElement;
 }

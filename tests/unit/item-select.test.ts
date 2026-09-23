@@ -7,9 +7,26 @@ import {
   visualStatusText,
 } from '../../src/main/item-select';
 import { SelectionStore } from '../../src/main/selection-store';
-import type { ThemeManager } from '../../src/ui/theme';
+import {
+  resolveInteractionAppearance,
+  type InteractionAppearanceSource,
+} from '../../src/main/interaction-appearance';
+import type { PreferenceReader } from '../../src/core/preferences';
 
 const logger = { debug: vi.fn(), diagnostic: vi.fn() };
+
+function appearanceSource(
+  values: Readonly<Record<string, string>> = {},
+): InteractionAppearanceSource {
+  const preferences = {
+    get: ((key: string, fallback: boolean | number | string) =>
+      values[key] ?? fallback) as PreferenceReader['get'],
+  };
+  return {
+    appearance: resolveInteractionAppearance(preferences, 'light'),
+    observe: () => () => {},
+  };
+}
 
 function item(id: number): Zotero.Item {
   return { id, libraryID: 1 } as Zotero.Item;
@@ -25,10 +42,19 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
   let selected = new Set<number>(initialSelected);
   const active = { id: `item-tree-row-${focusedRow}` } as unknown as Element;
   const root = { contains: (node: unknown) => node === active } as HTMLElement;
+  const badgeChildren: Array<{ textContent?: string | null; className?: string }> = [];
   const badge = {
     id: '',
     style: { cssText: '', display: '' },
     textContent: '',
+    replaceChildren: vi.fn(() => {
+      badgeChildren.length = 0;
+      badge.textContent = '';
+    }),
+    append: vi.fn((child: { textContent?: string | null; className?: string }) => {
+      badgeChildren.push(child);
+      badge.textContent = badgeChildren.map((entry) => entry.textContent ?? '').join('');
+    }),
     remove: vi.fn(),
   } as unknown as HTMLElement;
   const style = {
@@ -94,7 +120,16 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
     activeElement: active,
     getElementById: () => null,
     querySelector: () => null,
-    createElementNS: (_namespace: string, tag: string) => (tag === 'style' ? style : badge),
+    createElementNS: (_namespace: string, tag: string) =>
+      tag === 'style'
+        ? style
+        : tag === 'div'
+          ? badge
+          : ({
+              className: '',
+              textContent: '',
+              style: { color: '' },
+            } as unknown as HTMLElement),
     body: { append: vi.fn() },
     documentElement: { append: vi.fn() },
   } as unknown as Document;
@@ -110,6 +145,7 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
     rows,
     selection,
     badge,
+    badgeChildren,
     selectedRows: () => [...selected].sort((left, right) => left - right),
     focusedRow: () => focused,
   };
@@ -123,16 +159,13 @@ function selectedIDs(store: SelectionStore): number[] {
 }
 
 describe('Main item attach', () => {
-  const theme = {
-    theme: 'light',
-    observe: () => () => {},
-  } as unknown as ThemeManager;
+  const appearance = appearanceSource();
 
   it('establishes a zero-selection focused row as the sole native Cursor anchor', () => {
     const host = harness(2, []);
     const feature = new MainItemSelect(logger);
 
-    feature.addWindow(host.window, new SelectionStore(), theme);
+    feature.addWindow(host.window, new SelectionStore(), appearance);
 
     expect(host.selection.select).toHaveBeenCalledOnce();
     expect(host.selection.select).toHaveBeenCalledWith(2, false);
@@ -145,7 +178,7 @@ describe('Main item attach', () => {
     const host = harness(2, [0, 2, 4]);
     const feature = new MainItemSelect(logger);
 
-    feature.addWindow(host.window, new SelectionStore(), theme);
+    feature.addWindow(host.window, new SelectionStore(), appearance);
 
     expect(host.selection.select).toHaveBeenCalledOnce();
     expect(host.selectedRows()).toEqual([2]);
@@ -156,7 +189,7 @@ describe('Main item attach', () => {
     const missingCursor = harness(-1, []);
     const missingCursorFeature = new MainItemSelect(logger);
     expect(() =>
-      missingCursorFeature.addWindow(missingCursor.window, new SelectionStore(), theme),
+      missingCursorFeature.addWindow(missingCursor.window, new SelectionStore(), appearance),
     ).not.toThrow();
     expect(missingCursor.selection.select).not.toHaveBeenCalled();
     missingCursorFeature.removeWindow(missingCursor.window);
@@ -165,7 +198,7 @@ describe('Main item attach', () => {
     Reflect.deleteProperty(missingSelect.selection, 'select');
     const missingSelectFeature = new MainItemSelect(logger);
     expect(() =>
-      missingSelectFeature.addWindow(missingSelect.window, new SelectionStore(), theme),
+      missingSelectFeature.addWindow(missingSelect.window, new SelectionStore(), appearance),
     ).not.toThrow();
     expect(missingSelect.selectedRows()).toEqual([0, 1]);
     missingSelectFeature.removeWindow(missingSelect.window);
@@ -185,6 +218,44 @@ describe('Main Visual Selection', () => {
     expect(selectionStatusText(7, 3)).toBe('SEL 7 · 3 visible · 4 hidden');
     expect(selectionStatusText(2, 2)).toBe('SEL 2 · 2 visible');
     expect(visualStatusText(4, 7)).toBe('VISUAL 4 · SEL 7');
+  });
+
+  it('renders structured semantic status tokens with neutral and tinted containers', () => {
+    const selectionHost = harness(1);
+    const selectionStore = new SelectionStore();
+    const neutralFeature = new MainItemSelect(logger);
+    neutralFeature.addWindow(selectionHost.window, selectionStore, appearanceSource());
+    selectionStore.add({ libraryID: 1, itemID: 11 });
+
+    expect(selectionHost.badge.textContent).toBe('SEL 1 · 1 visible');
+    expect(selectionHost.badgeChildren.map((child) => child.className)).toEqual([
+      'zotero-neo-status-selection',
+      'zotero-neo-status-detail',
+    ]);
+    expect(selectionHost.badge.style.cssText).toContain('background:#F6F8FA');
+    expect(selectionHost.badge.style.cssText).toContain('color:#1F2328');
+    neutralFeature.removeWindow(selectionHost.window);
+
+    const visualHost = harness(1);
+    const visualStore = new SelectionStore();
+    const tintedFeature = new MainItemSelect(logger);
+    tintedFeature.addWindow(
+      visualHost.window,
+      visualStore,
+      appearanceSource({ 'appearance.interaction.statusStyle': 'tinted' }),
+    );
+    expect(tintedFeature.enter(visualHost.window, visualStore)).toBe('entered');
+
+    expect(visualHost.badge.textContent).toBe('VISUAL 1 · SEL 0');
+    expect(visualHost.badgeChildren.map((child) => child.className)).toEqual([
+      'zotero-neo-status-visual',
+      'zotero-neo-status-detail',
+      'zotero-neo-status-selection',
+      'zotero-neo-status-detail',
+    ]);
+    expect(visualHost.badge.style.cssText).toContain('background:#DAFBE1');
+    expect(visualHost.badge.style.cssText).toContain('color:#116329');
+    tintedFeature.removeWindow(visualHost.window);
   });
 
   it('does not toggle the item workset when the collection tree owns focus', () => {
@@ -252,17 +323,13 @@ describe('Main Visual Selection', () => {
   });
 
   it('hides empty Selection status after Visual cancel or focus loss', () => {
-    const theme = {
-      theme: 'light',
-      add: () => () => {},
-      observe: () => () => {},
-    } as unknown as ThemeManager;
+    const appearance = appearanceSource();
 
     for (const exit of ['cancel', 'leave'] as const) {
       const host = harness(1);
       const store = new SelectionStore();
       const feature = new MainItemSelect(logger);
-      feature.addWindow(host.window, store, theme);
+      feature.addWindow(host.window, store, appearance);
 
       expect(feature.enter(host.window, store)).toBe('entered');
       expect(host.badge.textContent).toBe('VISUAL 1 · SEL 0');
@@ -275,18 +342,14 @@ describe('Main Visual Selection', () => {
   });
 
   it('restores persistent Selection status after Visual cancel or focus loss', () => {
-    const theme = {
-      theme: 'light',
-      add: () => () => {},
-      observe: () => () => {},
-    } as unknown as ThemeManager;
+    const appearance = appearanceSource();
 
     for (const exit of ['cancel', 'leave'] as const) {
       const host = harness(1);
       const store = new SelectionStore();
       store.add({ libraryID: 1, itemID: 10 });
       const feature = new MainItemSelect(logger);
-      feature.addWindow(host.window, store, theme);
+      feature.addWindow(host.window, store, appearance);
 
       expect(feature.enter(host.window, store)).toBe('entered');
       feature[exit](host.window, store);

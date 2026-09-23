@@ -134,7 +134,7 @@ export class MainWindowController implements MainWindowControllerApi {
     if (this.#sessions.has(window)) return;
     const session = new MainWindowSession(window, this.#dependencies.preferences);
     this.#sessions.set(window, session);
-    this.#itemSelect.addWindow(window, session.selection, session.theme);
+    this.#itemSelect.addWindow(window, session.selection, session.interactionAppearance);
     session.cleanup.add(
       installMainViewLifecycle(window, this.#dependencies.logger, () =>
         this.#itemSelect.refresh(window, session.selection),

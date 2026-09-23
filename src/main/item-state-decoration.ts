@@ -1,6 +1,9 @@
 import type { MainWindow } from '../core/contracts';
-import { THEME_VARS, itemStateColors, type ResolvedTheme, type ThemeManager } from '../ui/theme';
 import { currentMainItemCursorRef, mainItemRefAtRow } from './host';
+import {
+  type InteractionAppearance,
+  type InteractionAppearanceSource,
+} from './interaction-appearance';
 import type { SelectionStore } from './selection-store';
 
 export interface MainVisualRange {
@@ -43,44 +46,40 @@ function refKey(ref: { readonly libraryID: number; readonly itemID: number } | u
   return ref ? `${ref.libraryID}:${ref.itemID}` : '';
 }
 
-function decorationCss(theme: ResolvedTheme): string {
-  const colors = itemStateColors(theme);
+function decorationCss(appearance: InteractionAppearance): string {
+  const { colors, marker } = appearance;
   return `
-#item-tree-main-default {
-  --zotero-neo-item-selection: ${colors.selection};
-  --zotero-neo-item-visual: ${colors.visual};
-}
 #item-tree-main-default .row.zotero-neo-selection::before,
 #item-tree-main-default .row.zotero-neo-visual::after {
   content: '';
   position: absolute;
-  width: 3px;
+  width: ${marker.width}px;
   pointer-events: none;
   z-index: 4;
 }
 #item-tree-main-default .row.zotero-neo-selection::before {
-  left: 2px;
+  left: ${marker.selectionLeft}px;
   top: 2px;
   bottom: 2px;
-  border-radius: 2px;
-  background: ${THEME_VARS.itemSelection};
+  border-radius: ${marker.radius}px;
+  background: ${colors.selectionMarker};
 }
 #item-tree-main-default .row.zotero-neo-visual::after {
-  left: 6px;
+  left: ${marker.visualLeft}px;
   top: 0;
   bottom: 0;
-  background: ${THEME_VARS.itemVisual};
+  background: ${colors.visualMarker};
 }
 #item-tree-main-default .row.zotero-neo-visual-first::after {
   top: 2px;
-  border-radius: 2px 2px 0 0;
+  border-radius: ${marker.radius}px ${marker.radius}px 0 0;
 }
 #item-tree-main-default .row.zotero-neo-visual-last::after {
   bottom: 2px;
-  border-radius: 0 0 2px 2px;
+  border-radius: 0 0 ${marker.radius}px ${marker.radius}px;
 }
 #item-tree-main-default .row.zotero-neo-visual-first.zotero-neo-visual-last::after {
-  border-radius: 2px;
+  border-radius: ${marker.radius}px;
 }
 `;
 }
@@ -92,12 +91,12 @@ type WindowDecoration = {
   readonly style: HTMLStyleElement;
   readonly selection: SelectionStore;
   readonly visual: () => MainVisualRange | undefined;
-  readonly theme: ThemeManager;
+  readonly appearance: InteractionAppearanceSource;
   readonly scrollListener: EventListener;
   selectionCleanup: (() => void) | null;
-  themeCleanup: (() => void) | null;
+  appearanceCleanup: (() => void) | null;
   scheduled: number | undefined;
-  renderedTheme: ResolvedTheme;
+  renderedAppearance: InteractionAppearance;
 };
 
 /** Decorates only rendered virtual rows; stable item identities remain authoritative. */
@@ -108,13 +107,13 @@ export class MainItemStateDecoration {
     window: MainWindow,
     selection: SelectionStore,
     visual: () => MainVisualRange | undefined,
-    theme: ThemeManager,
+    appearance: InteractionAppearanceSource,
   ): void {
     if (this.#windows.has(window)) return;
     const doc = window.document;
     const style = doc.createElementNS('http://www.w3.org/1999/xhtml', 'style') as HTMLStyleElement;
     style.id = 'zotero-neo-main-item-state-style';
-    style.textContent = decorationCss(theme.theme);
+    style.textContent = decorationCss(appearance.appearance);
     const styleParent = doc.head ?? doc.documentElement;
     if (typeof styleParent.append === 'function') styleParent.append(style);
     else styleParent.appendChild(style);
@@ -126,16 +125,16 @@ export class MainItemStateDecoration {
       style,
       selection,
       visual,
-      theme,
+      appearance,
       scrollListener: () => this.refresh(window),
       selectionCleanup: null,
-      themeCleanup: null,
+      appearanceCleanup: null,
       scheduled: undefined,
-      renderedTheme: theme.theme,
+      renderedAppearance: appearance.appearance,
     };
     this.#windows.set(window, state);
     state.selectionCleanup = selection.observe(() => this.refresh(window));
-    state.themeCleanup = theme.observe(() => this.refresh(window));
+    state.appearanceCleanup = appearance.observe(() => this.refresh(window));
     this.syncRoot(window, state);
     this.refresh(window);
   }
@@ -155,7 +154,7 @@ export class MainItemStateDecoration {
     if (!state) return;
     window.clearTimeout(state.scheduled);
     state.selectionCleanup?.();
-    state.themeCleanup?.();
+    state.appearanceCleanup?.();
     this.releaseRoot(state);
     state.style.remove();
     this.#windows.delete(window);
@@ -170,9 +169,9 @@ export class MainItemStateDecoration {
   }
 
   private render(window: MainWindow, state: WindowDecoration): void {
-    if (state.renderedTheme !== state.theme.theme) {
-      state.renderedTheme = state.theme.theme;
-      state.style.textContent = decorationCss(state.renderedTheme);
+    if (state.renderedAppearance !== state.appearance.appearance) {
+      state.renderedAppearance = state.appearance.appearance;
+      state.style.textContent = decorationCss(state.renderedAppearance);
     }
     this.syncRoot(window, state);
     const visual = state.visual();
