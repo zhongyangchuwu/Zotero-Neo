@@ -123,6 +123,9 @@ describe('0.1.0 default keymap freeze', () => {
   it('uses Space only as Main leader and s as the persistent-set operation', () => {
     expect(DEFAULT_BINDINGS['main-normal:s']).toBe('mainToggleSelection');
     expect(DEFAULT_BINDINGS['main-select:s']).toBe('mainSelectFinish');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ss']).toBe('manageSelection');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>sc']).toBe('mainClearSelection');
+    expect(DEFAULT_BINDINGS['main-normal:<Esc>']).toBe('mainClearSelection');
     expect('main-normal:<Space>' in DEFAULT_BINDINGS).toBe(false);
     expect('main-select:<Space>' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['main-normal:<Space>ta']).toBe('addTag');
@@ -132,6 +135,10 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 's')).toMatchObject({
       kind: 'execute',
       action: 'mainToggleSelection',
+    });
+    expect(press('main-normal', 'escape')).toMatchObject({
+      kind: 'execute',
+      action: 'mainClearSelection',
     });
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
 

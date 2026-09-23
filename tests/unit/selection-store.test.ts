@@ -52,4 +52,22 @@ describe('SelectionStore', () => {
     expect(store.clear()).toBe(false);
     expect(store.toggleTarget([])).toBe('unchanged');
   });
+
+  it('notifies observers once for each logical workset change', () => {
+    const store = new SelectionStore();
+    let changes = 0;
+    const stop = store.observe(() => {
+      changes += 1;
+    });
+
+    store.add(a);
+    store.add(a);
+    store.toggleTarget([a, b, c]);
+    store.toggleTarget([a, b, c]);
+    expect(changes).toBe(3);
+
+    stop();
+    store.add(a);
+    expect(changes).toBe(3);
+  });
 });

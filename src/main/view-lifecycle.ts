@@ -17,6 +17,7 @@ export function installMainViewLifecycle(
   window: MainWindow,
   session: MainWindowSession,
   logger: Logger,
+  onStateChange?: () => void,
 ): () => void {
   let cursor: ItemRef | undefined = currentMainItemCursorRef(window);
   let applying = false;
@@ -24,6 +25,7 @@ export function installMainViewLifecycle(
   const rememberCursor = (): void => {
     if (applying || !mainItemViewSettled(window)) return;
     cursor = currentMainItemCursorRef(window);
+    onStateChange?.();
   };
 
   const restoreProjection = (): void => {
@@ -38,6 +40,7 @@ export function installMainViewLifecycle(
       logger.debug(`Main View refresh projection failed: ${String(error)}`);
     } finally {
       applying = false;
+      onStateChange?.();
     }
   };
 

@@ -177,6 +177,8 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Space>q': 'closeCurrentTab',
   'main-normal:<Space>fn': 'findNotes',
   'main-normal:<Space>pp': 'managePlugins',
+  'main-normal:<Space>ss': 'manageSelection',
+  'main-normal:<Space>sc': 'mainClearSelection',
   'main-normal:e': 'mainFocusTree',
   'main-normal:<Space>yy': 'mainYankCitekey',
   'main-normal:o': 'mainOpenPDF',
@@ -208,6 +210,7 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Enter>': 'mainActivate',
   'main-normal:<Return>': 'mainActivate',
   'main-normal:s': 'mainToggleSelection',
+  'main-normal:<Esc>': 'mainClearSelection',
   'main-normal:v': 'mainEnterSelect',
   'main-select:s': 'mainSelectFinish',
   'main-select:j': 'mainSelectDown',
@@ -563,6 +566,32 @@ export function migrateUnifiedSpaceLeaderOverrides(raw: unknown): string {
   // leader root.
   move('main-normal:<Space>', 'main-normal:s');
   move('main-select:<Space>', 'main-select:s');
+
+  return stringifyBindingOverrides(overrides);
+}
+
+/** Preserves schema-15 custom dispatch timing around new Main Selection commands. */
+export function migrateMainSelectionCommandOverrides(raw: unknown): string {
+  const overrides = parseBindingOverrides(raw);
+  const newDefaults = ['main-normal:<Space>ss', 'main-normal:<Space>sc'] as const;
+  const strictPrefix = (left: readonly string[], right: readonly string[]): boolean =>
+    left.length < right.length && left.every((token, index) => token === right[index]);
+
+  for (const defaultKey of newDefaults) {
+    if (defaultKey in overrides) continue;
+    const defaultBinding = parseBindingKey(defaultKey);
+    const defaultTokens = defaultBinding ? bindingSequenceTokens(defaultBinding.sequence) : null;
+    if (!defaultBinding || !defaultTokens) continue;
+
+    const conflicts = Object.entries(overrides).some(([key, action]) => {
+      if (action === null) return false;
+      const binding = parseBindingKey(key);
+      const tokens = binding ? bindingSequenceTokens(binding.sequence) : null;
+      if (binding?.mode !== defaultBinding.mode || !tokens) return false;
+      return strictPrefix(tokens, defaultTokens) || strictPrefix(defaultTokens, tokens);
+    });
+    if (conflicts) overrides[defaultKey] = null;
+  }
 
   return stringifyBindingOverrides(overrides);
 }
