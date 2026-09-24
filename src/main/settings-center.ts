@@ -74,18 +74,19 @@ export class SettingsCenter {
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
     panel.setAttribute('aria-label', 'Zotero Neo Settings');
-    panel.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 48px));height:min(760px,calc(100vh - 64px));box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:10px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:14px/1.5 sans-serif`;
+    panel.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 48px));height:min(760px,calc(100vh - 64px));box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:10px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:inherit;line-height:1.5`;
     const header = create('header');
     header.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}`;
     const heading = create('h2');
     heading.textContent = 'Zotero Neo Settings';
     heading.tabIndex = -1;
-    heading.style.cssText = 'margin:0;font-size:16px;outline:none';
+    heading.style.cssText = 'margin:0;font-size:1.15em;outline:none';
     const close = create('button') as HTMLButtonElement;
     close.type = 'button';
+    close.tabIndex = -1;
     close.textContent = 'Close';
     close.setAttribute('aria-label', 'Close Neo Settings');
-    close.style.cssText = `padding:4px 8px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
+    close.style.cssText = `padding:0.35em 0.65em;font:inherit;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
     const onClose = (): void => this.close();
     close.addEventListener('click', onClose);
     this.#listeners.push(() => close.removeEventListener('click', onClose));
@@ -97,9 +98,10 @@ export class SettingsCenter {
     for (const section of SECTIONS) {
       const button = create('button') as HTMLButtonElement;
       button.type = 'button';
+      button.tabIndex = -1;
       button.textContent = section;
       button.dataset.section = section;
-      button.style.cssText = `min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 5px;font-size:13px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
+      button.style.cssText = `display:flex;align-items:center;justify-content:center;min-width:0;min-height:2.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0.35em;font:inherit;font-size:0.95em;line-height:1.2;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
       const onSelect = (): void => {
         this.#section = section;
         this.render();
@@ -174,7 +176,7 @@ export class SettingsCenter {
       content.replaceChildren();
       const title = this.#window.document.createElementNS(H, 'h2');
       title.textContent = this.#section;
-      title.style.cssText = 'margin:0 0 12px;font-size:22px';
+      title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
       const note = this.#window.document.createElementNS(H, 'p');
       note.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
       content.append(title, note);

@@ -4,7 +4,10 @@ import {
   INTERACTION_COLOR_PRESET_PREFERENCE_KEY as PRESET,
   INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY as CUSTOM,
   InteractionAppearanceManager,
+  interactionStatusColors,
   parseCustomInteractionThemes,
+  resolveInteractionAppearance,
+  seedCustomInteractionTheme,
   serializeCustomInteractionThemes,
   type CustomInteractionTheme,
 } from '../../src/main/interaction-appearance';
@@ -21,6 +24,7 @@ class ElementFake {
   readonly listeners = new Map<string, Set<(event: MouseEvent) => void>>();
   value = '';
   type = '';
+  tabIndex = 0;
   disabled = false;
   maxLength = 0;
   min = '';
@@ -209,6 +213,21 @@ describe('Settings Appearance autosave', () => {
     test.appearance.dispose();
   });
 
+  it('inherits panel fonts and keeps pointer controls out of sequential focus', () => {
+    const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id });
+    expect(test.root.find('h2', 'Appearance').style.cssText).toContain('font-size:1.55em');
+    expect(test.root.find('h3', 'Themes').style.cssText).toContain('font-size:1.2em');
+    for (const button of test.root.all().filter((node) => node.tag === 'button')) {
+      expect(button.tabIndex).toBe(-1);
+      expect(button.style.cssText).toContain('font:inherit');
+    }
+    test.root.click('button', 'Edit');
+    expect(test.root.labelled('Theme name').style.cssText).toContain('font:inherit');
+    expect(test.root.labelled('Yellow hex').style.cssText).toContain('font:inherit');
+    expect(test.root.labelled('Yellow hex').tabIndex).toBe(0);
+    test.appearance.dispose();
+  });
+
   it('selects a card immediately without changing width or status style', () => {
     const test = mount({
       [CUSTOM]: stored,
@@ -249,41 +268,97 @@ describe('Settings Appearance autosave', () => {
     test.appearance.dispose();
   });
 
-  it('creates a persisted v2 copy of the active theme before opening an active editor', () => {
-    const test = mount({ [PRESET]: 'catppuccin' });
+  it('keeps a new theme local until Add, previews its palette, and discards on Back', () => {
+    const test = mount({
+      [PRESET]: 'catppuccin',
+      ['appearance.interaction.markerWidth']: 1,
+      ['appearance.interaction.statusStyle']: 'tinted',
+    });
     const draft = vi.spyOn(test.manager, 'setDraft');
     const clear = vi.spyOn(test.manager, 'clearDraft');
     test.root.click('button', '+ Custom');
-    const id = test.preferences.get(PRESET, '');
-    expect(test.preferences.writes.map(([key]) => key)).toEqual([CUSTOM, PRESET]);
-    expect(test.state).toMatchObject({ view: 'editor', editingThemeId: id });
-    expect(parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes[0]).toEqual({
-      id,
-      name: 'New theme',
-      version: 2,
-      light: expect.objectContaining({ yellow: '#DF8E1D' }),
-      dark: expect.objectContaining({ green: '#A6E3A1' }),
-    });
+    expect(test.preferences.writes).toEqual([]);
+    expect(test.state).toMatchObject({ view: 'editor', editingThemeId: null });
+    expect(test.root.find('button', 'Add').disabled).toBe(false);
     expect(
       test.root.all().filter((node) => node.tag === 'input' && node.type === 'color'),
     ).toHaveLength(8);
     expect(test.root.textContent).toContain('Selection = Yellow');
     expect(test.root.textContent).toContain('Visual = Green');
-    expect(test.root.textContent).not.toContain('Save');
-    expect(test.root.textContent).not.toContain('Cancel');
-    test.root.input('#123456', 'Yellow hex');
-    expect(
-      parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes[0]?.light.yellow,
-    ).toBe('#123456');
-    expect(test.manager.appearance.colors.selectionMarker).toBe('#123456');
+    const seeded = seedCustomInteractionTheme(
+      test.preferences,
+      'catppuccin',
+      'custom:preview',
+      'New theme',
+    );
+    test.root.input('#112233', 'Yellow hex');
+    expect(test.root.labelled('Theme preview').find('span', 'SEL').style.cssText).toContain(
+      'border-left:1px solid #112233',
+    );
+    const expected = resolveInteractionAppearance(test.preferences, 'light', {
+      ...seeded,
+      light: { ...seeded.light, yellow: '#112233' },
+    });
+    expect(test.root.labelled('Theme preview').find('span', 'SEL').style.cssText).toContain(
+      `background:${interactionStatusColors(expected, 'selection').background}`,
+    );
+    expect(test.root.textContent).toContain('Yellow #112233');
+    expect(test.manager.appearance.colors.selectionMarker).toBe('#DF8E1D');
+    expect(test.preferences.writes).toEqual([]);
     test.root.click('button', 'Back to themes');
-    expect(test.manager.appearance.colors.selectionMarker).toBe('#123456');
+    expect(test.state.view).toBe('library');
+    expect(test.preferences.get(CUSTOM, '')).toBe('');
     expect(draft).not.toHaveBeenCalled();
     expect(clear).not.toHaveBeenCalled();
     test.appearance.dispose();
   });
 
-  it('seeds + Custom from the full active custom palette without changing global controls', () => {
+  it('disables Add for invalid text and commits one valid v2 theme plus active ID', () => {
+    const test = mount({ [PRESET]: 'catppuccin' });
+    test.root.click('button', '+ Custom');
+    const originalPreview = test.root.labelled('Theme preview').textContent;
+    const hex = test.root.input('#123', 'Yellow hex');
+    expect(hex.getAttribute('aria-invalid')).toBe('true');
+    expect(hex.value).toBe('#123');
+    expect(test.root.find('button', 'Add').disabled).toBe(true);
+    expect(test.root.labelled('Theme preview').textContent).toBe(originalPreview);
+    const name = test.root.input('   ', 'Theme name');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    hex.value = '#123456';
+    hex.fire('input');
+    expect(test.root.find('button', 'Add').disabled).toBe(true);
+    name.value = '  Personal  ';
+    name.fire('input');
+    expect(test.root.find('button', 'Add').disabled).toBe(false);
+    expect(test.preferences.writes).toEqual([]);
+    const picker = test.root.labelled('Blue color picker');
+    picker.value = '#456789';
+    picker.fire('change');
+    expect(test.root.labelled('Blue hex').value).toBe('#456789');
+    test.root.click('button', 'Add');
+    const id = test.preferences.get(PRESET, '');
+    expect(test.preferences.writes.map(([key]) => key)).toEqual([CUSTOM, PRESET]);
+    expect(parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes).toEqual([
+      {
+        id,
+        name: 'Personal',
+        version: 2,
+        light: expect.objectContaining({ yellow: '#123456', blue: '#456789' }),
+        dark: expect.objectContaining({ green: '#A6E3A1' }),
+      },
+    ]);
+    expect(test.manager.appearance.colors.selectionMarker).toBe('#123456');
+    expect(test.state.view).toBe('library');
+    expect(
+      test.root
+        .all()
+        .find((node) => node.dataset.themeId === id)
+        ?.getAttribute('aria-current'),
+    ).toBe('true');
+    test.appearance.dispose();
+  });
+
+  it('seeds from the active custom palette and allows an identical name on Add', () => {
     const test = mount({
       [CUSTOM]: stored,
       [PRESET]: custom.id,
@@ -291,8 +366,13 @@ describe('Settings Appearance autosave', () => {
       ['appearance.interaction.statusStyle']: 'tinted',
     });
     test.root.click('button', '+ Custom');
+    expect(test.root.labelled('Yellow hex').value).toBe(custom.light.yellow);
+    expect(test.preferences.writes).toEqual([]);
+    test.root.input('Study', 'Theme name');
+    test.root.click('button', 'Add');
     const themes = parseCustomInteractionThemes(test.preferences.get(CUSTOM, '')).themes;
     expect(themes).toHaveLength(2);
+    expect(themes[1]?.name).toBe('Study');
     expect(themes[1]?.light).toEqual(custom.light);
     expect(themes[1]?.dark).toEqual(custom.dark);
     expect(test.preferences.get(PRESET, '')).toBe(themes[1]?.id);
@@ -396,17 +476,34 @@ describe('Settings Appearance autosave', () => {
     test.appearance.dispose();
   });
 
-  it('rolls back failed creation and leaves failed edits at their last persisted value', () => {
+  it('keeps the draft and rolls back if Add activation fails; existing edit failures stay authoritative', () => {
     const failed = mount({ [PRESET]: 'zotero' });
-    failed.preferences.failPreset = true;
     failed.root.click('button', '+ Custom');
+    failed.preferences.failCustom = true;
+    failed.root.click('button', 'Add');
+    expect(failed.preferences.get(CUSTOM, '')).toBe('');
+    expect(failed.root.textContent).toContain('Could not add theme');
+    failed.preferences.failCustom = false;
+    failed.root.input('#123456', 'Yellow hex');
+    failed.preferences.failPreset = true;
+    failed.root.click('button', 'Add');
     expect(failed.preferences.get(CUSTOM, '')).toBe('');
     expect(failed.preferences.get(PRESET, '')).toBe('zotero');
-    expect(failed.root.textContent).toContain('Could not create theme');
+    expect(failed.state.view).toBe('editor');
+    expect(failed.root.labelled('Yellow hex').value).toBe('#123456');
+    expect(failed.root.textContent).toContain('Could not add theme');
+    failed.preferences.failPreset = false;
+    failed.root.click('button', 'Add');
+    expect(
+      parseCustomInteractionThemes(failed.preferences.get(CUSTOM, '')).themes[0]?.light.yellow,
+    ).toBe('#123456');
     failed.appearance.dispose();
 
     const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id });
     test.root.click('button', 'Edit');
+    expect(
+      test.root.all().filter((node) => node.tag === 'button' && node.textContent === 'Add'),
+    ).toHaveLength(0);
     test.preferences.failCustom = true;
     const hex = test.root.input('#123456', 'Yellow hex');
     expect(hex.value).toBe('#123456');

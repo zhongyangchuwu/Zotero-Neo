@@ -954,9 +954,19 @@ describe('Main Settings Center shell', () => {
     expect(panel?.style.cssText).toContain('width:min(820px,calc(100vw - 48px))');
     expect(panel?.style.cssText).toContain('height:min(760px,calc(100vh - 64px))');
     expect(panel?.style.cssText).not.toContain('right:12px');
+    expect(panel?.style.cssText).toContain('font:inherit');
+    expect(panel?.style.cssText).not.toContain('sans-serif');
     expect(backdrop.style.cssText).toContain('inset:0');
     const navigation = panel?.children[1] as HTMLElement;
     expect(navigation.children).toHaveLength(5);
+    for (const button of Array.from(navigation.children) as HTMLElement[]) {
+      expect(button.style.cssText).toContain(
+        'display:flex;align-items:center;justify-content:center',
+      );
+      expect(button.style.cssText).toContain('font:inherit');
+      expect(button.tabIndex).toBe(-1);
+    }
+    expect((panel?.children[0]?.children[1] as HTMLElement).tabIndex).toBe(-1);
     expect((navigation.children[0] as HTMLElement).style.background).toBe(
       'var(--zotero-neo-selected)',
     );
@@ -999,6 +1009,47 @@ describe('Main Settings Center shell', () => {
     expect(host.window.document.activeElement).toBe(outside);
     expect(host.backdrop()).toBeUndefined();
     host.controller.shutdown();
+  });
+
+  it('discards unadded themes on Close, backdrop, and Escape', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    try {
+      for (const method of ['Close', 'backdrop', 'Escape'] as const) {
+        host.controller.openSettings(host.window);
+        const addCustom = all(host.drawer()!).find(
+          (node) => node.localName === 'button' && node.textContent === '+ Custom',
+        ) as HTMLElement & { emit(type: string): void };
+        addCustom.emit('click');
+        expect(host.values.has('appearance.interaction.customThemes')).toBe(false);
+        if (method === 'Close') {
+          (
+            host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }
+          ).emit('click');
+        } else if (method === 'backdrop') {
+          (host.backdrop() as HTMLElement & { emit(type: string): void }).emit('click');
+        } else host.press('Escape');
+        expect(host.drawer()).toBeUndefined();
+        expect(host.values.has('appearance.interaction.customThemes')).toBe(false);
+        host.controller.openSettings(host.window);
+        expect(
+          all(host.drawer()!).some(
+            (node) => node.localName === 'button' && node.textContent === '+ Custom',
+          ),
+        ).toBe(true);
+        expect(
+          all(host.drawer()!).some(
+            (node) => node.localName === 'button' && node.textContent === 'Add',
+          ),
+        ).toBe(false);
+        host.press('Escape');
+      }
+    } finally {
+      host.controller.shutdown();
+    }
   });
 
   it('closes on Escape before Selection or Visual and suppresses Main keys while open', () => {
@@ -1053,16 +1104,21 @@ describe('Main Settings Center shell', () => {
     try {
       host.controller.openSettings(host.window);
       click('+ Custom');
-      expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
+      expect(host.values.get('appearance.interaction.customThemes')).toBeUndefined();
       click('Dark');
       const field = all(host.drawer()!).find(
         (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
       ) as HTMLInputElement & { emit(type: string): void };
       field.focus();
+      const typed = host.press('a', field);
+      expect(typed.preventDefault).not.toHaveBeenCalled();
       field.value = '#123456';
       field.emit('input');
       expect(all(host.drawer()!)).toContain(field);
       expect(host.window.document.activeElement).toBe(field);
+      click('Add');
+      expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
+      click('Edit');
       (host.drawer()?.children[1]?.children[2] as HTMLElement & { emit(type: string): void }).emit(
         'click',
       );
