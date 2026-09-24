@@ -7,8 +7,8 @@ import {
   INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
   INTERACTION_MARKER_WIDTH_PREFERENCE_KEY,
   INTERACTION_STATUS_STYLE_PREFERENCE_KEY,
-  deleteCustomInteractionTheme,
   INTERACTION_THEME_CATALOG,
+  deleteCustomInteractionTheme,
   findCustomInteractionTheme,
   generateCustomInteractionThemeId,
   interactionStatusColors,
@@ -18,14 +18,13 @@ import {
   seedCustomInteractionTheme,
   serializeCustomInteractionThemes,
   upsertCustomInteractionTheme,
-  type InteractionPalette8,
   type CustomInteractionTheme,
   type InteractionAppearanceManager,
+  type InteractionPalette8,
   type InteractionStatusStyle,
 } from './interaction-appearance';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const BUILT_INS = INTERACTION_THEME_CATALOG;
 const COLORS = [
   ['black', 'Black'],
   ['red', 'Red'],
@@ -40,24 +39,33 @@ type PaletteKey = keyof InteractionPalette8;
 type PaletteMode = 'light' | 'dark';
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const NAME = /^[^\x00-\x1f\x7f]{1,100}$/;
+const FLAVORS: Record<string, string> = {
+  zotero: 'Snow / Dark',
+  catppuccin: 'Latte / Mocha',
+  'tokyo-night': 'Day / Night',
+  gruvbox: 'Light / Dark',
+};
 
-/** Owns Appearance DOM and drafts independently of the modeless Settings shell. */
+/** Main-session navigation state; never persisted as a preference. */
+export interface SettingsAppearanceState {
+  view: 'library' | 'editor';
+  editingThemeId: string | null;
+  paletteMode: PaletteMode;
+}
+
+/** Appearance library and autosaving custom editor for one open Settings workspace. */
 export class SettingsAppearance {
   readonly #document: Document;
   readonly #preferences: PreferenceStore;
   readonly #appearance: InteractionAppearanceManager;
   readonly #root: HTMLElement;
+  readonly #state: SettingsAppearanceState;
   readonly #cleanups: Array<() => void> = [];
   #domCleanups: Array<() => void> = [];
-  #draft: CustomInteractionTheme | null = null;
-  #mode: PaletteMode = 'light';
-  #name = '';
-  #width = '';
-  #style: InteractionStatusStyle = 'neutral';
+  #theme: CustomInteractionTheme | null = null;
   #hexText: Record<PaletteMode, Record<PaletteKey, string>> | null = null;
-  #status: HTMLElement | null = null;
   #preview: HTMLElement | null = null;
-  #save: HTMLButtonElement | null = null;
+  #status: HTMLElement | null = null;
   #confirmedDelete: string | null = null;
 
   constructor(
@@ -65,33 +73,35 @@ export class SettingsAppearance {
     root: HTMLElement,
     preferences: PreferenceStore,
     appearance: InteractionAppearanceManager,
+    state: SettingsAppearanceState = {
+      view: 'library',
+      editingThemeId: null,
+      paletteMode: 'light',
+    },
   ) {
     this.#document = window.document;
     this.#root = root;
     this.#preferences = preferences;
     this.#appearance = appearance;
-    this.#cleanups.push(
-      appearance.observe(() => {
-        if (!this.#draft) this.#renderLibrary();
-      }),
-    );
+    this.#state = state;
+    this.#cleanups.push(appearance.observe(() => this.#refresh()));
     for (const key of [
       INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
       INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
     ]) {
-      const cleanup = preferences.observe?.(key, () => {
-        if (!this.#draft) this.#renderLibrary();
-      });
+      const cleanup = preferences.observe?.(key, () => this.#refresh());
       if (cleanup) this.#cleanups.push(cleanup);
     }
-    this.#renderLibrary();
+    if (state.view === 'editor' && state.editingThemeId) {
+      this.#theme = findCustomInteractionTheme(this.#store(), state.editingThemeId) ?? null;
+    }
+    if (this.#theme) this.#renderEditor();
+    else this.#renderLibrary();
   }
 
   dispose(): void {
-    this.#appearance.clearDraft();
     this.#clearDom();
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
-    this.#draft = null;
     this.#root.replaceChildren();
   }
 
@@ -104,7 +114,7 @@ export class SettingsAppearance {
   #button(text: string, action: () => void): HTMLButtonElement {
     const button = this.#create('button', text) as HTMLButtonElement;
     button.type = 'button';
-    button.style.cssText = `padding:5px 9px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
+    button.style.cssText = `padding:7px 11px;font-size:13px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:5px;cursor:pointer`;
     button.addEventListener('click', action);
     this.#domCleanups.push(() => button.removeEventListener('click', action));
     return button;
@@ -120,9 +130,12 @@ export class SettingsAppearance {
   #clearDom(): void {
     for (const cleanup of this.#domCleanups.splice(0)) cleanup();
     this.#root.replaceChildren();
-    this.#status = null;
     this.#preview = null;
-    this.#save = null;
+    this.#status = null;
+  }
+
+  #message(text: string): void {
+    if (this.#status) this.#status.textContent = text;
   }
 
   #store() {
@@ -136,402 +149,395 @@ export class SettingsAppearance {
       INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
       DEFAULT_INTERACTION_COLOR_PRESET,
     );
-    if (
-      BUILT_INS.some((builtIn) => builtIn.id === id) ||
-      findCustomInteractionTheme(this.#store(), id)
-    )
-      return id;
-    return normalizeInteractionColorPreset(id);
+    return findCustomInteractionTheme(this.#store(), id) ? id : normalizeInteractionColorPreset(id);
+  }
+
+  #refresh(): void {
+    if (this.#state.view === 'editor') {
+      const theme =
+        this.#state.editingThemeId &&
+        findCustomInteractionTheme(this.#store(), this.#state.editingThemeId);
+      if (!theme) {
+        this.#renderLibrary();
+        return;
+      }
+      this.#theme = theme;
+      this.#updatePreview(); // Never replace a focused name/hex input on its own observer notification.
+      return;
+    }
+    this.#renderLibrary();
   }
 
   #renderLibrary(): void {
-    if (this.#draft) return;
+    this.#state.view = 'library';
+    this.#state.editingThemeId = null;
+    this.#theme = null;
+    this.#hexText = null;
     this.#clearDom();
-    this.#root.style.display = 'block';
-    this.#root.style.overflow = 'auto';
-    this.#root.style.padding = '12px 14px';
-    const title = this.#create('h3', 'Interaction themes');
-    title.style.cssText = 'margin:0 0 5px;font-size:15px';
-    const description = this.#create(
-      'p',
-      "Cursor keeps Zotero's native selected style. Selection and Visual markers use this theme.",
-    );
-    description.style.cssText = 'margin:0 0 12px';
-    const actions = this.#create('div');
-    actions.style.cssText = 'display:flex;gap:8px;margin-bottom:14px';
-    actions.append(
-      this.#button('+ New theme', () => this.#openEditor(null, false)),
-      this.#button('Duplicate current', () => this.#openEditor(null, true)),
-    );
-    const cards = this.#create('div');
-    cards.style.cssText = 'display:grid;gap:8px';
+    this.#root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
+    const title = this.#create('h2', 'Appearance');
+    title.style.cssText = 'margin:0 0 12px;font-size:22px';
+    const controls = this.#create('section');
+    controls.style.cssText =
+      'display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin:0 0 18px';
+    const marker = this.#create('div');
+    marker.append(this.#create('span', 'Marker width (px) '));
+    const width = this.#appearance.appearance.marker.width;
+    for (const value of [1, 2, 3, 4]) {
+      const button = this.#button(`${value}px`, () =>
+        this.#setAppearance(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, value),
+      );
+      this.#setPressed(button, width === value);
+      marker.append(button);
+    }
+    const styles = this.#create('div');
+    styles.append(this.#create('span', 'Status style '));
+    for (const style of ['neutral', 'tinted'] as const) {
+      const button = this.#button(style === 'neutral' ? 'Neutral' : 'Tinted', () =>
+        this.#setAppearance(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, style),
+      );
+      this.#setPressed(button, this.#appearance.appearance.statusStyle === style);
+      styles.append(button);
+    }
+    controls.append(marker, styles);
+    const themesHeading = this.#create('h3', 'Themes');
+    themesHeading.style.cssText = 'margin:0 0 10px;font-size:17px';
+    const grid = this.#create('div');
+    grid.style.cssText =
+      'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px';
     const active = this.#activeId();
-    const themes = this.#store().themes;
-    for (const { id, name } of [...BUILT_INS, ...themes]) {
-      const custom = themes.find((theme) => theme.id === id);
+    const mode = this.#appearance.appearance.theme;
+    for (const theme of [...INTERACTION_THEME_CATALOG, ...this.#store().themes]) {
+      const selected = theme.id === active;
       const card = this.#create('div');
-      card.dataset.themeId = id;
-      card.style.cssText = `padding:9px;border:2px solid ${id === active ? THEME_VARS.accent : THEME_VARS.border};border-radius:6px;background:${id === active ? THEME_VARS.selected : THEME_VARS.elevated};color:${id === active ? THEME_VARS.selectedText : THEME_VARS.text}`;
-      const heading = this.#create('div', `${name}${id === active ? ' · Active' : ''}`);
-      heading.style.fontWeight = 'bold';
-      if (id === active) card.setAttribute('aria-current', 'true');
-      const palette =
-        custom?.[this.#appearance.appearance.theme] ??
-        seedCustomInteractionTheme(this.#preferences, id, 'custom:preview', name)[
-          this.#appearance.appearance.theme
-        ];
+      card.dataset.themeId = theme.id;
+      card.style.cssText = `padding:12px;border:2px solid ${selected ? THEME_VARS.accent : THEME_VARS.border};border-radius:7px;background:${selected ? THEME_VARS.selected : THEME_VARS.elevated};cursor:pointer`;
+      if (selected) card.setAttribute('aria-current', 'true');
+      const onCardClick = (event: MouseEvent): void => {
+        if (!(event.target as Element).closest?.('button')) this.#select(theme.id);
+      };
+      card.addEventListener('click', onCardClick);
+      this.#domCleanups.push(() => card.removeEventListener('click', onCardClick));
+      const choice = this.#button(theme.name, () => this.#select(theme.id));
+      choice.setAttribute('aria-label', `Select ${theme.name}`);
+      choice.style.cssText = `display:block;width:100%;text-align:left;font-weight:600;font-size:16px;border:0;background:transparent;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};cursor:pointer`;
+      const note = this.#create(
+        'div',
+        `${FLAVORS[theme.id] ?? 'Custom'}${selected ? ' · Active' : ''}`,
+      );
+      note.style.cssText = `font-size:13px;color:${THEME_VARS.muted}`;
       const swatches = this.#create('div');
-      swatches.style.cssText = 'display:flex;gap:12px;margin:7px 0';
-      for (const [label, color] of [
-        ['Selection', palette.yellow],
-        ['Visual', palette.green],
-      ]) {
-        const swatch = this.#create('span', `${label} ${color}`);
-        swatch.style.cssText = `border-left:8px solid ${color};padding-left:5px`;
+      swatches.style.cssText =
+        'display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;margin:10px 0';
+      for (const [key, label] of COLORS) {
+        const swatch = this.#create('span');
+        swatch.setAttribute('aria-label', `${label} ${theme[mode][key]}`);
+        swatch.style.cssText = `height:24px;background:${theme[mode][key]};border:1px solid ${THEME_VARS.border};border-radius:3px`;
         swatches.append(swatch);
       }
-      const controls = this.#create('div');
-      controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
-      const select = this.#button('Select', () => {
-        this.#appearance.clearDraft();
-        try {
-          this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, id);
-          this.#appearance.refresh();
-          this.#renderLibrary();
-        } catch {
-          this.#message('Could not select theme.');
-        }
-      });
-      select.setAttribute('aria-label', `Select ${name}`);
-      if (id === active) {
-        select.style.background = THEME_VARS.accent;
-        select.style.color = THEME_VARS.onAccent;
-        select.style.borderColor = THEME_VARS.accent;
-      }
-      controls.append(select);
-      if (custom) {
-        controls.append(this.#button('Edit', () => this.#openEditor(custom, false)));
-        controls.append(
-          this.#button(this.#confirmedDelete === id ? 'Confirm delete' : 'Delete', () => {
-            if (this.#confirmedDelete !== id) {
-              this.#confirmedDelete = id;
-              this.#renderLibrary();
-              return;
-            }
-            this.#confirmedDelete = null;
-            const original = this.#preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, '');
-            try {
-              this.#preferences.set(
-                INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
-                serializeCustomInteractionThemes(deleteCustomInteractionTheme(this.#store(), id)),
-              );
-              if (active === id)
-                this.#preferences.set(
-                  INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
-                  DEFAULT_INTERACTION_COLOR_PRESET,
-                );
-              this.#appearance.refresh();
-              this.#renderLibrary();
-            } catch {
-              try {
-                this.#preferences.set(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, original);
-              } catch {}
-              this.#appearance.refresh();
-              this.#renderLibrary();
-              this.#message('Could not delete theme.');
-            }
-          }),
+      card.append(choice, note, swatches);
+      if ('version' in theme) {
+        const actions = this.#create('div');
+        actions.style.cssText = 'display:flex;gap:6px';
+        actions.append(
+          this.#button('Edit', () => this.#openEditor(theme.id)),
+          this.#button(this.#confirmedDelete === theme.id ? 'Confirm delete' : 'Delete', () =>
+            this.#deleteTheme(theme.id),
+          ),
         );
+        card.append(actions);
       }
-      card.append(heading, swatches, controls);
-      cards.append(card);
+      grid.append(card);
     }
+    const add = this.#button('+ Custom', () => this.#createTheme());
+    add.style.cssText += ';min-height:78px;font-size:16px;text-align:left';
+    grid.append(add);
     const status = this.#create('p');
     status.setAttribute('role', 'status');
     this.#status = status;
-    this.#root.append(title, description, actions, cards, status);
+    this.#root.append(title, controls, themesHeading, grid, status);
   }
 
-  #message(text: string): void {
-    if (this.#status) this.#status.textContent = text;
+  #setAppearance(key: string, value: number | InteractionStatusStyle): void {
+    try {
+      this.#preferences.set(key, value);
+      this.#appearance.refresh();
+      this.#renderLibrary();
+    } catch {
+      this.#message('Could not update appearance.');
+    }
   }
 
-  #openEditor(existing: CustomInteractionTheme | null, duplicate: boolean): void {
+  #select(id: string): void {
+    try {
+      this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, id);
+      this.#appearance.refresh();
+      this.#renderLibrary();
+    } catch {
+      this.#message('Could not select theme.');
+    }
+  }
+
+  #createTheme(): void {
+    const sourceId = this.#activeId();
     const store = this.#store();
-    const sourceId = existing?.id ?? this.#activeId();
-    const sourceName =
-      existing?.name ??
-      BUILT_INS.find((item) => item.id === sourceId)?.name ??
-      findCustomInteractionTheme(store, sourceId)?.name ??
-      'Theme';
-    const id =
-      existing && !duplicate
-        ? existing.id
-        : generateCustomInteractionThemeId(
-            store.themes.map((theme) => theme.id),
-            () => {
-              const uuid = this.#document.defaultView?.crypto?.randomUUID();
-              return uuid ? `custom:${uuid}` : '';
-            },
-          );
-    this.#draft = seedCustomInteractionTheme(
-      this.#preferences,
-      sourceId,
-      id,
-      existing && !duplicate ? existing.name : duplicate ? `${sourceName} copy` : 'New theme',
+    const original = this.#preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, '');
+    const id = generateCustomInteractionThemeId(
+      store.themes.map((theme) => theme.id),
+      () => {
+        const uuid = this.#document.defaultView?.crypto?.randomUUID();
+        return uuid ? `custom:${uuid}` : '';
+      },
     );
-    this.#name = this.#draft.name;
-    this.#width = String(this.#appearance.appearance.marker.width);
-    this.#style = this.#appearance.appearance.statusStyle;
-    this.#hexText = { light: { ...this.#draft.light }, dark: { ...this.#draft.dark } };
-    this.#mode = this.#appearance.appearance.theme;
+    const theme = seedCustomInteractionTheme(this.#preferences, sourceId, id, 'New theme');
+    try {
+      this.#preferences.set(
+        INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
+        serializeCustomInteractionThemes(upsertCustomInteractionTheme(store, theme)),
+      );
+      try {
+        this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, id);
+      } catch (error) {
+        try {
+          this.#preferences.set(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, original);
+        } catch {}
+        throw error;
+      }
+      this.#appearance.refresh();
+      this.#state.paletteMode = this.#appearance.appearance.theme;
+      this.#openEditor(id);
+    } catch {
+      this.#renderLibrary();
+      this.#message('Could not create theme.');
+    }
+  }
+
+  #deleteTheme(id: string): void {
+    if (this.#confirmedDelete !== id) {
+      this.#confirmedDelete = id;
+      this.#renderLibrary();
+      return;
+    }
     this.#confirmedDelete = null;
+    const original = this.#preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, '');
+    const wasActive = this.#activeId() === id;
+    try {
+      this.#preferences.set(
+        INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
+        serializeCustomInteractionThemes(deleteCustomInteractionTheme(this.#store(), id)),
+      );
+      if (wasActive) {
+        try {
+          this.#preferences.set(
+            INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
+            DEFAULT_INTERACTION_COLOR_PRESET,
+          );
+        } catch (error) {
+          try {
+            this.#preferences.set(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, original);
+          } catch {}
+          throw error;
+        }
+      }
+      if (this.#state.editingThemeId === id) {
+        this.#state.view = 'library';
+        this.#state.editingThemeId = null;
+      }
+      this.#appearance.refresh();
+      this.#renderLibrary();
+    } catch {
+      this.#renderLibrary();
+      this.#message('Could not delete theme.');
+    }
+  }
+
+  #openEditor(id: string): void {
+    const theme = findCustomInteractionTheme(this.#store(), id);
+    if (!theme) {
+      this.#renderLibrary();
+      return;
+    }
+    try {
+      if (this.#activeId() !== id)
+        this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, id);
+      this.#appearance.refresh();
+    } catch {
+      this.#message('Could not activate theme for editing.');
+      return;
+    }
+    this.#state.view = 'editor';
+    this.#state.editingThemeId = id;
+    this.#theme = theme;
+    this.#hexText = { light: { ...theme.light }, dark: { ...theme.dark } };
     this.#renderEditor();
-    this.#appearance.setDraft(this.#draft);
+  }
+
+  #persist(theme: CustomInteractionTheme): boolean {
+    try {
+      this.#preferences.set(
+        INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
+        serializeCustomInteractionThemes(upsertCustomInteractionTheme(this.#store(), theme)),
+      );
+      this.#theme = theme;
+      this.#appearance.refresh();
+      this.#updatePreview();
+      this.#message('Saved');
+      return true;
+    } catch {
+      this.#message('Could not save change. Previous theme is still active.');
+      return false;
+    }
   }
 
   #renderEditor(): void {
-    const draft = this.#draft;
-    if (!draft) return;
+    const theme = this.#theme;
+    if (!theme) {
+      this.#renderLibrary();
+      return;
+    }
+    this.#state.view = 'editor';
+    this.#state.editingThemeId = theme.id;
+    this.#hexText ??= { light: { ...theme.light }, dark: { ...theme.dark } };
     this.#clearDom();
-    this.#root.style.display = 'flex';
-    this.#root.style.flexDirection = 'column';
-    this.#root.style.overflow = 'hidden';
-    this.#root.style.padding = '0';
-    const body = this.#create('div');
-    body.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:10px 14px 16px';
-    const title = this.#create('h3', 'Theme editor');
-    title.style.cssText = 'margin:0 0 5px;font-size:15px';
+    this.#root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
+    const back = this.#button('Back to themes', () => this.#renderLibrary());
+    const title = this.#create('h2', 'Appearance');
+    title.style.cssText = 'margin:12px 0;font-size:22px';
+    const heading = this.#create('h3', 'Custom theme');
+    heading.style.cssText = 'margin:0 0 10px;font-size:17px';
     const name = this.#create('input') as HTMLInputElement;
     name.type = 'text';
-    name.value = this.#name;
+    name.value = theme.name;
     name.maxLength = 100;
-    name.style.cssText = `width:100%;box-sizing:border-box;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border}`;
+    name.setAttribute('aria-label', 'Theme name');
+    name.style.cssText = `width:min(100%,360px);padding:6px;font-size:14px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border}`;
     const onName = (): void => {
-      this.#name = name.value;
-      if (this.#validName()) this.#updateDraft({ name: this.#name.trim() });
-      this.#validate();
+      const normalized = name.value.trim();
+      const valid = NAME.test(normalized);
+      name.setAttribute('aria-invalid', String(!valid));
+      if (!valid) {
+        this.#message('Enter a name (1–100 characters).');
+        return;
+      }
+      if (normalized !== this.#theme?.name) this.#persist({ ...this.#theme!, name: normalized });
+      else this.#message('');
     };
     name.addEventListener('input', onName);
     this.#domCleanups.push(() => name.removeEventListener('input', onName));
     const nameLabel = this.#create('label', 'Theme name');
-    nameLabel.style.cssText = 'display:block;margin-bottom:6px';
+    nameLabel.style.cssText = 'display:grid;gap:4px;margin-bottom:14px';
     nameLabel.append(name);
     const modes = this.#create('div');
-    modes.style.cssText = 'display:flex;gap:6px;margin-bottom:6px';
+    modes.style.cssText = 'display:flex;gap:6px;margin-bottom:14px';
     const modeButtons = (['light', 'dark'] as const).map((mode) =>
       this.#button(mode === 'light' ? 'Light' : 'Dark', () => {
-        this.#mode = mode;
-        this.#syncPalette();
+        this.#state.paletteMode = mode;
+        syncMode();
       }),
     );
     modes.append(...modeButtons);
     const fields = this.#create('div');
+    fields.style.cssText = 'display:grid;gap:5px;max-width:560px';
     const inputs = new Map<
       PaletteKey,
       { picker: HTMLInputElement; hex: HTMLInputElement; error: HTMLElement }
     >();
     for (const [key, label] of COLORS) {
-      const row = this.#create('div');
-      row.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:5px;margin:3px 0';
+      const row = this.#create('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:12px;min-height:35px';
+      const caption = this.#create('span', label);
+      caption.style.width = '90px';
       const picker = this.#create('input') as HTMLInputElement;
       picker.type = 'color';
       picker.setAttribute('aria-label', `${label} color picker`);
       const hex = this.#create('input') as HTMLInputElement;
       hex.type = 'text';
       hex.setAttribute('aria-label', `${label} hex`);
-      hex.style.cssText = `width:90px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border}`;
-      const caption = this.#create('span', label);
-      caption.style.width = '126px';
+      hex.style.cssText = `width:95px;padding:5px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border}`;
       const error = this.#create('span');
       error.style.color = THEME_VARS.error;
       const onHex = (): void => {
-        this.#hexText![this.#mode][key] = hex.value;
-        if (HEX.test(hex.value)) {
-          const color = hex.value.toUpperCase();
-          picker.value = color;
-          this.#updatePalette(key, color);
+        this.#hexText![this.#state.paletteMode][key] = hex.value;
+        const valid = HEX.test(hex.value);
+        hex.setAttribute('aria-invalid', String(!valid));
+        error.textContent = valid ? '' : 'Use #RRGGBB';
+        if (!valid) return;
+        const color = hex.value.toUpperCase();
+        if (color === this.#theme![this.#state.paletteMode][key]) {
+          this.#message('');
+          return;
         }
-        this.#validate();
+        if (this.#saveColor(key, color)) picker.value = color;
       };
       const onPicker = (): void => {
         const color = picker.value.toUpperCase();
-        hex.value = color;
-        this.#hexText![this.#mode][key] = color;
-        this.#updatePalette(key, color);
-        this.#validate();
+        if (this.#saveColor(key, color)) {
+          hex.value = color;
+          this.#hexText![this.#state.paletteMode][key] = color;
+          hex.setAttribute('aria-invalid', 'false');
+          error.textContent = '';
+        } else picker.value = this.#theme![this.#state.paletteMode][key];
       };
       hex.addEventListener('input', onHex);
-      picker.addEventListener('input', onPicker);
+      picker.addEventListener('change', onPicker);
       this.#domCleanups.push(() => {
         hex.removeEventListener('input', onHex);
-        picker.removeEventListener('input', onPicker);
+        picker.removeEventListener('change', onPicker);
       });
       inputs.set(key, { picker, hex, error });
       row.append(caption, picker, hex, error);
       fields.append(row);
     }
-    const width = this.#create('input') as HTMLInputElement;
-    width.type = 'number';
-    width.min = '1';
-    width.max = '4';
-    width.step = '1';
-    width.value = this.#width;
-    width.style.width = '56px';
-    const onWidth = (): void => {
-      this.#width = width.value;
-      if (this.#validWidth()) this.#updatePreview();
-      this.#validate();
-    };
-    width.addEventListener('input', onWidth);
-    this.#domCleanups.push(() => width.removeEventListener('input', onWidth));
-    const widthLabel = this.#create('label', 'Marker width (1–4 CSS px) ');
-    widthLabel.append(width);
-    const styles = this.#create('div');
-    styles.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:6px';
-    styles.append(widthLabel, this.#create('span', 'Status style'));
-    const styleButtons = (['neutral', 'tinted'] as const).map((style) =>
-      this.#button(style === 'neutral' ? 'Neutral' : 'Tinted', () => {
-        this.#style = style;
-        this.#updatePreview();
-        syncStyle();
-      }),
-    );
-    const syncStyle = (): void =>
-      styleButtons.forEach((button, index) =>
-        this.#setPressed(button, this.#style === (index ? 'tinted' : 'neutral')),
-      );
-    styles.append(...styleButtons);
     const preview = this.#create('div');
     preview.setAttribute('aria-label', 'Theme preview');
-    preview.style.cssText = 'padding:7px;margin:6px 0;border-radius:4px';
+    preview.style.cssText = 'padding:10px;margin:16px 0;border-radius:5px';
     this.#preview = preview;
-    const footer = this.#create('div');
-    footer.style.cssText = `position:sticky;bottom:0;z-index:1;flex:none;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:8px 14px;background:${THEME_VARS.surface};border-top:1px solid ${THEME_VARS.border}`;
-    const save = this.#button('Save', () => this.#saveTheme());
-    this.#save = save;
-    footer.append(
-      save,
-      this.#button('Cancel / Back', () => this.#cancel()),
-    );
     const status = this.#create('p');
     status.setAttribute('role', 'status');
-    status.style.cssText = 'margin:0;min-height:1em;flex-basis:100%';
     this.#status = status;
-    footer.append(status);
-    body.append(title, nameLabel, modes, preview, fields, styles);
-    this.#root.append(body, footer);
-    const syncStyleAndPalette = (): void => {
+    this.#root.append(back, title, heading, nameLabel, modes, fields, preview, status);
+    const syncMode = (): void => {
       modeButtons.forEach((button, index) =>
-        this.#setPressed(button, this.#mode === (index ? 'dark' : 'light')),
+        this.#setPressed(button, this.#state.paletteMode === (index ? 'dark' : 'light')),
       );
       for (const [key, controls] of inputs) {
-        controls.hex.value = this.#hexText![this.#mode][key];
-        controls.picker.value = this.#draft![this.#mode][key];
-        controls.error.textContent = HEX.test(controls.hex.value) ? '' : 'Use #RRGGBB';
-        controls.hex.setAttribute('aria-invalid', String(!!controls.error.textContent));
+        controls.hex.value = this.#hexText![this.#state.paletteMode][key];
+        controls.picker.value = this.#theme![this.#state.paletteMode][key];
+        const valid = HEX.test(controls.hex.value);
+        controls.hex.setAttribute('aria-invalid', String(!valid));
+        controls.error.textContent = valid ? '' : 'Use #RRGGBB';
       }
-      syncStyle();
       this.#updatePreview();
     };
-    this.#syncPalette = syncStyleAndPalette;
-    syncStyleAndPalette();
-    this.#validate();
+    syncMode();
   }
 
-  #syncPalette: () => void = () => {};
-
-  #validName(): boolean {
-    return NAME.test(this.#name.trim());
-  }
-
-  #validWidth(): boolean {
-    return /^[1-4]$/.test(this.#width);
-  }
-
-  #validate(): void {
-    const invalidHex = Object.values(this.#hexText ?? {}).some((palette) =>
-      Object.values(palette).some((value) => !HEX.test(value)),
-    );
-    if (this.#save) this.#save.disabled = !this.#validName() || !this.#validWidth() || invalidHex;
-    this.#message(
-      !this.#validName()
-        ? 'Enter a name (1–100 characters).'
-        : !this.#validWidth()
-          ? 'Marker width must be 1–4.'
-          : invalidHex
-            ? 'Use #RRGGBB for every color.'
-            : '',
-    );
-    this.#syncPalette();
-  }
-
-  #updateDraft(changes: Partial<CustomInteractionTheme>): void {
-    if (!this.#draft) return;
-    this.#draft = { ...this.#draft, ...changes };
-    this.#appearance.setDraft(this.#draft);
-    this.#updatePreview();
-  }
-
-  #updatePalette(key: PaletteKey, value: string): void {
-    if (!this.#draft) return;
-    this.#updateDraft({ [this.#mode]: { ...this.#draft[this.#mode], [key]: value } });
+  #saveColor(key: PaletteKey, color: string): boolean {
+    const theme = this.#theme;
+    if (!theme) return false;
+    const mode = this.#state.paletteMode;
+    return this.#persist({ ...theme, [mode]: { ...theme[mode], [key]: color } });
   }
 
   #updatePreview(): void {
-    if (!this.#preview || !this.#draft) return;
-    const palette = this.#draft[this.#mode];
-    const appearance = resolveInteractionAppearance(this.#preferences, this.#mode, this.#draft);
-    this.#preview.style.background = appearance.colors.neutralStatusBackground;
-    this.#preview.style.color = appearance.colors.neutralStatusForeground;
-    this.#preview.style.border = `1px solid ${appearance.colors.neutralStatusBorder}`;
-    this.#preview.textContent = `${this.#mode === 'light' ? 'Light' : 'Dark'} palette · Selection ${palette.yellow} · Visual ${palette.green}`;
+    const theme = this.#theme;
+    const preview = this.#preview;
+    if (!theme || !preview) return;
+    const mode = this.#state.paletteMode;
+    const palette = theme[mode];
+    const appearance = resolveInteractionAppearance(this.#preferences, mode);
+    preview.style.background = appearance.colors.neutralStatusBackground;
+    preview.style.color = appearance.colors.neutralStatusForeground;
+    preview.style.border = `1px solid ${appearance.colors.neutralStatusBorder}`;
+    preview.textContent = `${mode === 'light' ? 'Light' : 'Dark'} palette · Selection = Yellow ${palette.yellow} · Visual = Green ${palette.green}`;
     const samples = this.#create('div');
-    samples.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-top:5px';
+    samples.style.cssText = 'display:flex;gap:8px;margin-top:8px';
     for (const kind of ['selection', 'visual'] as const) {
-      const status = interactionStatusColors({ ...appearance, statusStyle: this.#style }, kind);
-      const marker = kind === 'selection' ? palette.yellow : palette.green;
+      const status = interactionStatusColors(appearance, kind);
       const sample = this.#create('span', kind === 'selection' ? 'SEL' : 'VISUAL');
-      sample.style.cssText = `padding:2px 6px;background:${status.background};color:${status.foreground};border:1px solid ${status.border};border-left:${this.#width}px solid ${marker};border-radius:3px`;
+      sample.style.cssText = `padding:4px 8px;background:${status.background};color:${status.foreground};border:1px solid ${status.border};border-left:${appearance.marker.width}px solid ${kind === 'selection' ? palette.yellow : palette.green};border-radius:3px`;
       samples.append(sample);
     }
-    this.#preview.append(samples);
-  }
-
-  #cancel(): void {
-    this.#appearance.clearDraft();
-    this.#draft = null;
-    this.#renderLibrary();
-  }
-
-  #saveTheme(): void {
-    if (!this.#draft || !this.#validName() || !this.#validWidth() || this.#save?.disabled) return;
-    const previous = this.#preferences.get(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, '');
-    const theme = this.#draft;
-    try {
-      const store = upsertCustomInteractionTheme(this.#store(), theme);
-      this.#preferences.set(
-        INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
-        serializeCustomInteractionThemes(store),
-      );
-      try {
-        this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, theme.id);
-        if (Number(this.#width) !== this.#appearance.appearance.marker.width)
-          this.#preferences.set(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, Number(this.#width));
-        if (this.#style !== this.#appearance.appearance.statusStyle)
-          this.#preferences.set(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, this.#style);
-      } catch (error) {
-        try {
-          this.#preferences.set(INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY, previous);
-        } catch {}
-        throw error;
-      }
-      this.#appearance.clearDraft();
-      this.#draft = null;
-      this.#appearance.refresh();
-      this.#renderLibrary();
-    } catch {
-      this.#message('Could not save theme. Your edits are still here.');
-    }
+    preview.append(samples);
   }
 }

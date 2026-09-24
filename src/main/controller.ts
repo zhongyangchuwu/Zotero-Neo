@@ -219,7 +219,7 @@ export class MainWindowController implements MainWindowControllerApi {
     this.resetMainInput(window, resolved);
     try {
       window.focus();
-      resolved.settings.openDrawer();
+      resolved.settings.openWorkspace();
       return true;
     } catch (error) {
       this.#dependencies.logger.debug(`Settings open failed: ${String(error)}`);
@@ -344,6 +344,20 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
+    if (session.settings.open) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
+        session.settings.close();
+      } else if (!session.settings.contains(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
+      }
+      this.resetMainInput(window, session);
+      return;
+    }
     if (session.localFind.open) {
       this.#localFind.handleKey(event, window, session);
       return;
@@ -358,21 +372,6 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
-      return;
-    }
-    const settingsOwnsKey =
-      session.settings.open &&
-      (session.settings.contains(event.target) ||
-        session.settings.contains(window.document.activeElement));
-    if (settingsOwnsKey) {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopImmediatePropagation?.();
-        event.stopPropagation();
-        session.settings.close();
-        return;
-      }
-      this.resetMainInput(window, session);
       return;
     }
     if (

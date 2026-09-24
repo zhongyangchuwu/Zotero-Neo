@@ -83,7 +83,7 @@ function pickerMainWindow(): {
         textContent = value.replace(/<[^>]*>/g, '');
       },
       setAttribute: (name: string, value: string) => Reflect.set(element, name, value),
-      getAttribute: () => null,
+      getAttribute: (name: string) => (Reflect.get(element, name) as string | undefined) ?? null,
       append: (...nodes: HTMLElement[]) => {
         for (const node of nodes) Reflect.set(node, 'parentElement', element);
         children.push(...nodes);
@@ -168,11 +168,11 @@ function pickerMainWindow(): {
     createElementNS: (_namespace: string, tag: string) => createElement(tag),
     head: { appendChild: (node: HTMLElement) => bodyChildren.push(node) },
     body: {
-      append: (node: HTMLElement) => bodyChildren.push(node),
+      append: (...nodes: HTMLElement[]) => bodyChildren.push(...nodes),
       appendChild: (node: HTMLElement) => bodyChildren.push(node),
     },
     documentElement: {
-      append: (node: HTMLElement) => bodyChildren.push(node),
+      append: (...nodes: HTMLElement[]) => bodyChildren.push(...nodes),
       appendChild: (node: HTMLElement) => bodyChildren.push(node),
     },
     addEventListener: (type: string, listener: EventListener) => {
@@ -892,15 +892,33 @@ describe('NoteEditor shared binding input', () => {
 function settingsMainHost() {
   vi.stubGlobal('Services', { focus: { focusedWindow: null } });
   const host = pickerMainWindow();
+  const values = new Map<string, boolean | number | string>();
+  const writes: Array<[string, boolean | number | string]> = [];
+  const observers = new Map<string, Set<() => void>>();
   const controller = createMainWindowController({
-    preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+    preferences: {
+      has: (key: string) => values.has(key),
+      get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
+      set: (key: string, value: boolean | number | string) => {
+        values.set(key, value);
+        writes.push([key, value]);
+        for (const listener of observers.get(key) ?? []) listener();
+      },
+      observe: (key: string, listener: () => void) => {
+        const group = observers.get(key) ?? new Set<() => void>();
+        group.add(listener);
+        observers.set(key, group);
+        return () => group.delete(listener);
+      },
+    },
     logger,
     reader: { rescan: () => {}, forwardKey: () => {} },
   } as MainWindowControllerDependencies);
   controller.addWindow(host.window);
-  const press = (key: string): KeyboardEvent => {
+  const press = (key: string, target?: EventTarget): KeyboardEvent => {
     const event = {
       key,
+      target,
       ctrlKey: false,
       metaKey: false,
       altKey: false,
@@ -913,11 +931,13 @@ function settingsMainHost() {
     return event;
   };
   const drawer = () => host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-center');
-  return { ...host, controller, press, drawer };
+  const backdrop = () =>
+    host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-backdrop');
+  return { ...host, controller, press, drawer, backdrop, values, writes };
 }
 
 describe('Main Settings Center shell', () => {
-  it('opens through Space p s once, remembers its section, and refocuses on repeat', () => {
+  it('opens centered once, remembers section, and removes backdrop and panel on close', () => {
     const host = settingsMainHost();
     const prior = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
     host.window.document.body?.append(prior);
@@ -925,113 +945,99 @@ describe('Main Settings Center shell', () => {
     host.press(' ');
     host.press('p');
     host.press('s');
-    const first = host.drawer();
-    expect(first).toBeDefined();
-    expect(first?.style.cssText).not.toContain('inset:0');
-    expect(first?.style.cssText).toContain('width:min(500px,50vw,calc(100vw - 24px))');
-    const navigation = first?.children[1] as HTMLElement | undefined;
-    expect(navigation?.style.cssText).toContain('grid-template-columns:repeat(5,minmax(0,1fr))');
-    expect(navigation?.children).toHaveLength(5);
-    const appearanceButton = navigation?.children[0] as HTMLElement;
-    expect(appearanceButton.style.background).toBe('var(--zotero-neo-selected)');
-    expect(appearanceButton.style.borderColor).toBe('var(--zotero-neo-accent)');
-    expect(first?.children[0]?.children[0]).toBe(host.window.document.activeElement);
-    const section = first?.children[1]?.children[2] as HTMLElement & { emit(type: string): void };
-    section.emit('click');
-    expect(section.style.background).toBe('var(--zotero-neo-selected)');
-    expect(appearanceButton.style.background).toBe('var(--zotero-neo-input)');
-    expect(first?.children[2]?.textContent).toContain('not migrated yet');
+    const panel = host.drawer();
+    const backdrop = host.backdrop() as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+      listenerCount(type: string): number;
+    };
+    expect(panel?.style.cssText).toContain('left:50%;top:50%;transform:translate(-50%,-50%)');
+    expect(panel?.style.cssText).toContain('width:min(820px,calc(100vw - 48px))');
+    expect(panel?.style.cssText).toContain('height:min(760px,calc(100vh - 64px))');
+    expect(panel?.style.cssText).not.toContain('right:12px');
+    expect(backdrop.style.cssText).toContain('inset:0');
+    const navigation = panel?.children[1] as HTMLElement;
+    expect(navigation.children).toHaveLength(5);
+    expect((navigation.children[0] as HTMLElement).style.background).toBe(
+      'var(--zotero-neo-selected)',
+    );
+    const reader = navigation.children[2] as HTMLElement & { emit(type: string): void };
+    reader.emit('click');
+    expect(reader.style.background).toBe('var(--zotero-neo-selected)');
+    expect(panel?.children[2]?.children[0]?.textContent).toBe('Reader');
     expect(host.controller.openSettings(host.window)).toBe(true);
-    expect(host.drawer()).toBe(first);
+    expect(host.drawer()).toBe(panel);
     expect(
       host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-center'),
     ).toHaveLength(1);
-    expect(first?.children[0]?.children[0]).toBe(host.window.document.activeElement);
-    const close = first?.children[0]?.children[1] as HTMLElement & {
-      emit(type: string): void;
-      listenerCount(type: string): number;
-    };
-    close.emit('click');
+    expect(
+      host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-backdrop'),
+    ).toHaveLength(1);
+    backdrop.emit('click', { target: panel });
+    expect(host.drawer()).toBe(panel);
+    backdrop.emit('click');
     expect(host.drawer()).toBeUndefined();
+    expect(host.backdrop()).toBeUndefined();
+    expect(backdrop.listenerCount('click')).toBe(0);
     expect(host.window.document.activeElement).toBe(prior);
-    expect(close.listenerCount('click')).toBe(0);
-    expect(host.controller.openSettings(host.window)).toBe(true);
-    expect(host.drawer()?.children[2]?.textContent).toContain('not migrated yet');
+    host.controller.openSettings(host.window);
+    expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
     host.controller.shutdown();
     expect(host.drawer()).toBeUndefined();
+    expect(host.backdrop()).toBeUndefined();
   });
 
-  it('lets the list retain focus and never steals it when closed from outside', () => {
+  it('keeps unexpected outside focus when closed by the Close button', () => {
     const host = settingsMainHost();
-    const list = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
-    host.window.document.body?.append(list);
-    expect(host.controller.openSettings(host.window)).toBe(true);
-    list.focus();
-    expect(host.drawer()).toBeDefined();
+    const outside = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+    host.window.document.body?.append(outside);
+    host.controller.openSettings(host.window);
+    outside.focus();
     const close = host.drawer()?.children[0]?.children[1] as HTMLElement & {
       emit(type: string): void;
     };
     close.emit('click');
-    expect(host.drawer()).toBeUndefined();
-    expect(host.window.document.activeElement).toBe(list);
+    expect(host.window.document.activeElement).toBe(outside);
+    expect(host.backdrop()).toBeUndefined();
     host.controller.shutdown();
   });
 
-  it('routes Escape through normal Main Selection handling when focus is outside Settings', () => {
+  it('closes on Escape before Selection or Visual and suppresses Main keys while open', () => {
     const host = settingsMainHost();
     const clear = vi.spyOn(MainItemSelect.prototype, 'clearSelection');
+    const enter = vi.spyOn(MainItemSelect.prototype, 'enter');
     const itemsFocused = vi.spyOn(MainItemSelect.prototype, 'itemsFocused').mockReturnValue(true);
     const notEmpty = vi.spyOn(SelectionStore.prototype, 'empty', 'get').mockReturnValue(false);
     try {
-      expect(host.controller.openSettings(host.window)).toBe(true);
-      const list = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
-      host.window.document.body?.append(list);
-      list.focus();
-      const escape = host.press('Escape');
-      expect(host.drawer()).toBeDefined();
-      expect(clear).toHaveBeenCalledOnce();
-      expect(escape.preventDefault).toHaveBeenCalledOnce();
-      expect(host.window.document.activeElement).toBe(list);
-    } finally {
-      host.controller.shutdown();
-      clear.mockRestore();
-      itemsFocused.mockRestore();
-      notEmpty.mockRestore();
-    }
-  });
-
-  it('blocks Main keys while focused inside, then resumes modeless input outside', () => {
-    const host = settingsMainHost();
-    const clear = vi.spyOn(SelectionStore.prototype, 'clear');
-    const itemsFocused = vi.spyOn(MainItemSelect.prototype, 'itemsFocused').mockReturnValue(true);
-    const notEmpty = vi.spyOn(SelectionStore.prototype, 'empty', 'get').mockReturnValue(false);
-    try {
-      expect(host.controller.openSettings(host.window)).toBe(true);
-      host.press('j');
-      host.press(':');
-      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
-      const escape = host.press('Escape');
-      expect(escape.preventDefault).toHaveBeenCalledOnce();
-      expect(clear).not.toHaveBeenCalled();
-      expect(host.drawer()).toBeUndefined();
+      host.controller.openSettings(host.window);
       const outside = host.window.document.createElementNS(
         'http://www.w3.org/1999/xhtml',
         'button',
       );
       host.window.document.body?.append(outside);
-      expect(host.controller.openSettings(host.window)).toBe(true);
       outside.focus();
-      host.press(':');
-      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(true);
+      const blocked = host.press('v', outside);
+      host.press('j', outside);
+      host.press(':', outside);
+      expect(blocked.preventDefault).toHaveBeenCalledOnce();
+      expect(enter).not.toHaveBeenCalled();
+      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
+      const inside = host.drawer()?.children[0]?.children[1] as HTMLElement;
+      const tab = host.press('Tab', inside);
+      expect(tab.preventDefault).not.toHaveBeenCalled();
+      const escape = host.press('Escape', outside);
+      expect(escape.preventDefault).toHaveBeenCalledOnce();
+      expect(clear).not.toHaveBeenCalled();
+      expect(host.drawer()).toBeUndefined();
     } finally {
       host.controller.shutdown();
       clear.mockRestore();
+      enter.mockRestore();
       itemsFocused.mockRestore();
       notEmpty.mockRestore();
     }
   });
 
-  it('preserves Appearance editor DOM during draft changes and cancels it on navigation and close', () => {
+  it('retains persisted custom editor and Dark tab across navigation and close', () => {
     const host = settingsMainHost();
     const all = (node: HTMLElement): HTMLElement[] => [
       node,
@@ -1045,30 +1051,36 @@ describe('Main Settings Center shell', () => {
       button.emit('click');
     };
     try {
-      expect(host.controller.openSettings(host.window)).toBe(true);
-      click('+ New theme');
-      const editor = host.drawer()!.children[2]!.children[0];
-      const field = all(host.drawer()!).filter(
-        (node) => node.localName === 'input' && (node as HTMLInputElement).type === 'text',
-      )[1] as HTMLInputElement & { emit(type: string): void };
+      host.controller.openSettings(host.window);
+      click('+ Custom');
+      expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
+      click('Dark');
+      const field = all(host.drawer()!).find(
+        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
+      ) as HTMLInputElement & { emit(type: string): void };
       field.focus();
       field.value = '#123456';
       field.emit('input');
-      expect(host.drawer()!.children[2]!.children[0]).toBe(editor);
+      expect(all(host.drawer()!)).toContain(field);
       expect(host.window.document.activeElement).toBe(field);
-      const reader = host.drawer()!.children[1]!.children[2] as HTMLElement & {
-        emit(type: string): void;
-      };
-      reader.emit('click');
-      expect(host.drawer()!.children[2]!.textContent).toContain('not migrated yet');
-      const appearance = host.drawer()!.children[1]!.children[0] as HTMLElement & {
-        emit(type: string): void;
-      };
-      appearance.emit('click');
-      expect(host.drawer()!.children[2]!.children[0]).not.toBe(editor);
-      click('+ New theme');
+      (host.drawer()?.children[1]?.children[2] as HTMLElement & { emit(type: string): void }).emit(
+        'click',
+      );
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+      (host.drawer()?.children[1]?.children[0] as HTMLElement & { emit(type: string): void }).emit(
+        'click',
+      );
+      const restored = all(host.drawer()!).find(
+        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
+      ) as HTMLInputElement;
+      expect(restored.value).toBe('#123456');
       click('Close');
-      expect(host.drawer()).toBeUndefined();
+      expect(host.backdrop()).toBeUndefined();
+      host.controller.openSettings(host.window);
+      const reopened = all(host.drawer()!).find(
+        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
+      ) as HTMLInputElement;
+      expect(reopened.value).toBe('#123456');
     } finally {
       host.controller.shutdown();
     }

@@ -2,19 +2,20 @@ import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
-import { SettingsAppearance } from './settings-appearance';
+import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 
 const H = 'http://www.w3.org/1999/xhtml';
 const SECTIONS = ['Appearance', 'Interaction', 'Reader', 'Keybindings', 'Advanced'] as const;
 type SettingsSection = (typeof SECTIONS)[number];
 
-/** One Main-window-owned, modeless shell; only Appearance has content in this slice. */
+/** One Main-window-owned, centered Settings workspace. */
 export class SettingsCenter {
   readonly #window: MainWindow;
   readonly #theme: ThemeManager;
   readonly #appearance: InteractionAppearanceManager;
   readonly #preferences: PreferenceStore;
-  #drawer: HTMLElement | null = null;
+  #panel: HTMLElement | null = null;
+  #backdrop: HTMLElement | null = null;
   #heading: HTMLElement | null = null;
   #content: HTMLElement | null = null;
   #navigation: HTMLElement | null = null;
@@ -23,6 +24,11 @@ export class SettingsCenter {
   #appearanceChild: SettingsAppearance | null = null;
   #listeners: Array<() => void> = [];
   #section: SettingsSection = 'Appearance';
+  readonly #appearanceState: SettingsAppearanceState = {
+    view: 'library',
+    editingThemeId: null,
+    paletteMode: 'light',
+  };
 
   constructor(
     window: MainWindow,
@@ -37,7 +43,7 @@ export class SettingsCenter {
   }
 
   get open(): boolean {
-    return this.#drawer !== null;
+    return this.#panel !== null;
   }
 
   get section(): SettingsSection {
@@ -45,28 +51,36 @@ export class SettingsCenter {
   }
 
   contains(target: EventTarget | null): boolean {
-    return !!target && !!this.#drawer?.contains(target as Node);
+    return !!target && !!this.#panel?.contains(target as Node);
   }
 
-  openDrawer(): void {
-    if (this.#drawer) {
+  openWorkspace(): void {
+    if (this.#panel) {
       this.#heading?.focus();
       return;
     }
     const doc = this.#window.document;
     const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
-    const drawer = create('aside');
-    drawer.id = 'zotero-neo-settings-center';
-    drawer.setAttribute('role', 'complementary');
-    drawer.setAttribute('aria-label', 'Zotero Neo Settings');
-    drawer.style.cssText = `position:fixed;top:48px;right:12px;bottom:48px;width:min(500px,50vw,calc(100vw - 24px));box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:13px/1.5 sans-serif`;
-
+    const backdrop = create('div');
+    backdrop.id = 'zotero-neo-settings-backdrop';
+    backdrop.style.cssText = `position:fixed;inset:0;z-index:99996;background:${THEME_VARS.backdrop}`;
+    const onBackdrop = (event: MouseEvent): void => {
+      if (event.target === backdrop) this.close();
+    };
+    backdrop.addEventListener('click', onBackdrop);
+    this.#listeners.push(() => backdrop.removeEventListener('click', onBackdrop));
+    const panel = create('aside');
+    panel.id = 'zotero-neo-settings-center';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', 'Zotero Neo Settings');
+    panel.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 48px));height:min(760px,calc(100vh - 64px));box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:10px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:14px/1.5 sans-serif`;
     const header = create('header');
     header.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}`;
     const heading = create('h2');
     heading.textContent = 'Zotero Neo Settings';
     heading.tabIndex = -1;
-    heading.style.cssText = 'margin:0;font-size:15px;outline:none';
+    heading.style.cssText = 'margin:0;font-size:16px;outline:none';
     const close = create('button') as HTMLButtonElement;
     close.type = 'button';
     close.textContent = 'Close';
@@ -85,7 +99,7 @@ export class SettingsCenter {
       button.type = 'button';
       button.textContent = section;
       button.dataset.section = section;
-      button.style.cssText = `min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:5px 3px;font-size:11px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
+      button.style.cssText = `min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:8px 5px;font-size:13px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
       const onSelect = (): void => {
         this.#section = section;
         this.render();
@@ -97,29 +111,38 @@ export class SettingsCenter {
 
     const content = create('section');
     content.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:12px 14px';
-    drawer.append(header, navigation, content);
+    panel.append(header, navigation, content);
     this.#previousElement = doc.activeElement;
-    this.#drawer = drawer;
+    this.#backdrop = backdrop;
+    this.#panel = panel;
     this.#heading = heading;
     this.#navigation = navigation;
     this.#content = content;
-    (doc.body ?? doc.documentElement).append(drawer);
-    this.#themeCleanup = this.#theme.add(drawer);
+    (doc.body ?? doc.documentElement).append(backdrop, panel);
+    const removeBackdropTheme = this.#theme.add(backdrop);
+    this.#themeCleanup = removeBackdropTheme;
+    const removePanelTheme = this.#theme.add(panel);
+    this.#themeCleanup = () => {
+      removeBackdropTheme();
+      removePanelTheme();
+    };
     this.render();
     heading.focus();
   }
 
   close(): void {
-    const drawer = this.#drawer;
-    if (!drawer) return;
+    const panel = this.#panel;
+    if (!panel) return;
     const restoreFocus = this.contains(this.#window.document.activeElement);
     this.#appearanceChild?.dispose();
     this.#appearanceChild = null;
     for (const remove of this.#listeners.splice(0)) remove();
     this.#themeCleanup?.();
     this.#themeCleanup = null;
-    drawer.remove();
-    this.#drawer = null;
+    panel.remove();
+    this.#backdrop?.remove();
+    this.#backdrop = null;
+    this.#panel = null;
     this.#heading = null;
     this.#navigation = null;
     this.#content = null;
@@ -148,7 +171,13 @@ export class SettingsCenter {
       content.style.display = 'block';
       content.style.overflow = 'auto';
       content.style.padding = '12px 14px';
-      content.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
+      content.replaceChildren();
+      const title = this.#window.document.createElementNS(H, 'h2');
+      title.textContent = this.#section;
+      title.style.cssText = 'margin:0 0 12px;font-size:22px';
+      const note = this.#window.document.createElementNS(H, 'p');
+      note.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
+      content.append(title, note);
       return;
     }
     if (this.#appearanceChild) return;
@@ -159,6 +188,7 @@ export class SettingsCenter {
       content,
       this.#preferences,
       this.#appearance,
+      this.#appearanceState,
     );
   }
 }

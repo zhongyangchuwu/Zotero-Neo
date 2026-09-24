@@ -4,9 +4,8 @@ import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { encodeBindingOverrides, resolveBindings } from '../input/bindings';
 import {
   INTERACTION_COLOR_PRESET_PREFERENCE_KEY,
-  INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY,
+  INTERACTION_MARKER_WIDTH_PREFERENCE_KEY,
   INTERACTION_STATUS_STYLE_PREFERENCE_KEY,
-  interactionMarkerWeightFromPreferences,
   interactionStatusStyleFromPreferences,
 } from '../main/interaction-appearance';
 import {
@@ -19,7 +18,10 @@ import {
 } from '../ui/theme';
 import { mountBindingEditor, type MountedBindingEditor } from './binding-editor-view';
 import { bindOpenNeoSettingsButton, type NeoSettingsRuntime } from './open-settings';
-import { bindLegacyInteractionThemeSelect } from './interaction-theme';
+import {
+  bindLegacyInteractionMarkerWidthSelect,
+  bindLegacyInteractionThemeSelect,
+} from './interaction-theme';
 
 const PREFERENCE_BRANCH = `${PREFERENCE_PREFIX}.`;
 const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
@@ -54,13 +56,15 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.mainAppearance.help':
       "Cursor keeps Zotero's native selected style; tune Selection and Visual markers and status.",
     'zv.mainAppearance.colorPreset': 'Color preset',
-    'zv.mainAppearance.color.primer': 'Primer Neutral',
-    'zv.mainAppearance.color.academic': 'Soft Academic',
-    'zv.mainAppearance.color.yazi': 'Yazi-like',
-    'zv.mainAppearance.markerWeight': 'Marker weight',
-    'zv.mainAppearance.marker.compact': 'Compact',
-    'zv.mainAppearance.marker.balanced': 'Balanced',
-    'zv.mainAppearance.marker.strong': 'Strong',
+    'zv.mainAppearance.color.zotero': 'Zotero',
+    'zv.mainAppearance.color.catppuccin': 'Catppuccin',
+    'zv.mainAppearance.color.tokyo': 'Tokyo Night',
+    'zv.mainAppearance.color.gruvbox': 'Gruvbox',
+    'zv.mainAppearance.markerWidth': 'Marker width',
+    'zv.mainAppearance.marker.1': '1px',
+    'zv.mainAppearance.marker.2': '2px',
+    'zv.mainAppearance.marker.3': '3px',
+    'zv.mainAppearance.marker.4': '4px',
     'zv.mainAppearance.statusStyle': 'Status indicator',
     'zv.mainAppearance.status.neutral': 'Neutral',
     'zv.mainAppearance.status.tinted': 'Tinted',
@@ -150,13 +154,15 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.mainAppearance.help':
       'Cursor 保持 Zotero 原生选中样式；这里调整 Selection / Visual 标记和状态提示。',
     'zv.mainAppearance.colorPreset': '配色方案',
-    'zv.mainAppearance.color.primer': 'Primer 中性',
-    'zv.mainAppearance.color.academic': '柔和学术',
-    'zv.mainAppearance.color.yazi': 'Yazi 风格',
-    'zv.mainAppearance.markerWeight': '标记粗细',
-    'zv.mainAppearance.marker.compact': '紧凑',
-    'zv.mainAppearance.marker.balanced': '均衡',
-    'zv.mainAppearance.marker.strong': '醒目',
+    'zv.mainAppearance.color.zotero': 'Zotero',
+    'zv.mainAppearance.color.catppuccin': 'Catppuccin',
+    'zv.mainAppearance.color.tokyo': 'Tokyo Night',
+    'zv.mainAppearance.color.gruvbox': 'Gruvbox',
+    'zv.mainAppearance.markerWidth': '标记宽度',
+    'zv.mainAppearance.marker.1': '1 像素',
+    'zv.mainAppearance.marker.2': '2 像素',
+    'zv.mainAppearance.marker.3': '3 像素',
+    'zv.mainAppearance.marker.4': '4 像素',
     'zv.mainAppearance.statusStyle': '状态提示',
     'zv.mainAppearance.status.neutral': '中性',
     'zv.mainAppearance.status.tinted': '着色',
@@ -462,17 +468,17 @@ function initializePane(doc: Document): void {
     view?.addEventListener('unload', unbind, { once: true });
   }
 
-  const markerWeightSelect = byId<XulMenuList>(doc, 'zv-interaction-marker-weight');
-  if (markerWeightSelect) {
-    markerWeightSelect.value = interactionMarkerWeightFromPreferences(preferenceStore);
-    markerWeightSelect.addEventListener('command', () => {
-      const next =
-        markerWeightSelect.value === 'compact' || markerWeightSelect.value === 'strong'
-          ? markerWeightSelect.value
-          : 'balanced';
-      setPreference(INTERACTION_MARKER_WEIGHT_PREFERENCE_KEY, next);
-      flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
-    });
+  const markerWidthSelect = byId<XulMenuList>(doc, 'zv-interaction-marker-width');
+  if (markerWidthSelect) {
+    const unbind = bindLegacyInteractionMarkerWidthSelect(
+      markerWidthSelect,
+      preferenceStore,
+      (width) => {
+        if (setPreference(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, width))
+          flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
+      },
+    );
+    view?.addEventListener('unload', unbind, { once: true });
   }
 
   const statusStyleSelect = byId<XulMenuList>(doc, 'zv-interaction-status-style');
