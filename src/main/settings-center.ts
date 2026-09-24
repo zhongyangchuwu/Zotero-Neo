@@ -3,6 +3,7 @@ import type { PreferenceStore } from '../core/preference-store';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
+import { settingsButton, setSettingsPressed } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
 const SECTIONS = ['Appearance', 'Interaction', 'Reader', 'Keybindings', 'Advanced'] as const;
@@ -81,33 +82,26 @@ export class SettingsCenter {
     heading.textContent = 'Zotero Neo Settings';
     heading.tabIndex = -1;
     heading.style.cssText = 'margin:0;font-size:1.15em;outline:none';
-    const close = create('button') as HTMLButtonElement;
-    close.type = 'button';
-    close.tabIndex = -1;
-    close.textContent = 'Close';
+    const close = settingsButton(doc, 'Close', () => this.close(), this.#listeners);
     close.setAttribute('aria-label', 'Close Neo Settings');
-    close.style.cssText = `padding:0.35em 0.65em;font:inherit;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
-    const onClose = (): void => this.close();
-    close.addEventListener('click', onClose);
-    this.#listeners.push(() => close.removeEventListener('click', onClose));
     header.append(heading, close);
 
     const navigation = create('nav');
     navigation.setAttribute('aria-label', 'Settings sections');
     navigation.style.cssText = `display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid ${THEME_VARS.border}`;
     for (const section of SECTIONS) {
-      const button = create('button') as HTMLButtonElement;
-      button.type = 'button';
-      button.tabIndex = -1;
-      button.textContent = section;
+      const button = settingsButton(
+        doc,
+        section,
+        () => {
+          this.#section = section;
+          this.render();
+        },
+        this.#listeners,
+      );
       button.dataset.section = section;
-      button.style.cssText = `display:flex;align-items:center;justify-content:center;min-width:0;min-height:2.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0.35em;font:inherit;font-size:0.95em;line-height:1.2;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
-      const onSelect = (): void => {
-        this.#section = section;
-        this.render();
-      };
-      button.addEventListener('click', onSelect);
-      this.#listeners.push(() => button.removeEventListener('click', onSelect));
+      button.style.cssText +=
+        ';width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;padding:0.35em';
       navigation.append(button);
     }
 
@@ -162,10 +156,7 @@ export class SettingsCenter {
     for (const button of Array.from(this.#navigation?.children ?? [])) {
       const selected = (button as HTMLElement).dataset.section === this.#section;
       button.setAttribute('aria-current', selected ? 'page' : 'false');
-      const control = button as HTMLElement;
-      control.style.background = selected ? THEME_VARS.selected : THEME_VARS.input;
-      control.style.color = selected ? THEME_VARS.selectedText : THEME_VARS.text;
-      control.style.borderColor = selected ? THEME_VARS.accent : THEME_VARS.border;
+      setSettingsPressed(button as HTMLButtonElement, selected);
     }
     if (this.#section !== 'Appearance') {
       this.#appearanceChild?.dispose();

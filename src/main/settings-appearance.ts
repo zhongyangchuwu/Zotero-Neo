@@ -23,6 +23,7 @@ import {
   type InteractionPalette8,
   type InteractionStatusStyle,
 } from './interaction-appearance';
+import { settingsButton, settingsChoices } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
 const COLORS = [
@@ -118,23 +119,6 @@ export class SettingsAppearance {
     return node;
   }
 
-  #button(text: string, action: () => void): HTMLButtonElement {
-    const button = this.#create('button', text) as HTMLButtonElement;
-    button.tabIndex = -1;
-    button.type = 'button';
-    button.style.cssText = `padding:0.5em 0.8em;font:inherit;font-size:0.95em;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:5px;cursor:pointer`;
-    button.addEventListener('click', action);
-    this.#domCleanups.push(() => button.removeEventListener('click', action));
-    return button;
-  }
-
-  #setPressed(button: HTMLButtonElement, pressed: boolean): void {
-    button.setAttribute('aria-pressed', String(pressed));
-    button.style.background = pressed ? THEME_VARS.selected : THEME_VARS.input;
-    button.style.color = pressed ? THEME_VARS.selectedText : THEME_VARS.text;
-    button.style.borderColor = pressed ? THEME_VARS.accent : THEME_VARS.border;
-  }
-
   #clearDom(): void {
     for (const cleanup of this.#domCleanups.splice(0)) cleanup();
     this.#root.replaceChildren();
@@ -196,23 +180,27 @@ export class SettingsAppearance {
       'display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin:0 0 18px';
     const marker = this.#create('div');
     marker.append(this.#create('span', 'Marker width (px) '));
-    const width = this.#appearance.appearance.marker.width;
-    for (const value of [1, 2, 3, 4]) {
-      const button = this.#button(`${value}px`, () =>
-        this.#setAppearance(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, value),
-      );
-      this.#setPressed(button, width === value);
-      marker.append(button);
-    }
+    const widths = settingsChoices(
+      this.#document,
+      [1, 2, 3, 4].map((value) => ({ value, label: `${value}px` })),
+      this.#appearance.appearance.marker.width,
+      (value) => this.#setAppearance(INTERACTION_MARKER_WIDTH_PREFERENCE_KEY, value),
+      this.#domCleanups,
+    );
+    marker.append(widths.element);
     const styles = this.#create('div');
     styles.append(this.#create('span', 'Status style '));
-    for (const style of ['neutral', 'tinted'] as const) {
-      const button = this.#button(style === 'neutral' ? 'Neutral' : 'Tinted', () =>
-        this.#setAppearance(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, style),
-      );
-      this.#setPressed(button, this.#appearance.appearance.statusStyle === style);
-      styles.append(button);
-    }
+    const statusStyles = settingsChoices(
+      this.#document,
+      [
+        { value: 'neutral', label: 'Neutral' },
+        { value: 'tinted', label: 'Tinted' },
+      ] as const,
+      this.#appearance.appearance.statusStyle,
+      (value) => this.#setAppearance(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, value),
+      this.#domCleanups,
+    );
+    styles.append(statusStyles.element);
     controls.append(marker, styles);
     const themesHeading = this.#create('h3', 'Themes');
     themesHeading.style.cssText = 'margin:0 0 0.6em;font-size:1.2em';
@@ -232,9 +220,14 @@ export class SettingsAppearance {
       };
       card.addEventListener('click', onCardClick);
       this.#domCleanups.push(() => card.removeEventListener('click', onCardClick));
-      const choice = this.#button(theme.name, () => this.#select(theme.id));
+      const choice = settingsButton(
+        this.#document,
+        theme.name,
+        () => this.#select(theme.id),
+        this.#domCleanups,
+      );
       choice.setAttribute('aria-label', `Select ${theme.name}`);
-      choice.style.cssText = `display:block;width:100%;text-align:left;font:inherit;font-weight:600;font-size:1.15em;border:0;background:transparent;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};cursor:pointer`;
+      choice.style.cssText += `;width:100%;justify-content:flex-start;text-align:left;font-weight:600;font-size:1.15em;border:0;background:transparent;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text}`;
       const note = this.#create(
         'div',
         `${FLAVORS[theme.id] ?? 'Custom'}${selected ? ' · Active' : ''}`,
@@ -254,17 +247,31 @@ export class SettingsAppearance {
         const actions = this.#create('div');
         actions.style.cssText = 'display:flex;gap:6px';
         actions.append(
-          this.#button('Edit', () => this.#openEditor(theme.id)),
-          this.#button(this.#confirmedDelete === theme.id ? 'Confirm delete' : 'Delete', () =>
-            this.#deleteTheme(theme.id),
+          settingsButton(
+            this.#document,
+            'Edit',
+            () => this.#openEditor(theme.id),
+            this.#domCleanups,
+          ),
+          settingsButton(
+            this.#document,
+            this.#confirmedDelete === theme.id ? 'Confirm delete' : 'Delete',
+            () => this.#deleteTheme(theme.id),
+            this.#domCleanups,
           ),
         );
         card.append(actions);
       }
       grid.append(card);
     }
-    const add = this.#button('+ Custom', () => this.#createTheme());
-    add.style.cssText += ';min-height:5.5em;font-size:1.15em;text-align:left';
+    const add = settingsButton(
+      this.#document,
+      '+ Custom',
+      () => this.#createTheme(),
+      this.#domCleanups,
+    );
+    add.style.cssText +=
+      ';min-height:5.5em;font-size:1.15em;text-align:left;justify-content:flex-start';
     grid.append(add);
     const status = this.#create('p');
     status.setAttribute('role', 'status');
@@ -272,13 +279,15 @@ export class SettingsAppearance {
     this.#root.append(title, controls, themesHeading, grid, status);
   }
 
-  #setAppearance(key: string, value: number | InteractionStatusStyle): void {
+  #setAppearance(key: string, value: number | InteractionStatusStyle): boolean {
     try {
       this.#preferences.set(key, value);
       this.#appearance.refresh();
       this.#renderLibrary();
+      return true;
     } catch {
       this.#message('Could not update appearance.');
+      return false;
     }
   }
 
@@ -445,9 +454,21 @@ export class SettingsAppearance {
     this.#root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
     const toolbar = this.#create('div');
     toolbar.style.cssText = 'display:flex;gap:0.5em;align-items:center';
-    toolbar.append(this.#button('Back to themes', () => this.#renderLibrary()));
+    toolbar.append(
+      settingsButton(
+        this.#document,
+        'Back to themes',
+        () => this.#renderLibrary(),
+        this.#domCleanups,
+      ),
+    );
     if (this.#isNew) {
-      this.#addButton = this.#button('Add', () => this.#addTheme());
+      this.#addButton = settingsButton(
+        this.#document,
+        'Add',
+        () => this.#addTheme(),
+        this.#domCleanups,
+      );
       toolbar.append(this.#addButton);
     }
     const title = this.#create('h2', 'Appearance');
@@ -480,15 +501,20 @@ export class SettingsAppearance {
     const nameLabel = this.#create('label', 'Theme name');
     nameLabel.style.cssText = 'display:grid;gap:4px;margin-bottom:14px';
     nameLabel.append(name);
-    const modes = this.#create('div');
-    modes.style.cssText = 'display:flex;gap:6px;margin-bottom:14px';
-    const modeButtons = (['light', 'dark'] as const).map((mode) =>
-      this.#button(mode === 'light' ? 'Light' : 'Dark', () => {
+    const modes = settingsChoices(
+      this.#document,
+      [
+        { value: 'light', label: 'Light' },
+        { value: 'dark', label: 'Dark' },
+      ] as const,
+      this.#state.paletteMode,
+      (mode) => {
         this.#state.paletteMode = mode;
         syncMode();
-      }),
+      },
+      this.#domCleanups,
     );
-    modes.append(...modeButtons);
+    modes.element.style.cssText += ';margin-bottom:14px';
     const fields = this.#create('div');
     fields.style.cssText = 'display:grid;gap:5px;max-width:560px';
     const inputs = new Map<
@@ -551,11 +577,8 @@ export class SettingsAppearance {
     const status = this.#create('p');
     status.setAttribute('role', 'status');
     this.#status = status;
-    this.#root.append(toolbar, title, heading, nameLabel, modes, fields, preview, status);
+    this.#root.append(toolbar, title, heading, nameLabel, modes.element, fields, preview, status);
     const syncMode = (): void => {
-      modeButtons.forEach((button, index) =>
-        this.#setPressed(button, this.#state.paletteMode === (index ? 'dark' : 'light')),
-      );
       for (const [key, controls] of inputs) {
         controls.hex.value = this.#hexText![this.#state.paletteMode][key];
         controls.picker.value = this.#theme![this.#state.paletteMode][key];

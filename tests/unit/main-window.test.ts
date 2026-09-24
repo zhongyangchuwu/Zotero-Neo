@@ -961,12 +961,17 @@ describe('Main Settings Center shell', () => {
     expect(navigation.children).toHaveLength(5);
     for (const button of Array.from(navigation.children) as HTMLElement[]) {
       expect(button.style.cssText).toContain(
-        'display:flex;align-items:center;justify-content:center',
+        'display:inline-flex;align-items:center;justify-content:center',
       );
+      expect(button.style.cssText).toContain('appearance:none');
+      expect(button.style.cssText).toContain('box-sizing:border-box');
       expect(button.style.cssText).toContain('font:inherit');
       expect(button.tabIndex).toBe(-1);
     }
     expect((panel?.children[0]?.children[1] as HTMLElement).tabIndex).toBe(-1);
+    expect((panel?.children[0]?.children[1] as HTMLElement).style.cssText).toContain(
+      'display:inline-flex',
+    );
     expect((navigation.children[0] as HTMLElement).style.background).toBe(
       'var(--zotero-neo-selected)',
     );
