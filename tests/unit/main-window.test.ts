@@ -165,7 +165,7 @@ function pickerMainWindow(): {
         return true;
       },
       closest: (selector: string) => {
-        let current: (typeof element) | null = element;
+        let current: typeof element | null = element;
         while (current) {
           if (current.matches(selector)) return current as unknown as HTMLElement;
           current = current.parentElement as unknown as typeof element | null;
@@ -184,8 +184,7 @@ function pickerMainWindow(): {
         visit(element as unknown as HTMLElement);
         return matches;
       },
-      querySelector: (selector: string) =>
-        element.querySelectorAll(selector)[0] ?? null,
+      querySelector: (selector: string) => element.querySelectorAll(selector)[0] ?? null,
       contains: (node: Node) => {
         let current = node as (Node & { parentElement?: HTMLElement | null }) | null;
         while (current) {
