@@ -73,10 +73,7 @@ describe('0.1.0 default keymap freeze', () => {
         { mode, keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
         ' ',
       );
-      const prefix = advanceInput(
-        { ...start.state, mode, bindings, allowCountPrefix: true },
-        'p',
-      );
+      const prefix = advanceInput({ ...start.state, mode, bindings, allowCountPrefix: true }, 'p');
       expect(prefix.kind).toBe('pending');
       expect(
         advanceInput({ ...prefix.state, mode, bindings, allowCountPrefix: true }, 's'),
