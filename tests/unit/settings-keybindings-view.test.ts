@@ -79,7 +79,9 @@ class FakeElement {
     return [...this.classes].join(' ');
   }
   get selectedOptions(): FakeElement[] {
-    return this.children.filter((child) => child.localName === 'option' && child.value === this.value);
+    return this.children.filter(
+      (child) => child.localName === 'option' && child.value === this.value,
+    );
   }
   set className(value: string) {
     this.classes = new Set(value.split(/\s+/).filter(Boolean));

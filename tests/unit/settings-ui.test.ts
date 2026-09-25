@@ -220,10 +220,7 @@ describe('shared Neo Settings controls', () => {
     ) as unknown as FakeElement;
     expect(select.getAttribute('aria-label')).toBe('Mode');
     expect(select.style.cssText).toContain('font:inherit');
-    expect(select.children.map((option) => option.value)).toEqual([
-      'reader-normal',
-      'main-normal',
-    ]);
+    expect(select.children.map((option) => option.value)).toEqual(['reader-normal', 'main-normal']);
     expect(select.value).toBe('reader-normal');
 
     setSettingsSelectOptions(
