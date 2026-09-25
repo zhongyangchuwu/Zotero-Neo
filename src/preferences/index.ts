@@ -588,10 +588,7 @@ function initializePane(doc: Document): void {
     const scrollStep = scrollNumber('scrollStep', scrollInput.value);
     const followSpeed = scrollNumber('followSpeed', followSpeedInput?.value);
     const initialSpeed = scrollNumber('initialSpeed', initialSpeedInput?.value);
-    const maximumSpeed = Math.max(
-      scrollNumber('maxSpeed', maxSpeedInput?.value),
-      initialSpeed,
-    );
+    const maximumSpeed = Math.max(scrollNumber('maxSpeed', maxSpeedInput?.value), initialSpeed);
     const acceleration = scrollNumber('acceleration', accelerationInput?.value);
     const deceleration = scrollNumber('deceleration', decelerationInput?.value);
     scrollInput.value = String(scrollStep);
@@ -634,11 +631,7 @@ function initializePane(doc: Document): void {
   accelerationInput?.addEventListener('change', saveScrollConfiguration);
   decelerationInput?.addEventListener('change', saveScrollConfiguration);
   if (stopOnReleaseCheckbox)
-    saveCheckbox(
-      stopOnReleaseCheckbox,
-      READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
-      scrollStatus,
-    );
+    saveCheckbox(stopOnReleaseCheckbox, READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY, scrollStatus);
 
   const colorSelect = byId<XulMenuList>(doc, 'zv-default-color');
   if (colorSelect) {

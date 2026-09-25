@@ -39,8 +39,7 @@ export const READER_INSERT_MODE_ENABLED_PREFERENCE_KEY = 'mode.insert.enabled' a
 export const READER_MARKS_PERSIST_PREFERENCE_KEY = 'marks.persist' as const;
 export const READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY = 'defaultHighlightColor' as const;
 export const READER_SCROLL_MODE_PREFERENCE_KEY = 'scroll.mode' as const;
-export const READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY =
-  'smoothScroll.stopOnRelease' as const;
+export const READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY = 'smoothScroll.stopOnRelease' as const;
 
 const LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY = 'smoothScroll' as const;
 

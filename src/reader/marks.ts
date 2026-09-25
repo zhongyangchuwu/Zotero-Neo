@@ -119,8 +119,7 @@ export class ReaderMarks {
     const position = this.position(pdfWindow);
     marks[char] = { ...position, key: annotationKey, ts: Date.now() };
     let persisted = '';
-    if (readerMarksPersist(this.#host.preferences))
-      persisted = await this.save(marks, reader);
+    if (readerMarksPersist(this.#host.preferences)) persisted = await this.save(marks, reader);
     const page = position.pageIndex === null ? '' : `  p.${position.pageIndex + 1}`;
     this.#host.showStatus(
       `✓ mark ${char} set${page}${persisted ? ` · saved (${persisted})` : ''}`,

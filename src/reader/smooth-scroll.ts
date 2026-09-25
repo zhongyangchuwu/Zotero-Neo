@@ -28,7 +28,6 @@ export function smoothScrollSpec(action: ActionId): SmoothScrollSpec | null {
   return action in SMOOTH_SCROLL_SPECS ? SMOOTH_SCROLL_SPECS[action as SmoothScrollAction] : null;
 }
 
-
 interface HoldState {
   active: boolean;
   releasing: boolean;
