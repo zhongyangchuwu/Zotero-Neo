@@ -166,10 +166,7 @@ export interface KeyGuideConfig {
   readonly fontSizePx: number;
 }
 
-export function normalizeKeyGuideNumber(
-  setting: KeyGuideNumberSetting,
-  value: number,
-): number {
+export function normalizeKeyGuideNumber(setting: KeyGuideNumberSetting, value: number): number {
   const spec = KEY_GUIDE_NUMBER_SPECS[setting];
   const finite = Number.isFinite(value) ? Math.trunc(value) : spec.defaultValue;
   return Math.max(spec.minimum, Math.min(spec.maximum, finite));

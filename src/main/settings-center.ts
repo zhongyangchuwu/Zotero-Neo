@@ -4,10 +4,7 @@ import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
-import {
-  SettingsKeybindings,
-  type SettingsKeybindingsState,
-} from './settings-keybindings';
+import { SettingsKeybindings, type SettingsKeybindingsState } from './settings-keybindings';
 import { SettingsReader } from './settings-reader';
 import { settingsButton, setSettingsPressed } from './settings-ui';
 

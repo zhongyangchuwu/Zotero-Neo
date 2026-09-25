@@ -427,9 +427,7 @@ describe('mounted binding editor view', () => {
       root: root as unknown as Element,
       state: staged,
     });
-    expect(mounted.getState().rows.map((row) => row.id)).toEqual(
-      staged.rows.map((row) => row.id),
-    );
+    expect(mounted.getState().rows.map((row) => row.id)).toEqual(staged.rows.map((row) => row.id));
     expect(mounted.getDerived().dirty).toBe(true);
     mounted.dispose();
   });

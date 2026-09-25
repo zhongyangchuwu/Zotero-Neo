@@ -291,7 +291,6 @@ function initializePane(doc: Document): void {
       flashStatus(interactionAppearanceStatus, translate('zv.status.saved', currentLanguage()));
     });
   }
-
 }
 
 export function initializePreferencesPane(doc: Document = document): void {

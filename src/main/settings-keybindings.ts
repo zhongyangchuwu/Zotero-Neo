@@ -219,7 +219,10 @@ export class SettingsKeybindings {
     const bindingsCleanup = preferences.observe?.(BINDINGS_PREFERENCE_KEY, () => {
       const draft = this.#state.editor;
       if (draft && deriveBindingEditor(draft).dirty) return;
-      this.#state.editor = createBindingEditor(bindingsFromPreferences(preferences), EDITOR_LANGUAGE);
+      this.#state.editor = createBindingEditor(
+        bindingsFromPreferences(preferences),
+        EDITOR_LANGUAGE,
+      );
       this.#mountEditor();
     });
     if (bindingsCleanup) this.#cleanups.push(bindingsCleanup);

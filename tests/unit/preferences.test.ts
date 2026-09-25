@@ -657,9 +657,7 @@ describe('key guide preferences', () => {
       delayMs: 0,
       fontSizePx: KEY_GUIDE_CONFIG.minFontSizePx,
     });
-    expect(normalizeKeyGuideNumber('delayMs', Number.NaN)).toBe(
-      KEY_GUIDE_CONFIG.defaultDelayMs,
-    );
+    expect(normalizeKeyGuideNumber('delayMs', Number.NaN)).toBe(KEY_GUIDE_CONFIG.defaultDelayMs);
     expect(normalizeKeyGuideNumber('fontSizePx', 18.9)).toBe(18);
   });
 });
