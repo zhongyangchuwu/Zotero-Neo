@@ -78,6 +78,9 @@ class FakeElement {
   get className(): string {
     return [...this.classes].join(' ');
   }
+  get selectedOptions(): FakeElement[] {
+    return this.children.filter((child) => child.localName === 'option' && child.value === this.value);
+  }
   set className(value: string) {
     this.classes = new Set(value.split(/\s+/).filter(Boolean));
   }
@@ -257,11 +260,9 @@ function createViewHarness(
     element.focus();
     element.select();
   });
-  const scrollIntoView = vi.fn();
   const geometry = {
     setScrollTop,
     focusAndSelect,
-    scrollIntoView,
   } satisfies BindingEditorGeometryAdapter;
   const mounted = mountBindingEditor({
     document: document as unknown as Document,
@@ -295,7 +296,8 @@ function expectExactlyOneSelectedAction(row: FakeElement): void {
   const input = actionInput(row);
   const results = actionResults(row);
   expect(input.getAttribute('role')).toBe('combobox');
-  const selected = results.querySelectorAll('[aria-selected="true"]');
+  expect(results.localName).toBe('select');
+  const selected = results.selectedOptions;
   expect(selected).toHaveLength(1);
   expect(input.getAttribute('aria-activedescendant')).toBe(selected[0].id);
   expect(input.getAttribute('aria-controls')).toBe(results.id);
@@ -327,7 +329,7 @@ describe('mounted binding editor view', () => {
     expect(harness.mounted.getState().rows[0]?.key).toBe('z');
   });
 
-  it('creates host-font HTML Mode selects and routes every change to the model', () => {
+  it('uses the shared native select path for Mode and Action choices', () => {
     const harness = createViewHarness();
     const rowId = harness.mounted.getState().rows[0].id;
     const initial = firstRow(harness).querySelector('.zv-binding-mode');
@@ -335,6 +337,11 @@ describe('mounted binding editor view', () => {
     expect(initial?.namespaceURI).toBe('http://www.w3.org/1999/xhtml');
     expect(initial?.style.cssText).toContain('font:inherit');
     expect(initial?.value).toBe('reader-normal');
+
+    const action = actionResults(firstRow(harness));
+    expect(action.localName).toBe('select');
+    expect(action.namespaceURI).toBe('http://www.w3.org/1999/xhtml');
+    expect(action.style.cssText).toContain('font:inherit');
 
     for (const mode of [
       'reader-normal',
@@ -374,10 +381,12 @@ describe('mounted binding editor view', () => {
     const initialRow = firstRow(harness);
 
     actionInput(initialRow).emit('focusin');
-    const pointerRow = actionResults(firstRow(harness)).children[1];
-    if (!pointerRow) throw new Error('Expected a second Action option');
-    const pointerAction = pointerRow.value;
-    pointerRow.emit('click');
+    const pointerResults = actionResults(firstRow(harness));
+    const pointerOption = pointerResults.children[1];
+    if (!pointerOption) throw new Error('Expected a second Action option');
+    const pointerAction = pointerOption.value;
+    pointerResults.value = pointerAction;
+    pointerResults.emit('change');
     expect(harness.mounted.getState().actionEditor).toBeNull();
     expect(harness.mounted.getState().rows[0]?.action).toBe(pointerAction);
 

@@ -21,6 +21,45 @@ export function styleSettingsField(element: HTMLElement, width?: string): void {
   element.style.cssText = `${FIELD_STYLE}${width ? `;width:${width}` : ''}`;
 }
 
+export interface SettingsSelectOption<T extends string> {
+  readonly value: T;
+  readonly label: string;
+}
+
+/** Replaces one Settings select's options while keeping selection projection in one shared path. */
+export function setSettingsSelectOptions<T extends string>(
+  doc: Document,
+  select: HTMLSelectElement,
+  options: readonly SettingsSelectOption<T>[],
+  value: T | '',
+  idPrefix?: string,
+): void {
+  const elements = options.map((option, index) => {
+    const element = doc.createElementNS(H, 'option') as HTMLOptionElement;
+    element.value = option.value;
+    element.textContent = option.label;
+    if (idPrefix) element.id = `${idPrefix}-${index}`;
+    return element;
+  });
+  select.replaceChildren(...elements);
+  select.value = value;
+}
+
+/** Creates the common native choice control used by Settings finite selections. */
+export function settingsSelectElement<T extends string>(
+  doc: Document,
+  label: string,
+  options: readonly SettingsSelectOption<T>[],
+  value: T | '',
+  width = '10.5em',
+): HTMLSelectElement {
+  const select = doc.createElementNS(H, 'select') as HTMLSelectElement;
+  select.setAttribute('aria-label', label);
+  styleSettingsField(select, width);
+  setSettingsSelectOptions(doc, select, options, value);
+  return select;
+}
+
 /** Creates one mouse-first button and registers its listener with the owning Settings view. */
 export function settingsButton(
   doc: Document,

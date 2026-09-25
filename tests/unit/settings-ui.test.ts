@@ -5,10 +5,12 @@ import {
   settingsControlRow,
   settingsGroup,
   settingsNumberRow,
+  settingsSelectElement,
   settingsStatus,
   settingsTextRow,
   settingsToggleRow,
   setSettingsPressed,
+  setSettingsSelectOptions,
   type SettingsToggle,
 } from '../../src/main/settings-ui';
 
@@ -25,6 +27,7 @@ interface FakeElement {
   max: string;
   step: string;
   append(...children: FakeElement[]): void;
+  replaceChildren(...children: FakeElement[]): void;
   setAttribute(key: string, value: string): void;
   getAttribute(key: string): string | null;
   addEventListener(type: string, listener: () => void): void;
@@ -52,6 +55,9 @@ function fakeDocument(): Document {
         step: '',
         append(...children: FakeElement[]) {
           this.children.push(...children);
+        },
+        replaceChildren(...children: FakeElement[]) {
+          this.children.splice(0, this.children.length, ...children);
         },
         setAttribute(key: string, value: string) {
           attributes.set(key, value);
@@ -199,6 +205,43 @@ describe('shared Neo Settings controls', () => {
     expect(row.children[0]?.children[0]?.textContent).toBe('Mode');
     expect(row.children[0]?.children[1]?.textContent).toBe('Shared description');
     expect(row.children[1]).toBe(control as unknown as FakeElement);
+  });
+
+  it('shares native select rendering and option replacement across Settings choices', () => {
+    const doc = fakeDocument();
+    const select = settingsSelectElement(
+      doc,
+      'Mode',
+      [
+        { value: 'reader-normal', label: 'reader-normal' },
+        { value: 'main-normal', label: 'main-normal' },
+      ],
+      'reader-normal',
+    ) as unknown as FakeElement;
+    expect(select.getAttribute('aria-label')).toBe('Mode');
+    expect(select.style.cssText).toContain('font:inherit');
+    expect(select.children.map((option) => option.value)).toEqual([
+      'reader-normal',
+      'main-normal',
+    ]);
+    expect(select.value).toBe('reader-normal');
+
+    setSettingsSelectOptions(
+      doc,
+      select as unknown as HTMLSelectElement,
+      [
+        { value: 'scrollDown', label: 'Scroll down' },
+        { value: 'scrollUp', label: 'Scroll up' },
+      ],
+      'scrollUp',
+      'action-option',
+    );
+    expect(select.children.map((option) => option.value)).toEqual(['scrollDown', 'scrollUp']);
+    expect(select.children.map((option) => (option as unknown as { id?: string }).id)).toEqual([
+      'action-option-0',
+      'action-option-1',
+    ]);
+    expect(select.value).toBe('scrollUp');
   });
 
   it('keeps text fields keyboard-editable with page-owned commit and rollback', () => {

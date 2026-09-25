@@ -1,5 +1,10 @@
 import { MODES, type BindingMap, type Mode } from '../input/bindings';
-import { settingsButtonElement, styleSettingsField } from './settings-ui';
+import {
+  setSettingsSelectOptions,
+  settingsButtonElement,
+  settingsSelectElement,
+  styleSettingsField,
+} from './settings-ui';
 import {
   actionLabel,
   actionOptions,
@@ -13,7 +18,7 @@ import {
   type BindingEditorRow,
   type BindingEditorState,
 } from '../input/binding-editor';
-import { isActionId } from '../input/actions';
+import { isActionId, type ActionId } from '../input/actions';
 
 const XHTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
 const ROW_ATTRIBUTE = 'data-zv-binding-row-id';
@@ -22,7 +27,6 @@ const ACTIVE_ACTION_INPUT_CLASS = 'zv-binding-action-input';
 export interface BindingEditorGeometryAdapter {
   setScrollTop?(wrapper: HTMLElement, top: number): void;
   focusAndSelect?(input: HTMLInputElement): void;
-  scrollIntoView?(element: Element): void;
 }
 
 export interface BindingEditorViewOptions {
@@ -59,14 +63,6 @@ function defaultSetScrollTop(wrapper: HTMLElement, top: number): void {
 function defaultFocusAndSelect(input: HTMLInputElement): void {
   input.focus();
   input.select();
-}
-
-function defaultScrollIntoView(element: Element): void {
-  (
-    element as Element & { scrollIntoView?: (options?: ScrollIntoViewOptions) => void }
-  ).scrollIntoView?.({
-    block: 'nearest',
-  });
 }
 
 function elementFromTarget(target: EventTarget | null): Element | null {
@@ -125,7 +121,6 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
   const geometry: Required<BindingEditorGeometryAdapter> = {
     setScrollTop: options.geometry?.setScrollTop ?? defaultSetScrollTop,
     focusAndSelect: options.geometry?.focusAndSelect ?? defaultFocusAndSelect,
-    scrollIntoView: options.geometry?.scrollIntoView ?? defaultScrollIntoView,
   };
   const localize: (key: string, language: BindingEditorLanguage) => string =
     options.localize ?? ((key: string, _language: BindingEditorLanguage) => defaultLocalize(key));
@@ -147,54 +142,48 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
   };
 
   function renderModeControl(row: BindingEditorRow): HTMLSelectElement {
-    const select = createXhtmlElement(document, 'select');
+    const select = settingsSelectElement(
+      document,
+      localize('zv.bindings.mode', state.language),
+      MODES.map((mode) => ({ value: mode, label: mode })),
+      row.mode,
+      '10.5em',
+    );
     select.className = 'zv-binding-mode';
-    select.setAttribute('aria-label', localize('zv.bindings.mode', state.language));
     select.setAttribute(ROW_ATTRIBUTE, String(row.id));
-    styleSettingsField(select, '10.5em');
-    for (const mode of MODES) {
-      const option = createXhtmlElement(document, 'option');
-      option.className = 'zv-binding-mode-option';
-      option.value = mode;
-      option.textContent = mode;
-      select.append(option);
-    }
-    select.value = row.mode;
     return select;
   }
 
   function renderActionResults(
     row: BindingEditorRow,
     actionInput: HTMLInputElement,
-    actionResults: HTMLElement,
+    actionResults: HTMLSelectElement,
   ): void {
     const editor = state.actionEditor;
     const active = editor?.rowId === row.id && editor.open;
-    actionResults.replaceChildren();
     actionResults.hidden = !active;
     actionInput.setAttribute('aria-expanded', active ? 'true' : 'false');
     actionInput.removeAttribute('aria-activedescendant');
-    if (!active || !editor) return;
+    if (!active || !editor) {
+      setSettingsSelectOptions<ActionId>(document, actionResults, [], '');
+      return;
+    }
 
     const options = actionOptions(row.mode, editor.query, state.language);
-    for (const [index, action] of options.entries()) {
-      const result = createXhtmlElement(document, 'button');
-      result.className = 'zv-binding-action-result';
-      result.type = 'button';
-      result.tabIndex = -1;
-      result.setAttribute('role', 'option');
-      result.id = `zv-binding-action-${row.id}-option-${index}`;
-      result.setAttribute('value', action);
-      result.value = action;
-      result.setAttribute('title', action);
-      result.setAttribute('aria-selected', index === editor.selectedIndex ? 'true' : 'false');
-      result.textContent = actionLabel(action, state.language);
-      actionResults.appendChild(result);
-      if (index === editor.selectedIndex) {
-        actionInput.setAttribute('aria-activedescendant', result.id);
-        geometry.scrollIntoView(result);
-      }
-    }
+    const selected = options[editor.selectedIndex] ?? '';
+    setSettingsSelectOptions(
+      document,
+      actionResults,
+      options.map((action) => ({
+        value: action,
+        label: actionLabel(action, state.language),
+      })),
+      selected,
+      `zv-binding-action-${row.id}-option`,
+    );
+    actionResults.size = Math.max(1, Math.min(8, options.length));
+    const selectedOption = actionResults.selectedOptions[0];
+    if (selectedOption) actionInput.setAttribute('aria-activedescendant', selectedOption.id);
   }
 
   function renderRow(row: BindingEditorRow, derived: BindingEditorDerived): HTMLTableRowElement {
@@ -251,10 +240,16 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     styleSettingsField(actionInput, '100%');
     actionInput.id = `zv-binding-action-${row.id}`;
     actionInput.value = actionDisplayValue(row, state);
-    const actionResults = createXhtmlElement(document, 'div');
+    const actionResults = settingsSelectElement<ActionId>(
+      document,
+      localize('zv.bindings.action', state.language),
+      [],
+      '',
+      '100%',
+    );
     actionResults.className = 'zv-binding-action-results';
     actionResults.id = `${actionInput.id}-listbox`;
-    actionResults.setAttribute('role', 'listbox');
+    actionResults.tabIndex = -1;
     actionInput.setAttribute('aria-controls', actionResults.id);
     actionRoot.append(actionInput, actionResults);
     actionCell.appendChild(actionRoot);
@@ -343,7 +338,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     ) as HTMLInputElement | null;
     const results = input?.parentElement?.querySelector(
       '.zv-binding-action-results',
-    ) as HTMLElement | null;
+    ) as HTMLSelectElement | null;
     if (!row || !input || !results) {
       render();
       return;
@@ -473,16 +468,6 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
       }
       return;
     }
-    const actionResult = target.closest('.zv-binding-action-result') as HTMLButtonElement | null;
-    if (actionResult) {
-      const rowId = rowIdFromElement(actionResult);
-      const action = actionResult.value || actionResult.getAttribute('value');
-      if (rowId !== null && action && isActionId(action)) {
-        event.preventDefault();
-        dispatch({ type: 'select-action', rowId, action });
-      }
-      return;
-    }
     const actionInput = target.closest(`.${ACTIVE_ACTION_INPUT_CLASS}`) as HTMLInputElement | null;
     if (actionInput) {
       const rowId = rowIdFromElement(actionInput);
@@ -557,19 +542,28 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
   function handleFocusOut(event: FocusEvent): void {
     const target = elementFromTarget(event.target);
     if (!target || !target.classList.contains(ACTIVE_ACTION_INPUT_CLASS)) return;
+    const actionRoot = target.closest('.zv-binding-action');
+    const next = elementFromTarget(event.relatedTarget);
+    if (actionRoot && next?.closest('.zv-binding-action') === actionRoot) return;
     const rowId = rowIdFromElement(target);
     if (rowId !== null) scheduleClose(rowId);
   }
 
   function handleChange(event: Event): void {
     const target = elementFromTarget(event.target);
-    const modeSelect = target?.closest('.zv-binding-mode') as HTMLSelectElement | null;
-    if (!modeSelect) return;
-    const rowId = rowIdFromElement(modeSelect);
+    const select = target?.closest('select') as HTMLSelectElement | null;
+    if (!select) return;
+    const rowId = rowIdFromElement(select);
     if (rowId === null) return;
-    const selected = modeSelect.value;
-    if ((MODES as readonly string[]).includes(selected)) {
-      dispatch({ type: 'update-row', rowId, patch: { mode: selected as Mode } });
+    if (select.classList.contains('zv-binding-mode')) {
+      const selected = select.value;
+      if ((MODES as readonly string[]).includes(selected)) {
+        dispatch({ type: 'update-row', rowId, patch: { mode: selected as Mode } });
+      }
+      return;
+    }
+    if (select.classList.contains('zv-binding-action-results') && isActionId(select.value)) {
+      dispatch({ type: 'select-action', rowId, action: select.value });
     }
   }
 

@@ -87,10 +87,7 @@ export class SettingsKeybindings {
       #zv-settings-keybindings-table .zv-binding-delete-cell { width:3em; text-align:center; }
       #zv-settings-keybindings-table .zv-binding-action { position:relative; display:flex; min-width:0; flex-direction:column; }
       #zv-settings-keybindings-table .zv-binding-action-results[hidden] { display:none; }
-      #zv-settings-keybindings-table .zv-binding-action-results { position:relative; z-index:3; max-height:180px; overflow:auto; margin-top:2px; border:1px solid ${THEME_VARS.border}; border-radius:4px; background:${THEME_VARS.input}; box-shadow:0 6px 18px ${THEME_VARS.shadow}; }
-      #zv-settings-keybindings-table .zv-binding-action-result { display:block; width:100%; box-sizing:border-box; padding:5px 7px; color:${THEME_VARS.text}; text-align:left; background:transparent; border:0; border-top:1px solid ${THEME_VARS.border}; cursor:pointer; font:inherit; }
-      #zv-settings-keybindings-table .zv-binding-action-result:first-child { border-top:0; }
-      #zv-settings-keybindings-table .zv-binding-action-result[aria-selected="true"] { color:${THEME_VARS.selectedText}; background:${THEME_VARS.selected}; }
+      #zv-settings-keybindings-table .zv-binding-action-results { position:relative; z-index:3; width:100%; max-height:180px; margin-top:2px; box-shadow:0 6px 18px ${THEME_VARS.shadow}; }
       #zv-settings-keybindings-table tr.zv-binding-row-error { box-shadow:inset 4px 0 ${THEME_VARS.error}; }
       #zv-settings-keybindings-table tr.zv-binding-row-warning { box-shadow:inset 4px 0 ${THEME_VARS.warning}; }
       #zv-settings-keybindings-table .zv-binding-delete { min-height:2.1em; padding:0.2em 0.55em; }
