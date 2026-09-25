@@ -128,7 +128,9 @@ describe('Reader Settings', () => {
         .map((node) => node.textContent),
     ).toEqual(['Modes', 'Scrolling', 'Marks', 'Annotations']);
     expect(test.root.byAria('Text Select mode').getAttribute('aria-checked')).toBe('true');
-    expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe('true');
+    expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe(
+      'true',
+    );
     expect(test.root.byAria('Persist marks').getAttribute('aria-checked')).toBe('false');
     expect(test.root.button('Constant').getAttribute('aria-pressed')).toBe('true');
     expect(test.root.button('Yellow').getAttribute('aria-pressed')).toBe('true');
@@ -136,7 +138,10 @@ describe('Reader Settings', () => {
     expect(test.root.modeBlock('follow').style.display).toBe('block');
     expect(test.root.modeBlock('trapezoid').style.display).toBe('none');
     expect(test.root.byAria('Scroll speed (px/s)').value).toBe('2000');
-    const copy = test.root.all().map((node) => node.textContent).join(' ');
+    const copy = test.root
+      .all()
+      .map((node) => node.textContent)
+      .join(' ');
     expect(copy).not.toContain('Flash-select');
     expect(copy).not.toContain('explicit colour prefix');
     test.page.dispose();

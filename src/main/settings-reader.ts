@@ -130,12 +130,7 @@ export class SettingsReader {
       followSpeed: this.#number(doc, 'Scroll speed (px/s)', 'followSpeed', scroll.followSpeed),
       initialSpeed: this.#number(doc, 'Initial speed (px/s)', 'initialSpeed', scroll.initialSpeed),
       maxSpeed: this.#number(doc, 'Max speed (px/s)', 'maxSpeed', scroll.maxSpeed),
-      acceleration: this.#number(
-        doc,
-        'Acceleration (px/s²)',
-        'acceleration',
-        scroll.acceleration,
-      ),
+      acceleration: this.#number(doc, 'Acceleration (px/s²)', 'acceleration', scroll.acceleration),
       deceleration: this.#number(doc, 'Deceleration (px/s²)', 'deceleration', scroll.deceleration),
     };
     this.#stepBlock.append(this.#scrollNumbers.scrollStep.element);

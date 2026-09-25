@@ -187,14 +187,13 @@ describe('shared Neo Settings controls', () => {
 
   it('shares labeled row geometry across choices, toggles, and number inputs', () => {
     const doc = fakeDocument();
-    const control = settingsChoices(
+    const control = settingsChoices(doc, [{ value: 'a', label: 'A' }], 'a', () => {}, []).element;
+    const row = settingsControlRow(
       doc,
-      [{ value: 'a', label: 'A' }],
-      'a',
-      () => {},
-      [],
-    ).element;
-    const row = settingsControlRow(doc, 'Mode', control, 'Shared description') as unknown as FakeElement;
+      'Mode',
+      control,
+      'Shared description',
+    ) as unknown as FakeElement;
     expect(row.style.cssText).toContain('align-items:center');
     expect(row.children[0]?.children[0]?.textContent).toBe('Mode');
     expect(row.children[0]?.children[1]?.textContent).toBe('Shared description');
