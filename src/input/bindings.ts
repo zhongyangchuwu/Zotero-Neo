@@ -146,6 +146,7 @@ export const DEFAULT_BINDINGS = {
   'note-normal:<Space>q': 'closeCurrentTab',
   'note-normal:<Space>fn': 'findNotes',
   'note-normal:<Space>pp': 'managePlugins',
+  'note-normal:<Space>ps': 'openNeoSettings',
   'note-normal:<Space>e': 'mainFocusTree',
   'note-normal:<Space>yy': 'mainYankCitekey',
   'note-normal:<Space>o': 'mainOpenPDF',

@@ -62,13 +62,15 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
-  it('resolves Space p s to Neo Settings in Main and Reader without a strict-prefix collision', () => {
+  it('resolves Space p s to Neo Settings in Main, Reader, and Note without a strict-prefix collision', () => {
     expect(DEFAULT_BINDINGS['main-normal:<Space>pp']).toBe('managePlugins');
     expect(DEFAULT_BINDINGS['main-normal:<Space>ps']).toBe('openNeoSettings');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>pp']).toBe('managePlugins');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(DEFAULT_BINDINGS['note-normal:<Space>pp']).toBe('managePlugins');
+    expect(DEFAULT_BINDINGS['note-normal:<Space>ps']).toBe('openNeoSettings');
     const bindings = resolveBindings('');
-    for (const mode of ['main-normal', 'reader-normal'] as const) {
+    for (const mode of ['main-normal', 'reader-normal', 'note-normal'] as const) {
       const start = advanceInput(
         { mode, keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
         ' ',
@@ -79,6 +81,13 @@ describe('0.1.0 default keymap freeze', () => {
         advanceInput({ ...prefix.state, mode, bindings, allowCountPrefix: true }, 's'),
       ).toMatchObject({ kind: 'execute', action: 'openNeoSettings' });
     }
+  });
+
+  it('keeps newly added defaults on first resolution with existing compact overrides', () => {
+    const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
+    expect(bindings['main-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(bindings['reader-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(bindings['note-normal:<Space>ps']).toBe('openNeoSettings');
   });
 
   it('shares collection membership keys with Reader item context', () => {

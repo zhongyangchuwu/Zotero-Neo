@@ -101,6 +101,7 @@ describe('leader guide projection', () => {
     expect(DEFAULT_BINDINGS['main-normal:<Space>tc']).toBe('clearTagFilters');
     expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
     expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
+    expect(KEY_GUIDE_CONFIG.groupLabels.p.en).toBe('Neo');
   });
 
   it('uses an explicit language first and otherwise follows the host locale', () => {

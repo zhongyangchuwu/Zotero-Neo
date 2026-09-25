@@ -28,6 +28,6 @@ export const KEY_GUIDE_CONFIG = {
     g: { en: 'Navigation', 'zh-CN': '导航' },
     w: { en: 'Panes', 'zh-CN': '窗格' },
     y: { en: 'Citations', 'zh-CN': '引用' },
-    p: { en: 'Plugins', 'zh-CN': '插件' },
+    p: { en: 'Neo', 'zh-CN': 'Neo' },
   },
 } as const;
