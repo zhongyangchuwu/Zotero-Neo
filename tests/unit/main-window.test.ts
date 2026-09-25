@@ -13,6 +13,7 @@ import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 import { NoteEditor } from '../../src/main/note-editor';
 import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
+import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
 import {
@@ -885,6 +886,53 @@ describe('NoteEditor shared binding input', () => {
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('Main startup focus handoff', () => {
+  it('marks the explicit Space-f-q Quick Search focus as intentional', () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const originalServices = Reflect.get(globalThis, 'Services');
+    Reflect.set(globalThis, 'Services', { focus: { focusedWindow: null } });
+    Reflect.set(globalThis, 'Zotero', { initialized: false });
+    const mark = vi.spyOn(MainFocusOwnership.prototype, 'markQuickSearchIntent');
+    const host = pickerMainWindow();
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      selectedID: 'zotero-pane',
+      _tabs: [{ id: 'zotero-pane', type: 'library' }],
+    });
+    const select = vi.fn();
+    Reflect.set(host.window.document, 'getElementById', (id: string) =>
+      id === 'zotero-tb-search' ? { searchTextbox: { select, value: '' } } : null,
+    );
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    try {
+      controller.addWindow(host.window);
+      for (const key of [' ', 'f', 'q']) {
+        host.keydown({
+          key,
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as KeyboardEvent);
+      }
+      expect(select).toHaveBeenCalledOnce();
+      expect(mark).toHaveBeenCalledOnce();
+    } finally {
+      controller.shutdown();
+      mark.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+      if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+      else Reflect.set(globalThis, 'Services', originalServices);
     }
   });
 });

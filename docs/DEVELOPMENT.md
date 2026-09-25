@@ -165,6 +165,15 @@ event gates, timers, guides, focus decisions, and action execution.
 selected items, reader-tab context, and tag filtering. Main-window control flow should use
 these named adapters rather than spreading structural casts through feature code.
 
+`src/main/focus-ownership.ts` claims Zotero's initial Library Quick Search focus
+only for `APP_STARTUP`. An empty search already focused when Neo attaches is
+claimed on the next event-loop turn so direct user input can cancel. Otherwise
+the one-shot gate waits for native Quick Search focus without an idle deadline;
+direct input, another focus target, a tab change observed through focus, or
+session cleanup ends it. `ADDON_INSTALL` also occurs on RDP hot reload, so
+installation, reload, enable, upgrade, nonempty search, and unrelated editors
+retain their focus. Zotero still owns Reader-to-Library tab focus restoration.
+
 `src/main/picker/` owns one shared candidate search/list/preview surface plus finite
 sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, rendering,
 focus, queueing, confirmation/cancellation, and containment. Ordinary object sources own

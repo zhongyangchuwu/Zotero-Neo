@@ -6,12 +6,19 @@ interface BootstrapContext {
   readonly rootURI: string;
 }
 
+// Zotero's Bootstrap sandbox injects these named numeric lifecycle constants.
+declare const APP_STARTUP: number;
+
+interface RuntimeBootstrapContext extends BootstrapContext {
+  readonly mayClaimInitialLibraryFocus: boolean;
+}
+
 interface MainWindowEvent {
   readonly window: _ZoteroTypes.MainWindow;
 }
 
 interface BootstrapController {
-  init(context: BootstrapContext): void;
+  init(context: RuntimeBootstrapContext): void;
   shutdown(): void;
   addToWindow(window: _ZoteroTypes.MainWindow): void;
   removeFromWindow(window: _ZoteroTypes.MainWindow): void;
@@ -49,11 +56,11 @@ function writeLogFile(text: string, flags: number): void {
   stream.close();
 }
 
-function resetLogFile(context: BootstrapContext): void {
+function resetLogFile(context: RuntimeBootstrapContext, reason: number): void {
   LOG_EPOCH = Date.now();
   try {
     writeLogFile(
-      `Zotero Neo diagnostic log\nstarted=${new Date(LOG_EPOCH).toISOString()}\naddon=${context.id} version=${context.version}\nzotero=${Zotero.version || '?'}\n`,
+      `Zotero Neo diagnostic log\nstarted=${new Date(LOG_EPOCH).toISOString()}\naddon=${context.id} version=${context.version}\nzotero=${Zotero.version || '?'}\nstartupReason=${reason} claimInitialLibraryFocus=${context.mayClaimInitialLibraryFocus}\n`,
       LOG_WRITE | LOG_CREATE | LOG_TRUNCATE,
     );
   } catch (error) {
@@ -71,17 +78,25 @@ function logFile(message: string): void {
   }
 }
 
-async function startup(context: BootstrapContext): Promise<void> {
+async function startup(context: BootstrapContext, reason: number): Promise<void> {
+  const runtimeContext: RuntimeBootstrapContext = {
+    ...context,
+    mayClaimInitialLibraryFocus: reason === APP_STARTUP,
+  };
   const startedAt = Date.now();
-  resetLogFile(context);
-  log(`startup called at ${startedAt} (app process start +${startedAt - APP_START_TS}ms)`);
-  logFile(`startup called (app process +${startedAt - APP_START_TS}ms)`);
+  resetLogFile(runtimeContext, reason);
+  log(
+    `startup called reason=${reason} at ${startedAt} (app process start +${startedAt - APP_START_TS}ms)`,
+  );
+  logFile(
+    `startup called reason=${reason} claimInitialLibraryFocus=${runtimeContext.mayClaimInitialLibraryFocus} (app process +${startedAt - APP_START_TS}ms)`,
+  );
 
   Services.scriptloader.loadSubScript(`${context.rootURI}content/zotero-neo.js`);
   if (!ZoteroNeo) throw new Error('Zotero Neo runtime bundle did not install its controller');
 
   try {
-    ZoteroNeo.init(context);
+    ZoteroNeo.init(runtimeContext);
   } catch (error) {
     log(`Early init failed: ${String(error)}`);
     logFile(`early init FAILED: ${String(error)}`);
@@ -98,7 +113,7 @@ async function startup(context: BootstrapContext): Promise<void> {
   logFile(`initializationPromise resolved (startup +${Date.now() - startedAt}ms)`);
 
   try {
-    ZoteroNeo.init(context);
+    ZoteroNeo.init(runtimeContext);
   } catch (error) {
     log(`Init after initialization failed: ${String(error)}`);
     logFile(`init after initialization FAILED: ${String(error)}`);

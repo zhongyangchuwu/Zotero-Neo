@@ -12,6 +12,7 @@ import { SelectionStore, type ItemRef } from './selection-store';
 import { InteractionAppearanceManager } from './interaction-appearance';
 import type { MainReturnBookmark } from './return-context';
 import { SettingsCenter } from './settings-center';
+import { MainFocusOwnership } from './focus-ownership';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -25,6 +26,7 @@ export class MainWindowSession {
   readonly theme: ThemeManager;
   readonly interactionAppearance: InteractionAppearanceManager;
   readonly settings: SettingsCenter;
+  readonly focusOwnership: MainFocusOwnership;
   readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
   inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
@@ -201,11 +203,17 @@ export class MainWindowSession {
     inputRevision: 0,
     yank: '',
   };
-  constructor(window: MainWindow, preferences: PreferenceStore) {
+  constructor(
+    window: MainWindow,
+    preferences: PreferenceStore,
+    mayClaimInitialLibraryFocus = false,
+  ) {
     this.window = window;
     this.theme = new ThemeManager(window, preferences);
     this.interactionAppearance = new InteractionAppearanceManager(preferences, this.theme);
     this.settings = new SettingsCenter(window, this.theme, this.interactionAppearance, preferences);
+    this.focusOwnership = new MainFocusOwnership(window, this, mayClaimInitialLibraryFocus);
+    this.cleanup.add(() => this.focusOwnership.dispose());
     this.cleanup.add(() => this.interactionAppearance.dispose());
     this.cleanup.add(() => this.theme.dispose());
     this.cleanup.add(() => this.settings.close());

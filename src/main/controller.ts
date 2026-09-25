@@ -132,7 +132,11 @@ export class MainWindowController implements MainWindowControllerApi {
 
   addWindow(window: MainWindow): void {
     if (this.#sessions.has(window)) return;
-    const session = new MainWindowSession(window, this.#dependencies.preferences);
+    const session = new MainWindowSession(
+      window,
+      this.#dependencies.preferences,
+      this.#dependencies.mayClaimInitialLibraryFocus?.() ?? false,
+    );
     this.#sessions.set(window, session);
     this.#itemSelect.addWindow(window, session.selection, session.interactionAppearance);
     session.cleanup.add(
@@ -140,6 +144,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#itemSelect.refresh(window, session.selection),
       ),
     );
+    session.focusOwnership.start();
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     let readerScanFailed = false;
@@ -704,6 +709,7 @@ export class MainWindowController implements MainWindowControllerApi {
           this.#itemSelect.cancel(window, session.selection);
           session.inputMode = 'main-normal';
         }
+        session.focusOwnership.markQuickSearchIntent();
         this.#viewActions.focusQuickSearch(window, session);
         break;
       case 'mainAdvancedSearch':

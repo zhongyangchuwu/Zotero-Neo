@@ -67,6 +67,8 @@ type MainQuickSearch = HTMLElement & {
     value?: string;
     select?(): void;
     focus?(): void;
+    matches?(selector: string): boolean;
+    hasAttribute?(name: string): boolean;
   };
   value?: string;
 };
@@ -217,6 +219,59 @@ function mainQuickSearch(window: MainWindow): MainQuickSearch | undefined {
   return (
     (window.document.getElementById('zotero-tb-search') as MainQuickSearch | null) ?? undefined
   );
+}
+
+/** The native search input currently owns focus and contains no intentional query. */
+export function mainEmptyQuickSearchFocused(window: MainWindow): boolean {
+  const search = mainQuickSearch(window);
+  const textbox = search?.searchTextbox;
+  const active = window.document.activeElement;
+  if (!search || !textbox || !active || (active !== search && !search.contains(active)))
+    return false;
+  try {
+    return (
+      !!(textbox.matches?.(':focus-within') || textbox.hasAttribute?.('focused')) &&
+      !String(textbox.value ?? '').length
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Recognizes a new focus transition into the native Quick Search control. */
+export function mainQuickSearchFocusEvent(window: MainWindow, event: Event): boolean {
+  const search = mainQuickSearch(window);
+  const target = event.target;
+  return (
+    !!search &&
+    !!target &&
+    (target === search || search.contains(target as Node)) &&
+    mainEmptyQuickSearchFocused(window)
+  );
+}
+
+/** Focuses the rendered Items table directly, never view.focus()'s deferred callback. */
+export function focusMainItemsImmediately(window: MainWindow): boolean {
+  const doc = window.document;
+  const view = mainPane(window)?.itemsView;
+  const topDiv = (view?.tree as { readonly _topDiv?: HTMLElement } | undefined)?._topDiv;
+  const candidates = [
+    topDiv,
+    view?.domEl?.querySelector<HTMLElement>('.virtualized-table'),
+    doc.getElementById('item-tree-main-default') as HTMLElement | null,
+    view?.domEl,
+  ];
+  for (const target of candidates) {
+    if (!target?.focus || target.isConnected === false) continue;
+    try {
+      target.focus();
+      const active = doc.activeElement;
+      if (active === target || (active && target.contains?.(active))) return true;
+    } catch {
+      // A detached view can be replaced during startup; try the next rendered target.
+    }
+  }
+  return false;
 }
 
 export function mainViewFilterState(window: MainWindow): MainViewFilterState {

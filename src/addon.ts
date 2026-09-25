@@ -16,6 +16,7 @@ export interface AddonContext {
   readonly id: string;
   readonly version: string;
   readonly rootURI: string;
+  readonly mayClaimInitialLibraryFocus: boolean;
 }
 
 export interface ZoteroNeoPublicApi {
@@ -63,6 +64,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
+      mayClaimInitialLibraryFocus: () => this.#context?.mayClaimInitialLibraryFocus === true,
     });
     main = this.#main;
     this.api = {

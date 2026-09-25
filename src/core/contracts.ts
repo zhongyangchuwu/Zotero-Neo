@@ -91,4 +91,5 @@ export interface MainWindowControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
   readonly reader: Pick<ReaderControllerApi, 'rescan' | 'forwardKey'>;
+  readonly mayClaimInitialLibraryFocus?: () => boolean;
 }
