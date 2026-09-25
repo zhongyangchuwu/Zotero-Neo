@@ -116,7 +116,7 @@ describe('Advanced Settings', () => {
         .all()
         .filter((node) => node.tag === 'h3')
         .map((node) => node.textContent),
-    ).toEqual(['Command language', 'Tag namespaces']);
+    ).toEqual(['Interface and command language', 'Tag namespaces']);
     expect(test.root.button('Follow Zotero').getAttribute('aria-pressed')).toBe('true');
     expect(test.root.button('English').getAttribute('aria-pressed')).toBe('false');
     expect(test.root.button('中文').getAttribute('aria-pressed')).toBe('false');
