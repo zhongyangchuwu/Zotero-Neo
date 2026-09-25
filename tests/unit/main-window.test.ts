@@ -234,6 +234,7 @@ function pickerMainWindow(): {
     return element as unknown as HTMLElement & {
       emit(type: string, event?: Partial<Event>): void;
     };
+  };
   document = {
     defaultView: null,
     activeElement: null,
