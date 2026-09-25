@@ -87,6 +87,9 @@ Neo remains subordinate to Zotero's data model:
 
 The current visible Zotero tree may project visible members of Selection for
 host/UI compatibility, but that projection is not the complete source of truth.
+Zotero's native item TreeSelection may also temporarily contain multiple visible
+items from host gestures such as `Ctrl+A` or pointer selection. That native
+selection is an immediate visible target, not a persistent Neo workset.
 
 A minimal ambient indicator should eventually make this distinction visible,
 for example:
@@ -101,12 +104,15 @@ Object actions that are defined as workset actions use:
 
 ```text
 EffectiveSelection =
-    Selection non-empty -> Selection
-    Selection empty     -> { Cursor }
+    Selection non-empty                 -> Selection
+    Selection empty + native multi-set -> native selected items
+    otherwise                           -> { Cursor }
 ```
 
-This gives ordinary single-item operation when no explicit workset exists,
-without requiring every action to special-case a separate selection mode.
+This preserves ordinary single-item operation while interoperating with Zotero's
+visible multi-selection. A native multi-set is intentionally ephemeral: Neo
+navigation may collapse it back to Cursor, while `s` can promote it into the
+persistent Selection workset.
 
 Not every action consumes EffectiveSelection. Target ownership remains
 action-specific; see **Action target contracts** below.
@@ -136,11 +142,12 @@ augment=true)`, because shrinking such a range leaves the old tail selected.
 
 ## Selection operations
 
-Selection operations act on the current CursorTarget:
+Selection operations act on the current selection target:
 
 ```text
-Normal Cursor -> CursorTarget = { cursor item }
-Visual Cursor -> CursorTarget = contiguous visual range
+Normal + native multi-set -> SelectionTarget = native selected items
+Normal otherwise          -> SelectionTarget = { cursor item }
+Visual                     -> SelectionTarget = contiguous visual range
 ```
 
 The initial high-frequency operation is Toggle Selection.
@@ -158,17 +165,21 @@ This all-or-none rule treats a Visual range as one target. It intentionally does
 not use symmetric difference, which would create surprising holes when only
 part of a range was already selected.
 
-### Normal Cursor toggle
+### Normal target toggle
 
-The default persistent-set interaction is Yazi-like:
+The default persistent-set interaction accepts Zotero's current visible target:
 
 ```text
-s -> toggle item under Cursor -> move Cursor down
+native multi-set present -> s toggles that whole target in Selection
+otherwise                -> s toggles Cursor item in Selection
+                            then moves Cursor down
 ```
 
-The move-after-toggle behavior is part of the workflow contract to dogfood, not
-an incidental key implementation detail. At the end of the result set, Cursor
-remains clamped to the last valid item.
+This makes native gestures such as `Ctrl+A` composable with Neo: `Ctrl+A`, then
+`s`, promotes the visible native selection into the persistent workset. The
+all-or-none rule still applies when part of the target is already selected.
+After a successful Normal toggle, Cursor advances and the transient native
+multi-selection may collapse to the new Cursor anchor.
 
 ### Visual toggle
 
@@ -227,7 +238,9 @@ The collection/library tree is a separate Scope layer.
 
 Zotero can represent multiple selected collection/saved-search/library rows.
 Neo should audit that capability as `ScopeSet`, but item Selection and ScopeSet
-must remain distinct concepts.
+must remain distinct concepts. Native multi-scope views remain supported where
+Zotero creates them, but Neo does not currently assign `s` a ScopeSet mutation
+grammar. Collection-tree `s` is left to Zotero rather than being consumed by Neo.
 
 Do not create a collection-selection mode merely for symmetry with item
 selection.
@@ -238,7 +251,7 @@ Neo distinguishes **item actions** from View/local-surface actions.
 
 Item actions share one contextual item-target resolver:
 
-- Main -> EffectiveSelection (explicit Selection, otherwise Cursor);
+- Main -> EffectiveSelection (persistent Neo Selection, otherwise native visible multi-selection, otherwise Cursor);
 - Reader -> the active Reader item, normalized to its parent bibliographic item when present;
 - Note -> the active note-context item, with the same parent normalization.
 
@@ -366,7 +379,7 @@ The v0.2 Main grammar is:
 
 ```text
 Space       command namespace / leader
-s           toggle Cursor item in Selection / ScopeCursor in ScopeSet
+s           item list: toggle current native target in Selection; collection tree: native Zotero behavior
 j/k         move Cursor
 <num>j/k    relative Cursor jump
 gg/G        first/last Cursor
@@ -549,8 +562,8 @@ Before the model is considered stable, dogfood at least these scenarios:
    visible subset.
 6. Sort or refresh: Cursor and Selection recover by item identity, not stale row
    index.
-7. Move focus to the collection tree and press `s`: item Selection is not
-   accidentally toggled.
+7. Move focus to the collection tree and press `s`: Neo leaves the key to Zotero
+   and does not mutate item Selection or invent ScopeSet semantics.
 8. Reader/Main/Note Space leader, IME handling, and `Ctrl+h/j/k/l` focus behavior do
    not regress.
 9. Selection A/B with Cursor on unselected C: inspect/open targets C while

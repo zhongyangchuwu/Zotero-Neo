@@ -1,5 +1,10 @@
 import type { MainWindow } from '../core/contracts';
-import { currentMainItemCursorRef, mainItem, visibleMainSelectionCount } from './host';
+import {
+  currentMainItemCursorRef,
+  mainItem,
+  mainSelectedItemRefs,
+  visibleMainSelectionCount,
+} from './host';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 
@@ -10,7 +15,7 @@ export interface MainResolvedTargets {
   readonly visible: number;
   readonly hidden: number;
   readonly missing: number;
-  readonly source: 'selection' | 'cursor';
+  readonly source: 'selection' | 'native-selection' | 'cursor';
 }
 
 function itemForRef(ref: ItemRef): Zotero.Item | undefined {
@@ -28,9 +33,10 @@ export function resolveMainEffectiveTargets(
   session: MainWindowSession,
 ): MainResolvedTargets {
   const explicit = session.selection.values();
+  const native = mainSelectedItemRefs(window);
   const cursor = currentMainItemCursorRef(window);
-  const refs = explicit.length ? explicit : cursor ? [cursor] : [];
-  const source = explicit.length ? 'selection' : 'cursor';
+  const refs = explicit.length ? explicit : native.length > 1 ? native : cursor ? [cursor] : native;
+  const source = explicit.length ? 'selection' : native.length > 1 ? 'native-selection' : 'cursor';
   const items = refs.flatMap((ref) => {
     const item = itemForRef(ref);
     return item ? [item] : [];

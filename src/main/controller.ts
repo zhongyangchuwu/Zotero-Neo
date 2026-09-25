@@ -484,11 +484,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.clearKeyGuide(window, session);
         return;
       }
-      if (
-        decision.action === 'mainToggleSelection' &&
-        !this.#itemSelect.itemsFocused(window) &&
-        this.#navigation.panel(window, session) !== 'collections'
-      ) {
+      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
@@ -876,11 +872,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.collapseAll(window, session);
         break;
       case 'mainToggleSelection':
-        if (this.#navigation.panel(window, session) === 'collections') {
-          this.#navigation.toggleScope(window, session, shouldDebounce);
-        } else {
-          this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
-        }
+        this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
         break;
       case 'mainClearSelection':
         this.#itemSelect.clearSelection(window, session.selection);

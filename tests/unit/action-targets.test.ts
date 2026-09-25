@@ -16,7 +16,11 @@ function item(id: number, libraryID = 1): Zotero.Item {
   return { id, libraryID } as Zotero.Item;
 }
 
-function harness(visible: readonly Zotero.Item[], focused = 0) {
+function harness(
+  visible: readonly Zotero.Item[],
+  focused = 0,
+  nativeSelected: readonly number[] = [focused],
+) {
   const byID = new Map(visible.map((value) => [value.id, value]));
   const all = new Map(byID);
   vi.stubGlobal('Zotero', {
@@ -26,6 +30,8 @@ function harness(visible: readonly Zotero.Item[], focused = 0) {
   const rows = visible.map((ref) => ({ isObjectRow: true, ref }));
   const window = {
     ZoteroPane: {
+      getSelectedItems: () =>
+        nativeSelected.flatMap((index) => (visible[index] ? [visible[index]] : [])),
       itemsView: {
         rowCount: rows.length,
         selection: { focused },
@@ -65,11 +71,32 @@ describe('Main action targets', () => {
     });
   });
 
+  it('uses a visible native multi-selection when the persistent Selection is empty', () => {
+    const first = item(10);
+    const second = item(11);
+    const third = item(12);
+    const h = harness([first, second, third], 1, [0, 1, 2]);
+
+    expect(resolveMainEffectiveTargets(h.window, h.session)).toMatchObject({
+      source: 'native-selection',
+      refs: [
+        { libraryID: 1, itemID: 10 },
+        { libraryID: 1, itemID: 11 },
+        { libraryID: 1, itemID: 12 },
+      ],
+      items: [first, second, third],
+      total: 3,
+      visible: 3,
+      hidden: 0,
+      missing: 0,
+    });
+  });
+
   it('uses the explicit Selection even when Cursor is elsewhere', () => {
     const first = item(10);
     const cursor = item(11);
     const hidden = item(12);
-    const h = harness([first, cursor], 1);
+    const h = harness([first, cursor], 1, [0, 1]);
     h.install(hidden);
     h.session.selection.add({ libraryID: 1, itemID: first.id });
     h.session.selection.add({ libraryID: 1, itemID: hidden.id });

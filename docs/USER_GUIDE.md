@@ -294,8 +294,8 @@ semantics.
 
 ##### Batch citekey copy
 
-In Main, `yy` copies Better BibTeX citekeys from EffectiveSelection: explicit
-Neo Selection first, otherwise Cursor. Targets are normalized with Zotero's
+In Main, `yy` copies Better BibTeX citekeys from EffectiveSelection: persistent
+Neo Selection first, otherwise the current visible Zotero multi-selection, then Cursor. Targets are normalized with Zotero's
 top-level-item semantics and duplicate normalized items are emitted once.
 
 Clipboard output preserves the existing raw-key convention. A single target
@@ -307,8 +307,8 @@ Reader and Note keep their existing contextual single-target `yy` behavior.
 
 ##### Collection membership
 
-`<Space>ca` and `<Space>cr` are item actions shared by Main and Reader. In Main, explicit
-Neo Selection wins and Cursor is the fallback. In Reader, the target is the
+`<Space>ca` and `<Space>cr` are item actions shared by Main and Reader. In Main, persistent
+Neo Selection wins; otherwise a visible Zotero multi-selection is used before Cursor fallback. In Reader, the target is the
 active Reader item's parent bibliographic item when one exists; Main Selection
 is not consulted.
 
@@ -449,13 +449,13 @@ list) when that pane has focus.
 | Key         | Action                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- |
 | `j` / `k`   | Move Cursor down / up; single-scope collection navigation follows View, pinned/multi ScopeSet preserves its members |
-| `s`         | Item list: toggle Selection + advance; collection tree: pin/toggle ScopeSet + advance                              |
+| `s`         | Item list: toggle current native item target into Neo Selection + advance; collection tree: native Zotero behavior |
 | `gg` / `G`  | Jump to the first / last row                                                                                         |
 | `h`         | In item list, move focus back to collection tree; in collection tree, collapse selected collection or jump to parent |
 | `l`         | In collection tree, expand selected collection; if already expanded or a leaf, move focus into item list             |
 | `Enter`     | In collection tree, collapse ScopeSet to ScopeCursor then enter items; in item list, open the Cursor item/PDF        |
 | `Backspace` | Jump to parent collection                                                                                            |
-| `dd` / `x`  | Move selected item rows to Zotero Trash                                                                              |
+| `dd` / `x`  | Trash Neo Selection when non-empty; otherwise current Zotero native item selection/Cursor                            |
 | `u`         | Restore the last item batch trashed by Neo                                                                           |
 | `za`        | Toggle expand/collapse for the currently selected collection row                                                     |
 | `zo`        | Expand the current collection row (if already open, keep it open)                                                    |
@@ -463,12 +463,17 @@ list) when that pane has focus.
 | `R`         | Expand all collections in the current library tree                                                                   |
 | `M`         | Collapse all collections in the current library tree                                                                 |
 
-In the collection tree, `s` builds Zotero's native ScopeSet without touching
-Neo item Selection. With one selected scope it pins that scope and advances
-ScopeCursor; subsequent `s` presses toggle additional scope rows. While the
-ScopeCursor is detached from ScopeSet or multiple scopes are selected,
-`j/k/gg/G` move only ScopeCursor. `Enter` returns to a single scope at the
-current ScopeCursor and enters the item list.
+In the item list, Zotero native multi-selection and Neo Selection compose rather
+than compete. For example, `Ctrl+A` followed by `s` promotes the visible native
+selection into the persistent Neo Selection. Workset actions prefer Neo Selection
+when it is non-empty; otherwise they use the current visible native multi-selection,
+then Cursor. Neo-driven Cursor movement may collapse the temporary native
+multi-selection, so use `s` when that set should persist across navigation or View
+changes.
+
+In the collection tree, Neo does not currently define `s` as a ScopeSet command.
+Native multi-scope selection can still be created and used through Zotero itself;
+Neo leaves `s` to the host and keeps item Selection independent.
 
 In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
 `J` and `K` are not Neo defaults and remain available to native Zotero behavior.

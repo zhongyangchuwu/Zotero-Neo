@@ -321,6 +321,44 @@ describe('current Zotero collection APIs', () => {
     expect(session.activePanel).toBe('collections');
   });
 
+  it('leaves collection-tree s to Zotero instead of consuming it as Neo Selection', () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = pickerMainWindow();
+    const active = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+    active.id = 'collection-tree-row-2';
+    host.window.document.body?.append(active);
+    active.focus();
+    Reflect.set(host.window, 'ZoteroPane', {
+      collectionsView: {
+        domEl: { contains: (node: unknown) => node === active },
+        rowCount: 4,
+        selection: { focused: 2, count: 1, selected: new Set([2]) },
+      },
+    });
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    try {
+      controller.addWindow(host.window);
+      const event = {
+        key: 's',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as KeyboardEvent;
+      host.keydown(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(event.stopPropagation).not.toHaveBeenCalled();
+    } finally {
+      controller.shutdown();
+    }
+  });
+
   it('preserves a native multi-scope selection while moving only ScopeCursor', () => {
     let focused = 2;
     const selected = new Set([1, 2]);
@@ -360,61 +398,6 @@ describe('current Zotero collection APIs', () => {
     expect(moveFocused).toHaveBeenCalledWith(3, false, false, true, false);
     expect([...selected]).toEqual([1, 2]);
     expect(focused).toBe(3);
-  });
-
-  it('pins a single native scope with s semantics and can add the detached ScopeCursor', () => {
-    let focused = 2;
-    const selected = new Set([2]);
-    const toggleSelect = vi.fn((index: number) => {
-      if (selected.has(index)) selected.delete(index);
-      else selected.add(index);
-    });
-    const moveFocused = vi.fn((index: number) => {
-      focused = index;
-    });
-    const active = { id: 'collection-tree-row-2' } as Element;
-    const view = {
-      tree: { focus: () => {}, _onSelection: moveFocused },
-      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
-      rowCount: 6,
-      selection: {
-        get count() {
-          return selected.size;
-        },
-        selected,
-        get focused() {
-          return focused;
-        },
-        toggleSelect,
-        select: vi.fn(),
-      },
-      ensureRowIsVisible: vi.fn(),
-    } as unknown as TreeView;
-    const window = {
-      document: {
-        activeElement: active,
-        getElementById: () => null,
-        querySelector: () => null,
-      },
-      ZoteroPane: { collectionsView: view },
-    } as unknown as MainWindow;
-    const session = {
-      window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
-      activePanel: 'collections',
-      status: { textContent: '', style: {} },
-      cleanup: { add: vi.fn() },
-    } as unknown as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
-
-    expect(navigation.toggleScope(window, session)).toBe(true);
-    expect(toggleSelect).not.toHaveBeenCalled();
-    expect([...selected]).toEqual([2]);
-    expect(focused).toBe(3);
-
-    expect(navigation.toggleScope(window, session)).toBe(true);
-    expect(toggleSelect).toHaveBeenCalledWith(3, false);
-    expect([...selected]).toEqual([2, 3]);
-    expect(focused).toBe(4);
   });
 
   it('collapses ScopeSet to ScopeCursor before Enter moves into items', () => {
