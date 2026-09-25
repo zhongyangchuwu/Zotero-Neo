@@ -7,11 +7,19 @@ import type {
   MainWindowControllerApi,
   MainWindowControllerDependencies,
 } from '../../src/core/contracts';
+import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 
 import { NoteEditor } from '../../src/main/note-editor';
+import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
+import { MainFocusOwnership } from '../../src/main/focus-ownership';
+import { SettingsAdvanced } from '../../src/main/settings-advanced';
+import { SettingsAppearance } from '../../src/main/settings-appearance';
+import { SettingsInteraction } from '../../src/main/settings-interaction';
+import { SettingsKeybindings } from '../../src/main/settings-keybindings';
+import { SettingsReader } from '../../src/main/settings-reader';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
 import {
@@ -22,6 +30,7 @@ import {
 } from '../../src/main/navigation';
 import type { MainWindowSession } from '../../src/main/session';
 import { SelectionStore } from '../../src/main/selection-store';
+import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
 
@@ -49,16 +58,41 @@ function pickerMainWindow(): {
   const bodyChildren: HTMLElement[] = [];
   let document: Document;
   let keydown: EventListener | undefined;
+  let focusin: EventListener | undefined;
   const createElement = (tag: string): HTMLElement => {
     const children: HTMLElement[] = [];
     const listeners = new Map<string, EventListener[]>();
+    const classes = new Set<string>();
     let textContent = '';
     const element = {
+      nodeType: 1,
       tagName: tag.toUpperCase(),
       localName: tag,
       ownerDocument: null as unknown as Document,
       parentElement: null as HTMLElement | null,
+      id: '',
+      get className() {
+        return [...classes].join(' ');
+      },
+      set className(value: string) {
+        classes.clear();
+        for (const name of value.split(/\s+/).filter(Boolean)) classes.add(name);
+      },
+      classList: {
+        add: (...names: string[]) => {
+          for (const name of names) classes.add(name);
+        },
+        remove: (...names: string[]) => {
+          for (const name of names) classes.delete(name);
+        },
+        contains: (name: string) => classes.has(name),
+      },
       style: {
+        cssText: '',
+        display: '',
+        background: '',
+        color: '',
+        borderColor: '',
         getPropertyValue: () => '',
         setProperty: () => {},
       } as unknown as CSSStyleDeclaration,
@@ -79,8 +113,21 @@ function pickerMainWindow(): {
       set innerHTML(value: string) {
         textContent = value.replace(/<[^>]*>/g, '');
       },
-      setAttribute: (name: string, value: string) => Reflect.set(element, name, value),
-      getAttribute: () => null,
+      setAttribute: (name: string, value: string) => {
+        if (name === 'id') element.id = value;
+        else if (name === 'class') element.className = value;
+        else Reflect.set(element, name, value);
+      },
+      getAttribute: (name: string) => {
+        if (name === 'id') return element.id || null;
+        if (name === 'class') return element.className || null;
+        return (Reflect.get(element, name) as string | undefined) ?? null;
+      },
+      removeAttribute: (name: string) => {
+        if (name === 'id') element.id = '';
+        else if (name === 'class') element.className = '';
+        else Reflect.deleteProperty(element, name);
+      },
       append: (...nodes: HTMLElement[]) => {
         for (const node of nodes) Reflect.set(node, 'parentElement', element);
         children.push(...nodes);
@@ -97,11 +144,55 @@ function pickerMainWindow(): {
       addEventListener: (type: string, listener: EventListener) => {
         listeners.set(type, [...(listeners.get(type) ?? []), listener]);
       },
-      removeEventListener: () => {},
+      removeEventListener: (type: string, listener: EventListener) => {
+        listeners.set(
+          type,
+          (listeners.get(type) ?? []).filter((entry) => entry !== listener),
+        );
+      },
+      listenerCount: (type: string) => listeners.get(type)?.length ?? 0,
+      matches: (selector: string) => {
+        const tagMatch = selector.match(/^[A-Za-z][A-Za-z0-9-]*/)?.[0];
+        if (tagMatch && element.localName !== tagMatch) return false;
+        const idMatch = selector.match(/#([A-Za-z0-9_-]+)/)?.[1];
+        if (idMatch && element.id !== idMatch) return false;
+        for (const match of selector.matchAll(/\.([A-Za-z0-9_-]+)/g)) {
+          if (!classes.has(match[1])) return false;
+        }
+        for (const match of selector.matchAll(/\[([^=\]]+)(?:=["']?([^\]"']+)["']?)?\]/g)) {
+          const actual = element.getAttribute(match[1]);
+          if (actual === null || (match[2] !== undefined && actual !== match[2])) return false;
+        }
+        return true;
+      },
       closest: (selector: string) => {
-        if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
-          return element as unknown as HTMLElement;
-        return element.parentElement?.closest?.(selector) ?? null;
+        let current: typeof element | null = element;
+        while (current) {
+          if (current.matches(selector)) return current as unknown as HTMLElement;
+          current = current.parentElement as unknown as typeof element | null;
+        }
+        return null;
+      },
+      querySelectorAll: (selector: string) => {
+        const matches: HTMLElement[] = [];
+        const visit = (node: HTMLElement): void => {
+          for (const child of Array.from(node.children) as HTMLElement[]) {
+            const candidate = child as HTMLElement & { matches?(selector: string): boolean };
+            if (candidate.matches?.(selector)) matches.push(child);
+            visit(child);
+          }
+        };
+        visit(element as unknown as HTMLElement);
+        return matches;
+      },
+      querySelector: (selector: string) => element.querySelectorAll(selector)[0] ?? null,
+      contains: (node: Node) => {
+        let current = node as (Node & { parentElement?: HTMLElement | null }) | null;
+        while (current) {
+          if (current === (element as unknown as Node)) return true;
+          current = current.parentElement ?? null;
+        }
+        return false;
       },
       emit: (type: string, event: Partial<Event> = {}) => {
         let stopped = false;
@@ -128,6 +219,7 @@ function pickerMainWindow(): {
       },
       focus: () => {
         Reflect.set(document, 'activeElement', element);
+        focusin?.({ target: element } as unknown as Event);
       },
       select: vi.fn(),
       scrollBy: vi.fn(),
@@ -135,6 +227,7 @@ function pickerMainWindow(): {
       remove: () => {
         const index = bodyChildren.indexOf(element as unknown as HTMLElement);
         if (index >= 0) bodyChildren.splice(index, 1);
+        Reflect.set(element, 'isConnected', false);
       },
     };
     element.ownerDocument = document;
@@ -149,17 +242,21 @@ function pickerMainWindow(): {
     createElementNS: (_namespace: string, tag: string) => createElement(tag),
     head: { appendChild: (node: HTMLElement) => bodyChildren.push(node) },
     body: {
-      append: (node: HTMLElement) => bodyChildren.push(node),
+      append: (...nodes: HTMLElement[]) => bodyChildren.push(...nodes),
       appendChild: (node: HTMLElement) => bodyChildren.push(node),
     },
     documentElement: {
-      append: (node: HTMLElement) => bodyChildren.push(node),
+      append: (...nodes: HTMLElement[]) => bodyChildren.push(...nodes),
       appendChild: (node: HTMLElement) => bodyChildren.push(node),
     },
     addEventListener: (type: string, listener: EventListener) => {
       if (type === 'keydown') keydown = listener;
+      if (type === 'focusin') focusin = listener;
     },
-    removeEventListener: () => {},
+    removeEventListener: (type: string, listener: EventListener) => {
+      if (type === 'keydown' && keydown === listener) keydown = undefined;
+      if (type === 'focusin' && focusin === listener) focusin = undefined;
+    },
     getElementById: () => null,
     querySelector: () => null,
     querySelectorAll: () => [],
@@ -168,6 +265,7 @@ function pickerMainWindow(): {
     document,
     innerWidth: 1200,
     Zotero_Tabs: { _tabs: [{ id: 'tab-b', title: 'Reader B' }], selectedID: 'tab-b' },
+    focus: vi.fn(),
     addEventListener: () => {},
     removeEventListener: () => {},
     setInterval: () => 0,
@@ -389,6 +487,44 @@ describe('current Zotero collection APIs', () => {
     expect(select).toHaveBeenCalledWith(4, false);
     expect([...selected]).toEqual([4]);
     expect(session.activePanel).toBe('items');
+  });
+
+  it('moves item Cursor with one select-only native anchor', () => {
+    const active = { id: 'item-tree-main-default-row-2' } as Element;
+    let focused = 2;
+    let selected = new Set([1, 2, 4]);
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected = new Set([index]);
+    });
+    const ensureRowIsVisible = vi.fn();
+    const itemsView = {
+      rowCount: 6,
+      selection: {
+        get focused() {
+          return focused;
+        },
+        select,
+      },
+      ensureRowIsVisible,
+    };
+    const window = {
+      document: {
+        activeElement: active,
+        getElementById: () => null,
+        querySelector: () => null,
+      },
+      ZoteroPane: { itemsView },
+    } as unknown as MainWindow;
+    const session = { activePanel: 'items' } as MainWindowSession;
+    const navigation = new MainNavigation(logger, () => {});
+
+    navigation.navigate(window, session, 1, 1, true);
+
+    expect(select).toHaveBeenCalledWith(3, true);
+    expect([...selected]).toEqual([3]);
+    expect(focused).toBe(3);
+    expect(ensureRowIsVisible).toHaveBeenCalledWith(3);
   });
 
   it('uses Zotero repeat debouncing and native selection scrolling for held j/k', () => {
@@ -827,6 +963,536 @@ describe('NoteEditor shared binding input', () => {
   });
 });
 
+describe('Main startup focus handoff', () => {
+  it('marks the explicit Space-f-q Quick Search focus as intentional', () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const originalServices = Reflect.get(globalThis, 'Services');
+    Reflect.set(globalThis, 'Services', { focus: { focusedWindow: null } });
+    Reflect.set(globalThis, 'Zotero', { initialized: false });
+    const mark = vi.spyOn(MainFocusOwnership.prototype, 'markQuickSearchIntent');
+    const host = pickerMainWindow();
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      selectedID: 'zotero-pane',
+      _tabs: [{ id: 'zotero-pane', type: 'library' }],
+    });
+    const select = vi.fn();
+    Reflect.set(host.window.document, 'getElementById', (id: string) =>
+      id === 'zotero-tb-search' ? { searchTextbox: { select, value: '' } } : null,
+    );
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    try {
+      controller.addWindow(host.window);
+      for (const key of [' ', 'f', 'q']) {
+        host.keydown({
+          key,
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as KeyboardEvent);
+      }
+      expect(select).toHaveBeenCalledOnce();
+      expect(mark).toHaveBeenCalledOnce();
+    } finally {
+      controller.shutdown();
+      mark.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+      if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+      else Reflect.set(globalThis, 'Services', originalServices);
+    }
+  });
+});
+
+function settingsMainHost() {
+  vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+  const host = pickerMainWindow();
+  const values = new Map<string, boolean | number | string>();
+  const writes: Array<[string, boolean | number | string]> = [];
+  const observers = new Map<string, Set<() => void>>();
+  const controller = createMainWindowController({
+    preferences: {
+      has: (key: string) => values.has(key),
+      get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
+      set: (key: string, value: boolean | number | string) => {
+        values.set(key, value);
+        writes.push([key, value]);
+        for (const listener of observers.get(key) ?? []) listener();
+      },
+      observe: (key: string, listener: () => void) => {
+        const group = observers.get(key) ?? new Set<() => void>();
+        group.add(listener);
+        observers.set(key, group);
+        return () => group.delete(listener);
+      },
+    },
+    logger,
+    reader: { rescan: () => {}, forwardKey: () => {} },
+  } as MainWindowControllerDependencies);
+  controller.addWindow(host.window);
+  const press = (key: string, target?: EventTarget): KeyboardEvent => {
+    const event = {
+      key,
+      target,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      stopImmediatePropagation: vi.fn(),
+    } as unknown as KeyboardEvent;
+    host.keydown(event);
+    return event;
+  };
+  const drawer = () => host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-center');
+  const backdrop = () =>
+    host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-backdrop');
+  return { ...host, controller, press, drawer, backdrop, values, writes };
+}
+
+describe('Main Settings Center shell', () => {
+  it('opens centered once, remembers section, and removes backdrop and panel on close', () => {
+    const host = settingsMainHost();
+    const prior = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+    host.window.document.body?.append(prior);
+    prior.focus();
+    host.press(' ');
+    host.press('p');
+    host.press('s');
+    const panel = host.drawer();
+    const backdrop = host.backdrop() as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+      listenerCount(type: string): number;
+    };
+    expect(panel?.style.cssText).toContain('left:50%;top:50%;transform:translate(-50%,-50%)');
+    expect(panel?.style.cssText).toContain('width:min(820px,calc(100vw - 48px))');
+    expect(panel?.style.cssText).toContain('height:min(760px,calc(100vh - 64px))');
+    expect(panel?.style.cssText).not.toContain('right:12px');
+    expect(panel?.style.cssText).toContain('font:inherit');
+    expect(panel?.style.cssText).not.toContain('sans-serif');
+    expect(backdrop.style.cssText).toContain('inset:0');
+    const navigation = panel?.children[1] as HTMLElement;
+    expect(navigation.children).toHaveLength(5);
+    for (const button of Array.from(navigation.children) as HTMLElement[]) {
+      expect(button.style.cssText).toContain(
+        'display:inline-flex;align-items:center;justify-content:center',
+      );
+      expect(button.style.cssText).toContain('appearance:none');
+      expect(button.style.cssText).toContain('box-sizing:border-box');
+      expect(button.style.cssText).toContain('font:inherit');
+      expect(button.tabIndex).toBe(-1);
+    }
+    expect((panel?.children[0]?.children[1] as HTMLElement).tabIndex).toBe(-1);
+    expect((panel?.children[0]?.children[1] as HTMLElement).style.cssText).toContain(
+      'display:inline-flex',
+    );
+    expect((navigation.children[0] as HTMLElement).style.background).toBe(
+      'var(--zotero-neo-selected)',
+    );
+    const reader = navigation.children[2] as HTMLElement & { emit(type: string): void };
+    reader.emit('click');
+    expect(reader.style.background).toBe('var(--zotero-neo-selected)');
+    expect(panel?.children[2]?.children[0]?.textContent).toBe('Reader');
+    expect(host.controller.openSettings(host.window)).toBe(true);
+    expect(host.drawer()).toBe(panel);
+    expect(
+      host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-center'),
+    ).toHaveLength(1);
+    expect(
+      host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-backdrop'),
+    ).toHaveLength(1);
+    backdrop.emit('click', { target: panel });
+    expect(host.drawer()).toBe(panel);
+    backdrop.emit('click');
+    expect(host.drawer()).toBeUndefined();
+    expect(host.backdrop()).toBeUndefined();
+    expect(backdrop.listenerCount('click')).toBe(0);
+    expect(host.window.document.activeElement).toBe(prior);
+    host.controller.openSettings(host.window);
+    expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+    host.controller.shutdown();
+    expect(host.drawer()).toBeUndefined();
+    expect(host.backdrop()).toBeUndefined();
+  });
+
+  it('disposes each active Settings page once across navigation, close, and reopen', () => {
+    const appearanceDispose = vi.spyOn(SettingsAppearance.prototype, 'dispose');
+    const interactionDispose = vi.spyOn(SettingsInteraction.prototype, 'dispose');
+    const readerDispose = vi.spyOn(SettingsReader.prototype, 'dispose');
+    const keybindingsDispose = vi.spyOn(SettingsKeybindings.prototype, 'dispose');
+    const advancedDispose = vi.spyOn(SettingsAdvanced.prototype, 'dispose');
+    const host = settingsMainHost();
+    try {
+      host.controller.openSettings(host.window);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[1]!.emit('click');
+      expect(appearanceDispose).toHaveBeenCalledTimes(1);
+      nav[2]!.emit('click');
+      expect(interactionDispose).toHaveBeenCalledTimes(1);
+      nav[3]!.emit('click');
+      expect(readerDispose).toHaveBeenCalledTimes(1);
+      expect(keybindingsDispose).not.toHaveBeenCalled();
+      nav[4]!.emit('click');
+      expect(keybindingsDispose).toHaveBeenCalledTimes(1);
+      expect(advancedDispose).not.toHaveBeenCalled();
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Advanced');
+      nav[4]!.emit('click');
+      expect(advancedDispose).not.toHaveBeenCalled();
+      nav[3]!.emit('click');
+      expect(advancedDispose).toHaveBeenCalledTimes(1);
+      (host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
+        'click',
+      );
+      expect(keybindingsDispose).toHaveBeenCalledTimes(2);
+      host.controller.openSettings(host.window);
+      expect(host.drawer()?.children[2]?.children[1]?.textContent).toBe('Keybindings');
+      host.controller.shutdown();
+      expect(keybindingsDispose).toHaveBeenCalledTimes(3);
+    } finally {
+      host.controller.shutdown();
+      appearanceDispose.mockRestore();
+      interactionDispose.mockRestore();
+      readerDispose.mockRestore();
+      keybindingsDispose.mockRestore();
+      advancedDispose.mockRestore();
+    }
+  });
+
+  it('saves Prefix Guide controls live and preserves a dirty keybinding draft across navigation', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    try {
+      host.controller.openSettings(host.window);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[3]!.emit('click');
+      const page = host.drawer()?.children[2] as HTMLElement;
+      const controls = all(page);
+      const guide = controls.find(
+        (node) => node.getAttribute('aria-label') === 'Show Prefix Guide',
+      ) as HTMLElement & { emit(type: string): void };
+      guide.emit('click');
+      expect(host.values.get('keyGuide.enabled')).toBe(false);
+
+      const delay = controls.find(
+        (node) => node.getAttribute('aria-label') === 'Display delay (ms)',
+      ) as HTMLInputElement & { emit(type: string): void };
+      delay.value = '9000';
+      delay.emit('change');
+      expect(host.values.get('keyGuide.delayMs')).toBe(KEY_GUIDE_CONFIG.maxDelayMs);
+      expect(delay.value).toBe(String(KEY_GUIDE_CONFIG.maxDelayMs));
+
+      const body = controls.find((node) => node.id === 'zv-bindings-body')!;
+      const initialRows = body.children.length;
+      const add = controls.find((node) => node.id === 'zv-add-binding') as HTMLElement & {
+        emit(type: string): void;
+      };
+      add.emit('click');
+      expect(body.children.length).toBe(initialRows + 1);
+      expect(host.values.has('bindings')).toBe(false);
+
+      nav[2]!.emit('click');
+      nav[3]!.emit('click');
+      const remounted = all(host.drawer()?.children[2] as HTMLElement);
+      const remountedBody = remounted.find((node) => node.id === 'zv-bindings-body')!;
+      expect(remountedBody.children.length).toBe(initialRows + 1);
+      const apply = remounted.find((node) => node.id === 'zv-save') as HTMLButtonElement;
+      expect(apply.disabled).toBe(true);
+
+      host.press('Escape');
+      host.controller.openSettings(host.window);
+      const reopened = all(host.drawer()?.children[2] as HTMLElement);
+      expect(reopened.find((node) => node.id === 'zv-bindings-body')?.children.length).toBe(
+        initialRows + 1,
+      );
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('switches the whole Settings workspace language live and keeps Advanced writes active', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    try {
+      host.controller.openSettings(host.window);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[4]!.emit('click');
+      let controls = all(host.drawer()?.children[2] as HTMLElement);
+      const chinese = controls.find(
+        (node) => node.localName === 'button' && node.textContent === '中文',
+      ) as HTMLElement & { emit(type: string): void };
+      chinese.emit('click');
+      expect(host.values.get('language')).toBe('zh-CN');
+
+      const panel = host.drawer()!;
+      expect(panel.children[0]?.children[0]?.textContent).toBe('Zotero Neo 设置');
+      expect(panel.children[0]?.children[1]?.textContent).toBe('关闭');
+      expect(Array.from(panel.children[1]?.children ?? []).map((node) => node.textContent)).toEqual(
+        ['外观', '交互', '阅读器', '快捷键', '高级'],
+      );
+      expect(panel.children[2]?.children[0]?.textContent).toBe('高级');
+
+      for (const [index, title] of [
+        [0, '外观'],
+        [1, '交互'],
+        [2, '阅读器'],
+        [3, '快捷键'],
+      ] as const) {
+        (panel.children[1]?.children[index] as HTMLElement & { emit(type: string): void }).emit(
+          'click',
+        );
+        expect(
+          all(panel.children[2] as HTMLElement).find((node) => node.localName === 'h2')
+            ?.textContent,
+        ).toBe(title);
+      }
+      (panel.children[1]?.children[4] as HTMLElement & { emit(type: string): void }).emit('click');
+
+      controls = all(panel.children[2] as HTMLElement);
+      const separator = controls.find(
+        (node) => node.getAttribute('aria-label') === '命名空间分隔符',
+      ) as HTMLInputElement & { emit(type: string): void };
+      separator.value = '::';
+      separator.emit('change');
+      expect(host.values.get('tags.separator')).toBe('::');
+      separator.value = '';
+      separator.emit('change');
+      expect(host.values.get('tags.separator')).toBe('');
+
+      const english = controls.find(
+        (node) => node.localName === 'button' && node.textContent === 'English',
+      ) as HTMLElement & { emit(type: string): void };
+      english.emit('click');
+      expect(host.values.get('language')).toBe('en');
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Advanced');
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('keeps unexpected outside focus when closed by the Close button', () => {
+    const host = settingsMainHost();
+    const outside = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+    host.window.document.body?.append(outside);
+    host.controller.openSettings(host.window);
+    outside.focus();
+    const close = host.drawer()?.children[0]?.children[1] as HTMLElement & {
+      emit(type: string): void;
+    };
+    close.emit('click');
+    expect(host.window.document.activeElement).toBe(outside);
+    expect(host.backdrop()).toBeUndefined();
+    host.controller.shutdown();
+  });
+
+  it('discards unadded themes on Close, backdrop, and Escape', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    try {
+      for (const method of ['Close', 'backdrop', 'Escape'] as const) {
+        host.controller.openSettings(host.window);
+        const addCustom = all(host.drawer()!).find(
+          (node) => node.localName === 'button' && node.textContent === '+ Custom',
+        ) as HTMLElement & { emit(type: string): void };
+        addCustom.emit('click');
+        expect(host.values.has('appearance.interaction.customThemes')).toBe(false);
+        if (method === 'Close') {
+          (
+            host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }
+          ).emit('click');
+        } else if (method === 'backdrop') {
+          (host.backdrop() as HTMLElement & { emit(type: string): void }).emit('click');
+        } else host.press('Escape');
+        expect(host.drawer()).toBeUndefined();
+        expect(host.values.has('appearance.interaction.customThemes')).toBe(false);
+        host.controller.openSettings(host.window);
+        expect(
+          all(host.drawer()!).some(
+            (node) => node.localName === 'button' && node.textContent === '+ Custom',
+          ),
+        ).toBe(true);
+        expect(
+          all(host.drawer()!).some(
+            (node) => node.localName === 'button' && node.textContent === 'Add',
+          ),
+        ).toBe(false);
+        host.press('Escape');
+      }
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('closes on Escape before Selection or Visual and suppresses Main keys while open', () => {
+    const host = settingsMainHost();
+    const clear = vi.spyOn(MainItemSelect.prototype, 'clearSelection');
+    const enter = vi.spyOn(MainItemSelect.prototype, 'enter');
+    const itemsFocused = vi.spyOn(MainItemSelect.prototype, 'itemsFocused').mockReturnValue(true);
+    const notEmpty = vi.spyOn(SelectionStore.prototype, 'empty', 'get').mockReturnValue(false);
+    try {
+      host.controller.openSettings(host.window);
+      const outside = host.window.document.createElementNS(
+        'http://www.w3.org/1999/xhtml',
+        'button',
+      );
+      host.window.document.body?.append(outside);
+      outside.focus();
+      const blocked = host.press('v', outside);
+      host.press('j', outside);
+      host.press(':', outside);
+      expect(blocked.preventDefault).toHaveBeenCalledOnce();
+      expect(enter).not.toHaveBeenCalled();
+      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
+      const inside = host.drawer()?.children[0]?.children[1] as HTMLElement;
+      const tab = host.press('Tab', inside);
+      expect(tab.preventDefault).not.toHaveBeenCalled();
+      const escape = host.press('Escape', outside);
+      expect(escape.preventDefault).toHaveBeenCalledOnce();
+      expect(clear).not.toHaveBeenCalled();
+      expect(host.drawer()).toBeUndefined();
+    } finally {
+      host.controller.shutdown();
+      clear.mockRestore();
+      enter.mockRestore();
+      itemsFocused.mockRestore();
+      notEmpty.mockRestore();
+    }
+  });
+
+  it('retains persisted custom editor and Dark tab across navigation and close', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    const click = (text: string): void => {
+      const button = all(host.drawer()!).find(
+        (node) => node.localName === 'button' && node.textContent === text,
+      ) as HTMLElement & { emit(type: string): void };
+      expect(button).toBeDefined();
+      button.emit('click');
+    };
+    try {
+      host.controller.openSettings(host.window);
+      click('+ Custom');
+      expect(host.values.get('appearance.interaction.customThemes')).toBeUndefined();
+      click('Dark');
+      const field = all(host.drawer()!).find(
+        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
+      ) as HTMLInputElement & { emit(type: string): void };
+      field.focus();
+      const typed = host.press('a', field);
+      expect(typed.preventDefault).not.toHaveBeenCalled();
+      field.value = '#123456';
+      field.emit('input');
+      expect(all(host.drawer()!)).toContain(field);
+      expect(host.window.document.activeElement).toBe(field);
+      click('Add');
+      expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
+      click('Edit');
+      (host.drawer()?.children[1]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
+        'click',
+      );
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
+      (host.drawer()?.children[1]?.children[0] as HTMLElement & { emit(type: string): void }).emit(
+        'click',
+      );
+      const restored = all(host.drawer()!).find(
+        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
+      ) as HTMLInputElement;
+      expect(restored.value).toBe('#123456');
+      click('Close');
+      expect(host.backdrop()).toBeUndefined();
+      host.controller.openSettings(host.window);
+      const reopened = all(host.drawer()!).find(
+        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
+      ) as HTMLInputElement;
+      expect(reopened.value).toBe('#123456');
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('rejects ambiguous ownerless opens and uses only an attached owner or sole fallback', () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const first = pickerMainWindow();
+    const second = pickerMainWindow();
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    expect(controller.openSettings()).toBe(false);
+    controller.addWindow(first.window);
+    controller.addWindow(second.window);
+    expect(controller.openSettings()).toBe(false);
+    expect(controller.openSettings({} as Window)).toBe(false);
+    expect(controller.openSettings(second.window)).toBe(true);
+    expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(false);
+    expect(second.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(true);
+    controller.removeWindow(second.window);
+    expect(controller.openSettings()).toBe(true);
+    expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(true);
+    controller.shutdown();
+    expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(false);
+  });
+
+  it('opens Neo Settings for a Reader-owned Main delegation without switching tabs', () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = settingsMainHost();
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'reader-tab', title: 'Reader', type: 'reader' }],
+      selectedID: 'reader-tab',
+    });
+    try {
+      host.controller.executeFromReader('openNeoSettings', 0, host.window);
+      expect(host.drawer()?.id).toBe('zotero-neo-settings-center');
+      expect(host.window.Zotero_Tabs?.selectedID).toBe('reader-tab');
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('includes the canonical Neo Settings action in Main Command Palette candidates', async () => {
+    const commands = createCommandsProvider({
+      mode: 'main',
+      bindingMode: 'main-normal',
+      actions: ['openNeoSettings'],
+      bindings: resolveBindings(''),
+      language: 'en',
+      execute: () => {},
+    });
+    expect(await commands.load()).toContainEqual(
+      expect.objectContaining({
+        id: 'openNeoSettings',
+        title: 'Neo: Settings',
+        meta: '<Space>ps',
+      }),
+    );
+  });
+});
+
 describe('Main command palette', () => {
   it('opens through the canonical ActionId path in the owner window', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
@@ -1162,7 +1828,7 @@ describe('repeated tab switching', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,
@@ -1215,7 +1881,7 @@ describe('repeated tab switching', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,
@@ -1280,7 +1946,7 @@ describe('main pending-prefix key guide', () => {
         preferences: {
           has: () => false,
           get: (key, fallback) =>
-            key === 'noteEditor.enabled'
+            key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
               ? false
               : key === 'bindings'
                 ? JSON.stringify({
@@ -1417,7 +2083,11 @@ describe('main pending-prefix key guide', () => {
       preferences: {
         has: () => false,
         get: (key, fallback) =>
-          key === 'noteEditor.enabled' ? false : key === 'keyGuide.fontSizePx' ? 18 : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
+            ? false
+            : key === 'keyGuide.fontSizePx'
+              ? 18
+              : fallback,
         set: () => {},
       },
       logger,
@@ -1457,7 +2127,7 @@ describe('Reader owner picker routing', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,
@@ -1597,7 +2267,7 @@ describe('collection navigation repeat pacing', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,

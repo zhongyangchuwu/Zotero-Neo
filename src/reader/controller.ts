@@ -6,7 +6,13 @@ import type {
   ReaderSelectionContext,
 } from '../core/contracts';
 import { CleanupScope } from '../core/cleanup';
-import { keyGuideConfig } from '../core/preferences';
+import {
+  keyGuideConfig,
+  neoCommandLanguage,
+  readerDefaultHighlightColor,
+  readerModeEnabled,
+  readerScrollStep,
+} from '../core/preferences';
 import { copyToClipboard } from '../platform/clipboard';
 import { cloneInto } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
@@ -17,11 +23,7 @@ import {
   inputWouldConsume,
   resolveInputTimeout,
 } from '../input/engine';
-import {
-  KEY_GUIDE_CONFIG,
-  keyGuideLanguage,
-  type KeyGuideLanguage,
-} from '../input/key-guide-config';
+import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import {
@@ -1421,8 +1423,8 @@ export class ReaderSession {
   }
 
   private keyGuideLanguage(): KeyGuideLanguage {
-    return keyGuideLanguage(
-      this.#dependencies.controller.dependencies.preferences.get('language', ''),
+    return neoCommandLanguage(
+      this.#dependencies.controller.dependencies.preferences,
       typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
     );
   }
@@ -1473,22 +1475,17 @@ export class ReaderSession {
   }
 
   private modeEnabled(mode: Exclude<ReaderMode, 'normal'>): boolean {
-    return this.#dependencies.controller.dependencies.preferences.get(`mode.${mode}.enabled`, true);
+    return readerModeEnabled(this.#dependencies.controller.dependencies.preferences, mode);
   }
 
   private scrollStep(): number {
-    return Math.max(
-      1,
-      this.#dependencies.controller.dependencies.preferences.get('scrollStep', 60),
-    );
+    return readerScrollStep(this.#dependencies.controller.dependencies.preferences);
   }
 
   private defaultHighlightColor(): AnnotationColor {
-    const configured = this.#dependencies.controller.dependencies.preferences.get(
-      'defaultHighlightColor',
-      'yellow',
-    );
-    return configured in COLORS ? COLORS[configured as keyof typeof COLORS] : COLORS.yellow;
+    return COLORS[
+      readerDefaultHighlightColor(this.#dependencies.controller.dependencies.preferences)
+    ];
   }
 
   private scrollContainer(pdfWindow: PdfWindow): HTMLElement {

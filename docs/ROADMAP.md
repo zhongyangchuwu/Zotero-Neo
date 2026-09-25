@@ -30,41 +30,45 @@ GitHub Release are complete.
 
 ## Next
 
-- Establish the v0.2 Library interaction substrate in
-  [#55](https://github.com/zhongyangchuwu/Zotero-Neo/issues/55), following
-  [INTERACTION_MODEL.md](INTERACTION_MODEL.md): separate View, Cursor, Selection,
-  VisualTarget, and Scope; make Selection a session-scoped stable-item workset;
-  preserve it across filtering/sorting; keep Space as the shared command namespace
-  while Main uses `s` for persistent-set operations; generalize Key Guide into a
-  pending-prefix guide; then audit action target
-  contracts before layering local find, filtering, ScopeSet, and batch triage
-  operations.
-- Build the first concrete v0.2 Library Triage batch workflow in
-  [#75](https://github.com/zhongyangchuwu/Zotero-Neo/issues/75): collection
-  membership over EffectiveSelection with explicit single-library preflight,
-  target selection through Picker, and Zotero-native membership mutation.
-- Track the batteries-included workflow/distribution direction and the first persistent Plugin
-  Manager surface in [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). The initial
-  panel is a read-only keyboard-first view over Zotero/Mozilla AddonManager state. It is deliberately
-  separate from the shared picker: pickers resolve transient targets, while managers keep a bounded
-  domain context open for repeated browsing and future lifecycle actions. Remote catalogs and
-  arbitrary GitHub XPI installation remain out of scope.
-- Continue tracking native Zotero Reader semantic-selection integration in
-  [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
-  DOM-selection compatibility path remains acceptable until Zotero exposes or
-  documents a supported semantic-selection seam.
+The v0.2 Library substrate and its first end-to-end workflows are implemented.
+The immediate work is consolidation, runtime acceptance, and safety rather than
+adding another broad interaction layer.
 
-- Extend the command palette where concrete workflows justify it, such as count
-  forwarding, bounded arguments/history, or external action registration.
-- Add richer tag-management operations only where Zotero exposes safe native
-  transactions and the operation has clear keyboard workflow value.
-- Consider keymap import/export after the default schema has stabilized in real
-  use.
-- Evaluate an optional Spotlight adapter only if it adds material value beyond
-  Neo's existing item/note/tab target choosers, tag candidate flows, and Command Palette.
-- Prefer native Reader/sidebar integration only where Zotero exposes a supported
-  extension seam; keep Neo-owned overlays when private host behavior would make
-  the integration fragile.
+1. **Finish the Settings/i18n integration** tracked by
+   [#89](https://github.com/zhongyangchuwu/Zotero-Neo/issues/89),
+   [#90](https://github.com/zhongyangchuwu/Zotero-Neo/issues/90), and
+   [#91](https://github.com/zhongyangchuwu/Zotero-Neo/issues/91): merge the
+   Neo Settings Center, custom interaction themes, launcher-only legacy
+   Preferences bridge, and shared application-level locale catalogs; then run a
+   dedicated-profile Zotero GUI smoke before closing the issues.
+2. **Complete consolidated v0.2 runtime acceptance** for
+   [#55](https://github.com/zhongyangchuwu/Zotero-Neo/issues/55) together with
+   the Main -> Reader return-context loop (#84) and Reader selection -> existing
+   note capture loop (#87). Automated tests cover state and target semantics; the
+   remaining gate is real Zotero focus, native-tree projection, cross-context
+   navigation, and note-mutation behavior.
+3. **Make destructive action targets explicit** in
+   [#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88). Start with
+   Trash as the first complete example: when Cursor sits outside a persistent
+   Selection, require an explicit Cursor/Selection choice and surface hidden
+   target counts. Keep this as a narrow action-target seam rather than a generic
+   project-wide Target framework.
+4. Keep the batteries-included workflow direction in
+   [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). Plugin Manager
+   phases 1-3, Library Triage collection/citekey workflows, Research Reading,
+   and the first Knowledge Capture loop are complete. After the acceptance and
+   safety work above, choose the next concrete workflow from observed use rather
+   than pre-building abstractions.
+5. Continue tracking native Zotero Reader semantic-selection integration in
+   [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
+   DOM-selection compatibility path remains acceptable until Zotero exposes or
+   documents a supported semantic-selection seam.
+
+Longer-term candidates remain command-palette arguments/history, richer safe
+tag operations, keymap import/export after the schema stabilizes in real use,
+and an optional Spotlight adapter only if it adds material value beyond Neo's
+existing pickers and Command Palette. Prefer native Reader/sidebar integration
+only where Zotero exposes a supported extension seam.
 
 ## Deferred ideas
 

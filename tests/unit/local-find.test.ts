@@ -51,8 +51,10 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
   }));
   let focused = initialFocused;
   const nativeSelected = new Set([0, Math.max(0, rows.length - 1)]);
-  const moveFocused = vi.fn((index: number) => {
+  const select = vi.fn((index: number) => {
     focused = index;
+    nativeSelected.clear();
+    nativeSelected.add(index);
   });
   const ensureRowIsVisible = vi.fn();
 
@@ -66,8 +68,8 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
           get focused() {
             return focused;
           },
+          select,
         },
-        tree: { _onSelection: moveFocused },
         getRow: (index: number) => rows[index],
         ensureRowIsVisible,
       },
@@ -101,7 +103,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
     session,
     find,
     statuses,
-    moveFocused,
+    select,
     ensureRowIsVisible,
     nativeSelected,
     focused: () => focused,
@@ -154,7 +156,8 @@ describe('Main local find', () => {
     h.session.localFind.query = 'gamma';
     expect(h.find.repeat(h.window, h.session, 1)).toBe(true);
     expect(h.focused()).toBe(2);
-    expect(h.moveFocused).toHaveBeenCalledWith(2, false, false, true, false);
+    expect(h.select).toHaveBeenCalledWith(2, false);
+    expect([...h.nativeSelected]).toEqual([2]);
     expect(h.ensureRowIsVisible).toHaveBeenCalledWith(2);
     expect(h.session.selection.values()).toEqual(before);
 

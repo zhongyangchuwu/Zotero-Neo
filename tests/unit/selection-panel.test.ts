@@ -89,7 +89,12 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
   } as unknown as MainWindowSession;
 
   const captureReturn = vi.fn();
-  const panel = new SelectionPanel({ debug: vi.fn() }, { capture: captureReturn } as never);
+  const selectionChanged = vi.fn();
+  const panel = new SelectionPanel(
+    { debug: vi.fn() },
+    { capture: captureReturn } as never,
+    selectionChanged,
+  );
   const key = (value: string): KeyboardEvent =>
     ({
       key: value,
@@ -108,6 +113,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     moveFocused,
     selectItem,
     captureReturn,
+    selectionChanged,
     key,
   };
 }
@@ -139,18 +145,46 @@ describe('Selection Panel', () => {
     expect(h.session.selection.size).toBe(3);
   });
 
-  it('removes one workset member and clears the workset without deleting Zotero items', () => {
+  it('consumes removal/clear keys and mutates only the persistent SelectionStore', () => {
     const first = item(1);
     const second = item(2);
     const h = harness([first, second], [1, 2]);
 
-    h.panel.handleKey(h.key('x'), h.window, h.session);
+    const remove = h.key('x');
+    h.panel.handleKey(remove, h.window, h.session);
+    expect(remove.preventDefault).toHaveBeenCalledOnce();
+    expect(remove.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(remove.stopPropagation).toHaveBeenCalledOnce();
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 2 }]);
-    expect(h.select).toHaveBeenCalledWith(1, false);
+    expect(h.selectionChanged).toHaveBeenCalledOnce();
+    expect(h.selectionChanged).toHaveBeenLastCalledWith(h.window, h.session);
 
-    h.panel.handleKey(h.key('c'), h.window, h.session);
+    const clear = h.key('c');
+    h.panel.handleKey(clear, h.window, h.session);
+    expect(clear.preventDefault).toHaveBeenCalledOnce();
+    expect(clear.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(clear.stopPropagation).toHaveBeenCalledOnce();
     expect(h.session.selection.empty).toBe(true);
-    expect(h.clearSelection).toHaveBeenCalled();
+    expect(h.selectionChanged).toHaveBeenCalledTimes(2);
+    expect(h.selectionChanged).toHaveBeenLastCalledWith(h.window, h.session);
+    expect(h.select).not.toHaveBeenCalled();
+    expect(h.clearSelection).not.toHaveBeenCalled();
+    expect(h.toggleSelect).not.toHaveBeenCalled();
+    expect(h.moveFocused).not.toHaveBeenCalled();
+  });
+
+  it('keeps panel-only navigation presentation-neutral', () => {
+    const first = item(1);
+    const second = item(2);
+    const h = harness([first, second], [1, 2]);
+    const before = h.session.selection.values();
+
+    for (const value of ['j', 'k', 'G', 'Home']) {
+      h.panel.handleKey(h.key(value), h.window, h.session);
+    }
+
+    expect(h.session.selection.values()).toEqual(before);
+    expect(h.selectionChanged).not.toHaveBeenCalled();
   });
 
   it('reveals the current member explicitly and closes the panel', () => {

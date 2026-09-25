@@ -1,13 +1,7 @@
-import { ACTION_LABELS, isActionId, type ActionId } from '../input/actions';
-import { actionsForBindingMode } from '../input/binding-capabilities';
-import {
-  DEFAULT_BINDINGS,
-  MODES,
-  parseBindingKey,
-  type BindingMap,
-  type Mode,
-} from '../input/bindings';
-import { canonicalBindingSequence, bindingSequenceIsStrictPrefix } from '../input/key-sequence';
+import { ACTION_LABELS, isActionId, type ActionId } from './actions';
+import { actionsForBindingMode } from './binding-capabilities';
+import { DEFAULT_BINDINGS, MODES, parseBindingKey, type BindingMap, type Mode } from './bindings';
+import { canonicalBindingSequence, bindingSequenceIsStrictPrefix } from './key-sequence';
 
 export type BindingEditorLanguage = 'en' | 'zh-CN';
 export type BindingRowId = number;

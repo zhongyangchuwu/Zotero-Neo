@@ -66,6 +66,7 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
 }
 
 export interface MainWindowControllerApi extends MainActionDelegate {
+  openSettings(owner?: Window | null): boolean;
   addWindow(window: MainWindow): void;
   removeWindow(window: MainWindow): void;
   shutdown(): void;
@@ -90,4 +91,5 @@ export interface MainWindowControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
   readonly reader: Pick<ReaderControllerApi, 'rescan' | 'forwardKey'>;
+  readonly mayClaimInitialLibraryFocus?: () => boolean;
 }

@@ -12,9 +12,8 @@ import {
   mainScopeCursorDetached,
   mainScopeCursorRow,
   mainScopeSelectedRows,
-  moveMainItemCursor,
   moveMainScopeCursor,
-  projectMainSelection,
+  selectMainItemCursorAnchor,
   selectOnlyMainScopeCursor,
   toggleMainScopeAtCursor,
 } from './host';
@@ -316,8 +315,8 @@ export class MainNavigation {
           : Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
 
     if (panel === 'items') {
-      if (!moveMainItemCursor(window, next, shouldDebounce)) {
-        this.#logger.debug('focus-only item cursor movement is unavailable');
+      if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
+        this.#logger.debug('item Cursor host-anchor movement is unavailable');
       }
       return;
     }
@@ -432,7 +431,6 @@ export class MainNavigation {
       session.trashedItemIDs = ids;
       if (targets.source === 'selection') {
         for (const ref of targets.refs) session.selection.remove(ref);
-        projectMainSelection(window, session.selection.values());
       }
       this.status(session, `✓ Moved ${ids.length} item${ids.length === 1 ? '' : 's'} to trash`);
     } catch (error) {

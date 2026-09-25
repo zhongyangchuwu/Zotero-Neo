@@ -87,9 +87,7 @@ export function guideEntries(
     .map(([key, candidate]) => {
       const group = candidate.hasChildren;
       const groupLabel = KEY_GUIDE_CONFIG.groupLabels[groupLabelKey(prefix, key)];
-      const actionLabel = candidate.action
-        ? (KEY_GUIDE_CONFIG.actionLabels[candidate.action] ?? ACTION_LABELS[candidate.action])
-        : null;
+      const actionLabel = candidate.action ? ACTION_LABELS[candidate.action] : null;
       return {
         key,
         label: group

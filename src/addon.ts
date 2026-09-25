@@ -8,7 +8,7 @@ import type {
 } from './core/contracts';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
-import { migrateBindingPreferences } from './core/preferences';
+import { migrateBindingPreferences, migrateReaderPreferences } from './core/preferences';
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 
@@ -16,10 +16,12 @@ export interface AddonContext {
   readonly id: string;
   readonly version: string;
   readonly rootURI: string;
+  readonly mayClaimInitialLibraryFocus: boolean;
 }
 
 export interface ZoteroNeoPublicApi {
   readonly reader: ReaderSelectionApi;
+  openSettings(owner?: Window | null): boolean;
 }
 
 export interface ZoteroNeoController {
@@ -62,9 +64,11 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
+      mayClaimInitialLibraryFocus: () => this.#context?.mayClaimInitialLibraryFocus === true,
     });
     main = this.#main;
     this.api = {
+      openSettings: (owner) => this.#main.openSettings(owner),
       reader: {
         getSelection: () => this.#reader.getSelection(),
         registerSelectionAction: (action: ReaderSelectionActionDefinition) =>
@@ -76,6 +80,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   init(context: AddonContext): void {
     this.#context = context;
     migrateBindingPreferences(this.#preferences);
+    migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
     this.#reader.start(context.id);
     (Zotero as ZoteroWithNeo).Neo = this.api;

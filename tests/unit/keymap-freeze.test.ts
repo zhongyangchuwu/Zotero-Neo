@@ -62,6 +62,34 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
+  it('resolves Space p s to Neo Settings in Main, Reader, and Note without a strict-prefix collision', () => {
+    expect(DEFAULT_BINDINGS['main-normal:<Space>pp']).toBe('managePlugins');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>pp']).toBe('managePlugins');
+    expect(DEFAULT_BINDINGS['reader-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(DEFAULT_BINDINGS['note-normal:<Space>pp']).toBe('managePlugins');
+    expect(DEFAULT_BINDINGS['note-normal:<Space>ps']).toBe('openNeoSettings');
+    const bindings = resolveBindings('');
+    for (const mode of ['main-normal', 'reader-normal', 'note-normal'] as const) {
+      const start = advanceInput(
+        { mode, keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
+        ' ',
+      );
+      const prefix = advanceInput({ ...start.state, mode, bindings, allowCountPrefix: true }, 'p');
+      expect(prefix.kind).toBe('pending');
+      expect(
+        advanceInput({ ...prefix.state, mode, bindings, allowCountPrefix: true }, 's'),
+      ).toMatchObject({ kind: 'execute', action: 'openNeoSettings' });
+    }
+  });
+
+  it('keeps newly added defaults on first resolution with existing compact overrides', () => {
+    const bindings = resolveBindings('{"main-normal:q":"openCommandPalette"}');
+    expect(bindings['main-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(bindings['reader-normal:<Space>ps']).toBe('openNeoSettings');
+    expect(bindings['note-normal:<Space>ps']).toBe('openNeoSettings');
+  });
+
   it('shares collection membership keys with Reader item context', () => {
     expect(DEFAULT_BINDINGS['reader-normal:<Space>ca']).toBe('addToCollection');
     expect(DEFAULT_BINDINGS['reader-normal:<Space>cr']).toBe('removeFromCollection');
@@ -123,6 +151,9 @@ describe('0.1.0 default keymap freeze', () => {
   it('uses Space only as Main leader and s as the persistent-set operation', () => {
     expect(DEFAULT_BINDINGS['main-normal:s']).toBe('mainToggleSelection');
     expect(DEFAULT_BINDINGS['main-select:s']).toBe('mainSelectFinish');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>ss']).toBe('manageSelection');
+    expect(DEFAULT_BINDINGS['main-normal:<Space>sc']).toBe('mainClearSelection');
+    expect(DEFAULT_BINDINGS['main-normal:<Esc>']).toBe('mainClearSelection');
     expect('main-normal:<Space>' in DEFAULT_BINDINGS).toBe(false);
     expect('main-select:<Space>' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['main-normal:<Space>ta']).toBe('addTag');
@@ -132,6 +163,10 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', 's')).toMatchObject({
       kind: 'execute',
       action: 'mainToggleSelection',
+    });
+    expect(press('main-normal', 'escape')).toMatchObject({
+      kind: 'execute',
+      action: 'mainClearSelection',
     });
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
 

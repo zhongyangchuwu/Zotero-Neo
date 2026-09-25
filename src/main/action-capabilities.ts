@@ -12,6 +12,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainQuickSearch',
   'mainAdvancedSearch',
   'managePlugins',
+  'openNeoSettings',
   'manageSelection',
   'mainReturnContext',
   'switchTab',
@@ -50,6 +51,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainTreeExpandAll',
   'mainTreeCollapseAll',
   'mainToggleSelection',
+  'mainClearSelection',
   'mainEnterSelect',
 ] as const satisfies readonly ActionId[]);
 
@@ -81,6 +83,7 @@ export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
   'findCollectionItems',
   'findNotes',
   'managePlugins',
+  'openNeoSettings',
   'mainReturnContext',
   'switchTab',
   'mainYankCitekey',

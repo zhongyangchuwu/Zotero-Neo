@@ -25,6 +25,7 @@ function validRef(ref: ItemRef): boolean {
  */
 export class SelectionStore {
   readonly #items = new Map<string, ItemRef>();
+  readonly #listeners = new Set<() => void>();
 
   get size(): number {
     return this.#items.size;
@@ -42,21 +43,30 @@ export class SelectionStore {
     return [...this.#items.values()];
   }
 
+  observe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
   add(ref: ItemRef): boolean {
     if (!validRef(ref)) return false;
     const key = keyOf(ref);
     if (this.#items.has(key)) return false;
     this.#items.set(key, { libraryID: ref.libraryID, itemID: ref.itemID });
+    this.emitChange();
     return true;
   }
 
   remove(ref: ItemRef): boolean {
-    return this.#items.delete(keyOf(ref));
+    const changed = this.#items.delete(keyOf(ref));
+    if (changed) this.emitChange();
+    return changed;
   }
 
   clear(): boolean {
     if (!this.#items.size) return false;
     this.#items.clear();
+    this.emitChange();
     return true;
   }
 
@@ -83,11 +93,25 @@ export class SelectionStore {
 
     const allSelected = [...target.values()].every((ref) => this.has(ref));
     if (allSelected) {
-      for (const ref of target.values()) this.remove(ref);
+      for (const ref of target.values()) this.#items.delete(keyOf(ref));
+      this.emitChange();
       return 'removed';
     }
 
-    for (const ref of target.values()) this.add(ref);
+    for (const ref of target.values()) {
+      const key = keyOf(ref);
+      if (!this.#items.has(key))
+        this.#items.set(key, { libraryID: ref.libraryID, itemID: ref.itemID });
+    }
+    this.emitChange();
     return 'added';
+  }
+
+  private emitChange(): void {
+    for (const listener of this.#listeners) {
+      try {
+        listener();
+      } catch {}
+    }
   }
 }

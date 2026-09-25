@@ -753,6 +753,25 @@ describe('Reader-origin main delegation', () => {
     expect(delegateMain).toHaveBeenCalledWith('findAllItems', 0, created.reader._window);
     created.session.dispose();
   });
+
+  it('delegates Space p s to Neo Settings without leaving the Reader owner window', () => {
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+
+    const leader = readerKey(' ');
+    const prefix = readerKey('p');
+    const settings = readerKey('s');
+    created.session.focusAndHandle(leader.event);
+    created.session.focusAndHandle(prefix.event);
+    created.session.focusAndHandle(settings.event);
+
+    expect(leader.preventDefault).toHaveBeenCalledOnce();
+    expect(prefix.preventDefault).toHaveBeenCalledOnce();
+    expect(settings.preventDefault).toHaveBeenCalledOnce();
+    expect(delegateMain).toHaveBeenCalledOnce();
+    expect(delegateMain).toHaveBeenCalledWith('openNeoSettings', 0, created.reader._window);
+    created.session.dispose();
+  });
 });
 describe('reader Space-leader key guide', () => {
   it('updates nested prefixes, returns with Backspace, and closes on invalid input or Escape', () => {

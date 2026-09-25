@@ -81,6 +81,7 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `<Space>q`  | Close the active Zotero tab                                               |
 | `<Space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
 | `<Space>pp` | Open the persistent Plugin Manager panel |
+| `<Space>ps` | Open Neo Settings without leaving the Reader tab |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
@@ -485,6 +486,7 @@ and focus context:
 | `<Space>fq` | Focus/select Zotero's native Quick Search field |
 | `<Space>fa` | Open Zotero's native Advanced Search; convert current Quick Search text when present |
 | `<Space>pp` | Open the persistent Plugin Manager panel |
+| `<Space>ps` | Open Neo Settings |
 | `<Space>,` | Choose and switch to an open Zotero tab |
 | `<Space>q` | Close the active Zotero tab |
 | `<Space>ta` | Add one tag to the current target(s) |
@@ -709,8 +711,8 @@ a highlight and opens its annotation comment editor.
 
 ## Customising keybindings
 
-Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to the
-**Zotero Neo** tab.
+Open Neo Settings with `<Space>ps` from Main, Reader, or Note Normal mode, then choose
+**Keybindings**. The same page also owns Prefix Guide visibility, delay, and font size.
 
 - Every row in the **Keybindings** table maps a _mode + key sequence_ to an _action_. Multiple rows may bind keys to the same action.
 - Edit the key sequence directly in its cell. Key sequences preserve case: `b` and `B` are different.
@@ -727,16 +729,16 @@ Open **Edit → Preferences** (macOS: **Zotero → Settings**) and navigate to t
 - The Action selector is searchable by localized action label or action identifier (case-insensitive). Use `↑` / `↓`, `Enter`, or `Escape`, or click an option to choose it.
 - An existing row whose Action is not supported by its selected Mode remains visible so it can be corrected. Such incompatible rows block **Apply bindings** until they are fixed; they are never removed automatically.
 - Rows show visible selected and hover states, separators distinguish adjacent rows, and the table headings remain visible while the table is scrolled.
-- Add, edit, and delete operations are drafts until you click **Apply bindings**. Closing Preferences without applying discards the draft and leaves the active bindings unchanged.
-- Click **Reset to defaults** to stage the default bindings. Reset is also a draft operation: the defaults take effect only after **Apply bindings**, and closing without applying abandons the reset.
+- Add, edit, and delete operations are drafts until you click **Apply bindings**. Switching Settings sections or closing and reopening Neo Settings keeps the dirty draft for the current Zotero Main-window session; it is not persisted as active bindings until Apply.
+- Click **Reset to defaults** to stage the default bindings. Reset is also a draft operation: the defaults take effect only after **Apply bindings**.
 - **Apply bindings** checks all rows before saving. Empty or malformed rows, incompatible mode/action rows, and exact duplicate mode-and-sequence rows block Apply. A valid same-mode prefix pair such as `f` and `ff` is allowed but shows a warning because the shorter sequence may wait for a continuation and introduce a timeout delay.
 - If saving fails, the draft remains in the table and the failure is reported; retry **Apply bindings** after addressing the reported failure.
 - After a successful Apply, a deleted shortcut remains unbound after restart and no longer appears in the resolved Key Guide or Command Palette hints.
-- Appearance, key guide, highlight colour, mode, marks and scroll settings save automatically on change.
-- Note editor Vim mode can be turned on or off independently from the Preferences panel.
+- Appearance, Prefix Guide, highlight colour, mode, marks and scroll settings save automatically on change.
+- Note editor Vim mode can be turned on or off independently from Neo Settings.
 
-The preferences pane reopens on the last-used section after a restart. Init
-failures are reported to `zotero-neo-startup.log` in the profile directory with
+The legacy Zotero Preferences pane remains a compatibility bridge for settings that
+have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in the profile directory with
 `[prefs]`-prefixed lines.
 
 ### Action reference
@@ -855,6 +857,9 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 
 ## Settings
 
+Open Neo Settings with `<Space>ps` from Main, Reader, or Note Normal mode. From Reader,
+the Settings workspace opens in the owning Zotero window without switching back to Library.
+
 | Setting                  | Default                  | Description                                                                                                                                           |
 | ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Appearance               | Auto                     | Auto follows Zotero's computed Light/Dark palette; Light and Dark force all Neo-owned panels without recolouring PDF pages or annotations             |
@@ -875,8 +880,12 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
 | Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |
+| Interface + command language | Follow Zotero         | Localize the Neo Settings workspace plus command labels in Prefix Guide, Command Palette, and Keybindings; Follow Zotero derives English/Chinese from the host locale |
+| Tag namespace separator  | `/`                      | Interpret flat Zotero tag strings as virtual Neo paths; an empty separator keeps tag matching completely flat                                    |
 
-Appearance, key guide, picker, and scroll settings save automatically on change.
+Appearance, Prefix Guide, picker, Reader, interface/command language, and tag namespace settings save automatically on change.
+Keybinding table edits remain drafts until **Apply bindings**.
+The Zotero Preferences pane is now only a compatibility launcher for opening Neo Settings; it no longer contains duplicate editable controls.
 
 - **Step scrolling** moves instantly by the scroll step per `j`/`k`/`zh`/`zl` press.
 - **Constant-speed scrolling** glides at a fixed speed while a scroll key is

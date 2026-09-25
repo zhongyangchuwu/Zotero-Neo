@@ -51,6 +51,9 @@ function fakePdfWindow() {
 
 function createHarness(values: Readonly<Record<string, boolean | number | string>> = {}) {
   const preferences = {
+    has(key: string): boolean {
+      return Object.hasOwn(values, key);
+    },
     get<T extends boolean | number | string>(key: string, fallback: T): T {
       return (values[key] ?? fallback) as T;
     },
@@ -96,6 +99,22 @@ describe('ReaderSmoothScroller', () => {
     expect(window.cancelAnimationFrame).toHaveBeenCalledOnce();
     expect(window.pendingFrames()).toBe(0);
     expect(scroller.isRepeat(keyboardEvent('j'))).toBe(false);
+  });
+
+  it('uses the canonical legacy mode and speed normalization', () => {
+    const window = fakePdfWindow();
+    const { scroller, scrollBy } = createHarness({
+      smoothScroll: true,
+      'smoothScroll.initialSpeed': 2000,
+      'smoothScroll.maxSpeed': 1200,
+      'smoothScroll.acceleration': 1000,
+    });
+
+    expect(scroller.mode).toBe('trapezoid');
+    expect(scroller.start(window.pdfWindow, 'j', down)).toBe(true);
+    expect(scrollBy).toHaveBeenNthCalledWith(1, window.pdfWindow, 0, 2000 / 120);
+    window.runNext(16);
+    expect(scrollBy).toHaveBeenNthCalledWith(2, window.pdfWindow, 0, 32);
   });
 
   it('accelerates while held and decelerates after trapezoid release', () => {

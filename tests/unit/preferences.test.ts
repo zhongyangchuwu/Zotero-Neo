@@ -1,20 +1,41 @@
 import { describe, expect, it } from 'vitest';
 
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
+import { advanceInput } from '../../src/input/engine';
+import { bindingsForMode } from '../../src/input/bindings';
 
 import {
   BINDING_SCHEMA_VERSION,
+  DEFAULT_TAG_SEPARATOR,
+  KEY_GUIDE_DELAY_PREFERENCE_KEY,
+  KEY_GUIDE_ENABLED_PREFERENCE_KEY,
+  KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
+  LANGUAGE_PREFERENCE_KEY,
+  NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
+  READER_SCROLL_MODE_PREFERENCE_KEY,
+  TAG_SEPARATOR_PREFERENCE_KEY,
   bindingsFromPreferences,
+  configuredNeoLanguage,
   keyGuideConfig,
   migrateBindingPreferences,
+  neoCommandLanguage,
+  normalizeKeyGuideNumber,
+  migrateReaderPreferences,
+  normalizeReaderScrollNumber,
+  noteEditorEnabled,
   pickerMouseEnabled,
+  readerDefaultHighlightColor,
+  readerMarksPersist,
+  readerModeEnabled,
+  readerScrollConfig,
   scrollModeFromPreferences,
   smoothScrollConfig,
-  type PreferenceReader,
+  tagSeparatorFromPreferences,
+  type PreferenceWriter,
 } from '../../src/core/preferences';
 
-class TestPreferences implements PreferenceReader {
+class TestPreferences implements PreferenceWriter {
   readonly writes: Array<readonly [string, boolean | number | string]> = [];
   private readonly values: Record<string, boolean | number | string>;
   constructor(values: Readonly<Record<string, boolean | number | string>>) {
@@ -35,6 +56,32 @@ class TestPreferences implements PreferenceReader {
     this.writes.push([key, value]);
   }
 }
+
+describe('advanced preferences', () => {
+  it('normalizes the configured command language and otherwise follows the host locale', () => {
+    const automatic = new TestPreferences({});
+    expect(configuredNeoLanguage(automatic)).toBe('');
+    expect(neoCommandLanguage(automatic, 'zh-TW')).toBe('zh-CN');
+
+    const explicit = new TestPreferences({ [LANGUAGE_PREFERENCE_KEY]: 'en' });
+    expect(configuredNeoLanguage(explicit)).toBe('en');
+    expect(neoCommandLanguage(explicit, 'zh-CN')).toBe('en');
+
+    const invalid = new TestPreferences({ [LANGUAGE_PREFERENCE_KEY]: 'fr' });
+    expect(configuredNeoLanguage(invalid)).toBe('');
+    expect(neoCommandLanguage(invalid, 'en-US')).toBe('en');
+  });
+
+  it('uses slash for tag namespaces while preserving explicit flat and custom separators', () => {
+    expect(tagSeparatorFromPreferences(new TestPreferences({}))).toBe(DEFAULT_TAG_SEPARATOR);
+    expect(
+      tagSeparatorFromPreferences(new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '' })),
+    ).toBe('');
+    expect(
+      tagSeparatorFromPreferences(new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '::' })),
+    ).toBe('::');
+  });
+});
 
 describe('scroll preferences', () => {
   it('uses follow mode when the configured mode is absent or invalid', () => {
@@ -105,6 +152,75 @@ describe('scroll preferences', () => {
       stopOnRelease: false,
       followSpeed: 2000,
     });
+  });
+
+  it('persists the legacy smoothScroll boolean into scroll.mode once', () => {
+    const enabled = new TestPreferences({ smoothScroll: true });
+    migrateReaderPreferences(enabled);
+    expect(enabled.writes).toEqual([[READER_SCROLL_MODE_PREFERENCE_KEY, 'trapezoid']]);
+    expect(scrollModeFromPreferences(enabled)).toBe('trapezoid');
+    migrateReaderPreferences(enabled);
+    expect(enabled.writes).toHaveLength(1);
+
+    const disabled = new TestPreferences({ smoothScroll: false });
+    migrateReaderPreferences(disabled);
+    expect(disabled.writes).toEqual([[READER_SCROLL_MODE_PREFERENCE_KEY, 'step']]);
+
+    const explicit = new TestPreferences({ 'scroll.mode': 'follow', smoothScroll: true });
+    migrateReaderPreferences(explicit);
+    expect(explicit.writes).toEqual([]);
+
+    const fresh = new TestPreferences({});
+    migrateReaderPreferences(fresh);
+    expect(fresh.writes).toEqual([]);
+  });
+
+  it('normalizes Reader scroll numbers through one canonical configuration', () => {
+    const preferences = new TestPreferences({
+      scrollStep: -40,
+      'smoothScroll.followSpeed': 9000,
+      'smoothScroll.initialSpeed': 2500,
+      'smoothScroll.maxSpeed': 100,
+      'smoothScroll.acceleration': 50,
+      'smoothScroll.deceleration': 20000,
+      'smoothScroll.stopOnRelease': true,
+    });
+
+    expect(readerScrollConfig(preferences)).toEqual({
+      mode: 'follow',
+      scrollStep: 10,
+      followSpeed: 6000,
+      initialSpeed: 2000,
+      maxSpeed: 2000,
+      acceleration: 100,
+      deceleration: 12000,
+      stopOnRelease: true,
+    });
+    expect(normalizeReaderScrollNumber('scrollStep', Number.NaN)).toBe(60);
+    expect(normalizeReaderScrollNumber('followSpeed', 1234.9)).toBe(1234);
+  });
+
+  it('normalizes Reader mode, marks, and highlight preferences', () => {
+    const defaults = new TestPreferences({});
+    expect(readerModeEnabled(defaults, 'visual')).toBe(true);
+    expect(readerModeEnabled(defaults, 'insert')).toBe(true);
+    expect(readerMarksPersist(defaults)).toBe(false);
+    expect(readerDefaultHighlightColor(defaults)).toBe('yellow');
+
+    const configured = new TestPreferences({
+      'mode.visual.enabled': false,
+      'mode.insert.enabled': false,
+      'marks.persist': true,
+      defaultHighlightColor: 'purple',
+    });
+    expect(readerModeEnabled(configured, 'visual')).toBe(false);
+    expect(readerModeEnabled(configured, 'insert')).toBe(false);
+    expect(readerMarksPersist(configured)).toBe(true);
+    expect(readerDefaultHighlightColor(configured)).toBe('purple');
+
+    expect(
+      readerDefaultHighlightColor(new TestPreferences({ defaultHighlightColor: 'orange' })),
+    ).toBe('yellow');
   });
 });
 
@@ -393,6 +509,58 @@ describe('binding preferences', () => {
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
+  it('preserves schema-15 custom Space-s dispatch around new Selection defaults', () => {
+    const exact = new TestPreferences({
+      'bindings.schemaVersion': 15,
+      bindings: JSON.stringify({ 'main-normal:<Space>s': 'nextTab' }),
+    });
+    migrateBindingPreferences(exact);
+    expect(JSON.parse(exact.get('bindings', ''))).toEqual({
+      'main-normal:<Space>s': 'nextTab',
+      'main-normal:<Space>sc': null,
+      'main-normal:<Space>ss': null,
+    });
+    const bindings = bindingsForMode(bindingsFromPreferences(exact), 'main-normal');
+    const leader = advanceInput(
+      { mode: 'main-normal', keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
+      ' ',
+    );
+    expect(leader.kind).toBe('pending');
+    expect(advanceInput({ ...leader.state, bindings, allowCountPrefix: true }, 's')).toMatchObject({
+      kind: 'execute',
+      action: 'nextTab',
+    });
+
+    const descendants = new TestPreferences({
+      'bindings.schemaVersion': 15,
+      bindings: JSON.stringify({
+        'main-normal:<Space>ssx': 'nextTab',
+        'main-normal:<Space>scx': 'previousTab',
+      }),
+    });
+    migrateBindingPreferences(descendants);
+    expect(JSON.parse(descendants.get('bindings', ''))).toEqual({
+      'main-normal:<Space>sc': null,
+      'main-normal:<Space>scx': 'previousTab',
+      'main-normal:<Space>ss': null,
+      'main-normal:<Space>ssx': 'nextTab',
+    });
+
+    const explicit = new TestPreferences({
+      'bindings.schemaVersion': 15,
+      bindings: JSON.stringify({
+        'main-normal:<Space>s': 'nextTab',
+        'main-normal:<Space>ss': 'manageSelection',
+      }),
+    });
+    migrateBindingPreferences(explicit);
+    expect(JSON.parse(explicit.get('bindings', ''))).toEqual({
+      'main-normal:<Space>s': 'nextTab',
+      'main-normal:<Space>sc': null,
+      'main-normal:<Space>ss': 'manageSelection',
+    });
+  });
+
   it('migrates schema 9 yank unbindings to Y while preserving genuine custom yy chords', () => {
     const unbound = new TestPreferences({
       'bindings.schemaVersion': 9,
@@ -499,8 +667,8 @@ describe('key guide preferences', () => {
     expect(
       keyGuideConfig(
         new TestPreferences({
-          'keyGuide.delayMs': KEY_GUIDE_CONFIG.maxDelayMs + 1_000,
-          'keyGuide.fontSizePx': KEY_GUIDE_CONFIG.maxFontSizePx + 10,
+          [KEY_GUIDE_DELAY_PREFERENCE_KEY]: KEY_GUIDE_CONFIG.maxDelayMs + 1_000,
+          [KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY]: KEY_GUIDE_CONFIG.maxFontSizePx + 10,
         }),
       ),
     ).toEqual({
@@ -511,9 +679,9 @@ describe('key guide preferences', () => {
     expect(
       keyGuideConfig(
         new TestPreferences({
-          'keyGuide.enabled': false,
-          'keyGuide.delayMs': -10,
-          'keyGuide.fontSizePx': 1,
+          [KEY_GUIDE_ENABLED_PREFERENCE_KEY]: false,
+          [KEY_GUIDE_DELAY_PREFERENCE_KEY]: -10,
+          [KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY]: 1,
         }),
       ),
     ).toEqual({
@@ -521,6 +689,8 @@ describe('key guide preferences', () => {
       delayMs: 0,
       fontSizePx: KEY_GUIDE_CONFIG.minFontSizePx,
     });
+    expect(normalizeKeyGuideNumber('delayMs', Number.NaN)).toBe(KEY_GUIDE_CONFIG.defaultDelayMs);
+    expect(normalizeKeyGuideNumber('fontSizePx', 18.9)).toBe(18);
   });
 });
 
@@ -533,5 +703,16 @@ describe('picker preferences', () => {
     expect(
       pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: true })),
     ).toBe(true);
+  });
+});
+
+describe('note editor preferences', () => {
+  it('defaults Vim editing on and reads changes without startup migration', () => {
+    const preferences = new TestPreferences({});
+    expect(noteEditorEnabled(preferences)).toBe(true);
+    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, false);
+    expect(noteEditorEnabled(preferences)).toBe(false);
+    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
+    expect(noteEditorEnabled(preferences)).toBe(true);
   });
 });

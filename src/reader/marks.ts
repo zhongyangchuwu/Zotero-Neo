@@ -1,4 +1,5 @@
 import type { PreferenceStore } from '../core/preference-store';
+import { readerMarksPersist } from '../core/preferences';
 import type { ItemRuntime, Mark, MarksPayload, PdfWindow, ReaderRuntime } from './types';
 
 interface ItemRepository {
@@ -118,8 +119,7 @@ export class ReaderMarks {
     const position = this.position(pdfWindow);
     marks[char] = { ...position, key: annotationKey, ts: Date.now() };
     let persisted = '';
-    if (this.#host.preferences.get('marks.persist', false))
-      persisted = await this.save(marks, reader);
+    if (readerMarksPersist(this.#host.preferences)) persisted = await this.save(marks, reader);
     const page = position.pageIndex === null ? '' : `  p.${position.pageIndex + 1}`;
     this.#host.showStatus(
       `✓ mark ${char} set${page}${persisted ? ` · saved (${persisted})` : ''}`,
@@ -172,13 +172,13 @@ export class ReaderMarks {
       return;
     }
     delete marks[char];
-    if (this.#host.preferences.get('marks.persist', false)) await this.save(marks, reader);
+    if (readerMarksPersist(this.#host.preferences)) await this.save(marks, reader);
     this.#host.showStatus(`✓ mark ${char} deleted`, 1200);
   }
 
   async clear(marks: Record<string, Mark>, reader: ReaderRuntime): Promise<void> {
     for (const char of Object.keys(marks)) delete marks[char];
-    if (this.#host.preferences.get('marks.persist', false)) await this.save(marks, reader);
+    if (readerMarksPersist(this.#host.preferences)) await this.save(marks, reader);
     this.#host.showStatus('✓ all marks deleted', 1200);
   }
 
@@ -226,7 +226,7 @@ export class ReaderMarks {
   }
 
   load(marks: Record<string, Mark>, reader: ReaderRuntime, retry = 0): void {
-    if (!this.#host.preferences.get('marks.persist', false)) return;
+    if (!readerMarksPersist(this.#host.preferences)) return;
     const attachment = this.#host.itemForReader(reader);
     if (!attachment) {
       if (retry < 20) this.#host.schedule(500, () => this.load(marks, reader, retry + 1));

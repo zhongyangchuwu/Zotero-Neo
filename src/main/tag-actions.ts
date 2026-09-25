@@ -1,6 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
-import type { PreferenceReader } from '../core/preferences';
+import { tagSeparatorFromPreferences, type PreferenceReader } from '../core/preferences';
 import type { FuzzyPicker } from './picker';
 import { createTagCandidateProvider, type TagRecord } from './picker/providers/tags';
 import type { MainNavigation } from './navigation';
@@ -96,7 +96,7 @@ export class TagActions {
       this.#navigation.status(session, '✗ Add Tag requires one library at a time');
       return;
     }
-    const separator = this.#preferences.get('tags.separator', '/');
+    const separator = tagSeparatorFromPreferences(this.#preferences);
     const source = createTagCandidateProvider({
       title: `Add Tag · ${targetLabel(targets)}`,
       placeholder: '> Search or create a tag…',
@@ -136,7 +136,7 @@ export class TagActions {
     const source = createTagCandidateProvider({
       title: `Remove Tag · ${targetLabel(targets)}`,
       placeholder: '> Search assigned tags…',
-      separator: this.#preferences.get('tags.separator', '/'),
+      separator: tagSeparatorFromPreferences(this.#preferences),
       loadTags: async () => tags,
       describe: (tag) => presenceLabel(targets, tag),
     });
@@ -165,7 +165,7 @@ export class TagActions {
     const source = createTagCandidateProvider({
       title: 'Toggle Tag Filter',
       placeholder: '> Search tags to toggle…',
-      separator: this.#preferences.get('tags.separator', '/'),
+      separator: tagSeparatorFromPreferences(this.#preferences),
       loadTags: async () => {
         const scoped: readonly TagRecord[] = row?.getTags
           ? await row.getTags()

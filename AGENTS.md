@@ -117,11 +117,12 @@ assets/
     icons/                 seven-size transparent runtime PNGs
 src/
   addon.ts                 composed add-on controller
+  i18n/                    shared app localization and locale catalogs
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and matcher
   main/                    main-window controller and UI features
   reader/                  reader lifecycle and features
-  preferences/index.ts     preference behavior and localization
+  preferences/index.ts     legacy Preferences registration / Settings launcher
   platform/                narrow host-boundary adapters
 vendor/                    pinned, licensed third-party source/build snapshots
 ```
@@ -215,14 +216,15 @@ Selection or mutate notes directly.
 |------|---------|
 | `src/bootstrap.ts` | Gecko Bootstrap lifecycle entry point |
 | `src/addon.ts` | Runtime composition and preference registration |
-| `src/input/` | Canonical bindings and bilingual action metadata |
+| `src/i18n/` | Shared application localization, action labels, and locale catalogs |
+| `src/input/` | Canonical bindings and action metadata |
 | `src/reader/controller.ts` | Reader session orchestration, input, actions, selection, annotation, and scroll behavior |
 | `src/reader/host-key-bridge.ts` | Private PdfView key/focus patch lifecycle |
 | `src/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
 | `src/reader/navigation.ts` | Reader history/zoom/page/search/split/focus host operations |
 | `src/reader/selection-range.ts` | Temporary DOM Select range state, motions, and view markers |
 | `src/main/controller.ts` | Main-window key dispatch and lifecycle |
-| `src/preferences/index.ts` | Preferences behavior and localization |
+| `src/preferences/index.ts` | Legacy Preferences registration and behavior |
 | `tools/build.mjs` | esbuild/XPI package pipeline |
 | `tools/check-package.mjs` | Generated-XPI member contract |
 | `tools/check-release.mjs` | Release metadata validator |

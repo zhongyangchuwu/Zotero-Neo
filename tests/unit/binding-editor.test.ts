@@ -13,7 +13,7 @@ import {
   transition,
   validateBindingDraft,
   type BindingEditorRow,
-} from '../../src/preferences/binding-editor';
+} from '../../src/input/binding-editor';
 
 function row(id: number, mode: string, key: string, action: string): BindingEditorRow {
   return { id, mode, key, action };

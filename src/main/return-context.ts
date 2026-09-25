@@ -5,9 +5,8 @@ import type { MainPanel, MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 import {
   currentMainItemCursorRef,
-  mainItemRowForRef,
   mainScopeSelectedIDs,
-  projectMainSelection,
+  restoreMainItemCursorAnchor,
   restoreMainScopeIDs,
   selectedMainTabID,
   selectMainTab,
@@ -64,6 +63,14 @@ export class MainReturnContext {
     }
 
     const partial: string[] = [];
+    if (bookmark.tabID) {
+      try {
+        selectMainTab(window, bookmark.tabID);
+      } catch (error) {
+        this.#logger.debug(`return tab restore failed: ${String(error)}`);
+        partial.push('tab');
+      }
+    }
 
     try {
       if (bookmark.scopeIDs.length && !(await restoreMainScopeIDs(window, bookmark.scopeIDs))) {
@@ -103,18 +110,8 @@ export class MainReturnContext {
       partial.push('advanced search');
     }
 
-    if (bookmark.cursor && mainItemRowForRef(window, bookmark.cursor) === undefined) {
+    if (bookmark.cursor && !restoreMainItemCursorAnchor(window, bookmark.cursor)) {
       partial.push('cursor');
-    }
-    projectMainSelection(window, session.selection.values(), bookmark.cursor);
-
-    if (bookmark.tabID) {
-      try {
-        selectMainTab(window, bookmark.tabID);
-      } catch (error) {
-        this.#logger.debug(`return tab restore failed: ${String(error)}`);
-        partial.push('tab');
-      }
     }
 
     if (!this.#navigation.focusPanel(window, session, bookmark.panel)) partial.push('focus');

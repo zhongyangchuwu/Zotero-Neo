@@ -15,7 +15,12 @@ import {
   type MainExecutableAction,
   type ReaderDelegableMainAction,
 } from './action-capabilities';
-import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
+import {
+  keyGuideConfig,
+  neoCommandLanguage,
+  noteEditorEnabled,
+  pickerMouseEnabled,
+} from '../core/preferences';
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
@@ -25,11 +30,7 @@ import {
   cancelPendingInput,
   resolveInputTimeout,
 } from '../input/engine';
-import {
-  KEY_GUIDE_CONFIG,
-  keyGuideLanguage,
-  type KeyGuideLanguage,
-} from '../input/key-guide-config';
+import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { guideEntries, isGuidePrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { isEditableElement } from '../platform/dom';
@@ -89,7 +90,11 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#navigation,
       this.#viewActions,
     );
-    this.#selectionPanel = new SelectionPanel(dependencies.logger, this.#returnContext);
+    this.#selectionPanel = new SelectionPanel(
+      dependencies.logger,
+      this.#returnContext,
+      (window, session) => this.#itemSelect.refresh(window, session.selection),
+    );
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
       pickerMouseEnabled(dependencies.preferences),
     );
@@ -128,9 +133,19 @@ export class MainWindowController implements MainWindowControllerApi {
 
   addWindow(window: MainWindow): void {
     if (this.#sessions.has(window)) return;
-    const session = new MainWindowSession(window, this.#dependencies.preferences);
+    const session = new MainWindowSession(
+      window,
+      this.#dependencies.preferences,
+      this.#dependencies.mayClaimInitialLibraryFocus?.() ?? false,
+    );
     this.#sessions.set(window, session);
-    session.cleanup.add(installMainViewLifecycle(window, session, this.#dependencies.logger));
+    this.#itemSelect.addWindow(window, session.selection, session.interactionAppearance);
+    session.cleanup.add(
+      installMainViewLifecycle(window, this.#dependencies.logger, () =>
+        this.#itemSelect.refresh(window, session.selection),
+      ),
+    );
+    session.focusOwnership.start();
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     let readerScanFailed = false;
@@ -151,7 +166,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#noteEditor.sync(
         window,
         session,
-        this.#dependencies.preferences.get('noteEditor.enabled', true),
+        noteEditorEnabled(this.#dependencies.preferences),
         (action, count, target, mode, bindings) =>
           this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
@@ -171,6 +186,9 @@ export class MainWindowController implements MainWindowControllerApi {
     };
     session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
+    session.cleanup.addEventListener(window.document, 'focusin', (event) => {
+      if (session.settings.contains(event.target)) this.resetMainInput(window, session);
+    });
     session.cleanup.add(() => {
       this.#picker.close(session);
       this.#pluginManager.close(session);
@@ -192,6 +210,37 @@ export class MainWindowController implements MainWindowControllerApi {
 
   shutdown(): void {
     for (const window of [...this.#sessions.keys()]) this.removeWindow(window);
+  }
+
+  openSettings(owner?: Window | null): boolean {
+    const session = owner ? this.#sessions.get(owner as MainWindow) : undefined;
+    const resolved =
+      session ?? (this.#sessions.size === 1 ? this.#sessions.values().next().value : undefined);
+    if (!resolved) return false;
+    const window = resolved.window;
+    this.#picker.close(resolved);
+    this.#pluginManager.close(resolved);
+    this.#selectionPanel.close(resolved);
+    this.#localFind.close(resolved);
+    this.resetMainInput(window, resolved);
+    try {
+      window.focus();
+      resolved.settings.openWorkspace();
+      return true;
+    } catch (error) {
+      this.#dependencies.logger.debug(`Settings open failed: ${String(error)}`);
+      resolved.settings.close();
+      return false;
+    }
+  }
+
+  private resetMainInput(window: MainWindow, session: MainWindowSession): void {
+    session.keyBuffer = '';
+    session.countBuffer = '';
+    session.inputRevision += 1;
+    window.clearTimeout(session.keyTimer);
+    session.keyTimer = undefined;
+    this.clearKeyGuide(window, session);
   }
 
   executeFromReader(
@@ -301,6 +350,20 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
+    if (session.settings.open) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
+        session.settings.close();
+      } else if (!session.settings.contains(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation();
+      }
+      this.resetMainInput(window, session);
+      return;
+    }
     if (session.localFind.open) {
       this.#localFind.handleKey(event, window, session);
       return;
@@ -318,7 +381,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (
-      this.#dependencies.preferences.get('noteEditor.enabled', true) &&
+      noteEditorEnabled(this.#dependencies.preferences) &&
       this.#noteEditor.isStandalone(window)
     ) {
       this.#noteEditor.onKeyDown(event, window, session, (action, count, target, mode, bindings) =>
@@ -409,6 +472,14 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (decision.kind === 'execute') {
+      if (
+        decision.action === 'mainClearSelection' &&
+        event.key.toLowerCase() === 'escape' &&
+        (session.selection.empty || !this.#itemSelect.itemsFocused(window))
+      ) {
+        this.clearKeyGuide(window, session);
+        return;
+      }
       if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
         this.clearKeyGuide(window, session);
         return;
@@ -503,8 +574,8 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   private keyGuideLanguage(): KeyGuideLanguage {
-    return keyGuideLanguage(
-      this.#dependencies.preferences.get('language', ''),
+    return neoCommandLanguage(
+      this.#dependencies.preferences,
       typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
     );
   }
@@ -631,11 +702,15 @@ export class MainWindowController implements MainWindowControllerApi {
           },
         });
         break;
+      case 'openNeoSettings':
+        this.openSettings(window);
+        break;
       case 'mainQuickSearch':
         if (session.inputMode === 'main-select') {
           this.#itemSelect.cancel(window, session.selection);
           session.inputMode = 'main-normal';
         }
+        session.focusOwnership.markQuickSearchIntent();
         this.#viewActions.focusQuickSearch(window, session);
         break;
       case 'mainAdvancedSearch':
@@ -806,6 +881,9 @@ export class MainWindowController implements MainWindowControllerApi {
         } else {
           this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
         }
+        break;
+      case 'mainClearSelection':
+        this.#itemSelect.clearSelection(window, session.selection);
         break;
       case 'mainEnterSelect': {
         const result = this.#itemSelect.enter(window, session.selection);

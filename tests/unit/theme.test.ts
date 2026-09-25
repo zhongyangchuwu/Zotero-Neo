@@ -127,6 +127,8 @@ describe('appearance theme contract', () => {
     expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#14532d');
     expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#fff8e1');
     expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#713f12');
+    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#eab308');
+    expect(panel.values.get('--zotero-neo-item-visual')).toBe('#22c55e');
     expect(panel.values.get('--zotero-neo-status-success')).toBe('#dcfce7');
     expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#166534');
     expect(panel.values.get('--zotero-neo-status-info')).toBe('#dbeafe');
@@ -139,12 +141,30 @@ describe('appearance theme contract', () => {
     expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#dcfce7');
     expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#332800');
     expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#fef3c7');
+    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#facc15');
+    expect(panel.values.get('--zotero-neo-item-visual')).toBe('#4ade80');
     expect(panel.values.get('--zotero-neo-status-success')).toBe('#16301f');
     expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#bbf7d0');
     expect(panel.values.get('--zotero-neo-status-info')).toBe('#172554');
     expect(panel.values.get('--zotero-neo-status-info-text')).toBe('#dbeafe');
     expect(panel.values.get('--zotero-neo-status-error')).toBe('#3f1d1d');
     expect(panel.values.get('--zotero-neo-status-error-text')).toBe('#fecaca');
+  });
+
+  it('notifies live consumers only when the resolved theme changes', () => {
+    const source = preferences('light');
+    const host = themeWindow('', false);
+    const manager = new ThemeManager(host.window, source);
+    const themes: string[] = [];
+    const stop = manager.observe((theme) => themes.push(theme));
+
+    source.set('dark');
+    source.set('dark');
+    stop();
+    source.set('light');
+
+    expect(themes).toEqual(['dark']);
+    manager.dispose();
   });
 
   it('updates existing roots in place and detaches live listeners', () => {

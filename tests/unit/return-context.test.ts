@@ -165,6 +165,9 @@ function harness(advanced = true) {
     status,
     focusPanel,
     tabSelect,
+    applyQuickSearch,
+    applyTagFilter,
+    itemSelect,
     itemMove,
   };
 }
@@ -204,9 +207,22 @@ describe('Main return context', () => {
     expect([...h.selectedScopes]).toEqual([0, 1]);
     expect(h.quickText()).toBe('alpha');
     expect(h.tags()).toEqual(['one', 'two']);
-    expect(h.itemMove).toHaveBeenCalledWith(0, false, false, true, false);
+    expect(h.itemSelect).toHaveBeenCalledWith(0, false);
+    expect(h.itemMove).not.toHaveBeenCalled();
     expect(h.focusPanel).toHaveBeenCalledWith(h.window, h.session, 'items');
     expect(h.tabSelect).toHaveBeenCalledWith('library');
+    expect(h.tabSelect.mock.invocationCallOrder[0]).toBeLessThan(
+      h.scopeSelectByID.mock.invocationCallOrder[0]!,
+    );
+    expect(h.scopeSelectByID.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      h.applyQuickSearch.mock.invocationCallOrder[0]!,
+    );
+    expect(h.applyQuickSearch.mock.invocationCallOrder[0]).toBeLessThan(
+      h.applyTagFilter.mock.invocationCallOrder[0]!,
+    );
+    expect(h.applyTagFilter.mock.invocationCallOrder[0]).toBeLessThan(
+      h.itemSelect.mock.invocationCallOrder[0]!,
+    );
     expect(h.session.selection.values()).toEqual(before);
     expect(h.status).toHaveBeenLastCalledWith(h.session, '✓ Returned to saved Main context');
   });

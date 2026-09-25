@@ -30,6 +30,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainQuickSearch',
   'mainAdvancedSearch',
   'managePlugins',
+  'openNeoSettings',
   'manageSelection',
   'mainReturnContext',
   'mainTrashItems',
@@ -68,6 +69,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainTreeCollapseAll',
   'mainEnterSelect',
   'mainToggleSelection',
+  'mainClearSelection',
   'mainSelectDown',
   'mainSelectUp',
   'mainSelectFirst',
@@ -82,6 +84,7 @@ const expectedDelegableMainActions: readonly ActionId[] = [
   'findCollectionItems',
   'findNotes',
   'managePlugins',
+  'openNeoSettings',
   'mainReturnContext',
   'switchTab',
   'mainYankCitekey',
@@ -149,9 +152,14 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'addToCollection')).toBe(true);
     expect(isReaderActionForMode('normal', 'removeFromCollection')).toBe(true);
     expect(isReaderActionForMode('normal', 'managePlugins')).toBe(true);
+    expect(isReaderActionForMode('normal', 'openNeoSettings')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainReturnContext')).toBe(true);
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
+    expect(READER_NORMAL_ACTIONS).toContain('openNeoSettings');
+    expect(actionsForBindingMode('note-normal')).toContain('openNeoSettings');
+    expect(MAIN_NORMAL_ACTIONS).toContain('openNeoSettings');
+    expect(MAIN_SELECT_ACTIONS).toContain('openNeoSettings');
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
     expect(isReaderActionForMode('visual', 'openSelectionActions')).toBe(true);

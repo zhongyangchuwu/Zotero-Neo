@@ -7,15 +7,15 @@ import {
   mainItemRowForRef,
   mainItemViewSettled,
   observeMainItemView,
-  moveMainItemCursor,
-  restoreMainItemCursor,
+  restoreMainItemCursorAnchor,
+  selectMainItemCursorAnchor,
   visibleMainSelectionCount,
 } from '../../src/main/host';
 import { installMainViewLifecycle } from '../../src/main/view-lifecycle';
 import { SelectionStore } from '../../src/main/selection-store';
 
 describe('Main View lifecycle', () => {
-  it('restores Cursor and visible Selection by identity after a View reorder', () => {
+  it('restores only the Cursor host anchor by identity after a View reorder', () => {
     const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
     const itemB = { id: 11, libraryID: 1 } as Zotero.Item;
     const itemC = { id: 12, libraryID: 1 } as Zotero.Item;
@@ -70,17 +70,86 @@ describe('Main View lifecycle', () => {
     workset.add({ libraryID: 1, itemID: 12 });
     const logger = { debug: vi.fn(), diagnostic: vi.fn() } satisfies Logger;
 
-    const cleanup = installMainViewLifecycle(
-      window,
-      { selection: workset } as unknown as import('../../src/main/session').MainWindowSession,
-      logger,
-    );
+    const cleanup = installMainViewLifecycle(window, logger);
 
     rows = [rows[2]!, rows[0]!, rows[1]!];
     [...refreshListeners][0]!();
 
     expect(focused).toBe(2);
-    expect([...selected].sort()).toEqual([0, 1]);
+    expect([...selected]).toEqual([2]);
+    expect(workset.values()).toEqual([
+      { libraryID: 1, itemID: 10 },
+      { libraryID: 1, itemID: 12 },
+    ]);
+
+    cleanup();
+  });
+
+  it('keeps the previous Cursor when Zotero selects a fallback row before View refresh', () => {
+    const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
+    const itemB = { id: 11, libraryID: 1 } as Zotero.Item;
+    const itemC = { id: 12, libraryID: 1 } as Zotero.Item;
+    let rows = [
+      { isObjectRow: true, ref: itemA },
+      { isObjectRow: true, ref: itemB },
+      { isObjectRow: true, ref: itemC },
+    ];
+    let focused = 2;
+    let refreshToken: object = {};
+    const selected = new Set<number>();
+    const selectListeners = new Set<() => void>();
+    const refreshListeners = new Set<() => void>();
+    const binding = (listeners: Set<() => void>) => ({
+      addListener: (listener: () => void) => listeners.add(listener),
+      removeListener: (listener: () => void) => listeners.delete(listener),
+    });
+    const view = {
+      get rowCount() {
+        return rows.length;
+      },
+      get _itemTreeLoadingDeferred() {
+        return refreshToken;
+      },
+      _loadingDeferredResolved: true,
+      onSelect: binding(selectListeners),
+      onRefresh: binding(refreshListeners),
+      tree: { _onSelection: vi.fn((index: number) => (focused = index)) },
+      selection: {
+        get focused() {
+          return focused;
+        },
+        select: vi.fn((index: number) => {
+          selected.clear();
+          selected.add(index);
+          focused = index;
+        }),
+        toggleSelect: vi.fn((index: number) => selected.add(index)),
+        clearSelection: vi.fn(() => selected.clear()),
+      },
+      getRow: (index: number) => rows[index],
+      getRowIndexByID: (id: number) => {
+        const index = rows.findIndex((row) => row.ref.id === id);
+        return index < 0 ? false : index;
+      },
+      ensureRowIsVisible: vi.fn(),
+    };
+    const window = { ZoteroPane: { itemsView: view } } as unknown as MainWindow;
+    const workset = new SelectionStore();
+    workset.add({ libraryID: 1, itemID: 10 });
+    workset.add({ libraryID: 1, itemID: 12 });
+    const cleanup = installMainViewLifecycle(window, {
+      debug: vi.fn(),
+      diagnostic: vi.fn(),
+    });
+
+    rows = [rows[0]!, rows[2]!, rows[1]!];
+    focused = 0;
+    refreshToken = {};
+    [...selectListeners][0]!();
+    [...refreshListeners][0]!();
+
+    expect(focused).toBe(1);
+    expect([...selected]).toEqual([1]);
     expect(workset.values()).toEqual([
       { libraryID: 1, itemID: 10 },
       { libraryID: 1, itemID: 12 },
@@ -126,17 +195,16 @@ describe('Main View lifecycle', () => {
     const workset = new SelectionStore();
     workset.add({ libraryID: 1, itemID: 10 });
     workset.add({ libraryID: 1, itemID: 11 });
-    const cleanup = installMainViewLifecycle(
-      window,
-      { selection: workset } as unknown as import('../../src/main/session').MainWindowSession,
-      { debug: vi.fn(), diagnostic: vi.fn() },
-    );
+    const cleanup = installMainViewLifecycle(window, {
+      debug: vi.fn(),
+      diagnostic: vi.fn(),
+    });
 
     rows = [rows[0]!];
     focused = 0;
     [...refreshListeners][0]!();
 
-    expect(view.tree._onSelection).not.toHaveBeenCalled();
+    expect(view.selection.select).not.toHaveBeenCalled();
     expect(workset.size).toBe(2);
     expect(workset.has({ libraryID: 1, itemID: 11 })).toBe(true);
 
@@ -145,55 +213,50 @@ describe('Main View lifecycle', () => {
 });
 
 describe('Main item Cursor host adapter', () => {
-  it('uses Zotero focus-only selection movement without collapsing native selection', () => {
-    const select = vi.fn();
+  it('collapses prior native multi-selection to one Cursor host anchor', () => {
+    let focused = 2;
+    let selected = new Set([0, 2, 6]);
     const ensureRowIsVisible = vi.fn();
-    const onSelection = vi.fn(
-      (
-        index: number,
-        shiftSelect: boolean,
-        toggleSelection: boolean,
-        moveFocused: boolean,
-        shouldDebounce?: boolean,
-      ) => {
-        expect(index).toBe(4);
-        expect(shiftSelect).toBe(false);
-        expect(toggleSelection).toBe(false);
-        expect(moveFocused).toBe(true);
-        expect(shouldDebounce).toBe(true);
-      },
-    );
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected = new Set([index]);
+    });
     const window = {
       ZoteroPane: {
         itemsView: {
           rowCount: 8,
-          tree: { _onSelection: onSelection },
-          selection: { focused: 2, count: 3, select },
+          selection: {
+            get focused() {
+              return focused;
+            },
+            select,
+          },
           ensureRowIsVisible,
         },
       },
     } as unknown as MainWindow;
 
-    expect(moveMainItemCursor(window, 4, true)).toBe(true);
-    expect(onSelection).toHaveBeenCalledOnce();
+    expect(selectMainItemCursorAnchor(window, 4, true)).toBe(true);
+    expect(select).toHaveBeenCalledWith(4, true);
+    expect([...selected]).toEqual([4]);
+    expect(focused).toBe(4);
     expect(ensureRowIsVisible).toHaveBeenCalledWith(4);
-    expect(select).not.toHaveBeenCalled();
   });
 
-  it('clamps the cursor target and fails closed when the host seam is unavailable', () => {
-    const onSelection = vi.fn();
+  it('clamps the Cursor anchor and fails closed when native select is unavailable', () => {
+    const select = vi.fn();
     const available = {
       ZoteroPane: {
-        itemsView: { rowCount: 3, tree: { _onSelection: onSelection } },
+        itemsView: { rowCount: 3, selection: { select } },
       },
     } as unknown as MainWindow;
-    expect(moveMainItemCursor(available, 20)).toBe(true);
-    expect(onSelection).toHaveBeenCalledWith(2, false, false, true, false);
+    expect(selectMainItemCursorAnchor(available, 20)).toBe(true);
+    expect(select).toHaveBeenCalledWith(2, false);
 
     const unavailable = {
-      ZoteroPane: { itemsView: { rowCount: 3, tree: {} } },
+      ZoteroPane: { itemsView: { rowCount: 3, selection: {} } },
     } as unknown as MainWindow;
-    expect(moveMainItemCursor(unavailable, 1)).toBe(false);
+    expect(selectMainItemCursorAnchor(unavailable, 1)).toBe(false);
   });
   it('maps visible rows to stable item identities and restores Cursor after reordering', () => {
     const itemA = { id: 10, libraryID: 1 } as Zotero.Item;
@@ -205,18 +268,20 @@ describe('Main item Cursor host adapter', () => {
       { isObjectRow: true, ref: itemC },
     ];
     let focused = 1;
-    const onSelection = vi.fn((index: number) => {
+    let selected = new Set([0, 1]);
+    const select = vi.fn((index: number) => {
       focused = index;
+      selected = new Set([index]);
     });
     const view = {
       get rowCount() {
         return rows.length;
       },
-      tree: { _onSelection: onSelection },
       selection: {
         get focused() {
           return focused;
         },
+        select,
       },
       getRow: (index: number) => rows[index],
       getRowIndexByID: (id: number) => {
@@ -234,9 +299,10 @@ describe('Main item Cursor host adapter', () => {
     rows = [rows[2]!, rows[0]!, rows[1]!];
 
     expect(mainItemRowForRef(window, bookmark)).toBe(2);
-    expect(restoreMainItemCursor(window, bookmark)).toBe(true);
+    expect(restoreMainItemCursorAnchor(window, bookmark)).toBe(true);
     expect(focused).toBe(2);
-    expect(onSelection).toHaveBeenLastCalledWith(2, false, false, true, false);
+    expect([...selected]).toEqual([2]);
+    expect(select).toHaveBeenLastCalledWith(2, false);
   });
 
   it('observes settled item-tree selection and refresh lifecycle events with cleanup', () => {

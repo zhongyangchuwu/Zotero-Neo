@@ -9,7 +9,10 @@ import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
 import type { InstalledPlugin } from './plugin-host';
 import { SelectionStore, type ItemRef } from './selection-store';
+import { InteractionAppearanceManager } from './interaction-appearance';
 import type { MainReturnBookmark } from './return-context';
+import { SettingsCenter } from './settings-center';
+import { MainFocusOwnership } from './focus-ownership';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -21,6 +24,9 @@ export class MainWindowSession {
   readonly window: MainWindow;
   readonly status: HTMLElement;
   readonly theme: ThemeManager;
+  readonly interactionAppearance: InteractionAppearanceManager;
+  readonly settings: SettingsCenter;
+  readonly focusOwnership: MainFocusOwnership;
   readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
   inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
@@ -197,10 +203,20 @@ export class MainWindowSession {
     inputRevision: 0,
     yank: '',
   };
-  constructor(window: MainWindow, preferences: PreferenceStore) {
+  constructor(
+    window: MainWindow,
+    preferences: PreferenceStore,
+    mayClaimInitialLibraryFocus = false,
+  ) {
     this.window = window;
     this.theme = new ThemeManager(window, preferences);
+    this.interactionAppearance = new InteractionAppearanceManager(preferences, this.theme);
+    this.settings = new SettingsCenter(window, this.theme, this.interactionAppearance, preferences);
+    this.focusOwnership = new MainFocusOwnership(window, this, mayClaimInitialLibraryFocus);
+    this.cleanup.add(() => this.focusOwnership.dispose());
+    this.cleanup.add(() => this.interactionAppearance.dispose());
     this.cleanup.add(() => this.theme.dispose());
+    this.cleanup.add(() => this.settings.close());
     const doc = window.document;
     this.status = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
     this.status.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:99999;font:bold 12px/1.4 monospace;color:${THEME_VARS.text};background:${THEME_VARS.surface};padding:2px 8px;border:1px solid ${THEME_VARS.border};border-radius:3px;pointer-events:none;display:none;user-select:none;box-shadow:0 4px 16px ${THEME_VARS.shadow}`;
