@@ -75,14 +75,10 @@ describe('advanced preferences', () => {
   it('uses slash for tag namespaces while preserving explicit flat and custom separators', () => {
     expect(tagSeparatorFromPreferences(new TestPreferences({}))).toBe(DEFAULT_TAG_SEPARATOR);
     expect(
-      tagSeparatorFromPreferences(
-        new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '' }),
-      ),
+      tagSeparatorFromPreferences(new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '' })),
     ).toBe('');
     expect(
-      tagSeparatorFromPreferences(
-        new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '::' }),
-      ),
+      tagSeparatorFromPreferences(new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '::' })),
     ).toBe('::');
   });
 });

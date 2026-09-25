@@ -243,7 +243,10 @@ export class SettingsKeybindings {
     const language = this.#editorLanguage();
     const existing = this.#state.editor;
     if (!existing || !deriveBindingEditor(existing).dirty) {
-      this.#state.editor = createBindingEditor(bindingsFromPreferences(this.#preferences), language);
+      this.#state.editor = createBindingEditor(
+        bindingsFromPreferences(this.#preferences),
+        language,
+      );
       return;
     }
     if (existing.language !== language) {

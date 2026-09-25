@@ -1,9 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
-import {
-  tagSeparatorFromPreferences,
-  type PreferenceReader,
-} from '../core/preferences';
+import { tagSeparatorFromPreferences, type PreferenceReader } from '../core/preferences';
 import type { FuzzyPicker } from './picker';
 import { createTagCandidateProvider, type TagRecord } from './picker/providers/tags';
 import type { MainNavigation } from './navigation';
