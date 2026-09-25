@@ -61,13 +61,37 @@ function pickerMainWindow(): {
   const createElement = (tag: string): HTMLElement => {
     const children: HTMLElement[] = [];
     const listeners = new Map<string, EventListener[]>();
+    const classes = new Set<string>();
     let textContent = '';
     const element = {
+      nodeType: 1,
       tagName: tag.toUpperCase(),
       localName: tag,
       ownerDocument: null as unknown as Document,
       parentElement: null as HTMLElement | null,
+      id: '',
+      get className() {
+        return [...classes].join(' ');
+      },
+      set className(value: string) {
+        classes.clear();
+        for (const name of value.split(/\s+/).filter(Boolean)) classes.add(name);
+      },
+      classList: {
+        add: (...names: string[]) => {
+          for (const name of names) classes.add(name);
+        },
+        remove: (...names: string[]) => {
+          for (const name of names) classes.delete(name);
+        },
+        contains: (name: string) => classes.has(name),
+      },
       style: {
+        cssText: '',
+        display: '',
+        background: '',
+        color: '',
+        borderColor: '',
         getPropertyValue: () => '',
         setProperty: () => {},
       } as unknown as CSSStyleDeclaration,
@@ -88,8 +112,21 @@ function pickerMainWindow(): {
       set innerHTML(value: string) {
         textContent = value.replace(/<[^>]*>/g, '');
       },
-      setAttribute: (name: string, value: string) => Reflect.set(element, name, value),
-      getAttribute: (name: string) => (Reflect.get(element, name) as string | undefined) ?? null,
+      setAttribute: (name: string, value: string) => {
+        if (name === 'id') element.id = value;
+        else if (name === 'class') element.className = value;
+        else Reflect.set(element, name, value);
+      },
+      getAttribute: (name: string) => {
+        if (name === 'id') return element.id || null;
+        if (name === 'class') return element.className || null;
+        return (Reflect.get(element, name) as string | undefined) ?? null;
+      },
+      removeAttribute: (name: string) => {
+        if (name === 'id') element.id = '';
+        else if (name === 'class') element.className = '';
+        else Reflect.deleteProperty(element, name);
+      },
       append: (...nodes: HTMLElement[]) => {
         for (const node of nodes) Reflect.set(node, 'parentElement', element);
         children.push(...nodes);
@@ -113,11 +150,42 @@ function pickerMainWindow(): {
         );
       },
       listenerCount: (type: string) => listeners.get(type)?.length ?? 0,
-      closest: (selector: string) => {
-        if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
-          return element as unknown as HTMLElement;
-        return element.parentElement?.closest?.(selector) ?? null;
+      matches: (selector: string) => {
+        const tagMatch = selector.match(/^[A-Za-z][A-Za-z0-9-]*/)?.[0];
+        if (tagMatch && element.localName !== tagMatch) return false;
+        const idMatch = selector.match(/#([A-Za-z0-9_-]+)/)?.[1];
+        if (idMatch && element.id !== idMatch) return false;
+        for (const match of selector.matchAll(/\.([A-Za-z0-9_-]+)/g)) {
+          if (!classes.has(match[1])) return false;
+        }
+        for (const match of selector.matchAll(/\[([^=\]]+)(?:=["']?([^\]"']+)["']?)?\]/g)) {
+          const actual = element.getAttribute(match[1]);
+          if (actual === null || (match[2] !== undefined && actual !== match[2])) return false;
+        }
+        return true;
       },
+      closest: (selector: string) => {
+        let current: (typeof element) | null = element;
+        while (current) {
+          if (current.matches(selector)) return current as unknown as HTMLElement;
+          current = current.parentElement as unknown as typeof element | null;
+        }
+        return null;
+      },
+      querySelectorAll: (selector: string) => {
+        const matches: HTMLElement[] = [];
+        const visit = (node: HTMLElement): void => {
+          for (const child of Array.from(node.children) as HTMLElement[]) {
+            const candidate = child as HTMLElement & { matches?(selector: string): boolean };
+            if (candidate.matches?.(selector)) matches.push(child);
+            visit(child);
+          }
+        };
+        visit(element as unknown as HTMLElement);
+        return matches;
+      },
+      querySelector: (selector: string) =>
+        element.querySelectorAll(selector)[0] ?? null,
       contains: (node: Node) => {
         let current = node as (Node & { parentElement?: HTMLElement | null }) | null;
         while (current) {
@@ -166,7 +234,6 @@ function pickerMainWindow(): {
     return element as unknown as HTMLElement & {
       emit(type: string, event?: Partial<Event>): void;
     };
-  };
   document = {
     defaultView: null,
     activeElement: null,
