@@ -7,6 +7,7 @@ import type {
   MainWindowControllerApi,
   MainWindowControllerDependencies,
 } from '../../src/core/contracts';
+import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 
@@ -14,6 +15,8 @@ import { NoteEditor } from '../../src/main/note-editor';
 import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
+import { SettingsAppearance } from '../../src/main/settings-appearance';
+import { SettingsInteraction } from '../../src/main/settings-interaction';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
 import {
@@ -1049,6 +1052,43 @@ describe('Main Settings Center shell', () => {
     expect(host.backdrop()).toBeUndefined();
   });
 
+  it('disposes each active page once across Interaction, placeholders, close, and reopen', () => {
+    const appearanceDispose = vi.spyOn(SettingsAppearance.prototype, 'dispose');
+    const interactionDispose = vi.spyOn(SettingsInteraction.prototype, 'dispose');
+    const host = settingsMainHost();
+    try {
+      host.controller.openSettings(host.window);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[1]!.emit('click');
+      expect(appearanceDispose).toHaveBeenCalledTimes(1);
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
+      nav[1]!.emit('click');
+      expect(appearanceDispose).toHaveBeenCalledTimes(1);
+      expect(interactionDispose).not.toHaveBeenCalled();
+      nav[2]!.emit('click');
+      expect(interactionDispose).toHaveBeenCalledTimes(1);
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+      nav[0]!.emit('click');
+      expect(appearanceDispose).toHaveBeenCalledTimes(1);
+      nav[1]!.emit('click');
+      expect(appearanceDispose).toHaveBeenCalledTimes(2);
+      (host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
+        'click',
+      );
+      expect(interactionDispose).toHaveBeenCalledTimes(2);
+      host.controller.openSettings(host.window);
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
+      host.controller.shutdown();
+      expect(interactionDispose).toHaveBeenCalledTimes(3);
+    } finally {
+      host.controller.shutdown();
+      appearanceDispose.mockRestore();
+      interactionDispose.mockRestore();
+    }
+  });
+
   it('keeps unexpected outside focus when closed by the Close button', () => {
     const host = settingsMainHost();
     const outside = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
@@ -1172,10 +1212,10 @@ describe('Main Settings Center shell', () => {
       click('Add');
       expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
       click('Edit');
-      (host.drawer()?.children[1]?.children[2] as HTMLElement & { emit(type: string): void }).emit(
+      (host.drawer()?.children[1]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
         'click',
       );
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
       (host.drawer()?.children[1]?.children[0] as HTMLElement & { emit(type: string): void }).emit(
         'click',
       );
@@ -1573,7 +1613,7 @@ describe('repeated tab switching', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,
@@ -1626,7 +1666,7 @@ describe('repeated tab switching', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,
@@ -1691,7 +1731,7 @@ describe('main pending-prefix key guide', () => {
         preferences: {
           has: () => false,
           get: (key, fallback) =>
-            key === 'noteEditor.enabled'
+            key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
               ? false
               : key === 'bindings'
                 ? JSON.stringify({
@@ -1828,7 +1868,11 @@ describe('main pending-prefix key guide', () => {
       preferences: {
         has: () => false,
         get: (key, fallback) =>
-          key === 'noteEditor.enabled' ? false : key === 'keyGuide.fontSizePx' ? 18 : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
+            ? false
+            : key === 'keyGuide.fontSizePx'
+              ? 18
+              : fallback,
         set: () => {},
       },
       logger,
@@ -1868,7 +1912,7 @@ describe('Reader owner picker routing', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,
@@ -2008,7 +2052,7 @@ describe('collection navigation repeat pacing', () => {
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
-          key === 'noteEditor.enabled' ? false : fallback,
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
       },
       logger,

@@ -15,7 +15,7 @@ import {
   type MainExecutableAction,
   type ReaderDelegableMainAction,
 } from './action-capabilities';
-import { keyGuideConfig, pickerMouseEnabled } from '../core/preferences';
+import { keyGuideConfig, noteEditorEnabled, pickerMouseEnabled } from '../core/preferences';
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
@@ -165,7 +165,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#noteEditor.sync(
         window,
         session,
-        this.#dependencies.preferences.get('noteEditor.enabled', true),
+        noteEditorEnabled(this.#dependencies.preferences),
         (action, count, target, mode, bindings) =>
           this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
@@ -380,7 +380,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (
-      this.#dependencies.preferences.get('noteEditor.enabled', true) &&
+      noteEditorEnabled(this.#dependencies.preferences) &&
       this.#noteEditor.isStandalone(window)
     ) {
       this.#noteEditor.onKeyDown(event, window, session, (action, count, target, mode, bindings) =>

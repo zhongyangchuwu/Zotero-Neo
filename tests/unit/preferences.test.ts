@@ -6,10 +6,12 @@ import { bindingsForMode } from '../../src/input/bindings';
 
 import {
   BINDING_SCHEMA_VERSION,
+  NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
   bindingsFromPreferences,
   keyGuideConfig,
   migrateBindingPreferences,
+  noteEditorEnabled,
   pickerMouseEnabled,
   scrollModeFromPreferences,
   smoothScrollConfig,
@@ -587,5 +589,16 @@ describe('picker preferences', () => {
     expect(
       pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: true })),
     ).toBe(true);
+  });
+});
+
+describe('note editor preferences', () => {
+  it('defaults Vim editing on and reads changes without startup migration', () => {
+    const preferences = new TestPreferences({});
+    expect(noteEditorEnabled(preferences)).toBe(true);
+    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, false);
+    expect(noteEditorEnabled(preferences)).toBe(false);
+    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
+    expect(noteEditorEnabled(preferences)).toBe(true);
   });
 });

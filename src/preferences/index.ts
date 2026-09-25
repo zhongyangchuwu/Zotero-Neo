@@ -1,5 +1,5 @@
 import { ZoteroPreferenceStore } from '../core/preference-store';
-import { PREFERENCE_PREFIX, PICKER_MOUSE_ENABLED_PREFERENCE_KEY } from '../core/preferences';
+import { PREFERENCE_PREFIX } from '../core/preferences';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { encodeBindingOverrides, resolveBindings } from '../input/bindings';
 import {
@@ -71,7 +71,6 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.modes': 'Modes',
     'zv.mode.visual': 'Enable Select mode (v — Flash-select text and run actions)',
     'zv.mode.insert': 'Enable Insert / passthrough mode (i — disable vim keys temporarily)',
-    'zv.mode.noteEditor': 'Enable Vim-style editing in note editors (context pane and note tabs)',
     'zv.scroll': 'Scroll',
     'zv.scroll.help': 'Pick one scrolling mode for j/k/zh/zl — only its parameters are shown.',
     'zv.scroll.mode': 'Scrolling mode',
@@ -96,10 +95,6 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.keyGuide.enabled': 'Show the Prefix Guide',
     'zv.keyGuide.delay': 'Display delay (ms)',
     'zv.keyGuide.fontSize': 'Font size (px)',
-    'zv.picker': 'Picker',
-    'zv.picker.help':
-      'Enable mouse selection and double-click confirmation for item, collection, tab, and note rows. Tag filters remain keyboard-only.',
-    'zv.picker.mouse.enabled': 'Enable mouse row selection and double-click confirmation',
     'zv.color.group': 'Default highlight colour',
     'zv.color.help':
       'Used when no explicit colour prefix is given (zh in the default bindings, if bound).',
@@ -122,7 +117,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
       ' are supported. Named keys use <Enter>, <Esc>, <F1>, <Space>; chords use forms such as <C-d>.',
     'zv.bindings.add': '+ Add binding',
     'zv.bindings.footer':
-      'Appearance, key guide, modes, marks, colour, picker and scroll settings save automatically.',
+      'Appearance, key guide, Reader modes, marks, colour and scroll settings save automatically.',
     'zv.bindings.reset': 'Reset to defaults',
     'zv.bindings.mode': 'Mode',
     'zv.bindings.key': 'Key sequence',
@@ -169,7 +164,6 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.modes': '模式',
     'zv.mode.visual': '启用选择模式（v — 用 Flash 选择文本并执行操作）',
     'zv.mode.insert': '启用插入 / 透传模式（i — 临时禁用 vim 按键）',
-    'zv.mode.noteEditor': '在笔记编辑器中启用类 Vim 编辑（侧栏面板和笔记标签页）',
     'zv.scroll': '滚动',
     'zv.scroll.help': '为 j/k/zh/zl 选择一种滚动模式 — 仅显示当前模式的参数。',
     'zv.scroll.mode': '滚动模式',
@@ -192,10 +186,6 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.keyGuide.enabled': '显示前缀按键提示',
     'zv.keyGuide.delay': '显示延迟（毫秒）',
     'zv.keyGuide.fontSize': '字体大小（像素）',
-    'zv.picker': '选择器',
-    'zv.picker.help':
-      '启用条目、分类、标签页和笔记结果行的鼠标选择与双击确认。标签筛选仍仅支持键盘。',
-    'zv.picker.mouse.enabled': '启用鼠标选择结果行与双击确认',
     'zv.color.group': '默认高亮颜色',
     'zv.color.help': '未按显式颜色前缀时使用（默认绑定中的 zh，若已绑定）。',
     'zv.color.default': '默认颜色',
@@ -215,7 +205,7 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
     'zv.bindings.help4b': '或',
     'zv.bindings.help4c': '等多键序列；命名键使用 <Enter>、<Esc>、<F1>、<Space>。',
     'zv.bindings.add': '+ 添加绑定',
-    'zv.bindings.footer': '外观、按键提示、模式、标记、颜色、选择器与滚动设置在更改时自动保存。',
+    'zv.bindings.footer': '外观、按键提示、阅读器模式、标记、颜色与滚动设置在更改时自动保存。',
     'zv.bindings.reset': '重置为默认值',
     'zv.bindings.mode': '模式',
     'zv.bindings.key': '键序列',
@@ -502,11 +492,6 @@ function initializePane(doc: Document): void {
     insertCheckbox.checked = getPreference('mode.insert.enabled', true);
     saveCheckbox(insertCheckbox, 'mode.insert.enabled', modesStatus);
   }
-  const noteEditorCheckbox = byId<XulCheckbox>(doc, 'zv-note-editor-enabled');
-  if (noteEditorCheckbox) {
-    noteEditorCheckbox.checked = getPreference('noteEditor.enabled', true);
-    saveCheckbox(noteEditorCheckbox, 'noteEditor.enabled', modesStatus);
-  }
 
   const marksCheckbox = byId<XulCheckbox>(doc, 'zv-marks-persist-enabled');
   if (marksCheckbox) {
@@ -567,12 +552,6 @@ function initializePane(doc: Document): void {
       setPreference('keyGuide.fontSizePx', fontSize);
       flashStatus(keyGuideStatus, translate('zv.status.saved', currentLanguage()));
     });
-  }
-  const pickerMouseStatus = byId<HTMLElement>(doc, 'zv-picker-mouse-status');
-  const pickerMouseCheckbox = byId<XulCheckbox>(doc, 'zv-picker-mouse-enabled');
-  if (pickerMouseCheckbox) {
-    pickerMouseCheckbox.checked = getPreference(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
-    saveCheckbox(pickerMouseCheckbox, PICKER_MOUSE_ENABLED_PREFERENCE_KEY, pickerMouseStatus);
   }
 
   const modeSelect = byId<XulMenuList>(doc, 'zv-scroll-mode');

@@ -203,11 +203,6 @@
         data-i18n="zv.mode.insert"
         label="Enable Insert / passthrough mode (i — disable vim keys temporarily)" />
     </hbox>
-    <hbox align="center" style="margin-top: 4px;">
-      <checkbox id="zv-note-editor-enabled"
-        data-i18n="zv.mode.noteEditor"
-        label="Enable Vim-style editing in note editors (context pane and note tabs)" />
-    </hbox>
     <hbox style="margin-top: 6px; justify-content: flex-end; align-items: center;">
       <html:span id="zv-modes-status" class="zv-status"
         style="font-size: 0.9em;"></html:span>
@@ -333,19 +328,6 @@
     </hbox>
   </groupbox>
 
-  <!-- ── Picker ─────────────────────────────────────────────────────────── -->
-  <groupbox>
-    <label data-i18n="zv.picker" value="Picker" style="font-weight: bold;" />
-    <html:p style="margin: 4px 0 8px; font-size: 0.9em;" data-i18n="zv.picker.help">
-      Enable mouse selection and double-click confirmation for item, collection, tab, and note rows. Tag filters remain keyboard-only.
-    </html:p>
-    <hbox align="center">
-      <checkbox id="zv-picker-mouse-enabled" data-i18n="zv.picker.mouse.enabled"
-        label="Enable mouse row selection and double-click confirmation" />
-      <html:span id="zv-picker-mouse-status" class="zv-status"
-        style="margin-left: 10px; font-size: 0.9em;"></html:span>
-    </hbox>
-  </groupbox>
 
   <!-- ── Default highlight colour ───────────────────────────────────── -->
   <groupbox>
@@ -421,7 +403,7 @@
   <hbox style="margin-top: 12px; justify-content: flex-end; align-items: center;">
     <html:p style="font-size: 0.85em; margin: 0 12px 0 0;"
       data-i18n="zv.bindings.footer">
-      Appearance, modes, marks, colour and scroll settings save automatically.
+      Appearance, key guide, Reader modes, marks, colour and scroll settings save automatically.
     </html:p>
     <html:button id="zv-save"
       data-i18n="zv.bindings.apply" style="padding: 4px 16px; font-weight: bold;">Apply bindings</html:button>

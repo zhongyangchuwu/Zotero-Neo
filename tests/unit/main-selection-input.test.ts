@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow, MainWindowControllerDependencies } from '../../src/core/contracts';
+import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { createMainWindowController } from '../../src/main/controller';
 
 function themedElement(id = ''): HTMLElement {
@@ -125,7 +126,7 @@ function harness() {
   const controller = createMainWindowController({
     preferences: {
       has: () => false,
-      get: (key, fallback) => (key === 'noteEditor.enabled' ? false : fallback),
+      get: (key, fallback) => (key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback),
       set: () => {},
     },
     logger: { debug: () => {}, diagnostic: () => {} },

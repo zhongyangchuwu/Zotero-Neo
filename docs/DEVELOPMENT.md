@@ -174,6 +174,13 @@ session cleanup ends it. `ADDON_INSTALL` also occurs on RDP hot reload, so
 installation, reload, enable, upgrade, nonempty search, and unrelated editors
 retain their focus. Zotero still owns Reader-to-Library tab focus restoration.
 
+`src/main/settings-center.ts` owns one disposable page at a time. Appearance
+retains its session-only editor state; `settings-interaction.ts` owns the live
+Picker mouse and Note editor toggles. `settings-ui.ts` owns their visual controls,
+while `src/core/preferences.ts` names the shared preference keys/defaults.
+Zotero Preferences no longer edits those two toggles; other legacy groups
+remain until migrated.
+
 `src/main/picker/` owns one shared candidate search/list/preview surface plus finite
 sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, rendering,
 focus, queueing, confirmation/cancellation, and containment. Ordinary object sources own

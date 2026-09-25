@@ -3,11 +3,16 @@ import type { PreferenceStore } from '../core/preference-store';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
+import { SettingsInteraction } from './settings-interaction';
 import { settingsButton, setSettingsPressed } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
 const SECTIONS = ['Appearance', 'Interaction', 'Reader', 'Keybindings', 'Advanced'] as const;
 type SettingsSection = (typeof SECTIONS)[number];
+
+interface SettingsPage {
+  dispose(): void;
+}
 
 /** One Main-window-owned, centered Settings workspace. */
 export class SettingsCenter {
@@ -22,7 +27,8 @@ export class SettingsCenter {
   #navigation: HTMLElement | null = null;
   #previousElement: Element | null = null;
   #themeCleanup: (() => void) | null = null;
-  #appearanceChild: SettingsAppearance | null = null;
+  #activePage: SettingsPage | null = null;
+  #mountedSection: SettingsSection | null = null;
   #listeners: Array<() => void> = [];
   #section: SettingsSection = 'Appearance';
   readonly #appearanceState: SettingsAppearanceState = {
@@ -130,8 +136,9 @@ export class SettingsCenter {
     const panel = this.#panel;
     if (!panel) return;
     const restoreFocus = this.contains(this.#window.document.activeElement);
-    this.#appearanceChild?.dispose();
-    this.#appearanceChild = null;
+    this.#activePage?.dispose();
+    this.#activePage = null;
+    this.#mountedSection = null;
     for (const remove of this.#listeners.splice(0)) remove();
     this.#themeCleanup?.();
     this.#themeCleanup = null;
@@ -158,30 +165,34 @@ export class SettingsCenter {
       button.setAttribute('aria-current', selected ? 'page' : 'false');
       setSettingsPressed(button as HTMLButtonElement, selected);
     }
-    if (this.#section !== 'Appearance') {
-      this.#appearanceChild?.dispose();
-      this.#appearanceChild = null;
-      content.style.display = 'block';
-      content.style.overflow = 'auto';
-      content.style.padding = '12px 14px';
-      content.replaceChildren();
-      const title = this.#window.document.createElementNS(H, 'h2');
-      title.textContent = this.#section;
-      title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
-      const note = this.#window.document.createElementNS(H, 'p');
-      note.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
-      content.append(title, note);
-      return;
-    }
-    if (this.#appearanceChild) return;
+    if (this.#mountedSection === this.#section) return;
+    this.#activePage?.dispose();
+    this.#activePage = null;
+    this.#mountedSection = this.#section;
     content.replaceChildren();
     content.style.whiteSpace = '';
-    this.#appearanceChild = new SettingsAppearance(
-      this.#window,
-      content,
-      this.#preferences,
-      this.#appearance,
-      this.#appearanceState,
-    );
+    if (this.#section === 'Appearance') {
+      this.#activePage = new SettingsAppearance(
+        this.#window,
+        content,
+        this.#preferences,
+        this.#appearance,
+        this.#appearanceState,
+      );
+      return;
+    }
+    if (this.#section === 'Interaction') {
+      this.#activePage = new SettingsInteraction(this.#window, content, this.#preferences);
+      return;
+    }
+    content.style.display = 'block';
+    content.style.overflow = 'auto';
+    content.style.padding = '12px 14px';
+    const title = this.#window.document.createElementNS(H, 'h2');
+    title.textContent = this.#section;
+    title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
+    const note = this.#window.document.createElementNS(H, 'p');
+    note.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
+    content.append(title, note);
   }
 }

@@ -24,6 +24,12 @@ export function pickerMouseEnabled(preferences: PreferenceReader): boolean {
   return preferences.get(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
 }
 
+export const NOTE_EDITOR_ENABLED_PREFERENCE_KEY = 'noteEditor.enabled' as const;
+
+export function noteEditorEnabled(preferences: PreferenceReader): boolean {
+  return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
+}
+
 export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
 

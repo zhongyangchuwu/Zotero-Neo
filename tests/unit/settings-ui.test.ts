@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { settingsButton, settingsChoices, setSettingsPressed } from '../../src/main/settings-ui';
+import {
+  settingsButton,
+  settingsChoices,
+  settingsGroup,
+  settingsStatus,
+  settingsToggleRow,
+  setSettingsPressed,
+  type SettingsToggle,
+} from '../../src/main/settings-ui';
 
 interface FakeElement {
   readonly children: FakeElement[];
@@ -149,5 +157,69 @@ describe('shared Neo Settings controls', () => {
     for (const cleanup of cleanups) cleanup();
     expect(buttons.every((button) => button.listeners.size === 0)).toBe(true);
     expect(styleButtons.every((button) => button.listeners.size === 0)).toBe(true);
+  });
+  it('renders lightweight group headings and accessible inline status', () => {
+    const doc = fakeDocument();
+    const group = settingsGroup(doc, 'Picker', 'Shared candidates');
+    const children = (group as unknown as FakeElement).children;
+    expect(children[0]?.textContent).toBe('Picker');
+    expect(children[1]?.textContent).toBe('Shared candidates');
+    expect(children[0]?.style.cssText).toContain('font-size:1.2em');
+    expect((settingsGroup(doc, 'Note editing') as unknown as FakeElement).children).toHaveLength(1);
+    const status = settingsStatus(doc) as unknown as FakeElement;
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('updates a switch after success, vetoes failures, and cleans its mouse listener', () => {
+    const cleanups: Array<() => void> = [];
+    const onChange = vi.fn((value: boolean) => value !== false);
+    const toggle = settingsToggleRow(
+      fakeDocument(),
+      'Mouse rows',
+      false,
+      onChange,
+      cleanups,
+      'All shared pickers',
+    );
+    const row = toggle.element as unknown as FakeElement;
+    const button = row.children[1]!;
+    expect(row.children[0]?.children[0]?.textContent).toBe('Mouse rows');
+    expect(row.children[0]?.children[1]?.textContent).toBe('All shared pickers');
+    expect(button.getAttribute('role')).toBe('switch');
+    expect(button.getAttribute('aria-label')).toBe('Mouse rows');
+    expect(button.getAttribute('aria-checked')).toBe('false');
+    expect(button.getAttribute('aria-pressed')).toBeNull();
+    expect(button.tabIndex).toBe(-1);
+    expect(button.style.cssText).toContain('appearance:none;');
+    expect(button.style.cssText).toContain('align-items:center;justify-content:center');
+    button.click();
+    expect(onChange).toHaveBeenCalledWith(true);
+    expect(button.getAttribute('aria-checked')).toBe('true');
+    button.click();
+    expect(onChange).toHaveBeenLastCalledWith(false);
+    expect(button.getAttribute('aria-checked')).toBe('true');
+    toggle.set(false);
+    expect(button.getAttribute('aria-checked')).toBe('false');
+    for (const cleanup of cleanups) cleanup();
+    button.click();
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not invert a switch after a synchronous preference observer updates it', () => {
+    let toggle: SettingsToggle;
+    toggle = settingsToggleRow(
+      fakeDocument(),
+      'Note editor',
+      false,
+      (next) => {
+        toggle.set(next);
+        return true;
+      },
+      [],
+    );
+    const button = (toggle.element as unknown as FakeElement).children[1]!;
+    button.click();
+    expect(button.getAttribute('aria-checked')).toBe('true');
   });
 });
