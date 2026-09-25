@@ -4,6 +4,7 @@ import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
+import { SettingsReader } from './settings-reader';
 import { settingsButton, setSettingsPressed } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -183,6 +184,10 @@ export class SettingsCenter {
     }
     if (this.#section === 'Interaction') {
       this.#activePage = new SettingsInteraction(this.#window, content, this.#preferences);
+      return;
+    }
+    if (this.#section === 'Reader') {
+      this.#activePage = new SettingsReader(this.#window, content, this.#preferences);
       return;
     }
     content.style.display = 'block';

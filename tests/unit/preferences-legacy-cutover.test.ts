@@ -12,7 +12,7 @@ const PREFERENCES_SOURCE = readFileSync(
 );
 
 describe('legacy Preferences migration boundary', () => {
-  it('removes migrated Interaction editors from the legacy pane and binder', () => {
+  it('removes migrated Interaction and Reader editors from the legacy pane and binder', () => {
     for (const removed of [
       'zv-note-editor-enabled',
       'zv-picker-mouse-enabled',
@@ -20,6 +20,23 @@ describe('legacy Preferences migration boundary', () => {
       'zv.mode.noteEditor',
       'zv.picker.mouse.enabled',
       'zv.picker.help',
+      'zv-visual-enabled',
+      'zv-insert-enabled',
+      'zv-scroll-mode',
+      'zv-scroll-step',
+      'zv-smooth-follow-speed',
+      'zv-smooth-initial-speed',
+      'zv-smooth-max-speed',
+      'zv-smooth-accel',
+      'zv-smooth-decel',
+      'zv-smooth-stop-on-release',
+      'zv-marks-persist-enabled',
+      'zv-default-color',
+      'zv.mode.visual',
+      'zv.mode.insert',
+      'zv.scroll.',
+      'zv.marks.',
+      'zv.color.',
     ]) {
       expect(PANE).not.toContain(removed);
       expect(PREFERENCES_SOURCE).not.toContain(removed);
@@ -32,12 +49,7 @@ describe('legacy Preferences migration boundary', () => {
       'zv-language',
       'zv-appearance-theme',
       'zv-interaction-color-preset',
-      'zv-visual-enabled',
-      'zv-insert-enabled',
-      'zv-scroll-mode',
-      'zv-marks-persist-enabled',
       'zv-key-guide-enabled',
-      'zv-default-color',
       'zv-bindings-body',
     ]) {
       expect(PANE).toContain(retained);

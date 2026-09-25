@@ -79,6 +79,30 @@ export function settingsGroup(doc: Document, heading: string, description?: stri
   return group;
 }
 
+/** Builds the common label/description + control geometry used by Settings rows. */
+export function settingsControlRow(
+  doc: Document,
+  label: string,
+  control: HTMLElement,
+  description?: string,
+): HTMLElement {
+  const row = doc.createElementNS(H, 'div') as HTMLElement;
+  row.style.cssText =
+    'display:flex;align-items:center;justify-content:space-between;gap:1em;padding:0.35em 0';
+  const text = doc.createElementNS(H, 'div') as HTMLElement;
+  const title = doc.createElementNS(H, 'span') as HTMLElement;
+  title.textContent = label;
+  text.append(title);
+  if (description) {
+    const help = doc.createElementNS(H, 'div') as HTMLElement;
+    help.style.cssText = `font-size:0.9em;color:${THEME_VARS.muted}`;
+    help.textContent = description;
+    text.append(help);
+  }
+  row.append(text, control);
+  return row;
+}
+
 export interface SettingsToggle {
   readonly element: HTMLElement;
   set(checked: boolean): void;
@@ -93,19 +117,6 @@ export function settingsToggleRow(
   cleanups: Array<() => void>,
   description?: string,
 ): SettingsToggle {
-  const row = doc.createElementNS(H, 'div') as HTMLElement;
-  row.style.cssText =
-    'display:flex;align-items:center;justify-content:space-between;gap:1em;padding:0.35em 0';
-  const text = doc.createElementNS(H, 'div') as HTMLElement;
-  const title = doc.createElementNS(H, 'span') as HTMLElement;
-  title.textContent = label;
-  text.append(title);
-  if (description) {
-    const help = doc.createElementNS(H, 'div') as HTMLElement;
-    help.style.cssText = `font-size:0.9em;color:${THEME_VARS.muted}`;
-    help.textContent = description;
-    text.append(help);
-  }
   const button = settingsButton(
     doc,
     '',
@@ -124,8 +135,54 @@ export function settingsToggleRow(
     setSelectedColors(button, value);
   };
   set(checked);
-  row.append(text, button);
-  return { element: row, set };
+  return { element: settingsControlRow(doc, label, button, description), set };
+}
+
+export interface SettingsNumberInput {
+  readonly element: HTMLElement;
+  set(value: number): void;
+}
+
+export interface SettingsNumberOptions {
+  readonly minimum: number;
+  readonly maximum: number;
+  readonly step: number;
+}
+
+/** A host-font numeric field; keyboard editing remains native while persistence stays page-owned. */
+export function settingsNumberRow(
+  doc: Document,
+  label: string,
+  value: number,
+  options: SettingsNumberOptions,
+  onChange: (next: number) => number | false | void,
+  cleanups: Array<() => void>,
+  description?: string,
+): SettingsNumberInput {
+  const input = doc.createElementNS(H, 'input') as HTMLInputElement;
+  input.type = 'number';
+  input.min = String(options.minimum);
+  input.max = String(options.maximum);
+  input.step = String(options.step);
+  input.setAttribute('aria-label', label);
+  input.style.cssText = `box-sizing:border-box;width:8.5em;min-height:2.3em;padding:0.3em 0.55em;font:inherit;line-height:1.2;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px`;
+  let current = value;
+  const set = (next: number): void => {
+    current = next;
+    input.value = String(next);
+  };
+  const commit = (): void => {
+    const raw = Number.parseInt(input.value, 10);
+    const result = onChange(raw);
+    if (result === false) set(current);
+    else if (typeof result === 'number') set(result);
+    else if (Number.isFinite(raw)) set(raw);
+    else set(current);
+  };
+  input.addEventListener('change', commit);
+  cleanups.push(() => input.removeEventListener('change', commit));
+  set(value);
+  return { element: settingsControlRow(doc, label, input, description), set };
 }
 
 /** One inline failure region; successful writes leave it empty. */

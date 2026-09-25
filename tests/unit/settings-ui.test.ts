@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   settingsButton,
   settingsChoices,
+  settingsControlRow,
   settingsGroup,
+  settingsNumberRow,
   settingsStatus,
   settingsToggleRow,
   setSettingsPressed,
@@ -17,11 +19,16 @@ interface FakeElement {
   type: string;
   tabIndex: number;
   textContent: string;
+  value: string;
+  min: string;
+  max: string;
+  step: string;
   append(...children: FakeElement[]): void;
   setAttribute(key: string, value: string): void;
   getAttribute(key: string): string | null;
   addEventListener(type: string, listener: () => void): void;
   removeEventListener(type: string, listener: () => void): void;
+  emit(type: string): void;
   click(): void;
 }
 
@@ -38,6 +45,10 @@ function fakeDocument(): Document {
         type: '',
         tabIndex: 0,
         textContent: '',
+        value: '',
+        min: '',
+        max: '',
+        step: '',
         append(...children: FakeElement[]) {
           this.children.push(...children);
         },
@@ -53,8 +64,11 @@ function fakeDocument(): Document {
         removeEventListener(type: string, listener: () => void) {
           if (listeners.get(type) === listener) listeners.delete(type);
         },
+        emit(type: string) {
+          listeners.get(type)?.();
+        },
         click() {
-          listeners.get('click')?.();
+          this.emit('click');
         },
       };
     },
@@ -169,6 +183,56 @@ describe('shared Neo Settings controls', () => {
     const status = settingsStatus(doc) as unknown as FakeElement;
     expect(status.getAttribute('role')).toBe('status');
     expect(status.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('shares labeled row geometry across choices, toggles, and number inputs', () => {
+    const doc = fakeDocument();
+    const control = settingsChoices(
+      doc,
+      [{ value: 'a', label: 'A' }],
+      'a',
+      () => {},
+      [],
+    ).element;
+    const row = settingsControlRow(doc, 'Mode', control, 'Shared description') as unknown as FakeElement;
+    expect(row.style.cssText).toContain('align-items:center');
+    expect(row.children[0]?.children[0]?.textContent).toBe('Mode');
+    expect(row.children[0]?.children[1]?.textContent).toBe('Shared description');
+    expect(row.children[1]).toBe(control as unknown as FakeElement);
+  });
+
+  it('keeps number fields keyboard-editable while centralizing geometry and commit normalization', () => {
+    const cleanups: Array<() => void> = [];
+    const changed = vi.fn((value: number) => (value > 500 ? 500 : value));
+    const field = settingsNumberRow(
+      fakeDocument(),
+      'Scroll step (px)',
+      60,
+      { minimum: 10, maximum: 500, step: 10 },
+      changed,
+      cleanups,
+    );
+    const row = field.element as unknown as FakeElement;
+    const input = row.children[1]!;
+    expect(input.type).toBe('number');
+    expect(input.tabIndex).toBe(0);
+    expect(input.min).toBe('10');
+    expect(input.max).toBe('500');
+    expect(input.step).toBe('10');
+    expect(input.value).toBe('60');
+    expect(input.getAttribute('aria-label')).toBe('Scroll step (px)');
+    expect(input.style.cssText).toContain('font:inherit');
+    expect(input.style.cssText).toContain('box-sizing:border-box');
+    input.value = '900';
+    input.emit('change');
+    expect(changed).toHaveBeenCalledWith(900);
+    expect(input.value).toBe('500');
+    field.set(120);
+    expect(input.value).toBe('120');
+    for (const cleanup of cleanups) cleanup();
+    input.value = '200';
+    input.emit('change');
+    expect(changed).toHaveBeenCalledTimes(1);
   });
 
   it('updates a switch after success, vetoes failures, and cleans its mouse listener', () => {

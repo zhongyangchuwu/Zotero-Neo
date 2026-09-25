@@ -176,16 +176,18 @@ retain their focus. Zotero still owns Reader-to-Library tab focus restoration.
 
 `src/main/settings-center.ts` owns one disposable page at a time. Appearance
 retains its session-only editor state; `settings-interaction.ts` owns the live
-Picker mouse and Note editor toggles. `settings-ui.ts` owns their visual controls,
-while `src/core/preferences.ts` names the shared preference keys/defaults.
-Zotero Preferences no longer edits those two toggles; other legacy groups
-remain until migrated.
+Picker mouse and Note editor toggles; `settings-reader.ts` owns Reader modes,
+scrolling, marks persistence, and default annotation colour. `settings-ui.ts`
+owns shared button, choice, row, toggle, and numeric-field geometry, while
+`src/core/preferences.ts` names the shared preference keys/defaults. Zotero
+Preferences no longer edits migrated Interaction or Reader settings; remaining
+legacy groups stay available until their Settings pages migrate.
 
 Reader preference policy is centralized in `src/core/preferences.ts`: Reader mode
 flags, marks persistence, default annotation colour, scroll defaults/ranges, and
-the legacy `smoothScroll` migration all resolve there. Reader runtime and the
-remaining legacy Preferences UI consume that same normalized configuration rather
-than carrying separate scroll defaults or clamping rules.
+the legacy `smoothScroll` migration all resolve there. Reader runtime and
+`settings-reader.ts` consume that same normalized configuration rather than
+carrying separate scroll defaults or clamping rules.
 
 `src/main/picker/` owns one shared candidate search/list/preview surface plus finite
 sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, rendering,

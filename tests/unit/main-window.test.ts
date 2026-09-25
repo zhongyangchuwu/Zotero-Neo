@@ -17,6 +17,7 @@ import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { SettingsAppearance } from '../../src/main/settings-appearance';
 import { SettingsInteraction } from '../../src/main/settings-interaction';
+import { SettingsReader } from '../../src/main/settings-reader';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
 import {
@@ -1052,9 +1053,10 @@ describe('Main Settings Center shell', () => {
     expect(host.backdrop()).toBeUndefined();
   });
 
-  it('disposes each active page once across Interaction, placeholders, close, and reopen', () => {
+  it('disposes each active Settings page once across navigation, placeholders, close, and reopen', () => {
     const appearanceDispose = vi.spyOn(SettingsAppearance.prototype, 'dispose');
     const interactionDispose = vi.spyOn(SettingsInteraction.prototype, 'dispose');
+    const readerDispose = vi.spyOn(SettingsReader.prototype, 'dispose');
     const host = settingsMainHost();
     try {
       host.controller.openSettings(host.window);
@@ -1065,27 +1067,32 @@ describe('Main Settings Center shell', () => {
       expect(appearanceDispose).toHaveBeenCalledTimes(1);
       expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
       nav[1]!.emit('click');
-      expect(appearanceDispose).toHaveBeenCalledTimes(1);
       expect(interactionDispose).not.toHaveBeenCalled();
       nav[2]!.emit('click');
       expect(interactionDispose).toHaveBeenCalledTimes(1);
+      expect(readerDispose).not.toHaveBeenCalled();
       expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+      nav[2]!.emit('click');
+      expect(readerDispose).not.toHaveBeenCalled();
+      nav[3]!.emit('click');
+      expect(readerDispose).toHaveBeenCalledTimes(1);
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Keybindings');
       nav[0]!.emit('click');
-      expect(appearanceDispose).toHaveBeenCalledTimes(1);
-      nav[1]!.emit('click');
+      nav[2]!.emit('click');
       expect(appearanceDispose).toHaveBeenCalledTimes(2);
       (host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
         'click',
       );
-      expect(interactionDispose).toHaveBeenCalledTimes(2);
+      expect(readerDispose).toHaveBeenCalledTimes(2);
       host.controller.openSettings(host.window);
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
       host.controller.shutdown();
-      expect(interactionDispose).toHaveBeenCalledTimes(3);
+      expect(readerDispose).toHaveBeenCalledTimes(3);
     } finally {
       host.controller.shutdown();
       appearanceDispose.mockRestore();
       interactionDispose.mockRestore();
+      readerDispose.mockRestore();
     }
   });
 
