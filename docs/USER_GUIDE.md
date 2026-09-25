@@ -711,7 +711,7 @@ a highlight and opens its annotation comment editor.
 
 ## Customising keybindings
 
-Open Neo Settings with `<Space>ps` from Main or Reader Normal mode, then choose
+Open Neo Settings with `<Space>ps` from Main, Reader, or Note Normal mode, then choose
 **Keybindings**. The same page also owns Prefix Guide visibility, delay, and font size.
 
 - Every row in the **Keybindings** table maps a _mode + key sequence_ to an _action_. Multiple rows may bind keys to the same action.

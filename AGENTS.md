@@ -122,7 +122,7 @@ src/
   input/                   canonical bindings, actions, and matcher
   main/                    main-window controller and UI features
   reader/                  reader lifecycle and features
-  preferences/index.ts     preference behavior and localization
+  preferences/index.ts     legacy Preferences registration / Settings launcher
   platform/                narrow host-boundary adapters
 vendor/                    pinned, licensed third-party source/build snapshots
 ```
