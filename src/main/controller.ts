@@ -473,22 +473,18 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (decision.kind === 'execute') {
       if (
-        decision.action === 'mainClearSelection' &&
+        decision.action === 'mainCancelTarget' &&
         event.key.toLowerCase() === 'escape' &&
-        (session.selection.empty || !this.#itemSelect.itemsFocused(window))
+        (!this.#itemSelect.itemsFocused(window) || !this.#itemSelect.hasCancelableTarget(window))
       ) {
         this.clearKeyGuide(window, session);
         return;
       }
-      if (decision.action === 'mainEnterSelect' && !this.#itemSelect.entryRelevant(window)) {
+      if (decision.action === 'mainEnterSelect' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
-      if (
-        decision.action === 'mainToggleSelection' &&
-        !this.#itemSelect.itemsFocused(window) &&
-        this.#navigation.panel(window, session) !== 'collections'
-      ) {
+      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
         this.clearKeyGuide(window, session);
         return;
       }
@@ -772,9 +768,16 @@ export class MainWindowController implements MainWindowControllerApi {
         }
         this.#selectionPanel.open(window, session);
         break;
-      case 'mainTrashItems':
-        void this.#navigation.trashSelectedItems(window, session);
+      case 'mainTrashItems': {
+        const currentTarget =
+          session.inputMode === 'main-select' ? this.#itemSelect.currentTarget(window) : undefined;
+        if (session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        void this.#navigation.trashSelectedItems(window, session, currentTarget);
         break;
+      }
       case 'mainRestoreTrashedItems':
         void this.#navigation.restoreLastTrashedItems(session);
         break;
@@ -798,9 +801,18 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'focusReaderSplitRight':
         this.#navigation.focusDirection(window, session, 'right');
         break;
-      case 'mainYankCitekey':
-        this.#navigation.yankCitekey(window, session, context);
+      case 'mainYankCitekey': {
+        const currentTarget =
+          context === 'main' && session.inputMode === 'main-select'
+            ? this.#itemSelect.currentTarget(window)
+            : undefined;
+        if (context === 'main' && session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        this.#navigation.yankCitekey(window, session, context, currentTarget);
         break;
+      }
       case 'mainOpenPDF':
         void this.#navigation.openPDF(
           window,
@@ -822,11 +834,19 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.cycleTab(window, 1);
         break;
       case 'addTag':
-        this.#tags.add(window, session, context);
+      case 'removeTag': {
+        const currentTarget =
+          context === 'main' && session.inputMode === 'main-select'
+            ? this.#itemSelect.currentTarget(window)
+            : undefined;
+        if (context === 'main' && session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        if (action === 'addTag') this.#tags.add(window, session, context, currentTarget);
+        else this.#tags.remove(window, session, context, currentTarget);
         break;
-      case 'removeTag':
-        this.#tags.remove(window, session, context);
-        break;
+      }
       case 'toggleTagFilter':
         this.#tags.toggleFilter(window, session);
         break;
@@ -834,11 +854,24 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#tags.clearFilters(window, session);
         break;
       case 'addToCollection':
-        this.#collections.open(window, session, true, context);
+      case 'removeFromCollection': {
+        const currentTarget =
+          context === 'main' && session.inputMode === 'main-select'
+            ? this.#itemSelect.currentTarget(window)
+            : undefined;
+        if (context === 'main' && session.inputMode === 'main-select') {
+          this.#itemSelect.cancel(window, session.selection);
+          session.inputMode = 'main-normal';
+        }
+        this.#collections.open(
+          window,
+          session,
+          action === 'addToCollection',
+          context,
+          currentTarget,
+        );
         break;
-      case 'removeFromCollection':
-        this.#collections.open(window, session, false, context);
-        break;
+      }
       case 'mainNavDown':
         this.#navigation.navigate(window, session, 1, count, shouldDebounce);
         break;
@@ -876,14 +909,13 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.collapseAll(window, session);
         break;
       case 'mainToggleSelection':
-        if (this.#navigation.panel(window, session) === 'collections') {
-          this.#navigation.toggleScope(window, session, shouldDebounce);
-        } else {
-          this.#itemSelect.toggleCursor(window, session.selection, shouldDebounce);
-        }
+        this.#itemSelect.toggleCurrentTarget(window, session.selection, shouldDebounce);
         break;
       case 'mainClearSelection':
         this.#itemSelect.clearSelection(window, session.selection);
+        break;
+      case 'mainCancelTarget':
+        this.#itemSelect.cancelCurrentTarget(window, session.selection);
         break;
       case 'mainEnterSelect': {
         const result = this.#itemSelect.enter(window, session.selection);

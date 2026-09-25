@@ -1,6 +1,6 @@
 import type { MainWindow } from '../core/contracts';
 import type { MainWindowSession } from './session';
-import { resolveMainEffectiveTargets } from './action-targets';
+import { resolveMainEffectiveTargets, type MainCurrentTarget } from './action-targets';
 import {
   activeContextNoteItem,
   mainItem,
@@ -88,9 +88,10 @@ export function resolveItemTargets(
   window: MainWindow,
   session: MainWindowSession,
   context: ItemTargetContext,
+  currentTarget?: MainCurrentTarget | null,
 ): ItemTargetSet {
   if (context === 'main') {
-    const resolved = resolveMainEffectiveTargets(window, session);
+    const resolved = resolveMainEffectiveTargets(window, session, currentTarget);
     return {
       source: 'main',
       items: normalizeTopLevelItemTargets(resolved.items),

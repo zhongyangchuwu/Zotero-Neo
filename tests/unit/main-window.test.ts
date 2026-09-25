@@ -362,61 +362,6 @@ describe('current Zotero collection APIs', () => {
     expect(focused).toBe(3);
   });
 
-  it('pins a single native scope with s semantics and can add the detached ScopeCursor', () => {
-    let focused = 2;
-    const selected = new Set([2]);
-    const toggleSelect = vi.fn((index: number) => {
-      if (selected.has(index)) selected.delete(index);
-      else selected.add(index);
-    });
-    const moveFocused = vi.fn((index: number) => {
-      focused = index;
-    });
-    const active = { id: 'collection-tree-row-2' } as Element;
-    const view = {
-      tree: { focus: () => {}, _onSelection: moveFocused },
-      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
-      rowCount: 6,
-      selection: {
-        get count() {
-          return selected.size;
-        },
-        selected,
-        get focused() {
-          return focused;
-        },
-        toggleSelect,
-        select: vi.fn(),
-      },
-      ensureRowIsVisible: vi.fn(),
-    } as unknown as TreeView;
-    const window = {
-      document: {
-        activeElement: active,
-        getElementById: () => null,
-        querySelector: () => null,
-      },
-      ZoteroPane: { collectionsView: view },
-    } as unknown as MainWindow;
-    const session = {
-      window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
-      activePanel: 'collections',
-      status: { textContent: '', style: {} },
-      cleanup: { add: vi.fn() },
-    } as unknown as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
-
-    expect(navigation.toggleScope(window, session)).toBe(true);
-    expect(toggleSelect).not.toHaveBeenCalled();
-    expect([...selected]).toEqual([2]);
-    expect(focused).toBe(3);
-
-    expect(navigation.toggleScope(window, session)).toBe(true);
-    expect(toggleSelect).toHaveBeenCalledWith(3, false);
-    expect([...selected]).toEqual([2, 3]);
-    expect(focused).toBe(4);
-  });
-
   it('collapses ScopeSet to ScopeCursor before Enter moves into items', () => {
     let focused = 4;
     const selected = new Set([1, 2]);
@@ -2212,6 +2157,144 @@ describe('Reader owner picker routing', () => {
     main.shutdown();
     if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
     else Reflect.set(globalThis, 'Services', originalServices);
+  });
+});
+
+describe('Main CurrentTarget routing', () => {
+  it('leaves collection-tree s native instead of consuming it as ScopeSet mutation', () => {
+    let keydown: EventListener | undefined;
+    const active = { id: 'collection-tree-row-0', localName: 'div' } as unknown as Element;
+    const collectionView: TreeView = {
+      tree: { focus: () => {} },
+      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
+      rowCount: 2,
+      selection: { focused: 0, count: 1, select: vi.fn() },
+    };
+    const status = statusElement();
+    const document = {
+      activeElement: active,
+      body: { append: () => {} },
+      documentElement: { append: () => {} },
+      createElementNS: () => status,
+      getElementById: () => null,
+      querySelector: () => null,
+      addEventListener: (type: string, listener: EventListener) => {
+        if (type === 'keydown') keydown = listener;
+      },
+      removeEventListener: () => {},
+    } as unknown as Document;
+    const window = {
+      document,
+      ZoteroPane: { collectionsView: collectionView },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+      setTimeout: () => 1,
+      clearTimeout: () => {},
+    } as unknown as MainWindow;
+    const controller = createMainWindowController({
+      preferences: {
+        has: () => false,
+        get: (key: string, fallback: boolean | number | string) =>
+          key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
+        set: () => {},
+      },
+      logger,
+      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    controller.addWindow(window);
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+
+    keydown?.({
+      key: 's',
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault,
+      stopPropagation,
+    } as unknown as KeyboardEvent);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(stopPropagation).not.toHaveBeenCalled();
+    controller.shutdown();
+  });
+
+  it('snapshots VisualTarget before an inherited batch action exits Visual mode', () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    Reflect.set(globalThis, 'Zotero', { initialized: false });
+    const host = pickerMainWindow();
+    const items = [10, 11, 12].map((id) => ({ id, libraryID: 1 }) as Zotero.Item);
+    let focused = 0;
+    let selected = new Set([0]);
+    const active = { id: 'item-tree-row-0', localName: 'div' } as unknown as Element;
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected = new Set([index]);
+    });
+    const itemsView = {
+      domEl: { contains: (node: unknown) => node === active } as HTMLElement,
+      rowCount: items.length,
+      selection: {
+        get focused() {
+          return focused;
+        },
+        select,
+      },
+      getRow: (index: number) => ({ isObjectRow: true, ref: items[index] }),
+      getRowIndexByID: (id: number) => {
+        const index = items.findIndex((item) => item.id === id);
+        return index < 0 ? false : index;
+      },
+      ensureRowIsVisible: vi.fn(),
+    };
+    Reflect.set(host.window.document, 'activeElement', active);
+    Reflect.set(host.window, 'ZoteroPane', {
+      itemsView,
+      getSelectedItems: () => [...selected].map((index) => items[index]!),
+    });
+    const trash = vi
+      .spyOn(MainNavigation.prototype, 'trashSelectedItems')
+      .mockResolvedValue(undefined);
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    try {
+      controller.addWindow(host.window);
+      const press = (key: string) =>
+        host.keydown({
+          key,
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as KeyboardEvent);
+
+      press('v');
+      press('j');
+      press('d');
+      press('d');
+
+      expect(trash).toHaveBeenCalledOnce();
+      expect(trash.mock.calls[0]?.[2]).toEqual({
+        source: 'visual',
+        refs: [
+          { libraryID: 1, itemID: 10 },
+          { libraryID: 1, itemID: 11 },
+        ],
+      });
+    } finally {
+      controller.shutdown();
+      trash.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
   });
 });
 

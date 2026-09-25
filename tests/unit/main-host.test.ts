@@ -71,17 +71,21 @@ describe('main host adapter', () => {
   });
 
   it('snapshots and applies tag filters through the current items view', async () => {
-    const setFilter = vi.fn(async () => {});
+    const activeRow = { tags: new Set<string>() };
+    const setFilter = vi.fn(async (_type: 'tags', tags: ReadonlySet<string>) => {
+      activeRow.tags = new Set(tags);
+    });
     const selectedTags = new Set<string>();
     const window = {
       ZoteroPane: {
-        itemsView: { rowCount: 4, setFilter },
+        itemsView: { rowCount: 4, collectionTreeRows: [activeRow], setFilter },
         tagSelector: { selectedTags },
       },
     } as unknown as MainWindow;
 
     await expect(applyMainTagFilter(window, ['blue', 'green'])).resolves.toBe(4);
     expect(setFilter).toHaveBeenCalledWith('tags', new Set(['blue', 'green']));
+    expect(currentTagSelection(window)).toEqual(['blue', 'green']);
     expect(
       (window as unknown as { ZoteroPane: { tagSelector: { selectedTags: Set<string> } } })
         .ZoteroPane.tagSelector.selectedTags,
@@ -89,10 +93,23 @@ describe('main host adapter', () => {
 
     await expect(applyMainTagFilter(window, [])).resolves.toBe(4);
     expect(setFilter).toHaveBeenLastCalledWith('tags', new Set());
+    expect(currentTagSelection(window)).toEqual([]);
     expect(
       (window as unknown as { ZoteroPane: { tagSelector: { selectedTags: Set<string> } } })
         .ZoteroPane.tagSelector.selectedTags,
     ).toEqual(new Set());
+  });
+
+  it('prefers active item-view filter rows over stale collection/tag-selector presentation state', () => {
+    const window = {
+      ZoteroPane: {
+        itemsView: { collectionTreeRows: [{ tags: new Set<string>() }] },
+        getCollectionTreeRow: () => ({ tags: new Set(['stale-row']) }),
+        tagSelector: { getTagSelection: () => new Set(['stale-selector']) },
+      },
+    } as unknown as MainWindow;
+
+    expect(currentTagSelection(window)).toEqual([]);
   });
 
   it('prefers collection-row active filters over distinct native tag-selector state', () => {

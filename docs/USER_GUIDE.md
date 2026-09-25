@@ -245,8 +245,8 @@ chosen first; the chooser only answers which object/tag that action should use.
 | `<Space>tr` | Remove one chosen tag from the current target(s) |
 | `<Space>tf` | Main only: toggle one chosen tag filter |
 | `<Space>tc` | Main only: clear all tag filters directly |
-| `<Space>ca` | Main: add EffectiveSelection; Reader: add the active Reader item to one chosen collection |
-| `<Space>cr` | Main: remove EffectiveSelection; Reader: remove the active Reader item from one chosen collection |
+| `<Space>ca` | Main: add EffectiveSelection (Selection > CurrentTarget); Reader: add the active Reader item to one chosen collection |
+| `<Space>cr` | Main: remove EffectiveSelection (Selection > CurrentTarget); Reader: remove the active Reader item from one chosen collection |
 
 The shared surface owns query input, fuzzy ranking, highlighted-row navigation,
 preview, IME/composition handling, confirmation, and cancellation. It does not
@@ -448,14 +448,15 @@ list) when that pane has focus.
 
 | Key         | Action                                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------- |
-| `j` / `k`   | Move Cursor down / up; single-scope collection navigation follows View, pinned/multi ScopeSet preserves its members |
-| `s`         | Item list: toggle Selection + advance; collection tree: pin/toggle ScopeSet + advance                              |
+| `j` / `k`   | Move Cursor down / up; when Zotero has a native item multi-selection, move Cursor focus without collapsing it |
+| `s`         | Item list: toggle CurrentTarget into persistent Selection; collection tree: leave to Zotero native behavior |
 | `gg` / `G`  | Jump to the first / last row                                                                                         |
 | `h`         | In item list, move focus back to collection tree; in collection tree, collapse selected collection or jump to parent |
 | `l`         | In collection tree, expand selected collection; if already expanded or a leaf, move focus into item list             |
-| `Enter`     | In collection tree, collapse ScopeSet to ScopeCursor then enter items; in item list, open the Cursor item/PDF        |
+| `Enter`     | In collection tree, activate the focused scope and enter items; in item list, open the Cursor item/PDF               |
 | `Backspace` | Jump to parent collection                                                                                            |
-| `dd` / `x`  | Move selected item rows to Zotero Trash                                                                              |
+| `dd` / `x`  | Trash persistent Selection when non-empty; otherwise trash the current transient item target                       |
+| `Esc`        | Cancel Visual/native multi CurrentTarget; does not clear persistent Selection                                      |
 | `u`         | Restore the last item batch trashed by Neo                                                                           |
 | `za`        | Toggle expand/collapse for the currently selected collection row                                                     |
 | `zo`        | Expand the current collection row (if already open, keep it open)                                                    |
@@ -463,12 +464,10 @@ list) when that pane has focus.
 | `R`         | Expand all collections in the current library tree                                                                   |
 | `M`         | Collapse all collections in the current library tree                                                                 |
 
-In the collection tree, `s` builds Zotero's native ScopeSet without touching
-Neo item Selection. With one selected scope it pins that scope and advances
-ScopeCursor; subsequent `s` presses toggle additional scope rows. While the
-ScopeCursor is detached from ScopeSet or multiple scopes are selected,
-`j/k/gg/G` move only ScopeCursor. `Enter` returns to a single scope at the
-current ScopeCursor and enters the item list.
+The collection tree keeps Zotero's native scope semantics. Neo does not assign
+`s` a ScopeSet mutation grammar. Existing native multi-scope selections are
+preserved by Cursor-only tree motion where Zotero supports it, and `Enter`
+continues to activate the focused scope before entering the item list.
 
 In Main Normal mode, `H` and `L` switch to the previous and next Zotero tabs.
 `J` and `K` are not Neo defaults and remain available to native Zotero behavior.
@@ -496,6 +495,7 @@ and focus context:
 | `<Space>ca` | Add current item target(s) to a collection |
 | `<Space>cr` | Remove current item target(s) from a collection |
 | `<Space>yy` | Copy current target citekey(s) to the clipboard |
+| `<Space>sc` | Clear persistent Neo Selection explicitly |
 | `e` | Focus the collection tree |
 | `o` | Open the selected item's PDF |
 | `wh` | Focus the collection tree (left pane) |
@@ -814,9 +814,11 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 | `managePlugins`               | Open the persistent Plugin Manager panel                                              |
 | `findAllItems`                | Find an item in the current library                                                   |
 | `findCollectionItems`         | Find an item in the current collection                                                |
-| `mainYankCitekey`             | Main: copy EffectiveSelection citekey(s); Reader/Note: copy contextual citekey       |
+| `mainYankCitekey`             | Main: copy EffectiveSelection citekey(s) (Selection > CurrentTarget); Reader/Note: copy contextual citekey       |
 | `mainOpenPDF`                 | Open the selected item's PDF                                                         |
-| `mainTrashItems`              | Move selected main item-list rows to Zotero Trash                                    |
+| `mainTrashItems`              | Trash persistent Selection, otherwise the transient CurrentTarget                    |
+| `mainClearSelection`           | Explicitly clear persistent Neo Selection                                             |
+| `mainCancelTarget`             | Cancel Visual/native multi CurrentTarget without clearing Selection                   |
 | `mainRestoreTrashedItems`     | Restore the last item batch trashed by Neo                                           |
 | `closeCurrentTab`             | Close the active Zotero tab                                                           |
 | `previousTab`                 | Switch to the previous open tab                                                       |
@@ -829,10 +831,10 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 | `removeTag`                   | Remove one tag from the current target(s)                                             |
 | `toggleTagFilter`             | Main only: toggle one tag filter                                                      |
 | `clearTagFilters`             | Main only: clear all tag filters                                                      |
-| `addToCollection`              | Main only: add EffectiveSelection/Cursor fallback to a chosen collection              |
-| `removeFromCollection`         | Main only: remove EffectiveSelection/Cursor fallback from a chosen collection         |
-| `mainNavDown`                 | Move selection down (collections tree / item list)                                   |
-| `mainNavUp`                   | Move selection up (collections tree / item list)                                     |
+| `addToCollection`              | Main only: add EffectiveSelection (Selection > CurrentTarget) to a chosen collection              |
+| `removeFromCollection`         | Main only: remove EffectiveSelection (Selection > CurrentTarget) from a chosen collection         |
+| `mainNavDown`                 | Move Cursor down (collections tree / item list)                                      |
+| `mainNavUp`                   | Move Cursor up (collections tree / item list)                                        |
 | `mainNavFirst`                | Jump to the first row                                                                |
 | `mainNavLast`                 | Jump to the last row                                                                 |
 | `toggleReaderSidebarOutline`  | Toggle the custom outline explorer overlay                                           |
@@ -843,13 +845,13 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 | `focusReaderSplitDown`        | Focus lower split pane (or toggle in vertical split)                                 |
 | `focusReaderSplitUp`          | Focus upper split pane (or toggle in vertical split)                                 |
 | `focusReaderSplitRight`       | Focus right split pane (or toggle in horizontal split)                               |
-| `mainActivate`                | In collections, enter the item list; in items, open the selected item/PDF            |
+| `mainActivate`                | In collections, enter the item list; in items, open the Cursor item/PDF              |
 | `mainTreeToggle`              | Toggle expand/collapse for the selected collection                                   |
 | `mainTreeOpenOnly`            | Expand the selected collection without changing pane                                 |
 | `mainTreeCloseOnly`           | Collapse the selected collection without moving to parent                            |
 | `mainTreeExpand`              | Expand selected collection or move focus into the item list                          |
 | `mainTreeCollapse`            | Collapse selected collection, move to parent, or return focus to the collection tree |
-| `mainTreeParent`              | Move selection to parent collection                                                  |
+| `mainTreeParent`              | Move ScopeCursor to the parent collection                                             |
 | `mainTreeExpandAll`           | Expand all collections in the left tree                                              |
 | `mainTreeCollapseAll`         | Collapse all collections in the left tree                                            |
 

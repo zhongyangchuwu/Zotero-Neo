@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow, MainWindowControllerDependencies } from '../../src/core/contracts';
 import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { createMainWindowController } from '../../src/main/controller';
+import { MainItemSelect } from '../../src/main/item-select';
 
 function themedElement(id = ''): HTMLElement {
   const attributes = new Map<string, string>();
@@ -179,8 +180,9 @@ function harness() {
   };
 }
 
-describe('Main Selection Escape grammar', () => {
-  it('passes empty and collection-tree Escape through, but clears Selection from the item list', () => {
+describe('Main transient-target Escape grammar', () => {
+  it('passes Escape through without a transient target and keeps persistent clear on Space-s-c', () => {
+    const clearPersistent = vi.spyOn(MainItemSelect.prototype, 'clearSelection');
     const host = harness();
 
     const empty = host.press('Escape');
@@ -190,11 +192,16 @@ describe('Main Selection Escape grammar', () => {
     const toggle = host.press('s');
     expect(toggle.preventDefault).toHaveBeenCalledOnce();
     expect(host.focused()).toBe(1);
-    const clear = host.press('Escape');
-    expect(clear.preventDefault).toHaveBeenCalledOnce();
-    expect(clear.stopPropagation).toHaveBeenCalledOnce();
-    expect(host.clearSelection).not.toHaveBeenCalled();
+    const normalEscape = host.press('Escape');
+    expect(normalEscape.preventDefault).not.toHaveBeenCalled();
+    expect(normalEscape.stopPropagation).not.toHaveBeenCalled();
+    expect(clearPersistent).not.toHaveBeenCalled();
     expect(host.focused()).toBe(1);
+
+    host.press(' ');
+    host.press('s');
+    host.press('c');
+    expect(clearPersistent).toHaveBeenCalledOnce();
 
     host.press('s');
     host.focusCollections();
@@ -204,6 +211,7 @@ describe('Main Selection Escape grammar', () => {
     expect(host.clearSelection).not.toHaveBeenCalled();
 
     host.controller.shutdown();
+    clearPersistent.mockRestore();
   });
   it('lets Visual Escape cancel the range while preserving persistent Selection', () => {
     const host = harness();
@@ -217,12 +225,13 @@ describe('Main Selection Escape grammar', () => {
     expect(host.clearSelection).toHaveBeenCalledTimes(clearCalls);
 
     const normalEscape = host.press('Escape');
-    expect(normalEscape.preventDefault).toHaveBeenCalledOnce();
+    expect(normalEscape.preventDefault).not.toHaveBeenCalled();
+    expect(normalEscape.stopPropagation).not.toHaveBeenCalled();
     expect(host.clearSelection).not.toHaveBeenCalled();
     host.controller.shutdown();
   });
 
-  it('keeps editable and Reader Escape routes ahead of Main Selection clearing', () => {
+  it('keeps editable and Reader Escape routes ahead of Main transient-target cancel', () => {
     const editableHost = harness();
     editableHost.press('s');
     const editable = editableHost.focusEditable();

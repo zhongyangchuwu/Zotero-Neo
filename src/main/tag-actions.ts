@@ -8,6 +8,7 @@ import type { MainWindowSession } from './session';
 import { mainHost } from './host';
 import type { MainViewActions } from './view-actions';
 import { itemTagState, setTagOnTargets } from './tag-targets';
+import type { MainCurrentTarget } from './action-targets';
 import { resolveItemTargets, type ItemTargetContext, type ItemTargetSet } from './item-targets';
 
 function sameTag(left: string, right: string): boolean {
@@ -88,8 +89,13 @@ export class TagActions {
     this.#viewActions = viewActions;
   }
 
-  add(window: MainWindow, session: MainWindowSession, context: ItemTargetContext = 'main'): void {
-    const targets = this.targets(window, session, context);
+  add(
+    window: MainWindow,
+    session: MainWindowSession,
+    context: ItemTargetContext = 'main',
+    currentTarget?: MainCurrentTarget | null,
+  ): void {
+    const targets = this.targets(window, session, context, currentTarget);
     if (!targets) return;
     const libraryID = targetLibraryID(targets);
     if (libraryID === null) {
@@ -125,8 +131,9 @@ export class TagActions {
     window: MainWindow,
     session: MainWindowSession,
     context: ItemTargetContext = 'main',
+    currentTarget?: MainCurrentTarget | null,
   ): void {
-    const targets = this.targets(window, session, context);
+    const targets = this.targets(window, session, context, currentTarget);
     if (!targets) return;
     const tags = targetTags(targets);
     if (!tags.length) {
@@ -218,8 +225,9 @@ export class TagActions {
     window: MainWindow,
     session: MainWindowSession,
     context: ItemTargetContext,
+    currentTarget?: MainCurrentTarget | null,
   ): ItemTargetSet | null {
-    const targets = resolveItemTargets(window, session, context);
+    const targets = resolveItemTargets(window, session, context, currentTarget);
     if (targets.missing > 0) {
       this.#navigation.status(
         session,

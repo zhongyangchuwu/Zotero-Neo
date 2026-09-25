@@ -1,5 +1,10 @@
 import type { MainWindow } from '../core/contracts';
-import { currentMainItemCursorRef, mainItem, visibleMainSelectionCount } from './host';
+import {
+  currentMainItemCursorRef,
+  mainItem,
+  mainSelectedItemRefs,
+  visibleMainSelectionCount,
+} from './host';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 
@@ -10,7 +15,12 @@ export interface MainResolvedTargets {
   readonly visible: number;
   readonly hidden: number;
   readonly missing: number;
-  readonly source: 'selection' | 'cursor';
+  readonly source: 'selection' | 'visual' | 'native-selection' | 'cursor';
+}
+
+export interface MainCurrentTarget {
+  readonly refs: readonly ItemRef[];
+  readonly source: 'visual' | 'native-selection' | 'cursor';
 }
 
 function itemForRef(ref: ItemRef): Zotero.Item | undefined {
@@ -23,14 +33,24 @@ export function mainCursorItem(window: MainWindow): Zotero.Item | undefined {
   return ref ? itemForRef(ref) : undefined;
 }
 
+export function resolveMainCurrentTarget(window: MainWindow): MainCurrentTarget | null {
+  const native = mainSelectedItemRefs(window);
+  if (native.length > 1) return { refs: native, source: 'native-selection' };
+  const cursor = currentMainItemCursorRef(window);
+  if (cursor) return { refs: [cursor], source: 'cursor' };
+  if (native.length === 1) return { refs: native, source: 'cursor' };
+  return null;
+}
+
 export function resolveMainEffectiveTargets(
   window: MainWindow,
   session: MainWindowSession,
+  currentTarget?: MainCurrentTarget | null,
 ): MainResolvedTargets {
   const explicit = session.selection.values();
-  const cursor = currentMainItemCursorRef(window);
-  const refs = explicit.length ? explicit : cursor ? [cursor] : [];
-  const source = explicit.length ? 'selection' : 'cursor';
+  const transient = currentTarget ?? resolveMainCurrentTarget(window);
+  const refs = explicit.length ? explicit : (transient?.refs ?? []);
+  const source = explicit.length ? 'selection' : (transient?.source ?? 'cursor');
   const items = refs.flatMap((ref) => {
     const item = itemForRef(ref);
     return item ? [item] : [];

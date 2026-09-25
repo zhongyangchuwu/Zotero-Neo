@@ -72,8 +72,9 @@ Command Palette without synthetic keyboard events. It also keeps Key Guide,
 Binding Editor, and Command Palette projections tied to the same resolved source.
 
 Item-targeted actions also share a contextual target contract: Main resolves
-EffectiveSelection, Reader resolves the active Reader item (normally its parent
-bibliographic item), and Note resolves its active note context. View actions and
+EffectiveSelection (persistent Selection when non-empty, otherwise CurrentTarget),
+Reader resolves the active Reader item (normally its parent bibliographic item),
+and Note resolves its active note context. View actions and
 Reader-local PDF actions remain surface-owned and do not use that resolver.
 
 ### 3. Feature owners
@@ -100,7 +101,7 @@ family. Controllers coordinate them; they should not mirror child feature state.
   Clear Tag Filters orchestration; it invokes the shared chooser only when a tag
   target must be resolved.
 - `main/item-targets.ts` — shared contextual item-target resolution for Main
-  EffectiveSelection and Reader/Note contextual items; item actions reuse this
+  EffectiveSelection (Selection > CurrentTarget) and Reader/Note contextual items; item actions reuse this
   contract instead of borrowing another surface's selection.
 - `main/tag-targets.ts` — batched item-tag mutation primitives.
 - `main/note-capture.ts` — persistent Reader-selection capture mutation into an
