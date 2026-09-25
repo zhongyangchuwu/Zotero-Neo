@@ -30,17 +30,113 @@ export function noteEditorEnabled(preferences: PreferenceReader): boolean {
   return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
 }
 
+export type ReaderModePreference = 'visual' | 'insert';
 export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
 
-export interface SmoothScrollConfig {
+export const READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY = 'mode.visual.enabled' as const;
+export const READER_INSERT_MODE_ENABLED_PREFERENCE_KEY = 'mode.insert.enabled' as const;
+export const READER_MARKS_PERSIST_PREFERENCE_KEY = 'marks.persist' as const;
+export const READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY = 'defaultHighlightColor' as const;
+export const READER_SCROLL_MODE_PREFERENCE_KEY = 'scroll.mode' as const;
+export const READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY =
+  'smoothScroll.stopOnRelease' as const;
+
+const LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY = 'smoothScroll' as const;
+
+export const READER_SCROLL_NUMBER_SPECS = {
+  scrollStep: { key: 'scrollStep', defaultValue: 60, minimum: 10, maximum: 500 },
+  followSpeed: {
+    key: 'smoothScroll.followSpeed',
+    defaultValue: 2_000,
+    minimum: 100,
+    maximum: 6_000,
+  },
+  initialSpeed: {
+    key: 'smoothScroll.initialSpeed',
+    defaultValue: 2_000,
+    minimum: 50,
+    maximum: 2_000,
+  },
+  maxSpeed: {
+    key: 'smoothScroll.maxSpeed',
+    defaultValue: 2_000,
+    minimum: 100,
+    maximum: 6_000,
+  },
+  acceleration: {
+    key: 'smoothScroll.acceleration',
+    defaultValue: 2_600,
+    minimum: 100,
+    maximum: 10_000,
+  },
+  deceleration: {
+    key: 'smoothScroll.deceleration',
+    defaultValue: 4_200,
+    minimum: 100,
+    maximum: 12_000,
+  },
+} as const;
+
+export type ReaderScrollNumberSetting = keyof typeof READER_SCROLL_NUMBER_SPECS;
+
+export interface ReaderScrollConfig {
   readonly mode: ScrollMode;
+  readonly scrollStep: number;
   readonly initialSpeed: number;
   readonly maxSpeed: number;
   readonly acceleration: number;
   readonly deceleration: number;
   readonly stopOnRelease: boolean;
   readonly followSpeed: number;
+}
+
+export type SmoothScrollConfig = Omit<ReaderScrollConfig, 'scrollStep'>;
+
+export function readerModeEnabled(
+  preferences: PreferenceReader,
+  mode: ReaderModePreference,
+): boolean {
+  const key =
+    mode === 'visual'
+      ? READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY
+      : READER_INSERT_MODE_ENABLED_PREFERENCE_KEY;
+  return preferences.get(key, true);
+}
+
+export function readerMarksPersist(preferences: PreferenceReader): boolean {
+  return preferences.get(READER_MARKS_PERSIST_PREFERENCE_KEY, false);
+}
+
+export function readerDefaultHighlightColor(preferences: PreferenceReader): HighlightColorName {
+  const configured = preferences.get(READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY, 'yellow');
+  return configured === 'red' ||
+    configured === 'green' ||
+    configured === 'blue' ||
+    configured === 'purple'
+    ? configured
+    : 'yellow';
+}
+
+export function normalizeReaderScrollNumber(
+  setting: ReaderScrollNumberSetting,
+  value: number,
+): number {
+  const spec = READER_SCROLL_NUMBER_SPECS[setting];
+  const finite = Number.isFinite(value) ? Math.trunc(value) : spec.defaultValue;
+  return Math.max(spec.minimum, Math.min(spec.maximum, finite));
+}
+
+function readerScrollNumber(
+  preferences: PreferenceReader,
+  setting: ReaderScrollNumberSetting,
+): number {
+  const spec = READER_SCROLL_NUMBER_SPECS[setting];
+  return normalizeReaderScrollNumber(setting, preferences.get(spec.key, spec.defaultValue));
+}
+
+function isScrollMode(value: string): value is ScrollMode {
+  return value === 'step' || value === 'follow' || value === 'trapezoid';
 }
 
 export interface KeyGuideConfig {
@@ -97,27 +193,45 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
 }
 
 export function scrollModeFromPreferences(preferences: PreferenceReader): ScrollMode {
-  const configured = preferences.get('scroll.mode', '');
-  if (configured === 'step' || configured === 'follow' || configured === 'trapezoid') {
-    return configured;
-  }
-  if (preferences.has?.('smoothScroll')) {
-    return preferences.get('smoothScroll', true) ? 'trapezoid' : 'step';
+  const configured = preferences.get(READER_SCROLL_MODE_PREFERENCE_KEY, '');
+  if (isScrollMode(configured)) return configured;
+  if (preferences.has?.(LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY)) {
+    return preferences.get(LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY, true) ? 'trapezoid' : 'step';
   }
   return 'follow';
 }
 
-export function smoothScrollConfig(preferences: PreferenceReader): SmoothScrollConfig {
-  const initialSpeed = preferences.get('smoothScroll.initialSpeed', 2000);
+/** Persists only the historical smoothScroll boolean into the canonical scroll.mode key. */
+export function migrateReaderPreferences(preferences: PreferenceWriter): void {
+  const configured = preferences.get(READER_SCROLL_MODE_PREFERENCE_KEY, '');
+  if (isScrollMode(configured) || !preferences.has?.(LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY)) return;
+  preferences.set(
+    READER_SCROLL_MODE_PREFERENCE_KEY,
+    preferences.get(LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY, true) ? 'trapezoid' : 'step',
+  );
+}
+
+export function readerScrollConfig(preferences: PreferenceReader): ReaderScrollConfig {
+  const initialSpeed = readerScrollNumber(preferences, 'initialSpeed');
   return {
     mode: scrollModeFromPreferences(preferences),
+    scrollStep: readerScrollNumber(preferences, 'scrollStep'),
+    followSpeed: readerScrollNumber(preferences, 'followSpeed'),
     initialSpeed,
-    maxSpeed: Math.max(initialSpeed, preferences.get('smoothScroll.maxSpeed', 2000)),
-    acceleration: preferences.get('smoothScroll.acceleration', 2600),
-    deceleration: preferences.get('smoothScroll.deceleration', 4200),
-    stopOnRelease: preferences.get('smoothScroll.stopOnRelease', false),
-    followSpeed: preferences.get('smoothScroll.followSpeed', 2000),
+    maxSpeed: Math.max(initialSpeed, readerScrollNumber(preferences, 'maxSpeed')),
+    acceleration: readerScrollNumber(preferences, 'acceleration'),
+    deceleration: readerScrollNumber(preferences, 'deceleration'),
+    stopOnRelease: preferences.get(READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY, false),
   };
+}
+
+export function readerScrollStep(preferences: PreferenceReader): number {
+  return readerScrollNumber(preferences, 'scrollStep');
+}
+
+export function smoothScrollConfig(preferences: PreferenceReader): SmoothScrollConfig {
+  const { scrollStep: _scrollStep, ...config } = readerScrollConfig(preferences);
+  return config;
 }
 
 export function bindingsFromPreferences(preferences: PreferenceReader): BindingMap {

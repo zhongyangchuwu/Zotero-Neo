@@ -8,7 +8,7 @@ import type {
 } from './core/contracts';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
-import { migrateBindingPreferences } from './core/preferences';
+import { migrateBindingPreferences, migrateReaderPreferences } from './core/preferences';
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 
@@ -80,6 +80,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   init(context: AddonContext): void {
     this.#context = context;
     migrateBindingPreferences(this.#preferences);
+    migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
     this.#reader.start(context.id);
     (Zotero as ZoteroWithNeo).Neo = this.api;

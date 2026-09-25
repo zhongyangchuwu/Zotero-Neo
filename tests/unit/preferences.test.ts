@@ -8,17 +8,24 @@ import {
   BINDING_SCHEMA_VERSION,
   NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
+  READER_SCROLL_MODE_PREFERENCE_KEY,
   bindingsFromPreferences,
   keyGuideConfig,
   migrateBindingPreferences,
+  migrateReaderPreferences,
+  normalizeReaderScrollNumber,
   noteEditorEnabled,
   pickerMouseEnabled,
+  readerDefaultHighlightColor,
+  readerMarksPersist,
+  readerModeEnabled,
+  readerScrollConfig,
   scrollModeFromPreferences,
   smoothScrollConfig,
-  type PreferenceReader,
+  type PreferenceWriter,
 } from '../../src/core/preferences';
 
-class TestPreferences implements PreferenceReader {
+class TestPreferences implements PreferenceWriter {
   readonly writes: Array<readonly [string, boolean | number | string]> = [];
   private readonly values: Record<string, boolean | number | string>;
   constructor(values: Readonly<Record<string, boolean | number | string>>) {
@@ -109,6 +116,75 @@ describe('scroll preferences', () => {
       stopOnRelease: false,
       followSpeed: 2000,
     });
+  });
+
+  it('persists the legacy smoothScroll boolean into scroll.mode once', () => {
+    const enabled = new TestPreferences({ smoothScroll: true });
+    migrateReaderPreferences(enabled);
+    expect(enabled.writes).toEqual([[READER_SCROLL_MODE_PREFERENCE_KEY, 'trapezoid']]);
+    expect(scrollModeFromPreferences(enabled)).toBe('trapezoid');
+    migrateReaderPreferences(enabled);
+    expect(enabled.writes).toHaveLength(1);
+
+    const disabled = new TestPreferences({ smoothScroll: false });
+    migrateReaderPreferences(disabled);
+    expect(disabled.writes).toEqual([[READER_SCROLL_MODE_PREFERENCE_KEY, 'step']]);
+
+    const explicit = new TestPreferences({ 'scroll.mode': 'follow', smoothScroll: true });
+    migrateReaderPreferences(explicit);
+    expect(explicit.writes).toEqual([]);
+
+    const fresh = new TestPreferences({});
+    migrateReaderPreferences(fresh);
+    expect(fresh.writes).toEqual([]);
+  });
+
+  it('normalizes Reader scroll numbers through one canonical configuration', () => {
+    const preferences = new TestPreferences({
+      scrollStep: -40,
+      'smoothScroll.followSpeed': 9000,
+      'smoothScroll.initialSpeed': 2500,
+      'smoothScroll.maxSpeed': 100,
+      'smoothScroll.acceleration': 50,
+      'smoothScroll.deceleration': 20000,
+      'smoothScroll.stopOnRelease': true,
+    });
+
+    expect(readerScrollConfig(preferences)).toEqual({
+      mode: 'follow',
+      scrollStep: 10,
+      followSpeed: 6000,
+      initialSpeed: 2000,
+      maxSpeed: 2000,
+      acceleration: 100,
+      deceleration: 12000,
+      stopOnRelease: true,
+    });
+    expect(normalizeReaderScrollNumber('scrollStep', Number.NaN)).toBe(60);
+    expect(normalizeReaderScrollNumber('followSpeed', 1234.9)).toBe(1234);
+  });
+
+  it('normalizes Reader mode, marks, and highlight preferences', () => {
+    const defaults = new TestPreferences({});
+    expect(readerModeEnabled(defaults, 'visual')).toBe(true);
+    expect(readerModeEnabled(defaults, 'insert')).toBe(true);
+    expect(readerMarksPersist(defaults)).toBe(false);
+    expect(readerDefaultHighlightColor(defaults)).toBe('yellow');
+
+    const configured = new TestPreferences({
+      'mode.visual.enabled': false,
+      'mode.insert.enabled': false,
+      'marks.persist': true,
+      defaultHighlightColor: 'purple',
+    });
+    expect(readerModeEnabled(configured, 'visual')).toBe(false);
+    expect(readerModeEnabled(configured, 'insert')).toBe(false);
+    expect(readerMarksPersist(configured)).toBe(true);
+    expect(readerDefaultHighlightColor(configured)).toBe('purple');
+
+    expect(
+      readerDefaultHighlightColor(new TestPreferences({ defaultHighlightColor: 'orange' })),
+    ).toBe('yellow');
   });
 });
 

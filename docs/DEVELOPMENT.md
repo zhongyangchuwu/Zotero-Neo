@@ -181,6 +181,12 @@ while `src/core/preferences.ts` names the shared preference keys/defaults.
 Zotero Preferences no longer edits those two toggles; other legacy groups
 remain until migrated.
 
+Reader preference policy is centralized in `src/core/preferences.ts`: Reader mode
+flags, marks persistence, default annotation colour, scroll defaults/ranges, and
+the legacy `smoothScroll` migration all resolve there. Reader runtime and the
+remaining legacy Preferences UI consume that same normalized configuration rather
+than carrying separate scroll defaults or clamping rules.
+
 `src/main/picker/` owns one shared candidate search/list/preview surface plus finite
 sources for items, tabs, notes, tags, and commands. The shell owns lifecycle, rendering,
 focus, queueing, confirmation/cancellation, and containment. Ordinary object sources own

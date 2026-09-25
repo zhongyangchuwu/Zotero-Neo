@@ -1,5 +1,21 @@
 import { ZoteroPreferenceStore } from '../core/preference-store';
-import { PREFERENCE_PREFIX } from '../core/preferences';
+import {
+  PREFERENCE_PREFIX,
+  READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
+  READER_INSERT_MODE_ENABLED_PREFERENCE_KEY,
+  READER_MARKS_PERSIST_PREFERENCE_KEY,
+  READER_SCROLL_MODE_PREFERENCE_KEY,
+  READER_SCROLL_NUMBER_SPECS,
+  READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
+  READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
+  normalizeReaderScrollNumber,
+  readerDefaultHighlightColor,
+  readerMarksPersist,
+  readerModeEnabled,
+  readerScrollConfig,
+  type ReaderScrollNumberSetting,
+  type ScrollMode,
+} from '../core/preferences';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { encodeBindingOverrides, resolveBindings } from '../input/bindings';
 import {
@@ -224,17 +240,6 @@ const TEXT: Readonly<Record<Language, Readonly<Record<string, string>>>> = {
   },
 } as const satisfies Record<Language, Record<string, string>>;
 
-const SCROLL_DEFAULTS = {
-  mode: 'follow',
-  scrollStep: 60,
-  followSpeed: 2_000,
-  initialSpeed: 2_000,
-  maxSpeed: 2_000,
-  acceleration: 2_600,
-  deceleration: 4_200,
-  stopOnRelease: false,
-} as const;
-
 const initializedDocuments = new WeakSet<Document>();
 const observers = new WeakMap<Document, MutationObserver>();
 const preferenceStore = new ZoteroPreferenceStore();
@@ -258,14 +263,6 @@ function getPreference(key: string, fallback: PreferenceValue): PreferenceValue 
     }
   } catch {
     return fallback;
-  }
-}
-
-function hasPreference(key: string): boolean {
-  try {
-    return Services.prefs.getPrefType(`${PREFERENCE_BRANCH}${key}`) !== 0;
-  } catch {
-    return false;
   }
 }
 
@@ -484,19 +481,23 @@ function initializePane(doc: Document): void {
   const modesStatus = byId<HTMLElement>(doc, 'zv-modes-status');
   const visualCheckbox = byId<XulCheckbox>(doc, 'zv-visual-enabled');
   if (visualCheckbox) {
-    visualCheckbox.checked = getPreference('mode.visual.enabled', true);
-    saveCheckbox(visualCheckbox, 'mode.visual.enabled', modesStatus);
+    visualCheckbox.checked = readerModeEnabled(preferenceStore, 'visual');
+    saveCheckbox(visualCheckbox, READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY, modesStatus);
   }
   const insertCheckbox = byId<XulCheckbox>(doc, 'zv-insert-enabled');
   if (insertCheckbox) {
-    insertCheckbox.checked = getPreference('mode.insert.enabled', true);
-    saveCheckbox(insertCheckbox, 'mode.insert.enabled', modesStatus);
+    insertCheckbox.checked = readerModeEnabled(preferenceStore, 'insert');
+    saveCheckbox(insertCheckbox, READER_INSERT_MODE_ENABLED_PREFERENCE_KEY, modesStatus);
   }
 
   const marksCheckbox = byId<XulCheckbox>(doc, 'zv-marks-persist-enabled');
   if (marksCheckbox) {
-    marksCheckbox.checked = getPreference('marks.persist', false);
-    saveCheckbox(marksCheckbox, 'marks.persist', byId<HTMLElement>(doc, 'zv-marks-config-status'));
+    marksCheckbox.checked = readerMarksPersist(preferenceStore);
+    saveCheckbox(
+      marksCheckbox,
+      READER_MARKS_PERSIST_PREFERENCE_KEY,
+      byId<HTMLElement>(doc, 'zv-marks-config-status'),
+    );
   }
 
   const keyGuideStatus = byId<HTMLElement>(doc, 'zv-key-guide-status');
@@ -565,96 +566,63 @@ function initializePane(doc: Document): void {
   const stepRow = byId<HTMLElement>(doc, 'zv-scroll-step-row');
   const followRow = byId<HTMLElement>(doc, 'zv-scroll-follow-row');
   const trapezoidBlock = byId<HTMLElement>(doc, 'zv-scroll-trapezoid-block');
-  const savedMode = getPreference('scroll.mode', '');
-  const scrollMode =
-    savedMode === 'step' || savedMode === 'follow' || savedMode === 'trapezoid'
-      ? savedMode
-      : hasPreference('smoothScroll')
-        ? getPreference('smoothScroll', true)
-          ? 'trapezoid'
-          : 'step'
-        : SCROLL_DEFAULTS.mode;
-  scrollInput.value = String(getPreference('scrollStep', SCROLL_DEFAULTS.scrollStep));
-  if (modeSelect) modeSelect.value = scrollMode;
-  if (followSpeedInput)
-    followSpeedInput.value = String(
-      getPreference('smoothScroll.followSpeed', SCROLL_DEFAULTS.followSpeed),
-    );
-  if (initialSpeedInput)
-    initialSpeedInput.value = String(
-      getPreference('smoothScroll.initialSpeed', SCROLL_DEFAULTS.initialSpeed),
-    );
-  if (maxSpeedInput)
-    maxSpeedInput.value = String(getPreference('smoothScroll.maxSpeed', SCROLL_DEFAULTS.maxSpeed));
-  if (accelerationInput)
-    accelerationInput.value = String(
-      getPreference('smoothScroll.acceleration', SCROLL_DEFAULTS.acceleration),
-    );
-  if (decelerationInput)
-    decelerationInput.value = String(
-      getPreference('smoothScroll.deceleration', SCROLL_DEFAULTS.deceleration),
-    );
-  if (stopOnReleaseCheckbox)
-    stopOnReleaseCheckbox.checked = getPreference(
-      'smoothScroll.stopOnRelease',
-      SCROLL_DEFAULTS.stopOnRelease,
-    );
+  const scrollConfig = readerScrollConfig(preferenceStore);
+  scrollInput.value = String(scrollConfig.scrollStep);
+  if (modeSelect) modeSelect.value = scrollConfig.mode;
+  if (followSpeedInput) followSpeedInput.value = String(scrollConfig.followSpeed);
+  if (initialSpeedInput) initialSpeedInput.value = String(scrollConfig.initialSpeed);
+  if (maxSpeedInput) maxSpeedInput.value = String(scrollConfig.maxSpeed);
+  if (accelerationInput) accelerationInput.value = String(scrollConfig.acceleration);
+  if (decelerationInput) decelerationInput.value = String(scrollConfig.deceleration);
+  if (stopOnReleaseCheckbox) stopOnReleaseCheckbox.checked = scrollConfig.stopOnRelease;
 
   const updateScrollModeUi = () => {
-    const selectedMode = modeSelect?.value ?? scrollMode;
+    const selectedMode = modeSelect?.value ?? scrollConfig.mode;
     if (stepRow) stepRow.hidden = selectedMode !== 'step';
     if (followRow) followRow.hidden = selectedMode !== 'follow';
     if (trapezoidBlock) trapezoidBlock.hidden = selectedMode !== 'trapezoid';
   };
+  const scrollNumber = (setting: ReaderScrollNumberSetting, value: string | undefined): number =>
+    normalizeReaderScrollNumber(setting, Number.parseInt(value ?? '', 10));
   const saveScrollConfiguration = () => {
-    const scrollStep = clampInteger(scrollInput.value, SCROLL_DEFAULTS.scrollStep, 10, 500);
-    const followSpeed = clampInteger(
-      followSpeedInput?.value,
-      SCROLL_DEFAULTS.followSpeed,
-      100,
-      6_000,
-    );
-    const initialSpeed = clampInteger(
-      initialSpeedInput?.value,
-      SCROLL_DEFAULTS.initialSpeed,
-      50,
-      2_000,
-    );
+    const scrollStep = scrollNumber('scrollStep', scrollInput.value);
+    const followSpeed = scrollNumber('followSpeed', followSpeedInput?.value);
+    const initialSpeed = scrollNumber('initialSpeed', initialSpeedInput?.value);
     const maximumSpeed = Math.max(
-      clampInteger(maxSpeedInput?.value, SCROLL_DEFAULTS.maxSpeed, 100, 6_000),
+      scrollNumber('maxSpeed', maxSpeedInput?.value),
       initialSpeed,
     );
-    const acceleration = clampInteger(
-      accelerationInput?.value,
-      SCROLL_DEFAULTS.acceleration,
-      100,
-      10_000,
-    );
-    const deceleration = clampInteger(
-      decelerationInput?.value,
-      SCROLL_DEFAULTS.deceleration,
-      100,
-      12_000,
-    );
+    const acceleration = scrollNumber('acceleration', accelerationInput?.value);
+    const deceleration = scrollNumber('deceleration', decelerationInput?.value);
     scrollInput.value = String(scrollStep);
     if (followSpeedInput) followSpeedInput.value = String(followSpeed);
     if (initialSpeedInput) initialSpeedInput.value = String(initialSpeed);
     if (maxSpeedInput) maxSpeedInput.value = String(maximumSpeed);
     if (accelerationInput) accelerationInput.value = String(acceleration);
     if (decelerationInput) decelerationInput.value = String(deceleration);
-    setPreference('scrollStep', scrollStep);
-    setPreference('smoothScroll.followSpeed', followSpeed);
-    setPreference('smoothScroll.initialSpeed', initialSpeed);
-    setPreference('smoothScroll.maxSpeed', maximumSpeed);
-    setPreference('smoothScroll.acceleration', acceleration);
-    setPreference('smoothScroll.deceleration', deceleration);
-    setPreference('smoothScroll.stopOnRelease', stopOnReleaseCheckbox?.checked ?? false);
+    setPreference(READER_SCROLL_NUMBER_SPECS.scrollStep.key, scrollStep);
+    setPreference(READER_SCROLL_NUMBER_SPECS.followSpeed.key, followSpeed);
+    setPreference(READER_SCROLL_NUMBER_SPECS.initialSpeed.key, initialSpeed);
+    setPreference(READER_SCROLL_NUMBER_SPECS.maxSpeed.key, maximumSpeed);
+    setPreference(READER_SCROLL_NUMBER_SPECS.acceleration.key, acceleration);
+    setPreference(READER_SCROLL_NUMBER_SPECS.deceleration.key, deceleration);
+    setPreference(
+      READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
+      stopOnReleaseCheckbox?.checked ?? false,
+    );
     flashStatus(scrollStatus, translate('zv.status.saved', currentLanguage()));
   };
   updateScrollModeUi();
   if (modeSelect) {
     modeSelect.addEventListener('command', () => {
-      setPreference('scroll.mode', modeSelect.value);
+      const nextMode: ScrollMode =
+        modeSelect.value === 'step' ||
+        modeSelect.value === 'follow' ||
+        modeSelect.value === 'trapezoid'
+          ? modeSelect.value
+          : 'follow';
+      modeSelect.value = nextMode;
+      setPreference(READER_SCROLL_MODE_PREFERENCE_KEY, nextMode);
       updateScrollModeUi();
       flashStatus(scrollStatus, translate('zv.status.saved', currentLanguage()));
     });
@@ -666,13 +634,17 @@ function initializePane(doc: Document): void {
   accelerationInput?.addEventListener('change', saveScrollConfiguration);
   decelerationInput?.addEventListener('change', saveScrollConfiguration);
   if (stopOnReleaseCheckbox)
-    saveCheckbox(stopOnReleaseCheckbox, 'smoothScroll.stopOnRelease', scrollStatus);
+    saveCheckbox(
+      stopOnReleaseCheckbox,
+      READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
+      scrollStatus,
+    );
 
   const colorSelect = byId<XulMenuList>(doc, 'zv-default-color');
   if (colorSelect) {
-    colorSelect.value = getPreference('defaultHighlightColor', 'yellow');
+    colorSelect.value = readerDefaultHighlightColor(preferenceStore);
     colorSelect.addEventListener('command', () => {
-      setPreference('defaultHighlightColor', colorSelect.value);
+      setPreference(READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY, colorSelect.value);
       flashStatus(
         byId<HTMLElement>(doc, 'zv-default-color-status'),
         translate('zv.status.saved', currentLanguage()),

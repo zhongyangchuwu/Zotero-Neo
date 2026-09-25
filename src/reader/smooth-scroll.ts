@@ -1,4 +1,9 @@
-import type { PreferenceReader, ScrollMode } from '../core/preferences';
+import {
+  smoothScrollConfig,
+  type PreferenceReader,
+  type ScrollMode,
+  type SmoothScrollConfig,
+} from '../core/preferences';
 import type { ActionId } from '../input/actions';
 import type { PdfWindow } from './types';
 
@@ -23,15 +28,6 @@ export function smoothScrollSpec(action: ActionId): SmoothScrollSpec | null {
   return action in SMOOTH_SCROLL_SPECS ? SMOOTH_SCROLL_SPECS[action as SmoothScrollAction] : null;
 }
 
-interface SmoothScrollConfig {
-  readonly mode: ScrollMode;
-  readonly initialSpeed: number;
-  readonly maxSpeed: number;
-  readonly acceleration: number;
-  readonly deceleration: number;
-  readonly stopOnRelease: boolean;
-  readonly followSpeed: number;
-}
 
 interface HoldState {
   active: boolean;
@@ -188,20 +184,6 @@ export class ReaderSmoothScroller {
   }
 
   #config(): SmoothScrollConfig {
-    const preferences = this.#host.preferences;
-    const configured = preferences.get('scroll.mode', 'follow');
-    const mode: ScrollMode =
-      configured === 'step' || configured === 'trapezoid' || configured === 'follow'
-        ? configured
-        : 'follow';
-    return {
-      mode,
-      initialSpeed: preferences.get('smoothScroll.initialSpeed', 2000),
-      maxSpeed: preferences.get('smoothScroll.maxSpeed', 2000),
-      acceleration: preferences.get('smoothScroll.acceleration', 2600),
-      deceleration: preferences.get('smoothScroll.deceleration', 4200),
-      stopOnRelease: preferences.get('smoothScroll.stopOnRelease', false),
-      followSpeed: preferences.get('smoothScroll.followSpeed', 2000),
-    };
+    return smoothScrollConfig(this.#host.preferences);
   }
 }
