@@ -6,6 +6,7 @@ import {
   mainItemCursorRow,
   mainItemRefAtRow,
   mainItemRowCount,
+  mainSelectedItemRefs,
   mainItemRowForRef,
   selectMainItemCursorAnchor,
   visibleMainSelectionCount,
@@ -78,8 +79,9 @@ export function visualStatusText(targetCount: number, selectionCount: number): s
  * Main Library selection feature.
  *
  * Persistent Selection belongs to MainWindowSession.SelectionStore. This owner
- * keeps transient Visual anchor/head state; Zotero TreeSelection remains one
- * native Cursor host anchor for current-item semantics only.
+ * keeps transient Visual anchor/head state. Zotero TreeSelection remains the
+ * host Cursor anchor and may temporarily carry a native multi-selection until
+ * Neo navigation collapses it or `s` promotes that target into Selection.
  */
 export class MainItemSelect {
   readonly #logger: Logger;
@@ -126,10 +128,15 @@ export class MainItemSelect {
       if (ui.status) this.renderBadge(window, ui, ui.status);
     });
 
-    // MainItemSelect owns every Neo Cursor transition. Normalize the initial
-    // native host anchor here before Main view lifecycle captures its identity.
+    // MainItemSelect owns every Neo Cursor transition. Only synthesize an
+    // initial native Cursor anchor when Zotero has no current item selection;
+    // preserve a host-owned native multi-selection for immediate actions.
     const cursorRow = mainItemCursorRow(window);
-    if (cursorRow !== undefined && currentMainItemCursorRef(window)) {
+    if (
+      cursorRow !== undefined &&
+      currentMainItemCursorRef(window) &&
+      mainSelectedItemRefs(window).length === 0
+    ) {
       selectMainItemCursorAnchor(window, cursorRow);
     }
   }
@@ -165,17 +172,23 @@ export class MainItemSelect {
     const rowCount = mainItemRowCount(window);
     if (!cursor || row === undefined || rowCount <= 0) return false;
 
+    const native = mainSelectedItemRefs(window);
+    const target = native.length > 1 ? native : [cursor];
+    const before = selection.values();
+    const result = selection.toggleTarget(target);
+    if (result === 'unchanged') return false;
+
     const next = Math.min(rowCount - 1, row + 1);
-    const selected = selection.toggle(cursor);
     if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
-      selection.toggle(cursor);
+      selection.clear();
+      for (const ref of before) selection.add(ref);
       return false;
     }
 
     const visible = visibleMainSelectionCount(window, selection.values());
     this.#decoration.refresh(window);
     this.#logger.debug(
-      `main selection cursor toggle item=${cursor.itemID} selected=${selected} total=${selection.size} visible=${visible}`,
+      `main selection target toggle target=${target.length} result=${result} total=${selection.size} visible=${visible}`,
     );
     return true;
   }

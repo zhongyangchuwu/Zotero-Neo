@@ -2,16 +2,17 @@
 
 Zotero Neo keeps Zotero authoritative for Item data and mutations, while Main
 interaction state separates Cursor, persistent Selection, and transient Visual
-ranges. Selection stores only stable item identities for the current session;
-Zotero's native TreeSelection is used as a visible projection rather than the
-complete workset source of truth.
+ranges. Selection stores only stable item identities for the current session.
+Zotero's native TreeSelection remains host-owned: a visible native multi-selection
+can be used as an immediate target when Neo Selection is empty, but it is not the
+persistent workset source of truth.
 
 ## Main Selection and Visual
 
 With focus in Zotero's main item list:
 
 - `j` / `k` move Cursor without changing Selection.
-- `s` toggles the Cursor item in Selection, then advances Cursor down.
+- `s` toggles the current Zotero native item target in Selection: a native multi-selection as one target, otherwise Cursor; then advances Cursor down.
 - `v` enters a transient Visual range anchored at Cursor.
 - Visual `j` / `k` / `gg` / `G` move the range head.
 - Visual `o` swaps anchor and head.
@@ -22,15 +23,14 @@ Range commit is all-or-none: if every item in the Visual range is already in
 Selection, the whole range is removed; otherwise the whole range is added.
 
 Visual temporarily uses Zotero's native row selection to render the contiguous
-range, then restores the visible Selection projection on commit/cancel.
+range, then returns to the normal item-target contract on commit/cancel.
 Selection itself is a Neo-owned session workset of stable item identities, so
 moving Cursor or editing a Visual range does not redefine it.
 
-The collection tree remains a separate scope/navigation context. Pressing `s`
-there never toggles item Selection; it operates on Zotero's native ScopeSet
-instead. A sole selected scope is pinned and ScopeCursor advances, after which
-`s` can add/remove native scope rows without introducing a second Neo-owned
-scope store. Space remains the command leader in both item and collection panes.
+The collection tree remains a separate scope/navigation context. Neo currently
+does not bind `s` to collection multi-selection; the key is left to Zotero and
+never toggles Neo item Selection. Space remains the command leader in both item
+and collection panes.
 
 ## Tag action vocabulary
 
@@ -55,7 +55,7 @@ off-screen Main filter.
 Add/Remove Tag are available from Main, Reader, and Note when Neo can resolve
 a taggable target set:
 
-- **Main**: EffectiveSelection (explicit Neo Selection, otherwise Cursor).
+- **Main**: EffectiveSelection (persistent Neo Selection first; otherwise the current visible Zotero multi-selection; otherwise Cursor).
 - **Reader**: the active Reader item's parent bibliographic item when one exists;
   Main Selection is never borrowed.
 - **Note**: the active note-context item's parent bibliographic item when one

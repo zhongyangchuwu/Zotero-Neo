@@ -15,7 +15,6 @@ import {
   moveMainScopeCursor,
   selectMainItemCursorAnchor,
   selectOnlyMainScopeCursor,
-  toggleMainScopeAtCursor,
 } from './host';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { resolveItemTargets, type ItemTargetContext } from './item-targets';
@@ -329,33 +328,6 @@ export class MainNavigation {
       return;
     }
     view.selection.select?.(next, shouldDebounce);
-  }
-
-  toggleScope(window: MainWindow, session: MainWindowSession, shouldDebounce = false): boolean {
-    if (this.panel(window, session) !== 'collections') return false;
-    const view = mainHost(window).ZoteroPane?.collectionsView;
-    const focused = mainScopeCursorRow(window);
-    if (focused === undefined || !view) return false;
-
-    const selected = mainScopeSelectedRows(window);
-    const pinnedSingle = selected.length === 1 && selected[0] === focused;
-    const changed = pinnedSingle ? false : toggleMainScopeAtCursor(window, shouldDebounce);
-
-    const last = Math.max(0, (view.rowCount ?? 1) - 1);
-    const next = Math.min(last, focused + 1);
-    if (next !== focused) moveMainScopeCursor(window, next, shouldDebounce);
-
-    const count = mainScopeSelectedRows(window).length;
-    this.status(
-      session,
-      pinnedSingle
-        ? `→ Scope pinned · ${count} selected`
-        : changed
-          ? `→ ScopeSet · ${count} selected`
-          : '✗ Unable to change ScopeSet',
-      1200,
-    );
-    return pinnedSingle || changed;
   }
 
   activate(
