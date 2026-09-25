@@ -17,6 +17,7 @@ import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { SettingsAppearance } from '../../src/main/settings-appearance';
 import { SettingsInteraction } from '../../src/main/settings-interaction';
+import { SettingsKeybindings } from '../../src/main/settings-keybindings';
 import { SettingsReader } from '../../src/main/settings-reader';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
@@ -1057,6 +1058,7 @@ describe('Main Settings Center shell', () => {
     const appearanceDispose = vi.spyOn(SettingsAppearance.prototype, 'dispose');
     const interactionDispose = vi.spyOn(SettingsInteraction.prototype, 'dispose');
     const readerDispose = vi.spyOn(SettingsReader.prototype, 'dispose');
+    const keybindingsDispose = vi.spyOn(SettingsKeybindings.prototype, 'dispose');
     const host = settingsMainHost();
     try {
       host.controller.openSettings(host.window);
@@ -1065,34 +1067,88 @@ describe('Main Settings Center shell', () => {
       >;
       nav[1]!.emit('click');
       expect(appearanceDispose).toHaveBeenCalledTimes(1);
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
-      nav[1]!.emit('click');
-      expect(interactionDispose).not.toHaveBeenCalled();
       nav[2]!.emit('click');
       expect(interactionDispose).toHaveBeenCalledTimes(1);
-      expect(readerDispose).not.toHaveBeenCalled();
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
-      nav[2]!.emit('click');
-      expect(readerDispose).not.toHaveBeenCalled();
       nav[3]!.emit('click');
       expect(readerDispose).toHaveBeenCalledTimes(1);
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Keybindings');
-      nav[0]!.emit('click');
-      nav[2]!.emit('click');
-      expect(appearanceDispose).toHaveBeenCalledTimes(2);
+      expect(keybindingsDispose).not.toHaveBeenCalled();
+      expect(host.drawer()?.children[2]?.children[1]?.textContent).toBe('Keybindings');
+      nav[3]!.emit('click');
+      expect(keybindingsDispose).not.toHaveBeenCalled();
+      nav[4]!.emit('click');
+      expect(keybindingsDispose).toHaveBeenCalledTimes(1);
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Advanced');
+      nav[3]!.emit('click');
       (host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
         'click',
       );
-      expect(readerDispose).toHaveBeenCalledTimes(2);
+      expect(keybindingsDispose).toHaveBeenCalledTimes(2);
       host.controller.openSettings(host.window);
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+      expect(host.drawer()?.children[2]?.children[1]?.textContent).toBe('Keybindings');
       host.controller.shutdown();
-      expect(readerDispose).toHaveBeenCalledTimes(3);
+      expect(keybindingsDispose).toHaveBeenCalledTimes(3);
     } finally {
       host.controller.shutdown();
       appearanceDispose.mockRestore();
       interactionDispose.mockRestore();
       readerDispose.mockRestore();
+      keybindingsDispose.mockRestore();
+    }
+  });
+
+  it('saves Prefix Guide controls live and preserves a dirty keybinding draft across navigation', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    try {
+      host.controller.openSettings(host.window);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[3]!.emit('click');
+      const page = host.drawer()?.children[2] as HTMLElement;
+      const controls = all(page);
+      const guide = controls.find(
+        (node) => node.getAttribute('aria-label') === 'Show Prefix Guide',
+      ) as HTMLElement & { emit(type: string): void };
+      guide.emit('click');
+      expect(host.values.get('keyGuide.enabled')).toBe(false);
+
+      const delay = controls.find(
+        (node) => node.getAttribute('aria-label') === 'Display delay (ms)',
+      ) as HTMLInputElement & { emit(type: string): void };
+      delay.value = '9000';
+      delay.emit('change');
+      expect(host.values.get('keyGuide.delayMs')).toBe(KEY_GUIDE_CONFIG.maxDelayMs);
+      expect(delay.value).toBe(String(KEY_GUIDE_CONFIG.maxDelayMs));
+
+      const body = controls.find((node) => node.id === 'zv-bindings-body')!;
+      const initialRows = body.children.length;
+      const add = controls.find((node) => node.id === 'zv-add-binding') as HTMLElement & {
+        emit(type: string): void;
+      };
+      add.emit('click');
+      expect(body.children.length).toBe(initialRows + 1);
+      expect(host.values.has('bindings')).toBe(false);
+
+      nav[2]!.emit('click');
+      nav[3]!.emit('click');
+      const remounted = all(host.drawer()?.children[2] as HTMLElement);
+      const remountedBody = remounted.find((node) => node.id === 'zv-bindings-body')!;
+      expect(remountedBody.children.length).toBe(initialRows + 1);
+      const apply = remounted.find((node) => node.id === 'zv-save') as HTMLButtonElement;
+      expect(apply.disabled).toBe(true);
+
+      host.press('Escape');
+      host.controller.openSettings(host.window);
+      const reopened = all(host.drawer()?.children[2] as HTMLElement);
+      expect(reopened.find((node) => node.id === 'zv-bindings-body')?.children.length).toBe(
+        initialRows + 1,
+      );
+    } finally {
+      host.controller.shutdown();
     }
   });
 

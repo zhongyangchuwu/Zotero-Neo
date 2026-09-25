@@ -177,10 +177,14 @@ retain their focus. Zotero still owns Reader-to-Library tab focus restoration.
 `src/main/settings-center.ts` owns one disposable page at a time. Appearance
 retains its session-only editor state; `settings-interaction.ts` owns the live
 Picker mouse and Note editor toggles; `settings-reader.ts` owns Reader modes,
-scrolling, marks persistence, and default annotation colour. `settings-ui.ts`
-owns shared button, choice, row, toggle, and numeric-field geometry, while
-`src/core/preferences.ts` names the shared preference keys/defaults. Zotero
-Preferences no longer edits migrated Interaction or Reader settings; remaining
+scrolling, marks persistence, and default annotation colour;
+`settings-keybindings.ts` owns Prefix Guide controls and the explicit-Apply
+keybinding draft. `settings-ui.ts` owns shared button, field, choice, row,
+toggle, and numeric-field geometry, while `src/core/preferences.ts` names the
+shared preference keys/defaults. The keybinding editor state machine lives in
+`src/input/binding-editor.ts`; its Settings view is Main-owned and does not
+depend on Zotero Preferences/XUL controls. Zotero Preferences no longer edits
+migrated Interaction, Reader, Prefix Guide, or Keybindings settings; remaining
 legacy groups stay available until their Settings pages migrate.
 
 Reader preference policy is centralized in `src/core/preferences.ts`: Reader mode

@@ -17,6 +17,7 @@ import {
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
 export const BINDING_SCHEMA_VERSION = 16;
+export const BINDINGS_PREFERENCE_KEY = 'bindings' as const;
 
 export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
 
@@ -205,7 +206,7 @@ export interface PreferenceWriter extends PreferenceReader {
 export function migrateBindingPreferences(preferences: PreferenceWriter): void {
   const version = preferences.get('bindings.schemaVersion', 0);
   if (version >= BINDING_SCHEMA_VERSION) return;
-  const raw = preferences.get('bindings', '');
+  const raw = preferences.get(BINDINGS_PREFERENCE_KEY, '');
   const canonical =
     version >= 8
       ? raw
@@ -221,7 +222,7 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
   if (version < 14) migrated = migrateMainSpaceSelectionOverrides(migrated);
   if (version < 15) migrated = migrateUnifiedSpaceLeaderOverrides(migrated);
   if (version < 16) migrated = migrateMainSelectionCommandOverrides(migrated);
-  if (migrated !== raw) preferences.set('bindings', migrated);
+  if (migrated !== raw) preferences.set(BINDINGS_PREFERENCE_KEY, migrated);
   preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }
 
@@ -268,5 +269,5 @@ export function smoothScrollConfig(preferences: PreferenceReader): SmoothScrollC
 }
 
 export function bindingsFromPreferences(preferences: PreferenceReader): BindingMap {
-  return resolveBindings(preferences.get('bindings', ''));
+  return resolveBindings(preferences.get(BINDINGS_PREFERENCE_KEY, ''));
 }

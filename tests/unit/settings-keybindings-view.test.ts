@@ -3,11 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BindingMap } from '../../src/input/bindings';
 import {
   mountBindingEditor,
-  type BindingEditorHostAdapter,
   type BindingEditorGeometryAdapter,
-} from '../../src/preferences/binding-editor-view';
-
-const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
+} from '../../src/main/settings-keybindings-view';
 
 type FakeListener = (event: Event) => void;
 
@@ -60,8 +57,8 @@ class FakeElement {
   autocomplete = '';
   tabIndex = 0;
   hidden = false;
-  private selectedValue = false;
   disabled = false;
+  readonly style = { cssText: '', width: '', background: '', color: '', borderColor: '' };
   title = '';
   textContent = '';
   scrollTop = 0;
@@ -81,17 +78,6 @@ class FakeElement {
   get className(): string {
     return [...this.classes].join(' ');
   }
-  get selected(): boolean {
-    return this.selectedValue;
-  }
-
-  set selected(value: boolean) {
-    if (this.namespaceURI === XUL_NAMESPACE && this.localName === 'menuitem') {
-      throw new TypeError('XUL menuitem.selected is read-only');
-    }
-    this.selectedValue = value;
-  }
-
   set className(value: string) {
     this.classes = new Set(value.split(/\s+/).filter(Boolean));
   }
@@ -263,19 +249,6 @@ function createViewHarness(
   saveStatus.id = 'zv-save-status';
   root.append(add, reset, save, wrapper, validationStatus, saveStatus);
 
-  const createCalls: string[] = [];
-  const host: BindingEditorHostAdapter & { readonly createCalls: string[] } = {
-    createCalls,
-    createXULElement: (_document, localName) => {
-      createCalls.push(localName);
-      return document.createElementNS(XUL_NAMESPACE, localName) as unknown as Element;
-    },
-    setMenuValue: (menu, value) => {
-      (menu as unknown as FakeElement).value = value;
-      menu.setAttribute('value', value);
-    },
-    getMenuValue: (menu) => (menu as unknown as FakeElement).value,
-  };
   const setScrollTop = vi.fn((element: HTMLElement, top: number) => {
     (element as unknown as FakeElement).scrollTop = top;
   });
@@ -294,10 +267,9 @@ function createViewHarness(
     document: document as unknown as Document,
     root: root as unknown as Element,
     baseline,
-    host,
     geometry,
   });
-  return { document, root, wrapper, add, host, geometry, mounted };
+  return { document, root, wrapper, add, geometry, mounted };
 }
 
 function firstRow(harness: { readonly root: FakeElement }): FakeElement {
@@ -355,13 +327,14 @@ describe('mounted binding editor view', () => {
     expect(harness.mounted.getState().rows[0]?.key).toBe('z');
   });
 
-  it('creates native XUL Mode controls and routes every Mode command to the model', () => {
+  it('creates host-font HTML Mode selects and routes every change to the model', () => {
     const harness = createViewHarness();
     const rowId = harness.mounted.getState().rows[0].id;
-
-    expect(harness.host.createCalls).toContain('menulist');
-    expect(harness.host.createCalls).toContain('menupopup');
-    expect(firstRow(harness).querySelector('.zv-binding-mode')?.value).toBe('reader-normal');
+    const initial = firstRow(harness).querySelector('.zv-binding-mode');
+    expect(initial?.localName).toBe('select');
+    expect(initial?.namespaceURI).toBe('http://www.w3.org/1999/xhtml');
+    expect(initial?.style.cssText).toContain('font:inherit');
+    expect(initial?.value).toBe('reader-normal');
 
     for (const mode of [
       'reader-normal',
@@ -369,15 +342,14 @@ describe('mounted binding editor view', () => {
       'reader-insert',
       'main-normal',
       'main-select',
+      'note-normal',
+      'note-insert',
     ] as const) {
-      const currentRow = harness.mounted.getState().rows.find((row) => row.id === rowId);
-      expect(currentRow).toBeDefined();
       const renderedRow = firstRow(harness);
-      const menu = renderedRow.querySelector('.zv-binding-mode');
-      expect(menu?.namespaceURI).toBe(XUL_NAMESPACE);
-      const option = menu?.querySelector(`.zv-binding-mode-option[value="${mode}"]`);
-      if (!option) throw new Error(`Expected ${mode} Mode option`);
-      option.emit('command');
+      const select = renderedRow.querySelector('.zv-binding-mode');
+      if (!select) throw new Error('Expected Mode select');
+      select.value = mode;
+      select.emit('change');
       expect(harness.mounted.getState().rows.find((row) => row.id === rowId)?.mode).toBe(mode);
     }
   });
@@ -434,6 +406,32 @@ describe('mounted binding editor view', () => {
     actionInput(firstRow(harness)).emit('focusin');
     actionInput(firstRow(harness)).emit('keydown', { key: 'Tab' });
     expect(harness.mounted.getState().actionEditor).toBeNull();
+  });
+
+  it('can remount an existing draft without recreating its baseline or row ids', () => {
+    const first = createViewHarness();
+    first.add.emit('click');
+    const staged = first.mounted.getState();
+    first.mounted.dispose();
+
+    const document = new FakeDocument();
+    const root = document.documentElement;
+    const wrapper = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+    wrapper.id = 'zv-bindings-table-wrap';
+    const body = document.createElementNS('http://www.w3.org/1999/xhtml', 'tbody');
+    body.id = 'zv-bindings-body';
+    wrapper.appendChild(body);
+    root.append(wrapper);
+    const mounted = mountBindingEditor({
+      document: document as unknown as Document,
+      root: root as unknown as Element,
+      state: staged,
+    });
+    expect(mounted.getState().rows.map((row) => row.id)).toEqual(
+      staged.rows.map((row) => row.id),
+    );
+    expect(mounted.getDerived().dirty).toBe(true);
+    mounted.dispose();
   });
 
   it('disposes delegated listeners and makes later events and dispatch inert', () => {

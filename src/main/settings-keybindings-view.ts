@@ -1,4 +1,5 @@
 import { MODES, type BindingMap, type Mode } from '../input/bindings';
+import { settingsButtonElement, styleSettingsField } from './settings-ui';
 import {
   actionLabel,
   actionOptions,
@@ -15,23 +16,8 @@ import {
 import { isActionId } from '../input/actions';
 
 const XHTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
-const XUL_NAMESPACE = 'http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul';
 const ROW_ATTRIBUTE = 'data-zv-binding-row-id';
 const ACTIVE_ACTION_INPUT_CLASS = 'zv-binding-action-input';
-
-type XulDocumentLike = {
-  readonly createXULElement?: (localName: string) => Element;
-};
-
-interface XulMenuList extends Element {
-  value?: string;
-}
-
-export interface BindingEditorHostAdapter {
-  createXULElement(document: Document, localName: string): Element;
-  setMenuValue?(menu: Element, value: string): void;
-  getMenuValue?(menu: Element): string;
-}
 
 export interface BindingEditorGeometryAdapter {
   setScrollTop?(wrapper: HTMLElement, top: number): void;
@@ -44,7 +30,7 @@ export interface BindingEditorViewOptions {
   readonly root?: Element;
   readonly baseline?: BindingMap;
   readonly language?: BindingEditorLanguage;
-  readonly host?: Partial<BindingEditorHostAdapter>;
+  readonly state?: BindingEditorState;
   readonly geometry?: BindingEditorGeometryAdapter;
   readonly onSave?: (bindings: BindingMap) => boolean | void;
   readonly localize?: (key: string, language: BindingEditorLanguage) => string;
@@ -64,23 +50,6 @@ function createXhtmlElement<K extends keyof HTMLElementTagNameMap>(
   localName: K,
 ): HTMLElementTagNameMap[K] {
   return document.createElementNS(XHTML_NAMESPACE, localName) as HTMLElementTagNameMap[K];
-}
-
-function defaultCreateXULElement(document: Document, localName: string): Element {
-  const create = (document as unknown as XulDocumentLike).createXULElement;
-  if (typeof create === 'function') return create.call(document, localName);
-  return document.createElementNS(XUL_NAMESPACE, localName);
-}
-
-function setMenuValue(menu: Element, value: string): void {
-  const xulMenu = menu as XulMenuList;
-  xulMenu.value = value;
-  menu.setAttribute('value', value);
-}
-
-function getMenuValue(menu: Element): string {
-  const value = (menu as XulMenuList).value;
-  return typeof value === 'string' && value ? value : (menu.getAttribute('value') ?? '');
 }
 
 function defaultSetScrollTop(wrapper: HTMLElement, top: number): void {
@@ -104,15 +73,6 @@ function elementFromTarget(target: EventTarget | null): Element | null {
   if (!target || typeof target !== 'object') return null;
   const node = target as Node;
   return node.nodeType === 1 ? (node as Element) : node.parentElement;
-}
-
-function ancestorWithClass(element: Element | null, className: string): Element | null {
-  let current = element;
-  while (current) {
-    if (current.classList.contains(className)) return current;
-    current = current.parentElement;
-  }
-  return null;
 }
 
 function rowIdFromElement(element: Element | null): number | null {
@@ -162,11 +122,6 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
   if (!resolvedDocument) throw new Error('Binding editor requires a document');
   const document: Document = resolvedDocument;
   const root = options.root ?? document.documentElement;
-  const host: BindingEditorHostAdapter = {
-    createXULElement: options.host?.createXULElement ?? defaultCreateXULElement,
-    setMenuValue: options.host?.setMenuValue ?? setMenuValue,
-    getMenuValue: options.host?.getMenuValue ?? getMenuValue,
-  };
   const geometry: Required<BindingEditorGeometryAdapter> = {
     setScrollTop: options.geometry?.setScrollTop ?? defaultSetScrollTop,
     focusAndSelect: options.geometry?.focusAndSelect ?? defaultFocusAndSelect,
@@ -175,7 +130,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
   const localize: (key: string, language: BindingEditorLanguage) => string =
     options.localize ?? ((key: string, _language: BindingEditorLanguage) => defaultLocalize(key));
   const baseline = options.baseline;
-  let state = createBindingEditor(baseline, options.language ?? 'en');
+  let state = options.state ?? createBindingEditor(baseline, options.language ?? 'en');
   let disposed = false;
   let blurTimer: number | null = null;
 
@@ -191,21 +146,21 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     ) as HTMLInputElement | null;
   };
 
-  function renderModeControl(row: BindingEditorRow): Element {
-    const menu = host.createXULElement(document, 'menulist');
-    menu.classList.add('zv-binding-mode');
-    menu.setAttribute('aria-label', localize('zv.bindings.mode', state.language));
-    const popup = host.createXULElement(document, 'menupopup');
+  function renderModeControl(row: BindingEditorRow): HTMLSelectElement {
+    const select = createXhtmlElement(document, 'select');
+    select.className = 'zv-binding-mode';
+    select.setAttribute('aria-label', localize('zv.bindings.mode', state.language));
+    select.setAttribute(ROW_ATTRIBUTE, String(row.id));
+    styleSettingsField(select, '10.5em');
     for (const mode of MODES) {
-      const item = host.createXULElement(document, 'menuitem');
-      item.classList.add('zv-binding-mode-option');
-      item.setAttribute('value', mode);
-      item.setAttribute('label', mode);
-      popup.appendChild(item);
+      const option = createXhtmlElement(document, 'option');
+      option.className = 'zv-binding-mode-option';
+      option.value = mode;
+      option.textContent = mode;
+      select.append(option);
     }
-    menu.appendChild(popup);
-    host.setMenuValue?.(menu, row.mode);
-    return menu;
+    select.value = row.mode;
+    return select;
   }
 
   function renderActionResults(
@@ -276,6 +231,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     keyInput.value = row.key.startsWith(' ') ? `<space>${row.key.slice(1)}` : row.key;
     keyInput.setAttribute('aria-label', localize('zv.bindings.key', state.language));
     keyInput.setAttribute(ROW_ATTRIBUTE, String(row.id));
+    styleSettingsField(keyInput, '100%');
     keyCell.appendChild(keyInput);
     tableRow.appendChild(keyCell);
 
@@ -292,6 +248,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     actionInput.setAttribute('aria-haspopup', 'listbox');
     actionInput.setAttribute('aria-label', localize('zv.bindings.action', state.language));
     actionInput.setAttribute(ROW_ATTRIBUTE, String(row.id));
+    styleSettingsField(actionInput, '100%');
     actionInput.id = `zv-binding-action-${row.id}`;
     actionInput.value = actionDisplayValue(row, state);
     const actionResults = createXhtmlElement(document, 'div');
@@ -305,10 +262,8 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
 
     const deleteCell = createXhtmlElement(document, 'td');
     deleteCell.className = 'zv-binding-delete-cell';
-    const deleteButton = createXhtmlElement(document, 'button');
-    deleteButton.className = 'zv-binding-delete';
-    deleteButton.type = 'button';
-    deleteButton.textContent = '×';
+    const deleteButton = settingsButtonElement(document, '×');
+    deleteButton.className += ' zv-binding-delete';
     deleteButton.setAttribute('aria-label', 'Delete binding');
     deleteCell.appendChild(deleteButton);
     tableRow.appendChild(deleteCell);
@@ -606,18 +561,14 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     if (rowId !== null) scheduleClose(rowId);
   }
 
-  function handleCommand(event: Event): void {
+  function handleChange(event: Event): void {
     const target = elementFromTarget(event.target);
-    const modeMenu = ancestorWithClass(target, 'zv-binding-mode');
-    if (!modeMenu) return;
-    const rowId = rowIdFromElement(modeMenu);
+    const modeSelect = target?.closest('.zv-binding-mode') as HTMLSelectElement | null;
+    if (!modeSelect) return;
+    const rowId = rowIdFromElement(modeSelect);
     if (rowId === null) return;
-    const selected =
-      target?.localName === 'menuitem'
-        ? (target.getAttribute('value') ?? '')
-        : (host.getMenuValue?.(modeMenu) ?? '');
+    const selected = modeSelect.value;
     if ((MODES as readonly string[]).includes(selected)) {
-      event.preventDefault();
       dispatch({ type: 'update-row', rowId, patch: { mode: selected as Mode } });
     }
   }
@@ -633,7 +584,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
   root.addEventListener('keydown', onKeyDown);
   root.addEventListener('focusin', onFocusIn);
   root.addEventListener('focusout', onFocusOut);
-  root.addEventListener('command', handleCommand, true);
+  root.addEventListener('change', handleChange);
 
   render();
 
@@ -651,7 +602,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
       root.removeEventListener('keydown', onKeyDown);
       root.removeEventListener('focusin', onFocusIn);
       root.removeEventListener('focusout', onFocusOut);
-      root.removeEventListener('command', handleCommand, true);
+      root.removeEventListener('change', handleChange);
       if (blurTimer !== null) {
         if (document.defaultView) document.defaultView.clearTimeout(blurTimer);
         else globalThis.clearTimeout(blurTimer);

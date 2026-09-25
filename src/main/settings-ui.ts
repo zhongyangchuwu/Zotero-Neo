@@ -4,6 +4,22 @@ const H = 'http://www.w3.org/1999/xhtml';
 
 // Scoped to buttons created for Neo Settings; never changes Zotero's controls.
 const BUTTON_STYLE = `appearance:none;-moz-appearance:none;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;box-sizing:border-box;min-height:2.5em;padding:0.35em 0.8em;font:inherit;font-size:0.95em;line-height:1.2;white-space:nowrap;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:5px;cursor:pointer`;
+const FIELD_STYLE = `box-sizing:border-box;min-height:2.3em;padding:0.3em 0.55em;font:inherit;line-height:1.2;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px`;
+
+/** Creates one Settings-styled button without imposing an event ownership model. */
+export function settingsButtonElement(doc: Document, label: string): HTMLButtonElement {
+  const button = doc.createElementNS(H, 'button') as HTMLButtonElement;
+  button.type = 'button';
+  button.tabIndex = -1;
+  button.textContent = label;
+  button.style.cssText = BUTTON_STYLE;
+  return button;
+}
+
+/** Applies the shared host-font field geometry to Settings-owned inputs and selects. */
+export function styleSettingsField(element: HTMLElement, width?: string): void {
+  element.style.cssText = `${FIELD_STYLE}${width ? `;width:${width}` : ''}`;
+}
 
 /** Creates one mouse-first button and registers its listener with the owning Settings view. */
 export function settingsButton(
@@ -12,11 +28,7 @@ export function settingsButton(
   onClick: () => void,
   cleanups: Array<() => void>,
 ): HTMLButtonElement {
-  const button = doc.createElementNS(H, 'button') as HTMLButtonElement;
-  button.type = 'button';
-  button.tabIndex = -1;
-  button.textContent = label;
-  button.style.cssText = BUTTON_STYLE;
+  const button = settingsButtonElement(doc, label);
   button.addEventListener('click', onClick);
   cleanups.push(() => button.removeEventListener('click', onClick));
   return button;
@@ -165,7 +177,7 @@ export function settingsNumberRow(
   input.max = String(options.maximum);
   input.step = String(options.step);
   input.setAttribute('aria-label', label);
-  input.style.cssText = `box-sizing:border-box;width:8.5em;min-height:2.3em;padding:0.3em 0.55em;font:inherit;line-height:1.2;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:4px`;
+  styleSettingsField(input, '8.5em');
   let current = value;
   const set = (next: number): void => {
     current = next;

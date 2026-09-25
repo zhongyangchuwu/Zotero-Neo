@@ -4,6 +4,10 @@ import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
+import {
+  SettingsKeybindings,
+  type SettingsKeybindingsState,
+} from './settings-keybindings';
 import { SettingsReader } from './settings-reader';
 import { settingsButton, setSettingsPressed } from './settings-ui';
 
@@ -37,6 +41,7 @@ export class SettingsCenter {
     editingThemeId: null,
     paletteMode: 'light',
   };
+  readonly #keybindingsState: SettingsKeybindingsState = { editor: null };
 
   constructor(
     window: MainWindow,
@@ -188,6 +193,15 @@ export class SettingsCenter {
     }
     if (this.#section === 'Reader') {
       this.#activePage = new SettingsReader(this.#window, content, this.#preferences);
+      return;
+    }
+    if (this.#section === 'Keybindings') {
+      this.#activePage = new SettingsKeybindings(
+        this.#window,
+        content,
+        this.#preferences,
+        this.#keybindingsState,
+      );
       return;
     }
     content.style.display = 'block';

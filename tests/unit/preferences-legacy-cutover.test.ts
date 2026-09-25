@@ -37,6 +37,15 @@ describe('legacy Preferences migration boundary', () => {
       'zv.scroll.',
       'zv.marks.',
       'zv.color.',
+      'zv-key-guide-enabled',
+      'zv-key-guide-delay',
+      'zv-key-guide-font-size',
+      'zv-bindings-body',
+      'zv-add-binding',
+      'zv-reset-bindings',
+      'zv-save',
+      'zv.keyGuide',
+      'zv.bindings',
     ]) {
       expect(PANE).not.toContain(removed);
       expect(PREFERENCES_SOURCE).not.toContain(removed);
@@ -49,8 +58,6 @@ describe('legacy Preferences migration boundary', () => {
       'zv-language',
       'zv-appearance-theme',
       'zv-interaction-color-preset',
-      'zv-key-guide-enabled',
-      'zv-bindings-body',
     ]) {
       expect(PANE).toContain(retained);
     }
