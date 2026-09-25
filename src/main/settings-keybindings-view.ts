@@ -259,7 +259,7 @@ export function mountBindingEditor(options: BindingEditorViewOptions): MountedBi
     deleteCell.className = 'zv-binding-delete-cell';
     const deleteButton = settingsButtonElement(document, '×');
     deleteButton.className += ' zv-binding-delete';
-    deleteButton.setAttribute('aria-label', 'Delete binding');
+    deleteButton.setAttribute('aria-label', localize('zv.bindings.delete', state.language));
     deleteCell.appendChild(deleteButton);
     tableRow.appendChild(deleteCell);
 

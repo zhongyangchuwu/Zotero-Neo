@@ -1223,7 +1223,7 @@ describe('Main Settings Center shell', () => {
     }
   });
 
-  it('writes Advanced command language and tag namespace settings live', () => {
+  it('switches the whole Settings workspace language live and keeps Advanced writes active', () => {
     const host = settingsMainHost();
     const all = (node: HTMLElement): HTMLElement[] => [
       node,
@@ -1235,15 +1235,37 @@ describe('Main Settings Center shell', () => {
         HTMLElement & { emit(type: string): void }
       >;
       nav[4]!.emit('click');
-      const controls = all(host.drawer()?.children[2] as HTMLElement);
+      let controls = all(host.drawer()?.children[2] as HTMLElement);
       const chinese = controls.find(
         (node) => node.localName === 'button' && node.textContent === '中文',
       ) as HTMLElement & { emit(type: string): void };
       chinese.emit('click');
       expect(host.values.get('language')).toBe('zh-CN');
 
+      const panel = host.drawer()!;
+      expect(panel.children[0]?.children[0]?.textContent).toBe('Zotero Neo 设置');
+      expect(panel.children[0]?.children[1]?.textContent).toBe('关闭');
+      expect(
+        Array.from(panel.children[1]?.children ?? []).map((node) => node.textContent),
+      ).toEqual(['外观', '交互', '阅读器', '快捷键', '高级']);
+      expect(panel.children[2]?.children[0]?.textContent).toBe('高级');
+
+      for (const [index, title] of [
+        [0, '外观'],
+        [1, '交互'],
+        [2, '阅读器'],
+        [3, '快捷键'],
+      ] as const) {
+        (panel.children[1]?.children[index] as HTMLElement & { emit(type: string): void }).emit(
+          'click',
+        );
+        expect(panel.children[2]?.children[0]?.textContent).toBe(title);
+      }
+      (panel.children[1]?.children[4] as HTMLElement & { emit(type: string): void }).emit('click');
+
+      controls = all(panel.children[2] as HTMLElement);
       const separator = controls.find(
-        (node) => node.getAttribute('aria-label') === 'Namespace separator',
+        (node) => node.getAttribute('aria-label') === '命名空间分隔符',
       ) as HTMLInputElement & { emit(type: string): void };
       separator.value = '::';
       separator.emit('change');
@@ -1251,6 +1273,13 @@ describe('Main Settings Center shell', () => {
       separator.value = '';
       separator.emit('change');
       expect(host.values.get('tags.separator')).toBe('');
+
+      const english = controls.find(
+        (node) => node.localName === 'button' && node.textContent === 'English',
+      ) as HTMLElement & { emit(type: string): void };
+      english.emit('click');
+      expect(host.values.get('language')).toBe('en');
+      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Advanced');
     } finally {
       host.controller.shutdown();
     }

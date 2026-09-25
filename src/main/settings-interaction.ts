@@ -6,6 +6,7 @@ import {
   pickerMouseEnabled,
 } from '../core/preferences';
 import type { PreferenceStore } from '../core/preference-store';
+import { settingsText, settingsToggleLabels, type SettingsLanguage } from './settings-i18n';
 import {
   settingsGroup,
   settingsStatus,
@@ -24,40 +25,52 @@ export class SettingsInteraction {
   readonly #noteToggle: SettingsToggle;
   readonly #status: HTMLElement;
 
-  constructor(window: MainWindow, root: HTMLElement, preferences: PreferenceStore) {
+  constructor(
+    window: MainWindow,
+    root: HTMLElement,
+    preferences: PreferenceStore,
+    language: SettingsLanguage = 'en',
+  ) {
     this.#root = root;
     this.#preferences = preferences;
     const doc = window.document;
     root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
     const title = doc.createElementNS(H, 'h2');
-    title.textContent = 'Interaction';
+    title.textContent = settingsText(language, 'Interaction');
     title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
 
     const picker = settingsGroup(
       doc,
-      'Picker',
-      'Mouse controls apply to all shared pickers, including items, collections, tags, tabs, and notes.',
+      settingsText(language, 'Picker'),
+      settingsText(
+        language,
+        'Mouse controls apply to all shared pickers, including items, collections, tags, tabs, and notes.',
+      ),
     );
     this.#pickerToggle = settingsToggleRow(
       doc,
-      'Mouse row selection and double-click confirmation',
+      settingsText(language, 'Mouse row selection and double-click confirmation'),
       pickerMouseEnabled(preferences),
-      (enabled) => this.#save(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, enabled),
+      (enabled) => this.#save(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, enabled, language),
       this.#cleanups,
+      undefined,
+      settingsToggleLabels(language),
     );
     picker.append(this.#pickerToggle.element);
 
     const note = settingsGroup(
       doc,
-      'Note editing',
-      'Applies to Zotero context-pane notes and standalone note tabs.',
+      settingsText(language, 'Note editing'),
+      settingsText(language, 'Applies to Zotero context-pane notes and standalone note tabs.'),
     );
     this.#noteToggle = settingsToggleRow(
       doc,
-      'Vim-style note editing',
+      settingsText(language, 'Vim-style note editing'),
       noteEditorEnabled(preferences),
-      (enabled) => this.#save(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, enabled),
+      (enabled) => this.#save(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, enabled, language),
       this.#cleanups,
+      undefined,
+      settingsToggleLabels(language),
     );
     note.append(this.#noteToggle.element);
 
@@ -75,14 +88,14 @@ export class SettingsInteraction {
     if (clearStatus) this.#status.textContent = '';
   }
 
-  #save(key: string, enabled: boolean): boolean {
+  #save(key: string, enabled: boolean, language: SettingsLanguage): boolean {
     try {
       this.#preferences.set(key, enabled);
       this.#refresh(true);
       return true;
     } catch {
       this.#refresh();
-      this.#status.textContent = 'Could not update Interaction settings.';
+      this.#status.textContent = settingsText(language, 'Could not update Interaction settings.');
       return false;
     }
   }

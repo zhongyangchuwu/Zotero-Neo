@@ -167,6 +167,7 @@ export function settingsToggleRow(
   onChange: (next: boolean) => boolean | void,
   cleanups: Array<() => void>,
   description?: string,
+  labels: { readonly on: string; readonly off: string } = { on: 'On', off: 'Off' },
 ): SettingsToggle {
   const button = settingsButton(
     doc,
@@ -182,7 +183,7 @@ export function settingsToggleRow(
   const set = (value: boolean): void => {
     checked = value;
     button.setAttribute('aria-checked', String(value));
-    button.textContent = value ? 'On' : 'Off';
+    button.textContent = value ? labels.on : labels.off;
     setSelectedColors(button, value);
   };
   set(checked);

@@ -879,10 +879,10 @@ the Settings workspace opens in the owning Zotero window without switching back 
 | Key guide delay          | 200 ms                   | Delay before the continuation panel appears; configurable from 0 to 1000 ms                                                                           |
 | Key guide font size      | 15 px                    | Continuation panel text size; configurable from 12 to 24 px                                                                                           |
 | Picker mouse rows        | off                      | When enabled, single-click selects and double-click confirms chooser result rows; hover remains inert                                             |
-| Command language         | Follow Zotero            | Localize Neo command labels in Prefix Guide, Command Palette, and Keybindings; Follow Zotero derives English/Chinese from the host locale          |
+| Interface + command language | Follow Zotero         | Localize the Neo Settings workspace plus command labels in Prefix Guide, Command Palette, and Keybindings; Follow Zotero derives English/Chinese from the host locale |
 | Tag namespace separator  | `/`                      | Interpret flat Zotero tag strings as virtual Neo paths; an empty separator keeps tag matching completely flat                                    |
 
-Appearance, Prefix Guide, picker, Reader, Advanced language, and tag namespace settings save automatically on change.
+Appearance, Prefix Guide, picker, Reader, interface/command language, and tag namespace settings save automatically on change.
 Keybinding table edits remain drafts until **Apply bindings**.
 The Zotero Preferences pane is now only a compatibility launcher for opening Neo Settings; it no longer contains duplicate editable controls.
 

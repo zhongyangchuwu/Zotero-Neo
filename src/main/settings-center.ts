@@ -1,10 +1,12 @@
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
+import { LANGUAGE_PREFERENCE_KEY } from '../core/preferences';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAdvanced } from './settings-advanced';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
+import { settingsLanguage, settingsText, type SettingsLanguage } from './settings-i18n';
 import { SettingsKeybindings, type SettingsKeybindingsState } from './settings-keybindings';
 import { SettingsReader } from './settings-reader';
 import { settingsButton, setSettingsPressed } from './settings-ui';
@@ -26,12 +28,14 @@ export class SettingsCenter {
   #panel: HTMLElement | null = null;
   #backdrop: HTMLElement | null = null;
   #heading: HTMLElement | null = null;
+  #closeButton: HTMLButtonElement | null = null;
   #content: HTMLElement | null = null;
   #navigation: HTMLElement | null = null;
   #previousElement: Element | null = null;
   #themeCleanup: (() => void) | null = null;
   #activePage: SettingsPage | null = null;
   #mountedSection: SettingsSection | null = null;
+  #mountedLanguage: SettingsLanguage | null = null;
   #listeners: Array<() => void> = [];
   #section: SettingsSection = 'Appearance';
   readonly #appearanceState: SettingsAppearanceState = {
@@ -63,6 +67,13 @@ export class SettingsCenter {
 
   contains(target: EventTarget | null): boolean {
     return !!target && !!this.#panel?.contains(target as Node);
+  }
+
+  #language(): SettingsLanguage {
+    return settingsLanguage(
+      this.#preferences,
+      typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
+    );
   }
 
   openWorkspace(): void {
@@ -115,6 +126,11 @@ export class SettingsCenter {
       navigation.append(button);
     }
 
+    const languageCleanup = this.#preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () =>
+      this.render(true),
+    );
+    if (languageCleanup) this.#listeners.push(languageCleanup);
+
     const content = create('section');
     content.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:12px 14px';
     panel.append(header, navigation, content);
@@ -122,6 +138,7 @@ export class SettingsCenter {
     this.#backdrop = backdrop;
     this.#panel = panel;
     this.#heading = heading;
+    this.#closeButton = close;
     this.#navigation = navigation;
     this.#content = content;
     (doc.body ?? doc.documentElement).append(backdrop, panel);
@@ -143,6 +160,7 @@ export class SettingsCenter {
     this.#activePage?.dispose();
     this.#activePage = null;
     this.#mountedSection = null;
+    this.#mountedLanguage = null;
     for (const remove of this.#listeners.splice(0)) remove();
     this.#themeCleanup?.();
     this.#themeCleanup = null;
@@ -151,6 +169,7 @@ export class SettingsCenter {
     this.#backdrop = null;
     this.#panel = null;
     this.#heading = null;
+    this.#closeButton = null;
     this.#navigation = null;
     this.#content = null;
     if (restoreFocus && this.#previousElement?.isConnected) {
@@ -161,18 +180,30 @@ export class SettingsCenter {
     this.#previousElement = null;
   }
 
-  private render(): void {
+  private render(force = false): void {
     const content = this.#content;
     if (!content) return;
+    const language = this.#language();
+    this.#panel?.setAttribute('aria-label', settingsText(language, 'Zotero Neo Settings'));
+    if (this.#heading) this.#heading.textContent = settingsText(language, 'Zotero Neo Settings');
+    if (this.#closeButton) {
+      this.#closeButton.textContent = settingsText(language, 'Close');
+      this.#closeButton.setAttribute('aria-label', settingsText(language, 'Close Neo Settings'));
+    }
+    this.#navigation?.setAttribute('aria-label', settingsText(language, 'Settings sections'));
     for (const button of Array.from(this.#navigation?.children ?? [])) {
-      const selected = (button as HTMLElement).dataset.section === this.#section;
+      const section = (button as HTMLElement).dataset.section as SettingsSection | undefined;
+      if (!section) continue;
+      const selected = section === this.#section;
+      button.textContent = settingsText(language, section);
       button.setAttribute('aria-current', selected ? 'page' : 'false');
       setSettingsPressed(button as HTMLButtonElement, selected);
     }
-    if (this.#mountedSection === this.#section) return;
+    if (!force && this.#mountedSection === this.#section && this.#mountedLanguage === language) return;
     this.#activePage?.dispose();
     this.#activePage = null;
     this.#mountedSection = this.#section;
+    this.#mountedLanguage = language;
     content.replaceChildren();
     content.style.whiteSpace = '';
     if (this.#section === 'Appearance') {
@@ -182,15 +213,16 @@ export class SettingsCenter {
         this.#preferences,
         this.#appearance,
         this.#appearanceState,
+        language,
       );
       return;
     }
     if (this.#section === 'Interaction') {
-      this.#activePage = new SettingsInteraction(this.#window, content, this.#preferences);
+      this.#activePage = new SettingsInteraction(this.#window, content, this.#preferences, language);
       return;
     }
     if (this.#section === 'Reader') {
-      this.#activePage = new SettingsReader(this.#window, content, this.#preferences);
+      this.#activePage = new SettingsReader(this.#window, content, this.#preferences, language);
       return;
     }
     if (this.#section === 'Keybindings') {
@@ -199,9 +231,10 @@ export class SettingsCenter {
         content,
         this.#preferences,
         this.#keybindingsState,
+        language,
       );
       return;
     }
-    this.#activePage = new SettingsAdvanced(this.#window, content, this.#preferences);
+    this.#activePage = new SettingsAdvanced(this.#window, content, this.#preferences, language);
   }
 }

@@ -24,6 +24,12 @@ import { encodeBindingOverrides } from '../input/bindings';
 import { THEME_VARS } from '../ui/theme';
 import { mountBindingEditor, type MountedBindingEditor } from './settings-keybindings-view';
 import {
+  settingsText,
+  settingsToggleLabels,
+  type SettingsLanguage,
+  type SettingsMessage,
+} from './settings-i18n';
+import {
   settingsButtonElement,
   settingsGroup,
   settingsNumberRow,
@@ -34,10 +40,11 @@ import {
 } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const EDITOR_TEXT: Readonly<Record<string, string>> = {
+const EDITOR_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
   'zv.bindings.mode': 'Mode',
   'zv.bindings.key': 'Key sequence',
   'zv.bindings.action': 'Action',
+  'zv.bindings.delete': 'Delete binding',
   'zv.bindings.status.dirty': 'Unsaved changes',
   'zv.bindings.status.invalid': 'Fix invalid rows before applying.',
   'zv.bindings.status.warning': 'Prefix conflicts detected; Apply is allowed.',
@@ -58,6 +65,7 @@ export interface SettingsKeybindingsState {
 export class SettingsKeybindings {
   readonly #root: HTMLElement;
   readonly #preferences: PreferenceStore;
+  readonly #language: SettingsLanguage;
   readonly #state: SettingsKeybindingsState;
   readonly #cleanups: Array<() => void> = [];
   readonly #guideToggle: SettingsToggle;
@@ -70,10 +78,12 @@ export class SettingsKeybindings {
     root: HTMLElement,
     preferences: PreferenceStore,
     state: SettingsKeybindingsState = { editor: null },
+    language: SettingsLanguage = 'en',
   ) {
     this.#root = root;
     this.#preferences = preferences;
     this.#state = state;
+    this.#language = language;
     const doc = window.document;
     root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
 
@@ -99,26 +109,28 @@ export class SettingsKeybindings {
     `;
 
     const title = doc.createElementNS(H, 'h2');
-    title.textContent = 'Keybindings';
+    title.textContent = settingsText(language, 'Keybindings');
     title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
 
     const guide = settingsGroup(
       doc,
-      'Prefix Guide',
-      'Show valid continuations while a multi-key command prefix is pending.',
+      settingsText(language, 'Prefix Guide'),
+      settingsText(language, 'Show valid continuations while a multi-key command prefix is pending.'),
     );
     const config = keyGuideConfig(preferences);
     this.#guideToggle = settingsToggleRow(
       doc,
-      'Show Prefix Guide',
+      settingsText(language, 'Show Prefix Guide'),
       config.enabled,
       (enabled) => this.#saveGuide(KEY_GUIDE_ENABLED_PREFERENCE_KEY, enabled),
       this.#cleanups,
+      undefined,
+      settingsToggleLabels(language),
     );
     this.#guideNumbers = {
       delayMs: settingsNumberRow(
         doc,
-        'Display delay (ms)',
+        settingsText(language, 'Display delay (ms)'),
         config.delayMs,
         {
           minimum: KEY_GUIDE_NUMBER_SPECS.delayMs.minimum,
@@ -130,7 +142,7 @@ export class SettingsKeybindings {
       ),
       fontSizePx: settingsNumberRow(
         doc,
-        'Font size (px)',
+        settingsText(language, 'Font size (px)'),
         config.fontSizePx,
         {
           minimum: KEY_GUIDE_NUMBER_SPECS.fontSizePx.minimum,
@@ -151,14 +163,17 @@ export class SettingsKeybindings {
 
     const bindings = settingsGroup(
       doc,
-      'Bindings',
-      'Edit mode + key sequence + action rows, then Apply. Named keys use <Enter>, <Esc>, <F1>, <Space>; chords use forms such as <C-d>.',
+      settingsText(language, 'Bindings'),
+      settingsText(
+        language,
+        'Edit mode + key sequence + action rows, then Apply. Named keys use <Enter>, <Esc>, <F1>, <Space>; chords use forms such as <C-d>.',
+      ),
     );
     const toolbar = doc.createElementNS(H, 'div');
     toolbar.style.cssText = 'display:flex;align-items:center;gap:0.55em;margin:0 0 0.65em';
-    const add = settingsButtonElement(doc, '+ Add binding');
+    const add = settingsButtonElement(doc, settingsText(language, '+ Add binding'));
     add.id = 'zv-add-binding';
-    const reset = settingsButtonElement(doc, 'Reset to defaults');
+    const reset = settingsButtonElement(doc, settingsText(language, 'Reset to defaults'));
     reset.id = 'zv-reset-bindings';
     toolbar.append(add, reset);
 
@@ -170,9 +185,9 @@ export class SettingsKeybindings {
     const head = doc.createElementNS(H, 'thead');
     const headRow = doc.createElementNS(H, 'tr');
     for (const [text, width] of [
-      ['Mode', '11em'],
-      ['Key sequence', '10em'],
-      ['Action', 'auto'],
+      [settingsText(language, 'Mode'), '11em'],
+      [settingsText(language, 'Key sequence'), '10em'],
+      [settingsText(language, 'Action'), 'auto'],
       ['', '3em'],
     ] as const) {
       const cell = doc.createElementNS(H, 'th');
@@ -192,7 +207,7 @@ export class SettingsKeybindings {
     const validation = doc.createElementNS(H, 'span');
     validation.id = 'zv-bindings-validation-status';
     validation.setAttribute('role', 'status');
-    const save = settingsButtonElement(doc, 'Apply bindings');
+    const save = settingsButtonElement(doc, settingsText(language, 'Apply bindings'));
     save.id = 'zv-save';
     const saveStatus = doc.createElementNS(H, 'span');
     saveStatus.id = 'zv-save-status';
@@ -272,7 +287,10 @@ export class SettingsKeybindings {
       root: this.#root,
       state,
       language: this.#editorLanguage(),
-      localize: (key) => EDITOR_TEXT[key] ?? key,
+      localize: (key, editorLanguage) => {
+        const message = EDITOR_MESSAGES[key];
+        return message ? settingsText(editorLanguage, message) : key;
+      },
       onSave: (bindings) => {
         this.#preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(bindings));
       },
@@ -289,7 +307,10 @@ export class SettingsKeybindings {
       return true;
     } catch {
       this.#refreshGuide();
-      this.#guideStatus.textContent = 'Could not update Prefix Guide settings.';
+      this.#guideStatus.textContent = settingsText(
+        this.#language,
+        'Could not update Prefix Guide settings.',
+      );
       return false;
     }
   }

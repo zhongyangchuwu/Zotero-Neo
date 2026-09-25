@@ -7,6 +7,7 @@ import {
   tagSeparatorFromPreferences,
   type NeoLanguagePreference,
 } from '../core/preferences';
+import { settingsText, type SettingsLanguage } from './settings-i18n';
 import {
   settingsChoices,
   settingsControlRow,
@@ -27,32 +28,42 @@ interface LanguageChoices {
 export class SettingsAdvanced {
   readonly #root: HTMLElement;
   readonly #preferences: PreferenceStore;
+  readonly #uiLanguage: SettingsLanguage;
   readonly #cleanups: Array<() => void> = [];
-  readonly #language: LanguageChoices;
+  readonly #languageChoices: LanguageChoices;
   readonly #separator: SettingsTextInput;
   readonly #status: HTMLElement;
 
-  constructor(window: MainWindow, root: HTMLElement, preferences: PreferenceStore) {
+  constructor(
+    window: MainWindow,
+    root: HTMLElement,
+    preferences: PreferenceStore,
+    language: SettingsLanguage = 'en',
+  ) {
     this.#root = root;
     this.#preferences = preferences;
+    this.#uiLanguage = language;
     const doc = window.document;
     root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
 
     const title = doc.createElementNS(H, 'h2');
-    title.textContent = 'Advanced';
+    title.textContent = settingsText(language, 'Advanced');
     title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
 
     const languageGroup = settingsGroup(
       doc,
-      'Command language',
-      "Controls Neo's localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.",
+      settingsText(language, 'Interface and command language'),
+      settingsText(
+        language,
+        "Controls Neo Settings and localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.",
+      ),
     );
-    this.#language = settingsChoices<NeoLanguagePreference>(
+    this.#languageChoices = settingsChoices<NeoLanguagePreference>(
       doc,
       [
-        { value: '', label: 'Follow Zotero' },
-        { value: 'en', label: 'English' },
-        { value: 'zh-CN', label: '中文' },
+        { value: '', label: settingsText(language, 'Follow Zotero') },
+        { value: 'en', label: settingsText(language, 'English') },
+        { value: 'zh-CN', label: settingsText(language, '中文') },
       ],
       configuredNeoLanguage(preferences),
       (value) => this.#save(LANGUAGE_PREFERENCE_KEY, value),
@@ -61,37 +72,46 @@ export class SettingsAdvanced {
     languageGroup.append(
       settingsControlRow(
         doc,
-        'Language',
-        this.#language.element,
-        'Changes command labels only; the Settings workspace itself remains English.',
+        settingsText(language, 'Language'),
+        this.#languageChoices.element,
+        settingsText(
+          language,
+          'Changes the Neo Settings interface and localized command labels immediately.',
+        ),
       ),
     );
 
     const tagGroup = settingsGroup(
       doc,
-      'Tag namespaces',
-      'Neo can interpret ordinary Zotero tag strings as virtual paths inside tag pickers without changing stored tag data.',
+      settingsText(language, 'Tag namespaces'),
+      settingsText(
+        language,
+        'Neo can interpret ordinary Zotero tag strings as virtual paths inside tag pickers without changing stored tag data.',
+      ),
     );
     this.#separator = settingsTextRow(
       doc,
-      'Namespace separator',
+      settingsText(language, 'Namespace separator'),
       tagSeparatorFromPreferences(preferences),
       (value) => {
         if (!this.#save(TAG_SEPARATOR_PREFERENCE_KEY, value)) return false;
         return tagSeparatorFromPreferences(preferences);
       },
       this.#cleanups,
-      "Default '/'. Leave empty for completely flat tag matching; existing Zotero tags are never rewritten.",
+      settingsText(
+        language,
+        "Default '/'. Leave empty for completely flat tag matching; existing Zotero tags are never rewritten.",
+      ),
     );
     tagGroup.append(this.#separator.element);
 
     this.#status = settingsStatus(doc);
     root.append(title, languageGroup, tagGroup, this.#status);
 
-    for (const key of [LANGUAGE_PREFERENCE_KEY, TAG_SEPARATOR_PREFERENCE_KEY]) {
-      const cleanup = preferences.observe?.(key, () => this.#refresh());
-      if (cleanup) this.#cleanups.push(cleanup);
-    }
+    const separatorCleanup = preferences.observe?.(TAG_SEPARATOR_PREFERENCE_KEY, () =>
+      this.#refresh(),
+    );
+    if (separatorCleanup) this.#cleanups.push(separatorCleanup);
   }
 
   #save(key: string, value: string): boolean {
@@ -101,13 +121,13 @@ export class SettingsAdvanced {
       return true;
     } catch {
       this.#refresh(false);
-      this.#status.textContent = 'Could not update Advanced settings.';
+      this.#status.textContent = settingsText(this.#uiLanguage, 'Could not update Advanced settings.');
       return false;
     }
   }
 
   #refresh(clearStatus = true): void {
-    this.#language.select(configuredNeoLanguage(this.#preferences));
+    this.#languageChoices.select(configuredNeoLanguage(this.#preferences));
     this.#separator.set(tagSeparatorFromPreferences(this.#preferences));
     if (clearStatus) this.#status.textContent = '';
   }

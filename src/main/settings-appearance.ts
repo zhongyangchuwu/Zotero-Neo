@@ -23,6 +23,7 @@ import {
   type InteractionPalette8,
   type InteractionStatusStyle,
 } from './interaction-appearance';
+import { settingsText, type SettingsLanguage, type SettingsMessage } from './settings-i18n';
 import { settingsButton, settingsChoices } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -59,6 +60,7 @@ export class SettingsAppearance {
   readonly #document: Document;
   readonly #preferences: PreferenceStore;
   readonly #appearance: InteractionAppearanceManager;
+  readonly #language: SettingsLanguage;
   readonly #root: HTMLElement;
   readonly #state: SettingsAppearanceState;
   readonly #cleanups: Array<() => void> = [];
@@ -82,12 +84,14 @@ export class SettingsAppearance {
       editingThemeId: null,
       paletteMode: 'light',
     },
+    language: SettingsLanguage = 'en',
   ) {
     this.#document = window.document;
     this.#root = root;
     this.#preferences = preferences;
     this.#appearance = appearance;
     this.#state = state;
+    this.#language = language;
     this.#cleanups.push(appearance.observe(() => this.#refresh()));
     for (const key of [
       INTERACTION_CUSTOM_THEMES_PREFERENCE_KEY,
@@ -117,6 +121,10 @@ export class SettingsAppearance {
     const node = this.#document.createElementNS(H, tag);
     if (text !== undefined) node.textContent = text;
     return node;
+  }
+
+  #t(message: SettingsMessage): string {
+    return settingsText(this.#language, message);
   }
 
   #clearDom(): void {
@@ -173,13 +181,13 @@ export class SettingsAppearance {
     this.#hexText = null;
     this.#clearDom();
     this.#root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
-    const title = this.#create('h2', 'Appearance');
+    const title = this.#create('h2', this.#t('Appearance'));
     title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
     const controls = this.#create('section');
     controls.style.cssText =
       'display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin:0 0 18px';
     const marker = this.#create('div');
-    marker.append(this.#create('span', 'Marker width (px) '));
+    marker.append(this.#create('span', `${this.#t('Marker width (px)')} `));
     const widths = settingsChoices(
       this.#document,
       [1, 2, 3, 4].map((value) => ({ value, label: `${value}px` })),
@@ -189,12 +197,12 @@ export class SettingsAppearance {
     );
     marker.append(widths.element);
     const styles = this.#create('div');
-    styles.append(this.#create('span', 'Status style '));
+    styles.append(this.#create('span', `${this.#t('Status style')} `));
     const statusStyles = settingsChoices(
       this.#document,
       [
-        { value: 'neutral', label: 'Neutral' },
-        { value: 'tinted', label: 'Tinted' },
+        { value: 'neutral', label: this.#t('Neutral') },
+        { value: 'tinted', label: this.#t('Tinted') },
       ] as const,
       this.#appearance.appearance.statusStyle,
       (value) => this.#setAppearance(INTERACTION_STATUS_STYLE_PREFERENCE_KEY, value),
@@ -202,7 +210,7 @@ export class SettingsAppearance {
     );
     styles.append(statusStyles.element);
     controls.append(marker, styles);
-    const themesHeading = this.#create('h3', 'Themes');
+    const themesHeading = this.#create('h3', this.#t('Themes'));
     themesHeading.style.cssText = 'margin:0 0 0.6em;font-size:1.2em';
     const grid = this.#create('div');
     grid.style.cssText =
@@ -226,11 +234,14 @@ export class SettingsAppearance {
         () => this.#select(theme.id),
         this.#domCleanups,
       );
-      choice.setAttribute('aria-label', `Select ${theme.name}`);
+      choice.setAttribute(
+        'aria-label',
+        this.#language === 'zh-CN' ? `选择 ${theme.name}` : `Select ${theme.name}`,
+      );
       choice.style.cssText += `;width:100%;justify-content:flex-start;text-align:left;font-weight:600;font-size:1.15em;border:0;background:transparent;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text}`;
       const note = this.#create(
         'div',
-        `${FLAVORS[theme.id] ?? 'Custom'}${selected ? ' · Active' : ''}`,
+        `${FLAVORS[theme.id] ?? this.#t('Custom')}${selected ? ` · ${this.#t('Active')}` : ''}`,
       );
       note.style.cssText = `font-size:0.95em;color:${THEME_VARS.muted}`;
       const swatches = this.#create('div');
@@ -238,7 +249,7 @@ export class SettingsAppearance {
         'display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:3px;margin:10px 0';
       for (const [key, label] of COLORS) {
         const swatch = this.#create('span');
-        swatch.setAttribute('aria-label', `${label} ${theme[mode][key]}`);
+        swatch.setAttribute('aria-label', `${this.#t(label)} ${theme[mode][key]}`);
         swatch.style.cssText = `height:24px;background:${theme[mode][key]};border:1px solid ${THEME_VARS.border};border-radius:3px`;
         swatches.append(swatch);
       }
@@ -249,13 +260,13 @@ export class SettingsAppearance {
         actions.append(
           settingsButton(
             this.#document,
-            'Edit',
+            this.#t('Edit'),
             () => this.#openEditor(theme.id),
             this.#domCleanups,
           ),
           settingsButton(
             this.#document,
-            this.#confirmedDelete === theme.id ? 'Confirm delete' : 'Delete',
+            this.#confirmedDelete === theme.id ? this.#t('Confirm delete') : this.#t('Delete'),
             () => this.#deleteTheme(theme.id),
             this.#domCleanups,
           ),
@@ -266,7 +277,7 @@ export class SettingsAppearance {
     }
     const add = settingsButton(
       this.#document,
-      '+ Custom',
+      this.#t('+ Custom'),
       () => this.#createTheme(),
       this.#domCleanups,
     );
@@ -286,7 +297,7 @@ export class SettingsAppearance {
       this.#renderLibrary();
       return true;
     } catch {
-      this.#message('Could not update appearance.');
+      this.#message(this.#t('Could not update appearance.'));
       return false;
     }
   }
@@ -297,7 +308,7 @@ export class SettingsAppearance {
       this.#appearance.refresh();
       this.#renderLibrary();
     } catch {
-      this.#message('Could not select theme.');
+      this.#message(this.#t('Could not select theme.'));
     }
   }
 
@@ -310,7 +321,12 @@ export class SettingsAppearance {
         return uuid ? `custom:${uuid}` : '';
       },
     );
-    this.#theme = seedCustomInteractionTheme(this.#preferences, this.#activeId(), id, 'New theme');
+    this.#theme = seedCustomInteractionTheme(
+      this.#preferences,
+      this.#activeId(),
+      id,
+      this.#t('New theme'),
+    );
     this.#isNew = true;
     this.#nameText = this.#theme.name;
     this.#hexText = { light: { ...this.#theme.light }, dark: { ...this.#theme.dark } };
@@ -342,7 +358,7 @@ export class SettingsAppearance {
       this.#appearance.refresh();
       this.#renderLibrary();
     } catch {
-      this.#message('Could not add theme. Your edits are still here.');
+      this.#message(this.#t('Could not add theme. Your edits are still here.'));
     }
   }
 
@@ -381,7 +397,7 @@ export class SettingsAppearance {
       this.#renderLibrary();
     } catch {
       this.#renderLibrary();
-      this.#message('Could not delete theme.');
+      this.#message(this.#t('Could not delete theme.'));
     }
   }
 
@@ -396,7 +412,7 @@ export class SettingsAppearance {
         this.#preferences.set(INTERACTION_COLOR_PRESET_PREFERENCE_KEY, id);
       this.#appearance.refresh();
     } catch {
-      this.#message('Could not activate theme for editing.');
+      this.#message(this.#t('Could not activate theme for editing.'));
       return;
     }
     this.#state.view = 'editor';
@@ -417,10 +433,10 @@ export class SettingsAppearance {
       this.#theme = theme;
       this.#appearance.refresh();
       this.#updatePreview();
-      this.#message('Saved');
+      this.#message(this.#t('Saved'));
       return true;
     } catch {
-      this.#message('Could not save change. Previous theme is still active.');
+      this.#message(this.#t('Could not save change. Previous theme is still active.'));
       return false;
     }
   }
@@ -457,7 +473,7 @@ export class SettingsAppearance {
     toolbar.append(
       settingsButton(
         this.#document,
-        'Back to themes',
+        this.#t('Back to themes'),
         () => this.#renderLibrary(),
         this.#domCleanups,
       ),
@@ -465,21 +481,21 @@ export class SettingsAppearance {
     if (this.#isNew) {
       this.#addButton = settingsButton(
         this.#document,
-        'Add',
+        this.#t('Add'),
         () => this.#addTheme(),
         this.#domCleanups,
       );
       toolbar.append(this.#addButton);
     }
-    const title = this.#create('h2', 'Appearance');
+    const title = this.#create('h2', this.#t('Appearance'));
     title.style.cssText = 'margin:0.6em 0;font-size:1.55em';
-    const heading = this.#create('h3', 'Custom theme');
+    const heading = this.#create('h3', this.#t('Custom theme'));
     heading.style.cssText = 'margin:0 0 0.6em;font-size:1.2em';
     const name = this.#create('input') as HTMLInputElement;
     name.type = 'text';
     name.value = theme.name;
     name.maxLength = 100;
-    name.setAttribute('aria-label', 'Theme name');
+    name.setAttribute('aria-label', this.#t('Theme name'));
     name.style.cssText = `width:min(100%,360px);padding:0.45em;font:inherit;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border}`;
     const onName = (): void => {
       this.#nameText = name.value;
@@ -487,7 +503,7 @@ export class SettingsAppearance {
       const valid = NAME.test(normalized);
       name.setAttribute('aria-invalid', String(!valid));
       if (!valid) {
-        this.#message('Enter a name (1–100 characters).');
+        this.#message(this.#t('Enter a name (1–100 characters).'));
         this.#updateAddValidity();
         return;
       }
@@ -498,14 +514,14 @@ export class SettingsAppearance {
     };
     name.addEventListener('input', onName);
     this.#domCleanups.push(() => name.removeEventListener('input', onName));
-    const nameLabel = this.#create('label', 'Theme name');
+    const nameLabel = this.#create('label', this.#t('Theme name'));
     nameLabel.style.cssText = 'display:grid;gap:4px;margin-bottom:14px';
     nameLabel.append(name);
     const modes = settingsChoices(
       this.#document,
       [
-        { value: 'light', label: 'Light' },
-        { value: 'dark', label: 'Dark' },
+        { value: 'light', label: this.#t('Light') },
+        { value: 'dark', label: this.#t('Dark') },
       ] as const,
       this.#state.paletteMode,
       (mode) => {
@@ -524,14 +540,20 @@ export class SettingsAppearance {
     for (const [key, label] of COLORS) {
       const row = this.#create('label');
       row.style.cssText = 'display:flex;align-items:center;gap:12px;min-height:35px';
-      const caption = this.#create('span', label);
+      const caption = this.#create('span', this.#t(label));
       caption.style.width = '90px';
       const picker = this.#create('input') as HTMLInputElement;
       picker.type = 'color';
-      picker.setAttribute('aria-label', `${label} color picker`);
+      picker.setAttribute(
+        'aria-label',
+        this.#language === 'zh-CN' ? `${this.#t(label)} 颜色选择器` : `${label} color picker`,
+      );
       const hex = this.#create('input') as HTMLInputElement;
       hex.type = 'text';
-      hex.setAttribute('aria-label', `${label} hex`);
+      hex.setAttribute(
+        'aria-label',
+        this.#language === 'zh-CN' ? `${this.#t(label)} 十六进制` : `${label} hex`,
+      );
       hex.style.cssText = `width:7em;padding:0.35em;font:inherit;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border}`;
       const error = this.#create('span');
       error.style.color = THEME_VARS.error;
@@ -539,7 +561,7 @@ export class SettingsAppearance {
         this.#hexText![this.#state.paletteMode][key] = hex.value;
         const valid = HEX.test(hex.value);
         hex.setAttribute('aria-invalid', String(!valid));
-        error.textContent = valid ? '' : 'Use #RRGGBB';
+        error.textContent = valid ? '' : this.#t('Use #RRGGBB');
         this.#updateAddValidity();
         if (!valid) return;
         const color = hex.value.toUpperCase();
@@ -571,7 +593,7 @@ export class SettingsAppearance {
       fields.append(row);
     }
     const preview = this.#create('div');
-    preview.setAttribute('aria-label', 'Theme preview');
+    preview.setAttribute('aria-label', this.#t('Theme preview'));
     preview.style.cssText = 'padding:10px;margin:16px 0;border-radius:5px';
     this.#preview = preview;
     const status = this.#create('p');
@@ -584,7 +606,7 @@ export class SettingsAppearance {
         controls.picker.value = this.#theme![this.#state.paletteMode][key];
         const valid = HEX.test(controls.hex.value);
         controls.hex.setAttribute('aria-invalid', String(!valid));
-        controls.error.textContent = valid ? '' : 'Use #RRGGBB';
+        controls.error.textContent = valid ? '' : this.#t('Use #RRGGBB');
       }
       this.#updatePreview();
     };
@@ -613,12 +635,21 @@ export class SettingsAppearance {
     preview.style.background = appearance.colors.neutralStatusBackground;
     preview.style.color = appearance.colors.neutralStatusForeground;
     preview.style.border = `1px solid ${appearance.colors.neutralStatusBorder}`;
-    preview.textContent = `${mode === 'light' ? 'Light' : 'Dark'} palette · Selection = Yellow ${palette.yellow} · Visual = Green ${palette.green}`;
+    preview.textContent = `${this.#t(mode === 'light' ? 'Light' : 'Dark')} ${this.#language === 'zh-CN' ? '调色板' : 'palette'} · ${this.#t('Selection')} = ${this.#t('Yellow')} ${palette.yellow} · ${this.#t('Visual')} = ${this.#t('Green')} ${palette.green}`;
     const samples = this.#create('div');
     samples.style.cssText = 'display:flex;gap:8px;margin-top:8px';
     for (const kind of ['selection', 'visual'] as const) {
       const status = interactionStatusColors(appearance, kind);
-      const sample = this.#create('span', kind === 'selection' ? 'SEL' : 'VISUAL');
+      const sample = this.#create(
+        'span',
+        this.#language === 'zh-CN'
+          ? kind === 'selection'
+            ? '选区'
+            : '可视'
+          : kind === 'selection'
+            ? 'SEL'
+            : 'VISUAL',
+      );
       sample.style.cssText = `padding:4px 8px;background:${status.background};color:${status.foreground};border:1px solid ${status.border};border-left:${appearance.marker.width}px solid ${kind === 'selection' ? palette.yellow : palette.green};border-radius:3px`;
       samples.append(sample);
     }

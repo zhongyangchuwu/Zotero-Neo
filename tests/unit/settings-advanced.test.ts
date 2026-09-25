@@ -125,7 +125,7 @@ describe('Advanced Settings', () => {
       .all()
       .map((node) => node.textContent)
       .join(' ');
-    expect(copy).toContain('Settings workspace itself remains English');
+    expect(copy).toContain('Changes the Neo Settings interface and localized command labels immediately.');
     expect(copy).toContain('existing Zotero tags are never rewritten');
     expect(test.preferences.writes).toEqual([]);
     test.page.dispose();
@@ -156,7 +156,7 @@ describe('Advanced Settings', () => {
     const chinese = test.root.button('中文');
     const follow = test.root.button('Follow Zotero');
     const separator = test.root.byAria('Namespace separator');
-    expect(test.preferences.listenerCount()).toBe(2);
+    expect(test.preferences.listenerCount()).toBe(1);
 
     test.preferences.failKey = LANGUAGE;
     chinese.click();
@@ -165,7 +165,7 @@ describe('Advanced Settings', () => {
     expect(test.status.textContent).toContain('Could not update Advanced settings');
 
     test.preferences.failKey = null;
-    test.preferences.set(LANGUAGE, 'zh-CN');
+    chinese.click();
     expect(chinese.getAttribute('aria-pressed')).toBe('true');
     expect(test.status.textContent).toBe('');
     test.preferences.set(TAG_SEPARATOR, ':');

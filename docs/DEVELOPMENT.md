@@ -179,8 +179,10 @@ retains its session-only editor state; `settings-interaction.ts` owns the live
 Picker mouse and Note editor toggles; `settings-reader.ts` owns Reader modes,
 scrolling, marks persistence, and default annotation colour;
 `settings-keybindings.ts` owns Prefix Guide controls and the explicit-Apply
-keybinding draft; `settings-advanced.ts` owns command-language selection and
-the virtual tag namespace separator. `settings-ui.ts` owns shared button,
+keybinding draft; `settings-advanced.ts` owns interface/command-language selection
+and the virtual tag namespace separator. `settings-i18n.ts` is the shared English/
+Simplified-Chinese Settings text catalog, and `SettingsCenter` remounts the active
+page when that language changes. `settings-ui.ts` owns shared button,
 field, choice, row, toggle, numeric-field, and text-field geometry, while
 `src/core/preferences.ts` names the shared preference keys/defaults and resolves
 language/tag policy. The keybinding editor state machine lives in
