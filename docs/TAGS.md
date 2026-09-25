@@ -125,8 +125,8 @@ There are no parent tag objects, inheritance rules, or Neo-owned taxonomy data.
 Changing the separator only changes Neo's interpretation. An empty separator
 means completely flat tag matching.
 
-The separator is read from the Neo preference key `tags.separator` and defaults
-to `/`.
+The separator is configured in **Neo Settings → Advanced → Tag namespaces**,
+is stored in the Neo preference key `tags.separator`, and defaults to `/`.
 
 ## Persistence and performance
 

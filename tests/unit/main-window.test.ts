@@ -15,6 +15,7 @@ import { NoteEditor } from '../../src/main/note-editor';
 import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
+import { SettingsAdvanced } from '../../src/main/settings-advanced';
 import { SettingsAppearance } from '../../src/main/settings-appearance';
 import { SettingsInteraction } from '../../src/main/settings-interaction';
 import { SettingsKeybindings } from '../../src/main/settings-keybindings';
@@ -1121,11 +1122,12 @@ describe('Main Settings Center shell', () => {
     expect(host.backdrop()).toBeUndefined();
   });
 
-  it('disposes each active Settings page once across navigation, placeholders, close, and reopen', () => {
+  it('disposes each active Settings page once across navigation, close, and reopen', () => {
     const appearanceDispose = vi.spyOn(SettingsAppearance.prototype, 'dispose');
     const interactionDispose = vi.spyOn(SettingsInteraction.prototype, 'dispose');
     const readerDispose = vi.spyOn(SettingsReader.prototype, 'dispose');
     const keybindingsDispose = vi.spyOn(SettingsKeybindings.prototype, 'dispose');
+    const advancedDispose = vi.spyOn(SettingsAdvanced.prototype, 'dispose');
     const host = settingsMainHost();
     try {
       host.controller.openSettings(host.window);
@@ -1139,13 +1141,14 @@ describe('Main Settings Center shell', () => {
       nav[3]!.emit('click');
       expect(readerDispose).toHaveBeenCalledTimes(1);
       expect(keybindingsDispose).not.toHaveBeenCalled();
-      expect(host.drawer()?.children[2]?.children[1]?.textContent).toBe('Keybindings');
-      nav[3]!.emit('click');
-      expect(keybindingsDispose).not.toHaveBeenCalled();
       nav[4]!.emit('click');
       expect(keybindingsDispose).toHaveBeenCalledTimes(1);
+      expect(advancedDispose).not.toHaveBeenCalled();
       expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Advanced');
+      nav[4]!.emit('click');
+      expect(advancedDispose).not.toHaveBeenCalled();
       nav[3]!.emit('click');
+      expect(advancedDispose).toHaveBeenCalledTimes(1);
       (host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
         'click',
       );
@@ -1160,6 +1163,7 @@ describe('Main Settings Center shell', () => {
       interactionDispose.mockRestore();
       readerDispose.mockRestore();
       keybindingsDispose.mockRestore();
+      advancedDispose.mockRestore();
     }
   });
 
@@ -1214,6 +1218,39 @@ describe('Main Settings Center shell', () => {
       expect(reopened.find((node) => node.id === 'zv-bindings-body')?.children.length).toBe(
         initialRows + 1,
       );
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('writes Advanced command language and tag namespace settings live', () => {
+    const host = settingsMainHost();
+    const all = (node: HTMLElement): HTMLElement[] => [
+      node,
+      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
+    ];
+    try {
+      host.controller.openSettings(host.window);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[4]!.emit('click');
+      const controls = all(host.drawer()?.children[2] as HTMLElement);
+      const chinese = controls.find(
+        (node) => node.localName === 'button' && node.textContent === '中文',
+      ) as HTMLElement & { emit(type: string): void };
+      chinese.emit('click');
+      expect(host.values.get('language')).toBe('zh-CN');
+
+      const separator = controls.find(
+        (node) => node.getAttribute('aria-label') === 'Namespace separator',
+      ) as HTMLInputElement & { emit(type: string): void };
+      separator.value = '::';
+      separator.emit('change');
+      expect(host.values.get('tags.separator')).toBe('::');
+      separator.value = '';
+      separator.emit('change');
+      expect(host.values.get('tags.separator')).toBe('');
     } finally {
       host.controller.shutdown();
     }

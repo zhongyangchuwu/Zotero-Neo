@@ -6,6 +6,7 @@ import {
   settingsGroup,
   settingsNumberRow,
   settingsStatus,
+  settingsTextRow,
   settingsToggleRow,
   setSettingsPressed,
   type SettingsToggle,
@@ -198,6 +199,39 @@ describe('shared Neo Settings controls', () => {
     expect(row.children[0]?.children[0]?.textContent).toBe('Mode');
     expect(row.children[0]?.children[1]?.textContent).toBe('Shared description');
     expect(row.children[1]).toBe(control as unknown as FakeElement);
+  });
+
+  it('keeps text fields keyboard-editable with page-owned commit and rollback', () => {
+    const cleanups: Array<() => void> = [];
+    const changed = vi.fn((value: string) => (value === 'bad' ? false : value.toUpperCase()));
+    const field = settingsTextRow(
+      fakeDocument(),
+      'Namespace separator',
+      '/',
+      changed,
+      cleanups,
+      'Leave empty for flat matching',
+    );
+    const row = field.element as unknown as FakeElement;
+    const input = row.children[1]!;
+    expect(input.type).toBe('text');
+    expect(input.tabIndex).toBe(0);
+    expect(input.value).toBe('/');
+    expect(input.getAttribute('aria-label')).toBe('Namespace separator');
+    expect(input.style.cssText).toContain('font:inherit');
+    input.value = '::';
+    input.emit('change');
+    expect(changed).toHaveBeenCalledWith('::');
+    expect(input.value).toBe('::');
+    input.value = 'bad';
+    input.emit('change');
+    expect(input.value).toBe('::');
+    field.set('');
+    expect(input.value).toBe('');
+    for (const cleanup of cleanups) cleanup();
+    input.value = '/';
+    input.emit('change');
+    expect(changed).toHaveBeenCalledTimes(2);
   });
 
   it('keeps number fields keyboard-editable while centralizing geometry and commit normalization', () => {

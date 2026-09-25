@@ -1,4 +1,8 @@
-import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
+import {
+  KEY_GUIDE_CONFIG,
+  keyGuideLanguage,
+  type KeyGuideLanguage,
+} from '../input/key-guide-config';
 
 import {
   migrateBindingModeOverrides,
@@ -18,6 +22,27 @@ import {
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
 export const BINDING_SCHEMA_VERSION = 16;
 export const BINDINGS_PREFERENCE_KEY = 'bindings' as const;
+export const LANGUAGE_PREFERENCE_KEY = 'language' as const;
+export const TAG_SEPARATOR_PREFERENCE_KEY = 'tags.separator' as const;
+export const DEFAULT_TAG_SEPARATOR = '/' as const;
+
+export type NeoLanguagePreference = '' | 'en' | 'zh-CN';
+
+export function configuredNeoLanguage(preferences: PreferenceReader): NeoLanguagePreference {
+  const value = preferences.get(LANGUAGE_PREFERENCE_KEY, '');
+  return value === 'en' || value === 'zh-CN' ? value : '';
+}
+
+export function neoCommandLanguage(
+  preferences: PreferenceReader,
+  hostLocale: string,
+): KeyGuideLanguage {
+  return keyGuideLanguage(configuredNeoLanguage(preferences), hostLocale);
+}
+
+export function tagSeparatorFromPreferences(preferences: PreferenceReader): string {
+  return preferences.get(TAG_SEPARATOR_PREFERENCE_KEY, DEFAULT_TAG_SEPARATOR);
+}
 
 export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
 

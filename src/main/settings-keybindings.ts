@@ -6,8 +6,10 @@ import {
   KEY_GUIDE_ENABLED_PREFERENCE_KEY,
   KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
   KEY_GUIDE_NUMBER_SPECS,
+  LANGUAGE_PREFERENCE_KEY,
   bindingsFromPreferences,
   keyGuideConfig,
+  neoCommandLanguage,
   normalizeKeyGuideNumber,
   type KeyGuideNumberSetting,
 } from '../core/preferences';
@@ -32,8 +34,6 @@ import {
 } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const EDITOR_LANGUAGE: BindingEditorLanguage = 'en';
-
 const EDITOR_TEXT: Readonly<Record<string, string>> = {
   'zv.bindings.mode': 'Mode',
   'zv.bindings.key': 'Key sequence',
@@ -221,28 +221,46 @@ export class SettingsKeybindings {
       if (draft && deriveBindingEditor(draft).dirty) return;
       this.#state.editor = createBindingEditor(
         bindingsFromPreferences(preferences),
-        EDITOR_LANGUAGE,
+        this.#editorLanguage(),
       );
       this.#mountEditor();
     });
     if (bindingsCleanup) this.#cleanups.push(bindingsCleanup);
+    const languageCleanup = preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () =>
+      this.#refreshLanguage(),
+    );
+    if (languageCleanup) this.#cleanups.push(languageCleanup);
+  }
+
+  #editorLanguage(): BindingEditorLanguage {
+    return neoCommandLanguage(
+      this.#preferences,
+      typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
+    );
   }
 
   #prepareDraft(): void {
+    const language = this.#editorLanguage();
     const existing = this.#state.editor;
     if (!existing || !deriveBindingEditor(existing).dirty) {
-      this.#state.editor = createBindingEditor(
-        bindingsFromPreferences(this.#preferences),
-        EDITOR_LANGUAGE,
-      );
+      this.#state.editor = createBindingEditor(bindingsFromPreferences(this.#preferences), language);
       return;
     }
-    if (existing.language !== EDITOR_LANGUAGE) {
+    if (existing.language !== language) {
       this.#state.editor = transition(existing, {
         type: 'set-language',
-        language: EDITOR_LANGUAGE,
+        language,
       });
     }
+  }
+
+  #refreshLanguage(): void {
+    const state = this.#state.editor;
+    if (!state) return;
+    const language = this.#editorLanguage();
+    if (state.language === language) return;
+    this.#state.editor = transition(state, { type: 'set-language', language });
+    this.#mountEditor();
   }
 
   #mountEditor(): void {
@@ -253,7 +271,7 @@ export class SettingsKeybindings {
       document: this.#root.ownerDocument,
       root: this.#root,
       state,
-      language: EDITOR_LANGUAGE,
+      language: this.#editorLanguage(),
       localize: (key) => EDITOR_TEXT[key] ?? key,
       onSave: (bindings) => {
         this.#preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(bindings));

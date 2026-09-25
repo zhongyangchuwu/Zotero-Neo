@@ -12,31 +12,24 @@ const PREFERENCES_SOURCE = readFileSync(
 );
 
 describe('legacy Preferences migration boundary', () => {
-  it('removes migrated Interaction and Reader editors from the legacy pane and binder', () => {
+  it('keeps only the launcher after every editable setting has moved to Neo Settings', () => {
+    expect(PANE).toContain('zv-open-neo-settings');
+    expect(PREFERENCES_SOURCE).toContain('bindOpenNeoSettingsButton');
+
     for (const removed of [
+      'zv-language',
+      'zv-appearance-theme',
+      'zv-interaction-color-preset',
+      'zv-interaction-marker-width',
+      'zv-interaction-status-style',
       'zv-note-editor-enabled',
       'zv-picker-mouse-enabled',
-      'zv-picker-mouse-status',
-      'zv.mode.noteEditor',
-      'zv.picker.mouse.enabled',
-      'zv.picker.help',
       'zv-visual-enabled',
       'zv-insert-enabled',
       'zv-scroll-mode',
       'zv-scroll-step',
-      'zv-smooth-follow-speed',
-      'zv-smooth-initial-speed',
-      'zv-smooth-max-speed',
-      'zv-smooth-accel',
-      'zv-smooth-decel',
-      'zv-smooth-stop-on-release',
       'zv-marks-persist-enabled',
       'zv-default-color',
-      'zv.mode.visual',
-      'zv.mode.insert',
-      'zv.scroll.',
-      'zv.marks.',
-      'zv.color.',
       'zv-key-guide-enabled',
       'zv-key-guide-delay',
       'zv-key-guide-font-size',
@@ -44,22 +37,17 @@ describe('legacy Preferences migration boundary', () => {
       'zv-add-binding',
       'zv-reset-bindings',
       'zv-save',
-      'zv.keyGuide',
-      'zv.bindings',
+      'bindLegacyInteraction',
+      'setPreference(',
+      'getPreference(',
     ]) {
       expect(PANE).not.toContain(removed);
       expect(PREFERENCES_SOURCE).not.toContain(removed);
     }
   });
 
-  it('keeps the launcher and all not-yet-migrated legacy groups available', () => {
-    for (const retained of [
-      'zv-open-neo-settings',
-      'zv-language',
-      'zv-appearance-theme',
-      'zv-interaction-color-preset',
-    ]) {
-      expect(PANE).toContain(retained);
-    }
+  it('explains that the legacy pane is a compatibility bridge, not a second settings surface', () => {
+    expect(PANE).toContain('All Zotero Neo settings are managed in the Neo Settings workspace.');
+    expect(PANE).toContain('Open Neo Settings');
   });
 });

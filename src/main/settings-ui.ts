@@ -150,9 +150,45 @@ export function settingsToggleRow(
   return { element: settingsControlRow(doc, label, button, description), set };
 }
 
+export interface SettingsTextInput {
+  readonly element: HTMLElement;
+  set(value: string): void;
+}
+
 export interface SettingsNumberInput {
   readonly element: HTMLElement;
   set(value: number): void;
+}
+
+/** A host-font text field with page-owned commit/persistence semantics. */
+export function settingsTextRow(
+  doc: Document,
+  label: string,
+  value: string,
+  onChange: (next: string) => string | false | void,
+  cleanups: Array<() => void>,
+  description?: string,
+): SettingsTextInput {
+  const input = doc.createElementNS(H, 'input') as HTMLInputElement;
+  input.type = 'text';
+  input.setAttribute('aria-label', label);
+  styleSettingsField(input, '12em');
+  let current = value;
+  const set = (next: string): void => {
+    current = next;
+    input.value = next;
+  };
+  const commit = (): void => {
+    const raw = input.value;
+    const result = onChange(raw);
+    if (result === false) set(current);
+    else if (typeof result === 'string') set(result);
+    else set(raw);
+  };
+  input.addEventListener('change', commit);
+  cleanups.push(() => input.removeEventListener('change', commit));
+  set(value);
+  return { element: settingsControlRow(doc, label, input, description), set };
 }
 
 export interface SettingsNumberOptions {

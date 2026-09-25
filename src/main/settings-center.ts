@@ -2,6 +2,7 @@ import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import type { InteractionAppearanceManager } from './interaction-appearance';
+import { SettingsAdvanced } from './settings-advanced';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
 import { SettingsInteraction } from './settings-interaction';
 import { SettingsKeybindings, type SettingsKeybindingsState } from './settings-keybindings';
@@ -201,14 +202,6 @@ export class SettingsCenter {
       );
       return;
     }
-    content.style.display = 'block';
-    content.style.overflow = 'auto';
-    content.style.padding = '12px 14px';
-    const title = this.#window.document.createElementNS(H, 'h2');
-    title.textContent = this.#section;
-    title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
-    const note = this.#window.document.createElementNS(H, 'p');
-    note.textContent = `${this.#section} settings have not migrated yet. Use Zotero Preferences for now.`;
-    content.append(title, note);
+    this.#activePage = new SettingsAdvanced(this.#window, content, this.#preferences);
   }
 }

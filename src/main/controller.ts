@@ -15,7 +15,12 @@ import {
   type MainExecutableAction,
   type ReaderDelegableMainAction,
 } from './action-capabilities';
-import { keyGuideConfig, noteEditorEnabled, pickerMouseEnabled } from '../core/preferences';
+import {
+  keyGuideConfig,
+  neoCommandLanguage,
+  noteEditorEnabled,
+  pickerMouseEnabled,
+} from '../core/preferences';
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
@@ -25,11 +30,7 @@ import {
   cancelPendingInput,
   resolveInputTimeout,
 } from '../input/engine';
-import {
-  KEY_GUIDE_CONFIG,
-  keyGuideLanguage,
-  type KeyGuideLanguage,
-} from '../input/key-guide-config';
+import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { guideEntries, isGuidePrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { isEditableElement } from '../platform/dom';
@@ -573,8 +574,8 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   private keyGuideLanguage(): KeyGuideLanguage {
-    return keyGuideLanguage(
-      this.#dependencies.preferences.get('language', ''),
+    return neoCommandLanguage(
+      this.#dependencies.preferences,
       typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
     );
   }

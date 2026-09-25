@@ -179,13 +179,15 @@ retains its session-only editor state; `settings-interaction.ts` owns the live
 Picker mouse and Note editor toggles; `settings-reader.ts` owns Reader modes,
 scrolling, marks persistence, and default annotation colour;
 `settings-keybindings.ts` owns Prefix Guide controls and the explicit-Apply
-keybinding draft. `settings-ui.ts` owns shared button, field, choice, row,
-toggle, and numeric-field geometry, while `src/core/preferences.ts` names the
-shared preference keys/defaults. The keybinding editor state machine lives in
+keybinding draft; `settings-advanced.ts` owns command-language selection and
+the virtual tag namespace separator. `settings-ui.ts` owns shared button,
+field, choice, row, toggle, numeric-field, and text-field geometry, while
+`src/core/preferences.ts` names the shared preference keys/defaults and resolves
+language/tag policy. The keybinding editor state machine lives in
 `src/input/binding-editor.ts`; its Settings view is Main-owned and does not
-depend on Zotero Preferences/XUL controls. Zotero Preferences no longer edits
-migrated Interaction, Reader, Prefix Guide, or Keybindings settings; remaining
-legacy groups stay available until their Settings pages migrate.
+depend on Zotero Preferences/XUL controls. Zotero Preferences is now a
+launcher-only compatibility bridge into Neo Settings; no editable Neo setting
+is duplicated there.
 
 Reader preference policy is centralized in `src/core/preferences.ts`: Reader mode
 flags, marks persistence, default annotation colour, scroll defaults/ranges, and

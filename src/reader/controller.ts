@@ -8,6 +8,7 @@ import type {
 import { CleanupScope } from '../core/cleanup';
 import {
   keyGuideConfig,
+  neoCommandLanguage,
   readerDefaultHighlightColor,
   readerModeEnabled,
   readerScrollStep,
@@ -22,11 +23,7 @@ import {
   inputWouldConsume,
   resolveInputTimeout,
 } from '../input/engine';
-import {
-  KEY_GUIDE_CONFIG,
-  keyGuideLanguage,
-  type KeyGuideLanguage,
-} from '../input/key-guide-config';
+import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import {
@@ -1426,8 +1423,8 @@ export class ReaderSession {
   }
 
   private keyGuideLanguage(): KeyGuideLanguage {
-    return keyGuideLanguage(
-      this.#dependencies.controller.dependencies.preferences.get('language', ''),
+    return neoCommandLanguage(
+      this.#dependencies.controller.dependencies.preferences,
       typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
     );
   }

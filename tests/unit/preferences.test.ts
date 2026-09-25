@@ -6,15 +6,20 @@ import { bindingsForMode } from '../../src/input/bindings';
 
 import {
   BINDING_SCHEMA_VERSION,
+  DEFAULT_TAG_SEPARATOR,
   KEY_GUIDE_DELAY_PREFERENCE_KEY,
   KEY_GUIDE_ENABLED_PREFERENCE_KEY,
   KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
+  LANGUAGE_PREFERENCE_KEY,
   NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
   READER_SCROLL_MODE_PREFERENCE_KEY,
+  TAG_SEPARATOR_PREFERENCE_KEY,
   bindingsFromPreferences,
+  configuredNeoLanguage,
   keyGuideConfig,
   migrateBindingPreferences,
+  neoCommandLanguage,
   normalizeKeyGuideNumber,
   migrateReaderPreferences,
   normalizeReaderScrollNumber,
@@ -26,6 +31,7 @@ import {
   readerScrollConfig,
   scrollModeFromPreferences,
   smoothScrollConfig,
+  tagSeparatorFromPreferences,
   type PreferenceWriter,
 } from '../../src/core/preferences';
 
@@ -50,6 +56,36 @@ class TestPreferences implements PreferenceWriter {
     this.writes.push([key, value]);
   }
 }
+
+describe('advanced preferences', () => {
+  it('normalizes the configured command language and otherwise follows the host locale', () => {
+    const automatic = new TestPreferences({});
+    expect(configuredNeoLanguage(automatic)).toBe('');
+    expect(neoCommandLanguage(automatic, 'zh-TW')).toBe('zh-CN');
+
+    const explicit = new TestPreferences({ [LANGUAGE_PREFERENCE_KEY]: 'en' });
+    expect(configuredNeoLanguage(explicit)).toBe('en');
+    expect(neoCommandLanguage(explicit, 'zh-CN')).toBe('en');
+
+    const invalid = new TestPreferences({ [LANGUAGE_PREFERENCE_KEY]: 'fr' });
+    expect(configuredNeoLanguage(invalid)).toBe('');
+    expect(neoCommandLanguage(invalid, 'en-US')).toBe('en');
+  });
+
+  it('uses slash for tag namespaces while preserving explicit flat and custom separators', () => {
+    expect(tagSeparatorFromPreferences(new TestPreferences({}))).toBe(DEFAULT_TAG_SEPARATOR);
+    expect(
+      tagSeparatorFromPreferences(
+        new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '' }),
+      ),
+    ).toBe('');
+    expect(
+      tagSeparatorFromPreferences(
+        new TestPreferences({ [TAG_SEPARATOR_PREFERENCE_KEY]: '::' }),
+      ),
+    ).toBe('::');
+  });
+});
 
 describe('scroll preferences', () => {
   it('uses follow mode when the configured mode is absent or invalid', () => {

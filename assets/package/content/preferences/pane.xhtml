@@ -2,118 +2,28 @@
   xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
   xmlns:html="http://www.w3.org/1999/xhtml"
   id="zotero-neo-prefs"
-  style="padding: 16px; min-width: 500px;"
+  style="padding: 16px; min-width: 420px;"
 >
-
   <html:style>
     #zotero-neo-prefs {
       color: var(--zotero-neo-text, inherit);
       background: var(--zotero-neo-surface, transparent);
     }
-    #zotero-neo-prefs html|p { color: var(--zotero-neo-muted, #666); }
-    #zotero-neo-prefs html|input,
-    #zotero-neo-prefs html|select,
-    #zotero-neo-prefs html|button,
-    #zotero-neo-prefs menulist {
-      color: var(--zotero-neo-text, inherit);
-      background: var(--zotero-neo-input, transparent);
-      border-color: var(--zotero-neo-border, #ccc);
+    #zotero-neo-prefs html|p {
+      color: var(--zotero-neo-muted, #666);
     }
-    #zotero-neo-prefs html|input:focus-visible,
-    #zotero-neo-prefs html|select:focus-visible,
-    #zotero-neo-prefs html|button:focus-visible {
-      outline: 2px solid var(--zotero-neo-focus-ring, Highlight);
-      outline-offset: 1px;
-    }
-    .zv-divider { border-color: var(--zotero-neo-border, #ddd) !important; }
-    .zv-status { color: var(--zotero-neo-success, #287a43) !important; }
   </html:style>
 
-  <!-- ── Language ──────────────────────────────────────────────────────── -->
-  <groupbox>
-    <hbox align="center">
-      <label data-i18n="zv.lang.label" value="Language"
-        style="font-weight: bold; margin-right: 12px;" />
-      <menulist id="zv-language" style="padding: 2px 6px;">
-        <menupopup>
-          <menuitem value="en" label="English" />
-          <menuitem value="zh-CN" label="中文" />
-        </menupopup>
-      </menulist>
-    </hbox>
-  </groupbox>
-
-  <hbox align="center" style="margin: 6px 0 12px;">
-    <button id="zv-open-neo-settings" data-i18n="zv.settings.open" label="Open Neo Settings" />
-    <html:span id="zv-open-neo-settings-status" role="status" style="margin-left: 10px;"></html:span>
+  <label value="Zotero Neo" style="font-weight: bold; font-size: 1.15em;" />
+  <html:p style="margin: 6px 0 12px;">
+    All Zotero Neo settings are managed in the Neo Settings workspace.
+  </html:p>
+  <hbox align="center">
+    <button id="zv-open-neo-settings" label="Open Neo Settings" />
+    <html:span
+      id="zv-open-neo-settings-status"
+      role="status"
+      style="margin-left: 10px;"
+    ></html:span>
   </hbox>
-
-  <!-- ── Appearance ───────────────────────────────────────────────────── -->
-  <groupbox>
-    <label data-i18n="zv.appearance" value="Appearance" style="font-weight: bold;" />
-    <html:p style="margin: 4px 0 10px; font-size: 0.9em;" data-i18n="zv.appearance.help">
-      Auto follows Zotero; Light and Dark override it for Neo panels.
-    </html:p>
-    <hbox align="center">
-      <html:label for="zv-appearance-theme" data-i18n="zv.appearance.mode"
-        style="min-width: 180px; font-weight: 600;">Theme</html:label>
-      <menulist id="zv-appearance-theme" style="padding: 2px 6px;">
-        <menupopup>
-          <menuitem value="auto" data-i18n="zv.appearance.auto" label="Auto" />
-          <menuitem value="light" data-i18n="zv.appearance.light" label="Light" />
-          <menuitem value="dark" data-i18n="zv.appearance.dark" label="Dark" />
-        </menupopup>
-      </menulist>
-      <html:span id="zv-appearance-status" class="zv-status"
-        style="margin-left: 10px; font-size: 0.9em;"></html:span>
-    </hbox>
-  </groupbox>
-
-  <!-- ── Main interaction appearance ───────────────────────────────── -->
-  <groupbox>
-    <label data-i18n="zv.mainAppearance" value="Main interaction appearance"
-      style="font-weight: bold;" />
-    <html:p style="margin: 4px 0 10px; font-size: 0.9em;" data-i18n="zv.mainAppearance.help">
-      Cursor keeps Zotero's native selected style; tune Selection and Visual markers and status.
-    </html:p>
-    <hbox align="center">
-      <html:label for="zv-interaction-color-preset" data-i18n="zv.mainAppearance.colorPreset"
-        style="min-width: 180px; font-weight: 600;">Color preset</html:label>
-      <menulist id="zv-interaction-color-preset">
-        <menupopup>
-          <menuitem value="zotero" data-i18n="zv.mainAppearance.color.zotero" label="Zotero" />
-          <menuitem value="catppuccin" data-i18n="zv.mainAppearance.color.catppuccin" label="Catppuccin" />
-          <menuitem value="tokyo-night" data-i18n="zv.mainAppearance.color.tokyo" label="Tokyo Night" />
-          <menuitem value="gruvbox" data-i18n="zv.mainAppearance.color.gruvbox" label="Gruvbox" />
-        </menupopup>
-      </menulist>
-    </hbox>
-    <hbox align="center" style="margin-top: 6px;">
-      <html:label for="zv-interaction-marker-width" data-i18n="zv.mainAppearance.markerWidth"
-        style="min-width: 180px; font-weight: 600;">Marker width</html:label>
-      <menulist id="zv-interaction-marker-width">
-        <menupopup>
-          <menuitem value="1" data-i18n="zv.mainAppearance.marker.1" label="1px" />
-          <menuitem value="2" data-i18n="zv.mainAppearance.marker.2" label="2px" />
-          <menuitem value="3" data-i18n="zv.mainAppearance.marker.3" label="3px" />
-          <menuitem value="4" data-i18n="zv.mainAppearance.marker.4" label="4px" />
-        </menupopup>
-      </menulist>
-    </hbox>
-    <hbox align="center" style="margin-top: 6px;">
-      <html:label for="zv-interaction-status-style" data-i18n="zv.mainAppearance.statusStyle"
-        style="min-width: 180px; font-weight: 600;">Status indicator</html:label>
-      <menulist id="zv-interaction-status-style">
-        <menupopup>
-          <menuitem value="neutral" data-i18n="zv.mainAppearance.status.neutral"
-            label="Neutral" />
-          <menuitem value="tinted" data-i18n="zv.mainAppearance.status.tinted"
-            label="Tinted" />
-        </menupopup>
-      </menulist>
-      <html:span id="zv-interaction-appearance-status" class="zv-status"
-        style="margin-left: 10px; font-size: 0.9em;"></html:span>
-    </hbox>
-  </groupbox>
-
 </vbox>
