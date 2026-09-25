@@ -8,6 +8,7 @@ export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
   'findCollectionItems',
   'findNotes',
   'managePlugins',
+  'openNeoSettings',
   'switchTab',
   'mainFocusTree',
   'mainFocusLeft',

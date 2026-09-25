@@ -486,6 +486,7 @@ and focus context:
 | `<Space>fq` | Focus/select Zotero's native Quick Search field |
 | `<Space>fa` | Open Zotero's native Advanced Search; convert current Quick Search text when present |
 | `<Space>pp` | Open the persistent Plugin Manager panel |
+| `<Space>ps` | Open Neo Settings |
 | `<Space>,` | Choose and switch to an open Zotero tab |
 | `<Space>q` | Close the active Zotero tab |
 | `<Space>ta` | Add one tag to the current target(s) |
@@ -856,7 +857,7 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 
 ## Settings
 
-Open Neo Settings with `<Space>ps` from either Main or Reader Normal mode. From Reader,
+Open Neo Settings with `<Space>ps` from Main, Reader, or Note Normal mode. From Reader,
 the Settings workspace opens in the owning Zotero window without switching back to Library.
 
 | Setting                  | Default                  | Description                                                                                                                                           |

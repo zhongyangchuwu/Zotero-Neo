@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ACTION_LABELS } from '../../src/input/actions';
 import { KEY_GUIDE_CONFIG, keyGuideLanguage } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, type BindingMap } from '../../src/input/bindings';
 import {
@@ -22,10 +23,10 @@ const bindings: BindingMap = {
 describe('leader guide projection', () => {
   it('projects only executable Space-leader continuations and group metadata', () => {
     expect(leaderGuideEntries(bindings, 'reader-normal', ' ', 'en')).toEqual([
-      { key: ',', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
+      { key: ',', label: ACTION_LABELS.switchTab.en, isGroup: false },
       {
         key: 'e',
-        label: KEY_GUIDE_CONFIG.actionLabels.toggleReaderSidebarOutline!.en,
+        label: ACTION_LABELS.toggleReaderSidebarOutline.en,
         isGroup: false,
       },
       { key: 'f', label: KEY_GUIDE_CONFIG.groupLabels.f.en, isGroup: true },
@@ -37,12 +38,12 @@ describe('leader guide projection', () => {
     expect(leaderGuideEntries(bindings, 'reader-normal', ' f', 'zh-CN')).toEqual([
       {
         key: 'c',
-        label: KEY_GUIDE_CONFIG.actionLabels.findCollectionItems!['zh-CN'],
+        label: ACTION_LABELS.findCollectionItems['zh-CN'],
         isGroup: false,
       },
       {
         key: 'f',
-        label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!['zh-CN'],
+        label: ACTION_LABELS.findAllItems['zh-CN'],
         isGroup: false,
       },
     ]);
@@ -56,8 +57,8 @@ describe('leader guide projection', () => {
 
     expect(isGuidePrefix(custom, 'main-normal', 'x')).toBe(true);
     expect(guideEntries(custom, 'main-normal', 'x', 'en')).toEqual([
-      { key: 'x', label: KEY_GUIDE_CONFIG.actionLabels.switchTab!.en, isGroup: false },
-      { key: 'y', label: KEY_GUIDE_CONFIG.actionLabels.findAllItems!.en, isGroup: false },
+      { key: 'x', label: ACTION_LABELS.switchTab.en, isGroup: false },
+      { key: 'y', label: ACTION_LABELS.findAllItems.en, isGroup: false },
     ]);
     expect(guideEntries(custom, 'main-normal', 'g', 'en')).toEqual([]);
     expect(leaderGuideEntries(custom, 'main-normal', 'x', 'en')).toEqual([]);
@@ -78,7 +79,7 @@ describe('leader guide projection', () => {
     expect(guideEntries(named, 'main-normal', 'y', 'en')).toEqual([
       {
         key: 'y',
-        label: KEY_GUIDE_CONFIG.actionLabels.mainYankCitekey!.en,
+        label: ACTION_LABELS.mainYankCitekey.en,
         isGroup: false,
       },
     ]);
@@ -100,6 +101,7 @@ describe('leader guide projection', () => {
     expect(DEFAULT_BINDINGS['main-normal:<Space>tc']).toBe('clearTagFilters');
     expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
     expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
+    expect(KEY_GUIDE_CONFIG.groupLabels.p.en).toBe('Neo');
   });
 
   it('uses an explicit language first and otherwise follows the host locale', () => {

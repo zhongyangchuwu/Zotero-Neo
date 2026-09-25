@@ -157,7 +157,7 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(READER_NORMAL_ACTIONS).toContain('openNeoSettings');
-    expect(actionsForBindingMode('note-normal')).not.toContain('openNeoSettings');
+    expect(actionsForBindingMode('note-normal')).toContain('openNeoSettings');
     expect(MAIN_NORMAL_ACTIONS).toContain('openNeoSettings');
     expect(MAIN_SELECT_ACTIONS).toContain('openNeoSettings');
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
