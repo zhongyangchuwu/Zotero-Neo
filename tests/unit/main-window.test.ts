@@ -1259,7 +1259,9 @@ describe('Main Settings Center shell', () => {
         (panel.children[1]?.children[index] as HTMLElement & { emit(type: string): void }).emit(
           'click',
         );
-        expect(panel.children[2]?.children[0]?.textContent).toBe(title);
+        expect(
+          all(panel.children[2] as HTMLElement).find((node) => node.localName === 'h2')?.textContent,
+        ).toBe(title);
       }
       (panel.children[1]?.children[4] as HTMLElement & { emit(type: string): void }).emit('click');
 
