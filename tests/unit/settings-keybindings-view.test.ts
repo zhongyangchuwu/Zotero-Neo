@@ -398,9 +398,7 @@ describe('mounted binding editor view', () => {
     keyboardInput.emit('keydown', { key: 'ArrowDown', preventDefault: arrowPreventDefault });
     expect(arrowPreventDefault).toHaveBeenCalledOnce();
     expectExactlyOneSelectedAction(firstRow(harness));
-    const selectedAction = actionResults(firstRow(harness)).querySelector(
-      '[aria-selected="true"]',
-    )?.value;
+    const selectedAction = actionResults(firstRow(harness)).value;
     keyboardInput.emit('keydown', { key: 'Enter' });
     expect(harness.mounted.getState().actionEditor).toBeNull();
     expect(harness.mounted.getState().rows[0]?.action).toBe(selectedAction);
