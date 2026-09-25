@@ -199,7 +199,8 @@ export class SettingsCenter {
       button.setAttribute('aria-current', selected ? 'page' : 'false');
       setSettingsPressed(button as HTMLButtonElement, selected);
     }
-    if (!force && this.#mountedSection === this.#section && this.#mountedLanguage === language) return;
+    if (!force && this.#mountedSection === this.#section && this.#mountedLanguage === language)
+      return;
     this.#activePage?.dispose();
     this.#activePage = null;
     this.#mountedSection = this.#section;
@@ -218,7 +219,12 @@ export class SettingsCenter {
       return;
     }
     if (this.#section === 'Interaction') {
-      this.#activePage = new SettingsInteraction(this.#window, content, this.#preferences, language);
+      this.#activePage = new SettingsInteraction(
+        this.#window,
+        content,
+        this.#preferences,
+        language,
+      );
       return;
     }
     if (this.#section === 'Reader') {

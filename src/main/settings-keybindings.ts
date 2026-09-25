@@ -115,7 +115,10 @@ export class SettingsKeybindings {
     const guide = settingsGroup(
       doc,
       settingsText(language, 'Prefix Guide'),
-      settingsText(language, 'Show valid continuations while a multi-key command prefix is pending.'),
+      settingsText(
+        language,
+        'Show valid continuations while a multi-key command prefix is pending.',
+      ),
     );
     const config = keyGuideConfig(preferences);
     this.#guideToggle = settingsToggleRow(

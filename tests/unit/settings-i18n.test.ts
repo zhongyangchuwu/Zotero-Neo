@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PreferenceReader } from '../../src/core/preferences';
-import {
-  settingsLanguage,
-  settingsText,
-  settingsToggleLabels,
-} from '../../src/main/settings-i18n';
+import { settingsLanguage, settingsText, settingsToggleLabels } from '../../src/main/settings-i18n';
 
 class Preferences implements PreferenceReader {
   constructor(private readonly values: Record<string, boolean | number | string>) {}

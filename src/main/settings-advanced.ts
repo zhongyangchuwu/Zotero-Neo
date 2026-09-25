@@ -55,7 +55,7 @@ export class SettingsAdvanced {
       settingsText(language, 'Interface and command language'),
       settingsText(
         language,
-        "Controls Neo Settings and localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.",
+        'Controls Neo Settings and localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.',
       ),
     );
     this.#languageChoices = settingsChoices<NeoLanguagePreference>(
@@ -121,7 +121,10 @@ export class SettingsAdvanced {
       return true;
     } catch {
       this.#refresh(false);
-      this.#status.textContent = settingsText(this.#uiLanguage, 'Could not update Advanced settings.');
+      this.#status.textContent = settingsText(
+        this.#uiLanguage,
+        'Could not update Advanced settings.',
+      );
       return false;
     }
   }

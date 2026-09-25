@@ -128,7 +128,7 @@ const ZH = {
   'Could not update Prefix Guide settings.': '无法更新前缀提示设置。',
 
   'Interface and command language': '界面与命令语言',
-  "Controls Neo Settings and localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.":
+  'Controls Neo Settings and localized command labels in Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.':
     '控制 Neo 设置界面，以及前缀提示、命令面板和快捷键中的本地化命令名称。“跟随 Zotero”使用宿主语言。',
   'Follow Zotero': '跟随 Zotero',
   English: 'English',

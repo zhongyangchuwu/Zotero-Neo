@@ -134,12 +134,42 @@ export class SettingsReader {
     this.#followBlock = this.#modeBlock(doc, 'follow');
     this.#trapezoidBlock = this.#modeBlock(doc, 'trapezoid');
     this.#scrollNumbers = {
-      scrollStep: this.#number(doc, settingsText(language, 'Scroll step (px)'), 'scrollStep', scroll.scrollStep),
-      followSpeed: this.#number(doc, settingsText(language, 'Scroll speed (px/s)'), 'followSpeed', scroll.followSpeed),
-      initialSpeed: this.#number(doc, settingsText(language, 'Initial speed (px/s)'), 'initialSpeed', scroll.initialSpeed),
-      maxSpeed: this.#number(doc, settingsText(language, 'Max speed (px/s)'), 'maxSpeed', scroll.maxSpeed),
-      acceleration: this.#number(doc, settingsText(language, 'Acceleration (px/s²)'), 'acceleration', scroll.acceleration),
-      deceleration: this.#number(doc, settingsText(language, 'Deceleration (px/s²)'), 'deceleration', scroll.deceleration),
+      scrollStep: this.#number(
+        doc,
+        settingsText(language, 'Scroll step (px)'),
+        'scrollStep',
+        scroll.scrollStep,
+      ),
+      followSpeed: this.#number(
+        doc,
+        settingsText(language, 'Scroll speed (px/s)'),
+        'followSpeed',
+        scroll.followSpeed,
+      ),
+      initialSpeed: this.#number(
+        doc,
+        settingsText(language, 'Initial speed (px/s)'),
+        'initialSpeed',
+        scroll.initialSpeed,
+      ),
+      maxSpeed: this.#number(
+        doc,
+        settingsText(language, 'Max speed (px/s)'),
+        'maxSpeed',
+        scroll.maxSpeed,
+      ),
+      acceleration: this.#number(
+        doc,
+        settingsText(language, 'Acceleration (px/s²)'),
+        'acceleration',
+        scroll.acceleration,
+      ),
+      deceleration: this.#number(
+        doc,
+        settingsText(language, 'Deceleration (px/s²)'),
+        'deceleration',
+        scroll.deceleration,
+      ),
     };
     this.#stepBlock.append(this.#scrollNumbers.scrollStep.element);
     this.#followBlock.append(this.#scrollNumbers.followSpeed.element);
@@ -198,7 +228,11 @@ export class SettingsReader {
       this.#cleanups,
     );
     annotations.append(
-      settingsControlRow(doc, settingsText(language, 'Default color'), this.#highlightColor.element),
+      settingsControlRow(
+        doc,
+        settingsText(language, 'Default color'),
+        this.#highlightColor.element,
+      ),
     );
 
     this.#status = settingsStatus(doc);

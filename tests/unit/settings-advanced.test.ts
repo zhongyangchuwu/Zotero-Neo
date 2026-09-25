@@ -125,7 +125,9 @@ describe('Advanced Settings', () => {
       .all()
       .map((node) => node.textContent)
       .join(' ');
-    expect(copy).toContain('Changes the Neo Settings interface and localized command labels immediately.');
+    expect(copy).toContain(
+      'Changes the Neo Settings interface and localized command labels immediately.',
+    );
     expect(copy).toContain('existing Zotero tags are never rewritten');
     expect(test.preferences.writes).toEqual([]);
     test.page.dispose();

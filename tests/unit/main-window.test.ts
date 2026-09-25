@@ -1245,9 +1245,9 @@ describe('Main Settings Center shell', () => {
       const panel = host.drawer()!;
       expect(panel.children[0]?.children[0]?.textContent).toBe('Zotero Neo 设置');
       expect(panel.children[0]?.children[1]?.textContent).toBe('关闭');
-      expect(
-        Array.from(panel.children[1]?.children ?? []).map((node) => node.textContent),
-      ).toEqual(['外观', '交互', '阅读器', '快捷键', '高级']);
+      expect(Array.from(panel.children[1]?.children ?? []).map((node) => node.textContent)).toEqual(
+        ['外观', '交互', '阅读器', '快捷键', '高级'],
+      );
       expect(panel.children[2]?.children[0]?.textContent).toBe('高级');
 
       for (const [index, title] of [
