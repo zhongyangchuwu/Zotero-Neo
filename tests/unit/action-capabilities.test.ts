@@ -84,6 +84,7 @@ const expectedDelegableMainActions: readonly ActionId[] = [
   'findCollectionItems',
   'findNotes',
   'managePlugins',
+  'openNeoSettings',
   'mainReturnContext',
   'switchTab',
   'mainYankCitekey',
@@ -151,10 +152,11 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'addToCollection')).toBe(true);
     expect(isReaderActionForMode('normal', 'removeFromCollection')).toBe(true);
     expect(isReaderActionForMode('normal', 'managePlugins')).toBe(true);
+    expect(isReaderActionForMode('normal', 'openNeoSettings')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainReturnContext')).toBe(true);
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
-    expect(READER_NORMAL_ACTIONS).not.toContain('openNeoSettings');
+    expect(READER_NORMAL_ACTIONS).toContain('openNeoSettings');
     expect(actionsForBindingMode('note-normal')).not.toContain('openNeoSettings');
     expect(MAIN_NORMAL_ACTIONS).toContain('openNeoSettings');
     expect(MAIN_SELECT_ACTIONS).toContain('openNeoSettings');

@@ -1266,6 +1266,22 @@ describe('Main Settings Center shell', () => {
     expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(false);
   });
 
+  it('opens Neo Settings for a Reader-owned Main delegation without switching tabs', () => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = settingsMainHost();
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'reader-tab', title: 'Reader', type: 'reader' }],
+      selectedID: 'reader-tab',
+    });
+    try {
+      host.controller.executeFromReader('openNeoSettings', 0, host.window);
+      expect(host.drawer()?.id).toBe('zotero-neo-settings-center');
+      expect(host.window.Zotero_Tabs?.selectedID).toBe('reader-tab');
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
   it('includes the canonical Neo Settings action in Main Command Palette candidates', async () => {
     const commands = createCommandsProvider({
       mode: 'main',

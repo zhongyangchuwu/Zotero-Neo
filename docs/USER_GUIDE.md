@@ -81,6 +81,7 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `<Space>q`  | Close the active Zotero tab                                               |
 | `<Space>fn` | Search all notes in the shared picker (left: note titles, right: preview) |
 | `<Space>pp` | Open the persistent Plugin Manager panel |
+| `<Space>ps` | Open Neo Settings without leaving the Reader tab |
 
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
@@ -854,6 +855,9 @@ failures are reported to `zotero-neo-startup.log` in the profile directory with
 ---
 
 ## Settings
+
+Open Neo Settings with `<Space>ps` from either Main or Reader Normal mode. From Reader,
+the Settings workspace opens in the owning Zotero window without switching back to Library.
 
 | Setting                  | Default                  | Description                                                                                                                                           |
 | ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |

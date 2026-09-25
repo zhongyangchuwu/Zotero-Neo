@@ -102,6 +102,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>cr': 'removeFromCollection',
   'reader-normal:<Space>fn': 'findNotes',
   'reader-normal:<Space>pp': 'managePlugins',
+  'reader-normal:<Space>ps': 'openNeoSettings',
   'reader-normal:<Space>yy': 'mainYankCitekey',
   'reader-normal:<Space>m': 'toggleMarksExplorer',
   'reader-select:s': 'flashText',
