@@ -11,7 +11,8 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
-    "tsBuildInfoFile": "./build/cache/tsconfig.tsbuildinfo"
+    "tsBuildInfoFile": "./build/cache/tsconfig.tsbuildinfo",
+    "resolveJsonModule": true
   },
   "include": ["src/**/*.ts"]
 }
