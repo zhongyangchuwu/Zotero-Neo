@@ -138,21 +138,55 @@ function isScrollMode(value: string): value is ScrollMode {
   return value === 'step' || value === 'follow' || value === 'trapezoid';
 }
 
+export const KEY_GUIDE_ENABLED_PREFERENCE_KEY = 'keyGuide.enabled' as const;
+export const KEY_GUIDE_DELAY_PREFERENCE_KEY = 'keyGuide.delayMs' as const;
+export const KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY = 'keyGuide.fontSizePx' as const;
+
+export const KEY_GUIDE_NUMBER_SPECS = {
+  delayMs: {
+    key: KEY_GUIDE_DELAY_PREFERENCE_KEY,
+    defaultValue: KEY_GUIDE_CONFIG.defaultDelayMs,
+    minimum: 0,
+    maximum: KEY_GUIDE_CONFIG.maxDelayMs,
+  },
+  fontSizePx: {
+    key: KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
+    defaultValue: KEY_GUIDE_CONFIG.defaultFontSizePx,
+    minimum: KEY_GUIDE_CONFIG.minFontSizePx,
+    maximum: KEY_GUIDE_CONFIG.maxFontSizePx,
+  },
+} as const;
+
+export type KeyGuideNumberSetting = keyof typeof KEY_GUIDE_NUMBER_SPECS;
+
 export interface KeyGuideConfig {
   readonly enabled: boolean;
   readonly delayMs: number;
   readonly fontSizePx: number;
 }
 
+export function normalizeKeyGuideNumber(
+  setting: KeyGuideNumberSetting,
+  value: number,
+): number {
+  const spec = KEY_GUIDE_NUMBER_SPECS[setting];
+  const finite = Number.isFinite(value) ? Math.trunc(value) : spec.defaultValue;
+  return Math.max(spec.minimum, Math.min(spec.maximum, finite));
+}
+
 export function keyGuideConfig(preferences: PreferenceReader): KeyGuideConfig {
-  const delay = preferences.get('keyGuide.delayMs', KEY_GUIDE_CONFIG.defaultDelayMs);
-  const fontSize = preferences.get('keyGuide.fontSizePx', KEY_GUIDE_CONFIG.defaultFontSizePx);
   return {
-    enabled: preferences.get('keyGuide.enabled', true),
-    delayMs: Math.max(0, Math.min(KEY_GUIDE_CONFIG.maxDelayMs, delay)),
-    fontSizePx: Math.max(
-      KEY_GUIDE_CONFIG.minFontSizePx,
-      Math.min(KEY_GUIDE_CONFIG.maxFontSizePx, fontSize),
+    enabled: preferences.get(KEY_GUIDE_ENABLED_PREFERENCE_KEY, true),
+    delayMs: normalizeKeyGuideNumber(
+      'delayMs',
+      preferences.get(KEY_GUIDE_DELAY_PREFERENCE_KEY, KEY_GUIDE_NUMBER_SPECS.delayMs.defaultValue),
+    ),
+    fontSizePx: normalizeKeyGuideNumber(
+      'fontSizePx',
+      preferences.get(
+        KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
+        KEY_GUIDE_NUMBER_SPECS.fontSizePx.defaultValue,
+      ),
     ),
   };
 }

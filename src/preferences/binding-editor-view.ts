@@ -11,7 +11,7 @@ import {
   type BindingEditorLanguage,
   type BindingEditorRow,
   type BindingEditorState,
-} from './binding-editor';
+} from '../input/binding-editor';
 import { isActionId } from '../input/actions';
 
 const XHTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';

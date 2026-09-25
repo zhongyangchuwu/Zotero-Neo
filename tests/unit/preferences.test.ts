@@ -6,12 +6,16 @@ import { bindingsForMode } from '../../src/input/bindings';
 
 import {
   BINDING_SCHEMA_VERSION,
+  KEY_GUIDE_DELAY_PREFERENCE_KEY,
+  KEY_GUIDE_ENABLED_PREFERENCE_KEY,
+  KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
   NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
   PICKER_MOUSE_ENABLED_PREFERENCE_KEY,
   READER_SCROLL_MODE_PREFERENCE_KEY,
   bindingsFromPreferences,
   keyGuideConfig,
   migrateBindingPreferences,
+  normalizeKeyGuideNumber,
   migrateReaderPreferences,
   normalizeReaderScrollNumber,
   noteEditorEnabled,
@@ -631,8 +635,8 @@ describe('key guide preferences', () => {
     expect(
       keyGuideConfig(
         new TestPreferences({
-          'keyGuide.delayMs': KEY_GUIDE_CONFIG.maxDelayMs + 1_000,
-          'keyGuide.fontSizePx': KEY_GUIDE_CONFIG.maxFontSizePx + 10,
+          [KEY_GUIDE_DELAY_PREFERENCE_KEY]: KEY_GUIDE_CONFIG.maxDelayMs + 1_000,
+          [KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY]: KEY_GUIDE_CONFIG.maxFontSizePx + 10,
         }),
       ),
     ).toEqual({
@@ -643,9 +647,9 @@ describe('key guide preferences', () => {
     expect(
       keyGuideConfig(
         new TestPreferences({
-          'keyGuide.enabled': false,
-          'keyGuide.delayMs': -10,
-          'keyGuide.fontSizePx': 1,
+          [KEY_GUIDE_ENABLED_PREFERENCE_KEY]: false,
+          [KEY_GUIDE_DELAY_PREFERENCE_KEY]: -10,
+          [KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY]: 1,
         }),
       ),
     ).toEqual({
@@ -653,6 +657,10 @@ describe('key guide preferences', () => {
       delayMs: 0,
       fontSizePx: KEY_GUIDE_CONFIG.minFontSizePx,
     });
+    expect(normalizeKeyGuideNumber('delayMs', Number.NaN)).toBe(
+      KEY_GUIDE_CONFIG.defaultDelayMs,
+    );
+    expect(normalizeKeyGuideNumber('fontSizePx', 18.9)).toBe(18);
   });
 });
 
