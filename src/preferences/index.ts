@@ -196,6 +196,15 @@ function byId<T extends Element>(doc: Document, id: string): T | null {
   return doc.getElementById(id) as T | null;
 }
 
+function flashStatus(element: HTMLElement | null, text: string): void {
+  if (!element) return;
+  element.textContent = text;
+  element.style.color = THEME_VARS.success;
+  window.setTimeout(() => {
+    element.textContent = '';
+  }, STATUS_DURATION_MS);
+}
+
 function initializePane(doc: Document): void {
   if (initializedDocuments.has(doc)) return;
   const paneRoot = byId<Element>(doc, 'zotero-neo-prefs') as ThemeRoot | null;
