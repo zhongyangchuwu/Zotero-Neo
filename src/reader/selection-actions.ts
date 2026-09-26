@@ -84,13 +84,14 @@ export class ReaderSelectionActions {
 
   open(pdfWindow: PdfWindow, context: ReaderSelectionContext): boolean {
     this.close();
-    const actions = this.#host.actions(context, pdfWindow);
+    const snapshot = Object.freeze({ ...context });
+    const actions = this.#host.actions(snapshot, pdfWindow);
     if (!actions.length) {
       this.#host.showStatus('No actions for selection', 1500);
       return false;
     }
     this.#window = pdfWindow;
-    this.#context = context;
+    this.#context = snapshot;
     this.#actions = actions;
     this.#selected = 0;
     this.#stage = 'menu';

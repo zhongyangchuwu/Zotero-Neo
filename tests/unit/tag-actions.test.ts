@@ -217,6 +217,36 @@ describe('semantic Tag actions', () => {
     expect(selected.hasTag('robotics')).toBe(true);
   });
 
+  it('Reader tag mutation targets the active Reader item and ignores Main Selection', async () => {
+    const main = tagItem(1);
+    const reader = tagItem(2);
+    installZotero([main, reader], [{ tag: 'robotics' }]);
+    const h = harness({ items: [main] });
+    (Zotero as unknown as { Reader: { getByTabID: () => { itemID: number } } }).Reader = {
+      getByTabID: () => ({ itemID: reader.id }),
+    };
+    (h.window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs = {
+      selectedID: 'reader-tab',
+    };
+
+    h.actions.add(h.window, h.session, 'reader');
+    const add = h.open();
+    await add.options.confirm?.(
+      {
+        id: 'tag:robotics',
+        title: 'robotics',
+        search: 'robotics',
+        tagName: 'robotics',
+        tagCandidate: 'tag',
+      } as PickerItem,
+      false,
+    );
+
+    expect(main.hasTag('robotics')).toBe(false);
+    expect(reader.hasTag('robotics')).toBe(true);
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+  });
+
   it('refuses a partial Main tag mutation when Selection contains an unavailable item', () => {
     const selected = tagItem(2);
     installZotero([selected], [{ tag: 'robotics' }]);
