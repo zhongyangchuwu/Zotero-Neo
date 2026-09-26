@@ -52,7 +52,7 @@ describe('0.1.0 default keymap freeze', () => {
   it('contains no exact default binding that is also a longer-command prefix', () => {
     expect(strictPrefixPairs(DEFAULT_BINDINGS)).toEqual([]);
 
-    const mainSelect = bindingsForMode(DEFAULT_BINDINGS, 'main-select', ['main-normal']);
+    const mainSelect = bindingsForMode(DEFAULT_BINDINGS, 'main-select');
     expect(strictPrefixPairs(mainSelect)).toEqual([]);
   });
 
@@ -170,12 +170,12 @@ describe('0.1.0 default keymap freeze', () => {
     });
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
 
-    const visualBindings = bindingsForMode(DEFAULT_BINDINGS, 'main-select', ['main-normal']);
+    const visualBindings = bindingsForMode(DEFAULT_BINDINGS, 'main-select');
     expect(press('main-select', 's', visualBindings)).toMatchObject({
       kind: 'execute',
       action: 'mainSelectFinish',
     });
-    expect(press('main-select', ' ', visualBindings)).toMatchObject({ kind: 'pending' });
+    expect(press('main-select', ' ', visualBindings)).toMatchObject({ kind: 'pass' });
   });
 
   it('does not confuse named keys with printable prefixes', () => {

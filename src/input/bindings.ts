@@ -645,20 +645,9 @@ export function resolveBindings(raw: unknown): BindingMap {
   return Object.freeze(bindings);
 }
 
-/** Projects fallback modes into one active mode; active bindings win by sequence. */
-export function bindingsForMode(
-  bindings: BindingMap,
-  mode: Mode,
-  fallbacks: readonly Mode[] = [],
-): BindingMap {
+/** Projects only the bindings explicitly declared for one mode. */
+export function bindingsForMode(bindings: BindingMap, mode: Mode): BindingMap {
   const result: Record<string, ActionId> = {};
-  for (const sourceMode of [...fallbacks].reverse()) {
-    for (const [key, action] of Object.entries(bindings)) {
-      const binding = parseBindingKey(key);
-      const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;
-      if (binding?.mode === sourceMode && sequence) result[`${mode}:${sequence}`] = action;
-    }
-  }
   for (const [key, action] of Object.entries(bindings)) {
     const binding = parseBindingKey(key);
     const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;

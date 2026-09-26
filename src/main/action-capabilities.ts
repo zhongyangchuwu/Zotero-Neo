@@ -67,12 +67,12 @@ export const MAIN_ITEM_SELECT_ACTIONS = Object.freeze([
   'mainSelectCancel',
 ] as const satisfies readonly ActionId[]);
 
-export const MAIN_SELECT_ACTIONS = Object.freeze([
+export const MAIN_SELECT_ACTIONS = MAIN_ITEM_SELECT_ACTIONS;
+
+export const MAIN_EXECUTABLE_ACTIONS = Object.freeze([
   ...MAIN_NORMAL_ACTIONS,
   ...MAIN_ITEM_SELECT_ACTIONS,
 ] as const satisfies readonly ActionId[]);
-
-export const MAIN_EXECUTABLE_ACTIONS = MAIN_SELECT_ACTIONS;
 
 export type MainNormalAction = (typeof MAIN_NORMAL_ACTIONS)[number];
 export type MainItemSelectAction = (typeof MAIN_ITEM_SELECT_ACTIONS)[number];

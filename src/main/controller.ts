@@ -339,7 +339,7 @@ export class MainWindowController implements MainWindowControllerApi {
     return resolveBindings(this.#dependencies.preferences.get('bindings', ''));
   }
   private activeBindings(mode: Mode) {
-    return bindingsForMode(this.bindings(), mode, mode === 'main-select' ? ['main-normal'] : []);
+    return bindingsForMode(this.bindings(), mode);
   }
   private rescan = (window: MainWindow): void => this.#dependencies.reader.rescan(window);
 
