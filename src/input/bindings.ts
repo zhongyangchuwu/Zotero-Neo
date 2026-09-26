@@ -21,6 +21,21 @@ export type Mode = (typeof MODES)[number];
 export type BindingKey = `${Mode}:${string}`;
 export type BindingMap = Readonly<Record<string, ActionId>>;
 
+/** An executable binding occupies a complete sequence, never a namespace. */
+export interface ActionBinding {
+  readonly kind: 'action';
+  readonly action: ActionId;
+}
+
+/** A named, non-executing namespace for longer sequences in the same mode. */
+export interface PrefixBinding {
+  readonly kind: 'prefix';
+  readonly label: Readonly<{ en: string; 'zh-CN': string }>;
+}
+
+export type Binding = ActionBinding | PrefixBinding;
+export type BindingNodes = Readonly<Record<string, Binding>>;
+
 const LEGACY_MODE_ALIASES: Readonly<Record<string, Mode>> = {
   normal: 'reader-normal',
   visual: 'reader-select',
@@ -224,6 +239,105 @@ export const DEFAULT_BINDINGS = {
   'main-select:v': 'mainSelectCancel',
   'main-select:<Esc>': 'mainSelectCancel',
 } as const satisfies BindingMap;
+// Labels live beside their mode-owned keymap nodes; Which-Key still uses its
+// existing presentation taxonomy until the resolved-keymap cutover.
+const PREFIX_LABELS = {
+  commands: { en: 'Commands', 'zh-CN': '命令' },
+  navigation: { en: 'Navigation', 'zh-CN': '导航' },
+  view: { en: 'View', 'zh-CN': '视图' },
+  filters: { en: 'Filters', 'zh-CN': '筛选' },
+  delete: { en: 'Delete', 'zh-CN': '删除' },
+  yank: { en: 'Yank', 'zh-CN': '复制' },
+  change: { en: 'Change', 'zh-CN': '修改' },
+  inner: { en: 'Inner', 'zh-CN': '内部' },
+  tags: { en: 'Tags', 'zh-CN': '标签' },
+  collections: { en: 'Collections', 'zh-CN': '分类' },
+  find: { en: 'Find', 'zh-CN': '查找' },
+  panes: { en: 'Panes', 'zh-CN': '窗格' },
+  citations: { en: 'Citations', 'zh-CN': '引用' },
+  neo: { en: 'Neo', 'zh-CN': 'Neo' },
+  selection: { en: 'Selection', 'zh-CN': '选择' },
+} as const;
+
+function prefix(label: keyof typeof PREFIX_LABELS): PrefixBinding {
+  return { kind: 'prefix', label: PREFIX_LABELS[label] };
+}
+
+/** Explicit, non-executing namespaces; keys include their owning mode. */
+export const DEFAULT_PREFIX_BINDINGS = {
+  'reader-normal:g': prefix('navigation'),
+  'reader-normal:d': prefix('delete'),
+  'reader-normal:z': prefix('view'),
+  'reader-normal:Z': prefix('filters'),
+  'reader-normal:<Space>': prefix('commands'),
+  'reader-normal:<Space>f': prefix('find'),
+  'reader-normal:<Space>t': prefix('tags'),
+  'reader-normal:<Space>c': prefix('collections'),
+  'reader-normal:<Space>p': prefix('neo'),
+  'reader-normal:<Space>y': prefix('citations'),
+  'reader-select:z': prefix('view'),
+  'main-normal:g': prefix('navigation'),
+  'main-normal:d': prefix('delete'),
+  'main-normal:z': prefix('view'),
+  'main-normal:w': prefix('panes'),
+  'main-normal:<Space>': prefix('commands'),
+  'main-normal:<Space>f': prefix('find'),
+  'main-normal:<Space>t': prefix('tags'),
+  'main-normal:<Space>c': prefix('collections'),
+  'main-normal:<Space>p': prefix('neo'),
+  'main-normal:<Space>s': prefix('selection'),
+  'main-normal:<Space>y': prefix('citations'),
+  'main-select:g': prefix('navigation'),
+  'note-normal:g': prefix('navigation'),
+  'note-normal:d': prefix('delete'),
+  'note-normal:di': prefix('inner'),
+  'note-normal:y': prefix('yank'),
+  'note-normal:yi': prefix('inner'),
+  'note-normal:c': prefix('change'),
+  'note-normal:ci': prefix('inner'),
+  'note-normal:<Space>': prefix('commands'),
+  'note-normal:<Space>f': prefix('find'),
+  'note-normal:<Space>t': prefix('tags'),
+  'note-normal:<Space>p': prefix('neo'),
+  'note-normal:<Space>y': prefix('citations'),
+} as const satisfies Readonly<Record<BindingKey, PrefixBinding>>;
+
+/**
+ * Projects the legacy action-only map into explicit nodes without changing
+ * preference serialization or dispatch. Ambiguous action prefixes remain
+ * supported by the legacy matcher, but cannot be represented as action leaves.
+ */
+export function bindingNodesFromActions(bindings: BindingMap): BindingNodes {
+  const nodes: Record<string, Binding> = {};
+  const strictPrefixes = new Set<string>();
+  for (const [key, action] of Object.entries(bindings)) {
+    const parsed = parseBindingKey(key);
+    if (!parsed) continue;
+    const tokens = bindingSequenceTokens(parsed.sequence);
+    if (!tokens) continue;
+    for (let length = 1; length < tokens.length; length += 1) {
+      strictPrefixes.add(`${parsed.mode}:${serializeBindingTokens(tokens.slice(0, length))}`);
+    }
+    nodes[key] = { kind: 'action', action };
+  }
+
+  for (const key of Object.keys(nodes)) {
+    if (strictPrefixes.has(key)) throw new Error(`Action binding cannot be a prefix: ${key}`);
+  }
+  for (const key of strictPrefixes) {
+    const builtIn = DEFAULT_PREFIX_BINDINGS[key as keyof typeof DEFAULT_PREFIX_BINDINGS];
+    if (builtIn) {
+      nodes[key] = builtIn;
+    } else {
+      const sequence = key.slice(key.indexOf(':') + 1);
+      nodes[key] = {
+        kind: 'prefix',
+        label: { en: `Prefix ${sequence}`, 'zh-CN': `前缀 ${sequence}` },
+      };
+    }
+  }
+  return Object.freeze(nodes);
+}
 
 export interface ParsedBindingKey {
   mode: Mode;

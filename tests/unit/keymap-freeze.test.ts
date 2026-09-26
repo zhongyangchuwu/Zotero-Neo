@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_BINDINGS,
+  DEFAULT_PREFIX_BINDINGS,
+  bindingNodesFromActions,
   bindingsForMode,
   migrateLegacyBindingOverrides,
   parseBindingKey,
@@ -9,8 +11,12 @@ import {
   type BindingMap,
   type Mode,
 } from '../../src/input/bindings';
-import { advanceInput } from '../../src/input/engine';
-import { bindingSequenceIsStrictPrefix } from '../../src/input/key-sequence';
+import { advanceInput, resolveInputTimeout } from '../../src/input/engine';
+import {
+  bindingSequenceIsStrictPrefix,
+  bindingSequenceTokens,
+  serializeBindingTokens,
+} from '../../src/input/key-sequence';
 
 function strictPrefixPairs(bindings: BindingMap): string[] {
   const byMode = new Map<Mode, string[]>();
@@ -254,5 +260,123 @@ describe('0.1.0 default keymap freeze', () => {
     expect(bindings['reader-normal:Y']).toBe('yankAnnotationComment');
     expect(bindings['reader-normal:yy']).toBeUndefined();
     expect(bindings['reader-select:yy']).toBeUndefined();
+  });
+});
+
+describe('first-class binding nodes', () => {
+  it('represents every built-in strict prefix as a named, non-executing node', () => {
+    const nodes = bindingNodesFromActions(DEFAULT_BINDINGS);
+    for (const [key, action] of Object.entries(DEFAULT_BINDINGS)) {
+      expect(nodes[key]).toEqual({ kind: 'action', action });
+      const parsed = parseBindingKey(key);
+      if (!parsed) throw new Error(`Invalid default binding: ${key}`);
+      const tokens = bindingSequenceTokens(parsed.sequence);
+      if (!tokens) throw new Error(`Invalid default sequence: ${key}`);
+      for (let length = 1; length < tokens.length; length += 1) {
+        const prefix = `${parsed.mode}:${serializeBindingTokens(tokens.slice(0, length))}`;
+        expect(
+          Object.hasOwn(DEFAULT_PREFIX_BINDINGS, prefix),
+          `Missing explicit label: ${prefix}`,
+        ).toBe(true);
+        expect(nodes[prefix], `Missing namespace for ${key}`).toMatchObject({ kind: 'prefix' });
+      }
+    }
+    for (const [key, node] of Object.entries(DEFAULT_PREFIX_BINDINGS)) {
+      expect(nodes[key]).toBe(node);
+      expect(node.label.en).not.toBe('');
+      const parsed = parseBindingKey(key);
+      if (!parsed) throw new Error(`Invalid default prefix: ${key}`);
+      expect(
+        Object.keys(DEFAULT_BINDINGS).some((childKey) => {
+          const child = parseBindingKey(childKey);
+          return (
+            child?.mode === parsed?.mode &&
+            bindingSequenceIsStrictPrefix(parsed.sequence, child.sequence)
+          );
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('waits on a PrefixBinding without executing, then executes its child ActionBinding', () => {
+    const bindings = resolveBindings('');
+    const nodes = bindingNodesFromActions(bindings);
+    expect(nodes['main-normal:<Space>f']).toEqual({
+      kind: 'prefix',
+      label: { en: 'Find', 'zh-CN': '查找' },
+    });
+    let pending = press('main-normal', ' ', bindings);
+    expect(pending).toMatchObject({ kind: 'pending', timeoutAction: null });
+    if (pending.kind !== 'pending') throw new Error('Expected Space prefix');
+    expect(resolveInputTimeout(pending)).toMatchObject({ kind: 'pass' });
+    pending = advanceInput({ ...pending.state, bindings, allowCountPrefix: true }, 'f');
+    expect(pending).toMatchObject({ kind: 'pending', timeoutAction: null });
+    if (pending.kind !== 'pending') throw new Error('Expected Find prefix');
+    expect(resolveInputTimeout(pending)).toMatchObject({ kind: 'pass' });
+    expect(advanceInput({ ...pending.state, bindings, allowCountPrefix: true }, 'q')).toMatchObject(
+      {
+        kind: 'execute',
+        action: 'mainQuickSearch',
+      },
+    );
+    expect(nodes['main-normal:<Space>fq']).toEqual({ kind: 'action', action: 'mainQuickSearch' });
+  });
+
+  it('keeps mode ownership and override unbindings in the adapted nodes', () => {
+    const bindings = resolveBindings(
+      JSON.stringify({
+        'main-select:gg': null,
+        'reader-normal:<Space>fq': 'scrollDown',
+      }),
+    );
+    const nodes = bindingNodesFromActions(bindings);
+    expect(nodes['main-select:g']).toBeUndefined();
+    expect(nodes['main-normal:g']).toMatchObject({ kind: 'prefix' });
+    expect(nodes['reader-normal:<Space>fq']).toEqual({ kind: 'action', action: 'scrollDown' });
+    expect(nodes['main-normal:<Space>fq']).toEqual({ kind: 'action', action: 'mainQuickSearch' });
+    expect(press('main-select', 'g', bindings)).toMatchObject({ kind: 'pass' });
+    expect(press('main-normal', 'g', bindings)).toMatchObject({ kind: 'pending' });
+  });
+
+  it('names every custom strict prefix without borrowing another mode namespace', () => {
+    const bindings = resolveBindings(
+      JSON.stringify({ 'main-select:<Space>xy': 'mainSelectFinish' }),
+    );
+    const nodes = bindingNodesFromActions(bindings);
+    expect(nodes['main-select:<Space>']).toEqual({
+      kind: 'prefix',
+      label: { en: 'Prefix <Space>', 'zh-CN': '前缀 <Space>' },
+    });
+    expect(nodes['main-select:<Space>x']).toEqual({
+      kind: 'prefix',
+      label: { en: 'Prefix <Space>x', 'zh-CN': '前缀 <Space>x' },
+    });
+    expect(nodes['main-select:<Space>xy']).toEqual({
+      kind: 'action',
+      action: 'mainSelectFinish',
+    });
+    expect(nodes['main-normal:<Space>']).toBe(DEFAULT_PREFIX_BINDINGS['main-normal:<Space>']);
+    expect(nodes['reader-select:<Space>']).toBeUndefined();
+
+    const start = press('main-select', ' ', bindings);
+    expect(start).toMatchObject({ kind: 'pending', timeoutAction: null });
+    const next = advanceInput({ ...start.state, bindings, allowCountPrefix: false }, 'x');
+    expect(next).toMatchObject({ kind: 'pending', timeoutAction: null });
+    expect(advanceInput({ ...next.state, bindings, allowCountPrefix: false }, 'y')).toMatchObject({
+      kind: 'execute',
+      action: 'mainSelectFinish',
+    });
+    expect(press('reader-select', ' ', bindings)).toMatchObject({ kind: 'pass' });
+  });
+
+  it('rejects action leaves with children without changing legacy ambiguous overrides', () => {
+    const bindings = resolveBindings(JSON.stringify({ 'main-normal:g': 'mainNavFirst' }));
+    expect(() => bindingNodesFromActions(bindings)).toThrow(
+      'Action binding cannot be a prefix: main-normal:g',
+    );
+    expect(press('main-normal', 'g', bindings)).toMatchObject({
+      kind: 'pending',
+      timeoutAction: 'mainNavFirst',
+    });
   });
 });
