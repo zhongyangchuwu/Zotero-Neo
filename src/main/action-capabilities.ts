@@ -56,7 +56,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainEnterSelect',
 ] as const satisfies readonly ActionId[]);
 
-/** Actions owned by transient Main Visual range editing. Ordinary Main actions remain available as fallbacks. */
+/** Actions explicitly owned by transient Main Visual range editing. */
 export const MAIN_ITEM_SELECT_ACTIONS = Object.freeze([
   'mainSelectDown',
   'mainSelectUp',
