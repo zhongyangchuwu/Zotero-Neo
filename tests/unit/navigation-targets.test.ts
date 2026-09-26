@@ -25,7 +25,11 @@ function attachment(id: number, citekey = ''): Zotero.Item {
   } as unknown as Zotero.Item;
 }
 
-function harness(visible: readonly Zotero.Item[], focused = 0) {
+function harness(
+  visible: readonly Zotero.Item[],
+  focused = 0,
+  nativeSelected: readonly number[] = [focused],
+) {
   const active = { id: 'item-tree-row-0' } as unknown as Element;
   const rows = visible.map((ref) => ({ isObjectRow: true, ref }));
   const root = { contains: (node: unknown) => node === active };
@@ -70,7 +74,8 @@ function harness(visible: readonly Zotero.Item[], focused = 0) {
         },
         clearSelection: vi.fn(),
       },
-      getSelectedItems: () => (visible[0] ? [visible[0]] : []),
+      getSelectedItems: () =>
+        nativeSelected.flatMap((index) => (visible[index] ? [visible[index]!] : [])),
       viewAttachment,
     },
     setTimeout: () => 1,
@@ -147,6 +152,39 @@ describe('Main action target contracts', () => {
     );
     expect(beforeNavigate).toHaveBeenCalledTimes(2);
     expect(h.session.status.textContent).toBe('✗ No attachment');
+  });
+
+  it('trashes native multi-selection when persistent Selection is empty', async () => {
+    const first = attachment(10);
+    const second = attachment(11);
+    const third = attachment(12);
+    const h = harness([first, second, third], 1, [0, 1, 2]);
+
+    await h.navigation.trashSelectedItems(h.window, h.session);
+
+    expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id, third.id]);
+    expect(h.session.trashedItemIDs).toEqual([first.id, second.id, third.id]);
+  });
+
+  it('uses an explicit Visual target when Selection is empty and keeps Selection authoritative when present', async () => {
+    const first = attachment(10);
+    const second = attachment(11);
+    const third = attachment(12);
+    const h = harness([first, second, third], 0);
+    const visual = {
+      source: 'visual' as const,
+      refs: [
+        { libraryID: 1, itemID: second.id },
+        { libraryID: 1, itemID: third.id },
+      ],
+    };
+
+    await h.navigation.trashSelectedItems(h.window, h.session, visual);
+    expect(h.trashTx).toHaveBeenLastCalledWith([second.id, third.id]);
+
+    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    await h.navigation.trashSelectedItems(h.window, h.session, visual);
+    expect(h.trashTx).toHaveBeenLastCalledWith([first.id]);
   });
 
   it('blocks trash when explicit Selection contains hidden targets', async () => {

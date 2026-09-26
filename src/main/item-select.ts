@@ -6,10 +6,12 @@ import {
   mainItemCursorRow,
   mainItemRefAtRow,
   mainItemRowCount,
+  mainSelectedItemRefs,
   mainItemRowForRef,
   selectMainItemCursorAnchor,
   visibleMainSelectionCount,
 } from './host';
+import type { MainCurrentTarget } from './action-targets';
 import type { ItemRef } from './selection-store';
 import type { SelectionStore } from './selection-store';
 import { MainItemStateDecoration, type MainVisualRange } from './item-state-decoration';
@@ -20,7 +22,7 @@ import {
 } from './interaction-appearance';
 
 type ItemSelectDirection = 1 | -1 | 'first' | 'last';
-export type ItemSelectEnterResult = 'entered' | 'focus-items' | 'unavailable' | 'pass';
+export type ItemSelectEnterResult = 'entered' | 'unavailable' | 'pass';
 type ItemSelectStatus =
   | { readonly kind: 'message'; readonly text: string }
   | { readonly kind: 'selection'; readonly total: number; readonly visible: number }
@@ -78,8 +80,8 @@ export function visualStatusText(targetCount: number, selectionCount: number): s
  * Main Library selection feature.
  *
  * Persistent Selection belongs to MainWindowSession.SelectionStore. This owner
- * keeps transient Visual anchor/head state; Zotero TreeSelection remains one
- * native Cursor host anchor for current-item semantics only.
+ * keeps transient Visual anchor/head state. Zotero TreeSelection may carry a
+ * transient native multi-target; persistent Selection remains independent.
  */
 export class MainItemSelect {
   readonly #logger: Logger;
@@ -129,7 +131,11 @@ export class MainItemSelect {
     // MainItemSelect owns every Neo Cursor transition. Normalize the initial
     // native host anchor here before Main view lifecycle captures its identity.
     const cursorRow = mainItemCursorRow(window);
-    if (cursorRow !== undefined && currentMainItemCursorRef(window)) {
+    if (
+      cursorRow !== undefined &&
+      currentMainItemCursorRef(window) &&
+      mainSelectedItemRefs(window).length === 0
+    ) {
       selectMainItemCursorAnchor(window, cursorRow);
     }
   }
@@ -150,41 +156,73 @@ export class MainItemSelect {
     );
   }
 
-  entryRelevant(window: MainWindow): boolean {
-    return this.treeFocused(window, 'items') || this.treeFocused(window, 'collections');
-  }
-
   itemsFocused(window: MainWindow): boolean {
     return this.treeFocused(window, 'items');
   }
 
-  toggleCursor(window: MainWindow, selection: SelectionStore, shouldDebounce = false): boolean {
+  currentTarget(window: MainWindow): MainCurrentTarget | null {
+    const visual = this.#visual.get(window);
+    if (visual) {
+      const refs = this.visualRefs(window, visual);
+      return refs.length ? { refs, source: 'visual' } : null;
+    }
+    const native = mainSelectedItemRefs(window);
+    if (native.length > 1) return { refs: native, source: 'native-selection' };
+    const cursor = currentMainItemCursorRef(window);
+    if (cursor) return { refs: [cursor], source: 'cursor' };
+    if (native.length === 1) return { refs: native, source: 'cursor' };
+    return null;
+  }
+
+  hasCancelableTarget(window: MainWindow): boolean {
+    return this.#visual.has(window) || mainSelectedItemRefs(window).length > 1;
+  }
+
+  cancelCurrentTarget(window: MainWindow, selection: SelectionStore): boolean {
+    if (this.#visual.has(window)) {
+      this.cancel(window, selection);
+      return true;
+    }
+    if (mainSelectedItemRefs(window).length <= 1) return false;
+    const row = mainItemCursorRow(window);
+    if (row === undefined || !selectMainItemCursorAnchor(window, row)) return false;
+    this.#decoration.refresh(window);
+    return true;
+  }
+
+  toggleCurrentTarget(
+    window: MainWindow,
+    selection: SelectionStore,
+    shouldDebounce = false,
+  ): boolean {
     if (!this.itemsFocused(window)) return false;
     const cursor = currentMainItemCursorRef(window);
     const row = mainItemCursorRow(window);
     const rowCount = mainItemRowCount(window);
     if (!cursor || row === undefined || rowCount <= 0) return false;
 
+    const target = this.currentTarget(window);
+    if (!target?.refs.length) return false;
+    const before = selection.values();
+    const result = selection.toggleTarget(target.refs);
+    if (result === 'unchanged') return false;
+
     const next = Math.min(rowCount - 1, row + 1);
-    const selected = selection.toggle(cursor);
     if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
-      selection.toggle(cursor);
+      selection.clear();
+      for (const ref of before) selection.add(ref);
       return false;
     }
 
     const visible = visibleMainSelectionCount(window, selection.values());
     this.#decoration.refresh(window);
     this.#logger.debug(
-      `main selection cursor toggle item=${cursor.itemID} selected=${selected} total=${selection.size} visible=${visible}`,
+      `main selection target toggle source=${target.source} target=${target.refs.length} result=${result} total=${selection.size} visible=${visible}`,
     );
     return true;
   }
 
   enter(window: MainWindow, selection: SelectionStore): ItemSelectEnterResult {
-    if (this.treeFocused(window, 'collections')) {
-      this.show(window, { kind: 'message', text: 'VISUAL · focus items list' }, false);
-      return 'focus-items';
-    }
     if (!this.treeFocused(window, 'items')) return 'pass';
 
     const cursor = currentMainItemCursorRef(window);

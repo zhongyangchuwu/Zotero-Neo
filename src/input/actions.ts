@@ -99,6 +99,7 @@ const BASE_ACTION_IDS = [
   'mainEnterSelect',
   'mainToggleSelection',
   'mainClearSelection',
+  'mainCancelTarget',
   'mainSelectDown',
   'mainSelectUp',
   'mainSelectFirst',

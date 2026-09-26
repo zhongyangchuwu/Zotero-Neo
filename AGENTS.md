@@ -201,7 +201,7 @@ reuse the candidate surface to choose an `ActionId`. Tag sources may constrain/p
 `TagActions` owns tag candidate choice and persistent item-tag mutation; `MainViewActions` owns
 Main Quick/Advanced/tag View mutations while Zotero's native filter UIs remain authoritative.
 Cross-context item actions should resolve targets through `main/item-targets.ts`:
-Main uses EffectiveSelection, Reader uses the active Reader item, and Note uses
+Main uses EffectiveSelection (persistent Selection, otherwise CurrentTarget), Reader uses the active Reader item, and Note uses
 its active note context. Do not make Reader item actions borrow Main Selection.
 Main View actions and Reader-local PDF actions remain surface-specific.
 Cross-surface knowledge capture follows the same ownership rule: Reader owns the

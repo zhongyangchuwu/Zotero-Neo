@@ -135,7 +135,11 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
   } as unknown as Document;
   const window = {
     document,
-    ZoteroPane: { itemsView: view },
+    ZoteroPane: {
+      itemsView: view,
+      getSelectedItems: () =>
+        [...selected].flatMap((index) => (rows[index]?.ref ? [rows[index]!.ref] : [])),
+    },
     setTimeout: vi.fn(() => 1),
     clearTimeout: vi.fn(),
   } as unknown as MainWindow;
@@ -174,14 +178,14 @@ describe('Main item attach', () => {
     feature.removeWindow(host.window);
   });
 
-  it('collapses pre-existing native multi-selection to the focused Cursor row', () => {
+  it('preserves pre-existing native multi-selection for host interoperability', () => {
     const host = harness(2, [0, 2, 4]);
     const feature = new MainItemSelect(logger);
 
     feature.addWindow(host.window, new SelectionStore(), appearance);
 
-    expect(host.selection.select).toHaveBeenCalledOnce();
-    expect(host.selectedRows()).toEqual([2]);
+    expect(host.selection.select).not.toHaveBeenCalled();
+    expect(host.selectedRows()).toEqual([0, 2, 4]);
     feature.removeWindow(host.window);
   });
 
@@ -270,8 +274,69 @@ describe('Main Visual Selection', () => {
     const store = new SelectionStore();
     const feature = new MainItemSelect(logger);
 
-    expect(feature.toggleCursor(host.window, store)).toBe(false);
+    expect(feature.toggleCurrentTarget(host.window, store)).toBe(false);
     expect(store.empty).toBe(true);
+  });
+
+  it('reports Cursor, native multi, and Visual through one CurrentTarget contract', () => {
+    const nativeHost = harness(2, [0, 2, 4]);
+    const feature = new MainItemSelect(logger);
+    const store = new SelectionStore();
+
+    expect(feature.currentTarget(nativeHost.window)).toEqual({
+      source: 'native-selection',
+      refs: [
+        { libraryID: 1, itemID: 10 },
+        { libraryID: 1, itemID: 12 },
+        { libraryID: 1, itemID: 14 },
+      ],
+    });
+
+    nativeHost.selection.select(2);
+    expect(feature.currentTarget(nativeHost.window)).toEqual({
+      source: 'cursor',
+      refs: [{ libraryID: 1, itemID: 12 }],
+    });
+
+    expect(feature.enter(nativeHost.window, store)).toBe('entered');
+    feature.extend(nativeHost.window, 1, 1, store);
+    expect(feature.currentTarget(nativeHost.window)).toEqual({
+      source: 'visual',
+      refs: [
+        { libraryID: 1, itemID: 12 },
+        { libraryID: 1, itemID: 13 },
+      ],
+    });
+  });
+
+  it('promotes a native multi-selection into persistent Selection with s semantics', () => {
+    const host = harness(2, [0, 2, 4]);
+    const store = new SelectionStore();
+    const feature = new MainItemSelect(logger);
+
+    expect(feature.toggleCurrentTarget(host.window, store)).toBe(true);
+    expect(selectedIDs(store)).toEqual([10, 12, 14]);
+    expect(host.selectedRows()).toEqual([3]);
+    expect(host.focusedRow()).toBe(3);
+
+    host.selection.select(2);
+    host.selection.toggleSelect(0);
+    host.selection.toggleSelect(4);
+    expect(feature.toggleCurrentTarget(host.window, store)).toBe(true);
+    expect(selectedIDs(store)).toEqual([]);
+  });
+
+  it('Esc-style transient cancel collapses native multi without clearing persistent Selection', () => {
+    const host = harness(2, [0, 2, 4]);
+    const store = new SelectionStore();
+    store.add({ libraryID: 1, itemID: 11 });
+    const feature = new MainItemSelect(logger);
+
+    expect(feature.hasCancelableTarget(host.window)).toBe(true);
+    expect(feature.cancelCurrentTarget(host.window, store)).toBe(true);
+    expect(host.selectedRows()).toEqual([2]);
+    expect(selectedIDs(store)).toEqual([11]);
+    expect(feature.hasCancelableTarget(host.window)).toBe(false);
   });
 
   it('toggles Cursor items into the workset and advances without collapsing it', () => {
@@ -279,12 +344,12 @@ describe('Main Visual Selection', () => {
     const store = new SelectionStore();
     const feature = new MainItemSelect(logger);
 
-    expect(feature.toggleCursor(host.window, store)).toBe(true);
+    expect(feature.toggleCurrentTarget(host.window, store)).toBe(true);
     expect(selectedIDs(store)).toEqual([11]);
     expect(host.selectedRows()).toEqual([2]);
     expect(host.focusedRow()).toBe(2);
 
-    expect(feature.toggleCursor(host.window, store)).toBe(true);
+    expect(feature.toggleCurrentTarget(host.window, store)).toBe(true);
     expect(selectedIDs(store)).toEqual([11, 12]);
     expect(host.selectedRows()).toEqual([3]);
     expect(host.focusedRow()).toBe(3);

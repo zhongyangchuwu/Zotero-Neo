@@ -5,6 +5,7 @@ import { createCollectionCandidateProvider } from './picker/providers/collection
 import type { FuzzyPicker } from './picker';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
+import type { MainCurrentTarget } from './action-targets';
 import { resolveItemTargets, type ItemTargetContext } from './item-targets';
 
 export interface CollectionMembershipTargets {
@@ -29,8 +30,9 @@ export function resolveCollectionMembershipTargets(
   window: MainWindow,
   session: MainWindowSession,
   context: ItemTargetContext = 'main',
+  currentTarget?: MainCurrentTarget | null,
 ): CollectionMembershipTargets {
-  const resolved = resolveItemTargets(window, session, context);
+  const resolved = resolveItemTargets(window, session, context, currentTarget);
   if (resolved.missing)
     throw new Error(
       context === 'main' ? 'Selection contains unavailable items' : 'Context item is unavailable',
@@ -108,10 +110,11 @@ export class CollectionMembershipActions {
     session: MainWindowSession,
     present: boolean,
     context: ItemTargetContext = 'main',
+    currentTarget?: MainCurrentTarget | null,
   ): void {
     let initial: CollectionMembershipTargets;
     try {
-      initial = resolveCollectionMembershipTargets(window, session, context);
+      initial = resolveCollectionMembershipTargets(window, session, context, currentTarget);
     } catch (error) {
       this.#navigation.status(session, `✗ ${String((error as Error).message ?? error)}`);
       return;
@@ -122,7 +125,12 @@ export class CollectionMembershipActions {
       source: createCollectionCandidateProvider(initial.libraryID),
       confirm: async (candidate: PickerItem) => {
         try {
-          const current = resolveCollectionMembershipTargets(window, session, context);
+          const current = resolveCollectionMembershipTargets(
+            window,
+            session,
+            context,
+            currentTarget,
+          );
           if (current.libraryID !== initial.libraryID || current.signature !== initial.signature) {
             this.#navigation.status(session, '✗ Collection target changed; retry');
             return;

@@ -213,7 +213,7 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Enter>': 'mainActivate',
   'main-normal:<Return>': 'mainActivate',
   'main-normal:s': 'mainToggleSelection',
-  'main-normal:<Esc>': 'mainClearSelection',
+  'main-normal:<Esc>': 'mainCancelTarget',
   'main-normal:v': 'mainEnterSelect',
   'main-select:s': 'mainSelectFinish',
   'main-select:j': 'mainSelectDown',

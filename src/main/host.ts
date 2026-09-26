@@ -46,6 +46,7 @@ type MainPane = {
   readonly collectionsView?: TreeView;
   readonly itemsView?: TreeView & {
     readonly rowCount?: number;
+    readonly collectionTreeRows?: readonly TagScopeRow[];
     setFilter?(type: 'tags' | 'search', value: ReadonlySet<string> | string): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
@@ -402,16 +403,6 @@ export function moveMainScopeCursor(
   return true;
 }
 
-export function toggleMainScopeAtCursor(window: MainWindow, shouldDebounce = false): boolean {
-  const view = mainScopeView(window);
-  const focused = view?.selection?.focused;
-  if (focused === undefined || !view?.selection?.toggleSelect) return false;
-  const selected = mainScopeSelectedRows(window);
-  if (selected.length === 1 && selected[0] === focused) return false;
-  view.selection.toggleSelect(focused, shouldDebounce);
-  return true;
-}
-
 export function selectOnlyMainScopeCursor(window: MainWindow, shouldDebounce = false): boolean {
   const view = mainScopeView(window);
   const focused = view?.selection?.focused;
@@ -526,13 +517,31 @@ export function selectMainItemCursorAnchor(
   return true;
 }
 
+export function moveMainItemCursor(
+  window: MainWindow,
+  index: number,
+  shouldDebounce = false,
+): boolean {
+  const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
+  const rowCount = view?.rowCount ?? 0;
+  if (rowCount <= 0) return false;
+  const next = Math.max(0, Math.min(rowCount - 1, index));
+
+  if (mainSelectedItems(window).length > 1 && view?.tree?._onSelection) {
+    view.tree._onSelection(next, false, false, true, shouldDebounce);
+    view.ensureRowIsVisible?.(next);
+    return true;
+  }
+  return selectMainItemCursorAnchor(window, next, shouldDebounce);
+}
+
 export function restoreMainItemCursorAnchor(
   window: MainWindow,
   ref: ItemRef,
   shouldDebounce = false,
 ): boolean {
   const row = mainItemRowForRef(window, ref);
-  return row === undefined ? false : selectMainItemCursorAnchor(window, row, shouldDebounce);
+  return row === undefined ? false : moveMainItemCursor(window, row, shouldDebounce);
 }
 
 export function mainItem(id: number): Zotero.Item | undefined {
@@ -542,6 +551,17 @@ export function mainItem(id: number): Zotero.Item | undefined {
 
 export function mainSelectedItems(window: MainWindow): Zotero.Item[] {
   return mainPane(window)?.getSelectedItems?.() ?? [];
+}
+
+export function mainSelectedItemRefs(window: MainWindow): ItemRef[] {
+  const refs = new Map<string, ItemRef>();
+  for (const item of mainSelectedItems(window)) {
+    if (!Number.isInteger(item.id) || item.id <= 0) continue;
+    if (!Number.isInteger(item.libraryID) || item.libraryID <= 0) continue;
+    const ref = { libraryID: item.libraryID, itemID: item.id };
+    refs.set(`${ref.libraryID}:${ref.itemID}`, ref);
+  }
+  return [...refs.values()];
 }
 
 /**
@@ -587,9 +607,21 @@ export function activeContextNoteItem(window: MainWindow): Zotero.Item | undefin
 
 export function currentTagSelection(window: MainWindow): string[] {
   const pane = mainPane(window);
-  // The collection row carries the active filter; native selector state is only its fallback.
-  const selected =
-    pane?.getCollectionTreeRow?.()?.tags ?? pane?.tagSelector?.getTagSelection?.() ?? [];
+  // CollectionViewItemTree owns the active tag predicate on its current rows.
+  // Prefer those rows over presentation state or a stale singular tree-row helper.
+  const activeRows = pane?.itemsView?.collectionTreeRows;
+  if (activeRows?.length) {
+    return [
+      ...new Set(
+        activeRows.flatMap((row) => [...(row.tags ?? [])]).filter((tag) => typeof tag === 'string'),
+      ),
+    ];
+  }
+  const row = pane?.getCollectionTreeRow?.();
+  if (row?.tags) {
+    return [...new Set([...row.tags].filter((tag): tag is string => typeof tag === 'string'))];
+  }
+  const selected = pane?.tagSelector?.getTagSelection?.() ?? [];
   return [...new Set([...selected].filter((tag): tag is string => typeof tag === 'string'))];
 }
 

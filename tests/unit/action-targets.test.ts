@@ -16,7 +16,11 @@ function item(id: number, libraryID = 1): Zotero.Item {
   return { id, libraryID } as Zotero.Item;
 }
 
-function harness(visible: readonly Zotero.Item[], focused = 0) {
+function harness(
+  visible: readonly Zotero.Item[],
+  focused = 0,
+  nativeSelected: readonly number[] = [focused],
+) {
   const byID = new Map(visible.map((value) => [value.id, value]));
   const all = new Map(byID);
   vi.stubGlobal('Zotero', {
@@ -26,6 +30,8 @@ function harness(visible: readonly Zotero.Item[], focused = 0) {
   const rows = visible.map((ref) => ({ isObjectRow: true, ref }));
   const window = {
     ZoteroPane: {
+      getSelectedItems: () =>
+        nativeSelected.flatMap((index) => (visible[index] ? [visible[index]!] : [])),
       itemsView: {
         rowCount: rows.length,
         selection: { focused },
@@ -62,6 +68,54 @@ describe('Main action targets', () => {
       visible: 1,
       hidden: 0,
       missing: 0,
+    });
+  });
+
+  it('uses native multi-selection as CurrentTarget when persistent Selection is empty', () => {
+    const first = item(10);
+    const second = item(11);
+    const third = item(12);
+    const h = harness([first, second, third], 1, [0, 1, 2]);
+
+    expect(resolveMainEffectiveTargets(h.window, h.session)).toMatchObject({
+      source: 'native-selection',
+      refs: [
+        { libraryID: 1, itemID: 10 },
+        { libraryID: 1, itemID: 11 },
+        { libraryID: 1, itemID: 12 },
+      ],
+      items: [first, second, third],
+      total: 3,
+      visible: 3,
+      hidden: 0,
+      missing: 0,
+    });
+  });
+
+  it('accepts an explicit Visual CurrentTarget but keeps persistent Selection authoritative', () => {
+    const first = item(10);
+    const second = item(11);
+    const third = item(12);
+    const h = harness([first, second, third], 0);
+    const visual = {
+      source: 'visual' as const,
+      refs: [
+        { libraryID: 1, itemID: second.id },
+        { libraryID: 1, itemID: third.id },
+      ],
+    };
+
+    expect(resolveMainEffectiveTargets(h.window, h.session, visual)).toMatchObject({
+      source: 'visual',
+      items: [second, third],
+      total: 2,
+    });
+
+    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    expect(resolveMainEffectiveTargets(h.window, h.session, visual)).toMatchObject({
+      source: 'selection',
+      items: [first],
+      total: 1,
     });
   });
 

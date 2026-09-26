@@ -6,6 +6,7 @@ import {
   mainItemRefAtRow,
   mainItemRowForRef,
   mainItemViewSettled,
+  moveMainItemCursor,
   observeMainItemView,
   restoreMainItemCursorAnchor,
   selectMainItemCursorAnchor,
@@ -241,6 +242,42 @@ describe('Main item Cursor host adapter', () => {
     expect([...selected]).toEqual([4]);
     expect(focused).toBe(4);
     expect(ensureRowIsVisible).toHaveBeenCalledWith(4);
+  });
+
+  it('moves Cursor focus without collapsing an existing native multi-selection', () => {
+    const items = [10, 11, 12].map((id) => ({ id, libraryID: 1 }) as Zotero.Item);
+    let focused = 0;
+    const selected = new Set([0, 2]);
+    const moveFocused = vi.fn((index: number) => {
+      focused = index;
+    });
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected.clear();
+      selected.add(index);
+    });
+    const window = {
+      ZoteroPane: {
+        getSelectedItems: () => [...selected].map((index) => items[index]!),
+        itemsView: {
+          rowCount: items.length,
+          tree: { _onSelection: moveFocused },
+          selection: {
+            get focused() {
+              return focused;
+            },
+            select,
+          },
+          ensureRowIsVisible: vi.fn(),
+        },
+      },
+    } as unknown as MainWindow;
+
+    expect(moveMainItemCursor(window, 1, true)).toBe(true);
+    expect(moveFocused).toHaveBeenCalledWith(1, false, false, true, true);
+    expect(select).not.toHaveBeenCalled();
+    expect([...selected]).toEqual([0, 2]);
+    expect(focused).toBe(1);
   });
 
   it('clamps the Cursor anchor and fails closed when native select is unavailable', () => {

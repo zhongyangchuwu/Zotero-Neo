@@ -153,7 +153,7 @@ describe('0.1.0 default keymap freeze', () => {
     expect(DEFAULT_BINDINGS['main-select:s']).toBe('mainSelectFinish');
     expect(DEFAULT_BINDINGS['main-normal:<Space>ss']).toBe('manageSelection');
     expect(DEFAULT_BINDINGS['main-normal:<Space>sc']).toBe('mainClearSelection');
-    expect(DEFAULT_BINDINGS['main-normal:<Esc>']).toBe('mainClearSelection');
+    expect(DEFAULT_BINDINGS['main-normal:<Esc>']).toBe('mainCancelTarget');
     expect('main-normal:<Space>' in DEFAULT_BINDINGS).toBe(false);
     expect('main-select:<Space>' in DEFAULT_BINDINGS).toBe(false);
     expect(DEFAULT_BINDINGS['main-normal:<Space>ta']).toBe('addTag');
@@ -166,7 +166,7 @@ describe('0.1.0 default keymap freeze', () => {
     });
     expect(press('main-normal', 'escape')).toMatchObject({
       kind: 'execute',
-      action: 'mainClearSelection',
+      action: 'mainCancelTarget',
     });
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
 

@@ -13,11 +13,15 @@ import {
   mainScopeCursorRow,
   mainScopeSelectedRows,
   moveMainScopeCursor,
+  moveMainItemCursor,
   selectMainItemCursorAnchor,
   selectOnlyMainScopeCursor,
-  toggleMainScopeAtCursor,
 } from './host';
-import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
+import {
+  mainCursorItem,
+  resolveMainEffectiveTargets,
+  type MainCurrentTarget,
+} from './action-targets';
 import { resolveItemTargets, type ItemTargetContext } from './item-targets';
 
 type Selection = {
@@ -315,7 +319,7 @@ export class MainNavigation {
           : Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
 
     if (panel === 'items') {
-      if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
+      if (!moveMainItemCursor(window, next, shouldDebounce)) {
         this.#logger.debug('item Cursor host-anchor movement is unavailable');
       }
       return;
@@ -329,33 +333,6 @@ export class MainNavigation {
       return;
     }
     view.selection.select?.(next, shouldDebounce);
-  }
-
-  toggleScope(window: MainWindow, session: MainWindowSession, shouldDebounce = false): boolean {
-    if (this.panel(window, session) !== 'collections') return false;
-    const view = mainHost(window).ZoteroPane?.collectionsView;
-    const focused = mainScopeCursorRow(window);
-    if (focused === undefined || !view) return false;
-
-    const selected = mainScopeSelectedRows(window);
-    const pinnedSingle = selected.length === 1 && selected[0] === focused;
-    const changed = pinnedSingle ? false : toggleMainScopeAtCursor(window, shouldDebounce);
-
-    const last = Math.max(0, (view.rowCount ?? 1) - 1);
-    const next = Math.min(last, focused + 1);
-    if (next !== focused) moveMainScopeCursor(window, next, shouldDebounce);
-
-    const count = mainScopeSelectedRows(window).length;
-    this.status(
-      session,
-      pinnedSingle
-        ? `→ Scope pinned · ${count} selected`
-        : changed
-          ? `→ ScopeSet · ${count} selected`
-          : '✗ Unable to change ScopeSet',
-      1200,
-    );
-    return pinnedSingle || changed;
   }
 
   activate(
@@ -403,12 +380,16 @@ export class MainNavigation {
     }
     return restored;
   }
-  async trashSelectedItems(window: MainWindow, session: MainWindowSession): Promise<void> {
+  async trashSelectedItems(
+    window: MainWindow,
+    session: MainWindowSession,
+    currentTarget?: MainCurrentTarget | null,
+  ): Promise<void> {
     if (!this.itemPaneContainsFocus(window)) {
       this.status(session, '✗ Focus the items list first');
       return;
     }
-    const targets = resolveMainEffectiveTargets(window, session);
+    const targets = resolveMainEffectiveTargets(window, session, currentTarget);
     if (!targets.total || !targets.items.length) {
       this.status(session, '✗ No item target');
       return;
@@ -553,9 +534,10 @@ export class MainNavigation {
     window: MainWindow,
     session: MainWindowSession,
     context: ItemTargetContext = 'main',
+    currentTarget?: MainCurrentTarget | null,
   ): void {
     try {
-      const targets = resolveItemTargets(window, session, context);
+      const targets = resolveItemTargets(window, session, context, currentTarget);
       if (targets.missing > 0) {
         this.status(
           session,

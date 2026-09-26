@@ -70,6 +70,7 @@ const expectedMainActions: readonly ActionId[] = [
   'mainEnterSelect',
   'mainToggleSelection',
   'mainClearSelection',
+  'mainCancelTarget',
   'mainSelectDown',
   'mainSelectUp',
   'mainSelectFirst',
