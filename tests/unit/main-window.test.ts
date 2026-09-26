@@ -2222,7 +2222,7 @@ describe('Main CurrentTarget routing', () => {
     controller.shutdown();
   });
 
-  it('snapshots VisualTarget before an inherited batch action exits Visual mode', () => {
+  it('does not inherit Main Normal batch actions into Visual mode', () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     Reflect.set(globalThis, 'Zotero', { initialized: false });
     const host = pickerMainWindow();
@@ -2281,14 +2281,7 @@ describe('Main CurrentTarget routing', () => {
       press('d');
       press('d');
 
-      expect(trash).toHaveBeenCalledOnce();
-      expect(trash.mock.calls[0]?.[2]).toEqual({
-        source: 'visual',
-        refs: [
-          { libraryID: 1, itemID: 10 },
-          { libraryID: 1, itemID: 11 },
-        ],
-      });
+      expect(trash).not.toHaveBeenCalled();
     } finally {
       controller.shutdown();
       trash.mockRestore();

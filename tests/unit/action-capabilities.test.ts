@@ -160,7 +160,7 @@ describe('action capability ownership', () => {
     expect(READER_NORMAL_ACTIONS).toContain('openNeoSettings');
     expect(actionsForBindingMode('note-normal')).toContain('openNeoSettings');
     expect(MAIN_NORMAL_ACTIONS).toContain('openNeoSettings');
-    expect(MAIN_SELECT_ACTIONS).toContain('openNeoSettings');
+    expect(MAIN_SELECT_ACTIONS).not.toContain('openNeoSettings');
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
     expect(isReaderActionForMode('visual', 'openSelectionActions')).toBe(true);
