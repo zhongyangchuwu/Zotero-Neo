@@ -120,6 +120,31 @@ describe('ReaderSelectionActions', () => {
     expect(palette.isOpen).toBe(false);
   });
 
+  it('isolates the action context from later caller mutation', async () => {
+    const created = createWindow();
+    const run = vi.fn();
+    const mutable = { ...context };
+    const palette = new ReaderSelectionActions({
+      actions: () => [{ id: 'capture', label: 'Capture', run }],
+      themeRoot: () => () => {},
+      copyText: () => {},
+      showStatus: () => {},
+      debug: () => {},
+    });
+
+    expect(palette.open(created.pdfWindow, mutable)).toBe(true);
+    mutable.text = 'changed later';
+    mutable.pageLabel = '99';
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(run).toHaveBeenCalledOnce();
+    const snapshot = run.mock.calls[0]?.[0];
+    expect(snapshot).toEqual(context);
+    expect(Object.isFrozen(snapshot)).toBe(true);
+  });
+
   it('keeps returned text in a result view and lets y copy it', async () => {
     const created = createWindow();
     const copyText = vi.fn();
