@@ -11,6 +11,7 @@ import { InteractionAppearanceManager } from './interaction-appearance';
 import type { MainReturnBookmark } from './return-context';
 import { SettingsCenter } from './settings-center';
 import { MainFocusOwnership } from './focus-ownership';
+import { MainLocalFindRuntime } from './local-find-runtime';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -32,21 +33,7 @@ export class MainWindowSession {
   trashedItemIDs: number[] = [];
   returnBookmark: MainReturnBookmark | null = null;
   readonly picker = new PickerRuntime();
-  localFind: {
-    open: boolean;
-    query: string;
-    overlay: HTMLElement | null;
-    input: HTMLInputElement | null;
-    previousElement: Element | null;
-    themeCleanup: (() => void) | null;
-  } = {
-    open: false,
-    query: '',
-    overlay: null,
-    input: null,
-    previousElement: null,
-    themeCleanup: null,
-  };
+  readonly localFind = new MainLocalFindRuntime();
   selectionPanel: {
     open: boolean;
     refs: ItemRef[];
