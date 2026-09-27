@@ -112,4 +112,36 @@ describe('InputRuntime lifecycle', () => {
       runtime.advance('main-normal', { ...bindings, 'main-normal:gg': 'nextTab' }, 'g', true),
     ).toMatchObject({ kind: 'execute', action: 'nextTab' });
   });
+  it('expires a host-owned pending sequence and ignores stale replacement timers', () => {
+    const { timers, callbacks } = clock();
+    const runtime = new InputRuntime(timers);
+    const expired = vi.fn();
+    runtime.replace('m', '');
+    runtime.scheduleReset(1200, expired);
+    runtime.replace('dm', '4');
+    runtime.scheduleReset(1200, expired);
+    callbacks[0]();
+    expect(runtime.keyBuffer).toBe('dm');
+    expect(runtime.countBuffer).toBe('4');
+    expect(expired).not.toHaveBeenCalled();
+    callbacks[1]();
+    expect(runtime.keyBuffer).toBe('');
+    expect(runtime.countBuffer).toBe('');
+    expect(expired).toHaveBeenCalledOnce();
+    runtime.replace('`', '');
+    runtime.scheduleReset(1200, expired);
+    runtime.scheduleReset(1200, expired);
+    callbacks[2](); // Cancellation may not retract an already queued callback.
+    expect(runtime.keyBuffer).toBe('`');
+    expect(expired).toHaveBeenCalledOnce();
+    callbacks[3]();
+    expect(runtime.keyBuffer).toBe('');
+    expect(expired).toHaveBeenCalledTimes(2);
+
+    runtime.replace('m', '');
+    runtime.scheduleReset(1200, expired);
+    runtime.dispose();
+    callbacks[4]();
+    expect(expired).toHaveBeenCalledTimes(2);
+  });
 });
