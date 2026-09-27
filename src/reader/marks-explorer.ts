@@ -15,7 +15,6 @@ export interface MarksExplorerHost {
   readonly marks: ReaderMarks;
   readonly reader: ReaderRuntime;
   readonly themeRoot: (root: HTMLElement) => () => void;
-  readonly marksState: () => Record<string, Mark>;
   readonly onAnnotation: (key: string | null) => void;
   readonly onClose: (pdfWindow?: PdfWindow) => void;
 }
@@ -85,7 +84,7 @@ export class ReaderMarksExplorer {
       !['j', 'k', 'g', 'G', 'd', 'x'].includes(key)
     ) {
       this.close(pdfWindow);
-      void marks.jump(this.#marks(), this.#host.reader, pdfWindow, key, (annotation) =>
+      void marks.jump(this.#host.reader, pdfWindow, key, (annotation) =>
         this.#host.onAnnotation(annotation),
       );
       return;
@@ -97,14 +96,14 @@ export class ReaderMarksExplorer {
       const char = chars[this.#state.selected];
       this.close(pdfWindow);
       if (char)
-        void marks.jump(this.#marks(), this.#host.reader, pdfWindow, char, (annotation) =>
+        void marks.jump(this.#host.reader, pdfWindow, char, (annotation) =>
           this.#host.onAnnotation(annotation),
         );
       return;
     } else if (key === 'd') {
       const char = chars[this.#state.selected];
-      if (char) void marks.delete(this.#marks(), this.#host.reader, char);
-    } else if (key === 'x') void marks.clear(this.#marks(), this.#host.reader);
+      if (char) void marks.delete(this.#host.reader, char);
+    } else if (key === 'x') void marks.clear(this.#host.reader);
     else if (key === 'escape') {
       this.close(pdfWindow);
       return;
@@ -148,7 +147,7 @@ export class ReaderMarksExplorer {
     });
   }
 
-  #marks(): Record<string, Mark> {
-    return this.#host.marksState();
+  #marks(): Readonly<Record<string, Mark>> {
+    return this.#host.marks.values();
   }
 }

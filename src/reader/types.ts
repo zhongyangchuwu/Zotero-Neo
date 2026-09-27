@@ -229,7 +229,6 @@ export interface ReaderSessionState {
   selectionParams: AnnotationSelectionParams | null;
   indicator: HTMLElement | null;
   indicatorThemeCleanup: (() => void) | null;
-  marks: Record<string, Mark>;
   filterColor: AnnotationColor | null;
   lastAnnotationKey: string | null;
 }

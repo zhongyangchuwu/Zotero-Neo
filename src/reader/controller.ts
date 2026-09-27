@@ -58,6 +58,7 @@ import {
   type AnnotationRuntime,
   type AnnotationSelectionParams,
   type ItemRuntime,
+  type Mark,
   type PdfWindow,
   type ReaderEventRuntime,
   type ReaderMode,
@@ -429,7 +430,6 @@ export class ReaderSession {
       selectionParams: null,
       indicator: null,
       indicatorThemeCleanup: null,
-      marks: {},
       filterColor: null,
       lastAnnotationKey: null,
     };
@@ -513,7 +513,6 @@ export class ReaderSession {
       marks: this.#marks,
       reader: dependencies.reader,
       themeRoot: (root) => this.#sidebar.themeRoot(root),
-      marksState: () => this.state.marks,
       onAnnotation: (key) => {
         this.state.lastAnnotationKey = key;
       },
@@ -586,6 +585,10 @@ export class ReaderSession {
     return this.#dependencies.reader.itemID;
   }
 
+  get marks(): Readonly<Record<string, Mark>> {
+    return this.#marks.values();
+  }
+
   start(): void {
     this.#dependencies.controller.dependencies.logger.debug(
       `injecting reader ${this.#dependencies.reader._instanceID ?? '?'}`,
@@ -597,7 +600,7 @@ export class ReaderSession {
       this.state.indicatorThemeCleanup = this.themeRoot(this.state.indicator);
     this.#viewLifecycle.start();
     this.installOuterReaderListeners();
-    this.#marks.load(this.state.marks, this.#dependencies.reader);
+    this.#marks.load(this.#dependencies.reader);
   }
 
   dispose(): void {
@@ -903,27 +906,15 @@ export class ReaderSession {
     }
     if (this.input.keyBuffer === 'm' && /^[a-z0-9]$/.test(key)) {
       this.input.replace('', this.input.countBuffer);
-      void this.#marks.set(
-        this.state.marks,
-        this.#dependencies.reader,
-        pdfWindow,
-        key,
-        this.state.lastAnnotationKey,
-      );
+      void this.#marks.set(this.#dependencies.reader, pdfWindow, key, this.state.lastAnnotationKey);
       consume();
       return true;
     }
     if (this.input.keyBuffer === '`' && /^[a-z0-9]$/.test(key)) {
       this.input.replace('', this.input.countBuffer);
-      void this.#marks.jump(
-        this.state.marks,
-        this.#dependencies.reader,
-        pdfWindow,
-        key,
-        (annotation) => {
-          this.state.lastAnnotationKey = annotation;
-        },
-      );
+      void this.#marks.jump(this.#dependencies.reader, pdfWindow, key, (annotation) => {
+        this.state.lastAnnotationKey = annotation;
+      });
       consume();
       return true;
     }
@@ -936,13 +927,13 @@ export class ReaderSession {
     }
     if (this.input.keyBuffer === 'd' && key === 'M') {
       this.input.replace('', this.input.countBuffer);
-      void this.#marks.clear(this.state.marks, this.#dependencies.reader);
+      void this.#marks.clear(this.#dependencies.reader);
       consume();
       return true;
     }
     if (this.input.keyBuffer === 'dm' && /^[a-z0-9]$/.test(key)) {
       this.input.replace('', this.input.countBuffer);
-      void this.#marks.delete(this.state.marks, this.#dependencies.reader, key);
+      void this.#marks.delete(this.#dependencies.reader, key);
       consume();
       return true;
     }
