@@ -229,8 +229,6 @@ export interface ReaderSessionState {
   selectionParams: AnnotationSelectionParams | null;
   indicator: HTMLElement | null;
   indicatorThemeCleanup: (() => void) | null;
-  filterColor: AnnotationColor | null;
-  lastAnnotationKey: string | null;
 }
 
 export interface AnnotationSelectionParams {

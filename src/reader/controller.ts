@@ -37,6 +37,7 @@ import {
 import { ACTION_LABELS, focusDirectionForAction, type ActionId } from '../input/actions';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
+import { ReaderAnnotationNavigationState } from './annotation-navigation-state';
 import { ReaderMarks } from './marks';
 import { ReaderOutline, type OutlineHost } from './outline';
 import { ReaderSidebarOverlay } from './sidebar-overlay';
@@ -406,6 +407,7 @@ export class ReaderSession {
   readonly #hostKeyBridge: ReaderHostKeyBridge;
   readonly #viewLifecycle: ReaderViewLifecycle;
   readonly #navigation: ReaderNavigation;
+  readonly #annotationNavigation = new ReaderAnnotationNavigationState();
   readonly #marks: ReaderMarks;
   readonly #marksExplorer: ReaderMarksExplorer;
   readonly #sidebar: ReaderSidebarOverlay;
@@ -430,8 +432,6 @@ export class ReaderSession {
       selectionParams: null,
       indicator: null,
       indicatorThemeCleanup: null,
-      filterColor: null,
-      lastAnnotationKey: null,
     };
     this.#flash = new ReaderFlash({
       activate: (intent, pdfWindow, target) =>
@@ -513,9 +513,7 @@ export class ReaderSession {
       marks: this.#marks,
       reader: dependencies.reader,
       themeRoot: (root) => this.#sidebar.themeRoot(root),
-      onAnnotation: (key) => {
-        this.state.lastAnnotationKey = key;
-      },
+      onAnnotation: (key) => this.#annotationNavigation.rememberAnnotation(key),
       onClose: (pdfWindow) => {
         this.clearSidebarToggleInput();
         this.#sidebar.closed('marks', pdfWindow);
@@ -906,15 +904,20 @@ export class ReaderSession {
     }
     if (this.input.keyBuffer === 'm' && /^[a-z0-9]$/.test(key)) {
       this.input.replace('', this.input.countBuffer);
-      void this.#marks.set(this.#dependencies.reader, pdfWindow, key, this.state.lastAnnotationKey);
+      void this.#marks.set(
+        this.#dependencies.reader,
+        pdfWindow,
+        key,
+        this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader),
+      );
       consume();
       return true;
     }
     if (this.input.keyBuffer === '`' && /^[a-z0-9]$/.test(key)) {
       this.input.replace('', this.input.countBuffer);
-      void this.#marks.jump(this.#dependencies.reader, pdfWindow, key, (annotation) => {
-        this.state.lastAnnotationKey = annotation;
-      });
+      void this.#marks.jump(this.#dependencies.reader, pdfWindow, key, (annotation) =>
+        this.#annotationNavigation.rememberAnnotation(annotation),
+      );
       consume();
       return true;
     }
@@ -1148,7 +1151,7 @@ export class ReaderSession {
         void this.recolorAnnotation(COLORS.green);
         break;
       case 'recolorBlue':
-        this.state.lastAnnotationKey
+        this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader)
           ? void this.recolorAnnotation(COLORS.blue)
           : this.scrollToPagePosition(pdfWindow, 'bottom');
         break;
@@ -1447,7 +1450,7 @@ export class ReaderSession {
   }
 
   private clearAnnotation(): void {
-    this.state.lastAnnotationKey = null;
+    this.#annotationNavigation.clearAnnotation();
   }
 
   private scrollToPagePosition(pdfWindow: PdfWindow, position: 'top' | 'center' | 'bottom'): void {
@@ -1645,7 +1648,7 @@ export class ReaderSession {
         item.annotationPosition =
           typeof position === 'string' ? position : JSON.stringify(position);
       await item.saveTx();
-      this.state.lastAnnotationKey = item.key;
+      this.#annotationNavigation.rememberAnnotation(item.key);
       this.showStatus('✓ annotated', 1200);
       if (focusComment) await this.enterAnnotationInsert();
     } catch (error) {
@@ -1767,10 +1770,9 @@ export class ReaderSession {
         .filter((annotation) =>
           ['highlight', 'underline', 'note', 'text'].includes(annotation.annotationType ?? ''),
         ) ?? [];
-    if (this.state.filterColor)
-      annotations = annotations.filter(
-        (annotation) => annotation.annotationColor === this.state.filterColor,
-      );
+    const filterColor = this.#annotationNavigation.filterColor();
+    if (filterColor)
+      annotations = annotations.filter((annotation) => annotation.annotationColor === filterColor);
     annotations = [...annotations].sort((left, right) =>
       (left.annotationSortIndex ?? '').localeCompare(right.annotationSortIndex ?? ''),
     );
@@ -1778,8 +1780,9 @@ export class ReaderSession {
       this.showStatus('✗ no annotations', 2000);
       return;
     }
-    const current = this.state.lastAnnotationKey
-      ? annotations.findIndex((annotation) => annotation.key === this.state.lastAnnotationKey)
+    const selectedKey = this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader);
+    const current = selectedKey
+      ? annotations.findIndex((annotation) => annotation.key === selectedKey)
       : -1;
     const index =
       current < 0
@@ -1789,7 +1792,7 @@ export class ReaderSession {
         : (current + direction + annotations.length) % annotations.length;
     const target = annotations[index];
     if (!target) return;
-    this.state.lastAnnotationKey = target.key;
+    this.#annotationNavigation.rememberAnnotation(target.key);
     this.navigateToAnnotation(target);
     this.showStatus(`→ ann ${index + 1}/${annotations.length}`, 1500);
   }
@@ -1812,7 +1815,7 @@ export class ReaderSession {
       return;
     }
     this.#dependencies.reader._internalReader?.setSelectedAnnotations?.([]);
-    this.state.lastAnnotationKey = null;
+    this.#annotationNavigation.clearAnnotation();
     await target.eraseTx();
     this.showStatus('✓ annotation deleted', 1500);
   }
@@ -1833,7 +1836,7 @@ export class ReaderSession {
     const readerWindow = this.#dependencies.reader._iframeWindow;
     if (internal?.setFilter && readerWindow)
       internal.setFilter(cloneInto({ colors: color ? [color] : [] }, readerWindow));
-    this.state.filterColor = color;
+    this.#annotationNavigation.setFilterColor(color);
     this.showStatus(color ? '✓ filter set' : '✓ filter cleared', 1200);
   }
 
@@ -1857,10 +1860,7 @@ export class ReaderSession {
   }
 
   private selectedAnnotation(): AnnotationRuntime | null {
-    const key =
-      this.state.lastAnnotationKey ??
-      this.#dependencies.reader._internalReader?._state?.selectedAnnotationIDs?.[0] ??
-      null;
+    const key = this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader);
     if (!key) return null;
     return (
       this.itemForReader(this.#dependencies.reader)
@@ -1870,16 +1870,13 @@ export class ReaderSession {
   }
 
   private async enterAnnotationInsert(): Promise<void> {
-    const key =
-      this.state.lastAnnotationKey ??
-      this.#dependencies.reader._internalReader?._state?.selectedAnnotationIDs?.[0] ??
-      null;
+    const key = this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader);
     if (!key) {
       this.showStatus('✗ navigate first with [ / ]', 2000);
       return;
     }
     this.setMode('insert');
-    this.state.lastAnnotationKey = key;
+    this.#annotationNavigation.rememberAnnotation(key);
     await this.#commentEditor.open(key);
   }
 
