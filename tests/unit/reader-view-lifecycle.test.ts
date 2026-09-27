@@ -78,11 +78,6 @@ describe('ReaderViewLifecycle', () => {
     const secondaryView = { _iframeWindow: secondary.pdfWindow } as ReaderViewRuntime;
     const internal = { _primaryView: primaryView } as NonNullable<ReaderRuntime['_internalReader']>;
     const reader = { _internalReader: internal } as ReaderRuntime;
-    let active = primary.pdfWindow;
-
-    const setActivePdfWindow = vi.fn((pdfWindow: PdfWindow) => {
-      active = pdfWindow;
-    });
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
     const onBlur = vi.fn();
@@ -95,8 +90,6 @@ describe('ReaderViewLifecycle', () => {
     const lifecycle = new ReaderViewLifecycle({
       reader,
       timerWindow: primary.pdfWindow,
-      activePdfWindow: () => active,
-      setActivePdfWindow,
       onKeyDown,
       onKeyUp,
       onBlur,
@@ -120,6 +113,7 @@ describe('ReaderViewLifecycle', () => {
     expect(primary.documentAdds.map((entry) => entry.type)).toEqual(['selectionchange']);
     expect(primary.scrollAdds.map((entry) => entry.type)).toEqual(['scroll']);
     expect(syncHostBridge).toHaveBeenCalledOnce();
+    expect(lifecycle.activePdfWindow()).toBe(primary.pdfWindow);
 
     const keydown = { key: 'j' } as unknown as KeyboardEvent;
     const keyup = { key: 'j' } as unknown as KeyboardEvent;
@@ -152,7 +146,7 @@ describe('ReaderViewLifecycle', () => {
     Reflect.set(internal, '_primaryView', undefined);
     primary.intervalTasks[0]?.();
 
-    expect(setActivePdfWindow).toHaveBeenCalledWith(secondary.pdfWindow);
+    expect(lifecycle.activePdfWindow()).toBe(secondary.pdfWindow);
     expect(releaseView).toHaveBeenCalledWith(primary.pdfWindow);
     expect(primary.windowRemoves.map((entry) => entry.type)).toEqual([
       'keydown',

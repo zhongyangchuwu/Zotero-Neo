@@ -429,7 +429,6 @@ export class ReaderSession {
       selectionParams: null,
       indicator: null,
       indicatorThemeCleanup: null,
-      activePdfWindow: dependencies.firstPdfWindow,
       marks: {},
       filterColor: null,
       lastAnnotationKey: null,
@@ -538,10 +537,6 @@ export class ReaderSession {
     this.#viewLifecycle = new ReaderViewLifecycle({
       reader: dependencies.reader,
       timerWindow: dependencies.firstPdfWindow,
-      activePdfWindow: () => this.state.activePdfWindow,
-      setActivePdfWindow: (pdfWindow) => {
-        this.state.activePdfWindow = pdfWindow;
-      },
       onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
       onKeyUp: (event) => this.handleKeyUp(event),
       onBlur: (pdfWindow) => {
@@ -570,10 +565,8 @@ export class ReaderSession {
     });
     this.#navigation = new ReaderNavigation({
       reader: dependencies.reader,
-      activePdfWindow: () => this.state.activePdfWindow,
-      setActivePdfWindow: (pdfWindow) => {
-        this.state.activePdfWindow = pdfWindow;
-      },
+      activePdfWindow: () => this.#viewLifecycle.activePdfWindow(),
+      setActivePdfWindow: (pdfWindow) => this.#viewLifecycle.setActivePdfWindow(pdfWindow),
       syncViews: () => this.#viewLifecycle.sync(),
       scrollBoundary: (last, pdfWindow) => {
         this.scrollTo(
