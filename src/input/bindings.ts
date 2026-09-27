@@ -58,7 +58,6 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:h': 'prevPage',
   'reader-normal:l': 'nextPage',
   'reader-normal:gg': 'firstPage',
-  'reader-normal:gr': 'mainReturnContext',
   'reader-normal:G': 'lastPage',
   'reader-normal:<C-d>': 'halfPageDown',
   'reader-normal:<C-u>': 'halfPageUp',
@@ -221,7 +220,6 @@ export const DEFAULT_BINDINGS = {
   'main-normal:M': 'mainTreeCollapseAll',
   'main-normal:<BS>': 'mainTreeParent',
   'main-normal:gg': 'mainNavFirst',
-  'main-normal:gr': 'mainReturnContext',
   'main-normal:G': 'mainNavLast',
   'main-normal:H': 'previousTab',
   'main-normal:L': 'nextTab',
@@ -411,6 +409,8 @@ export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
 }
 
 const RETIRED_DEFAULT_BINDINGS = {
+  'reader-normal:gr': 'mainReturnContext',
+  'main-normal:gr': 'mainReturnContext',
   'reader-normal:s': 'flashText',
   'reader-normal:yy': 'yankAnnotationComment',
   'reader-select:yy': 'yankParagraph',

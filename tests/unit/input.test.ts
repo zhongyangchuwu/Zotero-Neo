@@ -327,6 +327,8 @@ describe('binding parsing and overrides', () => {
   it('migrates legacy tables to deterministic compact overrides without inferred tombstones', () => {
     const legacyRows: Record<string, unknown> = {
       'reader-normal:j': 'scrollDown',
+      'reader-normal:gr': 'mainReturnContext',
+      'main-normal:gr': 'mainReturnContext',
       'reader-normal:zh': 'scrollLeft',
       'main-normal:enter': 'mainActivate',
       'reader-normal:H': 'scrollLeft',
@@ -372,6 +374,19 @@ describe('binding parsing and overrides', () => {
     expect(resolved['main-normal:J']).toBeUndefined();
     expect(resolved['main-normal:legacy-search']).toBeUndefined();
     expect(resolved['main-normal:old-advanced']).toBeUndefined();
+  });
+  it('retires historical gr defaults but preserves deliberate legacy remaps', () => {
+    expect(
+      migrateLegacyBindingOverrides(
+        JSON.stringify({
+          'reader-normal:gr': 'mainReturnContext',
+          'main-normal:gr': 'nextTab',
+        }),
+      ),
+    ).toBe('{"main-normal:gr":"nextTab"}');
+    const resolved = resolveBindings('{"main-normal:gr":"nextTab"}');
+    expect(resolved['reader-normal:gr']).toBeUndefined();
+    expect(resolved['main-normal:gr']).toBe('nextTab');
   });
 });
 

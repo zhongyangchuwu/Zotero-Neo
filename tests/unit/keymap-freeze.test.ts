@@ -124,42 +124,41 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
-  it('shares gr return-context navigation with Reader', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:gr']).toBe('mainReturnContext');
-    const bindings = resolveBindings('');
-    const pending = press('reader-normal', 'g', bindings);
-    expect(pending).toMatchObject({ kind: 'pending' });
-    const next = advanceInput(
-      {
-        ...pending.state,
-        bindings,
-        allowCountPrefix: true,
-      },
-      'r',
-    );
-    expect(next).toMatchObject({
-      kind: 'execute',
-      action: 'mainReturnContext',
-    });
+  it('reserves g for goto instead of defaulting to the saved return workflow', () => {
+    const defaults = resolveBindings('');
+    for (const [mode, destination] of [
+      ['reader-normal', 'firstPage'],
+      ['main-normal', 'mainNavFirst'],
+      ['note-normal', 'noteMoveDocumentStart'],
+    ] as const) {
+      expect(defaults[`${mode}:gr`]).toBeUndefined();
+      const pending = press(mode, 'g', defaults);
+      expect(pending).toMatchObject({ kind: 'pending', timeoutAction: null });
+      expect(
+        advanceInput({ ...pending.state, bindings: defaults, allowCountPrefix: true }, 'g'),
+      ).toMatchObject({ kind: 'execute', action: destination });
+      expect(
+        advanceInput({ ...pending.state, bindings: defaults, allowCountPrefix: true }, 'r'),
+      ).toMatchObject({ kind: 'pass' });
+    }
+    expect(press('main-select', 'g', defaults)).toMatchObject({ kind: 'pending' });
+    expect(DEFAULT_BINDINGS['main-select:gg']).toBe('mainSelectFirst');
   });
 
-  it('keeps Main return context under the g prefix', () => {
-    expect(DEFAULT_BINDINGS['main-normal:gr']).toBe('mainReturnContext');
-    const bindings = resolveBindings('');
-    const pending = press('main-normal', 'g', bindings);
-    expect(pending).toMatchObject({ kind: 'pending' });
-    const next = advanceInput(
-      {
-        ...pending.state,
-        bindings,
-        allowCountPrefix: true,
-      },
-      'r',
+  it('preserves explicit gr overrides without reinstating the old defaults', () => {
+    const bindings = resolveBindings(
+      JSON.stringify({
+        'reader-normal:gr': 'mainReturnContext',
+        'main-normal:gr': 'mainReturnContext',
+      }),
     );
-    expect(next).toMatchObject({
-      kind: 'execute',
-      action: 'mainReturnContext',
-    });
+    for (const mode of ['reader-normal', 'main-normal'] as const) {
+      const pending = press(mode, 'g', bindings);
+      expect(
+        advanceInput({ ...pending.state, bindings, allowCountPrefix: true }, 'r'),
+      ).toMatchObject({ kind: 'execute', action: 'mainReturnContext' });
+    }
+    expect(resolveBindings('{"reader-normal:gr":null}')['reader-normal:gr']).toBeUndefined();
   });
 
   it('reserves Vim-style Main local find keys without colliding with direct prefixes', () => {
