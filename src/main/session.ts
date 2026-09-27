@@ -1,6 +1,5 @@
 import { CleanupScope } from '../core/cleanup';
 import type { CompositionState } from '../input/composition';
-import type { Mode } from '../input/bindings';
 import { InputRuntime } from '../input/runtime';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
@@ -30,7 +29,6 @@ export class MainWindowSession {
   readonly focusOwnership: MainFocusOwnership;
   readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
-  inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
   readonly input: InputRuntime;
   readonly prefixGuide: PrefixGuideRuntime;
   trashedItemIDs: number[] = [];

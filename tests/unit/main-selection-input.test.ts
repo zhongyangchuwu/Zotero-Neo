@@ -231,6 +231,45 @@ describe('Main transient-target Escape grammar', () => {
     host.controller.shutdown();
   });
 
+  it('uses the exact Normal or Visual keymap after commit, cancel, and focus loss', () => {
+    const enter = vi.spyOn(MainItemSelect.prototype, 'enter');
+    const finish = vi.spyOn(MainItemSelect.prototype, 'finish');
+    const cancel = vi.spyOn(MainItemSelect.prototype, 'cancel');
+    const leave = vi.spyOn(MainItemSelect.prototype, 'leave');
+    const toggle = vi.spyOn(MainItemSelect.prototype, 'toggleCurrentTarget');
+    const host = harness();
+    try {
+      expect(host.press('v').preventDefault).toHaveBeenCalledOnce();
+      host.press('j');
+      expect(host.focused()).toBe(1);
+      host.press('s');
+      expect(finish).toHaveBeenCalledOnce();
+      expect(toggle).not.toHaveBeenCalled();
+
+      host.press('v');
+      host.press('Escape');
+      expect(cancel).toHaveBeenCalledOnce();
+      host.press('v');
+      host.focusCollections();
+      const focusLoss = host.press('j');
+      expect(leave).toHaveBeenCalledOnce();
+      expect(focusLoss.preventDefault).not.toHaveBeenCalled();
+      host.focusItems();
+      host.press('s');
+      expect(toggle).toHaveBeenCalledOnce();
+      expect(finish).toHaveBeenCalledOnce();
+      host.press('v');
+      expect(enter).toHaveBeenCalledTimes(4);
+    } finally {
+      host.controller.shutdown();
+      enter.mockRestore();
+      finish.mockRestore();
+      cancel.mockRestore();
+      leave.mockRestore();
+      toggle.mockRestore();
+    }
+  });
+
   it('keeps editable and Reader Escape routes ahead of Main transient-target cancel', () => {
     const editableHost = harness();
     editableHost.press('s');

@@ -448,4 +448,47 @@ describe('Main Visual Selection', () => {
     expect(host.selection.shiftSelect).not.toHaveBeenCalled();
     expect(host.selection.toggleSelect).not.toHaveBeenCalled();
   });
+  it('derives Visual mode from range activation through movement, commit, cancel, leave, and release', () => {
+    const host = harness(1);
+    const store = new SelectionStore();
+    store.add({ libraryID: 1, itemID: 10 });
+    const feature = new MainItemSelect(logger);
+    feature.addWindow(host.window, store, appearanceSource());
+    expect(feature.isVisual(host.window)).toBe(false);
+    expect(feature.enter(host.window, store)).toBe('entered');
+    expect(feature.isVisual(host.window)).toBe(true);
+    feature.extend(host.window, 1, 2, store);
+    feature.swapEnds(host.window, store);
+    expect(feature.isVisual(host.window)).toBe(true);
+    expect(feature.currentTarget(host.window)?.source).toBe('visual');
+    feature.finish(host.window, store);
+    expect(feature.isVisual(host.window)).toBe(false);
+    expect(selectedIDs(store)).toEqual([10, 11, 12, 13]);
+
+    expect(feature.enter(host.window, store)).toBe('entered');
+    feature.cancel(host.window, store);
+    expect(feature.isVisual(host.window)).toBe(false);
+    expect(selectedIDs(store)).toEqual([10, 11, 12, 13]);
+    expect(feature.enter(host.window, store)).toBe('entered');
+    feature.leave(host.window, store);
+    expect(feature.isVisual(host.window)).toBe(false);
+    expect(feature.enter(host.window, store)).toBe('entered');
+    feature.removeWindow(host.window);
+    expect(feature.isVisual(host.window)).toBe(false);
+  });
+
+  it('drops Visual mode when a range motion loses its native row', () => {
+    const host = harness(1);
+    const store = new SelectionStore();
+    store.add({ libraryID: 1, itemID: 10 });
+    const feature = new MainItemSelect(logger);
+    expect(feature.enter(host.window, store)).toBe('entered');
+    const view = host.window.ZoteroPane?.itemsView;
+    if (!view) throw new Error('Expected items view');
+    Reflect.set(view, 'rowCount', 0);
+    feature.extend(host.window, 1, 1, store);
+    expect(feature.isVisual(host.window)).toBe(false);
+    expect(feature.currentTarget(host.window)?.source).not.toBe('visual');
+    expect(selectedIDs(store)).toEqual([10]);
+  });
 });
