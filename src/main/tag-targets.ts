@@ -1,8 +1,8 @@
-import { normalizeTopLevelItemTargets } from './item-targets';
+import { normalizeTopLevelItemTargets } from '../platform/zotero-items';
 
 export type ItemTagState = 'all' | 'mixed' | 'none';
 
-/** @deprecated Use normalizeTopLevelItemTargets from item-targets. */
+/** @deprecated Use normalizeTopLevelItemTargets from platform/zotero-items. */
 export const normalizeItemTargets = normalizeTopLevelItemTargets;
 
 export function itemTagState(items: readonly Zotero.Item[], tag: string): ItemTagState {
