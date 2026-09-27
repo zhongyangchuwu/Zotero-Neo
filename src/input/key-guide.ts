@@ -1,6 +1,12 @@
-import { ACTION_LABELS, type ActionId } from './actions';
-import { type KeyGuideLanguage, KEY_GUIDE_CONFIG } from './key-guide-config';
-import { parseBindingKey, type BindingMap, type Mode } from './bindings';
+import { ACTION_LABELS } from './actions';
+import type { KeyGuideLanguage } from './key-guide-config';
+import {
+  bindingNodesFromActions,
+  parseBindingKey,
+  type Binding,
+  type BindingMap,
+  type Mode,
+} from './bindings';
 import {
   bindingMatchesInputPrefix,
   bindingSequenceTokens,
@@ -44,16 +50,10 @@ export function formatGuidePrefix(prefix: string): string {
   return (inputBufferTokens(prefix) ?? []).map(formatGuideKey).join(' › ');
 }
 
-function groupLabelKey(prefix: string, key: string): keyof typeof KEY_GUIDE_CONFIG.groupLabels {
-  const tokens = [...(inputBufferTokens(prefix) ?? []), key];
-  if (tokens[0] === ' ') tokens.shift();
-  return tokens.join('') as keyof typeof KEY_GUIDE_CONFIG.groupLabels;
-}
-
 /**
- * Projects immediately valid continuations from the same resolved binding map
- * used by the dispatcher. The projection deliberately creates no executable
- * bindings and works for both Space-leader and ordinary direct prefixes.
+ * Projects the immediate children of the pending prefix from the resolved
+ * mode-owned keymap. Legacy exact/prefix collisions still use the matcher's
+ * timeout; the guide displays their namespace rather than an action leaf.
  */
 export function guideEntries(
   bindings: BindingMap,
@@ -66,38 +66,29 @@ export function guideEntries(
   const prefixLength = inputTokenCount(prefix);
   if (!prefixLength) return [];
 
-  const candidates = new Map<string, { action: ActionId | null; hasChildren: boolean }>();
-  for (const [bindingKey, action] of Object.entries(bindings)) {
+  const candidates = new Map<string, Binding>();
+  const nodes = bindingNodesFromActions(bindings, 'prefer-prefix');
+  for (const [bindingKey, node] of Object.entries(nodes)) {
     const binding = parseBindingKey(bindingKey);
     if (!binding || binding.mode !== mode || !bindingMatchesInputPrefix(binding.sequence, prefix))
       continue;
 
     const tokens = bindingSequenceTokens(binding.sequence);
+    if (tokens?.length !== prefixLength + 1) continue;
     const nextKey = nextBindingToken(binding.sequence, prefix);
-    if (!tokens || !nextKey) continue;
-
-    const current = candidates.get(nextKey) ?? { action: null, hasChildren: false };
-    if (tokens.length === prefixLength + 1) current.action = action;
-    else current.hasChildren = true;
-    candidates.set(nextKey, current);
+    if (!nextKey) continue;
+    if (node.kind === 'prefix' || candidates.get(nextKey)?.kind !== 'prefix') {
+      candidates.set(nextKey, node);
+    }
   }
 
   return [...candidates.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, candidate]) => {
-      const group = candidate.hasChildren;
-      const groupLabel = KEY_GUIDE_CONFIG.groupLabels[groupLabelKey(prefix, key)];
-      const actionLabel = candidate.action ? ACTION_LABELS[candidate.action] : null;
-      return {
-        key,
-        label: group
-          ? (groupLabel ?? KEY_GUIDE_CONFIG.genericGroupLabel)[language]
-          : actionLabel
-            ? actionLabel[language]
-            : KEY_GUIDE_CONFIG.genericGroupLabel[language],
-        isGroup: group,
-      };
-    });
+    .map(([key, node]) => ({
+      key,
+      label: node.kind === 'prefix' ? node.label[language] : ACTION_LABELS[node.action][language],
+      isGroup: node.kind === 'prefix',
+    }));
 }
 
 /** Space-leader convenience wrapper over the generic pending-prefix guide. */
