@@ -6,7 +6,8 @@ import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { PickerRuntime } from './picker/runtime';
 import type { InstalledPlugin } from './plugin-host';
-import { SelectionStore, type ItemRef } from './selection-store';
+import { SelectionStore } from './selection-store';
+import { SelectionPanelRuntime } from './selection-panel-runtime';
 import { InteractionAppearanceManager } from './interaction-appearance';
 import type { MainReturnBookmark } from './return-context';
 import { SettingsCenter } from './settings-center';
@@ -34,33 +35,7 @@ export class MainWindowSession {
   returnBookmark: MainReturnBookmark | null = null;
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
-  selectionPanel: {
-    open: boolean;
-    refs: ItemRef[];
-    selected: number;
-    commandBuffer: string;
-    commandTimer: BrowserTimer | undefined;
-    overlay: HTMLElement | null;
-    list: HTMLElement | null;
-    details: HTMLElement | null;
-    count: HTMLElement | null;
-    footer: HTMLElement | null;
-    previousElement: Element | null;
-    themeCleanup: (() => void) | null;
-  } = {
-    open: false,
-    refs: [],
-    selected: 0,
-    commandBuffer: '',
-    commandTimer: undefined,
-    overlay: null,
-    list: null,
-    details: null,
-    count: null,
-    footer: null,
-    previousElement: null,
-    themeCleanup: null,
-  };
+  readonly selectionPanel = new SelectionPanelRuntime();
   pluginManager: {
     open: boolean;
     generation: number;
