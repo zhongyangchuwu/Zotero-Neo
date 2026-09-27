@@ -409,7 +409,7 @@ export class MainNavigation {
     const ids = targets.items.map((item) => item.id);
     try {
       await this.trashItems(ids);
-      session.trashedItemIDs = ids;
+      session.trashHistory.record(ids);
       if (targets.source === 'selection') {
         for (const ref of targets.refs) session.selection.remove(ref);
       }
@@ -422,13 +422,14 @@ export class MainNavigation {
 
   async restoreLastTrashedItems(session: MainWindowSession): Promise<void> {
     try {
-      const restored = await this.restoreTrashedItems(session.trashedItemIDs);
+      const itemIDs = session.trashHistory.values();
+      const restored = await this.restoreTrashedItems(itemIDs);
       if (!restored) {
         this.status(session, '✗ Nothing to restore');
         return;
       }
-      const count = session.trashedItemIDs.length;
-      session.trashedItemIDs = [];
+      const count = itemIDs.length;
+      session.trashHistory.clear();
       this.status(session, `✓ Restored ${count} item${count === 1 ? '' : 's'}`);
     } catch (error) {
       this.#logger.debug(`restore trashed items failed: ${String(error)}`);

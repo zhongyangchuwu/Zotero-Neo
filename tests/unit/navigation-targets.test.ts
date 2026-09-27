@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { MainNavigation } from '../../src/main/navigation';
 import { SelectionStore } from '../../src/main/selection-store';
+import { TrashHistory } from '../../src/main/trash-history';
 import type { MainWindowSession } from '../../src/main/session';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -86,7 +87,7 @@ function harness(
     selection: new SelectionStore(),
     status: { textContent: '', style: {} },
     cleanup: { add: vi.fn() },
-    trashedItemIDs: [],
+    trashHistory: new TrashHistory(),
   } as unknown as MainWindowSession;
   const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => undefined);
 
@@ -163,7 +164,7 @@ describe('Main action target contracts', () => {
     await h.navigation.trashSelectedItems(h.window, h.session);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id, third.id]);
-    expect(h.session.trashedItemIDs).toEqual([first.id, second.id, third.id]);
+    expect(h.session.trashHistory.values()).toEqual([first.id, second.id, third.id]);
   });
 
   it('uses an explicit Visual target when Selection is empty and keeps Selection authoritative when present', async () => {
@@ -213,7 +214,7 @@ describe('Main action target contracts', () => {
     await h.navigation.trashSelectedItems(h.window, h.session);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id]);
-    expect(h.session.trashedItemIDs).toEqual([first.id, second.id]);
+    expect(h.session.trashHistory.values()).toEqual([first.id, second.id]);
     expect(h.session.selection.empty).toBe(true);
   });
 

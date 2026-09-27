@@ -11,6 +11,7 @@ import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 import { InputRuntime } from '../../src/input/runtime';
+import { TrashHistory } from '../../src/main/trash-history';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { MainItemSelect } from '../../src/main/item-select';
@@ -539,7 +540,7 @@ describe('main item trash and restore', () => {
       window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
       activePanel: 'items',
       selection,
-      trashedItemIDs: [],
+      trashHistory: new TrashHistory(),
       status: { textContent: '', style: {} },
       cleanup: { add: () => {} },
     } as unknown as MainWindowSession;
@@ -552,12 +553,12 @@ describe('main item trash and restore', () => {
 
       await navigation.trashSelectedItems(window, session);
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
-      expect(session.trashedItemIDs).toEqual([41, 42]);
+      expect(session.trashHistory.values()).toEqual([41, 42]);
       expect(session.selection.empty).toBe(true);
       await navigation.restoreLastTrashedItems(session);
 
       expect(undo).toHaveBeenCalledOnce();
-      expect(session.trashedItemIDs).toEqual([]);
+      expect(session.trashHistory.values()).toEqual([]);
       Reflect.set(window.document, 'activeElement', { id: 'zotero-item-pane' });
       await navigation.trashSelectedItems(window, session);
       expect(trashTx).toHaveBeenCalledTimes(1);
