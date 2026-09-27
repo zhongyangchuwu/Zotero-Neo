@@ -71,10 +71,14 @@ function harness() {
     main,
     note,
     editor,
+    editorWindow,
     addWindowListener,
     removeWindowListener,
     addDocumentListener,
     removeDocumentListener,
+    setFocusedWindow: (window: Window | null) => {
+      Reflect.set(globalThis, 'Services', { focus: { focusedWindow: window } });
+    },
     setItemID: (next: number) => {
       itemID = next;
     },
@@ -120,5 +124,45 @@ describe('Note surface runtime identity', () => {
     expect(h.removeDocumentListener).toHaveBeenCalledOnce();
     expect(h.addWindowListener).toHaveBeenCalledTimes(2);
     expect(h.addDocumentListener).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves a focused context-pane Note ahead of standalone tab metadata', () => {
+    const h = harness();
+    const active = {} as Element;
+    Reflect.set(h.main.document, 'activeElement', active);
+    Reflect.set(h.main, 'ZoteroContextPane', {
+      activeEditor: {
+        item: { id: 7 },
+        contains: (node: unknown) => node === active,
+        _iframe: { contentWindow: h.editorWindow },
+      },
+    });
+    h.setFocusedWindow(null);
+
+    h.sync();
+
+    expect(h.note.itemID).toBe(7);
+    expect(h.note.editorWindow).toBe(h.editorWindow);
+  });
+
+  it('clears a closed Note editor and reopens it with fresh interaction state', () => {
+    const h = harness();
+    h.sync();
+    h.note.mode = 'insert';
+    h.note.yank = 'closed note';
+
+    h.setFocusedWindow(null);
+    h.sync();
+    expect(h.note.editorWindow).toBeNull();
+    expect(h.note.itemID).toBeNull();
+    expect(h.note.mode).toBe('normal');
+    expect(h.note.yank).toBe('');
+
+    h.setFocusedWindow(h.editorWindow);
+    h.sync();
+    expect(h.note.editorWindow).toBe(h.editorWindow);
+    expect(h.note.itemID).toBe(1);
+    expect(h.note.mode).toBe('normal');
+    expect(h.addWindowListener).toHaveBeenCalledTimes(2);
   });
 });
