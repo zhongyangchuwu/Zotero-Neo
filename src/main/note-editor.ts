@@ -5,12 +5,6 @@ import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
 import { NOTE_COMMAND_BY_ACTION, isNoteActionId } from '../input/note-actions';
 import { bindingsForMode, type BindingMap, type Mode } from '../input/bindings';
-import {
-  advanceInput,
-  backspaceLeaderInput,
-  cancelLeaderInput,
-  resolveInputTimeout,
-} from '../input/engine';
 import { isLeaderPrefix } from '../input/key-guide';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
@@ -122,17 +116,13 @@ export class NoteEditor {
   }
 
   clear(session: MainWindowSession): void {
-    const { editorWindow, editorDocument, handler, timer } = session.note;
+    const { editorWindow, editorDocument, handler } = session.note;
     if (editorWindow && handler) editorWindow.removeEventListener('keydown', handler, true);
     if (editorDocument && handler) editorDocument.removeEventListener('keydown', handler, true);
-    clearTimeout(timer);
+    session.note.input.reset();
     session.note.editorWindow = null;
     session.note.editorDocument = null;
     session.note.handler = null;
-    session.note.buffer = '';
-    session.note.count = '';
-    session.note.timer = undefined;
-    session.note.inputRevision += 1;
     this.#leaderGuide.clear(session.window, session);
   }
 
@@ -156,50 +146,27 @@ export class NoteEditor {
     if (!key) return;
 
     const active = this.activeBindings(session);
-    const state = {
-      mode: active.mode,
-      keyBuffer: session.note.buffer,
-      countBuffer: session.note.count,
-    };
-
-    if (key === 'escape') {
-      const cancelled = cancelLeaderInput(state);
-      if (cancelled) {
-        this.applyState(session, cancelled);
-        this.invalidate(main, session);
-        this.#leaderGuide.clear(main, session);
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
+    const input = session.note.input;
+    if (key === 'escape' && isLeaderPrefix(input.keyBuffer) && input.cancel(active.mode)) {
+      this.#leaderGuide.clear(main, session);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
     }
 
-    if (key === 'backspace') {
-      const backed = backspaceLeaderInput(state);
-      if (backed) {
-        this.applyState(session, backed);
-        this.invalidate(main, session);
-        this.refreshGuide(main, session);
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
+    if (key === 'backspace' && isLeaderPrefix(input.keyBuffer) && input.backspace(active.mode)) {
+      this.refreshGuide(main, session);
+      event.preventDefault();
+      event.stopPropagation();
+      return;
     }
 
-    session.note.inputRevision += 1;
-    const revision = session.note.inputRevision;
-    clearTimeout(session.note.timer);
-    session.note.timer = undefined;
-
-    const decision = advanceInput(
-      {
-        ...state,
-        bindings: active.bindings,
-        allowCountPrefix: active.mode === 'note-normal',
-      },
+    const decision = input.advance(
+      active.mode,
+      active.bindings,
       key,
+      active.mode === 'note-normal',
     );
-    this.applyState(session, decision.state);
 
     if (decision.kind === 'pass') {
       this.refreshGuide(main, session);
@@ -226,17 +193,13 @@ export class NoteEditor {
       ? KEY_GUIDE_CONFIG.idleTimeoutMs
       : decision.timeoutMs;
     if (timeoutMs !== null) {
-      session.note.timer = main.setTimeout(() => {
-        if (session.note.inputRevision !== revision) return;
-        const resolved = resolveInputTimeout(decision);
-        this.applyState(session, resolved.state);
-        session.note.timer = undefined;
+      input.schedule(decision, timeoutMs, (resolved) => {
         this.#leaderGuide.clear(main, session);
         if (resolved.kind !== 'execute') return;
         const count = resolved.action === 'openCommandPalette' ? 0 : resolved.count;
         const local = this.executeAction(resolved.action, el, main, session, count);
         if (local === null) execute(resolved.action, count, el, active.mode, active.bindings);
-      }, timeoutMs);
+      });
     }
   }
 
@@ -285,29 +248,13 @@ export class NoteEditor {
     return handled;
   }
 
-  private applyState(
-    session: MainWindowSession,
-    state: { readonly keyBuffer: string; readonly countBuffer: string },
-  ): void {
-    session.note.buffer = state.keyBuffer;
-    session.note.count = state.countBuffer;
-  }
-
-  private invalidate(main: MainWindow, session: MainWindowSession): void {
-    session.note.inputRevision += 1;
-    clearTimeout(session.note.timer);
-    session.note.timer = undefined;
-    if (!session.note.buffer) this.#leaderGuide.clear(main, session);
-  }
-
   private resetInput(main: MainWindow, session: MainWindowSession): void {
-    session.note.buffer = '';
-    session.note.count = '';
-    this.invalidate(main, session);
+    session.note.input.reset();
+    this.#leaderGuide.clear(main, session);
   }
 
   private refreshGuide(main: MainWindow, session: MainWindowSession): void {
-    if (isLeaderPrefix(session.note.buffer)) this.#leaderGuide.refresh(main, session);
+    if (isLeaderPrefix(session.note.input.keyBuffer)) this.#leaderGuide.refresh(main, session);
     else this.#leaderGuide.clear(main, session);
   }
 

@@ -185,21 +185,8 @@ export class MainWindowSession {
     editorDocument: Document | null;
     handler: EventListener | null;
     mode: NoteMode;
-    buffer: string;
-    count: string;
-    timer: BrowserTimer | undefined;
-    inputRevision: number;
+    input: InputRuntime;
     yank: string;
-  } = {
-    editorWindow: null,
-    editorDocument: null,
-    handler: null,
-    mode: 'normal',
-    buffer: '',
-    count: '',
-    timer: undefined,
-    inputRevision: 0,
-    yank: '',
   };
   constructor(
     window: MainWindow,
@@ -207,6 +194,14 @@ export class MainWindowSession {
     mayClaimInitialLibraryFocus = false,
   ) {
     this.input = new InputRuntime(window);
+    this.note = {
+      editorWindow: null,
+      editorDocument: null,
+      handler: null,
+      mode: 'normal',
+      input: new InputRuntime(window),
+      yank: '',
+    };
     this.window = window;
     this.theme = new ThemeManager(window, preferences);
     this.interactionAppearance = new InteractionAppearanceManager(preferences, this.theme);
@@ -222,6 +217,7 @@ export class MainWindowSession {
     (doc.body ?? doc.documentElement).append(this.status);
     this.theme.add(this.status);
     this.cleanup.add(() => this.input.dispose());
+    this.cleanup.add(() => this.note.input.dispose());
     this.cleanup.add(() => {
       this.window.clearTimeout(this.keyGuideTimer);
       this.keyGuide.hide();
