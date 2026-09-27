@@ -324,6 +324,10 @@ export class MainWindowController implements MainWindowControllerApi {
   private activeBindings(mode: Mode) {
     return bindingsForMode(this.bindings(), mode);
   }
+
+  private bindingMode(window: MainWindow): Extract<Mode, 'main-normal' | 'main-select'> {
+    return this.#itemSelect.isVisual(window) ? 'main-select' : 'main-normal';
+  }
   private rescan = (window: MainWindow): void => this.#dependencies.reader.rescan(window);
 
   private onKeyDown(
@@ -387,28 +391,28 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.reader.forwardKey(event, window);
       return;
     }
-    if (session.inputMode === 'main-select' && !this.#itemSelect.itemsFocused(window)) {
+    if (this.#itemSelect.isVisual(window) && !this.#itemSelect.itemsFocused(window)) {
       this.#itemSelect.leave(window, session.selection);
-      session.inputMode = 'main-normal';
       this.resetMainInput(window, session);
       return;
     }
     const key = keyString(event);
     if (!key) return;
-    const bindings = this.activeBindings(session.inputMode);
-    if (event.key.toLowerCase() === 'escape' && session.input.cancel(session.inputMode)) {
+    const mode = this.bindingMode(window);
+    const bindings = this.activeBindings(mode);
+    if (event.key.toLowerCase() === 'escape' && session.input.cancel(mode)) {
       event.preventDefault();
       event.stopPropagation();
       this.clearKeyGuide(window, session);
       return;
     }
-    if (event.key.toLowerCase() === 'backspace' && session.input.backspace(session.inputMode)) {
+    if (event.key.toLowerCase() === 'backspace' && session.input.backspace(mode)) {
       event.preventDefault();
       event.stopPropagation();
       this.refreshKeyGuide(window, session);
       return;
     }
-    const decision = session.input.advance(session.inputMode, bindings, key, true);
+    const decision = session.input.advance(mode, bindings, key, true);
     if (decision.kind === 'pass') {
       this.refreshKeyGuide(window, session);
       return;
@@ -453,7 +457,7 @@ export class MainWindowController implements MainWindowControllerApi {
     event.preventDefault();
     event.stopPropagation();
     this.refreshKeyGuide(window, session);
-    const timeoutMs = isGuidePrefix(bindings, session.inputMode, decision.state.keyBuffer)
+    const timeoutMs = isGuidePrefix(bindings, mode, decision.state.keyBuffer)
       ? KEY_GUIDE_CONFIG.idleTimeoutMs
       : decision.timeoutMs;
     if (timeoutMs !== null) {
@@ -481,9 +485,12 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     session.prefixGuide.refresh(() => {
       const fromNote = input === session.note.input;
-      const active = fromNote
-        ? this.#noteEditor.activeBindings(session)
-        : { mode: session.inputMode, bindings: this.activeBindings(session.inputMode) };
+      let active: { mode: Mode; bindings: BindingMap };
+      if (fromNote) active = this.#noteEditor.activeBindings(session);
+      else {
+        const mode = this.bindingMode(window);
+        active = { mode, bindings: this.activeBindings(mode) };
+      }
       const config = keyGuideConfig(this.#dependencies.preferences);
       return {
         input,
@@ -601,10 +608,7 @@ export class MainWindowController implements MainWindowControllerApi {
           this.#navigation.status(session, '✗ Focus the items list first');
           break;
         }
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         this.#localFind.open(window, session);
         break;
       case 'findNext':
@@ -613,17 +617,15 @@ export class MainWindowController implements MainWindowControllerApi {
           this.#navigation.status(session, '✗ Focus the items list first');
           break;
         }
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         this.#localFind.repeat(window, session, action === 'findNext' ? 1 : -1);
         break;
-      case 'openCommandPalette':
+      case 'openCommandPalette': {
+        const mode = this.bindingMode(window);
         this.openCommandPalette(window, {
           mode: 'main',
-          bindingMode: session.inputMode,
-          actions: session.inputMode === 'main-select' ? MAIN_SELECT_ACTIONS : MAIN_NORMAL_ACTIONS,
+          bindingMode: mode,
+          actions: mode === 'main-select' ? MAIN_SELECT_ACTIONS : MAIN_NORMAL_ACTIONS,
           bindings: this.bindings(),
           language: this.keyGuideLanguage(),
           execute: (nextAction, nextCount) => {
@@ -632,22 +634,17 @@ export class MainWindowController implements MainWindowControllerApi {
           },
         });
         break;
+      }
       case 'openNeoSettings':
         this.openSettings(window);
         break;
       case 'mainQuickSearch':
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         session.focusOwnership.markQuickSearchIntent();
         this.#viewActions.focusQuickSearch(window, session);
         break;
       case 'mainAdvancedSearch':
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         this.#viewActions.openAdvancedSearch(window, session);
         break;
       case 'findAllItems':
@@ -689,26 +686,18 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#pluginManager.open(window, session);
         break;
       case 'mainReturnContext':
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         void this.#returnContext.restore(window, session);
         break;
       case 'manageSelection':
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         this.#selectionPanel.open(window, session);
         break;
       case 'mainTrashItems': {
-        const currentTarget =
-          session.inputMode === 'main-select' ? this.#itemSelect.currentTarget(window) : undefined;
-        if (session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        const currentTarget = this.#itemSelect.isVisual(window)
+          ? this.#itemSelect.currentTarget(window)
+          : undefined;
+        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         void this.#navigation.trashSelectedItems(window, session, currentTarget);
         break;
       }
@@ -736,14 +725,9 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.focusDirection(window, session, 'right');
         break;
       case 'mainYankCitekey': {
-        const currentTarget =
-          context === 'main' && session.inputMode === 'main-select'
-            ? this.#itemSelect.currentTarget(window)
-            : undefined;
-        if (context === 'main' && session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        const visual = context === 'main' && this.#itemSelect.isVisual(window);
+        const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
+        if (visual) this.#itemSelect.cancel(window, session.selection);
         this.#navigation.yankCitekey(window, session, context, currentTarget);
         break;
       }
@@ -769,14 +753,9 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'addTag':
       case 'removeTag': {
-        const currentTarget =
-          context === 'main' && session.inputMode === 'main-select'
-            ? this.#itemSelect.currentTarget(window)
-            : undefined;
-        if (context === 'main' && session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        const visual = context === 'main' && this.#itemSelect.isVisual(window);
+        const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
+        if (visual) this.#itemSelect.cancel(window, session.selection);
         if (action === 'addTag') this.#tags.add(window, session, context, currentTarget);
         else this.#tags.remove(window, session, context, currentTarget);
         break;
@@ -789,14 +768,9 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'addToCollection':
       case 'removeFromCollection': {
-        const currentTarget =
-          context === 'main' && session.inputMode === 'main-select'
-            ? this.#itemSelect.currentTarget(window)
-            : undefined;
-        if (context === 'main' && session.inputMode === 'main-select') {
-          this.#itemSelect.cancel(window, session.selection);
-          session.inputMode = 'main-normal';
-        }
+        const visual = context === 'main' && this.#itemSelect.isVisual(window);
+        const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
+        if (visual) this.#itemSelect.cancel(window, session.selection);
         this.#collections.open(
           window,
           session,
@@ -851,11 +825,9 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'mainCancelTarget':
         this.#itemSelect.cancelCurrentTarget(window, session.selection);
         break;
-      case 'mainEnterSelect': {
-        const result = this.#itemSelect.enter(window, session.selection);
-        if (result === 'entered') session.inputMode = 'main-select';
+      case 'mainEnterSelect':
+        this.#itemSelect.enter(window, session.selection);
         break;
-      }
       case 'mainSelectDown':
         this.#itemSelect.extend(window, 1, count, session.selection, shouldDebounce);
         break;
@@ -873,11 +845,9 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'mainSelectFinish':
         this.#itemSelect.finish(window, session.selection);
-        session.inputMode = 'main-normal';
         break;
       case 'mainSelectCancel':
         this.#itemSelect.cancel(window, session.selection);
-        session.inputMode = 'main-normal';
         break;
       default:
         return assertNever(action);

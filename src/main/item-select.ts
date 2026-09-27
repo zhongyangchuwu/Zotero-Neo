@@ -160,6 +160,11 @@ export class MainItemSelect {
     return this.treeFocused(window, 'items');
   }
 
+  /** The transient Visual range is the sole source of Main mode ownership. */
+  isVisual(window: MainWindow): boolean {
+    return this.#visual.has(window);
+  }
+
   currentTarget(window: MainWindow): MainCurrentTarget | null {
     const visual = this.#visual.get(window);
     if (visual) {
