@@ -5,7 +5,7 @@ import type { PreferenceStore } from '../core/preference-store';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { PickerRuntime } from './picker/runtime';
-import type { InstalledPlugin } from './plugin-host';
+import { PluginManagerRuntime } from './plugin-manager-runtime';
 import { SelectionStore } from './selection-store';
 import { SelectionPanelRuntime } from './selection-panel-runtime';
 import { InteractionAppearanceManager } from './interaction-appearance';
@@ -16,7 +16,6 @@ import { MainLocalFindRuntime } from './local-find-runtime';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
-export type BrowserTimer = number;
 
 /** All mutable UI state belongs to one Zotero main window. */
 export class MainWindowSession {
@@ -36,51 +35,7 @@ export class MainWindowSession {
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
   readonly selectionPanel = new SelectionPanelRuntime();
-  pluginManager: {
-    open: boolean;
-    generation: number;
-    loading: boolean;
-    busy: boolean;
-    error: string;
-    notice: string;
-    plugins: InstalledPlugin[];
-    filtered: InstalledPlugin[];
-    selected: number;
-    query: string;
-    commandBuffer: string;
-    commandTimer: BrowserTimer | undefined;
-    overlay: HTMLElement | null;
-    list: HTMLElement | null;
-    details: HTMLElement | null;
-    count: HTMLElement | null;
-    input: HTMLInputElement | null;
-    footer: HTMLElement | null;
-    previousElement: Element | null;
-    inputCleanup: (() => void) | null;
-    themeCleanup: (() => void) | null;
-  } = {
-    open: false,
-    generation: 0,
-    loading: false,
-    busy: false,
-    error: '',
-    notice: '',
-    plugins: [],
-    filtered: [],
-    selected: 0,
-    query: '',
-    commandBuffer: '',
-    commandTimer: undefined,
-    overlay: null,
-    list: null,
-    details: null,
-    count: null,
-    input: null,
-    footer: null,
-    previousElement: null,
-    inputCleanup: null,
-    themeCleanup: null,
-  };
+  readonly pluginManager = new PluginManagerRuntime();
   note: {
     editorWindow: Window | null;
     editorDocument: Document | null;
