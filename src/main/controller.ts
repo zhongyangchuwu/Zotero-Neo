@@ -25,7 +25,8 @@ import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '..
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
-import { guideEntries, isGuidePrefix } from '../input/key-guide';
+import { isGuidePrefix } from '../input/key-guide';
+import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { isEditableElement } from '../platform/dom';
 import { MainWindowSession } from './session';
@@ -110,15 +111,7 @@ export class MainWindowController implements MainWindowControllerApi {
       () => this.bindings(),
       {
         refresh: (window, session) => {
-          const active = this.#noteEditor.activeBindings(session);
-          this.refreshKeyGuide(
-            window,
-            session,
-            session.note.input.keyBuffer,
-            (prefix) => session.note.input.keyBuffer === prefix,
-            active.mode,
-            active.bindings,
-          );
+          this.refreshKeyGuide(window, session, session.note.input);
         },
         clear: (window, session) => this.clearKeyGuide(window, session),
       },
@@ -477,40 +470,37 @@ export class MainWindowController implements MainWindowControllerApi {
     }
   }
 
-  private clearKeyGuide(window: MainWindow, session: MainWindowSession): void {
-    window.clearTimeout(session.keyGuideTimer);
-    session.keyGuideTimer = undefined;
-    session.keyGuide.hide();
+  private clearKeyGuide(_window: MainWindow, session: MainWindowSession): void {
+    session.prefixGuide.clear();
   }
 
   private refreshKeyGuide(
     window: MainWindow,
     session: MainWindowSession,
-    prefix = session.input.keyBuffer,
-    isCurrent = (candidate: string) => session.input.keyBuffer === candidate,
-    mode: Mode = session.inputMode,
-    bindings: BindingMap = this.activeBindings(mode),
+    input: InputRuntime = session.input,
   ): void {
-    const config = keyGuideConfig(this.#dependencies.preferences);
-    if (!config.enabled || !isGuidePrefix(bindings, mode, prefix)) {
-      this.clearKeyGuide(window, session);
-      return;
-    }
-    const entries = guideEntries(bindings, mode, prefix, this.keyGuideLanguage());
-    if (!entries.length) {
-      this.clearKeyGuide(window, session);
-      return;
-    }
-    if (session.keyGuide.visible) {
-      session.keyGuide.show(window.document, session.theme, prefix, entries, config.fontSizePx);
-      return;
-    }
-    window.clearTimeout(session.keyGuideTimer);
-    session.keyGuideTimer = window.setTimeout(() => {
-      session.keyGuideTimer = undefined;
-      if (!isCurrent(prefix)) return;
-      session.keyGuide.show(window.document, session.theme, prefix, entries, config.fontSizePx);
-    }, config.delayMs);
+    session.prefixGuide.refresh(() => {
+      const fromNote = input === session.note.input;
+      const active = fromNote
+        ? this.#noteEditor.activeBindings(session)
+        : { mode: session.inputMode, bindings: this.activeBindings(session.inputMode) };
+      const config = keyGuideConfig(this.#dependencies.preferences);
+      return {
+        input,
+        mode: active.mode,
+        bindings: active.bindings,
+        enabled:
+          config.enabled &&
+          (fromNote
+            ? noteEditorEnabled(this.#dependencies.preferences)
+            : !this.#noteEditor.isStandalone(window)),
+        language: this.keyGuideLanguage(),
+        delayMs: config.delayMs,
+        fontSizePx: config.fontSizePx,
+        document: window.document,
+        theme: session.theme,
+      };
+    });
   }
 
   private keyGuideLanguage(): KeyGuideLanguage {

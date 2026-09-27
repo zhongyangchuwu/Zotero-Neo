@@ -19,7 +19,7 @@ import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
 import { advanceInput, inputWouldConsume } from '../input/engine';
 import { InputRuntime, type InputTimerHost } from '../input/runtime';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
-import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
+import { isLeaderPrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import {
   appendInputKey,
@@ -34,7 +34,7 @@ import {
   type ReaderAction,
 } from './action-capabilities';
 import { ACTION_LABELS, focusDirectionForAction, type ActionId } from '../input/actions';
-import { KeyGuide } from '../ui/key-guide';
+import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderMarks } from './marks';
 import { ReaderOutline, type OutlineHost } from './outline';
@@ -415,8 +415,7 @@ export class ReaderSession {
   readonly #selectionActions: ReaderSelectionActions;
   readonly #smoothScroller: ReaderSmoothScroller;
   readonly #themeManagers = new Map<Window, ThemeManager>();
-  readonly #keyGuide = new KeyGuide();
-  #keyGuideTimer: ReaderTimer | null = null;
+  readonly #prefixGuide = new PrefixGuideRuntime(READER_INPUT_TIMERS);
   readonly input = new InputRuntime(READER_INPUT_TIMERS);
   #sidebarToggleBuffer = '';
   #sidebarToggleTimer: ReaderTimer | null = null;
@@ -629,7 +628,7 @@ export class ReaderSession {
     this.state.indicator?.remove();
     this.state.indicator = null;
     this.#linkHints.close();
-    this.clearKeyGuide();
+    this.#prefixGuide.dispose();
     this.#dependencies.release();
   }
 
@@ -1333,51 +1332,24 @@ export class ReaderSession {
   }
 
   private clearKeyGuide(): void {
-    this.clearTimer(this.#keyGuideTimer);
-    this.#keyGuideTimer = null;
-    this.#keyGuide.hide();
+    this.#prefixGuide.clear();
   }
 
   private refreshKeyGuide(): void {
-    const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
-    const prefix = this.input.keyBuffer;
-    if (!config.enabled || this.state.mode !== 'normal' || !isLeaderPrefix(prefix)) {
-      this.clearKeyGuide();
-      return;
-    }
-    const entries = leaderGuideEntries(
-      this.#dependencies.bindings(),
-      readerBindingMode(this.state.mode),
-      prefix,
-      this.keyGuideLanguage(),
-    );
-    if (!entries.length) {
-      this.clearKeyGuide();
-      return;
-    }
-    const document = this.#dependencies.reader._iframeWindow?.document;
-    if (!document) return;
-    if (this.#keyGuide.visible) {
-      this.#keyGuide.show(
-        document,
-        { add: (root) => this.themeRoot(root as HTMLElement) },
-        prefix,
-        entries,
-        config.fontSizePx,
-      );
-      return;
-    }
-    this.clearTimer(this.#keyGuideTimer);
-    this.#keyGuideTimer = this.schedule(config.delayMs, () => {
-      this.#keyGuideTimer = null;
-      if (this.state.mode !== 'normal' || this.input.keyBuffer !== prefix) return;
-      this.#keyGuide.show(
-        document,
-        { add: (root) => this.themeRoot(root as HTMLElement) },
-        prefix,
-        entries,
-        config.fontSizePx,
-      );
+    this.#prefixGuide.refresh(() => {
+      const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
+      return {
+        input: this.input,
+        mode: readerBindingMode(this.state.mode),
+        bindings: this.#dependencies.bindings(),
+        enabled:
+          config.enabled && this.state.mode === 'normal' && isLeaderPrefix(this.input.keyBuffer),
+        language: this.keyGuideLanguage(),
+        delayMs: config.delayMs,
+        fontSizePx: config.fontSizePx,
+        document: this.#dependencies.reader._iframeWindow?.document ?? null,
+        theme: { add: (root) => this.themeRoot(root as HTMLElement) },
+      };
     });
   }
 
