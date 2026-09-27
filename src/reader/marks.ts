@@ -79,9 +79,14 @@ function normalizeMark(value: Omit<Mark, 'ts'>): Mark {
 
 export class ReaderMarks {
   readonly #host: MarksHost;
+  readonly #marks: Record<string, Mark> = {};
 
   constructor(host: MarksHost) {
     this.#host = host;
+  }
+
+  values(): Readonly<Record<string, Mark>> {
+    return this.#marks;
   }
 
   position(pdfWindow: PdfWindow): { pageIndex: number | null; ratio: number } {
@@ -110,16 +115,15 @@ export class ReaderMarks {
   }
 
   async set(
-    marks: Record<string, Mark>,
     reader: ReaderRuntime,
     pdfWindow: PdfWindow,
     char: string,
     annotationKey: string | null,
   ): Promise<void> {
     const position = this.position(pdfWindow);
-    marks[char] = { ...position, key: annotationKey, ts: Date.now() };
+    this.#marks[char] = { ...position, key: annotationKey, ts: Date.now() };
     let persisted = '';
-    if (readerMarksPersist(this.#host.preferences)) persisted = await this.save(marks, reader);
+    if (readerMarksPersist(this.#host.preferences)) persisted = await this.save(reader);
     const page = position.pageIndex === null ? '' : `  p.${position.pageIndex + 1}`;
     this.#host.showStatus(
       `✓ mark ${char} set${page}${persisted ? ` · saved (${persisted})` : ''}`,
@@ -128,13 +132,12 @@ export class ReaderMarks {
   }
 
   async jump(
-    marks: Record<string, Mark>,
     reader: ReaderRuntime,
     pdfWindow: PdfWindow,
     char: string,
     selectAnnotation: (key: string | null) => void,
   ): Promise<void> {
-    const mark = marks[char];
+    const mark = this.#marks[char];
     if (!mark) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
       return;
@@ -166,32 +169,29 @@ export class ReaderMarks {
     this.#host.showStatus(`→ mark ${char}${annotationExists ? '' : ' · annotation gone'}`, 1200);
   }
 
-  async delete(marks: Record<string, Mark>, reader: ReaderRuntime, char: string): Promise<void> {
-    if (!marks[char]) {
+  async delete(reader: ReaderRuntime, char: string): Promise<void> {
+    if (!this.#marks[char]) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
       return;
     }
-    delete marks[char];
-    if (readerMarksPersist(this.#host.preferences)) await this.save(marks, reader);
+    delete this.#marks[char];
+    if (readerMarksPersist(this.#host.preferences)) await this.save(reader);
     this.#host.showStatus(`✓ mark ${char} deleted`, 1200);
   }
 
-  async clear(marks: Record<string, Mark>, reader: ReaderRuntime): Promise<void> {
-    for (const char of Object.keys(marks)) delete marks[char];
-    if (readerMarksPersist(this.#host.preferences)) await this.save(marks, reader);
+  async clear(reader: ReaderRuntime): Promise<void> {
+    for (const char of Object.keys(this.#marks)) delete this.#marks[char];
+    if (readerMarksPersist(this.#host.preferences)) await this.save(reader);
     this.#host.showStatus('✓ all marks deleted', 1200);
   }
 
-  async save(
-    marks: Readonly<Record<string, Mark>>,
-    reader: ReaderRuntime,
-  ): Promise<'extra' | 'local' | ''> {
+  async save(reader: ReaderRuntime): Promise<'extra' | 'local' | ''> {
     const attachment = this.#host.itemForReader(reader);
     if (!attachment) return '';
     const payload: MarksPayload = {
       v: 1,
       marks: Object.fromEntries(
-        Object.entries(marks).map(([char, mark]) => [
+        Object.entries(this.#marks).map(([char, mark]) => [
           char,
           {
             pageIndex: mark.pageIndex,
@@ -225,30 +225,30 @@ export class ReaderMarks {
     }
   }
 
-  load(marks: Record<string, Mark>, reader: ReaderRuntime, retry = 0): void {
+  load(reader: ReaderRuntime, retry = 0): void {
     if (!readerMarksPersist(this.#host.preferences)) return;
     const attachment = this.#host.itemForReader(reader);
     if (!attachment) {
-      if (retry < 20) this.#host.schedule(500, () => this.load(marks, reader, retry + 1));
+      if (retry < 20) this.#host.schedule(500, () => this.load(reader, retry + 1));
       return;
     }
     const fromExtra = this.readExtra(this.storeItem(attachment), attachment.key);
     const fromPreference = fromExtra ?? this.readPreference(reader);
     if (fromPreference) {
       for (const [char, mark] of Object.entries(fromPreference.marks))
-        marks[char] = normalizeMark(mark);
+        this.#marks[char] = normalizeMark(mark);
     }
     let migrated = false;
     for (const annotation of attachment.getAnnotations?.() ?? []) {
       for (const tag of annotation.tags ?? []) {
         const match = /^zv-mark:([a-z0-9])$/.exec(tag.tag);
-        if (match?.[1] && !marks[match[1]]) {
-          marks[match[1]] = { pageIndex: null, ratio: 0, key: annotation.key, ts: 0 };
+        if (match?.[1] && !this.#marks[match[1]]) {
+          this.#marks[match[1]] = { pageIndex: null, ratio: 0, key: annotation.key, ts: 0 };
           migrated = true;
         }
       }
     }
-    if (migrated) void this.save(marks, reader);
+    if (migrated) void this.save(reader);
   }
 
   private storeItem(attachment: ItemRuntime): ItemRuntime | null {

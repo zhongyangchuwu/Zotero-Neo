@@ -982,7 +982,7 @@ describe('Reader leader timer guards', () => {
     const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
     press('m');
     press('a');
-    expect(created.session.state.marks.a).toBeDefined();
+    expect(created.session.marks.a).toBeDefined();
     expect(created.session.input.keyBuffer).toBe('');
     press('`');
     expect(created.session.input.keyBuffer).toBe('`');
@@ -996,7 +996,7 @@ describe('Reader leader timer guards', () => {
     vi.advanceTimersByTime(600);
     expect(created.session.input.keyBuffer).toBe('dm');
     press('a');
-    expect(created.session.state.marks.a).toBeUndefined();
+    expect(created.session.marks.a).toBeUndefined();
     expect(created.session.input.keyBuffer).toBe('');
     vi.advanceTimersByTime(1200);
     expect(created.session.input.keyBuffer).toBe('');
