@@ -64,6 +64,72 @@ describe('reader discovery diagnostics', () => {
 
     expect(diagnostics).toEqual(['reader listeners registered']);
   });
+
+  it('disposes sessions that disappear from Zotero Reader inventory', () => {
+    const addWindowListener = vi.fn();
+    const removeWindowListener = vi.fn();
+    const addDocumentListener = vi.fn();
+    const removeDocumentListener = vi.fn();
+    const originalOnKeyDown = vi.fn();
+    const originalTextFocused = vi.fn(() => false);
+    const pdfWindow = {
+      document: {
+        getElementById: () => null,
+        querySelector: () => null,
+        addEventListener: addDocumentListener,
+        removeEventListener: removeDocumentListener,
+        documentElement: { removeAttribute: vi.fn() },
+      },
+      addEventListener: addWindowListener,
+      removeEventListener: removeWindowListener,
+      setInterval: vi.fn(() => 1),
+      focus: vi.fn(),
+    } as unknown as PdfWindow;
+    const primaryView = {
+      _iframeWindow: pdfWindow,
+      _onKeyDown: originalOnKeyDown,
+      _textAnnotationFocused: originalTextFocused,
+    } as ReaderViewRuntime;
+    const reader = {
+      _instanceID: 'reader-1',
+      itemID: 42,
+      _internalReader: { _primaryView: primaryView },
+    } as unknown as ReaderRuntime;
+    const readerService = {
+      _readers: [reader] as ReaderRuntime[],
+      registerEventListener: () => Symbol('reader-listener'),
+      unregisterEventListener: () => {},
+      getByTabID: () => null,
+    };
+    Reflect.set(globalThis, 'Zotero', { Reader: readerService });
+    const dependencies = {
+      preferences: {
+        has: () => false,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
+        set: () => {},
+      },
+      logger: { debug: () => {}, diagnostic: () => {} },
+      delegateMain: () => {},
+      openCommandPalette: () => {},
+      captureReaderSelectionToNote: async () => false,
+    } as ReaderControllerDependencies;
+    const controller = createReaderController(dependencies);
+    const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
+
+    controller.start('zotero-neo@zotero-neo');
+    controller.rescan(window);
+    expect(primaryView._onKeyDown).not.toBe(originalOnKeyDown);
+    expect(primaryView._textAnnotationFocused).not.toBe(originalTextFocused);
+
+    readerService._readers = [];
+    controller.rescan(window);
+
+    expect(primaryView._onKeyDown).toBe(originalOnKeyDown);
+    expect(primaryView._textAnnotationFocused).toBe(originalTextFocused);
+    expect(removeWindowListener).toHaveBeenCalled();
+    expect(removeDocumentListener).toHaveBeenCalled();
+    controller.shutdown();
+  });
 });
 
 function createHistorySession(
