@@ -17,10 +17,14 @@ export class NoteSurfaceRuntime {
     this.input = new InputRuntime(timerHost);
   }
 
-  resetInteraction(): void {
+  deactivateInteraction(): void {
     this.input.reset();
-    this.itemID = null;
     this.mode = 'normal';
+  }
+
+  resetInteraction(): void {
+    this.deactivateInteraction();
+    this.itemID = null;
     this.yank = '';
   }
 }
