@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import { resolveItemTargets } from '../../src/main/item-targets';
+import {
+  MAIN_ITEM_TARGET,
+  NOTE_ITEM_TARGET,
+  READER_ITEM_TARGET,
+  resolveItemTargets,
+  type ItemTargetSet,
+} from '../../src/main/item-targets';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 
@@ -50,6 +56,38 @@ function session(): MainWindowSession {
 }
 
 describe('shared item target resolution', () => {
+  it('exposes exact typed item Target resolvers for Main, Reader, and Note', () => {
+    const main = item(1);
+    const reader = item(2);
+    const note = item(3, { kind: 'note' });
+    install([main, reader, note], reader.id);
+    const s = session();
+    s.selection.add({ libraryID: 1, itemID: main.id });
+    const mainWindow = {
+      ZoteroPane: { itemsView: { rowCount: 0, selection: { focused: 0 } } },
+    } as unknown as MainWindow;
+    const readerWindow = {
+      Zotero_Tabs: { selectedID: 'reader-tab' },
+    } as unknown as MainWindow;
+    const noteWindow = {
+      Zotero_Tabs: {
+        selectedID: 'note-tab',
+        getTabInfo: () => ({ type: 'note', data: { itemID: note.id } }),
+      },
+    } as unknown as MainWindow;
+
+    const mainTarget: ItemTargetSet<'main'> = MAIN_ITEM_TARGET.resolve(mainWindow, s);
+    const readerTarget: ItemTargetSet<'reader'> = READER_ITEM_TARGET.resolve(readerWindow);
+    const noteTarget: ItemTargetSet<'note'> = NOTE_ITEM_TARGET.resolve(noteWindow);
+
+    expect(MAIN_ITEM_TARGET.source).toBe('main');
+    expect(READER_ITEM_TARGET.source).toBe('reader');
+    expect(NOTE_ITEM_TARGET.source).toBe('note');
+    expect(mainTarget.items.map((value) => value.id)).toEqual([main.id]);
+    expect(readerTarget.items.map((value) => value.id)).toEqual([reader.id]);
+    expect(noteTarget.items.map((value) => value.id)).toEqual([note.id]);
+  });
+
   it('uses Main EffectiveSelection and normalizes/deduplicates top-level targets', () => {
     const parent = item(1);
     const child = item(2, { parentItemID: 1, kind: 'attachment' });
