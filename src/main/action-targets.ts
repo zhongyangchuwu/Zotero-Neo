@@ -33,7 +33,11 @@ export function mainCursorItem(window: MainWindow): Zotero.Item | undefined {
   return ref ? itemForRef(ref) : undefined;
 }
 
-export function resolveMainCurrentTarget(window: MainWindow): MainCurrentTarget | null {
+export function resolveMainCurrentTarget(
+  window: MainWindow,
+  visualRefs: readonly ItemRef[] = [],
+): MainCurrentTarget | null {
+  if (visualRefs.length) return { refs: visualRefs, source: 'visual' };
   const native = mainSelectedItemRefs(window);
   if (native.length > 1) return { refs: native, source: 'native-selection' };
   const cursor = currentMainItemCursorRef(window);
