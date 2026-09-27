@@ -13,10 +13,11 @@ import type { MainReturnBookmark } from './return-context';
 import { SettingsCenter } from './settings-center';
 import { MainFocusOwnership } from './focus-ownership';
 import { MainLocalFindRuntime } from './local-find-runtime';
+import { NoteSurfaceRuntime } from './note-runtime';
 import { TrashHistory } from './trash-history';
 
 export type MainPanel = 'collections' | 'items';
-export type NoteMode = 'normal' | 'insert';
+export type { NoteMode } from './note-runtime';
 
 /** All mutable UI state belongs to one Zotero main window. */
 export class MainWindowSession {
@@ -37,14 +38,7 @@ export class MainWindowSession {
   readonly localFind = new MainLocalFindRuntime();
   readonly selectionPanel = new SelectionPanelRuntime();
   readonly pluginManager = new PluginManagerRuntime();
-  note: {
-    editorWindow: Window | null;
-    editorDocument: Document | null;
-    handler: EventListener | null;
-    mode: NoteMode;
-    input: InputRuntime;
-    yank: string;
-  };
+  readonly note: NoteSurfaceRuntime;
   constructor(
     window: MainWindow,
     preferences: PreferenceStore,
@@ -52,14 +46,7 @@ export class MainWindowSession {
   ) {
     this.input = new InputRuntime(window);
     this.prefixGuide = new PrefixGuideRuntime(window);
-    this.note = {
-      editorWindow: null,
-      editorDocument: null,
-      handler: null,
-      mode: 'normal',
-      input: new InputRuntime(window),
-      yank: '',
-    };
+    this.note = new NoteSurfaceRuntime(window);
     this.window = window;
     this.theme = new ThemeManager(window, preferences);
     this.interactionAppearance = new InteractionAppearanceManager(preferences, this.theme);
