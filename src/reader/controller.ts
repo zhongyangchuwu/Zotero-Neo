@@ -270,6 +270,21 @@ export class ReaderController implements ReaderControllerApi {
     for (const reader of readers) this.#ensure(reader);
   }
 
+  deactivateInactive(window: MainWindow, activeTabID: string | null): void {
+    const activeReader = activeTabID
+      ? (zoteroRuntime().Reader.getByTabID?.(activeTabID) ?? null)
+      : null;
+    for (const session of this.#sessions.values()) {
+      const ownerWindow = session.ownerWindow;
+      if (
+        ownerWindow ? ownerWindow !== window : activeReader ? session.reader !== activeReader : true
+      )
+        continue;
+      if (activeReader && session.reader === activeReader) continue;
+      session.deactivateInteraction();
+    }
+  }
+
   forwardKey(event: KeyboardEvent, window: MainWindow): void {
     const tabID = (window as MainWindowRuntime).Zotero_Tabs?.selectedID;
     if (!tabID) return;
@@ -601,6 +616,14 @@ export class ReaderSession {
 
   get itemID(): number | undefined {
     return this.#dependencies.reader.itemID;
+  }
+
+  get reader(): ReaderRuntime {
+    return this.#dependencies.reader;
+  }
+
+  get ownerWindow(): MainWindow | null {
+    return this.#dependencies.reader._window ?? null;
   }
 
   get marks(): Readonly<Record<string, Mark>> {

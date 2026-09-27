@@ -30,6 +30,7 @@ import { isGuidePrefix } from '../input/key-guide';
 import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
+import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
@@ -158,6 +159,7 @@ export class MainWindowController implements MainWindowControllerApi {
         (action, count, target, mode, bindings) =>
           this.executeFromNote(action, count, target, mode, bindings, window, session),
       );
+      this.syncSurfaceActivation(window, session);
     };
     scan();
     const interval = window.setInterval(scan, 1000);
@@ -176,6 +178,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.addEventListener(window.document, 'focusin', (event) => {
       if (session.settings.contains(event.target)) this.resetMainInput(window, session);
+      this.syncSurfaceActivation(window, session);
     });
     session.cleanup.add(() => {
       this.#picker.close(session);
@@ -230,6 +233,16 @@ export class MainWindowController implements MainWindowControllerApi {
   private deactivateMainSurface(window: MainWindow, session: MainWindowSession): void {
     if (this.#itemSelect.isVisual(window)) this.#itemSelect.leave(window, session.selection);
     this.resetMainInput(window, session);
+  }
+
+  private syncSurfaceActivation(window: MainWindow, session: MainWindowSession): void {
+    const active = resolveActiveSurface(window);
+    if (active.kind !== 'main') this.deactivateMainSurface(window, session);
+    if (active.kind !== 'note') session.note.deactivateInteraction();
+    this.#dependencies.reader.deactivateInactive(
+      window,
+      active.kind === 'reader' ? active.tabID : null,
+    );
   }
 
   executeFromReader(

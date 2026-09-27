@@ -62,6 +62,7 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
   start(pluginId: string): void;
   shutdown(): void;
   rescan(window: MainWindow): void;
+  deactivateInactive(window: MainWindow, activeTabID: string | null): void;
   forwardKey(event: KeyboardEvent, window: MainWindow): void;
 }
 
@@ -90,6 +91,6 @@ export interface ReaderControllerDependencies {
 export interface MainWindowControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly reader: Pick<ReaderControllerApi, 'rescan' | 'forwardKey'>;
+  readonly reader: Pick<ReaderControllerApi, 'rescan' | 'deactivateInactive' | 'forwardKey'>;
   readonly mayClaimInitialLibraryFocus?: () => boolean;
 }
