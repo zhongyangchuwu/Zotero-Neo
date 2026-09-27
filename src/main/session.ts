@@ -4,7 +4,7 @@ import type { Mode } from '../input/bindings';
 import { InputRuntime } from '../input/runtime';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
-import { KeyGuide } from '../ui/key-guide';
+import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import type { PickerConfirm, PickerProvider } from './picker/types';
 import type { PickerItem, PickerScope } from './picker/model';
@@ -32,8 +32,7 @@ export class MainWindowSession {
   activePanel: MainPanel = 'items';
   inputMode: Extract<Mode, 'main-normal' | 'main-select'> = 'main-normal';
   readonly input: InputRuntime;
-  readonly keyGuide = new KeyGuide();
-  keyGuideTimer: BrowserTimer | undefined;
+  readonly prefixGuide: PrefixGuideRuntime;
   trashedItemIDs: number[] = [];
   returnBookmark: MainReturnBookmark | null = null;
   picker: {
@@ -194,6 +193,7 @@ export class MainWindowSession {
     mayClaimInitialLibraryFocus = false,
   ) {
     this.input = new InputRuntime(window);
+    this.prefixGuide = new PrefixGuideRuntime(window);
     this.note = {
       editorWindow: null,
       editorDocument: null,
@@ -218,10 +218,7 @@ export class MainWindowSession {
     this.theme.add(this.status);
     this.cleanup.add(() => this.input.dispose());
     this.cleanup.add(() => this.note.input.dispose());
-    this.cleanup.add(() => {
-      this.window.clearTimeout(this.keyGuideTimer);
-      this.keyGuide.hide();
-    });
+    this.cleanup.add(() => this.prefixGuide.dispose());
     this.cleanup.add(() => {
       this.window.clearTimeout(this.selectionPanel.commandTimer);
       this.selectionPanel.commandTimer = undefined;
