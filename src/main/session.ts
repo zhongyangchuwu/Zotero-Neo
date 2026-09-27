@@ -1,12 +1,10 @@
 import { CleanupScope } from '../core/cleanup';
-import type { CompositionState } from '../input/composition';
 import { InputRuntime } from '../input/runtime';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
-import type { PickerConfirm, PickerProvider } from './picker/types';
-import type { PickerItem, PickerScope } from './picker/model';
+import { PickerRuntime } from './picker/runtime';
 import type { InstalledPlugin } from './plugin-host';
 import { SelectionStore, type ItemRef } from './selection-store';
 import { InteractionAppearanceManager } from './interaction-appearance';
@@ -33,63 +31,7 @@ export class MainWindowSession {
   readonly prefixGuide: PrefixGuideRuntime;
   trashedItemIDs: number[] = [];
   returnBookmark: MainReturnBookmark | null = null;
-  picker: {
-    open: boolean;
-    generation: number;
-    scope: PickerScope;
-    overlay: HTMLElement | null;
-    input: HTMLInputElement | null;
-    composition: CompositionState;
-    results: HTMLElement | null;
-    preview: HTMLElement | null;
-    count: HTMLElement | null;
-    previewTitle: HTMLElement | null;
-    help: HTMLElement | null;
-    queryHelp: HTMLElement | null;
-    listHelp: HTMLElement | null;
-    items: PickerItem[];
-    filtered: PickerItem[];
-    selected: number;
-    focusPane: 'search' | 'list' | 'preview';
-    provider: PickerProvider | null;
-    confirm: PickerConfirm | null;
-    closeBeforeConfirm: boolean;
-    onClose: (() => void) | null;
-    queue: Promise<void>;
-    inputCleanup: (() => void) | null;
-    layout: 'dual' | 'single';
-    previousElement: Element | null;
-    previousWindow: Window | null;
-    themeCleanup: (() => void) | null;
-  } = {
-    open: false,
-    generation: 0,
-    scope: 'all',
-    overlay: null,
-    input: null,
-    composition: { active: false },
-    results: null,
-    preview: null,
-    items: [],
-    filtered: [],
-    count: null,
-    previewTitle: null,
-    help: null,
-    queryHelp: null,
-    listHelp: null,
-    selected: 0,
-    previousElement: null,
-    focusPane: 'search',
-    provider: null,
-    confirm: null,
-    closeBeforeConfirm: false,
-    onClose: null,
-    queue: Promise.resolve(),
-    inputCleanup: null,
-    layout: 'dual',
-    previousWindow: null,
-    themeCleanup: null,
-  };
+  readonly picker = new PickerRuntime();
   localFind: {
     open: boolean;
     query: string;
