@@ -13,6 +13,7 @@ import type { MainReturnBookmark } from './return-context';
 import { SettingsCenter } from './settings-center';
 import { MainFocusOwnership } from './focus-ownership';
 import { MainLocalFindRuntime } from './local-find-runtime';
+import { TrashHistory } from './trash-history';
 
 export type MainPanel = 'collections' | 'items';
 export type NoteMode = 'normal' | 'insert';
@@ -30,7 +31,7 @@ export class MainWindowSession {
   activePanel: MainPanel = 'items';
   readonly input: InputRuntime;
   readonly prefixGuide: PrefixGuideRuntime;
-  trashedItemIDs: number[] = [];
+  readonly trashHistory = new TrashHistory();
   returnBookmark: MainReturnBookmark | null = null;
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
