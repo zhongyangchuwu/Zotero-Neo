@@ -252,6 +252,7 @@ export class ReaderController implements ReaderControllerApi {
     const service = zoteroRuntime().Reader;
     const readers: ReaderRuntime[] = [];
     const all = service._readers;
+    const hasAuthoritativeInventory = Array.isArray(all) || all instanceof Map;
     if (Array.isArray(all)) readers.push(...all);
     else if (all instanceof Map) readers.push(...all.values());
     if (!readers.length) {
@@ -265,6 +266,7 @@ export class ReaderController implements ReaderControllerApi {
         if (reader) readers.push(reader);
       }
     }
+    if (hasAuthoritativeInventory) this.#reconcileReaders(readers);
     for (const reader of readers) this.#ensure(reader);
   }
 
@@ -372,6 +374,24 @@ export class ReaderController implements ReaderControllerApi {
     }
     const timer = setTimeout(() => this.#waitAndInject(reader, instanceID, attempt + 1), 100);
     this.#waitTimers.set(instanceID, timer);
+  }
+
+  #reconcileReaders(readers: readonly ReaderRuntime[]): void {
+    const live = new Set(
+      readers
+        .map((reader) => reader._instanceID)
+        .filter((instanceID): instanceID is string => !!instanceID),
+    );
+    for (const [instanceID, session] of [...this.#sessions]) {
+      if (!live.has(instanceID)) session.dispose();
+    }
+    for (const instanceID of [...this.#pending]) {
+      if (live.has(instanceID)) continue;
+      this.#pending.delete(instanceID);
+      const timer = this.#waitTimers.get(instanceID);
+      if (timer !== undefined) clearTimeout(timer);
+      this.#waitTimers.delete(instanceID);
+    }
   }
 
   #release(instanceID: string, reader: ReaderRuntime): void {
