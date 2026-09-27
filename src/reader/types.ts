@@ -226,9 +226,6 @@ export interface Pointer {
 
 export interface ReaderSessionState {
   mode: ReaderMode;
-  keyBuffer: string;
-  countBuffer: string;
-  keyTimeout: ReaderTimer | null;
   selectionParams: AnnotationSelectionParams | null;
   indicator: HTMLElement | null;
   indicatorThemeCleanup: (() => void) | null;

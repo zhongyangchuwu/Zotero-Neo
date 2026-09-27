@@ -482,7 +482,7 @@ describe('reader keymap forwarding', () => {
     expect(container.scrollBy).toHaveBeenCalledWith(-2000 / 120, 0);
     expect(originalKeyDown).toHaveBeenNthCalledWith(1, expect.objectContaining({ key: 'J' }));
     expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'K' }));
-    expect(created.session.state.keyBuffer).toBe('');
+    expect(created.session.input.keyBuffer).toBe('');
     created.session.dispose();
   });
 });
@@ -904,6 +904,99 @@ describe('Reader leader timer guards', () => {
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
     expect(delegateMain).toHaveBeenCalledTimes(1);
   });
+  it('keeps counted leader cancellation while invalidating timed Reader commands on mode change', () => {
+    vi.useFakeTimers();
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const bindings = resolveBindings('{"reader-normal:g":"nextTab"}');
+    const created = createHistorySession({}, delegateMain, bindings);
+    Reflect.set(created.pdfWindow, 'getSelection', () => null);
+    const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
+    press('3');
+    press(' ');
+    press('f');
+    press('Backspace');
+    press('Escape');
+    expect(created.session.input.keyBuffer).toBe('');
+    expect(created.session.input.countBuffer).toBe('3');
+    press('L');
+    expect(delegateMain).toHaveBeenCalledWith('nextTab', 3, created.reader._window);
+
+    press('3');
+    press('g');
+    expect(created.session.input.keyBuffer).toBe('g');
+    created.session.acceptSelectionParams({ annotation: {} });
+    expect(created.session.state.mode).toBe('visual');
+    expect(created.session.input.keyBuffer).toBe('');
+    expect(created.session.input.countBuffer).toBe('');
+    vi.advanceTimersByTime(800);
+    expect(delegateMain).toHaveBeenCalledTimes(1);
+    const visualDigit = readerKey('3');
+    created.session.focusAndHandle(visualDigit.event);
+    expect(visualDigit.preventDefault).not.toHaveBeenCalled();
+    expect(created.session.input.countBuffer).toBe('');
+    created.session.dispose();
+  });
+
+  it('expires pending Reader mark keys without leaving input or timers behind', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
+    press('m');
+    expect(created.session.input.keyBuffer).toBe('m');
+    vi.advanceTimersByTime(1200);
+    expect(created.session.input.keyBuffer).toBe('');
+    press('d');
+    press('m');
+    expect(created.session.input.keyBuffer).toBe('dm');
+    vi.advanceTimersByTime(1200);
+    expect(created.session.input.keyBuffer).toBe('');
+    expect(created.session.input.countBuffer).toBe('');
+    created.session.dispose();
+  });
+
+  it('preserves m, backtick, and dm mark grammar across a superseded d timeout', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
+    press('m');
+    press('a');
+    expect(created.session.state.marks.a).toBeDefined();
+    expect(created.session.input.keyBuffer).toBe('');
+    press('`');
+    expect(created.session.input.keyBuffer).toBe('`');
+    press('z');
+    expect(created.indicator.textContent).toBe('✗ mark z not set');
+    expect(created.session.input.keyBuffer).toBe('');
+
+    press('d');
+    vi.advanceTimersByTime(600);
+    press('m');
+    vi.advanceTimersByTime(600);
+    expect(created.session.input.keyBuffer).toBe('dm');
+    press('a');
+    expect(created.session.state.marks.a).toBeUndefined();
+    expect(created.session.input.keyBuffer).toBe('');
+    vi.advanceTimersByTime(1200);
+    expect(created.session.input.keyBuffer).toBe('');
+    created.session.dispose();
+  });
+
+  it('keeps Reader Insert text native and Escape returns to Normal', async () => {
+    const created = createHistorySession();
+    created.session.state.mode = 'insert';
+    const native = readerKey('f');
+    created.session.focusAndHandle(native.event);
+    expect(native.preventDefault).not.toHaveBeenCalled();
+    const escape = readerKey('Escape');
+    created.session.focusAndHandle(escape.event);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(created.session.state.mode).toBe('normal');
+    expect(created.session.input.keyBuffer).toBe('');
+    expect(created.session.input.countBuffer).toBe('');
+    created.session.dispose();
+  });
 });
 
 describe('reader H/L tab and zh/zl pan defaults', () => {
@@ -979,6 +1072,25 @@ describe('Reader smooth horizontal pan', () => {
       expect(created.container.scrollBy).toHaveBeenCalledTimes(1);
       created.session.dispose();
     }
+  });
+
+  it('invalidates an intervening leader timeout when a smooth hold repeats', () => {
+    vi.useFakeTimers();
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const bindings: BindingMap = { ...DEFAULT_BINDINGS, 'reader-normal:<Space>f': 'switchTab' };
+    const created = smoothSession('follow', {}, bindings, delegateMain);
+    created.session.focusAndHandle(readerKey('j').event);
+    created.session.focusAndHandle(readerKey(' ').event);
+    created.session.focusAndHandle(readerKey('f').event);
+    expect(created.session.input.keyBuffer).toBe(' f');
+    const repeat = readerKey('j');
+    created.session.focusAndHandle(repeat.event);
+    expect(repeat.preventDefault).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(delegateMain).not.toHaveBeenCalled();
+    expect(created.session.input.keyBuffer).toBe(' f');
+    releaseSmoothHold(created, 'j');
+    created.session.dispose();
   });
 
   it('keeps trapezoid release moving while repeat keydown does not restart the curve', () => {

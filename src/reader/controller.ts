@@ -16,13 +16,8 @@ import {
 import { copyToClipboard } from '../platform/clipboard';
 import { cloneInto } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
-import {
-  advanceInput,
-  backspaceLeaderInput,
-  cancelLeaderInput,
-  inputWouldConsume,
-  resolveInputTimeout,
-} from '../input/engine';
+import { advanceInput, inputWouldConsume } from '../input/engine';
+import { InputRuntime, type InputTimerHost } from '../input/runtime';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isLeaderPrefix, leaderGuideEntries } from '../input/key-guide';
 import { keyString } from '../input/keys';
@@ -398,6 +393,11 @@ export class ReaderController implements ReaderControllerApi {
   }
 }
 
+const READER_INPUT_TIMERS: InputTimerHost = {
+  setTimeout: (callback, delayMs) => setTimeout(callback, delayMs) as unknown as number,
+  clearTimeout: (timer) => clearTimeout(timer),
+};
+
 export class ReaderSession {
   readonly #dependencies: SessionDependencies;
   readonly #scope = new CleanupScope();
@@ -417,7 +417,7 @@ export class ReaderSession {
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #keyGuide = new KeyGuide();
   #keyGuideTimer: ReaderTimer | null = null;
-  #inputRevision = 0;
+  readonly input = new InputRuntime(READER_INPUT_TIMERS);
   #sidebarToggleBuffer = '';
   #sidebarToggleTimer: ReaderTimer | null = null;
   readonly state: ReaderSessionState;
@@ -426,9 +426,6 @@ export class ReaderSession {
     this.#dependencies = dependencies;
     this.state = {
       mode: 'normal',
-      keyBuffer: '',
-      countBuffer: '',
-      keyTimeout: null,
       selectionParams: null,
       indicator: null,
       indicatorThemeCleanup: null,
@@ -589,10 +586,7 @@ export class ReaderSession {
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
-    this.#scope.add(() => {
-      this.#inputRevision += 1;
-      this.clearKeyTimer();
-    });
+    this.#scope.add(() => this.input.dispose());
   }
 
   get itemID(): number | undefined {
@@ -754,58 +748,39 @@ export class ReaderSession {
       this.clearKeyGuide();
       return;
     }
-    const leaderState = {
-      mode: readerBindingMode(this.state.mode),
-      keyBuffer: this.state.keyBuffer,
-      countBuffer: this.state.countBuffer,
-    };
-    if (event.key.toLowerCase() === 'escape') {
-      const cancelled = cancelLeaderInput(leaderState);
-      if (cancelled) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        this.state.keyBuffer = cancelled.keyBuffer;
-        this.state.countBuffer = cancelled.countBuffer;
-        this.#inputRevision += 1;
-        this.clearKeyTimer();
-        this.clearKeyGuide();
-        this.updateIndicator();
-        return;
-      }
+    const mode = readerBindingMode(this.state.mode);
+    if (
+      event.key.toLowerCase() === 'escape' &&
+      isLeaderPrefix(this.input.keyBuffer) &&
+      this.input.cancel(mode)
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.clearKeyGuide();
+      this.updateIndicator();
+      return;
     }
-    if (event.key.toLowerCase() === 'backspace') {
-      const backed = backspaceLeaderInput(leaderState);
-      if (backed) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        this.state.keyBuffer = backed.keyBuffer;
-        this.state.countBuffer = backed.countBuffer;
-        this.#inputRevision += 1;
-        this.clearKeyTimer();
-        this.refreshKeyGuide();
-        this.updateIndicator();
-        return;
-      }
+    if (
+      event.key.toLowerCase() === 'backspace' &&
+      isLeaderPrefix(this.input.keyBuffer) &&
+      this.input.backspace(mode)
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.refreshKeyGuide();
+      this.updateIndicator();
+      return;
     }
     const key = keyString(event);
     if (!key) return;
-    this.#inputRevision += 1;
-    const revision = this.#inputRevision;
     if (this.handleMarkChord(event, key, pdfWindow)) return;
     if (this.startSmoothHold(event, pdfWindow, key)) return;
-    const decision = advanceInput(
-      {
-        mode: readerBindingMode(this.state.mode),
-        keyBuffer: this.state.keyBuffer,
-        countBuffer: this.state.countBuffer,
-        bindings: this.#dependencies.bindings(),
-        allowCountPrefix: this.state.mode === 'normal',
-      },
+    const decision = this.input.advance(
+      mode,
+      this.#dependencies.bindings(),
       key,
+      this.state.mode === 'normal',
     );
-    this.state.keyBuffer = decision.state.keyBuffer;
-    this.state.countBuffer = decision.state.countBuffer;
-    this.clearKeyTimer();
     if (decision.kind === 'pass') {
       this.refreshKeyGuide();
       this.updateIndicator();
@@ -839,11 +814,8 @@ export class ReaderSession {
       ? KEY_GUIDE_CONFIG.idleTimeoutMs
       : decision.timeoutMs;
     if (timeoutMs !== null) {
-      this.state.keyTimeout = this.schedule(timeoutMs, () => {
-        if (this.#scope.disposed || this.#inputRevision !== revision) return;
-        const resolved = resolveInputTimeout(decision);
-        this.state.keyBuffer = resolved.state.keyBuffer;
-        this.state.countBuffer = resolved.state.countBuffer;
+      this.input.schedule(decision, timeoutMs, (resolved) => {
+        if (this.#scope.disposed) return;
         this.clearKeyGuide();
         this.updateIndicator();
         if (resolved.kind === 'execute')
@@ -924,17 +896,15 @@ export class ReaderSession {
       event.preventDefault();
       event.stopImmediatePropagation();
     };
-    if (!this.state.keyBuffer && (key === 'm' || key === '`')) {
-      this.state.keyBuffer = key;
-      this.state.countBuffer = '';
+    if (!this.input.keyBuffer && (key === 'm' || key === '`')) {
+      this.input.replace(key, '');
       this.armMarkTimer();
       this.updateIndicator();
       consume();
       return true;
     }
-    if (this.state.keyBuffer === 'm' && /^[a-z0-9]$/.test(key)) {
-      this.clearKeyTimer();
-      this.state.keyBuffer = '';
+    if (this.input.keyBuffer === 'm' && /^[a-z0-9]$/.test(key)) {
+      this.input.replace('', this.input.countBuffer);
       void this.#marks.set(
         this.state.marks,
         this.#dependencies.reader,
@@ -945,9 +915,8 @@ export class ReaderSession {
       consume();
       return true;
     }
-    if (this.state.keyBuffer === '`' && /^[a-z0-9]$/.test(key)) {
-      this.clearKeyTimer();
-      this.state.keyBuffer = '';
+    if (this.input.keyBuffer === '`' && /^[a-z0-9]$/.test(key)) {
+      this.input.replace('', this.input.countBuffer);
       void this.#marks.jump(
         this.state.marks,
         this.#dependencies.reader,
@@ -960,23 +929,21 @@ export class ReaderSession {
       consume();
       return true;
     }
-    if (this.state.keyBuffer === 'd' && key === 'm') {
-      this.state.keyBuffer = 'dm';
+    if (this.input.keyBuffer === 'd' && key === 'm') {
+      this.input.replace('dm', this.input.countBuffer);
       this.armMarkTimer();
       this.updateIndicator();
       consume();
       return true;
     }
-    if (this.state.keyBuffer === 'd' && key === 'M') {
-      this.clearKeyTimer();
-      this.state.keyBuffer = '';
+    if (this.input.keyBuffer === 'd' && key === 'M') {
+      this.input.replace('', this.input.countBuffer);
       void this.#marks.clear(this.state.marks, this.#dependencies.reader);
       consume();
       return true;
     }
-    if (this.state.keyBuffer === 'dm' && /^[a-z0-9]$/.test(key)) {
-      this.clearKeyTimer();
-      this.state.keyBuffer = '';
+    if (this.input.keyBuffer === 'dm' && /^[a-z0-9]$/.test(key)) {
+      this.input.replace('', this.input.countBuffer);
       void this.#marks.delete(this.state.marks, this.#dependencies.reader, key);
       consume();
       return true;
@@ -984,12 +951,7 @@ export class ReaderSession {
     return false;
   }
   private armMarkTimer(): void {
-    this.clearKeyTimer();
-    this.state.keyTimeout = this.schedule(1200, () => {
-      this.state.keyBuffer = '';
-      this.state.countBuffer = '';
-      this.updateIndicator();
-    });
+    this.input.scheduleReset(1200, () => this.updateIndicator());
   }
 
   private readerConsumesKey(key: string): boolean {
@@ -1003,15 +965,15 @@ export class ReaderSession {
       );
     if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
     if (
-      this.state.keyBuffer === 'm' ||
-      this.state.keyBuffer === '`' ||
-      this.state.keyBuffer === 'dm'
+      this.input.keyBuffer === 'm' ||
+      this.input.keyBuffer === '`' ||
+      this.input.keyBuffer === 'dm'
     )
       return /^[a-z0-9]$/.test(key);
     const context = {
       mode: readerBindingMode(this.state.mode),
-      keyBuffer: this.state.keyBuffer,
-      countBuffer: this.state.countBuffer,
+      keyBuffer: this.input.keyBuffer,
+      countBuffer: this.input.countBuffer,
       bindings: this.#dependencies.bindings(),
       allowCountPrefix: this.state.mode === 'normal',
     };
@@ -1363,11 +1325,8 @@ export class ReaderSession {
       this.#dependencies.selection?.clearOwner(this);
     }
     if (mode !== 'normal') this.#smoothScroller.stop(true);
-    this.#inputRevision += 1;
     this.state.mode = mode;
-    this.state.keyBuffer = '';
-    this.state.countBuffer = '';
-    this.clearKeyTimer();
+    this.input.reset();
     this.clearKeyGuide();
     if (mode !== 'visual') this.#selectionRange.leave();
     this.updateIndicator();
@@ -1381,7 +1340,7 @@ export class ReaderSession {
 
   private refreshKeyGuide(): void {
     const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
-    const prefix = this.state.keyBuffer;
+    const prefix = this.input.keyBuffer;
     if (!config.enabled || this.state.mode !== 'normal' || !isLeaderPrefix(prefix)) {
       this.clearKeyGuide();
       return;
@@ -1411,7 +1370,7 @@ export class ReaderSession {
     this.clearTimer(this.#keyGuideTimer);
     this.#keyGuideTimer = this.schedule(config.delayMs, () => {
       this.#keyGuideTimer = null;
-      if (this.state.mode !== 'normal' || this.state.keyBuffer !== prefix) return;
+      if (this.state.mode !== 'normal' || this.input.keyBuffer !== prefix) return;
       this.#keyGuide.show(
         document,
         { add: (root) => this.themeRoot(root as HTMLElement) },
@@ -1432,7 +1391,7 @@ export class ReaderSession {
   private updateIndicator(): void {
     const indicator = this.state.indicator;
     if (!indicator) return;
-    if (this.state.mode === 'normal' && !this.state.keyBuffer && !this.state.countBuffer) {
+    if (this.state.mode === 'normal' && !this.input.keyBuffer && !this.input.countBuffer) {
       indicator.style.display = 'none';
       return;
     }
@@ -1441,13 +1400,13 @@ export class ReaderSession {
       const selected = annotationText(
         this.#navigation.activePdfWindow()?.getSelection()?.toString() ?? '',
       );
-      const pending = this.state.countBuffer || this.state.keyBuffer;
-      indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
+      const pending = this.input.countBuffer || this.input.keyBuffer;
+      indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
       indicator.style.color = THEME_VARS.modeVisualText;
       indicator.style.background = THEME_VARS.modeVisual;
       return;
     }
-    indicator.textContent = `-- ${this.state.mode.toUpperCase()} --${this.state.countBuffer || this.state.keyBuffer ? `  ${this.state.countBuffer}${this.state.keyBuffer}` : ''}`;
+    indicator.textContent = `-- ${this.state.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
     indicator.style.color =
       this.state.mode === 'insert' ? THEME_VARS.modeInsertText : THEME_VARS.modeNormalText;
     indicator.style.background =
@@ -2023,6 +1982,7 @@ export class ReaderSession {
    */
   private startSmoothHold(event: KeyboardEvent, pdfWindow: PdfWindow, key: string): boolean {
     if (this.#smoothScroller.isRepeat(event)) {
+      this.input.replace(this.input.keyBuffer, this.input.countBuffer);
       event.preventDefault();
       event.stopImmediatePropagation();
       return true;
@@ -2030,7 +1990,7 @@ export class ReaderSession {
     if (
       this.#smoothScroller.mode === 'step' ||
       this.state.mode !== 'normal' ||
-      this.state.countBuffer ||
+      this.input.countBuffer ||
       event.ctrlKey ||
       event.metaKey ||
       event.altKey
@@ -2040,8 +2000,8 @@ export class ReaderSession {
     const decision = advanceInput(
       {
         mode: 'reader-normal',
-        keyBuffer: this.state.keyBuffer,
-        countBuffer: this.state.countBuffer,
+        keyBuffer: this.input.keyBuffer,
+        countBuffer: this.input.countBuffer,
         bindings,
         allowCountPrefix: true,
       },
@@ -2050,11 +2010,9 @@ export class ReaderSession {
     if (decision.kind !== 'execute') return false;
     const spec = smoothScrollSpec(decision.action);
     if (!spec || !this.#smoothScroller.start(pdfWindow, event.key, spec)) return false;
-    const hadPendingSequence = !!this.state.keyBuffer;
-    this.state.keyBuffer = '';
-    this.state.countBuffer = '';
+    const hadPendingSequence = !!this.input.keyBuffer;
+    this.input.reset();
     if (hadPendingSequence) {
-      this.clearKeyTimer();
       this.clearKeyGuide();
       this.updateIndicator();
     }
@@ -2119,11 +2077,6 @@ export class ReaderSession {
   private scrollDocumentToRatio(pdfWindow: PdfWindow, ratio: number): void {
     const container = this.scrollContainer(pdfWindow);
     this.scrollTo(pdfWindow, ratio * Math.max(0, container.scrollHeight - container.clientHeight));
-  }
-
-  private clearKeyTimer(): void {
-    this.clearTimer(this.state.keyTimeout);
-    this.state.keyTimeout = null;
   }
 
   private schedule(delay: number, task: () => void): ReaderTimer {

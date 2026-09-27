@@ -42,30 +42,41 @@ export class InputRuntime {
     this.#timer = undefined;
   }
 
-  #apply(state: InputState): void {
-    this.#keyBuffer = state.keyBuffer;
-    this.#countBuffer = state.countBuffer;
+  /** Replaces pending input for host-owned key grammars outside the binding engine. */
+  replace(keyBuffer: string, countBuffer: string): void {
+    this.#keyBuffer = keyBuffer;
+    this.#countBuffer = countBuffer;
     this.#revision += 1;
     this.#clearTimer();
+  }
+
+  #arm(delayMs: number, task: () => void): void {
+    this.#clearTimer();
+    const revision = ++this.#revision;
+    this.#timer = this.#timers.setTimeout(() => {
+      if (revision !== this.#revision) return;
+      this.#timer = undefined;
+      task();
+    }, delayMs);
   }
 
   cancel(mode: Mode): boolean {
     const next = cancelPendingInput(this.#state(mode));
     if (!next) return false;
-    this.#apply(next);
+    this.replace(next.keyBuffer, next.countBuffer);
     return true;
   }
 
   backspace(mode: Mode): boolean {
     const next = backspacePendingInput(this.#state(mode));
     if (!next) return false;
-    this.#apply(next);
+    this.replace(next.keyBuffer, next.countBuffer);
     return true;
   }
 
   advance(mode: Mode, bindings: BindingMap, key: string, allowCountPrefix: boolean): InputDecision {
     const decision = advanceInput({ ...this.#state(mode), bindings, allowCountPrefix }, key);
-    this.#apply(decision.state);
+    this.replace(decision.state.keyBuffer, decision.state.countBuffer);
     return decision;
   }
 
@@ -75,23 +86,24 @@ export class InputRuntime {
     delayMs: number,
     onTimeout: (resolved: InputDecision) => void,
   ): void {
-    this.#clearTimer();
-    const revision = this.#revision;
-    this.#timer = this.#timers.setTimeout(() => {
-      if (revision !== this.#revision) return;
-      this.#timer = undefined;
+    this.#arm(delayMs, () => {
       const resolved = resolveInputTimeout(pending);
       this.#keyBuffer = resolved.state.keyBuffer;
       this.#countBuffer = resolved.state.countBuffer;
       onTimeout(resolved);
-    }, delayMs);
+    });
+  }
+
+  /** Expires pending host-owned input without interpreting it as an Action. */
+  scheduleReset(delayMs: number, onTimeout: () => void): void {
+    this.#arm(delayMs, () => {
+      this.reset();
+      onTimeout();
+    });
   }
 
   reset(): void {
-    this.#keyBuffer = '';
-    this.#countBuffer = '';
-    this.#revision += 1;
-    this.#clearTimer();
+    this.replace('', '');
   }
 
   dispose(): void {
