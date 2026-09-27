@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BINDINGS,
   encodeBindingOverrides,
+  DEFAULT_PREFIX_BINDINGS,
   type BindingMap,
+  resolveBindings,
 } from '../../src/input/bindings';
 import {
   actionLabel,
@@ -150,6 +152,49 @@ describe('binding editor model transitions', () => {
       edits.map((patch) => patch.action),
     );
     expect(deriveBindingEditor(state).validation.valid).toBe(true);
+  });
+
+  it('edits resolved action rows per exact mode without turning prefixes into Actions', () => {
+    const initial = createBindingEditor(
+      resolveBindings(
+        JSON.stringify({
+          'reader-normal:<Space>ff': null,
+          'note-normal:<Space>ff': 'findCollectionItems',
+        }),
+      ),
+    );
+    const main = initial.rows.find(
+      (candidate) => candidate.mode === 'main-normal' && candidate.key === '<Space>ff',
+    );
+    if (!main) throw new Error('Expected the Main Find Action');
+    expect(main.action).toBe('findAllItems');
+    expect(
+      initial.rows.some(
+        (candidate) => candidate.mode === 'reader-normal' && candidate.key === '<Space>ff',
+      ),
+    ).toBe(false);
+    expect(
+      initial.rows.filter((candidate) =>
+        Object.hasOwn(DEFAULT_PREFIX_BINDINGS, `${candidate.mode}:${candidate.key}`),
+      ),
+    ).toEqual([]);
+    expect(actionOptions('main-select', 'findAllItems')).toEqual([]);
+    expect(actionOptions('reader-normal', 'findAllItems')).toContain('findAllItems');
+
+    const edited = transition(initial, {
+      type: 'update-row',
+      rowId: main.id,
+      patch: { mode: 'reader-normal' },
+    });
+    const effective = deriveBindingEditor(edited).effectiveMap;
+    if (!effective) throw new Error('Expected a valid exact-mode draft');
+    expect(effective['reader-normal:<Space>ff']).toBe('findAllItems');
+    expect(effective['main-normal:<Space>ff']).toBeUndefined();
+    expect(effective['note-normal:<Space>ff']).toBe('findCollectionItems');
+    const restored = resolveBindings(encodeBindingOverrides(effective));
+    expect(restored['reader-normal:<Space>ff']).toBe('findAllItems');
+    expect(restored['main-normal:<Space>ff']).toBeUndefined();
+    expect(restored['note-normal:<Space>ff']).toBe('findCollectionItems');
   });
 
   it('preserves incompatible legacy rows and blocks Apply until their Mode or Action is corrected', () => {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { isActionId, type ActionId } from '../../src/input/actions';
+import { resolveBindings } from '../../src/input/bindings';
 import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
 import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
 import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
@@ -14,6 +15,7 @@ import { MainNavigation } from '../../src/main/navigation';
 import type { MainWindowSession } from '../../src/main/session';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import { createTagCandidateProvider } from '../../src/main/picker/providers/tags';
+import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 import { citationKey } from '../../src/platform/better-bibtex';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -374,6 +376,45 @@ describe('picker mouse activation', () => {
 });
 
 describe('command palette provider', () => {
+  it('projects exact resolved Action shortcuts while keeping unbound Actions available', async () => {
+    const bindings = resolveBindings(
+      JSON.stringify({
+        'main-normal:<Space>ps': null,
+        'main-normal:L': null,
+        'main-normal:y': 'nextTab',
+        'reader-normal:<Space>ff': null,
+      }),
+    );
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      bindingMode: 'main-normal',
+      actions: ['nextTab', 'openNeoSettings', 'findAllItems'],
+      bindings,
+      language: 'en',
+      execute: () => {},
+    };
+    const main = createCommandsProvider(context);
+    const mainItems = await main.load();
+    expect(mainItems.map((item) => item.id).sort()).toEqual(
+      ['nextTab', 'openNeoSettings', 'findAllItems'].sort(),
+    );
+    expect(mainItems.find((item) => item.id === 'nextTab')?.meta).toBe('y');
+    const find = mainItems.find((item) => item.id === 'findAllItems');
+    if (!find) throw new Error('Expected bound Find Action');
+    expect(find.meta).toBe('<Space>ff');
+    expect(main.preview(find).body).toContain('Keys: <Space>ff');
+    expect(mainItems.find((item) => item.id === 'openNeoSettings')?.meta).toBe('Unbound');
+
+    const readerItems = await createCommandsProvider({
+      ...context,
+      mode: 'normal',
+      bindingMode: 'reader-normal',
+    }).load();
+    expect(readerItems.find((item) => item.id === 'nextTab')?.meta).toBe('L');
+    expect(readerItems.find((item) => item.id === 'openNeoSettings')?.meta).toBe('<Space>ps');
+    expect(readerItems.find((item) => item.id === 'findAllItems')?.meta).toBe('Unbound');
+  });
+
   it('deduplicates remapped actions and closes before keyboard or pointer execution', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const tabs = {
