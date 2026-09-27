@@ -652,6 +652,14 @@ export class ReaderSession {
     if (this.state.mode === 'normal' && this.modeEnabled('visual')) this.setMode('visual');
   }
 
+  deactivateInteraction(): void {
+    if (this.state.mode === 'insert' && this.#commentEditor.hasInput) {
+      void this.handOverNativeEditor();
+      return;
+    }
+    this.setMode('normal');
+  }
+
   nativeEditableFocused(): boolean {
     return isEditableElement(
       this.#dependencies.reader._iframeWindow?.document.activeElement ?? null,

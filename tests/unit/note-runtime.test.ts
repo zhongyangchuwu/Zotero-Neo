@@ -87,6 +87,23 @@ function harness() {
 }
 
 describe('Note surface runtime identity', () => {
+  it('deactivates Note interaction without discarding Note identity or register state', () => {
+    const h = harness();
+
+    h.sync();
+    h.note.mode = 'insert';
+    h.note.yank = 'kept register';
+    h.note.input.replace('d', '2');
+
+    h.note.deactivateInteraction();
+
+    expect(h.note.itemID).toBe(1);
+    expect(h.note.mode).toBe('normal');
+    expect(h.note.yank).toBe('kept register');
+    expect(h.note.input.keyBuffer).toBe('');
+    expect(h.note.input.countBuffer).toBe('');
+  });
+
   it('keeps one runtime binding for the same Note item and editor host', () => {
     const h = harness();
 

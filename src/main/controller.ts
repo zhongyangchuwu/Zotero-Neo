@@ -227,6 +227,11 @@ export class MainWindowController implements MainWindowControllerApi {
     this.clearKeyGuide(window, session);
   }
 
+  private deactivateMainSurface(window: MainWindow, session: MainWindowSession): void {
+    if (this.#itemSelect.isVisual(window)) this.#itemSelect.leave(window, session.selection);
+    this.resetMainInput(window, session);
+  }
+
   executeFromReader(
     action: ReaderDelegableMainAction,
     count: number,
@@ -400,8 +405,7 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (compositionOwnsKey(event, false)) return;
     if (this.#itemSelect.isVisual(window) && !this.#itemSelect.itemsFocused(window)) {
-      this.#itemSelect.leave(window, session.selection);
-      this.resetMainInput(window, session);
+      this.deactivateMainSurface(window, session);
       return;
     }
     const key = keyString(event);

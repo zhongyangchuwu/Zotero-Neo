@@ -1069,6 +1069,19 @@ describe('Reader leader timer guards', () => {
     created.session.dispose();
   });
 
+  it('deactivates Reader interaction back to Normal and clears pending input', () => {
+    const created = createHistorySession();
+    created.session.state.mode = 'visual';
+    created.session.input.replace('g', '2');
+
+    created.session.deactivateInteraction();
+
+    expect(created.session.state.mode).toBe('normal');
+    expect(created.session.input.keyBuffer).toBe('');
+    expect(created.session.input.countBuffer).toBe('');
+    created.session.dispose();
+  });
+
   it('keeps Reader Insert text native and Escape returns to Normal', async () => {
     const created = createHistorySession();
     created.session.state.mode = 'insert';
