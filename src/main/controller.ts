@@ -114,8 +114,8 @@ export class MainWindowController implements MainWindowControllerApi {
           this.refreshKeyGuide(
             window,
             session,
-            session.note.buffer,
-            (prefix) => session.note.buffer === prefix,
+            session.note.input.keyBuffer,
+            (prefix) => session.note.input.keyBuffer === prefix,
             active.mode,
             active.bindings,
           );

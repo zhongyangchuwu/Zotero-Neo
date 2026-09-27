@@ -10,6 +10,7 @@ import type {
 import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
+import { InputRuntime } from '../../src/input/runtime';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { MainItemSelect } from '../../src/main/item-select';
@@ -649,10 +650,12 @@ describe('directional pane focus', () => {
     } as unknown as Document;
     const window = {
       document,
+      setTimeout,
+      clearTimeout,
       Zotero_Tabs: { selectedID: 'reader-tab' },
     } as unknown as MainWindow;
     const session = {
-      note: { mode: 'normal', buffer: '', count: '', timer: undefined, inputRevision: 0, yank: '' },
+      note: { mode: 'normal', input: new InputRuntime(window), yank: '' },
     } as MainWindowSession;
     const editor = new NoteEditor(
       logger,
@@ -742,10 +745,7 @@ describe('NoteEditor shared binding input', () => {
         editorDocument: null,
         handler: null,
         mode: 'normal',
-        buffer: '',
-        count: '',
-        timer: undefined,
-        inputRevision: 0,
+        input: new InputRuntime(main),
         yank: '',
       },
     } as unknown as MainWindowSession;
@@ -813,13 +813,66 @@ describe('NoteEditor shared binding input', () => {
 
     test.press('3');
     test.press('g');
-    expect(test.session.note.count).toBe('3');
-    expect(test.session.note.buffer).toBe('g');
+    expect(test.session.note.input.countBuffer).toBe('3');
+    expect(test.session.note.input.keyBuffer).toBe('g');
 
     test.press('Escape');
-    expect(test.session.note.count).toBe('');
-    expect(test.session.note.buffer).toBe('');
+    expect(test.session.note.input.countBuffer).toBe('');
+    expect(test.session.note.input.keyBuffer).toBe('');
     expect(test.actions).toEqual([]);
+    vi.useRealTimers();
+  });
+
+  it('keeps d/y/c as pending Note Normal operators without stealing native Backspace', () => {
+    for (const operator of ['d', 'y', 'c']) {
+      const test = harness();
+      test.press('2');
+      test.press(operator);
+      expect(test.session.note.input.keyBuffer).toBe(operator);
+      expect(test.session.note.input.countBuffer).toBe('2');
+      const backspace = test.press('Backspace');
+      expect(backspace.preventDefault).not.toHaveBeenCalled();
+      expect(test.session.note.input.keyBuffer).toBe('');
+      expect(test.session.note.input.countBuffer).toBe('');
+      vi.useRealTimers();
+    }
+  });
+
+  it('backs up and cancels a counted Space prefix without losing its count', () => {
+    const test = harness();
+    test.press('3');
+    test.press(' ');
+    test.press('f');
+    const backspace = test.press('Backspace');
+    expect(backspace.preventDefault).toHaveBeenCalledOnce();
+    expect(test.session.note.input.keyBuffer).toBe(' ');
+    expect(test.session.note.input.countBuffer).toBe('3');
+    const escape = test.press('Escape');
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(test.session.note.input.keyBuffer).toBe('');
+    expect(test.session.note.input.countBuffer).toBe('3');
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(test.actions).toEqual([]);
+    test.press('H');
+    expect(test.actions).toEqual([['previousTab', 3]]);
+    vi.useRealTimers();
+  });
+
+  it('invalidates an ambiguous timeout on close and starts later input clean', () => {
+    const test = harness({ 'note-normal:<Space>f': 'nextTab' });
+    test.press('2');
+    test.press(' ');
+    test.press('f');
+    test.editor.clear(test.session);
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(test.actions).toEqual([]);
+    expect(test.session.note.input.keyBuffer).toBe('');
+    expect(test.session.note.input.countBuffer).toBe('');
+
+    test.press(' ');
+    test.press('f');
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(test.actions).toEqual([['nextTab', 0]]);
     vi.useRealTimers();
   });
 
@@ -880,7 +933,7 @@ describe('NoteEditor shared binding input', () => {
 
     expect(test.actions).toEqual([['openCommandPalette', 0]]);
     expect(colon.preventDefault).toHaveBeenCalledOnce();
-    expect(test.session.note.count).toBe('');
+    expect(test.session.note.input.countBuffer).toBe('');
     vi.useRealTimers();
   });
 
