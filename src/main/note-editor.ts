@@ -13,9 +13,11 @@ import { copyToClipboard } from '../platform/clipboard';
 import { asElement } from '../platform/dom';
 import {
   activeContextEditorWindow,
+  activeContextNoteItem,
   mainReaderForTab,
   mainTabList,
   selectedMainTabID,
+  selectedMainTabInfo,
 } from './host';
 
 export type NoteBindingMode = Extract<Mode, 'note-normal' | 'note-insert'>;
@@ -102,7 +104,8 @@ export class NoteEditor {
       return;
     }
     const candidate = this.find(main);
-    if (candidate === session.note.editorWindow) return;
+    const itemID = this.noteItemID(main);
+    if (candidate === session.note.editorWindow && itemID === session.note.itemID) return;
     this.clear(session);
     if (!candidate) return;
     const handler: EventListener = (event) =>
@@ -112,6 +115,7 @@ export class NoteEditor {
     session.note.editorWindow = candidate;
     session.note.editorDocument = candidate.document;
     session.note.handler = handler;
+    session.note.itemID = itemID;
     this.style(candidate.document, session.note.mode);
   }
 
@@ -119,7 +123,7 @@ export class NoteEditor {
     const { editorWindow, editorDocument, handler } = session.note;
     if (editorWindow && handler) editorWindow.removeEventListener('keydown', handler, true);
     if (editorDocument && handler) editorDocument.removeEventListener('keydown', handler, true);
-    session.note.input.reset();
+    session.note.resetInteraction();
     session.note.editorWindow = null;
     session.note.editorDocument = null;
     session.note.handler = null;
@@ -398,6 +402,14 @@ export class NoteEditor {
     const range = selection.getRangeAt(0);
     range.insertNode(el.ownerDocument.createTextNode(text));
     return true;
+  }
+
+  private noteItemID(main: MainWindow): number | null {
+    const contextual = activeContextNoteItem(main);
+    if (contextual?.id) return contextual.id;
+    const tab = selectedMainTabInfo(main);
+    const itemID = tab?.type?.startsWith('note') ? tab.data?.itemID : undefined;
+    return typeof itemID === 'number' && itemID > 0 ? itemID : null;
   }
 
   private find(main: MainWindow): Window | null {
