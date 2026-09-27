@@ -72,4 +72,18 @@ describe('active Surface resolution', () => {
       kind: 'note',
     });
   });
+
+  it('tracks Main -> Reader -> Main transitions directly from changing Zotero host state', () => {
+    Reflect.set(globalThis, 'Zotero', {
+      Reader: { getByTabID: (tabID: string) => (tabID === 'reader-tab' ? { itemID: 42 } : null) },
+    });
+    const window = mainWindow();
+    const tabs = (window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs;
+
+    expect(resolveActiveSurface(window)).toEqual({ kind: 'main' });
+    tabs.selectedID = 'reader-tab';
+    expect(resolveActiveSurface(window)).toEqual({ kind: 'reader', tabID: 'reader-tab' });
+    tabs.selectedID = 'zotero-pane';
+    expect(resolveActiveSurface(window)).toEqual({ kind: 'main' });
+  });
 });

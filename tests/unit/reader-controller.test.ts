@@ -130,6 +130,68 @@ describe('reader discovery diagnostics', () => {
     expect(removeDocumentListener).toHaveBeenCalled();
     controller.shutdown();
   });
+
+  it('keeps the active Reader runtime and deactivates sibling Reader runtimes', () => {
+    const ownerWindow = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
+    const pdfWindow = () =>
+      ({
+        document: {
+          getElementById: () => null,
+          querySelector: () => null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          documentElement: { removeAttribute: () => {} },
+        },
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        setInterval: () => 1,
+        focus: () => {},
+      }) as unknown as PdfWindow;
+    const reader = (instanceID: string, itemID: number): ReaderRuntime =>
+      ({
+        _instanceID: instanceID,
+        itemID,
+        _window: ownerWindow,
+        _internalReader: { _primaryView: { _iframeWindow: pdfWindow() } },
+      }) as unknown as ReaderRuntime;
+    const first = reader('reader-a', 41);
+    const second = reader('reader-b', 42);
+    const readerService = {
+      _readers: [first, second] as ReaderRuntime[],
+      registerEventListener: () => Symbol('reader-listener'),
+      unregisterEventListener: () => {},
+      getByTabID: (tabID: string) => (tabID === 'reader-b-tab' ? second : null),
+    };
+    Reflect.set(globalThis, 'Zotero', { Reader: readerService });
+    const dependencies = {
+      preferences: {
+        has: () => false,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
+        set: () => {},
+      },
+      logger: { debug: () => {}, diagnostic: () => {} },
+      delegateMain: () => {},
+      openCommandPalette: () => {},
+      captureReaderSelectionToNote: async () => false,
+    } as ReaderControllerDependencies;
+    const controller = createReaderController(dependencies);
+    const deactivate = vi.spyOn(ReaderSession.prototype, 'deactivateInteraction');
+
+    try {
+      controller.start('zotero-neo@zotero-neo');
+      controller.rescan(ownerWindow);
+      controller.deactivateInactive(ownerWindow, 'reader-b-tab');
+
+      expect(deactivate).toHaveBeenCalledOnce();
+      expect((deactivate.mock.instances[0] as ReaderSession | undefined)?.reader).toBe(first);
+
+      controller.deactivateInactive(ownerWindow, null);
+      expect(deactivate).toHaveBeenCalledTimes(3);
+    } finally {
+      controller.shutdown();
+      deactivate.mockRestore();
+    }
+  });
 });
 
 function createHistorySession(
