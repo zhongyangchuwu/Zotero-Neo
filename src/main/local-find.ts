@@ -1,4 +1,5 @@
 import type { MainWindow } from '../core/contracts';
+import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { citationKey } from '../platform/better-bibtex';
 import { THEME_VARS } from '../ui/theme';
@@ -151,7 +152,7 @@ export class MainLocalFind {
       event.stopPropagation();
     };
 
-    if (event.isComposing) {
+    if (compositionOwnsKey(event, false)) {
       event.stopPropagation();
       return;
     }

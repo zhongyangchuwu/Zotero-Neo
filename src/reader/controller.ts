@@ -16,6 +16,7 @@ import {
 import { copyToClipboard } from '../platform/clipboard';
 import { cloneInto } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
+import { compositionOwnsKey } from '../input/composition';
 import { advanceInput, inputWouldConsume } from '../input/engine';
 import { InputRuntime, type InputTimerHost } from '../input/runtime';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
@@ -747,6 +748,7 @@ export class ReaderSession {
       this.clearKeyGuide();
       return;
     }
+    if (compositionOwnsKey(event, false)) return;
     const mode = readerBindingMode(this.state.mode);
     if (
       event.key.toLowerCase() === 'escape' &&
@@ -878,6 +880,10 @@ export class ReaderSession {
   }
 
   private handleInsertKey(event: KeyboardEvent): void {
+    if (compositionOwnsKey(event, false)) {
+      if (this.#commentEditor.ownsTarget(event.target)) event.stopImmediatePropagation();
+      return;
+    }
     if (keyString(event) === 'escape') {
       event.preventDefault();
       event.stopImmediatePropagation();

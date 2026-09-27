@@ -1,3 +1,4 @@
+import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import type { ReaderRuntime, ReaderViewRuntime } from './types';
 
@@ -65,11 +66,9 @@ export class ReaderHostKeyBridge {
     if (this.#keyPatches.has(view) || !view._onKeyDown) return;
     const original = view._onKeyDown;
     const wrapper = (event: KeyboardEvent): unknown => {
-      if (
-        this.#dependencies.nativeEditableFocused() ||
-        this.#dependencies.consumesKey(keyString(event))
-      )
-        return undefined;
+      if (this.#dependencies.nativeEditableFocused()) return undefined;
+      if (compositionOwnsKey(event, false)) return original.call(view, event);
+      if (this.#dependencies.consumesKey(keyString(event))) return undefined;
       return original.call(view, event);
     };
     try {

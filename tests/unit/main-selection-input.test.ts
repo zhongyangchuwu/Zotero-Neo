@@ -135,7 +135,7 @@ function harness() {
   } as MainWindowControllerDependencies);
   controller.addWindow(window);
 
-  const press = (key: string) => {
+  const press = (key: string, options: Partial<KeyboardEvent> = {}) => {
     const preventDefault = vi.fn();
     const stopPropagation = vi.fn();
     keydown?.({
@@ -147,6 +147,7 @@ function harness() {
       repeat: false,
       preventDefault,
       stopPropagation,
+      ...options,
     } as unknown as KeyboardEvent);
     return { preventDefault, stopPropagation };
   };
@@ -294,5 +295,21 @@ describe('Main transient-target Escape grammar', () => {
     readerHost.press('Escape');
     expect(readerHost.clearSelection).not.toHaveBeenCalled();
     readerHost.controller.shutdown();
+  });
+  it('leaves IME-owned Escape and nested contenteditable keys native', () => {
+    const host = harness();
+    host.press(' ');
+    const composingEscape = host.press('Escape', { isComposing: true });
+    const processBackspace = host.press('Backspace', { keyCode: 229 });
+    expect(composingEscape.preventDefault).not.toHaveBeenCalled();
+    expect(processBackspace.preventDefault).not.toHaveBeenCalled();
+    expect(host.press('Escape').preventDefault).toHaveBeenCalledOnce();
+
+    const editor = themedElement('nested-editor');
+    Reflect.set(editor, 'isContentEditable', true);
+    const native = host.press('j', { target: editor });
+    expect(native.preventDefault).not.toHaveBeenCalled();
+    expect(host.focused()).toBe(0);
+    host.controller.shutdown();
   });
 });

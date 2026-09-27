@@ -204,5 +204,11 @@ describe('Main local find', () => {
 
     expect(h.session.localFind.query).toBe('old');
     expect(h.session.localFind.open).toBe(true);
+    const edge = key('Enter');
+    Reflect.set(edge, 'keyCode', 229);
+    h.find.handleKey(edge, h.window, h.session);
+    expect(edge.preventDefault).not.toHaveBeenCalled();
+    expect(h.session.localFind.open).toBe(true);
+    expect(h.session.localFind.query).toBe('old');
   });
 });

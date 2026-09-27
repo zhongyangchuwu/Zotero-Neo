@@ -22,13 +22,14 @@ import {
   pickerMouseEnabled,
 } from '../core/preferences';
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
+import { compositionOwnsKey } from '../input/composition';
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isGuidePrefix } from '../input/key-guide';
 import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
-import { isEditableElement } from '../platform/dom';
+import { asElement, isEditableElement } from '../platform/dom';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
@@ -338,6 +339,10 @@ export class MainWindowController implements MainWindowControllerApi {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
     if (session.settings.open) {
+      if (compositionOwnsKey(event, false)) {
+        event.stopPropagation();
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation?.();
@@ -377,12 +382,14 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     const active = window.document.activeElement;
-    if (isEditableElement(active)) {
+    const target = asElement(event.target);
+    const editable = isEditableElement(active) ? active : isEditableElement(target) ? target : null;
+    if (editable) {
       this.clearKeyGuide(window, session);
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !compositionOwnsKey(event, false)) {
         event.preventDefault();
         event.stopPropagation();
-        (active as HTMLElement).blur();
+        (editable as HTMLElement).blur();
       }
       return;
     }
@@ -391,6 +398,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.reader.forwardKey(event, window);
       return;
     }
+    if (compositionOwnsKey(event, false)) return;
     if (this.#itemSelect.isVisual(window) && !this.#itemSelect.itemsFocused(window)) {
       this.#itemSelect.leave(window, session.selection);
       this.resetMainInput(window, session);

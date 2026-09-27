@@ -876,6 +876,20 @@ describe('NoteEditor shared binding input', () => {
     vi.useRealTimers();
   });
 
+  it('leaves a Note Normal leader pending across IME-owned Escape and Backspace', () => {
+    const test = harness();
+    test.press(' ');
+    test.press('f');
+    const escape = test.press('Escape', { isComposing: true });
+    const backspace = test.press('Backspace', { keyCode: 229 });
+    expect(escape.preventDefault).not.toHaveBeenCalled();
+    expect(backspace.preventDefault).not.toHaveBeenCalled();
+    expect(test.session.note.input.keyBuffer).toBe(' f');
+    test.press('Escape');
+    expect(test.session.note.input.keyBuffer).toBe('');
+    vi.useRealTimers();
+  });
+
   it('keeps Note-local keys local while explicit global Note bindings dispatch externally', () => {
     const test = harness();
 
@@ -1034,7 +1048,11 @@ function settingsMainHost() {
     reader: { rescan: () => {}, forwardKey: () => {} },
   } as MainWindowControllerDependencies);
   controller.addWindow(host.window);
-  const press = (key: string, target?: EventTarget): KeyboardEvent => {
+  const press = (
+    key: string,
+    target?: EventTarget,
+    options: Partial<KeyboardEvent> = {},
+  ): KeyboardEvent => {
     const event = {
       key,
       target,
@@ -1045,6 +1063,7 @@ function settingsMainHost() {
       preventDefault: vi.fn(),
       stopPropagation: vi.fn(),
       stopImmediatePropagation: vi.fn(),
+      ...options,
     } as unknown as KeyboardEvent;
     host.keydown(event);
     return event;
@@ -1375,6 +1394,32 @@ describe('Main Settings Center shell', () => {
       enter.mockRestore();
       itemsFocused.mockRestore();
       notEmpty.mockRestore();
+    }
+  });
+  it('leaves composing Escape in Settings native while ordinary Escape closes', () => {
+    const host = settingsMainHost();
+    try {
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
+        HTMLElement & { emit(type: string): void }
+      >;
+      nav[3]!.emit('click');
+      const visit = (node: HTMLElement): HTMLElement[] => [
+        node,
+        ...Array.from(node.children).flatMap((child) => visit(child as HTMLElement)),
+      ];
+      const input = visit(host.drawer()!).find(
+        (node) => node.getAttribute('aria-label') === 'Display delay (ms)',
+      );
+      if (!input) throw new Error('Expected a Settings input');
+      const composing = host.press('Escape', input, { isComposing: true, keyCode: 229 });
+      expect(composing.preventDefault).not.toHaveBeenCalled();
+      expect(host.drawer()).toBeDefined();
+      const escape = host.press('Escape', input);
+      expect(escape.preventDefault).toHaveBeenCalledOnce();
+      expect(host.drawer()).toBeUndefined();
+    } finally {
+      host.controller.shutdown();
     }
   });
 

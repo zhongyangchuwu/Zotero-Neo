@@ -215,7 +215,12 @@ function createHistorySession(
 
 function readerKey(
   key: string,
-  options: { readonly ctrl?: boolean; readonly target?: EventTarget | null } = {},
+  options: {
+    readonly ctrl?: boolean;
+    readonly target?: EventTarget | null;
+    readonly isComposing?: boolean;
+    readonly keyCode?: number;
+  } = {},
 ) {
   const preventDefault = vi.fn();
   const stopImmediatePropagation = vi.fn();
@@ -223,6 +228,8 @@ function readerKey(
     event: {
       key,
       ctrlKey: options.ctrl ?? false,
+      isComposing: options.isComposing ?? false,
+      keyCode: options.keyCode ?? 0,
       metaKey: false,
       altKey: false,
       target: options.target ?? null,
@@ -445,6 +452,21 @@ describe('native reader history', () => {
     expect(originalKeyDown).toHaveBeenCalledTimes(2);
     expect(originalKeyDown).toHaveBeenNthCalledWith(1, expect.objectContaining({ key: 'x' }));
     expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'h' }));
+    created.session.dispose();
+  });
+  it('forwards composing keys rather than claiming bound Reader shortcuts', () => {
+    const originalKeyDown = vi.fn();
+    const created = createHistorySession();
+    const view = created.reader._internalReader?._primaryView;
+    if (!view) throw new Error('Expected Reader PDF view');
+    view._onKeyDown = originalKeyDown;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+
+    view._onKeyDown?.(readerKey('j', { isComposing: true }).event);
+    created.session.state.mode = 'insert';
+    view._onKeyDown?.(readerKey('Escape', { keyCode: 229 }).event);
+    expect(originalKeyDown).toHaveBeenCalledTimes(2);
     created.session.dispose();
   });
 });
@@ -995,6 +1017,26 @@ describe('Reader leader timer guards', () => {
     expect(created.session.state.mode).toBe('normal');
     expect(created.session.input.keyBuffer).toBe('');
     expect(created.session.input.countBuffer).toBe('');
+    created.session.dispose();
+  });
+  it('keeps composing Escape and Backspace outside Reader prefix and Insert commands', () => {
+    const created = createHistorySession();
+    created.session.focusAndHandle(readerKey(' ').event);
+    const escape = readerKey('Escape', { isComposing: true });
+    const backspace = readerKey('Backspace', { keyCode: 229 });
+    created.session.focusAndHandle(escape.event);
+    created.session.focusAndHandle(backspace.event);
+    expect(escape.preventDefault).not.toHaveBeenCalled();
+    expect(backspace.preventDefault).not.toHaveBeenCalled();
+    expect(created.session.input.keyBuffer).toBe(' ');
+    created.session.focusAndHandle(readerKey('Escape').event);
+    expect(created.session.input.keyBuffer).toBe('');
+
+    created.session.state.mode = 'insert';
+    const insertEscape = readerKey('Escape', { isComposing: true });
+    created.session.focusAndHandle(insertEscape.event);
+    expect(insertEscape.preventDefault).not.toHaveBeenCalled();
+    expect(created.session.state.mode).toBe('insert');
     created.session.dispose();
   });
 });
