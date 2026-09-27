@@ -131,7 +131,13 @@ function harness() {
       set: () => {},
     },
     logger: { debug: () => {}, diagnostic: () => {} },
-    reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey },
+    reader: {
+      start: () => {},
+      shutdown: () => {},
+      rescan: () => {},
+      deactivateInactive: () => {},
+      forwardKey,
+    },
   } as MainWindowControllerDependencies);
   controller.addWindow(window);
 

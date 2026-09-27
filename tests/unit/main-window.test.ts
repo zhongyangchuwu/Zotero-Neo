@@ -989,7 +989,7 @@ describe('Main startup focus handoff', () => {
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { rescan: () => {}, forwardKey: () => {} },
+      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
     } as MainWindowControllerDependencies);
     try {
       controller.addWindow(host.window);
@@ -1040,7 +1040,7 @@ function settingsMainHost() {
       },
     },
     logger,
-    reader: { rescan: () => {}, forwardKey: () => {} },
+    reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
   } as MainWindowControllerDependencies);
   controller.addWindow(host.window);
   const press = (
@@ -1479,7 +1479,7 @@ describe('Main Settings Center shell', () => {
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { rescan: () => {}, forwardKey: () => {} },
+      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
     } as MainWindowControllerDependencies);
     expect(controller.openSettings()).toBe(false);
     controller.addWindow(first.window);
@@ -1542,7 +1542,13 @@ describe('Main command palette', () => {
         set: () => {},
       },
       logger,
-      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+      },
     } as MainWindowControllerDependencies);
     controller.addWindow(host.window);
 
@@ -1578,6 +1584,7 @@ describe('Main command palette', () => {
         rescan: () => {
           throw new Error('missing Reader view');
         },
+        deactivateInactive: () => {},
         forwardKey: () => {},
       },
     } as MainWindowControllerDependencies);
@@ -1621,7 +1628,13 @@ describe('Main tab picker routing', () => {
         set: () => {},
       },
       logger,
-      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+      },
     } as MainWindowControllerDependencies);
     controller.addWindow(host.window);
 
@@ -1808,7 +1821,13 @@ describe('Main H/L tab defaults', () => {
         set: () => {},
       },
       logger,
-      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+      },
     } as MainWindowControllerDependencies);
     controller.addWindow(host.window);
 
@@ -1874,6 +1893,7 @@ describe('repeated tab switching', () => {
         start: () => {},
         shutdown: () => {},
         rescan: () => {},
+        deactivateInactive: () => {},
         forwardKey: () => {},
       },
     } as MainWindowControllerDependencies;
@@ -1927,6 +1947,7 @@ describe('repeated tab switching', () => {
         start: () => {},
         shutdown: () => {},
         rescan: () => {},
+        deactivateInactive: () => {},
         forwardKey: () => {},
       },
     } as MainWindowControllerDependencies;
@@ -1998,7 +2019,13 @@ describe('main pending-prefix key guide', () => {
           set: () => {},
         },
         logger,
-        reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+        reader: {
+          start: () => {},
+          shutdown: () => {},
+          rescan: () => {},
+          deactivateInactive: () => {},
+          forwardKey: () => {},
+        },
       } as MainWindowControllerDependencies);
       controller.addWindow(window);
       const press = (key: string) => {
@@ -2132,7 +2159,13 @@ describe('main pending-prefix key guide', () => {
         set: () => {},
       },
       logger,
-      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+      },
     } as MainWindowControllerDependencies);
     controller.addWindow(window);
 
@@ -2176,6 +2209,7 @@ describe('Reader owner picker routing', () => {
         start: () => {},
         shutdown: () => {},
         rescan: () => {},
+        deactivateInactive: () => {},
         forwardKey: () => {},
       },
     } as MainWindowControllerDependencies;
@@ -2297,7 +2331,13 @@ describe('Main CurrentTarget routing', () => {
         set: () => {},
       },
       logger,
-      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+      },
     } as MainWindowControllerDependencies);
     controller.addWindow(window);
     const preventDefault = vi.fn();
@@ -2357,7 +2397,13 @@ describe('Main CurrentTarget routing', () => {
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { start: () => {}, shutdown: () => {}, rescan: () => {}, forwardKey: () => {} },
+      reader: {
+        start: () => {},
+        shutdown: () => {},
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+      },
     } as MainWindowControllerDependencies);
     try {
       controller.addWindow(host.window);
@@ -2447,6 +2493,7 @@ describe('collection navigation repeat pacing', () => {
         start: () => {},
         shutdown: () => {},
         rescan: () => {},
+        deactivateInactive: () => {},
         forwardKey: () => {},
       },
     } as MainWindowControllerDependencies;
