@@ -90,6 +90,12 @@ describe('shared item target resolution', () => {
       total: 1,
       missing: 0,
     });
+    expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+    expect(resolveItemTargets(window, s, 'main')).toMatchObject({
+      source: 'main',
+      items: [{ id: main.id }],
+      total: 1,
+    });
   });
 
   it('Note resolves the focused context note before a note tab item', () => {
@@ -97,6 +103,8 @@ describe('shared item target resolution', () => {
     const focused = item(2, { parentItemID: 1, kind: 'note' });
     const tabNote = item(3, { kind: 'note' });
     install([parent, focused, tabNote]);
+    const s = session();
+    s.selection.add({ libraryID: 1, itemID: tabNote.id });
 
     const active = {} as Element;
     const window = {
@@ -113,9 +121,15 @@ describe('shared item target resolution', () => {
       },
     } as unknown as MainWindow;
 
-    expect(resolveItemTargets(window, session(), 'note')).toMatchObject({
+    expect(resolveItemTargets(window, s, 'note')).toMatchObject({
       source: 'note',
       items: [{ id: parent.id }],
+    });
+    expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: tabNote.id }]);
+    expect(resolveItemTargets(window, s, 'main')).toMatchObject({
+      source: 'main',
+      items: [{ id: tabNote.id }],
+      total: 1,
     });
   });
 
@@ -131,5 +145,25 @@ describe('shared item target resolution', () => {
       total: 1,
       missing: 1,
     });
+  });
+  it('reports a missing Note item without borrowing the live Main workset', () => {
+    const main = item(1);
+    install([main]);
+    const s = session();
+    s.selection.add({ libraryID: 1, itemID: main.id });
+    const window = {
+      Zotero_Tabs: {
+        selectedID: 'note-tab',
+        getTabInfo: () => ({ type: 'note', data: { itemID: 99 } }),
+      },
+    } as unknown as MainWindow;
+
+    expect(resolveItemTargets(window, s, 'note')).toMatchObject({
+      source: 'note',
+      items: [],
+      total: 1,
+      missing: 1,
+    });
+    expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 });
