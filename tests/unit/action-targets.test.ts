@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import { resolveMainEffectiveTargets } from '../../src/main/action-targets';
+import {
+  resolveMainCurrentTarget,
+  resolveMainEffectiveTargets,
+} from '../../src/main/action-targets';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 
@@ -55,6 +58,71 @@ function harness(
 }
 
 describe('Main action targets', () => {
+  it('derives CurrentTarget from live host state without a Neo cursor cache', () => {
+    const first = item(10);
+    const second = item(11);
+    const h = harness([first, second], 0, [0]);
+
+    expect(resolveMainCurrentTarget(h.window)).toEqual({
+      source: 'cursor',
+      refs: [{ libraryID: 1, itemID: first.id }],
+    });
+
+    const itemsView = (
+      h.window as unknown as {
+        ZoteroPane: { itemsView: { selection: { focused: number } } };
+      }
+    ).ZoteroPane.itemsView;
+    itemsView.selection.focused = 1;
+
+    expect(resolveMainCurrentTarget(h.window)).toEqual({
+      source: 'cursor',
+      refs: [{ libraryID: 1, itemID: second.id }],
+    });
+  });
+
+  it('treats one native-selected item as the Cursor projection when no cursor is available', () => {
+    const first = item(10);
+    const second = item(11);
+    const h = harness([first, second], -1, [1]);
+
+    expect(resolveMainCurrentTarget(h.window)).toEqual({
+      source: 'cursor',
+      refs: [{ libraryID: 1, itemID: second.id }],
+    });
+  });
+
+  it('treats native multi-selection as CurrentTarget ahead of the host cursor', () => {
+    const first = item(10);
+    const second = item(11);
+    const third = item(12);
+    const h = harness([first, second, third], 1, [0, 2]);
+
+    expect(resolveMainCurrentTarget(h.window)).toEqual({
+      source: 'native-selection',
+      refs: [
+        { libraryID: 1, itemID: first.id },
+        { libraryID: 1, itemID: third.id },
+      ],
+    });
+  });
+
+  it('lets an explicit Visual target override host native selection and cursor', () => {
+    const first = item(10);
+    const second = item(11);
+    const third = item(12);
+    const h = harness([first, second, third], 0, [0, 1]);
+    const visual = [
+      { libraryID: 1, itemID: second.id },
+      { libraryID: 1, itemID: third.id },
+    ];
+
+    expect(resolveMainCurrentTarget(h.window, visual)).toEqual({
+      source: 'visual',
+      refs: visual,
+    });
+  });
+
   it('falls back to Cursor when the explicit Selection is empty', () => {
     const first = item(10);
     const second = item(11);

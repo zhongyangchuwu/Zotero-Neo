@@ -11,7 +11,7 @@ import {
   selectMainItemCursorAnchor,
   visibleMainSelectionCount,
 } from './host';
-import type { MainCurrentTarget } from './action-targets';
+import { resolveMainCurrentTarget, type MainCurrentTarget } from './action-targets';
 import type { ItemRef } from './selection-store';
 import type { SelectionStore } from './selection-store';
 import { MainItemStateDecoration, type MainVisualRange } from './item-state-decoration';
@@ -167,16 +167,7 @@ export class MainItemSelect {
 
   currentTarget(window: MainWindow): MainCurrentTarget | null {
     const visual = this.#visual.get(window);
-    if (visual) {
-      const refs = this.visualRefs(window, visual);
-      return refs.length ? { refs, source: 'visual' } : null;
-    }
-    const native = mainSelectedItemRefs(window);
-    if (native.length > 1) return { refs: native, source: 'native-selection' };
-    const cursor = currentMainItemCursorRef(window);
-    if (cursor) return { refs: [cursor], source: 'cursor' };
-    if (native.length === 1) return { refs: native, source: 'cursor' };
-    return null;
+    return resolveMainCurrentTarget(window, visual ? this.visualRefs(window, visual) : []);
   }
 
   hasCancelableTarget(window: MainWindow): boolean {
