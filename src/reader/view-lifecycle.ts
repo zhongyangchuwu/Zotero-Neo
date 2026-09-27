@@ -14,8 +14,6 @@ interface ViewHandlers {
 export interface ReaderViewLifecycleDependencies {
   readonly reader: ReaderRuntime;
   readonly timerWindow: PdfWindow;
-  readonly activePdfWindow: () => PdfWindow;
-  readonly setActivePdfWindow: (pdfWindow: PdfWindow) => void;
   readonly onKeyDown: (event: KeyboardEvent, pdfWindow: PdfWindow) => void;
   readonly onKeyUp: (event: KeyboardEvent) => void;
   readonly onBlur: (pdfWindow: PdfWindow) => void;
@@ -39,11 +37,21 @@ function asPdfWindow(window: Window | undefined): PdfWindow | null {
 export class ReaderViewLifecycle {
   readonly #dependencies: ReaderViewLifecycleDependencies;
   readonly #handlers = new Map<PdfWindow, ViewHandlers>();
+  #activePdfWindow: PdfWindow;
   #syncTimer: number | null = null;
   #disposed = false;
 
   constructor(dependencies: ReaderViewLifecycleDependencies) {
     this.#dependencies = dependencies;
+    this.#activePdfWindow = dependencies.timerWindow;
+  }
+
+  activePdfWindow(): PdfWindow {
+    return this.#activePdfWindow;
+  }
+
+  setActivePdfWindow(pdfWindow: PdfWindow): void {
+    this.#activePdfWindow = pdfWindow;
   }
 
   start(): void {
@@ -60,9 +68,9 @@ export class ReaderViewLifecycle {
       asPdfWindow(internal?._secondaryView?._iframeWindow),
     ].filter((value): value is PdfWindow => value !== null);
 
-    if (!wanted.includes(this.#dependencies.activePdfWindow())) {
+    if (!wanted.includes(this.#activePdfWindow)) {
       const next = wanted[0];
-      if (next) this.#dependencies.setActivePdfWindow(next);
+      if (next) this.#activePdfWindow = next;
     }
 
     for (const [pdfWindow, handlers] of this.#handlers) {
