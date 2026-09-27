@@ -1,7 +1,7 @@
 import type { CommandPaletteContext } from '../../../core/contracts';
 import { actionsForBindingMode } from '../../../input/binding-capabilities';
 import { ACTION_LABELS, isActionId, type ActionId } from '../../../input/actions';
-import { parseBindingKey } from '../../../input/bindings';
+import { bindingsForMode } from '../../../input/bindings';
 import type { PickerItem } from '../model';
 import type { PickerPreview, PickerProvider } from '../types';
 
@@ -16,11 +16,13 @@ function isSupportedAction(context: CommandPaletteContext, action: unknown): act
 
 function commandItems(context: CommandPaletteContext): PickerItem[] {
   const keysByAction = new Map<ActionId, Set<string>>();
-  for (const [bindingKey, action] of Object.entries(context.bindings)) {
-    const binding = parseBindingKey(bindingKey);
-    if (!binding || binding.mode !== context.bindingMode || !isActionId(action)) continue;
+  // Resolved action-only bindings exclude PrefixBinding namespace metadata.
+  for (const [bindingKey, action] of Object.entries(
+    bindingsForMode(context.bindings, context.bindingMode),
+  )) {
+    if (!isActionId(action)) continue;
     const keys = keysByAction.get(action) ?? new Set<string>();
-    keys.add(binding.sequence);
+    keys.add(bindingKey.slice(context.bindingMode.length + 1));
     keysByAction.set(action, keys);
   }
 
