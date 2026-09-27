@@ -14,6 +14,7 @@ import { InputRuntime } from '../../src/input/runtime';
 import { TrashHistory } from '../../src/main/trash-history';
 
 import { NoteEditor } from '../../src/main/note-editor';
+import { NoteSurfaceRuntime } from '../../src/main/note-runtime';
 import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
@@ -656,7 +657,7 @@ describe('directional pane focus', () => {
       Zotero_Tabs: { selectedID: 'reader-tab' },
     } as unknown as MainWindow;
     const session = {
-      note: { mode: 'normal', input: new InputRuntime(window), yank: '' },
+      note: new NoteSurfaceRuntime(window),
     } as MainWindowSession;
     const editor = new NoteEditor(
       logger,
@@ -741,14 +742,7 @@ describe('NoteEditor shared binding input', () => {
       window: main,
       status: { textContent: '', style: { display: '', color: '', background: '' } },
       cleanup: { add: () => {} },
-      note: {
-        editorWindow: null,
-        editorDocument: null,
-        handler: null,
-        mode: 'normal',
-        input: new InputRuntime(main),
-        yank: '',
-      },
+      note: new NoteSurfaceRuntime(main),
     } as unknown as MainWindowSession;
     const bindings = resolveBindings(JSON.stringify(overrides));
     const guide = { refresh: vi.fn(), clear: vi.fn() };
