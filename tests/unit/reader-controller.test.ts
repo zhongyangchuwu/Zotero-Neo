@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommandPaletteContext, ReaderControllerDependencies } from '../../src/core/contracts';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
-import { DEFAULT_BINDINGS, type BindingMap } from '../../src/input/bindings';
+import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
   InternalReaderRuntime,
   PdfWindow,
@@ -532,15 +532,23 @@ describe('Reader Selection Actions capture', () => {
 });
 
 describe('reader return-context navigation', () => {
-  it('delegates gr to the owning Main return context', () => {
+  it('leaves gr unbound by default but delegates an explicit custom binding', () => {
     const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const created = createHistorySession({}, delegateMain);
+    const defaults = createHistorySession({}, delegateMain);
+    defaults.session.focusAndHandle(readerKey('g').event);
+    defaults.session.focusAndHandle(readerKey('r').event);
+    expect(delegateMain).not.toHaveBeenCalled();
+    defaults.session.dispose();
 
-    created.session.focusAndHandle(readerKey('g').event);
-    created.session.focusAndHandle(readerKey('r').event);
-
-    expect(delegateMain).toHaveBeenCalledWith('mainReturnContext', 0, created.reader._window);
-    created.session.dispose();
+    const custom = createHistorySession(
+      {},
+      delegateMain,
+      resolveBindings('{"reader-normal:gr":"mainReturnContext"}'),
+    );
+    custom.session.focusAndHandle(readerKey('g').event);
+    custom.session.focusAndHandle(readerKey('r').event);
+    expect(delegateMain).toHaveBeenCalledWith('mainReturnContext', 0, custom.reader._window);
+    custom.session.dispose();
   });
 });
 
