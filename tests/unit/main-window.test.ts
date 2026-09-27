@@ -1957,7 +1957,10 @@ describe('main pending-prefix key guide', () => {
       press('Backspace');
       vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
       expect(next).toBe(1);
+      press('f');
       controller.shutdown();
+      vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+      expect(next).toBe(1);
       vi.useRealTimers();
     });
   });

@@ -24,12 +24,6 @@ import {
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { isNoteCrossContextActionId } from '../input/note-actions';
-import {
-  advanceInput,
-  backspacePendingInput,
-  cancelPendingInput,
-  resolveInputTimeout,
-} from '../input/engine';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { guideEntries, isGuidePrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
@@ -235,11 +229,7 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   private resetMainInput(window: MainWindow, session: MainWindowSession): void {
-    session.keyBuffer = '';
-    session.countBuffer = '';
-    session.inputRevision += 1;
-    window.clearTimeout(session.keyTimer);
-    session.keyTimer = undefined;
+    session.input.reset();
     this.clearKeyGuide(window, session);
   }
 
@@ -407,66 +397,25 @@ export class MainWindowController implements MainWindowControllerApi {
     if (session.inputMode === 'main-select' && !this.#itemSelect.itemsFocused(window)) {
       this.#itemSelect.leave(window, session.selection);
       session.inputMode = 'main-normal';
-      session.keyBuffer = '';
-      session.countBuffer = '';
-      session.inputRevision += 1;
-      window.clearTimeout(session.keyTimer);
-      session.keyTimer = undefined;
-      this.clearKeyGuide(window, session);
+      this.resetMainInput(window, session);
       return;
     }
     const key = keyString(event);
     if (!key) return;
     const bindings = this.activeBindings(session.inputMode);
-    const leaderState = {
-      mode: session.inputMode,
-      keyBuffer: session.keyBuffer,
-      countBuffer: session.countBuffer,
-    };
-    if (event.key.toLowerCase() === 'escape') {
-      const cancelled = cancelPendingInput(leaderState);
-      if (cancelled) {
-        event.preventDefault();
-        event.stopPropagation();
-        session.keyBuffer = cancelled.keyBuffer;
-        session.countBuffer = cancelled.countBuffer;
-        session.inputRevision += 1;
-        window.clearTimeout(session.keyTimer);
-        session.keyTimer = undefined;
-        this.clearKeyGuide(window, session);
-        return;
-      }
+    if (event.key.toLowerCase() === 'escape' && session.input.cancel(session.inputMode)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearKeyGuide(window, session);
+      return;
     }
-    if (event.key.toLowerCase() === 'backspace') {
-      const backed = backspacePendingInput(leaderState);
-      if (backed) {
-        event.preventDefault();
-        event.stopPropagation();
-        session.keyBuffer = backed.keyBuffer;
-        session.countBuffer = backed.countBuffer;
-        session.inputRevision += 1;
-        window.clearTimeout(session.keyTimer);
-        session.keyTimer = undefined;
-        this.refreshKeyGuide(window, session);
-        return;
-      }
+    if (event.key.toLowerCase() === 'backspace' && session.input.backspace(session.inputMode)) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.refreshKeyGuide(window, session);
+      return;
     }
-    session.inputRevision += 1;
-    const revision = session.inputRevision;
-    const decision = advanceInput(
-      {
-        mode: session.inputMode,
-        keyBuffer: session.keyBuffer,
-        countBuffer: session.countBuffer,
-        bindings,
-        allowCountPrefix: true,
-      },
-      key,
-    );
-    session.keyBuffer = decision.state.keyBuffer;
-    session.countBuffer = decision.state.countBuffer;
-    window.clearTimeout(session.keyTimer);
-    session.keyTimer = undefined;
+    const decision = session.input.advance(session.inputMode, bindings, key, true);
     if (decision.kind === 'pass') {
       this.refreshKeyGuide(window, session);
       return;
@@ -515,12 +464,7 @@ export class MainWindowController implements MainWindowControllerApi {
       ? KEY_GUIDE_CONFIG.idleTimeoutMs
       : decision.timeoutMs;
     if (timeoutMs !== null) {
-      session.keyTimer = window.setTimeout(() => {
-        if (session.inputRevision !== revision) return;
-        const resolved = resolveInputTimeout(decision);
-        session.keyBuffer = resolved.state.keyBuffer;
-        session.countBuffer = resolved.state.countBuffer;
-        session.keyTimer = undefined;
+      session.input.schedule(decision, timeoutMs, (resolved) => {
         if (resolved.kind !== 'execute') return;
         if (!isMainExecutableAction(resolved.action)) return;
         const direction = focusDirectionForAction(resolved.action);
@@ -529,7 +473,7 @@ export class MainWindowController implements MainWindowControllerApi {
           return;
         }
         this.execute(resolved.action, window, session, resolved.count);
-      }, timeoutMs);
+      });
     }
   }
 
@@ -542,8 +486,8 @@ export class MainWindowController implements MainWindowControllerApi {
   private refreshKeyGuide(
     window: MainWindow,
     session: MainWindowSession,
-    prefix = session.keyBuffer,
-    isCurrent = (candidate: string) => session.keyBuffer === candidate,
+    prefix = session.input.keyBuffer,
+    isCurrent = (candidate: string) => session.input.keyBuffer === candidate,
     mode: Mode = session.inputMode,
     bindings: BindingMap = this.activeBindings(mode),
   ): void {
