@@ -1,13 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import {
-  MAIN_ITEM_TARGET,
-  NOTE_ITEM_TARGET,
-  READER_ITEM_TARGET,
-  resolveItemTargets,
-  type ItemTargetSet,
-} from '../../src/main/item-targets';
+import type { ItemTargetSet } from '../../src/core/item-target';
+import { resolveItemTargets } from '../../src/main/item-targets';
+import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
+import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
+import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 
@@ -77,7 +75,7 @@ describe('shared item target resolution', () => {
     } as unknown as MainWindow;
 
     const mainTarget: ItemTargetSet<'main'> = MAIN_ITEM_TARGET.resolve(mainWindow, s);
-    const readerTarget: ItemTargetSet<'reader'> = READER_ITEM_TARGET.resolve(readerWindow);
+    const readerTarget: ItemTargetSet<'reader'> = READER_ITEM_TARGET.resolve({ itemID: reader.id });
     const noteTarget: ItemTargetSet<'note'> = NOTE_ITEM_TARGET.resolve(noteWindow);
 
     expect(MAIN_ITEM_TARGET.source).toBe('main');
