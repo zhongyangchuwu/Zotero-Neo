@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { ACTION_LABELS } from '../../src/input/actions';
 import { KEY_GUIDE_CONFIG, keyGuideLanguage } from '../../src/input/key-guide-config';
-import { DEFAULT_BINDINGS, type BindingMap } from '../../src/input/bindings';
+import {
+  DEFAULT_BINDINGS,
+  DEFAULT_PREFIX_BINDINGS,
+  parseBindingKey,
+  resolveBindings,
+  type BindingMap,
+} from '../../src/input/bindings';
+import { advanceInput, resolveInputTimeout } from '../../src/input/engine';
 import {
   formatGuideKey,
   formatGuidePrefix,
@@ -11,6 +18,7 @@ import {
   isLeaderPrefix,
   leaderGuideEntries,
 } from '../../src/input/key-guide';
+import { appendInputKey, bindingSequenceTokens } from '../../src/input/key-sequence';
 
 const bindings: BindingMap = {
   'reader-normal:<Space>e': 'toggleReaderSidebarOutline',
@@ -29,9 +37,114 @@ describe('leader guide projection', () => {
         label: ACTION_LABELS.toggleReaderSidebarOutline.en,
         isGroup: false,
       },
-      { key: 'f', label: KEY_GUIDE_CONFIG.groupLabels.f.en, isGroup: true },
-      { key: 'y', label: KEY_GUIDE_CONFIG.groupLabels.y.en, isGroup: true },
+      {
+        key: 'f',
+        label: DEFAULT_PREFIX_BINDINGS['reader-normal:<Space>f'].label.en,
+        isGroup: true,
+      },
+      {
+        key: 'y',
+        label: DEFAULT_PREFIX_BINDINGS['reader-normal:<Space>y'].label.en,
+        isGroup: true,
+      },
     ]);
+  });
+
+  it('uses every visible built-in PrefixBinding label from resolved bindings', () => {
+    const resolved = resolveBindings('');
+    const entries = guideEntries(resolved, 'main-normal', ' ', 'en');
+    expect(entries).toContainEqual({ key: 's', label: 'Selection', isGroup: true });
+    expect(entries).toContainEqual({
+      key: ',',
+      label: ACTION_LABELS.switchTab.en,
+      isGroup: false,
+    });
+
+    for (const [key, node] of Object.entries(DEFAULT_PREFIX_BINDINGS)) {
+      const binding = parseBindingKey(key);
+      if (!binding) throw new Error(`Invalid built-in prefix: ${key}`);
+      const tokens = bindingSequenceTokens(binding.sequence);
+      if (!tokens) throw new Error(`Invalid built-in sequence: ${key}`);
+      if (tokens.length < 2) continue; // No guide exists before the first key.
+      const parent = tokens.slice(0, -1).reduce(appendInputKey, '');
+      const next = tokens[tokens.length - 1];
+      for (const language of ['en', 'zh-CN'] as const) {
+        const group = guideEntries(resolved, binding.mode, parent, language).find(
+          (entry) => entry.key === next,
+        );
+        expect(group, `Missing ${language} guide group: ${key}`).toEqual({
+          key: next,
+          label: node.label[language],
+          isGroup: true,
+        });
+        expect(group?.label).not.toMatch(/More commands|更多命令|^Prefix /);
+      }
+    }
+  });
+
+  it('shows generated labels for custom mode-owned prefixes and leaves other modes intact', () => {
+    const resolved = resolveBindings(
+      JSON.stringify({ 'main-select:<Space>xy': 'mainSelectFinish' }),
+    );
+    expect(guideEntries(resolved, 'main-select', ' ', 'en')).toEqual([
+      { key: 'x', label: 'Prefix <Space>x', isGroup: true },
+    ]);
+    expect(guideEntries(resolved, 'main-select', ' x', 'zh-CN')).toEqual([
+      { key: 'y', label: ACTION_LABELS.mainSelectFinish['zh-CN'], isGroup: false },
+    ]);
+    expect(isGuidePrefix(resolved, 'reader-select', ' ')).toBe(false);
+    expect(guideEntries(resolved, 'reader-select', ' ', 'en')).toEqual([]);
+    expect(guideEntries(resolved, 'main-normal', ' ', 'en')).not.toContainEqual({
+      key: 'x',
+      label: 'Prefix <Space>x',
+      isGroup: true,
+    });
+  });
+
+  it('drops unbound mode-local namespaces without borrowing another mode', () => {
+    const resolved = resolveBindings('{"main-select:gg":null}');
+    expect(isGuidePrefix(resolved, 'main-select', 'g')).toBe(false);
+    expect(guideEntries(resolved, 'main-select', 'g', 'en')).toEqual([]);
+    expect(guideEntries(resolved, 'main-normal', 'g', 'en')).toContainEqual({
+      key: 'g',
+      label: ACTION_LABELS.mainNavFirst.en,
+      isGroup: false,
+    });
+  });
+
+  it('keeps ambiguous override timeout while presenting a namespace and its child actions', () => {
+    const resolved = resolveBindings(JSON.stringify({ 'main-normal:<Space>f': 'switchTab' }));
+    expect(guideEntries(resolved, 'main-normal', ' ', 'en')).toContainEqual({
+      key: 'f',
+      label: DEFAULT_PREFIX_BINDINGS['main-normal:<Space>f'].label.en,
+      isGroup: true,
+    });
+    expect(guideEntries(resolved, 'main-normal', ' f', 'en')).toContainEqual({
+      key: 'f',
+      label: ACTION_LABELS.findAllItems.en,
+      isGroup: false,
+    });
+
+    const start = advanceInput(
+      {
+        mode: 'main-normal',
+        keyBuffer: '',
+        countBuffer: '',
+        bindings: resolved,
+        allowCountPrefix: true,
+      },
+      ' ',
+    );
+    const pending = advanceInput(
+      { ...start.state, bindings: resolved, allowCountPrefix: true },
+      'f',
+    );
+    expect(pending).toMatchObject({ kind: 'pending', timeoutMs: 800, timeoutAction: 'switchTab' });
+    if (pending.kind !== 'pending') throw new Error('Expected ambiguous prefix');
+    expect(resolveInputTimeout(pending)).toMatchObject({ kind: 'execute', action: 'switchTab' });
+    expect(
+      advanceInput({ ...pending.state, bindings: resolved, allowCountPrefix: true }, 'f'),
+    ).toMatchObject({ kind: 'execute', action: 'findAllItems' });
   });
 
   it('updates the valid subtree for nested prefixes and resolves labels in Chinese', () => {
@@ -100,8 +213,8 @@ describe('leader guide projection', () => {
     expect(DEFAULT_BINDINGS['main-normal:<Space>tf']).toBe('toggleTagFilter');
     expect(DEFAULT_BINDINGS['main-normal:<Space>tc']).toBe('clearTagFilters');
     expect('main-normal: fT' in DEFAULT_BINDINGS).toBe(false);
-    expect(KEY_GUIDE_CONFIG.groupLabels.t.en).toBe('Tags');
-    expect(KEY_GUIDE_CONFIG.groupLabels.p.en).toBe('Neo');
+    expect(DEFAULT_PREFIX_BINDINGS['main-normal:<Space>t'].label.en).toBe('Tags');
+    expect(DEFAULT_PREFIX_BINDINGS['main-normal:<Space>p'].label.en).toBe('Neo');
   });
 
   it('uses an explicit language first and otherwise follows the host locale', () => {

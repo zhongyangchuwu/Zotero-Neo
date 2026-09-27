@@ -239,8 +239,7 @@ export const DEFAULT_BINDINGS = {
   'main-select:v': 'mainSelectCancel',
   'main-select:<Esc>': 'mainSelectCancel',
 } as const satisfies BindingMap;
-// Labels live beside their mode-owned keymap nodes; Which-Key still uses its
-// existing presentation taxonomy until the resolved-keymap cutover.
+
 const PREFIX_LABELS = {
   commands: { en: 'Commands', 'zh-CN': '命令' },
   navigation: { en: 'Navigation', 'zh-CN': '导航' },
@@ -304,10 +303,14 @@ export const DEFAULT_PREFIX_BINDINGS = {
 
 /**
  * Projects the legacy action-only map into explicit nodes without changing
- * preference serialization or dispatch. Ambiguous action prefixes remain
- * supported by the legacy matcher, but cannot be represented as action leaves.
+ * preference serialization or dispatch. Ambiguous action prefixes cannot be
+ * represented as action leaves; Guide prefers the namespace in that case while
+ * the legacy matcher retains its exact-action timeout.
  */
-export function bindingNodesFromActions(bindings: BindingMap): BindingNodes {
+export function bindingNodesFromActions(
+  bindings: BindingMap,
+  collision: 'reject' | 'prefer-prefix' = 'reject',
+): BindingNodes {
   const nodes: Record<string, Binding> = {};
   const strictPrefixes = new Set<string>();
   for (const [key, action] of Object.entries(bindings)) {
@@ -321,8 +324,10 @@ export function bindingNodesFromActions(bindings: BindingMap): BindingNodes {
     nodes[key] = { kind: 'action', action };
   }
 
-  for (const key of Object.keys(nodes)) {
-    if (strictPrefixes.has(key)) throw new Error(`Action binding cannot be a prefix: ${key}`);
+  if (collision === 'reject') {
+    for (const key of Object.keys(nodes)) {
+      if (strictPrefixes.has(key)) throw new Error(`Action binding cannot be a prefix: ${key}`);
+    }
   }
   for (const key of strictPrefixes) {
     const builtIn = DEFAULT_PREFIX_BINDINGS[key as keyof typeof DEFAULT_PREFIX_BINDINGS];
