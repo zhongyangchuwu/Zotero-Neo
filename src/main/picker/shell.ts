@@ -147,8 +147,7 @@ export class FuzzyPicker {
       (doc.body ?? doc.documentElement).append(overlay);
       const themeCleanup = session.theme.add(overlay);
       const focusedWindow = Services.focus?.focusedWindow as unknown as Window | null;
-      session.picker = {
-        ...session.picker,
+      Object.assign(session.picker, {
         open: true,
         scope,
         overlay,
@@ -169,7 +168,7 @@ export class FuzzyPicker {
         previousElement: doc.activeElement,
         previousWindow: focusedWindow,
         themeCleanup,
-      };
+      });
       orphanOverlay = null;
       this.trace(`picker mounted scope=${scope} layout=${single ? 'single' : 'dual'}`);
       const loadStartedAt = Date.now();
