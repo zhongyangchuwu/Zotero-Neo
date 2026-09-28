@@ -87,7 +87,6 @@ export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
   'openNeoSettings',
   'mainReturnContext',
   'switchTab',
-  'mainYankCitekey',
   'closeCurrentTab',
   'previousTab',
   'nextTab',

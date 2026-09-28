@@ -28,6 +28,7 @@ import {
   bindingMatchesInputPrefix,
 } from '../input/key-sequence';
 import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
+import { copyCitekeys } from '../operations/citekeys';
 import { isReaderDelegableMainAction } from '../main/action-capabilities';
 import {
   READER_NORMAL_ACTIONS,
@@ -1098,6 +1099,10 @@ export class ReaderSession {
           return READER_ITEM_TARGET.resolve(this.#dependencies.reader);
         },
       );
+      return;
+    }
+    if (action === 'mainYankCitekey') {
+      this.showStatus(copyCitekeys(READER_ITEM_TARGET.resolve(this.#dependencies.reader)));
       return;
     }
     if (isReaderDelegableMainAction(action)) {

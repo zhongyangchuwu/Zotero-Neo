@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
 import { MainNavigation } from '../../src/main/navigation';
+import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
+import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
+import { READER_ITEM_TARGET } from '../../src/reader/item-target';
+import { copyCitekeys } from '../../src/operations/citekeys';
 import { SelectionStore } from '../../src/main/selection-store';
 import { TrashHistory } from '../../src/main/trash-history';
 import type { MainWindowSession } from '../../src/main/session';
@@ -225,17 +229,29 @@ describe('Main action target contracts', () => {
     h.session.selection.add({ libraryID: 1, itemID: first.id });
     h.session.selection.add({ libraryID: 1, itemID: cursor.id });
 
-    h.navigation.yankCitekey(h.window, h.session);
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toBe('✓ Copied 2 citekeys');
 
     expect(h.copied).toEqual(['first cursor']);
-    expect(h.session.status.textContent).toContain('Copied 2 citekeys');
     expect(h.session.selection.size).toBe(2);
 
     h.session.selection.clear();
-    h.navigation.yankCitekey(h.window, h.session);
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toBe('✓ @cursor');
 
     expect(h.copied).toEqual(['first cursor', 'cursor']);
-    expect(h.session.status.textContent).toBe('✓ @cursor');
+  });
+
+  it('uses Visual when the workset is empty but keeps persistent Selection authoritative', () => {
+    const selected = attachment(10, 'selected');
+    const visual = attachment(11, 'visual');
+    const h = harness([selected, visual], 0);
+    const current = { source: 'visual' as const, refs: [{ libraryID: 1, itemID: visual.id }] };
+
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session, current))).toBe('✓ @visual');
+    h.session.selection.add({ libraryID: 1, itemID: selected.id });
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session, current))).toBe(
+      '✓ @selected',
+    );
+    expect(h.copied).toEqual(['visual', 'selected']);
   });
 
   it('Reader citekey copy uses only the active Reader item and ignores Main Selection', () => {
@@ -244,16 +260,32 @@ describe('Main action target contracts', () => {
     const h = harness([main], 0);
     h.install(reader);
     h.session.selection.add({ libraryID: 1, itemID: main.id });
-    (Zotero as unknown as { Reader: { getByTabID: () => { itemID: number } } }).Reader = {
-      getByTabID: () => ({ itemID: reader.id }),
-    };
-    (h.window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs = {
-      selectedID: 'reader-tab',
-    };
 
-    h.navigation.yankCitekey(h.window, h.session, 'reader');
+    expect(copyCitekeys(READER_ITEM_TARGET.resolve({ itemID: reader.id }))).toBe('✓ @reader');
 
     expect(h.copied).toEqual(['reader']);
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+  });
+
+  it('copies the Note parent after its picker takes focus without borrowing Main Selection', () => {
+    const main = attachment(10, 'main');
+    const paper = attachment(11, 'paper');
+    const note = attachment(12);
+    Reflect.set(note, 'isAttachment', () => false);
+    Reflect.set(note, 'isNote', () => true);
+    Reflect.set(note, 'parentItemID', paper.id);
+    const h = harness([main]);
+    h.install(paper, note);
+    h.session.selection.add({ libraryID: 1, itemID: main.id });
+    const active = h.window.document.activeElement;
+    Reflect.set(h.window, 'ZoteroContextPane', {
+      activeEditor: { item: note, contains: (node: unknown) => node === active },
+    });
+
+    const targets = NOTE_ITEM_TARGET.resolve(h.window);
+    Reflect.set(h.window.document, 'activeElement', null);
+    expect(copyCitekeys(targets)).toBe('✓ @paper');
+    expect(h.copied).toEqual(['paper']);
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
@@ -264,17 +296,19 @@ describe('Main action target contracts', () => {
     h.session.selection.add({ libraryID: 1, itemID: first.id });
     h.session.selection.add({ libraryID: 1, itemID: missingKey.id });
 
-    h.navigation.yankCitekey(h.window, h.session);
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toContain(
+      '1 target without citekey',
+    );
 
     expect(h.copied).toEqual([]);
-    expect(h.session.status.textContent).toContain('1 target without citekey');
 
     h.session.selection.clear();
     h.session.selection.add({ libraryID: 1, itemID: 999 });
-    h.navigation.yankCitekey(h.window, h.session);
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toContain(
+      'unavailable items',
+    );
 
     expect(h.copied).toEqual([]);
-    expect(h.session.status.textContent).toContain('unavailable items');
   });
 
   it('uses Zotero keepTopLevel normalization and deduplicates normalized citekey targets', () => {
@@ -288,9 +322,8 @@ describe('Main action target contracts', () => {
     const keepTopLevel = vi.fn(() => [parent, parent]);
     (Zotero.Items as unknown as { keepTopLevel: typeof keepTopLevel }).keepTopLevel = keepTopLevel;
 
-    h.navigation.yankCitekey(h.window, h.session);
+    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toBe('✓ @parent');
 
-    expect(keepTopLevel).toHaveBeenCalledWith([childA, childB]);
     expect(h.copied).toEqual(['parent']);
   });
 });

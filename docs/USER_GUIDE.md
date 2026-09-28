@@ -299,12 +299,13 @@ Neo Selection first; otherwise the current Visual range, native multi-selection,
 or Cursor. Targets are normalized with Zotero's top-level-item semantics and
 duplicate normalized items are emitted once.
 
-Clipboard output preserves the existing raw-key convention. A single target
-still copies `Smith2026`; a batch copies `Smith2026 Jones2025`. If any target
-is stale or lacks a citekey, the whole batch is refused so the clipboard never
-contains a silent partial result.
-
-Reader and Note keep their existing contextual single-target `yy` behavior.
+The shared citekey Operation copies raw keys: one target produces `Smith2026`,
+and a batch produces `Smith2026 Jones2025`. If any target is unavailable or
+lacks a citekey, the whole batch is refused and the clipboard is untouched.
+Reader and Note resolve their own contextual single-item targets and never use
+Main Selection. A Note command invoked from the palette retains the Note target
+captured before the palette takes focus. This does not add a formatted citation
+output command.
 
 ##### Collection membership
 
