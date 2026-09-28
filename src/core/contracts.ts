@@ -57,6 +57,11 @@ export interface MainActionDelegate {
     targets: ItemTargetSet<'reader'>,
     present: boolean,
   ): void;
+  openReaderCollectionPicker(
+    ownerWindow: MainWindow | null,
+    present: boolean,
+    resolveTargets: () => ItemTargetSet<'reader'>,
+  ): void;
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void;
   captureReaderSelectionToNote(
     context: ReaderSelectionContext,
@@ -91,6 +96,11 @@ export interface ReaderControllerDependencies {
     ownerWindow: MainWindow | null,
     targets: ItemTargetSet<'reader'>,
     present: boolean,
+  ) => void;
+  readonly openReaderCollectionPicker: (
+    ownerWindow: MainWindow | null,
+    present: boolean,
+    resolveTargets: () => ItemTargetSet<'reader'>,
   ) => void;
   readonly openCommandPalette: (window: MainWindow, context: CommandPaletteContext) => void;
   readonly captureReaderSelectionToNote: (

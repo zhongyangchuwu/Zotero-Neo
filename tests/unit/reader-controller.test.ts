@@ -51,6 +51,7 @@ describe('reader discovery diagnostics', () => {
       },
       delegateMain: () => {},
       openReaderTagPicker: () => {},
+      openReaderCollectionPicker: () => {},
       openCommandPalette: () => {},
       captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
@@ -112,6 +113,7 @@ describe('reader discovery diagnostics', () => {
       logger: { debug: () => {}, diagnostic: () => {} },
       delegateMain: () => {},
       openReaderTagPicker: () => {},
+      openReaderCollectionPicker: () => {},
       openCommandPalette: () => {},
       captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
@@ -174,6 +176,7 @@ describe('reader discovery diagnostics', () => {
       logger: { debug: () => {}, diagnostic: () => {} },
       delegateMain: () => {},
       openReaderTagPicker: () => {},
+      openReaderCollectionPicker: () => {},
       openCommandPalette: () => {},
       captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
@@ -206,6 +209,7 @@ function createHistorySession(
   captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] = async () =>
     false,
   openReaderTagPicker: ReaderControllerDependencies['openReaderTagPicker'] = () => {},
+  openReaderCollectionPicker: ReaderControllerDependencies['openReaderCollectionPicker'] = () => {},
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -314,6 +318,7 @@ function createHistorySession(
       },
       delegateMain,
       openReaderTagPicker,
+      openReaderCollectionPicker,
       openCommandPalette,
       captureReaderSelectionToNote,
     },
@@ -965,6 +970,42 @@ describe('Reader item-tag operation', () => {
     const targets = { source: 'reader', items: [item], total: 1, missing: 0 };
     expect(openTag).toHaveBeenNthCalledWith(1, created.reader._window, targets, true);
     expect(openTag).toHaveBeenNthCalledWith(2, created.reader._window, targets, false);
+    expect(delegateMain).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+});
+
+describe('Reader collection membership operation', () => {
+  it('keeps the active Reader target and refuses a later tab switch', () => {
+    const item = { id: 24, libraryID: 1, isTopLevelItem: () => true } as Zotero.Item;
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const openCollection = vi.fn<ReaderControllerDependencies['openReaderCollectionPicker']>();
+    const created = createHistorySession(
+      {},
+      delegateMain,
+      DEFAULT_BINDINGS,
+      () => {},
+      {},
+      async () => false,
+      () => {},
+      openCollection,
+    );
+    Reflect.set(created.reader, 'itemID', item.id);
+    const ownerWindow = created.reader._window;
+    if (!ownerWindow) throw new Error('Expected a Reader owner window');
+    const tabs = { selectedID: 'reader-tab' };
+    Reflect.set(ownerWindow, 'Zotero_Tabs', tabs);
+    vi.stubGlobal('Zotero', {
+      Items: { get: (id: number) => (id === item.id ? item : false) },
+      Reader: { getByTabID: (tabID: string) => (tabID === 'reader-tab' ? created.reader : null) },
+    });
+
+    for (const key of [' ', 'c', 'a']) created.session.focusAndHandle(readerKey(key).event);
+    const current = openCollection.mock.calls[0]?.[2];
+    expect(current?.().items).toEqual([item]);
+
+    tabs.selectedID = 'other-tab';
+    expect(current?.().items).toEqual([]);
     expect(delegateMain).not.toHaveBeenCalled();
     created.session.dispose();
   });

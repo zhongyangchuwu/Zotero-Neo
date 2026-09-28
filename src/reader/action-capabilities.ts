@@ -63,6 +63,8 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'toggleMarksExplorer',
   'addTag',
   'removeTag',
+  'addToCollection',
+  'removeFromCollection',
   'openCommandPalette',
 ] as const satisfies readonly ActionId[]);
 
