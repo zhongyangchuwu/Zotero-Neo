@@ -1011,6 +1011,39 @@ describe('Reader collection membership operation', () => {
   });
 });
 
+describe('Reader citekey output', () => {
+  it('copies its item key from Space y y without delegating Main Selection', () => {
+    const copied: string[] = [];
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const created = createHistorySession({}, delegateMain);
+    const item = {
+      id: 25,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+      getField: () => 'Reader2026',
+    } as unknown as Zotero.Item;
+    Reflect.set(created.reader, 'itemID', item.id);
+    vi.stubGlobal('Zotero', { Items: { get: (id: number) => (id === item.id ? item : false) } });
+    vi.stubGlobal('Components', {
+      utils: { cloneInto: created.cloneInto },
+      classes: {
+        '@mozilla.org/widget/clipboardhelper;1': {
+          getService: () => ({ copyString: (text: string) => copied.push(text) }),
+        },
+      },
+      interfaces: { nsIClipboardHelper: {} },
+    });
+
+    for (const key of [' ', 'y', 'y']) created.session.focusAndHandle(readerKey(key).event);
+
+    expect(copied).toEqual(['Reader2026']);
+    expect(created.indicator.textContent).toBe('✓ @Reader2026');
+    expect(delegateMain).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+});
+
 describe('reader Space-leader key guide', () => {
   it('updates nested prefixes, returns with Backspace, and closes on invalid input or Escape', () => {
     vi.useFakeTimers();

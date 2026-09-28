@@ -31,6 +31,7 @@ import { isGuidePrefix } from '../input/key-guide';
 import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
+import { copyCitekeys } from '../operations/citekeys';
 import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
@@ -632,6 +633,13 @@ export class MainWindowController implements MainWindowControllerApi {
       else this.#tags.remove(window, session, targets);
       return true;
     }
+    if (action === 'mainYankCitekey') {
+      this.#navigation.status(
+        session,
+        copyCitekeys(noteTargets ?? NOTE_ITEM_TARGET.resolve(window)),
+      );
+      return true;
+    }
     if (!isMainExecutableAction(action)) return false;
     this.execute(action, window, session, count, false, 'note');
     return true;
@@ -794,10 +802,11 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.focusDirection(window, session, 'right');
         break;
       case 'mainYankCitekey': {
-        const visual = context === 'main' && this.#itemSelect.isVisual(window);
+        const visual = this.#itemSelect.isVisual(window);
         const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
+        const targets = MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
         if (visual) this.#itemSelect.cancel(window, session.selection);
-        this.#navigation.yankCitekey(window, session, context, currentTarget);
+        this.#navigation.status(session, copyCitekeys(targets));
         break;
       }
       case 'mainOpenPDF':

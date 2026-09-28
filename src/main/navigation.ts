@@ -1,8 +1,6 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
-import { citationKey } from '../platform/better-bibtex';
 import type { FocusDirection } from '../input/actions';
-import { copyToClipboard } from '../platform/clipboard';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 import {
@@ -22,7 +20,6 @@ import {
   resolveMainEffectiveTargets,
   type MainCurrentTarget,
 } from './action-targets';
-import { resolveItemTargets, type ItemTargetContext } from './item-targets';
 
 type Selection = {
   focused?: number;
@@ -530,47 +527,6 @@ export class MainNavigation {
   cycleTab(window: MainWindow, direction: 1 | -1): void {
     cycleMainTab(window, direction);
     this.afterTabSwitch(window);
-  }
-  yankCitekey(
-    window: MainWindow,
-    session: MainWindowSession,
-    context: ItemTargetContext = 'main',
-    currentTarget?: MainCurrentTarget | null,
-  ): void {
-    try {
-      const targets = resolveItemTargets(window, session, context, currentTarget);
-      if (targets.missing > 0) {
-        this.status(
-          session,
-          context === 'main'
-            ? '✗ Selection contains unavailable items; refresh before citekey copy'
-            : '✗ Context item is unavailable; refresh before citekey copy',
-        );
-        return;
-      }
-      if (!targets.total || !targets.items.length) {
-        this.status(session, '✗ No item target');
-        return;
-      }
-
-      const keys = targets.items.map((target) => citationKey(target));
-      const missing = keys.filter((key) => !key).length;
-      if (missing) {
-        this.status(
-          session,
-          `✗ ${missing} target${missing === 1 ? '' : 's'} without citekey (BBT not ready?)`,
-        );
-        return;
-      }
-
-      copyToClipboard(keys.join(' '));
-      this.status(
-        session,
-        keys.length === 1 ? `✓ @${keys[0]}` : `✓ Copied ${keys.length} citekeys`,
-      );
-    } catch (error) {
-      this.status(session, `✗ ${String(error).slice(0, 40)}`);
-    }
   }
   async toggleTree(window: MainWindow, session: MainWindowSession): Promise<void> {
     const view = this.collections(window, session);
