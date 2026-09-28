@@ -4,8 +4,10 @@ import type { MainWindow } from '../../src/core/contracts';
 import {
   CollectionMembershipActions,
   resolveCollectionMembershipTargets,
-  setCollectionMembership,
 } from '../../src/main/collection-actions';
+import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
+import { READER_ITEM_TARGET } from '../../src/reader/item-target';
+import { setCollectionMembership } from '../../src/operations/item-collections';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 import type { FuzzyPicker } from '../../src/main/picker';
@@ -87,7 +89,9 @@ describe('collection membership targets', () => {
     h.selection.add({ libraryID: 1, itemID: 1 });
     h.selection.add({ libraryID: 1, itemID: 3 });
 
-    const resolved = resolveCollectionMembershipTargets(h.window, h.session);
+    const resolved = resolveCollectionMembershipTargets(
+      MAIN_ITEM_TARGET.resolve(h.window, h.session),
+    );
 
     expect(resolved.items.map((value) => value.id)).toEqual([1, 3]);
     expect(resolved.libraryID).toBe(1);
@@ -101,15 +105,15 @@ describe('collection membership targets', () => {
     h.selection.add({ libraryID: 1, itemID: 1 });
     h.selection.add({ libraryID: 2, itemID: 2 });
 
-    expect(() => resolveCollectionMembershipTargets(h.window, h.session)).toThrow(
-      'Collection membership requires one library',
-    );
+    expect(() =>
+      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.session)),
+    ).toThrow('Collection membership requires one library');
 
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 99 });
-    expect(() => resolveCollectionMembershipTargets(h.window, h.session)).toThrow(
-      'Selection contains unavailable items',
-    );
+    expect(() =>
+      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.session)),
+    ).toThrow('Selection contains unavailable items');
   });
 
   it('Reader uses only the active Reader item and ignores Main Selection', () => {
@@ -117,32 +121,14 @@ describe('collection membership targets', () => {
     const reader = item(2, 7);
     const h = targetHarness([main, reader], [main.id]);
     h.selection.add({ libraryID: 7, itemID: main.id });
-    (Zotero as unknown as { Reader: { getByTabID: () => { itemID: number } } }).Reader = {
-      getByTabID: () => ({ itemID: reader.id }),
-    };
-    (h.window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs = {
-      selectedID: 'reader-tab',
-    };
 
-    const resolved = resolveCollectionMembershipTargets(h.window, h.session, 'reader');
+    const resolved = resolveCollectionMembershipTargets(
+      READER_ITEM_TARGET.resolve({ itemID: reader.id }),
+    );
 
     expect(resolved.items.map((value) => value.id)).toEqual([reader.id]);
     expect(resolved.libraryID).toBe(7);
     expect(resolved.signature).toBe('7:2');
-  });
-
-  it('delegates child normalization to Zotero keepTopLevel', () => {
-    const child = item(2, 1);
-    const parent = item(1, 1);
-    const h = targetHarness([child, parent], [2]);
-    h.selection.add({ libraryID: 1, itemID: 2 });
-    const keepTopLevel = vi.fn(() => [parent]);
-    (Zotero.Items as unknown as { keepTopLevel: typeof keepTopLevel }).keepTopLevel = keepTopLevel;
-
-    const resolved = resolveCollectionMembershipTargets(h.window, h.session);
-
-    expect(keepTopLevel).toHaveBeenCalledWith([child]);
-    expect(resolved.items).toEqual([parent]);
   });
 });
 
@@ -172,6 +158,20 @@ describe('collection membership mutation', () => {
     expect(second.save).toHaveBeenCalledTimes(1);
     expect(transaction).toHaveBeenCalledTimes(1);
   });
+
+  it('restores every in-memory membership when one item fails to save', async () => {
+    const first = item(1);
+    const failed = item(2);
+    vi.mocked(failed.save).mockRejectedValueOnce(new Error('save failed'));
+    vi.stubGlobal('Zotero', {
+      DB: { executeTransaction: async (fn: () => Promise<void>) => fn() },
+    });
+
+    await expect(setCollectionMembership([first, failed], 10, true)).rejects.toThrow('save failed');
+
+    expect(first.getCollections()).toEqual([]);
+    expect(failed.getCollections()).toEqual([]);
+  });
 });
 
 describe('CollectionMembershipActions', () => {
@@ -196,7 +196,7 @@ describe('CollectionMembershipActions', () => {
       picker,
     );
 
-    actions.open(h.window, h.session, true);
+    actions.open(h.window, h.session, true, () => MAIN_ITEM_TARGET.resolve(h.window, h.session));
     await Promise.resolve();
 
     h.selection.clear();
@@ -207,5 +207,15 @@ describe('CollectionMembershipActions', () => {
     expect(status).toHaveBeenLastCalledWith(h.session, '✗ Collection target changed; retry');
     expect(first.addToCollection).not.toHaveBeenCalled();
     expect(second.addToCollection).not.toHaveBeenCalled();
+
+    h.selection.clear();
+    h.selection.add({ libraryID: 1, itemID: 1 });
+    actions.open(h.window, h.session, true, () => MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.selection.clear();
+    h.selection.add({ libraryID: 1, itemID: 99 });
+    await confirm!({ id: 10 });
+
+    expect(status).toHaveBeenLastCalledWith(h.session, '✗ Collection target changed; retry');
+    expect(first.addToCollection).not.toHaveBeenCalled();
   });
 });

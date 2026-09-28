@@ -1082,6 +1082,24 @@ export class ReaderSession {
       );
       return;
     }
+    if (action === 'addToCollection' || action === 'removeFromCollection') {
+      const ownerWindow = this.#dependencies.reader._window ?? null;
+      this.#dependencies.controller.dependencies.openReaderCollectionPicker(
+        ownerWindow,
+        action === 'addToCollection',
+        () => {
+          const selectedID = (ownerWindow as MainWindowRuntime | null)?.Zotero_Tabs?.selectedID;
+          if (
+            this.#scope.disposed ||
+            !selectedID ||
+            zoteroRuntime().Reader.getByTabID?.(selectedID) !== this.#dependencies.reader
+          )
+            return READER_ITEM_TARGET.resolve(null);
+          return READER_ITEM_TARGET.resolve(this.#dependencies.reader);
+        },
+      );
+      return;
+    }
     if (isReaderDelegableMainAction(action)) {
       this.#dependencies.controller.dependencies.delegateMain(
         action,

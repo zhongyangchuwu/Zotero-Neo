@@ -314,10 +314,12 @@ multi-selection, or Cursor is targeted. In Reader, the target is the active
 Reader item's parent bibliographic item when one exists; Main Selection is not
 consulted.
 
-Targets use Zotero's top-level-item semantics and must resolve to one library.
-Neo then opens the same shared chooser with only collections from that library.
-Before applying the confirmation, Neo re-resolves the contextual item targets;
-if they changed while the chooser was open, the entire operation is refused.
+Each Surface resolves its own target; the Main window hosts the chooser without
+lending its Selection to Reader. The shared Collection Operation applies the
+membership change in one Zotero transaction. Targets must resolve to one library,
+and the chooser lists only collections from that library. Before confirmation,
+Neo re-resolves the Surface target; a changed target or Reader tab refuses the
+entire operation. Note has no collection membership binding.
 
 `<Space>ca` skips items already in the destination and `<Space>cr` skips items already
 absent. Membership changes do not redefine Neo Selection.

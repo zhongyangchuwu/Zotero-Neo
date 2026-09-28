@@ -283,6 +283,19 @@ export class MainWindowController implements MainWindowControllerApi {
     else this.#tags.remove(ownerWindow, session, targets);
   }
 
+  openReaderCollectionPicker(
+    ownerWindow: MainWindow | null,
+    present: boolean,
+    resolveTargets: () => ItemTargetSet<'reader'>,
+  ): void {
+    const session = ownerWindow ? this.#sessions.get(ownerWindow) : undefined;
+    if (!ownerWindow || !session) {
+      this.#dependencies.logger.debug('ignored Reader collection picker: no attached owner window');
+      return;
+    }
+    this.#collections.open(ownerWindow, session, present, resolveTargets);
+  }
+
   async captureReaderSelectionToNote(
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
@@ -825,15 +838,11 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'addToCollection':
       case 'removeFromCollection': {
-        const visual = context === 'main' && this.#itemSelect.isVisual(window);
+        const visual = this.#itemSelect.isVisual(window);
         const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
         if (visual) this.#itemSelect.cancel(window, session.selection);
-        this.#collections.open(
-          window,
-          session,
-          action === 'addToCollection',
-          context,
-          currentTarget,
+        this.#collections.open(window, session, action === 'addToCollection', () =>
+          MAIN_ITEM_TARGET.resolve(window, session, currentTarget),
         );
         break;
       }

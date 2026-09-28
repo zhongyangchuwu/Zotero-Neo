@@ -56,6 +56,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       openReaderTagPicker(ownerWindow, targets, present) {
         main?.openReaderTagPicker(ownerWindow, targets, present);
       },
+      openReaderCollectionPicker(ownerWindow, present, resolveTargets) {
+        main?.openReaderCollectionPicker(ownerWindow, present, resolveTargets);
+      },
       openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
         main?.openCommandPalette(window, context);
       },
