@@ -13,7 +13,7 @@ import { copyToClipboard } from '../platform/clipboard';
 import { asElement } from '../platform/dom';
 import {
   activeContextEditorWindow,
-  activeContextNoteItem,
+  mainHost,
   mainReaderForTab,
   mainTabList,
   selectedMainTabID,
@@ -104,7 +104,7 @@ export class NoteEditor {
       return;
     }
     const candidate = this.find(main);
-    const itemID = this.noteItemID(main);
+    const itemID = this.noteItemID(main, candidate);
     if (candidate === session.note.editorWindow && itemID === session.note.itemID) return;
     this.clear(session);
     if (!candidate) return;
@@ -404,9 +404,10 @@ export class NoteEditor {
     return true;
   }
 
-  private noteItemID(main: MainWindow): number | null {
-    const contextual = activeContextNoteItem(main);
-    if (contextual?.id) return contextual.id;
+  private noteItemID(main: MainWindow, candidate: Window | null): number | null {
+    const contextEditor = mainHost(main).ZoteroContextPane?.activeEditor;
+    if (candidate && contextEditor?._iframe?.contentWindow === candidate && contextEditor.item?.id)
+      return contextEditor.item.id;
     const tab = selectedMainTabInfo(main);
     const itemID = tab?.type?.startsWith('note') ? tab.data?.itemID : undefined;
     return typeof itemID === 'number' && itemID > 0 ? itemID : null;

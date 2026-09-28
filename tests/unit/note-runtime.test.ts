@@ -162,6 +162,35 @@ describe('Note surface runtime identity', () => {
     expect(h.note.editorWindow).toBe(h.editorWindow);
   });
 
+  it('preserves a context-pane Note register across focus loss but resets it for another Note', () => {
+    const h = harness();
+    const active = {} as Element;
+    const context = {
+      item: { id: 7 },
+      contains: (node: unknown) => node === active,
+      _iframe: { contentWindow: h.editorWindow },
+    };
+    Reflect.set(h.main, 'ZoteroContextPane', { activeEditor: context });
+    Reflect.set(h.main.document, 'activeElement', active);
+    Reflect.set(h.main.Zotero_Tabs, 'getTabInfo', () => ({ type: 'library' }));
+    h.setFocusedWindow(null);
+    h.sync();
+    h.note.yank = 'from A';
+
+    Reflect.set(h.main.document, 'activeElement', null);
+    h.sync();
+
+    expect(h.note.itemID).toBe(7);
+    expect(h.note.yank).toBe('from A');
+    expect(h.removeWindowListener).not.toHaveBeenCalled();
+
+    context.item = { id: 8 };
+    h.sync();
+
+    expect(h.note.itemID).toBe(8);
+    expect(h.note.yank).toBe('');
+  });
+
   it('clears a closed Note editor and reopens it with fresh interaction state', () => {
     const h = harness();
     h.sync();
