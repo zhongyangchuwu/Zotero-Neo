@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
+import { resolveMainEffectiveTargets } from '../../src/main/action-targets';
+import type { MainWindowSession } from '../../src/main/session';
 import {
   MainItemSelect,
   nextItemSelectIndex,
@@ -307,6 +309,26 @@ describe('Main Visual Selection', () => {
         { libraryID: 1, itemID: 13 },
       ],
     });
+  });
+
+  it('does not retarget actions to native selection when a Visual range disappears', () => {
+    const host = harness(0);
+    const store = new SelectionStore();
+    const feature = new MainItemSelect(logger);
+
+    expect(feature.enter(host.window, store)).toBe('entered');
+    host.rows.shift();
+    feature.refresh(host.window, store);
+
+    expect(feature.isVisual(host.window)).toBe(true);
+    expect(feature.currentTarget(host.window)).toEqual({ source: 'visual', refs: [] });
+    expect(
+      resolveMainEffectiveTargets(
+        host.window,
+        { selection: store } as MainWindowSession,
+        feature.currentTarget(host.window),
+      ),
+    ).toMatchObject({ source: 'visual', refs: [], total: 0 });
   });
 
   it('promotes a native multi-selection into persistent Selection with s semantics', () => {

@@ -167,7 +167,8 @@ export class MainItemSelect {
 
   currentTarget(window: MainWindow): MainCurrentTarget | null {
     const visual = this.#visual.get(window);
-    return resolveMainCurrentTarget(window, visual ? this.visualRefs(window, visual) : []);
+    if (visual) return { source: 'visual', refs: this.visualRefs(window, visual) };
+    return resolveMainCurrentTarget(window);
   }
 
   hasCancelableTarget(window: MainWindow): boolean {
