@@ -1,17 +1,19 @@
 # Selection and Tag Actions
 
 Zotero Neo keeps Zotero authoritative for Item data and mutations, while Main
-interaction state separates Cursor, persistent Selection, and transient Visual
-ranges. Selection stores only stable item identities for the current session;
-Zotero's native TreeSelection is used as a visible projection rather than the
-complete workset source of truth.
+interaction state separates Cursor, persistent Selection, native multi-selection,
+and transient Visual ranges. Neo Selection stores stable item identities across
+Views; Zotero's native TreeSelection can also supply the current transient target
+when several items are selected, but is not the complete persistent workset.
 
 ## Main Selection and Visual
 
 With focus in Zotero's main item list:
 
-- `j` / `k` move Cursor without changing Selection.
-- `s` toggles the Cursor item in Selection, then advances Cursor down.
+- `j` / `k` move Cursor without changing persistent Selection or collapsing an
+  existing native multi-selection when the focus-only host seam is available.
+- In Normal, `s` toggles CurrentTarget (native multi-selection or Cursor) in
+  persistent Selection, then advances Cursor.
 - `v` enters a transient Visual range anchored at Cursor.
 - Visual `j` / `k` / `gg` / `G` move the range head.
 - Visual `o` swaps anchor and head.

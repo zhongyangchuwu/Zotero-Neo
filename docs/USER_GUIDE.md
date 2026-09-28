@@ -295,8 +295,9 @@ semantics.
 ##### Batch citekey copy
 
 In Main, `yy` copies Better BibTeX citekeys from EffectiveSelection: explicit
-Neo Selection first, otherwise Cursor. Targets are normalized with Zotero's
-top-level-item semantics and duplicate normalized items are emitted once.
+Neo Selection first; otherwise the current Visual range, native multi-selection,
+or Cursor. Targets are normalized with Zotero's top-level-item semantics and
+duplicate normalized items are emitted once.
 
 Clipboard output preserves the existing raw-key convention. A single target
 still copies `Smith2026`; a batch copies `Smith2026 Jones2025`. If any target
@@ -307,10 +308,11 @@ Reader and Note keep their existing contextual single-target `yy` behavior.
 
 ##### Collection membership
 
-`<Space>ca` and `<Space>cr` are item actions shared by Main and Reader. In Main, explicit
-Neo Selection wins and Cursor is the fallback. In Reader, the target is the
-active Reader item's parent bibliographic item when one exists; Main Selection
-is not consulted.
+`<Space>ca` and `<Space>cr` are item actions shared by Main and Reader. In Main,
+explicit Neo Selection wins; otherwise the current Visual range, native
+multi-selection, or Cursor is targeted. In Reader, the target is the active
+Reader item's parent bibliographic item when one exists; Main Selection is not
+consulted.
 
 Targets use Zotero's top-level-item semantics and must resolve to one library.
 Neo then opens the same shared chooser with only collections from that library.
