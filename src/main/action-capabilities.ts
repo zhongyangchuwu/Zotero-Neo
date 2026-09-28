@@ -91,8 +91,6 @@ export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
   'closeCurrentTab',
   'previousTab',
   'nextTab',
-  'addTag',
-  'removeTag',
   'addToCollection',
   'removeFromCollection',
 ] as const satisfies readonly MainNormalAction[]);

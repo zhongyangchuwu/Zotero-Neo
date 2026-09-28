@@ -45,12 +45,12 @@ The default Tag namespace is explicit:
 | Toggle one Main-window tag filter | `<Space>tf` | — |
 | Clear all Main-window tag filters | `<Space>tc` | — |
 
-`<Space>ta` and `<Space>tr` use the same semantic item actions across Main,
-Reader, and Note. `<Space>tf` and `<Space>tc` only change the
-Main item View. Tag candidate choice remains in `TagActions`, while the actual
-tag-predicate View mutation is delegated to `MainViewActions`. The filter
-actions are Main-only so Reader/Note commands do not silently change an
-off-screen Main filter.
+`<Space>ta` and `<Space>tr` share one item-tag Operation across Main, Reader,
+and Note. Each Surface resolves its own item target and passes it to the shared
+chooser and Operation; Reader/Note do not execute a Main action. The chooser is
+hosted by the Main window without borrowing Main Selection. `<Space>tf` and
+`<Space>tc` only change the Main item View through `MainViewActions`, so
+Reader/Note commands cannot silently change an off-screen Main filter.
 
 ## Target resolution for tag mutation
 
@@ -63,8 +63,8 @@ a taggable target set:
 - **Note**: the active note-context item's parent bibliographic item when one
   exists; otherwise the standalone note itself.
 
-These rules come from the shared contextual item-target resolver rather than a
-Tag-specific context detector.
+Each Surface owns its target resolver; the tag chooser receives an explicit
+normalized target set instead of detecting the caller's context.
 
 Child attachments/notes are normalized and deduplicated before mutation.
 Cross-library target sets are rejected rather than silently mixing library tag

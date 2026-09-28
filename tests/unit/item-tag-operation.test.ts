@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { itemTagState, normalizeItemTargets, setTagOnTargets } from '../../src/main/tag-targets';
+import { setItemTag } from '../../src/operations/item-tags';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -14,8 +14,6 @@ type MutableTagItem = Zotero.Item & { readonly saves: ReturnType<typeof vi.fn> }
 function tagItem(
   id: number,
   options: {
-    parentItemID?: number;
-    kind?: 'regular' | 'attachment' | 'note';
     tags?: Array<{ tag: string; type: number }>;
     saveError?: Error;
   } = {},
@@ -27,9 +25,8 @@ function tagItem(
   return {
     id,
     libraryID: 1,
-    parentItemID: options.parentItemID,
-    isAttachment: () => options.kind === 'attachment',
-    isNote: () => options.kind === 'note',
+    isAttachment: () => false,
+    isNote: () => false,
     hasTag: (tag: string) => tags.has(tag),
     getTagType: (tag: string) => tags.get(tag) ?? 0,
     getTags: () => [...tags].map(([tag, type]) => ({ tag, type })),
@@ -44,50 +41,26 @@ function tagItem(
   } as unknown as MutableTagItem;
 }
 
-function installItems(items: readonly Zotero.Item[], readerItemID?: number): void {
-  const byID = new Map(items.map((item) => [item.id, item]));
-  vi.stubGlobal('Zotero', {
-    Items: { get: (id: number) => byID.get(id) ?? false },
-    Reader: { getByTabID: () => (readerItemID ? { itemID: readerItemID } : null) },
-  });
-}
-
 function installTransactionHost(): ReturnType<typeof vi.fn> {
   const executeTransaction = vi.fn(async (callback: () => Promise<void>) => callback());
   vi.stubGlobal('Zotero', { DB: { executeTransaction } });
   return executeTransaction;
 }
 
-describe('item tag target normalization', () => {
-  it('normalizes child attachments and notes to a deduplicated parent target', () => {
-    const parent = tagItem(1);
-    const attachment = tagItem(2, { kind: 'attachment', parentItemID: parent.id });
-    const note = tagItem(3, { kind: 'note', parentItemID: parent.id });
-    installItems([parent, attachment, note]);
-
-    expect(normalizeItemTargets([attachment, note, parent]).map((item) => item.id)).toEqual([
-      parent.id,
-    ]);
-  });
-});
-
 describe('semantic multi-target tag action', () => {
   it('uses one transaction and only saves targets that need the transition', async () => {
     const executeTransaction = installTransactionHost();
     const first = tagItem(1, { tags: [{ tag: 'robotics', type: 1 }] });
     const second = tagItem(2);
-    expect(itemTagState([first, second], 'robotics')).toBe('mixed');
 
-    await expect(setTagOnTargets([first, second], 'robotics', true)).resolves.toBe(1);
+    await expect(setItemTag([first, second], 'robotics', true)).resolves.toBe(1);
     expect(executeTransaction).toHaveBeenCalledTimes(1);
-    expect(itemTagState([first, second], 'robotics')).toBe('all');
     expect(first.saves).not.toHaveBeenCalled();
     expect(second.saves).toHaveBeenCalledTimes(1);
     expect(second.getTagType('robotics')).toBe(0);
 
-    await expect(setTagOnTargets([first, second], 'robotics', false)).resolves.toBe(2);
+    await expect(setItemTag([first, second], 'robotics', false)).resolves.toBe(2);
     expect(executeTransaction).toHaveBeenCalledTimes(2);
-    expect(itemTagState([first, second], 'robotics')).toBe('none');
     expect(first.saves).toHaveBeenCalledTimes(1);
     expect(second.saves).toHaveBeenCalledTimes(2);
   });
@@ -95,13 +68,13 @@ describe('semantic multi-target tag action', () => {
   it('creates manual tags and restores in-memory state if the batch transaction fails', async () => {
     installTransactionHost();
     const created = tagItem(1);
-    await expect(setTagOnTargets([created], 'new-tag', true)).resolves.toBe(1);
+    await expect(setItemTag([created], 'new-tag', true)).resolves.toBe(1);
     expect(created.hasTag('new-tag')).toBe(true);
     expect(created.getTagType('new-tag')).toBe(0);
 
     const first = tagItem(2);
     const failed = tagItem(3, { saveError: new Error('save failed') });
-    await expect(setTagOnTargets([first, failed], 'unsafe', true)).rejects.toThrow('save failed');
+    await expect(setItemTag([first, failed], 'unsafe', true)).rejects.toThrow('save failed');
     expect(first.hasTag('unsafe')).toBe(false);
     expect(failed.hasTag('unsafe')).toBe(false);
   });

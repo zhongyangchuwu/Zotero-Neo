@@ -48,6 +48,7 @@ import { ReaderHostKeyBridge } from './host-key-bridge';
 import { ReaderNavigation } from './navigation';
 import { ReaderViewLifecycle } from './view-lifecycle';
 import { ReaderFlash } from './flash';
+import { READER_ITEM_TARGET } from './item-target';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
 import { ReaderSelectionRange } from './selection-range';
 import { selectionClipboardText } from './selection-text';
@@ -1073,6 +1074,14 @@ export class ReaderSession {
     }
     if (!pdfWindow) return;
     const number = Math.max(1, count || 1);
+    if (action === 'addTag' || action === 'removeTag') {
+      this.#dependencies.controller.dependencies.openReaderTagPicker(
+        this.#dependencies.reader._window ?? null,
+        READER_ITEM_TARGET.resolve(this.#dependencies.reader),
+        action === 'addTag',
+      );
+      return;
+    }
     if (isReaderDelegableMainAction(action)) {
       this.#dependencies.controller.dependencies.delegateMain(
         action,

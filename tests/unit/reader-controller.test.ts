@@ -50,6 +50,7 @@ describe('reader discovery diagnostics', () => {
         diagnostic: (message: string) => diagnostics.push(message),
       },
       delegateMain: () => {},
+      openReaderTagPicker: () => {},
       openCommandPalette: () => {},
       captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
@@ -110,6 +111,7 @@ describe('reader discovery diagnostics', () => {
       },
       logger: { debug: () => {}, diagnostic: () => {} },
       delegateMain: () => {},
+      openReaderTagPicker: () => {},
       openCommandPalette: () => {},
       captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
@@ -171,6 +173,7 @@ describe('reader discovery diagnostics', () => {
       },
       logger: { debug: () => {}, diagnostic: () => {} },
       delegateMain: () => {},
+      openReaderTagPicker: () => {},
       openCommandPalette: () => {},
       captureReaderSelectionToNote: async () => false,
     } as ReaderControllerDependencies;
@@ -202,6 +205,7 @@ function createHistorySession(
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
   captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] = async () =>
     false,
+  openReaderTagPicker: ReaderControllerDependencies['openReaderTagPicker'] = () => {},
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -309,6 +313,7 @@ function createHistorySession(
         diagnostic: (message: string) => diagnostics.push(message),
       },
       delegateMain,
+      openReaderTagPicker,
       openCommandPalette,
       captureReaderSelectionToNote,
     },
@@ -931,6 +936,40 @@ describe('Reader-origin main delegation', () => {
     created.session.dispose();
   });
 });
+
+describe('Reader item-tag operation', () => {
+  it('opens add and remove for the Reader item without delegating a Main action', () => {
+    const item = {
+      id: 23,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+    } as Zotero.Item;
+    vi.stubGlobal('Zotero', { Items: { get: (id: number) => (id === item.id ? item : false) } });
+    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const openTag = vi.fn<ReaderControllerDependencies['openReaderTagPicker']>();
+    const created = createHistorySession(
+      {},
+      delegateMain,
+      DEFAULT_BINDINGS,
+      () => {},
+      {},
+      async () => false,
+      openTag,
+    );
+    Reflect.set(created.reader, 'itemID', item.id);
+
+    for (const key of [' ', 't', 'a', ' ', 't', 'r'])
+      created.session.focusAndHandle(readerKey(key).event);
+
+    const targets = { source: 'reader', items: [item], total: 1, missing: 0 };
+    expect(openTag).toHaveBeenNthCalledWith(1, created.reader._window, targets, true);
+    expect(openTag).toHaveBeenNthCalledWith(2, created.reader._window, targets, false);
+    expect(delegateMain).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+});
+
 describe('reader Space-leader key guide', () => {
   it('updates nested prefixes, returns with Backspace, and closes on invalid input or Escape', () => {
     vi.useFakeTimers();

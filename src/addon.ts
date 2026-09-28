@@ -53,6 +53,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       delegateMain(action, count, ownerWindow) {
         main?.executeFromReader(action, count, ownerWindow);
       },
+      openReaderTagPicker(ownerWindow, targets, present) {
+        main?.openReaderTagPicker(ownerWindow, targets, present);
+      },
       openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
         main?.openCommandPalette(window, context);
       },
