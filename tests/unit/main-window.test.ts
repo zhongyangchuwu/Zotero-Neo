@@ -1736,6 +1736,8 @@ describe('Reader to Main command palette integration', () => {
       logger,
       delegateMain: (action, count, ownerWindow) =>
         main?.executeFromReader(action, count, ownerWindow),
+      openReaderTagPicker: (ownerWindow, targets, present) =>
+        main?.openReaderTagPicker(ownerWindow, targets, present),
       openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
       captureReaderSelectionToNote: (context, ownerWindow) =>
         main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false),
@@ -2250,6 +2252,9 @@ describe('Reader owner picker routing', () => {
             count: number,
             ownerWindow: MainWindow | null,
           ) => main.executeFromReader(action, count, ownerWindow),
+          openReaderTagPicker: (
+            ...args: Parameters<MainWindowControllerApi['openReaderTagPicker']>
+          ) => main.openReaderTagPicker(...args),
         },
       },
       reader,

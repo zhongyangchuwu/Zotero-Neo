@@ -1,15 +1,14 @@
 import type { MainWindow } from '../core/contracts';
+import type { ItemTargetSet } from '../core/item-target';
 import type { Logger } from '../core/logging';
 import { tagSeparatorFromPreferences, type PreferenceReader } from '../core/preferences';
+import { setItemTag } from '../operations/item-tags';
 import type { FuzzyPicker } from './picker';
 import { createTagCandidateProvider, type TagRecord } from './picker/providers/tags';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
 import { mainHost } from './host';
 import type { MainViewActions } from './view-actions';
-import { itemTagState, setTagOnTargets } from './tag-targets';
-import type { MainCurrentTarget } from './action-targets';
-import { resolveItemTargets, type ItemTargetContext, type ItemTargetSet } from './item-targets';
 
 function sameTag(left: string, right: string): boolean {
   return left.toLocaleLowerCase() === right.toLocaleLowerCase();
@@ -22,8 +21,11 @@ function targetLabel(targets: ItemTargetSet): string {
 }
 
 function targetLibraryID(targets: ItemTargetSet): number | null {
-  const libraries = new Set(targets.items.map((item) => item.libraryID));
-  return libraries.size === 1 ? ([...libraries][0] ?? null) : null;
+  const first = targets.items[0]?.libraryID;
+  if (first === undefined) return null;
+  for (let index = 1; index < targets.items.length; index += 1)
+    if (targets.items[index]?.libraryID !== first) return null;
+  return first;
 }
 
 function targetTags(targets: ItemTargetSet): TagRecord[] {
@@ -56,17 +58,17 @@ function candidateName(item: {
 }
 
 function presenceLabel(targets: ItemTargetSet, tag: string): string | undefined {
-  const state = itemTagState(targets.items, tag);
-  if (state === 'none') return undefined;
-  const count = targets.items.filter((item) => item.hasTag(tag)).length;
-  return state === 'all'
+  let count = 0;
+  for (const item of targets.items) if (item.hasTag(tag)) count += 1;
+  if (!count) return undefined;
+  return count === targets.items.length
     ? `Assigned to all ${targets.items.length}`
     : `Assigned to ${count}/${targets.items.length}`;
 }
 
 /**
- * Owns semantic tag actions. Candidate search is delegated to the shared chooser; item mutation
- * and Main-view filtering remain separate host operations.
+ * Hosts tag candidate choice and Main-only filtering. Each Surface supplies explicit item targets;
+ * the shared item-tag Operation owns the Zotero transaction.
  */
 export class TagActions {
   readonly #logger: Logger;
@@ -89,13 +91,8 @@ export class TagActions {
     this.#viewActions = viewActions;
   }
 
-  add(
-    window: MainWindow,
-    session: MainWindowSession,
-    context: ItemTargetContext = 'main',
-    currentTarget?: MainCurrentTarget | null,
-  ): void {
-    const targets = this.targets(window, session, context, currentTarget);
+  add(window: MainWindow, session: MainWindowSession, input: ItemTargetSet): void {
+    const targets = this.validatedTargets(session, input);
     if (!targets) return;
     const libraryID = targetLibraryID(targets);
     if (libraryID === null) {
@@ -116,7 +113,7 @@ export class TagActions {
       confirm: async (item) => {
         const name = candidateName(item);
         if (!name) return;
-        const changed = await setTagOnTargets(targets.items, name, true);
+        const changed = await setItemTag(targets.items, name, true);
         this.#navigation.status(
           session,
           changed
@@ -127,14 +124,13 @@ export class TagActions {
     });
   }
 
-  remove(
-    window: MainWindow,
-    session: MainWindowSession,
-    context: ItemTargetContext = 'main',
-    currentTarget?: MainCurrentTarget | null,
-  ): void {
-    const targets = this.targets(window, session, context, currentTarget);
+  remove(window: MainWindow, session: MainWindowSession, input: ItemTargetSet): void {
+    const targets = this.validatedTargets(session, input);
     if (!targets) return;
+    if (targetLibraryID(targets) === null) {
+      this.#navigation.status(session, '✗ Remove Tag requires one library at a time');
+      return;
+    }
     const tags = targetTags(targets);
     if (!tags.length) {
       this.#navigation.status(session, '→ No assigned tags to remove');
@@ -152,7 +148,7 @@ export class TagActions {
       confirm: async (item) => {
         const name = candidateName(item);
         if (!name) return;
-        const changed = await setTagOnTargets(targets.items, name, false);
+        const changed = await setItemTag(targets.items, name, false);
         this.#navigation.status(
           session,
           changed
@@ -221,17 +217,14 @@ export class TagActions {
       });
   }
 
-  private targets(
-    window: MainWindow,
+  private validatedTargets(
     session: MainWindowSession,
-    context: ItemTargetContext,
-    currentTarget?: MainCurrentTarget | null,
+    targets: ItemTargetSet,
   ): ItemTargetSet | null {
-    const targets = resolveItemTargets(window, session, context, currentTarget);
     if (targets.missing > 0) {
       this.#navigation.status(
         session,
-        context === 'main'
+        targets.source === 'main'
           ? '✗ Selection contains unavailable items; refresh before changing tags'
           : '✗ Context item is unavailable; refresh before changing tags',
       );

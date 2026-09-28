@@ -5,6 +5,7 @@ import type {
   MainWindow,
   ReaderSelectionContext,
 } from '../core/contracts';
+import type { ItemTargetSet } from '../core/item-target';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
@@ -40,6 +41,8 @@ import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
 import { mainHost, mainReaderForTab, selectMainTab, selectedMainTabID } from './host';
 import { mainCursorItem } from './action-targets';
+import { MAIN_ITEM_TARGET } from './main-item-target';
+import { NOTE_ITEM_TARGET } from './note-item-target';
 import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
@@ -264,6 +267,20 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     this.execute(action, ownerWindow, session, count, false, 'reader');
+  }
+
+  openReaderTagPicker(
+    ownerWindow: MainWindow | null,
+    targets: ItemTargetSet<'reader'>,
+    present: boolean,
+  ): void {
+    const session = ownerWindow ? this.#sessions.get(ownerWindow) : undefined;
+    if (!ownerWindow || !session) {
+      this.#dependencies.logger.debug('ignored Reader tag picker: no attached owner window');
+      return;
+    }
+    if (present) this.#tags.add(ownerWindow, session, targets);
+    else this.#tags.remove(ownerWindow, session, targets);
   }
 
   async captureReaderSelectionToNote(
@@ -559,6 +576,7 @@ export class MainWindowController implements MainWindowControllerApi {
     if (local !== null) return local;
 
     if (action === 'openCommandPalette') {
+      const noteTargets = NOTE_ITEM_TARGET.resolve(window);
       this.openCommandPalette(window, {
         mode: 'note',
         bindingMode,
@@ -577,18 +595,31 @@ export class MainWindowController implements MainWindowControllerApi {
             session,
             nextCount,
           );
-          if (
-            nextLocal === null &&
-            isNoteCrossContextActionId(nextAction) &&
-            isMainExecutableAction(nextAction)
-          )
-            this.execute(nextAction, window, session, nextCount, false, 'note');
+          if (nextLocal === null)
+            this.executeNoteCrossContextAction(nextAction, nextCount, window, session, noteTargets);
         },
       });
       return true;
     }
 
-    if (!isNoteCrossContextActionId(action) || !isMainExecutableAction(action)) return false;
+    return this.executeNoteCrossContextAction(action, count, window, session);
+  }
+
+  private executeNoteCrossContextAction(
+    action: ActionId,
+    count: number,
+    window: MainWindow,
+    session: MainWindowSession,
+    noteTargets?: ItemTargetSet<'note'>,
+  ): boolean {
+    if (!isNoteCrossContextActionId(action)) return false;
+    if (action === 'addTag' || action === 'removeTag') {
+      const targets = noteTargets ?? NOTE_ITEM_TARGET.resolve(window);
+      if (action === 'addTag') this.#tags.add(window, session, targets);
+      else this.#tags.remove(window, session, targets);
+      return true;
+    }
+    if (!isMainExecutableAction(action)) return false;
     this.execute(action, window, session, count, false, 'note');
     return true;
   }
@@ -778,11 +809,12 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'addTag':
       case 'removeTag': {
-        const visual = context === 'main' && this.#itemSelect.isVisual(window);
+        const visual = this.#itemSelect.isVisual(window);
         const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
+        const targets = MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
         if (visual) this.#itemSelect.cancel(window, session.selection);
-        if (action === 'addTag') this.#tags.add(window, session, context, currentTarget);
-        else this.#tags.remove(window, session, context, currentTarget);
+        if (action === 'addTag') this.#tags.add(window, session, targets);
+        else this.#tags.remove(window, session, targets);
         break;
       }
       case 'toggleTagFilter':

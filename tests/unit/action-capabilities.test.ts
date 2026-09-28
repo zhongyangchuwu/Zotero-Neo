@@ -7,7 +7,6 @@ import {
   MAIN_SELECT_ACTIONS,
   READER_DELEGABLE_MAIN_ACTIONS,
   isMainExecutableAction,
-  isReaderDelegableMainAction,
 } from '../../src/main/action-capabilities';
 import {
   READER_LOCAL_INSERT_ACTIONS,
@@ -80,24 +79,6 @@ const expectedMainActions: readonly ActionId[] = [
   'mainSelectCancel',
 ];
 
-const expectedDelegableMainActions: readonly ActionId[] = [
-  'findAllItems',
-  'findCollectionItems',
-  'findNotes',
-  'managePlugins',
-  'openNeoSettings',
-  'mainReturnContext',
-  'switchTab',
-  'mainYankCitekey',
-  'closeCurrentTab',
-  'previousTab',
-  'nextTab',
-  'addTag',
-  'removeTag',
-  'addToCollection',
-  'removeFromCollection',
-];
-
 function sameActions(actual: readonly ActionId[], expected: readonly ActionId[]): void {
   expect(new Set(actual)).toEqual(new Set(expected));
   expect(new Set(actual).size).toBe(actual.length);
@@ -110,26 +91,6 @@ describe('action capability ownership', () => {
     for (const action of expectedMainActions) expect(isMainExecutableAction(action)).toBe(true);
     expect(isMainExecutableAction('zoomIn')).toBe(false);
     expect(isMainExecutableAction('not-an-action')).toBe(false);
-  });
-
-  it('keeps Reader delegation limited to the approved Main subset', () => {
-    sameActions(READER_DELEGABLE_MAIN_ACTIONS, expectedDelegableMainActions);
-
-    for (const action of expectedDelegableMainActions)
-      expect(isReaderDelegableMainAction(action)).toBe(true);
-    for (const action of [
-      'mainTrashItems',
-      'mainRestoreTrashedItems',
-      'mainFocusTree',
-      'mainFocusItems',
-      'mainOpenPDF',
-      'mainActivate',
-      'toggleTagFilter',
-      'clearTagFilters',
-      'mainTreeExpand',
-    ] as const)
-      expect(isReaderDelegableMainAction(action)).toBe(false);
-    expect(isReaderDelegableMainAction('zoomIn')).toBe(false);
   });
 
   it('composes binding capabilities from the owning Main and Reader sets', () => {

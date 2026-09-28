@@ -61,6 +61,8 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'toggleReaderSidebarOutline',
   'focusReaderSidebar',
   'toggleMarksExplorer',
+  'addTag',
+  'removeTag',
   'openCommandPalette',
 ] as const satisfies readonly ActionId[]);
 

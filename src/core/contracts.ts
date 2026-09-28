@@ -1,6 +1,7 @@
 import type { ReaderDelegableMainAction } from '../main/action-capabilities';
 import type { ActionId } from '../input/actions';
 import type { BindingMap, Mode } from '../input/bindings';
+import type { ItemTargetSet } from './item-target';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
 
@@ -51,6 +52,11 @@ export interface MainActionDelegate {
     count: number,
     ownerWindow: MainWindow | null,
   ): void;
+  openReaderTagPicker(
+    ownerWindow: MainWindow | null,
+    targets: ItemTargetSet<'reader'>,
+    present: boolean,
+  ): void;
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void;
   captureReaderSelectionToNote(
     context: ReaderSelectionContext,
@@ -80,6 +86,11 @@ export interface ReaderControllerDependencies {
     action: ReaderDelegableMainAction,
     count: number,
     ownerWindow: MainWindow | null,
+  ) => void;
+  readonly openReaderTagPicker: (
+    ownerWindow: MainWindow | null,
+    targets: ItemTargetSet<'reader'>,
+    present: boolean,
   ) => void;
   readonly openCommandPalette: (window: MainWindow, context: CommandPaletteContext) => void;
   readonly captureReaderSelectionToNote: (

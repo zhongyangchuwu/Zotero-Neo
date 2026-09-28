@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import type { PreferenceReader } from '../../src/core/preferences';
 import { MainNavigation } from '../../src/main/navigation';
+import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
+import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
+import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import type { FuzzyPicker } from '../../src/main/picker';
 import type { PickerItem } from '../../src/main/picker/model';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
@@ -152,7 +155,7 @@ describe('semantic Tag actions', () => {
     installZotero([first, second], [{ tag: 'alpha' }, { tag: 'robotics' }]);
     const h = harness({ items: [first, second] });
 
-    h.actions.add(h.window, h.session);
+    h.actions.add(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
     const add = h.open();
     expect(add.scope).toBe('tags');
     expect((await add.options.source!.load()).map((item) => item.tagName)).toEqual([
@@ -172,7 +175,7 @@ describe('semantic Tag actions', () => {
     expect(first.hasTag('robotics')).toBe(true);
     expect(second.hasTag('robotics')).toBe(true);
 
-    h.actions.remove(h.window, h.session);
+    h.actions.remove(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
     const remove = h.open();
     expect((await remove.options.source!.load()).map((item) => item.tagName).sort()).toEqual([
       'alpha',
@@ -200,7 +203,7 @@ describe('semantic Tag actions', () => {
     h.session.selection.clear();
     h.session.selection.add({ libraryID: selected.libraryID, itemID: selected.id });
 
-    h.actions.add(h.window, h.session);
+    h.actions.add(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
     const add = h.open();
     await add.options.confirm?.(
       {
@@ -222,14 +225,8 @@ describe('semantic Tag actions', () => {
     const reader = tagItem(2);
     installZotero([main, reader], [{ tag: 'robotics' }]);
     const h = harness({ items: [main] });
-    (Zotero as unknown as { Reader: { getByTabID: () => { itemID: number } } }).Reader = {
-      getByTabID: () => ({ itemID: reader.id }),
-    };
-    (h.window as unknown as { Zotero_Tabs: { selectedID: string } }).Zotero_Tabs = {
-      selectedID: 'reader-tab',
-    };
 
-    h.actions.add(h.window, h.session, 'reader');
+    h.actions.add(h.window, h.session, READER_ITEM_TARGET.resolve({ itemID: reader.id }));
     const add = h.open();
     await add.options.confirm?.(
       {
@@ -247,18 +244,83 @@ describe('semantic Tag actions', () => {
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
+  it('adds a Note tag to its parent item without touching Main Selection', async () => {
+    const main = tagItem(1);
+    const parent = tagItem(2);
+    const note = tagItem(3);
+    Reflect.set(note, 'isNote', () => true);
+    Reflect.set(note, 'parentItemID', parent.id);
+    installZotero([main, parent, note], [{ tag: 'robotics' }]);
+    const h = harness({ items: [main] });
+    const active = {} as Element;
+    Reflect.set(h.window.document, 'activeElement', active);
+    Reflect.set(h.window, 'ZoteroContextPane', {
+      activeEditor: { item: note, contains: (node: unknown) => node === active },
+    });
+
+    const noteTargets = NOTE_ITEM_TARGET.resolve(h.window);
+    Reflect.set(h.window.document, 'activeElement', null);
+    h.actions.add(h.window, h.session, noteTargets);
+    await h.open().options.confirm?.(
+      {
+        id: 'tag:robotics',
+        title: 'robotics',
+        search: 'robotics',
+        tagName: 'robotics',
+        tagCandidate: 'tag',
+      } as PickerItem,
+      false,
+    );
+
+    expect(parent.hasTag('robotics')).toBe(true);
+    expect(note.hasTag('robotics')).toBe(false);
+    expect(main.hasTag('robotics')).toBe(false);
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+  });
+
   it('refuses a partial Main tag mutation when Selection contains an unavailable item', () => {
     const selected = tagItem(2);
     installZotero([selected], [{ tag: 'robotics' }]);
     const h = harness({ items: [selected] });
     h.session.selection.add({ libraryID: 1, itemID: 99 });
 
-    h.actions.add(h.window, h.session);
+    h.actions.add(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
 
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
     expect(h.session.status.textContent).toBe(
       '✗ Selection contains unavailable items; refresh before changing tags',
     );
+  });
+
+  it('does not open a tag chooser for an unavailable Reader item', () => {
+    const main = tagItem(1);
+    installZotero([main]);
+    const h = harness({ items: [main] });
+
+    h.actions.add(h.window, h.session, READER_ITEM_TARGET.resolve({ itemID: 99 }));
+
+    expect(() => h.open()).toThrow('Tag action did not open a chooser');
+    expect(h.session.status.textContent).toBe(
+      '✗ Context item is unavailable; refresh before changing tags',
+    );
+    expect(main.getTags()).toEqual([]);
+  });
+
+  it('rejects mixed-library tag targets before opening either mutation chooser', () => {
+    const first = tagItem(1, [{ tag: 'robotics', type: 0 }]);
+    const second = tagItem(2, [{ tag: 'robotics', type: 0 }]);
+    Reflect.set(second, 'libraryID', 2);
+    installZotero([first, second]);
+    const h = harness({ items: [first] });
+    const targets = { source: 'main' as const, items: [first, second], total: 2, missing: 0 };
+
+    h.actions.add(h.window, h.session, targets);
+    expect(h.session.status.textContent).toBe('✗ Add Tag requires one library at a time');
+    h.actions.remove(h.window, h.session, targets);
+    expect(h.session.status.textContent).toBe('✗ Remove Tag requires one library at a time');
+    expect(() => h.open()).toThrow('Tag action did not open a chooser');
+    expect(first.hasTag('robotics')).toBe(true);
+    expect(second.hasTag('robotics')).toBe(true);
   });
 
   it('toggles one Main tag filter and clears all filters without mutating item tags', async () => {
