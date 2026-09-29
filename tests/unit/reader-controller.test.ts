@@ -295,7 +295,8 @@ function createHistorySession(
   const cloneInto = vi.fn(<T>(value: T) => value);
   Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: pdfWindow } });
-  const ownerWindow = {} as _ZoteroTypes.MainWindow;
+  const confirm = vi.fn(() => true);
+  const ownerWindow = { confirm } as unknown as _ZoteroTypes.MainWindow;
   const reader = {
     _iframeWindow: readerWindow,
     _window: ownerWindow,
@@ -344,6 +345,8 @@ function createHistorySession(
     pdfWindow,
     readerWindow,
     reader,
+    ownerWindow,
+    confirm,
     cloneInto,
     bodyChildren,
     animationFrameTasks,
@@ -1041,6 +1044,91 @@ describe('Reader citekey output', () => {
     expect(created.indicator.textContent).toBe('✓ @Reader2026');
     expect(delegateMain).not.toHaveBeenCalled();
     created.session.dispose();
+  });
+});
+
+describe('Reader annotation deletion safety', () => {
+  function createDeletion(confirmed: boolean, fail = false, hostLocale = '') {
+    const events: string[] = [];
+    const eraseTx = vi.fn(async () => {
+      events.push('erase');
+      if (fail) throw new Error('blocked');
+    });
+    const annotation = { key: 'ANN-1', annotationType: 'highlight', eraseTx };
+    const item = { getAnnotations: () => [annotation] };
+    const clearHostSelection = vi.fn(() => events.push('clear'));
+    const created = createHistorySession({
+      _state: { selectedAnnotationIDs: [annotation.key] },
+      setSelectedAnnotations: clearHostSelection,
+    });
+    Reflect.set(created.reader, 'itemID', 41);
+    created.confirm.mockReturnValue(confirmed);
+    vi.stubGlobal('Zotero', {
+      locale: hostLocale,
+      Items: { get: (id: number) => (id === 41 ? item : false) },
+    });
+    return { created, annotation, eraseTx, events, clearHostSelection };
+  }
+
+  function pressDelete(session: ReaderSession): void {
+    session.focusAndHandle(readerKey('d').event);
+    session.focusAndHandle(readerKey('d').event);
+  }
+
+  it('keeps the annotation selected and untouched when confirmation is cancelled', () => {
+    const h = createDeletion(false);
+
+    pressDelete(h.created.session);
+
+    expect(h.created.confirm).toHaveBeenCalledWith(
+      'Delete Reader annotation · 1 permanently? This cannot be undone.',
+    );
+    expect(h.eraseTx).not.toHaveBeenCalled();
+    expect(h.clearHostSelection).not.toHaveBeenCalled();
+    expect(h.created.reader._internalReader?._state?.selectedAnnotationIDs).toEqual(['ANN-1']);
+    expect(h.created.indicator.textContent).toBe(
+      '→ Cancelled · Reader annotation · 1 left unchanged',
+    );
+    h.created.session.dispose();
+  });
+
+  it('localizes permanent deletion confirmation for a Simplified Chinese host', () => {
+    const h = createDeletion(false, false, 'zh-CN');
+
+    pressDelete(h.created.session);
+
+    expect(h.created.confirm).toHaveBeenCalledWith('永久删除阅读器标注 · 1 项？此操作无法撤销。');
+    expect(h.eraseTx).not.toHaveBeenCalled();
+    expect(h.created.indicator.textContent).toBe('→ 已取消 · 阅读器标注 · 1 项 未更改');
+    h.created.session.dispose();
+  });
+
+  it('clears Reader selection only after confirmed deletion succeeds', async () => {
+    const h = createDeletion(true);
+
+    pressDelete(h.created.session);
+    await vi.waitFor(() =>
+      expect(h.created.indicator.textContent).toBe('✓ Deleted Reader annotation · 1'),
+    );
+
+    expect(h.created.confirm).toHaveBeenCalledOnce();
+    expect(h.events).toEqual(['erase', 'clear']);
+    expect(h.clearHostSelection).toHaveBeenCalledWith([]);
+    h.created.session.dispose();
+  });
+
+  it('preserves Reader selection if Zotero rejects annotation deletion', async () => {
+    const h = createDeletion(true, true);
+
+    pressDelete(h.created.session);
+    await vi.waitFor(() =>
+      expect(h.created.indicator.textContent).toBe('✗ Unable to delete Reader annotation · 1'),
+    );
+
+    expect(h.events).toEqual(['erase']);
+    expect(h.clearHostSelection).not.toHaveBeenCalled();
+    expect(h.created.debug).toContain('delete Reader annotation failed: Error: blocked');
+    h.created.session.dispose();
   });
 });
 

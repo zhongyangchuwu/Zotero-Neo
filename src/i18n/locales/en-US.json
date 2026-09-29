@@ -298,5 +298,18 @@
   "action.noteChangeToLineStart": "Note: change to line start",
   "action.noteChangeToLineEnd": "Note: change to line end",
   "action.noteChangeInnerWord": "Note: change inner word",
+  "confirm.trashItems": "Move {target} to Zotero Trash? You can restore it with Zotero Undo.",
+  "confirm.readerAnnotationDelete": "Delete {target} permanently? This cannot be undone.",
+  "status.destructiveCancelled": "Cancelled · {target} left unchanged",
+  "status.trashComplete": "Moved {target} to Zotero Trash",
+  "status.trashHidden": "Neo Selection includes {hidden}/{total} hidden items; inspect with <Space>ss, reveal, or clear before trash",
+  "status.readerAnnotationDeleteComplete": "Deleted {target}",
+  "status.readerAnnotationDeleteFailed": "Unable to delete {target}",
+  "status.readerAnnotationDeleteUnconfirmable": "Cannot confirm Reader annotation deletion",
+  "target.trashCursor": "Cursor",
+  "target.trashSelection": "Neo Selection",
+  "target.trashVisual": "Visual range",
+  "target.trashNativeSelection": "Zotero multi-selection",
+  "target.readerAnnotation": "Reader annotation · 1",
   "common.unbound": "Unbound"
 }

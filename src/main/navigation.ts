@@ -1,7 +1,10 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
+import { t } from '../i18n';
 import type { FocusDirection } from '../input/actions';
+import type { KeyGuideLanguage } from '../input/key-guide-config';
 import { openItem } from '../operations/open-item';
+import { trashItems } from '../operations/trash-items';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 import {
@@ -20,6 +23,7 @@ import {
   mainCursorItem,
   resolveMainEffectiveTargets,
   type MainCurrentTarget,
+  type MainResolvedTargets,
 } from './action-targets';
 
 type Selection = {
@@ -127,6 +131,19 @@ export function selectedCollection(view: TreeView | undefined): Zotero.Collectio
 
 export function selectedCollectionID(view: TreeView | undefined): number | undefined {
   return view?.getSelectedCollections?.(true)[0];
+}
+
+function trashTargetSummary(targets: MainResolvedTargets, language: KeyGuideLanguage): string {
+  const keyBySource: Record<MainResolvedTargets['source'], string> = {
+    selection: 'target.trashSelection',
+    visual: 'target.trashVisual',
+    'native-selection': 'target.trashNativeSelection',
+    cursor: 'target.trashCursor',
+  };
+  const count = targets.items.length;
+  const countLabel =
+    language === 'zh-CN' ? `${count} 项` : `${count} item${count === 1 ? '' : 's'}`;
+  return `${t(keyBySource[targets.source], language)} · ${countLabel}`;
 }
 
 export class MainNavigation {
@@ -347,13 +364,6 @@ export class MainNavigation {
     void this.openPDF(window, session, mainCursorItem(window) ?? null, beforeNavigate);
   }
 
-  async trashItems(ids: readonly number[]): Promise<boolean> {
-    const valid = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
-    if (!valid.length) return false;
-    await Zotero.Items.trashTx(valid);
-    return true;
-  }
-
   async restoreTrashedItems(ids: readonly number[]): Promise<boolean> {
     const valid = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
     if (!valid.length) return false;
@@ -382,39 +392,56 @@ export class MainNavigation {
     window: MainWindow,
     session: MainWindowSession,
     currentTarget?: MainCurrentTarget | null,
-  ): Promise<void> {
+    language: KeyGuideLanguage = 'en',
+  ): Promise<boolean> {
     if (!this.itemPaneContainsFocus(window)) {
       this.status(session, '✗ Focus the items list first');
-      return;
+      return false;
     }
     const targets = resolveMainEffectiveTargets(window, session, currentTarget);
     if (!targets.total || !targets.items.length) {
       this.status(session, '✗ No item target');
-      return;
+      return false;
     }
     if (targets.missing > 0) {
       this.status(session, '✗ Selection contains unavailable items; refresh before trash');
-      return;
+      return false;
     }
     if (targets.source === 'selection' && targets.hidden > 0) {
       this.status(
         session,
-        `✗ Selection includes ${targets.hidden} hidden item${targets.hidden === 1 ? '' : 's'}; reveal or clear before trash`,
+        `✗ ${t('status.trashHidden', language)
+          .replace('{hidden}', String(targets.hidden))
+          .replace('{total}', String(targets.total))}`,
       );
-      return;
+      return false;
     }
 
-    const ids = targets.items.map((item) => item.id);
+    const summary = trashTargetSummary(targets, language);
     try {
-      await this.trashItems(ids);
+      const prompt = t('confirm.trashItems', language).replace('{target}', summary);
+      if (!window.confirm(prompt)) {
+        this.status(
+          session,
+          `→ ${t('status.destructiveCancelled', language).replace('{target}', summary)}`,
+        );
+        return false;
+      }
+      const ids = await trashItems(targets.items);
+      if (!ids.length) {
+        this.status(session, '✗ No valid item target');
+        return false;
+      }
       session.trashHistory.record(ids);
       if (targets.source === 'selection') {
         for (const ref of targets.refs) session.selection.remove(ref);
       }
-      this.status(session, `✓ Moved ${ids.length} item${ids.length === 1 ? '' : 's'} to trash`);
+      this.status(session, `✓ ${t('status.trashComplete', language).replace('{target}', summary)}`);
+      return true;
     } catch (error) {
       this.#logger.debug(`trash target items failed: ${String(error)}`);
-      this.status(session, '✗ Unable to move target items to trash');
+      this.status(session, `✗ Unable to move ${summary} to Zotero Trash`);
+      return false;
     }
   }
 

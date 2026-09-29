@@ -42,6 +42,7 @@ function harness(
   const trashTx = vi.fn(async () => undefined);
   const byID = new Map(visible.map((item) => [item.id, item]));
   const copied: string[] = [];
+  const confirm = vi.fn(() => true);
 
   vi.stubGlobal('Zotero', {
     Items: {
@@ -65,6 +66,7 @@ function harness(
     querySelector: () => null,
   } as unknown as Document;
   const window = {
+    confirm,
     document,
     ZoteroPane: {
       itemsView: {
@@ -100,6 +102,7 @@ function harness(
     session,
     navigation,
     viewAttachment,
+    confirm,
     trashTx,
     copied,
     install: (...items: Zotero.Item[]) => {
@@ -200,7 +203,61 @@ describe('Main action target contracts', () => {
     await h.navigation.trashSelectedItems(h.window, h.session);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id, third.id]);
+    expect(h.confirm).toHaveBeenCalledWith(
+      'Move Zotero multi-selection · 3 items to Zotero Trash? You can restore it with Zotero Undo.',
+    );
     expect(h.session.trashHistory.values()).toEqual([first.id, second.id, third.id]);
+    expect(h.session.status.textContent).toBe(
+      '✓ Moved Zotero multi-selection · 3 items to Zotero Trash',
+    );
+  });
+
+  it('cancels a Trash confirmation without changing the resolved Selection', async () => {
+    const first = attachment(10);
+    const cursor = attachment(11);
+    const h = harness([first, cursor], 1);
+    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    h.confirm.mockReturnValue(false);
+
+    await expect(h.navigation.trashSelectedItems(h.window, h.session)).resolves.toBe(false);
+
+    expect(h.confirm).toHaveBeenCalledWith(
+      'Move Neo Selection · 1 item to Zotero Trash? You can restore it with Zotero Undo.',
+    );
+    expect(h.trashTx).not.toHaveBeenCalled();
+    expect(h.session.trashHistory.values()).toEqual([]);
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
+    expect(h.session.status.textContent).toBe(
+      '→ Cancelled · Neo Selection · 1 item left unchanged',
+    );
+  });
+
+  it('localizes Trash confirmation and feedback to the configured language', async () => {
+    const first = attachment(10);
+    const cursor = attachment(11);
+    const h = harness([first, cursor], 1);
+    h.session.selection.add({ libraryID: 1, itemID: first.id });
+
+    await h.navigation.trashSelectedItems(h.window, h.session, undefined, 'zh-CN');
+
+    expect(h.confirm).toHaveBeenCalledWith(
+      '将Neo 选择集 · 1 项移至 Zotero 回收站？你可以通过 Zotero 撤销恢复。',
+    );
+    expect(h.session.status.textContent).toBe('✓ 已将Neo 选择集 · 1 项移至 Zotero 回收站');
+  });
+
+  it('preserves Neo Selection and Trash history if Zotero rejects the confirmed operation', async () => {
+    const first = attachment(10);
+    const cursor = attachment(11);
+    const h = harness([first, cursor], 1);
+    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    h.trashTx.mockRejectedValueOnce(new Error('blocked'));
+
+    await expect(h.navigation.trashSelectedItems(h.window, h.session)).resolves.toBe(false);
+
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
+    expect(h.session.trashHistory.values()).toEqual([]);
+    expect(h.session.status.textContent).toContain('Unable to move Neo Selection · 1 item');
   });
 
   it('uses an explicit Visual target when Selection is empty and keeps Selection authoritative when present', async () => {
@@ -218,10 +275,20 @@ describe('Main action target contracts', () => {
 
     await h.navigation.trashSelectedItems(h.window, h.session, visual);
     expect(h.trashTx).toHaveBeenLastCalledWith([second.id, third.id]);
+    expect(h.confirm).toHaveBeenNthCalledWith(
+      1,
+      'Move Visual range · 2 items to Zotero Trash? You can restore it with Zotero Undo.',
+    );
+    expect(h.session.status.textContent).toBe('✓ Moved Visual range · 2 items to Zotero Trash');
 
     h.session.selection.add({ libraryID: 1, itemID: first.id });
     await h.navigation.trashSelectedItems(h.window, h.session, visual);
     expect(h.trashTx).toHaveBeenLastCalledWith([first.id]);
+    expect(h.confirm).toHaveBeenNthCalledWith(
+      2,
+      'Move Neo Selection · 1 item to Zotero Trash? You can restore it with Zotero Undo.',
+    );
+    expect(h.session.status.textContent).toBe('✓ Moved Neo Selection · 1 item to Zotero Trash');
   });
 
   it('blocks trash when explicit Selection contains hidden targets', async () => {
@@ -236,7 +303,8 @@ describe('Main action target contracts', () => {
     await h.navigation.trashSelectedItems(h.window, h.session);
 
     expect(h.trashTx).not.toHaveBeenCalled();
-    expect(h.session.status.textContent).toContain('1 hidden item');
+    expect(h.confirm).not.toHaveBeenCalled();
+    expect(h.session.status.textContent).toContain('1/2 hidden items');
     expect(h.session.selection.size).toBe(2);
   });
 

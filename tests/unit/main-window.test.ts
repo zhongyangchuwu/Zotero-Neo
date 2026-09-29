@@ -517,7 +517,9 @@ describe('main item trash and restore', () => {
     const rows = selected.map((ref) => ({ isObjectRow: true, ref }));
     const trashTx = vi.fn(async () => {});
     const undo = vi.fn(async () => true);
+    const confirm = vi.fn(() => true);
     const window = {
+      confirm,
       document: {
         activeElement: active,
         getElementById: () => null,
@@ -552,7 +554,10 @@ describe('main item trash and restore', () => {
         UndoHistory: { getUndoAction: () => ({ action: 'undo-action-trash' }), undo },
       });
 
-      await navigation.trashSelectedItems(window, session);
+      await expect(navigation.trashSelectedItems(window, session)).resolves.toBe(true);
+      expect(confirm).toHaveBeenCalledWith(
+        'Move Neo Selection · 2 items to Zotero Trash? You can restore it with Zotero Undo.',
+      );
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
       expect(session.trashHistory.values()).toEqual([41, 42]);
       expect(session.selection.empty).toBe(true);
@@ -2574,9 +2579,7 @@ describe('Main CurrentTarget routing', () => {
       itemsView,
       getSelectedItems: () => [...selected].map((index) => items[index]!),
     });
-    const trash = vi
-      .spyOn(MainNavigation.prototype, 'trashSelectedItems')
-      .mockResolvedValue(undefined);
+    const trash = vi.spyOn(MainNavigation.prototype, 'trashSelectedItems').mockResolvedValue(false);
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,

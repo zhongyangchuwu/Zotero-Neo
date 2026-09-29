@@ -4,6 +4,7 @@ import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainItemSelect } from '../../src/main/item-select';
 
+import { SelectionStore } from '../../src/main/selection-store';
 function themedElement(id = ''): HTMLElement {
   const attributes = new Map<string, string>();
   const styleValues = new Map<string, string>();
@@ -38,6 +39,7 @@ function harness() {
   let active = themedElement('item-tree-main-default-row-0') as Element;
   let keydown: EventListener | undefined;
   const forwardKey = vi.fn();
+  const confirm = vi.fn(() => false);
   const itemRoot = themedElement('item-tree-main-default');
   Reflect.set(
     itemRoot,
@@ -115,6 +117,7 @@ function harness() {
     removeEventListener: () => {},
   } as unknown as Document;
   const window = {
+    confirm,
     document,
     ZoteroPane: { itemsView, collectionsView: { domEl: collectionRoot } },
     addEventListener: () => {},
@@ -162,6 +165,7 @@ function harness() {
     controller,
     press,
     clearSelection,
+    confirm,
     forwardKey,
     focused: () => focused,
     focusItems: () => {
@@ -301,6 +305,33 @@ describe('Main transient-target Escape grammar', () => {
     readerHost.press('Escape');
     expect(readerHost.clearSelection).not.toHaveBeenCalled();
     readerHost.controller.shutdown();
+  });
+
+  it('keeps persistent Selection unchanged when Main Trash is cancelled', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const item = { id: 10, libraryID: 1 } as Zotero.Item;
+    const trashTx = vi.fn(async () => {});
+    const remove = vi.spyOn(SelectionStore.prototype, 'remove');
+    const host = harness();
+    Reflect.set(globalThis, 'Zotero', {
+      Items: { get: (id: number) => (id === item.id ? item : false), trashTx },
+    });
+    try {
+      host.press('s');
+      host.press('x');
+      await Promise.resolve();
+
+      expect(host.confirm).toHaveBeenCalledWith(
+        'Move Neo Selection · 1 item to Zotero Trash? You can restore it with Zotero Undo.',
+      );
+      expect(trashTx).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      host.controller.shutdown();
+      remove.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
   });
   it('leaves IME-owned Escape and nested contenteditable keys native', () => {
     const host = harness();

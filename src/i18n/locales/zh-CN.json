@@ -298,5 +298,18 @@
   "action.noteChangeToLineStart": "笔记：修改到行首",
   "action.noteChangeToLineEnd": "笔记：修改到行尾",
   "action.noteChangeInnerWord": "笔记：修改当前单词",
+  "confirm.trashItems": "将{target}移至 Zotero 回收站？你可以通过 Zotero 撤销恢复。",
+  "confirm.readerAnnotationDelete": "永久删除{target}？此操作无法撤销。",
+  "status.destructiveCancelled": "已取消 · {target} 未更改",
+  "status.trashComplete": "已将{target}移至 Zotero 回收站",
+  "status.trashHidden": "Neo 选择集中有 {hidden}/{total} 个隐藏条目；请用 <Space>ss 检查、显示或清空后再移至回收站",
+  "status.readerAnnotationDeleteComplete": "已删除{target}",
+  "status.readerAnnotationDeleteFailed": "无法删除{target}",
+  "status.readerAnnotationDeleteUnconfirmable": "无法确认阅读器标注删除操作",
+  "target.trashCursor": "游标",
+  "target.trashSelection": "Neo 选择集",
+  "target.trashVisual": "视觉范围",
+  "target.trashNativeSelection": "Zotero 原生多选",
+  "target.readerAnnotation": "阅读器标注 · 1 项",
   "common.unbound": "未绑定"
 }

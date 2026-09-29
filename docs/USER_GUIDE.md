@@ -469,6 +469,8 @@ list) when that pane has focus.
 | `R`         | Expand all collections in the current library tree                                                                   |
 | `M`         | Collapse all collections in the current library tree                                                                 |
 
+Before Trash, Neo asks for confirmation showing the resolved source and item count (for example, `Neo Selection · 7 items`) and notes Zotero Undo. Cancel leaves the workset unchanged. If Neo Selection contains hidden members, Trash is refused with the hidden/total count; open `<Space>ss` to inspect, reveal, or remove those members.
+
 The collection tree keeps Zotero's native scope semantics. Neo does not assign
 `s` a ScopeSet mutation grammar. Existing native multi-scope selections are
 preserved by Cursor-only tree motion where Zotero supports it, and `Enter`
@@ -598,7 +600,7 @@ highlighted in the PDF and scrolled to in the sidebar.
 | `i`     | Enter Insert mode **and** focus the annotation comment field |
 | `y`     | Copy the annotation's **highlighted text** to the clipboard  |
 | `Y`     | Copy the annotation's **comment text** to the clipboard      |
-| `dd`    | Delete the selected annotation                               |
+| `dd`    | Confirm permanent deletion of the selected Reader annotation (not undoable) |
 | `zy`    | Change annotation colour → Yellow                            |
 | `zr`    | Change annotation colour → Red                               |
 | `zg`    | Change annotation colour → Green                             |
@@ -710,7 +712,7 @@ a highlight and opens its annotation comment editor.
    pre-filled and the highlighted text quoted as context (Zotero's popup is
    not used). Press `Enter` for a new line, `Escape` to save and return to
    Normal mode.
-4. Press `dd` to delete the annotation.
+4. Press `dd` and confirm to permanently delete the selected annotation; this deletion cannot be undone.
 
 ---
 

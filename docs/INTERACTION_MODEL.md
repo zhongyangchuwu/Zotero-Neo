@@ -281,7 +281,8 @@ Initial target policy:
 | Main `o` / Enter | one Main Cursor item regardless of persistent Selection or native multi-set |
 | Note `o` | the Note-context item normalized to its bibliographic parent when present |
 | Add/Remove Tag | shared contextual item target; Main may be batch, Reader/Note contextual single target |
-| Trash/restore batch operations | EffectiveSelection with destructive preflight policy |
+| Trash/restore batch operations | Trash uses Main EffectiveSelection with target/count confirmation and hidden-member refusal; restore uses Neo's last Trash batch |
+| Reader annotation deletion | one selected Reader annotation; explicit permanent-delete confirmation |
 | Add/remove collection membership | shared contextual item target; Main batch or Reader contextual item |
 | Visual selection operation | VisualTarget -> Selection |
 | Quick/Advanced/tag filtering, sort | View only |
@@ -304,15 +305,13 @@ contract once Cursor can be detached from Selection.
 
 A persistent workset introduces hidden targets by design.
 
-Until a dedicated Selection Panel and preflight UX exist:
+High-impact mutations expose their actual resolved target before changing Zotero data:
 
-- hidden Selection members must never silently receive an unexpected destructive
-  operation;
-- dangerous actions should refuse or explicitly surface hidden-target counts;
-- non-destructive batch actions should still communicate total and visible
-  counts where this materially changes user expectations.
+- Main Trash refuses missing targets and persistent Neo Selection members hidden by the current View. Its status reports hidden/total counts and points to `<Space>ss` Selection Panel for inspection, reveal, or removal.
+- Visible Main Trash targets require a confirmation naming Neo Selection, Visual range, Zotero native multi-selection, or Cursor and the item count. Cancel changes neither Zotero data, Selection, nor Trash history; completion feedback repeats the resolved target and count.
+- Reader `dd` confirms deletion of exactly one selected Reader annotation and states that it is permanent. Cancel preserves the annotation selection; Neo clears it only after Zotero deletion succeeds.
 
-A future Selection Panel is an inspector/manager for the workset:
+A Selection Panel is an inspector/manager for the workset:
 
 - list members;
 - show visible/hidden state;
