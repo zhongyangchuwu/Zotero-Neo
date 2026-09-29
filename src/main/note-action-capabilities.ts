@@ -1,15 +1,32 @@
 import type { ActionId } from '../input/actions';
-import {
-  NOTE_ACTION_IDS,
-  NOTE_MAIN_SURFACE_ACTION_IDS,
-  type NoteActionId,
-} from '../input/note-actions';
+import { NOTE_ACTION_IDS, type NoteActionId } from '../input/note-actions';
 
 export const NOTE_NORMAL_ACTIONS = Object.freeze([
   ...NOTE_ACTION_IDS,
   'enterInsert',
   'exitMode',
-  ...NOTE_MAIN_SURFACE_ACTION_IDS,
+  'openCommandPalette',
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'managePlugins',
+  'openNeoSettings',
+  'switchTab',
+  'mainFocusTree',
+  'mainFocusLeft',
+  'mainFocusRight',
+  'mainFocusItems',
+  'focusReaderSplitLeft',
+  'focusReaderSplitDown',
+  'focusReaderSplitUp',
+  'focusReaderSplitRight',
+  'mainYankCitekey',
+  'mainOpenPDF',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
+  'addTag',
+  'removeTag',
 ] as const satisfies readonly ActionId[]);
 
 export const NOTE_COMMAND_PALETTE_ACTIONS = NOTE_NORMAL_ACTIONS;

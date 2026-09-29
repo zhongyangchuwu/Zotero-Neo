@@ -111,6 +111,32 @@ describe('action capability ownership', () => {
       'nextTab',
     ] as const)
       expect(isReaderActionForMode('normal', action)).toBe(true);
+
+    for (const action of [
+      'openCommandPalette',
+      'findAllItems',
+      'findCollectionItems',
+      'findNotes',
+      'managePlugins',
+      'openNeoSettings',
+      'switchTab',
+      'mainFocusTree',
+      'mainFocusLeft',
+      'mainFocusRight',
+      'mainFocusItems',
+      'focusReaderSplitLeft',
+      'focusReaderSplitDown',
+      'focusReaderSplitUp',
+      'focusReaderSplitRight',
+      'mainYankCitekey',
+      'mainOpenPDF',
+      'closeCurrentTab',
+      'previousTab',
+      'nextTab',
+      'addTag',
+      'removeTag',
+    ] as const)
+      expect(actionsForBindingMode('note-normal')).toContain(action);
   });
   it('guards commands by Reader mode and rejects unsafe catalog drift', () => {
     expect(isReaderActionForMode('normal', 'openCommandPalette')).toBe(true);
