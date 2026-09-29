@@ -975,12 +975,21 @@ describe('Note contextual Open', () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const originalServices = Reflect.get(globalThis, 'Services');
     const host = pickerMainWindow();
-    const paper = {
-      id: 21,
+    const pdf = {
+      id: 24,
       libraryID: 1,
       isAttachment: () => true,
       isNote: () => false,
     } as Zotero.Item;
+    const paper = {
+      id: 21,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+      getBestAttachment: async () => pdf,
+      getAttachments: () => [],
+      getField: () => '',
+    } as unknown as Zotero.Item;
     const note = {
       id: 22,
       libraryID: 1,
@@ -1016,21 +1025,28 @@ describe('Note contextual Open', () => {
       parentElement: null,
       ownerDocument: editorDocument,
     } as unknown as HTMLElement;
+    const noteEditor: {
+      item?: Zotero.Item;
+      contains(node: unknown): boolean;
+      _iframe: { contentWindow: Window };
+    } = {
+      item: note,
+      contains: (node) => node === target,
+      _iframe: { contentWindow: editorWindow },
+    };
     Reflect.set(host.window.document, 'activeElement', target);
-    Reflect.set(host.window, 'ZoteroContextPane', {
-      activeEditor: {
-        item: note,
-        contains: (node: unknown) => node === target,
-        _iframe: { contentWindow: editorWindow },
-      },
-    });
+    Reflect.set(host.window, 'ZoteroContextPane', { activeEditor: noteEditor });
     Reflect.set(host.window, 'ZoteroPane', {
       getSelectedItems: () => [other],
       viewAttachment,
     });
     Reflect.set(globalThis, 'Zotero', {
-      Items: { get: (id: number) => (id === paper.id ? paper : id === note.id ? note : other) },
+      Items: {
+        get: (id: number) =>
+          id === paper.id ? paper : id === note.id ? note : id === pdf.id ? pdf : other,
+      },
       Reader: { getByTabID: () => null },
+      locale: 'en-US',
       initialized: false,
     });
     Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
@@ -1041,7 +1057,7 @@ describe('Note contextual Open', () => {
     } as MainWindowControllerDependencies);
     try {
       controller.addWindow(host.window);
-      for (const key of [' ', 'o']) {
+      const pressNote = (key: string): void => {
         noteKeydown?.({
           key,
           target,
@@ -1052,8 +1068,69 @@ describe('Note contextual Open', () => {
           preventDefault: vi.fn(),
           stopPropagation: vi.fn(),
         } as unknown as Event);
-      }
-      await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(paper.id));
+      };
+      pressNote(':');
+      await vi.waitFor(() =>
+        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+      );
+      const overlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
+      const left = overlay?.children[0]?.children[0]?.children[0];
+      if (!left) throw new Error('Expected Note command palette content');
+      const input = left.children[1] as HTMLElement & {
+        value: string;
+        emit(type: string, event?: Partial<Event>): void;
+      };
+      const results = left.children[3] as HTMLElement;
+      input.value = 'mainOpenPDF';
+      input.emit('input');
+      await vi.waitFor(() =>
+        expect(results.children[0]?.children[0]?.textContent).toContain(
+          'Open the Main Cursor or Note-context item',
+        ),
+      );
+      host.keydown({
+        key: 'Enter',
+        target: results,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Event);
+      await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(pdf.id));
+      expect(viewAttachment).toHaveBeenCalledTimes(1);
+      expect(viewAttachment).not.toHaveBeenCalledWith(other.id);
+
+      Reflect.set(host.window.document, 'activeElement', target);
+      noteEditor.item = undefined;
+      Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
+      pressNote(':');
+      await vi.waitFor(() =>
+        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+      );
+      const missingOverlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
+      const missingLeft = missingOverlay?.children[0]?.children[0]?.children[0];
+      if (!missingLeft) throw new Error('Expected missing-context command palette content');
+      const missingInput = missingLeft.children[1] as HTMLElement & {
+        value: string;
+        emit(type: string, event?: Partial<Event>): void;
+      };
+      const missingResults = missingLeft.children[3] as HTMLElement;
+      missingInput.value = 'mainOpenPDF';
+      missingInput.emit('input');
+      await vi.waitFor(() => expect(missingResults.children.length).toBeGreaterThan(0));
+      host.keydown({
+        key: 'Enter',
+        target: missingResults,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Event);
+      await Promise.resolve();
       expect(viewAttachment).toHaveBeenCalledTimes(1);
       expect(viewAttachment).not.toHaveBeenCalledWith(other.id);
     } finally {

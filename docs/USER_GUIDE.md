@@ -502,7 +502,7 @@ and focus context:
 | `<Space>yy` | Copy current target citekey(s) to the clipboard |
 | `<Space>sc` | Clear persistent Neo Selection explicitly |
 | `e` | Focus the collection tree |
-| `o` | Open the selected item's PDF |
+| `o` | Open the focused Cursor item; persistent Selection and native multi-selection are not batch-opened |
 | `wh` | Focus the collection tree (left pane) |
 | `wl` | Focus the detail pane (right pane) |
 | `ww` | Focus the item list (middle pane) |
