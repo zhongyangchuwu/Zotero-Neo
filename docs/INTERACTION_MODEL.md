@@ -416,8 +416,10 @@ Visual Esc/v cancel Visual and exit
 
 The same Space-led semantic groups are used across Main, Reader, and Note where
 the action exists. Main keeps navigation and activation direct: local find,
-motions, pane/tree navigation, `o`, `gr`, `H/L`, and `:` do not require the
-leader.
+motions, pane/tree navigation, `o`, `H/L`, and `:` do not require the leader.
+
+`mainReturnContext` remains distinct from Show in Library and unbound by default
+while the navigation-history model is undecided.
 
 `Ctrl+h/j/k/l` remains directional pane focus and is not reused for item
 selection.

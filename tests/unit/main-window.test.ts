@@ -30,6 +30,7 @@ import {
   selectedCollectionID,
   type TreeView,
 } from '../../src/main/navigation';
+import { MainReturnContext } from '../../src/main/return-context';
 import type { MainWindowSession } from '../../src/main/session';
 import { SelectionStore } from '../../src/main/selection-store';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
@@ -2554,6 +2555,79 @@ describe('Reader Show in Library and owner routing', () => {
       main.shutdown();
       if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
       else Reflect.set(globalThis, 'Services', originalServices);
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
+});
+
+describe('Show in Library return bookmark ownership', () => {
+  it('does not let an earlier failed select overwrite a newer return context', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const host = pickerMainWindow();
+    const item = {
+      id: 91,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+    } as Zotero.Item;
+    const pending: { resolve: () => void; reject: (error: Error) => void }[] = [];
+    const selectItem = vi.fn(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          pending.push({ resolve, reject });
+        }),
+    );
+    const tabs = { selectedID: 'context-before-a', _tabs: [] as { id: string }[] };
+    Reflect.set(host.window, 'Zotero_Tabs', tabs);
+    Reflect.set(host.window, 'ZoteroPane', { selectItem, getSelectedItems: () => [] });
+    Reflect.set(globalThis, 'Zotero', {
+      Items: { get: (id: number) => (id === item.id ? item : false) },
+      Reader: { getByTabID: () => null },
+      locale: 'en-US',
+      initialized: false,
+    });
+
+    const debug = vi.fn();
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger: { debug, diagnostic: () => {} },
+      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    const messages: string[] = [];
+    const status = vi.spyOn(MainNavigation.prototype, 'status').mockImplementation((_, message) => {
+      messages.push(message);
+    });
+    const restored: { bookmark: MainWindowSession['returnBookmark'] } = { bookmark: null };
+    const restore = vi
+      .spyOn(MainReturnContext.prototype, 'restore')
+      .mockImplementation(async (_window, session) => {
+        restored.bookmark = session.returnBookmark;
+        return true;
+      });
+
+    try {
+      controller.addWindow(host.window);
+      const targets = { source: 'reader' as const, items: [item], total: 1, missing: 0 };
+      controller.showReaderItemInLibrary(host.window, targets);
+      tabs.selectedID = 'context-before-b';
+      controller.showReaderItemInLibrary(host.window, targets);
+      expect(pending).toHaveLength(2);
+
+      pending[1]!.resolve();
+      await vi.waitFor(() => expect(messages).toContain('Shown in Library'));
+      pending[0]!.reject(new Error('older selection failed'));
+      await vi.waitFor(() =>
+        expect(debug).toHaveBeenCalledWith(expect.stringContaining('show in library failed')),
+      );
+
+      controller.restoreReturnContext(host.window);
+      expect(restored.bookmark?.tabID).toBe('context-before-b');
+      expect(messages).not.toContain('Unable to show item in Library');
+    } finally {
+      controller.shutdown();
+      status.mockRestore();
+      restore.mockRestore();
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
     }

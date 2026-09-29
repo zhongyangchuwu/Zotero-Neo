@@ -47,7 +47,7 @@ import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
-import { MainReturnContext } from './return-context';
+import { MainReturnContext, type MainReturnBookmark } from './return-context';
 import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
@@ -792,18 +792,22 @@ export class MainWindowController implements MainWindowControllerApi {
     }
 
     const previous = session.returnBookmark;
+    let captured: MainReturnBookmark | null = null;
     try {
-      this.#returnContext.capture(window, session);
+      captured = this.#returnContext.capture(window, session);
       await showItemInLibrary(targets.items[0]!, pane);
     } catch (error) {
-      session.returnBookmark = previous;
+      const stillCurrent = captured
+        ? session.returnBookmark === captured
+        : session.returnBookmark === previous;
+      if (captured && stillCurrent) session.returnBookmark = previous;
       this.#dependencies.logger.debug(`show in library failed: ${String(error)}`);
-      if (this.#sessions.get(window) === session)
+      if (stillCurrent && this.#sessions.get(window) === session)
         this.#navigation.status(session, t('status.showInLibraryFailed', language));
       return;
     }
 
-    if (this.#sessions.get(window) === session)
+    if (captured && session.returnBookmark === captured && this.#sessions.get(window) === session)
       this.#navigation.status(session, t('status.showInLibraryComplete', language));
   }
   private openAllItemsPickerForSurface(window: MainWindow, session: MainWindowSession): void {

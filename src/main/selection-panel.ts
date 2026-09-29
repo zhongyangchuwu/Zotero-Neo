@@ -4,7 +4,7 @@ import { showItemInLibrary } from '../operations/show-in-library';
 import { THEME_VARS } from '../ui/theme';
 import { mainHost, mainItem, mainItemRowForRef } from './host';
 import type { MainWindowSession } from './session';
-import type { MainReturnContext } from './return-context';
+import type { MainReturnBookmark, MainReturnContext } from './return-context';
 import type { ItemRef } from './selection-store';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -295,16 +295,17 @@ export class SelectionPanel {
     }
 
     const previous = session.returnBookmark;
+    let captured: MainReturnBookmark | null = null;
     try {
-      this.#returnContext.capture(window, session);
+      captured = this.#returnContext.capture(window, session);
       this.close(session);
     } catch (error) {
-      session.returnBookmark = previous;
+      if (captured && session.returnBookmark === captured) session.returnBookmark = previous;
       this.#logger.debug(`Selection reveal failed: ${String(error)}`);
       return;
     }
     void showItemInLibrary(item, pane).catch((error) => {
-      session.returnBookmark = previous;
+      if (captured && session.returnBookmark === captured) session.returnBookmark = previous;
       this.#logger.debug(`Selection reveal failed: ${String(error)}`);
     });
   }
