@@ -133,17 +133,18 @@ export function selectedCollectionID(view: TreeView | undefined): number | undef
   return view?.getSelectedCollections?.(true)[0];
 }
 
+const TRASH_TARGET_LABEL_KEYS: Readonly<Record<MainResolvedTargets['source'], string>> = {
+  selection: 'target.trashSelection',
+  visual: 'target.trashVisual',
+  'native-selection': 'target.trashNativeSelection',
+  cursor: 'target.trashCursor',
+};
+
 function trashTargetSummary(targets: MainResolvedTargets, language: KeyGuideLanguage): string {
-  const keyBySource: Record<MainResolvedTargets['source'], string> = {
-    selection: 'target.trashSelection',
-    visual: 'target.trashVisual',
-    'native-selection': 'target.trashNativeSelection',
-    cursor: 'target.trashCursor',
-  };
   const count = targets.items.length;
   const countLabel =
     language === 'zh-CN' ? `${count} 项` : `${count} item${count === 1 ? '' : 's'}`;
-  return `${t(keyBySource[targets.source], language)} · ${countLabel}`;
+  return `${t(TRASH_TARGET_LABEL_KEYS[targets.source], language)} · ${countLabel}`;
 }
 
 export class MainNavigation {
@@ -440,7 +441,7 @@ export class MainNavigation {
       return true;
     } catch (error) {
       this.#logger.debug(`trash target items failed: ${String(error)}`);
-      this.status(session, `✗ Unable to move ${summary} to Zotero Trash`);
+      this.status(session, `✗ ${t('status.trashFailed', language).replace('{target}', summary)}`);
       return false;
     }
   }
