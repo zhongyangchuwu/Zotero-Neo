@@ -302,6 +302,7 @@
   "confirm.readerAnnotationDelete": "Delete {target} permanently? This cannot be undone.",
   "status.destructiveCancelled": "Cancelled · {target} left unchanged",
   "status.trashComplete": "Moved {target} to Zotero Trash",
+  "status.trashFailed": "Unable to move {target} to Zotero Trash",
   "status.trashHidden": "Neo Selection includes {hidden}/{total} hidden items; inspect with <Space>ss, reveal, or clear before trash",
   "status.readerAnnotationDeleteComplete": "Deleted {target}",
   "status.readerAnnotationDeleteFailed": "Unable to delete {target}",

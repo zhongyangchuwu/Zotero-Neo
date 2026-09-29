@@ -241,9 +241,9 @@ describe('Main action target contracts', () => {
     await h.navigation.trashSelectedItems(h.window, h.session, undefined, 'zh-CN');
 
     expect(h.confirm).toHaveBeenCalledWith(
-      '将Neo 选择集 · 1 项移至 Zotero 回收站？你可以通过 Zotero 撤销恢复。',
+      '将 Neo 选择集 · 1 项移至 Zotero 回收站？你可以通过 Zotero 撤销恢复。',
     );
-    expect(h.session.status.textContent).toBe('✓ 已将Neo 选择集 · 1 项移至 Zotero 回收站');
+    expect(h.session.status.textContent).toBe('✓ 已将 Neo 选择集 · 1 项移至 Zotero 回收站');
   });
 
   it('preserves Neo Selection and Trash history if Zotero rejects the confirmed operation', async () => {
