@@ -820,7 +820,7 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 | `findAllItems`                | Find an item in the current library                                                   |
 | `findCollectionItems`         | Find an item in the current collection                                                |
 | `mainYankCitekey`             | Main: copy EffectiveSelection citekey(s) (Selection > CurrentTarget); Reader/Note: copy contextual citekey       |
-| `mainOpenPDF`                 | Open the selected item's PDF                                                         |
+| `mainOpenPDF`                 | Main `o`/Enter open the Cursor item; Note `o` opens its Note context. Selection is not batch-opened. |
 | `mainTrashItems`              | Trash persistent Selection, otherwise the transient CurrentTarget                    |
 | `mainClearSelection`           | Explicitly clear persistent Neo Selection                                             |
 | `mainCancelTarget`             | Cancel Visual/native multi CurrentTarget without clearing Selection                   |

@@ -1,6 +1,7 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
 import type { FocusDirection } from '../input/actions';
+import { openItem } from '../operations/open-item';
 import { THEME_VARS } from '../ui/theme';
 import type { MainPanel, MainWindowSession } from './session';
 import {
@@ -436,85 +437,20 @@ export class MainNavigation {
   async openPDF(
     window: MainWindow,
     session: MainWindowSession,
-    target?: Zotero.Item | null,
+    target: Zotero.Item | null,
     beforeNavigate?: () => void | (() => void),
   ): Promise<boolean> {
-    try {
-      const pane = mainHost(window).ZoteroPane;
-      const navigate = async (run: () => void | Promise<void>): Promise<boolean> => {
-        const rollback = beforeNavigate?.();
-        try {
-          await run();
-          return true;
-        } catch (error) {
-          rollback?.();
-          throw error;
-        }
-      };
-      if (target === null) {
-        this.status(session, '✗ No item under cursor');
-        return false;
-      }
-      let item = target;
-      if (target === undefined) {
-        let items = pane?.getSelectedItems?.() ?? [];
-        if (!items.length) {
-          this.ensureSelection(pane?.itemsView);
-          items = pane?.getSelectedItems?.() ?? [];
-        }
-        item = items[0];
-      }
-      if (!item) {
-        this.status(session, '✗ No item selected');
-        return false;
-      }
-      if (item.isAttachment()) {
-        if (!pane?.viewAttachment) {
-          this.status(session, '✗ Attachment viewer is unavailable');
-          return false;
-        }
-        return await navigate(() => pane.viewAttachment?.(item.id));
-      }
-      if (item.isNote()) {
-        if (!pane?.openNote) {
-          this.status(session, '✗ Note viewer is unavailable');
-          return false;
-        }
-        return await navigate(() => pane.openNote?.(item.id));
-      }
-      let attachment: Zotero.Item | undefined = (await item.getBestAttachment?.()) || undefined;
-      if (!attachment) {
-        const candidate = item
-          .getAttachments()
-          .map((id) => Zotero.Items.get(id))
-          .find(
-            (value): value is Zotero.Item =>
-              value !== false &&
-              value.isAttachment() &&
-              value.attachmentContentType === 'application/pdf',
-          );
-        attachment = candidate ?? undefined;
-      }
-      if (attachment) {
-        if (!pane?.viewAttachment) {
-          this.status(session, '✗ Attachment viewer is unavailable');
-          return false;
-        }
-        return await navigate(() => pane.viewAttachment?.(attachment.id));
-      }
-      const doi = item.getField('DOI');
-      const url =
-        item.getField('url') ||
-        (doi ? `https://doi.org/${Zotero.Utilities.cleanDOI?.(doi) ?? doi}` : '');
-      if (url) {
-        if (!pane?.loadURI) {
-          this.status(session, '✗ URI navigation is unavailable');
-          return false;
-        }
-        return await navigate(() => pane.loadURI?.(url));
-      }
-      this.status(session, '✗ No attachment');
+    if (!target) {
+      this.status(session, '✗ No item under cursor');
       return false;
+    }
+    try {
+      const unavailable = await openItem(target, mainHost(window).ZoteroPane, beforeNavigate);
+      if (unavailable) {
+        this.status(session, `✗ ${unavailable}`);
+        return false;
+      }
+      return true;
     } catch (error) {
       this.#logger.debug(`mainOpenPDF error: ${String(error)}`);
       this.status(session, `✗ ${String(error).slice(0, 40)}`);

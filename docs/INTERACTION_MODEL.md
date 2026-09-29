@@ -278,13 +278,20 @@ Initial target policy:
 | Action family | Target contract |
 | --- | --- |
 | `j/k/gg/G`, local find | Cursor only |
-| inspect/open current item or PDF | Cursor |
+| Main `o` / Enter | one Main Cursor item regardless of persistent Selection or native multi-set |
+| Note `o` | the Note-context item normalized to its bibliographic parent when present |
 | Add/Remove Tag | shared contextual item target; Main may be batch, Reader/Note contextual single target |
 | Trash/restore batch operations | EffectiveSelection with destructive preflight policy |
 | Add/remove collection membership | shared contextual item target; Main batch or Reader contextual item |
 | Visual selection operation | VisualTarget -> Selection |
 | Quick/Advanced/tag filtering, sort | View only |
 | citekey/citation copy | shared contextual item target; Main supports batches, Reader/Note remain contextual single-target |
+
+Open/Activate is the intentional single-item inspection exception to ordinary
+Main item Operations: persistent Selection and native multi-selection do not
+replace Cursor. If Cursor cannot resolve, fail closed; never open the first
+host-selected item. Note opens its own context target and never borrows Main
+Selection.
 
 Action-specific normalization remains important. For example, tagging an
 attachment may intentionally normalize to its parent while deleting an

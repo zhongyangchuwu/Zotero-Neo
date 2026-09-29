@@ -1205,57 +1205,6 @@ describe('picker async lifecycle', () => {
     expect(session.picker.items).toEqual([]);
     expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('picker load discarded'));
   });
-
-  it('waits for item selection before opening its attachment', async () => {
-    let releaseSelection: (() => void) | undefined;
-    const selected: Zotero.Item[] = [];
-    const attachment = { id: 2, isAttachment: () => true } as Zotero.Item;
-    const item = {
-      id: 1,
-      isRegularItem: () => true,
-      isAttachment: () => false,
-      isNote: () => false,
-      getField: (field: string) => (field === 'title' ? 'Selected item' : ''),
-      getBestAttachment: async () => attachment,
-      getAttachments: () => [],
-    } as unknown as Zotero.Item;
-    const selectItem = vi.fn(
-      (_id: number) =>
-        new Promise<void>((resolve) => {
-          releaseSelection = () => {
-            selected.splice(0, selected.length, item);
-            resolve();
-          };
-        }),
-    );
-    const viewAttachment = vi.fn();
-    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
-    vi.stubGlobal('Zotero', {
-      Items: { getAll: async () => [item] },
-      Libraries: { userLibraryID: 1 },
-      Utilities: { cleanDOI: (value: string) => value },
-    });
-    const { window, session } = createPickerHarness();
-    Object.assign(window, {
-      ZoteroPane: { getSelectedItems: () => selected, selectItem, viewAttachment },
-    });
-    const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {});
-    const picker = new FuzzyPicker({ debug: vi.fn(), diagnostic: vi.fn() }, navigation);
-
-    await picker.open(window, session, 'all', {
-      confirm: async (target) => {
-        await selectItem(Number(target.id));
-        await navigation.openPDF(window, session);
-      },
-    });
-    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
-    await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(item.id));
-    expect(viewAttachment).not.toHaveBeenCalled();
-
-    releaseSelection?.();
-    await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(attachment.id));
-    expect(session.picker.open).toBe(false);
-  });
 });
 
 describe('pointer activation lifecycle', () => {
