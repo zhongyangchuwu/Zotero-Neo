@@ -50,7 +50,7 @@ export const NOTE_COMMAND_BY_ACTION = {
   noteChangeInnerWord: 'ciw',
 } as const;
 
-export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
+export const NOTE_MAIN_SURFACE_ACTION_IDS = Object.freeze([
   'openCommandPalette',
   'findAllItems',
   'findCollectionItems',
@@ -75,10 +75,10 @@ export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
   'removeTag',
 ] as const);
 
-export type NoteCrossContextActionId = (typeof NOTE_CROSS_CONTEXT_ACTION_IDS)[number];
+export type NoteMainSurfaceActionId = (typeof NOTE_MAIN_SURFACE_ACTION_IDS)[number];
 
-export function isNoteCrossContextActionId(value: unknown): value is NoteCrossContextActionId {
-  return NOTE_CROSS_CONTEXT_ACTION_IDS.includes(value as NoteCrossContextActionId);
+export function isNoteMainSurfaceActionId(value: unknown): value is NoteMainSurfaceActionId {
+  return NOTE_MAIN_SURFACE_ACTION_IDS.includes(value as NoteMainSurfaceActionId);
 }
 
 export type NoteActionId = keyof typeof NOTE_COMMAND_BY_ACTION;

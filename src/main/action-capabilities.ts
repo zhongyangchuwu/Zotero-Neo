@@ -78,22 +78,6 @@ export type MainNormalAction = (typeof MAIN_NORMAL_ACTIONS)[number];
 export type MainItemSelectAction = (typeof MAIN_ITEM_SELECT_ACTIONS)[number];
 export type MainExecutableAction = (typeof MAIN_EXECUTABLE_ACTIONS)[number];
 
-/** Reader may delegate only non-selection Main actions with an explicit owner route. */
-export const READER_DELEGABLE_MAIN_ACTIONS = Object.freeze([
-  'findAllItems',
-  'findCollectionItems',
-  'findNotes',
-  'managePlugins',
-  'openNeoSettings',
-  'mainReturnContext',
-  'switchTab',
-  'closeCurrentTab',
-  'previousTab',
-  'nextTab',
-] as const satisfies readonly MainNormalAction[]);
-
-export type ReaderDelegableMainAction = (typeof READER_DELEGABLE_MAIN_ACTIONS)[number];
-
 function includes(actions: readonly string[], value: unknown): boolean {
   return typeof value === 'string' && actions.includes(value);
 }
@@ -102,7 +86,4 @@ export function isMainExecutableAction(value: unknown): value is MainExecutableA
 }
 export function isMainItemSelectAction(value: unknown): value is MainItemSelectAction {
   return includes(MAIN_ITEM_SELECT_ACTIONS, value);
-}
-export function isReaderDelegableMainAction(value: unknown): value is ReaderDelegableMainAction {
-  return includes(READER_DELEGABLE_MAIN_ACTIONS, value);
 }

@@ -12,9 +12,7 @@ import {
   MAIN_NORMAL_ACTIONS,
   MAIN_SELECT_ACTIONS,
   isMainExecutableAction,
-  isReaderDelegableMainAction,
   type MainExecutableAction,
-  type ReaderDelegableMainAction,
 } from './action-capabilities';
 import {
   keyGuideConfig,
@@ -25,7 +23,6 @@ import {
 import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { compositionOwnsKey } from '../input/composition';
 import { actionsForBindingMode } from '../input/binding-capabilities';
-import { isNoteCrossContextActionId } from '../input/note-actions';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isGuidePrefix } from '../input/key-guide';
 import type { InputRuntime } from '../input/runtime';
@@ -53,8 +50,6 @@ import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
 import { appendReaderSelectionToNote, readerCaptureBaseItem } from './note-capture';
-
-type MainInvocationContext = 'main' | 'reader' | 'note';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -249,25 +244,77 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
-  executeFromReader(
-    action: ReaderDelegableMainAction,
-    count: number,
+  private withReaderWindow(
     ownerWindow: MainWindow | null,
+    operation: string,
+    run: (window: MainWindow, session: MainWindowSession) => void,
   ): void {
-    if (!isReaderDelegableMainAction(action)) {
-      this.#dependencies.logger.debug(`ignored Reader action ${String(action)}: not delegable`);
-      return;
-    }
     if (!ownerWindow) {
-      this.#dependencies.logger.debug(`ignored Reader action ${action}: no owner window`);
+      this.#dependencies.logger.debug(`ignored Reader operation ${operation}: no owner window`);
       return;
     }
     const session = this.#sessions.get(ownerWindow);
     if (!session) {
-      this.#dependencies.logger.debug(`ignored Reader action ${action}: owner window detached`);
+      this.#dependencies.logger.debug(
+        `ignored Reader operation ${operation}: owner window detached`,
+      );
       return;
     }
-    this.execute(action, ownerWindow, session, count, false, 'reader');
+    run(ownerWindow, session);
+  }
+
+  openAllItemsPicker(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'findAllItems', (window, session) =>
+      this.openAllItemsPickerForSurface(window, session),
+    );
+  }
+
+  openCollectionItemsPicker(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'findCollectionItems', (window, session) =>
+      this.openCollectionItemsPickerForSurface(window, session),
+    );
+  }
+
+  openNotesPicker(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'findNotes', (window, session) =>
+      this.openNotesPickerForSurface(window, session),
+    );
+  }
+
+  openPluginManager(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'managePlugins', (window, session) =>
+      this.#pluginManager.open(window, session),
+    );
+  }
+
+  openSettingsFromReader(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'openNeoSettings', (window) => this.openSettings(window));
+  }
+
+  restoreReturnContext(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(
+      ownerWindow,
+      'mainReturnContext',
+      (window, session) => void this.#returnContext.restore(window, session),
+    );
+  }
+
+  openTabPicker(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'switchTab', (window, session) =>
+      this.openTabPickerForSurface(window, session),
+    );
+  }
+
+  closeReaderTab(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'closeCurrentTab', (window) =>
+      this.#navigation.closePDF(window),
+    );
+  }
+
+  cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void {
+    this.withReaderWindow(ownerWindow, direction < 0 ? 'previousTab' : 'nextTab', (window) =>
+      this.#navigation.cycleTab(window, direction),
+    );
   }
 
   openReaderTagPicker(
@@ -609,49 +656,148 @@ export class MainWindowController implements MainWindowControllerApi {
             session,
             nextCount,
           );
-          if (nextLocal === null)
-            this.executeNoteCrossContextAction(nextAction, nextCount, window, session, noteTargets);
+          if (nextLocal !== null) return;
+          if (nextAction === 'openCommandPalette') {
+            this.executeFromNote(
+              nextAction,
+              nextCount,
+              target,
+              bindingMode,
+              bindings,
+              window,
+              session,
+            );
+            return;
+          }
+          this.executeNoteSurfaceAction(nextAction, window, session, noteTargets);
         },
       });
       return true;
     }
 
-    return this.executeNoteCrossContextAction(action, count, window, session);
+    return this.executeNoteSurfaceAction(action, window, session);
   }
 
-  private executeNoteCrossContextAction(
+  private executeNoteSurfaceAction(
     action: ActionId,
-    count: number,
     window: MainWindow,
     session: MainWindowSession,
-    noteTargets?: ItemTargetSet<'note'>,
+    resolvedTargets?: ItemTargetSet<'note'>,
   ): boolean {
-    if (!isNoteCrossContextActionId(action)) return false;
-    if (action === 'addTag' || action === 'removeTag') {
-      const targets = noteTargets ?? NOTE_ITEM_TARGET.resolve(window);
-      if (action === 'addTag') this.#tags.add(window, session, targets);
-      else this.#tags.remove(window, session, targets);
-      return true;
-    }
-    if (action === 'mainYankCitekey') {
-      this.#navigation.status(
-        session,
-        copyCitekeys(noteTargets ?? NOTE_ITEM_TARGET.resolve(window)),
-      );
-      return true;
-    }
-    if (action === 'mainOpenPDF') {
-      const targets = noteTargets ?? NOTE_ITEM_TARGET.resolve(window);
-      if (targets.missing || targets.items.length !== 1) {
-        this.#navigation.status(session, '✗ Note item is unavailable');
+    switch (action) {
+      case 'addTag':
+      case 'removeTag': {
+        const targets = resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window);
+        if (action === 'addTag') this.#tags.add(window, session, targets);
+        else this.#tags.remove(window, session, targets);
         return true;
       }
-      void this.#navigation.openPDF(window, session, targets.items[0]!);
-      return true;
+      case 'mainYankCitekey':
+        this.#navigation.status(
+          session,
+          copyCitekeys(resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window)),
+        );
+        return true;
+      case 'mainOpenPDF': {
+        const targets = resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window);
+        if (targets.missing || targets.items.length !== 1) {
+          this.#navigation.status(session, '✗ Note item is unavailable');
+          return true;
+        }
+        void this.#navigation.openPDF(window, session, targets.items[0]!);
+        return true;
+      }
+      case 'findAllItems':
+        this.openAllItemsPickerForSurface(window, session);
+        return true;
+      case 'findCollectionItems':
+        this.openCollectionItemsPickerForSurface(window, session);
+        return true;
+      case 'findNotes':
+        this.openNotesPickerForSurface(window, session);
+        return true;
+      case 'managePlugins':
+        this.#pluginManager.open(window, session);
+        return true;
+      case 'openNeoSettings':
+        this.openSettings(window);
+        return true;
+      case 'mainFocusTree':
+      case 'mainFocusLeft':
+        this.#navigation.focusPanel(window, session, 'collections');
+        return true;
+      case 'mainFocusItems':
+      case 'mainFocusRight':
+        this.#navigation.focusPanel(window, session, 'items');
+        return true;
+      case 'focusReaderSplitLeft':
+        this.#navigation.focusDirection(window, session, 'left');
+        return true;
+      case 'focusReaderSplitDown':
+        this.#navigation.focusDirection(window, session, 'down');
+        return true;
+      case 'focusReaderSplitUp':
+        this.#navigation.focusDirection(window, session, 'up');
+        return true;
+      case 'focusReaderSplitRight':
+        this.#navigation.focusDirection(window, session, 'right');
+        return true;
+      case 'switchTab':
+        this.openTabPickerForSurface(window, session);
+        return true;
+      case 'closeCurrentTab':
+        this.#navigation.closePDF(window);
+        return true;
+      case 'previousTab':
+        this.#navigation.cycleTab(window, -1);
+        return true;
+      case 'nextTab':
+        this.#navigation.cycleTab(window, 1);
+        return true;
+      default:
+        return false;
     }
-    if (!isMainExecutableAction(action)) return false;
-    this.execute(action, window, session, count, false, 'note');
-    return true;
+  }
+  private openAllItemsPickerForSurface(window: MainWindow, session: MainWindowSession): void {
+    void this.#picker.open(window, session, 'all', {
+      confirm: async (item) => {
+        this.#returnContext.capture(window, session);
+        await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+      },
+    });
+  }
+
+  private openCollectionItemsPickerForSurface(
+    window: MainWindow,
+    session: MainWindowSession,
+  ): void {
+    void this.#picker.open(window, session, 'collection', {
+      confirm: async (item) => {
+        await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+      },
+    });
+  }
+
+  private openNotesPickerForSurface(window: MainWindow, session: MainWindowSession): void {
+    void this.#picker.open(window, session, 'notes', {
+      confirm: async (item, openInWindow) => {
+        const pane = mainHost(window).ZoteroPane;
+        const id = Number(item.id);
+        this.#returnContext.capture(window, session);
+        await pane?.selectItem?.(id);
+        if (pane?.openNote) await pane.openNote(id, { openInWindow });
+        else await Zotero.Notes.open(id, null, { openInWindow });
+      },
+    });
+  }
+
+  private openTabPickerForSurface(window: MainWindow, session: MainWindowSession): void {
+    void this.#picker.open(window, session, 'tabs', {
+      confirm: (item) => {
+        selectMainTab(window, String(item.id));
+        this.#navigation.afterTabSwitch(window);
+      },
+    });
   }
 
   private execute(
@@ -660,13 +806,12 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     count: number,
     shouldDebounce = false,
-    context: MainInvocationContext = 'main',
   ): void {
     if (!isMainExecutableAction(action)) {
       this.#dependencies.logger.debug(`ignored Main action: ${String(action)}`);
       return;
     }
-    this.executeMain(action, window, session, count, shouldDebounce, context);
+    this.executeMain(action, window, session, count, shouldDebounce);
   }
 
   private executeMain(
@@ -675,18 +820,14 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     count: number,
     shouldDebounce = false,
-    context: MainInvocationContext = 'main',
   ): void {
-    const beforeMainReadingNavigation =
-      context === 'main'
-        ? () => {
-            const previous = session.returnBookmark;
-            this.#returnContext.capture(window, session);
-            return () => {
-              session.returnBookmark = previous;
-            };
-          }
-        : undefined;
+    const beforeMainReadingNavigation = () => {
+      const previous = session.returnBookmark;
+      this.#returnContext.capture(window, session);
+      return () => {
+        session.returnBookmark = previous;
+      };
+    };
 
     switch (action) {
       case 'openSearch':
@@ -734,39 +875,16 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#viewActions.openAdvancedSearch(window, session);
         break;
       case 'findAllItems':
-        void this.#picker.open(window, session, 'all', {
-          confirm: async (item) => {
-            this.#returnContext.capture(window, session);
-            await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
-          },
-        });
+        this.openAllItemsPickerForSurface(window, session);
         break;
       case 'findCollectionItems':
-        void this.#picker.open(window, session, 'collection', {
-          confirm: async (item) => {
-            await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
-          },
-        });
+        this.openCollectionItemsPickerForSurface(window, session);
         break;
       case 'switchTab':
-        void this.#picker.open(window, session, 'tabs', {
-          confirm: (item) => {
-            selectMainTab(window, String(item.id));
-            this.#navigation.afterTabSwitch(window);
-          },
-        });
+        this.openTabPickerForSurface(window, session);
         break;
       case 'findNotes':
-        void this.#picker.open(window, session, 'notes', {
-          confirm: async (item, openInWindow) => {
-            const pane = mainHost(window).ZoteroPane;
-            const id = Number(item.id);
-            this.#returnContext.capture(window, session);
-            await pane?.selectItem?.(id);
-            if (pane?.openNote) await pane.openNote(id, { openInWindow });
-            else await Zotero.Notes.open(id, null, { openInWindow });
-          },
-        });
+        this.openNotesPickerForSurface(window, session);
         break;
       case 'managePlugins':
         this.#pluginManager.open(window, session);

@@ -31,7 +31,6 @@ import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { t } from '../i18n';
 import { copyCitekeys } from '../operations/citekeys';
 import { deleteAnnotation as deleteReaderAnnotation } from '../operations/delete-annotation';
-import { isReaderDelegableMainAction } from '../main/action-capabilities';
 import {
   READER_NORMAL_ACTIONS,
   isReaderActionForMode,
@@ -1060,7 +1059,7 @@ export class ReaderSession {
       if (!pdfWindow || this.#scope.disposed) return;
       const ownerWindow = this.#dependencies.reader._window;
       if (!ownerWindow) return;
-      this.#dependencies.controller.dependencies.openCommandPalette(ownerWindow, {
+      this.#dependencies.controller.dependencies.main.openCommandPalette(ownerWindow, {
         mode: 'normal',
         bindingMode: 'reader-normal',
         actions: READER_NORMAL_ACTIONS,
@@ -1076,9 +1075,45 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
+    const ownerWindow = this.#dependencies.reader._window ?? null;
+    const main = this.#dependencies.controller.dependencies.main;
+    switch (action) {
+      case 'findAllItems':
+        main.openAllItemsPicker(ownerWindow);
+        return;
+      case 'findCollectionItems':
+        main.openCollectionItemsPicker(ownerWindow);
+        return;
+      case 'findNotes':
+        main.openNotesPicker(ownerWindow);
+        return;
+      case 'managePlugins':
+        main.openPluginManager(ownerWindow);
+        return;
+      case 'openNeoSettings':
+        main.openSettingsFromReader(ownerWindow);
+        return;
+      case 'mainReturnContext':
+        main.restoreReturnContext(ownerWindow);
+        return;
+      case 'switchTab':
+        main.openTabPicker(ownerWindow);
+        return;
+      case 'closeCurrentTab':
+        main.closeReaderTab(ownerWindow);
+        return;
+      case 'previousTab':
+        main.cycleReaderTab(ownerWindow, -1);
+        return;
+      case 'nextTab':
+        main.cycleReaderTab(ownerWindow, 1);
+        return;
+      default:
+        break;
+    }
     const number = Math.max(1, count || 1);
     if (action === 'addTag' || action === 'removeTag') {
-      this.#dependencies.controller.dependencies.openReaderTagPicker(
+      this.#dependencies.controller.dependencies.main.openReaderTagPicker(
         this.#dependencies.reader._window ?? null,
         READER_ITEM_TARGET.resolve(this.#dependencies.reader),
         action === 'addTag',
@@ -1087,7 +1122,7 @@ export class ReaderSession {
     }
     if (action === 'addToCollection' || action === 'removeFromCollection') {
       const ownerWindow = this.#dependencies.reader._window ?? null;
-      this.#dependencies.controller.dependencies.openReaderCollectionPicker(
+      this.#dependencies.controller.dependencies.main.openReaderCollectionPicker(
         ownerWindow,
         action === 'addToCollection',
         () => {
@@ -1105,14 +1140,6 @@ export class ReaderSession {
     }
     if (action === 'mainYankCitekey') {
       this.showStatus(copyCitekeys(READER_ITEM_TARGET.resolve(this.#dependencies.reader)));
-      return;
-    }
-    if (isReaderDelegableMainAction(action)) {
-      this.#dependencies.controller.dependencies.delegateMain(
-        action,
-        count,
-        this.#dependencies.reader._window ?? null,
-      );
       return;
     }
     if (action === 'toggleReaderSidebarOutline') {
@@ -1804,7 +1831,7 @@ export class ReaderSession {
       isAvailable: (selection) => selection.itemID !== null && !!selection.text.trim(),
       run: async (selection) => {
         const captured =
-          await this.#dependencies.controller.dependencies.captureReaderSelectionToNote(
+          await this.#dependencies.controller.dependencies.main.captureReaderSelectionToNote(
             selection,
             this.#dependencies.reader._window ?? null,
           );

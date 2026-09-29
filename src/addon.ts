@@ -50,20 +50,23 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#reader = createReaderController({
       preferences: this.#preferences,
       logger: this.#logger,
-      delegateMain(action, count, ownerWindow) {
-        main?.executeFromReader(action, count, ownerWindow);
-      },
-      openReaderTagPicker(ownerWindow, targets, present) {
-        main?.openReaderTagPicker(ownerWindow, targets, present);
-      },
-      openReaderCollectionPicker(ownerWindow, present, resolveTargets) {
-        main?.openReaderCollectionPicker(ownerWindow, present, resolveTargets);
-      },
-      openCommandPalette(window: MainWindow, context: CommandPaletteContext) {
-        main?.openCommandPalette(window, context);
-      },
-      captureReaderSelectionToNote(context, ownerWindow) {
-        return main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false);
+      main: {
+        openAllItemsPicker: (ownerWindow) => main?.openAllItemsPicker(ownerWindow),
+        openCollectionItemsPicker: (ownerWindow) => main?.openCollectionItemsPicker(ownerWindow),
+        openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),
+        openPluginManager: (ownerWindow) => main?.openPluginManager(ownerWindow),
+        openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
+        restoreReturnContext: (ownerWindow) => main?.restoreReturnContext(ownerWindow),
+        openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
+        closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
+        cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
+        openReaderTagPicker: (ownerWindow, targets, present) =>
+          main?.openReaderTagPicker(ownerWindow, targets, present),
+        openReaderCollectionPicker: (ownerWindow, present, resolveTargets) =>
+          main?.openReaderCollectionPicker(ownerWindow, present, resolveTargets),
+        openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
+        captureReaderSelectionToNote: (context, ownerWindow) =>
+          main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false),
       },
     });
     this.#main = createMainWindowController({
