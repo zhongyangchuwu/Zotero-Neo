@@ -90,8 +90,9 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
 
   const captureReturn = vi.fn();
   const selectionChanged = vi.fn();
+  const debug = vi.fn();
   const panel = new SelectionPanel(
-    { debug: vi.fn() },
+    { debug },
     { capture: captureReturn } as never,
     selectionChanged,
   );
@@ -114,6 +115,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     selectItem,
     captureReturn,
     selectionChanged,
+    debug,
     key,
   };
 }
@@ -197,5 +199,53 @@ describe('Selection Panel', () => {
     expect(h.selectItem).toHaveBeenCalledWith(7);
     expect(h.session.selectionPanel.open).toBe(false);
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 7 }]);
+  });
+
+  it('restores the previous return bookmark when Zotero rejects a reveal', async () => {
+    const selected = item(8);
+    const h = harness([selected], []);
+    const previous = { bookmark: 'previous' };
+    const captured = { bookmark: 'captured' };
+    Reflect.set(h.session, 'returnBookmark', previous);
+    h.captureReturn.mockImplementation(() => {
+      Reflect.set(h.session, 'returnBookmark', captured);
+      return captured as never;
+    });
+    h.selectItem.mockRejectedValueOnce(new Error('selection failed'));
+
+    h.panel.handleKey(h.key('Enter'), h.window, h.session);
+    await vi.waitFor(() => expect(Reflect.get(h.session, 'returnBookmark')).toBe(previous));
+
+    expect(h.selectItem).toHaveBeenCalledWith(selected.id);
+    expect(h.session.selectionPanel.open).toBe(false);
+  });
+
+  it('does not let a late reveal failure erase a newer return bookmark', async () => {
+    const selected = item(9);
+    const h = harness([selected], []);
+    const previous = { bookmark: 'previous' };
+    const captured = { bookmark: 'captured' };
+    const newer = { bookmark: 'newer' };
+    Reflect.set(h.session, 'returnBookmark', previous);
+    h.captureReturn.mockImplementation(() => {
+      Reflect.set(h.session, 'returnBookmark', captured);
+      return captured as never;
+    });
+    let rejectSelection: (error: Error) => void = () => {};
+    h.selectItem.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSelection = reject;
+        }),
+    );
+
+    h.panel.handleKey(h.key('Enter'), h.window, h.session);
+    Reflect.set(h.session, 'returnBookmark', newer);
+    rejectSelection(new Error('older selection failed'));
+    await vi.waitFor(() =>
+      expect(h.debug).toHaveBeenCalledWith(expect.stringContaining('Selection reveal failed')),
+    );
+
+    expect(Reflect.get(h.session, 'returnBookmark')).toBe(newer);
   });
 });

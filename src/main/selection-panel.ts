@@ -1,9 +1,10 @@
 import type { MainWindow } from '../core/contracts';
 import { keyString } from '../input/keys';
+import { showItemInLibrary } from '../operations/show-in-library';
 import { THEME_VARS } from '../ui/theme';
 import { mainHost, mainItem, mainItemRowForRef } from './host';
 import type { MainWindowSession } from './session';
-import type { MainReturnContext } from './return-context';
+import type { MainReturnBookmark, MainReturnContext } from './return-context';
 import type { ItemRef } from './selection-store';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -282,25 +283,31 @@ export class SelectionPanel {
   private reveal(window: MainWindow, session: MainWindowSession): void {
     const ref = session.selectionPanel.refs[session.selectionPanel.selected];
     if (!ref) return;
-    if (!itemForRef(ref)) {
+    const item = itemForRef(ref);
+    if (!item) {
       this.renderFooter(session, 'Unavailable item cannot be revealed');
       return;
     }
     const pane = mainHost(window).ZoteroPane;
-    const selectItem = pane?.selectItem;
-    if (!selectItem) {
+    if (!pane?.selectItem) {
       this.renderFooter(session, 'Reveal is unavailable in this Zotero view');
       return;
     }
-    this.#returnContext.capture(window, session);
-    this.close(session);
+
+    const previous = session.returnBookmark;
+    let captured: MainReturnBookmark | null = null;
     try {
-      void Promise.resolve(selectItem.call(pane, ref.itemID)).catch((error) =>
-        this.#logger.debug(`Selection reveal failed: ${String(error)}`),
-      );
+      captured = this.#returnContext.capture(window, session);
+      this.close(session);
     } catch (error) {
+      if (captured && session.returnBookmark === captured) session.returnBookmark = previous;
       this.#logger.debug(`Selection reveal failed: ${String(error)}`);
+      return;
     }
+    void showItemInLibrary(item, pane).catch((error) => {
+      if (captured && session.returnBookmark === captured) session.returnBookmark = previous;
+      this.#logger.debug(`Selection reveal failed: ${String(error)}`);
+    });
   }
 
   private render(window: MainWindow, session: MainWindowSession): void {

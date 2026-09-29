@@ -202,6 +202,7 @@ features already use them:
 - `fuzzyMatchScore()` adapter backed by pinned `fuzzysort`;
 - theme tokens/managers;
 - host adapters with a clear Zotero ownership boundary.
+- `operations/show-in-library.ts` — select one explicit Zotero item; each caller owns target resolution and return-bookmark capture.
 
 The following are intentionally **not** project-wide frameworks today:
 

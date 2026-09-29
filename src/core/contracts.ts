@@ -56,6 +56,7 @@ export interface ReaderMainOperations {
   openTabPicker(ownerWindow: MainWindow | null): void;
   closeReaderTab(ownerWindow: MainWindow | null): void;
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;
+  showReaderItemInLibrary(ownerWindow: MainWindow | null, targets: ItemTargetSet<'reader'>): void;
   openReaderTagPicker(
     ownerWindow: MainWindow | null,
     targets: ItemTargetSet<'reader'>,

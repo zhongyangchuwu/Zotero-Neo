@@ -280,6 +280,7 @@ Initial target policy:
 | `j/k/gg/G`, local find | Cursor only |
 | Main `o` / Enter | one Main Cursor item regardless of persistent Selection or native multi-set |
 | Note `o` | the Note-context item normalized to its bibliographic parent when present |
+| Show in Library | Reader/Note uses that Surface's contextual item, normalized to its parent; Selection Panel reveals the explicitly selected member |
 | Add/Remove Tag | shared contextual item target; Main may be batch, Reader/Note contextual single target |
 | Trash/restore batch operations | Trash uses Main EffectiveSelection with target/count confirmation and hidden-member refusal; restore uses Neo's last Trash batch |
 | Reader annotation deletion | one selected Reader annotation; explicit permanent-delete confirmation |
@@ -345,9 +346,22 @@ The initial capture contract is:
 Picker remains a target resolver. It does not own note creation, append
 semantics, or Reader selection state.
 
+## Show in Library
+
+Reader and Note `showInLibrary` resolves the active Surface item and selects it in
+Zotero's library through `ZoteroPane.selectItem`. Reader and Note never borrow Main
+Selection. Selection Panel Reveal uses the exact `ItemRef` chosen in that panel;
+both paths use the same single-item host Operation.
+
+Show in Library does not restore Main context. Immediately before real host
+navigation, the caller captures the existing Main return bookmark so the separately
+invokable `mainReturnContext` action can restore it. Missing targets, unavailable
+host selection, and failed selection do not change the bookmark. No default
+navigation binding is frozen until the history model is decided.
+
 ## Return context
 
-"Reveal in Library" and "return to previous work context" are distinct actions.
+Show in Library and return to the previous work context are distinct operations.
 
 Native Zotero item selection can clear Quick Search, tag filters, or Advanced
 Search when an item is not found in the current result set. Neo therefore keeps
@@ -370,11 +384,12 @@ by closing the native editor. If a reveal destroys an existing Advanced Search
 condition set, Neo reports a partial return rather than inventing conditions it
 cannot reconstruct.
 
-The bookmark is single-level, not a history stack. Main and Reader share
-`gr` as explicit return navigation. Opening a Main item into Reader/Note captures
-the bookmark only immediately before a real host navigation; failed opens restore
-the previous bookmark. Reader `gr` returns to the originating Main tab/View but
-does not close the Reader tab. Closing Reader/Note does not automatically restore it.
+The `mainReturnContext` action restores this bookmark. It remains available from
+Main and Reader Command Palettes but has no default key while navigation semantics
+remain open. Opening a Main item into Reader/Note captures the bookmark only
+immediately before a real host navigation; failed opens restore the previous
+bookmark. Reader Return does not close the Reader tab. Closing Reader/Note does not
+automatically restore it.
 
 Do not claim that a native reveal operation preserves triage context unless that
 behavior is explicitly verified.
@@ -401,8 +416,10 @@ Visual Esc/v cancel Visual and exit
 
 The same Space-led semantic groups are used across Main, Reader, and Note where
 the action exists. Main keeps navigation and activation direct: local find,
-motions, pane/tree navigation, `o`, `gr`, `H/L`, and `:` do not require the
-leader.
+motions, pane/tree navigation, `o`, `H/L`, and `:` do not require the leader.
+
+`mainReturnContext` remains distinct from Show in Library and unbound by default
+while the navigation-history model is undecided.
 
 `Ctrl+h/j/k/l` remains directional pane focus and is not reused for item
 selection.
