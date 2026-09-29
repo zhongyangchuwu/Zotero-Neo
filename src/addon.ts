@@ -60,6 +60,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
+        showReaderItemInLibrary: (ownerWindow, targets) =>
+          main?.showReaderItemInLibrary(ownerWindow, targets),
         openReaderTagPicker: (ownerWindow, targets, present) =>
           main?.openReaderTagPicker(ownerWindow, targets, present),
         openReaderCollectionPicker: (ownerWindow, present, resolveTargets) =>

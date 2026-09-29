@@ -1003,6 +1003,7 @@ describe('Note contextual Open', () => {
     } as Zotero.Item;
     const other = { id: 23, libraryID: 1, isAttachment: () => true } as Zotero.Item;
     const viewAttachment = vi.fn();
+    const selectItem = vi.fn();
     const editorDocument = {
       body: { isContentEditable: true },
       designMode: 'off',
@@ -1043,6 +1044,7 @@ describe('Note contextual Open', () => {
     Reflect.set(host.window, 'ZoteroPane', {
       getSelectedItems: () => [other],
       viewAttachment,
+      selectItem,
     });
     Reflect.set(globalThis, 'Zotero', {
       Items: {
@@ -1105,6 +1107,39 @@ describe('Note contextual Open', () => {
       await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(pdf.id));
       expect(viewAttachment).toHaveBeenCalledTimes(1);
       expect(viewAttachment).not.toHaveBeenCalledWith(other.id);
+      Reflect.set(host.window.document, 'activeElement', target);
+      pressNote(':');
+      await vi.waitFor(() =>
+        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+      );
+      const showOverlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
+      const showLeft = showOverlay?.children[0]?.children[0]?.children[0];
+      if (!showLeft) throw new Error('Expected Note Show in Library palette content');
+      const showInput = showLeft.children[1] as HTMLElement & {
+        value: string;
+        emit(type: string, event?: Partial<Event>): void;
+      };
+      const showResults = showLeft.children[3] as HTMLElement;
+      showInput.value = 'showInLibrary';
+      showInput.emit('input');
+      await vi.waitFor(() =>
+        expect(showResults.children[0]?.children[0]?.textContent).toContain(
+          'Show current item in Library',
+        ),
+      );
+      host.keydown({
+        key: 'Enter',
+        target: showResults,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as Event);
+      await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(paper.id));
+      expect(selectItem).toHaveBeenCalledTimes(1);
+      expect(selectItem).not.toHaveBeenCalledWith(other.id);
 
       Reflect.set(host.window.document, 'activeElement', target);
       noteEditor.item = undefined;
@@ -1921,6 +1956,8 @@ describe('Reader to Main command palette integration', () => {
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
+        showReaderItemInLibrary: (ownerWindow, targets) =>
+          main?.showReaderItemInLibrary(ownerWindow, targets),
         openReaderTagPicker: (ownerWindow, targets, present) =>
           main?.openReaderTagPicker(ownerWindow, targets, present),
         openReaderCollectionPicker: (ownerWindow, present, resolveTargets) =>
@@ -2381,12 +2418,76 @@ describe('main pending-prefix key guide', () => {
     vi.useRealTimers();
   });
 });
-describe('Reader owner picker routing', () => {
-  it('opens the picker only in the Reader owner window and never falls back', async () => {
+describe('Reader Show in Library and owner routing', () => {
+  it('shows the Reader parent item without borrowing Main selection and keeps owner-bound pickers', async () => {
     const originalServices = Reflect.get(globalThis, 'Services');
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
     Reflect.set(globalThis, 'Services', { focus: { focusedWindow: null } });
     const first = pickerMainWindow();
     const second = pickerMainWindow();
+    const paper = {
+      id: 81,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+    } as Zotero.Item;
+    const attachment = {
+      id: 82,
+      libraryID: 1,
+      parentItemID: paper.id,
+      isAttachment: () => true,
+      isNote: () => false,
+    } as Zotero.Item;
+    const other = { id: 83, libraryID: 1 } as Zotero.Item;
+    const selectItem = vi.fn();
+    Reflect.set(second.window, 'Zotero_Tabs', {
+      selectedID: 'reader-tab',
+      _tabs: [{ id: 'reader-tab', title: 'Reader', type: 'reader' }],
+    });
+    Reflect.set(second.window, 'ZoteroPane', {
+      getSelectedItems: () => [other],
+      selectItem,
+    });
+
+    const readerDocument = { defaultView: null as Window | null } as unknown as Document;
+    const pdfWindow = {
+      document: readerDocument,
+      focus: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 0,
+      clearInterval: () => {},
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
+      cancelAnimationFrame: () => {},
+    } as unknown as PdfWindow;
+    const readerWindow = { document: readerDocument } as unknown as Window;
+    Reflect.set(readerDocument, 'defaultView', pdfWindow);
+    const reader = {
+      _instanceID: 'reader-show-library',
+      itemID: attachment.id,
+      _window: second.window,
+      _iframeWindow: readerWindow,
+      _internalReader: { _primaryView: { _iframeWindow: pdfWindow } },
+    } as ReaderRuntime;
+    Reflect.set(globalThis, 'Zotero', {
+      Items: {
+        get: (id: number) =>
+          id === attachment.id
+            ? attachment
+            : id === paper.id
+              ? paper
+              : id === other.id
+                ? other
+                : false,
+      },
+      Reader: { getByTabID: (tabID: string) => (tabID === 'reader-tab' ? reader : null) },
+      locale: 'en-US',
+      initialized: false,
+    });
+
     const dependencies = {
       preferences: {
         has: () => false,
@@ -2407,29 +2508,8 @@ describe('Reader owner picker routing', () => {
     main.addWindow(first.window);
     main.addWindow(second.window);
     const firstBodyCount = first.bodyChildren.length;
-    const secondBodyCount = second.bodyChildren.length;
+    const readerBodyCount = second.bodyChildren.length;
 
-    const readerDocument = { defaultView: null as Window | null } as unknown as Document;
-    const pdfWindow = {
-      document: readerDocument,
-      focus: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      setInterval: () => 0,
-      clearInterval: () => {},
-      requestAnimationFrame: (callback: FrameRequestCallback) => {
-        callback(0);
-        return 0;
-      },
-      cancelAnimationFrame: () => {},
-    } as unknown as PdfWindow;
-    const readerWindow = { document: readerDocument } as unknown as Window;
-    Reflect.set(readerDocument, 'defaultView', pdfWindow);
-    const reader = {
-      _window: second.window,
-      _iframeWindow: readerWindow,
-      _internalReader: { _primaryView: { _iframeWindow: pdfWindow } },
-    } as ReaderRuntime;
     const readerSession = new ReaderSession({
       controller: {
         dependencies: {
@@ -2440,7 +2520,7 @@ describe('Reader owner picker routing', () => {
       },
       reader,
       firstPdfWindow: pdfWindow,
-      bindings: () => DEFAULT_BINDINGS,
+      bindings: () => resolveBindings('{"reader-normal:x":"showInLibrary"}'),
       release: () => {},
     } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
     const press = (key: string): void =>
@@ -2455,24 +2535,28 @@ describe('Reader owner picker routing', () => {
         stopImmediatePropagation: () => {},
       } as unknown as KeyboardEvent);
 
-    press(' ');
-    press(',');
-    await Promise.resolve();
-    expect(second.bodyChildren.length).toBeGreaterThan(secondBodyCount);
-    expect(first.bodyChildren).toHaveLength(firstBodyCount);
+    try {
+      press('x');
+      await vi.waitFor(() => expect(selectItem).toHaveBeenCalledWith(paper.id));
+      expect(selectItem).toHaveBeenCalledTimes(1);
+      expect(selectItem).not.toHaveBeenCalledWith(other.id);
 
-    main.removeWindow(second.window);
-    press(' ');
-    press('f');
-    press('t');
-    await Promise.resolve();
-    main.openTabPicker(null);
-    expect(first.bodyChildren).toHaveLength(firstBodyCount);
+      press(' ');
+      press(',');
+      await vi.waitFor(() => expect(second.bodyChildren.length).toBeGreaterThan(readerBodyCount));
+      expect(first.bodyChildren).toHaveLength(firstBodyCount);
 
-    readerSession.dispose();
-    main.shutdown();
-    if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
-    else Reflect.set(globalThis, 'Services', originalServices);
+      main.removeWindow(second.window);
+      main.openTabPicker(null);
+      expect(first.bodyChildren).toHaveLength(firstBodyCount);
+    } finally {
+      readerSession.dispose();
+      main.shutdown();
+      if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+      else Reflect.set(globalThis, 'Services', originalServices);
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
   });
 });
 

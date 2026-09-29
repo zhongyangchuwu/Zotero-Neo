@@ -31,6 +31,7 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openTabPicker: () => {},
   closeReaderTab: () => {},
   cycleReaderTab: () => {},
+  showReaderItemInLibrary: () => {},
   openReaderTagPicker: () => {},
   openReaderCollectionPicker: () => {},
   openCommandPalette: () => {},

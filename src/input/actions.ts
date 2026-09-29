@@ -81,6 +81,7 @@ const BASE_ACTION_IDS = [
   'managePlugins',
   'manageSelection',
   'mainReturnContext',
+  'showInLibrary',
   'mainTrashItems',
   'mainRestoreTrashedItems',
   'mainFocusTree',

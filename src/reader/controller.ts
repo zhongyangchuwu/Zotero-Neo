@@ -1096,6 +1096,12 @@ export class ReaderSession {
       case 'mainReturnContext':
         main.restoreReturnContext(ownerWindow);
         return;
+      case 'showInLibrary':
+        main.showReaderItemInLibrary(
+          ownerWindow,
+          READER_ITEM_TARGET.resolve(this.#dependencies.reader),
+        );
+        return;
       case 'switchTab':
         main.openTabPicker(ownerWindow);
         return;

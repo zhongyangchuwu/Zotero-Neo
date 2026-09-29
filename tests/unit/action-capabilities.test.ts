@@ -14,6 +14,7 @@ import {
   isReaderActionForMode,
 } from '../../src/reader/action-capabilities';
 import { actionsForBindingMode } from '../../src/input/binding-capabilities';
+import { DEFAULT_BINDINGS } from '../../src/input/bindings';
 
 const expectedMainActions: readonly ActionId[] = [
   'openCommandPalette',
@@ -109,6 +110,7 @@ describe('action capability ownership', () => {
       'closeCurrentTab',
       'previousTab',
       'nextTab',
+      'showInLibrary',
     ] as const)
       expect(isReaderActionForMode('normal', action)).toBe(true);
 
@@ -135,6 +137,7 @@ describe('action capability ownership', () => {
       'nextTab',
       'addTag',
       'removeTag',
+      'showInLibrary',
     ] as const)
       expect(actionsForBindingMode('note-normal')).toContain(action);
   });
@@ -148,6 +151,9 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'managePlugins')).toBe(true);
     expect(isReaderActionForMode('normal', 'openNeoSettings')).toBe(true);
     expect(isReaderActionForMode('normal', 'mainReturnContext')).toBe(true);
+    expect(isReaderActionForMode('normal', 'showInLibrary')).toBe(true);
+    expect(actionsForBindingMode('main-normal')).not.toContain('showInLibrary');
+    expect(Object.values(DEFAULT_BINDINGS)).not.toContain('showInLibrary');
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
     expect(READER_NORMAL_ACTIONS).toContain('openNeoSettings');

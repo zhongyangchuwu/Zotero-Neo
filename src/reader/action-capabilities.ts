@@ -62,6 +62,7 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'addToCollection',
   'removeFromCollection',
   'mainYankCitekey',
+  'showInLibrary',
   'openCommandPalette',
 ] as const satisfies readonly ActionId[]);
 

@@ -198,4 +198,22 @@ describe('Selection Panel', () => {
     expect(h.session.selectionPanel.open).toBe(false);
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 7 }]);
   });
+
+  it('restores the previous return bookmark when Zotero rejects a reveal', async () => {
+    const selected = item(8);
+    const h = harness([selected], []);
+    const previous = { bookmark: 'previous' };
+    const captured = { bookmark: 'captured' };
+    Reflect.set(h.session, 'returnBookmark', previous);
+    h.captureReturn.mockImplementation(() => {
+      Reflect.set(h.session, 'returnBookmark', captured);
+    });
+    h.selectItem.mockRejectedValueOnce(new Error('selection failed'));
+
+    h.panel.handleKey(h.key('Enter'), h.window, h.session);
+    await vi.waitFor(() => expect(Reflect.get(h.session, 'returnBookmark')).toBe(previous));
+
+    expect(h.selectItem).toHaveBeenCalledWith(selected.id);
+    expect(h.session.selectionPanel.open).toBe(false);
+  });
 });

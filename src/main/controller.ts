@@ -29,6 +29,8 @@ import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
 import { copyCitekeys } from '../operations/citekeys';
+import { t } from '../i18n';
+import { showItemInLibrary } from '../operations/show-in-library';
 import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
@@ -315,6 +317,12 @@ export class MainWindowController implements MainWindowControllerApi {
     this.withReaderWindow(ownerWindow, direction < 0 ? 'previousTab' : 'nextTab', (window) =>
       this.#navigation.cycleTab(window, direction),
     );
+  }
+
+  showReaderItemInLibrary(ownerWindow: MainWindow | null, targets: ItemTargetSet<'reader'>): void {
+    this.withReaderWindow(ownerWindow, 'showInLibrary', (window, session) => {
+      void this.showInLibraryForSurface(window, session, targets);
+    });
   }
 
   openReaderTagPicker(
@@ -707,6 +715,13 @@ export class MainWindowController implements MainWindowControllerApi {
         void this.#navigation.openPDF(window, session, targets.items[0]!);
         return true;
       }
+      case 'showInLibrary':
+        void this.showInLibraryForSurface(
+          window,
+          session,
+          resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window),
+        );
+        return true;
       case 'findAllItems':
         this.openAllItemsPickerForSurface(window, session);
         return true;
@@ -757,6 +772,39 @@ export class MainWindowController implements MainWindowControllerApi {
       default:
         return false;
     }
+  }
+
+  private async showInLibraryForSurface(
+    window: MainWindow,
+    session: MainWindowSession,
+    targets: ItemTargetSet,
+  ): Promise<void> {
+    const language = this.keyGuideLanguage();
+    if (targets.missing || targets.total !== 1 || targets.items.length !== 1) {
+      this.#navigation.status(session, t('status.showInLibraryUnavailable', language));
+      return;
+    }
+
+    const pane = mainHost(window).ZoteroPane;
+    if (!pane?.selectItem) {
+      this.#navigation.status(session, t('status.showInLibraryHostUnavailable', language));
+      return;
+    }
+
+    const previous = session.returnBookmark;
+    try {
+      this.#returnContext.capture(window, session);
+      await showItemInLibrary(targets.items[0]!, pane);
+    } catch (error) {
+      session.returnBookmark = previous;
+      this.#dependencies.logger.debug(`show in library failed: ${String(error)}`);
+      if (this.#sessions.get(window) === session)
+        this.#navigation.status(session, t('status.showInLibraryFailed', language));
+      return;
+    }
+
+    if (this.#sessions.get(window) === session)
+      this.#navigation.status(session, t('status.showInLibraryComplete', language));
   }
   private openAllItemsPickerForSurface(window: MainWindow, session: MainWindowSession): void {
     void this.#picker.open(window, session, 'all', {
