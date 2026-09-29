@@ -71,6 +71,10 @@ This separation lets the same semantic action be reached from a key binding or a
 Command Palette without synthetic keyboard events. It also keeps Key Guide,
 Binding Editor, and Command Palette projections tied to the same resolved source.
 
+Cross-surface coordination uses a named capability or shared Operation, not
+generic redispatch of another Surface's `ActionId`. Item Operations resolve
+their targets through the initiating Surface's resolver.
+
 Item-targeted actions also share a contextual target contract: Main resolves
 EffectiveSelection (persistent Selection when non-empty, otherwise CurrentTarget),
 Reader resolves the active Reader item (normally its parent bibliographic item),

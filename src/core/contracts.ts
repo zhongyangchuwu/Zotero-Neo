@@ -1,4 +1,3 @@
-import type { ReaderDelegableMainAction } from '../main/action-capabilities';
 import type { ActionId } from '../input/actions';
 import type { BindingMap, Mode } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
@@ -46,12 +45,17 @@ export interface ReaderSelectionApi {
   registerSelectionAction(action: ReaderSelectionActionDefinition): () => void;
 }
 
-export interface MainActionDelegate {
-  executeFromReader(
-    action: ReaderDelegableMainAction,
-    count: number,
-    ownerWindow: MainWindow | null,
-  ): void;
+/** Concrete Main-window capabilities Reader can invoke without semantic Action redispatch. */
+export interface ReaderMainOperations {
+  openAllItemsPicker(ownerWindow: MainWindow | null): void;
+  openCollectionItemsPicker(ownerWindow: MainWindow | null): void;
+  openNotesPicker(ownerWindow: MainWindow | null): void;
+  openPluginManager(ownerWindow: MainWindow | null): void;
+  openSettingsFromReader(ownerWindow: MainWindow | null): void;
+  restoreReturnContext(ownerWindow: MainWindow | null): void;
+  openTabPicker(ownerWindow: MainWindow | null): void;
+  closeReaderTab(ownerWindow: MainWindow | null): void;
+  cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;
   openReaderTagPicker(
     ownerWindow: MainWindow | null,
     targets: ItemTargetSet<'reader'>,
@@ -77,7 +81,7 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
   forwardKey(event: KeyboardEvent, window: MainWindow): void;
 }
 
-export interface MainWindowControllerApi extends MainActionDelegate {
+export interface MainWindowControllerApi extends ReaderMainOperations {
   openSettings(owner?: Window | null): boolean;
   addWindow(window: MainWindow): void;
   removeWindow(window: MainWindow): void;
@@ -87,26 +91,7 @@ export interface MainWindowControllerApi extends MainActionDelegate {
 export interface ReaderControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly delegateMain: (
-    action: ReaderDelegableMainAction,
-    count: number,
-    ownerWindow: MainWindow | null,
-  ) => void;
-  readonly openReaderTagPicker: (
-    ownerWindow: MainWindow | null,
-    targets: ItemTargetSet<'reader'>,
-    present: boolean,
-  ) => void;
-  readonly openReaderCollectionPicker: (
-    ownerWindow: MainWindow | null,
-    present: boolean,
-    resolveTargets: () => ItemTargetSet<'reader'>,
-  ) => void;
-  readonly openCommandPalette: (window: MainWindow, context: CommandPaletteContext) => void;
-  readonly captureReaderSelectionToNote: (
-    context: ReaderSelectionContext,
-    ownerWindow: MainWindow | null,
-  ) => Promise<boolean>;
+  readonly main: ReaderMainOperations;
 }
 
 export interface MainWindowControllerDependencies {

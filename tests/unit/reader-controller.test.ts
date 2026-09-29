@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { CommandPaletteContext, ReaderControllerDependencies } from '../../src/core/contracts';
+import type {
+  CommandPaletteContext,
+  ReaderControllerDependencies,
+  ReaderMainOperations,
+} from '../../src/core/contracts';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
@@ -17,6 +21,21 @@ import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
 const originalComponents = Reflect.get(globalThis, 'Components');
+const noopReaderMainOperations: ReaderMainOperations = {
+  openAllItemsPicker: () => {},
+  openCollectionItemsPicker: () => {},
+  openNotesPicker: () => {},
+  openPluginManager: () => {},
+  openSettingsFromReader: () => {},
+  restoreReturnContext: () => {},
+  openTabPicker: () => {},
+  closeReaderTab: () => {},
+  cycleReaderTab: () => {},
+  openReaderTagPicker: () => {},
+  openReaderCollectionPicker: () => {},
+  openCommandPalette: () => {},
+  captureReaderSelectionToNote: async () => false,
+};
 
 afterEach(() => {
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
@@ -49,11 +68,7 @@ describe('reader discovery diagnostics', () => {
         debug: () => {},
         diagnostic: (message: string) => diagnostics.push(message),
       },
-      delegateMain: () => {},
-      openReaderTagPicker: () => {},
-      openReaderCollectionPicker: () => {},
-      openCommandPalette: () => {},
-      captureReaderSelectionToNote: async () => false,
+      main: noopReaderMainOperations,
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
@@ -111,11 +126,7 @@ describe('reader discovery diagnostics', () => {
         set: () => {},
       },
       logger: { debug: () => {}, diagnostic: () => {} },
-      delegateMain: () => {},
-      openReaderTagPicker: () => {},
-      openReaderCollectionPicker: () => {},
-      openCommandPalette: () => {},
-      captureReaderSelectionToNote: async () => false,
+      main: noopReaderMainOperations,
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
@@ -174,11 +185,7 @@ describe('reader discovery diagnostics', () => {
         set: () => {},
       },
       logger: { debug: () => {}, diagnostic: () => {} },
-      delegateMain: () => {},
-      openReaderTagPicker: () => {},
-      openReaderCollectionPicker: () => {},
-      openCommandPalette: () => {},
-      captureReaderSelectionToNote: async () => false,
+      main: noopReaderMainOperations,
     } as ReaderControllerDependencies;
     const controller = createReaderController(dependencies);
     const deactivate = vi.spyOn(ReaderSession.prototype, 'deactivateInteraction');
@@ -202,14 +209,14 @@ describe('reader discovery diagnostics', () => {
 
 function createHistorySession(
   internal: InternalReaderRuntime = {},
-  delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
+  mainOperations: Partial<ReaderMainOperations> = {},
   bindings: BindingMap = DEFAULT_BINDINGS,
-  openCommandPalette: ReaderControllerDependencies['openCommandPalette'] = () => {},
+  openCommandPalette: ReaderMainOperations['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
-  captureReaderSelectionToNote: ReaderControllerDependencies['captureReaderSelectionToNote'] = async () =>
+  captureReaderSelectionToNote: ReaderMainOperations['captureReaderSelectionToNote'] = async () =>
     false,
-  openReaderTagPicker: ReaderControllerDependencies['openReaderTagPicker'] = () => {},
-  openReaderCollectionPicker: ReaderControllerDependencies['openReaderCollectionPicker'] = () => {},
+  openReaderTagPicker: ReaderMainOperations['openReaderTagPicker'] = () => {},
+  openReaderCollectionPicker: ReaderMainOperations['openReaderCollectionPicker'] = () => {},
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -317,11 +324,14 @@ function createHistorySession(
         debug: (message: string) => debug.push(message),
         diagnostic: (message: string) => diagnostics.push(message),
       },
-      delegateMain,
-      openReaderTagPicker,
-      openReaderCollectionPicker,
-      openCommandPalette,
-      captureReaderSelectionToNote,
+      main: {
+        ...noopReaderMainOperations,
+        ...mainOperations,
+        openReaderTagPicker,
+        openReaderCollectionPicker,
+        openCommandPalette,
+        captureReaderSelectionToNote,
+      },
     },
   };
   const session = new ReaderSession({
@@ -405,11 +415,11 @@ function smoothSession(
   mode: SmoothMode,
   internal: InternalReaderRuntime = {},
   bindings: BindingMap = DEFAULT_BINDINGS,
-  delegateMain: ReaderControllerDependencies['delegateMain'] = () => {},
+  mainOperations: Partial<ReaderMainOperations> = {},
 ) {
   const created = createHistorySession(
     internal,
-    delegateMain,
+    mainOperations,
     bindings,
     () => {},
     smoothPreferences(mode),
@@ -614,8 +624,8 @@ describe('native reader history', () => {
 describe('reader keymap forwarding', () => {
   it('consumes new tab and pan chords while forwarding retired J/K keys', () => {
     const originalKeyDown = vi.fn();
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const created = createHistorySession({}, delegateMain);
+    const cycleReaderTab = vi.fn();
+    const created = createHistorySession({}, { cycleReaderTab });
     const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
     const view = created.reader._internalReader?._primaryView;
@@ -637,8 +647,8 @@ describe('reader keymap forwarding', () => {
     press('z');
     press('h');
 
-    expect(delegateMain).toHaveBeenNthCalledWith(1, 'previousTab', 0, created.reader._window);
-    expect(delegateMain).toHaveBeenNthCalledWith(2, 'nextTab', 0, created.reader._window);
+    expect(cycleReaderTab).toHaveBeenNthCalledWith(1, created.reader._window, -1);
+    expect(cycleReaderTab).toHaveBeenNthCalledWith(2, created.reader._window, 1);
     expect(previous.preventDefault).toHaveBeenCalledOnce();
     expect(next.preventDefault).toHaveBeenCalledOnce();
     expect(originalKeyDown).toHaveBeenCalledTimes(2);
@@ -652,17 +662,8 @@ describe('reader keymap forwarding', () => {
 describe('Reader Selection Actions capture', () => {
   it('passes a Visual selection snapshot to the Main note-capture owner', async () => {
     vi.stubGlobal('Zotero', {});
-    const capture = vi.fn<ReaderControllerDependencies['captureReaderSelectionToNote']>(
-      async () => true,
-    );
-    const created = createHistorySession(
-      {},
-      () => {},
-      DEFAULT_BINDINGS,
-      () => {},
-      {},
-      capture,
-    );
+    const capture = vi.fn<ReaderMainOperations['captureReaderSelectionToNote']>(async () => true);
+    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {}, capture);
     Reflect.set(created.reader, 'itemID', 42);
     Reflect.set(created.pdfWindow, 'getSelection', () => ({
       isCollapsed: false,
@@ -694,23 +695,17 @@ describe('Reader Selection Actions capture', () => {
   });
 });
 
-describe('reader return-context navigation', () => {
-  it('leaves gr unbound by default but delegates an explicit custom binding', () => {
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const defaults = createHistorySession({}, delegateMain);
-    defaults.session.focusAndHandle(readerKey('g').event);
-    defaults.session.focusAndHandle(readerKey('r').event);
-    expect(delegateMain).not.toHaveBeenCalled();
-    defaults.session.dispose();
-
+describe('Reader return-context navigation', () => {
+  it('routes a custom binding through the named return-context operation', () => {
+    const restoreReturnContext = vi.fn();
     const custom = createHistorySession(
       {},
-      delegateMain,
+      { restoreReturnContext },
       resolveBindings('{"reader-normal:gr":"mainReturnContext"}'),
     );
     custom.session.focusAndHandle(readerKey('g').event);
     custom.session.focusAndHandle(readerKey('r').event);
-    expect(delegateMain).toHaveBeenCalledWith('mainReturnContext', 0, custom.reader._window);
+    expect(restoreReturnContext).toHaveBeenCalledWith(custom.reader._window);
     custom.session.dispose();
   });
 });
@@ -898,7 +893,7 @@ describe('reader zoom shortcuts', () => {
     const bindings = Object.fromEntries(
       Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'reader-normal::'),
     ) as BindingMap;
-    const created = createHistorySession({}, () => {}, bindings);
+    const created = createHistorySession({}, {}, bindings);
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected a primary reader view');
     view._onKeyDown = originalKeyDown;
@@ -912,22 +907,22 @@ describe('reader zoom shortcuts', () => {
   });
 });
 
-describe('Reader-origin main delegation', () => {
-  it('passes the Reader runtime owner window with picker-opening actions', () => {
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const created = createHistorySession({}, delegateMain);
+describe('Reader Main surface operations', () => {
+  it('passes the Reader owner to the item picker capability', () => {
+    const openAllItemsPicker = vi.fn();
+    const created = createHistorySession({}, { openAllItemsPicker });
 
     created.session.focusAndHandle(readerKey(' ').event);
     created.session.focusAndHandle(readerKey('f').event);
     created.session.focusAndHandle(readerKey('f').event);
 
-    expect(delegateMain).toHaveBeenCalledWith('findAllItems', 0, created.reader._window);
+    expect(openAllItemsPicker).toHaveBeenCalledWith(created.reader._window);
     created.session.dispose();
   });
 
-  it('delegates Space p s to Neo Settings without leaving the Reader owner window', () => {
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const created = createHistorySession({}, delegateMain);
+  it('routes settings by name without leaving the Reader owner window', () => {
+    const openSettingsFromReader = vi.fn();
+    const created = createHistorySession({}, { openSettingsFromReader });
 
     const leader = readerKey(' ');
     const prefix = readerKey('p');
@@ -939,8 +934,7 @@ describe('Reader-origin main delegation', () => {
     expect(leader.preventDefault).toHaveBeenCalledOnce();
     expect(prefix.preventDefault).toHaveBeenCalledOnce();
     expect(settings.preventDefault).toHaveBeenCalledOnce();
-    expect(delegateMain).toHaveBeenCalledOnce();
-    expect(delegateMain).toHaveBeenCalledWith('openNeoSettings', 0, created.reader._window);
+    expect(openSettingsFromReader).toHaveBeenCalledWith(created.reader._window);
     created.session.dispose();
   });
 });
@@ -954,11 +948,10 @@ describe('Reader item-tag operation', () => {
       isNote: () => false,
     } as Zotero.Item;
     vi.stubGlobal('Zotero', { Items: { get: (id: number) => (id === item.id ? item : false) } });
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const openTag = vi.fn<ReaderControllerDependencies['openReaderTagPicker']>();
+    const openTag = vi.fn<ReaderMainOperations['openReaderTagPicker']>();
     const created = createHistorySession(
       {},
-      delegateMain,
+      {},
       DEFAULT_BINDINGS,
       () => {},
       {},
@@ -973,7 +966,7 @@ describe('Reader item-tag operation', () => {
     const targets = { source: 'reader', items: [item], total: 1, missing: 0 };
     expect(openTag).toHaveBeenNthCalledWith(1, created.reader._window, targets, true);
     expect(openTag).toHaveBeenNthCalledWith(2, created.reader._window, targets, false);
-    expect(delegateMain).not.toHaveBeenCalled();
+    expect(created.session.input.keyBuffer).toBe('');
     created.session.dispose();
   });
 });
@@ -981,11 +974,10 @@ describe('Reader item-tag operation', () => {
 describe('Reader collection membership operation', () => {
   it('keeps the active Reader target and refuses a later tab switch', () => {
     const item = { id: 24, libraryID: 1, isTopLevelItem: () => true } as Zotero.Item;
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const openCollection = vi.fn<ReaderControllerDependencies['openReaderCollectionPicker']>();
+    const openCollection = vi.fn<ReaderMainOperations['openReaderCollectionPicker']>();
     const created = createHistorySession(
       {},
-      delegateMain,
+      {},
       DEFAULT_BINDINGS,
       () => {},
       {},
@@ -1009,7 +1001,6 @@ describe('Reader collection membership operation', () => {
 
     tabs.selectedID = 'other-tab';
     expect(current?.().items).toEqual([]);
-    expect(delegateMain).not.toHaveBeenCalled();
     created.session.dispose();
   });
 });
@@ -1017,8 +1008,6 @@ describe('Reader collection membership operation', () => {
 describe('Reader citekey output', () => {
   it('copies its item key from Space y y without delegating Main Selection', () => {
     const copied: string[] = [];
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const created = createHistorySession({}, delegateMain);
     const item = {
       id: 25,
       libraryID: 1,
@@ -1026,6 +1015,7 @@ describe('Reader citekey output', () => {
       isNote: () => false,
       getField: () => 'Reader2026',
     } as unknown as Zotero.Item;
+    const created = createHistorySession();
     Reflect.set(created.reader, 'itemID', item.id);
     vi.stubGlobal('Zotero', { Items: { get: (id: number) => (id === item.id ? item : false) } });
     vi.stubGlobal('Components', {
@@ -1042,7 +1032,6 @@ describe('Reader citekey output', () => {
 
     expect(copied).toEqual(['Reader2026']);
     expect(created.indicator.textContent).toBe('✓ @Reader2026');
-    expect(delegateMain).not.toHaveBeenCalled();
     created.session.dispose();
   });
 });
@@ -1163,15 +1152,15 @@ describe('reader Space-leader key guide', () => {
   });
 });
 describe('Reader command palette', () => {
-  it('opens from Reader Normal, routes active-split local actions, and preserves owner delegation', () => {
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+  it('opens from Reader Normal and preserves owner-specific operations', () => {
+    const openAllItemsPicker = vi.fn();
     const zoomIn = vi.fn(function (this: InternalReaderRuntime) {
       expect(this._lastViewPrimary).toBe(false);
     });
     const paletteRef: { value: CommandPaletteContext | null } = { value: null };
     const created = createHistorySession(
       { _lastViewPrimary: false, zoomIn },
-      delegateMain,
+      { openAllItemsPicker },
       DEFAULT_BINDINGS,
       (_window, context) => {
         paletteRef.value = context;
@@ -1195,15 +1184,14 @@ describe('Reader command palette', () => {
     palette.execute('zoomIn', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
     palette.execute('mainTrashItems', 123);
-    expect(delegateMain).not.toHaveBeenCalled();
     palette.execute('findAllItems', 123);
-    expect(delegateMain).toHaveBeenCalledWith('findAllItems', 0, created.reader._window);
+    expect(openAllItemsPicker).toHaveBeenCalledWith(created.reader._window);
 
     Reflect.set(created.reader._internalReader, '_primaryView', undefined);
     Reflect.set(created.reader._internalReader, '_secondaryView', undefined);
     palette.execute('zoomIn', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
-    expect(delegateMain).toHaveBeenCalledOnce();
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
     Reflect.set(created.reader._internalReader, '_primaryView', {
       _iframeWindow: created.pdfWindow,
     });
@@ -1211,55 +1199,55 @@ describe('Reader command palette', () => {
     palette.execute('zoomIn', 123);
     palette.execute('switchTab', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
-    expect(delegateMain).toHaveBeenCalledOnce();
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
   });
 });
 describe('Reader leader timer guards', () => {
   it('executes only current ambiguous leader transitions', () => {
     vi.useFakeTimers();
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const openAllItemsPicker = vi.fn();
     const bindings: BindingMap = {
       'reader-normal:<Space>f': 'findAllItems',
       'reader-normal:<Space>ff': 'switchTab',
     };
-    const created = createHistorySession({}, delegateMain, bindings);
+    const created = createHistorySession({}, { openAllItemsPicker }, bindings);
     const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
 
     press(' ');
     press('f');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(delegateMain).toHaveBeenCalledTimes(1);
-    expect(delegateMain).toHaveBeenLastCalledWith('findAllItems', 0, created.reader._window);
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
+    expect(openAllItemsPicker).toHaveBeenLastCalledWith(created.reader._window);
 
     press(' ');
     press('f');
     press('z');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(delegateMain).toHaveBeenCalledTimes(1);
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
 
     press(' ');
     press('f');
     press('Escape');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(delegateMain).toHaveBeenCalledTimes(1);
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
 
     press(' ');
     press('f');
     press('Backspace');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(delegateMain).toHaveBeenCalledTimes(1);
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
 
     press(' ');
     press('f');
     created.session.dispose();
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(delegateMain).toHaveBeenCalledTimes(1);
+    expect(openAllItemsPicker).toHaveBeenCalledOnce();
   });
   it('keeps counted leader cancellation while invalidating timed Reader commands on mode change', () => {
     vi.useFakeTimers();
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const cycleReaderTab = vi.fn();
     const bindings = resolveBindings('{"reader-normal:g":"nextTab"}');
-    const created = createHistorySession({}, delegateMain, bindings);
+    const created = createHistorySession({}, { cycleReaderTab }, bindings);
     Reflect.set(created.pdfWindow, 'getSelection', () => null);
     const press = (key: string): void => created.session.focusAndHandle(readerKey(key).event);
     press('3');
@@ -1270,7 +1258,7 @@ describe('Reader leader timer guards', () => {
     expect(created.session.input.keyBuffer).toBe('');
     expect(created.session.input.countBuffer).toBe('3');
     press('L');
-    expect(delegateMain).toHaveBeenCalledWith('nextTab', 3, created.reader._window);
+    expect(cycleReaderTab).toHaveBeenCalledWith(created.reader._window, 1);
 
     press('3');
     press('g');
@@ -1280,7 +1268,7 @@ describe('Reader leader timer guards', () => {
     expect(created.session.input.keyBuffer).toBe('');
     expect(created.session.input.countBuffer).toBe('');
     vi.advanceTimersByTime(800);
-    expect(delegateMain).toHaveBeenCalledTimes(1);
+    expect(cycleReaderTab).toHaveBeenCalledOnce();
     const visualDigit = readerKey('3');
     created.session.focusAndHandle(visualDigit.event);
     expect(visualDigit.preventDefault).not.toHaveBeenCalled();
@@ -1385,8 +1373,8 @@ describe('Reader leader timer guards', () => {
 
 describe('reader H/L tab and zh/zl pan defaults', () => {
   it('switches tabs horizontally, pans with counts, and leaves J/K native', () => {
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
-    const created = createHistorySession({}, delegateMain);
+    const cycleReaderTab = vi.fn();
+    const created = createHistorySession({}, { cycleReaderTab });
     const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
       pdfViewer: { container },
@@ -1396,8 +1384,8 @@ describe('reader H/L tab and zh/zl pan defaults', () => {
     const nextTab = readerKey('L');
     created.session.focusAndHandle(previousTab.event);
     created.session.focusAndHandle(nextTab.event);
-    expect(delegateMain).toHaveBeenNthCalledWith(1, 'previousTab', 0, created.reader._window);
-    expect(delegateMain).toHaveBeenNthCalledWith(2, 'nextTab', 0, created.reader._window);
+    expect(cycleReaderTab).toHaveBeenNthCalledWith(1, created.reader._window, -1);
+    expect(cycleReaderTab).toHaveBeenNthCalledWith(2, created.reader._window, 1);
     expect(container.scrollBy).not.toHaveBeenCalled();
 
     created.session.focusAndHandle(readerKey('3').event);
@@ -1420,7 +1408,7 @@ describe('reader H/L tab and zh/zl pan defaults', () => {
     created.session.focusAndHandle(oldNext.event);
     expect(oldPrevious.preventDefault).not.toHaveBeenCalled();
     expect(oldNext.preventDefault).not.toHaveBeenCalled();
-    expect(delegateMain).toHaveBeenCalledTimes(2);
+    expect(cycleReaderTab).toHaveBeenCalledTimes(2);
     created.session.dispose();
   });
 });
@@ -1460,9 +1448,9 @@ describe('Reader smooth horizontal pan', () => {
 
   it('invalidates an intervening leader timeout when a smooth hold repeats', () => {
     vi.useFakeTimers();
-    const delegateMain = vi.fn<ReaderControllerDependencies['delegateMain']>();
+    const openTabPicker = vi.fn();
     const bindings: BindingMap = { ...DEFAULT_BINDINGS, 'reader-normal:<Space>f': 'switchTab' };
-    const created = smoothSession('follow', {}, bindings, delegateMain);
+    const created = smoothSession('follow', {}, bindings, { openTabPicker });
     created.session.focusAndHandle(readerKey('j').event);
     created.session.focusAndHandle(readerKey(' ').event);
     created.session.focusAndHandle(readerKey('f').event);
@@ -1471,7 +1459,7 @@ describe('Reader smooth horizontal pan', () => {
     created.session.focusAndHandle(repeat.event);
     expect(repeat.preventDefault).toHaveBeenCalledOnce();
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(delegateMain).not.toHaveBeenCalled();
+    expect(openTabPicker).not.toHaveBeenCalled();
     expect(created.session.input.keyBuffer).toBe(' f');
     releaseSmoothHold(created, 'j');
     created.session.dispose();
@@ -1756,7 +1744,7 @@ describe('reader sidebar coordination', () => {
       'reader-normal:q': 'toggleReaderSidebarOutline',
       'reader-normal:w': 'toggleMarksExplorer',
     } as BindingMap;
-    const created = createHistorySession({}, () => {}, bindings);
+    const created = createHistorySession({}, {}, bindings);
 
     created.session.focusAndHandle(readerKey('q').event);
     expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');

@@ -1,8 +1,10 @@
 import type { ActionId } from '../input/actions';
 import { NOTE_ACTION_IDS, type NoteActionId } from '../input/note-actions';
-import { MAIN_NORMAL_ACTIONS, type MainNormalAction } from './action-capabilities';
 
-export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
+export const NOTE_NORMAL_ACTIONS = Object.freeze([
+  ...NOTE_ACTION_IDS,
+  'enterInsert',
+  'exitMode',
   'openCommandPalette',
   'findAllItems',
   'findCollectionItems',
@@ -25,21 +27,9 @@ export const NOTE_CROSS_CONTEXT_MAIN_ACTIONS = Object.freeze([
   'nextTab',
   'addTag',
   'removeTag',
-] as const satisfies readonly MainNormalAction[]);
-
-export const NOTE_NORMAL_ACTIONS = Object.freeze([
-  ...NOTE_ACTION_IDS,
-  'enterInsert',
-  'exitMode',
-  ...NOTE_CROSS_CONTEXT_MAIN_ACTIONS,
 ] as const satisfies readonly ActionId[]);
 
-export const NOTE_COMMAND_PALETTE_ACTIONS = Object.freeze([
-  ...NOTE_ACTION_IDS,
-  'enterInsert',
-  'exitMode',
-  ...NOTE_CROSS_CONTEXT_MAIN_ACTIONS,
-] as const satisfies readonly ActionId[]);
+export const NOTE_COMMAND_PALETTE_ACTIONS = NOTE_NORMAL_ACTIONS;
 
 export const NOTE_INSERT_ACTIONS = Object.freeze([
   'exitMode',

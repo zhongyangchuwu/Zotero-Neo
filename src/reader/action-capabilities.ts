@@ -1,7 +1,3 @@
-import {
-  READER_DELEGABLE_MAIN_ACTIONS,
-  type ReaderDelegableMainAction,
-} from '../main/action-capabilities';
 import type { ActionId } from '../input/actions';
 
 export type ReaderCapabilityMode = 'normal' | 'visual' | 'insert';
@@ -103,10 +99,19 @@ export const READER_LOCAL_INSERT_ACTIONS = Object.freeze([
   'exitMode',
 ] as const satisfies readonly ActionId[]);
 
-/** Reader Normal availability combines local actions with the narrow Main route. */
+/** Actions available in Reader Normal, including explicit Main-surface operations. */
 export const READER_NORMAL_ACTIONS = Object.freeze([
   ...READER_LOCAL_NORMAL_ACTIONS,
-  ...READER_DELEGABLE_MAIN_ACTIONS,
+  'findAllItems',
+  'findCollectionItems',
+  'findNotes',
+  'managePlugins',
+  'openNeoSettings',
+  'mainReturnContext',
+  'switchTab',
+  'closeCurrentTab',
+  'previousTab',
+  'nextTab',
 ] as const satisfies readonly ActionId[]);
 
 export type ReaderLocalNormalAction = (typeof READER_LOCAL_NORMAL_ACTIONS)[number];
@@ -117,7 +122,7 @@ export type ReaderLocalAction =
   | ReaderLocalNormalAction
   | ReaderLocalVisualAction
   | ReaderLocalInsertAction;
-export type ReaderAction = ReaderLocalAction | ReaderDelegableMainAction;
+export type ReaderAction = ReaderLocalAction | ReaderNormalAction;
 
 export type ReaderActionForMode<Mode extends ReaderCapabilityMode> = Mode extends 'normal'
   ? ReaderNormalAction
@@ -142,7 +147,7 @@ export function isReaderLocalInsertAction(value: unknown): value is ReaderLocalI
 }
 
 export function isReaderNormalAction(value: unknown): value is ReaderNormalAction {
-  return isReaderLocalNormalAction(value) || includesAction(READER_DELEGABLE_MAIN_ACTIONS, value);
+  return includesAction(READER_NORMAL_ACTIONS, value);
 }
 
 export function isReaderLocalAction(value: unknown): value is ReaderLocalAction {
@@ -154,7 +159,7 @@ export function isReaderLocalAction(value: unknown): value is ReaderLocalAction 
 }
 
 export function isReaderAction(value: unknown): value is ReaderAction {
-  return isReaderLocalAction(value) || includesAction(READER_DELEGABLE_MAIN_ACTIONS, value);
+  return isReaderLocalAction(value) || isReaderNormalAction(value);
 }
 
 export function isReaderActionForMode(mode: 'normal', value: unknown): value is ReaderNormalAction;

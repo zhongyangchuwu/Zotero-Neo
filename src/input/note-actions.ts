@@ -50,7 +50,8 @@ export const NOTE_COMMAND_BY_ACTION = {
   noteChangeInnerWord: 'ciw',
 } as const;
 
-export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
+/** Main-scope actions schema-8 migration may preserve in Note scope. */
+export const NOTE_MIGRATABLE_MAIN_BINDING_ACTION_IDS = Object.freeze([
   'openCommandPalette',
   'findAllItems',
   'findCollectionItems',
@@ -75,10 +76,14 @@ export const NOTE_CROSS_CONTEXT_ACTION_IDS = Object.freeze([
   'removeTag',
 ] as const);
 
-export type NoteCrossContextActionId = (typeof NOTE_CROSS_CONTEXT_ACTION_IDS)[number];
+type NoteMigratableMainBindingActionId = (typeof NOTE_MIGRATABLE_MAIN_BINDING_ACTION_IDS)[number];
 
-export function isNoteCrossContextActionId(value: unknown): value is NoteCrossContextActionId {
-  return NOTE_CROSS_CONTEXT_ACTION_IDS.includes(value as NoteCrossContextActionId);
+export function isNoteMigratableMainBindingAction(
+  value: unknown,
+): value is NoteMigratableMainBindingActionId {
+  return NOTE_MIGRATABLE_MAIN_BINDING_ACTION_IDS.includes(
+    value as NoteMigratableMainBindingActionId,
+  );
 }
 
 export type NoteActionId = keyof typeof NOTE_COMMAND_BY_ACTION;

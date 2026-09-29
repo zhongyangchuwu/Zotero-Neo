@@ -1,5 +1,5 @@
 import { isActionId, type ActionId } from './actions';
-import { NOTE_LOCAL_DEFAULT_BINDINGS, isNoteCrossContextActionId } from './note-actions';
+import { isNoteMigratableMainBindingAction, NOTE_LOCAL_DEFAULT_BINDINGS } from './note-actions';
 import {
   bindingSequenceTokens,
   canonicalBindingSequence,
@@ -507,7 +507,7 @@ export function migrateNoteBindingOverrides(raw: unknown): string {
   for (const [key, action] of Object.entries({ ...overrides })) {
     const binding = parseBindingKey(key);
     if (binding?.mode !== 'main-normal' || !noteInheritedMainSequence(binding.sequence)) continue;
-    if (action !== null && !isNoteCrossContextActionId(action)) continue;
+    if (action !== null && !isNoteMigratableMainBindingAction(action)) continue;
     const noteKey = 'note-normal:' + binding.sequence;
     if (!(noteKey in overrides)) overrides[noteKey] = action;
   }

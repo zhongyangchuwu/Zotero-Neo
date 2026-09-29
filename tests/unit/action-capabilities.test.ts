@@ -5,12 +5,10 @@ import {
   MAIN_EXECUTABLE_ACTIONS,
   MAIN_NORMAL_ACTIONS,
   MAIN_SELECT_ACTIONS,
-  READER_DELEGABLE_MAIN_ACTIONS,
   isMainExecutableAction,
 } from '../../src/main/action-capabilities';
 import {
   READER_LOCAL_INSERT_ACTIONS,
-  READER_LOCAL_NORMAL_ACTIONS,
   READER_LOCAL_VISUAL_ACTIONS,
   READER_NORMAL_ACTIONS,
   isReaderActionForMode,
@@ -100,12 +98,46 @@ describe('action capability ownership', () => {
     sameActions(actionsForBindingMode('reader-select'), READER_LOCAL_VISUAL_ACTIONS);
     sameActions(actionsForBindingMode('reader-insert'), READER_LOCAL_INSERT_ACTIONS);
 
-    sameActions(READER_NORMAL_ACTIONS, [
-      ...READER_LOCAL_NORMAL_ACTIONS,
-      ...READER_DELEGABLE_MAIN_ACTIONS,
-    ]);
-  });
+    for (const action of [
+      'findAllItems',
+      'findCollectionItems',
+      'findNotes',
+      'managePlugins',
+      'openNeoSettings',
+      'mainReturnContext',
+      'switchTab',
+      'closeCurrentTab',
+      'previousTab',
+      'nextTab',
+    ] as const)
+      expect(isReaderActionForMode('normal', action)).toBe(true);
 
+    for (const action of [
+      'openCommandPalette',
+      'findAllItems',
+      'findCollectionItems',
+      'findNotes',
+      'managePlugins',
+      'openNeoSettings',
+      'switchTab',
+      'mainFocusTree',
+      'mainFocusLeft',
+      'mainFocusRight',
+      'mainFocusItems',
+      'focusReaderSplitLeft',
+      'focusReaderSplitDown',
+      'focusReaderSplitUp',
+      'focusReaderSplitRight',
+      'mainYankCitekey',
+      'mainOpenPDF',
+      'closeCurrentTab',
+      'previousTab',
+      'nextTab',
+      'addTag',
+      'removeTag',
+    ] as const)
+      expect(actionsForBindingMode('note-normal')).toContain(action);
+  });
   it('guards commands by Reader mode and rejects unsafe catalog drift', () => {
     expect(isReaderActionForMode('normal', 'openCommandPalette')).toBe(true);
     expect(isReaderActionForMode('normal', 'switchTab')).toBe(true);

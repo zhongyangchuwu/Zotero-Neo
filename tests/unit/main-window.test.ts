@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ActionId } from '../../src/input/actions';
-import type { ReaderDelegableMainAction } from '../../src/main/action-capabilities';
 import type {
   MainWindow,
   MainWindowControllerApi,
@@ -1674,7 +1673,7 @@ describe('Main Settings Center shell', () => {
     expect(first.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(false);
   });
 
-  it('opens Neo Settings for a Reader-owned Main delegation without switching tabs', () => {
+  it('opens Neo Settings through the named Reader operation without switching tabs', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const host = settingsMainHost();
     Reflect.set(host.window, 'Zotero_Tabs', {
@@ -1682,7 +1681,7 @@ describe('Main Settings Center shell', () => {
       selectedID: 'reader-tab',
     });
     try {
-      host.controller.executeFromReader('openNeoSettings', 0, host.window);
+      host.controller.openSettingsFromReader(host.window);
       expect(host.drawer()?.id).toBe('zotero-neo-settings-center');
       expect(host.window.Zotero_Tabs?.selectedID).toBe('reader-tab');
     } finally {
@@ -1912,15 +1911,24 @@ describe('Reader to Main command palette integration', () => {
     const readerController = createReaderController({
       preferences,
       logger,
-      delegateMain: (action, count, ownerWindow) =>
-        main?.executeFromReader(action, count, ownerWindow),
-      openReaderTagPicker: (ownerWindow, targets, present) =>
-        main?.openReaderTagPicker(ownerWindow, targets, present),
-      openReaderCollectionPicker: (ownerWindow, present, resolveTargets) =>
-        main?.openReaderCollectionPicker(ownerWindow, present, resolveTargets),
-      openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
-      captureReaderSelectionToNote: (context, ownerWindow) =>
-        main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false),
+      main: {
+        openAllItemsPicker: (ownerWindow) => main?.openAllItemsPicker(ownerWindow),
+        openCollectionItemsPicker: (ownerWindow) => main?.openCollectionItemsPicker(ownerWindow),
+        openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),
+        openPluginManager: (ownerWindow) => main?.openPluginManager(ownerWindow),
+        openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
+        restoreReturnContext: (ownerWindow) => main?.restoreReturnContext(ownerWindow),
+        openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
+        closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
+        cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
+        openReaderTagPicker: (ownerWindow, targets, present) =>
+          main?.openReaderTagPicker(ownerWindow, targets, present),
+        openReaderCollectionPicker: (ownerWindow, present, resolveTargets) =>
+          main?.openReaderCollectionPicker(ownerWindow, present, resolveTargets),
+        openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
+        captureReaderSelectionToNote: (context, ownerWindow) =>
+          main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false),
+      },
     });
     main = createMainWindowController({ preferences, logger, reader: readerController });
     readerController.start('zotero-neo@zotero-neo');
@@ -2082,8 +2090,8 @@ describe('repeated tab switching', () => {
     const controller = createMainWindowController(dependencies);
     controller.addWindow(window);
 
-    controller.executeFromReader('nextTab', 1, window);
-    controller.executeFromReader('nextTab', 1, window);
+    controller.cycleReaderTab(window, 1);
+    controller.cycleReaderTab(window, 1);
     controller.shutdown();
 
     expect(selectedIndex).toBe(2);
@@ -2137,10 +2145,10 @@ describe('repeated tab switching', () => {
     controller.addWindow(first);
     controller.addWindow(second);
 
-    controller.executeFromReader('nextTab', 1, second);
+    controller.cycleReaderTab(second, 1);
     controller.removeWindow(second);
-    controller.executeFromReader('nextTab', 1, second);
-    controller.executeFromReader('nextTab', 1, null);
+    controller.cycleReaderTab(second, 1);
+    controller.cycleReaderTab(null, 1);
     controller.shutdown();
 
     expect(firstCount).toBe(0);
@@ -2427,17 +2435,7 @@ describe('Reader owner picker routing', () => {
         dependencies: {
           preferences: dependencies.preferences,
           logger,
-          delegateMain: (
-            action: ReaderDelegableMainAction,
-            count: number,
-            ownerWindow: MainWindow | null,
-          ) => main.executeFromReader(action, count, ownerWindow),
-          openReaderTagPicker: (
-            ...args: Parameters<MainWindowControllerApi['openReaderTagPicker']>
-          ) => main.openReaderTagPicker(...args),
-          openReaderCollectionPicker: (
-            ...args: Parameters<MainWindowControllerApi['openReaderCollectionPicker']>
-          ) => main.openReaderCollectionPicker(...args),
+          main,
         },
       },
       reader,
@@ -2468,7 +2466,7 @@ describe('Reader owner picker routing', () => {
     press('f');
     press('t');
     await Promise.resolve();
-    main.executeFromReader('switchTab', 1, null);
+    main.openTabPicker(null);
     expect(first.bodyChildren).toHaveLength(firstBodyCount);
 
     readerSession.dispose();
