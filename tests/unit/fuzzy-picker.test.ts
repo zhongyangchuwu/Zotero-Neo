@@ -546,9 +546,9 @@ describe('command palette provider', () => {
     const item = session.picker.filtered[0];
     const provider = session.picker.provider;
     if (!item || !provider) throw new Error('Expected mounted command provider');
-    expect(item.title).toBe('主窗口：打开所选条目的 PDF');
+    expect(item.title).toBe('打开主窗口游标条目或 Note 上下文条目');
     expect(item.meta).toBe('未绑定');
-    expect(provider.rowText(item, 0)).toBe('主窗口：打开所选条目的 PDF · 未绑定');
+    expect(provider.rowText(item, 0)).toBe('打开主窗口游标条目或 Note 上下文条目 · 未绑定');
     const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
     if (!input) throw new Error('Expected mounted picker input');
     input.value = '未绑定';
