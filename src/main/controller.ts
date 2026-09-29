@@ -640,6 +640,15 @@ export class MainWindowController implements MainWindowControllerApi {
       );
       return true;
     }
+    if (action === 'mainOpenPDF') {
+      const targets = noteTargets ?? NOTE_ITEM_TARGET.resolve(window);
+      if (targets.missing || targets.items.length !== 1) {
+        this.#navigation.status(session, '✗ Note item is unavailable');
+        return true;
+      }
+      void this.#navigation.openPDF(window, session, targets.items[0]!);
+      return true;
+    }
     if (!isMainExecutableAction(action)) return false;
     this.execute(action, window, session, count, false, 'note');
     return true;
@@ -813,7 +822,7 @@ export class MainWindowController implements MainWindowControllerApi {
         void this.#navigation.openPDF(
           window,
           session,
-          context === 'main' ? (mainCursorItem(window) ?? null) : undefined,
+          mainCursorItem(window) ?? null,
           beforeMainReadingNavigation,
         );
         break;

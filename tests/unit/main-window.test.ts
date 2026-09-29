@@ -970,6 +970,102 @@ describe('NoteEditor shared binding input', () => {
   });
 });
 
+describe('Note contextual Open', () => {
+  it('opens the Note parent rather than an unrelated Main selected item', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const originalServices = Reflect.get(globalThis, 'Services');
+    const host = pickerMainWindow();
+    const paper = {
+      id: 21,
+      libraryID: 1,
+      isAttachment: () => true,
+      isNote: () => false,
+    } as Zotero.Item;
+    const note = {
+      id: 22,
+      libraryID: 1,
+      parentItemID: paper.id,
+      isAttachment: () => false,
+      isNote: () => true,
+    } as Zotero.Item;
+    const other = { id: 23, libraryID: 1, isAttachment: () => true } as Zotero.Item;
+    const viewAttachment = vi.fn();
+    const editorDocument = {
+      body: { isContentEditable: true },
+      designMode: 'off',
+      head: { append: () => {} },
+      documentElement: { classList: { toggle: () => {} } },
+      getElementById: () => null,
+      createElement: () => ({ id: '', textContent: '' }),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    } as unknown as Document;
+    let noteKeydown: EventListener | undefined;
+    const editorWindow = {
+      document: editorDocument,
+      addEventListener: (name: string, listener: EventListener) => {
+        if (name === 'keydown') noteKeydown = listener;
+      },
+      removeEventListener: () => {},
+    } as unknown as Window;
+    const target = {
+      nodeType: 1,
+      tagName: 'DIV',
+      localName: 'div',
+      isContentEditable: true,
+      parentElement: null,
+      ownerDocument: editorDocument,
+    } as unknown as HTMLElement;
+    Reflect.set(host.window.document, 'activeElement', target);
+    Reflect.set(host.window, 'ZoteroContextPane', {
+      activeEditor: {
+        item: note,
+        contains: (node: unknown) => node === target,
+        _iframe: { contentWindow: editorWindow },
+      },
+    });
+    Reflect.set(host.window, 'ZoteroPane', {
+      getSelectedItems: () => [other],
+      viewAttachment,
+    });
+    Reflect.set(globalThis, 'Zotero', {
+      Items: { get: (id: number) => (id === paper.id ? paper : id === note.id ? note : other) },
+      Reader: { getByTabID: () => null },
+      initialized: false,
+    });
+    Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    try {
+      controller.addWindow(host.window);
+      for (const key of [' ', 'o']) {
+        noteKeydown?.({
+          key,
+          target,
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        } as unknown as Event);
+      }
+      await vi.waitFor(() => expect(viewAttachment).toHaveBeenCalledWith(paper.id));
+      expect(viewAttachment).toHaveBeenCalledTimes(1);
+      expect(viewAttachment).not.toHaveBeenCalledWith(other.id);
+    } finally {
+      controller.shutdown();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+      if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+      else Reflect.set(globalThis, 'Services', originalServices);
+    }
+  });
+});
+
 describe('Main startup focus handoff', () => {
   it('marks the explicit Space-f-q Quick Search focus as intentional', () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');

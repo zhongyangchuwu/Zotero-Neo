@@ -2,6 +2,12 @@
 
 All notable changes to Zotero Neo are documented here.
 
+## [Unreleased]
+
+### Changed
+
+- Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
+
 ## [0.1.0] - 2026-09-19
 
 ### Added
