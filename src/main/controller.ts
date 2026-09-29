@@ -783,8 +783,16 @@ export class MainWindowController implements MainWindowControllerApi {
         const currentTarget = this.#itemSelect.isVisual(window)
           ? this.#itemSelect.currentTarget(window)
           : undefined;
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
-        void this.#navigation.trashSelectedItems(window, session, currentTarget);
+        void this.#navigation
+          .trashSelectedItems(window, session, currentTarget, this.keyGuideLanguage())
+          .then((trashed) => {
+            if (
+              trashed &&
+              currentTarget?.source === 'visual' &&
+              this.#sessions.get(window) === session
+            )
+              this.#itemSelect.cancel(window, session.selection);
+          });
         break;
       }
       case 'mainRestoreTrashedItems':

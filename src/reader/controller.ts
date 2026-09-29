@@ -28,7 +28,9 @@ import {
   bindingMatchesInputPrefix,
 } from '../input/key-sequence';
 import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
+import { t } from '../i18n';
 import { copyCitekeys } from '../operations/citekeys';
+import { deleteAnnotation as deleteReaderAnnotation } from '../operations/delete-annotation';
 import { isReaderDelegableMainAction } from '../main/action-capabilities';
 import {
   READER_NORMAL_ACTIONS,
@@ -1892,15 +1894,43 @@ export class ReaderSession {
   }
 
   private async deleteAnnotation(): Promise<void> {
+    const language = this.keyGuideLanguage();
     const target = this.selectedAnnotation();
     if (!target?.eraseTx) {
       this.showStatus('✗ navigate first with [ / ]', 2000);
       return;
     }
-    this.#dependencies.reader._internalReader?.setSelectedAnnotations?.([]);
-    this.#annotationNavigation.clearAnnotation();
-    await target.eraseTx();
-    this.showStatus('✓ annotation deleted', 1500);
+    const window = this.#dependencies.reader._window;
+    if (!window) {
+      this.showStatus(`✗ ${t('status.readerAnnotationDeleteUnconfirmable', language)}`, 2000);
+      return;
+    }
+    const summary = t('target.readerAnnotation', language);
+    try {
+      const prompt = t('confirm.readerAnnotationDelete', language).replace('{target}', summary);
+      if (!window.confirm(prompt)) {
+        this.showStatus(
+          `→ ${t('status.destructiveCancelled', language).replace('{target}', summary)}`,
+          2000,
+        );
+        return;
+      }
+      await deleteReaderAnnotation(target);
+      this.#dependencies.reader._internalReader?.setSelectedAnnotations?.([]);
+      this.#annotationNavigation.clearAnnotation();
+      this.showStatus(
+        `✓ ${t('status.readerAnnotationDeleteComplete', language).replace('{target}', summary)}`,
+        1500,
+      );
+    } catch (error) {
+      this.#dependencies.controller.dependencies.logger.debug(
+        `delete Reader annotation failed: ${String(error)}`,
+      );
+      this.showStatus(
+        `✗ ${t('status.readerAnnotationDeleteFailed', language).replace('{target}', summary)}`,
+        2000,
+      );
+    }
   }
 
   private async recolorAnnotation(color: AnnotationColor): Promise<void> {
