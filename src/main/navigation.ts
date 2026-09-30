@@ -205,6 +205,12 @@ export class MainNavigation {
       panel === 'collections'
         ? mainHost(window).ZoteroPane?.collectionsView
         : mainHost(window).ZoteroPane?.itemsView;
+    // Capture the cursor before tree focus, which may reset TreeSelection.focused to row zero.
+    const scopeCursor = panel === 'collections' ? mainScopeCursorRow(window) : undefined;
+    const selectedScopeRows = panel === 'collections' ? mainScopeSelectedRows(window) : [];
+    const leavingItems = panel === 'collections' && this.itemPaneContainsFocus(window);
+    const hasScopeSelection =
+      panel === 'collections' && (selectedScopeRows.length > 0 || !!view?.selection?.count);
     const fallback = window.document.querySelector(
       panel === 'collections'
         ? '#collection-tree,#zotero-collections-tree .virtualized-table,#zotero-collections-tree'
@@ -215,7 +221,17 @@ export class MainNavigation {
     focusTarget?.focus?.();
     view?.focus?.();
     session.activePanel = panel;
-    this.ensureSelection(view);
+    // Restore only the cursor so the selected ScopeSet, including multi-selection, is retained.
+    if (hasScopeSelection) {
+      const cursor =
+        leavingItems && selectedScopeRows.length === 1
+          ? selectedScopeRows[0]
+          : scopeCursor !== undefined && Number.isInteger(scopeCursor) && scopeCursor >= 0
+            ? scopeCursor
+            : selectedScopeRows[0];
+      if (cursor !== undefined && view?.selection?.focused !== cursor)
+        moveMainScopeCursor(window, cursor);
+    } else this.ensureSelection(view);
     return true;
   }
 
@@ -529,6 +545,10 @@ export class MainNavigation {
     } else this.focusPanel(window, session, 'items');
   }
   collapseTree(window: MainWindow, session: MainWindowSession): void {
+    if (this.itemPaneContainsFocus(window)) {
+      this.focusPanel(window, session, 'collections');
+      return;
+    }
     const view = this.collections(window, session);
     const row = this.row(view);
     if (!view || row < 0) return;

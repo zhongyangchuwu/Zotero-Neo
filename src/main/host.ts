@@ -1,3 +1,4 @@
+import type { SelectLibraryItemResult } from '../operations/show-in-library';
 import type { MainWindow } from '../core/contracts';
 import type { TreeView } from './navigation';
 import type { ItemRef } from './selection-store';
@@ -50,9 +51,9 @@ type MainPane = {
     setFilter?(type: 'tags' | 'search', value: ReadonlySet<string> | string): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
+  selectItem?(id: number): SelectLibraryItemResult;
   toggleAdvancedSearchState?(state: 'open' | 'collapsed' | 'closed'): Promise<void> | void;
   openAdvancedSearchFromQuickSearch?(text: string, mode?: string): Promise<void> | void;
-  selectItem?(id: number): Promise<void> | void;
   viewAttachment?(id: number): void;
   openNote?(id: number, options?: { openInWindow: boolean }): Promise<void> | void;
   loadURI?(uri: string): void;
@@ -62,7 +63,6 @@ type MainPane = {
     selectedTags?: Set<string>;
   } | null;
 };
-
 type MainQuickSearch = HTMLElement & {
   searchTextbox?: {
     value?: string;

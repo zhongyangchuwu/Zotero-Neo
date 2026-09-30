@@ -1,3 +1,4 @@
+import { showItemInLibrary, type ShowInLibraryHost } from '../operations/show-in-library';
 import type { MainWindow } from '../core/contracts';
 import type { Logger } from '../core/logging';
 import type { MainNavigation } from './navigation';
@@ -12,6 +13,16 @@ import {
   selectMainTab,
 } from './host';
 import type { MainViewActions } from './view-actions';
+
+type LibrarySelectionQueue = {
+  latestRequest: number;
+  tail: Promise<void>;
+};
+
+interface LibrarySelectionRequest {
+  readonly result: Promise<boolean>;
+  isCurrent(): boolean;
+}
 
 export interface MainReturnBookmark {
   readonly scopeIDs: readonly string[];
@@ -33,6 +44,7 @@ export class MainReturnContext {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
   readonly #viewActions: MainViewActions;
+  readonly #librarySelections = new WeakMap<MainWindowSession, LibrarySelectionQueue>();
 
   constructor(logger: Logger, navigation: MainNavigation, viewActions: MainViewActions) {
     this.#logger = logger;
@@ -41,8 +53,40 @@ export class MainReturnContext {
   }
 
   capture(window: MainWindow, session: MainWindowSession): MainReturnBookmark {
+    const bookmark = this.snapshot(window, session);
+    session.returnBookmark = bookmark;
+    return bookmark;
+  }
+
+  /** Serialize host item changes per Main session and commit Return only after success. */
+  requestLibrarySelection(
+    window: MainWindow,
+    session: MainWindowSession,
+    itemID: number,
+    host: ShowInLibraryHost | undefined,
+    captureReturnContext = true,
+  ): LibrarySelectionRequest {
+    const existing = this.#librarySelections.get(session);
+    const queue = existing ?? { latestRequest: 0, tail: Promise.resolve() };
+    if (!existing) this.#librarySelections.set(session, queue);
+    const bookmark = captureReturnContext ? this.snapshot(window, session) : null;
+    const requestID = ++queue.latestRequest;
+    const result = queue.tail.then(async () => {
+      if (queue.latestRequest !== requestID) return false;
+      await showItemInLibrary(itemID, host);
+      if (bookmark) session.returnBookmark = bookmark;
+      return true;
+    });
+    queue.tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return { result, isCurrent: () => queue.latestRequest === requestID };
+  }
+
+  private snapshot(window: MainWindow, session: MainWindowSession): MainReturnBookmark {
     const view = this.#viewActions.state(window);
-    const bookmark: MainReturnBookmark = {
+    return {
       scopeIDs: mainScopeSelectedIDs(window),
       quickSearchText: view.quickSearchText,
       tags: [...view.tags],
@@ -51,8 +95,6 @@ export class MainReturnContext {
       panel: this.#navigation.panel(window, session),
       tabID: selectedMainTabID(window),
     };
-    session.returnBookmark = bookmark;
-    return bookmark;
   }
 
   async restore(window: MainWindow, session: MainWindowSession): Promise<boolean> {

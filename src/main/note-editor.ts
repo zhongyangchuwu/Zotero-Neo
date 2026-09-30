@@ -121,13 +121,25 @@ export class NoteEditor {
 
   clear(session: MainWindowSession): void {
     const { editorWindow, editorDocument, handler } = session.note;
+    const mode = session.note.mode;
     if (editorWindow && handler) editorWindow.removeEventListener('keydown', handler, true);
     if (editorDocument && handler) editorDocument.removeEventListener('keydown', handler, true);
     session.note.resetInteraction();
+    if (editorDocument && mode !== 'normal') this.style(editorDocument, 'normal');
     session.note.editorWindow = null;
     session.note.editorDocument = null;
     session.note.handler = null;
     this.#leaderGuide.clear(session.window, session);
+  }
+
+  deactivateInteraction(main: MainWindow, session: MainWindowSession): void {
+    const editorDocument = session.note.editorDocument;
+    const mode = session.note.mode;
+    const hasPendingInput =
+      session.note.input.keyBuffer !== '' || session.note.input.countBuffer !== '';
+    session.note.deactivateInteraction();
+    if (editorDocument && mode !== 'normal') this.style(editorDocument, 'normal');
+    if (hasPendingInput) this.#leaderGuide.clear(main, session);
   }
 
   activeBindings(session: MainWindowSession): {
@@ -244,7 +256,8 @@ export class NoteEditor {
     if (action === 'noteUndo' || action === 'noteRedo') {
       const handled = el.ownerDocument.execCommand(action === 'noteUndo' ? 'undo' : 'redo');
       if (handled) this.style(el.ownerDocument, session.note.mode);
-      return handled;
+      // These Note commands own their keys even when the editor has no history.
+      return true;
     }
 
     const handled = this.command(el, NOTE_COMMAND_BY_ACTION[action], count || 1, session);

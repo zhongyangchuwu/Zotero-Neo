@@ -30,7 +30,6 @@ import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
 import { copyCitekeys } from '../operations/citekeys';
 import { t } from '../i18n';
-import { showItemInLibrary } from '../operations/show-in-library';
 import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
@@ -47,7 +46,7 @@ import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
-import { MainReturnContext, type MainReturnBookmark } from './return-context';
+import { MainReturnContext } from './return-context';
 import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
@@ -239,7 +238,7 @@ export class MainWindowController implements MainWindowControllerApi {
   private syncSurfaceActivation(window: MainWindow, session: MainWindowSession): void {
     const active = resolveActiveSurface(window);
     if (active.kind !== 'main') this.deactivateMainSurface(window, session);
-    if (active.kind !== 'note') session.note.deactivateInteraction();
+    if (active.kind !== 'note') this.#noteEditor.deactivateInteraction(window, session);
     this.#dependencies.reader.deactivateInactive(
       window,
       active.kind === 'reader' ? active.tabID : null,
@@ -791,53 +790,66 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
 
-    const previous = session.returnBookmark;
-    let captured: MainReturnBookmark | null = null;
+    let isCurrent: (() => boolean) | null = null;
     try {
-      captured = this.#returnContext.capture(window, session);
-      await showItemInLibrary(targets.items[0]!, pane);
+      const request = this.#returnContext.requestLibrarySelection(
+        window,
+        session,
+        targets.items[0]!.id,
+        pane,
+      );
+      isCurrent = request.isCurrent;
+      const selected = await request.result;
+      if (selected && request.isCurrent() && this.#sessions.get(window) === session)
+        this.#navigation.status(session, t('status.showInLibraryComplete', language));
     } catch (error) {
-      const stillCurrent = captured
-        ? session.returnBookmark === captured
-        : session.returnBookmark === previous;
-      if (captured && stillCurrent) session.returnBookmark = previous;
       this.#dependencies.logger.debug(`show in library failed: ${String(error)}`);
-      if (stillCurrent && this.#sessions.get(window) === session)
+      if ((!isCurrent || isCurrent()) && this.#sessions.get(window) === session)
         this.#navigation.status(session, t('status.showInLibraryFailed', language));
-      return;
     }
-
-    if (captured && session.returnBookmark === captured && this.#sessions.get(window) === session)
-      this.#navigation.status(session, t('status.showInLibraryComplete', language));
   }
   private openAllItemsPickerForSurface(window: MainWindow, session: MainWindowSession): void {
     void this.#picker.open(window, session, 'all', {
       confirm: async (item) => {
-        this.#returnContext.capture(window, session);
-        await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+        const pane = mainHost(window).ZoteroPane;
+        if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
+        await this.#returnContext.requestLibrarySelection(window, session, Number(item.id), pane)
+          .result;
       },
     });
   }
-
   private openCollectionItemsPickerForSurface(
     window: MainWindow,
     session: MainWindowSession,
   ): void {
     void this.#picker.open(window, session, 'collection', {
       confirm: async (item) => {
-        await mainHost(window).ZoteroPane?.selectItem?.(Number(item.id));
+        const pane = mainHost(window).ZoteroPane;
+        if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
+        await this.#returnContext.requestLibrarySelection(
+          window,
+          session,
+          Number(item.id),
+          pane,
+          false,
+        ).result;
       },
     });
   }
-
   private openNotesPickerForSurface(window: MainWindow, session: MainWindowSession): void {
     void this.#picker.open(window, session, 'notes', {
       confirm: async (item, openInWindow) => {
         const pane = mainHost(window).ZoteroPane;
+        if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         const id = Number(item.id);
-        this.#returnContext.capture(window, session);
-        await pane?.selectItem?.(id);
-        if (pane?.openNote) await pane.openNote(id, { openInWindow });
+        const selected = await this.#returnContext.requestLibrarySelection(
+          window,
+          session,
+          id,
+          pane,
+        ).result;
+        if (!selected) return;
+        if (pane.openNote) await pane.openNote(id, { openInWindow });
         else await Zotero.Notes.open(id, null, { openInWindow });
       },
     });
@@ -953,15 +965,13 @@ export class MainWindowController implements MainWindowControllerApi {
         const currentTarget = this.#itemSelect.isVisual(window)
           ? this.#itemSelect.currentTarget(window)
           : undefined;
+        const visualRevision =
+          currentTarget?.source === 'visual' ? this.#itemSelect.visualRevision(window) : null;
         void this.#navigation
           .trashSelectedItems(window, session, currentTarget, this.keyGuideLanguage())
           .then((trashed) => {
-            if (
-              trashed &&
-              currentTarget?.source === 'visual' &&
-              this.#sessions.get(window) === session
-            )
-              this.#itemSelect.cancel(window, session.selection);
+            if (trashed && visualRevision !== null && this.#sessions.get(window) === session)
+              this.#itemSelect.cancelIfVisualRevision(window, visualRevision, session.selection);
           });
         break;
       }

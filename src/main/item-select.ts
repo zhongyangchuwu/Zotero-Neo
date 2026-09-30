@@ -40,6 +40,7 @@ type VisualState = {
   readonly anchor: ItemRef;
   readonly head: ItemRef;
   readonly range: MainVisualRange | undefined;
+  readonly revision: number;
 };
 
 function containsTarget(root: unknown, node: unknown): boolean {
@@ -87,6 +88,7 @@ export class MainItemSelect {
   readonly #logger: Logger;
   readonly #ui = new Map<MainWindow, ItemSelectUi>();
   readonly #visual = new Map<MainWindow, VisualState>();
+  #nextVisualRevision = 0;
   readonly #decoration = new MainItemStateDecoration();
 
   constructor(logger: Logger) {
@@ -145,7 +147,15 @@ export class MainItemSelect {
     const visual = this.#visual.get(window);
     if (visual) {
       const range = this.resolveVisualRange(window, visual.anchor, visual.head);
-      this.#visual.set(window, { ...visual, range });
+      const changed =
+        range?.first !== visual.range?.first ||
+        range?.last !== visual.range?.last ||
+        range?.count !== visual.range?.count;
+      this.#visual.set(window, {
+        ...visual,
+        range,
+        revision: changed ? ++this.#nextVisualRevision : visual.revision,
+      });
       this.showMode(window, range?.count ?? 0, selection);
       return;
     }
@@ -169,6 +179,15 @@ export class MainItemSelect {
     const visual = this.#visual.get(window);
     if (visual) return { source: 'visual', refs: this.visualRefs(window, visual) };
     return resolveMainCurrentTarget(window);
+  }
+  visualRevision(window: MainWindow): number | null {
+    return this.#visual.get(window)?.revision ?? null;
+  }
+
+  cancelIfVisualRevision(window: MainWindow, revision: number, selection: SelectionStore): boolean {
+    if (this.#visual.get(window)?.revision !== revision) return false;
+    this.cancel(window, selection);
+    return true;
   }
 
   hasCancelableTarget(window: MainWindow): boolean {
@@ -234,7 +253,12 @@ export class MainItemSelect {
       return 'unavailable';
     }
 
-    this.#visual.set(window, { anchor: cursor, head: cursor, range });
+    this.#visual.set(window, {
+      anchor: cursor,
+      head: cursor,
+      range,
+      revision: ++this.#nextVisualRevision,
+    });
     this.#decoration.refresh(window);
     this.showMode(window, range.count, selection);
     this.#logger.debug(`main visual entered item=${cursor.itemID}`);
@@ -267,7 +291,12 @@ export class MainItemSelect {
       this.cancel(window, selection);
       return;
     }
-    const nextState = { anchor: state.anchor, head, range };
+    const nextState = {
+      anchor: state.anchor,
+      head,
+      range,
+      revision: ++this.#nextVisualRevision,
+    };
     if (!selectMainItemCursorAnchor(window, next, shouldDebounce)) {
       this.cancel(window, selection);
       return;
@@ -287,7 +316,12 @@ export class MainItemSelect {
       this.cancel(window, selection);
       return;
     }
-    const nextState = { anchor: state.head, head: state.anchor, range };
+    const nextState = {
+      anchor: state.head,
+      head: state.anchor,
+      range,
+      revision: ++this.#nextVisualRevision,
+    };
     const headRow = mainItemRowForRef(window, nextState.head);
     if (headRow === undefined || !selectMainItemCursorAnchor(window, headRow)) {
       this.cancel(window, selection);

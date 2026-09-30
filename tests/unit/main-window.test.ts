@@ -281,6 +281,120 @@ function pickerMainWindow(): {
 }
 
 describe('current Zotero collection APIs', () => {
+  function focusHarness(
+    initialFocused: number | undefined,
+    initialSelection: readonly number[],
+    inItems = false,
+  ) {
+    let focused = initialFocused;
+    const selected = new Set(initialSelection);
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected.clear();
+      selected.add(index);
+    });
+    const moveFocused = vi.fn((index: number) => {
+      focused = index;
+    });
+    const collectionTree = {
+      focus: () => {
+        focused = 0;
+      },
+      _onSelection: moveFocused,
+    };
+    const view: TreeView = {
+      tree: collectionTree,
+      rowCount: 6,
+      selection: {
+        get count() {
+          return selected.size;
+        },
+        get focused() {
+          return focused;
+        },
+        selected,
+        select,
+      },
+      getRow: vi.fn().mockReturnValue({ id: 'row' }),
+      isContainer: vi.fn().mockReturnValue(true),
+      isContainerOpen: vi.fn().mockReturnValue(true),
+      toggleOpenState: vi.fn(),
+      ensureRowIsVisible: vi.fn(),
+    };
+    const document = {
+      activeElement: inItems ? ({ id: 'item-tree-main-default' } as Element) : null,
+      getElementById: vi.fn(),
+      querySelector: vi.fn(),
+    } as unknown as Document;
+    const window = {
+      document,
+      ZoteroPane: { collectionsView: view },
+      setTimeout: vi.fn().mockReturnValue(1),
+      clearTimeout: vi.fn(),
+    } as unknown as MainWindow;
+    const session = {
+      activePanel: 'items',
+      window,
+      status: { textContent: '', style: {} },
+      cleanup: { add: vi.fn() },
+    } as unknown as MainWindowSession;
+
+    return {
+      window,
+      session,
+      navigation: new MainNavigation(logger, vi.fn()),
+      selected,
+      select,
+      moveFocused,
+      view,
+    };
+  }
+
+  it('moves h from items to the selected collection without collapsing it', () => {
+    const h = focusHarness(0, [4], true);
+
+    h.navigation.collapseTree(h.window, h.session);
+
+    expect(h.view.toggleOpenState).not.toHaveBeenCalled();
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([4]);
+    expect(h.select).not.toHaveBeenCalled();
+    expect(h.moveFocused).toHaveBeenCalledWith(4, false, false, true, false);
+    expect(h.session.activePanel).toBe('collections');
+  });
+
+  it('collapses the focused collection only when h starts in the collection tree', () => {
+    const h = focusHarness(4, [4]);
+
+    h.navigation.collapseTree(h.window, h.session);
+
+    expect(h.view.toggleOpenState).toHaveBeenCalledWith(4);
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([4]);
+  });
+
+  it('restores a multi-scope collection cursor without changing the selected scopes', () => {
+    const h = focusHarness(4, [1, 2]);
+
+    h.navigation.focusPanel(h.window, h.session, 'collections');
+
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([1, 2]);
+    expect(h.select).not.toHaveBeenCalled();
+    expect(h.moveFocused).toHaveBeenCalledWith(4, false, false, true, false);
+  });
+
+  it('uses the first collection row as the safe focus fallback without a selection', () => {
+    const h = focusHarness(undefined, []);
+
+    h.navigation.focusPanel(h.window, h.session, 'collections');
+
+    expect(h.select).toHaveBeenCalledWith(0);
+    expect([...h.selected]).toEqual([0]);
+    expect(h.view.selection?.focused).toBe(0);
+    expect(h.view.ensureRowIsVisible).toHaveBeenCalledWith(0);
+  });
+
   it('uses plural collection selection methods for object and ID lookup', () => {
     const collection = { id: 42 } as Zotero.Collection;
     const view = {
@@ -2562,7 +2676,7 @@ describe('Reader Show in Library and owner routing', () => {
 });
 
 describe('Show in Library return bookmark ownership', () => {
-  it('does not let an earlier failed select overwrite a newer return context', async () => {
+  it('treats a false host result as failure without replacing Return', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const host = pickerMainWindow();
     const item = {
@@ -2571,15 +2685,8 @@ describe('Show in Library return bookmark ownership', () => {
       isAttachment: () => false,
       isNote: () => false,
     } as Zotero.Item;
-    const pending: { resolve: () => void; reject: (error: Error) => void }[] = [];
-    const selectItem = vi.fn(
-      () =>
-        new Promise<void>((resolve, reject) => {
-          pending.push({ resolve, reject });
-        }),
-    );
-    const tabs = { selectedID: 'context-before-a', _tabs: [] as { id: string }[] };
-    Reflect.set(host.window, 'Zotero_Tabs', tabs);
+    const selectItem = vi.fn(async (_id: number) => false);
+    Reflect.set(host.window, 'Zotero_Tabs', { selectedID: 'context-before', _tabs: [] });
     Reflect.set(host.window, 'ZoteroPane', { selectItem, getSelectedItems: () => [] });
     Reflect.set(globalThis, 'Zotero', {
       Items: { get: (id: number) => (id === item.id ? item : false) },
@@ -2608,26 +2715,195 @@ describe('Show in Library return bookmark ownership', () => {
 
     try {
       controller.addWindow(host.window);
-      const targets = { source: 'reader' as const, items: [item], total: 1, missing: 0 };
-      controller.showReaderItemInLibrary(host.window, targets);
-      tabs.selectedID = 'context-before-b';
-      controller.showReaderItemInLibrary(host.window, targets);
-      expect(pending).toHaveLength(2);
-
-      pending[1]!.resolve();
-      await vi.waitFor(() => expect(messages).toContain('Shown in Library'));
-      pending[0]!.reject(new Error('older selection failed'));
-      await vi.waitFor(() =>
-        expect(debug).toHaveBeenCalledWith(expect.stringContaining('show in library failed')),
-      );
+      controller.showReaderItemInLibrary(host.window, {
+        source: 'reader',
+        items: [item],
+        total: 1,
+        missing: 0,
+      });
+      await vi.waitFor(() => expect(messages).toContain('Unable to show item in Library'));
 
       controller.restoreReturnContext(host.window);
-      expect(restored.bookmark?.tabID).toBe('context-before-b');
-      expect(messages).not.toContain('Unable to show item in Library');
+      await vi.waitFor(() => expect(restored.bookmark).toBeNull());
+      expect(selectItem).toHaveBeenCalledWith(item.id);
+      expect(messages).not.toContain('Shown in Library');
+      expect(debug).toHaveBeenCalledWith(expect.stringContaining('Library item selection failed'));
     } finally {
       controller.shutdown();
       status.mockRestore();
       restore.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
+
+  it('preserves the last valid bookmark when two overlapping reveals fail', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const host = pickerMainWindow();
+    const previousItem = { id: 90, libraryID: 1 } as Zotero.Item;
+    const first = { id: 91, libraryID: 1 } as Zotero.Item;
+    const second = { id: 92, libraryID: 1 } as Zotero.Item;
+    const pending: {
+      readonly itemID: number;
+      resolve(value: boolean): void;
+      reject(error: Error): void;
+    }[] = [];
+    const selectItem = vi.fn(
+      (itemID: number) =>
+        new Promise<boolean>((resolve, reject) => pending.push({ itemID, resolve, reject })),
+    );
+    const tabs = { selectedID: 'context-before-valid', _tabs: [] as { id: string }[] };
+    Reflect.set(host.window, 'Zotero_Tabs', tabs);
+    Reflect.set(host.window, 'ZoteroPane', { selectItem, getSelectedItems: () => [] });
+    Reflect.set(globalThis, 'Zotero', {
+      Items: {
+        get: (id: number) =>
+          [previousItem, first, second].find((candidate) => candidate.id === id) ?? false,
+      },
+      Reader: { getByTabID: () => null },
+      locale: 'en-US',
+      initialized: false,
+    });
+
+    const debug = vi.fn();
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger: { debug, diagnostic: () => {} },
+      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+    const messages: string[] = [];
+    const status = vi.spyOn(MainNavigation.prototype, 'status').mockImplementation((_, message) => {
+      messages.push(message);
+    });
+    const restored: { bookmark: MainWindowSession['returnBookmark'] } = { bookmark: null };
+    const restore = vi
+      .spyOn(MainReturnContext.prototype, 'restore')
+      .mockImplementation(async (_window, session) => {
+        restored.bookmark = session.returnBookmark;
+        return true;
+      });
+
+    try {
+      controller.addWindow(host.window);
+      controller.showReaderItemInLibrary(host.window, {
+        source: 'reader',
+        items: [previousItem],
+        total: 1,
+        missing: 0,
+      });
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+      pending[0]!.resolve(true);
+      await vi.waitFor(() => expect(messages).toContain('Shown in Library'));
+      controller.restoreReturnContext(host.window);
+      await vi.waitFor(() => expect(restored.bookmark?.tabID).toBe('context-before-valid'));
+      const validBookmark = restored.bookmark;
+
+      tabs.selectedID = 'context-before-first';
+      controller.showReaderItemInLibrary(host.window, {
+        source: 'reader',
+        items: [first],
+        total: 1,
+        missing: 0,
+      });
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
+      tabs.selectedID = 'context-before-second';
+      controller.showReaderItemInLibrary(host.window, {
+        source: 'reader',
+        items: [second],
+        total: 1,
+        missing: 0,
+      });
+      expect(pending).toHaveLength(2);
+
+      pending[1]!.reject(new Error('first selection failed'));
+      await vi.waitFor(() => expect(pending).toHaveLength(3));
+      pending[2]!.reject(new Error('second selection failed'));
+      await vi.waitFor(() =>
+        expect(
+          messages.filter((message) => message === 'Unable to show item in Library'),
+        ).toHaveLength(1),
+      );
+
+      restored.bookmark = null;
+      controller.restoreReturnContext(host.window);
+      await vi.waitFor(() => expect(restored.bookmark).toBe(validBookmark));
+      expect(pending.map(({ itemID }) => itemID)).toEqual([previousItem.id, first.id, second.id]);
+    } finally {
+      controller.shutdown();
+      status.mockRestore();
+      restore.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
+
+  it('applies the newest overlapping target after earlier host work settles', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const host = pickerMainWindow();
+    const first = { id: 93, libraryID: 1 } as Zotero.Item;
+    const second = { id: 94, libraryID: 1 } as Zotero.Item;
+    const pending: {
+      readonly itemID: number;
+      resolve(value: boolean): void;
+      reject(error: Error): void;
+    }[] = [];
+    let selectedItemID: number | null = null;
+    const selectItem = vi.fn(
+      (itemID: number) =>
+        new Promise<boolean>((resolve, reject) =>
+          pending.push({
+            itemID,
+            resolve: (selected) => {
+              if (selected) selectedItemID = itemID;
+              resolve(selected);
+            },
+            reject,
+          }),
+        ),
+    );
+    const tabs = { selectedID: 'context-before-first', _tabs: [] as { id: string }[] };
+    Reflect.set(host.window, 'Zotero_Tabs', tabs);
+    Reflect.set(host.window, 'ZoteroPane', { selectItem, getSelectedItems: () => [] });
+    Reflect.set(globalThis, 'Zotero', {
+      Items: {
+        get: (id: number) => [first, second].find((candidate) => candidate.id === id) ?? false,
+      },
+      Reader: { getByTabID: () => null },
+      locale: 'en-US',
+      initialized: false,
+    });
+
+    const controller = createMainWindowController({
+      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      logger,
+      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+    } as MainWindowControllerDependencies);
+
+    try {
+      controller.addWindow(host.window);
+      controller.showReaderItemInLibrary(host.window, {
+        source: 'reader',
+        items: [first],
+        total: 1,
+        missing: 0,
+      });
+      await vi.waitFor(() => expect(pending).toHaveLength(1));
+      tabs.selectedID = 'context-before-second';
+      controller.showReaderItemInLibrary(host.window, {
+        source: 'reader',
+        items: [second],
+        total: 1,
+        missing: 0,
+      });
+      expect(pending.map(({ itemID }) => itemID)).toEqual([first.id]);
+
+      pending[0]!.resolve(true);
+      await vi.waitFor(() => expect(pending).toHaveLength(2));
+      pending[1]!.resolve(true);
+      await vi.waitFor(() => expect(selectedItemID).toBe(second.id));
+      expect(pending.map(({ itemID }) => itemID)).toEqual([first.id, second.id]);
+    } finally {
+      controller.shutdown();
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
     }
