@@ -300,7 +300,7 @@ function createHistorySession(
   } as unknown as PdfWindow;
   document.defaultView = pdfWindow;
   const readerWindow = { document } as unknown as Window;
-  const cloneInto = vi.fn(<T>(value: T) => value);
+  const cloneInto = vi.fn(<T>(value: T, _targetWindow?: Window) => value);
   Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: pdfWindow } });
   const confirm = vi.fn(() => true);
@@ -1045,8 +1045,11 @@ describe('Reader annotation deletion safety', () => {
       if (fail) throw new Error('blocked');
     });
     const annotation = { key: 'ANN-1', annotationType: 'highlight', eraseTx };
-    const item = { getAnnotations: () => [annotation] };
-    const clearHostSelection = vi.fn(() => events.push('clear'));
+    const annotations = [annotation];
+    const item = { getAnnotations: () => annotations };
+    const clearHostSelection = vi.fn((keys: readonly string[]) => {
+      events.push(keys.length ? 'select' : 'clear');
+    });
     const created = createHistorySession({
       _state: { selectedAnnotationIDs: [annotation.key] },
       setSelectedAnnotations: clearHostSelection,
@@ -1057,7 +1060,7 @@ describe('Reader annotation deletion safety', () => {
       locale: hostLocale,
       Items: { get: (id: number) => (id === 41 ? item : false) },
     });
-    return { created, annotation, eraseTx, events, clearHostSelection };
+    return { created, annotation, annotations, eraseTx, events, clearHostSelection };
   }
 
   function pressDelete(session: ReaderSession): void {
@@ -1093,8 +1096,17 @@ describe('Reader annotation deletion safety', () => {
     h.created.session.dispose();
   });
 
-  it('clears Reader selection only after confirmed deletion succeeds', async () => {
+  it('clears Reader selection through the cloned host seam after confirmed deletion', async () => {
     const h = createDeletion(true);
+    const clonedEmptySelection: readonly string[] = [];
+    h.created.cloneInto.mockImplementation(<T>(value: T): T => {
+      if (Array.isArray(value) && value.length === 0) return clonedEmptySelection as T;
+      return value;
+    });
+    h.clearHostSelection.mockImplementation((keys) => {
+      h.events.push('clear');
+      if (keys !== clonedEmptySelection) throw new Error('host rejected an un-cloned array');
+    });
 
     pressDelete(h.created.session);
     await vi.waitFor(() =>
@@ -1103,13 +1115,94 @@ describe('Reader annotation deletion safety', () => {
 
     expect(h.created.confirm).toHaveBeenCalledOnce();
     expect(h.events).toEqual(['erase', 'clear']);
-    expect(h.clearHostSelection).toHaveBeenCalledWith([]);
+    expect(h.created.cloneInto).toHaveBeenCalledWith([], h.created.readerWindow);
+    expect(h.clearHostSelection).toHaveBeenCalledOnce();
+    expect(h.clearHostSelection.mock.calls[0]?.[0]).toBe(clonedEmptySelection);
+    h.created.session.dispose();
+  });
+
+  it('keeps permanent deletion successful when host selection cleanup throws', async () => {
+    const h = createDeletion(true);
+    h.clearHostSelection.mockImplementation(() => {
+      h.events.push('clear');
+      throw new Error('host selection cleanup rejected');
+    });
+
+    pressDelete(h.created.session);
+    await vi.waitFor(() =>
+      expect(h.created.indicator.textContent).toBe('✓ Deleted Reader annotation · 1'),
+    );
+
+    expect(h.events).toEqual(['erase', 'clear']);
+    expect(h.created.debug).not.toContain(
+      'delete Reader annotation failed: Error: host selection cleanup rejected',
+    );
+    h.created.session.dispose();
+  });
+
+  it('preserves a newer Zotero-selected annotation when deletion is pending', async () => {
+    const h = createDeletion(true);
+    const newerAnnotation = { ...h.annotation, key: 'ANN-2' };
+    h.annotations.push(newerAnnotation);
+    let finishErase!: () => void;
+    h.eraseTx.mockImplementation(() => {
+      h.events.push('erase');
+      return new Promise<void>((resolve) => {
+        finishErase = () => resolve();
+      });
+    });
+
+    pressDelete(h.created.session);
+    const state = h.created.reader._internalReader?._state;
+    if (!state) throw new Error('Expected Reader selection state');
+    Reflect.set(state, 'selectedAnnotationIDs', [newerAnnotation.key]);
+    finishErase();
+
+    await vi.waitFor(() =>
+      expect(h.created.indicator.textContent).toBe('✓ Deleted Reader annotation · 1'),
+    );
+
+    expect(h.clearHostSelection).not.toHaveBeenCalled();
+    expect(state.selectedAnnotationIDs).toEqual([newerAnnotation.key]);
+    h.created.session.dispose();
+  });
+
+  it('preserves a newer Neo fallback annotation when deletion is pending', async () => {
+    const h = createDeletion(true);
+    const newerAnnotation = { ...h.annotation, key: 'ANN-2' };
+    h.annotations.push(newerAnnotation);
+    const state = h.created.reader._internalReader?._state;
+    if (!state) throw new Error('Expected Reader selection state');
+    h.created.session.focusAndHandle(readerKey('[').event);
+    Reflect.set(state, 'selectedAnnotationIDs', []);
+    h.created.session.focusAndHandle(readerKey(']').event);
+    expect(h.clearHostSelection).toHaveBeenLastCalledWith([h.annotation.key]);
+
+    let finishErase!: () => void;
+    h.eraseTx.mockImplementation(() => {
+      h.events.push('erase');
+      return new Promise<void>((resolve) => {
+        finishErase = () => resolve();
+      });
+    });
+    pressDelete(h.created.session);
+    h.created.session.focusAndHandle(readerKey(']').event);
+    expect(h.clearHostSelection).toHaveBeenLastCalledWith([newerAnnotation.key]);
+    const callsAfterSelectingNewer = h.clearHostSelection.mock.calls.length;
+    finishErase();
+
+    await vi.waitFor(() =>
+      expect(h.created.indicator.textContent).toBe('✓ Deleted Reader annotation · 1'),
+    );
+
+    expect(h.clearHostSelection).toHaveBeenCalledTimes(callsAfterSelectingNewer);
+    h.created.session.focusAndHandle(readerKey('[').event);
+    expect(h.clearHostSelection).toHaveBeenLastCalledWith([h.annotation.key]);
     h.created.session.dispose();
   });
 
   it('preserves Reader selection if Zotero rejects annotation deletion', async () => {
     const h = createDeletion(true, true);
-
     pressDelete(h.created.session);
     await vi.waitFor(() =>
       expect(h.created.indicator.textContent).toBe('✗ Unable to delete Reader annotation · 1'),

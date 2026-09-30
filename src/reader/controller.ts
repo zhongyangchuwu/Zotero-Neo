@@ -1949,8 +1949,18 @@ export class ReaderSession {
         return;
       }
       await deleteReaderAnnotation(target);
-      this.#dependencies.reader._internalReader?.setSelectedAnnotations?.([]);
-      this.#annotationNavigation.clearAnnotation();
+      const reader = this.#dependencies.reader;
+      try {
+        if (this.#annotationNavigation.selectedAnnotationKey(reader) === target.key) {
+          const internal = reader._internalReader;
+          const readerWindow = reader._iframeWindow;
+          if (internal?.setSelectedAnnotations && readerWindow)
+            internal.setSelectedAnnotations(cloneInto([], readerWindow));
+        }
+      } catch {
+        // The permanent erase succeeded; host selection cleanup is best-effort.
+      }
+      this.#annotationNavigation.clearAnnotation(target.key);
       this.showStatus(
         `✓ ${t('status.readerAnnotationDeleteComplete', language).replace('{target}', summary)}`,
         1500,

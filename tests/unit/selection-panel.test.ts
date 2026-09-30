@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { SelectionPanel, selectionPanelEntries } from '../../src/main/selection-panel';
 import { SelectionStore } from '../../src/main/selection-store';
+import { MainNavigation } from '../../src/main/navigation';
+import { MainReturnContext } from '../../src/main/return-context';
+import { MainViewActions } from '../../src/main/view-actions';
 import type { MainWindowSession } from '../../src/main/session';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -41,7 +44,11 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
   });
   const selectItem = vi.fn();
   const window = {
-    document: { activeElement: null },
+    document: {
+      activeElement: null,
+      getElementById: () => null,
+      querySelector: () => null,
+    },
     setTimeout: vi.fn(() => 1),
     clearTimeout: vi.fn(),
     ZoteroPane: {
@@ -72,6 +79,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
   const session = {
     window,
     selection,
+    activePanel: 'items',
     selectionPanel: {
       open: true,
       refs: [...selection.values()],
@@ -88,14 +96,16 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     },
   } as unknown as MainWindowSession;
 
-  const captureReturn = vi.fn();
   const selectionChanged = vi.fn();
   const debug = vi.fn();
-  const panel = new SelectionPanel(
-    { debug },
-    { capture: captureReturn } as never,
-    selectionChanged,
+  const logger = { debug, diagnostic: vi.fn() };
+  const navigation = new MainNavigation(logger, () => {});
+  const returnContext = new MainReturnContext(
+    logger,
+    navigation,
+    new MainViewActions(logger, navigation),
   );
+  const panel = new SelectionPanel({ debug }, returnContext, selectionChanged);
   const key = (value: string): KeyboardEvent =>
     ({
       key: value,
@@ -113,7 +123,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     toggleSelect,
     moveFocused,
     selectItem,
-    captureReturn,
+    returnContext,
     selectionChanged,
     debug,
     key,
@@ -189,63 +199,135 @@ describe('Selection Panel', () => {
     expect(h.selectionChanged).not.toHaveBeenCalled();
   });
 
-  it('reveals the current member explicitly and closes the panel', () => {
+  it('keeps the panel open until reveal succeeds without stealing Library focus', async () => {
     const selected = item(7);
     const h = harness([selected], []);
-
-    h.panel.handleKey(h.key('Enter'), h.window, h.session);
-
-    expect(h.captureReturn).toHaveBeenCalledWith(h.window, h.session);
-    expect(h.selectItem).toHaveBeenCalledWith(7);
-    expect(h.session.selectionPanel.open).toBe(false);
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 7 }]);
-  });
-
-  it('restores the previous return bookmark when Zotero rejects a reveal', async () => {
-    const selected = item(8);
-    const h = harness([selected], []);
-    const previous = { bookmark: 'previous' };
-    const captured = { bookmark: 'captured' };
-    Reflect.set(h.session, 'returnBookmark', previous);
-    h.captureReturn.mockImplementation(() => {
-      Reflect.set(h.session, 'returnBookmark', captured);
-      return captured as never;
-    });
-    h.selectItem.mockRejectedValueOnce(new Error('selection failed'));
-
-    h.panel.handleKey(h.key('Enter'), h.window, h.session);
-    await vi.waitFor(() => expect(Reflect.get(h.session, 'returnBookmark')).toBe(previous));
-
-    expect(h.selectItem).toHaveBeenCalledWith(selected.id);
-    expect(h.session.selectionPanel.open).toBe(false);
-  });
-
-  it('does not let a late reveal failure erase a newer return bookmark', async () => {
-    const selected = item(9);
-    const h = harness([selected], []);
-    const previous = { bookmark: 'previous' };
-    const captured = { bookmark: 'captured' };
-    const newer = { bookmark: 'newer' };
-    Reflect.set(h.session, 'returnBookmark', previous);
-    h.captureReturn.mockImplementation(() => {
-      Reflect.set(h.session, 'returnBookmark', captured);
-      return captured as never;
-    });
-    let rejectSelection: (error: Error) => void = () => {};
-    h.selectItem.mockImplementation(
-      () =>
-        new Promise<void>((_resolve, reject) => {
-          rejectSelection = reject;
-        }),
+    const previous = h.returnContext.capture(h.window, h.session);
+    const previousFocus = vi.fn();
+    h.session.selectionPanel.previousElement = {
+      isConnected: true,
+      focus: previousFocus,
+    } as unknown as HTMLElement;
+    let finishSelection!: (selected: boolean) => void;
+    h.selectItem.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (finishSelection = resolve)),
     );
 
     h.panel.handleKey(h.key('Enter'), h.window, h.session);
-    Reflect.set(h.session, 'returnBookmark', newer);
-    rejectSelection(new Error('older selection failed'));
+    await vi.waitFor(() => expect(h.selectItem).toHaveBeenCalledWith(selected.id));
+    expect(h.session.selectionPanel.open).toBe(true);
+    expect(h.session.returnBookmark).toBe(previous);
+    finishSelection(true);
+
+    await vi.waitFor(() => expect(h.session.selectionPanel.open).toBe(false));
+    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 7 }]);
+    expect(h.session.returnBookmark).toMatchObject({ panel: 'items' });
+    expect(previousFocus).not.toHaveBeenCalled();
+  });
+
+  it('treats a false host result as failure and preserves the previous bookmark', async () => {
+    const selected = item(8);
+    const h = harness([selected], []);
+    const previous = h.returnContext.capture(h.window, h.session);
+    const footer = { textContent: '' } as HTMLElement;
+    h.session.selectionPanel.footer = footer;
+    h.selectItem.mockResolvedValueOnce(false);
+
+    h.panel.handleKey(h.key('Enter'), h.window, h.session);
+    await vi.waitFor(() =>
+      expect(h.debug).toHaveBeenCalledWith(
+        expect.stringContaining('Library item selection failed'),
+      ),
+    );
+
+    expect(h.selectItem).toHaveBeenCalledWith(selected.id);
+    expect(h.session.selectionPanel.open).toBe(true);
+    expect(h.session.returnBookmark).toBe(previous);
+    expect(footer.textContent).toContain('Reveal failed');
+  });
+
+  it('keeps the last valid bookmark when a Main reveal and panel reveal both fail', async () => {
+    const first = item(9);
+    const second = item(10);
+    const h = harness([first, second], []);
+    const previous = h.returnContext.capture(h.window, h.session);
+    const pending: {
+      readonly itemID: number;
+      resolve(value: boolean): void;
+      reject(error: Error): void;
+    }[] = [];
+    h.selectItem.mockImplementation(
+      (itemID: number) =>
+        new Promise<boolean>((resolve, reject) => pending.push({ itemID, resolve, reject })),
+    );
+    const older = h.returnContext.requestLibrarySelection(
+      h.window,
+      h.session,
+      first.id,
+      h.window.ZoteroPane,
+    );
+    void older.result.catch(() => undefined);
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+    h.session.selectionPanel.selected = 1;
+    h.panel.handleKey(h.key('Enter'), h.window, h.session);
+    expect(h.session.selectionPanel.open).toBe(true);
+    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id]);
+
+    pending[0]!.reject(new Error('first reveal failed'));
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    pending[1]!.reject(new Error('panel reveal failed'));
     await vi.waitFor(() =>
       expect(h.debug).toHaveBeenCalledWith(expect.stringContaining('Selection reveal failed')),
     );
+    await older.result.catch(() => undefined);
 
-    expect(Reflect.get(h.session, 'returnBookmark')).toBe(newer);
+    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id, second.id]);
+    expect(h.session.returnBookmark).toBe(previous);
+  });
+
+  it('applies the panel item after earlier Main reveal work settles', async () => {
+    const first = item(11);
+    const second = item(12);
+    const h = harness([first, second], []);
+    const previous = h.returnContext.capture(h.window, h.session);
+    const pending: {
+      readonly itemID: number;
+      resolve(value: boolean): void;
+      reject(error: Error): void;
+    }[] = [];
+    let selectedItemID: number | null = null;
+    h.selectItem.mockImplementation(
+      (itemID: number) =>
+        new Promise<boolean>((resolve, reject) =>
+          pending.push({
+            itemID,
+            resolve: (selected) => {
+              if (selected) selectedItemID = itemID;
+              resolve(selected);
+            },
+            reject,
+          }),
+        ),
+    );
+    const older = h.returnContext.requestLibrarySelection(
+      h.window,
+      h.session,
+      first.id,
+      h.window.ZoteroPane,
+    );
+    await vi.waitFor(() => expect(pending).toHaveLength(1));
+
+    h.session.selectionPanel.selected = 1;
+    h.panel.handleKey(h.key('Enter'), h.window, h.session);
+    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id]);
+    pending[0]!.resolve(true);
+    await vi.waitFor(() => expect(pending).toHaveLength(2));
+    pending[1]!.resolve(true);
+    await vi.waitFor(() => expect(selectedItemID).toBe(second.id));
+    await older.result;
+
+    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id, second.id]);
+    expect(h.session.returnBookmark).not.toBe(previous);
   });
 });

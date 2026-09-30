@@ -98,8 +98,8 @@ The old extension-proxy path is intentionally not used for fast iteration:
 runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
 fresh profile, while RDP temporary installation and `reload` both succeeded.
 
-GitHub Actions runs the Linux and Windows builders on pushes and pull requests,
-then uploads separate XPI artifacts. A version tag runs a guarded release job:
+GitHub Actions runs the Linux builder on pushes and pull requests, then uploads
+one Linux-built XPI artifact. A version tag runs a guarded release job:
 `tools/check-release.mjs` requires the tag, manifest version, compatibility
 range, and prepared `updates.json` entry to agree before the Linux-built XPI is
 published. Do not create a release tag until its update-feed entry exists.

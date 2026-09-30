@@ -1,11 +1,10 @@
 import type { MainWindow } from '../core/contracts';
 import { keyString } from '../input/keys';
-import { showItemInLibrary } from '../operations/show-in-library';
 import { THEME_VARS } from '../ui/theme';
 import { mainHost, mainItem, mainItemRowForRef } from './host';
 import type { MainWindowSession } from './session';
-import type { MainReturnBookmark, MainReturnContext } from './return-context';
 import type { ItemRef } from './selection-store';
+import type { MainReturnContext } from './return-context';
 
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -139,7 +138,7 @@ export class SelectionPanel {
     this.refresh(window, session);
   }
 
-  close(session: MainWindowSession): void {
+  close(session: MainWindowSession, restoreFocus = true): void {
     const state = session.selectionPanel;
     if (!state.open) return;
     session.window.clearTimeout(state.commandTimer);
@@ -157,7 +156,8 @@ export class SelectionPanel {
     state.count = null;
     state.footer = null;
     try {
-      if (state.previousElement?.isConnected) (state.previousElement as HTMLElement).focus();
+      if (restoreFocus && state.previousElement?.isConnected)
+        (state.previousElement as HTMLElement).focus();
     } catch {}
     state.previousElement = null;
   }
@@ -294,20 +294,21 @@ export class SelectionPanel {
       return;
     }
 
-    const previous = session.returnBookmark;
-    let captured: MainReturnBookmark | null = null;
     try {
-      captured = this.#returnContext.capture(window, session);
-      this.close(session);
+      const request = this.#returnContext.requestLibrarySelection(window, session, item.id, pane);
+      void request.result
+        .then((selected) => {
+          if (selected && request.isCurrent()) this.close(session, false);
+        })
+        .catch((error) => {
+          this.#logger.debug(`Selection reveal failed: ${String(error)}`);
+          if (request.isCurrent())
+            this.renderFooter(session, 'Reveal failed · check Library selection');
+        });
     } catch (error) {
-      if (captured && session.returnBookmark === captured) session.returnBookmark = previous;
       this.#logger.debug(`Selection reveal failed: ${String(error)}`);
-      return;
+      this.renderFooter(session, 'Reveal failed · check Library selection');
     }
-    void showItemInLibrary(item, pane).catch((error) => {
-      if (captured && session.returnBookmark === captured) session.returnBookmark = previous;
-      this.#logger.debug(`Selection reveal failed: ${String(error)}`);
-    });
   }
 
   private render(window: MainWindow, session: MainWindowSession): void {

@@ -28,7 +28,12 @@ export class ReaderAnnotationNavigationState {
     return reader._internalReader?._state?.selectedAnnotationIDs?.[0] ?? this.#lastAnnotationKey;
   }
 
-  clearAnnotation(): void {
+  /**
+   * Clears all fallback state or only when the remembered key matches `key`.
+   * @param key Optional key to protect a newer navigation target.
+   */
+  clearAnnotation(key?: string): void {
+    if (key !== undefined && this.#lastAnnotationKey !== key) return;
     this.#lastAnnotationKey = null;
   }
 }

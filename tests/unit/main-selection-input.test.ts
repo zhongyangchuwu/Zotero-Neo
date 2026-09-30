@@ -5,6 +5,7 @@ import { createMainWindowController } from '../../src/main/controller';
 import { MainItemSelect } from '../../src/main/item-select';
 
 import { SelectionStore } from '../../src/main/selection-store';
+import { MainNavigation } from '../../src/main/navigation';
 function themedElement(id = ''): HTMLElement {
   const attributes = new Map<string, string>();
   const styleValues = new Map<string, string>();
@@ -28,7 +29,7 @@ function themedElement(id = ''): HTMLElement {
   } as unknown as HTMLElement;
 }
 
-function harness() {
+function harness(bindingOverrides = '') {
   const rows = [
     { isObjectRow: true, ref: { id: 10, libraryID: 1 } },
     { isObjectRow: true, ref: { id: 11, libraryID: 1 } },
@@ -130,7 +131,12 @@ function harness() {
   const controller = createMainWindowController({
     preferences: {
       has: () => false,
-      get: (key, fallback) => (key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback),
+      get: (key, fallback) =>
+        key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY
+          ? false
+          : key === 'bindings'
+            ? bindingOverrides
+            : fallback,
       set: () => {},
     },
     logger: { debug: () => {}, diagnostic: () => {} },
@@ -329,6 +335,56 @@ describe('Main transient-target Escape grammar', () => {
     } finally {
       host.controller.shutdown();
       remove.mockRestore();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
+  it('preserves a newer Visual range after asynchronous Trash succeeds', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const items = [
+      { id: 10, libraryID: 1 },
+      { id: 11, libraryID: 1 },
+    ] as Zotero.Item[];
+    let resolveFirstTrash: (() => void) | undefined;
+    const trashTx = vi.fn(async (_ids: readonly number[]) => {});
+    trashTx.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirstTrash = resolve;
+        }),
+    );
+    const host = harness(JSON.stringify({ 'main-select:x': 'mainTrashItems' }));
+    host.confirm.mockReturnValue(true);
+    Reflect.set(globalThis, 'Zotero', {
+      Items: {
+        get: (id: number) => items.find((item) => item.id === id) ?? false,
+        trashTx,
+      },
+    });
+    const status = vi.spyOn(MainNavigation.prototype, 'status');
+
+    try {
+      host.press('v');
+      host.press('j');
+      host.press('x');
+      await vi.waitFor(() => expect(trashTx).toHaveBeenCalledOnce());
+      expect(trashTx).toHaveBeenCalledWith([10, 11]);
+
+      host.press('Escape');
+      host.press('v');
+      host.press('k');
+      if (!resolveFirstTrash) throw new Error('Expected deferred Trash operation');
+      resolveFirstTrash();
+      await vi.waitFor(() =>
+        expect(status.mock.calls.some(([, message]) => message.startsWith('✓'))).toBe(true),
+      );
+
+      host.press('x');
+      await vi.waitFor(() => expect(trashTx).toHaveBeenCalledTimes(2));
+      expect(trashTx).toHaveBeenNthCalledWith(2, [10, 11]);
+    } finally {
+      host.controller.shutdown();
+      status.mockRestore();
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
     }
