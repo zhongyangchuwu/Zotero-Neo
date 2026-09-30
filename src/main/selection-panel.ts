@@ -4,7 +4,7 @@ import { THEME_VARS } from '../ui/theme';
 import { mainHost, mainItem, mainItemRowForRef } from './host';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
-import type { MainReturnContext } from './return-context';
+import type { MainJumpHistory } from './jump-history';
 
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -58,16 +58,16 @@ export function selectionPanelEntries(
  */
 export class SelectionPanel {
   readonly #logger: SelectionPanelLogger;
-  readonly #returnContext: MainReturnContext;
+  readonly #jumpHistory: MainJumpHistory;
   readonly #onSelectionChange: SelectionPanelChangeListener;
 
   constructor(
     logger: SelectionPanelLogger,
-    returnContext: MainReturnContext,
+    jumpHistory: MainJumpHistory,
     onSelectionChange: SelectionPanelChangeListener,
   ) {
     this.#logger = logger;
-    this.#returnContext = returnContext;
+    this.#jumpHistory = jumpHistory;
     this.#onSelectionChange = onSelectionChange;
   }
 
@@ -295,7 +295,7 @@ export class SelectionPanel {
     }
 
     try {
-      const request = this.#returnContext.requestLibrarySelection(window, session, item.id, pane);
+      const request = this.#jumpHistory.requestLibrarySelection(window, session, item.id, pane);
       void request.result
         .then((selected) => {
           if (selected && request.isCurrent()) this.close(session, false);

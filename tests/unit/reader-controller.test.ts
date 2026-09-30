@@ -27,7 +27,8 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openNotesPicker: () => {},
   openPluginManager: () => {},
   openSettingsFromReader: () => {},
-  restoreReturnContext: () => {},
+  navigateBackFromReader: () => {},
+  navigateForwardFromReader: () => {},
   openTabPicker: () => {},
   closeReaderTab: () => {},
   cycleReaderTab: () => {},
@@ -696,17 +697,21 @@ describe('Reader Selection Actions capture', () => {
   });
 });
 
-describe('Reader return-context navigation', () => {
-  it('routes a custom binding through the named return-context operation', () => {
-    const restoreReturnContext = vi.fn();
+describe('Reader stack navigation', () => {
+  it('routes Back and Forward through Main with the Reader owner window', () => {
+    const navigateBackFromReader = vi.fn();
+    const navigateForwardFromReader = vi.fn();
     const custom = createHistorySession(
       {},
-      { restoreReturnContext },
-      resolveBindings('{"reader-normal:gr":"mainReturnContext"}'),
+      { navigateBackFromReader, navigateForwardFromReader },
+      resolveBindings(
+        '{"reader-normal:x":"mainReturnContext","reader-normal:y":"navigateForward"}',
+      ),
     );
-    custom.session.focusAndHandle(readerKey('g').event);
-    custom.session.focusAndHandle(readerKey('r').event);
-    expect(restoreReturnContext).toHaveBeenCalledWith(custom.reader._window);
+    custom.session.focusAndHandle(readerKey('x').event);
+    custom.session.focusAndHandle(readerKey('y').event);
+    expect(navigateBackFromReader).toHaveBeenCalledWith(custom.reader._window);
+    expect(navigateForwardFromReader).toHaveBeenCalledWith(custom.reader._window);
     custom.session.dispose();
   });
 });
@@ -1271,6 +1276,8 @@ describe('Reader command palette', () => {
     if (!palette) throw new Error('Expected a Reader command palette context');
     expect(palette.mode).toBe('normal');
     expect(palette.actions).toContain('switchTab');
+    expect(palette.actions).toContain('navigateBack');
+    expect(palette.actions).toContain('navigateForward');
     expect(palette.actions).not.toContain('mainTrashItems');
     expect(palette.actions).not.toContain('mainOpenPDF');
     expect(palette.actions).not.toContain('mainActivate');

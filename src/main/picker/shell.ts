@@ -70,6 +70,7 @@ export class FuzzyPicker {
     options: PickerOpenOptions = {},
   ): Promise<void> {
     if (session.picker.open) return;
+    this.#navigation.panel(window, session);
     const generation = ++session.picker.generation;
     let orphanOverlay: HTMLElement | null = null;
     try {

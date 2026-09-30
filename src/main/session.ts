@@ -9,13 +9,13 @@ import { PluginManagerRuntime } from './plugin-manager-runtime';
 import { SelectionStore } from './selection-store';
 import { SelectionPanelRuntime } from './selection-panel-runtime';
 import type { InteractionAppearanceManager } from './interaction-appearance';
-import type { MainReturnBookmark } from './return-context';
-import type { SettingsCenter } from './settings-center';
+import { MainJumpHistoryState } from './jump-history';
 import { MainFocusOwnership } from './focus-ownership';
 import { MainLocalFindRuntime } from './local-find-runtime';
 import { NoteSurfaceRuntime } from './note-runtime';
 import { TrashHistory } from './trash-history';
 import { ZoteroWindowRuntime } from './window-runtime';
+import type { SettingsCenter } from './settings-center';
 
 export type MainPanel = 'collections' | 'items';
 export type { NoteMode } from './note-runtime';
@@ -31,7 +31,7 @@ export class MainWindowSession {
   readonly input: InputRuntime;
   readonly prefixGuide: PrefixGuideRuntime;
   readonly trashHistory = new TrashHistory();
-  returnBookmark: MainReturnBookmark | null = null;
+  readonly jumpHistory = new MainJumpHistoryState();
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
   readonly selectionPanel = new SelectionPanelRuntime();
@@ -83,6 +83,7 @@ export class MainWindowSession {
   }
 
   dispose(): void {
+    this.jumpHistory.dispose();
     this.cleanup.dispose();
     this.host.dispose();
   }

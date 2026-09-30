@@ -1093,8 +1093,11 @@ export class ReaderSession {
       case 'openNeoSettings':
         main.openSettingsFromReader(ownerWindow);
         return;
-      case 'mainReturnContext':
-        main.restoreReturnContext(ownerWindow);
+      case 'navigateBack':
+        main.navigateBackFromReader(ownerWindow);
+        return;
+      case 'navigateForward':
+        main.navigateForwardFromReader(ownerWindow);
         return;
       case 'showInLibrary':
         main.showReaderItemInLibrary(

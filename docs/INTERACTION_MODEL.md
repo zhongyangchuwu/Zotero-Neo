@@ -353,46 +353,46 @@ Zotero's library through `ZoteroPane.selectItem`. Reader and Note never borrow M
 Selection. Selection Panel Reveal uses the exact `ItemRef` chosen in that panel;
 both paths use the same single-item host Operation.
 
-Show in Library does not restore Main context. Immediately before real host
-navigation, the caller captures the existing Main return bookmark so the separately
-invokable `mainReturnContext` action can restore it. Missing targets, unavailable
-host selection, and failed selection do not change the bookmark. No default
-navigation binding is frozen until the history model is decided.
+Show in Library is separate from Back/Forward. After a successful reveal that
+changes location, Neo records the originating Reader/Note tab and the destination
+library location in the Main window's jump history. Missing targets, unavailable
+host selection, failed or stale requests, and same-location opens do not create
+a jump. No default history binding is assigned in this slice.
 
-## Return context
+## Navigation jump history
 
-Show in Library and return to the previous work context are distinct operations.
+Neo records completed, explicit navigation excursions, not every Cursor motion
+or native focus event. Main item Open, Reader/Note Show in Library, the library-wide
+item/note pickers, and Selection Panel Reveal can create jumps. The
+collection-scoped item picker stays within the current work context. Ordinary
+`j/k`, `gg/G`, local find, and native tab or collection changes are not recorded
+in this first slice; their inclusion can be reviewed once cross-Surface history
+has been verified in Zotero.
 
-Native Zotero item selection can clear Quick Search, tag filters, or Advanced
-Search when an item is not found in the current result set. Neo therefore keeps
-one session-owned return bookmark for explicit reveal/navigation excursions.
+Each Main window owns one ordered jump list and a current position. Back and
+Forward visit older and newer locations without appending more jumps. If the
+user goes Back to B and then navigates to D, the former forward suffix (such as
+C) is discarded: `A → B → D`. Empty Back/Forward does nothing and reports why.
+Closing the Main window discards its jump list.
 
-The initial bookmark stores only restorable navigation state:
+A Reader or Note location stores its tab identity; it does not claim to restore
+Reader page/scroll or Note caret state. A library location stores restorable
+navigation state: native ScopeSet IDs, Quick Search, tag predicates, whether
+Advanced Search was active, Cursor item identity, and the Main panel/focus.
 
-- native ScopeSet row identities;
-- Quick Search text and tag predicates;
-- whether Advanced Search was active;
-- Cursor item identity;
-- originating Main panel/focus and tab identity.
+A context-pane Note shares the library tab: Back restores its underlying Main
+library location, not the Note editor's focus or caret. Note editing remains a
+separate, deferred interaction problem.
 
-Neo Selection is **not** copied into the bookmark. It remains the same
-session-owned workset across reveal and return.
+Neo's persistent Selection remains Main-owned across navigation and is never
+copied into jump entries. Library restoration applies scope and View predicates
+before Cursor/focus. Advanced Search absence can be reversed by closing the
+native editor; a lost native condition set cannot be invented. Missing tabs,
+items, scopes, or partially restorable Views must be reported honestly, not
+recorded as successful jumps. Reader/Note close does not automatically go Back.
 
-Return restores in dependency order: scope, View predicates, visible Selection
-projection/Cursor, then tab/focus context. Advanced Search absence is reversible
-by closing the native editor. If a reveal destroys an existing Advanced Search
-condition set, Neo reports a partial return rather than inventing conditions it
-cannot reconstruct.
-
-The `mainReturnContext` action restores this bookmark. It remains available from
-Main and Reader Command Palettes but has no default key while navigation semantics
-remain open. Opening a Main item into Reader/Note captures the bookmark only
-immediately before a real host navigation; failed opens restore the previous
-bookmark. Reader Return does not close the Reader tab. Closing Reader/Note does not
-automatically restore it.
-
-Do not claim that a native reveal operation preserves triage context unless that
-behavior is explicitly verified.
+`navigateBack` and `navigateForward` remain unbound Main/Reader Command Palette
+actions until the navigation key grammar is reviewed separately.
 
 ## Keymap direction
 
@@ -418,8 +418,8 @@ The same Space-led semantic groups are used across Main, Reader, and Note where
 the action exists. Main keeps navigation and activation direct: local find,
 motions, pane/tree navigation, `o`, `H/L`, and `:` do not require the leader.
 
-`mainReturnContext` remains distinct from Show in Library and unbound by default
-while the navigation-history model is undecided.
+Back/Forward remain distinct from Show in Library and unbound by default until
+their navigation key grammar is reviewed.
 
 `Ctrl+h/j/k/l` remains directional pane focus and is not reused for item
 selection.
