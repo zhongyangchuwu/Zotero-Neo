@@ -256,7 +256,8 @@ export class NoteEditor {
     if (action === 'noteUndo' || action === 'noteRedo') {
       const handled = el.ownerDocument.execCommand(action === 'noteUndo' ? 'undo' : 'redo');
       if (handled) this.style(el.ownerDocument, session.note.mode);
-      return handled;
+      // These Note commands own their keys even when the editor has no history.
+      return true;
     }
 
     const handled = this.command(el, NOTE_COMMAND_BY_ACTION[action], count || 1, session);

@@ -23,7 +23,9 @@ function harness() {
   const removeDocumentListener = vi.fn();
   const styleNodes = new Map<string, { id: string; textContent: string }>();
   const classes = new Set<string>();
+  const execCommand = vi.fn(() => false);
   const editorDocument = {
+    execCommand,
     body: { isContentEditable: true },
     designMode: 'off',
     addEventListener: addDocumentListener,
@@ -136,22 +138,19 @@ function harness() {
     parentElement: null,
     ownerDocument: editorDocument,
   } as unknown as HTMLElement;
-  const press = (key: string): void => {
-    editor.onKeyDown(
-      {
-        key,
-        target,
-        ctrlKey: false,
-        metaKey: false,
-        altKey: false,
-        shiftKey: false,
-        preventDefault: vi.fn(),
-        stopPropagation: vi.fn(),
-      } as unknown as KeyboardEvent,
-      main,
-      session,
-      () => true,
-    );
+  const press = (key: string, ctrlKey = false) => {
+    const event = {
+      key,
+      target,
+      ctrlKey,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    };
+    editor.onKeyDown(event as unknown as KeyboardEvent, main, session, () => true);
+    return event;
   };
 
   return {
@@ -161,6 +160,7 @@ function harness() {
     editor,
     editorWindow,
     editorDocument,
+    execCommand,
     guideNodes,
     classes,
     guide,
@@ -181,6 +181,31 @@ function harness() {
 }
 
 describe('Note surface runtime identity', () => {
+  it('consumes Note undo and redo keys when the editor reports no history', () => {
+    const h = harness();
+
+    const undo = h.press('u');
+    expect(h.execCommand).toHaveBeenCalledWith('undo');
+    expect(undo.preventDefault).toHaveBeenCalledOnce();
+    expect(undo.stopPropagation).toHaveBeenCalledOnce();
+
+    const redo = h.press('r', true);
+    expect(h.execCommand).toHaveBeenCalledWith('redo');
+    expect(redo.preventDefault).toHaveBeenCalledOnce();
+    expect(redo.stopPropagation).toHaveBeenCalledOnce();
+  });
+
+  it('leaves Insert-mode u to native editor input', () => {
+    const h = harness();
+    h.press('i');
+
+    const insert = h.press('u');
+
+    expect(h.execCommand).not.toHaveBeenCalled();
+    expect(insert.preventDefault).not.toHaveBeenCalled();
+    expect(insert.stopPropagation).not.toHaveBeenCalled();
+  });
+
   it('deactivates Note interaction without discarding Note identity or register state', () => {
     const h = harness();
 

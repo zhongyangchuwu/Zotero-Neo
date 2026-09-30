@@ -281,6 +281,120 @@ function pickerMainWindow(): {
 }
 
 describe('current Zotero collection APIs', () => {
+  function focusHarness(
+    initialFocused: number | undefined,
+    initialSelection: readonly number[],
+    inItems = false,
+  ) {
+    let focused = initialFocused;
+    const selected = new Set(initialSelection);
+    const select = vi.fn((index: number) => {
+      focused = index;
+      selected.clear();
+      selected.add(index);
+    });
+    const moveFocused = vi.fn((index: number) => {
+      focused = index;
+    });
+    const collectionTree = {
+      focus: () => {
+        focused = 0;
+      },
+      _onSelection: moveFocused,
+    };
+    const view: TreeView = {
+      tree: collectionTree,
+      rowCount: 6,
+      selection: {
+        get count() {
+          return selected.size;
+        },
+        get focused() {
+          return focused;
+        },
+        selected,
+        select,
+      },
+      getRow: vi.fn().mockReturnValue({ id: 'row' }),
+      isContainer: vi.fn().mockReturnValue(true),
+      isContainerOpen: vi.fn().mockReturnValue(true),
+      toggleOpenState: vi.fn(),
+      ensureRowIsVisible: vi.fn(),
+    };
+    const document = {
+      activeElement: inItems ? ({ id: 'item-tree-main-default' } as Element) : null,
+      getElementById: vi.fn(),
+      querySelector: vi.fn(),
+    } as unknown as Document;
+    const window = {
+      document,
+      ZoteroPane: { collectionsView: view },
+      setTimeout: vi.fn().mockReturnValue(1),
+      clearTimeout: vi.fn(),
+    } as unknown as MainWindow;
+    const session = {
+      activePanel: 'items',
+      window,
+      status: { textContent: '', style: {} },
+      cleanup: { add: vi.fn() },
+    } as unknown as MainWindowSession;
+
+    return {
+      window,
+      session,
+      navigation: new MainNavigation(logger, vi.fn()),
+      selected,
+      select,
+      moveFocused,
+      view,
+    };
+  }
+
+  it('moves h from items to the selected collection without collapsing it', () => {
+    const h = focusHarness(0, [4], true);
+
+    h.navigation.collapseTree(h.window, h.session);
+
+    expect(h.view.toggleOpenState).not.toHaveBeenCalled();
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([4]);
+    expect(h.select).not.toHaveBeenCalled();
+    expect(h.moveFocused).toHaveBeenCalledWith(4, false, false, true, false);
+    expect(h.session.activePanel).toBe('collections');
+  });
+
+  it('collapses the focused collection only when h starts in the collection tree', () => {
+    const h = focusHarness(4, [4]);
+
+    h.navigation.collapseTree(h.window, h.session);
+
+    expect(h.view.toggleOpenState).toHaveBeenCalledWith(4);
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([4]);
+  });
+
+  it('restores a multi-scope collection cursor without changing the selected scopes', () => {
+    const h = focusHarness(4, [1, 2]);
+
+    h.navigation.focusPanel(h.window, h.session, 'collections');
+
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([1, 2]);
+    expect(h.select).not.toHaveBeenCalled();
+    expect(h.moveFocused).toHaveBeenCalledWith(4, false, false, true, false);
+  });
+
+  it('uses the first collection row as the safe focus fallback without a selection', () => {
+    const h = focusHarness(undefined, []);
+
+    h.navigation.focusPanel(h.window, h.session, 'collections');
+
+    expect(h.select).toHaveBeenCalledWith(0);
+    expect([...h.selected]).toEqual([0]);
+    expect(h.view.selection?.focused).toBe(0);
+    expect(h.view.ensureRowIsVisible).toHaveBeenCalledWith(0);
+  });
+
   it('uses plural collection selection methods for object and ID lookup', () => {
     const collection = { id: 42 } as Zotero.Collection;
     const view = {
