@@ -46,7 +46,7 @@ import { PluginManagerPanel } from './plugin-manager';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
-import { MainReturnContext } from './return-context';
+import { MainJumpHistory } from './jump-history';
 import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
@@ -72,7 +72,7 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #selectionPanel: SelectionPanel;
   readonly #localFind: MainLocalFind;
   readonly #viewActions: MainViewActions;
-  readonly #returnContext: MainReturnContext;
+  readonly #jumpHistory: MainJumpHistory;
   readonly #collections: CollectionMembershipActions;
 
   constructor(dependencies: MainWindowControllerDependencies) {
@@ -82,14 +82,15 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
     this.#localFind = new MainLocalFind((session, text) => this.#navigation.status(session, text));
     this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
-    this.#returnContext = new MainReturnContext(
+    this.#jumpHistory = new MainJumpHistory(
       dependencies.logger,
       this.#navigation,
       this.#viewActions,
+      (window, session) => this.#sessions.get(window) === session,
     );
     this.#selectionPanel = new SelectionPanel(
       dependencies.logger,
-      this.#returnContext,
+      this.#jumpHistory,
       (window, session) => this.#itemSelect.refresh(window, session.selection),
     );
     this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
@@ -292,12 +293,16 @@ export class MainWindowController implements MainWindowControllerApi {
     this.withReaderWindow(ownerWindow, 'openNeoSettings', (window) => this.openSettings(window));
   }
 
-  restoreReturnContext(ownerWindow: MainWindow | null): void {
-    this.withReaderWindow(
-      ownerWindow,
-      'mainReturnContext',
-      (window, session) => void this.#returnContext.restore(window, session),
-    );
+  navigateBackFromReader(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'navigateBack', (window, session) => {
+      void this.#jumpHistory.back(window, session);
+    });
+  }
+
+  navigateForwardFromReader(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'navigateForward', (window, session) => {
+      void this.#jumpHistory.forward(window, session);
+    });
   }
 
   openTabPicker(ownerWindow: MainWindow | null): void {
@@ -711,7 +716,7 @@ export class MainWindowController implements MainWindowControllerApi {
           this.#navigation.status(session, '✗ Note item is unavailable');
           return true;
         }
-        void this.#navigation.openPDF(window, session, targets.items[0]!);
+        this.openMainItem(window, session, targets.items[0]!);
         return true;
       }
       case 'showInLibrary':
@@ -792,7 +797,7 @@ export class MainWindowController implements MainWindowControllerApi {
 
     let isCurrent: (() => boolean) | null = null;
     try {
-      const request = this.#returnContext.requestLibrarySelection(
+      const request = this.#jumpHistory.requestLibrarySelection(
         window,
         session,
         targets.items[0]!.id,
@@ -813,7 +818,7 @@ export class MainWindowController implements MainWindowControllerApi {
       confirm: async (item) => {
         const pane = mainHost(window).ZoteroPane;
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
-        await this.#returnContext.requestLibrarySelection(window, session, Number(item.id), pane)
+        await this.#jumpHistory.requestLibrarySelection(window, session, Number(item.id), pane)
           .result;
       },
     });
@@ -826,13 +831,9 @@ export class MainWindowController implements MainWindowControllerApi {
       confirm: async (item) => {
         const pane = mainHost(window).ZoteroPane;
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
-        await this.#returnContext.requestLibrarySelection(
-          window,
-          session,
-          Number(item.id),
-          pane,
-          false,
-        ).result;
+        await this.#jumpHistory.requestLibrarySelection(window, session, Number(item.id), pane, {
+          recordHistory: false,
+        }).result;
       },
     });
   }
@@ -842,15 +843,14 @@ export class MainWindowController implements MainWindowControllerApi {
         const pane = mainHost(window).ZoteroPane;
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         const id = Number(item.id);
-        const selected = await this.#returnContext.requestLibrarySelection(
-          window,
-          session,
-          id,
-          pane,
-        ).result;
+        const request = this.#jumpHistory.requestLibrarySelection(window, session, id, pane, {
+          afterSelection: async () => {
+            if (pane.openNote) await pane.openNote(id, { openInWindow });
+            else await Zotero.Notes.open(id, null, { openInWindow });
+          },
+        });
+        const selected = await request.result;
         if (!selected) return;
-        if (pane.openNote) await pane.openNote(id, { openInWindow });
-        else await Zotero.Notes.open(id, null, { openInWindow });
       },
     });
   }
@@ -858,12 +858,21 @@ export class MainWindowController implements MainWindowControllerApi {
   private openTabPickerForSurface(window: MainWindow, session: MainWindowSession): void {
     void this.#picker.open(window, session, 'tabs', {
       confirm: (item) => {
-        selectMainTab(window, String(item.id));
+        if (!selectMainTab(window, String(item.id))) throw new Error('Tab is unavailable');
         this.#navigation.afterTabSwitch(window);
       },
     });
   }
 
+  private openMainItem(
+    window: MainWindow,
+    session: MainWindowSession,
+    item: Zotero.Item | null,
+  ): void {
+    void this.#jumpHistory.requestNavigation(window, session, () =>
+      this.#navigation.openPDF(window, session, item),
+    ).result;
+  }
   private execute(
     action: ActionId,
     window: MainWindow,
@@ -885,14 +894,6 @@ export class MainWindowController implements MainWindowControllerApi {
     count: number,
     shouldDebounce = false,
   ): void {
-    const beforeMainReadingNavigation = () => {
-      const previous = session.returnBookmark;
-      this.#returnContext.capture(window, session);
-      return () => {
-        session.returnBookmark = previous;
-      };
-    };
-
     switch (action) {
       case 'openSearch':
         if (!this.#itemSelect.itemsFocused(window)) {
@@ -953,12 +954,16 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'managePlugins':
         this.#pluginManager.open(window, session);
         break;
-      case 'mainReturnContext':
+      case 'navigateBack':
+      case 'navigateForward':
         if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
-        void this.#returnContext.restore(window, session);
+        void (action === 'navigateBack'
+          ? this.#jumpHistory.back(window, session)
+          : this.#jumpHistory.forward(window, session));
         break;
       case 'manageSelection':
         if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+        this.#navigation.panel(window, session);
         this.#selectionPanel.open(window, session);
         break;
       case 'mainTrashItems': {
@@ -1007,15 +1012,12 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       }
       case 'mainOpenPDF':
-        void this.#navigation.openPDF(
-          window,
-          session,
-          mainCursorItem(window) ?? null,
-          beforeMainReadingNavigation,
-        );
+        this.openMainItem(window, session, mainCursorItem(window) ?? null);
         break;
       case 'mainActivate':
-        this.#navigation.activate(window, session, beforeMainReadingNavigation);
+        if (this.#navigation.panel(window, session) === 'collections')
+          this.#navigation.activate(window, session);
+        else this.openMainItem(window, session, mainCursorItem(window) ?? null);
         break;
       case 'closeCurrentTab':
         this.#navigation.closePDF(window);

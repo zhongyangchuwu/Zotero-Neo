@@ -30,7 +30,8 @@ const expectedMainActions: readonly ActionId[] = [
   'managePlugins',
   'openNeoSettings',
   'manageSelection',
-  'mainReturnContext',
+  'navigateBack',
+  'navigateForward',
   'mainTrashItems',
   'mainRestoreTrashedItems',
   'mainFocusTree',
@@ -105,7 +106,8 @@ describe('action capability ownership', () => {
       'findNotes',
       'managePlugins',
       'openNeoSettings',
-      'mainReturnContext',
+      'navigateBack',
+      'navigateForward',
       'switchTab',
       'closeCurrentTab',
       'previousTab',
@@ -150,7 +152,8 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'removeFromCollection')).toBe(true);
     expect(isReaderActionForMode('normal', 'managePlugins')).toBe(true);
     expect(isReaderActionForMode('normal', 'openNeoSettings')).toBe(true);
-    expect(isReaderActionForMode('normal', 'mainReturnContext')).toBe(true);
+    expect(isReaderActionForMode('normal', 'navigateBack')).toBe(true);
+    expect(isReaderActionForMode('normal', 'navigateForward')).toBe(true);
     expect(isReaderActionForMode('normal', 'showInLibrary')).toBe(true);
     expect(actionsForBindingMode('main-normal')).not.toContain('showInLibrary');
     expect(Object.values(DEFAULT_BINDINGS)).not.toContain('showInLibrary');

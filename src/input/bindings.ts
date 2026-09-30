@@ -369,6 +369,7 @@ const LEGACY_ACTION_ALIASES: Readonly<Record<string, ActionId>> = {
   mainNextTab: 'nextTab',
   mainTagEditor: 'addTag',
   mainTagPicker: 'toggleTagFilter',
+  mainReturnContext: 'navigateBack',
 };
 
 function canonicalAction(value: unknown): ActionId | null {
@@ -463,8 +464,11 @@ export function migrateLegacyBindingOverrides(raw: unknown): string {
     const normalized = canonicalAction(action);
     if (!binding || REMOVED_ACTIONS[String(action)] || !normalized) continue;
     const canonicalKey = `${binding.mode}:${binding.sequence}`;
+    const retiredDefault =
+      RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS];
     if (
-      RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS] === normalized
+      retiredDefault === normalized ||
+      (action === 'mainReturnContext' && retiredDefault === action)
     )
       continue;
 

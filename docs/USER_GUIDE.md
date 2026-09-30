@@ -85,13 +85,14 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
 
-When Main `o` or item-list `Enter` actually opens an attachment, note, or
-external URI, Neo saves the originating Main context immediately before the host
-navigation. The unbound `mainReturnContext` action is available in Main and Reader
-Command Palettes or through a custom binding; it restores the saved Main
-tab/View/Cursor/focus state without closing the Reader tab. Failed/no-op opens do
-not replace an older bookmark, and Reader item actions such as tag/collection/
-citekey commands do not overwrite it.
+When Main `o` or item-list `Enter` opens an attachment or note and changes the
+current Zotero tab, Neo records the originating library location and the new
+Reader/Note tab. The unbound **Navigate Back** and **Navigate Forward** actions
+are available in the Main and Reader Command Palettes or through custom bindings.
+They move through completed navigation jumps without closing Reader tabs.
+No-op/failed opens and Reader item actions such as tag/collection/citekey do
+not add history. Opening an external URI without changing the Zotero location
+does not add a jump.
 
 ### Prefix Guide
 
@@ -125,7 +126,7 @@ the current key hints. There is no `<space>:` alias.
   `Escape` to close and restore the previous focus. A selected action runs in the
   originating Reader, Main, or Note context after the palette closes.
 
-- Reader and Note Command Palettes include **Show current item in Library**. It uses the active Reader item or Note-context item; it does not run or replace the separate Main `mainReturnContext` action. No default navigation key is assigned while the history model remains open.
+- Reader and Note Command Palettes include **Show current item in Library**. It uses the active Reader item or Note-context item and does not borrow Main Selection. A successful location change can be revisited through the separate navigation history; no Back/Forward default keys are assigned yet.
 - The initial palette is query-only: it accepts no command arguments, counts, scopes,
   history, Spotlight commands, or external registrations. `3:` may open it, but the
   selected action runs with its ordinary uncounted behavior.
@@ -511,18 +512,29 @@ and focus context:
 | `wl` | Focus the detail pane (right pane) |
 | `ww` | Focus the item list (middle pane) |
 
-#### Return context
+#### Navigation history
 
-Some explicit navigation actions, such as revealing a hidden Selection member
-or choosing an item from the library-wide finder, may let Zotero change the
-current scope or filters so the target becomes visible. Before those excursions,
-Neo saves one Main return bookmark.
+Explicit navigation, such as opening a Main item into Reader or revealing a
+Selection member in the library, adds a source and destination to the owning
+Main window's jump list only when the host actually changes location. Navigate
+Back/Forward walk that list. After going Back, a new jump discards the old
+Forward entries (stack-style history). At either end of the list, the command
+reports that no older/newer location exists.
 
-`mainReturnContext` is available from Main and Reader Command Palettes to restore the saved scope, Quick Search, tag predicates, Cursor, tab, and pane focus where the corresponding host state remains available. It has no default key binding while navigation semantics remain undecided.
+Reader/Note locations remember their Zotero tab. Library locations remember
+the scope, Quick Search, tag predicates, Cursor, tab and pane focus when those
+native states remain available. They do not save Reader page/scroll, Note caret,
+or a copy of Neo Selection: the same persistent Main workset survives navigation.
 
-Selection itself is not replaced: the same Neo workset continues across reveal and return.
+A Note in the Main context pane has no separate tab; Back restores its library
+View, not focus inside that Note editor.
 
-This is a single-level bookmark, not a navigation history stack. If Zotero has discarded an existing Advanced Search condition set, return reports partial restoration instead of synthesizing a different query. Reader/Note close does not trigger automatic return.
+If Zotero has discarded an Advanced Search condition set or deleted a target,
+restoration reports the missing state rather than inventing a replacement.
+Reader/Note close does not navigate automatically. Ordinary item motions,
+`gg/G`, local find, and native tab/collection changes do not add jumps in this
+first slice. Default Back/Forward bindings are reserved for the separate keymap
+review.
 
 #### Main local find
 

@@ -52,7 +52,8 @@ export interface ReaderMainOperations {
   openNotesPicker(ownerWindow: MainWindow | null): void;
   openPluginManager(ownerWindow: MainWindow | null): void;
   openSettingsFromReader(ownerWindow: MainWindow | null): void;
-  restoreReturnContext(ownerWindow: MainWindow | null): void;
+  navigateBackFromReader(ownerWindow: MainWindow | null): void;
+  navigateForwardFromReader(ownerWindow: MainWindow | null): void;
   openTabPicker(ownerWindow: MainWindow | null): void;
   closeReaderTab(ownerWindow: MainWindow | null): void;
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;

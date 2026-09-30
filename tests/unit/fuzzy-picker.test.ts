@@ -770,6 +770,8 @@ function createPickerHarness(width = 1200): {
       return activeElement;
     },
     createElementNS: (_namespace: string, tag: string) => createElement(tag),
+    getElementById: () => null,
+    querySelector: () => null,
     body: { append: (node: HTMLElement) => bodyChildren.push(node) },
     documentElement: { append: (node: HTMLElement) => bodyChildren.push(node) },
   } as unknown as Document;

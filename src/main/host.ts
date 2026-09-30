@@ -101,6 +101,7 @@ type ScopeCursorView = {
     readonly count?: number;
     select?(index: number, shouldDebounce?: boolean): boolean | void;
     toggleSelect?(index: number, shouldDebounce?: boolean): void;
+    clearSelection?(): void;
   };
   getRow?(index: number): ScopeRow | undefined;
   getRowIndexByID?(id: string): number | false;
@@ -186,10 +187,23 @@ export function mainTabList(window: MainWindow): readonly MainTab[] {
   return tabs?._tabs ?? tabs?.tabs ?? [];
 }
 
-export function selectMainTab(window: MainWindow, id: string): void {
+export function selectMainTab(window: MainWindow, id: string): boolean {
   const tabs = mainTabs(window);
-  const select = tabs?.select ?? tabs?.selectTab ?? tabs?.showTab;
-  select?.call(tabs, id);
+  if (!tabs) return false;
+
+  const inventory = tabs._tabs ?? tabs.tabs;
+  if (
+    (inventory && !inventory.some((tab) => (tab.id ?? tab.tabID ?? tab.dataset?.id) === id)) ||
+    (!inventory && tabs.getTabInfo && !tabs.getTabInfo(id))
+  ) {
+    return false;
+  }
+
+  if (selectedMainTabID(window) === id) return true;
+  const select = tabs.select ?? tabs.selectTab ?? tabs.showTab;
+  if (!select) return false;
+  select.call(tabs, id);
+  return selectedMainTabID(window) === id;
 }
 
 export function cycleMainTab(window: MainWindow, direction: 1 | -1): void {
@@ -360,29 +374,48 @@ export function mainScopeSelectedIDs(window: MainWindow): string[] {
 export async function restoreMainScopeIDs(
   window: MainWindow,
   ids: readonly string[],
+  isCurrent: () => boolean,
 ): Promise<boolean> {
   const view = mainScopeView(window);
-  if (!view?.selection || !ids.length) return false;
+  const selection = view?.selection;
+  if (!isCurrent()) return false;
+  if (!view || !selection) return false;
+
+  if (!ids.length) {
+    if (mainScopeSelectedIDs(window).length) {
+      if (!selection.clearSelection) return false;
+      selection.clearSelection();
+    }
+    return mainScopeSelectedIDs(window).length === 0;
+  }
+
+  const rows = ids.map((id) => view.getRowIndexByID?.(id));
+  if (
+    rows.some((row) => row === undefined || row === false || row < 0) ||
+    new Set(ids).size !== ids.length
+  ) {
+    return false;
+  }
 
   const [first, ...rest] = ids;
   if (!first) return false;
   if (view.selectByID) await view.selectByID(first, true);
   else {
-    const row = view.getRowIndexByID?.(first);
-    if (row === undefined || row === false || row < 0 || !view.selection.select) return false;
-    view.selection.select(row, false);
+    const row = rows[0];
+    if (row === undefined || row === false || !selection.select) return false;
+    selection.select(row, false);
+  }
+  if (!isCurrent()) return false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    if (!isCurrent()) return false;
+    const row = rows[index + 1];
+    if (row === undefined || row === false) return false;
+    if (!mainScopeSelectedRows(window).includes(row)) selection.toggleSelect?.(row, false);
   }
 
-  for (const id of rest) {
-    const row = view.getRowIndexByID?.(id);
-    if (row === undefined || row === false || row < 0) continue;
-    if (!mainScopeSelectedRows(window).includes(row)) view.selection.toggleSelect?.(row, false);
-  }
-
-  return ids.every((id) => {
-    const row = view.getRowIndexByID?.(id);
-    return row !== undefined && row !== false && mainScopeSelectedRows(window).includes(row);
-  });
+  const selected = mainScopeSelectedIDs(window);
+  return isCurrent() && selected.length === ids.length && ids.every((id) => selected.includes(id));
 }
 
 export function mainScopeCursorDetached(window: MainWindow): boolean {

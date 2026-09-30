@@ -54,6 +54,13 @@ This launches only the configured development profile with a local RDP server
 and installs Neo from the mirrored unpacked build as a temporary add-on. Leave
 that Zotero instance running.
 
+Use a development profile without a separately installed Neo XPI when validating
+temporary-add-on changes. A packaged Neo with the same ID already present in the
+profile can leave competing Main/Reader key handlers and an older Command Palette
+visible even when the RDP actor reports the new temporary add-on. Verify new
+interaction behavior in a clean profile rather than attributing that state to
+the changed build.
+
 The normal code-to-GUI loop is then:
 
 ```bash

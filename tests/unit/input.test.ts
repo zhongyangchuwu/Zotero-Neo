@@ -5,6 +5,7 @@ import {
   DEFAULT_BINDINGS,
   encodeBindingOverrides,
   migrateLegacyBindingOverrides,
+  migrateBindingModeOverrides,
   migrateMainDirectPrefixOverrides,
   migrateNoteBindingOverrides,
   parseBindingKey,
@@ -232,6 +233,12 @@ describe('binding parsing and overrides', () => {
     expect(ACTION_IDS).toContain('openCommandPalette');
     expect(ACTION_LABELS.openCommandPalette.en).toBe('Open command palette');
     expect(ACTION_LABELS.zoomReset.en).toBe('Reset zoom / Fit page width');
+    expect(ACTION_IDS).toContain('navigateBack');
+    expect(ACTION_IDS).toContain('navigateForward');
+    expect(ACTION_LABELS.navigateBack.en).toBe('Navigate back');
+    expect(ACTION_LABELS.navigateForward.en).toBe('Navigate forward');
+    expect(ACTION_LABELS.navigateBack['zh-CN']).toBe('后退');
+    expect(ACTION_LABELS.navigateForward['zh-CN']).toBe('前进');
 
     const bindings = resolveBindings(
       JSON.stringify({
@@ -387,6 +394,16 @@ describe('binding parsing and overrides', () => {
     const resolved = resolveBindings('{"main-normal:gr":"nextTab"}');
     expect(resolved['reader-normal:gr']).toBeUndefined();
     expect(resolved['main-normal:gr']).toBe('nextTab');
+  });
+  it('migrates explicit return-context overrides to Back without restoring retired defaults', () => {
+    const compact = '{"reader-normal:x":"mainReturnContext"}';
+    expect(parseBindingOverrides(compact)).toEqual({ 'reader-normal:x': 'navigateBack' });
+    expect(migrateBindingModeOverrides(compact)).toBe('{"reader-normal:x":"navigateBack"}');
+    expect(resolveBindings(compact)['reader-normal:x']).toBe('navigateBack');
+    expect(resolveBindings('')['reader-normal:gr']).toBeUndefined();
+    expect(
+      migrateLegacyBindingOverrides(JSON.stringify({ 'reader-normal:x': 'mainReturnContext' })),
+    ).toBe('{"reader-normal:x":"navigateBack"}');
   });
 });
 

@@ -6,14 +6,15 @@ All notable changes to Zotero Neo are documented here.
 
 ### Added
 
-- Reader and Note Command Palettes now expose an unbound Show in Library action for the active surface item; it remains separate from the single-level Main return bookmark.
+- Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains separate from navigation history.
+- Main and Reader Command Palettes expose unbound Back/Forward actions over explicit navigation jumps. A new jump after Back discards the old forward suffix; persistent Main Selection remains independent.
 
 ### Changed
 
 - Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
 
 - Main Trash confirms the resolved target kind/count, refuses hidden Selection members, and preserves Selection/history on cancel or failure. Reader annotation deletion states its single target and permanent consequence; cancellation preserves the selected annotation. New confirmations and target feedback follow the UI language.
-- Library reveal now treats Zotero selection failures as failures, orders overlapping requests without replacing a valid return context, and preserves newer Visual/annotation selections after asynchronous Trash or deletion. Reader annotation cleanup uses a cloned host array, and Note deactivation resets its caret and key guide.
+- Library reveal treats Zotero selection failures as failures, orders overlapping requests without replacing newer navigation context, and preserves newer Visual/annotation selections after asynchronous Trash or deletion. Reader annotation cleanup uses a cloned host array, and Note deactivation resets its caret and key guide.
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ## [0.1.0] - 2026-09-19
