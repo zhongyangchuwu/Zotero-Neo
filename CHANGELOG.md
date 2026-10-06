@@ -7,13 +7,14 @@ All notable changes to Zotero Neo are documented here.
 ### Added
 
 - Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains separate from navigation history.
-- Main and Reader Command Palettes expose unbound Back/Forward actions over explicit navigation jumps. A new jump after Back discards the old forward suffix; persistent Main Selection remains independent.
+- Add per-Main-window stack-style navigation history with a 100-location bound and forward-suffix truncation. Canonical `navigateBack` / `navigateForward` actions default to `<C-o>` / `<C-i>` in Main, Reader, and Note Normal; shortcut counts traverse history, while palette actions remain uncounted.
 
 ### Changed
 
 - Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
 
 - Main Trash confirms the resolved target kind/count, refuses hidden Selection members, and preserves Selection/history on cancel or failure. Reader annotation deletion states its single target and permanent consequence; cancellation preserves the selected annotation. New confirmations and target feedback follow the UI language.
+- Navigation history records explicit Main, Reader, and cross-surface jumps without capturing persistent Main Selection. It restores readable closed Reader attachments and available PDF position, but not zoom/layout or Note caret; unavailable or partially restorable destinations do not advance the history pointer. Zotero retains ownership of actual PDF link navigation.
 - Library reveal treats Zotero selection failures as failures, orders overlapping requests without replacing newer navigation context, and preserves newer Visual/annotation selections after asynchronous Trash or deletion. Reader annotation cleanup uses a cloned host array, and Note deactivation resets its caret and key guide.
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 

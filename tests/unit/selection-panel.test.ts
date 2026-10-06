@@ -121,6 +121,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     logger,
     navigation,
     new MainViewActions(logger, navigation),
+    { captureJumpLocation: () => null, restoreJumpLocation: async () => null },
   );
   const panel = new SelectionPanel({ debug }, jumpHistory, selectionChanged);
   const key = (value: string): KeyboardEvent =>

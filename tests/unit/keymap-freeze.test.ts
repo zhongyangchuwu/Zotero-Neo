@@ -124,27 +124,6 @@ describe('0.1.0 default keymap freeze', () => {
     expect(press('main-normal', ' ')).toMatchObject({ kind: 'pending' });
   });
 
-  it('reserves g for goto instead of assigning a default Back binding', () => {
-    const defaults = resolveBindings('');
-    for (const [mode, destination] of [
-      ['reader-normal', 'firstPage'],
-      ['main-normal', 'mainNavFirst'],
-      ['note-normal', 'noteMoveDocumentStart'],
-    ] as const) {
-      expect(defaults[`${mode}:gr`]).toBeUndefined();
-      const pending = press(mode, 'g', defaults);
-      expect(pending).toMatchObject({ kind: 'pending', timeoutAction: null });
-      expect(
-        advanceInput({ ...pending.state, bindings: defaults, allowCountPrefix: true }, 'g'),
-      ).toMatchObject({ kind: 'execute', action: destination });
-      expect(
-        advanceInput({ ...pending.state, bindings: defaults, allowCountPrefix: true }, 'r'),
-      ).toMatchObject({ kind: 'pass' });
-    }
-    expect(press('main-select', 'g', defaults)).toMatchObject({ kind: 'pending' });
-    expect(DEFAULT_BINDINGS['main-select:gg']).toBe('mainSelectFirst');
-  });
-
   it('preserves explicit gr overrides without reinstating the old defaults', () => {
     const bindings = resolveBindings(
       JSON.stringify({

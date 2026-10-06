@@ -85,14 +85,17 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
 with a count jump to that page number (`5G` / `5gg` = page 5).
 
-When Main `o` or item-list `Enter` opens an attachment or note and changes the
-current Zotero tab, Neo records the originating library location and the new
-Reader/Note tab. The unbound **Navigate Back** and **Navigate Forward** actions
-are available in the Main and Reader Command Palettes or through custom bindings.
-They move through completed navigation jumps without closing Reader tabs.
-No-op/failed opens and Reader item actions such as tag/collection/citekey do
-not add history. Opening an external URI without changing the Zotero location
-does not add a jump.
+Main Open, qualifying Main navigation, Reader PDF jumps, and successful Show in
+Library/reveal operations are recorded in one stack-style history per Main
+window (100 locations maximum). The canonical actions are `navigateBack` and
+`navigateForward`, defaulting to `<C-o>` and `<C-i>` in Main, Reader, and Note
+Normal. Shortcut counts traverse multiple locations; Command Palette invocation
+is uncounted. Traversal does not record itself, and a new jump after Back drops
+the forward suffix. Closing the Main window discards its history. Persistent Main
+Selection is independent and is never captured in a history location.
+
+For the complete recording rules, exclusions, and restoration behavior, see
+[Navigation history](#navigation-history) below.
 
 ### Prefix Guide
 
@@ -126,7 +129,8 @@ the current key hints. There is no `<space>:` alias.
   `Escape` to close and restore the previous focus. A selected action runs in the
   originating Reader, Main, or Note context after the palette closes.
 
-- Reader and Note Command Palettes include **Show current item in Library**. It uses the active Reader item or Note-context item and does not borrow Main Selection. A successful location change can be revisited through the separate navigation history; no Back/Forward default keys are assigned yet.
+Reader and Note Command Palettes include the unbound **Show current item in Library** action. It uses the active Reader item or Note-context item and does not borrow Main Selection. A successful location change is recorded in the shared history; see [Reading history](#reading-history) for Back/Forward keys and restoration limits.
+
 - The initial palette is query-only: it accepts no command arguments, counts, scopes,
   history, Spotlight commands, or external registrations. `3:` may open it, but the
   selected action runs with its ordinary uncounted behavior.
@@ -178,15 +182,17 @@ and editable fields keep their native input when no pane accepts focus.
 
 #### Reading history
 
-| Key      | Action                                             |
-| -------- | -------------------------------------------------- |
-| `Ctrl+o` | Go back through Zotero's native reading history    |
-| `Ctrl+i` | Go forward through Zotero's native reading history |
+| Key      | Action                         |
+| -------- | ------------------------------ |
+| `Ctrl+o` | Navigate Back (`navigateBack`) |
+| `Ctrl+i` | Navigate Forward (`navigateForward`) |
 
-History and all Reader motions remain owned by Zotero and follow the last focused
-primary or split reader view, whether focus changed by mouse or keyboard. Empty
-history boundaries are safe no-ops. These bindings are active only in reader Normal
-mode; Insert mode and editable controls retain native input.
+These canonical actions work in Main, Reader, and Note Normal. Shortcut counts
+traverse that many history locations; the Command Palette action is uncounted.
+Insert mode, editable controls, and Neo-owned modal input retain their own input
+and do not invoke history. Zotero remains responsible for performing native link
+navigation; Neo's history records and restores the explicit cross-surface
+locations described above. Back/Forward are safe no-ops at either boundary.
 
 #### Select text with Flash
 
@@ -218,10 +224,11 @@ remains the mode cue and shows the selected character count plus direct-action h
 Type the displayed hint letters to activate a link. Matching is case-insensitive;
 `Backspace` removes one typed hint character and `Escape` cancels the hint mode.
 Internal links, including figure/table references, navigate in the active primary
-or split PDF view and become part of Zotero's native `Ctrl+o` / `Ctrl+i` reading
-history. Citation hints follow Zotero's first resolved bibliography target.
-External links open through Zotero's normal link handler. Reference-preview
-overlays, off-screen links, Insert mode, and editable controls are not claimed.
+or split PDF view through Zotero's native navigation API and are recorded in Neo's
+Back/Forward history. Citation hints follow Zotero's first resolved bibliography
+target. Native PDF search-result navigation is also recorded. External links open
+through Zotero's normal link handler and do not become Neo history locations.
+Reference-preview overlays, off-screen links, Insert mode, and editable controls are not claimed.
 
 After an internal or citation jump, Neo shows Zotero's preview-style target cue
 for about two seconds: a red circle for point destinations or a red rectangle
@@ -514,27 +521,36 @@ and focus context:
 
 #### Navigation history
 
-Explicit navigation, such as opening a Main item into Reader or revealing a
-Selection member in the library, adds a source and destination to the owning
-Main window's jump list only when the host actually changes location. Navigate
-Back/Forward walk that list. After going Back, a new jump discards the old
-Forward entries (stack-style history). At either end of the list, the command
-reports that no older/newer location exists.
+The single Main-window list records completed explicit jumps: Main Items `gg`/`G`
+and confirmed local-find `n`/`N`; explicit Main Open; all-library,
+collection-scoped, and note item-picker confirmations; Show in Library and
+Selection Panel Reveal; Neo `H`/`L` and open-tab picker confirmation; Reader
+PDF page destinations (`gg`/`G`, including counts), marks, outline jumps,
+annotation navigation, internal/citation links, and native search-result
+navigation. It excludes continuous Main `j`/`k`, ordinary Reader scrolling and
+adjacent-page turns, native tab clicks, and manual collection/filter edits.
+Failed/no-op operations do not record. Before traversal, Neo refreshes the
+departing location when its contextual identity matches, preserving ordinary
+motion as the return position.
 
-Reader/Note locations remember their Zotero tab. Library locations remember
-the scope, Quick Search, tag predicates, Cursor, tab and pane focus when those
-native states remain available. They do not save Reader page/scroll, Note caret,
-or a copy of Neo Selection: the same persistent Main workset survives navigation.
+Reader locations store library/item identity, a tabID hint, and optional
+primary/secondary PDF page index and top/left coordinates. Back/Forward reuses an
+open same-item tab or reopens the same readable attachment, restores available
+PDF position, verifies the result, and returns the actual tabID. It does not
+restore zoom/layout. Missing/deleted/trash/unreadable items or a missing required
+split report partial/failure without advancing the pointer. Non-PDF Reader tabs
+are identity-only and follow native retained position rather than PDF geometry.
+Standalone Note tabs store only tabID and follow native retained position; a
+context-pane Note restores the underlying Main View, not editor focus or caret.
+Main locations restore available scope, Quick Search, tag filters, Advanced
+Search, Cursor, and panel/focus state. Main Selection is never captured or
+restored. Closing the Main window discards history; closing Reader/Note does not
+automatically navigate Back.
 
-A Note in the Main context pane has no separate tab; Back restores its library
-View, not focus inside that Note editor.
-
-If Zotero has discarded an Advanced Search condition set or deleted a target,
-restoration reports the missing state rather than inventing a replacement.
-Reader/Note close does not navigate automatically. Ordinary item motions,
-`gg/G`, local find, and native tab/collection changes do not add jumps in this
-first slice. Default Back/Forward bindings are reserved for the separate keymap
-review.
+The 100-location bound and forward-truncation follow Neovim's
+[jumplist-stack model](https://neovim.io/doc/user/motion/#jumplist-stack), not
+full Neovim behavior. Unlike Neovim's default `jumpoptions=clean`, Neo may reopen
+a closed Reader location when its same attachment remains readable.
 
 #### Main local find
 

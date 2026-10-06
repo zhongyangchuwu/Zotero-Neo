@@ -17,6 +17,8 @@ export type ReaderMode = 'normal' | 'visual' | 'insert';
 export type ReaderRuntime = _ZoteroTypes.ReaderInstance & {
   readonly _instanceID?: string;
   readonly itemID?: number;
+  readonly tabID?: string;
+  readonly _isTabClosed?: boolean;
   readonly _iframeWindow?: Window;
   readonly _window?: MainWindow & { readonly ZoteroContextPane?: { focus?(): boolean | void } };
   readonly _internalReader?: InternalReaderRuntime;
@@ -47,8 +49,6 @@ export interface InternalReaderRuntime {
     readonly annotationID?: string;
     readonly position?: ReaderLinkPosition;
   }): void;
-  navigateBack?(): void;
-  navigateForward?(): void;
   setSelectedAnnotations?(keys: readonly string[]): void;
   toggleFindPopup?(options: { readonly open: boolean }): void;
   findNext?(): void;
@@ -64,6 +64,7 @@ export interface InternalReaderRuntime {
 
 export interface ReaderViewRuntime {
   readonly _iframeWindow?: Window;
+  readonly _history?: ReaderPdfHistoryRuntime;
   readonly _findState?: { readonly active?: boolean };
   readonly _pdfPages?:
     | Readonly<Record<number, ReaderPdfPageRuntime | undefined>>
@@ -78,8 +79,25 @@ export interface ReaderViewRuntime {
   _onOpenLink?: (url: string) => void | Promise<void>;
   _textAnnotationFocused?: () => boolean;
   getClientRectForPopup?(position: ReaderLinkPosition): readonly number[];
-  navigate?(payload: { readonly position: ReaderLinkPosition }): void | Promise<void>;
+  navigate?(
+    payload:
+      | { readonly position: ReaderLinkPosition }
+      | {
+          readonly dest: readonly [number, { readonly name: 'XYZ' }, number, number, null];
+        },
+    options?: { readonly skipHistory?: boolean },
+  ): void | Promise<void>;
+  focus?(): void;
   navigateToNextPage?(): void;
+}
+
+export interface ReaderPdfHistoryLocationRuntime {
+  readonly dest?: readonly unknown[];
+}
+
+export interface ReaderPdfHistoryRuntime {
+  readonly _currentLocation?: ReaderPdfHistoryLocationRuntime | null;
+  save?: (location: ReaderPdfHistoryLocationRuntime, transient?: boolean) => unknown;
 }
 
 export interface ReaderLinkPosition {
@@ -112,8 +130,14 @@ export interface ReaderPdfPageRuntime {
 export interface PdfViewerRuntime {
   currentPageNumber?: number;
   readonly container?: HTMLElement;
+  readonly _location?: {
+    readonly pageNumber: number;
+    readonly top: number;
+    readonly left: number;
+  };
   readonly _pageLabels?: readonly string[];
   readonly _pages?: readonly PdfPageViewRuntime[];
+  update?(): void;
   getPageView?(index: number): PdfPageViewRuntime | undefined;
 }
 

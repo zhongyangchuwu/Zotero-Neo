@@ -4,6 +4,7 @@ import type {
   MainWindowControllerDependencies,
   MainWindow,
   ReaderSelectionContext,
+  ReaderJumpLocation,
 } from '../core/contracts';
 import type { ItemTargetSet } from '../core/item-target';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
@@ -80,13 +81,17 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
     this.#pluginManager = new PluginManagerPanel(dependencies.logger);
-    this.#localFind = new MainLocalFind((session, text) => this.#navigation.status(session, text));
     this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
     this.#jumpHistory = new MainJumpHistory(
       dependencies.logger,
       this.#navigation,
       this.#viewActions,
+      dependencies.reader,
       (window, session) => this.#sessions.get(window) === session,
+    );
+    this.#localFind = new MainLocalFind(
+      (session, text) => this.#navigation.status(session, text),
+      (window, session, navigate) => this.#jumpHistory.navigateNow(window, session, navigate),
     );
     this.#selectionPanel = new SelectionPanel(
       dependencies.logger,
@@ -293,16 +298,26 @@ export class MainWindowController implements MainWindowControllerApi {
     this.withReaderWindow(ownerWindow, 'openNeoSettings', (window) => this.openSettings(window));
   }
 
-  navigateBackFromReader(ownerWindow: MainWindow | null): void {
+  navigateBackFromReader(ownerWindow: MainWindow | null, count = 1): void {
     this.withReaderWindow(ownerWindow, 'navigateBack', (window, session) => {
-      void this.#jumpHistory.back(window, session);
+      void this.#jumpHistory.back(window, session, count);
     });
   }
 
-  navigateForwardFromReader(ownerWindow: MainWindow | null): void {
+  navigateForwardFromReader(ownerWindow: MainWindow | null, count = 1): void {
     this.withReaderWindow(ownerWindow, 'navigateForward', (window, session) => {
-      void this.#jumpHistory.forward(window, session);
+      void this.#jumpHistory.forward(window, session, count);
     });
+  }
+
+  recordReaderJump(
+    ownerWindow: MainWindow | null,
+    source: ReaderJumpLocation,
+    destination: ReaderJumpLocation,
+  ): void {
+    const session = ownerWindow ? this.#sessions.get(ownerWindow) : undefined;
+    if (ownerWindow && session)
+      this.#jumpHistory.recordReaderJump(ownerWindow, session, source, destination);
   }
 
   openTabPicker(ownerWindow: MainWindow | null): void {
@@ -318,8 +333,13 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void {
-    this.withReaderWindow(ownerWindow, direction < 0 ? 'previousTab' : 'nextTab', (window) =>
-      this.#navigation.cycleTab(window, direction),
+    this.withReaderWindow(
+      ownerWindow,
+      direction < 0 ? 'previousTab' : 'nextTab',
+      (window, session) =>
+        this.#jumpHistory.navigateNow(window, session, () =>
+          this.#navigation.cycleTab(window, direction),
+        ),
     );
   }
 
@@ -687,7 +707,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return true;
     }
 
-    return this.executeNoteSurfaceAction(action, window, session);
+    return this.executeNoteSurfaceAction(action, window, session, undefined, count);
   }
 
   private executeNoteSurfaceAction(
@@ -695,6 +715,7 @@ export class MainWindowController implements MainWindowControllerApi {
     window: MainWindow,
     session: MainWindowSession,
     resolvedTargets?: ItemTargetSet<'note'>,
+    count = 1,
   ): boolean {
     switch (action) {
       case 'addTag':
@@ -741,6 +762,12 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'openNeoSettings':
         this.openSettings(window);
         return true;
+      case 'navigateBack':
+      case 'navigateForward':
+        void (action === 'navigateBack'
+          ? this.#jumpHistory.back(window, session, count)
+          : this.#jumpHistory.forward(window, session, count));
+        return true;
       case 'mainFocusTree':
       case 'mainFocusLeft':
         this.#navigation.focusPanel(window, session, 'collections');
@@ -768,10 +795,10 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.closePDF(window);
         return true;
       case 'previousTab':
-        this.#navigation.cycleTab(window, -1);
+        this.#jumpHistory.navigateNow(window, session, () => this.#navigation.cycleTab(window, -1));
         return true;
       case 'nextTab':
-        this.#navigation.cycleTab(window, 1);
+        this.#jumpHistory.navigateNow(window, session, () => this.#navigation.cycleTab(window, 1));
         return true;
       default:
         return false;
@@ -831,9 +858,8 @@ export class MainWindowController implements MainWindowControllerApi {
       confirm: async (item) => {
         const pane = mainHost(window).ZoteroPane;
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
-        await this.#jumpHistory.requestLibrarySelection(window, session, Number(item.id), pane, {
-          recordHistory: false,
-        }).result;
+        await this.#jumpHistory.requestLibrarySelection(window, session, Number(item.id), pane)
+          .result;
       },
     });
   }
@@ -858,8 +884,10 @@ export class MainWindowController implements MainWindowControllerApi {
   private openTabPickerForSurface(window: MainWindow, session: MainWindowSession): void {
     void this.#picker.open(window, session, 'tabs', {
       confirm: (item) => {
-        if (!selectMainTab(window, String(item.id))) throw new Error('Tab is unavailable');
-        this.#navigation.afterTabSwitch(window);
+        this.#jumpHistory.navigateNow(window, session, () => {
+          if (!selectMainTab(window, String(item.id))) throw new Error('Tab is unavailable');
+          this.#navigation.afterTabSwitch(window);
+        });
       },
     });
   }
@@ -869,8 +897,8 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     item: Zotero.Item | null,
   ): void {
-    void this.#jumpHistory.requestNavigation(window, session, () =>
-      this.#navigation.openPDF(window, session, item),
+    void this.#jumpHistory.requestNavigation(window, session, (isCurrent) =>
+      this.#navigation.openPDF(window, session, item, isCurrent),
     ).result;
   }
   private execute(
@@ -958,8 +986,8 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'navigateForward':
         if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
         void (action === 'navigateBack'
-          ? this.#jumpHistory.back(window, session)
-          : this.#jumpHistory.forward(window, session));
+          ? this.#jumpHistory.back(window, session, count)
+          : this.#jumpHistory.forward(window, session, count));
         break;
       case 'manageSelection':
         if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
@@ -1023,10 +1051,10 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.closePDF(window);
         break;
       case 'previousTab':
-        this.#navigation.cycleTab(window, -1);
+        this.#jumpHistory.navigateNow(window, session, () => this.#navigation.cycleTab(window, -1));
         break;
       case 'nextTab':
-        this.#navigation.cycleTab(window, 1);
+        this.#jumpHistory.navigateNow(window, session, () => this.#navigation.cycleTab(window, 1));
         break;
       case 'addTag':
       case 'removeTag': {
@@ -1061,10 +1089,18 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.navigate(window, session, -1, count, shouldDebounce);
         break;
       case 'mainNavFirst':
-        this.#navigation.navigate(window, session, 'first', count);
+        if (this.#navigation.panel(window, session) === 'items')
+          this.#jumpHistory.navigateNow(window, session, () =>
+            this.#navigation.navigate(window, session, 'first', count),
+          );
+        else this.#navigation.navigate(window, session, 'first', count);
         break;
       case 'mainNavLast':
-        this.#navigation.navigate(window, session, 'last', count);
+        if (this.#navigation.panel(window, session) === 'items')
+          this.#jumpHistory.navigateNow(window, session, () =>
+            this.#navigation.navigate(window, session, 'last', count),
+          );
+        else this.#navigation.navigate(window, session, 'last', count);
         break;
       case 'mainTreeToggle':
         void this.#navigation.toggleTree(window, session);

@@ -125,8 +125,6 @@
   "action.scrollRight": "Scroll right",
   "action.prevPage": "Previous page",
   "action.nextPage": "Next page",
-  "action.historyBack": "Go back in reading history",
-  "action.historyForward": "Go forward in reading history",
   "action.followLink": "Follow visible PDF link",
   "action.flashText": "Flash to visible PDF text",
   "action.firstPage": "First page",

@@ -220,9 +220,9 @@ Local find:
 - does not fall back to a global item chooser;
 - does not clear filters when no match is found.
 
-`/` with `n/N` is reserved as the leading candidate for this behavior because
-it matches the existing Reader find grammar. The key is not frozen until the
-interaction slice is dogfooded.
+`/` opens local find and confirmed `n/N` repeat the committed query in the current
+View. This key grammar is current; confirmed `n/N` Cursor jumps are recorded in
+navigation history.
 
 ### Filter
 
@@ -353,46 +353,68 @@ Zotero's library through `ZoteroPane.selectItem`. Reader and Note never borrow M
 Selection. Selection Panel Reveal uses the exact `ItemRef` chosen in that panel;
 both paths use the same single-item host Operation.
 
-Show in Library is separate from Back/Forward. After a successful reveal that
-changes location, Neo records the originating Reader/Note tab and the destination
-library location in the Main window's jump history. Missing targets, unavailable
-host selection, failed or stale requests, and same-location opens do not create
-a jump. No default history binding is assigned in this slice.
+Show in Library remains a separate, unbound action. After a successful
+location-changing reveal, it records a history jump; missing targets,
+unavailable host selection, failed/stale requests, and same-location opens do
+not. Neither Show in Library nor Selection Panel Reveal captures or restores
+Main Selection.
 
 ## Navigation jump history
 
-Neo records completed, explicit navigation excursions, not every Cursor motion
-or native focus event. Main item Open, Reader/Note Show in Library, the library-wide
-item/note pickers, and Selection Panel Reveal can create jumps. The
-collection-scoped item picker stays within the current work context. Ordinary
-`j/k`, `gg/G`, local find, and native tab or collection changes are not recorded
-in this first slice; their inclusion can be reviewed once cross-Surface history
-has been verified in Zotero.
+Each Main window owns one stack-style ordered list of at most 100 locations and
+a current position. Canonical actions are `navigateBack` and
+`navigateForward`, defaulted to `<C-o>` and `<C-i>` in Main, Reader, and Note
+Normal. Shortcut counts traverse multiple locations; Command Palette invocation
+is uncounted. Back/Forward never record themselves. Before traversal, Neo
+refreshes the departing location when its contextual identity still matches, so
+ordinary movement since the last recorded jump is preserved. A new qualifying
+jump after Back truncates the forward suffix (`A → B → C`, Back, then `D` gives
+`A → B → D`). Empty boundaries are safe no-ops. Disposing a Main window discards
+its history; no session persistence is added.
 
-Each Main window owns one ordered jump list and a current position. Back and
-Forward visit older and newer locations without appending more jumps. If the
-user goes Back to B and then navigates to D, the former forward suffix (such as
-C) is discarded: `A → B → D`. Empty Back/Forward does nothing and reports why.
-Closing the Main window discards its jump list.
+Record completed explicit jumps:
 
-A Reader or Note location stores its tab identity; it does not claim to restore
-Reader page/scroll or Note caret state. A library location stores restorable
-navigation state: native ScopeSet IDs, Quick Search, tag predicates, whether
-Advanced Search was active, Cursor item identity, and the Main panel/focus.
+- Main `gg`/`G` in Items and confirmed local-find `n`/`N`;
+- explicit Main Open and successful all-library, collection-scoped, or note item
+  picker confirmation;
+- successful Reader/Note Show in Library and Selection Panel Reveal;
+- Neo `H`/`L` tab switches and open-tab picker confirmation;
+- Reader PDF page destinations (`gg`/`G`, including counted page jumps), marks,
+  outline-entry jumps, annotation navigation, internal/citation links, and
+  native search-result navigation.
 
-A context-pane Note shares the library tab: Back restores its underlying Main
-library location, not the Note editor's focus or caret. Note editing remains a
-separate, deferred interaction problem.
+Do not record continuous Main `j`/`k`, ordinary Reader scrolling or adjacent
+page turns, native tab clicks, or manual collection/filter edits. Failed or
+no-op operations do not create locations.
 
-Neo's persistent Selection remains Main-owned across navigation and is never
-copied into jump entries. Library restoration applies scope and View predicates
-before Cursor/focus. Advanced Search absence can be reversed by closing the
-native editor; a lost native condition set cannot be invented. Missing tabs,
-items, scopes, or partially restorable Views must be reported honestly, not
-recorded as successful jumps. Reader/Note close does not automatically go Back.
+Locations are DOM-free. Reader entries retain library/item identity, a tabID
+lookup hint, and optional primary/secondary PDF page index and top/left
+coordinates. Traversal reuses an open same-item tab or reopens the same readable
+attachment, restores available PDF position, verifies the result, and returns
+the actual tabID. It does not restore zoom or layout. A closed Reader tab is
+therefore intentionally reopenable; a missing/deleted/trash/unreadable item or
+missing required split reports partial/failure and leaves the history pointer
+unchanged. A non-PDF Reader entry is identity-only and follows Zotero's retained
+position rather than promising PDF geometry restoration. Standalone Note tabs
+store tabID only and likewise follow native retained position. A context-pane
+Note shares its library tab, so restoration returns the underlying Main View,
+not Note editor focus or caret.
 
-`navigateBack` and `navigateForward` remain unbound Main/Reader Command Palette
-actions until the navigation key grammar is reviewed separately.
+Main locations retain restorable library navigation state: native ScopeSet IDs,
+Quick Search, tag predicates, Advanced Search state, Cursor item identity, and
+Main panel/focus. View restoration applies scope and predicates before Cursor
+and focus. Advanced Search absence can be reversed by closing the native editor;
+a lost native condition set cannot be invented. Missing tabs/items/scopes or
+partially restorable Views must be reported honestly and must not advance the
+history pointer. Persistent Selection stays Main-owned, independent of history,
+and is never copied into a location. Closing Reader/Note does not automatically
+navigate Back.
+
+The stack/forward-truncation and 100-location bound follow Neovim's
+[jumplist-stack model](https://neovim.io/doc/user/motion/#jumplist-stack), not a
+claim of full Neovim equivalence. Neovim's default `jumpoptions=clean` drops
+unloaded buffers; Neo deliberately reopens a closed Reader location when the
+same readable attachment remains available.
 
 ## Keymap direction
 
@@ -418,8 +440,9 @@ The same Space-led semantic groups are used across Main, Reader, and Note where
 the action exists. Main keeps navigation and activation direct: local find,
 motions, pane/tree navigation, `o`, `H/L`, and `:` do not require the leader.
 
-Back/Forward remain distinct from Show in Library and unbound by default until
-their navigation key grammar is reviewed.
+Back/Forward are part of direct navigation: `<C-o>` and `<C-i>` invoke the
+canonical `navigateBack` / `navigateForward` actions in Main, Reader, and Note
+Normal. Shortcut counts are supported; palette invocation remains uncounted.
 
 `Ctrl+h/j/k/l` remains directional pane focus and is not reused for item
 selection.
@@ -570,7 +593,7 @@ Only after Cursor/Selection/Visual semantics are stable:
 1. add non-destructive local find;
 2. unify Quick/Advanced/tag View actions;
 3. audit multi-scope collection selection;
-4. add return-context behavior.
+
 
 ## Acceptance scenarios
 

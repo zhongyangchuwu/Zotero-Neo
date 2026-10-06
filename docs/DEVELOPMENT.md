@@ -181,6 +181,10 @@ session cleanup ends it. `ADDON_INSTALL` also occurs on RDP hot reload, so
 installation, reload, enable, upgrade, nonempty search, and unrelated editors
 retain their focus. Zotero still owns Reader-to-Library tab focus restoration.
 
+History restoration focuses the rendered Items/Collections tree `_topDiv`
+directly when available. Zotero's native tree/view `focus()` queues a callback;
+it cannot prove focus synchronously and can outlive the restore attempt.
+
 `src/main/settings-center.ts` owns one disposable page at a time. Appearance
 retains its session-only editor state; `settings-interaction.ts` owns the live
 Picker mouse and Note editor toggles; `settings-reader.ts` owns Reader modes,
@@ -358,14 +362,34 @@ Selectable targets are `internal-link`, `citation`, and `external-link`; standal
 
 Activation must stay on the same primary or secondary `PDFView`. Internal links use
 their `destinationPosition`; citations use the first resolved reference position; both
-call `navigate({ position })` so Zotero records native history. Because the call crosses
-from Bootstrap chrome into the reader content realm, clone the complete location payload
-into `reader._iframeWindow` first. External targets call `_onOpenLink(url)` with a primitive
-string. `ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
-temporary destination cue; `ReaderSession` only orchestrates host/view boundaries. Do not
-synthesize clicks or introduce Neo-owned link/history state. Missing or changed members
-must fail closed with status and write the specific reason to both Zotero
-debug output and the startup diagnostic log rather than leaving badges or input capture active.
+call Zotero's native `navigate({ position })` API so Zotero owns actual PDF link
+navigation. Because the call crosses from Bootstrap chrome into the reader content
+realm, clone the complete location payload into `reader._iframeWindow` first.
+External targets call `_onOpenLink(url)` with a primitive string.
+`ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
+temporary destination cue; `ReaderSession` orchestrates host/view boundaries. Neo's
+Main-window jump-history owner records qualifying Reader jumps and coordinates
+cross-surface Back/Forward restoration; it is distinct from Zotero's native link
+navigation. Keep host payloads cloned across the chrome/content boundary and do not
+synthesize link clicks. Missing or changed members must fail closed with status and
+write the specific reason to both Zotero debug output and the startup diagnostic
+log rather than leaving badges or input capture active.
+
+Reader session-owned hard-history observation emits only settled discrete PDF
+jumps as DOM-free identity/geometry snapshots; ordinary scroll and adjacent-page
+motion are excluded. `MainJumpHistory` is the sole owner of per-window ordering
+and Back/Forward traversal. Its `skipHistory` restore context suppresses
+self-recording during global restore. The Reader capture/restore/reopen adapter
+uses `cloneInto` for cross-compartment payloads and restores the exact primary or
+secondary PDF view, reopening the same readable attachment when its tab is gone.
+It reapplies its host patches when the PDF view is replaced and releases them on
+view replacement or session disposal. Snapshots omit zoom and layout.
+The observer retains incoming transient geometry independently of Zotero's
+`_currentLocation`, which may discard a location equal to its closest back point.
+Invoke content callbacks through chrome's `Reflect.apply`: content
+`Function.apply` cannot read a chrome argument-list array. Native navigation
+destinations and options still require `cloneInto`.
+
 
 After successful internal/citation navigation, Neo mirrors
 `PDFRenderer.renderPreviewPage()` target semantics over the live PDF document:

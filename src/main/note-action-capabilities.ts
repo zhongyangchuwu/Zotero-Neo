@@ -11,6 +11,8 @@ export const NOTE_NORMAL_ACTIONS = Object.freeze([
   'findNotes',
   'managePlugins',
   'openNeoSettings',
+  'navigateBack',
+  'navigateForward',
   'showInLibrary',
   'switchTab',
   'mainFocusTree',

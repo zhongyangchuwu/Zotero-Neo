@@ -24,6 +24,7 @@ import { SettingsKeybindings } from '../../src/main/settings-keybindings';
 import { SettingsReader } from '../../src/main/settings-reader';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
+import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
 import {
   MainNavigation,
   selectedCollection,
@@ -383,6 +384,27 @@ describe('current Zotero collection APIs', () => {
     expect(h.moveFocused).toHaveBeenCalledWith(4, false, false, true, false);
   });
 
+  it('restores collections focus immediately when the native widget defers focus', () => {
+    const h = focusHarness(4, [4], true);
+    const renderedTree = {
+      id: 'collection-tree',
+      focus: () => Reflect.set(h.window.document, 'activeElement', renderedTree),
+    };
+    const nativeFocus = () => {
+      h.window.setTimeout(() => renderedTree.focus(), 0);
+    };
+    Reflect.set(h.view.tree!, '_topDiv', renderedTree);
+    Reflect.set(h.view.tree!, 'focus', nativeFocus);
+    h.view.focus = nativeFocus;
+
+    h.navigation.focusPanel(h.window, h.session, 'collections');
+
+    expect(h.window.document.activeElement).toBe(renderedTree);
+    expect(h.navigation.panel(h.window, h.session)).toBe('collections');
+    expect(h.view.selection?.focused).toBe(4);
+    expect([...h.selected]).toEqual([4]);
+  });
+
   it('uses the first collection row as the safe focus fallback without a selection', () => {
     const h = focusHarness(undefined, []);
 
@@ -540,11 +562,9 @@ describe('current Zotero collection APIs', () => {
       cleanup: { add: vi.fn() },
     } as unknown as MainWindowSession;
     const navigation = new MainNavigation(logger, () => {});
-    const beforeNavigate = vi.fn();
 
-    navigation.activate(window, session, beforeNavigate);
+    navigation.activate(window, session);
 
-    expect(beforeNavigate).not.toHaveBeenCalled();
     expect(select).toHaveBeenCalledWith(4, false);
     expect([...selected]).toEqual([4]);
     expect(session.activePanel).toBe('items');
@@ -1173,7 +1193,13 @@ describe('Note contextual Open', () => {
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+      reader: {
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
+      },
     } as MainWindowControllerDependencies);
     try {
       controller.addWindow(host.window);
@@ -1315,7 +1341,13 @@ describe('Main startup focus handoff', () => {
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+      reader: {
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
+      },
     } as MainWindowControllerDependencies);
     try {
       controller.addWindow(host.window);
@@ -1366,7 +1398,13 @@ function settingsMainHost() {
       },
     },
     logger,
-    reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+    reader: {
+      rescan: () => {},
+      deactivateInactive: () => {},
+      forwardKey: () => {},
+      captureJumpLocation: () => null,
+      restoreJumpLocation: async () => null,
+    },
   } as MainWindowControllerDependencies);
   controller.addWindow(host.window);
   const press = (
@@ -1805,7 +1843,13 @@ describe('Main Settings Center shell', () => {
     const controller = createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+      reader: {
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
+      },
     } as MainWindowControllerDependencies);
     expect(controller.openSettings()).toBe(false);
     controller.addWindow(first.window);
@@ -1874,6 +1918,8 @@ describe('Main command palette', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
     controller.addWindow(host.window);
@@ -1912,6 +1958,8 @@ describe('Main command palette', () => {
         },
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
 
@@ -1960,6 +2008,8 @@ describe('Main tab picker routing', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
     controller.addWindow(host.window);
@@ -2068,6 +2118,8 @@ describe('Reader to Main command palette integration', () => {
         openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
         navigateBackFromReader: (ownerWindow) => main?.navigateBackFromReader(ownerWindow),
         navigateForwardFromReader: (ownerWindow) => main?.navigateForwardFromReader(ownerWindow),
+        recordReaderJump: (ownerWindow, source, destination) =>
+          main?.recordReaderJump(ownerWindow, source, destination),
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
@@ -2169,6 +2221,8 @@ describe('Main H/L tab defaults', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
     controller.addWindow(host.window);
@@ -2237,6 +2291,8 @@ describe('repeated tab switching', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies;
     const controller = createMainWindowController(dependencies);
@@ -2291,6 +2347,8 @@ describe('repeated tab switching', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies;
     const controller = createMainWindowController(dependencies);
@@ -2367,6 +2425,8 @@ describe('main pending-prefix key guide', () => {
           rescan: () => {},
           deactivateInactive: () => {},
           forwardKey: () => {},
+          captureJumpLocation: () => null,
+          restoreJumpLocation: async () => null,
         },
       } as MainWindowControllerDependencies);
       controller.addWindow(window);
@@ -2507,6 +2567,8 @@ describe('main pending-prefix key guide', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
     controller.addWindow(window);
@@ -2617,6 +2679,8 @@ describe('Reader Show in Library and owner routing', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies;
     const main = createMainWindowController(dependencies);
@@ -2637,6 +2701,7 @@ describe('Reader Show in Library and owner routing', () => {
       firstPdfWindow: pdfWindow,
       bindings: () => resolveBindings('{"reader-normal:x":"showInLibrary"}'),
       release: () => {},
+      jumpHost: new ReaderJumpHostAdapter(),
     } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
     const press = (key: string): void =>
       readerSession.focusAndHandle({
@@ -2702,9 +2767,132 @@ describe('Main jump history integration', () => {
     return createMainWindowController({
       preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
       logger,
-      reader: { rescan: () => {}, deactivateInactive: () => {}, forwardKey: () => {} },
+      reader: {
+        rescan: () => {},
+        deactivateInactive: () => {},
+        forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
+      },
     } as MainWindowControllerDependencies);
   }
+
+  it('does not let a stale attachment lookup overwrite a newer H/L tab jump', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const h = historyHost();
+    h.tabs._tabs = ['source-tab', 'reader-A', 'reader-B'].map((id) => ({ id }));
+    const attachment = { id: 92, libraryID: 1, isAttachment: () => true } as Zotero.Item;
+    let resolveAttachment!: (item: Zotero.Item) => void;
+    const lookup = vi.fn(
+      () =>
+        new Promise<Zotero.Item>((resolve) => {
+          resolveAttachment = resolve;
+        }),
+    );
+    const paper = {
+      id: 91,
+      libraryID: 1,
+      isAttachment: () => false,
+      isNote: () => false,
+      getBestAttachment: lookup,
+      getAttachments: () => [attachment.id],
+    } as unknown as Zotero.Item;
+    Reflect.set(globalThis, 'Zotero', {
+      Items: { get: (id: number) => (id === paper.id ? paper : attachment) },
+      Reader: { getByTabID: () => null },
+      initialized: false,
+      locale: 'en-US',
+    });
+    const pane = Reflect.get(h.host.window, 'ZoteroPane') as object;
+    const items = Reflect.get(pane, 'itemsView') as object;
+    Object.assign(items, {
+      selection: { focused: 0 },
+      getRow: () => ({ isObjectRow: true, ref: paper }),
+    });
+    const viewAttachment = vi.fn(() => {
+      h.tabs.selectedID = 'reader-B';
+    });
+    Reflect.set(pane, 'viewAttachment', viewAttachment);
+    const controller = historyController(logger);
+    const press = (key: string, ctrlKey = false): void => {
+      h.host.keydown({
+        key,
+        ctrlKey,
+        shiftKey: key === 'L',
+        altKey: false,
+        metaKey: false,
+        target: h.host.window.document.body,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        stopImmediatePropagation: () => {},
+      } as unknown as KeyboardEvent);
+    };
+    try {
+      controller.addWindow(h.host.window);
+      press('o');
+      await vi.waitFor(() => expect(lookup).toHaveBeenCalledOnce());
+      press('L');
+      expect(h.tabs.selectedID).toBe('reader-A');
+      resolveAttachment(attachment);
+      press('o', true);
+      await vi.waitFor(() => expect(h.tabs.selectedID).toBe('source-tab'));
+      expect(viewAttachment).not.toHaveBeenCalled();
+      press('i', true);
+      await vi.waitFor(() => expect(h.tabs.selectedID).toBe('reader-A'));
+    } finally {
+      controller.shutdown();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
+
+  it('walks H/L tab jumps with counted Ctrl-o/Ctrl-i', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    const h = historyHost();
+    h.tabs._tabs = ['source-tab', 'tab-A', 'tab-B', 'tab-C'].map((id) => ({ id }));
+    Reflect.set(globalThis, 'Zotero', {
+      Reader: { getByTabID: () => null },
+      initialized: false,
+      locale: 'en-US',
+    });
+    const controller = historyController(logger);
+    const press = (key: string, ctrlKey = false): void => {
+      h.host.keydown({
+        key,
+        ctrlKey,
+        shiftKey: key === 'H' || key === 'L',
+        altKey: false,
+        metaKey: false,
+        target: h.host.window.document.body,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        stopImmediatePropagation: () => {},
+      } as unknown as KeyboardEvent);
+    };
+    try {
+      controller.addWindow(h.host.window);
+      press('L');
+      press('L');
+      press('L');
+      expect(h.tabs.selectedID).toBe('tab-C');
+      press('2');
+      press('o', true);
+      await vi.waitFor(() => expect(h.tabs.selectedID).toBe('tab-A'));
+      press('2');
+      press('i', true);
+      await vi.waitFor(() => expect(h.tabs.selectedID).toBe('tab-C'));
+      press('H');
+      expect(h.tabs.selectedID).toBe('tab-B');
+      press('o', true);
+      await vi.waitFor(() => expect(h.tabs.selectedID).toBe('tab-C'));
+      press('i', true);
+      await vi.waitFor(() => expect(h.tabs.selectedID).toBe('tab-B'));
+    } finally {
+      controller.shutdown();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
 
   it('does not create a Back entry when Show in Library fails', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -2918,6 +3106,8 @@ describe('Main CurrentTarget routing', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
     controller.addWindow(window);
@@ -2982,6 +3172,8 @@ describe('Main CurrentTarget routing', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
     try {
@@ -3074,6 +3266,8 @@ describe('collection navigation repeat pacing', () => {
         rescan: () => {},
         deactivateInactive: () => {},
         forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies;
     const controller = createMainWindowController(dependencies);

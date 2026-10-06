@@ -88,9 +88,14 @@ export function findVisibleMainItemRow(
  */
 export class MainLocalFind {
   readonly #status: (session: MainWindowSession, text: string) => void;
+  readonly #navigate: (window: MainWindow, session: MainWindowSession, move: () => boolean) => void;
 
-  constructor(status: (session: MainWindowSession, text: string) => void) {
+  constructor(
+    status: (session: MainWindowSession, text: string) => void,
+    navigate: (window: MainWindow, session: MainWindowSession, move: () => boolean) => void,
+  ) {
     this.#status = status;
+    this.#navigate = navigate;
   }
 
   open(window: MainWindow, session: MainWindowSession): void {
@@ -194,7 +199,12 @@ export class MainLocalFind {
       return false;
     }
 
-    if (!moveMainItemCursor(window, row)) {
+    let moved = false;
+    this.#navigate(window, session, () => {
+      moved = moveMainItemCursor(window, row);
+      return moved;
+    });
+    if (!moved) {
       this.#status(session, '✗ Local find Cursor move is unavailable');
       return false;
     }

@@ -117,6 +117,8 @@ describe('action capability ownership', () => {
       expect(isReaderActionForMode('normal', action)).toBe(true);
 
     for (const action of [
+      'navigateBack',
+      'navigateForward',
       'openCommandPalette',
       'findAllItems',
       'findCollectionItems',

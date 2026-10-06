@@ -1,5 +1,5 @@
 import { showItemInLibrary, type ShowInLibraryHost } from '../operations/show-in-library';
-import type { MainWindow } from '../core/contracts';
+import type { MainWindow, ReaderControllerApi, ReaderJumpLocation } from '../core/contracts';
 import type { Logger } from '../core/logging';
 import type { MainNavigation } from './navigation';
 import type { MainPanel, MainWindowSession } from './session';
@@ -34,7 +34,9 @@ export interface MainLibraryJumpLocation {
   readonly panel: MainPanel;
 }
 
-export type MainJumpLocation = MainTabJumpLocation | MainLibraryJumpLocation;
+export type MainJumpLocation = MainTabJumpLocation | MainLibraryJumpLocation | ReaderJumpLocation;
+
+const MAX_JUMP_LOCATIONS = 100;
 
 /** Session-owned navigation history. Selection is deliberately not part of a location. */
 export class MainJumpHistoryState {
@@ -49,6 +51,18 @@ export class MainJumpHistoryState {
 
   append(source: MainJumpLocation, destination: MainJumpLocation, revision: number): boolean {
     if (this.revision !== revision || sameLocation(source, destination)) return false;
+    const current = this.locations[this.index];
+    // Loading a Reader refines its tab location; it is not another jump to that same tab.
+    if (
+      current?.kind === 'reader' &&
+      source.kind === 'reader' &&
+      current.tabID === source.tabID &&
+      current.libraryID === source.libraryID &&
+      current.itemID === source.itemID &&
+      !current.position &&
+      source.position
+    )
+      this.locations[this.index] = source;
 
     if (this.index >= 0 && sameLocation(this.locations[this.index]!, source)) {
       this.locations.splice(this.index + 1);
@@ -61,6 +75,11 @@ export class MainJumpHistoryState {
     this.locations.splice(this.index + 1);
     this.locations.push(destination);
     this.index = this.locations.length - 1;
+    if (this.locations.length > MAX_JUMP_LOCATIONS) {
+      const removed = this.locations.length - MAX_JUMP_LOCATIONS;
+      this.locations.splice(0, removed);
+      this.index -= removed;
+    }
     return true;
   }
 
@@ -68,6 +87,34 @@ export class MainJumpHistoryState {
     if (this.revision !== revision || index < 0 || index >= this.locations.length) return false;
     this.index = index;
     return true;
+  }
+
+  /** Ordinary motion is not a jump, but Forward must return to the actual departure point. */
+  refresh(location: MainJumpLocation | null): void {
+    const current = this.locations[this.index];
+    if (!location || !current || current.kind !== location.kind || current.tabID !== location.tabID)
+      return;
+    if (
+      current.kind === 'reader' &&
+      location.kind === 'reader' &&
+      (current.libraryID !== location.libraryID || current.itemID !== location.itemID)
+    )
+      return;
+    this.locations[this.index] = location;
+  }
+
+  remapReaderTab(location: ReaderJumpLocation, tabID: string): void {
+    if (location.tabID === tabID) return;
+    for (let index = 0; index < this.locations.length; index += 1) {
+      const entry = this.locations[index]!;
+      if (
+        entry.kind === 'reader' &&
+        entry.tabID === location.tabID &&
+        entry.libraryID === location.libraryID &&
+        entry.itemID === location.itemID
+      )
+        this.locations[index] = { ...entry, tabID };
+    }
   }
 
   dispose(): void {
@@ -83,7 +130,6 @@ export interface MainJumpRequest {
 }
 
 export interface LibrarySelectionOptions {
-  readonly recordHistory?: boolean;
   readonly afterSelection?: () => void | Promise<void>;
 }
 
@@ -112,17 +158,21 @@ export class MainJumpHistory {
   readonly #navigation: MainNavigation;
   readonly #viewActions: MainViewActions;
   readonly #queues = new WeakMap<MainWindowSession, NavigationQueue>();
+  readonly #reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>;
+  readonly #activeRevisions = new WeakMap<MainWindowSession, number>();
   readonly #isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean;
 
   constructor(
     logger: Logger,
     navigation: MainNavigation,
     viewActions: MainViewActions,
+    reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>,
     isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean = () => true,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#viewActions = viewActions;
+    this.#reader = reader;
     this.#isSessionCurrent = isSessionCurrent;
   }
 
@@ -136,7 +186,12 @@ export class MainJumpHistory {
 
     const tabInfo = selectedMainTabInfo(window);
     const libraryTab = tabID === 'zotero-pane' || tabInfo?.type?.startsWith('library') === true;
-    if (mainReaderForTab(tabID) || !libraryTab) return { kind: 'tab', tabID };
+    if (mainReaderForTab(tabID) || tabInfo?.type?.startsWith('reader')) {
+      return (
+        this.#reader.captureJumpLocation(tabID, tabInfo?.data?.itemID) ?? { kind: 'tab', tabID }
+      );
+    }
+    if (!libraryTab) return { kind: 'tab', tabID };
 
     const pane = mainHost(window).ZoteroPane;
     if (!pane?.collectionsView?.selection || !pane.itemsView?.selection) return null;
@@ -170,15 +225,50 @@ export class MainJumpHistory {
     }
   }
 
+  /** Synchronous semantic jumps execute immediately, including rapidly repeated tab keys. */
+  navigateNow(
+    window: MainWindow,
+    session: MainWindowSession,
+    navigate: () => boolean | void,
+  ): void {
+    const revision = session.jumpHistory.invalidate();
+    const source = this.captureSafely(window, session);
+    this.#activeRevisions.set(session, revision);
+    try {
+      if (navigate() === false || !this.#isSessionCurrent(window, session)) return;
+      const destination = this.captureSafely(window, session);
+      if (source && destination) session.jumpHistory.append(source, destination, revision);
+    } finally {
+      if (this.#activeRevisions.get(session) === revision) this.#activeRevisions.delete(session);
+    }
+  }
+
+  /** Reader emits completed discrete host jumps; it never owns a second traversal stack. */
+  recordReaderJump(
+    window: MainWindow,
+    session: MainWindowSession,
+    source: ReaderJumpLocation,
+    destination: ReaderJumpLocation,
+  ): void {
+    if (
+      this.#activeRevisions.get(session) === session.jumpHistory.revision ||
+      !this.#isSessionCurrent(window, session) ||
+      source.tabID !== destination.tabID ||
+      selectedMainTabID(window) !== destination.tabID ||
+      sameLocation(source, destination)
+    )
+      return;
+    session.jumpHistory.append(source, destination, session.jumpHistory.invalidate());
+  }
+
   requestNavigation(
     window: MainWindow,
     session: MainWindowSession,
     navigate: (isCurrent: () => boolean) => boolean | void | Promise<boolean | void>,
-    recordHistory = true,
     destinationPanel?: MainPanel,
   ): MainJumpRequest {
     return this.scheduleNavigation(window, session, async (request) => {
-      const source = recordHistory ? this.captureSafely(window, session) : null;
+      const source = this.captureSafely(window, session);
       const succeeded = await navigate(request.isCurrent);
       if (!request.isCurrent() || succeeded === false) return false;
 
@@ -206,17 +296,16 @@ export class MainJumpHistory {
         await options.afterSelection?.();
         return isCurrent();
       },
-      options.recordHistory !== false,
       'items',
     );
   }
 
-  back(window: MainWindow, session: MainWindowSession): Promise<boolean> {
-    return this.restore(window, session, -1);
+  back(window: MainWindow, session: MainWindowSession, count = 1): Promise<boolean> {
+    return this.restore(window, session, -1, count);
   }
 
-  forward(window: MainWindow, session: MainWindowSession): Promise<boolean> {
-    return this.restore(window, session, 1);
+  forward(window: MainWindow, session: MainWindowSession, count = 1): Promise<boolean> {
+    return this.restore(window, session, 1, count);
   }
 
   private scheduleNavigation(
@@ -250,7 +339,12 @@ export class MainJumpHistory {
       session.jumpHistory.revision === revision && this.#isSessionCurrent(window, session);
     const result = queue.tail.then(async () => {
       if (!isCurrent()) return false;
-      return run({ isCurrent, revision });
+      this.#activeRevisions.set(session, revision);
+      try {
+        return await run({ isCurrent, revision });
+      } finally {
+        if (this.#activeRevisions.get(session) === revision) this.#activeRevisions.delete(session);
+      }
     });
     queue.tail = result.then(
       () => undefined,
@@ -263,11 +357,19 @@ export class MainJumpHistory {
     window: MainWindow,
     session: MainWindowSession,
     direction: -1 | 1,
+    count: number,
   ): Promise<boolean> {
     const request = this.scheduleTraversal(window, session, async (scheduled) => {
-      const targetIndex = session.jumpHistory.index + direction;
+      session.jumpHistory.refresh(this.captureSafely(window, session));
+      const targetIndex = Math.max(
+        0,
+        Math.min(
+          session.jumpHistory.locations.length - 1,
+          session.jumpHistory.index + direction * Math.max(1, Math.trunc(count)),
+        ),
+      );
       const target = session.jumpHistory.locations[targetIndex];
-      if (!target) {
+      if (!target || targetIndex === session.jumpHistory.index) {
         if (scheduled.isCurrent())
           this.#navigation.status(
             session,
@@ -305,6 +407,15 @@ export class MainJumpHistory {
     location: MainJumpLocation,
     isCurrent: () => boolean,
   ): Promise<RestoreResult> {
+    if (location.kind === 'reader') {
+      const tabID = await this.#reader.restoreJumpLocation(window, location, isCurrent);
+      if (!isCurrent()) return { restored: false, stale: true, missing: [] };
+      if (!tabID) return { restored: false, stale: false, missing: ['Reader location'] };
+      if (selectedMainTabID(window) !== tabID) return { restored: false, stale: true, missing: [] };
+      session.jumpHistory.remapReaderTab(location, tabID);
+      this.#navigation.afterTabSwitch(window);
+      return { restored: true, stale: false, missing: [] };
+    }
     if (!selectMainTab(window, location.tabID))
       return { restored: false, stale: false, missing: ['tab'] };
     const isCurrentLocation = (): boolean =>
@@ -415,6 +526,17 @@ export class MainJumpHistory {
 function sameLocation(left: MainJumpLocation, right: MainJumpLocation): boolean {
   if (left.kind !== right.kind || left.tabID !== right.tabID) return false;
   if (left.kind === 'tab' || right.kind === 'tab') return left.kind === right.kind;
+  if (left.kind === 'reader' || right.kind === 'reader') {
+    if (left.kind !== 'reader' || right.kind !== 'reader') return false;
+    return (
+      left.libraryID === right.libraryID &&
+      left.itemID === right.itemID &&
+      left.position?.primary === right.position?.primary &&
+      left.position?.pageIndex === right.position?.pageIndex &&
+      left.position?.top === right.position?.top &&
+      left.position?.left === right.position?.left
+    );
+  }
   return (
     sameStrings(left.scopeIDs, right.scopeIDs) &&
     left.quickSearchText === right.quickSearchText &&

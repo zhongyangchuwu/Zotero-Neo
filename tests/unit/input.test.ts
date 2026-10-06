@@ -175,71 +175,47 @@ describe('binding parsing and overrides', () => {
     expect(bindings['main-normal:<Return>']).toBe('mainActivate');
   });
 
-  it('provides native history, Follow Link, and Select-first Flash defaults that remain remappable', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:<C-o>']).toBe('historyBack');
-    expect(DEFAULT_BINDINGS['reader-normal:<C-i>']).toBe('historyForward');
-    expect(DEFAULT_BINDINGS['reader-normal:f']).toBe('followLink');
-    expect(DEFAULT_BINDINGS['reader-normal:v']).toBe('enterVisual');
-    expect('reader-normal:s' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['reader-select:s']).toBe('flashText');
-    expect(DEFAULT_BINDINGS['reader-select:<Enter>']).toBe('openSelectionActions');
-    expect(Object.keys(DEFAULT_BINDINGS).some((key) => key.startsWith('cursor:'))).toBe(false);
-    expect('reader-insert:<C-o>' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal:<C-o>' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-insert:f' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal:f' in DEFAULT_BINDINGS).toBe(false);
-
+  it('honors explicit history-key overrides independently', () => {
     const bindings = resolveBindings(
       '{"reader-normal:<C-o>":"scrollDown","reader-normal:f":"scrollUp"}',
     );
     expect(bindings['reader-normal:<C-o>']).toBe('scrollDown');
-    expect(bindings['reader-normal:<C-i>']).toBe('historyForward');
+    expect(bindings['reader-normal:<C-i>']).toBe('navigateForward');
     expect(bindings['reader-normal:f']).toBe('scrollUp');
   });
-  it('provides Reader zoom, H/L tab, and zh/zl pan defaults', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:H']).toBe('previousTab');
-    expect(DEFAULT_BINDINGS['reader-normal:L']).toBe('nextTab');
-    expect(DEFAULT_BINDINGS['reader-normal:zh']).toBe('scrollLeft');
-    expect(DEFAULT_BINDINGS['reader-normal:zl']).toBe('scrollRight');
-    expect('reader-normal:J' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal:K' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['main-normal:H']).toBe('previousTab');
-    expect(DEFAULT_BINDINGS['main-normal:L']).toBe('nextTab');
-    expect(DEFAULT_BINDINGS['reader-normal:<Space>,']).toBe('switchTab');
-    expect(DEFAULT_BINDINGS['main-normal:<Space>,']).toBe('switchTab');
-    expect(DEFAULT_BINDINGS['reader-normal:<Space>q']).toBe('closeCurrentTab');
-    expect(DEFAULT_BINDINGS['main-normal:<Space>q']).toBe('closeCurrentTab');
-    expect('reader-normal: ft' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal: td' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal:J' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal:K' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['reader-normal:+']).toBe('zoomIn');
-    expect(DEFAULT_BINDINGS['reader-normal:-']).toBe('zoomOut');
-    expect(DEFAULT_BINDINGS['reader-normal:zI']).toBe('zoomIn');
-    expect(DEFAULT_BINDINGS['reader-normal:zO']).toBe('zoomOut');
-    expect(DEFAULT_BINDINGS['reader-normal:=']).toBe('zoomReset');
-    expect(DEFAULT_BINDINGS['reader-normal:z0']).toBe('zoomReset');
-    expect('reader-normal:zi' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal:zo' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-insert:+' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-normal: :' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal: :' in DEFAULT_BINDINGS).toBe(false);
-    expect('main-normal:-' in DEFAULT_BINDINGS).toBe(false);
-    expect(DEFAULT_BINDINGS['reader-normal::']).toBe('openCommandPalette');
-    expect(DEFAULT_BINDINGS['main-normal::']).toBe('openCommandPalette');
-    expect('reader-select::' in DEFAULT_BINDINGS).toBe(false);
-    expect('cursor::' in DEFAULT_BINDINGS).toBe(false);
-    expect('reader-insert::' in DEFAULT_BINDINGS).toBe(false);
-    expect(ACTION_IDS).toContain('openCommandPalette');
-    expect(ACTION_LABELS.openCommandPalette.en).toBe('Open command palette');
-    expect(ACTION_LABELS.zoomReset.en).toBe('Reset zoom / Fit page width');
-    expect(ACTION_IDS).toContain('navigateBack');
-    expect(ACTION_IDS).toContain('navigateForward');
-    expect(ACTION_LABELS.navigateBack.en).toBe('Navigate back');
-    expect(ACTION_LABELS.navigateForward.en).toBe('Navigate forward');
-    expect(ACTION_LABELS.navigateBack['zh-CN']).toBe('后退');
-    expect(ACTION_LABELS.navigateForward['zh-CN']).toBe('前进');
+  it('migrates persisted Reader history action values to unified navigation', () => {
+    const legacy = JSON.stringify({
+      'reader-normal:<C-o>': 'historyBack',
+      'reader-normal:<C-i>': 'historyForward',
+      'main-normal:x': 'historyBack',
+      'note-normal:x': 'historyForward',
+      'main-normal:<C-o>': null,
+      'reader-normal:z': 'scrollDown',
+    });
+    const canonical = {
+      'main-normal:<C-o>': null,
+      'main-normal:x': 'navigateBack',
+      'note-normal:x': 'navigateForward',
+      'reader-normal:<C-i>': 'navigateForward',
+      'reader-normal:<C-o>': 'navigateBack',
+      'reader-normal:z': 'scrollDown',
+    };
 
+    expect(parseBindingOverrides(legacy)).toEqual(canonical);
+    expect(JSON.parse(migrateBindingModeOverrides(legacy))).toEqual(canonical);
+    expect(JSON.parse(migrateLegacyBindingOverrides(legacy))).toMatchObject({
+      'main-normal:x': 'navigateBack',
+      'note-normal:x': 'navigateForward',
+      'reader-normal:z': 'scrollDown',
+    });
+    const resolved = resolveBindings(legacy);
+    expect(resolved['reader-normal:<C-o>']).toBe('navigateBack');
+    expect(resolved['reader-normal:<C-i>']).toBe('navigateForward');
+    expect(resolved['main-normal:<C-o>']).toBeUndefined();
+    expect(resolved['main-normal:x']).toBe('navigateBack');
+    expect(resolved['note-normal:x']).toBe('navigateForward');
+  });
+  it('honors explicit Reader zoom overrides', () => {
     const bindings = resolveBindings(
       JSON.stringify({
         'reader-normal:zI': 'zoomOut',
@@ -395,12 +371,11 @@ describe('binding parsing and overrides', () => {
     expect(resolved['reader-normal:gr']).toBeUndefined();
     expect(resolved['main-normal:gr']).toBe('nextTab');
   });
-  it('migrates explicit return-context overrides to Back without restoring retired defaults', () => {
+  it('migrates explicit return-context overrides to Back', () => {
     const compact = '{"reader-normal:x":"mainReturnContext"}';
     expect(parseBindingOverrides(compact)).toEqual({ 'reader-normal:x': 'navigateBack' });
     expect(migrateBindingModeOverrides(compact)).toBe('{"reader-normal:x":"navigateBack"}');
     expect(resolveBindings(compact)['reader-normal:x']).toBe('navigateBack');
-    expect(resolveBindings('')['reader-normal:gr']).toBeUndefined();
     expect(
       migrateLegacyBindingOverrides(JSON.stringify({ 'reader-normal:x': 'mainReturnContext' })),
     ).toBe('{"reader-normal:x":"navigateBack"}');

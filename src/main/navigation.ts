@@ -216,10 +216,12 @@ export class MainNavigation {
         ? '#collection-tree,#zotero-collections-tree .virtualized-table,#zotero-collections-tree'
         : '#item-tree-main-default,#zotero-items-tree .virtualized-table,#zotero-items-tree',
     );
-    const focusTarget = (view?.tree ?? view?.domEl ?? fallback) as HTMLElement | null;
+    const topDiv = (view?.tree as { readonly _topDiv?: HTMLElement } | undefined)?._topDiv;
+    const focusTarget = (topDiv ?? view?.tree ?? view?.domEl ?? fallback) as HTMLElement | null;
     if (!focusTarget?.focus && !view?.focus) return false;
     focusTarget?.focus?.();
-    view?.focus?.();
+    // Native tree/view focus defers the DOM focus; avoid leaving that stale callback queued.
+    if (!topDiv?.focus) view?.focus?.();
     session.activePanel = panel;
     // Restore only the cursor so the selected ScopeSet, including multi-selection, is retained.
     if (hasScopeSelection) {
@@ -367,18 +369,14 @@ export class MainNavigation {
     view.selection.select?.(next, shouldDebounce);
   }
 
-  activate(
-    window: MainWindow,
-    session: MainWindowSession,
-    beforeNavigate?: () => void | (() => void),
-  ): void {
+  activate(window: MainWindow, session: MainWindowSession): void {
     if (this.panel(window, session) === 'collections') {
       selectOnlyMainScopeCursor(window);
       this.focusPanel(window, session, 'items');
       this.status(session, '▶ items', 900);
       return;
     }
-    void this.openPDF(window, session, mainCursorItem(window) ?? null, beforeNavigate);
+    void this.openPDF(window, session, mainCursorItem(window) ?? null);
   }
 
   async restoreTrashedItems(ids: readonly number[]): Promise<boolean> {
@@ -482,14 +480,16 @@ export class MainNavigation {
     window: MainWindow,
     session: MainWindowSession,
     target: Zotero.Item | null,
-    beforeNavigate?: () => void | (() => void),
+    isCurrent?: () => boolean,
   ): Promise<boolean> {
+    if (isCurrent && !isCurrent()) return false;
     if (!target) {
       this.status(session, '✗ No item under cursor');
       return false;
     }
     try {
-      const unavailable = await openItem(target, mainHost(window).ZoteroPane, beforeNavigate);
+      const unavailable = await openItem(target, mainHost(window).ZoteroPane, isCurrent);
+      if (isCurrent && !isCurrent()) return false;
       if (unavailable) {
         this.status(session, `✗ ${unavailable}`);
         return false;
@@ -497,7 +497,7 @@ export class MainNavigation {
       return true;
     } catch (error) {
       this.#logger.debug(`mainOpenPDF error: ${String(error)}`);
-      this.status(session, `✗ ${String(error).slice(0, 40)}`);
+      if (!isCurrent || isCurrent()) this.status(session, `✗ ${String(error).slice(0, 40)}`);
       return false;
     }
   }

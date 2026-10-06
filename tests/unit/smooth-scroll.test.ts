@@ -189,6 +189,6 @@ describe('ReaderSmoothScroller', () => {
     expect(smoothScrollSpec('scrollUp')).toEqual({ axis: 'y', direction: -1 });
     expect(smoothScrollSpec('scrollLeft')).toEqual({ axis: 'x', direction: -1 });
     expect(smoothScrollSpec('scrollRight')).toEqual({ axis: 'x', direction: 1 });
-    expect(smoothScrollSpec('historyBack')).toBeNull();
+    expect(smoothScrollSpec('navigateBack')).toBeNull();
   });
 });

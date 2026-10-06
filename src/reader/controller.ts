@@ -2,6 +2,7 @@ import type {
   ReaderControllerApi,
   ReaderControllerDependencies,
   MainWindow,
+  ReaderJumpLocation,
   ReaderSelectionActionDefinition,
   ReaderSelectionContext,
 } from '../core/contracts';
@@ -47,6 +48,8 @@ import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderHostKeyBridge } from './host-key-bridge';
+import { ReaderJumpHostAdapter } from './jump-host';
+import { ReaderJumpHistoryBridge } from './jump-history-bridge';
 import { ReaderNavigation } from './navigation';
 import { ReaderViewLifecycle } from './view-lifecycle';
 import { ReaderFlash } from './flash';
@@ -132,6 +135,7 @@ interface SessionDependencies {
   readonly firstPdfWindow: PdfWindow;
   readonly bindings: () => BindingMap;
   readonly release: () => void;
+  readonly jumpHost: ReaderJumpHostAdapter;
   readonly selection?: SessionSelectionBridge;
 }
 
@@ -177,6 +181,7 @@ export function createReaderController(
 
 export class ReaderController implements ReaderControllerApi {
   readonly #dependencies: ReaderControllerDependencies;
+  readonly #jumpHost = new ReaderJumpHostAdapter();
   readonly #sessions = new Map<string, ReaderSession>();
   readonly #sessionsByItem = new Map<number, ReaderSession>();
   readonly #pending = new Set<string>();
@@ -299,6 +304,26 @@ export class ReaderController implements ReaderControllerApi {
     session.focusAndHandle(event);
   }
 
+  captureJumpLocation(tabID: string, itemID?: number): ReaderJumpLocation | null {
+    return this.#jumpHost.captureJumpLocation(tabID, itemID);
+  }
+
+  restoreJumpLocation(
+    window: MainWindow,
+    location: ReaderJumpLocation,
+    isCurrent: () => boolean,
+  ): Promise<string | null> {
+    return this.#jumpHost.restoreJumpLocation(
+      window,
+      location,
+      isCurrent,
+      (reader, view, position) => {
+        this.#ensure(reader);
+        this.#jumpHost.suppressRestoredLocation(view, position);
+      },
+    );
+  }
+
   selection(): AnnotationSelectionParams | null {
     return this.#lastSelection && Date.now() - this.#lastSelectionAt < 10_000
       ? this.#lastSelection
@@ -367,6 +392,7 @@ export class ReaderController implements ReaderControllerApi {
         firstPdfWindow: pdfWindow,
         bindings: () => resolveBindings(this.#dependencies.preferences.get('bindings', '')),
         release: () => this.#release(instanceID, reader),
+        jumpHost: this.#jumpHost,
         selection: {
           registered: (context) => this.registeredSelectionActions(context),
           noteOwner: (owner) => this.noteSelectionOwner(owner),
@@ -443,6 +469,7 @@ export class ReaderSession {
   readonly #dependencies: SessionDependencies;
   readonly #scope = new CleanupScope();
   readonly #hostKeyBridge: ReaderHostKeyBridge;
+  readonly #jumpHistoryBridge: ReaderJumpHistoryBridge;
   readonly #viewLifecycle: ReaderViewLifecycle;
   readonly #navigation: ReaderNavigation;
   readonly #annotationNavigation = new ReaderAnnotationNavigationState();
@@ -461,6 +488,8 @@ export class ReaderSession {
   readonly input = new InputRuntime(READER_INPUT_TIMERS);
   #sidebarToggleBuffer = '';
   #sidebarToggleTimer: ReaderTimer | null = null;
+  #markJumpRevision = 0;
+  #markJumpIsCurrent: (() => boolean) | null = null;
   readonly state: ReaderSessionState;
 
   constructor(dependencies: SessionDependencies) {
@@ -529,6 +558,17 @@ export class ReaderSession {
       commentInputFocused: (window) => this.#commentEditor.isInputFocused(window),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
+    this.#jumpHistoryBridge = new ReaderJumpHistoryBridge({
+      reader: dependencies.reader,
+      host: dependencies.jumpHost,
+      record: (source, destination) =>
+        dependencies.controller.dependencies.main.recordReaderJump(
+          dependencies.reader._window ?? null,
+          source,
+          destination,
+        ),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+    });
     this.#marks = new ReaderMarks({
       preferences: dependencies.controller.dependencies.preferences,
       itemForReader: (reader) => this.itemForReader(reader),
@@ -541,6 +581,7 @@ export class ReaderSession {
       pageNavigationSupported: () => this.#navigation.pageNavigationSupported(),
       annotationPageRatio: (pdfWindow, annotation) =>
         this.annotationPageRatio(pdfWindow, annotation),
+      onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
     });
     this.#sidebar = new ReaderSidebarOverlay({
       schedule: (delay, task) => this.schedule(delay, task),
@@ -595,8 +636,12 @@ export class ReaderSession {
         this.#linkHints.releaseView(pdfWindow);
         this.#selectionActions.releaseView(pdfWindow);
         this.releaseViewTheme(pdfWindow);
+        this.#jumpHistoryBridge.releaseWindow(pdfWindow);
       },
-      syncHostBridge: () => this.#hostKeyBridge.sync(),
+      syncHostBridge: () => {
+        this.#hostKeyBridge.sync();
+        this.#jumpHistoryBridge.sync();
+      },
     });
     this.#navigation = new ReaderNavigation({
       reader: dependencies.reader,
@@ -629,6 +674,47 @@ export class ReaderSession {
     return this.#dependencies.reader._window ?? null;
   }
 
+  /** Records one completed mark excursion, excluding annotation/scroll intermediate states. */
+  private async recordMarkJump(
+    pdfWindow: PdfWindow,
+    perform: (isCurrent: () => boolean) => Promise<boolean>,
+  ): Promise<boolean> {
+    const reader = this.#dependencies.reader;
+    const view = this.readerViewForWindow(pdfWindow);
+    const tabID = reader.tabID;
+    const revision = ++this.#markJumpRevision;
+    const isCurrent = (): boolean =>
+      revision === this.#markJumpRevision &&
+      !this.#scope.disposed &&
+      (!view || this.readerViewForWindow(pdfWindow) === view) &&
+      (!tabID ||
+        (reader._window as MainWindowRuntime | undefined)?.Zotero_Tabs?.selectedID === tabID);
+    if (!isCurrent()) return false;
+    const source =
+      tabID && view ? this.#dependencies.jumpHost.captureReader(reader, tabID, view) : null;
+    const release =
+      source?.position && view ? this.#jumpHistoryBridge.holdJump(view, isCurrent) : null;
+    this.#markJumpIsCurrent = isCurrent;
+    try {
+      if (!(await perform(isCurrent)) || !isCurrent()) return false;
+      const destination =
+        tabID && view ? this.#dependencies.jumpHost.captureReader(reader, tabID, view) : null;
+      if (source && destination) {
+        if (destination.position && view)
+          this.#dependencies.jumpHost.suppressRestoredLocation(view, destination.position);
+        this.#dependencies.controller.dependencies.main.recordReaderJump(
+          reader._window ?? null,
+          source,
+          destination,
+        );
+      }
+      return true;
+    } finally {
+      release?.();
+      if (this.#markJumpIsCurrent === isCurrent) this.#markJumpIsCurrent = null;
+    }
+  }
+
   get marks(): Readonly<Record<string, Mark>> {
     return this.#marks.values();
   }
@@ -657,6 +743,7 @@ export class ReaderSession {
     this.#selectionRange.leave();
     this.#viewLifecycle.dispose();
     this.#hostKeyBridge.dispose();
+    this.#jumpHistoryBridge.dispose();
     this.#scope.dispose();
     this.#sidebar.dispose(() => {
       this.#marksExplorer.close();
@@ -768,6 +855,7 @@ export class ReaderSession {
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.#navigation.activatePdfWindow(pdfWindow);
+    this.#markJumpRevision += 1;
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.handleSidebarToggleKey(event, pdfWindow)) return;
@@ -1077,6 +1165,7 @@ export class ReaderSession {
     if (!pdfWindow) return;
     const ownerWindow = this.#dependencies.reader._window ?? null;
     const main = this.#dependencies.controller.dependencies.main;
+    const number = Math.max(1, count || 1);
     switch (action) {
       case 'findAllItems':
         main.openAllItemsPicker(ownerWindow);
@@ -1094,10 +1183,10 @@ export class ReaderSession {
         main.openSettingsFromReader(ownerWindow);
         return;
       case 'navigateBack':
-        main.navigateBackFromReader(ownerWindow);
+        main.navigateBackFromReader(ownerWindow, number);
         return;
       case 'navigateForward':
-        main.navigateForwardFromReader(ownerWindow);
+        main.navigateForwardFromReader(ownerWindow, number);
         return;
       case 'showInLibrary':
         main.showReaderItemInLibrary(
@@ -1120,7 +1209,6 @@ export class ReaderSession {
       default:
         break;
     }
-    const number = Math.max(1, count || 1);
     if (action === 'addTag' || action === 'removeTag') {
       this.#dependencies.controller.dependencies.main.openReaderTagPicker(
         this.#dependencies.reader._window ?? null,
@@ -1179,12 +1267,6 @@ export class ReaderSession {
       case 'scrollRight':
         this.clearAnnotation();
         this.scrollBy(pdfWindow, this.scrollStep() * number, 0);
-        break;
-      case 'historyBack':
-        this.#navigation.navigateHistory('back');
-        break;
-      case 'historyForward':
-        this.#navigation.navigateHistory('forward');
         break;
       case 'followLink':
         this.#linkHints.open(pdfWindow);
@@ -2169,32 +2251,47 @@ export class ReaderSession {
     }
   }
 
-  private scrollToPageRatio(
+  private async scrollToPageRatio(
     pdfWindow: PdfWindow,
     pageIndex: number,
     ratio: number,
-    attempt = 0,
-  ): void {
-    const container =
-      pdfWindow.PDFViewerApplication?.pdfViewer?.container ??
-      pdfWindow.document.getElementById('viewerContainer');
-    const page = pdfWindow.document.querySelector<HTMLElement>(
-      `.page[data-page-number="${pageIndex + 1}"]`,
-    );
-    if (!page || !container) {
-      if (attempt < 10)
-        this.schedule(80, () => this.scrollToPageRatio(pdfWindow, pageIndex, ratio, attempt + 1));
-      return;
+  ): Promise<boolean> {
+    const isCurrent = this.#markJumpIsCurrent;
+    for (let attempt = 0; attempt <= 10; attempt += 1) {
+      const reader = this.#dependencies.reader;
+      if (
+        this.#scope.disposed ||
+        (isCurrent && !isCurrent()) ||
+        !this.readerViewForWindow(pdfWindow) ||
+        (reader.tabID &&
+          (reader._window as MainWindowRuntime | undefined)?.Zotero_Tabs?.selectedID !==
+            reader.tabID)
+      )
+        return false;
+      const container =
+        pdfWindow.PDFViewerApplication?.pdfViewer?.container ??
+        pdfWindow.document.getElementById('viewerContainer');
+      const page = pdfWindow.document.querySelector<HTMLElement>(
+        `.page[data-page-number="${pageIndex + 1}"]`,
+      );
+      if (page && page.offsetHeight > 0 && container) {
+        this.scrollTo(
+          pdfWindow,
+          Math.max(0, page.offsetTop + page.offsetHeight * ratio - container.clientHeight / 2),
+        );
+        return true;
+      }
+      if (attempt === 10) return false;
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
     }
-    this.scrollTo(
-      pdfWindow,
-      Math.max(0, page.offsetTop + page.offsetHeight * ratio - container.clientHeight / 2),
-    );
+    return false;
   }
 
-  private scrollDocumentToRatio(pdfWindow: PdfWindow, ratio: number): void {
+  private scrollDocumentToRatio(pdfWindow: PdfWindow, ratio: number): boolean {
+    if (this.#markJumpIsCurrent && !this.#markJumpIsCurrent()) return false;
     const container = this.scrollContainer(pdfWindow);
     this.scrollTo(pdfWindow, ratio * Math.max(0, container.scrollHeight - container.clientHeight));
+    return true;
   }
 
   private schedule(delay: number, task: () => void): ReaderTimer {

@@ -125,8 +125,6 @@
   "action.scrollRight": "向右滚动",
   "action.prevPage": "上一页",
   "action.nextPage": "下一页",
-  "action.historyBack": "返回阅读历史上一位置",
-  "action.historyForward": "前进到阅读历史下一位置",
   "action.followLink": "跟随可见 PDF 链接",
   "action.flashText": "Flash 跳转到可见 PDF 文本",
   "action.firstPage": "第一页",

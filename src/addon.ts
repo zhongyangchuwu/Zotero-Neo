@@ -56,8 +56,12 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
         openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),
         openPluginManager: (ownerWindow) => main?.openPluginManager(ownerWindow),
         openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
-        navigateBackFromReader: (ownerWindow) => main?.navigateBackFromReader(ownerWindow),
-        navigateForwardFromReader: (ownerWindow) => main?.navigateForwardFromReader(ownerWindow),
+        navigateBackFromReader: (ownerWindow, count) =>
+          main?.navigateBackFromReader(ownerWindow, count),
+        navigateForwardFromReader: (ownerWindow, count) =>
+          main?.navigateForwardFromReader(ownerWindow, count),
+        recordReaderJump: (ownerWindow, source, destination) =>
+          main?.recordReaderJump(ownerWindow, source, destination),
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),

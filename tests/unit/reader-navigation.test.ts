@@ -30,8 +30,6 @@ function harness() {
   const secondary = pdfWindow();
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: primary } });
 
-  const navigateBack = vi.fn();
-  const navigateForward = vi.fn();
   const zoomIn = vi.fn();
   const zoomOut = vi.fn();
   const zoomReset = vi.fn();
@@ -65,8 +63,6 @@ function harness() {
       _secondaryView: secondaryView,
       _lastView: primaryView,
       splitType: 'vertical',
-      navigateBack,
-      navigateForward,
       zoomIn,
       zoomOut,
       zoomReset,
@@ -109,8 +105,6 @@ function harness() {
     scrollBoundary,
     showStatus,
     debug,
-    navigateBack,
-    navigateForward,
     zoomIn,
     zoomOut,
     zoomReset,
@@ -131,11 +125,9 @@ function harness() {
 }
 
 describe('ReaderNavigation', () => {
-  it('delegates history, zoom, page, search, and split operations to the current Reader host', () => {
+  it('delegates zoom, page, search, and split operations to the current Reader host', () => {
     const test = harness();
 
-    test.navigation.navigateHistory('back');
-    test.navigation.navigateHistory('forward');
     test.navigation.zoom('in', 2);
     test.navigation.zoom('out', 3);
     test.navigation.zoom('reset', 4);
@@ -151,8 +143,6 @@ describe('ReaderNavigation', () => {
     test.navigation.toggleSplit('horizontal');
     test.navigation.toggleSplit('vertical');
 
-    expect(test.navigateBack).toHaveBeenCalledOnce();
-    expect(test.navigateForward).toHaveBeenCalledOnce();
     expect(test.zoomIn).toHaveBeenCalledTimes(2);
     expect(test.zoomOut).toHaveBeenCalledTimes(3);
     expect(test.zoomReset).toHaveBeenCalledOnce();
@@ -204,17 +194,14 @@ describe('ReaderNavigation', () => {
     if (!internal) throw new Error('Expected internal reader');
     Reflect.set(internal, '_lastView', undefined);
     Reflect.set(internal, '_primaryView', { _iframeWindow: test.primary });
-    Reflect.set(internal, 'navigateBack', undefined);
     Reflect.set(internal, 'zoomOut', () => {
       throw new Error('reader reloaded');
     });
 
-    test.navigation.navigateHistory('back');
     test.navigation.zoom('out', 1);
     test.navigation.navigateBoundary(0, true, test.primary);
     test.navigation.find(true);
 
-    expect(test.showStatus).toHaveBeenCalledWith('History unavailable', 1500);
     expect(test.showStatus).toHaveBeenCalledWith('Zoom unavailable', 1500);
     expect(test.showStatus).toHaveBeenCalledWith('No active search — press / to search', 1500);
     expect(test.debug).toHaveBeenCalledWith('reader zoom out failed: Error: reader reloaded');

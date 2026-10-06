@@ -96,7 +96,12 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
   } as unknown as MainWindowSession;
 
   const statuses: string[] = [];
-  const find = new MainLocalFind((_session, text) => statuses.push(text));
+  const find = new MainLocalFind(
+    (_session, text) => statuses.push(text),
+    (_window, _session, move) => {
+      move();
+    },
+  );
 
   return {
     window,

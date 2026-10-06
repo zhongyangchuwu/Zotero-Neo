@@ -30,21 +30,6 @@ export class ReaderNavigation {
     this.#dependencies = dependencies;
   }
 
-  navigateHistory(direction: 'back' | 'forward'): void {
-    try {
-      const internal = this.#dependencies.reader._internalReader;
-      const navigate = direction === 'back' ? internal?.navigateBack : internal?.navigateForward;
-      if (typeof navigate !== 'function') {
-        this.#dependencies.showStatus('History unavailable', 1500);
-        return;
-      }
-      navigate.call(internal);
-    } catch (error) {
-      this.#dependencies.debug(`reader history ${direction} failed: ${String(error)}`);
-      this.#dependencies.showStatus('History unavailable', 1500);
-    }
-  }
-
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {
     try {
       const internal = this.#dependencies.reader._internalReader;

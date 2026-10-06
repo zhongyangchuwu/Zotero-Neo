@@ -6,6 +6,7 @@ import type {
   ReaderMainOperations,
 } from '../../src/core/contracts';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
+import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
   InternalReaderRuntime,
@@ -29,6 +30,7 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openSettingsFromReader: () => {},
   navigateBackFromReader: () => {},
   navigateForwardFromReader: () => {},
+  recordReaderJump: () => {},
   openTabPicker: () => {},
   closeReaderTab: () => {},
   cycleReaderTab: () => {},
@@ -342,6 +344,7 @@ function createHistorySession(
     firstPdfWindow: pdfWindow,
     bindings: () => bindings,
     release: () => {},
+    jumpHost: new ReaderJumpHostAdapter(),
   } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
   const indicator = {
     style: { display: '', color: '', background: '' },
@@ -529,62 +532,44 @@ function destinationCueElement(
   return created.bodyChildren.find((node) => node.dataset.zoteroNeoDestinationCue === '1') ?? null;
 }
 
-describe('native reader history', () => {
-  it('delegates Ctrl-o and Ctrl-i to Zotero and consumes both events', () => {
-    const navigateBack = vi.fn();
-    const navigateForward = vi.fn();
-    const { session } = createHistorySession({ navigateBack, navigateForward });
+describe('Reader global history actions', () => {
+  it('routes counted Ctrl-o and Ctrl-i to Main with the Reader owner window', () => {
+    const navigateBackFromReader = vi.fn();
+    const navigateForwardFromReader = vi.fn();
+    const created = createHistorySession({}, { navigateBackFromReader, navigateForwardFromReader });
+    created.session.focusAndHandle(readerKey('3').event);
     const back = controlKey('o');
+    created.session.focusAndHandle(back.event);
+    created.session.focusAndHandle(readerKey('2').event);
     const forward = controlKey('i');
+    created.session.focusAndHandle(forward.event);
 
-    session.focusAndHandle(back.event);
-    session.focusAndHandle(forward.event);
-
-    expect(navigateBack).toHaveBeenCalledOnce();
-    expect(navigateForward).toHaveBeenCalledOnce();
+    expect(navigateBackFromReader).toHaveBeenCalledWith(created.reader._window, 3);
+    expect(navigateForwardFromReader).toHaveBeenCalledWith(created.reader._window, 2);
     expect(back.preventDefault).toHaveBeenCalledOnce();
-    expect(back.stopImmediatePropagation).toHaveBeenCalledOnce();
     expect(forward.preventDefault).toHaveBeenCalledOnce();
-    expect(forward.stopImmediatePropagation).toHaveBeenCalledOnce();
+    created.session.dispose();
   });
 
-  it('reports missing and failed host commands without throwing through input dispatch', () => {
-    vi.useFakeTimers();
-    const missing = createHistorySession();
-
-    expect(() => missing.session.focusAndHandle(controlKey('o').event)).not.toThrow();
-    expect(missing.indicator.textContent).toBe('History unavailable');
-
-    const failed = createHistorySession({
-      navigateForward: () => {
-        throw new Error('reader reloaded');
-      },
-    });
-    expect(() => failed.session.focusAndHandle(controlKey('i').event)).not.toThrow();
-    expect(failed.indicator.textContent).toBe('History unavailable');
-    expect(failed.debug).toEqual(['reader history forward failed: Error: reader reloaded']);
-    vi.clearAllTimers();
-  });
-
-  it('leaves history chords untouched in Insert mode and editable controls', () => {
-    const navigateBack = vi.fn();
-    const { session } = createHistorySession({ navigateBack });
-    session.state.mode = 'insert';
+  it('leaves global history chords untouched in Insert mode and editable controls', () => {
+    const navigateBackFromReader = vi.fn();
+    const created = createHistorySession({}, { navigateBackFromReader });
+    created.session.state.mode = 'insert';
     const insert = controlKey('o');
-
-    session.focusAndHandle(insert.event);
+    created.session.focusAndHandle(insert.event);
 
     const input = { tagName: 'INPUT', localName: 'input' } as unknown as EventTarget;
-    session.state.mode = 'normal';
+    created.session.state.mode = 'normal';
     const editable = controlKey('o', input);
-    session.focusAndHandle(editable.event);
+    created.session.focusAndHandle(editable.event);
 
-    expect(navigateBack).not.toHaveBeenCalled();
+    expect(navigateBackFromReader).not.toHaveBeenCalled();
     expect(insert.preventDefault).not.toHaveBeenCalled();
     expect(editable.preventDefault).not.toHaveBeenCalled();
+    created.session.dispose();
   });
 
-  it('suppresses Zotero key forwarding only for bound reader commands', () => {
+  it('suppresses Zotero key forwarding only for bound Reader commands', () => {
     const originalKeyDown = vi.fn();
     const created = createHistorySession();
     const view = created.reader._internalReader?._primaryView;
@@ -607,6 +592,7 @@ describe('native reader history', () => {
     expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'h' }));
     created.session.dispose();
   });
+
   it('forwards composing keys rather than claiming bound Reader shortcuts', () => {
     const originalKeyDown = vi.fn();
     const created = createHistorySession();
@@ -694,25 +680,6 @@ describe('Reader Selection Actions capture', () => {
     ).toBe(false);
     expect(created.indicator.textContent).toBe('✓ captured to note');
     created.session.dispose();
-  });
-});
-
-describe('Reader stack navigation', () => {
-  it('routes Back and Forward through Main with the Reader owner window', () => {
-    const navigateBackFromReader = vi.fn();
-    const navigateForwardFromReader = vi.fn();
-    const custom = createHistorySession(
-      {},
-      { navigateBackFromReader, navigateForwardFromReader },
-      resolveBindings(
-        '{"reader-normal:x":"mainReturnContext","reader-normal:y":"navigateForward"}',
-      ),
-    );
-    custom.session.focusAndHandle(readerKey('x').event);
-    custom.session.focusAndHandle(readerKey('y').event);
-    expect(navigateBackFromReader).toHaveBeenCalledWith(custom.reader._window);
-    expect(navigateForwardFromReader).toHaveBeenCalledWith(custom.reader._window);
-    custom.session.dispose();
   });
 });
 

@@ -8,8 +8,6 @@ const BASE_ACTION_IDS = [
   'scrollRight',
   'prevPage',
   'nextPage',
-  'historyBack',
-  'historyForward',
   'followLink',
   'flashText',
   'firstPage',
