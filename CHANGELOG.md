@@ -11,6 +11,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Changed
 
+- Reader `gg`, `G`, and counted page jumps now use one physical-page navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view.
+
 - Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
 
 - Main Trash confirms the resolved target kind/count, refuses hidden Selection members, and preserves Selection/history on cancel or failure. Reader annotation deletion states its single target and permanent consequence; cancellation preserves the selected annotation. New confirmations and target feedback follow the UI language.

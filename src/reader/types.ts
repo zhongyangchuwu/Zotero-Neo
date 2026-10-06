@@ -39,8 +39,6 @@ export interface InternalReaderRuntime {
   _enableAnnotationDeletionFromComment?: boolean;
   navigateToPreviousPage?(): void;
   navigateToNextPage?(): void;
-  navigateToFirstPage?(): void;
-  navigateToLastPage?(): void;
   zoomIn?(): void;
   zoomOut?(): void;
   zoomReset?(): void;
@@ -129,6 +127,7 @@ export interface ReaderPdfPageRuntime {
 
 export interface PdfViewerRuntime {
   currentPageNumber?: number;
+  readonly pagesCount?: number;
   readonly container?: HTMLElement;
   readonly _location?: {
     readonly pageNumber: number;

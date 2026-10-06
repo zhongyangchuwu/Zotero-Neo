@@ -1,16 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MainJumpHistoryState } from '../../src/main/jump-history';
+import { ReaderJumpHistoryBridge } from '../../src/reader/jump-history-bridge';
+import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
 import { ReaderNavigation } from '../../src/reader/navigation';
-import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
+import type {
+  PdfWindow,
+  ReaderPdfHistoryLocationRuntime,
+  ReaderRuntime,
+  ReaderViewRuntime,
+} from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalServices = Reflect.get(globalThis, 'Services');
+const originalZotero = Reflect.get(globalThis, 'Zotero');
 
 afterEach(() => {
   if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
   else Reflect.set(globalThis, 'Components', originalComponents);
   if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
   else Reflect.set(globalThis, 'Services', originalServices);
+  if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+  else Reflect.set(globalThis, 'Zotero', originalZotero);
 });
 
 function pdfWindow(): PdfWindow {
@@ -35,8 +46,6 @@ function harness() {
   const zoomReset = vi.fn();
   const navigateToPreviousPage = vi.fn();
   const navigateToNextPage = vi.fn();
-  const navigateToFirstPage = vi.fn();
-  const navigateToLastPage = vi.fn();
   const navigate = vi.fn();
   const toggleFindPopup = vi.fn();
   const findNext = vi.fn();
@@ -68,8 +77,6 @@ function harness() {
       zoomReset,
       navigateToPreviousPage,
       navigateToNextPage,
-      navigateToFirstPage,
-      navigateToLastPage,
       navigate,
       toggleFindPopup,
       findNext,
@@ -110,8 +117,6 @@ function harness() {
     zoomReset,
     navigateToPreviousPage,
     navigateToNextPage,
-    navigateToFirstPage,
-    navigateToLastPage,
     navigate,
     toggleFindPopup,
     findNext,
@@ -125,6 +130,77 @@ function harness() {
 }
 
 describe('ReaderNavigation', () => {
+  it.each([
+    { name: 'primary', secondary: false, pages: 37 },
+    { name: 'secondary', secondary: true, pages: 11 },
+  ])('preserves mixed boundary jump locations in the $name view', ({ secondary, pages }) => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const active = secondary ? test.secondary : test.primary;
+    const view = (secondary ? internal._secondaryView : internal._primaryView)!;
+    const viewer = { pagesCount: pages, _location: { pageNumber: 1, top: 800, left: 0 } };
+    Reflect.set(active, 'PDFViewerApplication', { pdfViewer: viewer });
+    Reflect.set(internal, '_lastView', view);
+    Reflect.set(view, 'navigateToNextPage', () => {});
+    Reflect.set(test.reader, 'tabID', 'reader-tab');
+    Reflect.set(test.reader, 'itemID', 7);
+    Reflect.set(globalThis, 'Zotero', {
+      Items: { get: () => ({ id: 7, libraryID: 1, isAttachment: () => true }) },
+    });
+
+    const location = (pageIndex: number): ReaderPdfHistoryLocationRuntime => ({
+      dest: [pageIndex, { name: 'XYZ' }, 0, 800, null],
+    });
+    const nativeHistory: {
+      _currentLocation: ReaderPdfHistoryLocationRuntime;
+      save: (location: ReaderPdfHistoryLocationRuntime, transient?: boolean) => unknown;
+    } = {
+      _currentLocation: location(0),
+      save: (next) => {
+        nativeHistory._currentLocation = next;
+      },
+    };
+    Reflect.set(view, '_history', nativeHistory);
+    const navigate = (pageIndex: number, hard: boolean) => {
+      viewer._location = { pageNumber: pageIndex + 1, top: 800, left: 0 };
+      nativeHistory.save(location(pageIndex), !hard);
+    };
+    Reflect.set(internal, 'navigate', ({ pageIndex }: { pageIndex: number }) =>
+      navigate(pageIndex, true),
+    );
+    // Native first/last-page events do not save discrete history points.
+    Reflect.set(internal, 'navigateToFirstPage', () => navigate(0, false));
+    Reflect.set(internal, 'navigateToLastPage', () => navigate(pages - 1, false));
+    const history = new MainJumpHistoryState();
+    const bridge = new ReaderJumpHistoryBridge({
+      reader: test.reader,
+      host: new ReaderJumpHostAdapter(),
+      record: (source, destination) => history.append(source, destination, history.invalidate()),
+      debug: test.debug,
+    });
+    bridge.sync();
+    try {
+      test.navigation.navigateBoundary(5, false, active);
+      test.navigation.navigateBoundary(0, true, active);
+      test.navigation.navigateBoundary(0, false, active);
+      test.navigation.navigateBoundary(9, false, active);
+
+      expect(viewer._location.pageNumber).toBe(9);
+      expect(
+        history.locations.map((entry) => (entry.kind === 'reader' ? entry.position : null)),
+      ).toEqual(
+        [0, 4, pages - 1, 0, 8].map((pageIndex) => ({
+          primary: !secondary,
+          pageIndex,
+          top: 800,
+          left: 0,
+        })),
+      );
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('delegates zoom, page, search, and split operations to the current Reader host', () => {
     const test = harness();
 
@@ -133,9 +209,6 @@ describe('ReaderNavigation', () => {
     test.navigation.zoom('reset', 4);
     test.navigation.navigatePage(-2);
     test.navigation.navigatePage(3);
-    test.navigation.navigateBoundary(0, false, test.primary);
-    test.navigation.navigateBoundary(0, true, test.primary);
-    test.navigation.navigateBoundary(4, false, test.primary);
     test.navigation.openSearch(test.primary);
     test.navigation.clearSearch();
     test.navigation.find(true);
@@ -148,9 +221,6 @@ describe('ReaderNavigation', () => {
     expect(test.zoomReset).toHaveBeenCalledOnce();
     expect(test.navigateToPreviousPage).toHaveBeenCalledTimes(2);
     expect(test.navigateToNextPage).toHaveBeenCalledTimes(3);
-    expect(test.navigateToFirstPage).toHaveBeenCalledOnce();
-    expect(test.navigateToLastPage).toHaveBeenCalledOnce();
-    expect(test.navigate).toHaveBeenCalledWith({ pageIndex: 3 });
     expect(test.toggleFindPopup).toHaveBeenNthCalledWith(1, { open: true });
     expect(test.toggleFindPopup).toHaveBeenNthCalledWith(2, { open: false });
     expect(test.findNext).toHaveBeenCalledOnce();

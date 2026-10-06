@@ -68,6 +68,10 @@ export class ReaderNavigation {
     for (let index = 0; index < Math.abs(direction); index += 1) method?.call(internal);
   }
 
+  /**
+   * Resolves a positive one-based count, or the first/last boundary of the active PDF view.
+   * A count overrides `last`; native hard-save observation owns recording the completed jump.
+   */
   navigateBoundary(count: number, last: boolean, pdfWindow: PdfWindow): void {
     const internal = this.#dependencies.reader._internalReader;
     if (!this.pageNavigationSupported()) {
@@ -75,10 +79,21 @@ export class ReaderNavigation {
       return;
     }
     const outerWindow = this.#dependencies.reader._iframeWindow;
-    if (count > 0 && internal?.navigate && outerWindow) {
-      internal.navigate(cloneInto({ pageIndex: count - 1 }, outerWindow));
-    } else if (last) internal?.navigateToLastPage?.();
-    else internal?.navigateToFirstPage?.();
+    if (!internal?.navigate || !outerWindow) {
+      this.#dependencies.showStatus('✗ Page navigation not supported here', 1500);
+      return;
+    }
+    let pageIndex = count > 0 ? count - 1 : 0;
+    if (last && count === 0) {
+      const pagesCount = pdfWindow.PDFViewerApplication?.pdfViewer?.pagesCount;
+      if (typeof pagesCount !== 'number' || !Number.isInteger(pagesCount) || pagesCount < 1) {
+        this.#dependencies.showStatus('✗ Page navigation not supported here', 1500);
+        return;
+      }
+      pageIndex = pagesCount - 1;
+    }
+    // First/last-page events do not save hard history points; all explicit targets use navigate.
+    internal.navigate(cloneInto({ pageIndex }, outerWindow));
   }
 
   openSearch(pdfWindow: PdfWindow): void {

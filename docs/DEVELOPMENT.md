@@ -244,6 +244,14 @@ Reader Normal `+`/`-` and `zI`/`zO` delegate to Zotero's `InternalReader.zoomIn(
 `zoomOut()` on the active `_lastView`; `=`/`z0` delegate to `zoomReset()` for fit-page-width
 semantics. Missing or throwing host methods fail closed with `Zoom unavailable`.
 
+Reader `gg`, `G`, and counted page jumps share `ReaderNavigation.navigateBoundary()`:
+it resolves a zero-based physical page index (`G` reads the active PDF viewer's
+`pagesCount`) and calls `InternalReader.navigate()` with a cloned payload. Do not use
+the host first/last-page event shortcuts: they do not save a hard history point.
+`ReaderJumpHistoryBridge` observes the resulting native hard save, while
+`MainJumpHistory` remains the only traversal stack. Navigation must not manually
+append another history entry or duplicate the position-capture/restore logic.
+
 Directional focus reuses the executable binding dispatcher. Reader split movement
 calls `InternalReader.focusView(primary)` based on `splitType`; every Reader command
 then resolves the same active view from the event source and Zotero's
