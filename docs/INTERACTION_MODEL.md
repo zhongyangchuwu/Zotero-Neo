@@ -383,6 +383,14 @@ Record completed explicit jumps:
   outline-entry jumps, annotation navigation, internal/citation links, and
   native search-result navigation.
 
+Reader page, outline, annotation, internal/citation link, and search destinations
+enter the shared list only when the native hard-save bridge observes a qualifying
+non-transient save. Marks instead record one completed managed excursion. `H`/`L`
+ignore numeric counts and cycle once through Zotero's open tabs, including Library;
+the current host and fallback wrap at the ends. Opening, browsing, or cancelling
+the tab chooser does not record. Confirming the current tab is a no-op and preserves
+an existing forward suffix.
+
 Do not record continuous Main `j`/`k`, ordinary Reader scrolling or adjacent
 page turns, native tab clicks, or manual collection/filter edits. Failed or
 no-op operations do not create locations.
@@ -409,6 +417,15 @@ partially restorable Views must be reported honestly and must not advance the
 history pointer. Persistent Selection stays Main-owned, independent of history,
 and is never copied into a location. Closing Reader/Note does not automatically
 navigate Back.
+
+Restoration is transactional for the history pointer, not atomic for the UI.
+Scope, Quick Search, tags, Advanced Search, Cursor, and focus are applied in order
+after selecting the target tab; a later failure or stale request leaves the pointer
+unchanged but does not roll back earlier UI changes. A newly opened Reader is not
+ready for Neo bindings until its session/view hooks install; Zotero's native reader
+initialization flag alone is not sufficient. See the
+[command reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist) for
+the command-by-command recording and restoration boundaries.
 
 The stack/forward-truncation and 100-location bound follow Neovim's
 [jumplist-stack model](https://neovim.io/doc/user/motion/#jumplist-stack), not a

@@ -384,10 +384,13 @@ write the specific reason to both Zotero debug output and the startup diagnostic
 log rather than leaving badges or input capture active.
 
 Reader session-owned hard-history observation emits only settled discrete PDF
-jumps as DOM-free identity/geometry snapshots; ordinary scroll and adjacent-page
-motion are excluded. `MainJumpHistory` is the sole owner of per-window ordering
-and Back/Forward traversal. Its `skipHistory` restore context suppresses
-self-recording during global restore. The Reader capture/restore/reopen adapter
+jumps as DOM-free identity/geometry snapshots. Ordinary scrolling and the current
+host's adjacent-page methods do not emit qualifying hard saves. The bridge filters
+native save kind, not an action whitelist; host navigation retains ownership of
+whether search, annotation, or other destinations emit such saves. `MainJumpHistory`
+is the sole owner of per-window ordering and Back/Forward traversal. Its
+`skipHistory` restore context suppresses self-recording during global restore.
+The Reader capture/restore/reopen adapter
 uses `cloneInto` for cross-compartment payloads and restores the exact primary or
 secondary PDF view, reopening the same readable attachment when its tab is gone.
 It reapplies its host patches when the PDF view is replaced and releases them on

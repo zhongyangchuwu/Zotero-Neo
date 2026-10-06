@@ -114,6 +114,7 @@ From File…** and restart when prompted.
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
+- [Command reference](docs/COMMAND_REFERENCE.md) — complete ActionId/default-key lookup, mode and temporary-surface grammars, and shared navigation/jumplist behavior.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
   semantic actions, and Zotero host boundaries.
 - [Selection and Tags](docs/TAGS.md) — Main Selection/Visual semantics, explicit

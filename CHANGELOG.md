@@ -6,8 +6,9 @@ All notable changes to Zotero Neo are documented here.
 
 ### Added
 
-- Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains separate from navigation history.
+- Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains a distinct action from Back/Forward.
 - Add per-Main-window stack-style navigation history with a 100-location bound and forward-suffix truncation. Canonical `navigateBack` / `navigateForward` actions default to `<C-o>` / `<C-i>` in Main, Reader, and Note Normal; shortcut counts traverse history, while palette actions remain uncounted.
+- Add a help-style command reference for Main, Reader, Note, and modal surfaces, including shipped bindings, action IDs, counts, targets, feature dependencies, and the shared jumplist's recording, restoration, and failure boundaries.
 
 ### Changed
 

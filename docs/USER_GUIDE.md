@@ -1,7 +1,7 @@
 # Zotero Neo User Guide
 
-This guide describes the current candidate bindings and settings. Planned additions remain
-unavailable until their owning feature is implemented and verified.
+For a complete command lookup, exact default bindings, count/input rules, and
+navigation-history boundaries, see the [Command Reference](COMMAND_REFERENCE.md).
 
 ## Contents
 
@@ -82,20 +82,12 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `<Space>pp` | Open the persistent Plugin Manager panel |
 | `<Space>ps` | Open Neo Settings without leaving the Reader tab |
 
-Count prefixes repeat the page turn (`3l` = three pages forward) and `gg`/`G`
-with a count jump to that page number (`5G` / `5gg` = page 5).
+Counts repeat page turns (`3l` = three host page-turn steps). When the Reader host supports numeric page navigation, positive counts with `gg/G` target that one-based page (`5G` / `5gg` = page 5). If it does not, `gg/G` fall back to top/bottom scrolling and the count is ignored.
 
-Main Open, qualifying Main navigation, Reader PDF jumps, and successful Show in
-Library/reveal operations are recorded in one stack-style history per Main
-window (100 locations maximum). The canonical actions are `navigateBack` and
-`navigateForward`, defaulting to `<C-o>` and `<C-i>` in Main, Reader, and Note
-Normal. Shortcut counts traverse multiple locations; Command Palette invocation
-is uncounted. Traversal does not record itself, and a new jump after Back drops
-the forward suffix. Closing the Main window discards its history. Persistent Main
-Selection is independent and is never captured in a history location.
-
-For the complete recording rules, exclusions, and restoration behavior, see
-[Navigation history](#navigation-history) below.
+The shared jumplist records selected explicit navigation across Main and Reader,
+including tab switches. Back/Forward use `<C-o>` / `<C-i>` in Normal modes.
+For the complete recording/exclusion matrix, restoration limits, and examples,
+see the [Command Reference: shared jumplist](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist).
 
 ### Prefix Guide
 
@@ -374,7 +366,7 @@ you still press `Enter` to jump.
 | Key         | Action                                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------------------------------ |
 | `<space>-`  | Toggle horizontal split (top/bottom)                                                                               |
-| `<space>\|` | Toggle vertical split (left/right)                                                                                 |
+| <code>&lt;Space&gt;&#124;</code> | Toggle vertical split (left/right) |
 | `Ctrl+h`    | Return from the right-side note editor to the active reader pane, or focus the reader split pane to the left       |
 | `Ctrl+j`    | Focus the reader split pane below when one exists                                                                  |
 | `Ctrl+k`    | Focus the reader split pane above when one exists                                                                  |
@@ -521,36 +513,14 @@ and focus context:
 
 #### Navigation history
 
-The single Main-window list records completed explicit jumps: Main Items `gg`/`G`
-and confirmed local-find `n`/`N`; explicit Main Open; all-library,
-collection-scoped, and note item-picker confirmations; Show in Library and
-Selection Panel Reveal; Neo `H`/`L` and open-tab picker confirmation; Reader
-PDF page destinations (`gg`/`G`, including counts), marks, outline jumps,
-annotation navigation, internal/citation links, and native search-result
-navigation. It excludes continuous Main `j`/`k`, ordinary Reader scrolling and
-adjacent-page turns, native tab clicks, and manual collection/filter edits.
-Failed/no-op operations do not record. Before traversal, Neo refreshes the
-departing location when its contextual identity matches, preserving ordinary
-motion as the return position.
+Neo keeps one bounded jumplist per Main window. The shortcuts are `<C-o>` Back
+and `<C-i>` Forward; H/L tab changes, Reader page jumps, marks, and other
+qualifying explicit destinations participate. Ordinary movement and failed or
+cancelled operations do not automatically become entries.
 
-Reader locations store library/item identity, a tabID hint, and optional
-primary/secondary PDF page index and top/left coordinates. Back/Forward reuses an
-open same-item tab or reopens the same readable attachment, restores available
-PDF position, verifies the result, and returns the actual tabID. It does not
-restore zoom/layout. Missing/deleted/trash/unreadable items or a missing required
-split report partial/failure without advancing the pointer. Non-PDF Reader tabs
-are identity-only and follow native retained position rather than PDF geometry.
-Standalone Note tabs store only tabID and follow native retained position; a
-context-pane Note restores the underlying Main View, not editor focus or caret.
-Main locations restore available scope, Quick Search, tag filters, Advanced
-Search, Cursor, and panel/focus state. Main Selection is never captured or
-restored. Closing the Main window discards history; closing Reader/Note does not
-automatically navigate Back.
-
-The 100-location bound and forward-truncation follow Neovim's
-[jumplist-stack model](https://neovim.io/doc/user/motion/#jumplist-stack), not
-full Neovim behavior. Unlike Neovim's default `jumpoptions=clean`, Neo may reopen
-a closed Reader location when its same attachment remains readable.
+For the canonical entry matrix, count behavior, snapshot contents, closed Reader
+attachment reopen/remapping, partial restoration, and Neovim differences, see
+the [Command Reference: Navigation and the shared jumplist](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist).
 
 #### Main local find
 
@@ -775,119 +745,7 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 
 ### Action reference
 
-| Action                        | Description                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `scrollDown`                  | Scroll down by the configured step                                                   |
-| `scrollUp`                    | Scroll up by the configured step                                                     |
-| `scrollLeft`                  | Scroll left by the configured step                                                   |
-| `scrollRight`                 | Scroll right by the configured step                                                  |
-| `zoomIn`                      | Zoom in one Zotero Reader step                                                       |
-| `zoomOut`                     | Zoom out one Zotero Reader step                                                      |
-| `zoomReset`                   | Reset zoom / fit page width                                                          |
-| `halfPageDown`                | Scroll down half a viewport                                                          |
-| `halfPageUp`                  | Scroll up half a viewport                                                            |
-| `fullPageDown`                | Scroll down a full viewport                                                          |
-| `fullPageUp`                  | Scroll up a full viewport                                                            |
-| `scrollTop`                   | Reposition view so current page is at top                                            |
-| `scrollCenter`                | Reposition view so current page is centred                                           |
-| `scrollBottom`                | Reposition view so current page is at bottom                                         |
-| `prevPage`                    | Previous page                                                                        |
-| `nextPage`                    | Next page                                                                            |
-| `firstPage`                   | First page                                                                           |
-| `lastPage`                    | Last page                                                                            |
-| `openSearch`                  | Open find bar                                                                        |
-| `findNext`                    | Jump to next search match                                                            |
-| `findPrevious`                | Jump to previous search match                                                        |
-| `clearSearch`                 | Close / clear find bar                                                               |
-| `prevAnnotation`              | Jump to previous annotation                                                          |
-| `nextAnnotation`              | Jump to next annotation                                                              |
-| `editAnnotation`              | Focus annotation comment field (Enter)                                               |
-| `deleteAnnotation`            | Delete selected annotation                                                           |
-| `filterYellow`                | Filter sidebar to Yellow annotations only                                            |
-| `filterRed`                   | Filter sidebar to Red annotations only                                               |
-| `filterGreen`                 | Filter sidebar to Green annotations only                                             |
-| `filterBlue`                  | Filter sidebar to Blue annotations only                                              |
-| `filterPurple`                | Filter sidebar to Purple annotations only                                            |
-| `filterClear`                 | Clear colour filter (show all annotations)                                           |
-| `recolorYellow`               | Change selected annotation colour to Yellow                                          |
-| `recolorRed`                  | Change selected annotation colour to Red                                             |
-| `recolorGreen`                | Change selected annotation colour to Green                                           |
-| `recolorBlue`                 | Change selected annotation colour to Blue                                            |
-| `recolorPurple`               | Change selected annotation colour to Purple                                          |
-| `yankAnnotation`              | Copy annotation highlighted text                                                     |
-| `yankAnnotationComment`       | Copy annotation comment text                                                         |
-| `enterVisual`                 | Enter Select mode                                                                    |
-| `enterInsert`                 | Enter Insert mode (also focuses comment if annotation selected)                      |
-| `exitMode`                    | Return to Normal mode                                                                |
-| `extendDown`                  | Extend selection down one line                                                       |
-| `extendUp`                    | Extend selection up one line                                                         |
-| `extendLeft`                  | Extend selection left one character                                                  |
-| `extendRight`                 | Extend selection right one character                                                 |
-| `extendWordForward`           | Extend selection to next word                                                        |
-| `extendWordBackward`          | Extend selection to previous word                                                    |
-| `extendLineStart`             | Extend selection to start of current line                                            |
-| `extendLineEnd`               | Extend selection to end of current line                                              |
-| `extendSentenceForward`       | Extend selection to next sentence start                                              |
-| `extendSentenceBackward`      | Extend selection to previous sentence start                                          |
-| `extendParagraphForward`      | Extend selection to end of current paragraph                                         |
-| `extendParagraphBackward`     | Extend selection to start of current paragraph                                       |
-| `highlightYellow`             | Create yellow highlight                                                              |
-| `highlightRed`                | Create red highlight                                                                 |
-| `highlightGreen`              | Create green highlight                                                               |
-| `highlightBlue`               | Create blue highlight                                                                |
-| `highlightPurple`             | Create purple highlight                                                              |
-| `addNote`                     | Add note annotation                                                                  |
-| `copySelection`               | Copy current selection to clipboard                                                  |
-| `searchSelection`             | Open find bar and search for current selection                                       |
-| `swapVisualEnds`              | Swap selection anchor and focus                                                      |
-| `openCommandPalette`          | Open the command palette in the current Normal context                               |
-| `switchTab`                   | Choose and switch to an open Zotero tab                                               |
-| `findNotes`                   | Find and open a note                                                                  |
-| `managePlugins`               | Open the persistent Plugin Manager panel                                              |
-| `findAllItems`                | Find an item in the current library                                                   |
-| `findCollectionItems`         | Find an item in the current collection                                                |
-| `mainYankCitekey`             | Main: copy EffectiveSelection citekey(s) (Selection > CurrentTarget); Reader/Note: copy contextual citekey       |
-| `mainOpenPDF`                 | Main `o`/Enter open the Cursor item; Note `o` opens its Note context. Selection is not batch-opened. |
-| `mainTrashItems`              | Trash persistent Selection, otherwise the transient CurrentTarget                    |
-| `mainClearSelection`           | Explicitly clear persistent Neo Selection                                             |
-| `mainCancelTarget`             | Cancel Visual/native multi CurrentTarget without clearing Selection                   |
-| `mainRestoreTrashedItems`     | Restore the last item batch trashed by Neo                                           |
-| `closeCurrentTab`             | Close the active Zotero tab                                                           |
-| `previousTab`                 | Switch to the previous open tab                                                       |
-| `nextTab`                     | Switch to the next open tab                                                           |
-| `mainFocusTree`               | Focus the collection tree (left pane)                                                |
-| `mainFocusItems`              | Focus the item list (middle pane)                                                    |
-| `mainFocusLeft`               | Focus the collection tree (left pane)                                                |
-| `mainFocusRight`              | Focus the detail pane (right pane)                                                   |
-| `addTag`                      | Add one tag to the current target(s)                                                  |
-| `removeTag`                   | Remove one tag from the current target(s)                                             |
-| `toggleTagFilter`             | Main only: toggle one tag filter                                                      |
-| `clearTagFilters`             | Main only: clear all tag filters                                                      |
-| `addToCollection`              | Main only: add EffectiveSelection (Selection > CurrentTarget) to a chosen collection              |
-| `removeFromCollection`         | Main only: remove EffectiveSelection (Selection > CurrentTarget) from a chosen collection         |
-| `mainNavDown`                 | Move Cursor down (collections tree / item list)                                      |
-| `mainNavUp`                   | Move Cursor up (collections tree / item list)                                        |
-| `mainNavFirst`                | Jump to the first row                                                                |
-| `mainNavLast`                 | Jump to the last row                                                                 |
-| `toggleReaderSidebarOutline`  | Toggle the custom outline explorer overlay                                           |
-| `focusReaderSidebar`          | Focus or reopen the custom outline explorer overlay                                  |
-| `toggleReaderSplitHorizontal` | Toggle reader horizontal split view                                                  |
-| `toggleReaderSplitVertical`   | Toggle reader vertical split view                                                    |
-| `focusReaderSplitLeft`        | Focus left split pane (or toggle in horizontal split)                                |
-| `focusReaderSplitDown`        | Focus lower split pane (or toggle in vertical split)                                 |
-| `focusReaderSplitUp`          | Focus upper split pane (or toggle in vertical split)                                 |
-| `focusReaderSplitRight`       | Focus right split pane (or toggle in horizontal split)                               |
-| `mainActivate`                | In collections, enter the item list; in items, open the Cursor item/PDF              |
-| `mainTreeToggle`              | Toggle expand/collapse for the selected collection                                   |
-| `mainTreeOpenOnly`            | Expand the selected collection without changing pane                                 |
-| `mainTreeCloseOnly`           | Collapse the selected collection without moving to parent                            |
-| `mainTreeExpand`              | Expand selected collection or move focus into the item list                          |
-| `mainTreeCollapse`            | Collapse selected collection, move to parent, or return focus to the collection tree |
-| `mainTreeParent`              | Move ScopeCursor to the parent collection                                             |
-| `mainTreeExpandAll`           | Expand all collections in the left tree                                              |
-| `mainTreeCollapseAll`         | Collapse all collections in the left tree                                            |
-
----
+For the complete action-ID lookup, capability by mode, unbound-action status, and canonical default binding map, see the [Command Reference](COMMAND_REFERENCE.md#action-id-index). This guide keeps the beginner workflow and quick default-key examples above; the command reference is the sole detailed action and history lookup.
 
 ## Settings
 
