@@ -520,12 +520,14 @@ export class ReaderSession {
   #sidebarToggleBuffer = '';
   #sidebarToggleTimer: ReaderTimer | null = null;
   #markJumpRevision = 0;
+  #surfaceMode: ReaderMode = 'normal';
+  #interactionRevision = 0;
+  #editorReleaseRevision = 0;
   readonly state: ReaderSessionState;
 
   constructor(dependencies: SessionDependencies) {
     this.#dependencies = dependencies;
     this.state = {
-      mode: 'normal',
       selectionParams: null,
       indicator: null,
       indicatorThemeCleanup: null,
@@ -537,7 +539,7 @@ export class ReaderSession {
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
     this.#selectionRange = new ReaderSelectionRange({
-      mode: () => this.state.mode,
+      mode: () => this.#surfaceMode,
       setModeVisual: () => this.setMode('visual'),
       invalidateNativeSelection: () => {
         this.state.selectionParams = null;
@@ -582,11 +584,31 @@ export class ReaderSession {
         void this.handOverNativeEditor();
       },
       locale: () => zoteroRuntime().locale ?? '',
+      onInputOwnerChanged: () => {
+        this.#interactionRevision += 1;
+        if (!this.#commentEditor.ownsInput) this.#editorReleaseRevision = this.#interactionRevision;
+        this.input.reset();
+        this.clearKeyGuide();
+        this.clearSidebarToggleInput();
+        this.#smoothScroller.stop(true);
+        this.updateIndicator();
+      },
+      onExit: (saved, pdfWindow) => {
+        if (
+          this.#commentEditor.ownsInput ||
+          this.#interactionRevision !== this.#editorReleaseRevision ||
+          this.#navigation.activePdfWindow() !== pdfWindow
+        )
+          return;
+        pdfWindow.focus();
+        this.showStatus(saved ? '✓ saved' : '✗ save failed', saved ? 1200 : 2500);
+      },
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
     this.#hostKeyBridge = new ReaderHostKeyBridge({
       reader: dependencies.reader,
       nativeEditableFocused: () => this.nativeEditableFocused(),
-      consumesKey: (key) => this.readerConsumesKey(key),
+      consumesKey: (key, pdfWindow) => this.readerConsumesKey(key, pdfWindow),
       commentInputFocused: (window) => this.#commentEditor.isInputFocused(window),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
@@ -658,7 +680,7 @@ export class ReaderSession {
       onScroll: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
-        if (this.state.mode === 'visual') this.#selectionRange.refresh(pdfWindow, false);
+        if (this.#surfaceMode === 'visual') this.#selectionRange.refresh(pdfWindow, false);
       },
       onResize: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
@@ -701,6 +723,10 @@ export class ReaderSession {
 
   get reader(): ReaderRuntime {
     return this.#dependencies.reader;
+  }
+  /** Effective mode is a read-only projection of the current input owner. */
+  get mode(): ReaderMode {
+    return this.#commentEditor.ownsInput ? 'insert' : this.#surfaceMode;
   }
 
   get ownerWindow(): MainWindow | null {
@@ -920,6 +946,7 @@ export class ReaderSession {
   }
 
   dispose(): void {
+    this.#interactionRevision += 1;
     this.#commentEditor.dispose();
     this.#selectionActions.dispose();
     this.#dependencies.selection?.clearOwner(this);
@@ -948,11 +975,11 @@ export class ReaderSession {
 
   acceptSelectionParams(params: AnnotationSelectionParams): void {
     this.state.selectionParams = params;
-    if (this.state.mode === 'normal' && this.modeEnabled('visual')) this.setMode('visual');
+    if (this.mode === 'normal' && this.modeEnabled('visual')) this.setMode('visual');
   }
 
   deactivateInteraction(): void {
-    if (this.state.mode === 'insert' && this.#commentEditor.hasInput) {
+    if (this.#commentEditor.ownsInput) {
       void this.handOverNativeEditor();
       return;
     }
@@ -979,12 +1006,7 @@ export class ReaderSession {
       document,
       'focusin',
       ((event: Event) => {
-        if (
-          this.state.mode !== 'insert' ||
-          !this.#commentEditor.hasInput ||
-          !isEditableElement(asElement(event.target))
-        )
-          return;
+        if (!this.#commentEditor.ownsInput || !isEditableElement(asElement(event.target))) return;
         void this.handOverNativeEditor();
       }) as EventListener,
       true,
@@ -1022,6 +1044,7 @@ export class ReaderSession {
    * recreated, without affecting the reader chrome or surviving split view.
    */
   private releaseViewTheme(pdfWindow: PdfWindow): void {
+    this.#interactionRevision += 1;
     this.#flash.releaseView(pdfWindow);
     this.#smoothScroller.releaseView(pdfWindow);
     if (this.#outline.ownsView(pdfWindow))
@@ -1042,6 +1065,8 @@ export class ReaderSession {
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.#navigation.activatePdfWindow(pdfWindow);
     this.#markJumpRevision += 1;
+    this.#interactionRevision += 1;
+    if (this.#commentEditor.handleKey(event, pdfWindow)) return;
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.handleSidebarToggleKey(event, pdfWindow)) return;
@@ -1062,8 +1087,15 @@ export class ReaderSession {
       this.#linkHints.handleKey(event, pdfWindow);
       return;
     }
-    if (this.state.mode === 'insert') {
-      this.handleInsertKey(event);
+    if (this.#surfaceMode === 'insert') {
+      if (compositionOwnsKey(event, false)) return;
+      if (keyString(event) === 'escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.setMode('normal');
+        pdfWindow.focus();
+        this.showStatus('✓ saved', 1200);
+      }
       return;
     }
     if (isEditableElement(asElement(event.target))) {
@@ -1071,7 +1103,7 @@ export class ReaderSession {
       return;
     }
     if (compositionOwnsKey(event, false)) return;
-    const mode = readerBindingMode(this.state.mode);
+    const mode = readerBindingMode(this.#surfaceMode);
     if (
       event.key.toLowerCase() === 'escape' &&
       isLeaderPrefix(this.input.keyBuffer) &&
@@ -1102,7 +1134,7 @@ export class ReaderSession {
       mode,
       this.#dependencies.bindings(),
       key,
-      this.state.mode === 'normal',
+      this.#surfaceMode === 'normal',
     );
     if (decision.kind === 'pass') {
       this.refreshKeyGuide();
@@ -1112,7 +1144,7 @@ export class ReaderSession {
     if (decision.kind === 'execute') {
       this.clearKeyGuide();
       this.updateIndicator();
-      if (!isReaderActionForMode(this.state.mode, decision.action)) {
+      if (!isReaderActionForMode(this.#surfaceMode, decision.action)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         return;
@@ -1201,23 +1233,13 @@ export class ReaderSession {
     this.#sidebarToggleTimer = null;
   }
 
-  private handleInsertKey(event: KeyboardEvent): void {
-    if (compositionOwnsKey(event, false)) {
-      if (this.#commentEditor.ownsTarget(event.target)) event.stopImmediatePropagation();
-      return;
-    }
-    if (keyString(event) === 'escape') {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      void this.exitAnnotationInsert();
-      return;
-    }
-    if (this.#commentEditor.ownsTarget(event.target)) event.stopImmediatePropagation();
-  }
-
   private handleMarkChord(event: KeyboardEvent, key: string, pdfWindow: PdfWindow): boolean {
     const bindings = this.#dependencies.bindings();
-    if (this.state.mode !== 'normal' || bindings['reader-normal:m'] || bindings['reader-normal:`'])
+    if (
+      this.#surfaceMode !== 'normal' ||
+      bindings['reader-normal:m'] ||
+      bindings['reader-normal:`']
+    )
       return false;
     const consume = (): void => {
       event.preventDefault();
@@ -1274,15 +1296,12 @@ export class ReaderSession {
     this.input.scheduleReset(1200, () => this.updateIndicator());
   }
 
-  private readerConsumesKey(key: string): boolean {
+  private readerConsumesKey(key: string, pdfWindow: PdfWindow | undefined): boolean {
     if (!key) return false;
+    if (pdfWindow && this.#commentEditor.ownsView(pdfWindow))
+      return this.#commentEditor.consumesKey(key, pdfWindow);
     if (this.#selectionActions.isOpen || this.#flash.isOpen) return true;
-    if (this.state.mode === 'insert')
-      return (
-        key === 'escape' ||
-        (this.#commentEditor.hasInput &&
-          (key.length === 1 || ['backspace', 'delete', 'enter'].includes(key)))
-      );
+    if (this.#surfaceMode === 'insert') return key === 'escape';
     if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
     if (
       this.input.keyBuffer === 'm' ||
@@ -1291,16 +1310,16 @@ export class ReaderSession {
     )
       return /^[a-z0-9]$/.test(key);
     const context = {
-      mode: readerBindingMode(this.state.mode),
+      mode: readerBindingMode(this.#surfaceMode),
       keyBuffer: this.input.keyBuffer,
       countBuffer: this.input.countBuffer,
       bindings: this.#dependencies.bindings(),
-      allowCountPrefix: this.state.mode === 'normal',
+      allowCountPrefix: this.#surfaceMode === 'normal',
     };
     if (!inputWouldConsume(context, key)) return false;
     const transition = advanceInput(context, key);
     if (transition.kind !== 'execute') return true;
-    if (!isReaderActionForMode(this.state.mode, transition.action)) return true;
+    if (!isReaderActionForMode(this.#surfaceMode, transition.action)) return true;
     const direction = focusDirectionForAction(transition.action);
     return direction ? this.#navigation.canFocusDirection(direction) : true;
   }
@@ -1315,12 +1334,13 @@ export class ReaderSession {
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
-    if (!isReaderActionForMode(this.state.mode, action)) {
+    if (!isReaderActionForMode(this.#surfaceMode, action)) {
       this.#dependencies.controller.dependencies.logger.debug(
-        `ignored Reader action ${String(action)} in ${this.state.mode} mode`,
+        `ignored Reader action ${String(action)} in ${this.#surfaceMode} mode`,
       );
       return;
     }
+    this.#interactionRevision += 1;
     this.executeReaderAction(action, count, pdfWindow);
   }
 
@@ -1506,7 +1526,7 @@ export class ReaderSession {
         this.#linkHints.open(pdfWindow);
         break;
       case 'flashText':
-        if (this.state.mode === 'visual') this.#flash.open(pdfWindow, 'visual-end');
+        if (this.#surfaceMode === 'visual') this.#flash.open(pdfWindow, 'visual-end');
         break;
       case 'halfPageDown': {
         const scroll = (): boolean => {
@@ -1820,16 +1840,16 @@ export class ReaderSession {
   }
 
   private setMode(mode: ReaderMode): void {
-    const previousMode = this.state.mode;
+    this.#interactionRevision += 1;
+    const previousMode = this.#surfaceMode;
     if (this.#flash.isOpen) this.#flash.cancel();
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
-    if (this.state.mode === 'insert' && mode !== 'insert') this.#commentEditor.invalidate();
     if (previousMode === 'visual' && mode !== 'visual') {
       this.#selectionActions.close();
       this.#dependencies.selection?.clearOwner(this);
     }
     if (mode !== 'normal') this.#smoothScroller.stop(true);
-    this.state.mode = mode;
+    this.#surfaceMode = mode;
     this.input.reset();
     this.clearKeyGuide();
     if (mode !== 'visual') this.#selectionRange.leave();
@@ -1845,10 +1865,9 @@ export class ReaderSession {
       const config = keyGuideConfig(this.#dependencies.controller.dependencies.preferences);
       return {
         input: this.input,
-        mode: readerBindingMode(this.state.mode),
+        mode: readerBindingMode(this.mode),
         bindings: this.#dependencies.bindings(),
-        enabled:
-          config.enabled && this.state.mode === 'normal' && isLeaderPrefix(this.input.keyBuffer),
+        enabled: config.enabled && this.mode === 'normal' && isLeaderPrefix(this.input.keyBuffer),
         language: this.keyGuideLanguage(),
         delayMs: config.delayMs,
         fontSizePx: config.fontSizePx,
@@ -1868,12 +1887,12 @@ export class ReaderSession {
   private updateIndicator(): void {
     const indicator = this.state.indicator;
     if (!indicator) return;
-    if (this.state.mode === 'normal' && !this.input.keyBuffer && !this.input.countBuffer) {
+    if (this.mode === 'normal' && !this.input.keyBuffer && !this.input.countBuffer) {
       indicator.style.display = 'none';
       return;
     }
     indicator.style.display = 'block';
-    if (this.state.mode === 'visual') {
+    if (this.mode === 'visual') {
       const selected = annotationText(
         this.#navigation.activePdfWindow()?.getSelection()?.toString() ?? '',
       );
@@ -1883,11 +1902,11 @@ export class ReaderSession {
       indicator.style.background = THEME_VARS.modeVisual;
       return;
     }
-    indicator.textContent = `-- ${this.state.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
+    indicator.textContent = `-- ${this.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
     indicator.style.color =
-      this.state.mode === 'insert' ? THEME_VARS.modeInsertText : THEME_VARS.modeNormalText;
+      this.mode === 'insert' ? THEME_VARS.modeInsertText : THEME_VARS.modeNormalText;
     indicator.style.background =
-      this.state.mode === 'insert' ? THEME_VARS.modeInsert : THEME_VARS.modeNormal;
+      this.mode === 'insert' ? THEME_VARS.modeInsert : THEME_VARS.modeNormal;
   }
 
   private showStatus(message: string, duration = 2000): void {
@@ -2173,7 +2192,7 @@ export class ReaderSession {
   }
 
   selectionContext(): ReaderSelectionContext | null {
-    if (this.state.mode !== 'visual') return null;
+    if (this.#surfaceMode !== 'visual') return null;
     const pdfWindow = this.#navigation.activePdfWindow();
     if (!pdfWindow) return null;
     const selection = pdfWindow.getSelection();
@@ -2452,7 +2471,7 @@ export class ReaderSession {
       this.showStatus('✗ navigate first with [ / ]', 2000);
       return;
     }
-    this.setMode('insert');
+    this.setMode('normal');
     this.#annotationNavigation.rememberAnnotation(key);
     await this.#commentEditor.open(key);
   }
@@ -2468,16 +2487,15 @@ export class ReaderSession {
     return annotation;
   }
 
-  private async exitAnnotationInsert(): Promise<void> {
-    const saved = await this.#commentEditor.exit();
-    this.setMode('normal');
-    this.#navigation.activePdfWindow()?.focus();
-    this.showStatus(saved ? '✓ saved' : '✗ save failed', saved ? 1200 : 2500);
-  }
-
   private async handOverNativeEditor(): Promise<void> {
     this.setMode('normal');
-    await this.#commentEditor.handOver();
+    try {
+      await this.#commentEditor.handOver();
+    } catch (error) {
+      this.#dependencies.controller.dependencies.logger.debug(
+        `comment editor handoff failed: ${String(error)}`,
+      );
+    }
   }
 
   private async annotationForSave(
@@ -2525,7 +2543,7 @@ export class ReaderSession {
     }
     if (
       this.#smoothScroller.mode === 'step' ||
-      this.state.mode !== 'normal' ||
+      this.#surfaceMode !== 'normal' ||
       this.input.countBuffer ||
       event.ctrlKey ||
       event.metaKey ||

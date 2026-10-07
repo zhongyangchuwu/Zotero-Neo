@@ -38,43 +38,44 @@ acceptance backlog. Current interaction ownership is defined by
 [the interaction model](INTERACTION_MODEL.md) and
 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98).
 
-The unified navigation history and document-bottom Reader `G` are implemented
-and owner-accepted in
-[#113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113), pending integration.
-Do not reimplement Back/Forward or assign their defaults again; the
+The unified navigation history and document-bottom Reader `G` are implemented,
+owner-accepted, and merged through
+[#113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
+The resulting `main` checkpoint passed CI and #112 is complete. Do not reimplement
+Back/Forward or assign their defaults again; the
 [command reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)
 owns the accepted behavior.
 
+Existing-note capture is host-accepted and
+[#85](https://github.com/zhongyangchuwu/Zotero-Neo/issues/85) is complete.
+Disposable-data acceptance covered preserved HTML, immutable text/page snapshots,
+child and other same-library notes, stale-target refusal, wrong-library exclusion,
+cancel/no mutation, Reader focus return, and the separate annotation-comment action.
+
+Destructive-target safety is host-accepted and
+[#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88) is complete.
+Real confirmation messages and native buttons proved Cursor, persistent Selection,
+and Zotero multi-selection targets; hidden-member refusal; cancellation preserving
+Selection and prior Trash undo; and exactly-one permanent Reader annotation deletion.
+
+Annotation Comment Editor input ownership is implemented and host-verified for
+[#98 Phase 9.1](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98): pending and
+mounted input belong to the captured PDF view, not a writable Reader mode flag.
+Enter newline, ordinary Escape save/close, two-second autosave, IME ownership,
+split-view isolation, native editable handoff, target snapshot, and close/reopen are
+preserved. `reader-insert` and its preference/native-pass-through compatibility remain;
+Phase 9.2's candidate key semantics and Phase 5.7's retirement are not part of this slice.
+
 ## Next
 
-Prioritize integration, real-host mutation acceptance, and narrow ownership work
-before adding another broad interaction layer.
+Prioritize narrow feature-input ownership before adding another broad interaction layer.
 
-1. **Integrate accepted navigation** through
-   [#112](https://github.com/zhongyangchuwu/Zotero-Neo/issues/112) / PR #113.
-   Merge only an authorized, verified head; verify the resulting `main` checkpoint
-   before closing #112 and completing the navigation integration entries in #98.
-   Navigation acceptance does not close unrelated mutation gates.
-2. **Complete destructive-target GUI acceptance** in
-   [#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88).
-   The safety implementation is already merged. Exercise actual target kind/count,
-   native multi-selection, hidden persistent-Selection refusal, and cancellation
-   without changing Selection or Trash history; verify Reader annotation deletion
-   confirms exactly one target. Use disposable test data. Do not revive the
-   superseded default Cursor-versus-Selection chooser proposal.
-3. **Complete existing-note capture GUI acceptance** in
-   [#85](https://github.com/zhongyangchuwu/Zotero-Neo/issues/85).
-   The Reader snapshot -> Notes picker -> native note append path is implemented.
-   Verify preserved note HTML, immutable text/page capture, same-library targets,
-   stale/deleted/wrong-library refusal, cancel/no mutation, and Reader focus return
-   on current Zotero. The historical PR #87 acceptance checklist is not proof that
-   those GUI scenarios passed; do not reimplement the feature from an open issue.
-4. **Take the next bounded architecture slice** from #98 Phase 9.1:
-   prove Annotation Comment Editor feature-input ownership and explicitly settle
-   save/cancel/newline semantics. Retain `reader-insert` until its replacement,
-   existing behavior, and preference/keybinding migration are independently proven.
-   Revisit other Reader overlays or Knowledge Capture only after that ownership is
-   stable, not as a broad rewrite bundled with this slice.
+1. **Review the next bounded architecture slice** in #98 Phase 9.2: explicitly decide
+   save/cancel/newline semantics and their preference model before changing existing keys.
+   Current comment behavior remains Enter newline and Escape save/close. Retain
+   `reader-insert` until a separate Phase 5.7 compatibility migration is approved and proven.
+   Revisit other Reader overlays or Knowledge Capture only after that ownership is stable,
+   not as a broad rewrite bundled with the comment editor.
 
 Keep
 [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49)

@@ -1,11 +1,11 @@
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
-import type { ReaderRuntime, ReaderViewRuntime } from './types';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from './types';
 
 export interface ReaderHostKeyBridgeDependencies {
   readonly reader: ReaderRuntime;
   readonly nativeEditableFocused: () => boolean;
-  readonly consumesKey: (key: string) => boolean;
+  readonly consumesKey: (key: string, pdfWindow: PdfWindow | undefined) => boolean;
   readonly commentInputFocused: (window: Window | undefined) => boolean;
   readonly debug: (message: string) => void;
 }
@@ -13,7 +13,7 @@ export interface ReaderHostKeyBridgeDependencies {
 /**
  * Owns the two private PdfView key seams Neo must patch.
  *
- * ReaderSession decides which keys Neo consumes and owns Note/Insert state. This bridge only
+ * ReaderSession decides which keys Neo consumes for the exact PDF view. This bridge only
  * installs/restores host callbacks as Zotero creates or replaces primary/secondary PdfViews.
  */
 export class ReaderHostKeyBridge {
@@ -68,7 +68,7 @@ export class ReaderHostKeyBridge {
     const wrapper = (event: KeyboardEvent): unknown => {
       if (this.#dependencies.nativeEditableFocused()) return undefined;
       if (compositionOwnsKey(event, false)) return original.call(view, event);
-      if (this.#dependencies.consumesKey(keyString(event))) return undefined;
+      if (this.#dependencies.consumesKey(keyString(event), view._iframeWindow)) return undefined;
       return original.call(view, event);
     };
     try {

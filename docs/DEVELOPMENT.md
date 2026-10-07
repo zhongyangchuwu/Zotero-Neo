@@ -467,21 +467,39 @@ The operating-system keyboard focus remains in the PDF.js iframe in common reade
 Programmatic focus on Zotero-native annotation editors is not a reliable text-input strategy and
 interferes with Gecko/React focus handling.
 
-`ReaderCommentEditor` owns the transient annotation-comment target, textarea DOM, IME state,
-autosave/focus timers, popup guard, theme subscription, and Zotero's private
-`_enableAnnotationDeletionFromComment` override. `ReaderSession` orchestrates Insert
-mode, while `ReaderAnnotationNavigationState` owns the remembered selection fallback
-and reads Zotero's exposed selection as authoritative. The comment feature snapshots
-its save target before mounting so later annotation navigation cannot retarget an
-in-progress edit.
+`ReaderCommentEditor` owns pending and mounted input for one captured PDF view, the
+annotation-comment target, textarea DOM, IME state, autosave/focus timers, popup guard,
+theme subscription, and Zotero's private `_enableAnnotationDeletionFromComment` override.
+It claims the view before asynchronous annotation lookup. `ReaderSession` retains only
+its private Surface context; the read-only `mode` projection displays Insert while the
+editor owns input. `ReaderSessionState` has no writable mode flag. Other split views
+continue using their Surface grammar. `ReaderAnnotationNavigationState` owns the
+remembered selection fallback and reads Zotero's exposed selection as authoritative.
+The editor snapshots its save target so later annotation navigation cannot retarget a draft.
 
-Neo renders the textarea in the PDF document, accepts native typing and IME composition, and saves
-through the resolved annotation item with `saveTx()`. A generation token prevents stale async open
-or focus work. PDF-view release and Reader disposal invalidate that work, stop the watchdog, remove
-the overlay, disconnect the popup observer, and restore the host deletion flag. The
-`_textAnnotationFocused` patch reports the Neo textarea as focused so Zotero's earlier Enter
-handler cannot open a competing annotation popup. Native editor focus hands off by restoring host
-behavior, saving, and closing the Neo overlay; it must never fight to reclaim focus.
+Neo renders the textarea in the PDF document, accepts native typing and IME composition,
+and saves through the resolved annotation item with `saveTx()`. Enter inserts a newline;
+ordinary Escape saves and closes; edits autosave after two seconds. Composing Escape,
+`Process`, and keyCode 229 remain IME-owned. These semantics and the persisted
+`reader-insert` binding/preference contract are unchanged; disabling comment/Insert entry
+still retains the legacy bare Insert native-pass-through path pending a separate migration.
+
+The view-owned Escape listener uses Gecko's privileged system event group because an
+earlier normal-group host handler can swallow textarea Escape. `privilegedEventTarget()`
+restores the native target's Xray wrapper so Gecko honors `mozSystemGroup`; options are
+still cloned into the PDF realm. `nativeObjectIdentity()` compares the system event's
+Xray target with the textarea's waived wrapper. The existing `_onKeyDown`/text-focus bridge
+remains; no additional private `_handleKeyDown` patch is installed.
+
+Generation, target, input, and draft guards contain stale opens, focus callbacks, and
+autosave lookups. Exit captures the target/text and releases ownership, DOM, listeners,
+timers, observer, theme, and deletion override synchronously before awaiting persistence.
+Late save completion cannot change a newer input owner, Surface context, focus, or status;
+an already-started native `saveTx()` is not cancellable. PDF-view release and Reader
+disposal invalidate pending work and remove the editor's owned resources. The
+`_textAnnotationFocused` patch reports the Neo textarea as focused so Zotero's earlier
+Enter handler cannot open a competing annotation popup. Native editable focus saves,
+closes, and hands off without fighting to reclaim focus.
 
 ## Source layout
 

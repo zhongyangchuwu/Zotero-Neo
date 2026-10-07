@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReaderHostKeyBridge } from '../../src/reader/host-key-bridge';
-import type { ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
 
 describe('ReaderHostKeyBridge', () => {
-  it('patches each view once, delegates policy to the session, and restores host callbacks', () => {
+  it('keeps consumed commands and focused comment input out of host handling and restores callbacks', () => {
     const originalKeyDown = vi.fn();
     const originalTextFocus = vi.fn(() => false);
     const pdfWindow = { document: {} } as unknown as Window;
@@ -27,12 +27,7 @@ describe('ReaderHostKeyBridge', () => {
     });
 
     bridge.sync();
-    const patchedKeyDown = view._onKeyDown;
-    const patchedTextFocus = view._textAnnotationFocused;
     bridge.sync();
-
-    expect(view._onKeyDown).toBe(patchedKeyDown);
-    expect(view._textAnnotationFocused).toBe(patchedTextFocus);
 
     view._onKeyDown?.({ key: 'j' } as KeyboardEvent);
     expect(originalKeyDown).not.toHaveBeenCalled();
@@ -52,6 +47,46 @@ describe('ReaderHostKeyBridge', () => {
     expect(view._onKeyDown).toBe(originalKeyDown);
     expect(view._textAnnotationFocused).toBe(originalTextFocus);
   });
+  it('suppresses editor keys only in the owning split view and leaves composition native', () => {
+    const ownerWindow = { document: {} } as unknown as PdfWindow;
+    const otherWindow = { document: {} } as unknown as PdfWindow;
+    const ownerHostKey = vi.fn();
+    const otherHostKey = vi.fn();
+    const primary = { _iframeWindow: ownerWindow, _onKeyDown: ownerHostKey };
+    const secondary = { _iframeWindow: otherWindow, _onKeyDown: otherHostKey };
+    const bridge = new ReaderHostKeyBridge({
+      reader: {
+        _internalReader: { _primaryView: primary, _secondaryView: secondary },
+      } as unknown as ReaderRuntime,
+      nativeEditableFocused: () => false,
+      consumesKey: (key, pdfWindow) =>
+        pdfWindow === ownerWindow && ['x', 'enter', 'escape'].includes(key),
+      commentInputFocused: () => false,
+      debug: vi.fn(),
+    });
+    bridge.sync();
+
+    for (const key of ['x', 'Enter', 'Escape']) {
+      const event = { key } as KeyboardEvent;
+      primary._onKeyDown(event);
+      secondary._onKeyDown(event);
+      expect(otherHostKey).toHaveBeenLastCalledWith(event);
+    }
+    expect(ownerHostKey).not.toHaveBeenCalled();
+    expect(otherHostKey).toHaveBeenCalledTimes(3);
+
+    for (const event of [
+      { key: 'Escape', isComposing: true },
+      { key: 'Enter', keyCode: 229 },
+      { key: 'Process' },
+    ]) {
+      primary._onKeyDown(event as unknown as KeyboardEvent);
+      expect(ownerHostKey).toHaveBeenLastCalledWith(event);
+    }
+    expect(ownerHostKey).toHaveBeenCalledTimes(3);
+    bridge.dispose();
+  });
+
   it('ignores null host views and patches a view that appears later', () => {
     const internal = { _primaryView: null, _secondaryView: null } as unknown as NonNullable<
       ReaderRuntime['_internalReader']
@@ -77,8 +112,10 @@ describe('ReaderHostKeyBridge', () => {
 
     bridge.sync();
 
-    expect(view._onKeyDown).not.toBe(originalKeyDown);
-    expect(view._textAnnotationFocused).not.toBe(originalTextFocus);
+    const native = { key: 'x' } as KeyboardEvent;
+    view._onKeyDown?.(native);
+    expect(originalKeyDown).toHaveBeenCalledWith(native);
+    expect(view._textAnnotationFocused?.()).toBe(false);
     bridge.dispose();
     expect(view._onKeyDown).toBe(originalKeyDown);
     expect(view._textAnnotationFocused).toBe(originalTextFocus);
