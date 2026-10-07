@@ -10,6 +10,11 @@ Context -> Target / TargetSet -> Semantic Action -> Zotero host operation
 Each layer should have one owner. New abstractions are introduced only when more
 than one concrete workflow needs the same contract.
 
+The [unified navigation execution and history policy](NAVIGATION_HISTORY_DESIGN.md)
+documents the current shared navigation owners, recording rules, and Reader
+transport constraints. Its implementation is in place and remains pending
+integrated acceptance.
+
 ## Layers
 
 ### 1. Input and interaction scope
@@ -167,6 +172,34 @@ lifecycle, private key seams, navigation-oriented host operations, and Neo's tem
 Select DOM-range state/mutations have been extracted into the owners above. The
 remaining pre-release cleanup under issue #29 should continue along coherent
 responsibilities with direct tests, not arbitrary file-size splitting.
+
+#### Shared navigation history
+
+`src/navigation/history.ts` owns the single per-Main-window `NavigationHistoryState`
+stack and its append, refresh, move, equality, and Reader-tab remap behavior.
+`src/navigation/history-policy.ts` is the sole typed source for action/event
+eligibility and required completion evidence. `src/navigation/coordinator.ts`
+owns admission, immutable cause/context stamping, inline/serial/traversal lanes,
+currentness fences, completion, and the only history commit path.
+
+`NavigationPort.execute()` and `NavigationPort.observeNative()` are the public
+recording entrances. `MainNavigationExecutor` in `src/main/jump-history.ts` is
+Main's host adapter/facade: it builds host operations and captures/restores
+locations through the shared coordinator; callers do not append to history or
+select a separate recorder. Reader commands use the same port. The Reader bridge
+transports owned or genuinely detached native completion to it; owned work never
+becomes a native root after it closes.
+
+Recording policy is independent of successful host completion. The central rule
+may require `native-hard`, `managed-final`, or `settled-change`; completion can
+remain successful with no append when its evidence is ineligible or no location
+changed. Reader native-hard eligibility requires a real producer receipt for the
+exact view and settled final geometry, and the owning Reader tab must be selected
+(the split view need not be focused). Default-ignored motion avoids history-only
+capture and Promise work. Explicit Reader navigation establishes its launch
+fence; Back/Forward waits for pending admitted navigation before traversing.
+See the navigation design for private SDK transport details and the acceptance
+status.
 
 ### 4. Zotero host adapters
 

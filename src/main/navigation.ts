@@ -17,6 +17,8 @@ import {
   moveMainScopeCursor,
   moveMainItemCursor,
   selectMainItemCursorAnchor,
+  selectMainTab,
+  selectedMainTabID,
   selectOnlyMainScopeCursor,
 } from './host';
 import {
@@ -334,13 +336,13 @@ export class MainNavigation {
     direction: 1 | -1 | 'first' | 'last',
     count: number,
     shouldDebounce = false,
-  ): void {
+  ): boolean {
     const panel = this.panel(window, session);
     const view =
       panel === 'collections'
         ? mainHost(window).ZoteroPane?.collectionsView
         : mainHost(window).ZoteroPane?.itemsView;
-    if (!view?.selection) return;
+    if (!view?.selection) return false;
     const current = view.selection.focused ?? 0;
     const last = Math.max(0, (view.rowCount ?? 1) - 1);
     const next =
@@ -355,28 +357,30 @@ export class MainNavigation {
     if (panel === 'items') {
       if (!moveMainItemCursor(window, next, shouldDebounce)) {
         this.#logger.debug('item Cursor host-anchor movement is unavailable');
+        return false;
       }
-      return;
+      return true;
     }
 
     const preserveScopeSet =
       mainScopeSelectedRows(window).length > 1 || mainScopeCursorDetached(window);
     if (preserveScopeSet) {
-      if (!moveMainScopeCursor(window, next, shouldDebounce))
+      if (!moveMainScopeCursor(window, next, shouldDebounce)) {
         this.#logger.debug('focus-only scope cursor movement is unavailable');
-      return;
+        return false;
+      }
+      return true;
     }
-    view.selection.select?.(next, shouldDebounce);
+    if (!view.selection.select) return false;
+    view.selection.select(next, shouldDebounce);
+    return true;
   }
 
   activate(window: MainWindow, session: MainWindowSession): void {
-    if (this.panel(window, session) === 'collections') {
-      selectOnlyMainScopeCursor(window);
-      this.focusPanel(window, session, 'items');
-      this.status(session, '▶ items', 900);
-      return;
-    }
-    void this.openPDF(window, session, mainCursorItem(window) ?? null);
+    if (this.panel(window, session) !== 'collections') return;
+    selectOnlyMainScopeCursor(window);
+    this.focusPanel(window, session, 'items');
+    this.status(session, '▶ items', 900);
   }
 
   async restoreTrashedItems(ids: readonly number[]): Promise<boolean> {
@@ -504,9 +508,28 @@ export class MainNavigation {
   closePDF(window: MainWindow): void {
     closeSelectedMainTab(window);
   }
-  cycleTab(window: MainWindow, direction: 1 | -1): void {
+  cycleTab(window: MainWindow, direction: 1 | -1): boolean {
+    const selectedBefore = selectedMainTabID(window);
     cycleMainTab(window, direction);
-    this.afterTabSwitch(window);
+    return this.finishTabSwitch(window, selectedBefore, selectedMainTabID(window));
+  }
+
+  selectTab(window: MainWindow, id: string): boolean {
+    const selectedBefore = selectedMainTabID(window);
+    if (!selectMainTab(window, id)) return false;
+    const selectedAfter = selectedMainTabID(window);
+    this.finishTabSwitch(window, selectedBefore, selectedAfter);
+    return selectedAfter === id;
+  }
+
+  private finishTabSwitch(
+    window: MainWindow,
+    selectedBefore?: string,
+    selectedAfter?: string,
+  ): boolean {
+    if (!selectedAfter) return false;
+    if (selectedAfter !== selectedBefore) this.afterTabSwitch(window);
+    return selectedAfter !== selectedBefore;
   }
   async toggleTree(window: MainWindow, session: MainWindowSession): Promise<void> {
     const view = this.collections(window, session);

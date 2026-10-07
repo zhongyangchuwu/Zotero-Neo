@@ -2118,8 +2118,7 @@ describe('Reader to Main command palette integration', () => {
         openSettingsFromReader: (ownerWindow) => main?.openSettingsFromReader(ownerWindow),
         navigateBackFromReader: (ownerWindow) => main?.navigateBackFromReader(ownerWindow),
         navigateForwardFromReader: (ownerWindow) => main?.navigateForwardFromReader(ownerWindow),
-        recordReaderJump: (ownerWindow, source, destination) =>
-          main?.recordReaderJump(ownerWindow, source, destination),
+        navigationForReader: (ownerWindow) => main?.navigationForReader(ownerWindow) ?? null,
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),

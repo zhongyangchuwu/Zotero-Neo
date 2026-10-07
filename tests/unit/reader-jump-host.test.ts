@@ -340,11 +340,8 @@ describe('ReaderJumpHostAdapter restore', () => {
       expect(actualTabID).toBe('current-reader');
       expect(fixture.selectedID()).toBe('current-reader');
       expect(fixture.open).not.toHaveBeenCalled();
-      expect(beforeNavigate).toHaveBeenCalledWith(
-        reader,
-        primary ? primaryView.view : secondaryView.view,
-        { ...target, primary },
-      );
+      expect(beforeNavigate).toHaveBeenCalledOnce();
+      expect(beforeNavigate).toHaveBeenCalledWith(reader);
       expect(primaryView.navigate).toHaveBeenCalledTimes(primary ? 1 : 0);
       expect(secondaryView.navigate).toHaveBeenCalledTimes(primary ? 0 : 1);
       const restoredView = primary ? primaryView : secondaryView;
@@ -478,7 +475,7 @@ describe('ReaderJumpHostAdapter restore', () => {
     addItem(fixture, 42);
     const primary = createPdfView({ pageIndex: 0, top: 0, left: 0 });
     const { reader } = addReader(fixture, 42, 'pending-navigation-reader', { primary });
-    const neverSettles = new Promise<void>(() => {});
+    const neverSettles = Promise.withResolvers<void>().promise;
     const navigate = vi.fn(() => neverSettles);
     Reflect.set(primary.view, 'navigate', navigate);
     const restoring = fixture.adapter.restoreJumpLocation(
@@ -500,7 +497,7 @@ describe('ReaderJumpHostAdapter restore', () => {
     const fixture = createFixture();
     addItem(fixture, 42);
     const { reader } = addReader(fixture, 42, 'pending-focus-reader');
-    const neverSettles = new Promise<void>(() => {});
+    const neverSettles = Promise.withResolvers<void>().promise;
     const focus = vi.fn(() => neverSettles);
     Reflect.set(reader, 'focus', focus);
     const restoring = fixture.adapter.restoreJumpLocation(

@@ -42,11 +42,17 @@ export interface InternalReaderRuntime {
   zoomIn?(): void;
   zoomOut?(): void;
   zoomReset?(): void;
-  navigate?(payload: {
-    readonly pageIndex?: number;
-    readonly annotationID?: string;
-    readonly position?: ReaderLinkPosition;
-  }): void;
+  navigate?(
+    payload: {
+      readonly pageIndex?: number;
+      readonly pageLabel?: string;
+      readonly pageNumber?: string;
+      readonly annotationID?: string;
+      readonly position?: ReaderLinkPosition;
+      readonly dest?: unknown;
+    },
+    options?: { readonly skipHistory?: boolean },
+  ): void | Promise<void>;
   setSelectedAnnotations?(keys: readonly string[]): void;
   toggleFindPopup?(options: { readonly open: boolean }): void;
   findNext?(): void;
@@ -60,10 +66,21 @@ export interface InternalReaderRuntime {
   focusView?(primary?: boolean): void;
 }
 
+export interface ReaderFindControllerRuntime {
+  _state?: object | null;
+  _selected?: { readonly pageIdx: number; readonly matchIdx: number };
+  _onNavigate?: (pageIndex: number, matchIndex: number) => unknown;
+  _onUpdateState?: (state: unknown) => unknown;
+  find?(state: object): void;
+  _updateMatch?(...args: unknown[]): unknown;
+  getMatchPositionsAsync?(pageIndex: number): Promise<readonly ReaderLinkPosition[]>;
+}
+
 export interface ReaderViewRuntime {
   readonly _iframeWindow?: Window;
   readonly _history?: ReaderPdfHistoryRuntime;
   readonly _findState?: { readonly active?: boolean };
+  readonly _findController?: ReaderFindControllerRuntime;
   readonly _pdfPages?:
     | Readonly<Record<number, ReaderPdfPageRuntime | undefined>>
     | readonly (ReaderPdfPageRuntime | undefined)[];
@@ -76,13 +93,19 @@ export interface ReaderViewRuntime {
   _onKeyDown?: (event: KeyboardEvent) => unknown;
   _onOpenLink?: (url: string) => void | Promise<void>;
   _textAnnotationFocused?: () => boolean;
+  _scrolling?: boolean;
+  _pageLabelsPromise?: unknown;
+  _pushHistoryPoint?(): Promise<unknown> | unknown;
+  navigateToPosition?(position: ReaderLinkPosition, options?: unknown): void | Promise<void>;
   getClientRectForPopup?(position: ReaderLinkPosition): readonly number[];
   navigate?(
     payload:
       | { readonly position: ReaderLinkPosition }
-      | {
-          readonly dest: readonly [number, { readonly name: 'XYZ' }, number, number, null];
-        },
+      | { readonly dest: unknown }
+      | { readonly pageIndex: number }
+      | { readonly pageLabel: string }
+      | { readonly pageNumber: string }
+      | { readonly annotationID: string },
     options?: { readonly skipHistory?: boolean },
   ): void | Promise<void>;
   focus?(): void;

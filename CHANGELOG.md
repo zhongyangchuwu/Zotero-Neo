@@ -12,7 +12,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Changed
 
-- Reader `gg`, `G`, and counted page jumps now use one physical-page navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view.
+- Reader `gg`, `G`, and counted page jumps now use one native navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view. Uncounted `G` reaches the document bottom rather than the last page's start; `nG` still targets the numbered page's start, without changing zoom.
+- Navigation recording now uses one state, coordinator, and typed policy. Reader search, annotation, or Outline may complete without appending when no owned exact-view hard receipt qualifies; marks record one managed final, ignored motion has no history-only capture, and launch/Back fences protect currentness.
 
 - Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
 

@@ -75,7 +75,12 @@ The list is one per owning Main window and stores at most 100 locations. Its ind
 
 ### Recording and exclusions
 
-A location is recorded for successful, explicit, discrete navigation, not simply because the screen changed. Current source behavior includes:
+A successful host operation does not guarantee a history entry. Central typed rules
+in [`history-policy.ts`](NAVIGATION_HISTORY_DESIGN.md#one-history-policy-source)
+decide eligibility and required evidence; the navigation design documents the
+coordinator and completion contract. A command may complete unchanged or without
+history when no qualifying destination/evidence exists. The following examples
+describe default eligibility, not a promise that every invocation appends:
 
 | Surface/action | History behavior |
 | --- | --- |
@@ -85,15 +90,24 @@ A location is recorded for successful, explicit, discrete navigation, not simply
 | Confirmed all-library/current-collection item chooser or Note chooser | Successful destination records. A Note result's library selection and Note opening are one queued request, not two entries. Opening chooser, typing, highlighting, cancelling, and failed resolution do not record. |
 | Successful `showInLibrary` / Selection Panel Reveal | Queued Main Library reveal records only after success/current validation. Selection Panel closes only after successful/current reveal. |
 | `H`/`L` previous/next tab or confirmed chooser (`switchTab`) | Successful selected-tab change records. Main prefers Zotero `selectPrev()`/`selectNext()` when available; the current host cycle wraps across all open tab types, including Library, and fallback enumeration uses modulo over tabs. Count is ignored (one operation). One-tab/no-change cycle and selecting current tab do not record. Native tab-bar changes/clicks are not directly recorded. |
-| Reader PDF page destinations, including `gg`, `G`, and counted boundary jumps | When the host page-navigation API is supported, explicit page destinations can record through native hard-save observation. Without it, `gg/G` fall back to top/bottom scrolling and do not create a hard-jump entry. Positive count targets the one-based page; absent/zero count selects first/last. Ordinary scrolling and adjacent `h`/`l` page turns are excluded. |
-| Reader marks, outline jumps, annotation navigation, internal/citation links, and native search-result navigation | Successful discrete destinations can record when Reader emits an observed native hard save. Annotation/search can be host-dependent. Mark jumps record one completed excursion. Selecting an outline row does not jump; Enter confirms. |
+| Reader PDF page destinations, including `gg`, `G`, and counted boundary jumps | When the host page-navigation API is supported, explicit page destinations may record only with a causally owned native hard receipt matching the exact current view and settled final geometry. Without the API, `gg/G` fall back to top/bottom scrolling and do not create a hard-jump entry. Positive count targets the one-based page; absent/zero count selects first/last. Ordinary scrolling and adjacent `h`/`l` page turns are excluded. |
+| Reader marks, outline jumps, annotation navigation, internal/citation links, and native search-result navigation | Marks use one managed final destination; the other routes require an owned, exact-view native hard receipt under the central policy. They may complete without an entry when no qualifying hard point occurs. Outline selection is not a jump; Enter confirms. |
 | External PDF link | Opens through Zotero's normal handler; not a Neo Reader history location. |
 | Scroll/zoom/split layout, selection/caret movement, filters, manual collection edits, and other non-location state changes | Excluded. |
 | Failure, no-op, stale async operation, cancelled chooser, or target that cannot be resolved/restored | No new location. `H/L` are the only shipped tab-cycle defaults; no `J/K` aliases exist. `H/L` ignore count and perform one native tab cycle. |
 
 For Main-originating transitions, current/cursor state is captured only for supported locations; exact recording is performed through the existing navigation owners. Back/Forward is transactional for the history index, not atomic for UI state: restoration selects the target tab and applies scope, Quick Search, tags, Advanced Search, Cursor, and focus sequentially. If a later component is unavailable or stale, earlier UI changes are not rolled back, but the index remains unchanged. Host-native actions outside an observed Neo path (for example manually clicking tabs) are not directly recorded.
 
-Reader recording follows the native save kind, not an action whitelist. The current host's ordinary `h/l` page methods do not emit qualifying hard saves; a different host navigation path is eligible only if it emits an observed non-transient hard save. Counts repeat host page-step calls, not a guaranteed arithmetic change in the visible viewport's page number.
+Reader recording is governed by the central cause/context policy and evidence rule,
+not by an action whitelist or raw save kind alone. `native-hard` requires a causally
+owned producer receipt matching the exact current view and settled final geometry;
+the owning Reader tab must be selected, but the split need not be focused. Search,
+annotation selection, and Outline can finish without such a receipt and therefore
+without appending. Marks use `managed-final`; Main cursor and tab changes use their
+configured `settled-change` evidence. Default-ignored motion does not capture a
+history snapshot or allocate a Promise solely for recording. Ordinary Reader `h/l`
+page turns remain excluded. Counts repeat host page-step calls, not a guaranteed
+arithmetic change in the visible viewport's page number.
 
 ### Snapshots and restoration
 
@@ -123,13 +137,13 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | Move half viewport per step; counts repeat. |
 | `fullPageDown` / `fullPageUp` | `<C-f>` / `<C-b>` | Move a full viewport; counts repeat. |
 | `prevPage` / `nextPage` | `h` / `l` | Repeat Zotero's previous/next-page host step `max(1,count)` times; this is page turning, not a jumplist destination. The host step's current location/viewport is authoritative. |
-| `firstPage` / `lastPage` | `gg` / `G` | When page navigation is supported, positive count passes that one-based page target to Zotero; absent/zero count means first for `gg`, last for `G`. Neo does not clamp numeric pages; target validity is host-owned. Native hard-save observation can record the jump. If page navigation is unsupported, Neo falls back to top/bottom scrolling, ignores count, and does not create a hard-jump history entry; if the navigation API exists without its required `navigate` view, the command reports unsupported. |
+| `firstPage` / `lastPage` | `gg` / `G` | When page navigation is supported, positive count (`ngg` or `nG`) passes that one-based page start to Zotero. Absent/zero count means first page start for `gg`, document bottom for `G`. The uncounted `G` uses one native XYZ destination derived from the active last-page viewport, including rotation, without changing zoom. Neo does not clamp numeric pages; target validity is host-owned. Recording requires an owned native hard receipt matching the exact current view and settled final geometry. If page navigation is unsupported, Neo falls back to top/bottom scrolling, ignores count, and does not create a hard-jump history entry; missing required navigation or last-page geometry reports unsupported. |
 | `zoomIn` / `zoomOut` | `+`, `zI` / `-`, `zO` | One Reader zoom step; count repeats. Not history. |
 | `zoomReset` | `=`, `z0` | Reset/Fit page width once; count does not repeat. |
 | `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place current page at top/center/bottom of viewport; view position only, no history. `scrollBottom` has no default sequence. |
-| `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's native PDF find bar; `n/N` each ask Zotero for one next/previous result regardless of count. Result navigation is history-eligible only when a native hard save is observed; query editing is not. |
-| `followLink` | `f` | Start visible PDF link hints; count is ignored. Hint activation may navigate internal/citation links (history-eligible when a hard save is observed) or open external links (not Neo history). Escape cancels; see [link hints](#temporary-surfaces-and-chooser-grammars). |
-| `prevAnnotation` / `nextAnnotation` | `[` / `]` | Select previous/next annotation, wrapping at the end; count is ignored. A destination is recorded only if the native Reader hard-save bridge observes a hard jump. |
+| `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's native PDF find bar; `n/N` each ask Zotero for one next/previous result regardless of count. A result may complete without an entry; only a qualifying owned native hard receipt records under the central policy. Query editing is not navigation history. |
+| `followLink` | `f` | Start visible PDF link hints; count is ignored. Hint activation may navigate internal/citation links; recording requires a qualifying owned exact-view native hard receipt. External links open outside Neo Reader history. Escape cancels; see [link hints](#temporary-surfaces-and-chooser-grammars). |
+| `prevAnnotation` / `nextAnnotation` | `[` / `]` | Select previous/next annotation, wrapping at the end; count is ignored. Selection alone can complete without an entry; recording requires a qualifying owned native hard receipt. |
 | `editAnnotation` | `<Enter>`, `<Return>` | Open/focus selected annotation comment editor; enters comment Insert workflow, not jumplist. |
 | `deleteAnnotation` | `dd` | Delete selected annotation after confirmation; cancellation leaves it unchanged. Not a navigation entry. |
 | `yankAnnotation` / `yankAnnotationComment` | `y` / `Y` | Copy selected annotation text / comment. No target means no copy. |
@@ -137,15 +151,15 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | Filter/clear annotation sidebar color filter; not history. |
 | `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, enter annotation comment Insert when eligible, or leave mode. Reader Select/Insert settings gate entry. `exitMode` is unbound in Reader Normal. |
 | `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus nearest supported direction/split/context pane; no wrap. Missing target leaves focus unchanged. |
-| `toggleReaderSidebarOutline` | `<Space>e` | Toggle custom outline explorer. Opening/selecting is not itself a history jump; confirmed outline destination is. |
+| `toggleReaderSidebarOutline` | `<Space>e` | Toggle custom outline explorer. Opening/selecting is not itself a history jump; a confirmed destination may record only when its owned native hard receipt qualifies. A successful jump without that receipt has no entry. |
 | `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle Reader split layout; layout is not part of jumplist snapshot. |
-| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared item/note chooser. Confirmation opens resolved target; successful destination recorded. Escape cancels. |
+| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared item/note chooser. A successful confirmed destination can record under the central settled-change rule; chooser activity itself does not. Escape cancels. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Choose open tab, cycle tabs, or close current tab. Successful chooser/H/L changes record; H/L counts are ignored and each cycles once. Closing alone is not Back and does not delete older entries. |
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Shared history traversal; positive counts accepted on shortcut; palette execution is once. |
 | `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | Open query-only palette, Settings, or persistent Plugin Manager panel. Modal/surface transition, not history. |
 | `addTag` / `removeTag` / `addToCollection` / `removeFromCollection` | `<Space>ta` / `<Space>tr` / `<Space>ca` / `<Space>cr` | Resolve active Reader bibliographic item and run chooser operation. Explicit user data operation, not a jump; failure/revalidation cancels whole action. |
 | `mainYankCitekey` | `<Space>yy` | Copy active Reader item's citekey; does not use Main Selection. |
-| `showInLibrary` | **Unbound** | Show active Reader item in Main Library; supported from Reader Normal palette, records only when reveal succeeds. |
+| `showInLibrary` | **Unbound** | Show active Reader item in Main Library; supported from Reader Normal palette. A successful changed reveal is eligible under the central settled-change rule. |
 | `focusReaderSidebar` | **Unbound** | Focus/reopen custom outline surface where the Reader executor exposes it; does not jump until an outline destination is confirmed. |
 
 Other Reader actions are Select-only; see [Reader Select](#reader-select-and-annotation-actions). Actual split focus direction may target another pane type, including a Note context pane; it does not promise pane creation.
@@ -205,9 +219,9 @@ Main Normal bindings depend on whether the collection tree, item rows, Quick Sea
 | `mainOpenPDF` | `o` | Open Cursor item/PDF only; does not batch-open persistent Selection/native multi-selection. |
 | `mainYankCitekey` | `<Space>yy` | Copy citekeys for Main EffectiveSelection; refusal if any target cannot resolve a citekey leaves clipboard unchanged. |
 | `openSearch` | `/` | Main Normal requires Items focus; it cancels a transient Visual range and opens Neo's local-find prompt over visible item rows. It is not Zotero Quick Search; use `mainQuickSearch` (`<Space>fq`) for that. |
-| `findNext` / `findPrevious` | `n` / `N` | Main Normal requires Items focus; cancels a transient Visual range and repeats the committed local-find query once forward/backward (count is ignored). No query, a miss, or unavailable Cursor movement leaves location unchanged; a successful Cursor move is history-eligible. |
+| `findNext` / `findPrevious` | `n` / `N` | Main Normal requires Items focus; cancels a transient Visual range and repeats the committed local-find query once forward/backward (count is ignored). No query, a miss, or unavailable Cursor movement leaves location unchanged; a successful changed Cursor move is eligible under the central settled-change rule. |
 | `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | Focus native Quick Search or open Advanced Search; `fa` can convert existing Quick Search text. These alter Main View scope, not Reader page location. |
-| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared target chooser; successful confirmed destinations may be history locations. |
+| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared target chooser; a successful confirmed destination can record under the central settled-change rule. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Open-tab chooser, previous/next open tab, close active tab. Successful chooser/H/L changes record; H/L ignore counts. Closing alone is not recorded and does not delete older entries.
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Shared counted history traversal. |
 | `addTag` / `removeTag` | `<Space>ta` / `<Space>tr` | Apply to revalidated Main target set; add can create explicit candidate; remove offers assigned tags. |
@@ -223,7 +237,7 @@ Main counts are consumed only by `mainNavDown/Up`, `mainNavLast`, `mainSelectDow
 
 ### Main-only local find
 
-When item-list focus and Main local find own the interaction, `/` opens a prompt; Enter commits a non-empty query and moves Cursor to the next visible match; Escape cancels without replacing the previous committed query. `n/N` each make one forward/backward search step regardless of count, wrapping once through visible rows. Search is case-insensitive over compact item metadata (display/title, first creator, year, citekey when available); no committed query, empty query, a miss, or unavailable Cursor movement leaves location unchanged and reports status. A successful Cursor move can be recorded. Local find is distinct from `ff/fc` fuzzy choosers and native `fq/fa` Quick/Advanced Search.
+When item-list focus and Main local find own the interaction, `/` opens a prompt; Enter commits a non-empty query and moves Cursor to the next visible match; Escape cancels without replacing the previous committed query. `n/N` each make one forward/backward search step regardless of count, wrapping once through visible rows. Search is case-insensitive over compact item metadata (display/title, first creator, year, citekey when available); no committed query, empty query, a miss, or unavailable Cursor movement leaves location unchanged and reports status. A successful changed Cursor move is eligible under the central settled-change rule. Local find is distinct from `ff/fc` fuzzy choosers and native `fq/fa` Quick/Advanced Search.
 
 ## Note editor
 
@@ -270,11 +284,11 @@ Tag behavior is operation-specific: Add Tag may expose an explicit create candid
 
 Flash runs under Reader Select `s` (or Select start entered by `v`). It uses a real browser input for literal query, with composition-aware IME; label characters are separate from committed query characters. Enter chooses nearest labelled target, Escape cancels, Backspace edits query/label according to focus. No match leaves selection unchanged. It does not synthesize Unicode from keydown data.
 
-Reader Normal `f` enumerates visible internal, citation, and external PDF links in the active Reader view. Type hint characters to choose; matching is case-insensitive, Backspace removes a hint character, Escape cancels. Activation follows the Reader's PDF navigation handler; internal/citation jumps are eligible history destinations, external links are not. Off-screen links and reference-preview overlays are not included.
+Reader Normal `f` enumerates visible internal, citation, and external PDF links in the active Reader view. Type hint characters to choose; matching is case-insensitive, Backspace removes a hint character, Escape cancels. Activation follows the Reader's PDF navigation handler; internal/citation jumps may record only when their owned exact-view native hard receipt qualifies, external links are not Neo history. Off-screen links and reference-preview overlays are not included.
 
 ### Outline explorer
 
-`<Space>e` toggles the Reader outline overlay. While it owns input: `j/k`, `Ctrl+d/u`, `l/h`, `R/M`, and `gg/G` navigate/expand/collapse outline rows; counts are not forwarded as general movement counts. Hint letters select without jumping; Enter confirms the selected outline destination; Escape closes. Selection and navigation are separate; a confirmed successful jump may be recorded when Reader's native hard-save is observed. If current page cannot map reliably to an outline entry, explorer chooses a fallback rather than claiming exact location.
+`<Space>e` toggles the Reader outline overlay. While it owns input: `j/k`, `Ctrl+d/u`, `l/h`, `R/M`, and `gg/G` navigate/expand/collapse outline rows; counts are not forwarded as general movement counts. Hint letters select without jumping; Enter confirms the selected outline destination; Escape closes. Selection and navigation are separate. The overlay closes after a successful completed or unchanged host outcome, independently of whether the central history policy appends. A confirmed jump records only when its owned native hard receipt qualifies; a successful jump without that evidence has no entry. If current page cannot map reliably to an outline entry, explorer chooses a fallback rather than claiming exact location.
 
 ### Marks and Marks Explorer
 
@@ -303,7 +317,7 @@ This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every
 | `followLink` | Reader Normal `f` | Reader Normal visible PDF link hints |
 | `flashText` | Reader Select `s` | Reader Select endpoint targeting |
 | `firstPage` | Reader Normal `gg` | Reader Normal first/count page jump |
-| `lastPage` | Reader Normal `G` | Reader Normal last/count page jump |
+| `lastPage` | Reader Normal `G` | Reader Normal document-end/count page jump |
 | `halfPageDown` | Reader Normal `<C-d>` | Reader Normal half viewport |
 | `halfPageUp` | Reader Normal `<C-u>` | Reader Normal half viewport |
 | `fullPageDown` | Reader Normal `<C-f>` | Reader Normal full viewport |

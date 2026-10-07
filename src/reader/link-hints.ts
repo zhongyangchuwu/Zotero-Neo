@@ -1,5 +1,7 @@
 import { cloneInto } from '../platform/cross-compartment';
 import { hintLabels } from './hint-labels';
+import type { NavigationExecution, NavigationIntent, NavigationResult } from '../navigation/types';
+import type { ReaderNavigationCommand } from './navigation';
 import type {
   PdfWindow,
   ReaderLinkOverlay,
@@ -21,6 +23,7 @@ export interface ReaderLinkHintsHost {
   showStatus(message: string, duration?: number): void;
   debug(message: string): void;
   diagnostic(message: string): void;
+  readonly executeNavigation: ReaderNavigationCommand;
 }
 
 export class ReaderLinkHints {
@@ -29,6 +32,7 @@ export class ReaderLinkHints {
   #buffer = '';
   #window: PdfWindow | null = null;
   #repositionFrame: number | null = null;
+  #activation = 0;
   #destinationCue: HTMLElement | null = null;
   #destinationPosition: ReaderLinkPosition | null = null;
   #destinationWindow: PdfWindow | null = null;
@@ -156,34 +160,71 @@ export class ReaderLinkHints {
     const overlay = badge.overlay;
     this.cancelHints();
     this.#clearDestinationCue();
+    const invocation = ++this.#activation;
     try {
       const view = this.#host.viewForWindow(pdfWindow);
-      let result: void | Promise<void>;
       if (overlay.type === 'external-link') {
         if (typeof view?._onOpenLink !== 'function') throw new Error('missing external open-link');
-        result = view._onOpenLink(overlay.url);
-      } else {
-        if (typeof view?.navigate !== 'function') throw new Error('missing internal navigation');
-        const readerWindow = this.#host.reader._iframeWindow;
-        if (!readerWindow) throw new Error('reader window unavailable');
-        const position =
-          overlay.type === 'internal-link'
-            ? overlay.destinationPosition
-            : overlay.references[0]!.position;
-        const location = cloneInto({ position }, readerWindow);
-        result = view.navigate(location);
-        this.#showDestinationCue(pdfWindow, location.position);
-      }
-      if (result && typeof result.then === 'function')
-        void Promise.resolve(result).catch((error: unknown) =>
-          this.#reportActivationFailure(error),
+        const execution = this.#host.executeNavigation(
+          pdfWindow,
+          this.#intent('external-link', invocation),
+          (navigation) => navigation.runNative(() => view._onOpenLink!(overlay.url)),
         );
+        if (!execution) throw new Error('reader navigation unavailable');
+        this.#observeActivation(execution, invocation);
+        return;
+      }
+
+      if (typeof view?.navigate !== 'function') throw new Error('missing internal navigation');
+      const readerWindow = this.#host.reader._iframeWindow;
+      if (!readerWindow) throw new Error('reader window unavailable');
+      const position =
+        overlay.type === 'internal-link'
+          ? overlay.destinationPosition
+          : overlay.references[0]!.position;
+      const location = cloneInto({ position }, readerWindow);
+      const execution = this.#host.executeNavigation(
+        pdfWindow,
+        this.#intent('internal-link', invocation),
+        (navigation) => {
+          navigation.bindRequest(location);
+          return navigation.runNative(() => view.navigate!(location));
+        },
+      );
+      if (!execution) throw new Error('reader navigation unavailable');
+      this.#showDestinationCue(pdfWindow, location.position);
+      this.#observeActivation(execution, invocation);
     } catch (error) {
-      this.#reportActivationFailure(error);
+      this.#reportActivationFailure(error, invocation);
     }
   }
 
-  #reportActivationFailure(error: unknown): void {
+  #intent(path: 'internal-link' | 'external-link', invocation: number): NavigationIntent {
+    return {
+      cause: { kind: 'action', action: 'followLink' },
+      surface: 'reader',
+      context: {
+        readerPath: path,
+        isCurrent: () => this.#activation === invocation,
+      },
+    };
+  }
+
+  #observeActivation(execution: NavigationExecution, invocation: number): void {
+    const complete = (result: NavigationResult): void => {
+      if (result.kind === 'failed') this.#reportActivationFailure(result.error, invocation);
+    };
+    if (execution.pending) {
+      void execution.result.then(complete, (error: unknown) =>
+        this.#reportActivationFailure(error, invocation),
+      );
+    } else {
+      complete(execution.result);
+    }
+  }
+
+  #reportActivationFailure(error: unknown, invocation: number): void {
+    if (invocation !== this.#activation) return;
     this.#clearDestinationCue();
     const message = `reader follow link activation failed: ${String(error)}`;
     this.#host.debug(message);

@@ -1,9 +1,16 @@
 import { showItemInLibrary, type ShowInLibraryHost } from '../operations/show-in-library';
 import type { MainWindow, ReaderControllerApi, ReaderJumpLocation } from '../core/contracts';
 import type { Logger } from '../core/logging';
-import type { MainNavigation } from './navigation';
+import { NavigationCoordinator } from '../navigation/coordinator';
+import type {
+  NavigationExecution,
+  NavigationIntent,
+  NavigationLocation,
+  NavigationOperation,
+  NavigationOutcome,
+  NavigationPort,
+} from '../navigation/types';
 import type { MainPanel, MainWindowSession } from './session';
-import type { ItemRef } from './selection-store';
 import {
   currentMainItemCursorRef,
   focusMainItemsImmediately,
@@ -16,134 +23,11 @@ import {
   selectedMainTabID,
   selectedMainTabInfo,
 } from './host';
+import type { MainNavigation } from './navigation';
 import type { MainViewActions } from './view-actions';
-
-export interface MainTabJumpLocation {
-  readonly kind: 'tab';
-  readonly tabID: string;
-}
-
-export interface MainLibraryJumpLocation {
-  readonly kind: 'library';
-  readonly tabID: string;
-  readonly scopeIDs: readonly string[];
-  readonly quickSearchText: string;
-  readonly tags: readonly string[];
-  readonly advancedSearch: boolean;
-  readonly cursor?: ItemRef;
-  readonly panel: MainPanel;
-}
-
-export type MainJumpLocation = MainTabJumpLocation | MainLibraryJumpLocation | ReaderJumpLocation;
-
-const MAX_JUMP_LOCATIONS = 100;
-
-/** Session-owned navigation history. Selection is deliberately not part of a location. */
-export class MainJumpHistoryState {
-  readonly locations: MainJumpLocation[] = [];
-  index = -1;
-  revision = 0;
-
-  invalidate(): number {
-    this.revision += 1;
-    return this.revision;
-  }
-
-  append(source: MainJumpLocation, destination: MainJumpLocation, revision: number): boolean {
-    if (this.revision !== revision || sameLocation(source, destination)) return false;
-    const current = this.locations[this.index];
-    // Loading a Reader refines its tab location; it is not another jump to that same tab.
-    if (
-      current?.kind === 'reader' &&
-      source.kind === 'reader' &&
-      current.tabID === source.tabID &&
-      current.libraryID === source.libraryID &&
-      current.itemID === source.itemID &&
-      !current.position &&
-      source.position
-    )
-      this.locations[this.index] = source;
-
-    if (this.index >= 0 && sameLocation(this.locations[this.index]!, source)) {
-      this.locations.splice(this.index + 1);
-    } else {
-      this.locations.splice(this.index + 1);
-      this.locations.push(source);
-      this.index = this.locations.length - 1;
-    }
-
-    this.locations.splice(this.index + 1);
-    this.locations.push(destination);
-    this.index = this.locations.length - 1;
-    if (this.locations.length > MAX_JUMP_LOCATIONS) {
-      const removed = this.locations.length - MAX_JUMP_LOCATIONS;
-      this.locations.splice(0, removed);
-      this.index -= removed;
-    }
-    return true;
-  }
-
-  move(index: number, revision: number): boolean {
-    if (this.revision !== revision || index < 0 || index >= this.locations.length) return false;
-    this.index = index;
-    return true;
-  }
-
-  /** Ordinary motion is not a jump, but Forward must return to the actual departure point. */
-  refresh(location: MainJumpLocation | null): void {
-    const current = this.locations[this.index];
-    if (!location || !current || current.kind !== location.kind || current.tabID !== location.tabID)
-      return;
-    if (
-      current.kind === 'reader' &&
-      location.kind === 'reader' &&
-      (current.libraryID !== location.libraryID || current.itemID !== location.itemID)
-    )
-      return;
-    this.locations[this.index] = location;
-  }
-
-  remapReaderTab(location: ReaderJumpLocation, tabID: string): void {
-    if (location.tabID === tabID) return;
-    for (let index = 0; index < this.locations.length; index += 1) {
-      const entry = this.locations[index]!;
-      if (
-        entry.kind === 'reader' &&
-        entry.tabID === location.tabID &&
-        entry.libraryID === location.libraryID &&
-        entry.itemID === location.itemID
-      )
-        this.locations[index] = { ...entry, tabID };
-    }
-  }
-
-  dispose(): void {
-    this.invalidate();
-    this.locations.length = 0;
-    this.index = -1;
-  }
-}
-
-export interface MainJumpRequest {
-  readonly result: Promise<boolean>;
-  isCurrent(): boolean;
-}
 
 export interface LibrarySelectionOptions {
   readonly afterSelection?: () => void | Promise<void>;
-}
-
-interface NavigationQueue {
-  tail: Promise<void>;
-}
-
-interface NavigationAttempt {
-  isCurrent(): boolean;
-  readonly revision: number;
-}
-
-interface ScheduledRequest extends MainJumpRequest {
-  readonly revision: number;
 }
 
 interface RestoreResult {
@@ -152,14 +36,12 @@ interface RestoreResult {
   readonly missing: readonly string[];
 }
 
-/** Per-window explicit navigation and transactional Back/Forward restoration. */
-export class MainJumpHistory {
+/** Main's host adapter for the shared per-session navigation coordinator. */
+export class MainNavigationExecutor {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
   readonly #viewActions: MainViewActions;
-  readonly #queues = new WeakMap<MainWindowSession, NavigationQueue>();
   readonly #reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>;
-  readonly #activeRevisions = new WeakMap<MainWindowSession, number>();
   readonly #isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean;
 
   constructor(
@@ -176,11 +58,47 @@ export class MainJumpHistory {
     this.#isSessionCurrent = isSessionCurrent;
   }
 
+  execute(
+    window: MainWindow,
+    session: MainWindowSession,
+    intent: NavigationIntent,
+    operation: NavigationOperation,
+  ): NavigationExecution {
+    return this.coordinatorFor(window, session).execute(intent, operation);
+  }
+
+  port(window: MainWindow, session: MainWindowSession): NavigationPort {
+    return this.coordinatorFor(window, session).port();
+  }
+
+  private coordinatorFor(window: MainWindow, session: MainWindowSession): NavigationCoordinator {
+    if (session.navigationCoordinator) return session.navigationCoordinator;
+    const coordinator = new NavigationCoordinator(session.jumpHistory, {
+      capture: (operation, phase) =>
+        this.captureSafely(
+          window,
+          session,
+          phase === 'destination' ? operation.destinationPanel : undefined,
+        ),
+      isCurrent: () => this.#isSessionCurrent(window, session),
+      onError: (error) => this.#logger.debug(`navigation execution failed: ${String(error)}`),
+      onTraversalCommitted: (intent) => {
+        if (intent.cause.kind !== 'action') return;
+        this.#navigation.status(
+          session,
+          intent.cause.action === 'navigateBack' ? '✓ Back' : '✓ Forward',
+        );
+      },
+    });
+    session.navigationCoordinator = coordinator;
+    return coordinator;
+  }
+
   capture(
     window: MainWindow,
     session: MainWindowSession,
     destinationPanel?: MainPanel,
-  ): MainJumpLocation | null {
+  ): NavigationLocation | null {
     const tabID = selectedMainTabID(window);
     if (!tabID) return null;
 
@@ -216,7 +134,7 @@ export class MainJumpHistory {
     window: MainWindow,
     session: MainWindowSession,
     destinationPanel?: MainPanel,
-  ): MainJumpLocation | null {
+  ): NavigationLocation | null {
     try {
       return this.capture(window, session, destinationPanel);
     } catch (error) {
@@ -225,186 +143,88 @@ export class MainJumpHistory {
     }
   }
 
-  /** Synchronous semantic jumps execute immediately, including rapidly repeated tab keys. */
-  navigateNow(
-    window: MainWindow,
-    session: MainWindowSession,
-    navigate: () => boolean | void,
-  ): void {
-    const revision = session.jumpHistory.invalidate();
-    const source = this.captureSafely(window, session);
-    this.#activeRevisions.set(session, revision);
-    try {
-      if (navigate() === false || !this.#isSessionCurrent(window, session)) return;
-      const destination = this.captureSafely(window, session);
-      if (source && destination) session.jumpHistory.append(source, destination, revision);
-    } finally {
-      if (this.#activeRevisions.get(session) === revision) this.#activeRevisions.delete(session);
-    }
-  }
-
-  /** Reader emits completed discrete host jumps; it never owns a second traversal stack. */
-  recordReaderJump(
-    window: MainWindow,
-    session: MainWindowSession,
-    source: ReaderJumpLocation,
-    destination: ReaderJumpLocation,
-  ): void {
-    if (
-      this.#activeRevisions.get(session) === session.jumpHistory.revision ||
-      !this.#isSessionCurrent(window, session) ||
-      source.tabID !== destination.tabID ||
-      selectedMainTabID(window) !== destination.tabID ||
-      sameLocation(source, destination)
-    )
-      return;
-    session.jumpHistory.append(source, destination, session.jumpHistory.invalidate());
-  }
-
-  requestNavigation(
-    window: MainWindow,
-    session: MainWindowSession,
-    navigate: (isCurrent: () => boolean) => boolean | void | Promise<boolean | void>,
-    destinationPanel?: MainPanel,
-  ): MainJumpRequest {
-    return this.scheduleNavigation(window, session, async (request) => {
-      const source = this.captureSafely(window, session);
-      const succeeded = await navigate(request.isCurrent);
-      if (!request.isCurrent() || succeeded === false) return false;
-
-      if (source) {
-        const destination = this.captureSafely(window, session, destinationPanel);
-        if (destination) session.jumpHistory.append(source, destination, request.revision);
-      }
-      return true;
-    });
-  }
-
-  requestLibrarySelection(
-    window: MainWindow,
-    session: MainWindowSession,
+  librarySelection(
     itemID: number,
     host: ShowInLibraryHost | undefined,
     options: LibrarySelectionOptions = {},
-  ): MainJumpRequest {
-    return this.requestNavigation(
-      window,
-      session,
-      async (isCurrent) => {
-        await showItemInLibrary(itemID, host);
-        if (!isCurrent()) return false;
-        await options.afterSelection?.();
-        return isCurrent();
-      },
-      'items',
-    );
+  ): NavigationOperation {
+    return {
+      dispatch: 'serial-navigation',
+      destinationPanel: 'items',
+      start: (attempt) => ({
+        kind: 'deferred',
+        settled: (async (): Promise<NavigationOutcome> => {
+          await showItemInLibrary(itemID, host);
+          if (!attempt.isCurrent()) return { kind: 'stale' };
+          await options.afterSelection?.();
+          if (!attempt.isCurrent()) return { kind: 'stale' };
+          return { kind: 'completed', evidence: 'settled-change' };
+        })(),
+      }),
+    };
   }
 
-  back(window: MainWindow, session: MainWindowSession, count = 1): Promise<boolean> {
-    return this.restore(window, session, -1, count);
-  }
-
-  forward(window: MainWindow, session: MainWindowSession, count = 1): Promise<boolean> {
-    return this.restore(window, session, 1, count);
-  }
-
-  private scheduleNavigation(
-    window: MainWindow,
-    session: MainWindowSession,
-    run: (request: NavigationAttempt) => Promise<boolean>,
-  ): ScheduledRequest {
-    return this.enqueue(window, session, session.jumpHistory.invalidate(), run);
-  }
-
-  private scheduleTraversal(
-    window: MainWindow,
-    session: MainWindowSession,
-    run: (request: NavigationAttempt) => Promise<boolean>,
-  ): ScheduledRequest {
-    return this.enqueue(window, session, session.jumpHistory.revision, run);
-  }
-
-  private enqueue(
-    window: MainWindow,
-    session: MainWindowSession,
-    revision: number,
-    run: (request: NavigationAttempt) => Promise<boolean>,
-  ): ScheduledRequest {
-    let queue = this.#queues.get(session);
-    if (!queue) {
-      queue = { tail: Promise.resolve() };
-      this.#queues.set(session, queue);
-    }
-    const isCurrent = (): boolean =>
-      session.jumpHistory.revision === revision && this.#isSessionCurrent(window, session);
-    const result = queue.tail.then(async () => {
-      if (!isCurrent()) return false;
-      this.#activeRevisions.set(session, revision);
-      try {
-        return await run({ isCurrent, revision });
-      } finally {
-        if (this.#activeRevisions.get(session) === revision) this.#activeRevisions.delete(session);
-      }
-    });
-    queue.tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return { result, isCurrent, revision };
-  }
-
-  private restore(
+  traversal(
     window: MainWindow,
     session: MainWindowSession,
     direction: -1 | 1,
-    count: number,
-  ): Promise<boolean> {
-    const request = this.scheduleTraversal(window, session, async (scheduled) => {
-      session.jumpHistory.refresh(this.captureSafely(window, session));
-      const targetIndex = Math.max(
-        0,
-        Math.min(
-          session.jumpHistory.locations.length - 1,
-          session.jumpHistory.index + direction * Math.max(1, Math.trunc(count)),
-        ),
-      );
-      const target = session.jumpHistory.locations[targetIndex];
-      if (!target || targetIndex === session.jumpHistory.index) {
-        if (scheduled.isCurrent())
-          this.#navigation.status(
-            session,
-            direction < 0 ? '✗ No earlier location' : '✗ No later location',
-          );
-        return false;
-      }
-
-      let result: RestoreResult;
-      try {
-        result = await this.restoreLocation(window, session, target, scheduled.isCurrent);
-      } catch (error) {
-        this.#logger.debug(`jump history restore failed: ${String(error)}`);
-        result = { restored: false, stale: !scheduled.isCurrent(), missing: ['host state'] };
-      }
-      if (result.stale || !scheduled.isCurrent()) return false;
-      if (!result.restored) {
-        this.#navigation.status(
-          session,
-          `→ ${direction < 0 ? 'Back' : 'Forward'} partial · missing ${result.missing.join(', ')}`,
-          3200,
+    count = 1,
+  ): NavigationOperation {
+    return {
+      dispatch: 'serial-traversal',
+      start: (attempt) => {
+        const history = session.jumpHistory;
+        history.refresh(this.captureSafely(window, session));
+        const targetIndex = Math.max(
+          0,
+          Math.min(
+            history.locations.length - 1,
+            history.index + direction * Math.max(1, Math.trunc(count)),
+          ),
         );
-        return false;
-      }
-      if (!session.jumpHistory.move(targetIndex, scheduled.revision)) return false;
-      this.#navigation.status(session, direction < 0 ? '✓ Back' : '✓ Forward');
-      return true;
-    });
-    return request.result;
+        const target = history.locations[targetIndex];
+        if (!target || targetIndex === history.index) {
+          if (attempt.isCurrent())
+            this.#navigation.status(
+              session,
+              direction < 0 ? '✗ No earlier location' : '✗ No later location',
+            );
+          return { kind: 'immediate', outcome: { kind: 'unavailable' } };
+        }
+
+        const settled = this.restoreLocation(window, session, target, attempt.isCurrent).then(
+          (result): NavigationOutcome => {
+            if (result.stale || !attempt.isCurrent()) return { kind: 'stale' };
+            if (!result.restored) {
+              this.#navigation.status(
+                session,
+                `→ ${direction < 0 ? 'Back' : 'Forward'} partial · missing ${result.missing.join(', ')}`,
+                3200,
+              );
+              return { kind: 'unavailable' };
+            }
+            return { kind: 'completed', evidence: 'managed-final', targetIndex };
+          },
+          (error: unknown): NavigationOutcome => {
+            this.#logger.debug(`jump history restore failed: ${String(error)}`);
+            if (!attempt.isCurrent()) return { kind: 'stale' };
+            this.#navigation.status(
+              session,
+              `→ ${direction < 0 ? 'Back' : 'Forward'} partial · missing host state`,
+              3200,
+            );
+            return { kind: 'unavailable' };
+          },
+        );
+        return { kind: 'deferred', settled };
+      },
+    };
   }
 
   private async restoreLocation(
     window: MainWindow,
     session: MainWindowSession,
-    location: MainJumpLocation,
+    location: NavigationLocation,
     isCurrent: () => boolean,
   ): Promise<RestoreResult> {
     if (location.kind === 'reader') {
@@ -521,31 +341,6 @@ export class MainJumpHistory {
 
     return { restored: true, stale: false, missing: [] };
   }
-}
-
-function sameLocation(left: MainJumpLocation, right: MainJumpLocation): boolean {
-  if (left.kind !== right.kind || left.tabID !== right.tabID) return false;
-  if (left.kind === 'tab' || right.kind === 'tab') return left.kind === right.kind;
-  if (left.kind === 'reader' || right.kind === 'reader') {
-    if (left.kind !== 'reader' || right.kind !== 'reader') return false;
-    return (
-      left.libraryID === right.libraryID &&
-      left.itemID === right.itemID &&
-      left.position?.primary === right.position?.primary &&
-      left.position?.pageIndex === right.position?.pageIndex &&
-      left.position?.top === right.position?.top &&
-      left.position?.left === right.position?.left
-    );
-  }
-  return (
-    sameStrings(left.scopeIDs, right.scopeIDs) &&
-    left.quickSearchText === right.quickSearchText &&
-    sameStrings(left.tags, right.tags) &&
-    left.advancedSearch === right.advancedSearch &&
-    left.cursor?.libraryID === right.cursor?.libraryID &&
-    left.cursor?.itemID === right.cursor?.itemID &&
-    left.panel === right.panel
-  );
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {

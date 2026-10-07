@@ -9,7 +9,8 @@ import { PluginManagerRuntime } from './plugin-manager-runtime';
 import { SelectionStore } from './selection-store';
 import { SelectionPanelRuntime } from './selection-panel-runtime';
 import type { InteractionAppearanceManager } from './interaction-appearance';
-import { MainJumpHistoryState } from './jump-history';
+import { NavigationHistoryState } from '../navigation/history';
+import type { NavigationCoordinator } from '../navigation/coordinator';
 import { MainFocusOwnership } from './focus-ownership';
 import { MainLocalFindRuntime } from './local-find-runtime';
 import { NoteSurfaceRuntime } from './note-runtime';
@@ -31,7 +32,8 @@ export class MainWindowSession {
   readonly input: InputRuntime;
   readonly prefixGuide: PrefixGuideRuntime;
   readonly trashHistory = new TrashHistory();
-  readonly jumpHistory = new MainJumpHistoryState();
+  readonly jumpHistory = new NavigationHistoryState();
+  navigationCoordinator: NavigationCoordinator | null = null;
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
   readonly selectionPanel = new SelectionPanelRuntime();
@@ -83,6 +85,8 @@ export class MainWindowSession {
   }
 
   dispose(): void {
+    this.navigationCoordinator?.dispose();
+    this.navigationCoordinator = null;
     this.jumpHistory.dispose();
     this.cleanup.dispose();
     this.host.dispose();

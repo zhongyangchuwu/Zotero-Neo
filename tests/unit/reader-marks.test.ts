@@ -110,7 +110,6 @@ describe('ReaderMarks jump behavior', () => {
     expect(test.sourceLocations).toEqual([{ pageNumber: 1, scrollTop: 400 }]);
     expect(test.pageNumber()).toBe(2);
     expect(test.container.scrollTop).toBe(1250);
-    expect(test.scrollToPageRatio).toHaveBeenCalledWith(test.pdfWindow, 1, 0.25);
     expect(test.successfulJumps).toEqual(['jump']);
   });
 
@@ -134,9 +133,6 @@ describe('ReaderMarks jump behavior', () => {
     );
 
     expect(test.sourceLocations).toEqual([{ pageNumber: 1, scrollTop: 350 }]);
-    expect(selectAnnotation).toHaveBeenCalledWith(annotation.key);
-    expect(resolvePage).toHaveBeenCalledWith(test.pdfWindow, annotation);
-    expect(test.scrollToPageRatio).toHaveBeenCalledWith(test.pdfWindow, 4, 0.7);
     expect(test.pageNumber()).toBe(5);
     expect(test.container.scrollTop).toBe(4700);
     expect(test.successfulJumps).toEqual(['jump']);
@@ -156,7 +152,8 @@ describe('ReaderMarks jump behavior', () => {
     await expect(test.marks.jump(test.reader, test.pdfWindow, 'a', () => {})).resolves.toBe(false);
 
     expect(test.sourceLocations).toEqual([{ pageNumber: 2, scrollTop: 1150 }]);
-    expect(test.scrollToPageRatio).not.toHaveBeenCalled();
+    expect(test.pageNumber()).toBe(2);
+    expect(test.container.scrollTop).toBe(1150);
     expect(test.successfulJumps).toEqual([]);
     expect(test.statuses).not.toContain('→ mark a');
   });
@@ -169,10 +166,10 @@ describe('ReaderMarks jump behavior', () => {
     await test.marks.set(test.reader, test.pdfWindow, 'a', annotation.key);
     Reflect.set(test.pdfWindow, 'PDFViewerApplication', { pdfViewer: test.viewer });
     test.setViewport(1, 350);
-    let resolvePage!: (page: { pageIndex: number; ratio: number }) => void;
-    const pendingPage = new Promise<{ pageIndex: number; ratio: number }>((resolve) => {
-      resolvePage = resolve;
-    });
+    const { promise: pendingPage, resolve: resolvePage } = Promise.withResolvers<{
+      pageIndex: number;
+      ratio: number;
+    }>();
     test.setAnnotationPageRatio(async () => pendingPage);
     const selectAnnotation = vi.fn(() => test.setViewport(5, 4200));
 
@@ -187,7 +184,6 @@ describe('ReaderMarks jump behavior', () => {
 
     expect(test.pageNumber()).toBe(5);
     expect(test.container.scrollTop).toBe(4200);
-    expect(test.scrollToPageRatio).not.toHaveBeenCalled();
     expect(test.successfulJumps).toEqual([]);
     expect(test.statuses).not.toContain('→ mark a');
   });
@@ -204,7 +200,8 @@ describe('ReaderMarks jump behavior', () => {
 
     expect(test.sourceLocations).toEqual([{ pageNumber: 1, scrollTop: 400 }]);
     expect(selectAnnotation).toHaveBeenCalledWith(null);
-    expect(test.scrollToPageRatio).toHaveBeenCalledWith(test.pdfWindow, 1, 0.25);
+    expect(test.pageNumber()).toBe(2);
+    expect(test.container.scrollTop).toBe(1250);
     expect(test.statuses).toContain('→ mark a · annotation gone');
     expect(test.successfulJumps).toEqual(['jump']);
   });

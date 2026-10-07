@@ -4,7 +4,7 @@ import { THEME_VARS } from '../ui/theme';
 import { mainHost, mainItem, mainItemRowForRef } from './host';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
-import type { MainJumpHistory } from './jump-history';
+import type { MainNavigationExecutor } from './jump-history';
 
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -56,18 +56,20 @@ export function selectionPanelEntries(
  * This panel intentionally owns no batch domain actions. It can inspect the
  * workset, remove/clear membership, and explicitly reveal one member.
  */
+type SelectionNavigation = Pick<MainNavigationExecutor, 'execute' | 'librarySelection'>;
+
 export class SelectionPanel {
   readonly #logger: SelectionPanelLogger;
-  readonly #jumpHistory: MainJumpHistory;
+  readonly #navigation: SelectionNavigation;
   readonly #onSelectionChange: SelectionPanelChangeListener;
 
   constructor(
     logger: SelectionPanelLogger,
-    jumpHistory: MainJumpHistory,
+    navigation: SelectionNavigation,
     onSelectionChange: SelectionPanelChangeListener,
   ) {
     this.#logger = logger;
-    this.#jumpHistory = jumpHistory;
+    this.#navigation = navigation;
     this.#onSelectionChange = onSelectionChange;
   }
 
@@ -294,20 +296,42 @@ export class SelectionPanel {
       return;
     }
 
+    const invocationOverlay = session.selectionPanel.overlay;
+    const isInvocationCurrent = (): boolean =>
+      session.selectionPanel.open && session.selectionPanel.overlay === invocationOverlay;
     try {
-      const request = this.#jumpHistory.requestLibrarySelection(window, session, item.id, pane);
-      void request.result
-        .then((selected) => {
-          if (selected && request.isCurrent()) this.close(session, false);
+      const execution = this.#navigation.execute(
+        window,
+        session,
+        {
+          cause: { kind: 'event', event: 'main-selection-panel.reveal' },
+          surface: 'main',
+          context: { mainPanel: 'items', isCurrent: isInvocationCurrent },
+        },
+        this.#navigation.librarySelection(item.id, pane),
+      );
+      const result = execution.pending ? execution.result : Promise.resolve(execution.result);
+      void result
+        .then((outcome) => {
+          if (outcome.kind === 'completed' && isInvocationCurrent()) this.close(session, false);
+          else if (
+            (outcome.kind === 'failed' || outcome.kind === 'unavailable') &&
+            isInvocationCurrent()
+          ) {
+            if (outcome.kind === 'failed')
+              this.#logger.debug(`Selection reveal failed: ${String(outcome.error)}`);
+            this.renderFooter(session, 'Reveal failed · check Library selection');
+          }
         })
         .catch((error) => {
           this.#logger.debug(`Selection reveal failed: ${String(error)}`);
-          if (request.isCurrent())
+          if (isInvocationCurrent())
             this.renderFooter(session, 'Reveal failed · check Library selection');
         });
     } catch (error) {
       this.#logger.debug(`Selection reveal failed: ${String(error)}`);
-      this.renderFooter(session, 'Reveal failed · check Library selection');
+      if (isInvocationCurrent())
+        this.renderFooter(session, 'Reveal failed · check Library selection');
     }
   }
 

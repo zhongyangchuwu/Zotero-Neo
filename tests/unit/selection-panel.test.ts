@@ -3,10 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { SelectionPanel, selectionPanelEntries } from '../../src/main/selection-panel';
 import { SelectionStore } from '../../src/main/selection-store';
-import { MainNavigation } from '../../src/main/navigation';
-import { MainJumpHistory, MainJumpHistoryState } from '../../src/main/jump-history';
-import { MainViewActions } from '../../src/main/view-actions';
 import type { MainWindowSession } from '../../src/main/session';
+import type {
+  NavigationExecution,
+  NavigationIntent,
+  NavigationOperation,
+  NavigationOutcome,
+} from '../../src/navigation/types';
+import type { ShowInLibraryHost } from '../../src/operations/show-in-library';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -96,7 +100,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     activePanel: 'items',
     status: { textContent: '', style: { display: '', color: '', background: '' } },
     cleanup: { add: vi.fn() },
-    jumpHistory: new MainJumpHistoryState(),
+
     selectionPanel: {
       open: true,
       refs: [...selection.values()],
@@ -115,15 +119,46 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
 
   const selectionChanged = vi.fn();
   const debug = vi.fn();
-  const logger = { debug, diagnostic: vi.fn() };
-  const navigation = new MainNavigation(logger, () => {});
-  const jumpHistory = new MainJumpHistory(
-    logger,
-    navigation,
-    new MainViewActions(logger, navigation),
-    { captureJumpLocation: () => null, restoreJumpLocation: async () => null },
-  );
-  const panel = new SelectionPanel({ debug }, jumpHistory, selectionChanged);
+  const navigation = {
+    librarySelection: vi.fn((itemID: number, host: ShowInLibraryHost | undefined) => ({
+      dispatch: 'serial-navigation' as const,
+      start: () => ({
+        kind: 'deferred' as const,
+        settled: Promise.resolve(host?.selectItem?.(itemID)).then(
+          (selected): NavigationOutcome =>
+            selected === false
+              ? { kind: 'failed', error: new Error('Library item selection failed') }
+              : { kind: 'completed', evidence: 'settled-change' },
+        ),
+      }),
+    })),
+    execute: vi.fn(
+      (
+        _window: MainWindow,
+        _session: MainWindowSession,
+        intent: NavigationIntent,
+        operation: NavigationOperation,
+      ): NavigationExecution => {
+        const completion = operation.start({
+          token: { id: 1, epoch: 1, cause: intent.cause, surface: intent.surface },
+          policy: { kind: 'ignore' },
+          isCurrent: () => intent.context?.isCurrent?.() ?? true,
+          cancel: () => {},
+        });
+        const settled =
+          completion.kind === 'immediate'
+            ? Promise.resolve(completion.outcome)
+            : completion.settled;
+        return {
+          isCurrent: () => intent.context?.isCurrent?.() ?? true,
+          cancel: () => {},
+          pending: true,
+          result: settled.then((outcome) => ({ ...outcome, recorded: false })),
+        };
+      },
+    ),
+  };
+  const panel = new SelectionPanel({ debug }, navigation, selectionChanged);
   const key = (value: string): KeyboardEvent =>
     ({
       key: value,
@@ -136,7 +171,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
     window,
     session,
     panel,
-    jumpHistory,
+    navigation,
     select,
     clearSelection,
     toggleSelect,
@@ -217,15 +252,10 @@ describe('Selection Panel', () => {
     expect(h.selectionChanged).not.toHaveBeenCalled();
   });
 
-  it('records a successful reveal, closes the panel and preserves Persistent Selection', async () => {
+  it('executes reveal through its event cause, closes on success and preserves Selection', async () => {
     const selected = item(7);
     const h = harness([selected], []);
     const selectionBefore = h.session.selection.values();
-    const previousFocus = vi.fn();
-    h.session.selectionPanel.previousElement = {
-      isConnected: true,
-      focus: previousFocus,
-    } as unknown as HTMLElement;
     let finishSelection!: (selected: boolean) => void;
     h.selectItem.mockImplementationOnce(
       () => new Promise<boolean>((resolve) => (finishSelection = resolve)),
@@ -235,16 +265,18 @@ describe('Selection Panel', () => {
     await vi.waitFor(() => expect(h.selectItem).toHaveBeenCalledWith(selected.id));
     expect(h.session.selectionPanel.open).toBe(true);
     finishSelection(true);
-    Reflect.set(Reflect.get(h.window, 'Zotero_Tabs')!, 'selectedID', 'zotero-pane');
-
     await vi.waitFor(() => expect(h.session.selectionPanel.open).toBe(false));
+
     expect(h.session.selection.values()).toEqual(selectionBefore);
-    await expect(h.jumpHistory.back(h.window, h.session)).resolves.toBe(true);
-    expect(Reflect.get(Reflect.get(h.window, 'Zotero_Tabs')!, 'selectedID')).toBe('reader-test');
-    expect(previousFocus).not.toHaveBeenCalled();
+    expect(h.navigation.execute).toHaveBeenCalledOnce();
+    expect(h.navigation.execute.mock.calls[0]?.[2]).toMatchObject({
+      cause: { kind: 'event', event: 'main-selection-panel.reveal' },
+      surface: 'main',
+      context: { mainPanel: 'items' },
+    });
   });
 
-  it('does not record a failed reveal or close the panel', async () => {
+  it('keeps the panel open and reports a failed reveal', async () => {
     const selected = item(8);
     const h = harness([selected], []);
     const selectionBefore = h.session.selection.values();
@@ -253,100 +285,33 @@ describe('Selection Panel', () => {
     h.selectItem.mockResolvedValueOnce(false);
 
     h.panel.handleKey(h.key('Enter'), h.window, h.session);
-    await vi.waitFor(() =>
-      expect(h.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Library item selection failed'),
-      ),
-    );
+    await vi.waitFor(() => expect(footer.textContent).toContain('Reveal failed'));
 
     expect(h.selectItem).toHaveBeenCalledWith(selected.id);
     expect(h.session.selectionPanel.open).toBe(true);
     expect(h.session.selection.values()).toEqual(selectionBefore);
-    expect(footer.textContent).toContain('Reveal failed');
-    await expect(h.jumpHistory.back(h.window, h.session)).resolves.toBe(false);
   });
 
-  it('keeps overlapping failed reveals from creating a Back entry', async () => {
-    const first = item(9);
-    const second = item(10);
-    const h = harness([first, second], []);
-    const pending: {
-      readonly itemID: number;
-      resolve(value: boolean): void;
-      reject(error: Error): void;
-    }[] = [];
-    h.selectItem.mockImplementation(
-      (itemID: number) =>
-        new Promise<boolean>((resolve, reject) => pending.push({ itemID, resolve, reject })),
+  it('does not let an old reveal update a closed and reopened panel', async () => {
+    const selected = item(9);
+    const h = harness([selected], []);
+    let finishSelection!: (selected: boolean) => void;
+    h.selectItem.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (finishSelection = resolve)),
     );
-    const older = h.jumpHistory.requestLibrarySelection(
-      h.window,
-      h.session,
-      first.id,
-      h.window.ZoteroPane,
-    );
-    void older.result.catch(() => undefined);
-    await vi.waitFor(() => expect(pending).toHaveLength(1));
+    h.session.selectionPanel.overlay = { remove: vi.fn() } as unknown as HTMLElement;
 
-    h.session.selectionPanel.selected = 1;
     h.panel.handleKey(h.key('Enter'), h.window, h.session);
-    expect(h.session.selectionPanel.open).toBe(true);
-    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id]);
+    await vi.waitFor(() => expect(h.selectItem).toHaveBeenCalledWith(selected.id));
+    h.panel.close(h.session, false);
+    const footer = { textContent: 'New panel' } as HTMLElement;
+    h.session.selectionPanel.open = true;
+    h.session.selectionPanel.overlay = { remove: vi.fn() } as unknown as HTMLElement;
+    h.session.selectionPanel.refs = [{ libraryID: 1, itemID: selected.id }];
+    h.session.selectionPanel.footer = footer;
 
-    pending[0]!.reject(new Error('first reveal failed'));
-    await vi.waitFor(() => expect(pending).toHaveLength(2));
-    pending[1]!.reject(new Error('panel reveal failed'));
-    await vi.waitFor(() =>
-      expect(h.debug).toHaveBeenCalledWith(expect.stringContaining('Selection reveal failed')),
-    );
-    await older.result.catch(() => undefined);
-
-    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id, second.id]);
-    await expect(h.jumpHistory.back(h.window, h.session)).resolves.toBe(false);
-  });
-
-  it('applies the newest reveal after earlier host work settles without recording a no-op', async () => {
-    const first = item(11);
-    const second = item(12);
-    const h = harness([first, second], []);
-    const pending: {
-      readonly itemID: number;
-      resolve(value: boolean): void;
-      reject(error: Error): void;
-    }[] = [];
-    let selectedItemID: number | null = null;
-    h.selectItem.mockImplementation(
-      (itemID: number) =>
-        new Promise<boolean>((resolve, reject) =>
-          pending.push({
-            itemID,
-            resolve: (selected) => {
-              if (selected) selectedItemID = itemID;
-              resolve(selected);
-            },
-            reject,
-          }),
-        ),
-    );
-    const older = h.jumpHistory.requestLibrarySelection(
-      h.window,
-      h.session,
-      first.id,
-      h.window.ZoteroPane,
-    );
-    await vi.waitFor(() => expect(pending).toHaveLength(1));
-
-    h.session.selectionPanel.selected = 1;
-    h.panel.handleKey(h.key('Enter'), h.window, h.session);
-    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id]);
-    pending[0]!.resolve(true);
-    Reflect.set(Reflect.get(h.window, 'Zotero_Tabs')!, 'selectedID', 'zotero-pane');
-    await vi.waitFor(() => expect(pending).toHaveLength(2));
-    pending[1]!.resolve(true);
-    await vi.waitFor(() => expect(selectedItemID).toBe(second.id));
-    await expect(older.result).resolves.toBe(false);
-
-    expect(pending.map(({ itemID }) => itemID)).toEqual([first.id, second.id]);
-    await expect(h.jumpHistory.back(h.window, h.session)).resolves.toBe(false);
+    finishSelection(false);
+    await vi.waitFor(() => expect(h.session.selectionPanel.open).toBe(true));
+    expect(footer.textContent).toBe('New panel');
   });
 });

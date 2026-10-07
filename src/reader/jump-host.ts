@@ -67,7 +67,6 @@ interface NativePdfPosition {
 
 const RESTORE_TIMEOUT_MS = 10_000;
 const RESTORE_POLL_MS = 50;
-const SELF_SAVE_SUPPRESSION_MS = 750;
 
 function hostRuntime(): ReaderHostRuntime {
   return Zotero as unknown as ReaderHostRuntime;
@@ -152,14 +151,6 @@ function validLocation(location: ReaderJumpLocation): boolean {
 }
 
 export class ReaderJumpHostAdapter {
-  readonly #restoreSuppression = new WeakMap<
-    ReaderViewRuntime,
-    {
-      readonly position: ReaderJumpPosition;
-      readonly expiresAt: number;
-    }
-  >();
-
   captureJumpLocation(tabID: string, itemID?: number): ReaderJumpLocation | null {
     const reader = hostRuntime().Reader.getByTabID?.(tabID) ?? null;
     if (reader?.itemID !== undefined) {
@@ -173,25 +164,42 @@ export class ReaderJumpHostAdapter {
     reader: ReaderRuntime,
     tabID = reader.tabID ?? '',
     requestedView?: ReaderViewRuntime,
+    capturedPosition?: ReaderJumpPosition | null,
   ): ReaderJumpLocation | null {
     if (!tabID || reader.itemID === undefined) return null;
     const identity = this.#identityLocation(tabID, reader.itemID);
     if (!identity) return null;
     const view = requestedView ?? this.#activeView(reader);
     if (!view) return identity;
-    const primary = this.#viewPrimary(reader, view);
-    if (primary === null) return identity;
-    const pdfWindow = view._iframeWindow as PdfWindow | undefined;
-    const viewer = pdfWindow?.PDFViewerApplication?.pdfViewer;
-    try {
-      viewer?.update?.();
-    } catch {
-      // The view may be replaced while its current location is captured.
-    }
     const position =
-      parseViewerPosition(viewer?._location) ??
-      parseNativePosition(view._history?._currentLocation);
-    return position ? { ...identity, position: { ...position, primary } } : identity;
+      capturedPosition === undefined ? this.captureViewPosition(reader, view) : capturedPosition;
+    return position ? { ...identity, position } : identity;
+  }
+
+  captureViewPosition(reader: ReaderRuntime, view: ReaderViewRuntime): ReaderJumpPosition | null {
+    try {
+      const primary = this.#viewPrimary(reader, view);
+      if (primary === null) return null;
+      const pdfWindow = view._iframeWindow as PdfWindow | undefined;
+      const viewer = pdfWindow?.PDFViewerApplication?.pdfViewer;
+      viewer?.update?.();
+      const position =
+        parseViewerPosition(viewer?._location) ??
+        parseNativePosition(view._history?._currentLocation);
+      return position ? { ...position, primary } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  hasViewMoved(
+    reader: ReaderRuntime,
+    view: ReaderViewRuntime,
+    origin: ReaderJumpPosition,
+  ): boolean | null {
+    const current = this.captureViewPosition(reader, view);
+    if (!current) return null;
+    return current.primary === origin.primary && sameNativePosition(current, origin) ? false : true;
   }
 
   captureHardLocation(
@@ -209,35 +217,11 @@ export class ReaderJumpHostAdapter {
       : null;
   }
 
-  suppressRestoredLocation(view: ReaderViewRuntime, position: ReaderJumpPosition): void {
-    this.#restoreSuppression.set(view, {
-      position,
-      expiresAt: Date.now() + SELF_SAVE_SUPPRESSION_MS,
-    });
-  }
-
-  isRestoredLocation(view: ReaderViewRuntime, location: unknown): boolean {
-    const suppression = this.#restoreSuppression.get(view);
-    if (!suppression) return false;
-    if (suppression.expiresAt < Date.now()) {
-      this.#restoreSuppression.delete(view);
-      return false;
-    }
-    const position = parseNativePosition(location);
-    if (!position || !sameNativePosition(position, suppression.position)) return false;
-    this.#restoreSuppression.delete(view);
-    return true;
-  }
-
   async restoreJumpLocation(
     window: MainWindow,
     location: ReaderJumpLocation,
     isCurrent: () => boolean,
-    beforeNavigate: (
-      reader: ReaderRuntime,
-      view: ReaderViewRuntime,
-      position: ReaderJumpPosition,
-    ) => void,
+    beforeNavigate: (reader: ReaderRuntime) => void,
   ): Promise<string | null> {
     if (!validLocation(location) || !isCurrentSafely(isCurrent)) return null;
     const deadline = Date.now() + RESTORE_TIMEOUT_MS;
@@ -340,32 +324,32 @@ export class ReaderJumpHostAdapter {
     }
     if (!current() || !this.#readerIsInOwnerTab(reader, owner, tabID, location.itemID)) return null;
 
-    if (location.position) {
-      const view = await this.#waitForExactView(
-        reader,
-        location.position.primary,
-        current,
-        deadline,
-      );
-      if (!view || !current()) return null;
+    let restoredView: ReaderViewRuntime | null = null;
+    let restoredPdfWindow: PdfWindow | undefined;
+    let restoredTargetIsCurrent = current;
+    const position = location.position;
+    if (position) {
+      const view = await this.#waitForExactView(reader, position.primary, current, deadline);
+      if (!view || !current() || !this.#viewIsCurrent(reader, view, position.primary)) return null;
       const pdfWindow = view._iframeWindow as PdfWindow | undefined;
       if (!pdfWindow?.PDFViewerApplication?.pdfViewer || typeof view.navigate !== 'function')
         return null;
+      restoredView = view;
+      restoredPdfWindow = pdfWindow;
+      restoredTargetIsCurrent = () =>
+        current() &&
+        this.#viewIsCurrent(reader, view, position.primary) &&
+        view._iframeWindow === pdfWindow;
       try {
-        beforeNavigate(reader, view, location.position);
+        beforeNavigate(reader);
       } catch {
         return null;
       }
+      if (!restoredTargetIsCurrent()) return null;
       try {
         const destination = cloneInto(
           {
-            dest: [
-              location.position.pageIndex,
-              { name: 'XYZ' },
-              location.position.left,
-              location.position.top,
-              null,
-            ],
+            dest: [position.pageIndex, { name: 'XYZ' }, position.left, position.top, null],
           } as const,
           pdfWindow,
         );
@@ -374,24 +358,29 @@ export class ReaderJumpHostAdapter {
           Promise.resolve(view.navigate(destination, options)),
           deadline,
         );
-        if (!navigated || !current()) return null;
+        if (!navigated || !restoredTargetIsCurrent()) return null;
       } catch {
         return null;
       }
-      if (!(await this.#waitForPosition(view, location.position, current, deadline))) return null;
+      if (
+        !(await this.#waitForPosition(view, position, restoredTargetIsCurrent, deadline)) ||
+        !restoredTargetIsCurrent()
+      )
+        return null;
     }
 
     if (!current() || !this.#readerIsInOwnerTab(reader, owner, tabID, location.itemID)) return null;
     try {
-      if (location.position) {
-        const view = location.position.primary
-          ? reader._internalReader?._primaryView
-          : reader._internalReader?._secondaryView;
-        const pdfWindow = view?._iframeWindow as PdfWindow | undefined;
-        if (!view || !pdfWindow) return null;
-        reader._internalReader?.focusView?.(location.position.primary);
+      if (position) {
+        const view = restoredView;
+        const pdfWindow = restoredPdfWindow;
+        if (!view || !pdfWindow || !restoredTargetIsCurrent()) return null;
+        reader._internalReader?.focusView?.(position.primary);
+        if (!restoredTargetIsCurrent()) return null;
         view.focus?.();
+        if (!restoredTargetIsCurrent()) return null;
         pdfWindow.focus();
+        if (!restoredTargetIsCurrent()) return null;
       } else {
         const focused = await this.#bounded(Promise.resolve(reader.focus?.()), deadline);
         if (!focused || !current()) return null;
@@ -399,9 +388,18 @@ export class ReaderJumpHostAdapter {
     } catch {
       return null;
     }
-    return current() && this.#readerIsInOwnerTab(reader, owner, tabID, location.itemID)
+    return current() &&
+      restoredTargetIsCurrent() &&
+      this.#readerIsInOwnerTab(reader, owner, tabID, location.itemID)
       ? tabID
       : null;
+  }
+
+  #viewIsCurrent(reader: ReaderRuntime, view: ReaderViewRuntime, primary: boolean): boolean {
+    const currentView = primary
+      ? reader._internalReader?._primaryView
+      : reader._internalReader?._secondaryView;
+    return currentView === view;
   }
 
   #identityLocation(tabID: string, itemID: number): ReaderJumpLocation | null {

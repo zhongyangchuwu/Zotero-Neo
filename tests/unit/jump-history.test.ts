@@ -2,11 +2,168 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow, ReaderJumpLocation } from '../../src/core/contracts';
 import { activeContextNoteItem } from '../../src/main/host';
-import { MainJumpHistory, MainJumpHistoryState } from '../../src/main/jump-history';
+import { MainNavigationExecutor, type LibrarySelectionOptions } from '../../src/main/jump-history';
+import { MainNavigation } from '../../src/main/navigation';
+import type { ShowInLibraryHost } from '../../src/operations/show-in-library';
+import { NavigationHistoryState } from '../../src/navigation/history';
+import type {
+  NavigationCompletion,
+  NavigationExecution,
+  NavigationIntent,
+  NavigationOutcome,
+} from '../../src/navigation/types';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
-import { MainNavigation } from '../../src/main/navigation';
 import type { MainViewActions } from '../../src/main/view-actions';
+
+interface HistoryHarness {
+  readonly window: MainWindow;
+  readonly session: MainWindowSession;
+  readonly history: MainNavigationExecutor;
+  readonly tabs: { selectedID: string };
+}
+
+type TestNavigate = (isCurrent: () => boolean) => boolean | void | Promise<boolean | void>;
+
+function completionFor(navigate: TestNavigate, isCurrent: () => boolean): NavigationCompletion {
+  const result = navigate(isCurrent);
+  if (result instanceof Promise) {
+    return {
+      kind: 'deferred',
+      settled: result.then(
+        (value): NavigationOutcome =>
+          value === false
+            ? { kind: 'unavailable' }
+            : { kind: 'completed', evidence: 'settled-change' },
+      ),
+    };
+  }
+  return {
+    kind: 'immediate',
+    outcome:
+      result === false
+        ? { kind: 'unavailable' }
+        : { kind: 'completed', evidence: 'settled-change' },
+  };
+}
+
+function navigate(
+  h: HistoryHarness,
+  callback: TestNavigate,
+  dispatch: 'inline' | 'serial-navigation',
+  window = h.window,
+  session = h.session,
+): NavigationExecution {
+  const intent: NavigationIntent = {
+    cause: { kind: 'action', action: 'previousTab' },
+    surface: 'main',
+  };
+  return h.history.execute(window, session, intent, {
+    dispatch,
+    start: (attempt) => completionFor(callback, attempt.isCurrent),
+  });
+}
+
+function jumpNow(h: HistoryHarness, callback: () => boolean | void): NavigationExecution {
+  return navigate(h, () => callback(), 'inline');
+}
+
+function queuedJump(
+  h: HistoryHarness,
+  callback: TestNavigate,
+  window = h.window,
+  session = h.session,
+) {
+  const execution = navigate(h, callback, 'serial-navigation', window, session);
+  const result = execution.pending
+    ? execution.result.then((outcome) => outcome.kind === 'completed')
+    : Promise.resolve(execution.result.kind === 'completed');
+  return { result, isCurrent: execution.isCurrent };
+}
+
+function traversal(
+  h: HistoryHarness,
+  direction: -1 | 1,
+  count = 1,
+  window = h.window,
+  session = h.session,
+): Promise<boolean> {
+  const intent: NavigationIntent = {
+    cause: { kind: 'action', action: direction < 0 ? 'navigateBack' : 'navigateForward' },
+    surface: 'main',
+  };
+  const execution = h.history.execute(
+    window,
+    session,
+    intent,
+    h.history.traversal(window, session, direction, count),
+  );
+  return execution.pending
+    ? execution.result.then((outcome) => outcome.kind === 'completed')
+    : Promise.resolve(execution.result.kind === 'completed');
+}
+
+function selectLibrary(
+  h: HistoryHarness,
+  itemID: number,
+  host: ShowInLibraryHost | undefined,
+  options?: LibrarySelectionOptions,
+) {
+  const intent: NavigationIntent = {
+    cause: { kind: 'event', event: 'main-selection-panel.reveal' },
+    surface: 'main',
+    context: { mainPanel: 'items' },
+  };
+  const execution = h.history.execute(
+    h.window,
+    h.session,
+    intent,
+    h.history.librarySelection(itemID, host, options),
+  );
+  const result = execution.pending
+    ? execution.result.then((outcome) => outcome.kind === 'completed')
+    : Promise.resolve(execution.result.kind === 'completed');
+  return { result, isCurrent: execution.isCurrent };
+}
+
+function recordManagedJump(
+  h: HistoryHarness,
+  source: ReaderJumpLocation,
+  destination: ReaderJumpLocation,
+): NavigationExecution {
+  return h.history.execute(
+    h.window,
+    h.session,
+    {
+      cause: { kind: 'event', event: 'reader-mark.jump' },
+      surface: 'reader',
+      context: {
+        readerPath: 'mark',
+        isCurrent: () => h.tabs.selectedID === destination.tabID,
+      },
+    },
+    {
+      dispatch: 'inline',
+      capture: () => source,
+      start: () => ({
+        kind: 'immediate',
+        outcome: { kind: 'completed', evidence: 'managed-final', destination },
+      }),
+    },
+  );
+}
+
+function observeNative(
+  h: HistoryHarness,
+  source: ReaderJumpLocation,
+  destination: ReaderJumpLocation,
+): void {
+  h.history.port(h.window, h.session).observeNative({
+    source,
+    destination,
+    isCurrent: () => h.tabs.selectedID === destination.tabID,
+  });
+}
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -51,12 +208,12 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     const index = scopeRows.findIndex((row) => row.id === id);
     if (index < 0) return;
     if (deferScopeSelection) {
-      return new Promise<void>((resolve) => {
-        resolveScopeSelection = () => {
-          selectScope(index);
-          resolve();
-        };
-      });
+      const { promise, resolve } = Promise.withResolvers<void>();
+      resolveScopeSelection = () => {
+        selectScope(index);
+        resolve();
+      };
+      return promise;
     }
     selectScope(index);
   });
@@ -184,7 +341,8 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     window,
     selection,
     activePanel: 'items',
-    jumpHistory: new MainJumpHistoryState(),
+    jumpHistory: new NavigationHistoryState(),
+    navigationCoordinator: null,
   } as unknown as MainWindowSession;
   const readerHost = {
     captureJumpLocation: vi.fn<(tabID: string, itemID?: number) => ReaderJumpLocation | null>(
@@ -198,7 +356,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
       ) => Promise<string | null>
     >(async () => null),
   };
-  const history = new MainJumpHistory(
+  const history = new MainNavigationExecutor(
     { debug: vi.fn() } as never,
     navigation,
     viewActions,
@@ -280,11 +438,11 @@ function harness(isSessionCurrent: () => boolean = () => true) {
 describe('Main jump history', () => {
   it('records genuine Reader jumps after tab navigation supersedes a pending restore', async () => {
     const h = harness();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
     h.deferScopeSelection();
-    const staleBack = h.history.back(h.window, h.session);
+    const staleBack = traversal(h, -1);
     await vi.waitFor(() => expect(h.selectScopeByID).toHaveBeenCalledOnce());
-    h.history.navigateNow(h.window, h.session, () => h.setTab('reader-B'));
+    jumpNow(h, () => h.setTab('reader-B'));
     const source: ReaderJumpLocation = {
       kind: 'reader',
       tabID: 'reader-B',
@@ -296,7 +454,7 @@ describe('Main jump history', () => {
       ...source,
       position: { primary: true, pageIndex: 6, top: 50, left: 0 },
     };
-    h.history.recordReaderJump(h.window, h.session, source, destination);
+    recordManagedJump(h, source, destination);
     h.resolveScopeSelection();
     await expect(staleBack).resolves.toBe(false);
     let page = 6;
@@ -309,10 +467,10 @@ describe('Main jump history', () => {
       page = location.position!.pageIndex;
       return location.tabID;
     });
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-B');
     expect(page).toBe(0);
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, 1)).resolves.toBe(true);
     expect(page).toBe(6);
   });
 
@@ -335,50 +493,49 @@ describe('Main jump history', () => {
       restoredPage = location.position?.pageIndex;
       return location.tabID;
     });
-    h.history.navigateNow(h.window, h.session, () => h.setTab('reader-A'));
+    jumpNow(h, () => h.setTab('reader-A'));
     initialized = true;
-    h.history.navigateNow(h.window, h.session, () => h.setTab('reader-B'));
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    jumpNow(h, () => h.setTab('reader-B'));
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-A');
     expect(restoredPage).toBe(3);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('zotero-pane');
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
   });
 
   it('records every synchronous tab jump and traverses counted locations without self-recording', async () => {
     const h = harness();
-    for (const tab of ['reader-A', 'reader-B', 'reader-C'])
-      h.history.navigateNow(h.window, h.session, () => h.setTab(tab));
+    for (const tab of ['reader-A', 'reader-B', 'reader-C']) jumpNow(h, () => h.setTab(tab));
 
-    await expect(h.history.back(h.window, h.session, 2)).resolves.toBe(true);
+    await expect(traversal(h, -1, 2)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-A');
-    await expect(h.history.forward(h.window, h.session, 2)).resolves.toBe(true);
+    await expect(traversal(h, 1, 2)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-C');
-    await expect(h.history.back(h.window, h.session, 100)).resolves.toBe(true);
+    await expect(traversal(h, -1, 100)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('zotero-pane');
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
   });
 
   it('returns to the actual Cursor and filters after unrecorded motion at a visited location', async () => {
     const h = harness();
     const selection = h.selection.values();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
-    await h.history.back(h.window, h.session);
+    await queuedJump(h, () => h.setTab('reader-A')).result;
+    await traversal(h, -1);
     h.setCursor(1);
     h.setQuickText('revised');
     h.setTags(['three']);
-    await h.history.forward(h.window, h.session);
+    await traversal(h, 1);
     h.setCursor(0);
     h.setQuickText('other');
     h.setTags([]);
-    await h.history.back(h.window, h.session);
+    await traversal(h, -1);
 
     expect(h.cursor()).toBe(1);
     expect(h.quickText()).toBe('revised');
     expect(h.tags()).toEqual(['three']);
     expect(h.selection.values()).toEqual(selection);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
   });
 
   it('keeps only the most recent 100 locations without breaking traversal at either end', async () => {
@@ -386,14 +543,14 @@ describe('Main jump history', () => {
     for (let index = 1; index <= 105; index += 1) {
       const id = `reader-${index}`;
       h.tabs._tabs.push({ id });
-      h.history.navigateNow(h.window, h.session, () => h.setTab(id));
+      jumpNow(h, () => h.setTab(id));
     }
-    await expect(h.history.back(h.window, h.session, 999)).resolves.toBe(true);
+    await expect(traversal(h, -1, 999)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-6');
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
-    await expect(h.history.forward(h.window, h.session, 999)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(false);
+    await expect(traversal(h, 1, 999)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-105');
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, 1)).resolves.toBe(false);
   });
 
   it('retains Reader positions after a closed tab receives a new tab ID', async () => {
@@ -421,30 +578,30 @@ describe('Main jump history', () => {
       page = location.position!.pageIndex;
       return tabID;
     });
-    h.history.navigateNow(h.window, h.session, () => {
+    jumpNow(h, () => {
       h.setTab('reader-A');
       page = 2;
     });
     const source = h.history.capture(h.window, h.session) as ReaderJumpLocation;
     page = 6;
     const destination = h.history.capture(h.window, h.session) as ReaderJumpLocation;
-    h.history.recordReaderJump(h.window, h.session, source, destination);
-    h.history.navigateNow(h.window, h.session, () => {
+    recordManagedJump(h, source, destination);
+    jumpNow(h, () => {
       h.setTab('reader-B');
       page = 1;
     });
     h.tabs._tabs = h.tabs._tabs.filter((tab) => tab.id !== 'reader-A');
 
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-reopened');
     expect(page).toBe(6);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-reopened');
     expect(page).toBe(2);
-    await expect(h.history.forward(h.window, h.session, 2)).resolves.toBe(true);
+    await expect(traversal(h, 1, 2)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-B');
     expect(page).toBe(1);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(page).toBe(6);
     expect(reopenCount).toBe(1);
   });
@@ -462,68 +619,65 @@ describe('Main jump history', () => {
       ...source,
       position: { primary: true, pageIndex: 5, left: 0, top: 100 },
     };
-    h.history.recordReaderJump(h.window, h.session, source, destination);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    observeNative(h, source, destination);
+    await expect(traversal(h, -1)).resolves.toBe(false);
     h.setTab('reader-A');
-    h.history.recordReaderJump(h.window, h.session, source, destination);
-    h.readerHost.restoreJumpLocation.mockImplementation(async () => {
-      h.history.recordReaderJump(h.window, h.session, destination, source);
-      return 'reader-A';
-    });
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(true);
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(false);
+    observeNative(h, source, destination);
+    h.readerHost.restoreJumpLocation.mockImplementation(async () => 'reader-A');
+    await expect(traversal(h, -1)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(false);
+    await expect(traversal(h, 1)).resolves.toBe(true);
+    await expect(traversal(h, 1)).resolves.toBe(false);
   });
 
   it('truncates Forward after returning to B and explicitly jumping to D', async () => {
     const h = harness();
 
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-B')).result;
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-C')).result;
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await queuedJump(h, () => h.setTab('reader-B')).result;
+    await queuedJump(h, () => h.setTab('reader-C')).result;
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-B');
 
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-D')).result;
+    await queuedJump(h, () => h.setTab('reader-D')).result;
     expect(h.tabs.selectedID).toBe('reader-D');
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(false);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, 1)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-B');
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, 1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-D');
   });
 
   it('enforces Back and Forward bounds and ignores successful no-op opens', async () => {
     const h = harness();
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
+    await expect(traversal(h, 1)).resolves.toBe(false);
 
-    await h.history.requestNavigation(h.window, h.session, () => true).result;
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await queuedJump(h, () => true).result;
+    await expect(traversal(h, -1)).resolves.toBe(false);
 
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await queuedJump(h, () => h.setTab('reader-A')).result;
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('zotero-pane');
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(false);
+    await expect(traversal(h, 1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-A');
-    await expect(h.history.forward(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, 1)).resolves.toBe(false);
   });
 
   it('processes rapid Back and Forward presses sequentially', async () => {
     const h = harness();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-B')).result;
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-C')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-B')).result;
+    await queuedJump(h, () => h.setTab('reader-C')).result;
 
-    const firstBack = h.history.back(h.window, h.session);
-    const secondBack = h.history.back(h.window, h.session);
+    const firstBack = traversal(h, -1);
+    const secondBack = traversal(h, -1);
     await expect(firstBack).resolves.toBe(true);
     await expect(secondBack).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-A');
 
-    const firstForward = h.history.forward(h.window, h.session);
-    const secondForward = h.history.forward(h.window, h.session);
+    const firstForward = traversal(h, 1);
+    const secondForward = traversal(h, 1);
     await expect(firstForward).resolves.toBe(true);
     await expect(secondForward).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-C');
@@ -532,19 +686,16 @@ describe('Main jump history', () => {
   it('runs Back after a pending explicit jump commits its destination', async () => {
     const h = harness();
     let finishJump!: () => void;
-    const jump = h.history.requestNavigation(
-      h.window,
-      h.session,
-      () =>
-        new Promise<void>((resolve) => {
-          finishJump = () => {
-            h.setTab('reader-A');
-            resolve();
-          };
-        }),
-    );
+    const jump = queuedJump(h, () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      finishJump = () => {
+        h.setTab('reader-A');
+        resolve();
+      };
+      return promise;
+    });
     await vi.waitFor(() => expect(finishJump).toBeTypeOf('function'));
-    const back = h.history.back(h.window, h.session);
+    const back = traversal(h, -1);
     finishJump();
 
     await expect(jump.result).resolves.toBe(true);
@@ -556,17 +707,13 @@ describe('Main jump history', () => {
   it('keeps independent stacks for two windows using one controller history service', async () => {
     const first = harness();
     const second = harness();
-    await first.history.requestNavigation(first.window, first.session, () =>
-      first.setTab('reader-A'),
-    ).result;
-    await first.history.requestNavigation(second.window, second.session, () =>
-      second.setTab('reader-B'),
-    ).result;
+    await queuedJump(first, () => first.setTab('reader-A')).result;
+    await queuedJump(first, () => second.setTab('reader-B'), second.window, second.session).result;
 
-    await expect(first.history.back(first.window, first.session)).resolves.toBe(true);
+    await expect(traversal(first, -1)).resolves.toBe(true);
     expect(first.tabs.selectedID).toBe('zotero-pane');
     expect(second.tabs.selectedID).toBe('reader-B');
-    await expect(first.history.back(second.window, second.session)).resolves.toBe(true);
+    await expect(traversal(first, -1, 1, second.window, second.session)).resolves.toBe(true);
     expect(second.tabs.selectedID).toBe('zotero-pane');
     expect(first.session.jumpHistory.locations).toHaveLength(2);
     expect(second.session.jumpHistory.locations).toHaveLength(2);
@@ -576,7 +723,7 @@ describe('Main jump history', () => {
     const h = harness();
     h.setPanel('collections');
     const selectionBefore = h.selection.values();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
 
     h.setScopes(['C3']);
     h.setQuickText('changed');
@@ -585,7 +732,7 @@ describe('Main jump history', () => {
     h.setPanel('items');
     h.setCursor(1);
 
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('zotero-pane');
     expect([...h.selectedScopes]).toEqual([0, 1]);
     expect(h.quickText()).toBe('alpha');
@@ -622,13 +769,19 @@ describe('Main jump history', () => {
     Reflect.set(items, 'focus', () => {});
     const logger = { debug: vi.fn() } as never;
     const navigation = new MainNavigation(logger, () => {});
-    const history = new MainJumpHistory(logger, navigation, h.viewActions, h.readerHost);
+    const history = new MainNavigationExecutor(logger, navigation, h.viewActions, h.readerHost);
+    const focusedHarness: HistoryHarness = {
+      window: h.window,
+      session: h.session,
+      history,
+      tabs: h.tabs,
+    };
 
-    await history.requestNavigation(h.window, h.session, () => {
+    await queuedJump(focusedHarness, () => {
       h.setTab('reader-A');
       Reflect.set(doc, 'activeElement', { id: 'reader-browser', localName: 'browser' });
     }).result;
-    await expect(history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(focusedHarness, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('zotero-pane');
     expect(doc.activeElement).toBe(itemTree);
   });
@@ -649,7 +802,7 @@ describe('Main jump history', () => {
       panel: 'collections',
     });
 
-    const reveal = h.history.requestLibrarySelection(h.window, h.session, h.secondItem.id, {
+    const reveal = selectLibrary(h, h.secondItem.id, {
       selectItem: (itemID) => {
         expect(itemID).toBe(h.secondItem.id);
         h.setCursor(1);
@@ -657,7 +810,7 @@ describe('Main jump history', () => {
       },
     });
     await expect(reveal.result).resolves.toBe(true);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
 
     expect(h.cursor()).toBe(0);
     expect(h.panel()).toBe('collections');
@@ -673,7 +826,7 @@ describe('Main jump history', () => {
       Object.assign(h.session, { [overlay]: { open: true } });
       const selectionBefore = h.selection.values();
 
-      await h.history.requestLibrarySelection(h.window, h.session, h.secondItem.id, {
+      await selectLibrary(h, h.secondItem.id, {
         selectItem: () => {
           h.setCursor(1);
           return true;
@@ -681,7 +834,7 @@ describe('Main jump history', () => {
       }).result;
 
       expect(h.session.jumpHistory.locations[0]).toMatchObject({ panel: 'items' });
-      await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+      await expect(traversal(h, -1)).resolves.toBe(true);
       expect(h.panel()).toBe('items');
       expect(h.cursor()).toBe(0);
       expect(h.selection.values()).toEqual(selectionBefore);
@@ -690,17 +843,17 @@ describe('Main jump history', () => {
 
   it('leaves the history position unchanged for missing tabs and partial restores', async () => {
     const h = harness();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
     const index = h.session.jumpHistory.index;
     h.tabs._tabs = h.tabs._tabs.filter((tab) => tab.id !== 'zotero-pane');
 
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
     expect(h.session.jumpHistory.index).toBe(index);
     expect(h.status).toHaveBeenLastCalledWith(h.session, '→ Back partial · missing tab', 3200);
 
     h.tabs._tabs.push({ id: 'zotero-pane' });
     h.setQuickSearchAvailable(false);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
     expect(h.session.jumpHistory.index).toBe(index);
     expect(h.status).toHaveBeenLastCalledWith(
       h.session,
@@ -712,11 +865,11 @@ describe('Main jump history', () => {
   it('reports partial when the recorded Advanced Search condition is no longer active', async () => {
     const h = harness();
     h.setAdvancedSearch(true);
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
     h.setAdvancedSearch(false);
     const index = h.session.jumpHistory.index;
 
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(traversal(h, -1)).resolves.toBe(false);
     expect(h.session.jumpHistory.index).toBe(index);
     expect(h.status).toHaveBeenLastCalledWith(
       h.session,
@@ -728,9 +881,9 @@ describe('Main jump history', () => {
   it('restores when Advanced Search remains active at the recorded location', async () => {
     const h = harness();
     h.setAdvancedSearch(true);
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
 
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.advancedSearch()).toBe(true);
     expect(h.session.jumpHistory.index).toBe(0);
     expect(h.status).toHaveBeenLastCalledWith(h.session, '✓ Back');
@@ -738,11 +891,11 @@ describe('Main jump history', () => {
 
   it('lets a queued jump record the post-restore state after Back is superseded', async () => {
     const h = harness();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
     h.deferScopeSelection();
-    const staleBack = h.history.back(h.window, h.session);
+    const staleBack = traversal(h, -1);
     await vi.waitFor(() => expect(h.selectScopeByID).toHaveBeenCalledOnce());
-    const newerJump = h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-D'));
+    const newerJump = queuedJump(h, () => h.setTab('reader-D'));
     h.resolveScopeSelection();
 
     await expect(staleBack).resolves.toBe(false);
@@ -756,16 +909,16 @@ describe('Main jump history', () => {
       quickSearchText: 'alpha',
     });
     expect(h.tabs.selectedID).toBe('reader-D');
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('zotero-pane');
   });
 
   it('does not overwrite a native tab change while a restore is awaiting scope selection', async () => {
     const h = harness();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
     h.deferScopeSelection();
     const index = h.session.jumpHistory.index;
-    const back = h.history.back(h.window, h.session);
+    const back = traversal(h, -1);
     await vi.waitFor(() => expect(h.selectScopeByID).toHaveBeenCalledOnce());
     h.setTab('reader-B');
     h.resolveScopeSelection();
@@ -779,10 +932,10 @@ describe('Main jump history', () => {
 
   it('does not replace a newer Quick Search edit while Back awaits scope selection', async () => {
     const h = harness();
-    await h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-A')).result;
+    await queuedJump(h, () => h.setTab('reader-A')).result;
     h.deferScopeSelection();
     const index = h.session.jumpHistory.index;
-    const back = h.history.back(h.window, h.session);
+    const back = traversal(h, -1);
     await vi.waitFor(() => expect(h.selectScopeByID).toHaveBeenCalledOnce());
     h.focusQuickSearch();
     h.setQuickText('new query');
@@ -797,46 +950,39 @@ describe('Main jump history', () => {
   it('records only the newest completed location after overlapping host jumps', async () => {
     const h = harness();
     let finish!: () => void;
-    const stale = h.history.requestNavigation(
-      h.window,
-      h.session,
-      () =>
-        new Promise<void>((resolve) => {
-          finish = () => {
-            h.setTab('reader-A');
-            resolve();
-          };
-        }),
-    );
+    const stale = queuedJump(h, () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      finish = () => {
+        h.setTab('reader-A');
+        resolve();
+      };
+      return promise;
+    });
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
-    const latest = h.history.requestNavigation(h.window, h.session, () => h.setTab('reader-B'));
+    const latest = queuedJump(h, () => h.setTab('reader-B'));
     finish();
 
     await expect(stale.result).resolves.toBe(false);
     await expect(latest.result).resolves.toBe(true);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(true);
+    await expect(traversal(h, -1)).resolves.toBe(true);
     expect(h.tabs.selectedID).toBe('reader-A');
   });
 
   it('does not record failed navigation requests', async () => {
     const h = harness();
-    await expect(
-      h.history.requestNavigation(h.window, h.session, () => false).result,
-    ).resolves.toBe(false);
-    await h.history
-      .requestLibrarySelection(h.window, h.session, 10, { selectItem: () => false })
-      .result.catch(() => undefined);
-    await expect(h.history.back(h.window, h.session)).resolves.toBe(false);
+    await expect(queuedJump(h, () => false).result).resolves.toBe(false);
+    await selectLibrary(h, 10, { selectItem: () => false }).result.catch(() => undefined);
+    await expect(traversal(h, -1)).resolves.toBe(false);
   });
 
   it('clears and invalidates history when a window session is disposed', async () => {
     const h = harness();
     let finish!: () => void;
-    const request = h.history.requestNavigation(
-      h.window,
-      h.session,
-      () => new Promise<void>((resolve) => (finish = resolve)),
-    );
+    const request = queuedJump(h, () => {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      finish = resolve;
+      return promise;
+    });
     await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
     h.session.jumpHistory.dispose();
     finish();
@@ -844,5 +990,28 @@ describe('Main jump history', () => {
     await expect(request.result).resolves.toBe(false);
     expect(h.session.jumpHistory.locations).toEqual([]);
     expect(h.session.jumpHistory.index).toBe(-1);
+  });
+
+  it('retains Forward after a no-op tab confirmation', async () => {
+    const h = harness();
+    jumpNow(h, () => h.setTab('reader-A'));
+    jumpNow(h, () => h.setTab('reader-B'));
+    await traversal(h, -1);
+
+    const confirmation = h.history.execute(
+      h.window,
+      h.session,
+      { cause: { kind: 'action', action: 'switchTab' }, surface: 'main' },
+      {
+        dispatch: 'inline',
+        start: () => ({
+          kind: 'immediate',
+          outcome: { kind: 'completed', evidence: 'settled-change' },
+        }),
+      },
+    );
+    expect(confirmation.result).toMatchObject({ kind: 'completed', recorded: false });
+    await expect(traversal(h, 1)).resolves.toBe(true);
+    expect(h.tabs.selectedID).toBe('reader-B');
   });
 });

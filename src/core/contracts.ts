@@ -3,6 +3,7 @@ import type { BindingMap, Mode } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
+import type { NavigationPort } from '../navigation/types';
 
 export type MainWindow = _ZoteroTypes.MainWindow;
 export type ReaderInstance = _ZoteroTypes.ReaderInstance;
@@ -70,11 +71,7 @@ export interface ReaderMainOperations {
   openSettingsFromReader(ownerWindow: MainWindow | null): void;
   navigateBackFromReader(ownerWindow: MainWindow | null, count?: number): void;
   navigateForwardFromReader(ownerWindow: MainWindow | null, count?: number): void;
-  recordReaderJump(
-    ownerWindow: MainWindow | null,
-    source: ReaderJumpLocation,
-    destination: ReaderJumpLocation,
-  ): void;
+  navigationForReader(ownerWindow: MainWindow | null): NavigationPort | null;
   openTabPicker(ownerWindow: MainWindow | null): void;
   closeReaderTab(ownerWindow: MainWindow | null): void;
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;

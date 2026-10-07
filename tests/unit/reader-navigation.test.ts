@@ -1,15 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MainJumpHistoryState } from '../../src/main/jump-history';
-import { ReaderJumpHistoryBridge } from '../../src/reader/jump-history-bridge';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
 import { ReaderNavigation } from '../../src/reader/navigation';
-import type {
-  PdfWindow,
-  ReaderPdfHistoryLocationRuntime,
-  ReaderRuntime,
-  ReaderViewRuntime,
-} from '../../src/reader/types';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -34,9 +26,8 @@ function pdfWindow(): PdfWindow {
 }
 
 function harness() {
-  Reflect.set(globalThis, 'Components', {
-    utils: { cloneInto: <T>(value: T) => value },
-  });
+  const cloneInto = vi.fn(<T>(value: T) => value);
+  Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   const primary = pdfWindow();
   const secondary = pdfWindow();
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: primary } });
@@ -104,6 +95,7 @@ function harness() {
   });
 
   return {
+    cloneInto,
     navigation,
     reader,
     primary,
@@ -133,73 +125,68 @@ describe('ReaderNavigation', () => {
   it.each([
     { name: 'primary', secondary: false, pages: 37 },
     { name: 'secondary', secondary: true, pages: 11 },
-  ])('preserves mixed boundary jump locations in the $name view', ({ secondary, pages }) => {
-    const test = harness();
-    const internal = test.reader._internalReader!;
-    const active = secondary ? test.secondary : test.primary;
-    const view = (secondary ? internal._secondaryView : internal._primaryView)!;
-    const viewer = { pagesCount: pages, _location: { pageNumber: 1, top: 800, left: 0 } };
-    Reflect.set(active, 'PDFViewerApplication', { pdfViewer: viewer });
-    Reflect.set(internal, '_lastView', view);
-    Reflect.set(view, 'navigateToNextPage', () => {});
-    Reflect.set(test.reader, 'tabID', 'reader-tab');
-    Reflect.set(test.reader, 'itemID', 7);
-    Reflect.set(globalThis, 'Zotero', {
-      Items: { get: () => ({ id: 7, libraryID: 1, isAttachment: () => true }) },
-    });
-
-    const location = (pageIndex: number): ReaderPdfHistoryLocationRuntime => ({
-      dest: [pageIndex, { name: 'XYZ' }, 0, 800, null],
-    });
-    const nativeHistory: {
-      _currentLocation: ReaderPdfHistoryLocationRuntime;
-      save: (location: ReaderPdfHistoryLocationRuntime, transient?: boolean) => unknown;
-    } = {
-      _currentLocation: location(0),
-      save: (next) => {
-        nativeHistory._currentLocation = next;
-      },
-    };
-    Reflect.set(view, '_history', nativeHistory);
-    const navigate = (pageIndex: number, hard: boolean) => {
-      viewer._location = { pageNumber: pageIndex + 1, top: 800, left: 0 };
-      nativeHistory.save(location(pageIndex), !hard);
-    };
-    Reflect.set(internal, 'navigate', ({ pageIndex }: { pageIndex: number }) =>
-      navigate(pageIndex, true),
-    );
-    // Native first/last-page events do not save discrete history points.
-    Reflect.set(internal, 'navigateToFirstPage', () => navigate(0, false));
-    Reflect.set(internal, 'navigateToLastPage', () => navigate(pages - 1, false));
-    const history = new MainJumpHistoryState();
-    const bridge = new ReaderJumpHistoryBridge({
-      reader: test.reader,
-      host: new ReaderJumpHostAdapter(),
-      record: (source, destination) => history.append(source, destination, history.invalidate()),
-      debug: test.debug,
-    });
-    bridge.sync();
-    try {
-      test.navigation.navigateBoundary(5, false, active);
-      test.navigation.navigateBoundary(0, true, active);
-      test.navigation.navigateBoundary(0, false, active);
-      test.navigation.navigateBoundary(9, false, active);
-
-      expect(viewer._location.pageNumber).toBe(9);
-      expect(
-        history.locations.map((entry) => (entry.kind === 'reader' ? entry.position : null)),
-      ).toEqual(
-        [0, 4, pages - 1, 0, 8].map((pageIndex) => ({
-          primary: !secondary,
-          pageIndex,
-          top: 800,
-          left: 0,
-        })),
+  ])(
+    'preserves counted page targets and reaches the document bottom in the $name view',
+    ({ secondary, pages }) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const active = secondary ? test.secondary : test.primary;
+      const view = (secondary ? internal._secondaryView : internal._primaryView)!;
+      const pageHeight = 1000;
+      const container = { scrollTop: 0, scrollHeight: pages * pageHeight, clientHeight: 600 };
+      const viewport = {
+        scale: 1,
+        height: pageHeight,
+        convertToPdfPoint: (x: number, y: number): readonly [number, number] =>
+          secondary ? [y, x] : [x, pageHeight - y],
+      };
+      const viewer = {
+        pagesCount: pages,
+        container,
+        currentPageNumber: 1,
+        getPageView: () => ({ viewport }),
+      };
+      Reflect.set(active, 'PDFViewerApplication', { pdfViewer: viewer });
+      Reflect.set(internal, '_lastView', view);
+      Reflect.set(view, 'navigateToNextPage', () => {});
+      Reflect.set(
+        internal,
+        'navigate',
+        (location: {
+          pageIndex?: number;
+          dest?: readonly [number, { name: string }, number, number, null];
+        }) => {
+          const pageIndex = location.dest?.[0] ?? location.pageIndex!;
+          const pageOffset = location.dest
+            ? secondary
+              ? location.dest[2]
+              : pageHeight - location.dest[3]
+            : 0;
+          viewer.currentPageNumber = pageIndex + 1;
+          container.scrollTop = Math.min(
+            pageIndex * pageHeight + pageOffset,
+            container.scrollHeight - container.clientHeight,
+          );
+        },
       );
-    } finally {
-      bridge.dispose();
-    }
-  });
+
+      test.navigation.navigateBoundary(0, true, active);
+      expect(viewer.currentPageNumber).toBe(pages);
+      expect(container.scrollTop).toBe(container.scrollHeight - container.clientHeight);
+
+      test.navigation.navigateBoundary(5, true, active);
+      expect(viewer.currentPageNumber).toBe(5);
+      expect(container.scrollTop).toBe(4000);
+
+      test.navigation.navigateBoundary(0, false, active);
+      expect(viewer.currentPageNumber).toBe(1);
+      expect(container.scrollTop).toBe(0);
+
+      test.navigation.navigateBoundary(9, false, active);
+      expect(viewer.currentPageNumber).toBe(9);
+      expect(container.scrollTop).toBe(8000);
+    },
+  );
 
   it('delegates zoom, page, search, and split operations to the current Reader host', () => {
     const test = harness();
@@ -256,6 +243,17 @@ describe('ReaderNavigation', () => {
     expect(test.navigation.canFocusDirection('right')).toBe(true);
     expect(test.navigation.focusDirection('right')).toBe(true);
     expect(test.focusContext).toHaveBeenCalledOnce();
+  });
+
+  it('does not dispatch an active primary search from an inactive secondary view', () => {
+    const test = harness();
+
+    expect(test.navigation.find(true, test.secondary)).toEqual({
+      kind: 'unchanged',
+    });
+
+    expect(test.findNext).not.toHaveBeenCalled();
+    expect(test.showStatus).toHaveBeenCalledWith('No active search — press / to search', 1500);
   });
 
   it('fails closed for unavailable navigation and uses the injected document fallback', () => {

@@ -248,9 +248,11 @@ Reader `gg`, `G`, and counted page jumps share `ReaderNavigation.navigateBoundar
 it resolves a zero-based physical page index (`G` reads the active PDF viewer's
 `pagesCount`) and calls `InternalReader.navigate()` with a cloned payload. Do not use
 the host first/last-page event shortcuts: they do not save a hard history point.
-`ReaderJumpHistoryBridge` observes the resulting native hard save, while
-`MainJumpHistory` remains the only traversal stack. Navigation must not manually
-append another history entry or duplicate the position-capture/restore logic.
+All recording enters through `NavigationPort.execute()` or `observeNative()` and
+commits through `NavigationCoordinator`. `NavigationHistoryState` owns the one
+per-window stack. Main's `MainNavigationExecutor` in `main/jump-history.ts` builds
+operations and supplies location capture/restore; do not append directly or create
+a second Reader history owner.
 
 Directional focus reuses the executable binding dispatcher. Reader split movement
 calls `InternalReader.focusView(primary)` based on `splitType`; every Reader command
@@ -375,31 +377,54 @@ navigation. Because the call crosses from Bootstrap chrome into the reader conte
 realm, clone the complete location payload into `reader._iframeWindow` first.
 External targets call `_onOpenLink(url)` with a primitive string.
 `ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
-temporary destination cue; `ReaderSession` orchestrates host/view boundaries. Neo's
-Main-window jump-history owner records qualifying Reader jumps and coordinates
-cross-surface Back/Forward restoration; it is distinct from Zotero's native link
-navigation. Keep host payloads cloned across the chrome/content boundary and do not
-synthesize link clicks. Missing or changed members must fail closed with status and
-write the specific reason to both Zotero debug output and the startup diagnostic
-log rather than leaving badges or input capture active.
+temporary destination cue; `ReaderSession` orchestrates host/view boundaries. The
+Main's jump-history adapter and the shared coordinator own qualifying Reader jumps
+and cross-surface Back/Forward. The bridge in `src/reader/jump-history-bridge.ts`
+observes native payloads to maintain actual hard/transient baselines, but a raw save
+is never an append path. Its native-hard receipt must belong to the exact patched
+view/window/history and producer, and its saved destination must match that producer's
+settled final geometry. Eligibility follows `history-policy.ts`, not an action
+whitelist or save-kind test alone. Completion remains independent: search, annotation
+selection, and other paths can complete successfully without a hard point or history
+entry when the configured evidence is absent.
 
-Reader session-owned hard-history observation emits only settled discrete PDF
-jumps as DOM-free identity/geometry snapshots. Ordinary scrolling and the current
-host's adjacent-page methods do not emit qualifying hard saves. The bridge filters
-native save kind, not an action whitelist; host navigation retains ownership of
-whether search, annotation, or other destinations emit such saves. `MainJumpHistory`
-is the sole owner of per-window ordering and Back/Forward traversal. Its
-`skipHistory` restore context suppresses self-recording during global restore.
-The Reader capture/restore/reopen adapter
-uses `cloneInto` for cross-compartment payloads and restores the exact primary or
-secondary PDF view, reopening the same readable attachment when its tab is gone.
-It reapplies its host patches when the PDF view is replaced and releases them on
-view replacement or session disposal. Snapshots omit zoom and layout.
-The observer retains incoming transient geometry independently of Zotero's
-`_currentLocation`, which may discard a location equal to its closest back point.
-Invoke content callbacks through chrome's `Reflect.apply`: content
-`Function.apply` cannot read a chrome argument-list array. Native navigation
-destinations and options still require `cloneInto`.
+The private transport is pinned to Zotero stable 10.0.5 and Reader SDK
+`9d821fa2c1941bdfdd7bee3199936401b45be852`; revalidate every private seam on host
+updates. The SDK's `_pushHistoryPoint()` awaits scroll settling, then performs its
+terminal `_history.save()` immediately before the original Promise fulfills. The
+bridge associates that save through the original producer's direct `.then` terminal
+boundary and a PDF `queueMicrotask` emission/clear boundary. Preserve exact native
+wrapper identity, original receiver/arguments/return value and Promise behavior;
+producer identity comes from the scoped wrapper, exact window/history/view stamps,
+and owned callback/request scope—not FIFO order, save cardinality, or matching
+geometry. Callback bindings carry immutable operation ownership only for their
+registered work. An owned scope that closes stays owned and rejected; it cannot be
+reclassified as native. Truly detached native motion uses `observeNative()` only
+when its selected Reader tab and exact-view receipt are current; focused-pane state
+is not the eligibility test, and no synthetic Main token/history is made when a
+navigation port is unavailable. Unsupported owned transport rejects rather than
+falling through to a generic native recorder.
+
+For `pageNumber` / `pageLabel`, the SDK awaits its own writable `_pageLabelsPromise`
+once before moving and invoking the producer. The bridge temporarily tags that exact
+await with a request-specific native-realm thenable (`cloneFunctions: true`), restores
+the original field immediately, and publishes the immutable invocation only across
+the PDF microtask that resumes the SDK. Exact patch/window/history/view stamps reject
+retired continuations. Do not copy the label parser, patch global Promise behavior, or
+assign delayed label work to whichever operation is latest. Revalidate the single-await
+producer seam on host updates. Outline confirmation also carries a per-confirmation
+guard so an older completion cannot close or update a newer confirmation's overlay.
+
+Managed marks report one final exact-view destination; their intermediate native
+producers remain children. Restore producers are Traverse children and cannot
+self-record. Preserve native history and hard/transient baselines even when Neo's
+policy ignores recording. Reader capture/restore/reopen uses `cloneInto` for
+cross-compartment payloads, restores the exact primary or secondary PDF view, and
+reopens the same readable attachment when its tab is gone. Host patches are released
+on view replacement or session disposal. Snapshots omit zoom and layout. Invoke
+content callbacks through chrome's `Reflect.apply`: content `Function.apply` cannot
+read a chrome argument-list array. Native navigation destinations and options still
+require `cloneInto`.
 
 
 After successful internal/citation navigation, Neo mirrors

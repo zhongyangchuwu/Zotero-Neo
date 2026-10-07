@@ -24,8 +24,13 @@ export interface MarksHost {
     pdfWindow: PdfWindow,
     pageIndex: number,
     ratio: number,
+    isCurrent: () => boolean,
   ) => Promise<boolean>;
-  readonly scrollDocumentToRatio: (pdfWindow: PdfWindow, ratio: number) => boolean;
+  readonly scrollDocumentToRatio: (
+    pdfWindow: PdfWindow,
+    ratio: number,
+    isCurrent: () => boolean,
+  ) => boolean;
   readonly pageNavigationSupported: (reader: ReaderRuntime) => boolean;
   readonly annotationPageRatio: (
     pdfWindow: PdfWindow,
@@ -177,9 +182,9 @@ export class ReaderMarks {
         if (pageIndex !== null && this.#host.pageNavigationSupported(reader)) {
           const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
           if (viewer) viewer.currentPageNumber = pageIndex + 1;
-          return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio);
+          return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
         }
-        return this.#host.scrollDocumentToRatio(pdfWindow, ratio);
+        return this.#host.scrollDocumentToRatio(pdfWindow, ratio, isCurrent);
       } catch (error) {
         this.#host.log(`mark jump failed: ${String(error)}`);
         return false;
