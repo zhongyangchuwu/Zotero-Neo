@@ -4,9 +4,10 @@
 
 Official support covers the latest stable Zotero release at the time of a Zotero
 Neo release. The manifest enforces that supported major instead of advertising
-untested older Zotero majors. The current pre-release target is Zotero 10.
-GitHub Actions proves packaging only; test a changed reader, main-window, note,
-or preferences flow in the current stable Zotero host.
+untested older Zotero majors. The current supported major is Zotero 10.
+GitHub Actions verifies formatting, strict TypeScript, Node contracts, and XPI
+packaging on Ubuntu; it does not prove Zotero GUI behavior. Exercise a changed
+reader, main-window, note, or preferences flow in the current stable Zotero host.
 
 ## Build
 
@@ -54,6 +55,13 @@ This launches only the configured development profile with a local RDP server
 and installs Neo from the mirrored unpacked build as a temporary add-on. Leave
 that Zotero instance running.
 
+Use a development profile without a separately installed Neo XPI when validating
+temporary-add-on changes. A packaged Neo with the same ID already present in the
+profile can leave competing Main/Reader key handlers and an older Command Palette
+visible even when the RDP actor reports the new temporary add-on. Verify new
+interaction behavior in a clean profile rather than attributing that state to
+the changed build.
+
 The normal code-to-GUI loop is then:
 
 ```bash
@@ -98,11 +106,13 @@ The old extension-proxy path is intentionally not used for fast iteration:
 runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
 fresh profile, while RDP temporary installation and `reload` both succeeded.
 
-GitHub Actions runs the Linux builder on pushes and pull requests, then uploads
-one Linux-built XPI artifact. A version tag runs a guarded release job:
-`tools/check-release.mjs` requires the tag, manifest version, compatibility
-range, and prepared `updates.json` entry to agree before the Linux-built XPI is
-published. Do not create a release tag until its update-feed entry exists.
+GitHub Actions runs the Ubuntu verify/package builder for `main` pushes,
+pull requests targeting `main`, version tags, and manual dispatch, then uploads
+one canonical XPI artifact. The guarded release job runs for a `v*` tag or a
+manual dispatch from `main` with a non-empty `release_tag`.
+`tools/check-release.mjs` requires the tag, manifest version, compatibility range,
+and prepared `updates.json` entry to agree before publication. Do not create a
+release tag until its update-feed entry exists.
 
 ## Branding assets
 
@@ -174,6 +184,10 @@ session cleanup ends it. `ADDON_INSTALL` also occurs on RDP hot reload, so
 installation, reload, enable, upgrade, nonempty search, and unrelated editors
 retain their focus. Zotero still owns Reader-to-Library tab focus restoration.
 
+History restoration focuses the rendered Items/Collections tree `_topDiv`
+directly when available. Zotero's native tree/view `focus()` queues a callback;
+it cannot prove focus synchronously and can outlive the restore attempt.
+
 `src/main/settings-center.ts` owns one disposable page at a time. Appearance
 retains its session-only editor state; `settings-interaction.ts` owns the live
 Picker mouse and Note editor toggles; `settings-reader.ts` owns Reader modes,
@@ -232,6 +246,16 @@ horizontal pan, while an explicit custom H/L scroll remap remains eligible.
 Reader Normal `+`/`-` and `zI`/`zO` delegate to Zotero's `InternalReader.zoomIn()` /
 `zoomOut()` on the active `_lastView`; `=`/`z0` delegate to `zoomReset()` for fit-page-width
 semantics. Missing or throwing host methods fail closed with `Zoom unavailable`.
+
+Reader `gg`, `G`, and counted page jumps share `ReaderNavigation.navigateBoundary()`:
+it resolves a zero-based physical page index (`G` reads the active PDF viewer's
+`pagesCount`) and calls `InternalReader.navigate()` with a cloned payload. Do not use
+the host first/last-page event shortcuts: they do not save a hard history point.
+All recording enters through `NavigationPort.execute()` or `observeNative()` and
+commits through `NavigationCoordinator`. `NavigationHistoryState` owns the one
+per-window stack. Main's `MainNavigationExecutor` in `main/jump-history.ts` builds
+operations and supplies location capture/restore; do not append directly or create
+a second Reader history owner.
 
 Directional focus reuses the executable binding dispatcher. Reader split movement
 calls `InternalReader.focusView(primary)` based on `splitType`; every Reader command
@@ -351,14 +375,60 @@ Selectable targets are `internal-link`, `citation`, and `external-link`; standal
 
 Activation must stay on the same primary or secondary `PDFView`. Internal links use
 their `destinationPosition`; citations use the first resolved reference position; both
-call `navigate({ position })` so Zotero records native history. Because the call crosses
-from Bootstrap chrome into the reader content realm, clone the complete location payload
-into `reader._iframeWindow` first. External targets call `_onOpenLink(url)` with a primitive
-string. `ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
-temporary destination cue; `ReaderSession` only orchestrates host/view boundaries. Do not
-synthesize clicks or introduce Neo-owned link/history state. Missing or changed members
-must fail closed with status and write the specific reason to both Zotero
-debug output and the startup diagnostic log rather than leaving badges or input capture active.
+call Zotero's native `navigate({ position })` API so Zotero owns actual PDF link
+navigation. Because the call crosses from Bootstrap chrome into the reader content
+realm, clone the complete location payload into `reader._iframeWindow` first.
+External targets call `_onOpenLink(url)` with a primitive string.
+`ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
+temporary destination cue; `ReaderSession` orchestrates host/view boundaries. The
+Main's jump-history adapter and the shared coordinator own qualifying Reader jumps
+and cross-surface Back/Forward. The bridge in `src/reader/jump-history-bridge.ts`
+observes native payloads to maintain actual hard/transient baselines, but a raw save
+is never an append path. Its native-hard receipt must belong to the exact patched
+view/window/history and producer, and its saved destination must match that producer's
+settled final geometry. Eligibility follows `history-policy.ts`, not an action
+whitelist or save-kind test alone. Completion remains independent: search, annotation
+selection, and other paths can complete successfully without a hard point or history
+entry when the configured evidence is absent.
+
+The private transport is pinned to Zotero stable 10.0.5 and Reader SDK
+`9d821fa2c1941bdfdd7bee3199936401b45be852`; revalidate every private seam on host
+updates. The SDK's `_pushHistoryPoint()` awaits scroll settling, then performs its
+terminal `_history.save()` immediately before the original Promise fulfills. The
+bridge associates that save through the original producer's direct `.then` terminal
+boundary and a PDF `queueMicrotask` emission/clear boundary. Preserve exact native
+wrapper identity, original receiver/arguments/return value and Promise behavior;
+producer identity comes from the scoped wrapper, exact window/history/view stamps,
+and owned callback/request scope—not FIFO order, save cardinality, or matching
+geometry. Callback bindings carry immutable operation ownership only for their
+registered work. An owned scope that closes stays owned and rejected; it cannot be
+reclassified as native. Truly detached native motion uses `observeNative()` only
+when its selected Reader tab and exact-view receipt are current; focused-pane state
+is not the eligibility test, and no synthetic Main token/history is made when a
+navigation port is unavailable. Unsupported owned transport rejects rather than
+falling through to a generic native recorder.
+
+For `pageNumber` / `pageLabel`, the SDK awaits its own writable `_pageLabelsPromise`
+once before moving and invoking the producer. The bridge temporarily tags that exact
+await with a request-specific native-realm thenable (`cloneFunctions: true`), restores
+the original field immediately, and publishes the immutable invocation only across
+the PDF microtask that resumes the SDK. Exact patch/window/history/view stamps reject
+retired continuations. Do not copy the label parser, patch global Promise behavior, or
+assign delayed label work to whichever operation is latest. Revalidate the single-await
+producer seam on host updates. Outline confirmation also carries a per-confirmation
+guard so an older completion cannot close or update a newer confirmation's overlay.
+
+Managed marks report one final exact-view destination; their intermediate native
+producers remain children. Restore producers are Traverse children and cannot
+self-record. Preserve native history and hard/transient baselines even when Neo's
+policy ignores recording. Reader capture/restore/reopen uses `cloneInto` for
+cross-compartment payloads, restores the exact primary or secondary PDF view, and
+reopens the same readable attachment when its tab is gone. Host patches are released
+on view replacement or session disposal. Snapshots omit zoom and layout. Invoke
+content callbacks through chrome's `Reflect.apply`: content `Function.apply` cannot
+read a chrome argument-list array. Native navigation destinations and options still
+require `cloneInto`.
+
 
 After successful internal/citation navigation, Neo mirrors
 `PDFRenderer.renderPreviewPage()` target semantics over the live PDF document:
@@ -399,9 +469,11 @@ interferes with Gecko/React focus handling.
 
 `ReaderCommentEditor` owns the transient annotation-comment target, textarea DOM, IME state,
 autosave/focus timers, popup guard, theme subscription, and Zotero's private
-`_enableAnnotationDeletionFromComment` override. `ReaderSession` owns only Insert mode and the
-persistent selected-annotation key. The feature resolves and snapshots its save target before
-mounting so later annotation navigation cannot retarget an in-progress edit.
+`_enableAnnotationDeletionFromComment` override. `ReaderSession` orchestrates Insert
+mode, while `ReaderAnnotationNavigationState` owns the remembered selection fallback
+and reads Zotero's exposed selection as authoritative. The comment feature snapshots
+its save target before mounting so later annotation navigation cannot retarget an
+in-progress edit.
 
 Neo renders the textarea in the PDF document, accepts native typing and IME composition, and saves
 through the resolved annotation item with `saveTx()`. A generation token prevents stale async open

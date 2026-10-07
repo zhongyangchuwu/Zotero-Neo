@@ -37,6 +37,7 @@ interface HoldState {
   speed: number;
   rafId: number | null;
   lastTimestamp: number;
+  onFinished: (() => void) | null;
 }
 
 export interface ReaderSmoothScrollerHost {
@@ -56,6 +57,7 @@ export class ReaderSmoothScroller {
     speed: 0,
     rafId: null,
     lastTimestamp: 0,
+    onFinished: null,
   };
   #pdfWindow: PdfWindow | null = null;
 
@@ -77,11 +79,16 @@ export class ReaderSmoothScroller {
     );
   }
 
-  start(pdfWindow: PdfWindow, key: string, spec: SmoothScrollSpec): boolean {
+  start(
+    pdfWindow: PdfWindow,
+    key: string,
+    spec: SmoothScrollSpec,
+    onFinished?: () => void,
+  ): boolean {
     const config = this.#config();
     if (config.mode === 'step') return false;
 
-    if (this.#pdfWindow && this.#pdfWindow !== pdfWindow) this.#clearFrame();
+    if (this.#pdfWindow) this.stop(true);
     this.#pdfWindow = pdfWindow;
     this.#hold.active = true;
     this.#hold.releasing = false;
@@ -90,11 +97,10 @@ export class ReaderSmoothScroller {
     this.#hold.direction = spec.direction;
     this.#hold.speed = config.mode === 'follow' ? config.followSpeed : config.initialSpeed;
     this.#hold.lastTimestamp = 0;
+    this.#hold.onFinished = onFinished ?? null;
 
     this.#scrollBySpeed(pdfWindow, 1 / 120);
-    if (this.#hold.rafId === null) {
-      this.#hold.rafId = pdfWindow.requestAnimationFrame((timestamp) => this.#tick(timestamp));
-    }
+    this.#hold.rafId = pdfWindow.requestAnimationFrame((timestamp) => this.#tick(timestamp));
     return true;
   }
 
@@ -120,6 +126,9 @@ export class ReaderSmoothScroller {
     this.#hold.speed = 0;
     this.#hold.lastTimestamp = 0;
     this.#clearFrame();
+    const onFinished = this.#hold.onFinished;
+    this.#hold.onFinished = null;
+    onFinished?.();
   }
 
   releaseView(pdfWindow: PdfWindow): void {
@@ -138,7 +147,7 @@ export class ReaderSmoothScroller {
       !this.#hold.axis ||
       !this.#hold.direction
     ) {
-      this.#hold.rafId = null;
+      this.stop(true);
       return;
     }
 

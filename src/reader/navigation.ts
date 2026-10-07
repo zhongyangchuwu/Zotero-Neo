@@ -1,6 +1,15 @@
 import { cloneInto } from '../platform/cross-compartment';
 import type { FocusDirection } from '../input/actions';
 import type { PdfWindow, ReaderRuntime } from './types';
+import type { NavigationExecution, NavigationIntent, NavigationOutcome } from '../navigation/types';
+import type { ReaderNativeNavigation } from './jump-history-bridge';
+
+/** Confirmation owners keep their cause and pass native work to the Reader execution adapter. */
+export type ReaderNavigationCommand = (
+  pdfWindow: PdfWindow,
+  intent: NavigationIntent,
+  perform: (navigation: ReaderNativeNavigation) => unknown,
+) => NavigationExecution | null;
 
 export interface ReaderNavigationDependencies {
   readonly reader: ReaderRuntime;
@@ -30,21 +39,6 @@ export class ReaderNavigation {
     this.#dependencies = dependencies;
   }
 
-  navigateHistory(direction: 'back' | 'forward'): void {
-    try {
-      const internal = this.#dependencies.reader._internalReader;
-      const navigate = direction === 'back' ? internal?.navigateBack : internal?.navigateForward;
-      if (typeof navigate !== 'function') {
-        this.#dependencies.showStatus('History unavailable', 1500);
-        return;
-      }
-      navigate.call(internal);
-    } catch (error) {
-      this.#dependencies.debug(`reader history ${direction} failed: ${String(error)}`);
-      this.#dependencies.showStatus('History unavailable', 1500);
-    }
-  }
-
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {
     try {
       const internal = this.#dependencies.reader._internalReader;
@@ -66,34 +60,86 @@ export class ReaderNavigation {
     }
   }
 
-  pageNavigationSupported(): boolean {
+  pageNavigationSupported(pdfWindow?: PdfWindow): boolean {
     const internal = this.#dependencies.reader._internalReader;
-    return (
-      typeof (internal?._lastView ?? internal?._primaryView)?.navigateToNextPage === 'function'
-    );
+    const primary = internal?._primaryView;
+    const secondary = internal?._secondaryView;
+    const last = internal?._lastView;
+    const view = pdfWindow
+      ? primary?._iframeWindow === pdfWindow
+        ? primary
+        : secondary?._iframeWindow === pdfWindow
+          ? secondary
+          : last?._iframeWindow === pdfWindow
+            ? last
+            : null
+      : (last ?? primary);
+    return typeof view?.navigateToNextPage === 'function';
   }
 
-  navigatePage(direction: number): void {
+  navigatePage(
+    direction: number,
+    pdfWindow?: PdfWindow,
+    navigation?: ReaderNativeNavigation,
+  ): void {
     const internal = this.#dependencies.reader._internalReader;
-    if (!this.pageNavigationSupported()) {
+    if (!this.pageNavigationSupported(pdfWindow)) {
       this.#dependencies.showStatus('✗ Page navigation not supported here', 1500);
       return;
     }
     const method = direction > 0 ? internal?.navigateToNextPage : internal?.navigateToPreviousPage;
-    for (let index = 0; index < Math.abs(direction); index += 1) method?.call(internal);
+    const step = (): void => {
+      for (let index = 0; index < Math.abs(direction); index += 1) method?.call(internal);
+    };
+    if (navigation) navigation.runNative(step);
+    else step();
   }
 
-  navigateBoundary(count: number, last: boolean, pdfWindow: PdfWindow): void {
+  /**
+   * Resolves a counted page start, the first page, or the document bottom in the active view.
+   * An uncounted last-page jump uses one native XYZ destination; count overrides the boundary.
+   */
+  navigateBoundary(
+    count: number,
+    last: boolean,
+    pdfWindow: PdfWindow,
+    navigation?: ReaderNativeNavigation,
+  ): void {
     const internal = this.#dependencies.reader._internalReader;
-    if (!this.pageNavigationSupported()) {
+    if (!this.pageNavigationSupported(pdfWindow)) {
       this.#dependencies.scrollBoundary(last, pdfWindow);
       return;
     }
     const outerWindow = this.#dependencies.reader._iframeWindow;
-    if (count > 0 && internal?.navigate && outerWindow) {
-      internal.navigate(cloneInto({ pageIndex: count - 1 }, outerWindow));
-    } else if (last) internal?.navigateToLastPage?.();
-    else internal?.navigateToFirstPage?.();
+    if (!internal?.navigate || !outerWindow) {
+      this.#dependencies.showStatus('✗ Page navigation not supported here', 1500);
+      return;
+    }
+    let pageIndex = count > 0 ? count - 1 : 0;
+    let bottom: readonly [number, number] | undefined;
+    if (last && count === 0) {
+      const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
+      const pagesCount = viewer?.pagesCount;
+      if (typeof pagesCount !== 'number' || !Number.isInteger(pagesCount) || pagesCount < 1) {
+        this.#dependencies.showStatus('✗ Page navigation not supported here', 1500);
+        return;
+      }
+      pageIndex = pagesCount - 1;
+      const viewport = (viewer?._pages?.[pageIndex] ?? viewer?.getPageView?.(pageIndex))?.viewport;
+      bottom = viewport?.convertToPdfPoint?.(0, viewport.height);
+      if (!bottom || !Number.isFinite(bottom[0]) || !Number.isFinite(bottom[1])) {
+        this.#dependencies.showStatus('✗ Page navigation not supported here', 1500);
+        return;
+      }
+    }
+    const request = cloneInto(
+      bottom ? { dest: [pageIndex, { name: 'XYZ' }, bottom[0], bottom[1], null] } : { pageIndex },
+      outerWindow,
+    );
+    if (navigation) {
+      navigation.bindRequest(request);
+      navigation.navigate(request);
+    } else internal.navigate(request);
   }
 
   openSearch(pdfWindow: PdfWindow): void {
@@ -122,19 +168,44 @@ export class ReaderNavigation {
     if (input && outerWindow?.document.activeElement === input) input.blur();
   }
 
-  find(next: boolean): void {
+  find(
+    next: boolean,
+    pdfWindow?: PdfWindow,
+    navigation?: ReaderNativeNavigation,
+  ): NavigationOutcome | Promise<NavigationOutcome> | void {
     const internal = this.#dependencies.reader._internalReader;
-    const active =
-      internal?._primaryView?._findState?.active ||
-      internal?._secondaryView?._findState?.active ||
-      internal?._state?.primaryViewFindState?.active ||
-      internal?._state?.secondaryViewFindState?.active;
+    const primary = internal?._primaryView;
+    const secondary = internal?._secondaryView;
+    const view = pdfWindow
+      ? primary?._iframeWindow === pdfWindow
+        ? primary
+        : secondary?._iframeWindow === pdfWindow
+          ? secondary
+          : null
+      : null;
+    const active = pdfWindow
+      ? view
+        ? (view._findState?.active ??
+          (view === primary
+            ? internal?._state?.primaryViewFindState?.active
+            : internal?._state?.secondaryViewFindState?.active))
+        : false
+      : primary?._findState?.active ||
+        secondary?._findState?.active ||
+        internal?._state?.primaryViewFindState?.active ||
+        internal?._state?.secondaryViewFindState?.active;
     if (!active) {
       this.#dependencies.showStatus('No active search — press / to search', 1500);
-      return;
+      return { kind: 'unchanged' };
     }
-    if (next) internal?.findNext?.();
-    else internal?.findPrevious?.();
+    const find = next ? internal?.findNext : internal?.findPrevious;
+    if (typeof find !== 'function') return { kind: 'unavailable' };
+    const invoke = (): void => find.call(internal);
+    if (navigation) {
+      navigation.runNative(invoke);
+      return navigation.waitForSearch();
+    }
+    invoke();
   }
 
   toggleSplit(type: 'horizontal' | 'vertical'): void {

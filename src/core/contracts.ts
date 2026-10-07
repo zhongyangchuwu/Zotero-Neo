@@ -3,6 +3,7 @@ import type { BindingMap, Mode } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
+import type { NavigationPort } from '../navigation/types';
 
 export type MainWindow = _ZoteroTypes.MainWindow;
 export type ReaderInstance = _ZoteroTypes.ReaderInstance;
@@ -24,6 +25,22 @@ export interface ReaderSelectionContext {
   readonly itemID: number | null;
   readonly pageLabel: string | null;
   readonly position: string | null;
+}
+/** PDF coordinates and view identity, without content-compartment objects. */
+export interface ReaderJumpPosition {
+  readonly primary: boolean;
+  readonly pageIndex: number;
+  readonly top: number;
+  readonly left: number;
+}
+
+/** A tab ID is a hint; attachment identity survives closing and reopening its tab. */
+export interface ReaderJumpLocation {
+  readonly kind: 'reader';
+  readonly tabID: string;
+  readonly libraryID: number;
+  readonly itemID: number;
+  readonly position?: ReaderJumpPosition;
 }
 
 export interface ReaderSelectionActionOutcome {
@@ -52,7 +69,9 @@ export interface ReaderMainOperations {
   openNotesPicker(ownerWindow: MainWindow | null): void;
   openPluginManager(ownerWindow: MainWindow | null): void;
   openSettingsFromReader(ownerWindow: MainWindow | null): void;
-  restoreReturnContext(ownerWindow: MainWindow | null): void;
+  navigateBackFromReader(ownerWindow: MainWindow | null, count?: number): void;
+  navigateForwardFromReader(ownerWindow: MainWindow | null, count?: number): void;
+  navigationForReader(ownerWindow: MainWindow | null): NavigationPort | null;
   openTabPicker(ownerWindow: MainWindow | null): void;
   closeReaderTab(ownerWindow: MainWindow | null): void;
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;
@@ -80,6 +99,12 @@ export interface ReaderControllerApi extends ReaderSelectionApi {
   rescan(window: MainWindow): void;
   deactivateInactive(window: MainWindow, activeTabID: string | null): void;
   forwardKey(event: KeyboardEvent, window: MainWindow): void;
+  captureJumpLocation(tabID: string, itemID?: number): ReaderJumpLocation | null;
+  restoreJumpLocation(
+    window: MainWindow,
+    location: ReaderJumpLocation,
+    isCurrent: () => boolean,
+  ): Promise<string | null>;
 }
 
 export interface MainWindowControllerApi extends ReaderMainOperations {
@@ -98,6 +123,9 @@ export interface ReaderControllerDependencies {
 export interface MainWindowControllerDependencies {
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
-  readonly reader: Pick<ReaderControllerApi, 'rescan' | 'deactivateInactive' | 'forwardKey'>;
+  readonly reader: Pick<
+    ReaderControllerApi,
+    'rescan' | 'deactivateInactive' | 'forwardKey' | 'captureJumpLocation' | 'restoreJumpLocation'
+  >;
   readonly mayClaimInitialLibraryFocus?: () => boolean;
 }

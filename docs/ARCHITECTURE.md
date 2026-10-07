@@ -10,6 +10,12 @@ Context -> Target / TargetSet -> Semantic Action -> Zotero host operation
 Each layer should have one owner. New abstractions are introduced only when more
 than one concrete workflow needs the same contract.
 
+The [unified navigation execution and history policy](NAVIGATION_HISTORY_DESIGN.md)
+documents the current shared navigation owners, recording rules, and Reader
+transport constraints. The navigation implementation and document-bottom `G`
+behavior have passed automated, supported-host, and owner acceptance; integration
+is tracked in [PR #113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
+
 ## Layers
 
 ### 1. Input and interaction scope
@@ -142,8 +148,12 @@ host/view lifecycle seams are owned separately:
   in the session callbacks;
 - `view-lifecycle.ts` — primary/secondary PDF-view discovery, periodic rescan,
   view-local DOM listeners, active-view fallback, and detached-view release;
-- `navigation.ts` — Reader history, zoom, page/search delegation, split control,
-  directional focus, and active primary/secondary host-view resolution;
+- `navigation.ts` — zoom, page/search delegation, split control, directional
+  focus, and active primary/secondary host-view resolution;
+- `jump-host.ts` — attachment/XYZ capture, exact-pane restoration, and readable
+  closed-attachment reopen;
+- `jump-history-bridge.ts` — native producer/callback provenance and completion
+  transport to the shared coordinator, not a separate Reader history stack;
 - `selection-range.ts` — Neo's temporary DOM Selection compatibility range,
   Select anchor/preferred-X state, range motions, endpoint swaps, and view markers;
 - `flash.ts` — visible-text targeting and hint lifecycle;
@@ -165,8 +175,36 @@ discovery/session ownership remains there, and `ReaderSession` still combines in
 routing, semantic dispatch, annotation operations, and scroll behavior. PDF-view
 lifecycle, private key seams, navigation-oriented host operations, and Neo's temporary
 Select DOM-range state/mutations have been extracted into the owners above. The
-remaining pre-release cleanup under issue #29 should continue along coherent
-responsibilities with direct tests, not arbitrary file-size splitting.
+further cleanup under issue #98 should follow coherent responsibilities with
+behavior contracts, not arbitrary file-size splitting.
+
+#### Shared navigation history
+
+`src/navigation/history.ts` owns the single per-Main-window `NavigationHistoryState`
+stack and its append, refresh, move, equality, and Reader-tab remap behavior.
+`src/navigation/history-policy.ts` is the sole typed source for action/event
+eligibility and required completion evidence. `src/navigation/coordinator.ts`
+owns admission, immutable cause/context stamping, inline/serial/traversal lanes,
+currentness fences, completion, and the only history commit path.
+
+`NavigationPort.execute()` and `NavigationPort.observeNative()` are the public
+recording entrances. `MainNavigationExecutor` in `src/main/jump-history.ts` is
+Main's host adapter/facade: it builds host operations and captures/restores
+locations through the shared coordinator; callers do not append to history or
+select a separate recorder. Reader commands use the same port. The Reader bridge
+transports owned or genuinely detached native completion to it; owned work never
+becomes a native root after it closes.
+
+Recording policy is independent of successful host completion. The central rule
+may require `native-hard`, `managed-final`, or `settled-change`; completion can
+remain successful with no append when its evidence is ineligible or no location
+changed. Reader native-hard eligibility requires a real producer receipt for the
+exact view and settled final geometry, and the owning Reader tab must be selected
+(the split view need not be focused). Default-ignored motion avoids history-only
+capture and Promise work. Explicit Reader navigation establishes its launch
+fence; Back/Forward waits for pending admitted navigation before traversing.
+See the navigation design for private SDK transport details and the acceptance
+status.
 
 ### 4. Zotero host adapters
 
@@ -215,13 +253,14 @@ The following are intentionally **not** project-wide frameworks today:
 Create one only when a second real consumer demonstrates a stable shared
 contract.
 
-## Remaining pre-release interaction cleanup
+## Remaining interaction cleanup
 
-The structural Reader cleanup tracked by issue #29 is complete. Before the
-v0.1.0 release candidate is frozen again, issues #42, #39, #40, and #43 tighten
-the interaction vocabulary around target resolution, Tag actions, Tab actions,
-and semantic leader namespaces. Issue #41 separately audits semantic light/dark
-component tokens.
+The structural Reader cleanup for v0.1.0 is complete. Current ownership and
+interaction follow-up is tracked in
+[#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98) and the
+[roadmap](ROADMAP.md). Annotation Comment Editor feature-input ownership is a
+bounded candidate; retain `reader-insert` until its replacement and migration
+are proven.
 
 The Note input grammar is already on the shared sequence/count/binding machinery;
 browser-native Insert editing remains outside Neo unless an explicit Note binding

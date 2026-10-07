@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
+import type { NavigationCause } from '../../src/navigation/types';
 import { MainLocalFind, findVisibleMainItemRow } from '../../src/main/local-find';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
@@ -96,7 +97,14 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
   } as unknown as MainWindowSession;
 
   const statuses: string[] = [];
-  const find = new MainLocalFind((_session, text) => statuses.push(text));
+  const causes: NavigationCause[] = [];
+  const find = new MainLocalFind(
+    (_session, text) => statuses.push(text),
+    (_window, _session, cause, move) => {
+      causes.push(cause);
+      move();
+    },
+  );
 
   return {
     window,
@@ -104,8 +112,9 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
     find,
     statuses,
     select,
-    ensureRowIsVisible,
     nativeSelected,
+    ensureRowIsVisible,
+    causes,
     focused: () => focused,
   };
 }
@@ -158,7 +167,7 @@ describe('Main local find', () => {
     expect(h.focused()).toBe(2);
     expect(h.select).toHaveBeenCalledWith(2, false);
     expect([...h.nativeSelected]).toEqual([2]);
-    expect(h.ensureRowIsVisible).toHaveBeenCalledWith(2);
+    expect(h.causes).toEqual([{ kind: 'action', action: 'findNext' }]);
     expect(h.session.selection.values()).toEqual(before);
 
     h.session.localFind.query = 'missing';
@@ -182,7 +191,7 @@ describe('Main local find', () => {
     expect(h.session.localFind.query).toBe('beta');
     expect(h.session.localFind.open).toBe(false);
     expect(h.focused()).toBe(1);
-
+    expect(h.causes).toEqual([{ kind: 'event', event: 'main-local-find.confirm' }]);
     h.session.localFind.open = true;
     h.session.localFind.query = 'beta';
     h.session.localFind.input = { value: 'alpha' } as HTMLInputElement;

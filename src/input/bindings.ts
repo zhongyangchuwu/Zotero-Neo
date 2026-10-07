@@ -69,8 +69,8 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:zO': 'zoomOut',
   'reader-normal:=': 'zoomReset',
   'reader-normal:z0': 'zoomReset',
-  'reader-normal:<C-o>': 'historyBack',
-  'reader-normal:<C-i>': 'historyForward',
+  'reader-normal:<C-o>': 'navigateBack',
+  'reader-normal:<C-i>': 'navigateForward',
   'reader-normal:f': 'followLink',
   'reader-normal:/': 'openSearch',
   'reader-normal::': 'openCommandPalette',
@@ -149,6 +149,8 @@ export const DEFAULT_BINDINGS = {
   'reader-select:<Esc>': 'exitMode',
   'reader-insert:<Esc>': 'exitMode',
   ...NOTE_LOCAL_DEFAULT_BINDINGS,
+  'note-normal:<C-o>': 'navigateBack',
+  'note-normal:<C-i>': 'navigateForward',
   'note-normal:i': 'enterInsert',
   'note-normal:<Esc>': 'exitMode',
   'note-normal::': 'openCommandPalette',
@@ -175,6 +177,8 @@ export const DEFAULT_BINDINGS = {
   'note-insert:<C-j>': 'focusReaderSplitDown',
   'note-insert:<C-k>': 'focusReaderSplitUp',
   'note-insert:<C-l>': 'focusReaderSplitRight',
+  'main-normal:<C-o>': 'navigateBack',
+  'main-normal:<C-i>': 'navigateForward',
   'main-normal:<Space>ff': 'findAllItems',
   'main-normal:<Space>fq': 'mainQuickSearch',
   'main-normal:<Space>fa': 'mainAdvancedSearch',
@@ -369,6 +373,9 @@ const LEGACY_ACTION_ALIASES: Readonly<Record<string, ActionId>> = {
   mainNextTab: 'nextTab',
   mainTagEditor: 'addTag',
   mainTagPicker: 'toggleTagFilter',
+  mainReturnContext: 'navigateBack',
+  historyBack: 'navigateBack',
+  historyForward: 'navigateForward',
 };
 
 function canonicalAction(value: unknown): ActionId | null {
@@ -463,8 +470,11 @@ export function migrateLegacyBindingOverrides(raw: unknown): string {
     const normalized = canonicalAction(action);
     if (!binding || REMOVED_ACTIONS[String(action)] || !normalized) continue;
     const canonicalKey = `${binding.mode}:${binding.sequence}`;
+    const retiredDefault =
+      RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS];
     if (
-      RETIRED_DEFAULT_BINDINGS[canonicalKey as keyof typeof RETIRED_DEFAULT_BINDINGS] === normalized
+      retiredDefault === normalized ||
+      (action === 'mainReturnContext' && retiredDefault === action)
     )
       continue;
 

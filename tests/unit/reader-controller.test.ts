@@ -5,17 +5,21 @@ import type {
   ReaderControllerDependencies,
   ReaderMainOperations,
 } from '../../src/core/contracts';
+import { NavigationCoordinator } from '../../src/navigation/coordinator';
+import { NavigationHistoryState } from '../../src/navigation/history';
+import type { NavigationIntent, NavigationPort } from '../../src/navigation/types';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
+import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
   InternalReaderRuntime,
   PdfWindow,
   ReaderLinkOverlay,
   ReaderLinkPosition,
+  ReaderPdfHistoryLocationRuntime,
   ReaderRuntime,
   ReaderViewRuntime,
 } from '../../src/reader/types';
-
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -27,7 +31,9 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openNotesPicker: () => {},
   openPluginManager: () => {},
   openSettingsFromReader: () => {},
-  restoreReturnContext: () => {},
+  navigateBackFromReader: () => {},
+  navigateForwardFromReader: () => {},
+  navigationForReader: () => null,
   openTabPicker: () => {},
   closeReaderTab: () => {},
   cycleReaderTab: () => {},
@@ -240,6 +246,16 @@ function createHistorySession(
     },
     getElementById: (id: string) => nodes.get(id) ?? null,
     querySelector: () => null,
+    createDocumentFragment: () => {
+      const childNodes: HTMLElement[] = [];
+      return {
+        childNodes,
+        appendChild: (node: HTMLElement) => {
+          childNodes.push(node);
+          return node;
+        },
+      };
+    },
     createElement: () => {
       const attributes = new Map<string, string>();
       const children: HTMLElement[] = [];
@@ -264,8 +280,16 @@ function createHistorySession(
           setProperty: () => {},
         },
         focus: vi.fn(),
+        children,
+        addEventListener: vi.fn(),
+        scrollIntoView: vi.fn(),
         append: (...nodes: HTMLElement[]) => children.push(...nodes),
-        appendChild: (node: HTMLElement) => children.push(node),
+        appendChild: (node: HTMLElement | { childNodes: HTMLElement[] }) => {
+          if ('childNodes' in node)
+            children.push(...(Array.from(node.childNodes) as HTMLElement[]));
+          else children.push(node);
+          return node;
+        },
         replaceChildren: (...nodes: HTMLElement[]) => {
           children.splice(0, children.length, ...nodes);
         },
@@ -341,6 +365,7 @@ function createHistorySession(
     firstPdfWindow: pdfWindow,
     bindings: () => bindings,
     release: () => {},
+    jumpHost: new ReaderJumpHostAdapter(),
   } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
   const indicator = {
     style: { display: '', color: '', background: '' },
@@ -363,6 +388,91 @@ function createHistorySession(
     animationFrameTasks,
     intervalTasks,
   };
+}
+function navigationHistoryPort() {
+  const history = new NavigationHistoryState();
+  const intents: NavigationIntent[] = [];
+  const coordinator = new NavigationCoordinator(history, {
+    capture: (operation) => operation.capture?.() ?? null,
+    isCurrent: () => true,
+  });
+  const navigation = coordinator.port();
+  const port: NavigationPort = {
+    execute: (intent, operation) => {
+      intents.push(intent);
+      return navigation.execute(intent, operation);
+    },
+    observeNative: (receipt) => navigation.observeNative(receipt),
+  };
+  return { history, intents, port };
+}
+
+interface ReaderHistoryHarness {
+  readonly reader: ReaderRuntime;
+  readonly pdfWindow: PdfWindow;
+  readonly ownerWindow: _ZoteroTypes.MainWindow;
+}
+
+function attachNativeReaderHistory(created: ReaderHistoryHarness) {
+  const view = created.reader._internalReader?._primaryView;
+  if (!view) throw new Error('Expected a primary Reader view');
+  const container = {
+    clientHeight: 100,
+    scrollHeight: 2_000,
+    scrollTop: 500,
+    scrollBy: (_x: number, y: number) => {
+      container.scrollTop += y;
+    },
+    scrollTo: (left: number | ScrollToOptions, top?: number) => {
+      container.scrollTop = typeof left === 'number' ? (top ?? 0) : (left.top ?? 0);
+    },
+  };
+  const page = { offsetTop: 0, offsetHeight: 1_000 };
+  const viewer = {
+    currentPageNumber: 1,
+    _location: { pageNumber: 1, top: 500, left: 0 },
+    container,
+    update: vi.fn(() => {
+      viewer._location = {
+        pageNumber: viewer.currentPageNumber,
+        top: container.scrollTop,
+        left: 0,
+      };
+    }),
+  };
+  const nativeLocation = (pageIndex: number, top: number): ReaderPdfHistoryLocationRuntime => ({
+    dest: [pageIndex, { name: 'XYZ' }, 0, top, null],
+  });
+  const nativeHistory: {
+    _currentLocation: ReaderPdfHistoryLocationRuntime;
+    save: (location: ReaderPdfHistoryLocationRuntime, transient?: boolean) => unknown;
+  } = {
+    _currentLocation: nativeLocation(0, 500),
+    save: vi.fn((location) => {
+      nativeHistory._currentLocation = location;
+      return 'native-save';
+    }),
+  };
+  Reflect.set(view, '_history', nativeHistory);
+  Reflect.set(view, '_pushHistoryPoint', () => {
+    const position = viewer._location;
+    return nativeHistory.save(nativeLocation(position.pageNumber - 1, position.top), false);
+  });
+  Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: viewer });
+  Reflect.set(created.pdfWindow.document, 'querySelector', (selector: string) =>
+    selector.startsWith('.page[') ? page : null,
+  );
+  Reflect.set(created.reader, 'itemID', 42);
+  Reflect.set(created.reader, 'tabID', 'reader-test-tab');
+  Reflect.set(created.ownerWindow, 'Zotero_Tabs', { selectedID: 'reader-test-tab' });
+  const attachment = { id: 42, libraryID: 1, isAttachment: () => true };
+  Reflect.set(globalThis, 'Zotero', {
+    Items: { get: (id: number) => (id === 42 ? attachment : false) },
+  });
+  return { container, nativeHistory, nativeLocation, viewer, view };
+}
+async function settleReaderMicrotasks(): Promise<void> {
+  for (let cycle = 0; cycle < 8; cycle += 1) await Promise.resolve();
 }
 
 function readerKey(
@@ -528,62 +638,44 @@ function destinationCueElement(
   return created.bodyChildren.find((node) => node.dataset.zoteroNeoDestinationCue === '1') ?? null;
 }
 
-describe('native reader history', () => {
-  it('delegates Ctrl-o and Ctrl-i to Zotero and consumes both events', () => {
-    const navigateBack = vi.fn();
-    const navigateForward = vi.fn();
-    const { session } = createHistorySession({ navigateBack, navigateForward });
+describe('Reader global history actions', () => {
+  it('routes counted Ctrl-o and Ctrl-i to Main with the Reader owner window', () => {
+    const navigateBackFromReader = vi.fn();
+    const navigateForwardFromReader = vi.fn();
+    const created = createHistorySession({}, { navigateBackFromReader, navigateForwardFromReader });
+    created.session.focusAndHandle(readerKey('3').event);
     const back = controlKey('o');
+    created.session.focusAndHandle(back.event);
+    created.session.focusAndHandle(readerKey('2').event);
     const forward = controlKey('i');
+    created.session.focusAndHandle(forward.event);
 
-    session.focusAndHandle(back.event);
-    session.focusAndHandle(forward.event);
-
-    expect(navigateBack).toHaveBeenCalledOnce();
-    expect(navigateForward).toHaveBeenCalledOnce();
+    expect(navigateBackFromReader).toHaveBeenCalledWith(created.reader._window, 3);
+    expect(navigateForwardFromReader).toHaveBeenCalledWith(created.reader._window, 2);
     expect(back.preventDefault).toHaveBeenCalledOnce();
-    expect(back.stopImmediatePropagation).toHaveBeenCalledOnce();
     expect(forward.preventDefault).toHaveBeenCalledOnce();
-    expect(forward.stopImmediatePropagation).toHaveBeenCalledOnce();
+    created.session.dispose();
   });
 
-  it('reports missing and failed host commands without throwing through input dispatch', () => {
-    vi.useFakeTimers();
-    const missing = createHistorySession();
-
-    expect(() => missing.session.focusAndHandle(controlKey('o').event)).not.toThrow();
-    expect(missing.indicator.textContent).toBe('History unavailable');
-
-    const failed = createHistorySession({
-      navigateForward: () => {
-        throw new Error('reader reloaded');
-      },
-    });
-    expect(() => failed.session.focusAndHandle(controlKey('i').event)).not.toThrow();
-    expect(failed.indicator.textContent).toBe('History unavailable');
-    expect(failed.debug).toEqual(['reader history forward failed: Error: reader reloaded']);
-    vi.clearAllTimers();
-  });
-
-  it('leaves history chords untouched in Insert mode and editable controls', () => {
-    const navigateBack = vi.fn();
-    const { session } = createHistorySession({ navigateBack });
-    session.state.mode = 'insert';
+  it('leaves global history chords untouched in Insert mode and editable controls', () => {
+    const navigateBackFromReader = vi.fn();
+    const created = createHistorySession({}, { navigateBackFromReader });
+    created.session.state.mode = 'insert';
     const insert = controlKey('o');
-
-    session.focusAndHandle(insert.event);
+    created.session.focusAndHandle(insert.event);
 
     const input = { tagName: 'INPUT', localName: 'input' } as unknown as EventTarget;
-    session.state.mode = 'normal';
+    created.session.state.mode = 'normal';
     const editable = controlKey('o', input);
-    session.focusAndHandle(editable.event);
+    created.session.focusAndHandle(editable.event);
 
-    expect(navigateBack).not.toHaveBeenCalled();
+    expect(navigateBackFromReader).not.toHaveBeenCalled();
     expect(insert.preventDefault).not.toHaveBeenCalled();
     expect(editable.preventDefault).not.toHaveBeenCalled();
+    created.session.dispose();
   });
 
-  it('suppresses Zotero key forwarding only for bound reader commands', () => {
+  it('suppresses Zotero key forwarding only for bound Reader commands', () => {
     const originalKeyDown = vi.fn();
     const created = createHistorySession();
     const view = created.reader._internalReader?._primaryView;
@@ -606,6 +698,7 @@ describe('native reader history', () => {
     expect(originalKeyDown).toHaveBeenNthCalledWith(2, expect.objectContaining({ key: 'h' }));
     created.session.dispose();
   });
+
   it('forwards composing keys rather than claiming bound Reader shortcuts', () => {
     const originalKeyDown = vi.fn();
     const created = createHistorySession();
@@ -693,21 +786,6 @@ describe('Reader Selection Actions capture', () => {
     ).toBe(false);
     expect(created.indicator.textContent).toBe('✓ captured to note');
     created.session.dispose();
-  });
-});
-
-describe('Reader return-context navigation', () => {
-  it('routes a custom binding through the named return-context operation', () => {
-    const restoreReturnContext = vi.fn();
-    const custom = createHistorySession(
-      {},
-      { restoreReturnContext },
-      resolveBindings('{"reader-normal:gr":"mainReturnContext"}'),
-    );
-    custom.session.focusAndHandle(readerKey('g').event);
-    custom.session.focusAndHandle(readerKey('r').event);
-    expect(restoreReturnContext).toHaveBeenCalledWith(custom.reader._window);
-    custom.session.dispose();
   });
 });
 
@@ -1271,6 +1349,8 @@ describe('Reader command palette', () => {
     if (!palette) throw new Error('Expected a Reader command palette context');
     expect(palette.mode).toBe('normal');
     expect(palette.actions).toContain('switchTab');
+    expect(palette.actions).toContain('navigateBack');
+    expect(palette.actions).toContain('navigateForward');
     expect(palette.actions).not.toContain('mainTrashItems');
     expect(palette.actions).not.toContain('mainOpenPDF');
     expect(palette.actions).not.toContain('mainActivate');
@@ -1887,10 +1967,7 @@ describe('reader sidebar coordination', () => {
 describe('reader outline load invalidation', () => {
   it('does not resurrect a closed Outline after pending load resolves', async () => {
     vi.useFakeTimers();
-    let resolveOutline!: (value: unknown[]) => void;
-    const pending = new Promise<unknown[]>((resolve) => {
-      resolveOutline = resolve;
-    });
+    const { promise: pending, resolve: resolveOutline } = Promise.withResolvers<unknown[]>();
     const created = createHistorySession();
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
       pdfDocument: { getOutline: () => pending },
@@ -1912,10 +1989,7 @@ describe('reader outline load invalidation', () => {
 
   it('does not resurrect a released PDF view Outline after pending load resolves', async () => {
     vi.useFakeTimers();
-    let resolveOutline!: (value: unknown[]) => void;
-    const pending = new Promise<unknown[]>((resolve) => {
-      resolveOutline = resolve;
-    });
+    const { promise: pending, resolve: resolveOutline } = Promise.withResolvers<unknown[]>();
     const created = createHistorySession();
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
       pdfDocument: { getOutline: () => pending },
@@ -1932,6 +2006,261 @@ describe('reader outline load invalidation', () => {
     expect(created.pdfWindow.focus).not.toHaveBeenCalled();
     created.session.dispose();
   });
+});
+
+describe('Reader outline navigation execution', () => {
+  it('closes on host success even when the actual hard destination is not appended', async () => {
+    const execution = navigationHistoryPort();
+    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const native = attachNativeReaderHistory(created);
+    const goToDestination = vi.fn(async () => {
+      await native.view._pushHistoryPoint?.();
+    });
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfViewer: native.viewer,
+      pdfDocument: {
+        getOutline: async () => [
+          { title: 'Current page', dest: [0, { name: 'XYZ' }, 0, 500, null] },
+        ],
+      },
+      pdfLinkService: { goToDestination },
+    });
+    created.session.start();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+
+    created.session.focusAndHandle(readerKey('Enter').event);
+    for (let turn = 0; turn < 12; turn += 1) {
+      await Promise.resolve();
+      created.animationFrameTasks.shift()?.();
+    }
+    await vi.waitFor(() =>
+      expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer'),
+    );
+
+    expect(goToDestination).toHaveBeenCalledOnce();
+    expect(execution.intents[0]).toMatchObject({
+      cause: { kind: 'event', event: 'reader-outline.confirm' },
+      surface: 'reader',
+      context: { readerPath: 'outline' },
+    });
+    expect(execution.history.locations).toHaveLength(0);
+    created.session.dispose();
+  });
+
+  it('keeps Outline open when a selected row has no host destination', async () => {
+    const created = createHistorySession();
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfDocument: { getOutline: async () => [{ title: 'No destination' }] },
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+
+    created.session.focusAndHandle(readerKey('Enter').event);
+    await settleReaderMicrotasks();
+
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    created.session.dispose();
+  });
+
+  it('keeps a reopened Outline when an older confirmed destination finishes late', async () => {
+    const created = createHistorySession();
+    const { promise: pending, resolve: resolveDestination } = Promise.withResolvers<void>();
+    const goToDestination = vi.fn(() => pending);
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfDocument: {
+        getOutline: async () => [
+          { title: 'Pending page', dest: [1, { name: 'XYZ' }, 0, 500, null] },
+        ],
+      },
+      pdfLinkService: { goToDestination },
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    created.session.focusAndHandle(readerKey('Enter').event);
+    expect(goToDestination).toHaveBeenCalledOnce();
+
+    created.session.focusAndHandle(readerKey('Escape').event);
+    expect(created.bodyChildren.map((node) => node.id)).not.toContain('zv-outline-explorer');
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    resolveDestination();
+    await settleReaderMicrotasks();
+
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    created.session.dispose();
+  });
+
+  it.each(['attached', 'detached'] as const)(
+    'keeps the newer %s confirmation in the same Outline invocation',
+    async (owner) => {
+      const execution = navigationHistoryPort();
+      const created = createHistorySession(
+        {},
+        owner === 'attached' ? { navigationForReader: () => execution.port } : {},
+      );
+      const native = attachNativeReaderHistory(created);
+      const first = Promise.withResolvers<void>();
+      const second = Promise.withResolvers<void>();
+      Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+        pdfViewer: native.viewer,
+        pdfDocument: {
+          getOutline: async () => [
+            { title: 'First', dest: [1, { name: 'XYZ' }, 0, 700, null] },
+            { title: 'Second', dest: [2, { name: 'XYZ' }, 0, 700, null] },
+          ],
+        },
+        pdfLinkService: {
+          goToDestination: (destination: readonly unknown[]) => {
+            const pageIndex = Number(destination[0]);
+            return (pageIndex === 1 ? first.promise : second.promise).then(() => {
+              native.viewer.currentPageNumber = pageIndex + 1;
+              native.container.scrollTop = 700;
+              native.viewer.update();
+            });
+          },
+        },
+      });
+      created.session.start();
+      executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+      await settleReaderMicrotasks();
+      created.session.focusAndHandle(readerKey('Enter').event);
+      created.session.focusAndHandle(readerKey('j').event);
+      created.session.focusAndHandle(readerKey('Enter').event);
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer');
+      if (!overlay) throw new Error('Expected the open Outline');
+      const status = overlay.children[overlay.children.length - 1];
+      if (!status) throw new Error('Expected the Outline status');
+      const currentStatus = status.textContent;
+      first.resolve();
+      for (let turn = 0; turn < 16; turn += 1) {
+        await Promise.resolve();
+        created.animationFrameTasks.shift()?.();
+      }
+      expect(created.bodyChildren).toContain(overlay);
+      expect(status.textContent).toBe(currentStatus);
+      second.resolve();
+      for (let turn = 0; turn < 16; turn += 1) {
+        await Promise.resolve();
+        created.animationFrameTasks.shift()?.();
+      }
+      await vi.waitFor(() => expect(created.bodyChildren).not.toContain(overlay));
+      expect(native.viewer.currentPageNumber).toBe(3);
+      created.session.dispose();
+    },
+  );
+
+  it('keeps Outline open and reports a failed destination instead of closing', async () => {
+    const created = createHistorySession();
+    const goToDestination = vi.fn(async () => {
+      throw new Error('destination failed');
+    });
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfDocument: {
+        getOutline: async () => [
+          { title: 'Rejected page', dest: [1, { name: 'XYZ' }, 0, 500, null] },
+        ],
+      },
+      pdfLinkService: { goToDestination },
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    created.session.focusAndHandle(readerKey('Enter').event);
+    await settleReaderMicrotasks();
+
+    expect(goToDestination).toHaveBeenCalledOnce();
+    expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    expect(created.debug).toContain('outline navigation failed: Error: destination failed');
+    created.session.dispose();
+  });
+});
+
+describe('Reader mark history execution', () => {
+  it('records one managed-final location for the completed scroll excursion', async () => {
+    const execution = navigationHistoryPort();
+    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const native = attachNativeReaderHistory(created);
+    created.session.start();
+    created.session.focusAndHandle(readerKey('m').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    expect(created.session.marks.a).toBeDefined();
+    native.container.scrollTop = 100;
+
+    created.session.focusAndHandle(readerKey('`').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    for (let turn = 0; turn < 8; turn += 1) {
+      await Promise.resolve();
+      created.animationFrameTasks.shift()?.();
+    }
+    await vi.waitFor(() => expect(execution.history.locations).toHaveLength(2));
+
+    expect(execution.intents).toHaveLength(1);
+    expect(execution.intents[0]).toMatchObject({
+      cause: { kind: 'event', event: 'reader-mark.jump' },
+      surface: 'reader',
+      context: { readerPath: 'mark' },
+    });
+    expect(
+      execution.history.locations.map((location) =>
+        location.kind === 'reader' ? location.position?.top : null,
+      ),
+    ).toEqual([100, 1_045]);
+    expect(native.nativeHistory._currentLocation).toEqual(native.nativeLocation(0, 500));
+    created.session.dispose();
+  });
+
+  it.each(['x', ' '])(
+    'retires a pending annotation mark after ordinary/prefix input %j',
+    async (key) => {
+      const execution = navigationHistoryPort();
+      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const native = attachNativeReaderHistory(created);
+      const annotation = {
+        key: 'ANN-1',
+        annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[0, 0, 0, 200]] }),
+      };
+      const attachment = {
+        id: 42,
+        libraryID: 1,
+        isAttachment: () => true,
+        getAnnotations: () => [annotation],
+      };
+      Reflect.set(globalThis, 'Zotero', {
+        Items: { get: (id: number) => (id === 42 ? attachment : false) },
+      });
+      Reflect.set(created.reader._internalReader ?? {}, '_state', {
+        selectedAnnotationIDs: [annotation.key],
+      });
+      const { promise: pendingPage, resolve: resolvePage } = Promise.withResolvers<{
+        getViewport: () => { width: number; height: number };
+      }>();
+      Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+        pdfViewer: native.viewer,
+        pdfDocument: { getPage: () => pendingPage },
+      });
+      created.session.start();
+      created.session.focusAndHandle(readerKey('m').event);
+      created.session.focusAndHandle(readerKey('a').event);
+      const mark = created.session.marks.a;
+      if (!mark) throw new Error('Expected the saved mark');
+      Reflect.set(mark, 'pageIndex', null);
+      native.container.scrollTop = 100;
+
+      created.session.focusAndHandle(readerKey('`').event);
+      created.session.focusAndHandle(readerKey('a').event);
+      const revision = execution.history.revision;
+      created.session.focusAndHandle(readerKey(key).event);
+      expect(execution.history.revision).toBe(revision);
+
+      resolvePage({ getViewport: () => ({ width: 800, height: 1_000 }) });
+      await settleReaderMicrotasks();
+
+      expect(native.container.scrollTop).toBe(100);
+      expect(execution.history.locations).toHaveLength(0);
+      expect(native.nativeHistory._currentLocation).toEqual(native.nativeLocation(0, 500));
+      created.session.dispose();
+    },
+  );
 });
 
 describe('PDF follow-link hints', () => {
@@ -2003,6 +2332,88 @@ describe('PDF follow-link hints', () => {
     created.session.dispose();
   });
 
+  it('records confirmed internal links under followLink origin and leaves external links unrecorded', async () => {
+    const execution = navigationHistoryPort();
+    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const native = attachNativeReaderHistory(created);
+    const internal = internalLink([20, 30, 80, 50], 4);
+    const external = externalLink([100, 120, 180, 140], 'https://example.com');
+    const configured = configureLinkView(created, [internal, external]);
+    const navigate = vi.fn((location: { readonly position: ReaderLinkPosition }) => {
+      const pageNumber = location.position.pageIndex + 1;
+      native.viewer.currentPageNumber = pageNumber;
+      native.container.scrollTop = 700;
+      native.viewer._location = { pageNumber, top: 700, left: 0 };
+      return native.view._pushHistoryPoint?.();
+    });
+    const openLink = vi.fn();
+    Reflect.set(configured.view, 'navigate', navigate);
+    Reflect.set(configured.view, '_onOpenLink', openLink);
+    created.session.start();
+
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    for (let turn = 0; turn < 12; turn += 1) {
+      await Promise.resolve();
+      created.animationFrameTasks.shift()?.();
+    }
+    await vi.waitFor(() => expect(execution.history.locations).toHaveLength(2));
+
+    expect(navigate).toHaveBeenCalledOnce();
+    expect(execution.intents[0]).toMatchObject({
+      cause: { kind: 'action', action: 'followLink' },
+      surface: 'reader',
+      context: { readerPath: 'internal-link' },
+    });
+    expect(Object.isFrozen(execution.intents[0]?.cause)).toBe(true);
+    expect(
+      execution.history.locations.map((location) =>
+        location.kind === 'reader' ? location.position?.pageIndex : null,
+      ),
+    ).toEqual([0, 4]);
+
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('s').event);
+
+    expect(openLink).toHaveBeenCalledWith('https://example.com');
+    expect(execution.intents[1]).toMatchObject({
+      cause: { kind: 'action', action: 'followLink' },
+      surface: 'reader',
+      context: { readerPath: 'external-link' },
+    });
+    expect(execution.history.locations).toHaveLength(2);
+    created.session.dispose();
+  });
+  it('keeps a newer destination cue after an older confirmation rejects late', async () => {
+    const created = createHistorySession();
+    const first = internalLink([10, 10, 40, 30], 1);
+    const second = {
+      ...internalLink([60, 10, 90, 30], 2),
+      destinationPosition: linkPosition([220, 240, 260, 280], 2),
+    };
+    const configured = configureLinkView(created, [first, second]);
+    const { promise: pendingFirst, reject: rejectFirst } = Promise.withResolvers<void>();
+    configured.navigate.mockReturnValueOnce(pendingFirst).mockResolvedValueOnce(undefined);
+
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('s').event);
+    const newerCue = destinationCueElement(created);
+    expect(newerCue).not.toBeNull();
+    while (created.animationFrameTasks.length) created.animationFrameTasks.shift()?.();
+    expect(newerCue?.style.left).toBe('220px');
+
+    rejectFirst(new Error('late old rejection'));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(destinationCueElement(created)).toBe(newerCue);
+    expect(created.debug).toEqual([]);
+    expect(created.indicator.textContent).not.toBe('Link unavailable');
+    created.session.dispose();
+  });
   it('uses the active secondary PDF view for split-reader navigation', () => {
     const created = createHistorySession();
     const primary = created.reader._internalReader?._primaryView;
@@ -2109,6 +2520,7 @@ describe('PDF follow-link hints', () => {
     });
     failed.session.focusAndHandle(readerKey('f').event);
     expect(() => failed.session.focusAndHandle(readerKey('a').event)).not.toThrow();
+    await settleReaderMicrotasks();
     expect(failed.indicator.textContent).toBe('Link unavailable');
     expect(failed.debug).toEqual(['reader follow link activation failed: Error: blocked URI']);
     expect(failed.diagnostics).toEqual([
@@ -2122,7 +2534,7 @@ describe('PDF follow-link hints', () => {
     });
     rejected.session.focusAndHandle(readerKey('f').event);
     rejected.session.focusAndHandle(readerKey('a').event);
-    await Promise.resolve();
+    await settleReaderMicrotasks();
     expect(rejected.indicator.textContent).toBe('Link unavailable');
     expect(rejected.debug).toEqual([
       'reader follow link activation failed: Error: navigation rejected',

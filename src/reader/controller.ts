@@ -2,9 +2,20 @@ import type {
   ReaderControllerApi,
   ReaderControllerDependencies,
   MainWindow,
+  ReaderJumpLocation,
   ReaderSelectionActionDefinition,
   ReaderSelectionContext,
 } from '../core/contracts';
+import { sameNavigationLocation } from '../navigation/history';
+import type {
+  HistoryDecision,
+  NavigationCause,
+  NavigationExecution,
+  NavigationIntent,
+  NavigationOperation,
+  NavigationOutcome,
+  NavigationResult,
+} from '../navigation/types';
 import { CleanupScope } from '../core/cleanup';
 import {
   keyGuideConfig,
@@ -47,7 +58,14 @@ import { ReaderMarksExplorer } from './marks-explorer';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderHostKeyBridge } from './host-key-bridge';
-import { ReaderNavigation } from './navigation';
+import { ReaderJumpHostAdapter } from './jump-host';
+import { ReaderJumpHistoryBridge } from './jump-history-bridge';
+import type {
+  ReaderNativeNavigation,
+  ReaderOwnedCompletion,
+  ReaderOwnedNavigation,
+} from './jump-history-bridge';
+import { ReaderNavigation, type ReaderNavigationCommand } from './navigation';
 import { ReaderViewLifecycle } from './view-lifecycle';
 import { ReaderFlash } from './flash';
 import { READER_ITEM_TARGET } from './item-target';
@@ -132,6 +150,7 @@ interface SessionDependencies {
   readonly firstPdfWindow: PdfWindow;
   readonly bindings: () => BindingMap;
   readonly release: () => void;
+  readonly jumpHost: ReaderJumpHostAdapter;
   readonly selection?: SessionSelectionBridge;
 }
 
@@ -168,6 +187,28 @@ function readerBindingMode(
       ? 'reader-select'
       : 'reader-insert';
 }
+function readerActionIntent(
+  action: ActionId,
+  readerPath: NonNullable<NavigationIntent['context']>['readerPath'],
+): NavigationIntent {
+  return {
+    cause: { kind: 'action', action },
+    surface: 'reader',
+    context: { readerPath },
+  };
+}
+function isNavigationOutcome(value: unknown): value is NavigationOutcome {
+  if (!value || typeof value !== 'object' || !('kind' in value)) return false;
+  const kind = Reflect.get(value, 'kind');
+  return (
+    kind === 'completed' ||
+    kind === 'unchanged' ||
+    kind === 'unavailable' ||
+    kind === 'cancelled' ||
+    kind === 'stale' ||
+    kind === 'failed'
+  );
+}
 
 export function createReaderController(
   dependencies: ReaderControllerDependencies,
@@ -177,6 +218,7 @@ export function createReaderController(
 
 export class ReaderController implements ReaderControllerApi {
   readonly #dependencies: ReaderControllerDependencies;
+  readonly #jumpHost = new ReaderJumpHostAdapter();
   readonly #sessions = new Map<string, ReaderSession>();
   readonly #sessionsByItem = new Map<number, ReaderSession>();
   readonly #pending = new Set<string>();
@@ -299,6 +341,20 @@ export class ReaderController implements ReaderControllerApi {
     session.focusAndHandle(event);
   }
 
+  captureJumpLocation(tabID: string, itemID?: number): ReaderJumpLocation | null {
+    return this.#jumpHost.captureJumpLocation(tabID, itemID);
+  }
+
+  restoreJumpLocation(
+    window: MainWindow,
+    location: ReaderJumpLocation,
+    isCurrent: () => boolean,
+  ): Promise<string | null> {
+    return this.#jumpHost.restoreJumpLocation(window, location, isCurrent, (reader) =>
+      this.#ensure(reader),
+    );
+  }
+
   selection(): AnnotationSelectionParams | null {
     return this.#lastSelection && Date.now() - this.#lastSelectionAt < 10_000
       ? this.#lastSelection
@@ -367,6 +423,7 @@ export class ReaderController implements ReaderControllerApi {
         firstPdfWindow: pdfWindow,
         bindings: () => resolveBindings(this.#dependencies.preferences.get('bindings', '')),
         release: () => this.#release(instanceID, reader),
+        jumpHost: this.#jumpHost,
         selection: {
           registered: (context) => this.registeredSelectionActions(context),
           noteOwner: (owner) => this.noteSelectionOwner(owner),
@@ -443,6 +500,7 @@ export class ReaderSession {
   readonly #dependencies: SessionDependencies;
   readonly #scope = new CleanupScope();
   readonly #hostKeyBridge: ReaderHostKeyBridge;
+  readonly #jumpHistoryBridge: ReaderJumpHistoryBridge;
   readonly #viewLifecycle: ReaderViewLifecycle;
   readonly #navigation: ReaderNavigation;
   readonly #annotationNavigation = new ReaderAnnotationNavigationState();
@@ -461,6 +519,7 @@ export class ReaderSession {
   readonly input = new InputRuntime(READER_INPUT_TIMERS);
   #sidebarToggleBuffer = '';
   #sidebarToggleTimer: ReaderTimer | null = null;
+  #markJumpRevision = 0;
   readonly state: ReaderSessionState;
 
   constructor(dependencies: SessionDependencies) {
@@ -504,6 +563,8 @@ export class ReaderSession {
     this.#linkHints = new ReaderLinkHints({
       reader: dependencies.reader,
       viewForWindow: (pdfWindow) => this.readerViewForWindow(pdfWindow),
+      executeNavigation: (pdfWindow, intent, perform) =>
+        this.executeReaderNavigation(pdfWindow, intent, perform),
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       diagnostic: (message) => dependencies.controller.dependencies.logger.diagnostic(message),
@@ -529,18 +590,29 @@ export class ReaderSession {
       commentInputFocused: (window) => this.#commentEditor.isInputFocused(window),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
+    this.#jumpHistoryBridge = new ReaderJumpHistoryBridge({
+      reader: dependencies.reader,
+      host: dependencies.jumpHost,
+      navigation: () =>
+        dependencies.controller.dependencies.main.navigationForReader(
+          dependencies.reader._window ?? null,
+        ),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+    });
     this.#marks = new ReaderMarks({
       preferences: dependencies.controller.dependencies.preferences,
       itemForReader: (reader) => this.itemForReader(reader),
       schedule: (delay, task) => this.schedule(delay, task),
       showStatus: (message, duration) => this.showStatus(message, duration),
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
-      scrollToPageRatio: (pdfWindow, pageIndex, ratio) =>
-        this.scrollToPageRatio(pdfWindow, pageIndex, ratio),
-      scrollDocumentToRatio: (pdfWindow, ratio) => this.scrollDocumentToRatio(pdfWindow, ratio),
+      scrollToPageRatio: (pdfWindow, pageIndex, ratio, isCurrent) =>
+        this.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent),
+      scrollDocumentToRatio: (pdfWindow, ratio, isCurrent) =>
+        this.scrollDocumentToRatio(pdfWindow, ratio, isCurrent),
       pageNavigationSupported: () => this.#navigation.pageNavigationSupported(),
       annotationPageRatio: (pdfWindow, annotation) =>
         this.annotationPageRatio(pdfWindow, annotation),
+      onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
     });
     this.#sidebar = new ReaderSidebarOverlay({
       schedule: (delay, task) => this.schedule(delay, task),
@@ -563,6 +635,8 @@ export class ReaderSession {
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
       setModeNormal: () => this.setMode('normal'),
       themeRoot: (root) => this.#sidebar.themeRoot(root),
+      executeNavigation: (pdfWindow, intent, perform) =>
+        this.executeReaderNavigation(pdfWindow, intent, perform),
       onClose: (pdfWindow) => {
         this.clearSidebarToggleInput();
         this.#sidebar.closed('outline', pdfWindow);
@@ -595,8 +669,12 @@ export class ReaderSession {
         this.#linkHints.releaseView(pdfWindow);
         this.#selectionActions.releaseView(pdfWindow);
         this.releaseViewTheme(pdfWindow);
+        this.#jumpHistoryBridge.releaseWindow(pdfWindow);
       },
-      syncHostBridge: () => this.#hostKeyBridge.sync(),
+      syncHostBridge: () => {
+        this.#hostKeyBridge.sync();
+        this.#jumpHistoryBridge.sync();
+      },
     });
     this.#navigation = new ReaderNavigation({
       reader: dependencies.reader,
@@ -629,6 +707,200 @@ export class ReaderSession {
     return this.#dependencies.reader._window ?? null;
   }
 
+  /** Routes one Reader effect through exact-view ownership and evidence-based completion. */
+  private executeReaderNavigation(
+    pdfWindow: PdfWindow,
+    intent: NavigationIntent,
+    perform: (navigation: ReaderNativeNavigation) => unknown,
+    options: {
+      readonly admission?: 'replace' | 'motion';
+      readonly onUnavailable?: () => void;
+    } = {},
+  ): NavigationExecution | null {
+    const reader = this.#dependencies.reader;
+    const view = this.readerViewForWindow(pdfWindow);
+    if (!view) {
+      options.onUnavailable?.();
+      return null;
+    }
+
+    const parentCurrent = intent.context?.isCurrent;
+    const tabID = reader.tabID;
+    const ownerWindow = reader._window as MainWindowRuntime | undefined;
+    const isCurrent = (): boolean => {
+      try {
+        return (
+          !this.#scope.disposed &&
+          this.readerViewForWindow(pdfWindow) === view &&
+          (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID) &&
+          (parentCurrent?.() ?? true)
+        );
+      } catch {
+        return false;
+      }
+    };
+    const cause: NavigationCause = Object.freeze({ ...intent.cause });
+    const ownedIntent: NavigationIntent = Object.freeze({
+      cause,
+      surface: intent.surface,
+      context: Object.freeze({ ...intent.context, isCurrent }),
+    });
+    const admission = options.admission ?? 'replace';
+    const capture = (): ReaderJumpLocation | null =>
+      tabID ? this.#dependencies.jumpHost.captureReader(reader, tabID, view) : null;
+
+    const port = this.#dependencies.controller.dependencies.main.navigationForReader(
+      reader._window ?? null,
+    );
+    if (port) {
+      const operation: NavigationOperation = {
+        dispatch: 'inline',
+        admission,
+        capture,
+        start: (attempt) => {
+          if (!isCurrent() || !attempt.isCurrent())
+            return { kind: 'immediate', outcome: { kind: 'stale' } };
+          if (attempt.policy.kind === 'ignore' && admission === 'motion') {
+            const outcome = this.#jumpHistoryBridge.runIgnoredMotion(view, attempt, perform);
+            return { kind: 'immediate', outcome };
+          }
+          const attemptCurrent = (): boolean => isCurrent() && attempt.isCurrent();
+          let navigation: ReaderOwnedNavigation | null = null;
+          return {
+            kind: 'deferred',
+            settled: this.#jumpHistoryBridge.runOwned(
+              view,
+              attempt,
+              (owned) => {
+                navigation = owned;
+                return perform(owned);
+              },
+              (value, completion) =>
+                this.finishReaderNavigation(
+                  value,
+                  completion,
+                  attempt.policy,
+                  navigation,
+                  attemptCurrent,
+                ),
+            ),
+          };
+        },
+      };
+      return port.execute(ownedIntent, operation);
+    }
+
+    let cancelled = false;
+    const detachedCurrent = (): boolean => !cancelled && isCurrent();
+    if (admission === 'motion') {
+      const outcome = this.#jumpHistoryBridge.runIgnoredMotion(view, detachedCurrent, perform);
+      return {
+        isCurrent: detachedCurrent,
+        cancel: () => {
+          cancelled = true;
+        },
+        pending: false,
+        result: { ...outcome, recorded: false },
+      };
+    }
+    let navigation: ReaderNativeNavigation | null = null;
+    const settled = this.#jumpHistoryBridge.runDetached(
+      view,
+      detachedCurrent,
+      (native) => {
+        navigation = native;
+        return perform(native);
+      },
+      (value, completion) =>
+        this.finishReaderNavigation(
+          value,
+          completion,
+          { kind: 'ignore' },
+          navigation,
+          detachedCurrent,
+        ),
+    );
+    return {
+      isCurrent: detachedCurrent,
+      cancel: () => {
+        cancelled = true;
+      },
+      pending: true,
+      result: settled.then((outcome): NavigationResult => ({ ...outcome, recorded: false })),
+    };
+  }
+  private finishReaderNavigation(
+    value: unknown,
+    completion: ReaderOwnedCompletion,
+    policy: HistoryDecision,
+    navigation: ReaderNativeNavigation | null,
+    isCurrent: () => boolean,
+  ): NavigationOutcome | Promise<NavigationOutcome> {
+    if (!completion.current || !isCurrent() || !navigation || !navigation.isCurrent())
+      return { kind: 'stale' };
+    if (completion.error !== null && completion.error !== undefined)
+      return { kind: 'failed', error: completion.error };
+    const explicit = isNavigationOutcome(value) ? value : null;
+    if (explicit && explicit.kind !== 'completed') return explicit;
+    if (value === false) return { kind: 'unavailable' };
+
+    if (completion.ambiguous) return { kind: 'stale' };
+    if (explicit?.kind === 'completed')
+      return policy.kind === 'record' && policy.evidence === 'native-hard'
+        ? { ...explicit, evidence: 'settled-change' }
+        : explicit;
+    return navigation.waitForView().then((settled): NavigationOutcome => {
+      if (!settled) return isCurrent() ? { kind: 'unchanged' } : { kind: 'stale' };
+      if (!isCurrent() || !navigation.isCurrent()) return { kind: 'stale' };
+      const moved = navigation.hasMoved();
+      if (moved !== true) return { kind: moved === false ? 'unchanged' : 'unavailable' };
+      if (policy.kind !== 'record') return { kind: 'completed', evidence: 'settled-change' };
+      const destination = navigation.capture();
+      if (!destination) return { kind: 'unavailable' };
+      if (completion.source && sameNavigationLocation(completion.source, destination))
+        return { kind: 'unchanged' };
+      const evidence =
+        policy.evidence === 'native-hard'
+          ? completion.hardDestination &&
+            sameNavigationLocation(completion.hardDestination, destination)
+            ? 'native-hard'
+            : 'settled-change'
+          : policy.evidence;
+      return { kind: 'completed', evidence, destination };
+    });
+  }
+
+  /** Marks are a single managed-final excursion; every input retires their invocation guard. */
+  private async recordMarkJump(
+    pdfWindow: PdfWindow,
+    perform: (isCurrent: () => boolean) => Promise<boolean>,
+  ): Promise<boolean> {
+    const revision = ++this.#markJumpRevision;
+    const reader = this.#dependencies.reader;
+    const view = this.readerViewForWindow(pdfWindow);
+    const tabID = reader.tabID;
+    const ownerWindow = reader._window as MainWindowRuntime | undefined;
+    const isCurrent = (): boolean =>
+      revision === this.#markJumpRevision &&
+      !this.#scope.disposed &&
+      !!view &&
+      this.readerViewForWindow(pdfWindow) === view &&
+      (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID);
+    if (!isCurrent()) return false;
+    const execution = this.executeReaderNavigation(
+      pdfWindow,
+      {
+        cause: { kind: 'event', event: 'reader-mark.jump' },
+        surface: 'reader',
+        context: { readerPath: 'mark', isCurrent },
+      },
+      (navigation) => perform(() => isCurrent() && navigation.isCurrent()),
+    );
+    if (!execution) return false;
+    const result = execution.pending ? await execution.result : execution.result;
+    return result.kind === 'completed' && isCurrent();
+  }
+
   get marks(): Readonly<Record<string, Mark>> {
     return this.#marks.values();
   }
@@ -657,6 +929,7 @@ export class ReaderSession {
     this.#selectionRange.leave();
     this.#viewLifecycle.dispose();
     this.#hostKeyBridge.dispose();
+    this.#jumpHistoryBridge.dispose();
     this.#scope.dispose();
     this.#sidebar.dispose(() => {
       this.#marksExplorer.close();
@@ -768,6 +1041,7 @@ export class ReaderSession {
 
   private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
     this.#navigation.activatePdfWindow(pdfWindow);
+    this.#markJumpRevision += 1;
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.handleSidebarToggleKey(event, pdfWindow)) return;
@@ -1077,6 +1351,7 @@ export class ReaderSession {
     if (!pdfWindow) return;
     const ownerWindow = this.#dependencies.reader._window ?? null;
     const main = this.#dependencies.controller.dependencies.main;
+    const number = Math.max(1, count || 1);
     switch (action) {
       case 'findAllItems':
         main.openAllItemsPicker(ownerWindow);
@@ -1093,8 +1368,11 @@ export class ReaderSession {
       case 'openNeoSettings':
         main.openSettingsFromReader(ownerWindow);
         return;
-      case 'mainReturnContext':
-        main.restoreReturnContext(ownerWindow);
+      case 'navigateBack':
+        main.navigateBackFromReader(ownerWindow, number);
+        return;
+      case 'navigateForward':
+        main.navigateForwardFromReader(ownerWindow, number);
         return;
       case 'showInLibrary':
         main.showReaderItemInLibrary(
@@ -1117,7 +1395,6 @@ export class ReaderSession {
       default:
         break;
     }
-    const number = Math.max(1, count || 1);
     if (action === 'addTag' || action === 'removeTag') {
       this.#dependencies.controller.dependencies.main.openReaderTagPicker(
         this.#dependencies.reader._window ?? null,
@@ -1161,50 +1438,132 @@ export class ReaderSession {
       return;
     }
     switch (action) {
-      case 'scrollDown':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, 0, this.scrollStep() * number);
+      case 'scrollDown': {
+        const scroll = (): void => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, 0, this.scrollStep() * number);
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => {
+            scroll();
+            return true;
+          },
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'scrollUp':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, 0, -this.scrollStep() * number);
+      }
+      case 'scrollUp': {
+        const scroll = (): void => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, 0, -this.scrollStep() * number);
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => {
+            scroll();
+            return true;
+          },
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'scrollLeft':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, -this.scrollStep() * number, 0);
+      }
+      case 'scrollLeft': {
+        const scroll = (): void => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, -this.scrollStep() * number, 0);
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => {
+            scroll();
+            return true;
+          },
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'scrollRight':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, this.scrollStep() * number, 0);
+      }
+      case 'scrollRight': {
+        const scroll = (): void => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, this.scrollStep() * number, 0);
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => {
+            scroll();
+            return true;
+          },
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'historyBack':
-        this.#navigation.navigateHistory('back');
-        break;
-      case 'historyForward':
-        this.#navigation.navigateHistory('forward');
-        break;
+      }
       case 'followLink':
         this.#linkHints.open(pdfWindow);
         break;
       case 'flashText':
         if (this.state.mode === 'visual') this.#flash.open(pdfWindow, 'visual-end');
         break;
-      case 'halfPageDown':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, 0, (this.viewport(pdfWindow) / 2) * number, true);
+      case 'halfPageDown': {
+        const scroll = (): boolean => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, 0, (this.viewport(pdfWindow) / 2) * number, true);
+          return true;
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => scroll(),
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'halfPageUp':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, 0, (-this.viewport(pdfWindow) / 2) * number, true);
+      }
+      case 'halfPageUp': {
+        const scroll = (): boolean => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, 0, (-this.viewport(pdfWindow) / 2) * number, true);
+          return true;
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => scroll(),
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'fullPageDown':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, 0, this.viewport(pdfWindow) * number, true);
+      }
+      case 'fullPageDown': {
+        const scroll = (): boolean => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, 0, this.viewport(pdfWindow) * number, true);
+          return true;
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => scroll(),
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'fullPageUp':
-        this.clearAnnotation();
-        this.scrollBy(pdfWindow, 0, -this.viewport(pdfWindow) * number, true);
+      }
+      case 'fullPageUp': {
+        const scroll = (): boolean => {
+          this.clearAnnotation();
+          this.scrollBy(pdfWindow, 0, -this.viewport(pdfWindow) * number, true);
+          return true;
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => scroll(),
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
+      }
       case 'zoomIn':
         this.#navigation.zoom('in', number);
         break;
@@ -1215,26 +1574,44 @@ export class ReaderSession {
         this.#navigation.zoom('reset', 1);
         break;
       case 'scrollTop':
-        this.scrollToPagePosition(pdfWindow, 'top');
-        break;
       case 'scrollCenter':
-        this.scrollToPagePosition(pdfWindow, 'center');
+      case 'scrollBottom': {
+        const position =
+          action === 'scrollTop' ? 'top' : action === 'scrollCenter' ? 'center' : 'bottom';
+        const scroll = (): boolean => this.scrollToPagePosition(pdfWindow, position);
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => scroll(),
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
-      case 'scrollBottom':
-        this.scrollToPagePosition(pdfWindow, 'bottom');
-        break;
+      }
       case 'prevPage':
-        this.#navigation.navigatePage(-number);
+      case 'nextPage': {
+        const direction = action === 'prevPage' ? -number : number;
+        const navigate = (): void => this.#navigation.navigatePage(direction, pdfWindow);
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'page-step'),
+          (navigation) => this.#navigation.navigatePage(direction, pdfWindow, navigation),
+          { admission: 'motion', onUnavailable: navigate },
+        );
         break;
-      case 'nextPage':
-        this.#navigation.navigatePage(number);
-        break;
+      }
       case 'firstPage':
-        this.#navigation.navigateBoundary(count, false, pdfWindow);
+      case 'lastPage': {
+        const last = action === 'lastPage';
+        const supported = this.#navigation.pageNavigationSupported(pdfWindow);
+        const navigate = (): void => this.#navigation.navigateBoundary(count, last, pdfWindow);
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, supported ? 'explicit-page' : 'fallback-scroll'),
+          (navigation) => this.#navigation.navigateBoundary(count, last, pdfWindow, navigation),
+          { admission: supported ? 'replace' : 'motion', onUnavailable: navigate },
+        );
         break;
-      case 'lastPage':
-        this.#navigation.navigateBoundary(count, true, pdfWindow);
-        break;
+      }
       case 'openSearch':
         this.#navigation.openSearch(pdfWindow);
         break;
@@ -1242,16 +1619,24 @@ export class ReaderSession {
         this.#navigation.clearSearch();
         break;
       case 'findNext':
-        this.#navigation.find(true);
+      case 'findPrevious': {
+        const next = action === 'findNext';
+        const find = (): void => {
+          this.#navigation.find(next, pdfWindow);
+        };
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'search'),
+          (navigation) => this.#navigation.find(next, pdfWindow, navigation),
+          { onUnavailable: find },
+        );
         break;
-      case 'findPrevious':
-        this.#navigation.find(false);
-        break;
+      }
       case 'prevAnnotation':
-        this.navigateAnnotation(-1);
+        this.navigateAnnotation(-1, pdfWindow, action);
         break;
       case 'nextAnnotation':
-        this.navigateAnnotation(1);
+        this.navigateAnnotation(1, pdfWindow, action);
         break;
       case 'editAnnotation':
         if (this.modeEnabled('insert')) void this.enterAnnotationInsert();
@@ -1268,11 +1653,20 @@ export class ReaderSession {
       case 'recolorGreen':
         void this.recolorAnnotation(COLORS.green);
         break;
-      case 'recolorBlue':
-        this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader)
-          ? void this.recolorAnnotation(COLORS.blue)
-          : this.scrollToPagePosition(pdfWindow, 'bottom');
+      case 'recolorBlue': {
+        if (this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader)) {
+          void this.recolorAnnotation(COLORS.blue);
+          break;
+        }
+        const scroll = (): boolean => this.scrollToPagePosition(pdfWindow, 'bottom');
+        this.executeReaderNavigation(
+          pdfWindow,
+          readerActionIntent(action, 'scroll'),
+          () => scroll(),
+          { admission: 'motion', onUnavailable: scroll },
+        );
         break;
+      }
       case 'recolorPurple':
         void this.recolorAnnotation(COLORS.purple);
         break;
@@ -1537,30 +1931,32 @@ export class ReaderSession {
       pdfWindow.document.documentElement) as HTMLElement;
   }
 
-  private scrollBy(pdfWindow: PdfWindow, x: number, y: number, smooth = false): void {
+  private scrollBy(pdfWindow: PdfWindow, x: number, y: number, smooth = false): boolean {
     const container = this.scrollContainer(pdfWindow);
     if (smooth && this.#smoothScroller.mode !== 'step') {
       try {
         container.scrollBy(cloneInto({ left: x, top: y, behavior: 'smooth' as const }, pdfWindow));
-        return;
+        return true;
       } catch {
         // Fall through to coordinate scrolling where a host view rejects options objects.
       }
     }
     container.scrollBy(x, y);
+    return true;
   }
 
-  private scrollTo(pdfWindow: PdfWindow, top: number, smooth = false): void {
+  private scrollTo(pdfWindow: PdfWindow, top: number, smooth = false): boolean {
     const container = this.scrollContainer(pdfWindow);
     if (smooth && this.#smoothScroller.mode !== 'step') {
       try {
         container.scrollTo(cloneInto({ top, behavior: 'smooth' as const }, pdfWindow));
-        return;
+        return true;
       } catch {
         // Fall through to numeric scrollTo.
       }
     }
     container.scrollTo(0, top);
+    return true;
   }
 
   private viewport(pdfWindow: PdfWindow): number {
@@ -1571,31 +1967,33 @@ export class ReaderSession {
     this.#annotationNavigation.clearAnnotation();
   }
 
-  private scrollToPagePosition(pdfWindow: PdfWindow, position: 'top' | 'center' | 'bottom'): void {
+  private scrollToPagePosition(
+    pdfWindow: PdfWindow,
+    position: 'top' | 'center' | 'bottom',
+  ): boolean {
     const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
     const container = viewer?.container;
     if (!viewer || !container) {
       const element = this.scrollContainer(pdfWindow);
       const available = Math.max(0, element.scrollHeight - element.clientHeight);
-      this.scrollTo(
+      return this.scrollTo(
         pdfWindow,
         position === 'top' ? 0 : position === 'bottom' ? available : available / 2,
         true,
       );
-      return;
     }
     const pageNumber = viewer.currentPageNumber ?? 1;
     const page = pdfWindow.document.querySelector<HTMLElement>(
       `.page[data-page-number="${pageNumber}"]`,
     );
-    if (!page) return;
+    if (!page) return false;
     const target =
       position === 'top'
         ? page.offsetTop
         : position === 'bottom'
           ? page.offsetTop + page.offsetHeight - container.clientHeight
           : page.offsetTop + page.offsetHeight / 2 - container.clientHeight / 2;
-    this.scrollTo(pdfWindow, Math.max(0, target), true);
+    return this.scrollTo(pdfWindow, Math.max(0, target), true);
   }
 
   private readerViewForWindow(pdfWindow: PdfWindow): ReaderViewRuntime | null {
@@ -1880,7 +2278,11 @@ export class ReaderSession {
     selection.removeAllRanges();
   }
 
-  private navigateAnnotation(direction: -1 | 1): void {
+  private navigateAnnotation(
+    direction: -1 | 1,
+    pdfWindow: PdfWindow,
+    action: 'prevAnnotation' | 'nextAnnotation',
+  ): void {
     const attachment = this.itemForReader(this.#dependencies.reader);
     let annotations =
       attachment
@@ -1911,19 +2313,38 @@ export class ReaderSession {
     const target = annotations[index];
     if (!target) return;
     this.#annotationNavigation.rememberAnnotation(target.key);
-    this.navigateToAnnotation(target);
+    this.executeReaderNavigation(
+      pdfWindow,
+      readerActionIntent(action, 'annotation'),
+      (navigation) => this.navigateToAnnotation(target, navigation),
+    );
     this.showStatus(`→ ann ${index + 1}/${annotations.length}`, 1500);
   }
 
-  private navigateToAnnotation(annotation: AnnotationRuntime): void {
+  private navigateToAnnotation(
+    annotation: AnnotationRuntime,
+    navigation?: ReaderNativeNavigation,
+  ): unknown {
     const readerWindow = this.#dependencies.reader._iframeWindow;
     const internal = this.#dependencies.reader._internalReader;
-    if (!readerWindow || !internal) return;
+    if (!readerWindow || !internal) return { kind: 'unavailable' };
     if (internal.setSelectedAnnotations) {
+      const before = internal._state?.selectedAnnotationIDs ?? [];
       internal.setSelectedAnnotations(cloneInto([annotation.key], readerWindow));
-      return;
+      const selected = internal._state?.selectedAnnotationIDs;
+      if (!selected || (before.length === 1 && before[0] === annotation.key))
+        return { kind: 'unchanged' };
+      return selected.length === 1 && selected[0] === annotation.key
+        ? { kind: 'completed', evidence: 'settled-change' }
+        : { kind: 'unchanged' };
     }
-    internal.navigate?.(cloneInto({ annotationID: annotation.key }, readerWindow));
+    if (!internal.navigate) return { kind: 'unavailable' };
+    const request = cloneInto({ annotationID: annotation.key }, readerWindow);
+    if (navigation) {
+      navigation.bindRequest(request);
+      return navigation.navigate(request);
+    }
+    return internal.navigate(request);
   }
 
   private async deleteAnnotation(): Promise<void> {
@@ -2124,7 +2545,20 @@ export class ReaderSession {
     );
     if (decision.kind !== 'execute') return false;
     const spec = smoothScrollSpec(decision.action);
-    if (!spec || !this.#smoothScroller.start(pdfWindow, event.key, spec)) return false;
+    if (!spec) return false;
+    const start = (): boolean => this.#smoothScroller.start(pdfWindow, event.key, spec);
+    this.executeReaderNavigation(
+      pdfWindow,
+      readerActionIntent(decision.action, 'scroll'),
+      (navigation) => {
+        if (navigation.policy.kind !== 'record') return start();
+        const { promise, resolve } = Promise.withResolvers<boolean>();
+        if (!this.#smoothScroller.start(pdfWindow, event.key, spec, () => resolve(true)))
+          resolve(false);
+        return promise;
+      },
+      { admission: 'motion', onUnavailable: start },
+    );
     const hadPendingSequence = !!this.input.keyBuffer;
     this.input.reset();
     if (hadPendingSequence) {
@@ -2166,32 +2600,53 @@ export class ReaderSession {
     }
   }
 
-  private scrollToPageRatio(
+  private async scrollToPageRatio(
     pdfWindow: PdfWindow,
     pageIndex: number,
     ratio: number,
-    attempt = 0,
-  ): void {
-    const container =
-      pdfWindow.PDFViewerApplication?.pdfViewer?.container ??
-      pdfWindow.document.getElementById('viewerContainer');
-    const page = pdfWindow.document.querySelector<HTMLElement>(
-      `.page[data-page-number="${pageIndex + 1}"]`,
-    );
-    if (!page || !container) {
-      if (attempt < 10)
-        this.schedule(80, () => this.scrollToPageRatio(pdfWindow, pageIndex, ratio, attempt + 1));
-      return;
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt <= 10; attempt += 1) {
+      const reader = this.#dependencies.reader;
+      if (
+        this.#scope.disposed ||
+        !isCurrent() ||
+        !this.readerViewForWindow(pdfWindow) ||
+        (reader.tabID &&
+          (reader._window as MainWindowRuntime | undefined)?.Zotero_Tabs?.selectedID !==
+            reader.tabID)
+      )
+        return false;
+      const container =
+        pdfWindow.PDFViewerApplication?.pdfViewer?.container ??
+        pdfWindow.document.getElementById('viewerContainer');
+      const page = pdfWindow.document.querySelector<HTMLElement>(
+        `.page[data-page-number="${pageIndex + 1}"]`,
+      );
+      if (page && page.offsetHeight > 0 && container) {
+        this.scrollTo(
+          pdfWindow,
+          Math.max(0, page.offsetTop + page.offsetHeight * ratio - container.clientHeight / 2),
+        );
+        return true;
+      }
+      if (attempt === 10) return false;
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 80);
+      await promise;
     }
-    this.scrollTo(
-      pdfWindow,
-      Math.max(0, page.offsetTop + page.offsetHeight * ratio - container.clientHeight / 2),
-    );
+    return false;
   }
 
-  private scrollDocumentToRatio(pdfWindow: PdfWindow, ratio: number): void {
+  private scrollDocumentToRatio(
+    pdfWindow: PdfWindow,
+    ratio: number,
+    isCurrent: () => boolean,
+  ): boolean {
+    if (!isCurrent()) return false;
     const container = this.scrollContainer(pdfWindow);
     this.scrollTo(pdfWindow, ratio * Math.max(0, container.scrollHeight - container.clientHeight));
+    return true;
   }
 
   private schedule(delay: number, task: () => void): ReaderTimer {

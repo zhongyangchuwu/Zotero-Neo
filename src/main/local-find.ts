@@ -1,3 +1,4 @@
+import type { NavigationCause } from '../navigation/types';
 import type { MainWindow } from '../core/contracts';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
@@ -88,9 +89,24 @@ export function findVisibleMainItemRow(
  */
 export class MainLocalFind {
   readonly #status: (session: MainWindowSession, text: string) => void;
+  readonly #navigate: (
+    window: MainWindow,
+    session: MainWindowSession,
+    cause: NavigationCause,
+    move: () => boolean,
+  ) => void;
 
-  constructor(status: (session: MainWindowSession, text: string) => void) {
+  constructor(
+    status: (session: MainWindowSession, text: string) => void,
+    navigate: (
+      window: MainWindow,
+      session: MainWindowSession,
+      cause: NavigationCause,
+      move: () => boolean,
+    ) => void,
+  ) {
     this.#status = status;
+    this.#navigate = navigate;
   }
 
   open(window: MainWindow, session: MainWindowSession): void {
@@ -172,7 +188,7 @@ export class MainLocalFind {
       }
       session.localFind.query = query;
       this.close(session);
-      this.repeat(window, session, 1);
+      this.repeat(window, session, 1, { kind: 'event', event: 'main-local-find.confirm' });
       return;
     }
 
@@ -181,7 +197,15 @@ export class MainLocalFind {
     event.stopPropagation();
   }
 
-  repeat(window: MainWindow, session: MainWindowSession, direction: LocalFindDirection): boolean {
+  repeat(
+    window: MainWindow,
+    session: MainWindowSession,
+    direction: LocalFindDirection,
+    cause: NavigationCause = {
+      kind: 'action',
+      action: direction > 0 ? 'findNext' : 'findPrevious',
+    },
+  ): boolean {
     const query = session.localFind.query.trim();
     if (!query) {
       this.#status(session, '✗ No local find query');
@@ -194,7 +218,12 @@ export class MainLocalFind {
       return false;
     }
 
-    if (!moveMainItemCursor(window, row)) {
+    let moved = false;
+    this.#navigate(window, session, cause, () => {
+      moved = moveMainItemCursor(window, row);
+      return moved;
+    });
+    if (!moved) {
       this.#status(session, '✗ Local find Cursor move is unavailable');
       return false;
     }

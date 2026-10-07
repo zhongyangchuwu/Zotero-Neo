@@ -1,5 +1,9 @@
 import { keyString } from '../input/keys';
+import { cloneInto } from '../platform/cross-compartment';
 import { THEME_VARS } from '../ui/theme';
+import type { NavigationIntent, NavigationResult } from '../navigation/types';
+import type { ReaderNativeNavigation } from './jump-history-bridge';
+import type { ReaderNavigationCommand } from './navigation';
 import type {
   OutlineNode,
   OutlineSourceNode,
@@ -13,6 +17,7 @@ interface OutlineState {
   open: boolean;
   loading: boolean;
   loadGeneration: number;
+  confirmation: number;
   tree: OutlineNode[] | null;
   visible: OutlineNode[];
   selected: number;
@@ -33,6 +38,7 @@ export interface OutlineHost {
   readonly setModeNormal: () => void;
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly onClose: (pdfWindow?: PdfWindow) => void;
+  readonly executeNavigation: ReaderNavigationCommand;
 }
 
 interface PdfLinkService {
@@ -48,6 +54,7 @@ export class ReaderOutline {
     open: false,
     loading: false,
     loadGeneration: 0,
+    confirmation: 0,
     tree: null,
     visible: [],
     selected: 0,
@@ -396,10 +403,39 @@ export class ReaderOutline {
   ): Promise<void> {
     const node = state.visible[state.selected];
     if (!node) return;
-    if (await this.goTo(reader, pdfWindow, node)) {
-      this.close(pdfWindow);
-      this.#host.setModeNormal();
-    } else {
+    const overlay = state.overlay;
+    const confirmation = ++state.confirmation;
+    const isCurrent = (): boolean =>
+      state.open && state.overlay === overlay && state.confirmation === confirmation;
+    const intent: NavigationIntent = {
+      cause: { kind: 'event', event: 'reader-outline.confirm' },
+      surface: 'reader',
+      context: { readerPath: 'outline', isCurrent },
+    };
+    let hostResult: Promise<boolean> | null = null;
+    try {
+      const execution = this.#host.executeNavigation(pdfWindow, intent, (navigation) => {
+        hostResult = this.goTo(reader, pdfWindow, node, navigation);
+        return hostResult;
+      });
+      if (!execution) {
+        if (isCurrent()) this.setStatus(state, 'Jump failed');
+        return;
+      }
+      const result: NavigationResult = execution.pending
+        ? await execution.result
+        : execution.result;
+      const hostSucceeded = await (hostResult ?? Promise.resolve(false));
+      if (!isCurrent()) return;
+      if (hostSucceeded && (result.kind === 'completed' || result.kind === 'unchanged')) {
+        this.close(pdfWindow);
+        this.#host.setModeNormal();
+      } else {
+        this.setStatus(state, 'Jump failed');
+      }
+    } catch (error) {
+      if (!isCurrent()) return;
+      this.#host.log(`outline navigation failed: ${String(error)}`);
       this.setStatus(state, 'Jump failed');
     }
   }
@@ -408,19 +444,25 @@ export class ReaderOutline {
     reader: ReaderRuntime,
     pdfWindow: PdfWindow,
     node: OutlineNode,
+    navigation: ReaderNativeNavigation,
   ): Promise<boolean> {
     const application = pdfWindow.PDFViewerApplication;
     const link = application?.pdfLinkService;
     try {
-      if (this.setHash(link, node.dest)) return true;
+      if (this.setHash(link, node.dest, navigation)) return true;
       if (node.url && link?.setHash) {
-        link.setHash(node.url.replace(/^[^#]*#?/, ''));
+        const hash = node.url.replace(/^[^#]*#?/, '');
+        navigation.runNative(() => link.setHash!(hash));
         return true;
       }
-      if (node.dest && (await this.navigate(link, node.dest))) return true;
+      if (node.dest && (await this.navigate(link, node.dest, navigation))) return true;
       const page = await this.resolvePageIndex(node, node.dest, application?.pdfDocument);
-      if (page !== null && reader._internalReader?.navigate) {
-        reader._internalReader.navigate({ pageIndex: page });
+      if (!navigation.isCurrent()) return false;
+      if (page !== null && reader._internalReader) {
+        const readerWindow = reader._iframeWindow;
+        if (!readerWindow) return false;
+        const location = cloneInto({ pageIndex: page }, readerWindow);
+        navigation.runNative(() => navigation.navigate(location));
         return true;
       }
     } catch (error) {
@@ -429,21 +471,30 @@ export class ReaderOutline {
     return false;
   }
 
-  private setHash(link: PdfLinkService | undefined, destination: unknown): boolean {
+  private setHash(
+    link: PdfLinkService | undefined,
+    destination: unknown,
+    navigation: ReaderNativeNavigation,
+  ): boolean {
     if (!destination || !link?.getDestinationHash || !link.setHash) return false;
     const hash = link.getDestinationHash(destination);
     if (!hash) return false;
-    link.setHash(hash.replace(/^#/, ''));
+    const normalized = hash.replace(/^#/, '');
+    navigation.runNative(() => link.setHash!(normalized));
     return true;
   }
 
-  private async navigate(link: PdfLinkService | undefined, destination: unknown): Promise<boolean> {
+  private async navigate(
+    link: PdfLinkService | undefined,
+    destination: unknown,
+    navigation: ReaderNativeNavigation,
+  ): Promise<boolean> {
     if (link?.goToDestination) {
-      await link.goToDestination(destination);
+      await navigation.runNative(() => link.goToDestination!(destination));
       return true;
     }
     if (link?.navigateTo) {
-      await link.navigateTo(destination);
+      await navigation.runNative(() => link.navigateTo!(destination));
       return true;
     }
     return false;

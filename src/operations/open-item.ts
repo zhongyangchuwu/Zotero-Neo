@@ -4,36 +4,29 @@ export interface ItemOpenHost {
   loadURI?(uri: string): void | Promise<void>;
 }
 
-/** Open exactly one explicit item through Zotero, preserving navigation rollback on host failure. */
+/** Opens one explicit item only while its navigation owner is current, including deferred lookup. */
 export async function openItem(
   item: Zotero.Item,
   host: ItemOpenHost | undefined,
-  beforeNavigate?: () => void | (() => void),
+  isCurrent?: () => boolean,
 ): Promise<string | null> {
-  const navigate = async (run: () => void | Promise<void>): Promise<void> => {
-    const rollback = beforeNavigate?.();
-    try {
-      await run();
-    } catch (error) {
-      rollback?.();
-      throw error;
-    }
-  };
+  if (isCurrent && !isCurrent()) return null;
 
   if (item.isAttachment()) {
     const viewAttachment = host?.viewAttachment;
     if (!viewAttachment) return 'Attachment viewer is unavailable';
-    await navigate(() => viewAttachment.call(host, item.id));
+    await viewAttachment.call(host, item.id);
     return null;
   }
   if (item.isNote()) {
     const openNote = host?.openNote;
     if (!openNote) return 'Note viewer is unavailable';
-    await navigate(() => openNote.call(host, item.id));
+    await openNote.call(host, item.id);
     return null;
   }
 
   let attachment: Zotero.Item | undefined = (await item.getBestAttachment?.()) || undefined;
+  if (isCurrent && !isCurrent()) return null;
   if (!attachment) {
     for (const id of item.getAttachments()) {
       const candidate = Zotero.Items.get(id);
@@ -50,7 +43,7 @@ export async function openItem(
   if (attachment) {
     const viewAttachment = host?.viewAttachment;
     if (!viewAttachment) return 'Attachment viewer is unavailable';
-    await navigate(() => viewAttachment.call(host, attachment.id));
+    await viewAttachment.call(host, attachment.id);
     return null;
   }
 
@@ -61,6 +54,6 @@ export async function openItem(
   if (!url) return 'No attachment';
   const loadURI = host?.loadURI;
   if (!loadURI) return 'URI navigation is unavailable';
-  await navigate(() => loadURI.call(host, url));
+  await loadURI.call(host, url);
   return null;
 }

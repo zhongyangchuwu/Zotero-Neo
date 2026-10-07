@@ -20,13 +20,26 @@ export interface MarksHost {
   readonly schedule: (delay: number, task: () => void) => void;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly log: (message: string) => void;
-  readonly scrollToPageRatio: (pdfWindow: PdfWindow, pageIndex: number, ratio: number) => void;
-  readonly scrollDocumentToRatio: (pdfWindow: PdfWindow, ratio: number) => void;
+  readonly scrollToPageRatio: (
+    pdfWindow: PdfWindow,
+    pageIndex: number,
+    ratio: number,
+    isCurrent: () => boolean,
+  ) => Promise<boolean>;
+  readonly scrollDocumentToRatio: (
+    pdfWindow: PdfWindow,
+    ratio: number,
+    isCurrent: () => boolean,
+  ) => boolean;
   readonly pageNavigationSupported: (reader: ReaderRuntime) => boolean;
   readonly annotationPageRatio: (
     pdfWindow: PdfWindow,
     annotation: ItemRuntime,
   ) => Promise<{ pageIndex: number; ratio: number }>;
+  readonly onJump: (
+    pdfWindow: PdfWindow,
+    perform: (isCurrent: () => boolean) => Promise<boolean>,
+  ) => Promise<boolean>;
 }
 
 function items(): ItemRepository {
@@ -136,37 +149,50 @@ export class ReaderMarks {
     pdfWindow: PdfWindow,
     char: string,
     selectAnnotation: (key: string | null) => void,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const mark = this.#marks[char];
     if (!mark) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
-      return;
+      return false;
     }
-    let { pageIndex, ratio } = mark;
     let annotationExists = true;
-    if (mark.key) {
-      const target =
-        this.#host
-          .itemForReader(reader)
-          ?.getAnnotations?.()
-          .find((annotation) => annotation.key === mark.key) ?? null;
-      if (target) {
-        selectAnnotation(mark.key);
-        if (pageIndex === null)
-          ({ pageIndex, ratio } = await this.#host.annotationPageRatio(pdfWindow, target));
-      } else {
-        annotationExists = false;
-        selectAnnotation(null);
+    const moved = await this.#host.onJump(pdfWindow, async (isCurrent) => {
+      let { pageIndex, ratio } = mark;
+      try {
+        if (mark.key) {
+          const target =
+            this.#host
+              .itemForReader(reader)
+              ?.getAnnotations?.()
+              .find((annotation) => annotation.key === mark.key) ?? null;
+          if (!isCurrent()) return false;
+          if (target) {
+            selectAnnotation(mark.key);
+            if (pageIndex === null) {
+              const resolved = await this.#host.annotationPageRatio(pdfWindow, target);
+              if (!isCurrent()) return false;
+              ({ pageIndex, ratio } = resolved);
+            }
+          } else {
+            annotationExists = false;
+            selectAnnotation(null);
+          }
+        }
+        if (!isCurrent()) return false;
+        if (pageIndex !== null && this.#host.pageNavigationSupported(reader)) {
+          const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
+          if (viewer) viewer.currentPageNumber = pageIndex + 1;
+          return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
+        }
+        return this.#host.scrollDocumentToRatio(pdfWindow, ratio, isCurrent);
+      } catch (error) {
+        this.#host.log(`mark jump failed: ${String(error)}`);
+        return false;
       }
-    }
-    if (pageIndex !== null && this.#host.pageNavigationSupported(reader)) {
-      const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
-      if (viewer) viewer.currentPageNumber = pageIndex + 1;
-      this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio);
-    } else {
-      this.#host.scrollDocumentToRatio(pdfWindow, ratio);
-    }
+    });
+    if (!moved) return false;
     this.#host.showStatus(`→ mark ${char}${annotationExists ? '' : ' · annotation gone'}`, 1200);
+    return true;
   }
 
   async delete(reader: ReaderRuntime, char: string): Promise<void> {

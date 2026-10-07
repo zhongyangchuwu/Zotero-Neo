@@ -101,6 +101,24 @@ describe('ReaderSmoothScroller', () => {
     expect(scroller.isRepeat(keyboardEvent('j'))).toBe(false);
   });
 
+  it('settles hold completion only when the owning motion stops', () => {
+    const window = fakePdfWindow();
+    const { scroller } = createHarness({
+      'scroll.mode': 'follow',
+      'smoothScroll.followSpeed': 1200,
+    });
+    const finished = vi.fn();
+
+    expect(scroller.start(window.pdfWindow, 'j', down, finished)).toBe(true);
+    expect(finished).not.toHaveBeenCalled();
+    window.runNext(16);
+    expect(finished).not.toHaveBeenCalled();
+
+    expect(scroller.handleKeyUp(keyboardEvent('j'))).toBe(true);
+    expect(finished).toHaveBeenCalledOnce();
+    expect(window.pendingFrames()).toBe(0);
+  });
+
   it('uses the canonical legacy mode and speed normalization', () => {
     const window = fakePdfWindow();
     const { scroller, scrollBy } = createHarness({
@@ -136,6 +154,24 @@ describe('ReaderSmoothScroller', () => {
     expect(decelerating).toBeGreaterThan(0);
     expect(decelerating).toBeLessThan(accelerated);
     expect(window.pendingFrames()).toBe(1);
+  });
+  it('settles trapezoid completion after its last deceleration frame', () => {
+    const window = fakePdfWindow();
+    const { scroller } = createHarness(trapezoidPreferences());
+    const finished = vi.fn();
+
+    scroller.start(window.pdfWindow, 'l', right, finished);
+    scroller.handleKeyUp(keyboardEvent('l'));
+    expect(finished).not.toHaveBeenCalled();
+
+    let timestamp = 32;
+    while (window.pendingFrames() && timestamp < 5_000) {
+      window.runNext(timestamp);
+      timestamp += 16;
+    }
+
+    expect(window.pendingFrames()).toBe(0);
+    expect(finished).toHaveBeenCalledOnce();
   });
 
   it('stops trapezoid motion immediately when stopOnRelease is enabled', () => {
@@ -189,6 +225,6 @@ describe('ReaderSmoothScroller', () => {
     expect(smoothScrollSpec('scrollUp')).toEqual({ axis: 'y', direction: -1 });
     expect(smoothScrollSpec('scrollLeft')).toEqual({ axis: 'x', direction: -1 });
     expect(smoothScrollSpec('scrollRight')).toEqual({ axis: 'x', direction: 1 });
-    expect(smoothScrollSpec('historyBack')).toBeNull();
+    expect(smoothScrollSpec('navigateBack')).toBeNull();
   });
 });

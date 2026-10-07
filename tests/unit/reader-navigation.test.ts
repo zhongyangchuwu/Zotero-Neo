@@ -5,12 +5,15 @@ import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/read
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalServices = Reflect.get(globalThis, 'Services');
+const originalZotero = Reflect.get(globalThis, 'Zotero');
 
 afterEach(() => {
   if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
   else Reflect.set(globalThis, 'Components', originalComponents);
   if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
   else Reflect.set(globalThis, 'Services', originalServices);
+  if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+  else Reflect.set(globalThis, 'Zotero', originalZotero);
 });
 
 function pdfWindow(): PdfWindow {
@@ -23,22 +26,17 @@ function pdfWindow(): PdfWindow {
 }
 
 function harness() {
-  Reflect.set(globalThis, 'Components', {
-    utils: { cloneInto: <T>(value: T) => value },
-  });
+  const cloneInto = vi.fn(<T>(value: T) => value);
+  Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   const primary = pdfWindow();
   const secondary = pdfWindow();
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: primary } });
 
-  const navigateBack = vi.fn();
-  const navigateForward = vi.fn();
   const zoomIn = vi.fn();
   const zoomOut = vi.fn();
   const zoomReset = vi.fn();
   const navigateToPreviousPage = vi.fn();
   const navigateToNextPage = vi.fn();
-  const navigateToFirstPage = vi.fn();
-  const navigateToLastPage = vi.fn();
   const navigate = vi.fn();
   const toggleFindPopup = vi.fn();
   const findNext = vi.fn();
@@ -65,15 +63,11 @@ function harness() {
       _secondaryView: secondaryView,
       _lastView: primaryView,
       splitType: 'vertical',
-      navigateBack,
-      navigateForward,
       zoomIn,
       zoomOut,
       zoomReset,
       navigateToPreviousPage,
       navigateToNextPage,
-      navigateToFirstPage,
-      navigateToLastPage,
       navigate,
       toggleFindPopup,
       findNext,
@@ -101,6 +95,7 @@ function harness() {
   });
 
   return {
+    cloneInto,
     navigation,
     reader,
     primary,
@@ -109,15 +104,11 @@ function harness() {
     scrollBoundary,
     showStatus,
     debug,
-    navigateBack,
-    navigateForward,
     zoomIn,
     zoomOut,
     zoomReset,
     navigateToPreviousPage,
     navigateToNextPage,
-    navigateToFirstPage,
-    navigateToLastPage,
     navigate,
     toggleFindPopup,
     findNext,
@@ -131,19 +122,80 @@ function harness() {
 }
 
 describe('ReaderNavigation', () => {
-  it('delegates history, zoom, page, search, and split operations to the current Reader host', () => {
+  it.each([
+    { name: 'primary', secondary: false, pages: 37 },
+    { name: 'secondary', secondary: true, pages: 11 },
+  ])(
+    'preserves counted page targets and reaches the document bottom in the $name view',
+    ({ secondary, pages }) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const active = secondary ? test.secondary : test.primary;
+      const view = (secondary ? internal._secondaryView : internal._primaryView)!;
+      const pageHeight = 1000;
+      const container = { scrollTop: 0, scrollHeight: pages * pageHeight, clientHeight: 600 };
+      const viewport = {
+        scale: 1,
+        height: pageHeight,
+        convertToPdfPoint: (x: number, y: number): readonly [number, number] =>
+          secondary ? [y, x] : [x, pageHeight - y],
+      };
+      const viewer = {
+        pagesCount: pages,
+        container,
+        currentPageNumber: 1,
+        getPageView: () => ({ viewport }),
+      };
+      Reflect.set(active, 'PDFViewerApplication', { pdfViewer: viewer });
+      Reflect.set(internal, '_lastView', view);
+      Reflect.set(view, 'navigateToNextPage', () => {});
+      Reflect.set(
+        internal,
+        'navigate',
+        (location: {
+          pageIndex?: number;
+          dest?: readonly [number, { name: string }, number, number, null];
+        }) => {
+          const pageIndex = location.dest?.[0] ?? location.pageIndex!;
+          const pageOffset = location.dest
+            ? secondary
+              ? location.dest[2]
+              : pageHeight - location.dest[3]
+            : 0;
+          viewer.currentPageNumber = pageIndex + 1;
+          container.scrollTop = Math.min(
+            pageIndex * pageHeight + pageOffset,
+            container.scrollHeight - container.clientHeight,
+          );
+        },
+      );
+
+      test.navigation.navigateBoundary(0, true, active);
+      expect(viewer.currentPageNumber).toBe(pages);
+      expect(container.scrollTop).toBe(container.scrollHeight - container.clientHeight);
+
+      test.navigation.navigateBoundary(5, true, active);
+      expect(viewer.currentPageNumber).toBe(5);
+      expect(container.scrollTop).toBe(4000);
+
+      test.navigation.navigateBoundary(0, false, active);
+      expect(viewer.currentPageNumber).toBe(1);
+      expect(container.scrollTop).toBe(0);
+
+      test.navigation.navigateBoundary(9, false, active);
+      expect(viewer.currentPageNumber).toBe(9);
+      expect(container.scrollTop).toBe(8000);
+    },
+  );
+
+  it('delegates zoom, page, search, and split operations to the current Reader host', () => {
     const test = harness();
 
-    test.navigation.navigateHistory('back');
-    test.navigation.navigateHistory('forward');
     test.navigation.zoom('in', 2);
     test.navigation.zoom('out', 3);
     test.navigation.zoom('reset', 4);
     test.navigation.navigatePage(-2);
     test.navigation.navigatePage(3);
-    test.navigation.navigateBoundary(0, false, test.primary);
-    test.navigation.navigateBoundary(0, true, test.primary);
-    test.navigation.navigateBoundary(4, false, test.primary);
     test.navigation.openSearch(test.primary);
     test.navigation.clearSearch();
     test.navigation.find(true);
@@ -151,16 +203,11 @@ describe('ReaderNavigation', () => {
     test.navigation.toggleSplit('horizontal');
     test.navigation.toggleSplit('vertical');
 
-    expect(test.navigateBack).toHaveBeenCalledOnce();
-    expect(test.navigateForward).toHaveBeenCalledOnce();
     expect(test.zoomIn).toHaveBeenCalledTimes(2);
     expect(test.zoomOut).toHaveBeenCalledTimes(3);
     expect(test.zoomReset).toHaveBeenCalledOnce();
     expect(test.navigateToPreviousPage).toHaveBeenCalledTimes(2);
     expect(test.navigateToNextPage).toHaveBeenCalledTimes(3);
-    expect(test.navigateToFirstPage).toHaveBeenCalledOnce();
-    expect(test.navigateToLastPage).toHaveBeenCalledOnce();
-    expect(test.navigate).toHaveBeenCalledWith({ pageIndex: 3 });
     expect(test.toggleFindPopup).toHaveBeenNthCalledWith(1, { open: true });
     expect(test.toggleFindPopup).toHaveBeenNthCalledWith(2, { open: false });
     expect(test.findNext).toHaveBeenCalledOnce();
@@ -198,23 +245,31 @@ describe('ReaderNavigation', () => {
     expect(test.focusContext).toHaveBeenCalledOnce();
   });
 
+  it('does not dispatch an active primary search from an inactive secondary view', () => {
+    const test = harness();
+
+    expect(test.navigation.find(true, test.secondary)).toEqual({
+      kind: 'unchanged',
+    });
+
+    expect(test.findNext).not.toHaveBeenCalled();
+    expect(test.showStatus).toHaveBeenCalledWith('No active search — press / to search', 1500);
+  });
+
   it('fails closed for unavailable navigation and uses the injected document fallback', () => {
     const test = harness();
     const internal = test.reader._internalReader;
     if (!internal) throw new Error('Expected internal reader');
     Reflect.set(internal, '_lastView', undefined);
     Reflect.set(internal, '_primaryView', { _iframeWindow: test.primary });
-    Reflect.set(internal, 'navigateBack', undefined);
     Reflect.set(internal, 'zoomOut', () => {
       throw new Error('reader reloaded');
     });
 
-    test.navigation.navigateHistory('back');
     test.navigation.zoom('out', 1);
     test.navigation.navigateBoundary(0, true, test.primary);
     test.navigation.find(true);
 
-    expect(test.showStatus).toHaveBeenCalledWith('History unavailable', 1500);
     expect(test.showStatus).toHaveBeenCalledWith('Zoom unavailable', 1500);
     expect(test.showStatus).toHaveBeenCalledWith('No active search — press / to search', 1500);
     expect(test.debug).toHaveBeenCalledWith('reader zoom out failed: Error: reader reloaded');

@@ -123,60 +123,18 @@ describe('Main action target contracts', () => {
     expect(h.viewAttachment).not.toHaveBeenCalledWith(nativeSelected.id);
   });
 
-  it('keeps the workset and native multi-selection while Enter inspects only Cursor', async () => {
-    const first = attachment(10);
-    const second = attachment(11);
-    const cursor = attachment(12);
-    const h = harness([first, second, cursor], 2, [0, 1]);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    h.session.selection.add({ libraryID: 1, itemID: second.id });
-
-    h.navigation.activate(h.window, h.session);
-    await vi.waitFor(() => expect(h.viewAttachment).toHaveBeenCalledOnce());
-
-    expect(h.viewAttachment).toHaveBeenCalledWith(cursor.id);
-    expect(h.session.selection.values()).toEqual([
-      { libraryID: 1, itemID: first.id },
-      { libraryID: 1, itemID: second.id },
-    ]);
-  });
-
-  it('does not open the first native-selected item when Cursor cannot resolve', () => {
-    const selected = attachment(10);
-    const h = harness([selected]);
-    const pane = Reflect.get(h.window, 'ZoteroPane') as object;
-    const itemsView = Reflect.get(pane, 'itemsView') as object;
-    const selection = Reflect.get(itemsView, 'selection') as object;
-    Reflect.set(selection, 'focused', 99);
-
-    h.navigation.activate(h.window, h.session);
-
-    expect(h.viewAttachment).not.toHaveBeenCalled();
-    expect(h.session.status.textContent).toBe('✗ No item under cursor');
-  });
-
-  it('captures only real reading navigation and rolls back when the host open fails', async () => {
+  it('reports unavailable reading targets and native viewer failures', async () => {
     const target = attachment(10);
     const h = harness([target], 0);
-    const rollback = vi.fn();
-    const beforeNavigate = vi.fn(() => rollback);
 
-    await expect(h.navigation.openPDF(h.window, h.session, target, beforeNavigate)).resolves.toBe(
-      true,
-    );
-    expect(beforeNavigate).toHaveBeenCalledOnce();
-    expect(rollback).not.toHaveBeenCalled();
+    await expect(h.navigation.openPDF(h.window, h.session, target)).resolves.toBe(true);
     expect(h.viewAttachment).toHaveBeenCalledWith(target.id);
 
     h.viewAttachment.mockReset();
     h.viewAttachment.mockImplementation(() => {
       throw new Error('viewer failed');
     });
-    await expect(h.navigation.openPDF(h.window, h.session, target, beforeNavigate)).resolves.toBe(
-      false,
-    );
-    expect(beforeNavigate).toHaveBeenCalledTimes(2);
-    expect(rollback).toHaveBeenCalledOnce();
+    await expect(h.navigation.openPDF(h.window, h.session, target)).resolves.toBe(false);
 
     const noTarget = {
       id: 20,
@@ -187,10 +145,7 @@ describe('Main action target contracts', () => {
       getAttachments: () => [],
       getField: () => '',
     } as unknown as Zotero.Item;
-    await expect(h.navigation.openPDF(h.window, h.session, noTarget, beforeNavigate)).resolves.toBe(
-      false,
-    );
-    expect(beforeNavigate).toHaveBeenCalledTimes(2);
+    await expect(h.navigation.openPDF(h.window, h.session, noTarget)).resolves.toBe(false);
     expect(h.session.status.textContent).toBe('✗ No attachment');
   });
 

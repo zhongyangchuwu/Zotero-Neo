@@ -14,11 +14,15 @@ Zotero Neo supports the **latest stable Zotero release only**. The current
 v0.1.0 target is Zotero 10; older Zotero major versions are outside the install
 and test contract.
 
-Zotero Neo targets macOS, Linux, and Windows. GitHub Actions validates XPI
-packaging on Ubuntu and Windows; Zotero GUI behavior still requires manual
-verification in the current stable host.
+Zotero Neo targets macOS, Linux, and Windows. The current GitHub Actions workflow
+verifies and packages the XPI on Ubuntu; Windows has a local PowerShell build
+wrapper. Zotero GUI behavior still requires verification in the current stable host.
 
 ## Major features
+
+The features below describe the current source tree. Some v0.2 workflows and
+navigation changes are unreleased; the published v0.1.0 XPI does not include every
+current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
 
 ### Library and Main window
 
@@ -114,6 +118,7 @@ From File…** and restart when prompted.
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
+- [Command reference](docs/COMMAND_REFERENCE.md) — complete ActionId/default-key lookup, mode and temporary-surface grammars, and shared navigation/jumplist behavior.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
   semantic actions, and Zotero host boundaries.
 - [Selection and Tags](docs/TAGS.md) — Main Selection/Visual semantics, explicit

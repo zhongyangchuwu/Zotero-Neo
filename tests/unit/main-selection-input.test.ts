@@ -146,6 +146,8 @@ function harness(bindingOverrides = '') {
       rescan: () => {},
       deactivateInactive: () => {},
       forwardKey,
+      captureJumpLocation: () => null,
+      restoreJumpLocation: async () => null,
     },
   } as MainWindowControllerDependencies);
   controller.addWindow(window);
