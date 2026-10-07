@@ -12,8 +12,9 @@ than one concrete workflow needs the same contract.
 
 The [unified navigation execution and history policy](NAVIGATION_HISTORY_DESIGN.md)
 documents the current shared navigation owners, recording rules, and Reader
-transport constraints. Its implementation is in place and remains pending
-integrated acceptance.
+transport constraints. The navigation implementation and document-bottom `G`
+behavior have passed automated, supported-host, and owner acceptance; integration
+is tracked in [PR #113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
 
 ## Layers
 
@@ -147,8 +148,12 @@ host/view lifecycle seams are owned separately:
   in the session callbacks;
 - `view-lifecycle.ts` — primary/secondary PDF-view discovery, periodic rescan,
   view-local DOM listeners, active-view fallback, and detached-view release;
-- `navigation.ts` — Reader history, zoom, page/search delegation, split control,
-  directional focus, and active primary/secondary host-view resolution;
+- `navigation.ts` — zoom, page/search delegation, split control, directional
+  focus, and active primary/secondary host-view resolution;
+- `jump-host.ts` — attachment/XYZ capture, exact-pane restoration, and readable
+  closed-attachment reopen;
+- `jump-history-bridge.ts` — native producer/callback provenance and completion
+  transport to the shared coordinator, not a separate Reader history stack;
 - `selection-range.ts` — Neo's temporary DOM Selection compatibility range,
   Select anchor/preferred-X state, range motions, endpoint swaps, and view markers;
 - `flash.ts` — visible-text targeting and hint lifecycle;
@@ -170,8 +175,8 @@ discovery/session ownership remains there, and `ReaderSession` still combines in
 routing, semantic dispatch, annotation operations, and scroll behavior. PDF-view
 lifecycle, private key seams, navigation-oriented host operations, and Neo's temporary
 Select DOM-range state/mutations have been extracted into the owners above. The
-remaining pre-release cleanup under issue #29 should continue along coherent
-responsibilities with direct tests, not arbitrary file-size splitting.
+further cleanup under issue #98 should follow coherent responsibilities with
+behavior contracts, not arbitrary file-size splitting.
 
 #### Shared navigation history
 
@@ -248,13 +253,14 @@ The following are intentionally **not** project-wide frameworks today:
 Create one only when a second real consumer demonstrates a stable shared
 contract.
 
-## Remaining pre-release interaction cleanup
+## Remaining interaction cleanup
 
-The structural Reader cleanup tracked by issue #29 is complete. Before the
-v0.1.0 release candidate is frozen again, issues #42, #39, #40, and #43 tighten
-the interaction vocabulary around target resolution, Tag actions, Tab actions,
-and semantic leader namespaces. Issue #41 separately audits semantic light/dark
-component tokens.
+The structural Reader cleanup for v0.1.0 is complete. Current ownership and
+interaction follow-up is tracked in
+[#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98) and the
+[roadmap](ROADMAP.md). Annotation Comment Editor feature-input ownership is a
+bounded candidate; retain `reader-insert` until its replacement and migration
+are proven.
 
 The Note input grammar is already on the shared sequence/count/binding machinery;
 browser-native Insert editing remains outside Neo unless an explicit Note binding

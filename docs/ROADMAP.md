@@ -28,41 +28,75 @@ Completed release gates:
 The v0.1.0 release gate (#24), update metadata, dual-platform build, and public
 GitHub Release are complete.
 
+## Current v0.2 work
+
+The Library substrate and its first workflows are implemented. Settings, custom
+interaction themes, and shared i18n were merged in
+[#93](https://github.com/zhongyangchuwu/Zotero-Neo/pull/93); #89/#90/#91 are complete.
+Issue #55 is closed as historical Library-substrate evidence, not the current
+acceptance backlog. Current interaction ownership is defined by
+[the interaction model](INTERACTION_MODEL.md) and
+[#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98).
+
+The unified navigation history and document-bottom Reader `G` are implemented
+and owner-accepted in
+[#113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113), pending integration.
+Do not reimplement Back/Forward or assign their defaults again; the
+[command reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)
+owns the accepted behavior.
+
 ## Next
 
-The v0.2 Library substrate and its first end-to-end workflows are implemented.
-The immediate work is consolidation, runtime acceptance, and safety rather than
-adding another broad interaction layer.
+Prioritize integration, real-host mutation acceptance, and narrow ownership work
+before adding another broad interaction layer.
 
-1. **Finish the Settings/i18n integration** tracked by
-   [#89](https://github.com/zhongyangchuwu/Zotero-Neo/issues/89),
-   [#90](https://github.com/zhongyangchuwu/Zotero-Neo/issues/90), and
-   [#91](https://github.com/zhongyangchuwu/Zotero-Neo/issues/91): merge the
-   Neo Settings Center, custom interaction themes, launcher-only legacy
-   Preferences bridge, and shared application-level locale catalogs; then run a
-   dedicated-profile Zotero GUI smoke before closing the issues.
-2. **Complete consolidated v0.2 runtime acceptance** for
-   [#55](https://github.com/zhongyangchuwu/Zotero-Neo/issues/55) together with
-   the Main -> Reader return-context loop (#84) and Reader selection -> existing
-   note capture loop (#87). Automated tests cover state and target semantics; the
-   remaining gate is real Zotero focus, native-tree projection, cross-context
-   navigation, and note-mutation behavior.
-3. **Make destructive action targets explicit** in
-   [#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88). Start with
-   Trash as the first complete example: when Cursor sits outside a persistent
-   Selection, require an explicit Cursor/Selection choice and surface hidden
-   target counts. Keep this as a narrow action-target seam rather than a generic
-   project-wide Target framework.
-4. Keep the batteries-included workflow direction in
-   [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49). Plugin Manager
-   phases 1-3, Library Triage collection/citekey workflows, Research Reading,
-   and the first Knowledge Capture loop are complete. After the acceptance and
-   safety work above, choose the next concrete workflow from observed use rather
-   than pre-building abstractions.
-5. Continue tracking native Zotero Reader semantic-selection integration in
-   [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20). The current
-   DOM-selection compatibility path remains acceptable until Zotero exposes or
-   documents a supported semantic-selection seam.
+1. **Integrate accepted navigation** through
+   [#112](https://github.com/zhongyangchuwu/Zotero-Neo/issues/112) / PR #113.
+   Merge only an authorized, verified head; verify the resulting `main` checkpoint
+   before closing #112 and completing the navigation integration entries in #98.
+   Navigation acceptance does not close unrelated mutation gates.
+2. **Complete destructive-target GUI acceptance** in
+   [#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88).
+   The safety implementation is already merged. Exercise actual target kind/count,
+   native multi-selection, hidden persistent-Selection refusal, and cancellation
+   without changing Selection or Trash history; verify Reader annotation deletion
+   confirms exactly one target. Use disposable test data. Do not revive the
+   superseded default Cursor-versus-Selection chooser proposal.
+3. **Complete existing-note capture GUI acceptance** in
+   [#85](https://github.com/zhongyangchuwu/Zotero-Neo/issues/85).
+   The Reader snapshot -> Notes picker -> native note append path is implemented.
+   Verify preserved note HTML, immutable text/page capture, same-library targets,
+   stale/deleted/wrong-library refusal, cancel/no mutation, and Reader focus return
+   on current Zotero. The historical PR #87 acceptance checklist is not proof that
+   those GUI scenarios passed; do not reimplement the feature from an open issue.
+4. **Take the next bounded architecture slice** from #98 Phase 9.1:
+   prove Annotation Comment Editor feature-input ownership and explicitly settle
+   save/cancel/newline semantics. Retain `reader-insert` until its replacement,
+   existing behavior, and preference/keybinding migration are independently proven.
+   Revisit other Reader overlays or Knowledge Capture only after that ownership is
+   stable, not as a broad rewrite bundled with this slice.
+
+Keep
+[#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49)
+as the batteries-included workflow direction: Plugin Manager phases 1–3 are
+accepted, and the next workflow should come from observed use after safety and
+acceptance, not speculative provider/manager abstractions. Track
+[#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20)
+for a supported Zotero semantic-selection seam; retain the current DOM
+compatibility path until that external prerequisite exists.
+
+## Release gate
+
+The published release and manifest/package/update-feed versions remain v0.1.0;
+the current v0.2 source work is not a published release. Before another release:
+
+- complete the selected current-host acceptance and integration gates;
+- verify packaged install/update behavior separately from RDP temporary loading,
+  including binding/preference migration and single runtime ownership;
+- prepare matching manifest/package version, update-feed asset entry, release
+  notes, and installation links before tagging; use `tools/check-release.mjs`;
+- describe actual CI coverage: the current workflow verifies/packages on Ubuntu.
+  Do not claim Windows CI coverage without restoring that job and observing it pass.
 
 Longer-term candidates remain command-palette arguments/history, richer safe
 tag operations, keymap import/export after the schema stabilizes in real use,

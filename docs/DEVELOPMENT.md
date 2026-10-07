@@ -4,9 +4,10 @@
 
 Official support covers the latest stable Zotero release at the time of a Zotero
 Neo release. The manifest enforces that supported major instead of advertising
-untested older Zotero majors. The current pre-release target is Zotero 10.
-GitHub Actions proves packaging only; test a changed reader, main-window, note,
-or preferences flow in the current stable Zotero host.
+untested older Zotero majors. The current supported major is Zotero 10.
+GitHub Actions verifies formatting, strict TypeScript, Node contracts, and XPI
+packaging on Ubuntu; it does not prove Zotero GUI behavior. Exercise a changed
+reader, main-window, note, or preferences flow in the current stable Zotero host.
 
 ## Build
 
@@ -105,11 +106,13 @@ The old extension-proxy path is intentionally not used for fast iteration:
 runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
 fresh profile, while RDP temporary installation and `reload` both succeeded.
 
-GitHub Actions runs the Linux builder on pushes and pull requests, then uploads
-one Linux-built XPI artifact. A version tag runs a guarded release job:
-`tools/check-release.mjs` requires the tag, manifest version, compatibility
-range, and prepared `updates.json` entry to agree before the Linux-built XPI is
-published. Do not create a release tag until its update-feed entry exists.
+GitHub Actions runs the Ubuntu verify/package builder for `main` pushes,
+pull requests targeting `main`, version tags, and manual dispatch, then uploads
+one canonical XPI artifact. The guarded release job runs for a `v*` tag or a
+manual dispatch from `main` with a non-empty `release_tag`.
+`tools/check-release.mjs` requires the tag, manifest version, compatibility range,
+and prepared `updates.json` entry to agree before publication. Do not create a
+release tag until its update-feed entry exists.
 
 ## Branding assets
 
@@ -466,9 +469,11 @@ interferes with Gecko/React focus handling.
 
 `ReaderCommentEditor` owns the transient annotation-comment target, textarea DOM, IME state,
 autosave/focus timers, popup guard, theme subscription, and Zotero's private
-`_enableAnnotationDeletionFromComment` override. `ReaderSession` owns only Insert mode and the
-persistent selected-annotation key. The feature resolves and snapshots its save target before
-mounting so later annotation navigation cannot retarget an in-progress edit.
+`_enableAnnotationDeletionFromComment` override. `ReaderSession` orchestrates Insert
+mode, while `ReaderAnnotationNavigationState` owns the remembered selection fallback
+and reads Zotero's exposed selection as authoritative. The comment feature snapshots
+its save target before mounting so later annotation navigation cannot retarget an
+in-progress edit.
 
 Neo renders the textarea in the PDF document, accepts native typing and IME composition, and saves
 through the resolved annotation item with `saveTx()`. A generation token prevents stale async open

@@ -28,7 +28,7 @@ Implemented contract:
 3. Adapters declare inline, serial-navigation, or serial-traversal dispatch before host work and report immediate/deferred navigation completion. Completion is not inferred from an arbitrary host Promise.
 4. `NavigationHistoryState` is the one window-owned stack and retains the bounded stack/equality/refresh/remap contract.
 5. Each admitted execution stamps immutable cause/context and ownership. Native producers and delayed callbacks retain that ownership; ignored, superseded, completed, or disposed ownership never becomes generic native navigation.
-6. The default evidence rules remain context-sensitive. Explicit Reader navigation establishes its epoch at launch; Back/Forward waits for admitted Reader completion. These implemented concurrency rules remain subject to integrated acceptance.
+6. The default evidence rules remain context-sensitive. Explicit Reader navigation establishes its epoch at launch; Back/Forward waits for admitted Reader completion. Integrated and owner acceptance evidence is recorded below.
 7. Direct completion ports are used; there is no event bus, plugin registration framework, universal command executor, preference UI, or runtime package dependency.
 
 **Scope:** policy centralization, navigation execution/completion, provenance, cancellation, and clean caller migration. **Not in scope:** new bindings/count semantics, recording all native tab clicks, persistent history, zoom/layout/Note-caret snapshots, full UI rollback, or external plugin APIs.
@@ -237,7 +237,7 @@ Cancellation is not rollback or proof that native work stopped. A stale or cance
 
 ### Reader launch and traversal fences: deliberate normalization
 
-An admitted explicit Neo Reader jump establishes its window epoch at launch, like a Main jump. This supersedes an older explicit operation even if recording for the new action is disabled. The Reader host call still dispatches inline; deferred completion registers a fence for later Back/Forward without queueing the jump itself. Back/Forward waits for that actual outcome, then computes its target from resulting history. This implemented normalization supersedes the baseline's accepted-record-time invalidation and awaits integrated acceptance.
+An admitted explicit Neo Reader jump establishes its window epoch at launch, like a Main jump. This supersedes an older explicit operation even if recording for the new action is disabled. The Reader host call still dispatches inline; deferred completion registers a fence for later Back/Forward without queueing the jump itself. Back/Forward waits for that actual outcome, then computes its target from resulting history. This accepted normalization supersedes the baseline's accepted-record-time invalidation.
 
 Ordinary default-ignored motion keeps its no-epoch fast path. Independently, the existing Reader input transition must retire an in-flight mark even for an unbound/prefix/ordinary key. Execution ownership cancellation and history-epoch advancement are not the same thing.
 

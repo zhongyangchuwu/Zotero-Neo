@@ -1,8 +1,9 @@
 # Library Interaction Model (v0.2)
 
-This document defines the interaction contract for Zotero Neo's v0.2 Library
-workflow. It is the design source of truth for issue #55 before further
-selection/filter implementation is merged.
+This document records the v0.2 Library interaction contract developed under
+issue #55, now closed as historical substrate. Current architecture decisions
+and any superseding interaction rules are owned by issue #98; navigation details
+are specified in [the command reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist).
 
 The goal is not to reproduce Vim or Yazi mechanically. Neo should expose a
 keyboard-first model that fits Zotero's actual host behavior while keeping
@@ -384,8 +385,10 @@ Record completed explicit jumps:
   native search-result navigation.
 
 Reader page, outline, annotation, internal/citation link, and search destinations
-enter the shared list only when the native hard-save bridge observes a qualifying
-non-transient save. Marks instead record one completed managed excursion. `H`/`L`
+enter the shared list only when producer-bound completion supplies a native-hard
+receipt matching the exact current view and settled geometry. A raw non-transient
+history save is not an independent recording entrance. Marks instead record one
+managed final destination. `H`/`L`
 ignore numeric counts and cycle once through Zotero's open tabs, including Library;
 the current host and fallback wrap at the ends. Opening, browsing, or cancelling
 the tab chooser does not record. Confirming the current tab is a no-op and preserves

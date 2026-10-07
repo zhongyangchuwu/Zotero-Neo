@@ -14,11 +14,15 @@ Zotero Neo supports the **latest stable Zotero release only**. The current
 v0.1.0 target is Zotero 10; older Zotero major versions are outside the install
 and test contract.
 
-Zotero Neo targets macOS, Linux, and Windows. GitHub Actions validates XPI
-packaging on Ubuntu and Windows; Zotero GUI behavior still requires manual
-verification in the current stable host.
+Zotero Neo targets macOS, Linux, and Windows. The current GitHub Actions workflow
+verifies and packages the XPI on Ubuntu; Windows has a local PowerShell build
+wrapper. Zotero GUI behavior still requires verification in the current stable host.
 
 ## Major features
+
+The features below describe the current source tree. Some v0.2 workflows and
+navigation changes are unreleased; the published v0.1.0 XPI does not include every
+current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
 
 ### Library and Main window
 

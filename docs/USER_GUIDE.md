@@ -72,8 +72,8 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | ----------- | ------------------------------------------------------------------------- |
 | `h`         | Previous page                                                             |
 | `l`         | Next page                                                                 |
-| `gg`        | First page                                                                |
-| `G`         | Last page                                                                 |
+| `gg`        | First-page start                                                          |
+| `G`         | Document bottom                                                           |
 | `H`         | Switch to previous open tab                                               |
 | `L`         | Switch to next open tab                                                   |
 | `<Space>,`  | Choose and switch to an open Zotero tab                                   |
@@ -82,9 +82,9 @@ while reset always runs once, so `3=` and `3z0` each reset once.
 | `<Space>pp` | Open the persistent Plugin Manager panel |
 | `<Space>ps` | Open Neo Settings without leaving the Reader tab |
 
-Counts repeat page turns (`3l` = three host page-turn steps). When the Reader host supports numeric page navigation, positive counts with `gg/G` target that one-based page (`5G` / `5gg` = page 5). If it does not, `gg/G` fall back to top/bottom scrolling and the count is ignored.
+Counts repeat page turns (`3l` = three host page-turn steps). When numeric page navigation is supported, positive `nG` / `ngg` counts target that one-based page start (`5G` / `5gg` = page 5 start). Uncounted `gg` goes to the first-page start; uncounted `G` goes to the document bottom without changing zoom. Unsupported hosts fall back to top/bottom scrolling and ignore the count.
 
-The shared jumplist records selected explicit navigation across Main and Reader,
+The shared jumplist records selected explicit navigation across Main, Reader, and Note,
 including tab switches. Back/Forward use `<C-o>` / `<C-i>` in Normal modes.
 For the complete recording/exclusion matrix, restoration limits, and examples,
 see the [Command Reference: shared jumplist](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist).
