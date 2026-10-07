@@ -22,7 +22,7 @@ the Select workflow rather than a separate mode.
 | ---------- | --------- | ------- |
 | **Normal** | _(hidden)_ | Reading, navigation, and existing-annotation commands |
 | **Select** (internal name: Visual) | `SELECT · …` | Select PDF text, refine endpoints, and run actions |
-| **Insert** | `-- INSERT --` | Native/comment text input |
+| **Insert** | `-- INSERT --` | Annotation-comment input ownership indicator; native-text compatibility state |
 
 Mode transitions:
 
@@ -30,7 +30,7 @@ Mode transitions:
 Normal ──v──▶ Flash start ──target──▶ Select ──v/Escape──▶ Normal
                                       │
                                       └──s──▶ Flash endpoint ──target──▶ Select
-Normal ──i──▶ Insert ──Escape────────────────────────────▶ Normal
+Normal ──i──▶ Comment input (Insert indicator) ──Escape──▶ Normal
 ```
 
 ---
@@ -592,7 +592,7 @@ highlighted in the PDF and scrolled to in the sidebar.
 | `[`     | Jump to previous annotation                                  |
 | `]`     | Jump to next annotation                                      |
 | `Enter` | Open the selected annotation's comment field for editing     |
-| `i`     | Enter Insert mode **and** focus the annotation comment field |
+| `i`     | Open the annotation comment editor with the Insert indicator |
 | `y`     | Copy the annotation's **highlighted text** to the clipboard  |
 | `Y`     | Copy the annotation's **comment text** to the clipboard      |
 | `dd`    | Confirm permanent deletion of the selected Reader annotation (not undoable) |
@@ -636,16 +636,16 @@ all text-oriented work now goes through one Select workflow.
 
 ### Insert mode
 
-In Insert mode every key is passed through to Zotero unchanged. This is
-useful when you need to type into Zotero's own UI elements without the vim
-bindings intercepting your keystrokes.
+The annotation comment editor owns its input independently of Reader Normal/Select;
+`-- INSERT --` remains its user-facing indicator, not a general Reader command mode.
+Ordinary typing and IME keep their native text behavior rather than invoking Reader
+shortcuts. If comment/Insert entry is disabled in Settings, `i` retains the legacy bare
+Insert compatibility state: ordinary keys pass through to Zotero and Escape exits it.
 
-When `i` is pressed in Normal mode while an annotation is selected (via `[`/`]`),
-the plugin enters Insert mode and opens **its own comment overlay** over the
-PDF — a floating input box rendered inside the PDF view (the only place that
-receives the OS keyboard focus, so typing and IME composition work natively).
-The annotation's existing comment is pre-filled; the quoted text is shown as
-context. Zotero's own popup is not used at all.
+Press `i` in Normal while an annotation is selected via `[`/`]` to open Neo's floating
+comment textarea inside that PDF view. The existing comment is pre-filled and the quoted
+text is shown as context. Enter inserts a newline, and Escape saves and closes rather
+than discarding the draft. Escape during active IME composition does not close the editor.
 
 | Key      | Action                                                                      |
 | -------- | --------------------------------------------------------------------------- |
@@ -655,6 +655,11 @@ context. Zotero's own popup is not used at all.
 The comment is also autosaved 2 seconds after the last keystroke, and `visual i`
 (Add note) opens the same overlay for the newly created annotation. This is an
 annotation comment workflow; it is distinct from **Capture to note**.
+
+The editor keeps the annotation it opened as its save target even if Zotero navigates to
+another annotation. Its keys are scoped to that PDF view; another split view still accepts
+Reader navigation. Closing the Reader releases the transient editor, and reopening starts
+from the annotation's saved comment.
 
 Zotero's own annotation popup and sidebar comment fields remain fully usable
 for mouse editing: clicking into either while the overlay is open saves and

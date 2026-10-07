@@ -271,7 +271,6 @@ export interface Pointer {
 }
 
 export interface ReaderSessionState {
-  mode: ReaderMode;
   selectionParams: AnnotationSelectionParams | null;
   indicator: HTMLElement | null;
   indicatorThemeCleanup: (() => void) | null;
