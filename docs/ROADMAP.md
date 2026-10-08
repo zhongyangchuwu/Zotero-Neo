@@ -65,32 +65,38 @@ checkpoint passed CI. Pending and mounted input belong to the captured PDF view,
 not a writable Reader mode flag.
 Enter newline, ordinary Escape save/close, two-second autosave, IME ownership,
 split-view isolation, native editable handoff, target snapshot, and close/reopen are
-preserved. `reader-insert` and its preference/native-pass-through compatibility remain;
-Phase 9.2's candidate key semantics and Phase 5.7's retirement are not part of this slice.
+preserved. `reader-insert` and its preference/native-pass-through compatibility remain.
+
+The separately observed mixed-generation Reader lifecycle gap
+[#115](https://github.com/zhongyangchuwu/Zotero-Neo/issues/115) is resolved through
+[PR #116](https://github.com/zhongyangchuwu/Zotero-Neo/pull/116), merged at `0c9833f`;
+merged-main CI passed. Callback-identity unregistration and closed Reader/split-view
+dead-wrapper teardown were repaired. Final Zotero 10.0.6 disposable-data acceptance
+covered three same-root reloads, three different-root replacements, existing/reopened
+Reader input, split/native handoff, disable/enable, and separate persistent XPI
+install/update/restart.
+
+For Phase 9.2, the owner selected the existing Enter-newline / Escape-save-close /
+two-second-autosave contract. There is no cancel or alternate autosave/key policy.
+The one **Annotation comment editing** entry switch remains backed by
+`mode.insert.enabled`; Off retains bare Insert native pass-through. The current
+User Guide, Command Reference, and Development Guide define these boundaries.
 
 ## Next
 
 Prioritize narrow feature-input ownership before adding another broad interaction layer.
 
-1. **Resolve the observed lifecycle gap** in
-   [#115](https://github.com/zhongyangchuwu/Zotero-Neo/issues/115) before another Reader
-   interaction change. Repeated temporary add-on replacement exposed input callbacks
-   from two package generations; the cause is not established. Trace startup/shutdown,
-   registration, pending injection, and view cleanup in disposable data, then repair only
-   the proved owner. Acceptance must show one current input owner and correct behavior
-   across repeated reload/replacement, existing/new Readers, split release, and native
-   editable handoff. Packaged lifecycle checks remain separate from RDP loading.
-2. **Review #98 Phase 9.2 without silently changing keys.** Prefer freezing the current
-   Enter-newline / Escape-save-close behavior unless an explicit product decision selects
-   another contract. An Enter-save / Shift+Enter-newline / Escape-cancel proposal must
-   first define what cancel means after autosave and how native/concurrent edits are
-   protected. The preference model and physical OS IME candidate-window acceptance
-   remain explicit decisions/checks, not claims derived from trusted Gecko composition.
-3. **Return to Phase 5.7 only after lifecycle and behavior contracts are settled.** Retire
-   `reader-insert` through an approved persisted-binding/preference migration, with old
-   overrides, disabled-preference native-input intent, Settings, and exact keymaps verified.
-   Do not leave runtime aliases or silently discard configuration. Keep Phase 9.3 overlay
-   review and Phase 9.4 Knowledge Capture separate from these slices.
+1. **Execute Phase 5.7 only through an independently approved compatibility migration.**
+   Feature input ownership and the save/newline contract are settled; retiring
+   `reader-insert` still requires preserving stored bindings, explicit unbindings,
+   disabled-preference native-input intent, Settings, and exact input contexts.
+   Do not silently discard configuration or leave runtime aliases. The Phase 9.2
+   contract freeze does not authorize or implement this cutover.
+2. **Keep physical OS IME acceptance explicit.** Trusted Gecko composition and
+   composition-aware key contracts do not prove candidate-window selection on the
+   operating system.
+3. **Keep Phase 9.3 overlay review and Phase 9.4 Knowledge Capture separate.** Do not
+   expand either workflow as a side effect of editor preference/binding migration.
 
 Keep
 [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49)

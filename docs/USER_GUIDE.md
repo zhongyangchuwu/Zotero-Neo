@@ -656,6 +656,19 @@ The comment is also autosaved 2 seconds after the last keystroke, and `visual i`
 (Add note) opens the same overlay for the newly created annotation. This is an
 annotation comment workflow; it is distinct from **Capture to note**.
 
+There is no cancel command: Escape saves the current draft, including edits made
+after the last autosave. It does not restore the comment from when the editor
+opened or undo an earlier save. Closing the Reader is resource cleanup, not an
+extra save command; only content already saved is guaranteed on reopen.
+
+The **Annotation comment editing** switch under **Settings → Reader** gates editing
+an existing selected annotation from Normal mode and is enabled by default. Off
+prevents Normal `i` / Enter from opening Neo's floating editor; `i` still enters
+the legacy native-pass-through Insert state described above. Select **Add note**
+remains a separate creation workflow and opens the new annotation's editor. This
+switch does not disable Zotero's own comment fields. There are no separate
+Enter-save, Escape-cancel, or autosave-policy switches.
+
 The editor keeps the annotation it opened as its save target even if Zotero navigates to
 another annotation. Its keys are scoped to that PDF view; another split view still accepts
 Reader navigation. Closing the Reader releases the transient editor, and reopening starts
