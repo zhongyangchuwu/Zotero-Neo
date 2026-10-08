@@ -25,7 +25,7 @@ import {
   readerScrollStep,
 } from '../core/preferences';
 import { copyToClipboard } from '../platform/clipboard';
-import { cloneInto } from '../platform/cross-compartment';
+import { cloneInto, isDeadObject } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
 import { compositionOwnsKey } from '../input/composition';
 import { advanceInput, inputWouldConsume } from '../input/engine';
@@ -90,14 +90,17 @@ import {
   type ReaderViewRuntime,
 } from './types';
 
+type ReaderEventName = 'renderToolbar' | 'renderTextSelectionPopup';
+type ReaderEventListener = (event: ReaderEventRuntime) => void;
+
 interface ReaderService {
   readonly _readers?: readonly ReaderRuntime[] | ReadonlyMap<unknown, ReaderRuntime>;
   registerEventListener(
-    name: 'renderToolbar' | 'renderTextSelectionPopup',
-    listener: (event: ReaderEventRuntime) => void,
+    name: ReaderEventName,
+    listener: ReaderEventListener,
     pluginID: string,
-  ): unknown;
-  unregisterEventListener(listenerID: unknown): void;
+  ): void;
+  unregisterEventListener(name: ReaderEventName, listener: ReaderEventListener): void;
   getByTabID?(tabID: string): ReaderRuntime | null;
 }
 
@@ -223,7 +226,8 @@ export class ReaderController implements ReaderControllerApi {
   readonly #sessionsByItem = new Map<number, ReaderSession>();
   readonly #pending = new Set<string>();
   readonly #waitTimers = new Map<string, ReaderTimer>();
-  #listenerIDs: unknown[] = [];
+  #toolbarListener: ReaderEventListener | null = null;
+  #selectionPopupListener: ReaderEventListener | null = null;
   #pluginID: string | null = null;
   #lastSelection: AnnotationSelectionParams | null = null;
   #lastSelectionAt = 0;
@@ -235,35 +239,26 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   start(pluginId: string): void {
-    if (this.#pluginID === pluginId && this.#listenerIDs.length) return;
+    if (this.#pluginID === pluginId) return;
     this.shutdown();
     const service = zoteroRuntime().Reader;
-    const registered: unknown[] = [];
+    const toolbarListener: ReaderEventListener = (event) => {
+      if (this.#toolbarListener === toolbarListener) this.#onToolbar(event);
+    };
+    const selectionPopupListener: ReaderEventListener = (event) => {
+      if (this.#selectionPopupListener === selectionPopupListener) this.#onSelectionPopup(event);
+    };
+    this.#toolbarListener = toolbarListener;
+    this.#selectionPopupListener = selectionPopupListener;
     try {
-      registered.push(
-        service.registerEventListener('renderToolbar', (event) => this.#onToolbar(event), pluginId),
-      );
-      registered.push(
-        service.registerEventListener(
-          'renderTextSelectionPopup',
-          (event) => this.#onSelectionPopup(event),
-          pluginId,
-        ),
-      );
-      this.#listenerIDs = registered;
+      // Zotero returns no listener ID: teardown requires the exact event/handler pair.
+      service.registerEventListener('renderToolbar', toolbarListener, pluginId);
+      service.registerEventListener('renderTextSelectionPopup', selectionPopupListener, pluginId);
       this.#pluginID = pluginId;
       this.#dependencies.logger.debug('reader listeners registered');
       this.#dependencies.logger.diagnostic('reader listeners registered');
     } catch (error) {
-      for (const listenerID of registered) {
-        try {
-          service.unregisterEventListener(listenerID);
-        } catch {
-          // Listener registration rollback is best-effort; the next start remains retryable.
-        }
-      }
-      this.#listenerIDs = [];
-      this.#pluginID = null;
+      this.shutdown();
       const message = `reader listener registration failed: ${String(error)}`;
       this.#dependencies.logger.debug(message);
       this.#dependencies.logger.diagnostic(message);
@@ -272,15 +267,26 @@ export class ReaderController implements ReaderControllerApi {
 
   shutdown(): void {
     const service = zoteroRuntime().Reader;
-    for (const listenerID of this.#listenerIDs) {
+    const toolbarListener = this.#toolbarListener;
+    const selectionPopupListener = this.#selectionPopupListener;
+    // Retire before touching the host registry so queued callbacks cannot reclaim input.
+    this.#toolbarListener = null;
+    this.#selectionPopupListener = null;
+    this.#pluginID = null;
+    if (toolbarListener) {
       try {
-        service.unregisterEventListener(listenerID);
+        service.unregisterEventListener('renderToolbar', toolbarListener);
       } catch {
         // Host shutdown may already have discarded the reader registry.
       }
     }
-    this.#listenerIDs = [];
-    this.#pluginID = null;
+    if (selectionPopupListener) {
+      try {
+        service.unregisterEventListener('renderTextSelectionPopup', selectionPopupListener);
+      } catch {
+        // Host shutdown may already have discarded the reader registry.
+      }
+    }
     for (const timer of this.#waitTimers.values()) clearTimeout(timer);
     this.#waitTimers.clear();
     this.#pending.clear();
@@ -392,6 +398,7 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   #onSelectionPopup(event: ReaderEventRuntime): void {
+    if (!this.#pluginID) return;
     const params = event.params;
     if (!params?.annotation || !params.onAddAnnotation) return;
     this.#lastSelection = params;
@@ -405,6 +412,7 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   #ensure(reader: ReaderRuntime): void {
+    if (!this.#pluginID) return;
     const instanceID = reader._instanceID;
     if (!instanceID || this.#pending.has(instanceID) || this.#sessions.has(instanceID)) return;
     this.#pending.add(instanceID);
@@ -966,8 +974,9 @@ export class ReaderSession {
     this.state.indicatorThemeCleanup = null;
     for (const manager of this.#themeManagers.values()) manager.dispose();
     this.#themeManagers.clear();
-    this.state.indicator?.remove();
+    const indicator = this.state.indicator;
     this.state.indicator = null;
+    if (indicator && !isDeadObject(indicator)) indicator.remove();
     this.#linkHints.close();
     this.#prefixGuide.dispose();
     this.#dependencies.release();

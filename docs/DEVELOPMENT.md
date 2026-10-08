@@ -102,6 +102,18 @@ preferences, and item mutations such as tags or persisted marks remain Zotero
 data. Reinstalling the same XPI is therefore not a clean-install or upgrade
 test.
 
+Reader lifecycle changes require both unpacked and persistent-package acceptance
+in isolated profiles/data directories. Run at least three same-path RDP reloads
+and three replacements from different unpacked roots. In every cycle, check that
+old native Reader callbacks and PDF key listeners are gone, queued old callbacks
+cannot inject UI, pending comment work stays retired, and existing plus newly
+opened Readers execute input only once. Also close a secondary PDF before
+disable/enable, exercise native editable focus handoff, and check Reader
+close/reopen. Separately install an XPI into a clean profile and update it to a
+higher fixture version through the native Add-on Manager; temporary RDP install
+does not prove persistent installation or upgrade. Fixture version changes belong
+outside the repository, not in release metadata.
+
 The old extension-proxy path is intentionally not used for fast iteration:
 runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
 fresh profile, while RDP temporary installation and `reload` both succeeded.

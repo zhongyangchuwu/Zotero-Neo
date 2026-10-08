@@ -2042,6 +2042,7 @@ describe('Main tab picker routing', () => {
 describe('Reader to Main command palette integration', () => {
   it('keeps Reader ownership, active split execution, and picker chaining end to end', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
     const owner = pickerMainWindow();
     const other = pickerMainWindow();
     Reflect.set(owner.window, 'Zotero_Tabs', {

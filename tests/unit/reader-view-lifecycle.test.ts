@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReaderViewLifecycle } from '../../src/reader/view-lifecycle';
 import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
+
+const originalComponents = Reflect.get(globalThis, 'Components');
+afterEach(() => {
+  if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+  else Reflect.set(globalThis, 'Components', originalComponents);
+});
 
 type ListenerEntry = {
   readonly type: string;
@@ -72,6 +78,7 @@ function fakePdfWindow() {
 
 describe('ReaderViewLifecycle', () => {
   it('owns primary/secondary listener attachment, replacement, release, and active-view fallback', () => {
+    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
     const primary = fakePdfWindow();
     const secondary = fakePdfWindow();
     const primaryView = { _iframeWindow: primary.pdfWindow } as ReaderViewRuntime;

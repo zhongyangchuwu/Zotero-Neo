@@ -1,3 +1,4 @@
+import { isDeadObject } from '../platform/cross-compartment';
 import { asKeyboardEvent } from '../platform/dom';
 import type { PdfWindow, ReaderRuntime } from './types';
 
@@ -132,12 +133,17 @@ export class ReaderViewLifecycle {
   }
 
   #detach(pdfWindow: PdfWindow, handlers: ViewHandlers): void {
-    pdfWindow.removeEventListener('keydown', handlers.keyDown, true);
-    pdfWindow.removeEventListener('keyup', handlers.keyUp, true);
-    pdfWindow.removeEventListener('blur', handlers.blur, true);
-    pdfWindow.document.removeEventListener('selectionchange', handlers.selection);
-    pdfWindow.removeEventListener('resize', handlers.resize);
-    handlers.scrollElement?.removeEventListener('scroll', handlers.scroll);
+    // Zotero may destroy an iframe before the next discovery tick or add-on shutdown.
+    if (!isDeadObject(pdfWindow)) {
+      pdfWindow.removeEventListener('keydown', handlers.keyDown, true);
+      pdfWindow.removeEventListener('keyup', handlers.keyUp, true);
+      pdfWindow.removeEventListener('blur', handlers.blur, true);
+      pdfWindow.document.removeEventListener('selectionchange', handlers.selection);
+      pdfWindow.removeEventListener('resize', handlers.resize);
+    }
+    const scrollElement = handlers.scrollElement;
+    if (scrollElement && !isDeadObject(scrollElement))
+      scrollElement.removeEventListener('scroll', handlers.scroll);
     this.#dependencies.releaseView(pdfWindow);
   }
 }
