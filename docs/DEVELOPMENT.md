@@ -482,19 +482,18 @@ interferes with Gecko/React focus handling.
 `ReaderCommentEditor` owns pending and mounted input for one captured PDF view, the
 annotation-comment target, textarea DOM, IME state, autosave/focus timers, popup guard,
 theme subscription, and Zotero's private `_enableAnnotationDeletionFromComment` override.
-It claims the view before asynchronous annotation lookup. `ReaderSession` retains only
-its private Surface context; the read-only `mode` projection displays Insert while the
-editor owns input. `ReaderSessionState` has no writable mode flag. Other split views
-continue using their Surface grammar. `ReaderAnnotationNavigationState` owns the
+It claims the view before asynchronous annotation lookup. `ReaderSession` retains
+only Normal/Visual Surface state. `COMMENT` presents the view-owned editor;
+`NATIVE` presents the separate Reader-wide `ReaderNativeInput` passthrough owner.
+Other split views retain Surface grammar while comment input owns its captured view. `ReaderAnnotationNavigationState` owns the
 remembered selection fallback and reads Zotero's exposed selection as authoritative.
 The editor snapshots its save target so later annotation navigation cannot retarget a draft.
 
 Neo renders the textarea in the PDF document, accepts native typing and IME composition,
 and saves through the resolved annotation item with `saveTx()`. Enter inserts a newline;
 ordinary Escape saves and closes; edits autosave after two seconds. Composing Escape,
-`Process`, and keyCode 229 remain IME-owned. These semantics and the persisted
-`reader-insert` binding/preference contract are unchanged; disabling comment/Insert entry
-still retains the legacy bare Insert native-pass-through path pending a separate migration.
+`Process`, and keyCode 229 remain IME-owned. Disabling Normal comment entry retains
+native `i` passthrough until Escape without creating a Reader Insert mode.
 
 Phase 9.2 freezes this existing grammar, not the former Enter-save / Escape-cancel
 proposal. There is no cancel action, alternate save policy, or configurable
@@ -504,14 +503,20 @@ not a transaction/rollback or concurrent-edit merge interface.
 
 Settings → Reader → **Annotation comment editing** exposes one boolean gate for
 Normal-mode selected-annotation entry, stored as
-`extensions.zotero-neo.mode.insert.enabled` (default `true`).
+`extensions.zotero-neo.annotationCommentEditor.enabled` (default `true`).
 With it enabled, eligible Normal `i` / Enter opens the floating editor. With it
-disabled, Enter does not open that editor and `i` retains bare Insert native
-pass-through until Escape exits it. The gate does not disable Zotero's native
-comment fields or remove an existing saved annotation comment. Keep the stored
-key, its disabled intent, and the persisted `reader-insert` binding scope intact
-until Phase 5.7 supplies an independently approved compatibility migration;
-freezing the feature contract does not itself migrate preferences or bindings.
+disabled, Enter does not open that editor and `i` gives `ReaderNativeInput` keyboard
+ownership until Escape. This owner admits native keys/IME across that Reader's views
+without running Neo commands, and releases on Reader deactivation/disposal. The
+gate does not disable Zotero-native comment fields or remove saved comments.
+
+Phase 5.7 migrates the effective `mode.insert.enabled` boolean to this feature key
+only if the new key is absent; an existing canonical value wins. The old key is
+cleared only after successful persistence. There is no runtime fallback to it.
+Binding schema 17 deletes inactive `reader-insert:` / legacy `insert:` overrides,
+including explicit null unbindings, without archiving or activating replacement
+shortcuts. This deletion is owner-approved; unrelated bindings and unbindings are
+preserved. Settings no longer exposes Reader Insert. Note Insert remains unchanged.
 Select **Add note** is a separate annotation-creation operation and still opens
 the new annotation's comment editor; this switch does not gate that creation path.
 

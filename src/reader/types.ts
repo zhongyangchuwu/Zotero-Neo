@@ -12,7 +12,7 @@ export const COLORS = {
 } as const;
 
 export type AnnotationColor = (typeof COLORS)[keyof typeof COLORS];
-export type ReaderMode = 'normal' | 'visual' | 'insert';
+export type ReaderMode = 'normal' | 'visual';
 
 export type ReaderRuntime = _ZoteroTypes.ReaderInstance & {
   readonly _instanceID?: string;

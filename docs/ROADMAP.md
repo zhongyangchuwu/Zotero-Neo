@@ -65,7 +65,7 @@ checkpoint passed CI. Pending and mounted input belong to the captured PDF view,
 not a writable Reader mode flag.
 Enter newline, ordinary Escape save/close, two-second autosave, IME ownership,
 split-view isolation, native editable handoff, target snapshot, and close/reopen are
-preserved. `reader-insert` and its preference/native-pass-through compatibility remain.
+preserved. Reader now has only Normal/Select Surface modes; comment/native input is feature-owned.
 
 The separately observed mixed-generation Reader lifecycle gap
 [#115](https://github.com/zhongyangchuwu/Zotero-Neo/issues/115) is resolved through
@@ -78,20 +78,19 @@ install/update/restart.
 
 For Phase 9.2, the owner selected the existing Enter-newline / Escape-save-close /
 two-second-autosave contract. There is no cancel or alternate autosave/key policy.
-The one **Annotation comment editing** entry switch remains backed by
-`mode.insert.enabled`; Off retains bare Insert native pass-through. The current
-User Guide, Command Reference, and Development Guide define these boundaries.
+The one **Annotation comment editing** entry switch is backed by
+`annotationCommentEditor.enabled`; legacy true/false values migrate before the old
+key is cleared. Phase 5.7 removes `reader-insert` runtime contexts and, with explicit
+owner approval, deletes their inactive saved mappings/null unbindings without an
+archive. Other contexts and disabled `i` native-input intent are preserved.
 
 ## Next
 
 Prioritize narrow feature-input ownership before adding another broad interaction layer.
 
-1. **Execute Phase 5.7 only through an independently approved compatibility migration.**
-   Feature input ownership and the save/newline contract are settled; retiring
-   `reader-insert` still requires preserving stored bindings, explicit unbindings,
-   disabled-preference native-input intent, Settings, and exact input contexts.
-   Do not silently discard configuration or leave runtime aliases. The Phase 9.2
-   contract freeze does not authorize or implement this cutover.
+1. **Review Phase 9.3 overlays as separate input owners.** Reader Insert retirement
+   and its explicit deletion migration are complete in this candidate; do not use
+   overlay review to reopen frozen comment keys or introduce a generic state store.
 2. **Keep physical OS IME acceptance explicit.** Trusted Gecko composition and
    composition-aware key contracts do not prove candidate-window selection on the
    operating system.

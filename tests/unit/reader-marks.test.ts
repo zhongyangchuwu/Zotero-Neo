@@ -40,11 +40,18 @@ function harness() {
     container.scrollTop = scrollTop;
     return true;
   });
+  const preferenceValues = new Map<string, boolean | number | string>();
   const host: MarksHost = {
     preferences: {
-      get: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
-      has: () => false,
-      set: () => {},
+      get: <T extends boolean | number | string>(key: string, fallback: T): T =>
+        (preferenceValues.get(key) ?? fallback) as T,
+      has: (key: string) => preferenceValues.has(key),
+      set: (key: string, value: boolean | number | string) => {
+        preferenceValues.set(key, value);
+      },
+      clear: (key: string) => {
+        preferenceValues.delete(key);
+      },
     },
     itemForReader: () =>
       ({

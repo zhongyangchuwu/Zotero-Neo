@@ -65,13 +65,11 @@ describe('0.1.0 default keymap freeze', () => {
   it('keeps non-Normal mode keymaps exact with no sibling-mode inheritance', () => {
     const mainVisual = bindingsForMode(DEFAULT_BINDINGS, 'main-select');
     const readerVisual = bindingsForMode(DEFAULT_BINDINGS, 'reader-select');
-    const readerInsert = bindingsForMode(DEFAULT_BINDINGS, 'reader-insert');
     const noteInsert = bindingsForMode(DEFAULT_BINDINGS, 'note-insert');
 
     expect(press('main-select', ' ', mainVisual)).toMatchObject({ kind: 'pass' });
     expect(press('main-select', 'd', mainVisual)).toMatchObject({ kind: 'pass' });
     expect(press('reader-select', ':', readerVisual)).toMatchObject({ kind: 'pass' });
-    expect(press('reader-insert', ' ', readerInsert)).toMatchObject({ kind: 'pass' });
     expect(press('note-insert', ':', noteInsert)).toMatchObject({ kind: 'pass' });
     expect(press('note-insert', 'escape', noteInsert)).toMatchObject({
       kind: 'execute',

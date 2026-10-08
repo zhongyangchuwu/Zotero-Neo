@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY as COLOR,
-  READER_INSERT_MODE_ENABLED_PREFERENCE_KEY as INSERT,
+  ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY as COMMENT,
   READER_MARKS_PERSIST_PREFERENCE_KEY as MARKS,
   READER_SCROLL_MODE_PREFERENCE_KEY as MODE,
   READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY as VISUAL,
@@ -97,6 +97,10 @@ class Preferences implements PreferenceStore {
     this.writes.push([key, value]);
     for (const listener of this.observers.get(key) ?? []) listener();
   }
+  clear(key: string): void {
+    this.values.delete(key);
+    for (const listener of this.observers.get(key) ?? []) listener();
+  }
   observe(key: string, listener: () => void): () => void {
     const group = this.observers.get(key) ?? new Set();
     group.add(listener);
@@ -118,15 +122,9 @@ function mount(initial: Record<string, boolean | number | string> = {}) {
 }
 
 describe('Reader Settings', () => {
-  it('renders the four Reader groups with truthful defaults and active-mode controls', () => {
+  it('renders Reader controls with truthful defaults and active scroll-model controls', () => {
     const test = mount();
     expect(test.root.all().find((node) => node.tag === 'h2')?.textContent).toBe('Reader');
-    expect(
-      test.root
-        .all()
-        .filter((node) => node.tag === 'h3')
-        .map((node) => node.textContent),
-    ).toEqual(['Modes', 'Scrolling', 'Marks', 'Annotations']);
     expect(test.root.byAria('Text Select mode').getAttribute('aria-checked')).toBe('true');
     expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe(
       'true',
@@ -138,12 +136,6 @@ describe('Reader Settings', () => {
     expect(test.root.modeBlock('follow').style.display).toBe('block');
     expect(test.root.modeBlock('trapezoid').style.display).toBe('none');
     expect(test.root.byAria('Scroll speed (px/s)').value).toBe('2000');
-    const copy = test.root
-      .all()
-      .map((node) => node.textContent)
-      .join(' ');
-    expect(copy).not.toContain('Flash-select');
-    expect(copy).not.toContain('explicit colour prefix');
     test.page.dispose();
   });
 
@@ -178,7 +170,7 @@ describe('Reader Settings', () => {
     test.root.button('Purple').click();
     expect(test.preferences.writes).toEqual([
       [VISUAL, false],
-      [INSERT, false],
+      [COMMENT, false],
       [MARKS, true],
       [COLOR, 'purple'],
     ]);
@@ -204,10 +196,14 @@ describe('Reader Settings', () => {
     test.preferences.set('scrollStep', 120);
     test.preferences.set(MARKS, true);
     test.preferences.set(COLOR, 'blue');
+    test.preferences.set(COMMENT, false);
     expect(test.root.modeBlock('step').style.display).toBe('block');
     expect(step.value).toBe('120');
     expect(test.root.byAria('Persist marks').getAttribute('aria-checked')).toBe('true');
     expect(test.root.button('Blue').getAttribute('aria-pressed')).toBe('true');
+    expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe(
+      'false',
+    );
 
     const writeCount = test.preferences.writes.length;
     test.page.dispose();

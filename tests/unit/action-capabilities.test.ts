@@ -8,7 +8,6 @@ import {
   isMainExecutableAction,
 } from '../../src/main/action-capabilities';
 import {
-  READER_LOCAL_INSERT_ACTIONS,
   READER_LOCAL_VISUAL_ACTIONS,
   READER_NORMAL_ACTIONS,
   isReaderActionForMode,
@@ -98,7 +97,6 @@ describe('action capability ownership', () => {
     sameActions(actionsForBindingMode('main-select'), MAIN_SELECT_ACTIONS);
     sameActions(actionsForBindingMode('reader-normal'), READER_NORMAL_ACTIONS);
     sameActions(actionsForBindingMode('reader-select'), READER_LOCAL_VISUAL_ACTIONS);
-    sameActions(actionsForBindingMode('reader-insert'), READER_LOCAL_INSERT_ACTIONS);
 
     for (const action of [
       'findAllItems',
@@ -171,8 +169,6 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('visual', 'underlineSelection')).toBe(true);
     expect(isReaderActionForMode('visual', 'zoomIn')).toBe(false);
     expect(isReaderActionForMode('normal', 'flashText')).toBe(false);
-    expect(isReaderActionForMode('insert', 'exitMode')).toBe(true);
-    expect(isReaderActionForMode('insert', 'findAllItems')).toBe(false);
     expect(isReaderActionForMode('normal', 'not-an-action')).toBe(false);
   });
 });

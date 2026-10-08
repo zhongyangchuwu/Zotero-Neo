@@ -33,20 +33,21 @@ state:
 ```text
 reader-normal
 reader-select
-reader-insert
 main-normal
 main-select
 note-normal
 note-insert
 ```
 
-This is deliberately different from Reader runtime state. Reader still has the
-runtime states `normal | visual | insert`; the Reader controller maps those to
-binding scopes at the input boundary. This keeps a host-independent Reader state
-model from being confused with the persisted keymap schema.
+Reader Surface state is `normal | visual`, mapped to `reader-normal` / `reader-select`
+at the input boundary. Annotation-comment input is owned by `ReaderCommentEditor`
+for its captured PDF view; disabled-editor native passthrough is owned separately by
+`ReaderNativeInput` for that Reader. Neither adds a Surface mode or configurable
+binding context. The retired `reader-insert` scope has no runtime alias.
 
-Development builds using the earlier `normal | visual | insert | main` binding
-keys are migrated to the canonical scopes. Explicit unbindings remain explicit.
+Historical `normal | visual | main` binding keys migrate to their canonical scopes.
+The obsolete `insert` / `reader-insert` rows are deliberately deleted by schema 17;
+unbindings in surviving contexts remain explicit.
 
 The v0.2 Main-library interaction contract is defined in
 [INTERACTION_MODEL.md](INTERACTION_MODEL.md). In that model, Cursor, persistent
@@ -271,9 +272,11 @@ contract.
 The structural Reader cleanup for v0.1.0 is complete. Current ownership and
 interaction follow-up is tracked in
 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98) and the
-[roadmap](ROADMAP.md). Annotation Comment Editor feature-input ownership is a
-bounded candidate; retain `reader-insert` until its replacement and migration
-are proven.
+[roadmap](ROADMAP.md). Annotation Comment Editor ownership and its fixed key/save
+contract are implemented. Phase 5.7 retires Reader Insert: schema 17 deletes its
+inactive overrides/unbindings with owner approval, while the effective feature
+boolean migrates to `annotationCommentEditor.enabled`. Remaining overlays and
+Knowledge Capture are separate follow-up slices.
 
 The Note input grammar is already on the shared sequence/count/binding machinery;
 browser-native Insert editing remains outside Neo unless an explicit Note binding
