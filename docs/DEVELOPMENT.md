@@ -496,6 +496,25 @@ ordinary Escape saves and closes; edits autosave after two seconds. Composing Es
 `reader-insert` binding/preference contract are unchanged; disabling comment/Insert entry
 still retains the legacy bare Insert native-pass-through path pending a separate migration.
 
+Phase 9.2 freezes this existing grammar, not the former Enter-save / Escape-cancel
+proposal. There is no cancel action, alternate save policy, or configurable
+autosave interval. Escape also saves edits made after an earlier autosave; it
+does not restore the opening comment or undo an already committed save. This is
+not a transaction/rollback or concurrent-edit merge interface.
+
+Settings → Reader → **Annotation comment editing** exposes one boolean gate for
+Normal-mode selected-annotation entry, stored as
+`extensions.zotero-neo.mode.insert.enabled` (default `true`).
+With it enabled, eligible Normal `i` / Enter opens the floating editor. With it
+disabled, Enter does not open that editor and `i` retains bare Insert native
+pass-through until Escape exits it. The gate does not disable Zotero's native
+comment fields or remove an existing saved annotation comment. Keep the stored
+key, its disabled intent, and the persisted `reader-insert` binding scope intact
+until Phase 5.7 supplies an independently approved compatibility migration;
+freezing the feature contract does not itself migrate preferences or bindings.
+Select **Add note** is a separate annotation-creation operation and still opens
+the new annotation's comment editor; this switch does not gate that creation path.
+
 The view-owned Escape listener uses Gecko's privileged system event group because an
 earlier normal-group host handler can swallow textarea Escape. `privilegedEventTarget()`
 restores the native target's Xray wrapper so Gecko honors `mozSystemGroup`; options are

@@ -294,6 +294,25 @@ Reader Normal `f` enumerates visible internal, citation, and external PDF links 
 
 The marks grammar is Reader-owned and not represented by `ActionId` entries. `m` then a lowercase letter or digit sets a viewport mark; backtick then a letter/digit jumps; `dm` then a mark deletes one; `dM` deletes all; `<Space>m` toggles Marks Explorer. The mark character after the prefix is a label, not a count (`4j` counts movement; `` `1 `` jumps to mark `1`). Mark jumps restore marked viewport and can restore selected annotation association; successful jumps record one completed excursion, not each intermediate scroll. Explorer accepts direct mark labels, `j/k`, `G` or End to go last, Enter to jump, `d` to delete, `x` to delete all, Escape to close. It has no Home/gg shortcut; marks `j`, `k`, `g`, `d`, and `x` are not direct-character shortcuts in the explorer (use list selection and Enter); uppercase letters are not mark labels. Mark persistence is governed by Preferences; not a second navigation stack.
 
+### Annotation comment editor
+
+Eligible Reader Normal `i` / Enter opens the selected annotation's floating comment
+editor; Select `i` opens it for the newly created annotation. While that feature owns
+input, ordinary typing and Enter newline remain native, non-composing Escape saves
+the current draft and closes, and edits autosave after two seconds. These are feature
+controls, not inherited Reader Normal actions. There is no cancel/rollback command:
+Escape saves changes since the last autosave rather than discarding them. IME-owned
+Escape remains native.
+
+Settings → Reader → **Annotation comment editing** gates Normal-mode selected-annotation
+entry (default On); it persists as `extensions.zotero-neo.mode.insert.enabled`. Off
+prevents that entry but preserves bare `i` native-pass-through Insert compatibility
+and its Escape exit. It does not disable Zotero-native comments. The existing
+`reader-insert` scope/key remains until a separately approved migration; this contract
+freeze adds no alternative key or autosave settings.
+Select **Add note** still creates an annotation and opens its comment editor; it is
+not gated by the Normal-mode entry switch.
+
 ### Selection Actions, Plugin Manager, Settings, and Selection Panel
 
 Selection Actions (`a`/Enter in Reader Select) offers capture-to-note, underline, add note and optional Translate integration. Escape cancels; action availability depends on active Reader selection and optional integration. Capture-to-note opens the shared Notes chooser and appends quoted captured context only after target revalidation; it is distinct from adding an annotation comment.
