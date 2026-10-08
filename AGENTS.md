@@ -11,25 +11,30 @@ packaging.
 ## Build / Install / Test
 
 ### Building the plugin
+
 ```bash
 ./tools/build.sh
 ```
+
 On Windows (no bash needed): `powershell -ExecutionPolicy Bypass -File tools\build.ps1`
 Creates `zotero-neo.xpi` — a deterministic archive containing generated runtime
 bundles, the preference pane markup, the manifest, and icons.
 
 ### Installing
+
 1. Open Zotero → Tools → Add-ons → Gear icon → "Install Add-on From File..."
 2. Select `zotero-neo.xpi`
 3. Restart Zotero
 
 ### Debugging
+
 - Use `Zotero.debug('[ZoteroNeo] message')` for logging — output appears in Zotero's
   Error Console (Help → Developer → Developer Options → Error Console).
 - Startup and reader injection state changes are also written to
   `zotero-neo-startup.log` in the Zotero profile.
 
 ### Testing
+
 `npm run verify` runs formatting, strict TypeScript checks, Vitest contracts,
 the esbuild package build, and the XPI member check. GitHub Actions runs the
 repository CI workflow; inspect the current workflow definition rather than
@@ -94,6 +99,7 @@ repository. Prefer existing repository workflows and narrow GitHub operations
 over ad-hoc build-script edits.
 
 Zotero GUI behavior still requires manual verification:
+
 1. Configure the dedicated profile once with `npm run dev:setup`, then launch
    it with `npm run dev:start` as documented in `docs/DEVELOPMENT.md`.
 2. For ordinary local iteration, run `npm run dev` to rebuild and hot-reload
@@ -105,6 +111,7 @@ Zotero GUI behavior still requires manual verification:
 ## Code Style
 
 ### Indentation
+
 Use **2 spaces** for indentation. Do not use tabs.
 
 ### Source Layout
@@ -149,27 +156,35 @@ vendor/                    pinned, licensed third-party source/build snapshots
   events.
 
 ### Formatting
+
 - Use single quotes unless a host format requires otherwise.
 - Prettier formats all TypeScript, test, and build-tool sources; do not hand-format.
 - Keep lines readable; extract a named helper when a host boundary becomes dense.
 
 ### Error Handling
+
 - Expected or non-critical host failures may use empty catches.
 - Log unexpected errors with `Zotero.debug()` through the shared logger.
 
 ### State Management
+
 - `ReaderController` owns reader sessions in a `Map` keyed by `instanceID`.
 - `MainWindowController` owns main-window sessions in a `Map` keyed by window.
 - Session cleanup owns listeners, timers, observers, DOM, and host patches.
+- Reader Surface mode is only `normal | visual`; `ReaderCommentEditor` owns exact-view text input and `ReaderNativeInput` owns Reader-wide native passthrough until Escape/deactivation. Neither is a Reader mode or binding scope.
 
 ### Cross-Compartment Security (Chrome ↔ Content)
+
 Objects and arrays passed across the chrome/content boundary **must** be cloned:
+
 ```ts
-Components.utils.cloneInto(value, targetWindow)
+Components.utils.cloneInto(value, targetWindow);
 ```
+
 Failing to do this throws a security error.
 
 ### Documentation
+
 Add JSDoc-style block comments for non-obvious methods explaining parameters and
 side effects. Inline comments are welcome for host constraints and complex logic.
 
@@ -212,26 +227,26 @@ Selection or mutate notes directly.
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/bootstrap.ts` | Gecko Bootstrap lifecycle entry point |
-| `src/addon.ts` | Runtime composition and preference registration |
-| `src/i18n/` | Shared application localization, action labels, and locale catalogs |
-| `src/input/` | Canonical bindings and action metadata |
-| `src/reader/controller.ts` | Reader session orchestration, input, actions, selection, annotation, and scroll behavior |
-| `src/reader/host-key-bridge.ts` | Private PdfView key/focus patch lifecycle |
-| `src/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
-| `src/reader/navigation.ts` | Reader history/zoom/page/search/split/focus host operations |
-| `src/reader/selection-range.ts` | Temporary DOM Select range state, motions, and view markers |
-| `src/main/controller.ts` | Main-window key dispatch and lifecycle |
-| `src/preferences/index.ts` | Legacy Preferences registration and behavior |
-| `tools/build.mjs` | esbuild/XPI package pipeline |
-| `tools/check-package.mjs` | Generated-XPI member contract |
-| `tools/check-release.mjs` | Release metadata validator |
-| `.github/workflows/build.yml` | Ubuntu verification/build and guarded tag release |
-| `docs/DEVELOPMENT.md` | Build, architecture, release, and maintenance constraints |
-| `manifest.json` | Extension manifest |
-| `tools/build.sh` / `tools/build.ps1` | POSIX and Windows verification/build wrappers |
+| File                                 | Purpose                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `src/bootstrap.ts`                   | Gecko Bootstrap lifecycle entry point                                                    |
+| `src/addon.ts`                       | Runtime composition and preference registration                                          |
+| `src/i18n/`                          | Shared application localization, action labels, and locale catalogs                      |
+| `src/input/`                         | Canonical bindings and action metadata                                                   |
+| `src/reader/controller.ts`           | Reader session orchestration, input, actions, selection, annotation, and scroll behavior |
+| `src/reader/host-key-bridge.ts`      | Private PdfView key/focus patch lifecycle                                                |
+| `src/reader/view-lifecycle.ts`       | Primary/secondary PDF-view discovery, listeners, and release                             |
+| `src/reader/navigation.ts`           | Reader history/zoom/page/search/split/focus host operations                              |
+| `src/reader/selection-range.ts`      | Temporary DOM Select range state, motions, and view markers                              |
+| `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
+| `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |
+| `tools/build.mjs`                    | esbuild/XPI package pipeline                                                             |
+| `tools/check-package.mjs`            | Generated-XPI member contract                                                            |
+| `tools/check-release.mjs`            | Release metadata validator                                                               |
+| `.github/workflows/build.yml`        | Ubuntu verification/build and guarded tag release                                        |
+| `docs/DEVELOPMENT.md`                | Build, architecture, release, and maintenance constraints                                |
+| `manifest.json`                      | Extension manifest                                                                       |
+| `tools/build.sh` / `tools/build.ps1` | POSIX and Windows verification/build wrappers                                            |
 
 ## Important Constraints
 

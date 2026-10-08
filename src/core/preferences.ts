@@ -15,12 +15,13 @@ import {
   migrateUnifiedSpaceLeaderOverrides,
   migrateNoteBindingOverrides,
   migrateSemanticKeymapOverrides,
+  migrateRetiredReaderInsertOverrides,
   resolveBindings,
   type BindingMap,
 } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
-export const BINDING_SCHEMA_VERSION = 16;
+export const BINDING_SCHEMA_VERSION = 17;
 export const BINDINGS_PREFERENCE_KEY = 'bindings' as const;
 export const LANGUAGE_PREFERENCE_KEY = 'language' as const;
 export const TAG_SEPARATOR_PREFERENCE_KEY = 'tags.separator' as const;
@@ -56,18 +57,20 @@ export function noteEditorEnabled(preferences: PreferenceReader): boolean {
   return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
 }
 
-export type ReaderModePreference = 'visual' | 'insert';
+export type ReaderModePreference = 'visual';
 export type ScrollMode = 'step' | 'follow' | 'trapezoid';
 export type HighlightColorName = 'yellow' | 'red' | 'green' | 'blue' | 'purple';
 
 export const READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY = 'mode.visual.enabled' as const;
-export const READER_INSERT_MODE_ENABLED_PREFERENCE_KEY = 'mode.insert.enabled' as const;
+export const ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY =
+  'annotationCommentEditor.enabled' as const;
 export const READER_MARKS_PERSIST_PREFERENCE_KEY = 'marks.persist' as const;
 export const READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY = 'defaultHighlightColor' as const;
 export const READER_SCROLL_MODE_PREFERENCE_KEY = 'scroll.mode' as const;
 export const READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY = 'smoothScroll.stopOnRelease' as const;
 
 const LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY = 'smoothScroll' as const;
+const LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY = 'mode.insert.enabled' as const;
 
 export const READER_SCROLL_NUMBER_SPECS = {
   scrollStep: { key: 'scrollStep', defaultValue: 60, minimum: 10, maximum: 500 },
@@ -120,13 +123,13 @@ export type SmoothScrollConfig = Omit<ReaderScrollConfig, 'scrollStep'>;
 
 export function readerModeEnabled(
   preferences: PreferenceReader,
-  mode: ReaderModePreference,
+  _mode: ReaderModePreference,
 ): boolean {
-  const key =
-    mode === 'visual'
-      ? READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY
-      : READER_INSERT_MODE_ENABLED_PREFERENCE_KEY;
-  return preferences.get(key, true);
+  return preferences.get(READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY, true);
+}
+
+export function annotationCommentEditorEnabled(preferences: PreferenceReader): boolean {
+  return preferences.get(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, true);
 }
 
 export function readerMarksPersist(preferences: PreferenceReader): boolean {
@@ -223,6 +226,7 @@ export interface PreferenceReader {
 
 export interface PreferenceWriter extends PreferenceReader {
   set(key: string, value: boolean | number | string): void;
+  clear(key: string): void;
 }
 
 export function migrateBindingPreferences(preferences: PreferenceWriter): void {
@@ -244,6 +248,7 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
   if (version < 14) migrated = migrateMainSpaceSelectionOverrides(migrated);
   if (version < 15) migrated = migrateUnifiedSpaceLeaderOverrides(migrated);
   if (version < 16) migrated = migrateMainSelectionCommandOverrides(migrated);
+  if (version < 17) migrated = migrateRetiredReaderInsertOverrides(migrated);
   if (migrated !== raw) preferences.set(BINDINGS_PREFERENCE_KEY, migrated);
   preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }
@@ -257,8 +262,17 @@ export function scrollModeFromPreferences(preferences: PreferenceReader): Scroll
   return 'follow';
 }
 
-/** Persists only the historical smoothScroll boolean into the canonical scroll.mode key. */
+/** Migrates retired Reader preferences before runtime consumers read canonical values. */
 export function migrateReaderPreferences(preferences: PreferenceWriter): void {
+  if (preferences.has?.(LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY)) {
+    if (!preferences.has(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY)) {
+      preferences.set(
+        ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
+        preferences.get(LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY, true),
+      );
+    }
+    preferences.clear(LEGACY_READER_INSERT_MODE_ENABLED_PREFERENCE_KEY);
+  }
   const configured = preferences.get(READER_SCROLL_MODE_PREFERENCE_KEY, '');
   if (isScrollMode(configured) || !preferences.has?.(LEGACY_SMOOTH_SCROLL_PREFERENCE_KEY)) return;
   preferences.set(

@@ -30,15 +30,14 @@ Each command table gives the canonical `ActionId`, its default binding(s), and t
 | --- | --- | --- |
 | Reader | Normal (`reader-normal`) | Reading, page/view navigation, annotations, tabs, shared actions, and Normal command palette. |
 | Reader | Select (`reader-select`, internal Visual) | Active PDF text-range refinement and selection actions. |
-| Reader | Insert indicator / retained `reader-insert` scope | Annotation Comment Editor owns input in its PDF view; native editable controls keep native ownership. |
 | Main | Normal (`main-normal`) | Zotero library tree/items, search, Selection workset, commands and palette. |
 | Main | Select (`main-select`) | Temporary Visual range in the visible Main item rows. |
 | Note | Normal (`note-normal`) | Note motions/operators and supported shared actions. |
 | Note | Insert (`note-insert`) | Native note-editor text input plus the explicit directional pane-focus bindings. |
 
-These mode scopes are distinct from runtime surface capability. Reader Select applies only when an eligible PDF text selection can be owned; Main Select operates on visible item rows, not the collection tree. A binding editor offers only actions in the selected mode's capability catalog. Reader Insert's only Reader-owned action is `exitMode`; Note Insert additionally supports four directional focus actions. Native editors, chooser inputs, and composition events are not silently converted to Neo Normal commands.
+These mode scopes are distinct from runtime surface capability. Reader Select applies only when an eligible PDF text selection can be owned; Main Select operates on visible item rows, not the collection tree. A binding editor offers only actions in the selected mode's capability catalog. Reader has no Insert scope; comment and native input owners use fixed feature controls. Note Insert retains its explicit directional focus actions. Native editors, chooser inputs, and composition events are not silently converted to Neo Normal commands.
 
-Reader `enterVisual` (`v`) starts/adopts a text selection; `enterInsert` (`i`) opens annotation-comment input when eligible, with an Insert indicator derived from editor ownership rather than a writable Reader mode flag. Opening it normalizes Select to Normal; other split views retain Surface grammar. Settings gates Select and comment/Insert entry. With comment/Insert disabled, `i` retains the legacy bare Insert native-pass-through state and Escape exit until an explicit migration retires it. Main `mainEnterSelect` (`v`) starts a temporary item-row range, and its finish/cancel actions end it. Note `enterInsert` begins editor insertion; Escape is the default exit. Note editor Vim mode remains independently configurable.
+Reader `enterVisual` (`v`) starts/adopts a text selection; `enterInsert` (`i`) starts feature-owned comment input when eligible rather than entering another Reader mode. Opening it normalizes Select to Normal; other split views retain Surface grammar. Settings gates Select and Normal selected-annotation entry. When comment entry is disabled, `i` starts a Reader-wide native input owner until Escape. Main `mainEnterSelect` (`v`) starts a temporary item-row range, and its finish/cancel actions end it. Note `enterInsert` still begins Note Insert; Escape is its default exit. Note editor Vim mode remains independently configurable.
 
 ## Key notation and input grammar
 
@@ -188,7 +187,7 @@ Reader `v` enters Select and uses Flash to choose a text range (or adopts an exi
 | `underlineSelection` | **Unbound** | Supported Select action via Selection Actions when its built-in action is available; no default key. |
 
 Flash labels disambiguate query typing from target selection. A label's exact completed prefix activates its target immediately; Enter activates the first/nearest current result. If many targets exist, Neo shows a match count before drawing per-target label geometry until the query narrows. Escape cancels and preserves the selection. Selection Actions built-ins include Capture to note, Underline, and Add note; colored highlights, copy, and search have direct bindings. Optional Translate appears only when Zotero Translate integration is available; its result is displayed in the action surface. Keyboard-created selection is copied through Neo's DOM range, not Zotero's separate native semantic range. See [Input methods](INPUT_METHODS.md) and the [User Guide selection workflow](USER_GUIDE.md#selection-workflow).
-Annotation Comment Editor is a view-scoped Feature Input Owner, not a general Reader command mode. Pending and mounted ownership project the retained Insert indicator; its textarea receives native text and IME, Enter inserts a newline, and ordinary Escape saves and closes. Composing Escape stays with the IME. Edits autosave after two seconds of inactivity. Saving uses the captured annotation target rather than the later native selection. Exit releases input synchronously; late open/autosave/save completion cannot remount or change a newer input owner's focus/status. If the target annotation no longer resolves, saving cannot complete; ordinary Zotero editable controls keep native ownership. The `reader-insert` binding/preference contract and disabled-preference bare Insert path remain compatible. In Reader Select, counts are ignored: each motion extends once and each selection action runs once.
+Annotation Comment Editor is a view-scoped Feature Input Owner, not a Reader mode. Pending/mounted ownership displays COMMENT; native text and IME remain browser-owned, Enter inserts a newline, and ordinary Escape saves/closes. Composing Escape stays with IME. Edits autosave after two seconds. Saving uses the captured annotation target; exit releases input synchronously and late completion cannot change a newer owner's focus/status. Missing targets cannot be saved. Disabled Normal entry retains Reader-wide NATIVE passthrough until Escape, not a Reader Insert mode. In Reader Select, counts are ignored: each motion extends once and each selection action runs once.
 
 ## Main window
 
@@ -305,11 +304,12 @@ Escape saves changes since the last autosave rather than discarding them. IME-ow
 Escape remains native.
 
 Settings → Reader → **Annotation comment editing** gates Normal-mode selected-annotation
-entry (default On); it persists as `extensions.zotero-neo.mode.insert.enabled`. Off
-prevents that entry but preserves bare `i` native-pass-through Insert compatibility
-and its Escape exit. It does not disable Zotero-native comments. The existing
-`reader-insert` scope/key remains until a separately approved migration; this contract
-freeze adds no alternative key or autosave settings.
+entry (default On); it persists as `extensions.zotero-neo.annotationCommentEditor.enabled`.
+Off preserves `i` native passthrough and its Escape exit without disabling Zotero-native
+comments. Existing mode-preference true/false values migrate to this feature key;
+an existing canonical value wins and the old key is removed. Schema 17 deletes the
+inactive `reader-insert:` / legacy `insert:` mappings and null unbindings with owner
+approval, without archiving, new shortcuts, or runtime aliases. Other contexts remain.
 Select **Add note** still creates an annotation and opens its comment editor; it is
 not gated by the Normal-mode entry switch.
 
@@ -355,8 +355,8 @@ This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every
 | `clearSearch` | Reader Normal `<Esc>` | Reader search clear/close |
 | `enterVisual` | Reader Normal `v` | Reader Select entry |
 | `openSelectionActions` | Reader Select `a`, `<Enter>`, `<Return>` | Selection Actions |
-| `enterInsert` | Reader Normal `i`; Note Normal `i` | Reader comment / Note editor Insert transition |
-| `exitMode` | Reader Select `<Esc>`/`v`; Reader Insert `<Esc>`; Note Normal `<Esc>`; Note Insert `<Esc>` | Mode exit; Main Select uses dedicated cancel action |
+| `enterInsert` | Reader Normal `i`; Note Normal `i` | Reader feature/native input ownership; Note editor Insert transition |
+| `exitMode` | Reader Select `<Esc>`/`v`; Note Normal `<Esc>`; Note Insert `<Esc>` | Surface mode exit; Reader feature Escape is fixed input-owner control, Main Select uses dedicated cancel |
 | `extendDown` | Reader Select `j` | Reader Select range motion |
 | `extendUp` | Reader Select `k` | Reader Select range motion |
 | `extendLeft` | Reader Select `h` | Reader Select range motion |
@@ -611,7 +611,6 @@ The table is the complete default lookup: each canonical `mode:sequence` is pair
 | `reader-select:o` | `swapVisualEnds` |
 | `reader-select:v` | `exitMode` |
 | `reader-select:<Esc>` | `exitMode` |
-| `reader-insert:<Esc>` | `exitMode` |
 | `main-normal:<C-o>` | `navigateBack` |
 | `main-normal:<C-i>` | `navigateForward` |
 | `main-normal:<Space>ff` | `findAllItems` |

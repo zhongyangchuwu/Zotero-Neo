@@ -26,6 +26,7 @@ import type {
   ReaderViewRuntime,
 } from '../../src/reader/types';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
+import { ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -63,6 +64,21 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Components', originalComponents);
 });
 
+function readerPreferences(initial: Readonly<Record<string, boolean | number | string>> = {}) {
+  const values = new Map<string, boolean | number | string>(Object.entries(initial));
+  return {
+    has: (key: string) => values.has(key),
+    get: <T extends boolean | number | string>(key: string, fallback: T): T =>
+      (values.get(key) ?? fallback) as T,
+    set: (key: string, value: boolean | number | string) => {
+      values.set(key, value);
+    },
+    clear: (key: string) => {
+      values.delete(key);
+    },
+  };
+}
+
 function createReaderRegistryHarness() {
   const service = {
     _readers: [] as ReaderRuntime[],
@@ -90,11 +106,7 @@ function createReaderRegistryHarness() {
   };
   Reflect.set(globalThis, 'Zotero', { Reader: service });
   const dependencies = {
-    preferences: {
-      has: () => false,
-      get: (_key: string, fallback: boolean | number | string) => fallback,
-      set: () => {},
-    },
+    preferences: readerPreferences(),
     logger: { debug: () => {}, diagnostic: () => {} },
     main: noopReaderMainOperations,
   } as ReaderControllerDependencies;
@@ -224,11 +236,7 @@ describe('Reader event lifecycle', () => {
     };
     Reflect.set(globalThis, 'Zotero', { Reader: readerService });
     const dependencies = {
-      preferences: {
-        has: () => false,
-        get: (_key: string, fallback: boolean | number | string) => fallback,
-        set: () => {},
-      },
+      preferences: readerPreferences(),
       logger: { debug: () => {}, diagnostic: () => {} },
       main: noopReaderMainOperations,
     } as ReaderControllerDependencies;
@@ -283,11 +291,7 @@ describe('Reader event lifecycle', () => {
     };
     Reflect.set(globalThis, 'Zotero', { Reader: readerService });
     const dependencies = {
-      preferences: {
-        has: () => false,
-        get: (_key: string, fallback: boolean | number | string) => fallback,
-        set: () => {},
-      },
+      preferences: readerPreferences(),
       logger: { debug: () => {}, diagnostic: () => {} },
       main: noopReaderMainOperations,
     } as ReaderControllerDependencies;
@@ -443,14 +447,10 @@ function createHistorySession(
       _primaryView: internal._primaryView ?? { _iframeWindow: pdfWindow },
     },
   } as ReaderRuntime;
+  const preferences = readerPreferences(preferenceValues);
   const controller = {
     dependencies: {
-      preferences: {
-        has: (key: string) => Object.hasOwn(preferenceValues, key),
-        get: (key: string, fallback: boolean | number | string) =>
-          preferenceValues[key] ?? fallback,
-        set: () => {},
-      },
+      preferences,
       logger: {
         debug: (message: string) => debug.push(message),
         diagnostic: (message: string) => diagnostics.push(message),
@@ -481,6 +481,7 @@ function createHistorySession(
   session.state.indicator = indicator;
   return {
     session,
+    preferences,
     indicator,
     debug,
     diagnostics,
@@ -763,14 +764,14 @@ describe('Reader global history actions', () => {
     created.session.dispose();
   });
 
-  it('leaves global history chords untouched in Insert mode and editable controls', () => {
+  it('leaves global history chords untouched during native passthrough and in editable controls', () => {
     const navigateBackFromReader = vi.fn();
     const created = createHistorySession(
       {},
       { navigateBackFromReader },
       DEFAULT_BINDINGS,
       () => {},
-      { 'mode.insert.enabled': false },
+      { [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false },
     );
     created.session.focusAndHandle(readerKey('i').event);
     const insert = controlKey('o');
@@ -814,7 +815,7 @@ describe('Reader global history actions', () => {
   it('forwards composing keys rather than claiming bound Reader shortcuts', () => {
     const originalKeyDown = vi.fn();
     const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
-      'mode.insert.enabled': false,
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected Reader PDF view');
@@ -984,11 +985,11 @@ describe('reader zoom shortcuts', () => {
     vi.clearAllTimers();
   });
 
-  it('leaves zoom keys native in Insert mode and editable controls', () => {
+  it('leaves zoom keys native during passthrough and in editable controls', () => {
     const zoomIn = vi.fn();
     const zoomReset = vi.fn();
     const created = createHistorySession({ zoomIn, zoomReset }, {}, DEFAULT_BINDINGS, () => {}, {
-      'mode.insert.enabled': false,
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     created.session.focusAndHandle(readerKey('i').event);
     const insert = readerKey('+');
@@ -1629,10 +1630,10 @@ describe('Reader leader timer guards', () => {
     created.session.dispose();
   });
 
-  it('keeps Reader Insert text native and Escape returns to Normal', async () => {
+  it('keeps bare passthrough native and Escape releases input back to Surface commands', async () => {
     const originalKeyDown = vi.fn();
     const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
-      'mode.insert.enabled': false,
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected Reader PDF view');
@@ -1641,8 +1642,8 @@ describe('Reader leader timer guards', () => {
     created.session.start();
     created.session.state.indicator = created.indicator;
     created.session.focusAndHandle(readerKey('i').event);
-    expect(created.session.mode).toBe('insert');
-    expect(created.indicator.textContent).toBe('-- INSERT --');
+    expect(created.session.mode).toBe('normal');
+    expect(created.indicator.textContent).toBe('-- NATIVE --');
     const native = readerKey('f');
     created.session.focusAndHandle(native.event);
     expect(native.preventDefault).not.toHaveBeenCalled();
@@ -1653,6 +1654,10 @@ describe('Reader leader timer guards', () => {
     const escape = readerKey('Escape');
     created.session.focusAndHandle(escape.event);
     expect(escape.preventDefault).toHaveBeenCalledOnce();
+    const prefix = readerKey(' ');
+    created.session.focusAndHandle(prefix.event);
+    expect(prefix.preventDefault).toHaveBeenCalledOnce();
+    created.session.focusAndHandle(readerKey('Escape').event);
     await Promise.resolve();
     await Promise.resolve();
     expect(created.session.mode).toBe('normal');
@@ -1660,9 +1665,9 @@ describe('Reader leader timer guards', () => {
     expect(created.session.input.countBuffer).toBe('');
     created.session.dispose();
   });
-  it('keeps composing Escape and Backspace outside Reader prefix and Insert commands', () => {
+  it('keeps composing Escape and Backspace outside Reader prefix and native-owner commands', () => {
     const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
-      'mode.insert.enabled': false,
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     created.session.focusAndHandle(readerKey(' ').event);
     const escape = readerKey('Escape', { isComposing: true });
@@ -1679,13 +1684,164 @@ describe('Reader leader timer guards', () => {
     const insertEscape = readerKey('Escape', { isComposing: true });
     created.session.focusAndHandle(insertEscape.event);
     expect(insertEscape.preventDefault).not.toHaveBeenCalled();
-    expect(created.session.mode).toBe('insert');
+    const native = readerKey('j');
+    created.session.focusAndHandle(native.event);
+    expect(native.preventDefault).not.toHaveBeenCalled();
     created.session.dispose();
   });
 });
 
+describe('Reader native passthrough ownership', () => {
+  it('stops smooth motion and excludes grammar, overlays and direct commands while native input owns keys', () => {
+    const zoomIn = vi.fn();
+    const navigateBackFromReader = vi.fn();
+    const openCommandPalette = vi.fn();
+    const created = createHistorySession(
+      { zoomIn },
+      { navigateBackFromReader },
+      DEFAULT_BINDINGS,
+      openCommandPalette,
+      {
+        ...smoothPreferences('follow'),
+        [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
+      },
+    );
+    const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
+    created.session.focusAndHandle(readerKey('j').event);
+    runSmoothFrame(created, 100);
+    runSmoothFrame(created, 200);
+    expect(container.scrollBy).toHaveBeenCalled();
+
+    created.session.focusAndHandle(readerKey('i').event);
+    const scrollCount = vi.mocked(container.scrollBy).mock.calls.length;
+    for (const key of ['j', ' ', '3', 'f', '+']) {
+      const native = readerKey(key);
+      created.session.focusAndHandle(native.event);
+      expect(native.preventDefault).not.toHaveBeenCalled();
+      expect(native.stopImmediatePropagation).not.toHaveBeenCalled();
+    }
+    const history = controlKey('o');
+    created.session.focusAndHandle(history.event);
+    expect(history.preventDefault).not.toHaveBeenCalled();
+    executeReaderAction(created.session, 'zoomIn', created.pdfWindow);
+    executeReaderAction(created.session, 'openCommandPalette', created.pdfWindow);
+    created.session.acceptSelectionParams({ annotation: { text: 'native selection' } });
+    runSmoothFrame(created, 300);
+    expect(container.scrollBy).toHaveBeenCalledTimes(scrollCount);
+    expect(zoomIn).not.toHaveBeenCalled();
+    expect(navigateBackFromReader).not.toHaveBeenCalled();
+    expect(openCommandPalette).not.toHaveBeenCalled();
+    expect(created.session.input.keyBuffer).toBe('');
+    expect(created.session.input.countBuffer).toBe('');
+    expect(created.bodyChildren).toEqual([]);
+    created.session.dispose();
+  });
+
+  it('owns both split views but not another Reader and releases through Escape in either view', () => {
+    const sibling = createHistorySession();
+    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
+    });
+    const primary = created.reader._internalReader?._primaryView;
+    if (!primary) throw new Error('Expected primary Reader PDF view');
+    const primaryHost = vi.fn();
+    primary._onKeyDown = primaryHost;
+    const secondaryHost = vi.fn();
+    const secondaryListeners = new Map<string, EventListener>();
+    const secondaryWindow = {
+      document: {
+        getElementById: () => null,
+        querySelector: () => null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+      addEventListener: (type: string, listener: EventListener) =>
+        secondaryListeners.set(type, listener),
+      removeEventListener: (type: string) => secondaryListeners.delete(type),
+      focus: vi.fn(),
+      getSelection: () => null,
+    } as unknown as PdfWindow;
+    const secondary = { _iframeWindow: secondaryWindow, _onKeyDown: secondaryHost };
+    Reflect.set(created.reader._internalReader ?? {}, '_secondaryView', secondary);
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+    created.session.focusAndHandle(readerKey('i').event);
+
+    const primaryNative = readerKey(' ');
+    primary._onKeyDown?.(primaryNative.event);
+    created.session.focusAndHandle(primaryNative.event);
+    expect(primaryNative.preventDefault).not.toHaveBeenCalled();
+    expect(primaryHost).toHaveBeenCalledWith(primaryNative.event);
+    const secondaryNative = readerKey(' ');
+    secondary._onKeyDown(secondaryNative.event);
+    secondaryListeners.get('keydown')?.(secondaryNative.event);
+    expect(secondaryNative.preventDefault).not.toHaveBeenCalled();
+    expect(secondaryHost).toHaveBeenCalledWith(secondaryNative.event);
+    const siblingPrefix = readerKey(' ');
+    sibling.session.focusAndHandle(siblingPrefix.event);
+    expect(siblingPrefix.preventDefault).toHaveBeenCalledOnce();
+
+    const composing = readerKey('Escape', { keyCode: 229 });
+    secondary._onKeyDown(composing.event);
+    secondaryListeners.get('keydown')?.(composing.event);
+    expect(composing.preventDefault).not.toHaveBeenCalled();
+    expect(secondaryHost).toHaveBeenCalledWith(composing.event);
+    const escape = readerKey('Escape');
+    secondaryListeners.get('keydown')?.(escape.event);
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    const resumed = readerKey(' ');
+    created.session.focusAndHandle(resumed.event);
+    expect(resumed.preventDefault).toHaveBeenCalledOnce();
+    created.session.dispose();
+    sibling.session.dispose();
+    expect(primary._onKeyDown).toBe(primaryHost);
+    expect(secondary._onKeyDown).toBe(secondaryHost);
+    expect(secondaryListeners.size).toBe(0);
+  });
+
+  it.each(['deactivate', 'dispose'] as const)(
+    'releases native ownership on %s without registering extra listeners or leaving host patches',
+    (operation) => {
+      const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+        [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
+      });
+      const addListener = vi.fn();
+      const removeListener = vi.fn();
+      Reflect.set(created.pdfWindow, 'addEventListener', addListener);
+      Reflect.set(created.pdfWindow, 'removeEventListener', removeListener);
+      const primary = created.reader._internalReader?._primaryView;
+      if (!primary) throw new Error('Expected primary Reader PDF view');
+      const nativeHost = vi.fn();
+      primary._onKeyDown = nativeHost;
+      Reflect.set(created.reader, '_iframeWindow', undefined);
+      created.session.start();
+      const listenerCount = addListener.mock.calls.length;
+      created.session.focusAndHandle(readerKey('i').event);
+      expect(addListener).toHaveBeenCalledTimes(listenerCount);
+
+      if (operation === 'deactivate') {
+        created.session.deactivateInteraction();
+        const resumed = readerKey(' ');
+        created.session.focusAndHandle(resumed.event);
+        expect(resumed.preventDefault).toHaveBeenCalledOnce();
+      }
+      created.session.dispose();
+      expect(removeListener).toHaveBeenCalledTimes(listenerCount);
+      expect(primary._onKeyDown).toBe(nativeHost);
+      const native = readerKey('j');
+      primary._onKeyDown?.(native.event);
+      expect(nativeHost).toHaveBeenCalledWith(native.event);
+      expect(native.preventDefault).not.toHaveBeenCalled();
+    },
+  );
+});
+
 describe('Reader annotation comment input ownership', () => {
-  function createCommentSession(loadDataType: () => Promise<void> = async () => {}) {
+  function createCommentSession(
+    loadDataType: () => Promise<void> = async () => {},
+    preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
+  ) {
     const annotation = {
       id: 51,
       key: 'ANN-1',
@@ -1704,22 +1860,49 @@ describe('Reader annotation comment input ownership', () => {
         return annotation;
       }),
     });
-    const created = createHistorySession({
-      _state: { selectedAnnotationIDs: [annotation.key] },
-      navigate: vi.fn(),
-    });
+    const created = createHistorySession(
+      {
+        _state: { selectedAnnotationIDs: [annotation.key] },
+        navigate: vi.fn(),
+      },
+      {},
+      DEFAULT_BINDINGS,
+      () => {},
+      preferenceValues,
+    );
     Reflect.set(created.reader, 'itemID', attachment.id);
     return { ...created, annotation };
   }
 
-  it('projects pending comment input as Insert and Escape releases it before a late open resolves', async () => {
+  it('keeps disabled Normal Enter a no-op while disabled i admits native input', async () => {
+    const created = createCommentSession(async () => {}, {
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
+    });
+    created.session.focusAndHandle(readerKey('Enter').event);
+    await settleReaderMicrotasks();
+    expect(created.bodyChildren).toEqual([]);
+    expect(created.annotation.saveTx).not.toHaveBeenCalled();
+    const normalPrefix = readerKey(' ');
+    created.session.focusAndHandle(normalPrefix.event);
+    expect(normalPrefix.preventDefault).toHaveBeenCalledOnce();
+    created.session.focusAndHandle(readerKey('Escape').event);
+
+    created.session.focusAndHandle(readerKey('i').event);
+    const nativePrefix = readerKey(' ');
+    created.session.focusAndHandle(nativePrefix.event);
+    expect(nativePrefix.preventDefault).not.toHaveBeenCalled();
+    expect(created.bodyChildren).toEqual([]);
+    created.session.dispose();
+  });
+
+  it('owns pending comment input without changing Surface mode and Escape retires a late open', async () => {
     const loading = Promise.withResolvers<void>();
     const created = createCommentSession(() => loading.promise);
     created.session.focusAndHandle(readerKey('3').event);
     created.session.focusAndHandle(readerKey('i').event);
 
-    expect(created.session.mode).toBe('insert');
-    expect(created.indicator.textContent).toBe('-- INSERT --');
+    expect(created.session.mode).toBe('normal');
+    expect(created.indicator.textContent).toBe('-- COMMENT --');
     expect(created.session.input.countBuffer).toBe('');
     const native = readerKey('+');
     created.session.focusAndHandle(native.event);
@@ -1727,8 +1910,11 @@ describe('Reader annotation comment input ownership', () => {
     expect(created.session.input.keyBuffer).toBe('');
     const composingEscape = readerKey('Escape', { keyCode: 229 });
     created.session.focusAndHandle(composingEscape.event);
-    expect(created.session.mode).toBe('insert');
     expect(composingEscape.preventDefault).not.toHaveBeenCalled();
+    created.session.acceptSelectionParams({ annotation: { text: 'owned selection' } });
+    const blockedPrefix = readerKey(' ');
+    created.session.focusAndHandle(blockedPrefix.event);
+    expect(blockedPrefix.preventDefault).not.toHaveBeenCalled();
 
     const escape = readerKey('Escape');
     created.session.focusAndHandle(escape.event);
@@ -1747,7 +1933,9 @@ describe('Reader annotation comment input ownership', () => {
       const loading = Promise.withResolvers<void>();
       const created = createCommentSession(() => loading.promise);
       created.session.focusAndHandle(readerKey('i').event);
-      expect(created.session.mode).toBe('insert');
+      const blocked = readerKey(' ');
+      created.session.focusAndHandle(blocked.event);
+      expect(blocked.preventDefault).not.toHaveBeenCalled();
 
       if (operation === 'deactivate') created.session.deactivateInteraction();
       else releaseReaderView(created.session, created.pdfWindow);
@@ -1764,34 +1952,38 @@ describe('Reader annotation comment input ownership', () => {
     },
   );
 
-  it('normalizes Select when its add-note action opens comment input and retains native Enter', async () => {
-    const loading = Promise.withResolvers<void>();
-    const created = createCommentSession(() => loading.promise);
-    created.session.acceptSelectionParams({ annotation: { text: 'snapshot text' } });
-    created.session.focusAndHandle(readerKey('i').event);
-    await settleReaderMicrotasks();
-    expect(created.session.mode).toBe('insert');
-    loading.resolve();
-    await settleReaderMicrotasks();
-    const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
-    const input = Array.from(overlay?.children ?? []).find(
-      (node) => node.id === 'zv-annotation-comment-input',
-    );
-    expect(input).toBeDefined();
-    const enter = readerKey('Enter', { target: input ?? null });
-    created.session.focusAndHandle(enter.event);
-    expect(enter.preventDefault).not.toHaveBeenCalled();
-    expect(enter.stopImmediatePropagation).toHaveBeenCalledOnce();
-    expect(created.session.mode).toBe('insert');
+  it.each([true, false])(
+    'keeps Select Add note independent of comment entry preference %s and retains native Enter',
+    async (enabled) => {
+      const loading = Promise.withResolvers<void>();
+      const created = createCommentSession(() => loading.promise, {
+        [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: enabled,
+      });
+      created.session.acceptSelectionParams({ annotation: { text: 'snapshot text' } });
+      created.session.focusAndHandle(readerKey('i').event);
+      await settleReaderMicrotasks();
+      loading.resolve();
+      await settleReaderMicrotasks();
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+      const input = Array.from(overlay?.children ?? []).find(
+        (node) => node.id === 'zv-annotation-comment-input',
+      );
+      expect(input).toBeDefined();
+      expect(created.annotation.saveTx).toHaveBeenCalledOnce();
+      const enter = readerKey('Enter', { target: input ?? null });
+      created.session.focusAndHandle(enter.event);
+      expect(enter.preventDefault).not.toHaveBeenCalled();
+      expect(enter.stopImmediatePropagation).toHaveBeenCalledOnce();
 
-    created.session.focusAndHandle(readerKey('Escape', { target: input ?? null }).event);
-    expect(created.session.mode).toBe('normal');
-    await settleReaderMicrotasks();
-    expect(created.indicator.textContent).toBe('✓ saved');
-    created.session.dispose();
-  });
+      created.session.focusAndHandle(readerKey('Escape', { target: input ?? null }).event);
+      expect(created.session.mode).toBe('normal');
+      await settleReaderMicrotasks();
+      expect(created.indicator.textContent).toBe('✓ saved');
+      created.session.dispose();
+    },
+  );
 
-  it.each(['selection', 'outline'] as const)(
+  it.each(['selection', 'outline', 'native'] as const)(
     'saves the closing draft without resetting newer %s ownership or stealing focus',
     async (owner) => {
       const saving = Promise.withResolvers<void>();
@@ -1813,6 +2005,9 @@ describe('Reader annotation comment input ownership', () => {
       if (owner === 'selection') {
         created.session.acceptSelectionParams({ annotation: { text: 'new selection' } });
         created.session.focusAndHandle(readerKey('z').event);
+      } else if (owner === 'native') {
+        created.preferences.set(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, false);
+        created.session.focusAndHandle(readerKey('i').event);
       } else {
         executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
         await settleReaderMicrotasks();
@@ -1830,6 +2025,11 @@ describe('Reader annotation comment input ownership', () => {
         expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
       expect(created.indicator.textContent).toBe(status);
       expect(created.pdfWindow.focus).toHaveBeenCalledTimes(focusCount);
+      if (owner === 'native') {
+        const native = readerKey(' ');
+        created.session.focusAndHandle(native.event);
+        expect(native.preventDefault).not.toHaveBeenCalled();
+      }
       created.session.dispose();
     },
   );
@@ -1862,7 +2062,6 @@ describe('Reader annotation comment input ownership', () => {
     created.session.state.indicator = created.indicator;
     created.session.focusAndHandle(readerKey('i').event);
     await settleReaderMicrotasks();
-    expect(created.session.mode).toBe('insert');
 
     const native = readerKey('x');
     primary._onKeyDown?.(native.event);
@@ -1877,7 +2076,6 @@ describe('Reader annotation comment input ownership', () => {
     secondaryListeners.get('keydown')?.(prefix.event);
     expect(prefix.preventDefault).toHaveBeenCalledOnce();
     expect(created.session.input.keyBuffer).toBe(' ');
-    expect(created.session.mode).toBe('insert');
     created.session.dispose();
   });
 });
@@ -2882,9 +3080,9 @@ describe('PDF follow-link hints', () => {
     vi.clearAllTimers();
   });
 
-  it('leaves Insert mode and editable controls native and drops stale link hints on focus change', () => {
+  it('leaves native ownership and editable controls native and drops stale link hints on focus change', () => {
     const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
-      'mode.insert.enabled': false,
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     configureLinkView(created, [internalLink([10, 10, 80, 30])]);
     created.session.focusAndHandle(readerKey('i').event);

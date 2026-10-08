@@ -36,7 +36,7 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
 
 ### Reader navigation
 
-- Reader **Normal, Select, and Insert** interaction states.
+- Reader **Normal and Select** Surface modes, with feature-owned annotation comment input and native keyboard passthrough.
 - Page turns, scrolling, half/full-page movement, zoom, horizontal pan, native
   reading history, annotation navigation, and Zotero Reader search.
 - Horizontal/vertical split control and directional pane focus.

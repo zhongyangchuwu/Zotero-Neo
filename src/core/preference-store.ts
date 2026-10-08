@@ -3,6 +3,7 @@ import { PREFERENCE_PREFIX, type PreferenceReader } from './preferences';
 export interface PreferenceStore extends PreferenceReader {
   has(key: string): boolean;
   set(key: string, value: boolean | number | string): void;
+  clear(key: string): void;
   observe?(key: string, listener: () => void): () => void;
 }
 
@@ -50,6 +51,10 @@ export class ZoteroPreferenceStore implements PreferenceStore {
     } else {
       Services.prefs.setStringPref(fullKey, value);
     }
+  }
+
+  clear(key: string): void {
+    Services.prefs.clearUserPref(this.#fullKey(key));
   }
 
   observe(key: string, listener: () => void): () => void {

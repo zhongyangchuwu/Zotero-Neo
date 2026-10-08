@@ -135,7 +135,7 @@ describe('binding editor model transitions', () => {
     const ids = initial.rows.map((candidate) => candidate.id);
     const edits: readonly Pick<BindingEditorRow, 'mode' | 'action'>[] = [
       { mode: 'reader-select', action: 'extendDown' },
-      { mode: 'reader-insert', action: 'exitMode' },
+      { mode: 'note-insert', action: 'exitMode' },
       { mode: 'main-normal', action: 'switchTab' },
       { mode: 'reader-normal', action: 'scrollBottom' },
       { mode: 'reader-select', action: 'openSelectionActions' },

@@ -344,11 +344,11 @@ describe('mounted binding editor view', () => {
     expect(action.localName).toBe('select');
     expect(action.namespaceURI).toBe('http://www.w3.org/1999/xhtml');
     expect(action.style.cssText).toContain('font:inherit');
+    expect(initial?.children.map((option) => option.value)).not.toContain('reader-insert');
 
     for (const mode of [
       'reader-normal',
       'reader-select',
-      'reader-insert',
       'main-normal',
       'main-select',
       'note-normal',

@@ -15,14 +15,16 @@ navigation-history boundaries, see the [Command Reference](COMMAND_REFERENCE.md)
 
 ## Modes
 
-The plugin has three user-facing Reader states. Flash is a temporary targeting motion inside
-the Select workflow rather than a separate mode.
+Reader has two Surface modes. Flash is a temporary targeting motion inside the
+Select workflow; comment editing and native passthrough are feature input owners.
 
 | Mode       | Indicator | Purpose |
 | ---------- | --------- | ------- |
 | **Normal** | _(hidden)_ | Reading, navigation, and existing-annotation commands |
 | **Select** (internal name: Visual) | `SELECT · …` | Select PDF text, refine endpoints, and run actions |
-| **Insert** | `-- INSERT --` | Annotation-comment input ownership indicator; native-text compatibility state |
+
+`-- COMMENT --` / `-- NATIVE --` indicate feature-owned input, not additional modes.
+They own the keyboard without becoming Surface modes; opening a comment normalizes Select to Normal.
 
 Mode transitions:
 
@@ -30,7 +32,6 @@ Mode transitions:
 Normal ──v──▶ Flash start ──target──▶ Select ──v/Escape──▶ Normal
                                       │
                                       └──s──▶ Flash endpoint ──target──▶ Select
-Normal ──i──▶ Comment input (Insert indicator) ──Escape──▶ Normal
 ```
 
 ---
@@ -103,8 +104,8 @@ display-only keymap.
 - It updates after nested prefixes such as `<Space>f` or `<Space>t` on any surface where those groups are available.
 - `Escape` cancels the pending sequence. `Backspace` returns to the previous
   pending prefix; at the root it closes the guide.
-- It never appears in Insert mode, native/editor text input, picker input, or
-  other Neo-owned modal input.
+- It never appears while comment/native input, Note Insert, picker input, or
+  another Neo-owned modal feature owns the keyboard.
 
 Only working commands are shown; unsupported commands are omitted until their
 owning features are available.
@@ -181,8 +182,8 @@ and editable fields keep their native input when no pane accepts focus.
 
 These canonical actions work in Main, Reader, and Note Normal. Shortcut counts
 traverse that many history locations; the Command Palette action is uncounted.
-Insert mode, editable controls, and Neo-owned modal input retain their own input
-and do not invoke history. Zotero remains responsible for performing native link
+Note Insert, comment/native input owners, editable controls, and Neo-owned modal
+input do not invoke history. Zotero remains responsible for performing native link
 navigation; Neo's history records and restores the explicit cross-surface
 locations described above. Back/Forward are safe no-ops at either boundary.
 
@@ -220,7 +221,7 @@ or split PDF view through Zotero's native navigation API and are recorded in Neo
 Back/Forward history. Citation hints follow Zotero's first resolved bibliography
 target. Native PDF search-result navigation is also recorded. External links open
 through Zotero's normal link handler and do not become Neo history locations.
-Reference-preview overlays, off-screen links, Insert mode, and editable controls are not claimed.
+Reference-preview overlays, off-screen links, feature-owned input, and editable controls are not claimed.
 
 After an internal or citation jump, Neo shows Zotero's preview-style target cue
 for about two seconds: a red circle for point destinations or a red rectangle
@@ -634,13 +635,13 @@ all text-oriented work now goes through one Select workflow.
 
 ---
 
-### Insert mode
+### Annotation comment input
 
-The annotation comment editor owns its input independently of Reader Normal/Select;
-`-- INSERT --` remains its user-facing indicator, not a general Reader command mode.
-Ordinary typing and IME keep their native text behavior rather than invoking Reader
-shortcuts. If comment/Insert entry is disabled in Settings, `i` retains the legacy bare
-Insert compatibility state: ordinary keys pass through to Zotero and Escape exits it.
+The annotation comment editor owns input independently of Reader Normal/Select;
+`-- COMMENT --` identifies that feature, not a Reader command mode. Ordinary typing
+and IME keep their native text behavior rather than invoking Reader shortcuts.
+With comment entry disabled in Settings, `i` instead activates Reader-wide native
+passthrough (`-- NATIVE --`): ordinary keys stay native until Escape exits it.
 
 Press `i` in Normal while an annotation is selected via `[`/`]` to open Neo's floating
 comment textarea inside that PDF view. The existing comment is pre-filled and the quoted
@@ -664,10 +665,16 @@ extra save command; only content already saved is guaranteed on reopen.
 The **Annotation comment editing** switch under **Settings → Reader** gates editing
 an existing selected annotation from Normal mode and is enabled by default. Off
 prevents Normal `i` / Enter from opening Neo's floating editor; `i` still enters
-the legacy native-pass-through Insert state described above. Select **Add note**
+the native input owner described above. Select **Add note**
 remains a separate creation workflow and opens the new annotation's editor. This
 switch does not disable Zotero's own comment fields. There are no separate
 Enter-save, Escape-cancel, or autosave-policy switches.
+
+The switch now persists as `extensions.zotero-neo.annotationCommentEditor.enabled`.
+Existing true/false values migrate from the old mode preference; a value already
+stored under the new key wins. The obsolete Reader Insert binding context is removed.
+Its inactive custom bindings and explicit unbindings are deleted without an archive,
+as approved for this cleanup; other Reader/Main/Note customizations remain intact.
 
 The editor keeps the annotation it opened as its save target even if Zotero navigates to
 another annotation. Its keys are scoped to that PDF view; another split view still accepts
@@ -774,7 +781,7 @@ the Settings workspace opens in the owning Zotero window without switching back 
 | ------------------------ | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Appearance               | Auto                     | Auto follows Zotero's computed Light/Dark palette; Light and Dark force all Neo-owned panels without recolouring PDF pages or annotations             |
 | Enable Select mode       | on                       | Allow entering Select mode with `v`                                                                                                                   |
-| Enable Insert mode       | on                       | Allow entering Insert mode with `i`                                                                                                                   |
+| Annotation comment editing | on | Enable Normal `i` / Enter editing of a selected annotation; Off keeps `i` native passthrough until Escape |
 | Note editor Vim mode     | on                       | Enable Vim-style editing in note editors (context pane and note tabs)                                                                                 |
 | Scroll mode              | Constant-speed scrolling | Step / Constant-speed / Accelerating — only the active mode's parameters are shown                                                                    |
 | Scroll step              | 60 px                    | Pixels scrolled per `j`/`k`/`zh`/`zl` keypress (step mode; count prefixes like `3j` always use this)                                                  |

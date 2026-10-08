@@ -10,7 +10,6 @@ import {
 export const MODES = [
   'reader-normal',
   'reader-select',
-  'reader-insert',
   'main-normal',
   'main-select',
   'note-normal',
@@ -39,7 +38,6 @@ export type BindingNodes = Readonly<Record<string, Binding>>;
 const LEGACY_MODE_ALIASES: Readonly<Record<string, Mode>> = {
   normal: 'reader-normal',
   visual: 'reader-select',
-  insert: 'reader-insert',
   main: 'main-normal',
 };
 
@@ -147,7 +145,6 @@ export const DEFAULT_BINDINGS = {
   'reader-select:o': 'swapVisualEnds',
   'reader-select:v': 'exitMode',
   'reader-select:<Esc>': 'exitMode',
-  'reader-insert:<Esc>': 'exitMode',
   ...NOTE_LOCAL_DEFAULT_BINDINGS,
   'note-normal:<C-o>': 'navigateBack',
   'note-normal:<C-i>': 'navigateForward',
@@ -726,6 +723,17 @@ export function migrateMainSelectionCommandOverrides(raw: unknown): string {
   }
 
   return stringifyBindingOverrides(overrides);
+}
+
+/** Deletes inactive Reader Insert overrides, including explicit unbindings. */
+export function migrateRetiredReaderInsertOverrides(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const entries = parseBindingEntries(raw);
+  const retained = entries.filter(
+    ([key]) => !key.startsWith('reader-insert:') && !key.startsWith('insert:'),
+  );
+  if (retained.length === entries.length) return raw;
+  return retained.length ? JSON.stringify(Object.fromEntries(retained)) : '';
 }
 
 /** Canonicalizes token boundaries so persisted multi-key sequences are unambiguous. */

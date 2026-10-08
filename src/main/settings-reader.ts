@@ -1,12 +1,13 @@
 import type { MainWindow } from '../core/contracts';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
-  READER_INSERT_MODE_ENABLED_PREFERENCE_KEY,
+  ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
   READER_MARKS_PERSIST_PREFERENCE_KEY,
   READER_SCROLL_MODE_PREFERENCE_KEY,
   READER_SCROLL_NUMBER_SPECS,
   READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
   READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
+  annotationCommentEditorEnabled,
   normalizeReaderScrollNumber,
   readerDefaultHighlightColor,
   readerMarksPersist,
@@ -52,7 +53,7 @@ export class SettingsReader {
   readonly #language: SettingsLanguage;
   readonly #cleanups: Array<() => void> = [];
   readonly #visualToggle: SettingsToggle;
-  readonly #insertToggle: SettingsToggle;
+  readonly #commentEditorToggle: SettingsToggle;
   readonly #scrollMode: SettingsChoice<ScrollMode>;
   readonly #scrollNumbers: Record<ReaderScrollNumberSetting, SettingsNumberInput>;
   readonly #stopOnReleaseToggle: SettingsToggle;
@@ -80,7 +81,7 @@ export class SettingsReader {
     title.textContent = settingsText(language, 'Reader');
     title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
 
-    const modes = settingsGroup(doc, settingsText(language, 'Modes'));
+    const inputGroup = settingsGroup(doc, settingsText(language, 'Reader input'));
     this.#visualToggle = settingsToggleRow(
       doc,
       settingsText(language, 'Text Select mode'),
@@ -93,19 +94,19 @@ export class SettingsReader {
       ),
       settingsToggleLabels(language),
     );
-    this.#insertToggle = settingsToggleRow(
+    this.#commentEditorToggle = settingsToggleRow(
       doc,
       settingsText(language, 'Annotation comment editing'),
-      readerModeEnabled(preferences, 'insert'),
-      (enabled) => this.#save(READER_INSERT_MODE_ENABLED_PREFERENCE_KEY, enabled),
+      annotationCommentEditorEnabled(preferences),
+      (enabled) => this.#save(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, enabled),
       this.#cleanups,
       settingsText(
         language,
-        "When enabled, i / Enter opens the selected annotation's comment editor. When disabled, i only enters passthrough Insert mode.",
+        "When enabled, i / Enter opens the selected annotation's comment editor. When disabled, i gives native inputs keyboard ownership; Enter does nothing.",
       ),
       settingsToggleLabels(language),
     );
-    modes.append(this.#visualToggle.element, this.#insertToggle.element);
+    inputGroup.append(this.#visualToggle.element, this.#commentEditorToggle.element);
 
     const scrolling = settingsGroup(
       doc,
@@ -236,12 +237,12 @@ export class SettingsReader {
     );
 
     this.#status = settingsStatus(doc);
-    root.append(title, modes, scrolling, marks, annotations, this.#status);
+    root.append(title, inputGroup, scrolling, marks, annotations, this.#status);
     this.#refresh();
 
     const keys = [
       READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
-      READER_INSERT_MODE_ENABLED_PREFERENCE_KEY,
+      ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
       READER_MARKS_PERSIST_PREFERENCE_KEY,
       READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
       READER_SCROLL_MODE_PREFERENCE_KEY,
@@ -303,7 +304,7 @@ export class SettingsReader {
   #refresh(clearStatus = false): void {
     const scroll = readerScrollConfig(this.#preferences);
     this.#visualToggle.set(readerModeEnabled(this.#preferences, 'visual'));
-    this.#insertToggle.set(readerModeEnabled(this.#preferences, 'insert'));
+    this.#commentEditorToggle.set(annotationCommentEditorEnabled(this.#preferences));
     this.#scrollMode.select(scroll.mode);
     for (const setting of Object.keys(this.#scrollNumbers) as ReaderScrollNumberSetting[]) {
       this.#scrollNumbers[setting].set(scroll[setting]);

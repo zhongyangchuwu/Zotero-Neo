@@ -87,6 +87,10 @@ class Preferences implements PreferenceStore {
     this.writes.push([key, value]);
     for (const listener of this.observers.get(key) ?? []) listener();
   }
+  clear(key: string): void {
+    this.values.delete(key);
+    for (const listener of this.observers.get(key) ?? []) listener();
+  }
   observe(key: string, listener: () => void): () => void {
     const group = this.observers.get(key) ?? new Set();
     group.add(listener);

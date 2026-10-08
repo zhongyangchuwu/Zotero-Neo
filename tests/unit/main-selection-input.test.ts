@@ -138,6 +138,7 @@ function harness(bindingOverrides = '') {
             ? bindingOverrides
             : fallback,
       set: () => {},
+      clear: () => {},
     },
     logger: { debug: () => {}, diagnostic: () => {} },
     reader: {

@@ -1191,7 +1191,12 @@ describe('Note contextual Open', () => {
     });
     Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
     const controller = createMainWindowController({
-      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+        clear: () => {},
+      },
       logger,
       reader: {
         rescan: () => {},
@@ -1339,7 +1344,12 @@ describe('Main startup focus handoff', () => {
       id === 'zotero-tb-search' ? { searchTextbox: { select, value: '' } } : null,
     );
     const controller = createMainWindowController({
-      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+        clear: () => {},
+      },
       logger,
       reader: {
         rescan: () => {},
@@ -1388,6 +1398,10 @@ function settingsMainHost() {
       set: (key: string, value: boolean | number | string) => {
         values.set(key, value);
         writes.push([key, value]);
+        for (const listener of observers.get(key) ?? []) listener();
+      },
+      clear: (key: string) => {
+        values.delete(key);
         for (const listener of observers.get(key) ?? []) listener();
       },
       observe: (key: string, listener: () => void) => {
@@ -1841,7 +1855,12 @@ describe('Main Settings Center shell', () => {
     const first = pickerMainWindow();
     const second = pickerMainWindow();
     const controller = createMainWindowController({
-      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+        clear: () => {},
+      },
       logger,
       reader: {
         rescan: () => {},
@@ -1910,6 +1929,7 @@ describe('Main command palette', () => {
         has: () => false,
         get: (_key, fallback) => fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -1948,6 +1968,7 @@ describe('Main command palette', () => {
         has: () => false,
         get: (_key, fallback) => fallback,
         set: () => {},
+        clear: () => {},
       },
       logger: { debug, diagnostic: vi.fn() },
       reader: {
@@ -2000,6 +2021,7 @@ describe('Main tab picker routing', () => {
         has: () => false,
         get: (_key, fallback) => fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -2099,6 +2121,7 @@ describe('Reader to Main command palette integration', () => {
       has: () => false,
       get: (_key: string, fallback: boolean | number | string) => fallback,
       set: () => {},
+      clear: () => {},
     } as unknown as MainWindowControllerDependencies['preferences'];
     Reflect.set(globalThis, 'Zotero', {
       Reader: readerService,
@@ -2213,6 +2236,7 @@ describe('Main H/L tab defaults', () => {
         has: () => false,
         get: (_key, fallback) => fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -2283,6 +2307,7 @@ describe('repeated tab switching', () => {
         get: (key: string, fallback: boolean | number | string) =>
           key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -2339,6 +2364,7 @@ describe('repeated tab switching', () => {
         get: (key: string, fallback: boolean | number | string) =>
           key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -2417,6 +2443,7 @@ describe('main pending-prefix key guide', () => {
                   })
                 : fallback,
           set: () => {},
+          clear: () => {},
         },
         logger,
         reader: {
@@ -2559,6 +2586,7 @@ describe('main pending-prefix key guide', () => {
               ? 18
               : fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -2671,6 +2699,7 @@ describe('Reader Show in Library and owner routing', () => {
         get: (key: string, fallback: boolean | number | string) =>
           key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -2765,7 +2794,12 @@ describe('Main jump history integration', () => {
 
   function historyController(logger: MainWindowControllerDependencies['logger']) {
     return createMainWindowController({
-      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+        clear: () => {},
+      },
       logger,
       reader: {
         rescan: () => {},
@@ -3098,6 +3132,7 @@ describe('Main CurrentTarget routing', () => {
         get: (key: string, fallback: boolean | number | string) =>
           key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
@@ -3164,7 +3199,12 @@ describe('Main CurrentTarget routing', () => {
     });
     const trash = vi.spyOn(MainNavigation.prototype, 'trashSelectedItems').mockResolvedValue(false);
     const controller = createMainWindowController({
-      preferences: { has: () => false, get: (_key, fallback) => fallback, set: () => {} },
+      preferences: {
+        has: () => false,
+        get: (_key, fallback) => fallback,
+        set: () => {},
+        clear: () => {},
+      },
       logger,
       reader: {
         start: () => {},
@@ -3258,6 +3298,7 @@ describe('collection navigation repeat pacing', () => {
         get: (key: string, fallback: boolean | number | string) =>
           key === NOTE_EDITOR_ENABLED_PREFERENCE_KEY ? false : fallback,
         set: () => {},
+        clear: () => {},
       },
       logger,
       reader: {
