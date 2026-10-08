@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   CommandPaletteContext,
@@ -8,12 +8,17 @@ import type {
 import { NavigationCoordinator } from '../../src/navigation/coordinator';
 import { NavigationHistoryState } from '../../src/navigation/history';
 import type { NavigationIntent, NavigationPort } from '../../src/navigation/types';
-import { ReaderSession, createReaderController } from '../../src/reader/controller';
+import {
+  ReaderController,
+  ReaderSession,
+  createReaderController,
+} from '../../src/reader/controller';
 import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
   InternalReaderRuntime,
   PdfWindow,
+  ReaderEventRuntime,
   ReaderLinkOverlay,
   ReaderLinkPosition,
   ReaderPdfHistoryLocationRuntime,
@@ -44,6 +49,10 @@ const noopReaderMainOperations: ReaderMainOperations = {
   captureReaderSelectionToNote: async () => false,
 };
 
+beforeEach(() => {
+  Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
+});
+
 afterEach(() => {
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
   else Reflect.set(globalThis, 'Zotero', originalZotero);
@@ -54,40 +63,128 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Components', originalComponents);
 });
 
-describe('reader discovery diagnostics', () => {
-  it('records registration once but does not log unchanged rescans', () => {
-    const diagnostics: string[] = [];
-    const readerService = {
-      _readers: [],
-      registerEventListener: () => Symbol('reader-listener'),
-      unregisterEventListener: () => {},
-      getByTabID: () => null,
-    };
-    Reflect.set(globalThis, 'Zotero', { Reader: readerService });
+function createReaderRegistryHarness() {
+  const service = {
+    _readers: [] as ReaderRuntime[],
+    _registeredListeners: [] as {
+      type: string;
+      handler: (event: ReaderEventRuntime) => void;
+      pluginID: string;
+    }[],
+    registerEventListener(
+      type: string,
+      handler: (event: ReaderEventRuntime) => void,
+      pluginID: string,
+    ) {
+      this._registeredListeners.push({ type, handler, pluginID });
+    },
+    unregisterEventListener(type: string, handler: (event: ReaderEventRuntime) => void) {
+      this._registeredListeners = this._registeredListeners.filter(
+        (entry) => !(entry.type === type && entry.handler === handler),
+      );
+    },
+    dispatch(type: string, event: ReaderEventRuntime) {
+      for (const entry of this._registeredListeners.filter((entry) => entry.type === type))
+        entry.handler(event);
+    },
+  };
+  Reflect.set(globalThis, 'Zotero', { Reader: service });
+  const dependencies = {
+    preferences: {
+      has: () => false,
+      get: (_key: string, fallback: boolean | number | string) => fallback,
+      set: () => {},
+    },
+    logger: { debug: () => {}, diagnostic: () => {} },
+    main: noopReaderMainOperations,
+  } as ReaderControllerDependencies;
+  return { service, dependencies };
+}
 
-    const dependencies = {
-      preferences: {
-        has: () => false,
-        get: (_key: string, fallback: boolean | number | string) => fallback,
-        set: () => {},
-      },
-      logger: {
-        debug: () => {},
-        diagnostic: (message: string) => diagnostics.push(message),
-      },
-      main: noopReaderMainOperations,
-    } as ReaderControllerDependencies;
-    const controller = createReaderController(dependencies);
-    const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
+describe('Reader event lifecycle', () => {
+  it.each(['restart', 'replacement'] as const)(
+    'retires native selection callbacks across %s without changing the current input',
+    (operation) => {
+      const { service, dependencies } = createReaderRegistryHarness();
+      const retired = new ReaderController(dependencies);
+      retired.start('zotero-neo@zotero-neo');
+      const queued = service._registeredListeners.find(
+        (entry) => entry.type === 'renderTextSelectionPopup',
+      )!.handler;
+      const oldParams = { annotation: { text: 'old selection' }, onAddAnnotation: () => {} };
+      service.dispatch('renderTextSelectionPopup', { params: oldParams });
+      expect(retired.selection()).toBe(oldParams);
+      retired.shutdown();
+      expect(retired.selection()).toBeNull();
 
-    controller.start('zotero-neo@zotero-neo');
-    controller.rescan(window);
-    controller.rescan(window);
-    controller.rescan(window);
-    controller.shutdown();
+      const current = operation === 'restart' ? retired : new ReaderController(dependencies);
+      try {
+        current.start('zotero-neo@zotero-neo');
+        const newParams = { annotation: { text: 'current selection' }, onAddAnnotation: () => {} };
+        service.dispatch('renderTextSelectionPopup', { params: newParams });
+        expect(current.selection()).toBe(newParams);
+        if (operation === 'replacement') expect(retired.selection()).toBeNull();
 
-    expect(diagnostics).toEqual(['reader listeners registered']);
-  });
+        queued({ params: oldParams });
+        expect(current.selection()).toBe(newParams);
+        if (operation === 'replacement') expect(retired.selection()).toBeNull();
+      } finally {
+        current.shutdown();
+      }
+    },
+  );
+
+  it.each(['indicator', 'secondary view'] as const)(
+    'restores live Reader native keys after a dead %s wrapper',
+    (deadOwner) => {
+      const closed = createHistorySession();
+      const live = createHistorySession();
+      const secondary = deadOwner === 'secondary view' ? createHistorySession() : null;
+      if (secondary)
+        Reflect.set(closed.reader._internalReader!, '_secondaryView', {
+          _iframeWindow: secondary.pdfWindow,
+        });
+      const { service, dependencies } = createReaderRegistryHarness();
+      Reflect.set(closed.reader, '_instanceID', 'closed-reader');
+      Reflect.set(live.reader, '_instanceID', 'live-reader');
+      const nativeKey = vi.fn();
+      const view = live.reader._internalReader!._primaryView!;
+      Reflect.set(view, '_onKeyDown', nativeKey);
+      let deadTarget: object | undefined;
+      Reflect.set(globalThis, 'Components', {
+        utils: {
+          cloneInto: <T>(value: T) => value,
+          unwaiveXrays: <T>(value: T) => value,
+          waiveXrays: <T>(value: T) => value,
+          isDeadWrapper: (value: object) => value === deadTarget,
+        },
+      });
+      service._readers = [closed.reader, live.reader];
+      const controller = createReaderController(dependencies);
+      controller.start('zotero-neo@zotero-neo');
+      controller.rescan({ Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow);
+      deadTarget =
+        secondary?.pdfWindow ??
+        closed.bodyChildren.find((node) => node.id === 'zotero-vim-mode-indicator');
+      if (!deadTarget) throw new Error('Expected native cleanup target');
+      const method = secondary ? 'removeEventListener' : 'remove';
+      Reflect.set(deadTarget, method, () => {
+        throw new TypeError("can't access dead object");
+      });
+      try {
+        controller.shutdown();
+        const event = readerKey('j').event;
+        view._onKeyDown!(event);
+        expect(nativeKey).toHaveBeenCalledExactlyOnceWith(event);
+        expect(live.bodyChildren.some((node) => node.id === 'zotero-vim-mode-indicator')).toBe(
+          false,
+        );
+      } finally {
+        Reflect.set(deadTarget, method, () => {});
+        controller.shutdown();
+      }
+    },
+  );
 
   it('disposes sessions that disappear from Zotero Reader inventory', () => {
     const addWindowListener = vi.fn();
@@ -121,7 +218,7 @@ describe('reader discovery diagnostics', () => {
     } as unknown as ReaderRuntime;
     const readerService = {
       _readers: [reader] as ReaderRuntime[],
-      registerEventListener: () => Symbol('reader-listener'),
+      registerEventListener: () => {},
       unregisterEventListener: () => {},
       getByTabID: () => null,
     };
@@ -180,7 +277,7 @@ describe('reader discovery diagnostics', () => {
     const second = reader('reader-b', 42);
     const readerService = {
       _readers: [first, second] as ReaderRuntime[],
-      registerEventListener: () => Symbol('reader-listener'),
+      registerEventListener: () => {},
       unregisterEventListener: () => {},
       getByTabID: (tabID: string) => (tabID === 'reader-b-tab' ? second : null),
     };
@@ -332,6 +429,7 @@ function createHistorySession(
       cloneInto,
       unwaiveXrays: <T>(value: T) => value,
       waiveXrays: <T>(value: T) => value,
+      isDeadWrapper: () => false,
     },
   });
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: pdfWindow } });
@@ -1120,6 +1218,7 @@ describe('Reader citekey output', () => {
         cloneInto: created.cloneInto,
         unwaiveXrays: <T>(value: T) => value,
         waiveXrays: <T>(value: T) => value,
+        isDeadWrapper: () => false,
       },
       classes: {
         '@mozilla.org/widget/clipboardhelper;1': {

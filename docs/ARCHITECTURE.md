@@ -167,6 +167,19 @@ host/view lifecycle seams are owned separately:
 - `smooth-scroll.ts` — smooth-hold state;
 - `sidebar-overlay.ts` — only the shared Outline/Marks overlay lifecycle.
 
+`ReaderController` owns the native Reader event registrations by event type and
+callback identity; Zotero's registration API returns no listener handle. Shutdown
+retires those callback fields before unregistering them, and each callback checks
+that its own registration is still current. A queued callback from before shutdown
+therefore cannot create a session or replace selection state after the same
+controller restarts.
+
+Closed Reader and split-view content can leave dead Gecko wrappers in session
+state. Teardown checks the native `Cu.isDeadWrapper` boundary before touching a
+retired PDF window, scroll element, or indicator. Dead DOM does not stop view
+release, remaining session cleanup, or Main shutdown; unexpected failures on live
+objects are not hidden by this guard.
+
 These modules should not be merged into a generic Reader widget framework. Their
 state and host contracts differ and are already independently testable.
 
