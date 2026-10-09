@@ -1,11 +1,15 @@
 import { THEME_VARS } from '../ui/theme';
 import { keyString } from '../input/keys';
+import { compositionOwnsKey } from '../input/composition';
+import { isDeadObject } from '../platform/cross-compartment';
+import { asElement, isEditableElement } from '../platform/dom';
 import type { Mark, PdfWindow, ReaderRuntime } from './types';
 import { ReaderMarks } from './marks';
 
 interface MarksExplorerState {
   open: boolean;
   selected: number;
+  pdfWindow: PdfWindow | null;
   overlay: HTMLElement | null;
   list: HTMLElement | null;
   themeCleanup: (() => void) | null;
@@ -23,6 +27,7 @@ export class ReaderMarksExplorer {
   readonly #host: MarksExplorerHost;
   readonly #state: MarksExplorerState = {
     open: false,
+    pdfWindow: null,
     selected: 0,
     overlay: null,
     list: null,
@@ -38,7 +43,7 @@ export class ReaderMarksExplorer {
   }
 
   ownsView(pdfWindow: PdfWindow): boolean {
-    return this.#state.overlay?.ownerDocument.defaultView === pdfWindow;
+    return this.#state.pdfWindow === pdfWindow;
   }
 
   toggle(pdfWindow: PdfWindow): void {
@@ -47,6 +52,7 @@ export class ReaderMarksExplorer {
       return;
     }
     this.#state.open = true;
+    this.#state.pdfWindow = pdfWindow;
     this.#state.selected = 0;
     const document = pdfWindow.document;
     const overlay = document.createElement('div');
@@ -71,9 +77,20 @@ export class ReaderMarksExplorer {
     overlay.focus();
   }
 
-  handleKey(pdfWindow: PdfWindow, event: KeyboardEvent): void {
+  handleKey(pdfWindow: PdfWindow, event: KeyboardEvent): boolean {
+    if (!this.#state.open) return false;
+    if (
+      !this.ownsView(pdfWindow) ||
+      isDeadObject(pdfWindow) ||
+      (this.#state.overlay && isDeadObject(this.#state.overlay)) ||
+      isEditableElement(asElement(event.target))
+    ) {
+      this.close();
+      return false;
+    }
+    if (compositionOwnsKey(event, false)) return true;
     const key = keyString(event);
-    if (!key) return;
+    if (!key) return false;
     event.preventDefault();
     event.stopImmediatePropagation();
     const marks = this.#host.marks;
@@ -87,7 +104,7 @@ export class ReaderMarksExplorer {
       void marks.jump(this.#host.reader, pdfWindow, key, (annotation) =>
         this.#host.onAnnotation(annotation),
       );
-      return;
+      return true;
     }
     if (key === 'j') this.#state.selected = Math.min(chars.length - 1, this.#state.selected + 1);
     else if (key === 'k') this.#state.selected = Math.max(0, this.#state.selected - 1);
@@ -99,28 +116,41 @@ export class ReaderMarksExplorer {
         void marks.jump(this.#host.reader, pdfWindow, char, (annotation) =>
           this.#host.onAnnotation(annotation),
         );
-      return;
+      return true;
     } else if (key === 'd') {
       const char = chars[this.#state.selected];
       if (char) void marks.delete(this.#host.reader, char);
     } else if (key === 'x') void marks.clear(this.#host.reader);
     else if (key === 'escape') {
       this.close(pdfWindow);
-      return;
+      return true;
     }
     this.#render();
+    return true;
   }
 
+  /** Retires exact-pane ownership before cleanup and notifies the coordinator even on live failure. */
   close(pdfWindow?: PdfWindow): void {
-    const ownerWindow = this.#state.overlay?.ownerDocument.defaultView;
-    const owner = pdfWindow ?? (ownerWindow as PdfWindow | null) ?? undefined;
-    this.#state.open = false;
-    this.#state.themeCleanup?.();
-    this.#state.themeCleanup = null;
-    this.#state.overlay?.remove();
-    this.#state.overlay = null;
-    this.#state.list = null;
-    this.#host.onClose(owner);
+    const state = this.#state;
+    if (!state.open && !state.overlay) return;
+    const overlay = state.overlay;
+    const owner = state.pdfWindow;
+    const cleanup = state.themeCleanup;
+    state.open = false;
+    state.pdfWindow = null;
+    state.selected = 0;
+    state.themeCleanup = null;
+    state.overlay = null;
+    state.list = null;
+    try {
+      cleanup?.();
+    } finally {
+      try {
+        if (overlay && !isDeadObject(overlay) && (!owner || !isDeadObject(owner))) overlay.remove();
+      } finally {
+        this.#host.onClose(pdfWindow);
+      }
+    }
   }
 
   #render(): void {
@@ -129,6 +159,7 @@ export class ReaderMarksExplorer {
     list.replaceChildren();
     const marks = this.#marks();
     const chars = Object.keys(marks).sort();
+    this.#state.selected = Math.max(0, Math.min(this.#state.selected, chars.length - 1));
     if (!chars.length) {
       const row = list.ownerDocument.createElement('div');
       row.style.cssText = `padding:10px 14px;color:${THEME_VARS.muted}`;

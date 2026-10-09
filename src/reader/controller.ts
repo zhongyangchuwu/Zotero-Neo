@@ -995,6 +995,7 @@ export class ReaderSession {
 
   deactivateInteraction(): void {
     this.#sidebar.cancelFocusRestore();
+    this.#marksExplorer.close();
     this.#outline.close();
     this.#linkHints.close();
     this.#nativeInput.release();
@@ -1095,10 +1096,7 @@ export class ReaderSession {
       this.#outline.handleKey(this.#dependencies.reader, pdfWindow, event)
     )
       return;
-    if (this.#marksExplorer.isOpen) {
-      this.#marksExplorer.handleKey(pdfWindow, event);
-      return;
-    }
+    if (this.#marksExplorer.isOpen && this.#marksExplorer.handleKey(pdfWindow, event)) return;
     if (this.#linkHints.hasHints && this.#linkHints.handleKey(event, pdfWindow)) return;
     if (isEditableElement(asElement(event.target))) {
       this.clearKeyGuide();
@@ -1183,10 +1181,10 @@ export class ReaderSession {
 
   private handleSidebarToggleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
     if (
-      this.#outline.isOpen &&
-      (!this.#outline.ownsView(pdfWindow) ||
-        isEditableElement(asElement(event.target)) ||
-        compositionOwnsKey(event, false))
+      (this.#outline.isOpen && !this.#outline.ownsView(pdfWindow)) ||
+      (this.#marksExplorer.isOpen && !this.#marksExplorer.ownsView(pdfWindow)) ||
+      isEditableElement(asElement(event.target)) ||
+      compositionOwnsKey(event, false)
     )
       return false;
     const action = this.#outline.isOpen
@@ -1229,10 +1227,12 @@ export class ReaderSession {
 
     this.#sidebarToggleBuffer = next;
     this.clearTimer(this.#sidebarToggleTimer);
-    this.#sidebarToggleTimer = this.schedule(1200, () => {
+    const timer = this.schedule(1200, () => {
+      if (this.#sidebarToggleTimer !== timer) return;
       this.#sidebarToggleBuffer = '';
       this.#sidebarToggleTimer = null;
     });
+    this.#sidebarToggleTimer = timer;
     return true;
   }
 
@@ -1315,7 +1315,8 @@ export class ReaderSession {
     if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
     if (this.#linkHints.hasHints && pdfWindow && this.#linkHints.ownsView(pdfWindow)) return true;
     if (this.#outline.isOpen && pdfWindow && this.#outline.ownsView(pdfWindow)) return true;
-    if (this.#marksExplorer.isOpen) return true;
+    if (this.#marksExplorer.isOpen && pdfWindow && this.#marksExplorer.ownsView(pdfWindow))
+      return true;
     if (
       this.input.keyBuffer === 'm' ||
       this.input.keyBuffer === '`' ||
