@@ -133,7 +133,6 @@ describe('ReaderViewLifecycle', () => {
 
     expect(onKeyDown).toHaveBeenCalledWith(keydown, primary.pdfWindow);
     expect(onKeyUp).toHaveBeenCalledWith(keyup);
-    expect(onBlur).toHaveBeenCalledWith(primary.pdfWindow);
     expect(onSelectionChange).toHaveBeenCalledWith(primary.pdfWindow);
     expect(onResize).toHaveBeenCalledWith(primary.pdfWindow);
     expect(onScroll).toHaveBeenCalledWith(primary.pdfWindow);

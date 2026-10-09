@@ -27,6 +27,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Fixed
 
+- Flash no longer cancels itself when native focus moves into its query input, and claims host keys only in that PDF pane. Dead input/prompt/badges cannot strand ownership; retired input/composition callbacks cannot alter a newer query. Existing matching, labels, IME editing, and Select endpoint behavior remain unchanged.
+
 - Reader history cleanup uses the PDF-window identity captured while each view is live. Destroyed view wrappers no longer interrupt session retirement and leave Main activation inspecting a closed Reader; pending exact-view work is retired without affecting surviving split views.
 
 - Selection Actions leaves composing keys native and claims host forwarding only in its owning PDF pane. Closing a dead Reader/split view releases palette/theme ownership without interrupting cleanup; Select marker cleanup skips destroyed windows so it cannot block that release. Stale async results cannot repaint or refocus a later palette.

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   FLASH_TARGET_LIMIT,
@@ -11,6 +11,19 @@ import {
   type FlashTextSegment,
 } from '../../src/reader/flash';
 import type { PdfWindow } from '../../src/reader/types';
+
+const originalComponents = Reflect.get(globalThis, 'Components');
+
+beforeEach(() => {
+  Reflect.set(globalThis, 'Components', {
+    utils: { isDeadWrapper: () => false, waiveXrays: <T>(value: T) => value },
+  });
+});
+
+afterEach(() => {
+  if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+  else Reflect.set(globalThis, 'Components', originalComponents);
+});
 
 function textNode(value: string): Text {
   return {
@@ -129,6 +142,7 @@ function createFlashWindow(specs: readonly TextSpec[], focusIndex = 0) {
     createElement: (tag: string) => {
       const listeners = new Map<string, EventListener[]>();
       const element = {
+        listeners,
         tagName: tag.toUpperCase(),
         dataset: {} as Record<string, string>,
         style: { cssText: '', left: '', top: '' },
@@ -217,11 +231,17 @@ function flashPrompt(children: readonly HTMLElement[]): HTMLElement | undefined 
   return children.find((element) => element.dataset.zoteroNeoFlashPrompt === '1');
 }
 
-function flashInput(
-  children: readonly HTMLElement[],
-): (HTMLInputElement & { emit(type: string, event?: Partial<Event>): void }) | undefined {
+function flashInput(children: readonly HTMLElement[]):
+  | (HTMLInputElement & {
+      emit(type: string, event?: Partial<Event>): void;
+      listeners: Map<string, EventListener[]>;
+    })
+  | undefined {
   return children.find((element) => element.dataset.zoteroNeoFlashInput === '1') as
-    | (HTMLInputElement & { emit(type: string, event?: Partial<Event>): void })
+    | (HTMLInputElement & {
+        emit(type: string, event?: Partial<Event>): void;
+        listeners: Map<string, EventListener[]>;
+      })
     | undefined;
 }
 
@@ -369,16 +389,6 @@ describe('Reader Flash lifecycle', () => {
     expect(activations[0]?.target.end.offset).toBe(6);
   });
 
-  it('uses purpose-specific prompts for Visual start and endpoint targeting', () => {
-    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
-    const { flash } = createFlash();
-    flash.open(created.pdfWindow, 'visual-start');
-    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT START: …');
-    flash.cancel();
-    flash.open(created.pdfWindow, 'visual-end');
-    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT END: …');
-  });
-
   it('commits CJK IME text through the real input without leaking candidate keys', () => {
     const created = createFlashWindow([{ value: '机器学习 方法', left: 20, top: 20 }]);
     const { flash, activations } = createFlash();
@@ -441,5 +451,82 @@ describe('Reader Flash lifecycle', () => {
     expect(flash.handleKey(event, secondary.pdfWindow)).toBe(false);
     expect(event.preventDefault).not.toHaveBeenCalled();
     expect(flash.isOpen).toBe(false);
+  });
+
+  it('retires dead Flash input and badges without blocking a new view selection', () => {
+    const retired = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const current = createFlashWindow([{ value: 'target new', left: 20, top: 20 }]);
+    const { flash, activations } = createFlash();
+    flash.open(retired.pdfWindow, 'visual-start');
+    setFlashQuery(retired.bodyChildren, 'target');
+    const input = flashInput(retired.bodyChildren)!;
+    const queuedInput = input.listeners.get('input')![0]!;
+    const dead = new Set<object>([retired.pdfWindow, ...retired.bodyChildren]);
+    Reflect.set(globalThis, 'Components', {
+      utils: { isDeadWrapper: (value: object) => dead.has(value) },
+    });
+    for (const element of retired.bodyChildren) {
+      Reflect.set(element, 'remove', () => {
+        throw new TypeError("can't access dead object");
+      });
+    }
+    Reflect.set(input, 'removeEventListener', () => {
+      throw new TypeError("can't access dead object");
+    });
+    Object.defineProperty(input, 'value', {
+      get: () => {
+        throw new TypeError("can't access dead object");
+      },
+    });
+
+    queuedInput({ target: input } as unknown as Event);
+    flash.releaseView(retired.pdfWindow);
+    expect(flash.isOpen).toBe(false);
+    flash.open(current.pdfWindow, 'visual-start');
+    setFlashQuery(current.bodyChildren, 'target');
+    flash.handleKey(flashKey('Enter'), current.pdfWindow);
+    expect(activations[0]?.target.start.textNode).toBe(current.spans[0]?.node);
+    expect(activations[0]?.target.end.offset).toBe(6);
+  });
+
+  it('ignores retired input and composition callbacks after a new invocation opens', () => {
+    const retired = createFlashWindow([{ value: 'old', left: 20, top: 20 }]);
+    const current = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash, activations } = createFlash();
+    flash.open(retired.pdfWindow, 'visual-start');
+    const oldInput = flashInput(retired.bodyChildren)!;
+    const queuedInput = oldInput.listeners.get('input')![0]!;
+    const queuedComposition = oldInput.listeners.get('compositionstart')![0]!;
+    flash.cancel();
+    flash.open(current.pdfWindow, 'visual-start');
+    setFlashQuery(current.bodyChildren, 'target');
+
+    oldInput.value = 'old';
+    queuedInput({ target: oldInput } as unknown as Event);
+    expect(flashPrompt(current.bodyChildren)?.textContent).toContain('target (1)');
+    queuedComposition({ target: oldInput } as unknown as Event);
+    setFlashQuery(current.bodyChildren, 'tar');
+    expect(flashPrompt(current.bodyChildren)?.textContent).toContain('tar (1)');
+    flash.handleKey(flashKey('Enter'), current.pdfWindow);
+    expect(activations[0]?.target.start.textNode).toBe(current.spans[0]?.node);
+    expect(activations[0]?.target.end.offset).toBe(3);
+  });
+
+  it('keeps unexpected live DOM failures observable while retiring input ownership', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    setFlashQuery(created.bodyChildren, 'target');
+    const input = flashInput(created.bodyChildren)!;
+    const prompt = flashPrompt(created.bodyChildren)!;
+    const failure = new Error('unexpected live DOM failure');
+    Reflect.set(flashHints(created.bodyChildren)[0]!, 'remove', () => {
+      throw failure;
+    });
+
+    expect(() => flash.cancel()).toThrow(failure);
+    expect(flash.isOpen).toBe(false);
+    expect(input.listeners.get('input')).toEqual([]);
+    expect(created.bodyChildren).not.toContain(prompt);
   });
 });

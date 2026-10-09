@@ -17,7 +17,7 @@ export interface ReaderViewLifecycleDependencies {
   readonly timerWindow: PdfWindow;
   readonly onKeyDown: (event: KeyboardEvent, pdfWindow: PdfWindow) => void;
   readonly onKeyUp: (event: KeyboardEvent) => void;
-  readonly onBlur: (pdfWindow: PdfWindow) => void;
+  readonly onBlur: (pdfWindow: PdfWindow, event: FocusEvent) => void;
   readonly onSelectionChange: (pdfWindow: PdfWindow) => void;
   readonly onScroll: (pdfWindow: PdfWindow) => void;
   readonly onResize: (pdfWindow: PdfWindow) => void;
@@ -106,7 +106,8 @@ export class ReaderViewLifecycle {
       const keyEvent = asKeyboardEvent(event);
       if (keyEvent) this.#dependencies.onKeyUp(keyEvent);
     }) as EventListener;
-    const blur = (() => this.#dependencies.onBlur(pdfWindow)) as EventListener;
+    const blur = ((event: Event) =>
+      this.#dependencies.onBlur(pdfWindow, event as FocusEvent)) as EventListener;
     const selection = (() => this.#dependencies.onSelectionChange(pdfWindow)) as EventListener;
     const scroll = (() => this.#dependencies.onScroll(pdfWindow)) as EventListener;
     const resize = (() => this.#dependencies.onResize(pdfWindow)) as EventListener;

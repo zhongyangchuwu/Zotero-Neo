@@ -363,6 +363,14 @@ and Unicode text editing remain browser-owned. Neo only consumes committed `inpu
 Flash commands, and continuation-safe ASCII hint labels; fuzzy Flash search, regex,
 transliteration, OCR, and whole-document indexing remain outside v1. See `INPUT_METHODS.md`.
 
+Flash claims Zotero host forwarding only in the PDF view that owns its query. Native
+focus transfer from the PDF body into that input is not a view exit: the captured
+blur event's related target is compared by canonical native identity across Xrays.
+Input and composition callbacks retain their invocation, so retired callbacks cannot
+replace a newer query or its composition state. Cancellation retires ownership before
+DOM cleanup and skips destroyed input/prompt/badge wrappers; unexpected live DOM
+failures remain observable while the remaining input/prompt cleanup still runs.
+
 ## PDF text vertical motion
 
 Visual `j` and `k` must not delegate to Gecko
