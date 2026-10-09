@@ -4,6 +4,7 @@ import {
   isCommittedInput,
   type CompositionState,
 } from '../input/composition';
+import { isDeadObject, nativeObjectIdentity } from '../platform/cross-compartment';
 import { HINT_ALPHABET } from './hint-labels';
 import type { PdfWindow, Pointer } from './types';
 
@@ -229,7 +230,7 @@ export class ReaderFlash {
   #prompt: HTMLElement | null = null;
   #input: HTMLInputElement | null = null;
   #inputCleanup: (() => void) | null = null;
-  readonly #composition: CompositionState = { active: false };
+  #composition: CompositionState = { active: false };
   #matchCount = 0;
   #labelCache = new Map<Text, Map<number, string>>();
 
@@ -239,6 +240,24 @@ export class ReaderFlash {
 
   get isOpen(): boolean {
     return this.#window !== null;
+  }
+
+  ownsView(pdfWindow: PdfWindow): boolean {
+    return this.#window === pdfWindow;
+  }
+
+  /** Internal focus into the query is not a view exit; other blur still cancels Flash. */
+  onBlur(pdfWindow: PdfWindow, event: FocusEvent): void {
+    if (!this.ownsView(pdfWindow)) return;
+    const input = this.#input;
+    if (
+      input &&
+      !isDeadObject(input) &&
+      event.relatedTarget &&
+      nativeObjectIdentity(event.relatedTarget) === nativeObjectIdentity(input)
+    )
+      return;
+    this.cancel();
   }
 
   open(pdfWindow: PdfWindow, intent: FlashIntent): void {
@@ -337,14 +356,14 @@ export class ReaderFlash {
     this.cancel();
   }
 
+  /** Retires input ownership before DOM cleanup; dead nodes are skipped and live failures propagate. */
   cancel(): void {
-    this.#clearTargets();
-    this.#inputCleanup?.();
+    const input = this.#input;
+    const prompt = this.#prompt;
+    const inputCleanup = this.#inputCleanup;
     this.#inputCleanup = null;
-    this.#input?.remove();
     this.#input = null;
     this.#composition.active = false;
-    this.#prompt?.remove();
     this.#prompt = null;
     this.#window = null;
     this.#intent = null;
@@ -353,6 +372,21 @@ export class ReaderFlash {
     this.#labelBuffer = '';
     this.#matchCount = 0;
     this.#labelCache.clear();
+    try {
+      this.#clearTargets();
+    } finally {
+      try {
+        if (input && !isDeadObject(input)) {
+          try {
+            inputCleanup?.();
+          } finally {
+            input.remove();
+          }
+        }
+      } finally {
+        if (prompt && !isDeadObject(prompt)) prompt.remove();
+      }
+    }
   }
 
   #handleLabelKey(event: KeyboardEvent): void {
@@ -540,8 +574,11 @@ export class ReaderFlash {
   }
 
   #clearTargets(): void {
-    for (const target of this.#targets) target.element.remove();
+    const targets = this.#targets;
     this.#targets = [];
+    for (const target of targets) {
+      if (!isDeadObject(target.element)) target.element.remove();
+    }
   }
 
   #createInput(pdfWindow: PdfWindow): HTMLInputElement {
@@ -553,9 +590,17 @@ export class ReaderFlash {
     input.placeholder = 'Type visible text…';
     input.style.cssText =
       'position:fixed;left:12px;bottom:46px;z-index:100001;width:min(360px,calc(100vw - 24px));box-sizing:border-box;padding:6px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#0f172a;color:#ffffff;outline:none;font:13px/1.2 monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);';
-    const compositionCleanup = bindCompositionState(input, this.#composition);
+    const composition: CompositionState = { active: false };
+    this.#composition = composition;
+    const compositionCleanup = bindCompositionState(input, composition);
     const inputHandler = (event: Event): void => {
-      if (!isCommittedInput(event, this.#composition.active)) return;
+      if (
+        this.#input !== input ||
+        isDeadObject(pdfWindow) ||
+        isDeadObject(input) ||
+        !isCommittedInput(event, composition.active)
+      )
+        return;
       this.#query = input.value;
       this.#refreshTargets();
     };

@@ -680,9 +680,9 @@ export class ReaderSession {
       timerWindow: dependencies.firstPdfWindow,
       onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
       onKeyUp: (event) => this.handleKeyUp(event),
-      onBlur: (pdfWindow) => {
+      onBlur: (pdfWindow, event) => {
         this.#smoothScroller.stop(true);
-        this.#flash.releaseView(pdfWindow);
+        this.#flash.onBlur(pdfWindow, event);
       },
       onSelectionChange: (pdfWindow) => {
         if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
@@ -1309,7 +1309,7 @@ export class ReaderSession {
       return this.#commentEditor.consumesKey(key, pdfWindow);
     if (this.#selectionActions.isOpen && pdfWindow && this.#selectionActions.ownsView(pdfWindow))
       return true;
-    if (this.#flash.isOpen) return true;
+    if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
     if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
     if (
       this.input.keyBuffer === 'm' ||

@@ -1004,6 +1004,98 @@ describe('Reader Selection Actions capture', () => {
   });
 });
 
+function createFlashSession() {
+  const created = createHistorySession();
+  const text = {
+    nodeType: 3,
+    data: 'target text',
+    length: 11,
+    isConnected: true,
+  } as unknown as Text;
+  const span = {
+    firstChild: text,
+    getBoundingClientRect: () => ({
+      left: 20,
+      right: 120,
+      top: 20,
+      bottom: 36,
+      width: 100,
+      height: 16,
+    }),
+  };
+  Reflect.set(created.pdfWindow.document, 'querySelectorAll', (selector: string) =>
+    selector === '.textLayer span' ? [span] : [],
+  );
+  return created;
+}
+
+describe('Reader Flash input ownership', () => {
+  it('keeps Flash open when native focus moves from the PDF body into its query input', () => {
+    const created = createFlashSession();
+    const blur: { listener: EventListener | null } = { listener: null };
+    Reflect.set(created.pdfWindow, 'addEventListener', (type: string, listener: EventListener) => {
+      if (type === 'blur') blur.listener = listener;
+    });
+    const createElement = created.pdfWindow.document.createElement.bind(created.pdfWindow.document);
+    Reflect.set(created.pdfWindow.document, 'createElement', (tag: string) => {
+      const element = createElement(tag);
+      if (tag === 'input')
+        Reflect.set(element, 'focus', () => {
+          blur.listener?.({
+            target: created.pdfWindow.document.body,
+            relatedTarget: element,
+          } as unknown as FocusEvent);
+        });
+      return element;
+    });
+    try {
+      created.session.start();
+      created.session.focusAndHandle(readerKey('v').event);
+      expect(
+        created.bodyChildren.some((element) => element.dataset.zoteroNeoFlashInput === '1'),
+      ).toBe(true);
+      blur.listener?.({ target: created.pdfWindow, relatedTarget: null } as unknown as FocusEvent);
+      expect(
+        created.bodyChildren.some((element) => element.dataset.zoteroNeoFlashInput === '1'),
+      ).toBe(false);
+    } finally {
+      created.session.dispose();
+    }
+  });
+
+  it('claims Flash host input only in the pane that owns its query', () => {
+    const created = createFlashSession();
+    const primary = created.reader._internalReader!._primaryView!;
+    const primaryHost = vi.fn();
+    const secondaryHost = vi.fn();
+    primary._onKeyDown = primaryHost;
+    const secondaryWindow = {
+      document: {
+        getElementById: () => null,
+        querySelector: () => null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    } as unknown as PdfWindow;
+    const secondary = { _iframeWindow: secondaryWindow, _onKeyDown: secondaryHost };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', secondary);
+    try {
+      created.session.start();
+      created.session.focusAndHandle(readerKey('v').event);
+      const own = readerKey('x').event;
+      primary._onKeyDown?.(own);
+      expect(primaryHost).not.toHaveBeenCalled();
+      const other = readerKey('x').event;
+      secondary._onKeyDown(other);
+      expect(secondaryHost).toHaveBeenCalledExactlyOnceWith(other);
+    } finally {
+      created.session.dispose();
+    }
+  });
+});
+
 describe('reader zoom shortcuts', () => {
   it('dispatches zoom commands and repeats count prefixes', () => {
     const zoomIn = vi.fn();
