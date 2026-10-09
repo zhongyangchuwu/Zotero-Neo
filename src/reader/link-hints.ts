@@ -187,6 +187,7 @@ export class ReaderLinkHints {
   }
 
   close(): void {
+    if (!this.#window && !this.#activationWindow && !this.#destinationWindow) return;
     try {
       this.cancelHints();
     } finally {
