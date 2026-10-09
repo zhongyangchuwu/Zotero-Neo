@@ -1,3 +1,4 @@
+import { isDeadObject } from '../platform/cross-compartment';
 import type { PdfWindow, ReaderTimer } from './types';
 
 type SidebarKind = 'outline' | 'marks';
@@ -12,6 +13,7 @@ export class ReaderSidebarOverlay {
   #active: SidebarKind | null = null;
   #pdfWindow: PdfWindow | null = null;
   #focusTimer: ReaderTimer | null = null;
+  #focusRevision = 0;
   #themeCleanup: (() => void) | null = null;
   #suppressFocusRestore = false;
   readonly #host: SidebarOverlayHost;
@@ -30,13 +32,20 @@ export class ReaderSidebarOverlay {
     this.#themeCleanup = cleanup;
     return cleanup;
   }
+
+  /** Retires even an already queued restore when Reader focus or sidebar ownership changes. */
+  cancelFocusRestore(): void {
+    this.#focusRevision += 1;
+    this.#host.clearTimer(this.#focusTimer);
+    this.#focusTimer = null;
+  }
+
   activate(kind: SidebarKind, pdfWindow: PdfWindow, closeOther: () => void): boolean {
+    this.cancelFocusRestore();
     if (this.#active === kind) return false;
     if (this.#active) closeOther();
     this.#active = kind;
     this.#pdfWindow = pdfWindow;
-    this.#host.clearTimer(this.#focusTimer);
-    this.#focusTimer = null;
     return true;
   }
 
@@ -51,8 +60,7 @@ export class ReaderSidebarOverlay {
 
   releaseView(pdfWindow: PdfWindow, closeView: () => void): void {
     if (this.#pdfWindow !== pdfWindow) return;
-    this.#host.clearTimer(this.#focusTimer);
-    this.#focusTimer = null;
+    this.cancelFocusRestore();
     this.#suppressFocusRestore = true;
     try {
       closeView();
@@ -62,8 +70,7 @@ export class ReaderSidebarOverlay {
       this.#pdfWindow = null;
       this.#themeCleanup?.();
       this.#themeCleanup = null;
-      this.#host.clearTimer(this.#focusTimer);
-      this.#focusTimer = null;
+      this.cancelFocusRestore();
     }
   }
 
@@ -73,16 +80,17 @@ export class ReaderSidebarOverlay {
     this.#pdfWindow = null;
     this.#themeCleanup?.();
     this.#themeCleanup = null;
-    this.#host.clearTimer(this.#focusTimer);
-    this.#focusTimer = null;
+    this.cancelFocusRestore();
   }
   #restoreFocus(pdfWindow?: PdfWindow): void {
     const target = pdfWindow ?? this.#pdfWindow;
-    if (!target) return;
-    this.#host.clearTimer(this.#focusTimer);
+    if (!target || isDeadObject(target)) return;
+    this.cancelFocusRestore();
+    const revision = this.#focusRevision;
     this.#focusTimer = this.#host.schedule(30, () => {
+      if (this.#focusRevision !== revision) return;
       this.#focusTimer = null;
-      target.focus();
+      if (!isDeadObject(target)) target.focus();
     });
   }
 }

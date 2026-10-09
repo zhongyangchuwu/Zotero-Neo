@@ -1,5 +1,7 @@
+import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
-import { cloneInto } from '../platform/cross-compartment';
+import { cloneInto, isDeadObject } from '../platform/cross-compartment';
+import { asElement, isEditableElement } from '../platform/dom';
 import { THEME_VARS } from '../ui/theme';
 import type { NavigationIntent, NavigationResult } from '../navigation/types';
 import type { ReaderNativeNavigation } from './jump-history-bridge';
@@ -11,6 +13,7 @@ import type {
   PdfWindow,
   ReaderRuntime,
   ReaderTimer,
+  ReaderViewRuntime,
 } from './types';
 
 interface OutlineState {
@@ -21,6 +24,7 @@ interface OutlineState {
   tree: OutlineNode[] | null;
   visible: OutlineNode[];
   selected: number;
+  pdfWindow: PdfWindow | null;
   overlay: HTMLElement | null;
   list: HTMLElement | null;
   status: HTMLElement | null;
@@ -58,6 +62,7 @@ export class ReaderOutline {
     tree: null,
     visible: [],
     selected: 0,
+    pdfWindow: null,
     overlay: null,
     list: null,
     status: null,
@@ -77,7 +82,7 @@ export class ReaderOutline {
   }
 
   ownsView(pdfWindow: PdfWindow): boolean {
-    return this.#state.overlay?.ownerDocument.defaultView === pdfWindow;
+    return this.#state.pdfWindow === pdfWindow;
   }
 
   async toggle(reader: ReaderRuntime, pdfWindow: PdfWindow): Promise<void> {
@@ -88,6 +93,7 @@ export class ReaderOutline {
     }
     state.loadGeneration += 1;
     state.open = true;
+    state.pdfWindow = pdfWindow;
     this.createOverlay(state, pdfWindow);
     this.render(state);
     state.overlay?.focus();
@@ -104,25 +110,53 @@ export class ReaderOutline {
     if (!state.visible.length && !state.loading) await this.load(state, reader, pdfWindow);
   }
 
+  /** Retires input and asynchronous work before DOM cleanup, notifying the coordinator on failure. */
   close(pdfWindow?: PdfWindow): void {
     const state = this.#state;
+    if (!state.open && !state.overlay) return;
+    const overlay = state.overlay;
+    const owner = state.pdfWindow;
+    const cleanup = state.themeCleanup;
     state.loadGeneration += 1;
+    state.confirmation += 1;
     state.open = false;
     state.loading = false;
-    this.clearBuffers(state);
-    state.themeCleanup?.();
+    state.pdfWindow = null;
     state.themeCleanup = null;
-    state.overlay?.remove();
     state.overlay = null;
     state.list = null;
     state.status = null;
     state.visible = [];
     state.selected = 0;
-    this.#host.onClose(pdfWindow);
+    try {
+      this.clearBuffers(state);
+    } finally {
+      try {
+        cleanup?.();
+      } finally {
+        try {
+          if (overlay && !isDeadObject(overlay) && (!owner || !isDeadObject(owner)))
+            overlay.remove();
+        } finally {
+          this.#host.onClose(pdfWindow);
+        }
+      }
+    }
   }
 
   handleKey(reader: ReaderRuntime, pdfWindow: PdfWindow, event: KeyboardEvent): boolean {
     const state = this.#state;
+    if (!state.open) return false;
+    if (
+      !this.ownsView(pdfWindow) ||
+      isDeadObject(pdfWindow) ||
+      (state.overlay && isDeadObject(state.overlay)) ||
+      isEditableElement(asElement(event.target))
+    ) {
+      this.close();
+      return false;
+    }
+    if (compositionOwnsKey(event, false)) return true;
     const key = keyString(event);
     if (!key) return false;
     const consume = (): void => {
@@ -138,7 +172,12 @@ export class ReaderOutline {
       } else {
         state.commandBuffer = 'g';
         this.#host.clearTimer(state.commandTimer);
-        state.commandTimer = this.#host.schedule(700, () => this.clearCommand(state));
+        const generation = state.loadGeneration;
+        const timer = this.#host.schedule(700, () => {
+          if (state.commandTimer === timer && this.isCurrent(state, generation))
+            this.clearCommand(state);
+        });
+        state.commandTimer = timer;
         this.setStatus(state, 'g … (gg top)');
       }
       return true;
@@ -180,6 +219,18 @@ export class ReaderOutline {
     consume();
     return true;
   }
+
+  private isCurrent(state: OutlineState, generation: number): boolean {
+    return (
+      state.open &&
+      state.loadGeneration === generation &&
+      state.pdfWindow !== null &&
+      !isDeadObject(state.pdfWindow) &&
+      state.overlay !== null &&
+      !isDeadObject(state.overlay)
+    );
+  }
+
   private async load(
     state: OutlineState,
     reader: ReaderRuntime,
@@ -187,15 +238,28 @@ export class ReaderOutline {
   ): Promise<void> {
     const generation = state.loadGeneration;
     const current = (): boolean =>
-      state.open &&
-      state.loadGeneration === generation &&
-      state.overlay?.ownerDocument.defaultView === pdfWindow;
+      this.isCurrent(state, generation) && state.pdfWindow === pdfWindow;
     if (!current()) return;
     state.loading = true;
     this.render(state);
     try {
+      if (!state.tree || !pdfWindow.PDFViewerApplication?.pdfDocument) {
+        const internal = reader._internalReader;
+        const primary = internal?._primaryView;
+        let view: ReaderViewRuntime | undefined = primary;
+        if (primary?._iframeWindow !== pdfWindow) {
+          const secondary = internal?._secondaryView;
+          view = secondary?._iframeWindow === pdfWindow ? secondary : undefined;
+        }
+        // Capture readiness while the view is live; never re-read it after awaiting host work.
+        const initialized = view?.initializedPromise;
+        if (initialized) {
+          await initialized;
+          if (!current()) return;
+        }
+      }
       if (!state.tree) {
-        const tree = await this.fetchTree(reader, pdfWindow);
+        const tree = await this.fetchTree(reader, pdfWindow, current);
         if (!current()) return;
         state.tree = tree;
       }
@@ -279,9 +343,14 @@ export class ReaderOutline {
     list.children[state.selected]?.scrollIntoView({ block: 'nearest' });
   }
 
-  private async fetchTree(reader: ReaderRuntime, pdfWindow: PdfWindow): Promise<OutlineNode[]> {
+  private async fetchTree(
+    reader: ReaderRuntime,
+    pdfWindow: PdfWindow,
+    current: () => boolean,
+  ): Promise<OutlineNode[]> {
     const pdfDocument = pdfWindow.PDFViewerApplication?.pdfDocument;
     let source = (await pdfDocument?.getOutline?.()) ?? null;
+    if (!current()) return [];
     if (!source?.length) source = this.readDomOutline(reader, pdfWindow);
     if (!source?.length) return [];
     let nextID = 0;
@@ -405,8 +474,12 @@ export class ReaderOutline {
     if (!node) return;
     const overlay = state.overlay;
     const confirmation = ++state.confirmation;
+    const generation = state.loadGeneration;
     const isCurrent = (): boolean =>
-      state.open && state.overlay === overlay && state.confirmation === confirmation;
+      this.isCurrent(state, generation) &&
+      state.pdfWindow === pdfWindow &&
+      state.overlay === overlay &&
+      state.confirmation === confirmation;
     const intent: NavigationIntent = {
       cause: { kind: 'event', event: 'reader-outline.confirm' },
       surface: 'reader',
@@ -466,7 +539,7 @@ export class ReaderOutline {
         return true;
       }
     } catch (error) {
-      this.#host.log(`outline navigation failed: ${String(error)}`);
+      if (navigation.isCurrent()) this.#host.log(`outline navigation failed: ${String(error)}`);
     }
     return false;
   }
@@ -530,7 +603,11 @@ export class ReaderOutline {
     }
     state.hintBuffer = next;
     this.#host.clearTimer(state.hintTimer);
-    state.hintTimer = this.#host.schedule(1200, () => this.clearHint(state));
+    const generation = state.loadGeneration;
+    const timer = this.#host.schedule(1200, () => {
+      if (state.hintTimer === timer && this.isCurrent(state, generation)) this.clearHint(state);
+    });
+    state.hintTimer = timer;
     const exact = matches.find(({ node }) => node.hint === next);
     if (exact) {
       state.selected = exact.index;

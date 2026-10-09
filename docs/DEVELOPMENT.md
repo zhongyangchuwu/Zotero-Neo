@@ -490,6 +490,23 @@ active kind. `ReaderOutline` also owns its cached tree, hint/command timers, and
 token; closing or replacing a PDF view invalidates pending `getOutline()` work before it can
 repaint a later overlay. `ReaderSessionState` must not mirror either sidebar's transient state.
 
+Outline captures its PDF-window identity independently of panel DOM. Its input and sidebar-toggle
+prefix belong only to that pane; composing keys remain native, while keys dispatched from another
+pane or an editable target cancel and yield. The focus-only action transfers Outline to its requested
+pane. Reader deactivation closes Outline and retires pending sidebar focus restoration without
+changing Zotero's page, zoom, scroll, or the Reader Surface mode vocabulary.
+
+Fresh loads, and cached-tree publication into a pane whose document is not ready, await that exact
+view's captured `initializedPromise`. After the wait, currentness is checked before reading the PDF
+document or publishing rows. Already-ready cached panes stay synchronous; early opening must not
+cache a missing document as an empty outline or confirm a destination before the pane is ready.
+Closing retires panel/window/timer ownership before DOM cleanup and notifies the coordinator even
+when a live cleanup fails. Destroyed wrappers are skipped; unexpected live failures remain visible.
+Hint/command expiries retain their timer and invocation, and navigation errors retain their current
+receipt. The shared sidebar focus callback retains a revision and checks the live destination window,
+so a queued old restore cannot refocus after deactivation, view release, or a newer sidebar activation.
+
+
 ## Annotation comment overlay
 
 The operating-system keyboard focus remains in the PDF.js iframe in common reader states.

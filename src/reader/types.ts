@@ -78,6 +78,7 @@ export interface ReaderFindControllerRuntime {
 
 export interface ReaderViewRuntime {
   readonly _iframeWindow?: Window;
+  readonly initializedPromise?: Promise<unknown>;
   readonly _history?: ReaderPdfHistoryRuntime;
   readonly _findState?: { readonly active?: boolean };
   readonly _findController?: ReaderFindControllerRuntime;
