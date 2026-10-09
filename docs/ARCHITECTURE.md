@@ -162,9 +162,10 @@ host/view lifecycle seams are owned separately:
 - `marks.ts` / `marks-explorer.ts` — persisted marks and explorer behavior;
 - `outline.ts` — outline tree/navigation;
 - `comment-editor.ts` — transient annotation-comment editor state;
-- `selection-actions.ts` — selection action registry/palette. Cross-surface
-  capture actions pass immutable selection context to their semantic owner and
-  remain pending until the owner's chooser closes;
+- `selection-actions.ts` — view-scoped selection action registry/palette and async
+  result lifetime. It retires input/theme ownership before touching detached DOM.
+  Cross-surface capture passes immutable selection context to its semantic owner
+  and remains pending until the owner's chooser closes;
 - `smooth-scroll.ts` — smooth-hold state;
 - `sidebar-overlay.ts` — only the shared Outline/Marks overlay lifecycle.
 
@@ -177,7 +178,7 @@ controller restarts.
 
 Closed Reader and split-view content can leave dead Gecko wrappers in session
 state. Teardown checks the native `Cu.isDeadWrapper` boundary before touching a
-retired PDF window, scroll element, or indicator. Dead DOM does not stop view
+retired PDF window, Select marker, scroll element, or indicator. Dead DOM does not stop view
 release, remaining session cleanup, or Main shutdown; unexpected failures on live
 objects are not hidden by this guard.
 

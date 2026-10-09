@@ -902,6 +902,53 @@ describe('Reader Selection Actions capture', () => {
     expect(created.indicator.textContent).toBe('✓ captured to note');
     created.session.dispose();
   });
+
+  it('claims popup input only in its captured view when Zotero forwards split keys', () => {
+    vi.stubGlobal('Zotero', {});
+    const created = createHistorySession();
+    const primary = created.reader._internalReader?._primaryView;
+    if (!primary) throw new Error('Expected primary Reader PDF view');
+    const primaryHost = vi.fn();
+    primary._onKeyDown = primaryHost;
+    const secondaryHost = vi.fn();
+    const secondaryWindow = {
+      document: {
+        getElementById: () => null,
+        querySelector: () => null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      focus: vi.fn(),
+      getSelection: () => null,
+    } as unknown as PdfWindow;
+    const secondary = { _iframeWindow: secondaryWindow, _onKeyDown: secondaryHost };
+    Reflect.set(created.reader._internalReader ?? {}, '_secondaryView', secondary);
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    Reflect.set(created.pdfWindow, 'getSelection', () => ({
+      isCollapsed: false,
+      rangeCount: 0,
+      toString: () => 'captured selection',
+      removeAllRanges: vi.fn(),
+    }));
+    created.session.start();
+    created.session.acceptSelectionParams({ annotation: {} });
+    created.session.focusAndHandle(readerKey('a').event);
+    expect(
+      created.bodyChildren.some((node) => node.dataset.zoteroNeoSelectionActions === '1'),
+    ).toBe(true);
+    const ownKey = readerKey('x');
+    primary._onKeyDown?.(ownKey.event);
+    expect(primaryHost).not.toHaveBeenCalled();
+    const otherKey = readerKey('x');
+    secondary._onKeyDown(otherKey.event);
+    expect(secondaryHost).toHaveBeenCalledWith(otherKey.event);
+    expect(
+      created.bodyChildren.some((node) => node.dataset.zoteroNeoSelectionActions === '1'),
+    ).toBe(true);
+    created.session.dispose();
+  });
 });
 
 describe('reader zoom shortcuts', () => {

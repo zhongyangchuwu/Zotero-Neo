@@ -592,3 +592,9 @@ for Zotero is discovered through its documented `Zotero.PDFTranslate.api.transla
 extension seam is exposed as `Zotero.Neo.reader.getSelection()` and
 `registerSelectionAction(...)`; integrations must use this contract instead of reaching into
 `ReaderSession` or PDF.js private nodes.
+
+The opening PDF window owns palette input, including Zotero's private key-forwarding claim;
+an open palette must not suppress an unbound key in the other split pane. Check IME ownership
+before consuming or cancelling a key. Async completion must match the invocation generation
+and live owner window/root before rendering, status, or focus. Close retires ownership and
+theme resources even when Gecko has already destroyed the content; do not hide live DOM failures.
