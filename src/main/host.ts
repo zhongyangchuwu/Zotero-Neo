@@ -159,7 +159,7 @@ export type MainHostWindow = MainWindow & {
   readonly Zotero_Tabs?: MainTabs;
   readonly ZoteroContextPane?: {
     focus?(): boolean | void;
-    activeEditor?: ContextNoteEditor;
+    readonly context?: { readonly activeEditor?: ContextNoteEditor };
   };
 };
 
@@ -630,9 +630,14 @@ export function currentMainItem(window: MainWindow): Zotero.Item | undefined {
   return mainSelectedItems(window)[0];
 }
 
+/** Zotero publishes context during init; its wrapper editor getter dereferences unready native state. */
+export function activeContextNoteEditor(window: MainWindow): ContextNoteEditor | undefined {
+  return mainHost(window).ZoteroContextPane?.context?.activeEditor;
+}
+
 /** Mirrors Zotero's own focused-context-note test instead of treating any open note as active. */
 export function activeContextNoteItem(window: MainWindow): Zotero.Item | undefined {
-  const editor = mainHost(window).ZoteroContextPane?.activeEditor;
+  const editor = activeContextNoteEditor(window);
   const active = window.document?.activeElement ?? null;
   if (!editor?.item || !active || !editor.contains?.(active)) return undefined;
   return editor.item;
@@ -669,5 +674,5 @@ export async function applyMainTagFilter(
   return pane.itemsView.rowCount ?? 0;
 }
 export function activeContextEditorWindow(window: MainWindow): Window | undefined {
-  return mainHost(window).ZoteroContextPane?.activeEditor?._iframe?.contentWindow;
+  return activeContextNoteEditor(window)?._iframe?.contentWindow;
 }

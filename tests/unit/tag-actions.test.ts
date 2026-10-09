@@ -255,7 +255,7 @@ describe('semantic Tag actions', () => {
     const active = {} as Element;
     Reflect.set(h.window.document, 'activeElement', active);
     Reflect.set(h.window, 'ZoteroContextPane', {
-      activeEditor: { item: note, contains: (node: unknown) => node === active },
+      context: { activeEditor: { item: note, contains: (node: unknown) => node === active } },
     });
 
     const noteTargets = NOTE_ITEM_TARGET.resolve(h.window);

@@ -27,9 +27,11 @@ function mainWindow(
     },
     ZoteroContextPane: options.contextNote
       ? {
-          activeEditor: {
-            item: { id: 7 },
-            contains: (node: unknown) => node === activeElement,
+          context: {
+            activeEditor: {
+              item: { id: 7 },
+              contains: (node: unknown) => node === activeElement,
+            },
           },
         }
       : undefined,
@@ -71,6 +73,38 @@ describe('active Surface resolution', () => {
     expect(resolveActiveSurface(mainWindow({ tabID: 'reader-tab', contextNote: true }))).toEqual({
       kind: 'note',
     });
+  });
+
+  it('resolves Main before context initialization and focused Note after the native context is published', () => {
+    Reflect.set(globalThis, 'Zotero', { Reader: { getByTabID: () => null } });
+    const window = mainWindow();
+    const active = window.document.activeElement;
+    const pane = {
+      get activeEditor(): never {
+        throw new TypeError('native context is not initialized');
+      },
+    };
+    Reflect.set(window, 'ZoteroContextPane', pane);
+    expect(resolveActiveSurface(window)).toEqual({ kind: 'main' });
+    const context = {
+      activeEditor: { item: { id: 7 }, contains: (node: unknown) => node === active },
+    };
+    Reflect.set(pane, 'context', context);
+    expect(resolveActiveSurface(window)).toEqual({ kind: 'note' });
+    Reflect.set(context, 'activeEditor', undefined);
+    expect(resolveActiveSurface(window)).toEqual({ kind: 'main' });
+  });
+
+  it('keeps an unexpected live context getter failure observable', () => {
+    const window = mainWindow();
+    Reflect.set(window, 'ZoteroContextPane', {
+      context: {
+        get activeEditor(): never {
+          throw new Error('live context editor failed');
+        },
+      },
+    });
+    expect(() => resolveActiveSurface(window)).toThrow('live context editor failed');
   });
 
   it('tracks Main -> Reader -> Main transitions directly from changing Zotero host state', () => {
