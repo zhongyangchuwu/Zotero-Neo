@@ -27,6 +27,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Fixed
 
+- PDF link hints preserve native IME keys and claim input only in their captured pane. Dead badges/cues/windows no longer strand ownership; retired RAF/timer callbacks and late navigation failures cannot alter a newer invocation. Reader deactivation clears the transient cue and pending activation without changing link discovery, labels, geometry or native navigation.
+
 - Flash no longer cancels itself when native focus moves into its query input, and claims host keys only in that PDF pane. Dead input/prompt/badges cannot strand ownership; retired input/composition callbacks cannot alter a newer query. Existing matching, labels, IME editing, and Select endpoint behavior remain unchanged.
 
 - Reader history cleanup uses the PDF-window identity captured while each view is live. Destroyed view wrappers no longer interrupt session retirement and leave Main activation inspecting a closed Reader; pending exact-view work is retired without affecting surviving split views.

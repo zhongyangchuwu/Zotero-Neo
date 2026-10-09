@@ -994,6 +994,7 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
+    this.#linkHints.close();
     this.#nativeInput.release();
     if (this.#commentEditor.ownsInput) {
       void this.handOverNativeEditor();
@@ -1096,14 +1097,7 @@ export class ReaderSession {
       this.#marksExplorer.handleKey(pdfWindow, event);
       return;
     }
-    if (this.#linkHints.hasHints && isEditableElement(asElement(event.target))) {
-      this.#linkHints.cancelHints();
-      return;
-    }
-    if (this.#linkHints.hasHints) {
-      this.#linkHints.handleKey(event, pdfWindow);
-      return;
-    }
+    if (this.#linkHints.hasHints && this.#linkHints.handleKey(event, pdfWindow)) return;
     if (isEditableElement(asElement(event.target))) {
       this.clearKeyGuide();
       return;
@@ -1310,7 +1304,8 @@ export class ReaderSession {
     if (this.#selectionActions.isOpen && pdfWindow && this.#selectionActions.ownsView(pdfWindow))
       return true;
     if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
-    if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
+    if (this.#linkHints.hasHints && pdfWindow && this.#linkHints.ownsView(pdfWindow)) return true;
+    if (this.#marksExplorer.isOpen || this.#outline.isOpen) return true;
     if (
       this.input.keyBuffer === 'm' ||
       this.input.keyBuffer === '`' ||
