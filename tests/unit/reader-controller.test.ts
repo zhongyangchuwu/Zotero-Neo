@@ -258,6 +258,59 @@ describe('Reader event lifecycle', () => {
     controller.shutdown();
   });
 
+  it('releases a destroyed Reader view before Main activation and keeps the live Reader keys', () => {
+    const closed = createHistorySession();
+    const live = createHistorySession();
+    const { service, dependencies } = createReaderRegistryHarness();
+    const closedView = closed.reader._internalReader!._primaryView!;
+    const liveView = live.reader._internalReader!._primaryView!;
+    const nativeNavigate = vi.fn(() => Promise.resolve());
+    const nativeKey = vi.fn();
+    Reflect.set(closedView, 'navigate', nativeNavigate);
+    Reflect.set(liveView, '_onKeyDown', nativeKey);
+    Reflect.set(closed.reader, '_instanceID', 'closed-reader');
+    Reflect.set(live.reader, '_instanceID', 'live-reader');
+    Reflect.set(closed.reader, '_window', live.ownerWindow);
+    service._readers = [closed.reader, live.reader];
+    const controller = createReaderController(dependencies);
+    let destroyed = false;
+    Object.defineProperty(closedView, '_iframeWindow', {
+      configurable: true,
+      get: () => {
+        if (destroyed) throw new TypeError("can't access dead object");
+        return closed.pdfWindow;
+      },
+    });
+    Reflect.set(globalThis, 'Components', {
+      utils: {
+        cloneInto: <T>(value: T) => value,
+        unwaiveXrays: <T>(value: T) => value,
+        waiveXrays: <T>(value: T) => value,
+        isDeadWrapper: (value: object) =>
+          destroyed && (value === closedView || value === closed.pdfWindow),
+      },
+    });
+    try {
+      controller.start('zotero-neo@zotero-neo');
+      controller.rescan(live.ownerWindow);
+      destroyed = true;
+      service._readers = [live.reader];
+
+      controller.rescan(live.ownerWindow);
+      controller.deactivateInactive(live.ownerWindow, null);
+      expect(closedView.navigate).toBe(nativeNavigate);
+      expect(liveView._onKeyDown).not.toBe(nativeKey);
+
+      controller.shutdown();
+      const event = readerKey('j').event;
+      liveView._onKeyDown!(event);
+      expect(nativeKey).toHaveBeenCalledExactlyOnceWith(event);
+    } finally {
+      destroyed = false;
+      controller.shutdown();
+    }
+  });
+
   it('keeps the active Reader runtime and deactivates sibling Reader runtimes', () => {
     const ownerWindow = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
     const pdfWindow = () =>

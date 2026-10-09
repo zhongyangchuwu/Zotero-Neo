@@ -181,6 +181,10 @@ state. Teardown checks the native `Cu.isDeadWrapper` boundary before touching a
 retired PDF window, Select marker, scroll element, or indicator. Dead DOM does not stop view
 release, remaining session cleanup, or Main shutdown; unexpected failures on live
 objects are not hidden by this guard.
+History scopes and patch records retain their PDF-window identity from creation.
+Window release matches those captured identities instead of reading `_iframeWindow`
+from a possibly destroyed native view, so history cleanup cannot strand the closed
+Reader session in Main's next activation pass.
 
 These modules should not be merged into a generic Reader widget framework. Their
 state and host contracts differ and are already independently testable.

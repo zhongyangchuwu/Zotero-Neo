@@ -43,6 +43,7 @@ interface OwnedScope {
   readonly policy: HistoryDecision;
   readonly isCurrent: () => boolean;
   readonly view: ReaderViewRuntime;
+  readonly window: Window | undefined;
   readonly source: ReaderJumpLocation | null;
   readonly origin: ReaderJumpPosition | null;
   readonly hardDestinations: ReaderJumpLocation[] | null;
@@ -93,6 +94,7 @@ interface HardEmission {
 }
 
 interface ReaderViewPatch {
+  readonly window: Window | undefined;
   readonly methods: MethodPatch[];
   readonly histories: ReaderHistoryPatch[];
   history?: ReaderPdfHistoryRuntime;
@@ -291,12 +293,13 @@ export class ReaderJumpHistoryBridge {
     }
   }
 
+  /** Releases captured window ownership without dereferencing a possibly destroyed native view. */
   releaseWindow(window: Window): void {
     for (const scope of [...this.#scopes]) {
-      if (scope.view._iframeWindow === window) this.#disposeScope(scope);
+      if (scope.window === window) this.#disposeScope(scope);
     }
-    for (const [view] of this.#patches) {
-      if (view._iframeWindow === window) this.#restore(view);
+    for (const [view, patch] of this.#patches) {
+      if (patch.window === window) this.#restore(view);
     }
   }
 
@@ -330,6 +333,7 @@ export class ReaderJumpHistoryBridge {
       policy,
       isCurrent,
       view,
+      window: view._iframeWindow,
       source: captureSource && policy.kind === 'record' ? this.#capture(view, origin) : null,
       origin,
       hardDestinations: policy.kind === 'record' && policy.evidence === 'native-hard' ? [] : null,
@@ -965,7 +969,11 @@ export class ReaderJumpHistoryBridge {
     if (existing && this.#isPatchCurrent(view, existing)) return;
     if (existing) this.#restore(view);
 
-    const patch: ReaderViewPatch = { methods: [], histories: [] };
+    const patch: ReaderViewPatch = {
+      window: view._iframeWindow,
+      methods: [],
+      histories: [],
+    };
     const history = view._history;
     const findController = view._findController;
     const linkService = (view._iframeWindow as PdfWindow | undefined)?.PDFViewerApplication
@@ -1340,6 +1348,7 @@ export class ReaderJumpHistoryBridge {
     const service = (view._iframeWindow as PdfWindow | undefined)?.PDFViewerApplication
       ?.pdfLinkService;
     if (
+      patch.window !== view._iframeWindow ||
       patch.history !== view._history ||
       patch.findController !== view._findController ||
       patch.linkService !== service ||

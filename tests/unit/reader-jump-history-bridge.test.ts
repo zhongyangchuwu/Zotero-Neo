@@ -1046,7 +1046,7 @@ describe('ReaderJumpHistoryBridge', () => {
     expect(h.observeNative).not.toHaveBeenCalled();
   });
 
-  it('settles view waiters and restores patches when the exact Reader window is released', async () => {
+  it('settles exact-view waiters after the native view wrapper has been destroyed', async () => {
     const h = harness();
     h.view._scrolling = true;
     const running = h.bridge.runDetached(
@@ -1056,6 +1056,14 @@ describe('ReaderJumpHistoryBridge', () => {
       () => ({ kind: 'completed', evidence: 'settled-change' }),
     );
     await Promise.resolve();
+    Object.defineProperty(h.view, '_iframeWindow', {
+      configurable: true,
+      get: () => {
+        throw new TypeError("can't access dead object");
+      },
+    });
+    h.bridge.releaseWindow({} as Window);
+    expect(h.history.save).not.toBe(h.nativeSave);
 
     h.bridge.releaseWindow(h.pdfWindow);
 

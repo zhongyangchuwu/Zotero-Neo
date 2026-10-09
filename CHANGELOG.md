@@ -27,6 +27,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Fixed
 
+- Reader history cleanup uses the PDF-window identity captured while each view is live. Destroyed view wrappers no longer interrupt session retirement and leave Main activation inspecting a closed Reader; pending exact-view work is retired without affecting surviving split views.
+
 - Selection Actions leaves composing keys native and claims host forwarding only in its owning PDF pane. Closing a dead Reader/split view releases palette/theme ownership without interrupting cleanup; Select marker cleanup skips destroyed windows so it cannot block that release. Stale async results cannot repaint or refocus a later palette.
 
 - Reader teardown now unregisters native listeners by event type and callback identity and rejects queued callbacks from retired registrations. Closed Reader indicators and secondary PDF dead wrappers no longer interrupt the remaining Reader/Main cleanup, fixing old-generation input and editor ownership surviving reload, replacement, disable/enable, or XPI update.
