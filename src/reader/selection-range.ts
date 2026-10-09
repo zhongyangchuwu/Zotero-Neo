@@ -1,3 +1,4 @@
+import { isDeadObject } from '../platform/cross-compartment';
 import type { FlashIntent, FlashSelectionTarget } from './flash';
 import { verticalTextPosition } from './text-motion';
 import type { PdfWindow, Pointer, ReaderMode } from './types';
@@ -210,6 +211,7 @@ export class ReaderSelectionRange {
   }
 
   #removeViewMarker(pdfWindow: PdfWindow): void {
+    if (isDeadObject(pdfWindow)) return;
     pdfWindow.document.documentElement.removeAttribute('data-zv-select-active');
     const cursors = Array.from(
       pdfWindow.document.querySelectorAll('[data-zv-cursor]'),

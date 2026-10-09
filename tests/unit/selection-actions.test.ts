@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ReaderSelectionActionRegistry,
@@ -10,6 +10,19 @@ import type {
 } from '../../src/core/contracts';
 import type { PdfWindow } from '../../src/reader/types';
 
+const originalComponents = Reflect.get(globalThis, 'Components');
+let deadObjects = new WeakSet<object>();
+beforeEach(() => {
+  deadObjects = new WeakSet();
+  Reflect.set(globalThis, 'Components', {
+    utils: { isDeadWrapper: (value: object) => deadObjects.has(value) },
+  });
+});
+afterEach(() => {
+  if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+  else Reflect.set(globalThis, 'Components', originalComponents);
+});
+
 const context: ReaderSelectionContext = {
   text: 'selected text',
   itemID: 42,
@@ -17,9 +30,10 @@ const context: ReaderSelectionContext = {
   position: '{"pageIndex":6}',
 };
 
-function key(value: string): KeyboardEvent {
+function key(value: string, state: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
     key: value,
+    ...state,
     preventDefault: vi.fn(),
     stopImmediatePropagation: vi.fn(),
   } as unknown as KeyboardEvent;
@@ -172,6 +186,151 @@ describe('ReaderSelectionActions', () => {
     expect(copyText).toHaveBeenCalledWith('译文');
     palette.handleKey(key('Escape'), created.pdfWindow);
     expect(palette.isOpen).toBe(false);
+  });
+
+  it('keeps IME-owned keys native without closing, navigating, or executing the menu', async () => {
+    const created = createWindow();
+    const first = vi.fn();
+    const second = vi.fn();
+    const palette = new ReaderSelectionActions({
+      actions: () => [
+        { id: 'first', label: 'First', run: first },
+        { id: 'second', label: 'Second', run: second },
+      ],
+      themeRoot: () => () => {},
+      copyText: () => {},
+      showStatus: () => {},
+      debug: () => {},
+    });
+    palette.open(created.pdfWindow, context);
+    for (const event of [
+      key('Escape', { isComposing: true }),
+      key('j', { keyCode: 229 }),
+      key('Process'),
+    ]) {
+      palette.handleKey(event, created.pdfWindow);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
+      expect(palette.isOpen).toBe(true);
+    }
+    const otherView = createWindow();
+    const otherIme = key('Escape', { keyCode: 229 });
+    expect(palette.handleKey(otherIme, otherView.pdfWindow)).toBe(false);
+    expect(otherIme.preventDefault).not.toHaveBeenCalled();
+    expect(palette.isOpen).toBe(true);
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(first).toHaveBeenCalledWith(context);
+    expect(second).not.toHaveBeenCalled();
+    expect(palette.isOpen).toBe(false);
+  });
+
+  it('retires dead-view ownership and ignores a late result over a new menu', async () => {
+    const primary = createWindow();
+    const secondary = createWindow();
+    const pending = Promise.withResolvers<{ body: string }>();
+    const themes = new Set<HTMLElement>();
+    const nextRun = vi.fn();
+    const actions: ReaderSelectionActionDefinition[] = [
+      { id: 'old', label: 'Old', run: () => pending.promise },
+    ];
+    const palette = new ReaderSelectionActions({
+      actions: () => actions,
+      themeRoot: (root) => {
+        themes.add(root);
+        return () => {
+          themes.delete(root);
+        };
+      },
+      copyText: () => {},
+      showStatus: () => {},
+      debug: () => {},
+    });
+    palette.open(primary.pdfWindow, context);
+    palette.handleKey(key('Enter'), primary.pdfWindow);
+    const oldRoot = primary.bodyChildren[0]!;
+    deadObjects.add(oldRoot);
+    deadObjects.add(primary.pdfWindow);
+    vi.mocked(oldRoot.remove).mockImplementation(() => {
+      throw new Error('dead object');
+    });
+    vi.mocked(primary.pdfWindow.focus).mockImplementation(() => {
+      throw new Error('dead object');
+    });
+    palette.releaseView(primary.pdfWindow);
+    expect(palette.isOpen).toBe(false);
+    expect(themes.size).toBe(0);
+    actions.splice(0, 1, { id: 'new', label: 'New', run: nextRun });
+    const nextContext = { ...context, text: 'new selection', pageLabel: '8' };
+    palette.open(secondary.pdfWindow, nextContext);
+    pending.resolve({ body: 'stale result' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(palette.isOpen).toBe(true);
+    expect(primary.pdfWindow.focus).not.toHaveBeenCalled();
+    palette.handleKey(key('Enter'), secondary.pdfWindow);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(nextRun).toHaveBeenCalledWith(nextContext);
+    expect(palette.isOpen).toBe(false);
+    expect(themes.size).toBe(0);
+  });
+
+  it('retires a completed invocation whose owner window died before view release', async () => {
+    const created = createWindow();
+    const pending = Promise.withResolvers<{ body: string }>();
+    const themes = new Set<HTMLElement>();
+    const showStatus = vi.fn();
+    const debug = vi.fn();
+    const palette = new ReaderSelectionActions({
+      actions: () => [{ id: 'pending', label: 'Pending', run: () => pending.promise }],
+      themeRoot: (root) => {
+        themes.add(root);
+        return () => {
+          themes.delete(root);
+        };
+      },
+      copyText: () => {},
+      showStatus,
+      debug,
+    });
+    palette.open(created.pdfWindow, context);
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    deadObjects.add(created.pdfWindow);
+    pending.resolve({ body: 'late result for removed view' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(palette.isOpen).toBe(false);
+    expect(themes.size).toBe(0);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    expect(showStatus).not.toHaveBeenCalled();
+    expect(debug).not.toHaveBeenCalled();
+  });
+
+  it('releases ownership and theme resources without hiding a live DOM failure', () => {
+    const created = createWindow();
+    const themes = new Set<HTMLElement>();
+    const palette = new ReaderSelectionActions({
+      actions: () => [{ id: 'copy', label: 'Copy', run: () => {} }],
+      themeRoot: (root) => {
+        themes.add(root);
+        return () => {
+          themes.delete(root);
+        };
+      },
+      copyText: () => {},
+      showStatus: () => {},
+      debug: () => {},
+    });
+    palette.open(created.pdfWindow, context);
+    const failure = new Error('live DOM removal failed');
+    vi.mocked(created.bodyChildren[0]!.remove).mockImplementation(() => {
+      throw failure;
+    });
+    expect(() => palette.close()).toThrow(failure);
+    expect(palette.isOpen).toBe(false);
+    expect(themes.size).toBe(0);
   });
 
   it('closes and yields when input moves to another split view', () => {

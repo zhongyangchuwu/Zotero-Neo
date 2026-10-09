@@ -1,7 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ReaderSelectionRange } from '../../src/reader/selection-range';
 import type { PdfWindow, ReaderMode } from '../../src/reader/types';
+
+const originalComponents = Reflect.get(globalThis, 'Components');
+let deadObjects = new WeakSet<object>();
+beforeEach(() => {
+  deadObjects = new WeakSet();
+  Reflect.set(globalThis, 'Components', {
+    utils: { isDeadWrapper: (value: object) => deadObjects.has(value) },
+  });
+});
+afterEach(() => {
+  if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+  else Reflect.set(globalThis, 'Components', originalComponents);
+});
 
 function textNode(value = 'abcdef'): Text {
   return {
@@ -156,6 +169,26 @@ describe('ReaderSelectionRange', () => {
 
     test.owner.releaseView(test.pdfWindow);
     expect(test.removeAttribute).toHaveBeenCalledWith('data-zv-select-active');
+  });
+
+  it('releases a destroyed Select view without blocking surviving-view cleanup', () => {
+    const test = harness();
+    const surviving = rangeWindow();
+    test.owner.refresh(test.pdfWindow, false);
+    test.owner.refresh(surviving.pdfWindow, false);
+    const deadDocument = vi.fn(() => {
+      throw new TypeError("can't access dead object");
+    });
+    Object.defineProperty(test.pdfWindow, 'document', { get: deadDocument });
+    deadObjects.add(test.pdfWindow);
+
+    test.owner.releaseView(test.pdfWindow);
+    deadObjects.delete(test.pdfWindow);
+    test.owner.leave();
+
+    expect(deadDocument).not.toHaveBeenCalled();
+    expect(surviving.removeAttribute).toHaveBeenCalledWith('data-zv-select-active');
+    expect(surviving.cursorRemove).toHaveBeenCalled();
   });
 
   it('starts Flash when Select has no existing native range', () => {

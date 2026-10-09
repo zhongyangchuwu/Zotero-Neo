@@ -1,3 +1,5 @@
+import { compositionOwnsKey } from '../input/composition';
+import { isDeadObject } from '../platform/cross-compartment';
 import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionActionOutcome,
@@ -101,9 +103,10 @@ export class ReaderSelectionActions {
     return true;
   }
 
-  /** Returns false after cancelling an invocation owned by another split view. */
+  /** Ordinary outside-view input cancels and yields; IME input does not change the owner. */
   handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
     if (!this.#overlay || !this.#window) return false;
+    if (compositionOwnsKey(event, false)) return this.ownsView(pdfWindow);
     if (pdfWindow !== this.#window) {
       this.close();
       return false;
@@ -169,9 +172,9 @@ export class ReaderSelectionActions {
 
   close(): void {
     this.#generation += 1;
-    this.#overlay?.remove();
+    const overlay = this.#overlay;
+    const themeCleanup = this.#themeCleanup;
     this.#overlay = null;
-    this.#themeCleanup?.();
     this.#themeCleanup = null;
     this.#window = null;
     this.#context = null;
@@ -179,6 +182,11 @@ export class ReaderSelectionActions {
     this.#selected = 0;
     this.#stage = 'menu';
     this.#resultText = '';
+    try {
+      if (overlay && !isDeadObject(overlay)) overlay.remove();
+    } finally {
+      themeCleanup?.();
+    }
   }
 
   async #execute(index: number): Promise<void> {
@@ -192,7 +200,7 @@ export class ReaderSelectionActions {
     this.#render(`Running ${action.label}…`);
     try {
       const outcome = await action.run(context);
-      if (generation !== this.#generation || this.#window !== pdfWindow) return;
+      if (!this.#canComplete(generation, pdfWindow)) return;
       if (outcome && typeof outcome === 'object' && outcome.body) {
         this.#stage = 'result';
         this.#resultText = outcome.body;
@@ -202,12 +210,23 @@ export class ReaderSelectionActions {
       this.close();
       pdfWindow.focus();
     } catch (error) {
-      if (generation !== this.#generation) return;
+      if (!this.#canComplete(generation, pdfWindow)) return;
       this.#host.debug(`selection action ${action.id} failed: ${String(error)}`);
       this.close();
       this.#host.showStatus(`✗ ${action.label} failed`, 2500);
       pdfWindow.focus();
     }
+  }
+
+  /** Retires dead content before an async result can touch it, even before view discovery. */
+  #canComplete(generation: number, pdfWindow: PdfWindow): boolean {
+    if (generation !== this.#generation || this.#window !== pdfWindow || !this.#overlay)
+      return false;
+    if (isDeadObject(pdfWindow) || isDeadObject(this.#overlay)) {
+      this.close();
+      return false;
+    }
+    return true;
   }
 
   #mount(pdfWindow: PdfWindow): void {

@@ -1307,7 +1307,9 @@ export class ReaderSession {
     if (this.#nativeInput.ownsInput) return key === 'escape';
     if (pdfWindow && this.#commentEditor.ownsView(pdfWindow))
       return this.#commentEditor.consumesKey(key, pdfWindow);
-    if (this.#selectionActions.isOpen || this.#flash.isOpen) return true;
+    if (this.#selectionActions.isOpen && pdfWindow && this.#selectionActions.ownsView(pdfWindow))
+      return true;
+    if (this.#flash.isOpen) return true;
     if (this.#marksExplorer.isOpen || this.#outline.isOpen || this.#linkHints.hasHints) return true;
     if (
       this.input.keyBuffer === 'm' ||
