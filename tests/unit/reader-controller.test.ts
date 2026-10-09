@@ -113,6 +113,121 @@ function createReaderRegistryHarness() {
   return { service, dependencies };
 }
 
+describe('Reader failure diagnostics', () => {
+  it('retains inventory failure identity without reading the failed host again', () => {
+    const { service, dependencies } = createReaderRegistryHarness();
+    const original = new TypeError('native inventory failure');
+    const inventory = vi.fn(() => {
+      throw original;
+    });
+    Object.defineProperty(service, '_readers', { configurable: true, get: inventory });
+    const controller = new ReaderController(dependencies);
+    try {
+      controller.rescan({} as _ZoteroTypes.MainWindow);
+      throw new Error('Expected inventory failure');
+    } catch (error) {
+      expect(error).toMatchObject({
+        message: expect.stringContaining('stage=inventory'),
+        cause: original,
+      });
+      expect(inventory).toHaveBeenCalledOnce();
+    } finally {
+      controller.shutdown();
+    }
+  });
+
+  it('retains injection failure identity and the known Reader instance', () => {
+    const { service, dependencies } = createReaderRegistryHarness();
+    const original = new TypeError('native iframe failure');
+    const reader = { _instanceID: 'fault-reader', itemID: 42 } as ReaderRuntime;
+    const internalReader = vi.fn(() => {
+      throw original;
+    });
+    Object.defineProperty(reader, '_internalReader', { get: internalReader });
+    service._readers = [reader];
+    const controller = new ReaderController(dependencies);
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan({ Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow);
+      throw new Error('Expected injection failure');
+    } catch (error) {
+      expect(error).toMatchObject({
+        message: expect.stringContaining('stage=ensure'),
+        cause: { message: expect.stringContaining('instanceID=fault-reader'), cause: original },
+      });
+      expect(internalReader).toHaveBeenCalledOnce();
+    } finally {
+      controller.shutdown();
+    }
+  });
+
+  it('persists a delayed injection failure before preserving its propagation', () => {
+    vi.useFakeTimers();
+    const { service, dependencies } = createReaderRegistryHarness();
+    const diagnostic = vi.fn();
+    const original = new TypeError('delayed native iframe failure');
+    const reader = { _instanceID: 'delayed-reader', itemID: 42 } as ReaderRuntime;
+    let failed = false;
+    Object.defineProperty(reader, '_internalReader', {
+      get: () => {
+        if (failed) throw original;
+        return undefined;
+      },
+    });
+    service._readers = [reader];
+    const controller = new ReaderController({
+      ...dependencies,
+      logger: { debug: () => {}, diagnostic },
+    });
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan({ Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow);
+      failed = true;
+      try {
+        vi.advanceTimersByTime(100);
+        throw new Error('Expected delayed injection failure');
+      } catch (error) {
+        expect(error).toMatchObject({
+          message: expect.stringContaining('instanceID=delayed-reader attempt=1'),
+          cause: original,
+        });
+      }
+      const report = diagnostic.mock.calls.map(([message]) => message).join('\n');
+      expect(report).toContain(original.stack);
+      expect(report).toContain('instanceID=delayed-reader attempt=1');
+    } finally {
+      controller.shutdown();
+    }
+  });
+
+  it('retains disposal failure identity and the cached Reader instance', () => {
+    const closed = createHistorySession();
+    const { service, dependencies } = createReaderRegistryHarness();
+    Reflect.set(closed.reader, '_instanceID', 'retired-reader');
+    service._readers = [closed.reader];
+    const controller = new ReaderController(dependencies);
+    controller.start('zotero-neo@zotero-neo');
+    controller.rescan(closed.ownerWindow);
+    service._readers = [];
+    const original = new TypeError('native disposal failure');
+    const dispose = vi.spyOn(ReaderSession.prototype, 'dispose').mockImplementationOnce(() => {
+      throw original;
+    });
+    try {
+      controller.rescan(closed.ownerWindow);
+      throw new Error('Expected disposal failure');
+    } catch (error) {
+      expect(error).toMatchObject({
+        message: expect.stringContaining('stage=reconcile'),
+        cause: { message: expect.stringContaining('instanceID=retired-reader'), cause: original },
+      });
+    } finally {
+      dispose.mockRestore();
+      controller.shutdown();
+    }
+  });
+});
+
 describe('Reader event lifecycle', () => {
   it.each(['restart', 'replacement'] as const)(
     'retires native selection callbacks across %s without changing the current input',

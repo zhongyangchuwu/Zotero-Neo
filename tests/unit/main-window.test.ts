@@ -1959,10 +1959,79 @@ describe('Main command palette', () => {
     controller.shutdown();
   });
 
-  it('keeps Main shortcuts attached when Reader rescan fails during startup', async () => {
+  it.each([
+    new Error('missing Reader view'),
+    Object.create(null, {
+      toString: {
+        value: () => {
+          throw new Error('dead error wrapper');
+        },
+      },
+      stack: {
+        get: () => {
+          throw new Error('dead stack wrapper');
+        },
+      },
+    }),
+  ])(
+    'keeps Main shortcuts attached when Reader rescan fails during startup (%#)',
+    async (failure) => {
+      vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+      const host = pickerMainWindow();
+      const debug = vi.fn();
+      const controller = createMainWindowController({
+        preferences: {
+          has: () => false,
+          get: (_key, fallback) => fallback,
+          set: () => {},
+          clear: () => {},
+        },
+        logger: { debug, diagnostic: vi.fn() },
+        reader: {
+          start: () => {},
+          shutdown: () => {},
+          rescan: () => {
+            throw failure;
+          },
+          deactivateInactive: () => {},
+          forwardKey: () => {},
+          captureJumpLocation: () => null,
+          restoreJumpLocation: async () => null,
+        },
+      } as MainWindowControllerDependencies);
+
+      expect(() => controller.addWindow(host.window)).not.toThrow();
+
+      host.keydown({
+        key: ':',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as KeyboardEvent);
+
+      await vi.waitFor(() =>
+        expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
+      );
+      controller.shutdown();
+    },
+  );
+
+  it('persists the original failure stack once per episode and records recovery', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const host = pickerMainWindow();
+    let scan!: () => void;
+    Reflect.set(host.window, 'setInterval', (callback: () => void) => {
+      scan = callback;
+      return 0;
+    });
+    Reflect.set(host.window, 'setTimeout', () => 0);
     const debug = vi.fn();
+    const diagnostic = vi.fn();
+    const original = new TypeError('native Reader boundary failure');
+    const failure = new Error('Reader injection context', { cause: original });
+    let failed = true;
     const controller = createMainWindowController({
       preferences: {
         has: () => false,
@@ -1970,12 +2039,12 @@ describe('Main command palette', () => {
         set: () => {},
         clear: () => {},
       },
-      logger: { debug, diagnostic: vi.fn() },
+      logger: { debug, diagnostic },
       reader: {
         start: () => {},
         shutdown: () => {},
         rescan: () => {
-          throw new Error('missing Reader view');
+          if (failed) throw failure;
         },
         deactivateInactive: () => {},
         forwardKey: () => {},
@@ -1983,25 +2052,27 @@ describe('Main command palette', () => {
         restoreJumpLocation: async () => null,
       },
     } as MainWindowControllerDependencies);
-
-    expect(() => controller.addWindow(host.window)).not.toThrow();
-
-    host.keydown({
-      key: ':',
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    } as unknown as KeyboardEvent);
-
-    await vi.waitFor(() =>
-      expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
-    );
-    expect(debug).toHaveBeenCalledWith(
-      expect.stringContaining('Reader rescan failed during Main window scan'),
-    );
-    controller.shutdown();
+    try {
+      controller.addWindow(host.window);
+      expect(debug.mock.calls.map(([message]) => message).join('\n')).toContain(original.stack);
+      expect(diagnostic.mock.calls.map(([message]) => message).join('\n')).toContain(
+        original.stack,
+      );
+      const firstFailureRecords = diagnostic.mock.calls.length;
+      scan();
+      scan();
+      expect(diagnostic).toHaveBeenCalledTimes(firstFailureRecords);
+      failed = false;
+      scan();
+      expect(diagnostic).toHaveBeenCalledTimes(firstFailureRecords + 1);
+      scan();
+      expect(diagnostic).toHaveBeenCalledTimes(firstFailureRecords + 1);
+      failed = true;
+      scan();
+      expect(diagnostic).toHaveBeenCalledTimes(firstFailureRecords + 2);
+    } finally {
+      controller.shutdown();
+    }
   });
 });
 

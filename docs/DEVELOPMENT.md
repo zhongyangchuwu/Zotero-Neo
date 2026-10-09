@@ -626,6 +626,17 @@ picker mount/load/close, tag-filter changes, and contextual failures. Idle reade
 must not append recurring rescan entries. Verify Reader injection with restored and newly opened
 readers, and verify picker work against the mounted list/preview DOM rather than session fields alone.
 
+`reportDiagnosticError()` reports native exception stacks and bounded `Error.cause` chains to
+both Debug and the UTF-8 profile log. Unreadable error properties, cyclic causes, and failed
+logging sinks must not produce a second exception. The sinks are independent; a failed profile
+write is reported in Debug once per logger, and native streams are closed on failure.
+Reader rescans attach the discovery/reconciliation/injection stage and cached session/pending
+instance IDs without dereferencing failed DOM wrappers for diagnostics. Injection and disposal
+failures retain the known Reader instance and original error as their cause; delayed injection
+failures are reported before propagating. Main records the first failed scan in an episode and
+one recovery, not every recurring failure or idle scan. These reports do not change retry,
+inventory, cleanup, or input policy, and do not themselves fix an underlying lifecycle fault.
+
 
 ### Reader text selection and external actions
 

@@ -5,6 +5,7 @@ import type {
   MainWindow,
   ReaderSelectionContext,
 } from '../core/contracts';
+import { reportDiagnostic, reportDiagnosticError } from '../core/logging';
 import type {
   NavigationCause,
   NavigationIntent,
@@ -170,13 +171,18 @@ export class MainWindowController implements MainWindowControllerApi {
       try {
         this.rescan(window);
         if (readerScanFailed) {
-          this.#dependencies.logger.debug('Reader rescan recovered during Main window scan');
+          reportDiagnostic(
+            this.#dependencies.logger,
+            'Reader rescan recovered during Main window scan',
+          );
           readerScanFailed = false;
         }
       } catch (error) {
         if (!readerScanFailed)
-          this.#dependencies.logger.debug(
-            `Reader rescan failed during Main window scan: ${String(error)}`,
+          reportDiagnosticError(
+            this.#dependencies.logger,
+            'Reader rescan failed during Main window scan',
+            error,
           );
         readerScanFailed = true;
       }

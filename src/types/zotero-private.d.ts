@@ -1,4 +1,5 @@
 interface nsIXPCComponents_Classes {
+  readonly '@mozilla.org/intl/converter-output-stream;1': nsIJSCID;
   readonly '@mozilla.org/network/file-output-stream;1': nsIJSCID;
   readonly '@mozilla.org/widget/clipboardhelper;1': nsIJSCID;
 }
