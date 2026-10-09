@@ -400,7 +400,16 @@ navigation. Because the call crosses from Bootstrap chrome into the reader conte
 realm, clone the complete location payload into `reader._iframeWindow` first.
 External targets call `_onOpenLink(url)` with a primitive string.
 `ReaderLinkHints` owns hint badges, key-buffer filtering, viewport RAFs, and the
-temporary destination cue; `ReaderSession` orchestrates host/view boundaries. The
+temporary destination cue; `ReaderSession` orchestrates host/view boundaries.
+Hint input belongs only to its captured PDF view: composing keys stay native,
+and keys from another pane or an editable control cancel and yield to that context.
+Badge/cue/RAF ownership retires before DOM cleanup; destroyed nodes/windows are
+skipped while unexpected live failures remain observable. Queued RAF/timer callbacks
+must still own their captured badges/cue before changing current state. New hint
+invocations, cancellation, Reader deactivation, and exact-view release retire pending
+activation receipts, so late navigation failures cannot affect a newer invocation.
+The destination cue does not create a Reader Surface mode.
+
 Main's jump-history adapter and the shared coordinator own qualifying Reader jumps
 and cross-surface Back/Forward. The bridge in `src/reader/jump-history-bridge.ts`
 observes native payloads to maintain actual hard/transient baselines, but a raw save

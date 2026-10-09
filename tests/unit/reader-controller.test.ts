@@ -2991,6 +2991,213 @@ describe('Reader mark history execution', () => {
 });
 
 describe('PDF follow-link hints', () => {
+  it('leaves composing Escape and label keys native without changing hints', () => {
+    const created = createHistorySession();
+    const { navigate } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    created.session.focusAndHandle(readerKey('f').event);
+    const hints = [...linkHintElements(created)];
+    for (const event of [
+      readerKey('Escape', { isComposing: true }),
+      readerKey('a', { keyCode: 229 }),
+      readerKey('Process'),
+    ]) {
+      created.session.focusAndHandle(event.event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
+      expect(linkHintElements(created)).toEqual(hints);
+    }
+    expect(navigate).not.toHaveBeenCalled();
+    created.session.focusAndHandle(readerKey('a').event);
+    expect(navigate).toHaveBeenCalledWith({ position: linkPosition([0, 0, 0, 0], 1) });
+    created.session.dispose();
+  });
+
+  it("claims only its captured pane and never activates that pane's badge in another view", () => {
+    const created = createHistorySession();
+    const primary = configureLinkView(created, [internalLink([10, 10, 80, 30], 7)]);
+    const primaryHost = vi.fn();
+    const secondaryHost = vi.fn();
+    const secondaryNavigate = vi.fn();
+    primary.view._onKeyDown = primaryHost;
+    const secondaryWindow = {
+      document: {
+        getElementById: () => null,
+        querySelector: () => null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+      focus: vi.fn(),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    } as unknown as PdfWindow;
+    const secondary = {
+      _iframeWindow: secondaryWindow,
+      _onKeyDown: secondaryHost,
+      navigate: secondaryNavigate,
+      getClientRectForPopup: (position: ReaderLinkPosition) => position.rects[0],
+    };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', secondary);
+    created.session.start();
+    created.session.focusAndHandle(readerKey('f').event);
+    primary.view._onKeyDown?.(readerKey('x').event);
+    expect(primaryHost).not.toHaveBeenCalled();
+    const native = readerKey('x').event;
+    secondary._onKeyDown(native);
+    expect(secondaryHost).toHaveBeenCalledExactlyOnceWith(native);
+
+    Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+    const other = readerKey('a');
+    created.session.focusAndHandle(other.event);
+    expect(other.preventDefault).not.toHaveBeenCalled();
+    expect(primary.navigate).not.toHaveBeenCalled();
+    expect(secondaryNavigate).not.toHaveBeenCalled();
+    expect(linkHintElements(created)).toEqual([]);
+    created.session.dispose();
+  });
+
+  it('retires hint ownership even when a live badge cannot be removed', () => {
+    const created = createHistorySession();
+    const { view } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const native = vi.fn();
+    view._onKeyDown = native;
+    created.session.start();
+    created.session.focusAndHandle(readerKey('f').event);
+    const badge = linkHintElements(created)[0]!;
+    vi.mocked(badge.remove).mockImplementationOnce(() => {
+      throw new Error('live badge removal failed');
+    });
+    expect(() => created.session.focusAndHandle(readerKey('Escape').event)).toThrow(
+      'live badge removal failed',
+    );
+    const key = readerKey('x').event;
+    view._onKeyDown?.(key);
+    expect(native).toHaveBeenCalledExactlyOnceWith(key);
+    badge.remove();
+    created.session.dispose();
+  });
+
+  it('releases a destroyed view without touching its dead badges, cue or RAF boundary', () => {
+    const created = createHistorySession();
+    const { view } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const originalKey = vi.fn();
+    view._onKeyDown = originalKey;
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+    Reflect.set(created.reader, '_iframeWindow', created.readerWindow);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    const cue = destinationCueElement(created)!;
+    created.session.focusAndHandle(readerKey('f').event);
+    const badge = linkHintElements(created)[0]!;
+    const dead = new Set<object>([created.pdfWindow, cue, badge]);
+    const utils = Reflect.get(globalThis, 'Components').utils;
+    utils.isDeadWrapper = (value: object) => dead.has(value);
+    for (const node of [cue, badge]) {
+      Object.defineProperty(node, 'remove', {
+        get: () => {
+          throw new Error('cannot access dead object');
+        },
+      });
+    }
+    Object.defineProperty(created.pdfWindow, 'cancelAnimationFrame', {
+      get: () => {
+        throw new Error('cannot access dead object');
+      },
+    });
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    created.intervalTasks[0]?.();
+    const key = readerKey('x').event;
+    view._onKeyDown?.(key);
+    expect(originalKey).toHaveBeenCalledExactlyOnceWith(key);
+    created.session.dispose();
+    expect(view._onKeyDown).toBe(originalKey);
+  });
+
+  it('ignores a retired destination RAF and timer while a new cue awaits its own frame', () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createHistorySession();
+    const second = {
+      ...internalLink([60, 10, 90, 30], 2),
+      destinationPosition: linkPosition([220, 240, 260, 280], 2),
+    };
+    configureLinkView(created, [internalLink([10, 10, 40, 30]), second]);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    const retiredFrame = created.animationFrameTasks.shift()!;
+    const retiredTimer = timers.mock.calls.find(([, delay]) => delay === 2000)![0] as () => void;
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('s').event);
+    const currentCue = destinationCueElement(created)!;
+    expect(currentCue.hidden).toBe(true);
+    retiredFrame();
+    expect(currentCue.hidden).toBe(true);
+    retiredTimer();
+    expect(destinationCueElement(created)).toBe(currentCue);
+    created.animationFrameTasks.shift()?.();
+    expect(currentCue.style.left).toBe('220px');
+    expect(currentCue.hidden).toBe(false);
+    created.session.dispose();
+    timers.mockRestore();
+  });
+
+  it('does not report a retired navigation failure into a newer hint invocation', async () => {
+    const created = createHistorySession();
+    const configured = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const pending = Promise.withResolvers<void>();
+    configured.navigate.mockReturnValue(pending.promise);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    created.session.focusAndHandle(readerKey('f').event);
+    const current = [...linkHintElements(created)];
+    pending.reject(new Error('retired navigation failed'));
+    await settleReaderMicrotasks();
+    expect(created.debug).toEqual([]);
+    expect(created.indicator.textContent).not.toBe('Link unavailable');
+    expect(linkHintElements(created)).toEqual(current);
+    created.session.dispose();
+  });
+
+  it('retires an activated link when its view is released after its badges were removed', async () => {
+    const created = createHistorySession();
+    const configured = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const pending = Promise.withResolvers<void>();
+    configured.navigate.mockReturnValue(pending.promise);
+    Reflect.set(created.reader, '_iframeWindow', undefined);
+    created.session.start();
+    Reflect.set(created.reader, '_iframeWindow', created.readerWindow);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    created.intervalTasks[0]?.();
+    pending.reject(new Error('released navigation failed'));
+    await settleReaderMicrotasks();
+    expect(created.debug).not.toContain(
+      'reader follow link activation failed: Error: released navigation failed',
+    );
+    expect(created.indicator.textContent).not.toBe('Link unavailable');
+    expect(destinationCueElement(created)).toBeNull();
+    created.session.dispose();
+  });
+
+  it('clears the cue and retires pending activation on Reader deactivation', async () => {
+    const created = createHistorySession();
+    const configured = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const pending = Promise.withResolvers<void>();
+    configured.navigate.mockReturnValue(pending.promise);
+    created.session.focusAndHandle(readerKey('f').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    expect(destinationCueElement(created)).not.toBeNull();
+    created.session.deactivateInteraction();
+    expect(destinationCueElement(created)).toBeNull();
+    pending.reject(new Error('deactivated navigation failed'));
+    await settleReaderMicrotasks();
+    expect(created.debug).toEqual([]);
+    created.session.focusAndHandle(readerKey('f').event);
+    expect(linkHintElements(created).map((badge) => badge.textContent)).toEqual(['A']);
+    created.session.dispose();
+  });
+
   it('follows visible links and shows Zotero-preview-style point and rectangle cues', () => {
     vi.useFakeTimers();
     const created = createHistorySession();

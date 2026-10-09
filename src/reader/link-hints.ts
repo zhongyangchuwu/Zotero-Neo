@@ -1,4 +1,6 @@
-import { cloneInto } from '../platform/cross-compartment';
+import { compositionOwnsKey } from '../input/composition';
+import { cloneInto, isDeadObject } from '../platform/cross-compartment';
+import { asElement, isEditableElement } from '../platform/dom';
 import { hintLabels } from './hint-labels';
 import type { NavigationExecution, NavigationIntent, NavigationResult } from '../navigation/types';
 import type { ReaderNavigationCommand } from './navigation';
@@ -33,6 +35,7 @@ export class ReaderLinkHints {
   #window: PdfWindow | null = null;
   #repositionFrame: number | null = null;
   #activation = 0;
+  #activationWindow: PdfWindow | null = null;
   #destinationCue: HTMLElement | null = null;
   #destinationPosition: ReaderLinkPosition | null = null;
   #destinationWindow: PdfWindow | null = null;
@@ -45,6 +48,10 @@ export class ReaderLinkHints {
 
   get hasHints(): boolean {
     return this.#badges.length > 0;
+  }
+
+  ownsView(pdfWindow: PdfWindow): boolean {
+    return this.#window === pdfWindow;
   }
 
   open(pdfWindow: PdfWindow): void {
@@ -100,20 +107,29 @@ export class ReaderLinkHints {
     }
   }
 
-  handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): void {
+  handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
+    if (
+      !this.ownsView(pdfWindow) ||
+      isDeadObject(pdfWindow) ||
+      isEditableElement(asElement(event.target))
+    ) {
+      this.cancelHints();
+      return false;
+    }
+    if (compositionOwnsKey(event, false)) return true;
     event.preventDefault();
     event.stopImmediatePropagation();
     if (event.key === 'Escape') {
       this.cancelHints();
       pdfWindow.focus();
-      return;
+      return true;
     }
     if (event.key === 'Backspace') {
       this.#buffer = this.#buffer.slice(0, -1);
       this.#refreshHints(pdfWindow);
-      return;
+      return true;
     }
-    if (!/^[a-z]$/i.test(event.key)) return;
+    if (!/^[a-z]$/i.test(event.key)) return true;
     const next = `${this.#buffer}${event.key.toUpperCase()}`;
     const matches = this.#badges.filter(
       (badge) => !badge.element.hidden && badge.label.startsWith(next),
@@ -121,7 +137,7 @@ export class ReaderLinkHints {
     if (!matches.length) {
       this.#buffer = '';
       this.#refreshHints(pdfWindow);
-      return;
+      return true;
     }
     this.#buffer = next;
     this.#refreshHints(pdfWindow);
@@ -129,31 +145,54 @@ export class ReaderLinkHints {
     const exact = visibleMatches.find((badge) => badge.label === next);
     if (exact || visibleMatches.length === 1)
       this.#activate(pdfWindow, exact ?? visibleMatches[0]!);
+    return true;
   }
 
   onViewportChange(pdfWindow: PdfWindow): void {
+    if (isDeadObject(pdfWindow)) return;
     if (this.#window === pdfWindow) this.#repositionHints(pdfWindow);
     if (this.#destinationWindow === pdfWindow) this.#repositionDestinationCue(pdfWindow);
   }
 
   releaseView(pdfWindow: PdfWindow): void {
-    if (this.#window === pdfWindow) this.cancelHints();
-    if (this.#destinationWindow === pdfWindow) this.#clearDestinationCue();
+    if (this.#activationWindow === pdfWindow) {
+      this.#activation += 1;
+      this.#activationWindow = null;
+    }
+    try {
+      if (this.ownsView(pdfWindow)) this.cancelHints();
+    } finally {
+      if (this.#destinationWindow === pdfWindow) this.#clearDestinationCue();
+    }
   }
 
+  /** Retires the invocation before releasing DOM/RAF resources; live failures remain observable. */
   cancelHints(): void {
-    for (const badge of this.#badges) badge.element.remove();
+    const badges = this.#badges;
+    const owner = this.#window;
+    const frame = this.#repositionFrame;
+    this.#activation += 1;
+    this.#activationWindow = null;
     this.#badges = [];
     this.#buffer = '';
-    const owner = this.#window;
-    if (owner && this.#repositionFrame !== null) owner.cancelAnimationFrame(this.#repositionFrame);
     this.#repositionFrame = null;
     this.#window = null;
+    try {
+      if (owner && !isDeadObject(owner) && frame !== null) owner.cancelAnimationFrame(frame);
+    } finally {
+      for (const badge of badges) {
+        if (!isDeadObject(badge.element)) badge.element.remove();
+      }
+    }
   }
 
   close(): void {
-    this.cancelHints();
-    this.#clearDestinationCue();
+    if (!this.#window && !this.#activationWindow && !this.#destinationWindow) return;
+    try {
+      this.cancelHints();
+    } finally {
+      this.#clearDestinationCue();
+    }
   }
 
   #activate(pdfWindow: PdfWindow, badge: { readonly overlay: ReaderLinkOverlay }): void {
@@ -161,6 +200,7 @@ export class ReaderLinkHints {
     this.cancelHints();
     this.#clearDestinationCue();
     const invocation = ++this.#activation;
+    this.#activationWindow = pdfWindow;
     try {
       const view = this.#host.viewForWindow(pdfWindow);
       if (overlay.type === 'external-link') {
@@ -205,7 +245,7 @@ export class ReaderLinkHints {
       surface: 'reader',
       context: {
         readerPath: path,
-        isCurrent: () => this.#activation === invocation,
+        isCurrent: () => this.#activationIsCurrent(invocation),
       },
     };
   }
@@ -223,8 +263,16 @@ export class ReaderLinkHints {
     }
   }
 
+  #activationIsCurrent(invocation: number): boolean {
+    return (
+      invocation === this.#activation &&
+      this.#activationWindow !== null &&
+      !isDeadObject(this.#activationWindow)
+    );
+  }
+
   #reportActivationFailure(error: unknown, invocation: number): void {
-    if (invocation !== this.#activation) return;
+    if (!this.#activationIsCurrent(invocation)) return;
     this.#clearDestinationCue();
     const message = `reader follow link activation failed: ${String(error)}`;
     this.#host.debug(message);
@@ -252,9 +300,11 @@ export class ReaderLinkHints {
 
   #repositionHints(pdfWindow: PdfWindow): void {
     if (this.#repositionFrame !== null) return;
+    const badges = this.#badges;
     this.#repositionFrame = pdfWindow.requestAnimationFrame(() => {
+      if (this.#badges !== badges || this.#window !== pdfWindow || isDeadObject(pdfWindow)) return;
       this.#repositionFrame = null;
-      if (this.#window === pdfWindow) this.#refreshHints(pdfWindow);
+      this.#refreshHints(pdfWindow);
     });
   }
 
@@ -270,7 +320,9 @@ export class ReaderLinkHints {
       this.#destinationCue = cue;
       this.#destinationPosition = position;
       this.#destinationWindow = pdfWindow;
-      this.#destinationTimer = setTimeout(() => this.#clearDestinationCue(), 2000);
+      this.#destinationTimer = setTimeout(() => {
+        if (this.#destinationCue === cue) this.#clearDestinationCue();
+      }, 2000);
       this.#repositionDestinationCue(pdfWindow);
     } catch (error) {
       this.#clearDestinationCue();
@@ -302,23 +354,35 @@ export class ReaderLinkHints {
       this.#destinationRepositionFrame !== null
     )
       return;
+    const cue = this.#destinationCue;
     this.#destinationRepositionFrame = pdfWindow.requestAnimationFrame(() => {
+      if (
+        this.#destinationCue !== cue ||
+        this.#destinationWindow !== pdfWindow ||
+        isDeadObject(pdfWindow) ||
+        isDeadObject(cue)
+      )
+        return;
       this.#destinationRepositionFrame = null;
       this.#refreshDestinationCue(pdfWindow);
     });
   }
 
   #clearDestinationCue(): void {
-    this.#destinationCue?.remove();
+    const cue = this.#destinationCue;
+    const owner = this.#destinationWindow;
+    const frame = this.#destinationRepositionFrame;
     this.#destinationCue = null;
     this.#destinationPosition = null;
     clearTimeout(this.#destinationTimer ?? undefined);
     this.#destinationTimer = null;
-    const owner = this.#destinationWindow;
-    if (owner && this.#destinationRepositionFrame !== null)
-      owner.cancelAnimationFrame(this.#destinationRepositionFrame);
-    this.#destinationRepositionFrame = null;
     this.#destinationWindow = null;
+    this.#destinationRepositionFrame = null;
+    try {
+      if (owner && !isDeadObject(owner) && frame !== null) owner.cancelAnimationFrame(frame);
+    } finally {
+      if (cue && !isDeadObject(cue)) cue.remove();
+    }
   }
 
   #reportDestinationCueFailure(error: unknown): void {
