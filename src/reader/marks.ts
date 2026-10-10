@@ -20,6 +20,7 @@ export interface MarksHost {
   readonly schedule: (delay: number, task: () => void) => void;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly log: (message: string) => void;
+  readonly onChange?: () => void;
   readonly scrollToPageRatio: (
     pdfWindow: PdfWindow,
     pageIndex: number,
@@ -135,6 +136,7 @@ export class ReaderMarks {
   ): Promise<void> {
     const position = this.position(pdfWindow);
     this.#marks[char] = { ...position, key: annotationKey, ts: Date.now() };
+    this.#host.onChange?.();
     let persisted = '';
     if (readerMarksPersist(this.#host.preferences)) persisted = await this.save(reader);
     const page = position.pageIndex === null ? '' : `  p.${position.pageIndex + 1}`;
@@ -201,12 +203,14 @@ export class ReaderMarks {
       return;
     }
     delete this.#marks[char];
+    this.#host.onChange?.();
     if (readerMarksPersist(this.#host.preferences)) await this.save(reader);
     this.#host.showStatus(`✓ mark ${char} deleted`, 1200);
   }
 
   async clear(reader: ReaderRuntime): Promise<void> {
     for (const char of Object.keys(this.#marks)) delete this.#marks[char];
+    this.#host.onChange?.();
     if (readerMarksPersist(this.#host.preferences)) await this.save(reader);
     this.#host.showStatus('✓ all marks deleted', 1200);
   }
@@ -274,6 +278,7 @@ export class ReaderMarks {
         }
       }
     }
+    this.#host.onChange?.();
     if (migrated) void this.save(reader);
   }
 

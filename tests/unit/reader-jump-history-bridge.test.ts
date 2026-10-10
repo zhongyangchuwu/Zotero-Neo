@@ -122,7 +122,7 @@ function makeAttempt(
     token: {
       id,
       epoch: 0,
-      cause: { kind: 'event', event: 'reader-outline.confirm' },
+      cause: { kind: 'event', event: 'reader-native.hard' },
       surface: 'reader',
     },
     policy,

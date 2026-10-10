@@ -46,7 +46,6 @@ const ACTION_RULES: Partial<Record<ActionId, Rule>> = {
 const EVENT_RULES: Readonly<Record<NavigationEventId, Rule>> = {
   'main-local-find.confirm': (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
   'main-selection-panel.reveal': (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
-  'reader-outline.confirm': (intent) => (isReaderPath(intent, 'outline') ? NATIVE_HARD : IGNORE),
   'reader-mark.jump': (intent) => (isReaderPath(intent, 'mark') ? MANAGED_FINAL : IGNORE),
   'reader-native.hard': (intent) => (intent.surface === 'reader' ? NATIVE_HARD : IGNORE),
 };
