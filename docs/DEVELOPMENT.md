@@ -490,11 +490,12 @@ active kind. `ReaderOutline` also owns its cached tree, hint/command timers, and
 token; closing or replacing a PDF view invalidates pending `getOutline()` work before it can
 repaint a later overlay. `ReaderSessionState` must not mirror either sidebar's transient state.
 
-Outline captures its PDF-window identity independently of panel DOM. Its input and sidebar-toggle
-prefix belong only to that pane; composing keys remain native, while keys dispatched from another
-pane or an editable target cancel and yield. The focus-only action transfers Outline to its requested
-pane. Reader deactivation closes Outline and retires pending sidebar focus restoration without
-changing Zotero's page, zoom, scroll, or the Reader Surface mode vocabulary.
+Both sidebars capture their PDF-window identity independently of panel DOM. Their input and
+sidebar-toggle prefix belong only to that pane; composing keys remain native, while keys dispatched
+from another pane or an editable target cancel and yield. The focus-only action transfers Outline
+to its requested pane. Reader deactivation closes both panels and retires pending sidebar focus
+restoration, preserving the Reader-owned mark map and Zotero's page, zoom, and scroll without
+changing the Reader Surface mode vocabulary.
 
 Fresh loads, and cached-tree publication into a pane whose document is not ready, await that exact
 view's captured `initializedPromise`. After the wait, currentness is checked before reading the PDF
@@ -506,6 +507,12 @@ Hint/command expiries retain their timer and invocation, and navigation errors r
 receipt. The shared sidebar focus callback retains a revision and checks the live destination window,
 so a queued old restore cannot refocus after deactivation, view release, or a newer sidebar activation.
 
+Marks clamps its selected row after deletion so Enter can still confirm the surviving mark. Close
+retires its captured pane, selection, and DOM pointers before theme/DOM cleanup, skipping destroyed
+wrappers while keeping live failures observable and notifying the coordinator in either case.
+Persistent mark values and existing `ReaderMarks` managed navigation/storage remain separate from
+the transient panel. Shared sidebar-toggle expiry callbacks check their captured timer identity
+before clearing a later invocation's prefix.
 
 ## Annotation comment overlay
 

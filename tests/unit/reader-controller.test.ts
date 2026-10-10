@@ -2999,6 +2999,182 @@ describe('reader sidebar coordination', () => {
   });
 });
 
+describe('Reader Marks input lifetime', () => {
+  it.each([
+    { key: 'Escape', isComposing: true },
+    { key: 'Process', keyCode: 229 },
+    { key: ' ', keyCode: 229 },
+  ])('leaves native composition $key outside Marks commands and toggle prefixes', (input) => {
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-marks-explorer');
+    const key = readerKey(input.key, input);
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(created.bodyChildren.find((node) => node.id === 'zv-marks-explorer')).toBe(overlay);
+    created.session.dispose();
+  });
+
+  it('yields another pane to its host without clearing Marks or restoring old focus', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    const native = vi.fn();
+    const view = { _iframeWindow: secondary.pdfWindow, _onKeyDown: native };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', view);
+    created.session.start();
+    created.session.focusAndHandle(readerKey('m').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    vi.mocked(created.pdfWindow.focus).mockClear();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    const hostKey = readerKey('x').event;
+    view._onKeyDown(hostKey);
+    expect(native).toHaveBeenCalledExactlyOnceWith(hostKey);
+    Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+    const key = readerKey('x');
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(created.session.marks.a).toBeDefined();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-marks-explorer')).toBe(false);
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('hands editable input back instead of running Marks or its remapped toggle', () => {
+    const bindings: BindingMap = {
+      ...DEFAULT_BINDINGS,
+      'reader-normal:q': 'toggleMarksExplorer',
+    };
+    const created = createHistorySession({}, {}, bindings);
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    const target = { tagName: 'INPUT', localName: 'input' } as unknown as EventTarget;
+    const key = readerKey('q', { target });
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-marks-explorer')).toBe(false);
+    created.session.dispose();
+  });
+
+  it('releases dead Marks DOM without reading its owner or blocking native key restoration', () => {
+    const created = createHistorySession();
+    const view = created.reader._internalReader!._primaryView!;
+    const native = vi.fn();
+    view._onKeyDown = native;
+    created.session.start();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-marks-explorer')!;
+    const dead = new Set<object>([created.pdfWindow, overlay]);
+    Reflect.get(globalThis, 'Components').utils.isDeadWrapper = (value: object) => dead.has(value);
+    for (const property of ['ownerDocument', 'remove'])
+      Object.defineProperty(overlay, property, {
+        configurable: true,
+        get: () => {
+          throw new Error('cannot access dead Marks');
+        },
+      });
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    created.intervalTasks[0]?.();
+    const key = readerKey('x').event;
+    view._onKeyDown?.(key);
+    expect(native).toHaveBeenCalledExactlyOnceWith(key);
+    created.session.dispose();
+  });
+
+  it('keeps live close failures observable while retiring Marks coordination', () => {
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    const native = vi.fn();
+    const view = { _iframeWindow: secondary.pdfWindow, _onKeyDown: native };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', view);
+    created.session.start();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-marks-explorer')!;
+    vi.mocked(overlay.remove).mockImplementationOnce(() => {
+      throw new Error('live Marks removal failed');
+    });
+    expect(() => created.session.focusAndHandle(readerKey('Escape').event)).toThrow(
+      'live Marks removal failed',
+    );
+    overlay.remove();
+    executeReaderAction(created.session, 'toggleMarksExplorer', secondary.pdfWindow);
+    Reflect.set(created.reader._internalReader!, '_secondaryView', undefined);
+    created.intervalTasks[0]?.();
+    expect(secondary.bodyChildren.some((node) => node.id === 'zv-marks-explorer')).toBe(false);
+    const key = readerKey('x').event;
+    view._onKeyDown(key);
+    expect(native).toHaveBeenCalledExactlyOnceWith(key);
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('clears transient Marks and pending focus on Reader deactivation but preserves saved marks', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    created.session.focusAndHandle(readerKey('m').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    created.session.deactivateInteraction();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-marks-explorer')).toBe(false);
+    expect(created.session.marks.a).toBeDefined();
+    vi.mocked(created.pdfWindow.focus).mockClear();
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    created.session.focusAndHandle(readerKey('Escape').event);
+    created.session.deactivateInteraction();
+    vi.mocked(created.pdfWindow.focus).mockClear();
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+
+  it('keeps a retired toggle-prefix expiry from cancelling a newer Marks toggle', () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    created.session.focusAndHandle(readerKey(' ').event);
+    const oldTimer = timers.mock.calls.find(([, delay]) => delay === 1200)![0] as () => void;
+    created.session.focusAndHandle(readerKey('Escape').event);
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    created.session.focusAndHandle(readerKey(' ').event);
+    oldTimer();
+    created.session.focusAndHandle(readerKey('m').event);
+    expect(created.bodyChildren.some((node) => node.id === 'zv-marks-explorer')).toBe(false);
+    created.session.dispose();
+    timers.mockRestore();
+  });
+
+  it('keeps the remaining mark selected and jumpable after deleting the selected last row', async () => {
+    const execution = navigationHistoryPort();
+    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const native = attachNativeReaderHistory(created);
+    created.session.start();
+    created.session.focusAndHandle(readerKey('m').event);
+    created.session.focusAndHandle(readerKey('a').event);
+    native.container.scrollTop = 800;
+    created.session.focusAndHandle(readerKey('m').event);
+    created.session.focusAndHandle(readerKey('b').event);
+    executeReaderAction(created.session, 'toggleMarksExplorer', created.pdfWindow);
+    created.session.focusAndHandle(readerKey('G').event);
+    created.session.focusAndHandle(readerKey('d').event);
+    expect(Object.keys(created.session.marks)).toEqual(['a']);
+    native.container.scrollTop = 100;
+    created.session.focusAndHandle(readerKey('Enter').event);
+    await vi.waitFor(() => {
+      created.animationFrameTasks.shift()?.();
+      expect(
+        execution.history.locations.map((location) =>
+          location.kind === 'reader' ? location.position?.top : null,
+        ),
+      ).toEqual([100, 1_045]);
+    });
+    created.session.dispose();
+  });
+});
+
 describe('reader outline load invalidation', () => {
   it('does not resurrect a closed Outline after pending load resolves', async () => {
     vi.useFakeTimers();
