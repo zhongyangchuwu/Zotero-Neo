@@ -114,6 +114,13 @@ higher fixture version through the native Add-on Manager; temporary RDP install
 does not prove persistent installation or upgrade. Fixture version changes belong
 outside the repository, not in release metadata.
 
+Unexpected live cleanup failures must not strand later owners: detach every Reader view,
+restore native bridges, retire all Reader/Main sessions, and clear the Bootstrap controller
+reference before propagating the first failure unchanged. Session retirement is one-shot;
+a second disposal must not be needed to release a split pane. During fault-injection
+acceptance, confirm that disabling Neo still removes Main command handling when a live
+Reader sidebar removal throws.
+
 The old extension-proxy path is intentionally not used for fast iteration:
 runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
 fresh profile, while RDP temporary installation and `reload` both succeeded.
@@ -511,6 +518,9 @@ document or publishing rows. Already-ready cached panes stay synchronous; early 
 cache a missing document as an empty outline or confirm a destination before the pane is ready.
 Closing retires panel/window/timer ownership before DOM cleanup and notifies the coordinator even
 when a live cleanup fails. Destroyed wrappers are skipped; unexpected live failures remain visible.
+Successful Outline navigation retires the panel outside the stale-navigation catch. A live
+close failure is logged as `outline close failed`, and the completed confirmation still
+returns to Normal; only obsolete navigation failures are discarded.
 Hint/command expiries retain their timer and invocation, and navigation errors retain their current
 receipt. The shared sidebar focus callback retains a revision and checks the live destination window,
 so a queued old restore cannot refocus after deactivation, view release, or a newer sidebar activation.
@@ -630,6 +640,9 @@ readers, and verify picker work against the mounted list/preview DOM rather than
 both Debug and the UTF-8 profile log. Unreadable error properties, cyclic causes, and failed
 logging sinks must not produce a second exception. The sinks are independent; a failed profile
 write is reported in Debug once per logger, and native streams are closed on failure.
+If initialization or writing and stream closure both fail, that single Debug receipt retains
+the primary failure/stack plus separately labelled close failure/stack. An uninitialized
+converter is never closed; its raw output stream is closed instead.
 Reader rescans attach the discovery/reconciliation/injection stage and cached session/pending
 instance IDs without dereferencing failed DOM wrappers for diagnostics. Injection and disposal
 failures retain the known Reader instance and original error as their cause; delayed injection

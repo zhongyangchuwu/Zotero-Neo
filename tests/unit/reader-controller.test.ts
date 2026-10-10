@@ -313,6 +313,39 @@ describe('Reader event lifecycle', () => {
     },
   );
 
+  it('retires the remaining Reader when an earlier live cleanup fails during shutdown', () => {
+    const first = createHistorySession();
+    const second = createHistorySession();
+    const { service, dependencies } = createReaderRegistryHarness();
+    Reflect.set(first.reader, '_instanceID', 'first-reader');
+    Reflect.set(second.reader, '_instanceID', 'second-reader');
+    const nativeKey = vi.fn();
+    const view = second.reader._internalReader!._primaryView!;
+    view._onKeyDown = nativeKey;
+    service._readers = [first.reader, second.reader];
+    const controller = createReaderController(dependencies);
+    controller.start('zotero-neo@zotero-neo');
+    controller.rescan({ Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow);
+    const indicator = first.bodyChildren.find((node) => node.id === 'zotero-vim-mode-indicator')!;
+    const original = new Error('first Reader live cleanup failure');
+    vi.mocked(indicator.remove).mockImplementationOnce(() => {
+      throw original;
+    });
+    let failure: unknown;
+    try {
+      controller.shutdown();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBe(original);
+    const event = readerKey('j').event;
+    view._onKeyDown!(event);
+    expect(nativeKey).toHaveBeenCalledExactlyOnceWith(event);
+    expect(second.bodyChildren.some((node) => node.id === 'zotero-vim-mode-indicator')).toBe(false);
+    controller.shutdown();
+    indicator.remove();
+  });
+
   it('disposes sessions that disappear from Zotero Reader inventory', () => {
     const addWindowListener = vi.fn();
     const removeWindowListener = vi.fn();
@@ -2913,6 +2946,63 @@ describe('reader sidebar coordination', () => {
     secondary.session.dispose();
   });
 
+  it.each([
+    ['Outline', 'toggleReaderSidebarOutline', 'zv-outline-explorer'],
+    ['Marks', 'toggleMarksExplorer', 'zv-marks-explorer'],
+  ] as const)('retires both views after a live %s removal failure', (_name, action, overlayID) => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    const primaryView = created.reader._internalReader!._primaryView!;
+    const primaryHost = vi.fn();
+    const secondaryHost = vi.fn();
+    primaryView._onKeyDown = primaryHost;
+    const secondaryView = { _iframeWindow: secondary.pdfWindow, _onKeyDown: secondaryHost };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', secondaryView);
+    const listeners = new Set<EventListener>();
+    Reflect.set(
+      secondary.pdfWindow,
+      'addEventListener',
+      (type: string, listener: EventListener) => {
+        if (type === 'keydown') listeners.add(listener);
+      },
+    );
+    Reflect.set(
+      secondary.pdfWindow,
+      'removeEventListener',
+      (type: string, listener: EventListener) => {
+        if (type === 'keydown') listeners.delete(listener);
+      },
+    );
+    created.session.start();
+    executeReaderAction(created.session, action, created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === overlayID)!;
+    const original = new Error('live sidebar retirement failure');
+    vi.mocked(overlay.remove).mockImplementationOnce(() => {
+      throw original;
+    });
+    let failure: unknown;
+    try {
+      created.session.dispose();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBe(original);
+    // A single retirement must restore native handling, not rely on a recovery disposal.
+    expect(primaryView._onKeyDown).toBe(primaryHost);
+    expect(secondaryView._onKeyDown).toBe(secondaryHost);
+    created.session.dispose();
+    const key = readerKey('j');
+    for (const listener of listeners) listener(key.event);
+    secondaryView._onKeyDown(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(secondaryHost).toHaveBeenCalledExactlyOnceWith(key.event);
+    vi.advanceTimersByTime(1000);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    overlay.remove();
+    secondary.session.dispose();
+  });
+
   it('moves focus-only Outline ownership to the requested split pane', async () => {
     const created = createHistorySession();
     const secondary = createHistorySession();
@@ -2991,6 +3081,41 @@ describe('reader sidebar coordination', () => {
     await settleReaderMicrotasks();
     expect(created.debug).toEqual([]);
     expect(created.bodyChildren.find((node) => node.id === 'zv-outline-explorer')).toBe(current);
+    created.session.dispose();
+  });
+
+  it('reports a successful confirmation cleanup failure instead of treating it as stale navigation', async () => {
+    const execution = navigationHistoryPort();
+    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const native = attachNativeReaderHistory(created);
+    const goToDestination = vi.fn(async () => {
+      await native.view._pushHistoryPoint?.();
+    });
+    Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+      pdfViewer: native.viewer,
+      pdfDocument: {
+        getOutline: async () => [
+          { title: 'Current page', dest: [0, { name: 'XYZ' }, 0, 500, null] },
+        ],
+      },
+      pdfLinkService: { goToDestination },
+    });
+    created.session.start();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer')!;
+    const original = new Error('current Outline confirmation cleanup failure');
+    vi.mocked(overlay.remove).mockImplementationOnce(() => {
+      throw original;
+    });
+    created.session.focusAndHandle(readerKey('Enter').event);
+    for (let turn = 0; turn < 12; turn += 1) {
+      await Promise.resolve();
+      created.animationFrameTasks.shift()?.();
+    }
+    expect(goToDestination).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(created.debug.join('\n')).toContain(original.message));
+    overlay.remove();
     created.session.dispose();
   });
 

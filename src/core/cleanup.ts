@@ -1,5 +1,26 @@
 export type Cleanup = () => void;
 
+/** Finishes a multi-owner retirement before propagating its first failure unchanged. */
+export class CleanupFailure {
+  #failed = false;
+  #error: unknown;
+
+  run(cleanup: Cleanup): void {
+    try {
+      cleanup();
+    } catch (error) {
+      if (!this.#failed) {
+        this.#failed = true;
+        this.#error = error;
+      }
+    }
+  }
+
+  rethrow(): void {
+    if (this.#failed) throw this.#error;
+  }
+}
+
 export class CleanupScope {
   readonly #cleanups: Cleanup[] = [];
   #disposed = false;

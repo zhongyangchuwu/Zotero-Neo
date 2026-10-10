@@ -6,6 +6,7 @@ import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionApi,
 } from './core/contracts';
+import { CleanupFailure } from './core/cleanup';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
 import { migrateBindingPreferences, migrateReaderPreferences } from './core/preferences';
@@ -108,11 +109,13 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   shutdown(): void {
     const host = Zotero as ZoteroWithNeo;
     if (host.Neo === this.api) delete host.Neo;
-    this.#reader.shutdown();
-    this.#main.shutdown();
+    this.#context = null;
+    const failure = new CleanupFailure();
+    failure.run(() => this.#reader.shutdown());
+    failure.run(() => this.#main.shutdown());
+    failure.rethrow();
     this.#logger.debug('Shut down');
     this.#logger.diagnostic('addon shut down');
-    this.#context = null;
   }
 
   addToWindow(window: MainWindow): void {

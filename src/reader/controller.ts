@@ -17,7 +17,7 @@ import type {
   NavigationOutcome,
   NavigationResult,
 } from '../navigation/types';
-import { CleanupScope } from '../core/cleanup';
+import { CleanupFailure, CleanupScope } from '../core/cleanup';
 import {
   annotationCommentEditorEnabled,
   keyGuideConfig,
@@ -287,13 +287,15 @@ export class ReaderController implements ReaderControllerApi {
     for (const timer of this.#waitTimers.values()) clearTimeout(timer);
     this.#waitTimers.clear();
     this.#pending.clear();
-    for (const session of this.#sessions.values()) session.dispose();
+    const failure = new CleanupFailure();
+    for (const session of this.#sessions.values()) failure.run(() => session.dispose());
     this.#sessions.clear();
     this.#sessionsByItem.clear();
     this.#lastSelection = null;
     this.#lastSelectionAt = 0;
     this.#selectionOwner = null;
     this.#selectionActions.clear();
+    failure.rethrow();
   }
 
   rescan(window: MainWindow): void {
@@ -982,34 +984,44 @@ export class ReaderSession {
     this.#marks.load(this.#dependencies.reader);
   }
 
+  /** Retires all owners once, preserving the first live cleanup failure for the caller. */
   dispose(): void {
+    if (this.#scope.disposed) return;
     this.#interactionRevision += 1;
-    this.#nativeInput.release();
-    this.#commentEditor.dispose();
-    this.#selectionActions.dispose();
-    this.#dependencies.selection?.clearOwner(this);
-    this.#flash.dispose();
-    this.#smoothScroller.dispose();
-    this.clearSidebarToggleInput();
-    this.#selectionRange.leave();
-    this.#viewLifecycle.dispose();
-    this.#hostKeyBridge.dispose();
-    this.#jumpHistoryBridge.dispose();
+    // Reject reentrant input and queued work before any host cleanup can fail.
     this.#scope.dispose();
-    this.#sidebar.dispose(() => {
-      this.#marksExplorer.close();
-      this.#outline.close();
-    });
-    this.state.indicatorThemeCleanup?.();
+    const failure = new CleanupFailure();
+    failure.run(() => this.#nativeInput.release());
+    failure.run(() => this.#commentEditor.dispose());
+    failure.run(() => this.#selectionActions.dispose());
+    failure.run(() => this.#dependencies.selection?.clearOwner(this));
+    failure.run(() => this.#flash.dispose());
+    failure.run(() => this.#smoothScroller.dispose());
+    failure.run(() => this.clearSidebarToggleInput());
+    failure.run(() => this.#selectionRange.leave());
+    failure.run(() => this.#viewLifecycle.dispose());
+    failure.run(() => this.#hostKeyBridge.dispose());
+    failure.run(() => this.#jumpHistoryBridge.dispose());
+    failure.run(() =>
+      this.#sidebar.dispose(() => {
+        failure.run(() => this.#marksExplorer.close());
+        failure.run(() => this.#outline.close());
+      }),
+    );
+    const indicatorCleanup = this.state.indicatorThemeCleanup;
     this.state.indicatorThemeCleanup = null;
-    for (const manager of this.#themeManagers.values()) manager.dispose();
+    failure.run(() => indicatorCleanup?.());
+    for (const manager of this.#themeManagers.values()) failure.run(() => manager.dispose());
     this.#themeManagers.clear();
     const indicator = this.state.indicator;
     this.state.indicator = null;
-    if (indicator && !isDeadObject(indicator)) indicator.remove();
-    this.#linkHints.close();
-    this.#prefixGuide.dispose();
-    this.#dependencies.release();
+    failure.run(() => {
+      if (indicator && !isDeadObject(indicator)) indicator.remove();
+    });
+    failure.run(() => this.#linkHints.close());
+    failure.run(() => this.#prefixGuide.dispose());
+    failure.run(() => this.#dependencies.release());
+    failure.rethrow();
   }
 
   acceptSelectionParams(params: AnnotationSelectionParams): void {
@@ -1092,17 +1104,22 @@ export class ReaderSession {
    */
   private releaseViewTheme(pdfWindow: PdfWindow): void {
     this.#interactionRevision += 1;
-    this.#flash.releaseView(pdfWindow);
-    this.#smoothScroller.releaseView(pdfWindow);
-    if (this.#outline.ownsView(pdfWindow))
-      this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
-    this.#commentEditor.releaseView(pdfWindow);
-    if (this.#marksExplorer.ownsView(pdfWindow))
-      this.#sidebar.releaseView(pdfWindow, () => this.#marksExplorer.close(pdfWindow));
+    const failure = new CleanupFailure();
+    failure.run(() => this.#flash.releaseView(pdfWindow));
+    failure.run(() => this.#smoothScroller.releaseView(pdfWindow));
+    failure.run(() => {
+      if (this.#outline.ownsView(pdfWindow))
+        this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
+    });
+    failure.run(() => this.#commentEditor.releaseView(pdfWindow));
+    failure.run(() => {
+      if (this.#marksExplorer.ownsView(pdfWindow))
+        this.#sidebar.releaseView(pdfWindow, () => this.#marksExplorer.close(pdfWindow));
+    });
     const manager = this.#themeManagers.get(pdfWindow);
-    if (!manager) return;
-    manager.dispose();
     this.#themeManagers.delete(pdfWindow);
+    failure.run(() => manager?.dispose());
+    failure.rethrow();
   }
 
   private handleKeyUp(event: KeyboardEvent): void {

@@ -1,3 +1,4 @@
+import { CleanupFailure } from '../core/cleanup';
 import { isDeadObject } from '../platform/cross-compartment';
 import type { PdfWindow, ReaderTimer } from './types';
 
@@ -60,27 +61,32 @@ export class ReaderSidebarOverlay {
 
   releaseView(pdfWindow: PdfWindow, closeView: () => void): void {
     if (this.#pdfWindow !== pdfWindow) return;
-    this.cancelFocusRestore();
+    const failure = new CleanupFailure();
+    failure.run(() => this.cancelFocusRestore());
     this.#suppressFocusRestore = true;
-    try {
-      closeView();
-    } finally {
-      this.#suppressFocusRestore = false;
-      this.#active = null;
-      this.#pdfWindow = null;
-      this.#themeCleanup?.();
-      this.#themeCleanup = null;
-      this.cancelFocusRestore();
-    }
+    failure.run(closeView);
+    this.#suppressFocusRestore = false;
+    this.#active = null;
+    this.#pdfWindow = null;
+    const cleanup = this.#themeCleanup;
+    this.#themeCleanup = null;
+    failure.run(() => cleanup?.());
+    failure.run(() => this.cancelFocusRestore());
+    failure.rethrow();
   }
 
   dispose(closeAll: () => void): void {
-    closeAll();
+    const failure = new CleanupFailure();
+    this.#suppressFocusRestore = true;
+    failure.run(closeAll);
+    this.#suppressFocusRestore = false;
     this.#active = null;
     this.#pdfWindow = null;
-    this.#themeCleanup?.();
+    const cleanup = this.#themeCleanup;
     this.#themeCleanup = null;
-    this.cancelFocusRestore();
+    failure.run(() => cleanup?.());
+    failure.run(() => this.cancelFocusRestore());
+    failure.rethrow();
   }
   #restoreFocus(pdfWindow?: PdfWindow): void {
     const target = pdfWindow ?? this.#pdfWindow;

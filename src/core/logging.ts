@@ -73,6 +73,7 @@ export class ZoteroLogger implements Logger {
   }
 
   diagnostic(message: string): void {
+    let additionalCloseFailure: string | undefined;
     try {
       if (!this.#epoch) this.#epoch = Date.now();
       const directory =
@@ -85,6 +86,7 @@ export class ZoteroLogger implements Logger {
         Components.interfaces.nsIFileOutputStream,
       );
       let converter: nsIConverterOutputStream | undefined;
+      let writeFailed = false;
       try {
         stream.init(file, 0x02 | 0x08 | 0x10, 0o600, 0);
         const output = Components.classes[
@@ -94,15 +96,26 @@ export class ZoteroLogger implements Logger {
         converter = output;
         const line = `${Date.now() - this.#epoch}ms  ${message}\n`;
         if (!output.writeString(line)) throw new Error('Incomplete diagnostic log write');
+      } catch (error) {
+        writeFailed = true;
+        throw error;
       } finally {
-        // Closing an uninitialized native converter can crash Gecko.
-        if (converter) converter.close();
-        else stream.close();
+        try {
+          // Closing an uninitialized native converter can crash Gecko.
+          if (converter) converter.close();
+          else stream.close();
+        } catch (error) {
+          if (!writeFailed) throw error;
+          additionalCloseFailure = formatDiagnosticError(error);
+        }
       }
     } catch (error) {
       if (this.#writeFailureReported) return;
       this.#writeFailureReported = true;
-      this.debug(`diagnostic log write failed: ${formatDiagnosticError(error)}`);
+      const cleanupContext = additionalCloseFailure
+        ? `\nAdditional diagnostic close failure: ${additionalCloseFailure}`
+        : '';
+      this.debug(`diagnostic log write failed: ${formatDiagnosticError(error)}${cleanupContext}`);
     }
   }
 }

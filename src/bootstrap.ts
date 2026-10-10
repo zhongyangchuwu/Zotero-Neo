@@ -136,8 +136,9 @@ function onMainWindowUnload(event: MainWindowEvent): void {
 
 function shutdown(): void {
   log('Shutting down');
-  ZoteroNeo?.shutdown();
+  const controller = ZoteroNeo;
   ZoteroNeo = undefined;
+  controller?.shutdown();
 }
 
 function install(): void {

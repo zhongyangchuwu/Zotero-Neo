@@ -1,3 +1,4 @@
+import { CleanupFailure } from '../core/cleanup';
 import { isDeadObject } from '../platform/cross-compartment';
 import { asKeyboardEvent } from '../platform/dom';
 import type { PdfWindow, ReaderRuntime } from './types';
@@ -74,11 +75,14 @@ export class ReaderViewLifecycle {
       if (next) this.#activePdfWindow = next;
     }
 
+    let failure: CleanupFailure | undefined;
     for (const [pdfWindow, handlers] of this.#handlers) {
       if (wanted.includes(pdfWindow)) continue;
-      this.#detach(pdfWindow, handlers);
       this.#handlers.delete(pdfWindow);
+      failure ??= new CleanupFailure();
+      failure.run(() => this.#detach(pdfWindow, handlers));
     }
+    failure?.rethrow();
 
     for (const pdfWindow of wanted) {
       if (this.#handlers.has(pdfWindow)) continue;
@@ -93,8 +97,11 @@ export class ReaderViewLifecycle {
     this.#disposed = true;
     if (this.#syncTimer !== null) clearInterval(this.#syncTimer);
     this.#syncTimer = null;
-    for (const [pdfWindow, handlers] of this.#handlers) this.#detach(pdfWindow, handlers);
+    const failure = new CleanupFailure();
+    for (const [pdfWindow, handlers] of this.#handlers)
+      failure.run(() => this.#detach(pdfWindow, handlers));
     this.#handlers.clear();
+    failure.rethrow();
   }
 
   #attach(pdfWindow: PdfWindow): void {
@@ -134,17 +141,21 @@ export class ReaderViewLifecycle {
   }
 
   #detach(pdfWindow: PdfWindow, handlers: ViewHandlers): void {
+    const failure = new CleanupFailure();
     // Zotero may destroy an iframe before the next discovery tick or add-on shutdown.
     if (!isDeadObject(pdfWindow)) {
-      pdfWindow.removeEventListener('keydown', handlers.keyDown, true);
-      pdfWindow.removeEventListener('keyup', handlers.keyUp, true);
-      pdfWindow.removeEventListener('blur', handlers.blur, true);
-      pdfWindow.document.removeEventListener('selectionchange', handlers.selection);
-      pdfWindow.removeEventListener('resize', handlers.resize);
+      failure.run(() => pdfWindow.removeEventListener('keydown', handlers.keyDown, true));
+      failure.run(() => pdfWindow.removeEventListener('keyup', handlers.keyUp, true));
+      failure.run(() => pdfWindow.removeEventListener('blur', handlers.blur, true));
+      failure.run(() =>
+        pdfWindow.document.removeEventListener('selectionchange', handlers.selection),
+      );
+      failure.run(() => pdfWindow.removeEventListener('resize', handlers.resize));
     }
     const scrollElement = handlers.scrollElement;
     if (scrollElement && !isDeadObject(scrollElement))
-      scrollElement.removeEventListener('scroll', handlers.scroll);
-    this.#dependencies.releaseView(pdfWindow);
+      failure.run(() => scrollElement.removeEventListener('scroll', handlers.scroll));
+    failure.run(() => this.#dependencies.releaseView(pdfWindow));
+    failure.rethrow();
   }
 }

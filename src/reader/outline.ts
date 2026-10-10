@@ -500,16 +500,23 @@ export class ReaderOutline {
         : execution.result;
       const hostSucceeded = await (hostResult ?? Promise.resolve(false));
       if (!isCurrent()) return;
-      if (hostSucceeded && (result.kind === 'completed' || result.kind === 'unchanged')) {
-        this.close(pdfWindow);
-        this.#host.setModeNormal();
-      } else {
+      if (!hostSucceeded || (result.kind !== 'completed' && result.kind !== 'unchanged')) {
         this.setStatus(state, 'Jump failed');
+        return;
       }
     } catch (error) {
       if (!isCurrent()) return;
       this.#host.log(`outline navigation failed: ${String(error)}`);
       this.setStatus(state, 'Jump failed');
+      return;
+    }
+    // Closing invalidates the navigation receipt; its failure is not a stale navigation error.
+    try {
+      this.close(pdfWindow);
+    } catch (error) {
+      this.#host.log(`outline close failed: ${String(error)}`);
+    } finally {
+      this.#host.setModeNormal();
     }
   }
 
