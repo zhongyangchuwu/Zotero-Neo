@@ -106,21 +106,44 @@ export class ReaderViewLifecycle {
 
   #attach(pdfWindow: PdfWindow): void {
     const keyDown = ((event: Event) => {
+      // A failed detach must not admit this registration after window reuse.
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
       const keyEvent = asKeyboardEvent(event);
       if (keyEvent) this.#dependencies.onKeyDown(keyEvent, pdfWindow);
     }) as EventListener;
     const keyUp = ((event: Event) => {
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
       const keyEvent = asKeyboardEvent(event);
       if (keyEvent) this.#dependencies.onKeyUp(keyEvent);
     }) as EventListener;
-    const blur = ((event: Event) =>
-      this.#dependencies.onBlur(pdfWindow, event as FocusEvent)) as EventListener;
-    const selection = (() => this.#dependencies.onSelectionChange(pdfWindow)) as EventListener;
-    const scroll = (() => this.#dependencies.onScroll(pdfWindow)) as EventListener;
-    const resize = (() => this.#dependencies.onResize(pdfWindow)) as EventListener;
+    const blur = ((event: Event) => {
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
+      this.#dependencies.onBlur(pdfWindow, event as FocusEvent);
+    }) as EventListener;
+    const selection = (() => {
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
+      this.#dependencies.onSelectionChange(pdfWindow);
+    }) as EventListener;
+    const scroll = (() => {
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
+      this.#dependencies.onScroll(pdfWindow);
+    }) as EventListener;
+    const resize = (() => {
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
+      this.#dependencies.onResize(pdfWindow);
+    }) as EventListener;
     const scrollElement =
       pdfWindow.document.getElementById('viewerContainer') ??
       pdfWindow.document.querySelector('.pdfViewer');
+    const handlers: ViewHandlers = {
+      keyDown,
+      keyUp,
+      blur,
+      selection,
+      resize,
+      scroll,
+      scrollElement,
+    };
 
     pdfWindow.addEventListener('keydown', keyDown, true);
     pdfWindow.addEventListener('keyup', keyUp, true);
@@ -129,15 +152,7 @@ export class ReaderViewLifecycle {
     pdfWindow.addEventListener('resize', resize, { passive: true });
     scrollElement?.addEventListener('scroll', scroll, { passive: true });
 
-    this.#handlers.set(pdfWindow, {
-      keyDown,
-      keyUp,
-      blur,
-      selection,
-      resize,
-      scroll,
-      scrollElement,
-    });
+    this.#handlers.set(pdfWindow, handlers);
   }
 
   #detach(pdfWindow: PdfWindow, handlers: ViewHandlers): void {
