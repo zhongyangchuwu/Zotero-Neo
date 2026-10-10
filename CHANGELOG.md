@@ -12,6 +12,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Changed
 
+- Reader scan failures now retain native exception stacks, bounded cause chains, failure stages, and cached Reader identities in Debug and the profile log. First failure and recovery are recorded without recurring failure/idle spam; unreadable exceptions and failed logging sinks cannot abort error reporting. Profile logs preserve UTF-8 and close native streams after failed writes. Reader lifecycle/retry policy is unchanged; this is diagnostic hardening, not a fix for an underlying dead-object fault.
+
 - Annotation Comment Editor owns pending and mounted input per PDF view independently of the Reader Surface. Native typing/IME, Enter newline, two-second autosave, and Escape save/close are fixed; privileged system Escape handles earlier host interception and cross-compartment wrappers. Stale open/save/focus work cannot reset newer input ownership.
 - Retire Reader Insert as a Surface mode and configurable binding context. The Annotation comment editing boolean migrates to `annotationCommentEditor.enabled`, preserving old true/false intent and preferring an existing new value before clearing the old key. Binding schema 17 deletes inactive Reader Insert custom mappings and explicit unbindings without an archive, as explicitly approved; other contexts remain unchanged. Disabled `i` native passthrough has its own input owner; Note Insert is unchanged.
 

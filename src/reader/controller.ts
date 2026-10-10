@@ -6,6 +6,7 @@ import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionContext,
 } from '../core/contracts';
+import { reportDiagnosticError } from '../core/logging';
 import { sameNavigationLocation } from '../navigation/history';
 import type {
   HistoryDecision,
@@ -296,25 +297,36 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   rescan(window: MainWindow): void {
-    const service = zoteroRuntime().Reader;
-    const readers: ReaderRuntime[] = [];
-    const all = service._readers;
-    const hasAuthoritativeInventory = Array.isArray(all) || all instanceof Map;
-    if (Array.isArray(all)) readers.push(...all);
-    else if (all instanceof Map) readers.push(...all.values());
-    if (!readers.length) {
-      const tabs =
-        (window as MainWindowRuntime).Zotero_Tabs?._tabs ??
-        (window as MainWindowRuntime).Zotero_Tabs?.tabs ??
-        [];
-      for (const tab of tabs) {
-        if (!tab.id) continue;
-        const reader = service.getByTabID?.(tab.id);
-        if (reader) readers.push(reader);
+    let stage = 'inventory';
+    try {
+      const service = zoteroRuntime().Reader;
+      const readers: ReaderRuntime[] = [];
+      const all = service._readers;
+      const hasAuthoritativeInventory = Array.isArray(all) || all instanceof Map;
+      if (Array.isArray(all)) readers.push(...all);
+      else if (all instanceof Map) readers.push(...all.values());
+      if (!readers.length) {
+        stage = 'tabs';
+        const tabs =
+          (window as MainWindowRuntime).Zotero_Tabs?._tabs ??
+          (window as MainWindowRuntime).Zotero_Tabs?.tabs ??
+          [];
+        for (const tab of tabs) {
+          if (!tab.id) continue;
+          const reader = service.getByTabID?.(tab.id);
+          if (reader) readers.push(reader);
+        }
       }
+      stage = 'reconcile';
+      if (hasAuthoritativeInventory) this.#reconcileReaders(readers);
+      stage = 'ensure';
+      for (const reader of readers) this.#ensure(reader);
+    } catch (error) {
+      throw new Error(
+        `Reader rescan stage=${stage} sessions=[${[...this.#sessions.keys()].join(',')}] pending=[${[...this.#pending].join(',')}]`,
+        { cause: error },
+      );
     }
-    if (hasAuthoritativeInventory) this.#reconcileReaders(readers);
-    for (const reader of readers) this.#ensure(reader);
   }
 
   deactivateInactive(window: MainWindow, activeTabID: string | null): void {
@@ -416,43 +428,52 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   #waitAndInject(reader: ReaderRuntime, instanceID: string, attempt: number): void {
-    if (!this.#pending.has(instanceID)) return;
-    const pdfWindow = asPdfWindow(reader._internalReader?._primaryView?._iframeWindow);
-    if (pdfWindow) {
-      this.#waitTimers.delete(instanceID);
-      this.#pending.delete(instanceID);
-      const session = new ReaderSession({
-        controller: this,
-        reader,
-        firstPdfWindow: pdfWindow,
-        bindings: () => resolveBindings(this.#dependencies.preferences.get('bindings', '')),
-        release: () => this.#release(instanceID, reader),
-        jumpHost: this.#jumpHost,
-        selection: {
-          registered: (context) => this.registeredSelectionActions(context),
-          noteOwner: (owner) => this.noteSelectionOwner(owner),
-          clearOwner: (owner) => this.clearSelectionOwner(owner),
-          pluginID: () => this.pluginID,
-        },
+    try {
+      if (!this.#pending.has(instanceID)) return;
+      const pdfWindow = asPdfWindow(reader._internalReader?._primaryView?._iframeWindow);
+      if (pdfWindow) {
+        this.#waitTimers.delete(instanceID);
+        this.#pending.delete(instanceID);
+        const session = new ReaderSession({
+          controller: this,
+          reader,
+          firstPdfWindow: pdfWindow,
+          bindings: () => resolveBindings(this.#dependencies.preferences.get('bindings', '')),
+          release: () => this.#release(instanceID, reader),
+          jumpHost: this.#jumpHost,
+          selection: {
+            registered: (context) => this.registeredSelectionActions(context),
+            noteOwner: (owner) => this.noteSelectionOwner(owner),
+            clearOwner: (owner) => this.clearSelectionOwner(owner),
+            pluginID: () => this.pluginID,
+          },
+        });
+        this.#sessions.set(instanceID, session);
+        if (reader.itemID !== undefined) this.#sessionsByItem.set(reader.itemID, session);
+        session.start();
+        this.#dependencies.logger.diagnostic(
+          `inject reader ${instanceID} itemID=${reader.itemID ?? '?'}`,
+        );
+        return;
+      }
+      if (attempt >= 300) {
+        this.#pending.delete(instanceID);
+        this.#waitTimers.delete(instanceID);
+        this.#dependencies.logger.diagnostic(
+          `reader injection timed out ${instanceID} itemID=${reader.itemID ?? '?'}`,
+        );
+        return;
+      }
+      const timer = setTimeout(() => this.#waitAndInject(reader, instanceID, attempt + 1), 100);
+      this.#waitTimers.set(instanceID, timer);
+    } catch (error) {
+      const failure = new Error(`Reader injection instanceID=${instanceID} attempt=${attempt}`, {
+        cause: error,
       });
-      this.#sessions.set(instanceID, session);
-      if (reader.itemID !== undefined) this.#sessionsByItem.set(reader.itemID, session);
-      session.start();
-      this.#dependencies.logger.diagnostic(
-        `inject reader ${instanceID} itemID=${reader.itemID ?? '?'}`,
-      );
-      return;
+      if (attempt > 0)
+        reportDiagnosticError(this.#dependencies.logger, 'Reader injection failed', failure);
+      throw failure;
     }
-    if (attempt >= 300) {
-      this.#pending.delete(instanceID);
-      this.#waitTimers.delete(instanceID);
-      this.#dependencies.logger.diagnostic(
-        `reader injection timed out ${instanceID} itemID=${reader.itemID ?? '?'}`,
-      );
-      return;
-    }
-    const timer = setTimeout(() => this.#waitAndInject(reader, instanceID, attempt + 1), 100);
-    this.#waitTimers.set(instanceID, timer);
   }
 
   #reconcileReaders(readers: readonly ReaderRuntime[]): void {
@@ -462,7 +483,13 @@ export class ReaderController implements ReaderControllerApi {
         .filter((instanceID): instanceID is string => !!instanceID),
     );
     for (const [instanceID, session] of [...this.#sessions]) {
-      if (!live.has(instanceID)) session.dispose();
+      if (!live.has(instanceID)) {
+        try {
+          session.dispose();
+        } catch (error) {
+          throw new Error(`Reader disposal instanceID=${instanceID}`, { cause: error });
+        }
+      }
     }
     for (const instanceID of [...this.#pending]) {
       if (live.has(instanceID)) continue;
