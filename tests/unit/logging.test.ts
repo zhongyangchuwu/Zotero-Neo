@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { reportDiagnosticError, ZoteroLogger } from '../../src/core/logging';
 
 function nativeLogHost(
-  options: { writeError?: unknown; initError?: unknown; debugError?: unknown } = {},
+  options: {
+    writeError?: unknown;
+    initError?: unknown;
+    debugError?: unknown;
+    closeError?: unknown;
+  } = {},
 ) {
   const chunks: Buffer[] = [];
   const debug = vi.fn((_message: string) => {
@@ -15,7 +20,9 @@ function nativeLogHost(
       if (options.writeError) throw options.writeError;
       chunks.push(Buffer.from(text, 'latin1').subarray(0, count));
     },
-    close: vi.fn(),
+    close: vi.fn(() => {
+      if (options.closeError) throw options.closeError;
+    }),
   };
   const converter = {
     init: () => {
@@ -67,6 +74,26 @@ describe('native diagnostic logging', () => {
     expect(host.stream.close).toHaveBeenCalledOnce();
     expect(host.debug.mock.calls[0]?.[0]).toContain('converter unavailable');
   });
+
+  it.each(['write', 'init'] as const)(
+    'preserves the primary %s failure and the additional native close failure',
+    (stage) => {
+      const primary = new Error(`primary ${stage} failure`);
+      const close = new Error('additional native close failure');
+      const host = nativeLogHost({
+        [stage === 'write' ? 'writeError' : 'initError']: primary,
+        closeError: close,
+      });
+      const logger = new ZoteroLogger();
+      logger.diagnostic('Reader failed');
+      logger.diagnostic('same failed destination');
+      expect(host.debug).toHaveBeenCalledOnce();
+      const receipt = host.debug.mock.calls[0]![0];
+      expect(receipt).toContain(primary.stack);
+      expect(receipt).toContain(close.stack);
+      if (stage === 'init') expect(host.converter.close).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps profile logging usable when the native Debug sink throws', () => {
     const host = nativeLogHost({ debugError: new Error('Debug unavailable') });
