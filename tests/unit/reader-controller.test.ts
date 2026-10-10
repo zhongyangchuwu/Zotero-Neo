@@ -261,6 +261,57 @@ describe('Reader event lifecycle', () => {
     },
   );
 
+  it.each(['disposed', 'detached', 'reattached'] as const)(
+    'keeps native keys unclaimed by a %s PDF listener after removal fails',
+    (retirement) => {
+      vi.useFakeTimers();
+      const created = createHistorySession();
+      const replacement = createHistorySession();
+      attachNativeReaderHistory(created);
+      const listeners: EventListener[] = [];
+      vi.spyOn(created.pdfWindow, 'addEventListener').mockImplementation((type, listener) => {
+        if (type === 'keydown') listeners.push(listener as EventListener);
+      });
+      const original = new Error('live PDF listener removal failure');
+      let failRemoval = true;
+      vi.spyOn(created.pdfWindow, 'removeEventListener').mockImplementation((type) => {
+        if (type === 'keydown' && failRemoval) throw original;
+      });
+      created.session.start();
+      const retired = listeners[0]!;
+      const liveKey = readerKey('j');
+      retired(liveKey.event);
+      expect(liveKey.preventDefault).toHaveBeenCalledOnce();
+      const internal = created.reader._internalReader!;
+      const originalView = internal._primaryView;
+      try {
+        if (retirement === 'disposed') {
+          expect(() => created.session.dispose()).toThrow(original);
+          failRemoval = false;
+        } else {
+          internal._primaryView = replacement.reader._internalReader!._primaryView;
+          expect(() => created.intervalTasks[0]!()).toThrow(original);
+          failRemoval = false;
+          created.intervalTasks[0]!();
+          if (retirement === 'reattached') {
+            internal._primaryView = originalView;
+            created.intervalTasks[0]!();
+            const currentKey = readerKey('j');
+            listeners[1]!(currentKey.event);
+            expect(currentKey.preventDefault).toHaveBeenCalledOnce();
+          }
+        }
+        const nativeKey = readerKey('j');
+        retired(nativeKey.event);
+        expect(nativeKey.preventDefault).not.toHaveBeenCalled();
+        expect(nativeKey.stopImmediatePropagation).not.toHaveBeenCalled();
+      } finally {
+        failRemoval = false;
+        created.session.dispose();
+      }
+    },
+  );
+
   it.each(['indicator', 'secondary view'] as const)(
     'restores live Reader native keys after a dead %s wrapper',
     (deadOwner) => {

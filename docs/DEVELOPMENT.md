@@ -121,6 +121,11 @@ a second disposal must not be needed to release a split pane. During fault-injec
 acceptance, confirm that disabling Neo still removes Main command handling when a live
 Reader sidebar removal throws.
 
+PDF event callbacks must match their exact live view registration before entering Reader
+features. A failed listener removal cannot consume keys or deliver late view events after
+retirement, including when Zotero later reuses the same PDF window. Keep the original
+cleanup failure observable; callback fencing does not make failed DOM removal succeed.
+
 The old extension-proxy path is intentionally not used for fast iteration:
 runtime acceptance on Zotero 10.0.3 did not discover a first-time proxy in a
 fresh profile, while RDP temporary installation and `reload` both succeeded.
