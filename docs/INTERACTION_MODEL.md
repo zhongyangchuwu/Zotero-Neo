@@ -380,15 +380,9 @@ Record completed explicit jumps:
   picker confirmation;
 - successful Reader/Note Show in Library and Selection Panel Reveal;
 - Neo `H`/`L` tab switches and open-tab picker confirmation;
-- Reader PDF page destinations (`gg`/`G`, including counted page jumps), marks,
-  outline-entry jumps, annotation navigation, internal/citation links, and
-  native search-result navigation.
+- Reader PDF page destinations (`gg`/`G`, including counted page jumps), marks, annotation navigation, internal/citation links, native search-result navigation, and Zotero-native Outline destinations.
 
-Reader page, outline, annotation, internal/citation link, and search destinations
-enter the shared list only when producer-bound completion supplies a native-hard
-receipt matching the exact current view and settled geometry. A raw non-transient
-history save is not an independent recording entrance. Marks instead record one
-managed final destination. `H`/`L`
+Reader page, annotation, internal/citation link, and search destinations enter the shared list only when producer-bound completion supplies a native-hard receipt matching the exact current view and settled geometry. Zotero-native Outline navigation follows native immediate controls and uses the existing `reader-native.hard` observation; there is no Neo select-then-confirm step or dedicated Outline confirmation event. A raw non-transient history save is not an independent recording entrance. Marks instead record one managed final destination. `H`/`L`
 ignore numeric counts and cycle once through Zotero's open tabs, including Library;
 the current host and fallback wrap at the ends. Opening, browsing, or cancelling
 the tab chooser does not record. Confirming the current tab is a no-op and preserves

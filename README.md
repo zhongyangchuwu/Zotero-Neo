@@ -41,7 +41,8 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
   reading history, annotation navigation, and Zotero Reader search.
 - Horizontal/vertical split control and directional pane focus.
 - Link hints for visible internal, citation, and external PDF links.
-- Keyboard explorers for PDF outline and persisted marks.
+- Native Zotero Reader Outline enhanced in place with conservative hierarchy
+  labels and a Neo Bookmarks group for Reader marks.
 - Snapshot and EPUB navigation/search where Zotero exposes compatible Reader
   behavior.
 

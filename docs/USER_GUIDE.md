@@ -339,28 +339,21 @@ Note creation, deletion, restore, yank, and editing are not a second grammar
 inside the chooser. Note editor Normal/Insert operations use the shared binding
 engine in the editor itself.
 
-#### Outline explorer
+#### Native Reader Outline and Bookmarks
 
-| Key                 | Action                                                   |
-| ------------------- | -------------------------------------------------------- |
-| `e`          | Toggle custom outline explorer overlay                   |
-| `j` / `k`           | Move outline selection down / up                         |
-| `Ctrl+d` / `Ctrl+u` | Fast move down / up                                      |
-| `l`                 | Expand selected outline node                             |
-| `h`                 | Collapse selected outline node                           |
-| `R` / `M`           | Expand all / collapse all outline nodes                  |
-| `gg` / `G`          | Jump to top / bottom outline item                        |
-| Hint letters        | Select the hinted outline item without jumping           |
-| `Enter`             | Jump to selected outline entry and return to Normal mode |
-| `Escape`            | Close the outline explorer                               |
+`<Space>e` opens Zotero's native Reader sidebar in Outline view; if that view is already open, it closes. Neo appends one Bookmarks group to the existing native Outline without replacing its rows or titles. Zotero's native Annotations and Thumbnails views remain independent sidebar surfaces.
 
-When the outline explorer opens, it will try to preselect the nearest/current
-outline entry for your reading position; if the PDF metadata does not allow
-reliable mapping, it falls back to the first visible outline item. Each visible
-item also shows a hint label.
-If the number of items is small the hints are single characters; otherwise they
-expand to two-character hints. Typing a hint only changes the current selection;
-you still press `Enter` to jump.
+| Key | Action |
+| --- | --- |
+| `<Space>e` | Open/close the native Outline view |
+| `j` / `k` / `h` / `l` | While focused in native Outline, forward ArrowDown/ArrowUp/ArrowLeft/ArrowRight to Zotero's immediate row navigation |
+| `Enter` | Follow native behavior: expand/collapse a branch or open its URL |
+| `Escape` | Close the native sidebar and focus the active PDF |
+| `<Space>m` | Focus Bookmarks; repeat while Bookmarks has focus to close the sidebar |
+
+Neo adds presentation labels inferred from existing Outline titles and hierarchy. A one-component number (such as `1`) is labeled Section; a dotted number (such as `1.1`) is Subsection. Other nested rows are labeled Subsection, and a root row with children is labeled Section. Explicitly numbered Figure/Fig/图 and Table/表 titles receive Figure or Table labels; an unknown root leaf remains unclassified. These labels are not verified document semantics: the original title and numbering stay unchanged, the separate child badge counts direct Outline children, and Neo does not search PDF full text to discover figures or tables.
+
+In Bookmarks, `j` / `k` move between marks; `G` / `End` moves to the last mark; `Enter` or clicking a mark jumps to it; `d` deletes the selected mark; and `x` deletes all marks. An assigned mark label jumps directly except `j`, `k`, `g`, `d`, and `x`, which are reserved for group controls. These are Neo Reader marks, not PDF annotations; their persistence follows the Marks preference.
 
 #### Reader split view
 
@@ -385,7 +378,7 @@ or `0`–`9` (sioyek-style numbered tags).
 | `` `<x> `` | Jump to the mark — instant page flip, reproducing the exact view that was marked (e.g. `` `a ``, `` `1 ``)                    |
 | `dm<x>`    | Delete the mark (e.g. `dma`)                                                                                                  |
 | `dM`       | Delete all marks                                                                                                              |
-| `<space>m` | Toggle the marks explorer overlay (type a mark char to jump directly; `j`/`k` move, `Enter` jump, `d` delete, `x` delete all) |
+| `<Space>m` | Focus the Bookmarks group in the native Outline sidebar; repeat while Bookmarks has focus to close the sidebar |
 
 Notes:
 
