@@ -994,6 +994,8 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
+    this.#sidebar.cancelFocusRestore();
+    this.#outline.close();
     this.#linkHints.close();
     this.#nativeInput.release();
     if (this.#commentEditor.ownsInput) {
@@ -1180,6 +1182,13 @@ export class ReaderSession {
   }
 
   private handleSidebarToggleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
+    if (
+      this.#outline.isOpen &&
+      (!this.#outline.ownsView(pdfWindow) ||
+        isEditableElement(asElement(event.target)) ||
+        compositionOwnsKey(event, false))
+    )
+      return false;
     const action = this.#outline.isOpen
       ? 'toggleReaderSidebarOutline'
       : this.#marksExplorer.isOpen
@@ -1305,7 +1314,8 @@ export class ReaderSession {
       return true;
     if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
     if (this.#linkHints.hasHints && pdfWindow && this.#linkHints.ownsView(pdfWindow)) return true;
-    if (this.#marksExplorer.isOpen || this.#outline.isOpen) return true;
+    if (this.#outline.isOpen && pdfWindow && this.#outline.ownsView(pdfWindow)) return true;
+    if (this.#marksExplorer.isOpen) return true;
     if (
       this.input.keyBuffer === 'm' ||
       this.input.keyBuffer === '`' ||
@@ -1327,6 +1337,7 @@ export class ReaderSession {
     return direction ? this.#navigation.canFocusDirection(direction) : true;
   }
   private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
+    if (this.#outline.isOpen && !this.#outline.ownsView(pdfWindow)) this.#outline.close();
     this.#sidebar.activate('outline', pdfWindow, () => this.#marksExplorer.close(pdfWindow));
     if (focusOnly) {
       void this.#outline.focus(this.#dependencies.reader, pdfWindow);

@@ -2582,6 +2582,25 @@ describe('reader split shortcuts', () => {
   });
 });
 
+function configureOutline(created: ReaderHistoryHarness, count = 2) {
+  const setHash = vi.fn();
+  Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+    pdfViewer: { currentPageNumber: 1 },
+    pdfDocument: {
+      getOutline: async () =>
+        Array.from({ length: count }, (_, index) => ({
+          title: `Chapter ${index + 1}`,
+          dest: [index, { name: 'Fit' }],
+        })),
+    },
+    pdfLinkService: {
+      getDestinationHash: (destination: readonly [number]) => `#page=${destination[0] + 1}`,
+      setHash,
+    },
+  });
+  return { setHash };
+}
+
 describe('reader sidebar coordination', () => {
   it('replaces Outline with Marks and restores focus once on close', () => {
     vi.useFakeTimers();
@@ -2672,6 +2691,295 @@ describe('reader sidebar coordination', () => {
 
     expect(scrollBy).not.toHaveBeenCalled();
     expect(created.bodyChildren.map((node) => node.id)).toContain('zv-outline-explorer');
+    created.session.dispose();
+  });
+  it.each([
+    { key: 'Escape', isComposing: true },
+    { key: 'Process', keyCode: 229 },
+    { key: ' ', keyCode: 229 },
+  ])('leaves native composition $key outside Outline commands and toggle prefixes', (input) => {
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer');
+    const key = readerKey(input.key, input);
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(created.bodyChildren.find((node) => node.id === 'zv-outline-explorer')).toBe(overlay);
+    created.session.dispose();
+  });
+
+  it('yields another pane to its host and retires the Outline without restoring old focus', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    const native = vi.fn();
+    const view = { _iframeWindow: secondary.pdfWindow, _onKeyDown: native };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', view);
+    created.session.start();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    const hostKey = readerKey('x').event;
+    view._onKeyDown(hostKey);
+    expect(native).toHaveBeenCalledExactlyOnceWith(hostKey);
+    Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+    const key = readerKey('x');
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-outline-explorer')).toBe(false);
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('hands editable input back instead of running Outline or its remapped toggle', () => {
+    const bindings: BindingMap = {
+      ...DEFAULT_BINDINGS,
+      'reader-normal:q': 'toggleReaderSidebarOutline',
+    };
+    const created = createHistorySession({}, {}, bindings);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    const target = { tagName: 'INPUT', localName: 'input' } as unknown as EventTarget;
+    const key = readerKey('q', { target });
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-outline-explorer')).toBe(false);
+    created.session.dispose();
+  });
+
+  it('releases dead Outline DOM without reading its owner or blocking host restoration', () => {
+    const created = createHistorySession();
+    const view = created.reader._internalReader!._primaryView!;
+    const native = vi.fn();
+    view._onKeyDown = native;
+    created.session.start();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer')!;
+    const dead = new Set<object>([created.pdfWindow, overlay]);
+    Reflect.get(globalThis, 'Components').utils.isDeadWrapper = (value: object) => dead.has(value);
+    for (const property of ['ownerDocument', 'remove'])
+      Object.defineProperty(overlay, property, {
+        configurable: true,
+        get: () => {
+          throw new Error('cannot access dead Outline');
+        },
+      });
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    created.intervalTasks[0]?.();
+    const key = readerKey('x').event;
+    view._onKeyDown?.(key);
+    expect(native).toHaveBeenCalledExactlyOnceWith(key);
+    created.session.dispose();
+  });
+
+  it('keeps live close failures observable while retiring sidebar coordination', () => {
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    const native = vi.fn();
+    const view = { _iframeWindow: secondary.pdfWindow, _onKeyDown: native };
+    Reflect.set(created.reader._internalReader!, '_secondaryView', view);
+    created.session.start();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer')!;
+    vi.mocked(overlay.remove).mockImplementationOnce(() => {
+      throw new Error('live Outline removal failed');
+    });
+    expect(() => created.session.focusAndHandle(readerKey('Escape').event)).toThrow(
+      'live Outline removal failed',
+    );
+    overlay.remove();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', secondary.pdfWindow);
+    Reflect.set(created.reader._internalReader!, '_secondaryView', undefined);
+    created.intervalTasks[0]?.();
+    expect(secondary.bodyChildren.some((node) => node.id === 'zv-outline-explorer')).toBe(false);
+    const key = readerKey('x').event;
+    view._onKeyDown(key);
+    expect(native).toHaveBeenCalledExactlyOnceWith(key);
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('moves focus-only Outline ownership to the requested split pane', async () => {
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    Reflect.set(created.reader._internalReader!, '_secondaryView', {
+      _iframeWindow: secondary.pdfWindow,
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    executeReaderAction(created.session, 'focusReaderSidebar', secondary.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-outline-explorer')).toBe(false);
+    expect(secondary.bodyChildren.some((node) => node.id === 'zv-outline-explorer')).toBe(true);
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it.each(['hint', 'command'] as const)(
+    'keeps retired %s expiry from changing a new Outline selection',
+    async (kind) => {
+      vi.useFakeTimers();
+      const timers = vi.spyOn(globalThis, 'setTimeout');
+      const created = createHistorySession();
+      const { setHash } = configureOutline(created, 32);
+      executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+      await settleReaderMicrotasks();
+      created.session.focusAndHandle(readerKey(kind === 'hint' ? 'a' : 'g').event);
+      const oldTimer = timers.mock.calls.find(
+        ([, delay]) => delay === (kind === 'hint' ? 1200 : 700),
+      )![0] as () => void;
+      created.session.focusAndHandle(readerKey('Escape').event);
+      executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+      await settleReaderMicrotasks();
+      if (kind === 'command') created.session.focusAndHandle(readerKey('G').event);
+      created.session.focusAndHandle(readerKey(kind === 'hint' ? 'a' : 'g').event);
+      oldTimer();
+      created.session.focusAndHandle(readerKey(kind === 'hint' ? 's' : 'g').event);
+      created.session.focusAndHandle(readerKey('Enter').event);
+      expect(setHash).toHaveBeenCalledExactlyOnceWith(kind === 'hint' ? 'page=2' : 'page=1');
+      created.session.dispose();
+      timers.mockRestore();
+    },
+  );
+
+  it('does not refocus a retired pane after a newer sidebar opens', () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    Reflect.set(created.reader._internalReader!, '_secondaryView', {
+      _iframeWindow: secondary.pdfWindow,
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    created.session.focusAndHandle(readerKey('Escape').event);
+    const oldTimer = timers.mock.calls.find(([, delay]) => delay === 30)![0] as () => void;
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', secondary.pdfWindow);
+    vi.mocked(created.pdfWindow.focus).mockClear();
+    oldTimer();
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    created.session.dispose();
+    secondary.session.dispose();
+    timers.mockRestore();
+  });
+
+  it('retires pending Outline navigation errors when a new invocation replaces it', async () => {
+    const created = createHistorySession();
+    configureOutline(created);
+    const pending = Promise.withResolvers<void>();
+    const application = created.pdfWindow.PDFViewerApplication!;
+    Reflect.set(application, 'pdfLinkService', { goToDestination: () => pending.promise });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    created.session.focusAndHandle(readerKey('Enter').event);
+    created.session.focusAndHandle(readerKey('Escape').event);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    const current = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer');
+    pending.reject(new Error('retired outline navigation'));
+    await settleReaderMicrotasks();
+    expect(created.debug).toEqual([]);
+    expect(created.bodyChildren.find((node) => node.id === 'zv-outline-explorer')).toBe(current);
+    created.session.dispose();
+  });
+
+  it('waits for the captured view initialization instead of caching an empty early Outline', async () => {
+    const created = createHistorySession();
+    const { setHash } = configureOutline(created);
+    const application = created.pdfWindow.PDFViewerApplication!;
+    const document = application.pdfDocument;
+    const initialized = Promise.withResolvers<void>();
+    Reflect.set(
+      created.reader._internalReader!._primaryView!,
+      'initializedPromise',
+      initialized.promise,
+    );
+    Reflect.set(application, 'pdfDocument', undefined);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    Reflect.set(application, 'pdfDocument', document);
+    initialized.resolve();
+    await vi.waitFor(() => {
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-outline-explorer');
+      if (!overlay?.children[1]?.children[1]) throw new Error('Outline entries are not ready');
+    });
+    created.session.focusAndHandle(readerKey('j').event);
+    created.session.focusAndHandle(readerKey('Enter').event);
+    expect(setHash).toHaveBeenCalledExactlyOnceWith('page=2');
+    created.session.dispose();
+  });
+
+  it('does not confirm a cached Outline before its new pane is initialized', async () => {
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    configureOutline(created);
+    const { setHash } = configureOutline(secondary);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    await settleReaderMicrotasks();
+    created.session.focusAndHandle(readerKey('Escape').event);
+    const initialized = Promise.withResolvers<void>();
+    Reflect.set(created.reader._internalReader!, '_secondaryView', {
+      _iframeWindow: secondary.pdfWindow,
+      initializedPromise: initialized.promise,
+    });
+    Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+    const application = secondary.pdfWindow.PDFViewerApplication!;
+    const document = application.pdfDocument;
+    Reflect.set(application, 'pdfDocument', undefined);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', secondary.pdfWindow);
+    created.session.focusAndHandle(readerKey('Enter').event);
+    expect(setHash).not.toHaveBeenCalled();
+    Reflect.set(application, 'pdfDocument', document);
+    initialized.resolve();
+    await vi.waitFor(() => {
+      const overlay = secondary.bodyChildren.find((node) => node.id === 'zv-outline-explorer');
+      if (!overlay?.children[1]?.children[1]) throw new Error('Outline entries are not ready');
+    });
+    created.session.focusAndHandle(readerKey('j').event);
+    created.session.focusAndHandle(readerKey('Enter').event);
+    expect(setHash).toHaveBeenCalledExactlyOnceWith('page=2');
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('retires an old initialization wait before a replacement view owns Outline', async () => {
+    const created = createHistorySession();
+    const secondary = createHistorySession();
+    configureOutline(created);
+    const { setHash } = configureOutline(secondary);
+    const oldView = created.reader._internalReader!._primaryView!;
+    const initialized = Promise.withResolvers<void>();
+    Reflect.set(oldView, 'initializedPromise', initialized.promise);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    created.session.focusAndHandle(readerKey('Escape').event);
+    Reflect.set(created.reader._internalReader!, '_primaryView', {
+      _iframeWindow: secondary.pdfWindow,
+    });
+    Object.defineProperty(oldView, '_iframeWindow', {
+      get: () => {
+        throw new Error('retired native view');
+      },
+    });
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', secondary.pdfWindow);
+    await settleReaderMicrotasks();
+    initialized.resolve();
+    await settleReaderMicrotasks();
+    created.session.focusAndHandle(readerKey('j').event);
+    created.session.focusAndHandle(readerKey('Enter').event);
+    expect(setHash).toHaveBeenCalledExactlyOnceWith('page=2');
+    expect(created.debug).toEqual([]);
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('clears Outline on Reader deactivation and cancels an already pending focus restore', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession();
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    created.session.deactivateInteraction();
+    expect(created.bodyChildren.some((node) => node.id === 'zv-outline-explorer')).toBe(false);
+    executeReaderAction(created.session, 'toggleReaderSidebarOutline', created.pdfWindow);
+    created.session.focusAndHandle(readerKey('Escape').event);
+    vi.mocked(created.pdfWindow.focus).mockClear();
+    created.session.deactivateInteraction();
+    vi.advanceTimersByTime(30);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
     created.session.dispose();
   });
 

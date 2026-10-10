@@ -27,6 +27,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Fixed
 
+- Outline preserves native IME keys and scopes input/toggle prefixes to its captured PDF pane. Reader deactivation, destroyed panels, retired expiry/navigation work, and queued sidebar focus restoration no longer retain or steal transient ownership. Fresh loads and cached trees in uninitialized panes wait for the captured host view before publishing or confirming; an early open no longer caches a missing document as an empty outline. Tree hierarchy, expansion, hints, bindings, and navigation policy remain unchanged.
+
 - PDF link hints preserve native IME keys and claim input only in their captured pane. Dead badges/cues/windows no longer strand ownership; retired RAF/timer callbacks and late navigation failures cannot alter a newer invocation. Reader deactivation clears the transient cue and pending activation without changing link discovery, labels, geometry or native navigation.
 
 - Flash no longer cancels itself when native focus moves into its query input, and claims host keys only in that PDF pane. Dead input/prompt/badges cannot strand ownership; retired input/composition callbacks cannot alter a newer query. Existing matching, labels, IME editing, and Select endpoint behavior remain unchanged.
