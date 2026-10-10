@@ -31,6 +31,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Fixed
 
+- Pending Reader injection now retires a natively closed Reader before accessing its PDF wrappers, preventing dead-object errors and ghost sessions after closing an unready Reader. Queued ready callbacks cannot revive the retired identity; live injection errors remain observable.
+
 - Retired PDF view callbacks no longer consume native keys or deliver late blur/selection/viewport events when listener removal fails. Event ownership matches the exact registration, so reattaching the same PDF window does not reactivate an older listener; original cleanup failures remain observable.
 
 - New Main windows no longer abort Neo attachment by reading the context Note getter before Zotero initializes its inner pane. Surface, Note target, and editor identity consumers now read the published native context through one host adapter, without suppressing live errors or changing Note precedence, bindings, or preferences.

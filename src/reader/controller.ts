@@ -432,6 +432,12 @@ export class ReaderController implements ReaderControllerApi {
   #waitAndInject(reader: ReaderRuntime, instanceID: string, attempt: number): void {
     try {
       if (!this.#pending.has(instanceID)) return;
+      // Native close can outpace inventory reconciliation and destroy the pending PDF view.
+      if (reader._isTabClosed === true) {
+        this.#pending.delete(instanceID);
+        this.#waitTimers.delete(instanceID);
+        return;
+      }
       const pdfWindow = asPdfWindow(reader._internalReader?._primaryView?._iframeWindow);
       if (pdfWindow) {
         this.#waitTimers.delete(instanceID);

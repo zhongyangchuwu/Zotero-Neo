@@ -229,6 +229,77 @@ describe('Reader failure diagnostics', () => {
 });
 
 describe('Reader event lifecycle', () => {
+  it('does not inject an already closed Reader tab', () => {
+    const closed = createHistorySession();
+    const { service, dependencies } = createReaderRegistryHarness();
+    Reflect.set(closed.reader, '_instanceID', 'closed-before-injection');
+    Reflect.set(closed.reader, '_isTabClosed', true);
+    service._readers = [closed.reader];
+    const controller = createReaderController(dependencies);
+    const view = closed.reader._internalReader!._primaryView!;
+    const nativeKey = view._onKeyDown;
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan(closed.ownerWindow);
+      expect(
+        closed.bodyChildren.find((node) => node.id === 'zotero-vim-mode-indicator'),
+      ).toBeUndefined();
+      expect(view._onKeyDown).toBe(nativeKey);
+    } finally {
+      controller.shutdown();
+    }
+  });
+
+  it('retires a closed Reader tab before the next pending injection attempt', () => {
+    vi.useFakeTimers();
+    const closed = createHistorySession();
+    const reopened = createHistorySession();
+    const { service, dependencies } = createReaderRegistryHarness();
+    const diagnostic = vi.fn();
+    const original = new TypeError('closed native PDF view');
+    const internal = closed.reader._internalReader;
+    let destroyed = false;
+    let ready = false;
+    Reflect.set(closed.reader, '_instanceID', 'closed-during-injection');
+    Reflect.set(closed.reader, '_isTabClosed', false);
+    Reflect.set(reopened.reader, '_instanceID', 'reopened-after-pending-close');
+    Object.defineProperty(closed.reader, '_internalReader', {
+      get: () => {
+        if (destroyed) throw original;
+        return ready ? internal : undefined;
+      },
+    });
+    service._readers = [closed.reader];
+    const controller = createReaderController({
+      ...dependencies,
+      logger: { debug: () => {}, diagnostic },
+    });
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan(closed.ownerWindow);
+      Reflect.set(closed.reader, '_isTabClosed', true);
+      destroyed = true;
+      vi.advanceTimersByTime(100);
+
+      destroyed = false;
+      ready = true;
+      service._readers = [closed.reader, reopened.reader];
+      controller.rescan(reopened.ownerWindow);
+      vi.advanceTimersByTime(400);
+      expect(
+        closed.bodyChildren.find((node) => node.id === 'zotero-vim-mode-indicator'),
+      ).toBeUndefined();
+      expect(
+        reopened.bodyChildren.find((node) => node.id === 'zotero-vim-mode-indicator'),
+      ).toBeDefined();
+      expect(
+        diagnostic.mock.calls.some(([message]) => /Reader injection failed/i.test(message)),
+      ).toBe(false);
+    } finally {
+      controller.shutdown();
+    }
+  });
+
   it.each(['restart', 'replacement'] as const)(
     'retires native selection callbacks across %s without changing the current input',
     (operation) => {

@@ -121,6 +121,13 @@ a second disposal must not be needed to release a split pane. During fault-injec
 acceptance, confirm that disabling Neo still removes Main command handling when a live
 Reader sidebar removal throws.
 
+Pending Reader injection checks Zotero's `_isTabClosed` flag before reading any
+PDF view or iframe. A closed Reader retires its pending identity and retry timer
+without creating a session; queued ready callbacks cannot revive that identity.
+Live delayed-injection failures still retain their native cause and propagate.
+Acceptance must close an unready Reader through native Main-window retirement,
+then exercise surviving and newly activated Readers after the retry interval.
+
 PDF event callbacks must match their exact live view registration before entering Reader
 features. A failed listener removal cannot consume keys or deliver late view events after
 retirement, including when Zotero later reuses the same PDF window. Keep the original
