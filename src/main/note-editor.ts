@@ -13,7 +13,7 @@ import { copyToClipboard } from '../platform/clipboard';
 import { asElement } from '../platform/dom';
 import {
   activeContextEditorWindow,
-  mainHost,
+  activeContextNoteEditor,
   mainReaderForTab,
   mainTabList,
   selectedMainTabID,
@@ -418,7 +418,7 @@ export class NoteEditor {
   }
 
   private noteItemID(main: MainWindow, candidate: Window | null): number | null {
-    const contextEditor = mainHost(main).ZoteroContextPane?.activeEditor;
+    const contextEditor = activeContextNoteEditor(main);
     if (candidate && contextEditor?._iframe?.contentWindow === candidate && contextEditor.item?.id)
       return contextEditor.item.id;
     const tab = selectedMainTabInfo(main);

@@ -419,9 +419,11 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     focusContextNote: () => {
       Reflect.set(document, 'activeElement', noteEditorFocus);
       Reflect.set(window, 'ZoteroContextPane', {
-        activeEditor: {
-          item: secondItem,
-          contains: (node: Node | null) => node === noteEditorFocus,
+        context: {
+          activeEditor: {
+            item: secondItem,
+            contains: (node: Node | null) => node === noteEditorFocus,
+          },
         },
       });
     },

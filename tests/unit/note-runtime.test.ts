@@ -301,15 +301,44 @@ describe('Note surface runtime identity', () => {
     expect(h.addDocumentListener).toHaveBeenCalledTimes(2);
   });
 
+  it('binds the actual context Note only after native context initialization', () => {
+    const h = harness();
+    const active = {} as Element;
+    Reflect.set(h.main.document, 'activeElement', active);
+    Reflect.set(h.main.Zotero_Tabs, 'getTabInfo', () => ({ type: 'library' }));
+    h.setFocusedWindow(null);
+    const pane = {
+      get activeEditor(): never {
+        throw new TypeError('native context is not initialized');
+      },
+    };
+    Reflect.set(h.main, 'ZoteroContextPane', pane);
+    h.sync();
+    expect(h.note.editorWindow).toBeNull();
+    Reflect.set(pane, 'context', {
+      activeEditor: {
+        item: { id: 7 },
+        contains: (node: unknown) => node === active,
+        _iframe: { contentWindow: h.editorWindow },
+      },
+    });
+    h.sync();
+    expect(h.note.itemID).toBe(7);
+    expect(h.note.editorWindow).toBe(h.editorWindow);
+    h.editor.clear(h.session);
+  });
+
   it('resolves a focused context-pane Note ahead of standalone tab metadata', () => {
     const h = harness();
     const active = {} as Element;
     Reflect.set(h.main.document, 'activeElement', active);
     Reflect.set(h.main, 'ZoteroContextPane', {
-      activeEditor: {
-        item: { id: 7 },
-        contains: (node: unknown) => node === active,
-        _iframe: { contentWindow: h.editorWindow },
+      context: {
+        activeEditor: {
+          item: { id: 7 },
+          contains: (node: unknown) => node === active,
+          _iframe: { contentWindow: h.editorWindow },
+        },
       },
     });
     h.setFocusedWindow(null);
@@ -328,7 +357,7 @@ describe('Note surface runtime identity', () => {
       contains: (node: unknown) => node === active,
       _iframe: { contentWindow: h.editorWindow },
     };
-    Reflect.set(h.main, 'ZoteroContextPane', { activeEditor: context });
+    Reflect.set(h.main, 'ZoteroContextPane', { context: { activeEditor: context } });
     Reflect.set(h.main.document, 'activeElement', active);
     Reflect.set(h.main.Zotero_Tabs, 'getTabInfo', () => ({ type: 'library' }));
     h.setFocusedWindow(null);

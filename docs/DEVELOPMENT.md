@@ -187,6 +187,14 @@ event gates, timers, guides, focus decisions, and action execution.
 selected items, reader-tab context, and tag filtering. Main-window control flow should use
 these named adapters rather than spreading structural casts through feature code.
 
+Context Note resolution reads the native `ZoteroContextPane.context.activeEditor` through
+`activeContextNoteEditor()`. Zotero publishes `context` during initialization; its controller-level
+`activeEditor` getter dereferences the not-yet-created inner pane when a new Main window first loads.
+Missing context means no context Note is available yet, not a failed Main attachment. Re-read the
+native context on every resolution so later initialization, editor replacement, and focused Note
+precedence remain host-authoritative. Live getter failures are not hidden, and no retry or mirrored
+readiness flag is introduced.
+
 `src/main/focus-ownership.ts` claims Zotero's initial Library Quick Search focus
 only for `APP_STARTUP`. An empty search already focused when Neo attaches is
 claimed on the next event-loop turn so direct user input can cancel. Otherwise

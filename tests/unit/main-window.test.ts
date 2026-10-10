@@ -1174,7 +1174,7 @@ describe('Note contextual Open', () => {
       _iframe: { contentWindow: editorWindow },
     };
     Reflect.set(host.window.document, 'activeElement', target);
-    Reflect.set(host.window, 'ZoteroContextPane', { activeEditor: noteEditor });
+    Reflect.set(host.window, 'ZoteroContextPane', { context: { activeEditor: noteEditor } });
     Reflect.set(host.window, 'ZoteroPane', {
       getSelectedItems: () => [other],
       viewAttachment,

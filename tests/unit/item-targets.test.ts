@@ -146,9 +146,11 @@ describe('shared item target resolution', () => {
     const window = {
       document: { activeElement: active },
       ZoteroContextPane: {
-        activeEditor: {
-          item: focused,
-          contains: (node: Node | null) => node === (active as unknown as Node),
+        context: {
+          activeEditor: {
+            item: focused,
+            contains: (node: Node | null) => node === (active as unknown as Node),
+          },
         },
       },
       Zotero_Tabs: {

@@ -334,7 +334,7 @@ describe('Main action target contracts', () => {
     h.session.selection.add({ libraryID: 1, itemID: main.id });
     const active = h.window.document.activeElement;
     Reflect.set(h.window, 'ZoteroContextPane', {
-      activeEditor: { item: note, contains: (node: unknown) => node === active },
+      context: { activeEditor: { item: note, contains: (node: unknown) => node === active } },
     });
 
     const targets = NOTE_ITEM_TARGET.resolve(h.window);

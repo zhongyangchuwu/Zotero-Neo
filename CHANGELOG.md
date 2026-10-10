@@ -27,6 +27,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Fixed
 
+- New Main windows no longer abort Neo attachment by reading the context Note getter before Zotero initializes its inner pane. Surface, Note target, and editor identity consumers now read the published native context through one host adapter, without suppressing live errors or changing Note precedence, bindings, or preferences.
+
 - Marks preserves native IME input and claims keys/toggle prefixes only in its captured PDF pane. Reader deactivation and destroyed panels release transient ownership without clearing mark values; live cleanup failures still notify sidebar coordination. Retired toggle expiry cannot cancel a newer invocation, and deleting the selected last row leaves the surviving mark confirmable. Existing mark grammar, storage, bindings, and managed navigation remain unchanged.
 
 - Outline preserves native IME keys and scopes input/toggle prefixes to its captured PDF pane. Reader deactivation, destroyed panels, retired expiry/navigation work, and queued sidebar focus restoration no longer retain or steal transient ownership. Fresh loads and cached trees in uninitialized panes wait for the captured host view before publishing or confirming; an early open no longer caches a missing document as an empty outline. Tree hierarchy, expansion, hints, bindings, and navigation policy remain unchanged.
