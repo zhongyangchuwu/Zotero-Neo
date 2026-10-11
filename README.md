@@ -41,9 +41,9 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
   reading history, annotation navigation, and Zotero Reader search.
 - Horizontal/vertical split control and directional pane focus.
 - Link hints for visible internal, citation, and external PDF links.
-- Native Zotero Reader Outline enhanced in place with conservative hierarchy
-  labels and a Neo Bookmarks group for Reader marks.
-- Direct Reader panel focus with `<Space>ro/rm/ra/rt` opens or focuses Outline, Bookmarks, Annotations, or Thumbnails without toggling the panel closed. Reader Normal also navigates headings (`[s`/`]s`), Figures (`[f`/`]f`), Tables (`[t`/`]t`), annotations (`[a`/`]a`), and Bookmarks (`[m`/`]m`); category jumps use authored Outline targets only, with no PDF text scan or generated entries.
+- Native Zotero Reader Outline enhanced in place with compact color/icon badges, stable
+  hierarchical ordinals (including unnumbered Introduction), numeric child counts, and Neo Bookmarks.
+- Direct Reader panel focus with `<Space>ro/rm/ra/rt` opens or focuses Outline, Bookmarks, Annotations, or Thumbnails without toggling the panel closed. `[s`/`]s` traverse the full native heading tree from the active PDF position, including from all four focused sidebar contexts. `[f`/`]f` and `[t`/`]t` also reuse genuine Zotero structured-document captions with PDF anchors; recognition is explicit and cached, and a cold native cache may require local whole-PDF processing. No new OCR dependency, upload, or invented targets.
 - Snapshot and EPUB navigation/search where Zotero exposes compatible Reader
   behavior.
 

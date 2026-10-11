@@ -85,6 +85,8 @@ const READER_PANEL_ACTIONS = [
 /** Configurable Neo controls; native arrows, Tab and editors remain host-owned. */
 export const READER_OUTLINE_ACTIONS = Object.freeze([
   ...READER_PANEL_ACTIONS,
+  'prevHeading',
+  'nextHeading',
   'uiNext',
   'uiPrevious',
   'uiParent',
@@ -94,6 +96,8 @@ export const READER_OUTLINE_ACTIONS = Object.freeze([
 ] as const satisfies readonly ActionId[]);
 export const READER_MARKS_ACTIONS = Object.freeze([
   ...READER_PANEL_ACTIONS,
+  'prevHeading',
+  'nextHeading',
   'uiNext',
   'uiPrevious',
   'uiFirst',
@@ -105,12 +109,16 @@ export const READER_MARKS_ACTIONS = Object.freeze([
 ] as const satisfies readonly ActionId[]);
 export const READER_ANNOTATIONS_ACTIONS = Object.freeze([
   ...READER_PANEL_ACTIONS,
+  'prevHeading',
+  'nextHeading',
   'uiNext',
   'uiPrevious',
   'uiCancel',
 ] as const satisfies readonly ActionId[]);
 export const READER_THUMBNAILS_ACTIONS = Object.freeze([
   ...READER_PANEL_ACTIONS,
+  'prevHeading',
+  'nextHeading',
   'uiNext',
   'uiPrevious',
   'uiCancel',

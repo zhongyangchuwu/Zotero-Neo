@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReaderNavigation } from '../../src/reader/navigation';
+import { ReaderCaptionTargets } from '../../src/reader/caption-targets';
 import type {
   PdfWindow,
   ReaderRuntime,
@@ -31,7 +32,7 @@ function pdfWindow(): PdfWindow {
   } as unknown as PdfWindow;
 }
 
-function harness() {
+function harness(itemID = 42) {
   const cloneInto = vi.fn(<T>(value: T) => value);
   Reflect.set(globalThis, 'Components', { utils: { cloneInto } });
   const primary = pdfWindow();
@@ -62,6 +63,7 @@ function harness() {
     activeElement: null,
   } as unknown as Document;
   const reader = {
+    itemID,
     _iframeWindow: { document: outerDocument } as Window,
     _window: { ZoteroContextPane: { focus: focusContext } },
     _internalReader: {
@@ -90,6 +92,7 @@ function harness() {
   const debug = vi.fn();
   const navigation = new ReaderNavigation({
     reader,
+    captions: new ReaderCaptionTargets(reader.itemID, () => {}, debug),
     activePdfWindow: () => active,
     setActivePdfWindow: (pdfWindow) => {
       active = pdfWindow;
@@ -308,19 +311,30 @@ describe('ReaderNavigation', () => {
     Reflect.set(internal._primaryView!, 'setSidebarView', async () => {
       state.outline = [
         {
-          title: '1 Introduction',
+          title: 'Introduction',
           location: location(0, 792),
           expanded: false,
-          items: [{ title: '1.1 Background', location: location(0, 700), items: [] }],
+          items: [
+            {
+              title: 'Background',
+              location: location(0, 700),
+              matched: false,
+              childMatched: false,
+              items: [],
+            },
+          ],
         },
+        { title: 'Related Work', location: location(1, 750), items: [], matched: false },
         { title: 'Figure 1 Workflow', location: location(1, 792), items: [] },
-        { title: '2 Results', location: location(2, 792), items: [] },
+        { title: '5 Experiments', location: location(2, 792), items: [], active: true },
       ];
     });
     await expect(
       test.navigation.traverseOutline('heading', 1, test.primary, () => true),
     ).resolves.toBe(true);
     expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 700), { block: 'start' });
+    await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(1, 750), { block: 'start' });
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
     expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), { block: 'start' });
     await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
@@ -350,6 +364,9 @@ describe('ReaderNavigation', () => {
     Reflect.set(internal._primaryView!, 'navigate', primaryNavigate);
     Reflect.set(internal._secondaryView!, 'navigate', secondaryNavigate);
     Reflect.set(internal, '_lastViewPrimary', false);
+    Reflect.set(test.secondary, 'PDFViewerApplication', {
+      pdfViewer: { _location: { pageNumber: 1, top: 792, left: 0 } },
+    });
     await test.navigation.traverseOutline('figure', 1, test.secondary, () => true);
     await test.navigation.traverseOutline('figure', -1, test.secondary, () => true);
     expect(secondaryNavigate).toHaveBeenCalledTimes(2);
@@ -359,7 +376,223 @@ describe('ReaderNavigation', () => {
       test.navigation.traverseOutline('table', 1, test.secondary, () => true),
     ).resolves.toBe(false);
     expect(secondaryNavigate).toHaveBeenCalledTimes(2);
-    expect(test.showStatus).toHaveBeenCalledWith('✗ no tables in Outline', 2000);
+  });
+
+  it.each([
+    { direction: 1 as const, rounded: 700, target: 600.4, scale: 1 },
+    { direction: -1 as const, rounded: 700, target: 792, scale: 1 },
+    { direction: 1 as const, rounded: 600, target: 792, scale: 1 },
+    { direction: -1 as const, rounded: 600, target: 700.4, scale: 1 },
+    { direction: -1 as const, rounded: 699, target: 792, scale: 0.5 },
+  ])(
+    'skips rounded same-page boundaries and wraps globally ($direction, $rounded)',
+    async ({ direction, rounded, target, scale }) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      Reflect.set(internal, '_state', {
+        outline: [
+          {
+            title: 'Introduction',
+            location: { position: { pageIndex: 0, rects: [[0, 792, 0, 792]] } },
+          },
+          {
+            title: 'Related Work',
+            location: { position: { pageIndex: 0, rects: [[0, 700.4, 0, 700.4]] } },
+          },
+          {
+            title: 'Experiments',
+            active: true,
+            location: { position: { pageIndex: 0, rects: [[0, 600.4, 0, 600.4]] } },
+          },
+        ],
+      });
+      Reflect.set(test.primary, 'PDFViewerApplication', {
+        pdfViewer: {
+          _location: { pageNumber: 1, top: rounded, left: 0 },
+          getPageView: () => ({ viewport: { scale, height: 1000 } }),
+        },
+      });
+      const navigate = vi.fn();
+      Reflect.set(internal._primaryView!, 'navigate', navigate);
+      await test.navigation.traverseOutline('heading', direction, test.primary, () => true);
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        { position: { pageIndex: 0, rects: [[0, target, 0, target]] } },
+        { block: 'start' },
+      );
+    },
+  );
+
+  it('advances to a bottom-clamped heading once, then wraps instead of repeating its unreachable top', async () => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const first = { position: { pageIndex: 0, rects: [[0, 792, 0, 792]] } };
+    const last = { position: { pageIndex: 1, rects: [[0, 200, 0, 200]] } };
+    Reflect.set(internal, '_state', {
+      outline: [
+        { title: 'Introduction', location: first },
+        { title: 'Discussion', location: last },
+      ],
+    });
+    const container = { scrollTop: 950, scrollHeight: 2000, clientHeight: 1000 };
+    const viewer = { _location: { pageNumber: 2, top: 550, left: 0 }, container };
+    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: viewer });
+    Reflect.set(
+      internal._primaryView!,
+      'getPositionBoundingViewRect',
+      (position: ReaderLinkPosition) => [
+        0,
+        position.pageIndex === 0 ? 0 : 1300,
+        0,
+        position.pageIndex === 0 ? 0 : 1300,
+      ],
+    );
+    const navigate = vi.fn(async (request: { position: ReaderLinkPosition }) => {
+      container.scrollTop = request.position.pageIndex === 0 ? 0 : 1000;
+      viewer._location = {
+        pageNumber: request.position.pageIndex + 1,
+        top: request.position.pageIndex === 0 ? 792 : 500,
+        left: 0,
+      };
+    });
+    Reflect.set(internal._primaryView!, 'navigate', navigate);
+    await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith(last, { block: 'start' });
+    await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith(first, { block: 'start' });
+    await test.navigation.traverseOutline('heading', -1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith(last, { block: 'start' });
+    expect(navigate).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses live PDF geometry without an Outline active-row or page-only fallback', async () => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const next = { position: { pageIndex: 0, rects: [[0, 650, 0, 650]] } };
+    Reflect.set(internal, '_state', {
+      outline: [
+        {
+          title: 'Introduction',
+          location: { position: { pageIndex: 0, rects: [[0, 750, 0, 750]] } },
+        },
+        { title: 'Related Work', location: next },
+        {
+          title: '5 Experiments',
+          active: true,
+          location: { position: { pageIndex: 5, rects: [[0, 750, 0, 750]] } },
+        },
+      ],
+    });
+    const viewer = {
+      currentPageNumber: 1,
+      container: {
+        clientTop: 2,
+        clientLeft: 0,
+        getBoundingClientRect: () => ({ top: 100, left: 0 }),
+      },
+      getPageView: () => ({
+        div: { getBoundingClientRect: () => ({ top: -198, left: 0 }) },
+        viewport: {
+          scale: 1,
+          height: 1000,
+          convertToPdfPoint: (x: number, y: number) => [x, 1000 - y],
+        },
+      }),
+    };
+    Reflect.set(viewer, '_location', { pageNumber: 1, top: 800, left: 0 });
+    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: viewer });
+    const navigate = vi.fn();
+    Reflect.set(internal._primaryView!, 'navigate', navigate);
+    await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(next, { block: 'start' });
+
+    Reflect.set(viewer, 'getPageView', undefined);
+    Reflect.set(viewer, '_location', undefined);
+    navigate.mockClear();
+    await expect(
+      test.navigation.traverseOutline('heading', 1, test.primary, () => true),
+    ).resolves.toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('merges native bookmark and genuine SDT caption targets without repeating a figure identity', async () => {
+    const test = harness();
+    const nativeFigure = { pageIndex: 0, rects: [[0, 600, 0, 600]] };
+    const figure = { pageIndex: 2, rects: [[50, 100, 500, 140]] };
+    const table = { pageIndex: 3, rects: [[50, 400, 500, 440]] };
+    const blocks = [
+      {
+        type: 'caption',
+        content: [{ text: 'Figure 1: Overview' }],
+        anchor: { pageRects: [[0, 50, 400, 500, 440]] },
+      },
+      {
+        type: 'caption',
+        content: [{ text: 'Figure 2: Model' }],
+        anchor: { pageRects: [[2, 50, 100, 500, 140]] },
+      },
+      {
+        type: 'caption',
+        content: [{ text: 'Table 1: Results' }],
+        anchor: { pageRects: [[3, 50, 400, 500, 440]] },
+      },
+    ];
+    Reflect.set(globalThis, 'Zotero', {
+      SDT: {
+        getReader: async () => ({
+          getTopLevelBlockCount: () => blocks.length,
+          getBlocks: async () => blocks,
+        }),
+      },
+    });
+    const internal = test.reader._internalReader!;
+    Reflect.set(internal, '_state', {
+      outline: [{ title: 'Figure 1 Overview', location: { position: nativeFigure } }],
+    });
+    const viewer = { _location: { pageNumber: 1, top: 700, left: 0 } };
+    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: viewer });
+    const navigate = vi.fn(async ({ position }: { position: ReaderLinkPosition }) => {
+      viewer._location = {
+        pageNumber: position.pageIndex + 1,
+        top: Math.max(position.rects[0][1], position.rects[0][3]),
+        left: 0,
+      };
+    });
+    Reflect.set(internal._primaryView!, 'navigate', navigate);
+    await test.navigation.traverseOutline('figure', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith({ position: nativeFigure }, { block: 'start' });
+    await test.navigation.traverseOutline('figure', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith({ position: figure }, { block: 'start' });
+    await test.navigation.traverseOutline('table', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith({ position: table }, { block: 'start' });
+  });
+
+  it('does not navigate when focus ownership retires during native caption processing', async () => {
+    const test = harness();
+    const pending = Promise.withResolvers<unknown>();
+    Reflect.set(globalThis, 'Zotero', { SDT: { getReader: () => pending.promise } });
+    const internal = test.reader._internalReader!;
+    Reflect.set(internal, '_state', { outline: [] });
+    Reflect.set(test.primary, 'PDFViewerApplication', {
+      pdfViewer: { _location: { pageNumber: 1, top: 700, left: 0 } },
+    });
+    const navigate = vi.fn();
+    Reflect.set(internal._primaryView!, 'navigate', navigate);
+    let current = true;
+    const request = test.navigation.traverseOutline('figure', 1, test.primary, () => current);
+    await Promise.resolve();
+    current = false;
+    pending.resolve({
+      getTopLevelBlockCount: () => 1,
+      getBlocks: async () => [
+        {
+          type: 'caption',
+          content: [{ text: 'Figure 1: Overview' }],
+          anchor: { pageRects: [[1, 50, 100, 500, 140]] },
+        },
+      ],
+    });
+    await expect(request).resolves.toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it.each(['new input', 'split change', 'view replacement'] as const)(
@@ -367,6 +600,9 @@ describe('ReaderNavigation', () => {
     async (change) => {
       const test = harness();
       const internal = test.reader._internalReader!;
+      Reflect.set(test.primary, 'PDFViewerApplication', {
+        pdfViewer: { _location: { pageNumber: 1, top: 792, left: 0 } },
+      });
       const pending = Promise.withResolvers<void>();
       const state = { outline: null as ReaderNativeOutlineEntry[] | null };
       Reflect.set(internal, '_state', state);

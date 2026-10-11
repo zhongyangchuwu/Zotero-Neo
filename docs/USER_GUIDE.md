@@ -361,9 +361,11 @@ The native Reader sidebar has four direct focus commands in Reader Normal: `<Spa
 
 These Neo-owned controls can be remapped in their matching contexts. Native arrows and `Tab` / `Shift+Tab` remain Zotero-owned; in Outline, `Enter` / `Return` (including modified Enter) is exclusively native. If you want a configurable confirmation in Outline, bind `uiConfirm` to another non-reserved key. Escape follows each surface's own return/cancel behavior.
 
-Neo adds a Bookmarks group to the existing native Outline without replacing native rows or titles. Reader navigation defaults are `[s` / `]s` for headings (Sections and Subsections), `[f` / `]f` for Figures, `[t` / `]t` for Tables, `[a` / `]a` for annotations, and `[m` / `]m` for Bookmarks. Figure, Table, and heading traversal uses only existing authored Outline entries; Neo does not scan PDF text or generate missing entries. A missing target is reported honestly. Category traversal follows document order and wraps; Bookmark navigation uses document position and preserves existing mark jumps and annotation links.
+Neo adds bounded Bookmarks and collapsible `▧ / ▤` caption groups to the native Outline without replacing its rows or titles. `[s` / `]s` traverse the whole native heading hierarchy, including Subsections, from the actual active PDF position; the same shortcuts work from Outline, Bookmarks, Annotations and Thumbnails. Collapse, search filtering, the active Outline row and sidebar visibility never scope this traversal. Navigation follows document order and wraps; native editing/IME remains authoritative.
 
-Display labels are conservative inferences from existing Outline titles and hierarchy: a one-component number (such as `1`) is labeled Section; a dotted number (such as `1.1`) is Subsection. Other nested rows are labeled Subsection, and a root row with children is labeled Section. Explicitly numbered Figure/Fig/图 and Table/表 titles receive Figure or Table labels; an unknown root leaf remains unclassified. These labels are not verified document semantics: original titles and numbering stay unchanged, and the separate child badge counts direct Outline children.
+Figure `[f` / `]f` and Table `[t` / `]t` navigation also reuse genuine Zotero structured-document caption blocks with valid PDF anchors. Expand `▧ / ▤` to recognize and choose a caption, or request a category directly. Recognition is lazy and cached for the Reader: a missing native cache may require Zotero to process the whole PDF locally, but opening Reader and `[s` / `]s` do not trigger this extra work. No upload or new OCR dependency is added. These are caption positions, not guaranteed image detection; absent captions stay absent, including incomplete native recognition. A missing target is reported honestly. Bookmark `[m` / `]m` navigation retains existing document-position ordering, jumps and annotation links.
+
+Compact colored icons and derived tree ordinals replace long type labels: an unnumbered Introduction root is `1`, the next root is `2`, and child headings are `3.1`, `3.2`, etc. Numbering uses the full hierarchy, not only expanded/filtered rows; explicit Figure/Table entries do not increment heading counters. Meaningful unnumbered root leaves are Sections. Native titles and authored numbering remain unchanged; hover and accessible names explain the icons, and the separate number is a direct-child count. These presentation hints do not verify PDF semantics.
 
 Inside Bookmarks, `j` / `k` move between marks; `gg` / `G` move to the first / last mark; `Enter` confirms; `d` deletes the selected mark; and `x` clears marks. Mark labels jump directly except `j`, `k`, `g`, `d`, and `x`, which are group controls. These are Neo Reader marks, not PDF annotations; their persistence follows the Marks preference.
 
@@ -596,8 +598,8 @@ moves to the previous / next matching target, follows document order, and wraps:
 | Keys | Category |
 | --- | --- |
 | `[s` / `]s` | Headings, including Sections and Subsections |
-| `[f` / `]f` | Figures present in the existing authored Outline |
-| `[t` / `]t` | Tables present in the existing authored Outline |
+| `[f` / `]f` | Figures from explicit native targets or recognized native captions |
+| `[t` / `]t` | Tables from explicit native targets or recognized native captions |
 | `[a` / `]a` | Annotations |
 | `[m` / `]m` | Bookmarks, ordered by document position |
 

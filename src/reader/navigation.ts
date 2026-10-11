@@ -3,6 +3,11 @@ import type { FocusDirection } from '../input/actions';
 import type { PdfWindow, ReaderRuntime } from './types';
 import { outlineEntryKind } from './outline-presentation';
 import type { ReaderNativeOutlineEntry, ReaderViewRuntime } from './types';
+import {
+  captionLabel,
+  type ReaderCaptionTarget,
+  type ReaderCaptionTargets,
+} from './caption-targets';
 import type { NavigationExecution, NavigationIntent, NavigationOutcome } from '../navigation/types';
 import type { ReaderNativeNavigation } from './jump-history-bridge';
 
@@ -15,6 +20,7 @@ export type ReaderNavigationCommand = (
 
 export interface ReaderNavigationDependencies {
   readonly reader: ReaderRuntime;
+  readonly captions: ReaderCaptionTargets;
   readonly activePdfWindow: () => PdfWindow;
   readonly setActivePdfWindow: (pdfWindow: PdfWindow) => void;
   readonly syncViews: () => void;
@@ -85,15 +91,22 @@ export class ReaderNavigation {
       (view !== internal?._primaryView && view !== internal?._secondaryView)
     )
       return false;
-    const entries: { entry: ReaderNativeOutlineEntry; page: number; top: number; order: number }[] =
-      [];
+    const entries: {
+      entry: ReaderNativeOutlineEntry;
+      page: number;
+      top: number;
+      order: number;
+      clonePosition: boolean;
+    }[] = [];
     let order = 0;
-    let activeOrder = -1;
-    const visit = (outline: readonly ReaderNativeOutlineEntry[], depth: number): void => {
+    const visit = (
+      outline: readonly ReaderNativeOutlineEntry[],
+      depth: number,
+      clonePosition = false,
+    ): void => {
       for (const entry of outline) {
         const currentOrder = order++;
-        if (entry.active) activeOrder = currentOrder;
-        const kind = outlineEntryKind(entry.title, depth, entry.items?.length ?? 0);
+        const kind = outlineEntryKind(entry.title, depth);
         const position = entry.location?.position;
         if (
           position &&
@@ -112,29 +125,108 @@ export class ReaderNavigation {
             top = Math.max(top, rect[1], rect[3]);
           }
           if (Number.isFinite(top))
-            entries.push({ entry, page: position.pageIndex, top, order: currentOrder });
+            entries.push({
+              entry,
+              page: position.pageIndex,
+              top,
+              order: currentOrder,
+              clonePosition,
+            });
         }
-        if (entry.items) visit(entry.items, depth + 1);
+        if (entry.items) visit(entry.items, depth + 1, clonePosition);
       }
     };
     visit(internal?._state?.outline ?? [], 0);
+    if (category !== 'heading') {
+      const captions = await this.#dependencies.captions.load();
+      if (
+        !isCurrent() ||
+        this.activePdfWindow() !== pdfWindow ||
+        this.#dependencies.reader._internalReader !== internal ||
+        internal?._primaryView !== primary ||
+        (view !== internal?._primaryView && view !== internal?._secondaryView)
+      )
+        return false;
+      const seen = new Set(
+        entries.map(({ entry, page }) => `${page}:${captionLabel(entry.title)}`),
+      );
+      for (const caption of captions) {
+        if (caption.kind !== category) continue;
+        const key = `${caption.location.position.pageIndex}:${caption.label}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        visit([caption], 0, true);
+      }
+    }
     if (!entries.length) {
       this.#dependencies.showStatus(
-        `✗ no ${category === 'heading' ? 'headings' : category === 'figure' ? 'figures' : 'tables'} in Outline`,
+        `✗ no ${category === 'heading' ? 'headings in Outline' : category === 'figure' ? 'recognized figures' : 'recognized tables'}`,
         2000,
       );
       return false;
     }
     entries.sort((a, b) => a.page - b.page || b.top - a.top || a.order - b.order);
+    const outerWindow = this.#dependencies.reader._iframeWindow;
+    if (!outerWindow) return false;
     const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
     const location = viewer?._location;
-    const page = location ? location.pageNumber - 1 : (viewer?.currentPageNumber ?? 1) - 1;
-    const relative = (entry: (typeof entries)[number]): number =>
-      location
-        ? entry.page - page || location.top - entry.top
-        : activeOrder >= 0
-          ? entry.order - activeOrder
-          : entry.page - page;
+    const pageNumber = location?.pageNumber ?? viewer?.currentPageNumber;
+    if (typeof pageNumber !== 'number' || !Number.isInteger(pageNumber) || pageNumber < 1) {
+      this.#dependencies.showStatus('✗ PDF position unavailable', 2000);
+      return false;
+    }
+    const page = pageNumber - 1;
+    const pageView = viewer?._pages?.[page] ?? viewer?.getPageView?.(page);
+    const container = viewer?.container;
+    const pageElement = pageView?.div;
+    let top: number | undefined;
+    // Prefer unrounded live viewport geometry; PDF.js rounds _location.top to whole PDF units.
+    if (container && pageElement && pageView?.viewport?.convertToPdfPoint) {
+      const containerRect = container.getBoundingClientRect();
+      const pageRect = pageElement.getBoundingClientRect();
+      const point = pageView.viewport.convertToPdfPoint(
+        Math.max(0, containerRect.left + container.clientLeft - pageRect.left),
+        Math.max(0, containerRect.top + container.clientTop - pageRect.top),
+      );
+      if (Number.isFinite(point[1])) top = point[1];
+    }
+    const scale = pageView?.viewport?.scale;
+    const scrollRounding = scale && Number.isFinite(scale) && scale > 0 ? 1 / scale : 0;
+    // Native scroll offsets can round by a CSS pixel, in addition to _location's PDF-unit rounding.
+    const tolerance = scrollRounding + (top === undefined ? 0.5 : 0.01);
+    top ??= location?.top;
+    if (top === undefined || !Number.isFinite(top)) {
+      this.#dependencies.showStatus('✗ PDF position unavailable', 2000);
+      return false;
+    }
+    const currentTop = top;
+    const relative = (entry: (typeof entries)[number]): number => {
+      const position = entry.entry.location?.position;
+      if (
+        container &&
+        position &&
+        view.getPositionBoundingViewRect &&
+        Number.isFinite(container.scrollTop) &&
+        Number.isFinite(container.scrollHeight) &&
+        container.clientHeight > 0
+      ) {
+        // Native Outline positions already belong to Reader; SDT projections belong to chrome.
+        const nativePosition = entry.clonePosition ? cloneInto(position, outerWindow) : position;
+        const targetTop = view.getPositionBoundingViewRect(nativePosition)[1];
+        if (Number.isFinite(targetTop)) {
+          // Mirror native block:start clamping: unreachable last-page tops must not trap traversal.
+          const alignedTop = Math.max(
+            0,
+            Math.min(targetTop, container.scrollHeight - container.clientHeight),
+          );
+          const distance = alignedTop - container.scrollTop;
+          return Math.abs(distance) <= 1 ? 0 : distance;
+        }
+      }
+      if (entry.page !== page) return entry.page - page;
+      const distance = currentTop - entry.top;
+      return Math.abs(distance) <= tolerance ? 0 : distance;
+    };
     let target = direction > 0 ? entries[0] : entries[entries.length - 1];
     if (direction > 0) target = entries.find((entry) => relative(entry) > 0) ?? target;
     else {
@@ -147,13 +239,28 @@ export class ReaderNavigation {
     }
     if (!target?.entry.location || !isCurrent() || this.activePdfWindow() !== pdfWindow)
       return false;
-    const outerWindow = this.#dependencies.reader._iframeWindow;
-    if (!outerWindow) return false;
     await view.navigate(
       cloneInto(target.entry.location, outerWindow),
       cloneInto({ block: 'start' as const }, outerWindow),
     );
     return isCurrent();
+  }
+
+  /** A caption choice uses the exact active view's native position/history producer. */
+  async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<void> {
+    const internal = this.#dependencies.reader._internalReader;
+    const view =
+      internal?._primaryView?._iframeWindow === pdfWindow
+        ? internal._primaryView
+        : internal?._secondaryView?._iframeWindow === pdfWindow
+          ? internal._secondaryView
+          : null;
+    const outerWindow = this.#dependencies.reader._iframeWindow;
+    if (!view?.navigate || !outerWindow || this.activePdfWindow() !== pdfWindow) return;
+    await view.navigate(
+      cloneInto(target.location, outerWindow),
+      cloneInto({ block: 'start' as const }, outerWindow),
+    );
   }
 
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {

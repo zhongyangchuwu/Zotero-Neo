@@ -178,8 +178,9 @@ host/view lifecycle seams are owned separately:
 - `flash.ts` — visible-text targeting and hint lifecycle;
 - `link-hints.ts` — PDF link targeting;
 - `marks.ts` — persisted Reader marks and managed mark navigation;
-- `native-sidebar.ts` — reversible decoration of the native Reader Outline and Neo Bookmarks group;
-- `outline-presentation.ts` — conservative derived Outline categories and child counts;
+- `native-sidebar.ts` — reversible compact native Outline decoration and bounded Neo caption/Bookmarks groups;
+- `outline-presentation.ts` — derived Outline kinds; full-tree ordinals are projected by the sidebar;
+- `caption-targets.ts` — session-owned, lazy single-flight Zotero SDT caption access, PDF-anchor projection, and result retirement;
 - `comment-editor.ts` — transient annotation-comment editor state;
 - `selection-actions.ts` — view-scoped selection action registry/palette and async
   result lifetime. It retires input/theme ownership before touching detached DOM.
@@ -193,13 +194,20 @@ Reader panel focus uses the canonical `focusReaderOutline`, `focusReaderMarks`,
 `focusReaderAnnotations`, and `focusReaderThumbnails` actions. They open/focus the
 named native pane; repeating one does not close it. Toggle actions remain separate.
 The four sidebar binding contexts are local execution contexts, not additional
-Reader Surface modes. `ReaderNavigation.traverseOutline()` uses only existing
-authored Outline entries and conservative row classification for heading
-(including Section and Subsection), figure, and table traversal. Candidates are
-ordered by document position and wrap; navigation uses the exact active PDF view
-and reports no target when that category is absent.
+Reader Surface modes. `ReaderNavigation.traverseOutline()` flattens the whole native
+heading tree (including Sections/Subsections), independent of expansion, filtering,
+the active Outline row, and sidebar state. `[s`/`]s` also delegate from the four exact
+sidebar contexts. Live active-view geometry selects the next/previous target with
+rounding/clamping tolerance and wrap; pending metadata work is fenced to its view/input owner.
 
-It does not scan PDF text or synthesize missing Outline rows.
+Figure/Table requests additionally load genuine native SDT caption blocks via
+`ReaderCaptionTargets`, preserving explicit native bookmark targets and deduplicating
+matching identities. Caption DTO positions are cloned into Reader before native geometry
+or navigation calls. The SDK validates/reuses its attachment cache; a cold call can
+process the whole PDF locally and cannot be cancelled. Only an explicit category request
+or caption-group expansion starts this work, never Reader open or heading traversal.
+Unavailable/missing captions stay absent; Neo adds no OCR/network dependency and does not
+invent image identities or alter the native Outline tree.
 
 Bookmark traversal is owned by `ReaderMarks`, ordered by document position and
 wrapping across persisted and legacy marks while retaining existing

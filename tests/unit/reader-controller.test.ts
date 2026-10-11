@@ -2213,6 +2213,7 @@ describe('Reader native passthrough ownership', () => {
     document: Document,
     localName = 'div',
     insideOutline = false,
+    pane?: 'outline' | 'marks' | 'annotations' | 'thumbnails',
   ): Element {
     const sidebarContainer = {};
     const outlineView = {};
@@ -2222,11 +2223,164 @@ describe('Reader native passthrough ownership', () => {
       ownerDocument: document,
       closest: (selector: string) => {
         if (selector === '#sidebarContainer') return sidebarContainer;
-        if (insideOutline && selector === '#outlineView') return outlineView;
+        if (insideOutline && selector.split(',').some((part) => part.trim() === '#outlineView'))
+          return outlineView;
+        if (
+          pane &&
+          selector
+            .split(',')
+            .some(
+              (part) => part.trim() === `#${pane === 'marks' ? 'zv-reader-marks' : `${pane}View`}`,
+            )
+        )
+          return {};
         return null;
       },
     } as unknown as Element;
   }
+
+  it.each(
+    (['pdf', 'outline', 'marks', 'annotations', 'thumbnails'] as const).flatMap((pane) =>
+      [false, true].map((secondary) => ({ pane, secondary })),
+    ),
+  )(
+    'traverses document headings from live PDF position in $pane (secondary=$secondary), preserving native hard history',
+    async ({ pane, secondary }) => {
+      const execution = navigationHistoryPort();
+      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const primary = attachNativeReaderHistory(created);
+      const primaryNavigate = vi.fn();
+      Reflect.set(primary.view, 'navigate', primaryNavigate);
+      let native = primary;
+      if (secondary) {
+        const pdfWindow = { ...created.pdfWindow, focus: vi.fn() } as unknown as PdfWindow;
+        const view = { _iframeWindow: pdfWindow };
+        Reflect.set(created.reader._internalReader!, '_secondaryView', view);
+        Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+        native = attachNativeReaderHistory({
+          pdfWindow,
+          reader: { ...created.reader, _internalReader: { _primaryView: view } } as ReaderRuntime,
+          ownerWindow: created.ownerWindow,
+        });
+        primary.viewer._location = { pageNumber: 6, top: 500, left: 0 };
+      }
+      // PDF.js update reports PDF coordinates, not the container's CSS scroll offset.
+      native.viewer.update.mockImplementation(() => {
+        native.viewer._location = {
+          pageNumber: native.viewer.currentPageNumber,
+          top: 1000 - (native.container.scrollTop % 1000),
+          left: 0,
+        };
+      });
+      const location = (pageIndex: number, top: number) => ({
+        position: { pageIndex, rects: [[0, top, 0, top]] },
+      });
+      const state = {
+        sidebarOpen: pane !== 'pdf',
+        sidebarView: (pane === 'annotations' || pane === 'thumbnails' ? pane : 'outline') as
+          | 'outline'
+          | 'annotations'
+          | 'thumbnails',
+        outline: [
+          { title: 'Introduction', location: location(0, 700) },
+          { title: 'Related Work', location: location(0, 400), matched: false },
+          { title: '5 Experiments', active: true, expanded: false, location: location(5, 700) },
+        ],
+      };
+      Reflect.set(created.reader._internalReader!, '_state', state);
+      const navigate = vi.fn(async (request: { position: ReaderLinkPosition }) => {
+        native.viewer._location = {
+          pageNumber: request.position.pageIndex + 1,
+          top: Math.round(request.position.rects[0][1]),
+          left: 0,
+        };
+        native.viewer.currentPageNumber = native.viewer._location.pageNumber;
+        native.container.scrollTop =
+          request.position.pageIndex * 1000 + 1000 - native.viewer._location.top;
+        await native.view._pushHistoryPoint?.();
+      });
+      Reflect.set(native.view, 'navigate', navigate);
+      const bridge = startReaderDocumentKeydown(created);
+      const target =
+        pane === 'pdf' ? null : nativeSidebarTarget(bridge.document, 'div', false, pane);
+      Reflect.set(bridge.document, 'activeElement', target);
+      try {
+        for (const token of [']', 's']) {
+          const key = readerKey(token, { target });
+          bridge.dispatch(key.event);
+          expect(key.preventDefault).toHaveBeenCalledOnce();
+        }
+        await settleReaderMicrotasks();
+        expect(navigate).toHaveBeenLastCalledWith(location(0, 400), { block: 'start' });
+        for (const token of ['[', 's']) bridge.dispatch(readerKey(token, { target }).event);
+        await settleReaderMicrotasks();
+        expect(navigate).toHaveBeenLastCalledWith(location(0, 700), { block: 'start' });
+        expect(navigate).toHaveBeenCalledTimes(2);
+        expect(state.sidebarOpen).toBe(pane !== 'pdf');
+        expect(state.sidebarView).toBe(
+          pane === 'annotations' || pane === 'thumbnails' ? pane : 'outline',
+        );
+        expect(execution.history.locations).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'reader',
+              position: expect.objectContaining({ pageIndex: 0, top: 400 }),
+            }),
+            expect.objectContaining({
+              kind: 'reader',
+              position: expect.objectContaining({ pageIndex: 0, top: 700 }),
+            }),
+          ]),
+        );
+        expect(execution.intents).toEqual([]);
+        if (secondary) expect(primaryNavigate).not.toHaveBeenCalled();
+        expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
+
+  it.each(['input', 'textarea', 'composition'] as const)(
+    'leaves document heading chords with the native %s owner and produces no history',
+    async (owner) => {
+      const execution = navigationHistoryPort();
+      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const native = attachNativeReaderHistory(created);
+      const navigate = vi.fn();
+      Reflect.set(native.view, 'navigate', navigate);
+      Reflect.set(created.reader._internalReader!, '_state', {
+        sidebarOpen: true,
+        sidebarView: 'outline',
+        outline: [
+          {
+            title: 'Introduction',
+            location: { position: { pageIndex: 1, rects: [[0, 700, 0, 700]] } },
+          },
+        ],
+      });
+      const bridge = startReaderDocumentKeydown(created);
+      const target = nativeSidebarTarget(
+        bridge.document,
+        owner === 'composition' ? 'div' : owner,
+        true,
+      );
+      Reflect.set(bridge.document, 'activeElement', target);
+      try {
+        for (const token of [']', 's', '[', 's']) {
+          const key = readerKey(token, { target, isComposing: owner === 'composition' });
+          bridge.dispatch(key.event);
+          expect(key.preventDefault).not.toHaveBeenCalled();
+        }
+        await settleReaderMicrotasks();
+        expect(navigate).not.toHaveBeenCalled();
+        expect(execution.history.locations).toEqual([]);
+        expect(execution.intents).toEqual([]);
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
 
   it.each(['focusin', 'pointerdown', 'native key'] as const)(
     'retires a preserved exact-prefix PDF command on sidebar %s',
@@ -3099,10 +3253,44 @@ describe('Reader category history execution', () => {
       created.session.dispose();
     }
   });
-  it.each(['new key', 'deactivation', 'pointer input'] as const)(
+  it.each(['missing heading', 'missing PDF position'] as const)(
+    'does not fabricate a navigation or history point for %s',
+    async (failure) => {
+      const execution = navigationHistoryPort();
+      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const native = attachNativeReaderHistory(created);
+      const navigate = vi.fn();
+      Reflect.set(native.view, 'navigate', navigate);
+      Reflect.set(created.reader._internalReader!, '_state', {
+        outline:
+          failure === 'missing heading'
+            ? []
+            : [
+                {
+                  title: 'Introduction',
+                  location: { position: { pageIndex: 1, rects: [[0, 700, 0, 700]] } },
+                },
+              ],
+      });
+      if (failure === 'missing PDF position') Reflect.set(native.viewer, '_location', undefined);
+      try {
+        created.session.start();
+        for (const key of [']', 's']) created.session.focusAndHandle(readerKey(key).event);
+        await settleReaderMicrotasks();
+        expect(navigate).not.toHaveBeenCalled();
+        expect(execution.history.locations).toEqual([]);
+        expect(execution.intents).toEqual([]);
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
+
+  it.each(['new key', 'deactivation', 'pointer input', 'focus loss'] as const)(
     'cannot jump after delayed native Outline loading and %s',
     async (input) => {
       const created = createHistorySession();
+      attachNativeReaderHistory(created);
       const internal = created.reader._internalReader!;
       const state = { outline: null as ReaderNativeOutlineEntry[] | null };
       Reflect.set(internal, '_state', state);
@@ -3111,11 +3299,13 @@ describe('Reader category history execution', () => {
       const navigate = vi.fn();
       Reflect.set(internal._primaryView!, 'navigate', navigate);
       const pointers: EventListener[] = [];
+      const blurs: EventListener[] = [];
       Reflect.set(
         created.pdfWindow,
         'addEventListener',
         (type: string, listener: EventListener) => {
           if (type === 'pointerdown') pointers.push(listener);
+          if (type === 'blur') blurs.push(listener);
         },
       );
       try {
@@ -3123,6 +3313,7 @@ describe('Reader category history execution', () => {
         for (const key of [']', 's']) created.session.focusAndHandle(readerKey(key).event);
         if (input === 'new key') created.session.focusAndHandle(readerKey('x').event);
         else if (input === 'deactivation') created.session.deactivateInteraction();
+        else if (input === 'focus loss') for (const listener of blurs) listener({} as Event);
         else for (const listener of pointers) listener({} as Event);
         state.outline = [
           {

@@ -41,8 +41,8 @@ acceptance backlog. Current interaction ownership is defined by
 The keyboard-system and Reader-local navigation change tracked by
 [#135](https://github.com/zhongyangchuwu/Zotero-Neo/issues/135) is implemented
 in the source branch, but is not merged or released. It replaces retired Reader
-defaults with direct panel focus and authored Outline/category plus bookmark
-traversal, using the shared 14-context binding source, action-centric Apply
+defaults with direct panel focus, full-document native heading/category and bookmark
+traversal, plus lazy native caption targets, using the shared 14-context binding source, action-centric Apply
 editor, and schema-18 migration. Implementation and verification evidence belong
 to the owning issue/PR; branch implementation is not an issue-completion claim.
 

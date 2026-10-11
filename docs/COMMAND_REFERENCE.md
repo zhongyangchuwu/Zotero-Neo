@@ -36,10 +36,10 @@ The six Reader/Main/Note mode contexts are surface grammar scopes. The remaining
 | Main | `main-select` | Temporary Visual range in the visible Main item rows. |
 | Note | `note-normal` | Note motions/operators and supported shared actions. |
 | Note | `note-insert` | Native note-editor text input plus the explicit directional pane-focus bindings. |
-| Reader Outline | `reader-outline` | Four Reader panel-focus actions; local next/previous, parent/child and cancel; `uiConfirm` is supported but unbound by default. |
-| Reader Bookmarks | `reader-marks` | Four Reader panel-focus actions; local next/previous/first/last/confirm/cancel/delete/clear. |
-| Reader Annotations | `reader-annotations` | Four Reader panel-focus actions; local next/previous/cancel. |
-| Reader Thumbnails | `reader-thumbnails` | Four Reader panel-focus actions; local next/previous/cancel. |
+| Reader Outline | `reader-outline` | Four panel-focus actions and global heading traversal; local next/previous, parent/child and cancel; `uiConfirm` is supported but default-unbound. Caption controls reuse this context. |
+| Reader Bookmarks | `reader-marks` | Four panel-focus actions and global heading traversal; local next/previous/first/last/confirm/cancel/delete/clear. |
+| Reader Annotations | `reader-annotations` | Four panel-focus actions and global heading traversal; local next/previous/cancel. |
+| Reader Thumbnails | `reader-thumbnails` | Four panel-focus actions and global heading traversal; local next/previous/cancel. |
 | Picker query field | `picker-input` | Local next/previous/confirm/cancel, preview movement, and next/previous pane actions. Query text and IME remain native. |
 | Picker results | `picker-list` | Picker-input actions plus local query focus. |
 | Plugin Manager filter | `plugins-input` | Only `uiFocusList`; its default `Escape` returns focus to the results. |
@@ -154,9 +154,9 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place current page at top/center/bottom of viewport; view position only, no history. `scrollBottom` has no default sequence. |
 | `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's native PDF find bar; `n/N` each ask Zotero for one next/previous result regardless of count. A result may complete without an entry; only a qualifying owned native hard receipt records under the central policy. Query editing is not navigation history. |
 | `followLink` | `f` | Start visible PDF link hints; count is ignored. Hint activation may navigate internal/citation links; recording requires a qualifying owned exact-view native hard receipt. External links open outside Neo Reader history. Escape cancels; see [link hints](#temporary-surfaces-and-chooser-grammars). |
-| `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse existing authored Outline headings, including Sections and Subsections, in document order with wrap; no PDF text scan. |
-| `prevFigure` / `nextFigure` | `[f` / `]f` | Traverse only Figure targets present in the existing authored Outline; no extraction or generated targets. |
-| `prevTable` / `nextTable` | `[t` / `]t` | Traverse only Table targets present in the existing authored Outline; no extraction or generated targets. |
+| `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse the entire native Outline heading tree, including Sections/Subsections, in document order with wrap. Also available in every focused Reader sidebar context; uses the active PDF position, independent of collapse/filter/current-row/sidebar state. |
+| `prevFigure` / `nextFigure` | `[f` / `]f` | Traverse explicit native Figure targets plus genuine native SDT captions with PDF anchors; explicit lazy recognition, cache reuse and honest missing targets. Cold native processing may read/process the whole PDF locally. |
+| `prevTable` / `nextTable` | `[t` / `]t` | Traverse explicit native Table targets plus genuine native SDT captions with PDF anchors; the same lazy/cache/cost boundary as Figures. |
 | `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | Select previous/next annotation, wrapping at the end; count is ignored. Selection alone can complete without an entry; recording requires a qualifying owned native hard receipt. |
 | `prevBookmark` / `nextBookmark` | `[m` / `]m` | Navigate Reader marks in document order with wrap, preserving existing mark-jump and managed-final history behavior. |
 | `editAnnotation` | `<Enter>`, `<Return>` | Open/focus the selected annotation comment's feature-owned input, displaying Insert; not jumplist. |
@@ -308,7 +308,9 @@ Reader Normal `<Space>ro`, `<Space>rm`, `<Space>ra`, and `<Space>rt` directly op
 
 In `reader-outline`, Neo defaults `j/k` to immediate native row movement and `h/l` to parent/child; Escape is the local cancel default. Zotero's arrows, Tab/Shift+Tab, and Enter/Return remain native, including modified Enter. `uiConfirm` is supported in this context but unbound by default and can use another non-reserved key. In `reader-marks`, defaults are `j/k`, `gg/G`, Enter, Escape, `d`, and `x`; in `reader-annotations` and `reader-thumbnails`, defaults are `j/k` and Escape. These local Neo controls are configurable in their own contexts.
 
-Neo decorates existing native Outline rows without changing titles or numbering; the separate child count is the number of direct Outline children. Display categories are conservative inferences from title and hierarchy: a one-component number indicates Section, a dotted number indicates Subsection; otherwise nested rows infer Subsection and a root row with children infers Section. Explicitly numbered Figure/Fig/图 and Table/表 titles infer Figure or Table; unknown root leaves remain unclassified. These labels do not verify document semantics. Heading, Figure, and Table navigation uses only existing authored Outline entries; Neo does not scan PDF text or generate missing targets. Zotero's native Annotations and Thumbnails views remain independent sidebar surfaces.
+Neo decorates native Outline rows without changing their titles or authored numbering. Compact theme-aware icon/ordinal badges and numeric direct-child counts have localized accessible/hover labels. Full-tree numbering includes meaningful unnumbered roots such as Introduction as `1`, preserves `parent.child` ordinals across filtering/collapse, and excludes explicit Figure/Table entries from heading counters. Native Annotations and Thumbnails remain independent sidebar surfaces.
+
+`[s`/`]s` delegate from all four focused sidebar contexts to the same Reader-wide native heading traversal, not local tree movement. Caption `▧ / ▤` controls share `reader-outline`; `j/k` move through visible owned controls and `h/l` close/open their groups. Opening the caption group or requesting `[f`/`]f` or `[t`/`]t` lazily calls Zotero's native structured-document SDK. Valid, labeled caption blocks provide first-page PDF positions; image/table blocks alone never invent targets. A warm native cache is reused, while a cold/invalid cache can require local whole-PDF processing and the SDK cannot cancel that work. Retired results cannot navigate or revive a Reader. There is no upload/new OCR dependency and recognition is not guaranteed for every caption or scanned PDF.
 
 ### Marks and Bookmarks group
 
@@ -377,12 +379,12 @@ This index covers all 215 canonical `ActionId`s in `ACTION_IDS`, including every
 | `findPrevious` | Reader/Main Normal `N` | Reader/Main search result or Main local find |
 | `prevAnnotation` | Reader Normal `[a` | Reader annotation navigation |
 | `nextAnnotation` | Reader Normal `]a` | Reader annotation navigation |
-| `prevHeading` | Reader Normal `[s` | Previous Section/Subsection in existing authored Outline; document order and wrap |
-| `nextHeading` | Reader Normal `]s` | Next Section/Subsection in existing authored Outline; document order and wrap |
-| `prevFigure` | Reader Normal `[f` | Previous existing authored Figure Outline entry; no PDF scanning |
-| `nextFigure` | Reader Normal `]f` | Next existing authored Figure Outline entry; no PDF scanning |
-| `prevTable` | Reader Normal `[t` | Previous existing authored Table Outline entry; no PDF scanning |
-| `nextTable` | Reader Normal `]t` | Next existing authored Table Outline entry; no PDF scanning |
+| `prevHeading` | Reader Normal and four sidebar contexts `[s` | Previous Section/Subsection in the whole native Outline; active PDF position, document order and wrap |
+| `nextHeading` | Reader Normal and four sidebar contexts `]s` | Next Section/Subsection in the whole native Outline; active PDF position, document order and wrap |
+| `prevFigure` | Reader Normal `[f` | Previous native Figure target or genuine recognized caption; lazy local SDK processing |
+| `nextFigure` | Reader Normal `]f` | Next native Figure target or genuine recognized caption; lazy local SDK processing |
+| `prevTable` | Reader Normal `[t` | Previous native Table target or genuine recognized caption; lazy local SDK processing |
+| `nextTable` | Reader Normal `]t` | Next native Table target or genuine recognized caption; lazy local SDK processing |
 | `prevBookmark` | Reader Normal `[m` | Previous Reader mark by document position; wraps and preserves managed-final jump behavior |
 | `nextBookmark` | Reader Normal `]m` | Next Reader mark by document position; wraps and preserves managed-final jump behavior |
 | `clearSearch` | Reader Normal `<Esc>` | Reader search clear/close |
@@ -570,7 +572,7 @@ This index covers all 215 canonical `ActionId`s in `ACTION_IDS`, including every
 
 ## Default binding index
 
-The table is the complete default lookup: each canonical `BindingContext:sequence` is paired with its exact `ActionId`. It contains all 329 entries from `DEFAULT_BINDINGS`, including the spread `NOTE_LOCAL_DEFAULT_BINDINGS`; saved user remaps can replace defaults.
+The table is the complete default lookup: each canonical `BindingContext:sequence` is paired with its exact `ActionId`. It contains all 337 entries from `DEFAULT_BINDINGS`, including the spread `NOTE_LOCAL_DEFAULT_BINDINGS`; saved user remaps can replace defaults.
 
 | Canonical `BindingContext:sequence` | ActionId |
 | --- | --- |
@@ -822,6 +824,8 @@ The table is the complete default lookup: each canonical `BindingContext:sequenc
 | `note-insert:<C-j>` | `focusReaderSplitDown` |
 | `note-insert:<C-k>` | `focusReaderSplitUp` |
 | `note-insert:<C-l>` | `focusReaderSplitRight` |
+| `reader-outline:[s` | `prevHeading` |
+| `reader-outline:]s` | `nextHeading` |
 | `reader-outline:<Space>ro` | `focusReaderOutline` |
 | `reader-outline:<Space>rm` | `focusReaderMarks` |
 | `reader-outline:<Space>ra` | `focusReaderAnnotations` |
@@ -831,6 +835,8 @@ The table is the complete default lookup: each canonical `BindingContext:sequenc
 | `reader-outline:h` | `uiParent` |
 | `reader-outline:l` | `uiChild` |
 | `reader-outline:<Esc>` | `uiCancel` |
+| `reader-marks:[s` | `prevHeading` |
+| `reader-marks:]s` | `nextHeading` |
 | `reader-marks:<Space>ro` | `focusReaderOutline` |
 | `reader-marks:<Space>rm` | `focusReaderMarks` |
 | `reader-marks:<Space>ra` | `focusReaderAnnotations` |
@@ -843,6 +849,8 @@ The table is the complete default lookup: each canonical `BindingContext:sequenc
 | `reader-marks:<Esc>` | `uiCancel` |
 | `reader-marks:d` | `uiDelete` |
 | `reader-marks:x` | `uiClear` |
+| `reader-annotations:[s` | `prevHeading` |
+| `reader-annotations:]s` | `nextHeading` |
 | `reader-annotations:<Space>ro` | `focusReaderOutline` |
 | `reader-annotations:<Space>rm` | `focusReaderMarks` |
 | `reader-annotations:<Space>ra` | `focusReaderAnnotations` |
@@ -850,6 +858,8 @@ The table is the complete default lookup: each canonical `BindingContext:sequenc
 | `reader-annotations:j` | `uiNext` |
 | `reader-annotations:k` | `uiPrevious` |
 | `reader-annotations:<Esc>` | `uiCancel` |
+| `reader-thumbnails:[s` | `prevHeading` |
+| `reader-thumbnails:]s` | `nextHeading` |
 | `reader-thumbnails:<Space>ro` | `focusReaderOutline` |
 | `reader-thumbnails:<Space>rm` | `focusReaderMarks` |
 | `reader-thumbnails:<Space>ra` | `focusReaderAnnotations` |

@@ -104,6 +104,7 @@ export interface ReaderViewRuntime {
   setSidebarView?(view: 'outline' | 'annotations' | 'thumbnails'): void | Promise<void>;
   navigateToPosition?(position: ReaderLinkPosition, options?: unknown): void | Promise<void>;
   getClientRectForPopup?(position: ReaderLinkPosition): readonly number[];
+  getPositionBoundingViewRect?(position: ReaderLinkPosition): readonly number[];
   navigate?(
     payload:
       | { readonly position: ReaderLinkPosition }
@@ -170,6 +171,7 @@ export interface PdfViewerRuntime {
 }
 
 export interface PdfPageViewRuntime {
+  readonly div?: HTMLElement;
   readonly viewport?: {
     readonly scale: number;
     readonly height: number;

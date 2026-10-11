@@ -50,6 +50,7 @@ import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderAnnotationNavigationState } from './annotation-navigation-state';
 import { ReaderMarks } from './marks';
 import { ReaderNativeSidebar } from './native-sidebar';
+import { ReaderCaptionTargets } from './caption-targets';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
@@ -540,6 +541,7 @@ export class ReaderSession {
   readonly #annotationNavigation = new ReaderAnnotationNavigationState();
   readonly #marks: ReaderMarks;
   readonly #sidebar: ReaderNativeSidebar;
+  readonly #captions: ReaderCaptionTargets;
   readonly #linkHints: ReaderLinkHints;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #nativeInput: ReaderNativeInput;
@@ -685,13 +687,45 @@ export class ReaderSession {
         this.annotationPageRatio(pdfWindow, annotation),
       onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
     });
+    this.#captions = new ReaderCaptionTargets(
+      dependencies.reader.itemID,
+      () => this.#sidebar.refreshCaptions(),
+      (message) => dependencies.controller.dependencies.logger.debug(message),
+    );
     this.#sidebar = new ReaderNativeSidebar({
       reader: dependencies.reader,
       marks: this.#marks,
+      captions: this.#captions,
+      onCaptionTarget: (target, pdfWindow) => {
+        if (this.#scope.disposed || this.#nativeInput.ownsInput || this.#commentEditor.ownsInput)
+          return;
+        this.#interactionRevision += 1;
+        void this.#navigation
+          .navigateCaption(target, pdfWindow)
+          .catch((error: unknown) =>
+            dependencies.controller.dependencies.logger.debug(
+              `reader caption jump failed: ${String(error)}`,
+            ),
+          );
+      },
       bindings: dependencies.bindings,
       language: () => this.keyGuideLanguage(),
       activePdfWindow: () => this.#navigation.activePdfWindow(),
       onAnnotation: (key) => this.#annotationNavigation.rememberAnnotation(key),
+      onDocumentAction: (action, pdfWindow) => {
+        if (
+          this.#scope.disposed ||
+          this.#nativeInput.ownsInput ||
+          this.#commentEditor.ownsInput ||
+          this.nativeEditableFocused() ||
+          this.#surfaceMode !== 'normal' ||
+          !this.readerViewForWindow(pdfWindow) ||
+          this.#navigation.activePdfWindow() !== pdfWindow
+        )
+          return false;
+        this.executeAction(action, 0, pdfWindow);
+        return true;
+      },
       onInput: () => {
         this.#markJumpRevision += 1;
         this.#interactionRevision += 1;
@@ -717,6 +751,7 @@ export class ReaderSession {
         this.#sidebar.deactivate();
       },
       onBlur: (pdfWindow, event) => {
+        this.#interactionRevision += 1;
         this.#smoothScroller.stop(true);
         this.#flash.onBlur(pdfWindow, event);
       },
@@ -746,6 +781,7 @@ export class ReaderSession {
     });
     this.#navigation = new ReaderNavigation({
       reader: dependencies.reader,
+      captions: this.#captions,
       activePdfWindow: () => this.#viewLifecycle.activePdfWindow(),
       setActivePdfWindow: (pdfWindow) => this.#viewLifecycle.setActivePdfWindow(pdfWindow),
       syncViews: () => this.#viewLifecycle.sync(),
@@ -1011,6 +1047,7 @@ export class ReaderSession {
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
     failure.run(() => this.#sidebar.dispose());
+    failure.run(() => this.#captions.dispose());
     const indicatorCleanup = this.state.indicatorThemeCleanup;
     this.state.indicatorThemeCleanup = null;
     failure.run(() => indicatorCleanup?.());
@@ -1685,6 +1722,8 @@ export class ReaderSession {
           : action.endsWith('Figure')
             ? 'figure'
             : 'table';
+        if (category !== 'heading' && this.#captions.state === 'idle')
+          this.showStatus(t('reader.sidebar.captionsLoading', this.keyGuideLanguage()), 3000);
         void this.#navigation
           .traverseOutline(
             category,
