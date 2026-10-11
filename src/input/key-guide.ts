@@ -5,7 +5,7 @@ import {
   parseBindingKey,
   type Binding,
   type BindingMap,
-  type Mode,
+  type BindingContext,
 } from './bindings';
 import {
   bindingMatchesInputPrefix,
@@ -29,7 +29,7 @@ export function isLeaderPrefix(prefix: string): boolean {
   return inputStartsWithKey(prefix, ' ');
 }
 
-export function isGuidePrefix(bindings: BindingMap, mode: Mode, prefix: string): boolean {
+export function isGuidePrefix(bindings: BindingMap, mode: BindingContext, prefix: string): boolean {
   const prefixLength = inputTokenCount(prefix);
   if (!prefix || !prefixLength) return false;
 
@@ -57,7 +57,7 @@ export function formatGuidePrefix(prefix: string): string {
  */
 export function guideEntries(
   bindings: BindingMap,
-  mode: Mode,
+  mode: BindingContext,
   prefix: string,
   language: KeyGuideLanguage,
 ): readonly KeyGuideEntry[] {
@@ -94,7 +94,7 @@ export function guideEntries(
 /** Space-leader convenience wrapper over the generic pending-prefix guide. */
 export function leaderGuideEntries(
   bindings: BindingMap,
-  mode: Mode,
+  mode: BindingContext,
   prefix: string,
   language: KeyGuideLanguage,
 ): readonly KeyGuideEntry[] {

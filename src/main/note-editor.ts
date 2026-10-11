@@ -4,7 +4,7 @@ import type { MainWindowSession, NoteMode } from './session';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
 import { NOTE_COMMAND_BY_ACTION, isNoteActionId } from '../input/note-actions';
-import { bindingsForMode, type BindingMap, type Mode } from '../input/bindings';
+import { bindingsForMode, type BindingMap, type BindingContext } from '../input/bindings';
 import { isLeaderPrefix } from '../input/key-guide';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
@@ -20,7 +20,7 @@ import {
   selectedMainTabInfo,
 } from './host';
 
-export type NoteBindingMode = Extract<Mode, 'note-normal' | 'note-insert'>;
+export type NoteBindingMode = Extract<BindingContext, 'note-normal' | 'note-insert'>;
 export type NoteExternalExecute = (
   action: ActionId,
   count: number,

@@ -1,7 +1,19 @@
 import { ACTION_LABELS, isActionId, type ActionId } from './actions';
 import { actionsForBindingMode } from './binding-capabilities';
-import { DEFAULT_BINDINGS, MODES, parseBindingKey, type BindingMap, type Mode } from './bindings';
+import {
+  DEFAULT_BINDINGS,
+  BINDING_CONTEXTS,
+  parseBindingKey,
+  type BindingMap,
+  type BindingContext,
+} from './bindings';
 import { canonicalBindingSequence, bindingSequenceIsStrictPrefix } from './key-sequence';
+import {
+  nativeReservation,
+  shortcutCatalog,
+  shortcutsForAction,
+  type ShortcutCatalogEntry,
+} from './shortcut-catalog';
 
 export type BindingEditorLanguage = 'en' | 'zh-CN';
 export type BindingRowId = number;
@@ -21,7 +33,13 @@ export interface ActionEditorState {
   readonly selectedIndex: number;
 }
 
-export type BindingIssueKind = 'empty' | 'malformed' | 'incompatible' | 'duplicate' | 'prefix';
+export type BindingIssueKind =
+  | 'empty'
+  | 'malformed'
+  | 'incompatible'
+  | 'duplicate'
+  | 'prefix'
+  | 'native';
 
 export interface BindingEditorIssue {
   readonly rowId: BindingRowId;
@@ -51,19 +69,15 @@ export interface BindingEditorDerived {
   readonly effectiveMap: BindingMap | null;
   readonly dirty: boolean;
   readonly activeActionOptions: readonly ActionId[];
+  readonly catalog: readonly ShortcutCatalogEntry[];
 }
 
-const MODE_ORDER: Readonly<Record<Mode, number>> = {
-  'reader-normal': 0,
-  'reader-select': 1,
-  'main-normal': 2,
-  'main-select': 3,
-  'note-normal': 4,
-  'note-insert': 5,
-};
+const MODE_ORDER = Object.fromEntries(
+  BINDING_CONTEXTS.map((context, index) => [context, index]),
+) as Record<BindingContext, number>;
 
-function isMode(value: string): value is Mode {
-  return (MODES as readonly string[]).includes(value);
+function isMode(value: string): value is BindingContext {
+  return (BINDING_CONTEXTS as readonly string[]).includes(value);
 }
 
 function cloneBindingMap(bindings: BindingMap): BindingMap {
@@ -101,7 +115,8 @@ function sortedRowsFromMap(bindings: BindingMap, startingId = 0): BindingEditorR
       return parsed ? [{ mode: parsed.mode, key: parsed.sequence, action }] : [];
     })
     .sort((left, right) => {
-      const modeDelta = MODE_ORDER[left.mode as Mode] - MODE_ORDER[right.mode as Mode];
+      const modeDelta =
+        MODE_ORDER[left.mode as BindingContext] - MODE_ORDER[right.mode as BindingContext];
       return modeDelta !== 0 ? modeDelta : left.key.localeCompare(right.key);
     })
     .map((row, index) => ({ ...row, id: startingId + index }));
@@ -109,19 +124,19 @@ function sortedRowsFromMap(bindings: BindingMap, startingId = 0): BindingEditorR
 
 interface ParsedEditorRow {
   readonly rowId: BindingRowId;
-  readonly mode: Mode;
+  readonly mode: BindingContext;
   readonly sequence: string;
   readonly action: ActionId;
 }
 
 function parseRows(rows: readonly BindingEditorRow[]): {
   readonly parsed: readonly ParsedEditorRow[];
-  readonly keyRows: readonly { rowId: BindingRowId; mode: Mode; sequence: string }[];
+  readonly keyRows: readonly { rowId: BindingRowId; mode: BindingContext; sequence: string }[];
   readonly errors: readonly BindingEditorIssue[];
 } {
   const errors: BindingEditorIssue[] = [];
   const parsed: ParsedEditorRow[] = [];
-  const keyRows: { rowId: BindingRowId; mode: Mode; sequence: string }[] = [];
+  const keyRows: { rowId: BindingRowId; mode: BindingContext; sequence: string }[] = [];
 
   for (const row of rows) {
     const mode = typeof row?.mode === 'string' ? row.mode : '';
@@ -152,13 +167,16 @@ function parseRows(rows: readonly BindingEditorRow[]): {
     if (!actionsForBindingMode(binding.mode).includes(action)) {
       errors.push({ rowId, kind: 'incompatible' });
     }
+    if (nativeReservation(binding.mode, sequence) === 'exclusive') {
+      errors.push({ rowId, kind: 'native' });
+    }
   }
 
   return { parsed, keyRows, errors };
 }
 
 function duplicateIssues(
-  rows: readonly { rowId: BindingRowId; mode: Mode; sequence: string }[],
+  rows: readonly { rowId: BindingRowId; mode: BindingContext; sequence: string }[],
 ): BindingEditorIssue[] {
   const byBinding = new Map<string, BindingRowId[]>();
   for (const row of rows) {
@@ -188,13 +206,6 @@ function prefixIssues(rows: readonly ParsedEditorRow[]): BindingEditorIssue[] {
       if (
         !bindingSequenceIsStrictPrefix(first.sequence, second.sequence) &&
         !bindingSequenceIsStrictPrefix(second.sequence, first.sequence)
-      )
-        continue;
-      const firstBinding = `${first.mode}:${first.sequence}`;
-      const secondBinding = `${second.mode}:${second.sequence}`;
-      if (
-        DEFAULT_BINDINGS[firstBinding as keyof typeof DEFAULT_BINDINGS] === first.action &&
-        DEFAULT_BINDINGS[secondBinding as keyof typeof DEFAULT_BINDINGS] === second.action
       )
         continue;
       prefixRows.add(first.rowId);
@@ -265,11 +276,30 @@ export function deriveBindingEditor(state: BindingEditorState): BindingEditorDer
   const candidate = candidateMap(state.rows);
   const dirty = candidate === null ? true : !mapsEqual(candidate, state.baseline);
   const actionOptionsForActive = optionsForEditor(state, state.actionEditor);
+  const keysByAction: Record<string, string[]> = {};
+  for (const row of parseRows(state.rows).parsed) {
+    const slot = `${row.mode}:${row.action}`;
+    const keys = keysByAction[slot] ?? (keysByAction[slot] = []);
+    if (!keys.includes(row.sequence)) keys.push(row.sequence);
+  }
+  const catalog = shortcutCatalog(candidate ?? state.baseline, state.language).map((entry) => {
+    const keys = (keysByAction[`${entry.context}:${entry.action}`] ?? []).sort((left, right) =>
+      left.localeCompare(right),
+    );
+    const source: ShortcutCatalogEntry['source'] = !keys.length
+      ? 'unbound'
+      : keys.length === entry.defaultKeys.length &&
+          keys.every((key, index) => key === entry.defaultKeys[index])
+        ? 'default'
+        : 'custom';
+    return { ...entry, keys, source };
+  });
   return {
     validation,
     effectiveMap,
     dirty,
     activeActionOptions: actionOptionsForActive,
+    catalog,
   };
 }
 
@@ -467,4 +497,63 @@ export function createBindingEditor(
     saveOutcome: null,
     language,
   };
+}
+
+export function addActionBinding(
+  state: BindingEditorState,
+  context: BindingContext,
+  action: ActionId,
+  key = '',
+): BindingEditorState {
+  const id = nextRowId(state);
+  return {
+    ...state,
+    rows: [...state.rows, { id, mode: context, action, key }],
+    nextRowId: id + 1,
+    actionEditor: null,
+    saveOutcome: null,
+  };
+}
+
+export function unbindAction(
+  state: BindingEditorState,
+  context: BindingContext,
+  action: ActionId,
+): BindingEditorState {
+  return {
+    ...state,
+    rows: state.rows.filter((row) => row.mode !== context || row.action !== action),
+    actionEditor: null,
+    saveOutcome: null,
+  };
+}
+
+export function resetAction(
+  state: BindingEditorState,
+  context: BindingContext,
+  action: ActionId,
+): BindingEditorState {
+  let next = unbindAction(state, context, action);
+  for (const key of shortcutsForAction(DEFAULT_BINDINGS, context, action)) {
+    // Keep another action's custom occupant; validation reports the real duplicate.
+    next = addActionBinding(next, context, action, key);
+  }
+  return next;
+}
+
+export function resetContext(
+  state: BindingEditorState,
+  context: BindingContext,
+): BindingEditorState {
+  let next = {
+    ...state,
+    rows: state.rows.filter((row) => row.mode !== context),
+    actionEditor: null,
+    saveOutcome: null,
+  } as BindingEditorState;
+  for (const [key, action] of Object.entries(DEFAULT_BINDINGS)) {
+    const parsed = parseBindingKey(key);
+    if (parsed?.mode === context) next = addActionBinding(next, context, action, parsed.sequence);
+  }
+  return next;
 }

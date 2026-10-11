@@ -87,6 +87,7 @@ describe('ReaderViewLifecycle', () => {
     const reader = { _internalReader: internal } as ReaderRuntime;
     const onKeyDown = vi.fn();
     const onKeyUp = vi.fn();
+    const onPointerDown = vi.fn();
     const onBlur = vi.fn();
     const onSelectionChange = vi.fn();
     const onScroll = vi.fn();
@@ -99,6 +100,7 @@ describe('ReaderViewLifecycle', () => {
       timerWindow: primary.pdfWindow,
       onKeyDown,
       onKeyUp,
+      onPointerDown,
       onBlur,
       onSelectionChange,
       onScroll,
@@ -114,6 +116,7 @@ describe('ReaderViewLifecycle', () => {
     expect(primary.windowAdds.map((entry) => entry.type)).toEqual([
       'keydown',
       'keyup',
+      'pointerdown',
       'blur',
       'resize',
     ]);
@@ -126,6 +129,7 @@ describe('ReaderViewLifecycle', () => {
     const keyup = { key: 'j' } as unknown as KeyboardEvent;
     primary.emitWindow('keydown', keydown);
     primary.emitWindow('keyup', keyup);
+    primary.emitWindow('pointerdown', {} as Event);
     primary.emitWindow('blur', {} as Event);
     primary.emitDocument('selectionchange', {} as Event);
     primary.emitWindow('resize', {} as Event);
@@ -133,6 +137,7 @@ describe('ReaderViewLifecycle', () => {
 
     expect(onKeyDown).toHaveBeenCalledWith(keydown, primary.pdfWindow);
     expect(onKeyUp).toHaveBeenCalledWith(keyup);
+    expect(onPointerDown).toHaveBeenCalledWith(primary.pdfWindow);
     expect(onSelectionChange).toHaveBeenCalledWith(primary.pdfWindow);
     expect(onResize).toHaveBeenCalledWith(primary.pdfWindow);
     expect(onScroll).toHaveBeenCalledWith(primary.pdfWindow);
@@ -143,6 +148,7 @@ describe('ReaderViewLifecycle', () => {
     expect(secondary.windowAdds.map((entry) => entry.type)).toEqual([
       'keydown',
       'keyup',
+      'pointerdown',
       'blur',
       'resize',
     ]);
@@ -157,6 +163,7 @@ describe('ReaderViewLifecycle', () => {
     expect(primary.windowRemoves.map((entry) => entry.type)).toEqual([
       'keydown',
       'keyup',
+      'pointerdown',
       'blur',
       'resize',
     ]);
@@ -169,6 +176,7 @@ describe('ReaderViewLifecycle', () => {
     expect(secondary.windowRemoves.map((entry) => entry.type)).toEqual([
       'keydown',
       'keyup',
+      'pointerdown',
       'blur',
       'resize',
     ]);
@@ -176,6 +184,9 @@ describe('ReaderViewLifecycle', () => {
     expect(secondary.scrollRemoves.map((entry) => entry.type)).toEqual(['scroll']);
 
     lifecycle.sync();
+    primary.emitWindow('pointerdown', {} as Event);
+    secondary.emitWindow('pointerdown', {} as Event);
+    expect(onPointerDown).toHaveBeenCalledOnce();
     expect(syncHostBridge).toHaveBeenCalledTimes(3);
   });
 });

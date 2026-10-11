@@ -35,7 +35,7 @@ import { InputRuntime, type InputTimerHost } from '../input/runtime';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isLeaderPrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
-import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
+import { resolveBindings, type BindingMap, type BindingContext } from '../input/bindings';
 import { t } from '../i18n';
 import { copyCitekeys } from '../operations/citekeys';
 import { deleteAnnotation as deleteReaderAnnotation } from '../operations/delete-annotation';
@@ -177,7 +177,9 @@ function annotationText(value: string): string {
 function assertNever(value: never): never {
   throw new Error(`Unhandled Reader action: ${String(value)}`);
 }
-function readerBindingMode(mode: ReaderMode): Extract<Mode, 'reader-normal' | 'reader-select'> {
+function readerBindingMode(
+  mode: ReaderMode,
+): Extract<BindingContext, 'reader-normal' | 'reader-select'> {
   return mode === 'normal' ? 'reader-normal' : 'reader-select';
 }
 function readerActionIntent(
@@ -677,7 +679,8 @@ export class ReaderSession {
         this.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent),
       scrollDocumentToRatio: (pdfWindow, ratio, isCurrent) =>
         this.scrollDocumentToRatio(pdfWindow, ratio, isCurrent),
-      pageNavigationSupported: () => this.#navigation.pageNavigationSupported(),
+      pageNavigationSupported: (_reader, pdfWindow) =>
+        this.#navigation.pageNavigationSupported(pdfWindow),
       annotationPageRatio: (pdfWindow, annotation) =>
         this.annotationPageRatio(pdfWindow, annotation),
       onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
@@ -692,6 +695,9 @@ export class ReaderSession {
       onInput: () => {
         this.#markJumpRevision += 1;
         this.#interactionRevision += 1;
+        this.input.reset();
+        this.clearKeyGuide();
+        this.updateIndicator();
       },
       schedule: (delay, task) => this.schedule(delay, task),
       clearTimer: (timer) => this.clearTimer(timer),
@@ -702,6 +708,14 @@ export class ReaderSession {
       timerWindow: dependencies.firstPdfWindow,
       onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
       onKeyUp: (event) => this.handleKeyUp(event),
+      onPointerDown: () => {
+        this.#markJumpRevision += 1;
+        this.#interactionRevision += 1;
+        this.input.reset();
+        this.clearKeyGuide();
+        this.updateIndicator();
+        this.#sidebar.deactivate();
+      },
       onBlur: (pdfWindow, event) => {
         this.#smoothScroller.stop(true);
         this.#flash.onBlur(pdfWindow, event);
@@ -942,6 +956,7 @@ export class ReaderSession {
       revision === this.#markJumpRevision &&
       !this.#scope.disposed &&
       !!view &&
+      this.#navigation.activePdfWindow() === pdfWindow &&
       this.readerViewForWindow(pdfWindow) === view &&
       (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID);
     if (!isCurrent()) return false;
@@ -1021,6 +1036,8 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
+    this.#markJumpRevision += 1;
+    this.#interactionRevision += 1;
     this.#sidebar.deactivate();
     this.#linkHints.close();
     this.#nativeInput.release();
@@ -1063,7 +1080,13 @@ export class ReaderSession {
       'keydown',
       ((event: Event) => {
         const keyEvent = asKeyboardEvent(event);
-        if (!keyEvent || (this.nativeEditableFocused() && !this.#nativeInput.ownsInput)) return;
+        if (!keyEvent) return;
+        if (this.nativeEditableFocused() && !this.#nativeInput.ownsInput) {
+          this.input.reset();
+          this.clearKeyGuide();
+          this.updateIndicator();
+          return;
+        }
         const pdfWindow = this.#navigation.activePdfWindow();
         if (pdfWindow) this.handleKeyDown(keyEvent, pdfWindow);
       }) as EventListener,
@@ -1113,6 +1136,9 @@ export class ReaderSession {
   ): void {
     if (this.#scope.disposed) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
+      this.input.reset();
+      this.clearKeyGuide();
+      this.updateIndicator();
       this.#sidebar.handleKey(event);
       return;
     }
@@ -1126,6 +1152,7 @@ export class ReaderSession {
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.#linkHints.hasHints && this.#linkHints.handleKey(event, pdfWindow)) return;
     if (isEditableElement(asElement(event.target))) {
+      this.input.reset();
       this.clearKeyGuide();
       return;
     }
@@ -1298,10 +1325,6 @@ export class ReaderSession {
     const direction = focusDirectionForAction(transition.action);
     return direction ? this.#navigation.canFocusDirection(direction) : true;
   }
-  private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
-    if (focusOnly) this.#sidebar.focus(pdfWindow);
-    else this.#sidebar.toggle('outline', pdfWindow);
-  }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
     if (
@@ -1317,6 +1340,7 @@ export class ReaderSession {
       return;
     }
     this.#interactionRevision += 1;
+    this.#markJumpRevision += 1;
     this.executeReaderAction(action, count, pdfWindow);
   }
 
@@ -1422,11 +1446,25 @@ export class ReaderSession {
       return;
     }
     if (action === 'toggleReaderSidebarOutline') {
-      this.openOrFocusOutline(pdfWindow, false);
+      this.#sidebar.toggle('outline', pdfWindow);
       return;
     }
-    if (action === 'focusReaderSidebar') {
-      this.openOrFocusOutline(pdfWindow, true);
+    if (
+      action === 'focusReaderOutline' ||
+      action === 'focusReaderMarks' ||
+      action === 'focusReaderAnnotations' ||
+      action === 'focusReaderThumbnails'
+    ) {
+      this.#sidebar.focus(
+        action === 'focusReaderOutline'
+          ? 'outline'
+          : action === 'focusReaderMarks'
+            ? 'marks'
+            : action === 'focusReaderAnnotations'
+              ? 'annotations'
+              : 'thumbnails',
+        pdfWindow,
+      );
       return;
     }
     if (action === 'toggleMarksExplorer') {
@@ -1633,6 +1671,52 @@ export class ReaderSession {
         break;
       case 'nextAnnotation':
         this.navigateAnnotation(1, pdfWindow, action);
+        break;
+      case 'prevHeading':
+      case 'nextHeading':
+      case 'prevFigure':
+      case 'nextFigure':
+      case 'prevTable':
+      case 'nextTable': {
+        const revision = this.#interactionRevision;
+        const view = this.readerViewForWindow(pdfWindow);
+        const category = action.endsWith('Heading')
+          ? 'heading'
+          : action.endsWith('Figure')
+            ? 'figure'
+            : 'table';
+        void this.#navigation
+          .traverseOutline(
+            category,
+            action.startsWith('prev') ? -1 : 1,
+            pdfWindow,
+            () =>
+              !this.#scope.disposed &&
+              this.#interactionRevision === revision &&
+              this.readerViewForWindow(pdfWindow) === view &&
+              this.#navigation.activePdfWindow() === pdfWindow,
+          )
+          .catch((error: unknown) =>
+            this.#dependencies.controller.dependencies.logger.debug(
+              `reader Outline traversal failed: ${String(error)}`,
+            ),
+          );
+        break;
+      }
+      case 'prevBookmark':
+      case 'nextBookmark':
+        void this.#marks
+          .traverse(
+            this.#dependencies.reader,
+            pdfWindow,
+            action === 'prevBookmark' ? -1 : 1,
+            (key) => this.#annotationNavigation.rememberAnnotation(key),
+          )
+          .catch((error: unknown) =>
+            this.#dependencies.controller.dependencies.logger.debug(
+              `reader bookmark traversal failed: ${String(error)}`,
+            ),
+          );
         break;
       case 'editAnnotation':
         if (annotationCommentEditorEnabled(this.#dependencies.controller.dependencies.preferences))
@@ -2365,7 +2449,7 @@ export class ReaderSession {
     const language = this.keyGuideLanguage();
     const target = this.selectedAnnotation();
     if (!target?.eraseTx) {
-      this.showStatus('✗ navigate first with [ / ]', 2000);
+      this.showStatus('✗ select an annotation first', 2000);
       return;
     }
     const window = this.#dependencies.reader._window;
@@ -2414,7 +2498,7 @@ export class ReaderSession {
   private async recolorAnnotation(color: AnnotationColor): Promise<void> {
     const target = this.selectedAnnotation();
     if (!target) {
-      this.showStatus('✗ navigate first with [ / ]', 2000);
+      this.showStatus('✗ select an annotation first', 2000);
       return;
     }
     target.annotationColor = color;
@@ -2472,7 +2556,7 @@ export class ReaderSession {
   private async openAnnotationComment(): Promise<void> {
     const key = this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader);
     if (!key) {
-      this.showStatus('✗ navigate first with [ / ]', 2000);
+      this.showStatus('✗ select an annotation first', 2000);
       return;
     }
     this.#nativeInput.release();

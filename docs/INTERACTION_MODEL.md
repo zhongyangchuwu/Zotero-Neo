@@ -199,9 +199,10 @@ concept.
 
 Selection itself has no mode.
 
-The existing `main-select` binding scope is an implementation/persisted-keymap
-artifact from v0.1. It may temporarily remain while the code is migrated, but
-its user-facing meaning in v0.2 is Visual range editing only.
+`main-select` is an exact `BindingContext`, not a Surface mode or temporary
+compatibility artifact. Its owner accepts Visual range-editing actions while
+Main's Visual state is active. Selection remains a distinct interaction workset;
+the binding context does not define or persist Selection.
 
 Do not reintroduce a generic mode whose purpose is "editing the selected set".
 Toggle/add/remove operations should instead operate on the target represented by
@@ -566,8 +567,10 @@ Use narrow feature owners and action contracts.
 4. Commit Toggle Selection on `s`.
 5. Cancel on Esc/`v` without Selection mutation.
 
-The persisted binding scope may temporarily remain `main-select`; renaming it
-to `main-visual` is a separate schema-migration decision.
+`main-select` remains the canonical exact `BindingContext` for Main Visual range
+editing; it is not a context rename proposal. Binding contexts and Surface state
+are separate contracts; the complete context inventory is in
+[Architecture](ARCHITECTURE.md#layers).
 
 ### Phase E - Action target audit
 

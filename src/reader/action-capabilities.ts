@@ -28,6 +28,14 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'findPrevious',
   'prevAnnotation',
   'nextAnnotation',
+  'prevHeading',
+  'nextHeading',
+  'prevFigure',
+  'nextFigure',
+  'prevTable',
+  'nextTable',
+  'prevBookmark',
+  'nextBookmark',
   'clearSearch',
   'editAnnotation',
   'deleteAnnotation',
@@ -53,7 +61,10 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'toggleReaderSplitHorizontal',
   'toggleReaderSplitVertical',
   'toggleReaderSidebarOutline',
-  'focusReaderSidebar',
+  'focusReaderOutline',
+  'focusReaderMarks',
+  'focusReaderAnnotations',
+  'focusReaderThumbnails',
   'toggleMarksExplorer',
   'addTag',
   'removeTag',
@@ -62,6 +73,47 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'mainYankCitekey',
   'showInLibrary',
   'openCommandPalette',
+] as const satisfies readonly ActionId[]);
+
+const READER_PANEL_ACTIONS = [
+  'focusReaderOutline',
+  'focusReaderMarks',
+  'focusReaderAnnotations',
+  'focusReaderThumbnails',
+] as const satisfies readonly ActionId[];
+
+/** Configurable Neo controls; native arrows, Tab and editors remain host-owned. */
+export const READER_OUTLINE_ACTIONS = Object.freeze([
+  ...READER_PANEL_ACTIONS,
+  'uiNext',
+  'uiPrevious',
+  'uiParent',
+  'uiChild',
+  'uiConfirm',
+  'uiCancel',
+] as const satisfies readonly ActionId[]);
+export const READER_MARKS_ACTIONS = Object.freeze([
+  ...READER_PANEL_ACTIONS,
+  'uiNext',
+  'uiPrevious',
+  'uiFirst',
+  'uiLast',
+  'uiConfirm',
+  'uiCancel',
+  'uiDelete',
+  'uiClear',
+] as const satisfies readonly ActionId[]);
+export const READER_ANNOTATIONS_ACTIONS = Object.freeze([
+  ...READER_PANEL_ACTIONS,
+  'uiNext',
+  'uiPrevious',
+  'uiCancel',
+] as const satisfies readonly ActionId[]);
+export const READER_THUMBNAILS_ACTIONS = Object.freeze([
+  ...READER_PANEL_ACTIONS,
+  'uiNext',
+  'uiPrevious',
+  'uiCancel',
 ] as const satisfies readonly ActionId[]);
 
 /** Actions implemented while a PDF text selection is active. */

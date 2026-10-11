@@ -9,6 +9,8 @@ All notable changes to Zotero Neo are documented here.
 - Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains a distinct action from Back/Forward.
 - Add per-Main-window stack-style navigation history with a 100-location bound and forward-suffix truncation. Canonical `navigateBack` / `navigateForward` actions default to `<C-o>` / `<C-i>` in Main, Reader, and Note Normal; shortcut counts traverse history, while palette actions remain uncounted.
 - Add a help-style command reference for Main, Reader, Note, and modal surfaces, including shipped bindings, action IDs, counts, targets, feature dependencies, and the shared jumplist's recording, restoration, and failure boundaries.
+- Add action-centric shortcut discovery and staged editing across all 14 binding contexts. Search covers localized labels, canonical ActionIds, current/default keys, groups, and contexts; results identify Default, Custom, or Unbound, while native shortcuts are disclosed separately as read-only.
+- Add Reader Normal navigation for headings, Figures, Tables, annotations, and Bookmarks, plus direct focus for Outline, Bookmarks, Annotations, and Thumbnails. Figure, Table, and heading traversal uses existing authored Outline entries only; Bookmark navigation follows document position and wraps.
 
 ### Changed
 
@@ -22,6 +24,9 @@ All notable changes to Zotero Neo are documented here.
 - Reader `gg`, `G`, and counted page jumps now use one native navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view. Uncounted `G` reaches the document bottom rather than the last page's start; `nG` still targets the numbered page's start, without changing zoom.
 - Navigation recording now uses one state, coordinator, and typed policy. Reader search and annotation navigation may complete without appending when no owned exact-view hard receipt qualifies; native Outline destinations use the existing `reader-native.hard` observation, marks record one managed final, ignored motion has no history-only capture, and launch/Back fences protect currentness.
 - Enhance the existing Zotero Reader Outline with a Neo Bookmarks group and conservative derived heading/figure/table labels plus direct-child counts, preserving native title/numbering and leaving Zotero's Annotations and Thumbnails views independent.
+- Replace the old Reader `<Space>e` / `<Space>m` and bare `[` / `]` defaults with direct panel focus (`<Space>ro/rm/ra/rt`) and categorized `[s` / `]s`, `[f` / `]f`, `[t` / `]t`, `[a` / `]a`, and `[m` / `]m` navigation. Direct focus opens/focuses a panel without toggling it closed.
+- Make Neo-owned Reader panel, picker input/list, and Plugin Manager input/list controls configurable through the shared action/context catalogs. Native text and IME remain host-owned; native shortcuts are separate read-only disclosures.
+- Migrate binding preferences at schema 18: preserve non-null custom exact overrides, move retired explicit-null cancellations only when the destination is absent, and migrate persisted `focusReaderSidebar` IDs to `focusReaderOutline` without a runtime alias. The override is written before the schema version and migration is idempotent.
 
 - Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
 
@@ -31,6 +36,11 @@ All notable changes to Zotero Neo are documented here.
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ### Fixed
+- Reserve native-owned keys at every token in a recorded sequence, including `<C-Insert>` / `<S-Insert>` in query editing and Outline `Enter` / `Return` with modifiers. Outline `uiConfirm` remains supported but default-unbound so confirmation can be remapped to another non-reserved key.
+- Retire pending PDF commands and key guides when focus or pointer input hands ownership to the Reader sidebar or native editor, preventing a delayed Reader action after the input owner changes.
+- Retire delayed chooser commands on accepted row click/double-click so pointer selection cannot trigger a pending confirmation.
+- Restore connected Settings focus after recording, cancellation, unbind, or reset; label native rows by context, keep Apply reachable above bounded results, and offer only usable deletion for incompatible orphan bindings.
+- Bookmark traversal preserves the deleted-annotation outcome and treats browser-rounded scroll offsets as the same visible destination, preventing repeated jumps to the current mark.
 
 - Pending Reader injection now retires a natively closed Reader before accessing its PDF wrappers, preventing dead-object errors and ghost sessions after closing an unready Reader. Queued ready callbacks cannot revive the retired identity; live injection errors remain observable.
 

@@ -9,7 +9,7 @@ import {
   parseBindingKey,
   resolveBindings,
   type BindingMap,
-  type Mode,
+  type BindingContext,
 } from '../../src/input/bindings';
 import { advanceInput, resolveInputTimeout } from '../../src/input/engine';
 import {
@@ -19,7 +19,7 @@ import {
 } from '../../src/input/key-sequence';
 
 function strictPrefixPairs(bindings: BindingMap): string[] {
-  const byMode = new Map<Mode, string[]>();
+  const byMode = new Map<BindingContext, string[]>();
   for (const key of Object.keys(bindings)) {
     const parsed = parseBindingKey(key);
     if (!parsed) continue;
@@ -40,7 +40,7 @@ function strictPrefixPairs(bindings: BindingMap): string[] {
   return pairs.sort();
 }
 
-function press(mode: Mode, key: string, bindings: BindingMap = resolveBindings('')) {
+function press(mode: BindingContext, key: string, bindings: BindingMap = resolveBindings('')) {
   return advanceInput(
     {
       mode,

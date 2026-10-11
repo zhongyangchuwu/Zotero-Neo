@@ -7,17 +7,25 @@ import {
   serializeBindingTokens,
 } from './key-sequence';
 
-export const MODES = [
+export const BINDING_CONTEXTS = [
   'reader-normal',
   'reader-select',
   'main-normal',
   'main-select',
   'note-normal',
   'note-insert',
+  'reader-outline',
+  'reader-marks',
+  'reader-annotations',
+  'reader-thumbnails',
+  'picker-input',
+  'picker-list',
+  'plugins-input',
+  'plugins-list',
 ] as const;
 
-export type Mode = (typeof MODES)[number];
-export type BindingKey = `${Mode}:${string}`;
+export type BindingContext = (typeof BINDING_CONTEXTS)[number];
+export type BindingKey = `${BindingContext}:${string}`;
 export type BindingMap = Readonly<Record<string, ActionId>>;
 
 /** An executable binding occupies a complete sequence, never a namespace. */
@@ -35,14 +43,14 @@ export interface PrefixBinding {
 export type Binding = ActionBinding | PrefixBinding;
 export type BindingNodes = Readonly<Record<string, Binding>>;
 
-const LEGACY_MODE_ALIASES: Readonly<Record<string, Mode>> = {
+const LEGACY_MODE_ALIASES: Readonly<Record<string, BindingContext>> = {
   normal: 'reader-normal',
   visual: 'reader-select',
   main: 'main-normal',
 };
 
-function canonicalMode(value: string): Mode | null {
-  if ((MODES as readonly string[]).includes(value)) return value as Mode;
+function canonicalMode(value: string): BindingContext | null {
+  if ((BINDING_CONTEXTS as readonly string[]).includes(value)) return value as BindingContext;
   return LEGACY_MODE_ALIASES[value] ?? null;
 }
 
@@ -74,8 +82,16 @@ export const DEFAULT_BINDINGS = {
   'reader-normal::': 'openCommandPalette',
   'reader-normal:n': 'findNext',
   'reader-normal:N': 'findPrevious',
-  'reader-normal:[': 'prevAnnotation',
-  'reader-normal:]': 'nextAnnotation',
+  'reader-normal:[s': 'prevHeading',
+  'reader-normal:]s': 'nextHeading',
+  'reader-normal:[f': 'prevFigure',
+  'reader-normal:]f': 'nextFigure',
+  'reader-normal:[t': 'prevTable',
+  'reader-normal:]t': 'nextTable',
+  'reader-normal:[a': 'prevAnnotation',
+  'reader-normal:]a': 'nextAnnotation',
+  'reader-normal:[m': 'prevBookmark',
+  'reader-normal:]m': 'nextBookmark',
   'reader-normal:<Enter>': 'editAnnotation',
   'reader-normal:<Return>': 'editAnnotation',
   'reader-normal:dd': 'deleteAnnotation',
@@ -101,7 +117,10 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<C-k>': 'focusReaderSplitUp',
   'reader-normal:<C-l>': 'focusReaderSplitRight',
   'reader-normal:<Esc>': 'clearSearch',
-  'reader-normal:<Space>e': 'toggleReaderSidebarOutline',
+  'reader-normal:<Space>ro': 'focusReaderOutline',
+  'reader-normal:<Space>rm': 'focusReaderMarks',
+  'reader-normal:<Space>ra': 'focusReaderAnnotations',
+  'reader-normal:<Space>rt': 'focusReaderThumbnails',
   'reader-normal:<Space>-': 'toggleReaderSplitHorizontal',
   'reader-normal:<Space>|': 'toggleReaderSplitVertical',
   'reader-normal:<Space>ff': 'findAllItems',
@@ -116,7 +135,6 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>pp': 'managePlugins',
   'reader-normal:<Space>ps': 'openNeoSettings',
   'reader-normal:<Space>yy': 'mainYankCitekey',
-  'reader-normal:<Space>m': 'toggleMarksExplorer',
   'reader-select:s': 'flashText',
   'reader-select:a': 'openSelectionActions',
   'reader-select:<Enter>': 'openSelectionActions',
@@ -237,6 +255,87 @@ export const DEFAULT_BINDINGS = {
   'main-select:o': 'mainSelectSwapEnds',
   'main-select:v': 'mainSelectCancel',
   'main-select:<Esc>': 'mainSelectCancel',
+  'reader-outline:<Space>ro': 'focusReaderOutline',
+  'reader-outline:<Space>rm': 'focusReaderMarks',
+  'reader-outline:<Space>ra': 'focusReaderAnnotations',
+  'reader-outline:<Space>rt': 'focusReaderThumbnails',
+  'reader-marks:<Space>ro': 'focusReaderOutline',
+  'reader-marks:<Space>rm': 'focusReaderMarks',
+  'reader-marks:<Space>ra': 'focusReaderAnnotations',
+  'reader-marks:<Space>rt': 'focusReaderThumbnails',
+  'reader-annotations:<Space>ro': 'focusReaderOutline',
+  'reader-annotations:<Space>rm': 'focusReaderMarks',
+  'reader-annotations:<Space>ra': 'focusReaderAnnotations',
+  'reader-annotations:<Space>rt': 'focusReaderThumbnails',
+  'reader-thumbnails:<Space>ro': 'focusReaderOutline',
+  'reader-thumbnails:<Space>rm': 'focusReaderMarks',
+  'reader-thumbnails:<Space>ra': 'focusReaderAnnotations',
+  'reader-thumbnails:<Space>rt': 'focusReaderThumbnails',
+  'reader-outline:j': 'uiNext',
+  'reader-outline:k': 'uiPrevious',
+  'reader-outline:h': 'uiParent',
+  'reader-outline:l': 'uiChild',
+  'reader-outline:<Esc>': 'uiCancel',
+  'reader-marks:j': 'uiNext',
+  'reader-marks:k': 'uiPrevious',
+  'reader-marks:gg': 'uiFirst',
+  'reader-marks:G': 'uiLast',
+  'reader-marks:<Enter>': 'uiConfirm',
+  'reader-marks:<Esc>': 'uiCancel',
+  'reader-marks:d': 'uiDelete',
+  'reader-marks:x': 'uiClear',
+  'reader-annotations:j': 'uiNext',
+  'reader-annotations:k': 'uiPrevious',
+  'reader-annotations:<Esc>': 'uiCancel',
+  'reader-thumbnails:j': 'uiNext',
+  'reader-thumbnails:k': 'uiPrevious',
+  'reader-thumbnails:<Esc>': 'uiCancel',
+  'picker-input:<C-j>': 'uiNext',
+  'picker-input:<C-n>': 'uiNext',
+  'picker-input:<Down>': 'uiNext',
+  'picker-input:<C-k>': 'uiPrevious',
+  'picker-input:<C-p>': 'uiPrevious',
+  'picker-input:<Up>': 'uiPrevious',
+  'picker-input:<C-d>': 'uiPreviewDown',
+  'picker-input:<C-u>': 'uiPreviewUp',
+  'picker-input:<Enter>': 'uiConfirm',
+  'picker-input:<S-Enter>': 'uiConfirm',
+  'picker-input:<Esc>': 'uiCancel',
+  'picker-list:<C-j>': 'uiNext',
+  'picker-list:<C-n>': 'uiNext',
+  'picker-list:<Down>': 'uiNext',
+  'picker-list:<C-k>': 'uiPrevious',
+  'picker-list:<C-p>': 'uiPrevious',
+  'picker-list:<Up>': 'uiPrevious',
+  'picker-list:<C-d>': 'uiPreviewDown',
+  'picker-list:<C-u>': 'uiPreviewUp',
+  'picker-list:<Enter>': 'uiConfirm',
+  'picker-list:<S-Enter>': 'uiConfirm',
+  'picker-list:<Esc>': 'uiCancel',
+  'picker-list:j': 'uiNext',
+  'picker-list:k': 'uiPrevious',
+  'picker-list:/': 'uiSearch',
+  'plugins-input:<Esc>': 'uiFocusList',
+  'plugins-list:<Esc>': 'uiCancel',
+  'plugins-list:q': 'uiCancel',
+  'plugins-list:/': 'uiSearch',
+  'plugins-list:j': 'uiNext',
+  'plugins-list:<Down>': 'uiNext',
+  'plugins-list:k': 'uiPrevious',
+  'plugins-list:<Up>': 'uiPrevious',
+  'plugins-list:gg': 'uiFirst',
+  'plugins-list:<Home>': 'uiFirst',
+  'plugins-list:G': 'uiLast',
+  'plugins-list:<End>': 'uiLast',
+  'plugins-list:<C-d>': 'uiPageDown',
+  'plugins-list:<C-u>': 'uiPageUp',
+  'plugins-list:r': 'pluginsRefresh',
+  'plugins-list:e': 'pluginsEnable',
+  'plugins-list:d': 'pluginsDisable',
+  'plugins-list:p': 'pluginsPreferences',
+  'plugins-list:o': 'pluginsHomepage',
+  'plugins-list:R': 'pluginsReadme',
+  'plugins-list:L': 'pluginsGitLog',
 } as const satisfies BindingMap;
 
 const PREFIX_LABELS = {
@@ -255,6 +354,9 @@ const PREFIX_LABELS = {
   citations: { en: 'Citations', 'zh-CN': '引用' },
   neo: { en: 'Neo', 'zh-CN': 'Neo' },
   selection: { en: 'Selection', 'zh-CN': '选择' },
+  reader: { en: 'Reader panels', 'zh-CN': '阅读器面板' },
+  previous: { en: 'Previous target', 'zh-CN': '上一个目标' },
+  next: { en: 'Next target', 'zh-CN': '下一个目标' },
 } as const;
 
 function prefix(label: keyof typeof PREFIX_LABELS): PrefixBinding {
@@ -267,12 +369,15 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'reader-normal:d': prefix('delete'),
   'reader-normal:z': prefix('view'),
   'reader-normal:Z': prefix('filters'),
+  'reader-normal:[': prefix('previous'),
+  'reader-normal:]': prefix('next'),
   'reader-normal:<Space>': prefix('commands'),
   'reader-normal:<Space>f': prefix('find'),
   'reader-normal:<Space>t': prefix('tags'),
   'reader-normal:<Space>c': prefix('collections'),
   'reader-normal:<Space>p': prefix('neo'),
   'reader-normal:<Space>y': prefix('citations'),
+  'reader-normal:<Space>r': prefix('reader'),
   'reader-select:z': prefix('view'),
   'main-normal:g': prefix('navigation'),
   'main-normal:d': prefix('delete'),
@@ -298,6 +403,16 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'note-normal:<Space>t': prefix('tags'),
   'note-normal:<Space>p': prefix('neo'),
   'note-normal:<Space>y': prefix('citations'),
+  'reader-marks:g': prefix('navigation'),
+  'plugins-list:g': prefix('navigation'),
+  'reader-outline:<Space>': prefix('commands'),
+  'reader-outline:<Space>r': prefix('reader'),
+  'reader-marks:<Space>': prefix('commands'),
+  'reader-marks:<Space>r': prefix('reader'),
+  'reader-annotations:<Space>': prefix('commands'),
+  'reader-annotations:<Space>r': prefix('reader'),
+  'reader-thumbnails:<Space>': prefix('commands'),
+  'reader-thumbnails:<Space>r': prefix('reader'),
 } as const satisfies Readonly<Record<BindingKey, PrefixBinding>>;
 
 /**
@@ -344,7 +459,7 @@ export function bindingNodesFromActions(
 }
 
 export interface ParsedBindingKey {
-  mode: Mode;
+  mode: BindingContext;
   sequence: string;
 }
 
@@ -736,6 +851,40 @@ export function migrateRetiredReaderInsertOverrides(raw: unknown): string {
   return retained.length ? JSON.stringify(Object.fromEntries(retained)) : '';
 }
 
+/** Translate persisted retired IDs before earlier schema steps parse ActionIds. */
+export function migrateRetiredShortcutActions(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const entries = parseBindingEntries(raw);
+  if (!entries.some(([, action]) => action === 'focusReaderSidebar')) return raw;
+  return JSON.stringify(
+    Object.fromEntries(
+      entries.map(([key, action]) => [
+        key,
+        action === 'focusReaderSidebar' ? 'focusReaderOutline' : action,
+      ]),
+    ),
+  );
+}
+
+/** Relocates only inherited-default tombstones; explicit destinations always win. */
+export function migrateShortcutSystemOverrides(raw: unknown): string {
+  const renamed = migrateRetiredShortcutActions(raw);
+  const overrides = parseBindingOverrides(renamed);
+  let changed = false;
+  for (const [oldKey, newKey] of [
+    ['reader-normal:<Space>e', 'reader-normal:<Space>ro'],
+    ['reader-normal:<Space>m', 'reader-normal:<Space>rm'],
+    ['reader-normal:[', 'reader-normal:[a'],
+    ['reader-normal:]', 'reader-normal:]a'],
+  ] as const) {
+    if (overrides[oldKey] !== null) continue;
+    changed = true;
+    delete overrides[oldKey];
+    if (!(newKey in overrides)) overrides[newKey] = null;
+  }
+  return changed ? stringifyBindingOverrides(overrides) : renamed;
+}
+
 /** Canonicalizes token boundaries so persisted multi-key sequences are unambiguous. */
 export function migrateKeySequenceOverrides(raw: unknown): string {
   const overrides: Record<string, BindingOverride> = {};
@@ -783,7 +932,7 @@ export function resolveBindings(raw: unknown): BindingMap {
 }
 
 /** Projects only the bindings explicitly declared for one mode. */
-export function bindingsForMode(bindings: BindingMap, mode: Mode): BindingMap {
+export function bindingsForMode(bindings: BindingMap, mode: BindingContext): BindingMap {
   const result: Record<string, ActionId> = {};
   for (const [key, action] of Object.entries(bindings)) {
     const binding = parseBindingKey(key);

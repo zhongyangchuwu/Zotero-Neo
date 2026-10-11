@@ -32,7 +32,7 @@ export interface MarksHost {
     ratio: number,
     isCurrent: () => boolean,
   ) => boolean;
-  readonly pageNavigationSupported: (reader: ReaderRuntime) => boolean;
+  readonly pageNavigationSupported: (reader: ReaderRuntime, pdfWindow: PdfWindow) => boolean;
   readonly annotationPageRatio: (
     pdfWindow: PdfWindow,
     annotation: ItemRuntime,
@@ -128,6 +128,21 @@ export class ReaderMarks {
     }
   }
 
+  /** Treats browser-rounded scroll offsets as the same visible bookmark destination. */
+  private positionTolerance(pdfWindow: PdfWindow, pageIndex: number | null, pages: number): number {
+    if (pageIndex !== null) {
+      const page = pdfWindow.document.querySelector<HTMLElement>(
+        `.page[data-page-number="${pageIndex + 1}"]`,
+      );
+      if (page && page.offsetHeight > 0) return 1 / page.offsetHeight;
+    } else {
+      const container = pdfWindow.document.scrollingElement ?? pdfWindow.document.documentElement;
+      const range = container.scrollHeight - container.clientHeight;
+      if (range > 0) return pages / range;
+    }
+    return 0.000001;
+  }
+
   async set(
     reader: ReaderRuntime,
     pdfWindow: PdfWindow,
@@ -158,43 +173,122 @@ export class ReaderMarks {
       return false;
     }
     let annotationExists = true;
-    const moved = await this.#host.onJump(pdfWindow, async (isCurrent) => {
-      let { pageIndex, ratio } = mark;
-      try {
-        if (mark.key) {
-          const target =
-            this.#host
-              .itemForReader(reader)
-              ?.getAnnotations?.()
-              .find((annotation) => annotation.key === mark.key) ?? null;
-          if (!isCurrent()) return false;
-          if (target) {
-            selectAnnotation(mark.key);
-            if (pageIndex === null) {
-              const resolved = await this.#host.annotationPageRatio(pdfWindow, target);
-              if (!isCurrent()) return false;
-              ({ pageIndex, ratio } = resolved);
-            }
-          } else {
-            annotationExists = false;
-            selectAnnotation(null);
-          }
-        }
-        if (!isCurrent()) return false;
-        if (pageIndex !== null && this.#host.pageNavigationSupported(reader)) {
-          const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
-          if (viewer) viewer.currentPageNumber = pageIndex + 1;
-          return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
-        }
-        return this.#host.scrollDocumentToRatio(pdfWindow, ratio, isCurrent);
-      } catch (error) {
-        this.#host.log(`mark jump failed: ${String(error)}`);
-        return false;
-      }
-    });
+    const moved = await this.#host.onJump(pdfWindow, (isCurrent) =>
+      this.jumpMark(reader, pdfWindow, mark, selectAnnotation, isCurrent, () => {
+        annotationExists = false;
+      }),
+    );
     if (!moved) return false;
     this.#host.showStatus(`→ mark ${char}${annotationExists ? '' : ' · annotation gone'}`, 1200);
     return true;
+  }
+
+  /** Traverses persisted and legacy marks in document order through the same managed jump. */
+  async traverse(
+    reader: ReaderRuntime,
+    pdfWindow: PdfWindow,
+    direction: -1 | 1,
+    selectAnnotation: (key: string | null) => void,
+  ): Promise<boolean> {
+    const entries = Object.entries(this.#marks);
+    if (!entries.length) {
+      this.#host.showStatus('✗ no bookmarks', 2000);
+      return false;
+    }
+    let char = '';
+    let annotationExists = true;
+    const moved = await this.#host.onJump(pdfWindow, async (isCurrent) => {
+      const pages = pdfWindow.PDFViewerApplication?.pdfViewer?.pagesCount ?? 1;
+      const annotations = this.#host.itemForReader(reader)?.getAnnotations?.() ?? [];
+      const ordered: { char: string; mark: Mark; position: number }[] = [];
+      for (const [name, mark] of entries) {
+        let pageIndex = mark.pageIndex;
+        let ratio = mark.ratio;
+        if (pageIndex === null && mark.key) {
+          const annotation = annotations.find((entry) => entry.key === mark.key);
+          if (annotation) {
+            const resolved = await this.#host.annotationPageRatio(pdfWindow, annotation);
+            if (!isCurrent()) return false;
+            ({ pageIndex, ratio } = resolved);
+          }
+        }
+        if (!isCurrent()) return false;
+        ordered.push({
+          char: name,
+          mark:
+            pageIndex === mark.pageIndex && ratio === mark.ratio
+              ? mark
+              : { ...mark, pageIndex, ratio },
+          position: pageIndex === null ? ratio * pages : pageIndex + ratio,
+        });
+      }
+      ordered.sort((a, b) => a.position - b.position || a.char.localeCompare(b.char));
+      const current = this.position(pdfWindow);
+      const position =
+        current.pageIndex === null ? current.ratio * pages : current.pageIndex + current.ratio;
+      const tolerance = this.positionTolerance(pdfWindow, current.pageIndex, pages);
+      let target = direction > 0 ? ordered[0] : ordered[ordered.length - 1];
+      if (direction > 0)
+        target = ordered.find((entry) => entry.position > position + tolerance) ?? target;
+      else {
+        for (let index = ordered.length - 1; index >= 0; index -= 1) {
+          if (ordered[index].position < position - tolerance) {
+            target = ordered[index];
+            break;
+          }
+        }
+      }
+      if (!target || !isCurrent()) return false;
+      char = target.char;
+      return this.jumpMark(reader, pdfWindow, target.mark, selectAnnotation, isCurrent, () => {
+        annotationExists = false;
+      });
+    });
+    if (moved)
+      this.#host.showStatus(`→ mark ${char}${annotationExists ? '' : ' · annotation gone'}`, 1200);
+    return moved;
+  }
+
+  private async jumpMark(
+    reader: ReaderRuntime,
+    pdfWindow: PdfWindow,
+    mark: Mark,
+    selectAnnotation: (key: string | null) => void,
+    isCurrent: () => boolean,
+    onMissingAnnotation?: () => void,
+  ): Promise<boolean> {
+    let { pageIndex, ratio } = mark;
+    try {
+      if (!isCurrent()) return false;
+      if (mark.key) {
+        const target = this.#host
+          .itemForReader(reader)
+          ?.getAnnotations?.()
+          .find((annotation) => annotation.key === mark.key);
+        if (!isCurrent()) return false;
+        if (target) {
+          selectAnnotation(mark.key);
+          if (pageIndex === null) {
+            const resolved = await this.#host.annotationPageRatio(pdfWindow, target);
+            if (!isCurrent()) return false;
+            ({ pageIndex, ratio } = resolved);
+          }
+        } else {
+          onMissingAnnotation?.();
+          selectAnnotation(null);
+        }
+      }
+      if (!isCurrent()) return false;
+      if (pageIndex !== null && this.#host.pageNavigationSupported(reader, pdfWindow)) {
+        const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
+        if (viewer) viewer.currentPageNumber = pageIndex + 1;
+        return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
+      }
+      return this.#host.scrollDocumentToRatio(pdfWindow, ratio, isCurrent);
+    } catch (error) {
+      this.#host.log(`mark jump failed: ${String(error)}`);
+      return false;
+    }
   }
 
   async delete(reader: ReaderRuntime, char: string): Promise<void> {

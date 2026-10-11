@@ -1,3 +1,4 @@
+import type { LocalBindingRuntime } from '../../input/local-binding-runtime';
 import type { CompositionState } from '../../input/composition';
 import type { PickerItem, PickerScope } from './model';
 import type { PickerConfirm, PickerProvider } from './types';
@@ -27,6 +28,7 @@ export class PickerRuntime {
   onClose: (() => void) | null = null;
   queue: Promise<void> = Promise.resolve();
   inputCleanup: (() => void) | null = null;
+  localBindings: LocalBindingRuntime | null = null;
   layout: 'dual' | 'single' = 'dual';
   previousElement: Element | null = null;
   previousWindow: Window | null = null;

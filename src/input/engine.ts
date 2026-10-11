@@ -1,5 +1,5 @@
 import type { ActionId } from './actions';
-import type { BindingMap, Mode } from './bindings';
+import type { BindingMap, BindingContext } from './bindings';
 import {
   appendInputKey,
   bindingEqualsInput,
@@ -11,7 +11,7 @@ import {
 } from './key-sequence';
 
 export interface InputState {
-  readonly mode: Mode;
+  readonly mode: BindingContext;
   readonly keyBuffer: string;
   readonly countBuffer: string;
 }
@@ -51,7 +51,11 @@ function countValue(buffer: string): number {
   return buffer ? Number.parseInt(buffer, 10) : 0;
 }
 
-export function bindingMatchesPrefix(bindingKey: string, mode: Mode, buffer: string): boolean {
+export function bindingMatchesPrefix(
+  bindingKey: string,
+  mode: BindingContext,
+  buffer: string,
+): boolean {
   const modePrefix = `${mode}:`;
   if (!bindingKey.startsWith(modePrefix)) return false;
   return bindingMatchesInputPrefix(bindingKey.slice(modePrefix.length), buffer);
@@ -62,7 +66,11 @@ interface MatchSummary {
   readonly longer: boolean;
 }
 
-function summarizeMatches(bindings: BindingMap, mode: Mode, buffer: string): MatchSummary {
+function summarizeMatches(
+  bindings: BindingMap,
+  mode: BindingContext,
+  buffer: string,
+): MatchSummary {
   const inputLength = inputTokenCount(buffer);
   if (inputLength === null) return { exact: undefined, longer: false };
 

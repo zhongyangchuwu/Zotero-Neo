@@ -43,6 +43,7 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
 - Link hints for visible internal, citation, and external PDF links.
 - Native Zotero Reader Outline enhanced in place with conservative hierarchy
   labels and a Neo Bookmarks group for Reader marks.
+- Direct Reader panel focus with `<Space>ro/rm/ra/rt` opens or focuses Outline, Bookmarks, Annotations, or Thumbnails without toggling the panel closed. Reader Normal also navigates headings (`[s`/`]s`), Figures (`[f`/`]f`), Tables (`[t`/`]t`), annotations (`[a`/`]a`), and Bookmarks (`[m`/`]m`); category jumps use authored Outline targets only, with no PDF text scan or generated entries.
 - Snapshot and EPUB navigation/search where Zotero exposes compatible Reader
   behavior.
 
@@ -85,8 +86,13 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
 
 ### Keymaps and appearance
 
-- Configurable Reader/Main/Note bindings with multiple bindings per action,
-  duplicate blocking, prefix warnings, persistent unbinding, and staged Apply.
+- Action- and context-centric bindings across Reader/Main/Note modes, Reader
+  Outline/Marks/Annotations/Thumbnails, picker input/list, and Plugin Manager
+  input/list controls. Search finds action labels/IDs, current/default keys,
+  groups, and contexts; results distinguish Default, Custom, and Unbound.
+- Per-context add/record/unbind/reset with staged Apply, duplicate/native
+  conflict blocking, and strict-prefix warnings. Native shortcuts stay
+  separately read-only; host text input and IME remain native.
 - Prefix Guide derived from the active resolved keymap; Space is the default semantic command namespace across Reader/Main/Note.
 - Auto, Light, and Dark appearance modes on Neo-owned surfaces.
 

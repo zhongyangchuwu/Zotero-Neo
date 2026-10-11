@@ -1,6 +1,8 @@
 import { cloneInto } from '../platform/cross-compartment';
 import type { FocusDirection } from '../input/actions';
 import type { PdfWindow, ReaderRuntime } from './types';
+import { outlineEntryKind } from './outline-presentation';
+import type { ReaderNativeOutlineEntry, ReaderViewRuntime } from './types';
 import type { NavigationExecution, NavigationIntent, NavigationOutcome } from '../navigation/types';
 import type { ReaderNativeNavigation } from './jump-history-bridge';
 
@@ -34,9 +36,124 @@ function asPdfWindow(window: Window | undefined): PdfWindow | null {
  */
 export class ReaderNavigation {
   readonly #dependencies: ReaderNavigationDependencies;
+  #outlineLoading: { readonly view: ReaderViewRuntime; readonly promise: Promise<void> } | null =
+    null;
 
   constructor(dependencies: ReaderNavigationDependencies) {
     this.#dependencies = dependencies;
+  }
+
+  /** Uses authored, resolved Outline locations and the exact view's native history producer. */
+  async traverseOutline(
+    category: 'heading' | 'figure' | 'table',
+    direction: -1 | 1,
+    pdfWindow: PdfWindow,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    const internal = this.#dependencies.reader._internalReader;
+    const view =
+      internal?._primaryView?._iframeWindow === pdfWindow
+        ? internal._primaryView
+        : internal?._secondaryView?._iframeWindow === pdfWindow
+          ? internal._secondaryView
+          : null;
+    if (!view?.navigate) {
+      this.#dependencies.showStatus('✗ Outline navigation unavailable', 2000);
+      return false;
+    }
+    if (view.initializedPromise) await view.initializedPromise;
+    if (!isCurrent() || this.activePdfWindow() !== pdfWindow) return false;
+    const primary = internal?._primaryView;
+    if (internal?._state?.outline == null && typeof primary?.setSidebarView === 'function') {
+      let loading = this.#outlineLoading;
+      if (!loading || loading.view !== primary) {
+        const promise = Promise.resolve(primary.setSidebarView('outline'));
+        loading = { view: primary, promise };
+        this.#outlineLoading = loading;
+      }
+      try {
+        await loading.promise;
+      } finally {
+        if (this.#outlineLoading === loading) this.#outlineLoading = null;
+      }
+    }
+    if (
+      !isCurrent() ||
+      this.activePdfWindow() !== pdfWindow ||
+      this.#dependencies.reader._internalReader !== internal ||
+      internal?._primaryView !== primary ||
+      (view !== internal?._primaryView && view !== internal?._secondaryView)
+    )
+      return false;
+    const entries: { entry: ReaderNativeOutlineEntry; page: number; top: number; order: number }[] =
+      [];
+    let order = 0;
+    let activeOrder = -1;
+    const visit = (outline: readonly ReaderNativeOutlineEntry[], depth: number): void => {
+      for (const entry of outline) {
+        const currentOrder = order++;
+        if (entry.active) activeOrder = currentOrder;
+        const kind = outlineEntryKind(entry.title, depth, entry.items?.length ?? 0);
+        const position = entry.location?.position;
+        if (
+          position &&
+          Number.isInteger(position.pageIndex) &&
+          position.pageIndex >= 0 &&
+          Array.isArray(position.rects) &&
+          (kind === category ||
+            (category === 'heading' && (kind === 'section' || kind === 'subsection')))
+        ) {
+          let top = -Infinity;
+          for (const rect of position.rects) {
+            if (!Array.isArray(rect) || rect.length < 4 || !rect.every(Number.isFinite)) {
+              top = -Infinity;
+              break;
+            }
+            top = Math.max(top, rect[1], rect[3]);
+          }
+          if (Number.isFinite(top))
+            entries.push({ entry, page: position.pageIndex, top, order: currentOrder });
+        }
+        if (entry.items) visit(entry.items, depth + 1);
+      }
+    };
+    visit(internal?._state?.outline ?? [], 0);
+    if (!entries.length) {
+      this.#dependencies.showStatus(
+        `✗ no ${category === 'heading' ? 'headings' : category === 'figure' ? 'figures' : 'tables'} in Outline`,
+        2000,
+      );
+      return false;
+    }
+    entries.sort((a, b) => a.page - b.page || b.top - a.top || a.order - b.order);
+    const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
+    const location = viewer?._location;
+    const page = location ? location.pageNumber - 1 : (viewer?.currentPageNumber ?? 1) - 1;
+    const relative = (entry: (typeof entries)[number]): number =>
+      location
+        ? entry.page - page || location.top - entry.top
+        : activeOrder >= 0
+          ? entry.order - activeOrder
+          : entry.page - page;
+    let target = direction > 0 ? entries[0] : entries[entries.length - 1];
+    if (direction > 0) target = entries.find((entry) => relative(entry) > 0) ?? target;
+    else {
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        if (relative(entries[index]) < 0) {
+          target = entries[index];
+          break;
+        }
+      }
+    }
+    if (!target?.entry.location || !isCurrent() || this.activePdfWindow() !== pdfWindow)
+      return false;
+    const outerWindow = this.#dependencies.reader._iframeWindow;
+    if (!outerWindow) return false;
+    await view.navigate(
+      cloneInto(target.entry.location, outerWindow),
+      cloneInto({ block: 'start' as const }, outerWindow),
+    );
+    return isCurrent();
   }
 
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {

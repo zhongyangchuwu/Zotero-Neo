@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReaderNavigation } from '../../src/reader/navigation';
-import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
+import type {
+  PdfWindow,
+  ReaderRuntime,
+  ReaderViewRuntime,
+  ReaderNativeOutlineEntry,
+  ReaderLinkPosition,
+} from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -275,4 +281,113 @@ describe('ReaderNavigation', () => {
     expect(test.debug).toHaveBeenCalledWith('reader zoom out failed: Error: reader reloaded');
     expect(test.scrollBoundary).toHaveBeenCalledWith(true, test.primary);
   });
+
+  it('loads the native authored Outline on first use without opening a sidebar, and traverses headings including collapsed subsections', async () => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const location = (pageIndex: number, top: number) => ({
+      position: { pageIndex, rects: [[0, top, 0, top]] },
+    });
+    const state = {
+      sidebarOpen: false,
+      sidebarView: 'annotations' as const,
+      outline: null as ReaderNativeOutlineEntry[] | null,
+    };
+    Reflect.set(internal, '_state', state);
+    const nativeNavigate = vi.fn(async (request: { position: ReaderLinkPosition }) => {
+      viewer.currentPageNumber = request.position.pageIndex + 1;
+      viewer._location = {
+        pageNumber: viewer.currentPageNumber,
+        top: request.position.rects[0][1],
+        left: 0,
+      };
+    });
+    const viewer = { currentPageNumber: 1, _location: { pageNumber: 1, top: 792, left: 0 } };
+    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: viewer });
+    Reflect.set(internal._primaryView!, 'navigate', nativeNavigate);
+    Reflect.set(internal._primaryView!, 'setSidebarView', async () => {
+      state.outline = [
+        {
+          title: '1 Introduction',
+          location: location(0, 792),
+          expanded: false,
+          items: [{ title: '1.1 Background', location: location(0, 700), items: [] }],
+        },
+        { title: 'Figure 1 Workflow', location: location(1, 792), items: [] },
+        { title: '2 Results', location: location(2, 792), items: [] },
+      ];
+    });
+    await expect(
+      test.navigation.traverseOutline('heading', 1, test.primary, () => true),
+    ).resolves.toBe(true);
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 700), { block: 'start' });
+    await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), { block: 'start' });
+    await test.navigation.traverseOutline('heading', 1, test.primary, () => true);
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(0, 792), { block: 'start' });
+    await test.navigation.traverseOutline('heading', -1, test.primary, () => true);
+    expect(nativeNavigate).toHaveBeenLastCalledWith(location(2, 792), { block: 'start' });
+    expect(state.sidebarOpen).toBe(false);
+    expect(state.sidebarView).toBe('annotations');
+    expect(test.cloneInto).toHaveBeenCalledWith(
+      expect.objectContaining({ position: expect.any(Object) }),
+      test.reader._iframeWindow,
+    );
+  });
+
+  it('traverses figures and tables only from authored entries in the exact active secondary view and reports missing categories honestly', async () => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const position = { pageIndex: 2, rects: [[0, 600, 0, 600]] };
+    Reflect.set(internal, '_state', {
+      outline: [
+        { title: 'Figure 1 Workflow', location: { position }, items: [] },
+        { title: 'Unknown root', location: { position }, items: [] },
+      ],
+    });
+    const primaryNavigate = vi.fn();
+    const secondaryNavigate = vi.fn();
+    Reflect.set(internal._primaryView!, 'navigate', primaryNavigate);
+    Reflect.set(internal._secondaryView!, 'navigate', secondaryNavigate);
+    Reflect.set(internal, '_lastViewPrimary', false);
+    await test.navigation.traverseOutline('figure', 1, test.secondary, () => true);
+    await test.navigation.traverseOutline('figure', -1, test.secondary, () => true);
+    expect(secondaryNavigate).toHaveBeenCalledTimes(2);
+    expect(secondaryNavigate).toHaveBeenLastCalledWith({ position }, { block: 'start' });
+    expect(primaryNavigate).not.toHaveBeenCalled();
+    await expect(
+      test.navigation.traverseOutline('table', 1, test.secondary, () => true),
+    ).resolves.toBe(false);
+    expect(secondaryNavigate).toHaveBeenCalledTimes(2);
+    expect(test.showStatus).toHaveBeenCalledWith('✗ no tables in Outline', 2000);
+  });
+
+  it.each(['new input', 'split change', 'view replacement'] as const)(
+    'cannot jump after delayed native outline loading and %s',
+    async (change) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const pending = Promise.withResolvers<void>();
+      const state = { outline: null as ReaderNativeOutlineEntry[] | null };
+      Reflect.set(internal, '_state', state);
+      const navigate = vi.fn();
+      Reflect.set(internal._primaryView!, 'navigate', navigate);
+      Reflect.set(internal._primaryView!, 'setSidebarView', () => pending.promise);
+      let current = true;
+      const traversal = test.navigation.traverseOutline('heading', 1, test.primary, () => current);
+      if (change === 'new input') current = false;
+      else if (change === 'split change') Reflect.set(internal, '_lastViewPrimary', false);
+      else Reflect.set(internal, '_primaryView', { _iframeWindow: test.primary, navigate });
+      state.outline = [
+        {
+          title: '1 Results',
+          location: { position: { pageIndex: 1, rects: [[0, 792, 0, 792]] } },
+          items: [],
+        },
+      ];
+      pending.resolve();
+      await expect(traversal).resolves.toBe(false);
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -1,13 +1,9 @@
 import { CleanupFailure } from '../core/cleanup';
 import { t } from '../i18n';
-import type { BindingMap } from '../input/bindings';
+import type { BindingMap, BindingContext } from '../input/bindings';
+import type { ActionId } from '../input/actions';
 import { compositionOwnsKey } from '../input/composition';
-import { keyString } from '../input/keys';
-import {
-  appendInputKey,
-  bindingEqualsInput,
-  bindingMatchesInputPrefix,
-} from '../input/key-sequence';
+import { LocalBindingRuntime } from '../input/local-binding-runtime';
 import { cloneInto, isDeadObject } from '../platform/cross-compartment';
 import { asElement, isEditableElement } from '../platform/dom';
 import type { ReaderMarks } from './marks';
@@ -64,12 +60,7 @@ const STYLE = `
 #zv-reader-marks .zv-empty-marks { opacity: .65; padding-block: 5px; }
 `;
 
-const NATIVE_MOTION_KEYS: Readonly<Record<string, string>> = {
-  j: 'ArrowDown',
-  k: 'ArrowUp',
-  h: 'ArrowLeft',
-  l: 'ArrowRight',
-};
+type SidebarPane = 'outline' | 'marks' | 'annotations' | 'thumbnails';
 
 /** Owns one reversible native-sidebar enhancement, never the host's sidebar or annotation state. */
 export class ReaderNativeSidebar {
@@ -82,14 +73,47 @@ export class ReaderNativeSidebar {
   #decorated = new Set<HTMLElement>();
   #pageLabels: readonly string[] | undefined;
   #language = '';
-  #focusRequest: 'outline' | 'marks' | null = null;
-  #toggleBuffer = '';
-  #toggleTimer: ReaderTimer | null = null;
+  #focusRequest: SidebarPane | null = null;
+  readonly #local: LocalBindingRuntime;
+  readonly #localTimers = new Map<number, ReaderTimer>();
+  #nextTimer = 0;
+  #localContext: BindingContext | null = null;
+  #observedOpen: boolean | undefined;
+  #observedView: 'outline' | 'annotations' | 'thumbnails' | undefined;
+  readonly #focusableFallbacks = new Set<HTMLElement>();
+  readonly #onFocus = (): void => {
+    this.deactivate();
+    this.#host.onInput();
+  };
+  readonly #onPointer = (): void => {
+    this.deactivate();
+    this.#host.onInput();
+  };
   #dispatching = false;
   #disposed = false;
 
   constructor(host: ReaderNativeSidebarHost) {
     this.#host = host;
+    this.#local = new LocalBindingRuntime({
+      bindings: host.bindings,
+      execute: (action, event) => this.executeLocal(action, event),
+      schedule: (callback, delay) => {
+        const id = ++this.#nextTimer;
+        this.#localTimers.set(
+          id,
+          host.schedule(delay, () => {
+            this.#localTimers.delete(id);
+            callback();
+          }),
+        );
+        return id;
+      },
+      clearTimer: (id) => {
+        if (id === undefined) return;
+        host.clearTimer(this.#localTimers.get(id) ?? null);
+        this.#localTimers.delete(id);
+      },
+    });
   }
 
   start(): void {
@@ -97,6 +121,8 @@ export class ReaderNativeSidebar {
     const window = this.#host.reader._iframeWindow as NativeSidebarWindow | undefined;
     if (!window || isDeadObject(window)) return;
     this.#document = window.document;
+    window.document.addEventListener('focusin', this.#onFocus, true);
+    window.document.addEventListener('pointerdown', this.#onPointer, true);
     if (window.MutationObserver && window.document.body) {
       this.#observer = new window.MutationObserver((records) => {
         if (this.#disposed) return;
@@ -107,6 +133,7 @@ export class ReaderNativeSidebar {
           this.refresh();
         else if (this.#pageLabels !== this.#host.reader._internalReader?._state?.pageLabels)
           this.refreshMarks();
+        this.refreshFocus();
       });
       this.#observer.observe(
         window.document.body,
@@ -154,103 +181,142 @@ export class ReaderNativeSidebar {
       this.close();
       return;
     }
-    internal.setSidebarView?.('outline');
-    internal.toggleSidebar?.(true);
-    this.#focusRequest = group;
-    this.refresh();
+    this.focus(group, _pdfWindow);
   }
 
-  focus(_pdfWindow: PdfWindow): void {
+  focus(group: SidebarPane, _pdfWindow: PdfWindow): void {
     if (this.#disposed) return;
     this.start();
+    this.#local.deactivate();
     const internal = this.#host.reader._internalReader;
-    internal?.setSidebarView?.('outline');
+    internal?.setSidebarView?.(group === 'marks' ? 'outline' : group);
     internal?.toggleSidebar?.(true);
-    this.#focusRequest = 'outline';
+    this.#focusRequest = group;
     this.refresh();
+    this.refreshFocus();
   }
 
-  /** Leaves native editable, annotation, thumbnail and ordinary native navigation keys untouched. */
+  /** Only configurable Neo aliases are consumed; genuine host keys and editors stay native. */
   handleKey(event: KeyboardEvent): void {
     const target = asElement(event.target);
     if (this.#disposed || this.#dispatching || !target) return;
     this.#host.onInput();
-    if (isEditableElement(target) || compositionOwnsKey(event, false)) return;
-    const outline = target.closest('#outlineView');
-    const marks = target.closest('#zv-reader-marks');
-    if (!outline && !marks) return;
-    if (this.handleToggleKey(event)) return;
-    if (event.key === 'Escape') {
-      this.consume(event);
+    this.#focusRequest = null;
+    if (isEditableElement(target) || compositionOwnsKey(event, false)) {
+      this.#local.deactivate();
+      return;
+    }
+    const context = this.contextForTarget(target);
+    if (
+      !context ||
+      event.key === 'Tab' ||
+      event.key.startsWith('Arrow') ||
+      (context === 'reader-outline' && (event.key === 'Enter' || event.key === 'Return'))
+    ) {
+      this.#local.deactivate();
+      return;
+    }
+    this.#localContext = context;
+    if (this.#local.handle(event, context)) this.consume(event);
+  }
+
+  private contextForTarget(target: Element): BindingContext | null {
+    const state = this.#host.reader._internalReader?._state;
+    if (!state?.sidebarOpen || target.closest('.viewWrapper.hidden')) return null;
+    if (state.sidebarView === 'outline') {
+      if (target.closest('#zv-reader-marks')) return 'reader-marks';
+      if (target.closest('#outlineView')) return 'reader-outline';
+    }
+    if (state.sidebarView === 'annotations' && target.closest('#annotationsView'))
+      return 'reader-annotations';
+    if (state.sidebarView === 'thumbnails' && target.closest('#thumbnailsView'))
+      return 'reader-thumbnails';
+    return null;
+  }
+
+  private executeLocal(action: ActionId, _event: KeyboardEvent | null): boolean {
+    const target = asElement(this.#document?.activeElement ?? null);
+    const context = target && this.contextForTarget(target);
+    if (this.#disposed || !target || !context || isEditableElement(target)) return false;
+    if (
+      action === 'focusReaderOutline' ||
+      action === 'focusReaderMarks' ||
+      action === 'focusReaderAnnotations' ||
+      action === 'focusReaderThumbnails'
+    ) {
+      const pdfWindow = this.#host.activePdfWindow();
+      if (!pdfWindow) return false;
+      this.focus(
+        action === 'focusReaderOutline'
+          ? 'outline'
+          : action === 'focusReaderMarks'
+            ? 'marks'
+            : action === 'focusReaderAnnotations'
+              ? 'annotations'
+              : 'thumbnails',
+        pdfWindow,
+      );
+      return true;
+    }
+    if (action === 'uiCancel') {
       this.close();
-      return;
+      return true;
     }
-    if (outline && this.#host.reader._internalReader?._state?.outline == null) {
-      this.consume(event);
-      return;
-    }
-    if (event.ctrlKey || event.altKey || event.metaKey) return;
-    if (outline) {
-      if (!outline.querySelector('.item')) {
-        if (
-          Object.hasOwn(NATIVE_MOTION_KEYS, event.key) ||
-          event.key === 'Enter' ||
-          event.key === 'ArrowLeft' ||
-          event.key === 'ArrowRight'
-        )
-          this.consume(event);
-        return;
-      }
-      const key = Object.hasOwn(NATIVE_MOTION_KEYS, event.key)
-        ? NATIVE_MOTION_KEYS[event.key]
-        : undefined;
-      if (key) {
-        this.consume(event);
-        if (key !== 'ArrowDown' && !outline.querySelector('.active'))
-          this.dispatchNativeKey(outline, 'ArrowDown');
-        this.dispatchNativeKey(outline, key);
-      } else if (event.key === 'Enter' && !outline.querySelector('.active')) {
+    if (context !== 'reader-marks') {
+      const outline = context === 'reader-outline' ? target.closest('#outlineView') : null;
+      const key =
+        action === 'uiNext'
+          ? 'ArrowDown'
+          : action === 'uiPrevious'
+            ? 'ArrowUp'
+            : outline && action === 'uiParent'
+              ? 'ArrowLeft'
+              : outline && action === 'uiChild'
+                ? 'ArrowRight'
+                : outline && action === 'uiConfirm'
+                  ? 'Enter'
+                  : null;
+      if (!key) return false;
+      if (outline && !outline.querySelector('.item')) return true;
+      if (outline && key !== 'ArrowDown' && !outline.querySelector('.active'))
         this.dispatchNativeKey(outline, 'ArrowDown');
-      }
-      return;
+      if (key !== 'Enter' || outline?.querySelector('.active'))
+        this.dispatchNativeKey(outline ?? target, key);
+      return true;
     }
-    const key = event.key;
-    // Zotero's application-role key handling does not reliably activate plain HTML buttons.
-    const actionButton = target.closest<HTMLButtonElement>('button');
-    if (key === 'Enter' && actionButton) {
-      this.consume(event);
-      actionButton.click();
-      return;
+    const marks = target.closest('#zv-reader-marks');
+    if (!marks) return false;
+    const current = target.closest<HTMLButtonElement>('button[data-zv-mark]');
+    if (action === 'uiConfirm') {
+      const button = target.closest<HTMLButtonElement>('button');
+      if (button) button.click();
+      else if (target.tagName === 'SUMMARY') (target as HTMLElement).click();
+      return true;
     }
-    if (key === 'j' || key === 'k' || key === 'G' || key === 'End' || key === 'd') {
-      const buttons = marks!.querySelectorAll<HTMLButtonElement>('button[data-zv-mark]');
-      const current = target.closest<HTMLButtonElement>('button[data-zv-mark]');
-      let index = -1;
-      if (current) {
-        for (let i = 0; i < buttons.length; i += 1)
-          if (buttons[i] === current) {
-            index = i;
-            break;
-          }
-      }
-      if (key === 'j' || key === 'k') {
-        this.consume(event);
-        const next = Math.max(0, Math.min(buttons.length - 1, index + (key === 'j' ? 1 : -1)));
-        buttons.item(next)?.focus();
-      } else if (key === 'G' || key === 'End') {
-        this.consume(event);
-        buttons.item(buttons.length - 1)?.focus();
-      } else if (current) {
-        this.consume(event);
-        this.deleteMark(current.dataset.zvMark ?? '');
-      }
-    } else if (key === 'x') {
-      this.consume(event);
+    if (action === 'uiDelete') {
+      if (current) this.deleteMark(current.dataset.zvMark ?? '');
+      return true;
+    }
+    if (action === 'uiClear') {
       this.deleteMark(null);
-    } else if (/^[a-z0-9]$/.test(key) && key !== 'g' && this.#host.marks.values()[key]) {
-      this.consume(event);
-      this.jumpMark(key);
+      return true;
     }
+    if (!['uiNext', 'uiPrevious', 'uiFirst', 'uiLast'].includes(action)) return false;
+    const buttons = marks.querySelectorAll<HTMLButtonElement>('button[data-zv-mark]');
+    let index = -1;
+    for (let i = 0; i < buttons.length; i += 1)
+      if (buttons[i] === current) {
+        index = i;
+        break;
+      }
+    const next =
+      action === 'uiFirst'
+        ? 0
+        : action === 'uiLast'
+          ? buttons.length - 1
+          : Math.max(0, Math.min(buttons.length - 1, index + (action === 'uiNext' ? 1 : -1)));
+    buttons.item(next)?.focus();
+    return true;
   }
 
   /** Rebinds only Neo DOM/attributes after native React rerenders; never replaces native children. */
@@ -324,22 +390,7 @@ export class ReaderNativeSidebar {
     )
       this.refreshMarks();
     this.#language = this.#host.language();
-    const request = this.#focusRequest;
-    const state = this.#host.reader._internalReader?._state;
-    if (
-      request &&
-      state?.sidebarOpen &&
-      state.sidebarView === 'outline' &&
-      !wrapper.classList.contains('hidden') &&
-      (request === 'marks' || state.outline != null)
-    ) {
-      this.#focusRequest = null;
-      const target =
-        request === 'marks'
-          ? this.#marksRoot.querySelector<HTMLElement>('button[data-zv-mark], summary')
-          : outline;
-      target?.focus();
-    }
+    this.refreshFocus();
   }
 
   refreshMarks(): void {
@@ -383,6 +434,7 @@ export class ReaderNativeSidebar {
     const details = root.ownerDocument.createElement('details');
     details.open = root.querySelector<HTMLDetailsElement>('details')?.open ?? true;
     const summary = root.ownerDocument.createElement('summary');
+    summary.tabIndex = -1;
     summary.textContent = `${t('reader.sidebar.marks', language)} (${entries.length})`;
     details.appendChild(summary);
     if (!entries.length) {
@@ -396,6 +448,7 @@ export class ReaderNativeSidebar {
       row.className = 'zv-mark-row';
       const button = root.ownerDocument.createElement('button');
       button.type = 'button';
+      button.tabIndex = -1;
       button.dataset.zvMark = char;
       const label =
         mark.pageIndex === null
@@ -407,6 +460,7 @@ export class ReaderNativeSidebar {
       button.textContent = `${char} · ${label}${mark.key ? ` · ${t('reader.sidebar.annotationMark', language)}` : ''}`;
       const remove = root.ownerDocument.createElement('button');
       remove.type = 'button';
+      remove.tabIndex = -1;
       remove.dataset.zvDeleteMark = char;
       remove.textContent = '×';
       remove.setAttribute('aria-label', `${t('reader.sidebar.deleteMark', language)} ${char}`);
@@ -434,7 +488,8 @@ export class ReaderNativeSidebar {
 
   deactivate(): void {
     this.#focusRequest = null;
-    this.clearToggleInput();
+    this.#local.deactivate();
+    this.#localContext = null;
   }
 
   dispose(): void {
@@ -442,7 +497,22 @@ export class ReaderNativeSidebar {
     this.#disposed = true;
     this.#focusRequest = null;
     const failure = new CleanupFailure();
-    failure.run(() => this.clearToggleInput());
+    failure.run(() => this.#local.dispose());
+    const document = this.#document;
+    failure.run(() => {
+      if (document && !isDeadObject(document))
+        document.removeEventListener('focusin', this.#onFocus, true);
+    });
+    failure.run(() => {
+      if (document && !isDeadObject(document))
+        document.removeEventListener('pointerdown', this.#onPointer, true);
+    });
+    for (const element of this.#focusableFallbacks)
+      failure.run(() => {
+        if (!isDeadObject(element) && element.getAttribute('tabindex') === '-1')
+          element.removeAttribute('tabindex');
+      });
+    this.#focusableFallbacks.clear();
     const observer = this.#observer;
     this.#observer = null;
     failure.run(() => {
@@ -520,53 +590,6 @@ export class ReaderNativeSidebar {
     }
   }
 
-  private handleToggleKey(event: KeyboardEvent): boolean {
-    const key = keyString(event);
-    if (!key) return false;
-    const bindings = this.#host.bindings();
-    let next = appendInputKey(this.#toggleBuffer, key);
-    let matches = false;
-    let exact: 'outline' | 'marks' | null = null;
-    for (let pass = 0; pass < 2; pass += 1) {
-      for (const binding in bindings) {
-        const action = bindings[binding];
-        if (
-          !binding.startsWith('reader-normal:') ||
-          (action !== 'toggleReaderSidebarOutline' && action !== 'toggleMarksExplorer')
-        )
-          continue;
-        const sequence = binding.slice('reader-normal:'.length);
-        if (!bindingMatchesInputPrefix(sequence, next)) continue;
-        matches = true;
-        if (bindingEqualsInput(sequence, next)) {
-          exact = action === 'toggleMarksExplorer' ? 'marks' : 'outline';
-          break;
-        }
-      }
-      if (matches || !this.#toggleBuffer) break;
-      next = appendInputKey('', key);
-    }
-    if (!matches) {
-      this.clearToggleInput();
-      return false;
-    }
-    this.consume(event);
-    this.clearToggleInput();
-    if (exact) {
-      const pdfWindow = this.#host.activePdfWindow();
-      if (pdfWindow) this.toggle(exact, pdfWindow);
-    } else {
-      this.#toggleBuffer = next;
-      const timer = this.#host.schedule(1200, () => {
-        if (this.#disposed || this.#toggleTimer !== timer) return;
-        this.#toggleBuffer = '';
-        this.#toggleTimer = null;
-      });
-      this.#toggleTimer = timer;
-    }
-    return true;
-  }
-
   /** Ignores native chrome/annotation/thumbnail work and our own projection mutations. */
   private isOutlineMutation(record: MutationRecord): boolean {
     const target = asElement(record.target) ?? record.target.parentElement;
@@ -594,10 +617,64 @@ export class ReaderNativeSidebar {
     return false;
   }
 
-  private clearToggleInput(): void {
-    this.#toggleBuffer = '';
-    this.#host.clearTimer(this.#toggleTimer);
-    this.#toggleTimer = null;
+  /** A request is valid only while its native pane remains open and authoritative. */
+  private refreshFocus(): void {
+    const request = this.#focusRequest;
+    const document = this.#document;
+    if (!document || this.#disposed || isDeadObject(document)) return;
+    const state = this.#host.reader._internalReader?._state;
+    const open = state?.sidebarOpen ?? false;
+    if (this.#observedOpen && (!open || state?.sidebarView !== this.#observedView)) {
+      this.#local.deactivate();
+      this.#localContext = null;
+      this.#host.onInput();
+    }
+    this.#observedOpen = open;
+    this.#observedView = state?.sidebarView;
+    const active = asElement(document.activeElement);
+    if (
+      (!state?.sidebarOpen && (request || this.#localContext)) ||
+      (this.#localContext && (!active || this.contextForTarget(active) !== this.#localContext))
+    ) {
+      this.deactivate();
+      this.#host.onInput();
+      return;
+    }
+    if (!request) return;
+    const view = request === 'marks' ? 'outline' : request;
+    if (state?.sidebarView !== view) {
+      this.deactivate();
+      this.#host.onInput();
+      return;
+    }
+    let target: HTMLElement | null = null;
+    if (request === 'outline' && state.outline != null)
+      target = document.getElementById('outlineView');
+    else if (request === 'marks') {
+      const details = this.#marksRoot?.querySelector<HTMLDetailsElement>('details');
+      if (details) details.open = true;
+      target =
+        this.#marksRoot?.querySelector<HTMLElement>('button[data-zv-mark]') ??
+        this.#marksRoot?.querySelector<HTMLElement>('summary') ??
+        this.#marksRoot;
+    } else if (request === 'annotations')
+      target =
+        document.querySelector<HTMLElement>('#annotationsView .annotation.selected') ??
+        document.querySelector<HTMLElement>('#annotationsView .annotation') ??
+        document.getElementById('annotationsView');
+    else if (request === 'thumbnails')
+      target = document.querySelector<HTMLElement>('#thumbnailsView .thumbnails');
+    if (!target || target.closest('.viewWrapper.hidden')) return;
+    if (
+      !target.hasAttribute('tabindex') &&
+      target.tagName !== 'BUTTON' &&
+      target.tagName !== 'SUMMARY'
+    ) {
+      target.setAttribute('tabindex', '-1');
+      this.#focusableFallbacks.add(target);
+    }
+    this.#focusRequest = null;
+    target.focus();
   }
 
   private consume(event: KeyboardEvent): void {

@@ -20,22 +20,32 @@ This is the detailed, source-oriented reference for Zotero Neo's current command
 
 ## Reading this reference
 
-Each command table gives the canonical `ActionId`, its default binding(s), and the surface/mode where it is executable. Binding defaults are documented per mode; same key sequences can mean different things on different surfaces. Keybinding preferences can add alternatives or unbind defaults. A command being a valid ActionId does not imply that every mode can execute it.
+Command tables give each canonical `ActionId`, its default binding(s), and the exact `BindingContext` where it is executable. The same sequence can mean different things in different contexts. Preferences may add alternatives or unbind defaults; a valid ActionId is not automatically supported everywhere.
 
 “History” means Neo's shared Back/Forward jumplist, not Zotero's native PDF history. `recorded` means an eligible completed discrete location change can be added; it does not promise a node for a no-op, failed, cancelled, or duplicate destination. Continuous movement and transient state changes are not jumps. See [Navigation and the shared jumplist](#navigation-and-the-shared-jumplist) for exact classification and snapshots.
 
 ## Modes, focus, and capabilities
 
-| Scope | Mode | Capability |
-| --- | --- | --- |
-| Reader | Normal (`reader-normal`) | Reading, page/view navigation, annotations, tabs, shared actions, and Normal command palette. |
-| Reader | Select (`reader-select`, internal Visual) | Active PDF text-range refinement and selection actions. |
-| Main | Normal (`main-normal`) | Zotero library tree/items, search, Selection workset, commands and palette. |
-| Main | Select (`main-select`) | Temporary Visual range in the visible Main item rows. |
-| Note | Normal (`note-normal`) | Note motions/operators and supported shared actions. |
-| Note | Insert (`note-insert`) | Native note-editor text input plus the explicit directional pane-focus bindings. |
+The six Reader/Main/Note mode contexts are surface grammar scopes. The remaining eight are focused local contexts, not additional Reader Surface modes.
 
-These mode scopes are distinct from runtime surface capability. Reader Select applies only when an eligible PDF text selection can be owned; Main Select operates on visible item rows, not the collection tree. A binding editor offers only actions in the selected mode's capability catalog. Reader has no Insert scope; comment and native input owners use fixed feature controls. Note Insert retains its explicit directional focus actions. Native editors, chooser inputs, and composition events are not silently converted to Neo Normal commands.
+| Owner | BindingContext | Capability |
+| --- | --- | --- |
+| Reader | `reader-normal` | Reading, page/view and category navigation, annotations, tabs, shared actions, and Normal command palette. |
+| Reader | `reader-select` | Active PDF text-range refinement and selection actions. |
+| Main | `main-normal` | Zotero library tree/items, search, Selection workset, commands and palette. |
+| Main | `main-select` | Temporary Visual range in the visible Main item rows. |
+| Note | `note-normal` | Note motions/operators and supported shared actions. |
+| Note | `note-insert` | Native note-editor text input plus the explicit directional pane-focus bindings. |
+| Reader Outline | `reader-outline` | Four Reader panel-focus actions; local next/previous, parent/child and cancel; `uiConfirm` is supported but unbound by default. |
+| Reader Bookmarks | `reader-marks` | Four Reader panel-focus actions; local next/previous/first/last/confirm/cancel/delete/clear. |
+| Reader Annotations | `reader-annotations` | Four Reader panel-focus actions; local next/previous/cancel. |
+| Reader Thumbnails | `reader-thumbnails` | Four Reader panel-focus actions; local next/previous/cancel. |
+| Picker query field | `picker-input` | Local next/previous/confirm/cancel, preview movement, and next/previous pane actions. Query text and IME remain native. |
+| Picker results | `picker-list` | Picker-input actions plus local query focus. |
+| Plugin Manager filter | `plugins-input` | Only `uiFocusList`; its default `Escape` returns focus to the results. |
+| Plugin Manager results | `plugins-list` | Local next/previous/first/last/page movement, search, cancel, and Plugin Manager operations. |
+
+Reader Select applies only when an eligible PDF text selection can be owned; Main Select operates on visible item rows, not the collection tree. Settings offers only actions in the selected context's capability catalog. Reader has no Insert binding context; comment and native input owners use fixed feature controls. Note Insert retains its explicit directional focus actions. Native editors, chooser inputs, and composition events are not silently converted to Neo Normal commands.
 
 Reader `enterVisual` (`v`) starts/adopts a text selection; `enterInsert` (`i`) starts feature-owned comment input when eligible rather than entering another Reader mode. Opening it normalizes Select to Normal; other split views retain Surface grammar. Settings gates Select and Normal selected-annotation entry. When comment entry is disabled, `i` starts a Reader-wide native input owner until Escape. Main `mainEnterSelect` (`v`) starts a temporary item-row range, and its finish/cancel actions end it. Note `enterInsert` still begins Note Insert; Escape is its default exit. Note editor Vim mode remains independently configurable.
 
@@ -55,14 +65,16 @@ Default `DEFAULT_PREFIX_BINDINGS` are non-executing namespaces; they accept only
 
 In Reader Normal, Main Normal, and Note Normal, `:` runs `openCommandPalette`. The palette is a query-only command list from the actions executable in that current context, including supported actions with no binding; it omits `openCommandPalette` itself. It does not parse counts, arguments, Ex commands, aliases, external registrations, or provider-local command grammars. A count before `:` can open it, but the selected action runs once with its ordinary semantics. `↑/↓`, `j/k` (outside query focus), and `Ctrl+j/Ctrl+k` select; Enter runs; Escape closes. It returns execution to the originating context. The palette's action set is broader than the defaults and is constrained to the executor's current capability; an action unavailable in this context is absent, not merely unbound.
 
-Bindings are configurable by mode, case-sensitive, and may map several sequences to one action. An explicit removal persists as unbound. Duplicate complete sequences in one mode are rejected; prefix collisions are permitted with a warning and may incur the sequence timeout. The Prefix Guide reflects the active resolved keymap, including remaps. Apply is staged in Settings; invalid or mode-incompatible rows prevent Apply. See [customising bindings in the User Guide](USER_GUIDE.md#customising-keybindings).
+The Settings shortcut browser is action- and context-centric. Filter by action group or `BindingContext`; search matches localized labels, canonical ActionIds, current keys, default keys, groups, and contexts. Groups are Navigation, Reader, Annotations, Selection, Notes, Library, Interface, Plugins, and Commands. Results identify **Default**, **Custom**, or **Unbound**, including supported actions with no default.
 
-Distinctions:
+Choose an action and context to add, record, unbind, or reset its bindings; per-action changes preserve unrelated rows. **Add** and **Record** are deliberate controls. While recording, `Enter` and `Escape` are key tokens, not finish/cancel commands; use **Done** or **Cancel**. Edits are staged until **Apply**. Duplicate bindings, unsupported action/context pairs, and reserved native keys block Apply. Strict-prefix pairs are allowed with a warning. Existing incompatible orphan rows are **Delete**-only, not inert or recordable.
 
-1. **Bound by default:** present in `DEFAULT_BINDINGS` / `NOTE_LOCAL_DEFAULT_BINDINGS`; tables below list each one.
-2. **Supported but unbound:** included in an executor capability and reachable via the context's Command Palette (or the indicated temporary surface), but no shipped binding exists. Examples include Reader Normal `showInLibrary`, Reader Normal `scrollBottom`, Reader Select `underlineSelection`, and Note Normal `showInLibrary`.
-3. **Not supported in that mode:** absent from that mode's capability set. A binding cannot make an unsupported action execute there. `NOTE_LOCAL_DEFAULT_BINDINGS` does not mean every Note action is global or bound in other modes.
-4. **Temporary grammar / native input:** a chooser, the Reader Bookmarks group, Selection Panel, Plugin Manager, Settings, Flash, or an editor may own keys while active; these controls are not ordinary action bindings.
+Native shortcut records are independent, read-only, context-labeled, and shown only when the group filter is **All groups**. Reservations apply at every token in a sequence. Native query editing includes `<C-Insert>` and `<S-Insert>`; Outline `Enter` / `Return`, including modified Enter, is exclusively host-owned. `uiConfirm` is supported in Outline but has no default and can be remapped to another non-reserved key. Native text entry and IME remain host-authoritative. The result/native regions are bounded and **Apply** stays reachable before them; leaving the recorder restores the connected edited-action summary or, if filtered away, focus to Apply or search.
+
+1. **Bound by default:** present in `DEFAULT_BINDINGS` / `NOTE_LOCAL_DEFAULT_BINDINGS`; the complete index below lists every shipped context/sequence pair.
+2. **Supported but unbound:** included in the selected context's executor capability but with no shipped binding; the ActionId index distinguishes this from unsupported actions.
+3. **Not supported in that context:** absent from that context's capability set. A binding cannot make an unsupported action executable there.
+4. **Native or feature-owned input:** native arrows, text editing, IME, and non-configurable editor behavior remain owned by Zotero/browser or the feature. Configurable Neo local controls are ActionIds in the exact local context catalogs, not a second private grammar.
 
 ## Navigation and the shared jumplist
 
@@ -142,7 +154,11 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place current page at top/center/bottom of viewport; view position only, no history. `scrollBottom` has no default sequence. |
 | `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's native PDF find bar; `n/N` each ask Zotero for one next/previous result regardless of count. A result may complete without an entry; only a qualifying owned native hard receipt records under the central policy. Query editing is not navigation history. |
 | `followLink` | `f` | Start visible PDF link hints; count is ignored. Hint activation may navigate internal/citation links; recording requires a qualifying owned exact-view native hard receipt. External links open outside Neo Reader history. Escape cancels; see [link hints](#temporary-surfaces-and-chooser-grammars). |
-| `prevAnnotation` / `nextAnnotation` | `[` / `]` | Select previous/next annotation, wrapping at the end; count is ignored. Selection alone can complete without an entry; recording requires a qualifying owned native hard receipt. |
+| `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse existing authored Outline headings, including Sections and Subsections, in document order with wrap; no PDF text scan. |
+| `prevFigure` / `nextFigure` | `[f` / `]f` | Traverse only Figure targets present in the existing authored Outline; no extraction or generated targets. |
+| `prevTable` / `nextTable` | `[t` / `]t` | Traverse only Table targets present in the existing authored Outline; no extraction or generated targets. |
+| `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | Select previous/next annotation, wrapping at the end; count is ignored. Selection alone can complete without an entry; recording requires a qualifying owned native hard receipt. |
+| `prevBookmark` / `nextBookmark` | `[m` / `]m` | Navigate Reader marks in document order with wrap, preserving existing mark-jump and managed-final history behavior. |
 | `editAnnotation` | `<Enter>`, `<Return>` | Open/focus the selected annotation comment's feature-owned input, displaying Insert; not jumplist. |
 | `deleteAnnotation` | `dd` | Delete selected annotation after confirmation; cancellation leaves it unchanged. Not a navigation entry. |
 | `yankAnnotation` / `yankAnnotationComment` | `y` / `Y` | Copy selected annotation text / comment. No target means no copy. |
@@ -150,7 +166,7 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | Filter/clear annotation sidebar color filter; not history. |
 | `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, open eligible comment input, or leave the owned interaction. Settings gate Select and comment entry; disabled comment/Insert retains bare `i` native-pass-through compatibility. `exitMode` is unbound in Reader Normal. |
 | `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus nearest supported direction/split/context pane; no wrap. Missing target leaves focus unchanged. |
-| `toggleReaderSidebarOutline` | `<Space>e` | Toggle Zotero's native Reader sidebar in Outline view. Opening/closing the panel is not a history jump; qualifying native Outline destinations use the existing `reader-native.hard` observation. |
+| `focusReaderOutline` / `focusReaderMarks` / `focusReaderAnnotations` / `focusReaderThumbnails` | `<Space>ro` / `<Space>rm` / `<Space>ra` / `<Space>rt` | Open or focus Outline, Bookmarks, Annotations, or Thumbnails. Repeating a command leaves that surface focused rather than toggling it closed; the same focus actions are available from every Reader local panel context. |
 | `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle Reader split layout; layout is not part of jumplist snapshot. |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared item/note chooser. A successful confirmed destination can record under the central settled-change rule; chooser activity itself does not. Escape cancels. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Choose open tab, cycle tabs, or close current tab. Successful chooser/H/L changes record; H/L counts are ignored and each cycles once. Closing alone is not Back and does not delete older entries. |
@@ -159,9 +175,10 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `addTag` / `removeTag` / `addToCollection` / `removeFromCollection` | `<Space>ta` / `<Space>tr` / `<Space>ca` / `<Space>cr` | Resolve active Reader bibliographic item and run chooser operation. Explicit user data operation, not a jump; failure/revalidation cancels whole action. |
 | `mainYankCitekey` | `<Space>yy` | Copy active Reader item's citekey; does not use Main Selection. |
 | `showInLibrary` | **Unbound** | Show active Reader item in Main Library; supported from Reader Normal palette. A successful changed reveal is eligible under the central settled-change rule. |
-| `focusReaderSidebar` | **Unbound** | Focus/reopen the native Reader sidebar's Outline view; does not itself navigate. |
+| `toggleReaderSidebarOutline` | **Unbound** | Explicit toggle of Zotero's native Reader Outline sidebar; it has no shipped shortcut. |
+| `toggleMarksExplorer` | **Unbound** | Explicit toggle of the Bookmarks view; it has no shipped shortcut. |
 
-Other Reader actions are Select-only; see [Reader Select](#reader-select-and-annotation-actions). Actual split focus direction may target another pane type, including a Note context pane; it does not promise pane creation.
+Reader Select actions are listed in [Reader Select](#reader-select-and-annotation-actions). Actual split focus direction may target another pane type, including a Note context pane; it does not promise pane creation.
 Reader Normal counts are action-specific: step scroll, half/full viewport, `h/l` page turns, zoom in/out, and history traverse/repeat as their rows state; numeric `gg/G` is a single page target when supported. Search, annotation, tab-cycle, pane/layout, chooser, and other Reader Normal actions run once. Reader Select ignores counts for all its binding actions.
 
 ## Reader Select and annotation actions
@@ -275,7 +292,7 @@ Note counts are command-specific: counts repeat `h/l/j/k/w/b/0/$` caret motions 
 
 ### Shared chooser
 
-`ff`, `fc`, `fn`, `,`, tag actions, and collection actions invoke the shared chooser as described in their owning surface tables. It owns query text, fuzzy ranking, row focus, preview, confirmation, cancellation, and IME. `↑/↓` move the highlighted row; `j/k` do so when query input is not focused; `Ctrl+j/n` move down and `Ctrl+k/p` move up; `Ctrl+d/u` scroll the preview. `/` focuses/selects the query when focus is outside it. Enter confirms; Shift+Enter requests the alternate open-in-window presentation only when supported; Escape closes/cancels. Typing edits the focused query. Mouse row selection requires the preference to enable it; hover alone is inert. A chooser only resolves an action target; it does not add provider-local commands.
+`ff`, `fc`, `fn`, `,`, tag actions, and collection actions invoke the shared chooser as described in their owning surface tables. Neo-owned controls use `picker-input` while the query field owns focus and `picker-list` while results are focused. Defaults include Up/Down, `Ctrl+j/n` and `Ctrl+k/p` for movement, `Ctrl+d/u` for preview scrolling, Enter/Shift+Enter to confirm, and Escape to cancel; `j/k` and `/` are additionally bound in `picker-list`, with `/` focusing the query. `uiNextPane` / `uiPreviousPane` are supported in `picker-input` but unbound by default. Query typing and IME remain browser/Gecko-owned; native editing shortcuts remain separate and read-only. Mouse row selection requires the preference to enable it; hover alone is inert. A chooser only resolves an action target; it does not add provider-local command grammars.
 
 Tag behavior is operation-specific: Add Tag may expose an explicit create candidate; Remove Tag lists tags assigned to at least one target. Main `tf` toggles one Zotero-native tag filter; `tc` clears filters without a chooser. With a configured separator, a tag query is refined segment by segment: a non-terminal virtual namespace is not a tag mutation, and Enter on that candidate replaces the query with the namespace path while keeping the chooser open. A terminal tag is the candidate for the invoking action. Paths are a presentation over flat Zotero strings and never rewrite tag data. Collection actions require same-library targets, re-resolve before confirmation, and skip already-present/absent membership. A changed target/library or cancelled chooser refuses the whole operation.
 
@@ -287,19 +304,17 @@ Reader Normal `f` enumerates visible internal, citation, and external PDF links 
 
 ### Native Reader Outline and Bookmarks
 
-`<Space>e` opens the native Reader sidebar in Outline view or closes it when that view is already open. In the native Outline, `j/k/h/l` forward the corresponding arrow keys to Zotero, preserving native immediate row navigation. Native `Enter` expands/collapses a branch or opens its URL; `Escape` closes the sidebar and focuses the active PDF. Outline has no hint-entry grammar or Neo select-then-confirm step. A qualifying native Outline destination is observed through `reader-native.hard`; opening or closing the panel does not record a location.
+Reader Normal `<Space>ro`, `<Space>rm`, `<Space>ra`, and `<Space>rt` directly open or focus Outline, Bookmarks, Annotations, and Thumbnails. Repeating one leaves its target focused; it does not toggle the sidebar closed. The same four panel-focus actions are available in each Reader local panel context.
 
-For Outline entries, Neo decorates native rows without changing their titles or numbering. The separate child count is the number of direct Outline children, not generated heading numbering.
+In `reader-outline`, Neo defaults `j/k` to immediate native row movement and `h/l` to parent/child; Escape is the local cancel default. Zotero's arrows, Tab/Shift+Tab, and Enter/Return remain native, including modified Enter. `uiConfirm` is supported in this context but unbound by default and can use another non-reserved key. In `reader-marks`, defaults are `j/k`, `gg/G`, Enter, Escape, `d`, and `x`; in `reader-annotations` and `reader-thumbnails`, defaults are `j/k` and Escape. These local Neo controls are configurable in their own contexts.
 
-Display categories are conservative inferences from title and hierarchy: a one-component number indicates Section, a dotted number indicates Subsection; otherwise nested rows infer Subsection and a root row with children infers Section. Explicitly numbered Figure/Fig/图 and Table/表 titles infer Figure or Table; unknown root leaves remain unclassified. These labels do not verify document semantics, and Neo does not extract figures or tables from PDF full text.
-
-The Bookmarks group is appended inside Outline; Zotero's native Annotations and Thumbnails views remain independent.
+Neo decorates existing native Outline rows without changing titles or numbering; the separate child count is the number of direct Outline children. Display categories are conservative inferences from title and hierarchy: a one-component number indicates Section, a dotted number indicates Subsection; otherwise nested rows infer Subsection and a root row with children infers Section. Explicitly numbered Figure/Fig/图 and Table/表 titles infer Figure or Table; unknown root leaves remain unclassified. These labels do not verify document semantics. Heading, Figure, and Table navigation uses only existing authored Outline entries; Neo does not scan PDF text or generate missing targets. Zotero's native Annotations and Thumbnails views remain independent sidebar surfaces.
 
 ### Marks and Bookmarks group
 
-The marks grammar is Reader-owned and is not represented by `ActionId` entries. `m` then a lowercase letter or digit sets a viewport mark; backtick then a letter/digit jumps; `dm` then a mark deletes one; `dM` deletes all; `<Space>m` focuses the Bookmarks group in native Outline. Repeating `<Space>m` while Bookmarks has focus closes the sidebar. The mark character after the prefix is a label, not a count (`4j` counts movement; `` `1 `` jumps to mark `1`). Mark jumps restore the marked viewport and can restore selected annotation association; successful jumps record one completed excursion, not each intermediate scroll.
+The mark creation/jump grammar remains Reader-owned and is not represented by `ActionId` entries: `m` then a lowercase letter or digit sets a viewport mark; backtick then a letter/digit jumps; `dm` then a mark deletes one; `dM` deletes all. Reader Normal `[m` / `]m` navigates marks in document order with wrap. `<Space>rm` directly opens or focuses the Bookmarks group; repeating it does not close the sidebar. Mark jumps restore the marked viewport and can restore selected-annotation association; successful jumps record one managed-final excursion, not each intermediate scroll.
 
-Inside Bookmarks, `j/k` move, `G` or End goes to the last mark, Enter or click jumps, `d` deletes the selected mark, and `x` deletes all marks. Assigned labels jump directly except `j`, `k`, `g`, `d`, and `x`, which are group controls; there is no Home/gg shortcut and uppercase letters are not labels. Marks remain in the persisted ReaderMarks map and are not PDF annotations; Preferences controls persistence.
+The Bookmark list uses configurable `reader-marks` actions. Defaults are `j/k` to move, `gg/G` to reach first/last, Enter to jump, `d` to delete the selected mark, and `x` to clear marks. Assigned mark labels jump directly except `j`, `k`, `g`, `d`, and `x`, which are group controls; Home/End are not default list commands, and uppercase letters are not mark labels. These remain Reader marks, not PDF annotations; persistence follows the Marks preference.
 
 ### Annotation comment editor
 
@@ -327,13 +342,13 @@ Selection Actions (`a`/Enter in Reader Select) offers capture-to-note, underline
 
 Its fixed controls are `j/k` or arrows to move, `Home`/`g` for first, `End`/`G` for last, and `1–9` or Enter to run. A result uses `y` to copy and Enter/Escape to close. Ordinary Escape closes only the palette and preserves Reader Select. Composing keys remain native without cancelling, navigating, or running an action. Key capture belongs to the PDF pane that opened the palette; ordinary input in another pane closes it and yields to that pane. Closing the palette or its owning view invalidates late results and focus/status work.
 
-Plugin Manager (`<Space>pp`) is persistent, unlike a chooser. It uses `j/k` or arrows, `Ctrl+d/u`, `gg/G`, `/` filter, `r` reload, Escape/`q` close. `e/d` enable/disable only if AddonManager grants that operation; `p` opens registered plugin settings; `o` opens homepage; `R` opens a mapped GitHub README; `L` opens repository commit history. Neo cannot disable itself through its own panel. Zotero AddonManager remains authoritative.
+Plugin Manager (`<Space>pp`) is persistent, unlike a chooser. Its Neo list actions are configurable in `plugins-list`; defaults are `j` / Down and `k` / Up for movement, `gg` / Home and `G` / End for first/last, `Ctrl+d/u` for page movement, `/` for filtering, and `Escape` / `q` to close. `r` reloads; `e/d` enable/disable only if AddonManager grants that operation; `p` opens registered plugin settings; `o` opens the homepage; `R` opens a mapped GitHub README; `L` opens repository commit history. `plugins-input` supports only `uiFocusList`, defaulted to Escape to return focus to results; ordinary filter text and IME remain native. Neo cannot disable itself through its own panel. Zotero AddonManager remains authoritative.
 
 Settings (`<Space>ps`) is Neo-owned, with binding edits staged until Apply. Main Selection Panel is opened through `<Space>ss`; `j/k` move through entries, `Home`/`gg` go first, `End`/`G` go last, `Enter` reveals the selected item, `x` removes it from persistent Neo Selection, `c` clears that Selection, `r` refreshes, and Escape/`q` closes. Its list distinguishes visible, hidden, and unavailable items; an unavailable item cannot be revealed. Reveal is queued and the panel closes only after successful/current Library selection; failed reveal leaves it open. Selection Panel controls inspect/reveal/remove workset membership; they are not batch actions on Zotero items.
 
 ## Action ID index
 
-This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every `NOTE_ACTION_ID`. Defaults are the only shipped shortcuts; **unbound** means no shipped binding. Availability names identify the executor capability, not a guarantee a target exists at runtime. See the detailed mode tables above for semantics.
+This index covers all 215 canonical `ActionId`s in `ACTION_IDS`, including every `NOTE_ACTION_ID`. Defaults are the only shipped shortcuts; **unbound** means no shipped binding. Availability names identify the exact executor contexts, not a guarantee a target exists at runtime. See the detailed context and grammar tables above.
 
 | ActionId | Default binding(s) | Capability / principal effect |
 | --- | --- | --- |
@@ -360,8 +375,16 @@ This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every
 | `openSearch` | Reader/Main Normal `/` | Reader search; Main native search/local-find dispatcher |
 | `findNext` | Reader/Main Normal `n` | Reader/Main search result or Main local find |
 | `findPrevious` | Reader/Main Normal `N` | Reader/Main search result or Main local find |
-| `prevAnnotation` | Reader Normal `[` | Reader annotation navigation |
-| `nextAnnotation` | Reader Normal `]` | Reader annotation navigation |
+| `prevAnnotation` | Reader Normal `[a` | Reader annotation navigation |
+| `nextAnnotation` | Reader Normal `]a` | Reader annotation navigation |
+| `prevHeading` | Reader Normal `[s` | Previous Section/Subsection in existing authored Outline; document order and wrap |
+| `nextHeading` | Reader Normal `]s` | Next Section/Subsection in existing authored Outline; document order and wrap |
+| `prevFigure` | Reader Normal `[f` | Previous existing authored Figure Outline entry; no PDF scanning |
+| `nextFigure` | Reader Normal `]f` | Next existing authored Figure Outline entry; no PDF scanning |
+| `prevTable` | Reader Normal `[t` | Previous existing authored Table Outline entry; no PDF scanning |
+| `nextTable` | Reader Normal `]t` | Next existing authored Table Outline entry; no PDF scanning |
+| `prevBookmark` | Reader Normal `[m` | Previous Reader mark by document position; wraps and preserves managed-final jump behavior |
+| `nextBookmark` | Reader Normal `]m` | Next Reader mark by document position; wraps and preserves managed-final jump behavior |
 | `clearSearch` | Reader Normal `<Esc>` | Reader search clear/close |
 | `enterVisual` | Reader Normal `v` | Reader Select entry |
 | `openSelectionActions` | Reader Select `a`, `<Enter>`, `<Return>` | Selection Actions |
@@ -464,9 +487,37 @@ This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every
 | `focusReaderSplitRight` | Reader/Note/Main Normal and Note Insert `<C-l>` | Directional pane focus |
 | `toggleReaderSplitHorizontal` | Reader Normal `<Space>-` | Toggle horizontal split |
 | `toggleReaderSplitVertical` | Reader Normal <code>&lt;Space&gt;&#124;</code> | Toggle vertical split |
-| `toggleReaderSidebarOutline` | Reader Normal `<Space>e` | Toggle Zotero's native Reader sidebar in Outline view |
-| `focusReaderSidebar` | **unbound** | Focus/reopen native Outline view in the Reader sidebar |
-| `toggleMarksExplorer` | Reader Normal `<Space>m` | Focus Bookmarks in native Outline; repeat while focused to close the sidebar |
+| `toggleReaderSidebarOutline` | **Unbound** | Explicit Reader Outline sidebar toggle; no shipped shortcut. |
+| `focusReaderOutline` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ro` | Open or focus Outline; repeating leaves it focused. |
+| `toggleMarksExplorer` | **Unbound** | Explicit Bookmarks-view toggle; no shipped shortcut. |
+| `focusReaderMarks` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rm` | Open or focus Bookmarks; repeating leaves it focused. |
+| `focusReaderAnnotations` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ra` | Open or focus Annotations; repeating leaves it focused. |
+| `focusReaderThumbnails` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rt` | Open or focus Thumbnails; repeating leaves it focused. |
+| `uiNext` | Reader Outline / Marks / Annotations / Thumbnails `j`; Picker Input `<C-j>`, `<C-n>`, `<Down>`; Picker List those plus `j`; Plugins List `j`, `<Down>` | Configurable next-item action in the listed contexts only. |
+| `uiPrevious` | Reader Outline / Marks / Annotations / Thumbnails `k`; Picker Input `<C-k>`, `<C-p>`, `<Up>`; Picker List those plus `k`; Plugins List `k`, `<Up>` | Configurable previous-item action in the listed contexts only. |
+| `uiFirst` | Reader Marks `gg`; Plugins List `gg`, `<Home>` | Configurable first-item action in the listed contexts only. |
+| `uiLast` | Reader Marks `G`; Plugins List `G`, `<End>` | Configurable last-item action in the listed contexts only. |
+| `uiParent` | Reader Outline `h` | Move to the parent in `reader-outline`. |
+| `uiChild` | Reader Outline `l` | Move to the child in `reader-outline`. |
+| `uiConfirm` | Reader Marks `<Enter>`; Picker Input/List `<Enter>`, `<S-Enter>`; Reader Outline **unbound** | Confirm in supported local contexts; Outline has no default because Enter/Return is host-owned. |
+| `uiCancel` | Reader Outline/Marks/Annotations/Thumbnails `<Esc>`; Picker Input/List `<Esc>`; Plugins List `<Esc>`, `q` | Cancel or return in these local contexts; not supported in `plugins-input`. |
+| `uiDelete` | Reader Marks `d` | Delete the selected bookmark in `reader-marks`. |
+| `uiClear` | Reader Marks `x` | Clear bookmarks in `reader-marks`. |
+| `uiSearch` | Picker List `/`; Plugins List `/` | Focus the query/filter from the results context. |
+| `uiFocusList` | Plugins Input `<Esc>` | Return from the filter field to results; the only `plugins-input` ActionId. |
+| `uiPreviewDown` | Picker Input/List `<C-d>` | Scroll the chooser preview down. |
+| `uiPreviewUp` | Picker Input/List `<C-u>` | Scroll the chooser preview up. |
+| `uiNextPane` | **Unbound** | Supported in `picker-input`; no default shortcut. |
+| `uiPreviousPane` | **Unbound** | Supported in `picker-input`; no default shortcut. |
+| `uiPageDown` | Plugins List `<C-d>` | Page down in the Plugin Manager results. |
+| `uiPageUp` | Plugins List `<C-u>` | Page up in the Plugin Manager results. |
+| `pluginsRefresh` | Plugins List `r` | Refresh Plugin Manager state. |
+| `pluginsEnable` | Plugins List `e` | Enable when AddonManager permits. |
+| `pluginsDisable` | Plugins List `d` | Disable when AddonManager permits. |
+| `pluginsPreferences` | Plugins List `p` | Open registered plugin preferences. |
+| `pluginsHomepage` | Plugins List `o` | Open the plugin homepage. |
+| `pluginsReadme` | Plugins List `R` | Open the mapped GitHub README. |
+| `pluginsGitLog` | Plugins List `L` | Open the mapped GitHub commit history. |
 | `noteMoveLeft` | Note Normal `h` | Note caret motion |
 | `noteMoveDown` | Note Normal `j` | Note caret motion |
 | `noteMoveUp` | Note Normal `k` | Note caret motion |
@@ -519,9 +570,9 @@ This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every
 
 ## Default binding index
 
-The table is the complete default lookup: each canonical `mode:sequence` is paired with its exact `ActionId`. It contains all 239 entries from `DEFAULT_BINDINGS`, including the spread `NOTE_LOCAL_DEFAULT_BINDINGS`; saved user remaps can replace defaults.
+The table is the complete default lookup: each canonical `BindingContext:sequence` is paired with its exact `ActionId`. It contains all 329 entries from `DEFAULT_BINDINGS`, including the spread `NOTE_LOCAL_DEFAULT_BINDINGS`; saved user remaps can replace defaults.
 
-| Canonical binding | ActionId |
+| Canonical `BindingContext:sequence` | ActionId |
 | --- | --- |
 | `reader-normal:j` | `scrollDown` |
 | `reader-normal:k` | `scrollUp` |
@@ -550,8 +601,16 @@ The table is the complete default lookup: each canonical `mode:sequence` is pair
 | `reader-normal::` | `openCommandPalette` |
 | `reader-normal:n` | `findNext` |
 | `reader-normal:N` | `findPrevious` |
-| `reader-normal:[` | `prevAnnotation` |
-| `reader-normal:]` | `nextAnnotation` |
+| `reader-normal:[s` | `prevHeading` |
+| `reader-normal:]s` | `nextHeading` |
+| `reader-normal:[f` | `prevFigure` |
+| `reader-normal:]f` | `nextFigure` |
+| `reader-normal:[t` | `prevTable` |
+| `reader-normal:]t` | `nextTable` |
+| `reader-normal:[a` | `prevAnnotation` |
+| `reader-normal:]a` | `nextAnnotation` |
+| `reader-normal:[m` | `prevBookmark` |
+| `reader-normal:]m` | `nextBookmark` |
 | `reader-normal:<Enter>` | `editAnnotation` |
 | `reader-normal:<Return>` | `editAnnotation` |
 | `reader-normal:dd` | `deleteAnnotation` |
@@ -577,7 +636,10 @@ The table is the complete default lookup: each canonical `mode:sequence` is pair
 | `reader-normal:<C-k>` | `focusReaderSplitUp` |
 | `reader-normal:<C-l>` | `focusReaderSplitRight` |
 | `reader-normal:<Esc>` | `clearSearch` |
-| `reader-normal:<Space>e` | `toggleReaderSidebarOutline` |
+| `reader-normal:<Space>ro` | `focusReaderOutline` |
+| `reader-normal:<Space>rm` | `focusReaderMarks` |
+| `reader-normal:<Space>ra` | `focusReaderAnnotations` |
+| `reader-normal:<Space>rt` | `focusReaderThumbnails` |
 | `reader-normal:<Space>-` | `toggleReaderSplitHorizontal` |
 | `reader-normal:<Space>\|` | `toggleReaderSplitVertical` |
 | `reader-normal:<Space>ff` | `findAllItems` |
@@ -592,7 +654,6 @@ The table is the complete default lookup: each canonical `mode:sequence` is pair
 | `reader-normal:<Space>pp` | `managePlugins` |
 | `reader-normal:<Space>ps` | `openNeoSettings` |
 | `reader-normal:<Space>yy` | `mainYankCitekey` |
-| `reader-normal:<Space>m` | `toggleMarksExplorer` |
 | `reader-select:s` | `flashText` |
 | `reader-select:a` | `openSelectionActions` |
 | `reader-select:<Enter>` | `openSelectionActions` |
@@ -761,6 +822,87 @@ The table is the complete default lookup: each canonical `mode:sequence` is pair
 | `note-insert:<C-j>` | `focusReaderSplitDown` |
 | `note-insert:<C-k>` | `focusReaderSplitUp` |
 | `note-insert:<C-l>` | `focusReaderSplitRight` |
+| `reader-outline:<Space>ro` | `focusReaderOutline` |
+| `reader-outline:<Space>rm` | `focusReaderMarks` |
+| `reader-outline:<Space>ra` | `focusReaderAnnotations` |
+| `reader-outline:<Space>rt` | `focusReaderThumbnails` |
+| `reader-outline:j` | `uiNext` |
+| `reader-outline:k` | `uiPrevious` |
+| `reader-outline:h` | `uiParent` |
+| `reader-outline:l` | `uiChild` |
+| `reader-outline:<Esc>` | `uiCancel` |
+| `reader-marks:<Space>ro` | `focusReaderOutline` |
+| `reader-marks:<Space>rm` | `focusReaderMarks` |
+| `reader-marks:<Space>ra` | `focusReaderAnnotations` |
+| `reader-marks:<Space>rt` | `focusReaderThumbnails` |
+| `reader-marks:j` | `uiNext` |
+| `reader-marks:k` | `uiPrevious` |
+| `reader-marks:gg` | `uiFirst` |
+| `reader-marks:G` | `uiLast` |
+| `reader-marks:<Enter>` | `uiConfirm` |
+| `reader-marks:<Esc>` | `uiCancel` |
+| `reader-marks:d` | `uiDelete` |
+| `reader-marks:x` | `uiClear` |
+| `reader-annotations:<Space>ro` | `focusReaderOutline` |
+| `reader-annotations:<Space>rm` | `focusReaderMarks` |
+| `reader-annotations:<Space>ra` | `focusReaderAnnotations` |
+| `reader-annotations:<Space>rt` | `focusReaderThumbnails` |
+| `reader-annotations:j` | `uiNext` |
+| `reader-annotations:k` | `uiPrevious` |
+| `reader-annotations:<Esc>` | `uiCancel` |
+| `reader-thumbnails:<Space>ro` | `focusReaderOutline` |
+| `reader-thumbnails:<Space>rm` | `focusReaderMarks` |
+| `reader-thumbnails:<Space>ra` | `focusReaderAnnotations` |
+| `reader-thumbnails:<Space>rt` | `focusReaderThumbnails` |
+| `reader-thumbnails:j` | `uiNext` |
+| `reader-thumbnails:k` | `uiPrevious` |
+| `reader-thumbnails:<Esc>` | `uiCancel` |
+| `picker-input:<C-j>` | `uiNext` |
+| `picker-input:<C-n>` | `uiNext` |
+| `picker-input:<Down>` | `uiNext` |
+| `picker-input:<C-k>` | `uiPrevious` |
+| `picker-input:<C-p>` | `uiPrevious` |
+| `picker-input:<Up>` | `uiPrevious` |
+| `picker-input:<C-d>` | `uiPreviewDown` |
+| `picker-input:<C-u>` | `uiPreviewUp` |
+| `picker-input:<Enter>` | `uiConfirm` |
+| `picker-input:<S-Enter>` | `uiConfirm` |
+| `picker-input:<Esc>` | `uiCancel` |
+| `picker-list:<C-j>` | `uiNext` |
+| `picker-list:<C-n>` | `uiNext` |
+| `picker-list:<Down>` | `uiNext` |
+| `picker-list:<C-k>` | `uiPrevious` |
+| `picker-list:<C-p>` | `uiPrevious` |
+| `picker-list:<Up>` | `uiPrevious` |
+| `picker-list:<C-d>` | `uiPreviewDown` |
+| `picker-list:<C-u>` | `uiPreviewUp` |
+| `picker-list:<Enter>` | `uiConfirm` |
+| `picker-list:<S-Enter>` | `uiConfirm` |
+| `picker-list:<Esc>` | `uiCancel` |
+| `picker-list:j` | `uiNext` |
+| `picker-list:k` | `uiPrevious` |
+| `picker-list:/` | `uiSearch` |
+| `plugins-input:<Esc>` | `uiFocusList` |
+| `plugins-list:<Esc>` | `uiCancel` |
+| `plugins-list:q` | `uiCancel` |
+| `plugins-list:/` | `uiSearch` |
+| `plugins-list:j` | `uiNext` |
+| `plugins-list:<Down>` | `uiNext` |
+| `plugins-list:k` | `uiPrevious` |
+| `plugins-list:<Up>` | `uiPrevious` |
+| `plugins-list:gg` | `uiFirst` |
+| `plugins-list:<Home>` | `uiFirst` |
+| `plugins-list:G` | `uiLast` |
+| `plugins-list:<End>` | `uiLast` |
+| `plugins-list:<C-d>` | `uiPageDown` |
+| `plugins-list:<C-u>` | `uiPageUp` |
+| `plugins-list:r` | `pluginsRefresh` |
+| `plugins-list:e` | `pluginsEnable` |
+| `plugins-list:d` | `pluginsDisable` |
+| `plugins-list:p` | `pluginsPreferences` |
+| `plugins-list:o` | `pluginsHomepage` |
+| `plugins-list:R` | `pluginsReadme` |
+| `plugins-list:L` | `pluginsGitLog` |
 
 
 ## Neovim comparison and examples

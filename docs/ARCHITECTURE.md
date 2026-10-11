@@ -23,38 +23,41 @@ is tracked in [PR #113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
 `src/input/` owns key normalization, semantic key-token parsing, sequence/count matching,
 resolved bindings, Key Guide projection, and composition boundaries. Named keys and modifier
 chords are matched as tokens rather than raw string prefixes, so `e` is distinct from `enter`
-and `escape`. The shared input engine is a
-pure reducer; Main and Reader still own event gating, timers, focus, and action
-execution.
+and `escape`. The shared input engine is a pure reducer; each host consumer owns
+event qualification/gating, timers, focus, and action execution. Sidebar, Picker,
+and Plugin Manager local controls reuse the common binding runtime.
 
-Configurable binding scopes are explicit about both surface and interaction
-state:
+The runtime has 14 exact `BindingContext` identifiers. Six established contexts are
+`reader-normal`, `reader-select`, `main-normal`, `main-select`, `note-normal`, and
+`note-insert`; eight local interaction contexts are `reader-outline`, `reader-marks`,
+`reader-annotations`, `reader-thumbnails`, `picker-input`, `picker-list`,
+`plugins-input`, and `plugins-list`. A binding context selects the owner and its
+capability set; it is not itself a Reader or Main Surface mode, and there is no
+generic Reader-sidebar context.
 
-```text
-reader-normal
-reader-select
-main-normal
-main-select
-note-normal
-note-insert
-```
+Reader Surface state remains `normal | visual`, mapped at the input boundary to
+`reader-normal` / `reader-select`. Contexts such as `main-select` and `note-insert`
+name the owner-specific binding contract rather than create parallel domain state.
+Annotation-comment input belongs to `ReaderCommentEditor` for its captured PDF
+view; disabled-editor native passthrough belongs separately to `ReaderNativeInput`
+for that Reader. Neither adds a Surface mode or configurable binding context. The
+retired `reader-insert` scope has no runtime alias.
 
-Reader Surface state is `normal | visual`, mapped to `reader-normal` / `reader-select`
-at the input boundary. Annotation-comment input is owned by `ReaderCommentEditor`
-for its captured PDF view; disabled-editor native passthrough is owned separately by
-`ReaderNativeInput` for that Reader. Neither adds a Surface mode or configurable
-binding context. The retired `reader-insert` scope has no runtime alias.
-
-Historical `normal | visual | main` binding keys migrate to their canonical scopes.
-The obsolete `insert` / `reader-insert` rows are deliberately deleted by schema 17;
-unbindings in surviving contexts remain explicit.
+Historical binding keys migrate to their canonical contexts. Schema 17 deletes
+obsolete `insert` / `reader-insert` rows; schema 18 owns the keyboard-system
+override cutover in `src/core/preferences.ts`. It removes inherited Reader
+`<Space>e` / `<Space>m` and bare `[` / `]` defaults, preserves non-null custom
+overrides, and moves an explicit cancellation only when its destination has no
+override. It also migrates the persisted outline-focus ActionId to
+`focusReaderOutline`. The binding value is written before the schema version, and
+the schema migration is repeat-safe.
+Details are in the [development guide](DEVELOPMENT.md#runtime-architecture).
 
 The v0.2 Main-library interaction contract is defined in
 [INTERACTION_MODEL.md](INTERACTION_MODEL.md). In that model, Cursor, persistent
-Selection, VisualTarget, View, and Scope are distinct concepts. The persisted
-`main-select` binding scope may remain temporarily for compatibility, but its
-user-facing meaning is Visual range editing rather than a generic selection mode.
-Selection itself has no mode.
+Selection, VisualTarget, View, and Scope are distinct concepts. `main-select` is
+an active exact `BindingContext` for Visual range editing, not a temporary
+compatibility scope or generic Selection mode. Selection itself has no mode.
 
 Note Normal and Insert use the same reducer and binding source through explicit
 `note-normal` and `note-insert` scopes. Note-local motions and operators are
@@ -77,6 +80,21 @@ controllers execute those actions after the binding engine resolves a sequence.
 This separation lets the same semantic action be reached from a key binding or a
 Command Palette without synthetic keyboard events. It also keeps Key Guide,
 Binding Editor, and Command Palette projections tied to the same resolved source.
+
+The shared keyboard architecture has separate owners: `actions.ts` is the
+canonical `ActionId` registry; `binding-capabilities.ts` projects each surface's
+actual executor-owned actions; `shortcut-catalog.ts` derives localized action,
+group, context, editable-binding, and native/read-only projections from those
+sources; and `binding-editor.ts` is the pure draft and validation state machine.
+`LocalBindingRuntime` is the reusable per-surface sequence matcher. It owns no
+focus or key-qualification policy: each host qualifies native/editable/composing
+targets, supplies its own timer adapters and executor, and deactivates/disposes
+its local matcher with that surface's focus and lifecycle.
+
+Settings/catalog, Key Guide, command/shortcut hints, and matching derive from the
+canonical ActionId registry, owner capabilities, and resolved bindings. Owners
+contribute capabilities and executors, not competing action registries or
+private default maps.
 
 Cross-surface coordination uses a named capability or shared Operation, not
 generic redispatch of another Surface's `ActionId`. Item Operations resolve
@@ -170,6 +188,30 @@ host/view lifecycle seams are owned separately:
 - `smooth-scroll.ts` — smooth-hold state;
 
 The native sidebar is Reader-document-scoped; PDF focus and split changes do not select a sidebar owner. Editable and composing targets remain host-owned.
+
+Reader panel focus uses the canonical `focusReaderOutline`, `focusReaderMarks`,
+`focusReaderAnnotations`, and `focusReaderThumbnails` actions. They open/focus the
+named native pane; repeating one does not close it. Toggle actions remain separate.
+The four sidebar binding contexts are local execution contexts, not additional
+Reader Surface modes. `ReaderNavigation.traverseOutline()` uses only existing
+authored Outline entries and conservative row classification for heading
+(including Section and Subsection), figure, and table traversal. Candidates are
+ordered by document position and wrap; navigation uses the exact active PDF view
+and reports no target when that category is absent.
+
+It does not scan PDF text or synthesize missing Outline rows.
+
+Bookmark traversal is owned by `ReaderMarks`, ordered by document position and
+wrapping across persisted and legacy marks while retaining existing
+bookmark/annotation-link semantics. Outline destinations retain native-hard
+history evidence; bookmark jumps use the shared navigation path as one
+managed-final excursion. Opening/focusing a panel creates no synthetic history
+route.
+
+When a native sidebar target receives focus or a pointer press, its owner retires
+both the sidebar matcher and pending PDF shortcut sequence. Local matchers and
+timers are also deactivated on native-key, editable/IME, context, target, and
+binding changes, then disposed with their owning Reader/Pickers/Plugin Manager.
 
 `ReaderController` owns the native Reader event registrations by event type and
 callback identity; Zotero's registration API returns no listener handle. Shutdown

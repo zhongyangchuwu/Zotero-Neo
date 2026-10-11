@@ -21,6 +21,7 @@ import type {
   ReaderEventRuntime,
   ReaderLinkOverlay,
   ReaderLinkPosition,
+  ReaderNativeOutlineEntry,
   ReaderPdfHistoryLocationRuntime,
   ReaderRuntime,
   ReaderViewRuntime,
@@ -1474,6 +1475,43 @@ describe('reader zoom shortcuts', () => {
     created.session.dispose();
   });
 
+  it.each([
+    { key: 'o', view: 'outline' },
+    { key: 'm', view: 'outline' },
+    { key: 'a', view: 'annotations' },
+    { key: 't', view: 'thumbnails' },
+  ] as const)(
+    'opens the exact native $view pane through Space-r-$key and repeat never closes it',
+    ({ key, view }) => {
+      const state = {
+        sidebarOpen: false,
+        sidebarView: 'annotations' as 'outline' | 'annotations' | 'thumbnails',
+      };
+      const setSidebarView = vi.fn((next: typeof state.sidebarView) => {
+        state.sidebarView = next;
+      });
+      const toggleSidebar = vi.fn((open?: boolean) => {
+        state.sidebarOpen = open ?? !state.sidebarOpen;
+      });
+      const created = createHistorySession({ _state: state, setSidebarView, toggleSidebar });
+      try {
+        created.session.start();
+        for (let repeat = 0; repeat < 2; repeat += 1) {
+          for (const token of [' ', 'r', key])
+            created.session.focusAndHandle(readerKey(token).event);
+          expect(state.sidebarOpen).toBe(true);
+          expect(state.sidebarView).toBe(view);
+        }
+        expect(toggleSidebar).toHaveBeenCalledTimes(2);
+        expect(toggleSidebar).toHaveBeenNthCalledWith(1, true);
+        expect(toggleSidebar).toHaveBeenNthCalledWith(2, true);
+        expect(setSidebarView).toHaveBeenCalledTimes(2);
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
+
   it('continues PDF zoom shortcuts while the native Outline sidebar is open', () => {
     const zoomIn = vi.fn();
     const zoomOut = vi.fn();
@@ -1827,8 +1865,10 @@ describe('Reader annotation deletion safety', () => {
     const state = h.created.reader._internalReader?._state;
     if (!state) throw new Error('Expected Reader selection state');
     h.created.session.focusAndHandle(readerKey('[').event);
+    h.created.session.focusAndHandle(readerKey('a').event);
     Reflect.set(state, 'selectedAnnotationIDs', []);
     h.created.session.focusAndHandle(readerKey(']').event);
+    h.created.session.focusAndHandle(readerKey('a').event);
     expect(h.clearHostSelection).toHaveBeenLastCalledWith([h.annotation.key]);
 
     let finishErase!: () => void;
@@ -1840,6 +1880,7 @@ describe('Reader annotation deletion safety', () => {
     });
     pressDelete(h.created.session);
     h.created.session.focusAndHandle(readerKey(']').event);
+    h.created.session.focusAndHandle(readerKey('a').event);
     expect(h.clearHostSelection).toHaveBeenLastCalledWith([newerAnnotation.key]);
     const callsAfterSelectingNewer = h.clearHostSelection.mock.calls.length;
     finishErase();
@@ -1850,6 +1891,7 @@ describe('Reader annotation deletion safety', () => {
 
     expect(h.clearHostSelection).toHaveBeenCalledTimes(callsAfterSelectingNewer);
     h.created.session.focusAndHandle(readerKey('[').event);
+    h.created.session.focusAndHandle(readerKey('a').event);
     expect(h.clearHostSelection).toHaveBeenLastCalledWith([h.annotation.key]);
     h.created.session.dispose();
   });
@@ -2146,12 +2188,14 @@ describe('Reader leader timer guards', () => {
 
 describe('Reader native passthrough ownership', () => {
   function startReaderDocumentKeydown(created: ReaderDocumentKeydownHarness) {
-    const keydownListeners: EventListener[] = [];
+    const listeners = new Map<string, EventListener[]>();
     const document = {
       ...created.readerWindow.document,
       activeElement: null as Element | null,
       addEventListener: (type: string, listener: EventListener) => {
-        if (type === 'keydown') keydownListeners.push(listener);
+        const entries = listeners.get(type) ?? [];
+        entries.push(listener);
+        listeners.set(type, entries);
       },
       removeEventListener: () => {},
     };
@@ -2159,8 +2203,8 @@ describe('Reader native passthrough ownership', () => {
     created.session.start();
     return {
       document: document as unknown as Document,
-      dispatch(event: KeyboardEvent) {
-        for (const listener of keydownListeners) listener(event as unknown as Event);
+      dispatch(event: Event) {
+        for (const listener of listeners.get(event.type || 'keydown') ?? []) listener(event);
       },
     };
   }
@@ -2183,6 +2227,41 @@ describe('Reader native passthrough ownership', () => {
       },
     } as unknown as Element;
   }
+
+  it.each(['focusin', 'pointerdown', 'native key'] as const)(
+    'retires a preserved exact-prefix PDF command on sidebar %s',
+    (handoff) => {
+      vi.useFakeTimers();
+      const zoomIn = vi.fn();
+      const created = createHistorySession(
+        { zoomIn },
+        {},
+        {
+          ...DEFAULT_BINDINGS,
+          'reader-normal:]': 'zoomIn',
+        },
+      );
+      try {
+        const bridge = startReaderDocumentKeydown(created);
+        created.session.focusAndHandle(readerKey(']').event);
+        expect(created.session.input.keyBuffer).toBe(']');
+        const target = nativeSidebarTarget(bridge.document, 'input');
+        Reflect.set(bridge.document, 'activeElement', target);
+        const nativeKey = readerKey('j', { target });
+        if (handoff === 'native key') bridge.dispatch(nativeKey.event);
+        else bridge.dispatch({ type: handoff, target } as unknown as Event);
+        expect(created.session.input.keyBuffer).toBe('');
+        vi.advanceTimersByTime(1000);
+        bridge.dispatch(nativeKey.event);
+        expect(zoomIn).not.toHaveBeenCalled();
+        expect(nativeKey.preventDefault).not.toHaveBeenCalled();
+        expect(nativeKey.stopImmediatePropagation).not.toHaveBeenCalled();
+      } finally {
+        created.session.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it.each([
     { name: 'Annotations', sidebarView: 'annotations' },
@@ -2974,6 +3053,92 @@ describe('reader split shortcuts', () => {
     expect(left.preventDefault).not.toHaveBeenCalled();
     created.session.dispose();
   });
+});
+
+describe('Reader category history execution', () => {
+  it('executes a first-use figure command through the live native loader and keeps its native hard history observation', async () => {
+    const execution = navigationHistoryPort();
+    const observeNative = vi.fn((receipt: Parameters<NavigationPort['observeNative']>[0]) =>
+      execution.port.observeNative(receipt),
+    );
+    const port: NavigationPort = { ...execution.port, observeNative };
+    const created = createHistorySession({}, { navigationForReader: () => port });
+    const native = attachNativeReaderHistory(created);
+    const state = {
+      sidebarOpen: false,
+      sidebarView: 'annotations' as const,
+      outline: null as ReaderNativeOutlineEntry[] | null,
+    };
+    Reflect.set(created.reader._internalReader!, '_state', state);
+    const position = { pageIndex: 1, rects: [[0, 792, 0, 792]] };
+    Reflect.set(native.view, 'setSidebarView', async () => {
+      state.outline = [{ title: 'Figure 1 Workflow', location: { position }, items: [] }];
+    });
+    const navigate = vi.fn(async (request: { position: ReaderLinkPosition }) => {
+      native.viewer.currentPageNumber = request.position.pageIndex + 1;
+      native.viewer._location = {
+        pageNumber: native.viewer.currentPageNumber,
+        top: request.position.rects[0][1],
+        left: 0,
+      };
+      native.container.scrollTop = 1200;
+      await native.view._pushHistoryPoint?.();
+    });
+    Reflect.set(native.view, 'navigate', navigate);
+    try {
+      created.session.start();
+      for (const key of [']', 'f']) created.session.focusAndHandle(readerKey(key).event);
+      await settleReaderMicrotasks();
+      expect(navigate).toHaveBeenCalledExactlyOnceWith({ position }, { block: 'start' });
+      expect(state.sidebarOpen).toBe(false);
+      expect(state.sidebarView).toBe('annotations');
+      expect(observeNative).toHaveBeenCalledOnce();
+      expect(execution.history.locations).toHaveLength(2);
+      expect(execution.intents).toEqual([]);
+    } finally {
+      created.session.dispose();
+    }
+  });
+  it.each(['new key', 'deactivation', 'pointer input'] as const)(
+    'cannot jump after delayed native Outline loading and %s',
+    async (input) => {
+      const created = createHistorySession();
+      const internal = created.reader._internalReader!;
+      const state = { outline: null as ReaderNativeOutlineEntry[] | null };
+      Reflect.set(internal, '_state', state);
+      const pending = Promise.withResolvers<void>();
+      Reflect.set(internal._primaryView!, 'setSidebarView', () => pending.promise);
+      const navigate = vi.fn();
+      Reflect.set(internal._primaryView!, 'navigate', navigate);
+      const pointers: EventListener[] = [];
+      Reflect.set(
+        created.pdfWindow,
+        'addEventListener',
+        (type: string, listener: EventListener) => {
+          if (type === 'pointerdown') pointers.push(listener);
+        },
+      );
+      try {
+        created.session.start();
+        for (const key of [']', 's']) created.session.focusAndHandle(readerKey(key).event);
+        if (input === 'new key') created.session.focusAndHandle(readerKey('x').event);
+        else if (input === 'deactivation') created.session.deactivateInteraction();
+        else for (const listener of pointers) listener({} as Event);
+        state.outline = [
+          {
+            title: '1 Results',
+            location: { position: { pageIndex: 1, rects: [[0, 792, 0, 792]] } },
+            items: [],
+          },
+        ];
+        pending.resolve();
+        await settleReaderMicrotasks();
+        expect(navigate).not.toHaveBeenCalled();
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
 });
 
 describe('Reader mark history execution', () => {

@@ -312,7 +312,7 @@ describe('binding preferences', () => {
     });
     migrateBindingPreferences(preferences);
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual(retained);
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(17);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     const resolved = bindingsFromPreferences(preferences);
     expect(Object.keys(resolved).some((key) => key.startsWith('reader-insert:'))).toBe(false);
     expect(resolved['reader-normal:j']).toBe('scrollUp');
@@ -338,7 +338,7 @@ describe('binding preferences', () => {
     const preferences = new TestPreferences({ 'bindings.schemaVersion': 16, bindings: raw });
     migrateBindingPreferences(preferences);
     expect(preferences.get('bindings', '')).toBe(raw);
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(17);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
   it('does not expose retired Insert bindings at runtime while keeping Note Insert', () => {
@@ -847,5 +847,109 @@ describe('note editor preferences', () => {
     expect(noteEditorEnabled(preferences)).toBe(false);
     preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
     expect(noteEditorEnabled(preferences)).toBe(true);
+  });
+});
+
+describe('schema 18 shortcut cutover', () => {
+  it('moves explicit unbindings without overwriting destinations or moving deliberate custom keys', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 17,
+      bindings: JSON.stringify({
+        'reader-normal:<Space>e': null,
+        'reader-normal:<Space>m': null,
+        'reader-normal:[': null,
+        'reader-normal:[a': 'nextPage',
+        'reader-normal:]': 'scrollDown',
+        'reader-normal:x': 'focusReaderSidebar',
+      }),
+    });
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'reader-normal:<Space>ro': null,
+      'reader-normal:<Space>rm': null,
+      'reader-normal:[a': 'nextPage',
+      'reader-normal:]': 'scrollDown',
+      'reader-normal:x': 'focusReaderOutline',
+    });
+    const bindings = bindingsFromPreferences(preferences);
+    expect(bindings['reader-normal:<Space>ro']).toBeUndefined();
+    expect(bindings['reader-normal:<Space>rm']).toBeUndefined();
+    expect(bindings['reader-normal:[a']).toBe('nextPage');
+    expect(bindings['reader-normal:]a']).toBe('nextAnnotation');
+    const pending = advanceInput(
+      { mode: 'reader-normal', keyBuffer: '', countBuffer: '', bindings, allowCountPrefix: true },
+      ']',
+    );
+    expect(pending).toMatchObject({ kind: 'pending', timeoutAction: 'scrollDown', timeoutMs: 800 });
+    const writes = preferences.writes.length;
+    migrateBindingPreferences(preferences);
+    expect(preferences.writes).toHaveLength(writes);
+  });
+
+  it('preserves custom old panel commands and destination tombstones', () => {
+    const overrides = {
+      'reader-normal:<Space>e': 'toggleReaderSidebarOutline',
+      'reader-normal:<Space>m': 'toggleMarksExplorer',
+      'reader-normal:[': 'prevAnnotation',
+      'reader-normal:]': null,
+      'reader-normal:]a': null,
+    };
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 17,
+      bindings: JSON.stringify(overrides),
+    });
+    migrateBindingPreferences(preferences);
+    const migrated = JSON.parse(preferences.get('bindings', ''));
+    expect(migrated).toEqual({
+      'reader-normal:<Space>e': 'toggleReaderSidebarOutline',
+      'reader-normal:<Space>m': 'toggleMarksExplorer',
+      'reader-normal:[': 'prevAnnotation',
+      'reader-normal:]a': null,
+    });
+    expect(bindingsFromPreferences(preferences)['reader-normal:<Space>e']).toBe(
+      'toggleReaderSidebarOutline',
+    );
+    expect(bindingsFromPreferences(preferences)['reader-normal:[']).toBe('prevAnnotation');
+    expect(bindingsFromPreferences(preferences)['reader-normal:]a']).toBeUndefined();
+  });
+
+  it('does not advance schema or erase overrides after a write failure and resumes safely', () => {
+    const raw = '{"reader-normal:<Space>e":null,"reader-normal:]":null}';
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 17, bindings: raw });
+    preferences.failKey = 'bindings';
+    expect(() => migrateBindingPreferences(preferences)).toThrow('Write failed');
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(17);
+    expect(preferences.get('bindings', '')).toBe(raw);
+    preferences.failKey = null;
+    migrateBindingPreferences(preferences);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(18);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'reader-normal:<Space>ro': null,
+      'reader-normal:]a': null,
+    });
+  });
+
+  it('retries an already-persisted cutover after schema persistence fails', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 17,
+      bindings: '{"reader-normal:[":null}',
+    });
+    preferences.failKey = 'bindings.schemaVersion';
+    expect(() => migrateBindingPreferences(preferences)).toThrow('Write failed');
+    const persisted = preferences.get('bindings', '');
+    expect(JSON.parse(persisted)).toEqual({ 'reader-normal:[a': null });
+    preferences.failKey = null;
+    migrateBindingPreferences(preferences);
+    expect(preferences.get('bindings', '')).toBe(persisted);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(18);
+  });
+
+  it('translates retired action IDs before older schema parsers discard them', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 16,
+      bindings: '{"reader-normal:x":"focusReaderSidebar"}',
+    });
+    migrateBindingPreferences(preferences);
+    expect(bindingsFromPreferences(preferences)['reader-normal:x']).toBe('focusReaderOutline');
   });
 });
