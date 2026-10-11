@@ -91,6 +91,16 @@ export class ReaderNavigation {
       (view !== internal?._primaryView && view !== internal?._secondaryView)
     )
       return false;
+    // Load native semantic anchors only on an explicit structural navigation request.
+    const captions = await this.#dependencies.captions.load();
+    if (
+      !isCurrent() ||
+      this.activePdfWindow() !== pdfWindow ||
+      this.#dependencies.reader._internalReader !== internal ||
+      internal?._primaryView !== primary ||
+      (view !== internal?._primaryView && view !== internal?._secondaryView)
+    )
+      return false;
     const entries: {
       entry: ReaderNativeOutlineEntry;
       page: number;
@@ -107,7 +117,14 @@ export class ReaderNavigation {
       for (const entry of outline) {
         const currentOrder = order++;
         const kind = outlineEntryKind(entry.title, depth);
-        const position = entry.location?.position;
+        const heading = kind === 'section' || kind === 'subsection';
+        // Some authored bookmarks precede their printed heading by a page. Keep their
+        // hierarchy and identity, but land at the genuine semantic heading when available.
+        const headingPosition =
+          category === 'heading' && heading
+            ? this.#dependencies.captions.headingPosition(entry)
+            : null;
+        const position = headingPosition ?? entry.location?.position;
         if (
           position &&
           Number.isInteger(position.pageIndex) &&
@@ -126,11 +143,13 @@ export class ReaderNavigation {
           }
           if (Number.isFinite(top))
             entries.push({
-              entry,
+              entry: headingPosition
+                ? { ...entry, location: { position: headingPosition } }
+                : entry,
               page: position.pageIndex,
               top,
               order: currentOrder,
-              clonePosition,
+              clonePosition: clonePosition || headingPosition !== null,
             });
         }
         if (entry.items) visit(entry.items, depth + 1, clonePosition);
@@ -138,24 +157,36 @@ export class ReaderNavigation {
     };
     visit(internal?._state?.outline ?? [], 0);
     if (category !== 'heading') {
-      const captions = await this.#dependencies.captions.load();
-      if (
-        !isCurrent() ||
-        this.activePdfWindow() !== pdfWindow ||
-        this.#dependencies.reader._internalReader !== internal ||
-        internal?._primaryView !== primary ||
-        (view !== internal?._primaryView && view !== internal?._secondaryView)
-      )
-        return false;
-      const seen = new Set(
-        entries.map(({ entry, page }) => `${page}:${captionLabel(entry.title)}`),
+      const seen = new Map(
+        entries.map((entry) => [`${entry.page}:${captionLabel(entry.entry.title)}`, entry]),
       );
       for (const caption of captions) {
         if (caption.kind !== category) continue;
         const key = `${caption.location.position.pageIndex}:${caption.label}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+        const existing = seen.get(key);
+        if (existing) {
+          // A genuine Figure projection may start at its image, above the authored bookmark.
+          // Keep the native identity/order unless the supplied region starts earlier.
+          if (category === 'figure') {
+            let top = -Infinity;
+            for (const rect of caption.location.position.rects) {
+              if (!Array.isArray(rect) || rect.length < 4 || !rect.every(Number.isFinite)) {
+                top = -Infinity;
+                break;
+              }
+              top = Math.max(top, rect[1], rect[3]);
+            }
+            if (Number.isFinite(top) && top > existing.top) {
+              existing.entry = caption;
+              existing.top = top;
+              existing.clonePosition = true;
+            }
+          }
+          continue;
+        }
         visit([caption], 0, true);
+        const added = entries[entries.length - 1];
+        if (added && added.entry === caption) seen.set(key, added);
       }
     }
     if (!entries.length) {

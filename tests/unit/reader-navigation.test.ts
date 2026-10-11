@@ -90,9 +90,10 @@ function harness(itemID = 42) {
   const scrollBoundary = vi.fn();
   const showStatus = vi.fn();
   const debug = vi.fn();
+  const captions = new ReaderCaptionTargets(reader.itemID, () => {}, debug);
   const navigation = new ReaderNavigation({
     reader,
-    captions: new ReaderCaptionTargets(reader.itemID, () => {}, debug),
+    captions,
     activePdfWindow: () => active,
     setActivePdfWindow: (pdfWindow) => {
       active = pdfWindow;
@@ -107,6 +108,7 @@ function harness(itemID = 42) {
     cloneInto,
     navigation,
     reader,
+    captions,
     primary,
     secondary,
     syncViews,
@@ -349,6 +351,159 @@ describe('ReaderNavigation', () => {
     );
   });
 
+  it.each([
+    {
+      name: 'primary forward',
+      secondary: false,
+      direction: 1 as const,
+      heights: [600, 900, 700],
+      scale: 1,
+    },
+    {
+      name: 'secondary forward',
+      secondary: true,
+      direction: 1 as const,
+      heights: [1100, 650, 900],
+      scale: 1.25,
+    },
+    {
+      name: 'primary backward',
+      secondary: false,
+      direction: -1 as const,
+      heights: [600, 900, 700],
+      scale: 0.8,
+    },
+    {
+      name: 'secondary backward',
+      secondary: true,
+      direction: -1 as const,
+      heights: [1100, 650, 900],
+      scale: 1.5,
+    },
+  ])(
+    'aligns the destination heading page/start across unequal pages in $name',
+    async ({ secondary, direction, heights, scale }) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const loadCaptions = vi.spyOn(test.captions, 'load');
+      const active = secondary ? test.secondary : test.primary;
+      const view = secondary ? internal._secondaryView! : internal._primaryView!;
+      const other = secondary ? internal._primaryView! : internal._secondaryView!;
+      Reflect.set(internal, '_lastViewPrimary', !secondary);
+      const offsets = [0, heights[0] * scale + 18, (heights[0] + heights[1]) * scale + 36];
+      const sourcePage = direction > 0 ? 0 : 2;
+      const targetTop = direction > 0 ? heights[1] - 45 : 40;
+      const target = { pageIndex: 1, rects: [[35, targetTop - 12, 400, targetTop]] };
+      const authored = { pageIndex: 0, rects: [[0, 70.401, 0, 70.401]] };
+      const getBlocks = vi.fn(async () => [
+        {
+          type: 'heading',
+          content: [{ text: '3.2Background' }],
+          anchor: { pageRects: [[1, 35, targetTop - 12, 400, targetTop]] },
+        },
+      ]);
+      const getReader = vi.fn(async () => ({ getTopLevelBlockCount: () => 1, getBlocks }));
+      Reflect.set(globalThis, 'Zotero', { SDT: { getReader } });
+      const container = {
+        scrollTop: offsets[sourcePage] + (direction > 0 ? (heights[0] - 100) * scale : 25 * scale),
+        scrollHeight: offsets[2] + heights[2] * scale,
+        clientHeight: 300,
+        clientTop: 0,
+        clientLeft: 0,
+        getBoundingClientRect: () => ({ top: 0, left: 0 }),
+      };
+      const pageViews = heights.map((height, index) => ({
+        div: {
+          getBoundingClientRect: () => ({ top: offsets[index] - container.scrollTop, left: 0 }),
+        },
+        viewport: {
+          height: height * scale,
+          scale,
+          convertToPdfPoint: (x: number, y: number) => [x / scale, height - y / scale],
+        },
+      }));
+      const viewer = { container, _pages: pageViews, currentPageNumber: sourcePage + 1 };
+      Reflect.set(active, 'PDFViewerApplication', { pdfViewer: viewer });
+      const nativeRect = (position: ReaderLinkPosition) => {
+        const rect = position.rects[0];
+        return [
+          rect[0] * scale,
+          offsets[position.pageIndex] +
+            (heights[position.pageIndex] - Math.max(rect[1], rect[3])) * scale,
+          rect[2] * scale,
+          offsets[position.pageIndex] +
+            (heights[position.pageIndex] - Math.min(rect[1], rect[3])) * scale,
+        ];
+      };
+      const destinations: ReaderLinkPosition[] = [];
+      Reflect.set(view, 'getPositionBoundingViewRect', nativeRect);
+      // Native block:start uses the PDF rectangle's document top, then clamps to scroll bounds.
+      Reflect.set(
+        view,
+        'navigate',
+        async (
+          { position }: { position: ReaderLinkPosition },
+          options: { block?: string } = {},
+        ) => {
+          destinations.push(position);
+          const rect = nativeRect(position);
+          const top =
+            options.block === 'start' ? rect[1] : rect[1] - container.clientHeight / 2 - 5;
+          container.scrollTop = Math.max(
+            0,
+            Math.min(top, container.scrollHeight - container.clientHeight),
+          );
+          viewer.currentPageNumber =
+            offsets.findLastIndex((offset) => offset <= container.scrollTop) + 1;
+        },
+      );
+      const otherNavigate = vi.fn();
+      Reflect.set(other, 'navigate', otherNavigate);
+      Reflect.set(internal, '_state', {
+        sidebarOpen: false,
+        sidebarView: 'annotations',
+        outline: [
+          {
+            title: 'Introduction',
+            expanded: false,
+            location: { position: { pageIndex: 0, rects: [[0, heights[0], 0, heights[0]]] } },
+            items: [{ title: 'Background', location: { position: authored }, matched: false }],
+          },
+          { title: 'Discussion', location: { position: { pageIndex: 2, rects: [[0, 0, 0, 0]] } } },
+        ],
+      });
+      const before = container.scrollTop;
+      if (direction > 0) {
+        expect(nativeRect(target)[1]).toBeGreaterThan(before);
+        expect(nativeRect(target)[1]).toBeLessThan(before + container.clientHeight);
+      }
+      await expect(
+        test.navigation.traverseOutline('heading', direction, active, () => true),
+      ).resolves.toBe(true);
+      expect(destinations).toEqual([target]);
+      expect(container.scrollTop).toBeCloseTo(offsets[1] + (heights[1] - targetTop) * scale);
+      expect(nativeRect(target)[1] - container.scrollTop).toBeCloseTo(0);
+      expect(viewer.currentPageNumber).toBe(2);
+      expect(heights[1] - (container.scrollTop - offsets[1]) / scale).toBeCloseTo(targetTop);
+      expect(otherNavigate).not.toHaveBeenCalled();
+      expect(loadCaptions).toHaveBeenCalledTimes(1);
+      expect(getReader).toHaveBeenCalledTimes(1);
+      expect(getBlocks).toHaveBeenCalledTimes(1);
+      expect(test.cloneInto).toHaveBeenCalledWith(target, test.reader._iframeWindow);
+      // Classification must also use the resolved geometry after landing, not the obsolete
+      // previous-page bookmark, so both directions advance and globally wrap without repeats.
+      await test.navigation.traverseOutline('heading', direction, active, () => true);
+      await test.navigation.traverseOutline('heading', direction, active, () => true);
+      expect(destinations.map((position) => position.pageIndex)).toEqual(
+        direction > 0 ? [1, 2, 0] : [1, 0, 2],
+      );
+      expect(getReader).toHaveBeenCalledTimes(1);
+      expect(getBlocks).toHaveBeenCalledTimes(1);
+      expect(internal._state?.sidebarOpen).toBe(false);
+      expect(internal._state?.sidebarView).toBe('annotations');
+    },
+  );
+
   it('traverses figures and tables only from authored entries in the exact active secondary view and reports missing categories honestly', async () => {
     const test = harness();
     const internal = test.reader._internalReader!;
@@ -566,6 +721,60 @@ describe('ReaderNavigation', () => {
     expect(navigate).toHaveBeenLastCalledWith({ position: table }, { block: 'start' });
   });
 
+  it('lands a duplicate Figure identity at the supplied image region rather than its bookmark caption', async () => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const region = { pageIndex: 1, rects: [[40, 480, 560, 760]] };
+    const caption = { pageIndex: 1, rects: [[40, 440, 560, 460]] };
+    const target = {
+      kind: 'figure' as const,
+      label: 'Figure 1',
+      title: 'Figure 1: Overview',
+      location: { position: region },
+    };
+    Reflect.set(internal, '_state', {
+      outline: [{ title: 'Figure 1 Overview', location: { position: caption } }],
+    });
+    vi.spyOn(test.captions, 'load').mockResolvedValue([target]);
+    const container = { scrollTop: 0, scrollHeight: 2000, clientHeight: 500 };
+    const viewer = { container, _location: { pageNumber: 1, top: 900, left: 0 } };
+    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: viewer });
+    const nativeRect = (position: ReaderLinkPosition) => {
+      const rect = position.rects[0];
+      return [
+        rect[0],
+        1000 + 900 - Math.max(rect[1], rect[3]),
+        rect[2],
+        1000 + 900 - Math.min(rect[1], rect[3]),
+      ];
+    };
+    Reflect.set(internal._primaryView!, 'getPositionBoundingViewRect', nativeRect);
+    Reflect.set(
+      internal._primaryView!,
+      'navigate',
+      async ({ position }: { position: ReaderLinkPosition }) => {
+        container.scrollTop = Math.min(
+          nativeRect(position)[1],
+          container.scrollHeight - container.clientHeight,
+        );
+        viewer._location = {
+          pageNumber: position.pageIndex + 1,
+          top: 900 - (container.scrollTop - 1000),
+          left: 0,
+        };
+      },
+    );
+
+    await expect(
+      test.navigation.traverseOutline('figure', 1, test.primary, () => true),
+    ).resolves.toBe(true);
+    expect(viewer._location).toEqual({ pageNumber: 2, top: 760, left: 0 });
+    expect(nativeRect(region)[1] - container.scrollTop).toBe(0);
+    expect(nativeRect(caption)[1] - container.scrollTop).toBe(300);
+    await test.navigation.navigateCaption(target, test.primary);
+    expect(nativeRect(region)[1] - container.scrollTop).toBe(0);
+  });
+
   it('does not navigate when focus ownership retires during native caption processing', async () => {
     const test = harness();
     const pending = Promise.withResolvers<unknown>();
@@ -623,6 +832,110 @@ describe('ReaderNavigation', () => {
       ];
       pending.resolve();
       await expect(traversal).resolves.toBe(false);
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { secondary: false, change: 'new input' },
+    { secondary: false, change: 'split change' },
+    { secondary: false, change: 'view replacement' },
+    { secondary: true, change: 'new input' },
+    { secondary: true, change: 'split change' },
+    { secondary: true, change: 'view replacement' },
+  ])(
+    'retires heading landing after awaited initialization ($secondary, $change)',
+    async ({ secondary, change }) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const active = secondary ? test.secondary : test.primary;
+      const view = secondary ? internal._secondaryView! : internal._primaryView!;
+      Reflect.set(internal, '_lastViewPrimary', !secondary);
+      Reflect.set(active, 'PDFViewerApplication', {
+        pdfViewer: { _location: { pageNumber: 1, top: 792, left: 0 } },
+      });
+      Reflect.set(internal, '_state', {
+        outline: [
+          { title: 'Results', location: { position: { pageIndex: 1, rects: [[0, 750, 0, 750]] } } },
+        ],
+      });
+      const pending = Promise.withResolvers<void>();
+      Reflect.set(view, 'initializedPromise', pending.promise);
+      const navigate = vi.fn();
+      Reflect.set(view, 'navigate', navigate);
+      let current = true;
+      const traversal = test.navigation.traverseOutline('heading', 1, active, () => current);
+      if (change === 'new input') current = false;
+      else if (change === 'split change') Reflect.set(internal, '_lastViewPrimary', secondary);
+      else
+        Reflect.set(internal, secondary ? '_secondaryView' : '_primaryView', {
+          _iframeWindow: active,
+          navigate,
+        });
+      pending.resolve();
+      await expect(traversal).resolves.toBe(false);
+      expect(navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { secondary: false, change: 'new input' },
+    { secondary: false, change: 'split change' },
+    { secondary: false, change: 'view replacement' },
+    { secondary: true, change: 'new input' },
+    { secondary: true, change: 'split change' },
+    { secondary: true, change: 'view replacement' },
+  ])(
+    'cannot apply a heading anchor after native metadata await ($secondary, $change)',
+    async ({ secondary, change }) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const active = secondary ? test.secondary : test.primary;
+      const view = secondary ? internal._secondaryView! : internal._primaryView!;
+      Reflect.set(internal, '_lastViewPrimary', !secondary);
+      Reflect.set(active, 'PDFViewerApplication', {
+        pdfViewer: { _location: { pageNumber: 1, top: 100, left: 0 } },
+      });
+      Reflect.set(internal, '_state', {
+        outline: [
+          { title: 'Results', location: { position: { pageIndex: 0, rects: [[0, 70, 0, 70]] } } },
+        ],
+      });
+      const started = Promise.withResolvers<void>();
+      const pending = Promise.withResolvers<unknown>();
+      Reflect.set(globalThis, 'Zotero', {
+        SDT: {
+          getReader: () => {
+            started.resolve();
+            return pending.promise;
+          },
+        },
+      });
+      const headingPosition = vi.spyOn(test.captions, 'headingPosition');
+      const navigate = vi.fn();
+      Reflect.set(view, 'navigate', navigate);
+      let current = true;
+      const traversal = test.navigation.traverseOutline('heading', 1, active, () => current);
+      await started.promise;
+      if (change === 'new input') current = false;
+      else if (change === 'split change') Reflect.set(internal, '_lastViewPrimary', secondary);
+      else
+        Reflect.set(internal, secondary ? '_secondaryView' : '_primaryView', {
+          _iframeWindow: active,
+          navigate,
+        });
+      pending.resolve({
+        getTopLevelBlockCount: () => 1,
+        getBlocks: async () => [
+          {
+            type: 'heading',
+            content: [{ text: '1Results' }],
+            anchor: { pageRects: [[1, 108, 700, 250, 716]] },
+          },
+        ],
+      });
+      await expect(traversal).resolves.toBe(false);
+      expect(headingPosition).not.toHaveBeenCalled();
       expect(navigate).not.toHaveBeenCalled();
     },
   );

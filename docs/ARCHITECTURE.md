@@ -180,7 +180,7 @@ host/view lifecycle seams are owned separately:
 - `marks.ts` — persisted Reader marks and managed mark navigation;
 - `native-sidebar.ts` — reversible compact native Outline decoration and bounded Neo caption/Bookmarks groups;
 - `outline-presentation.ts` — derived Outline kinds; full-tree ordinals are projected by the sidebar;
-- `caption-targets.ts` — session-owned, lazy single-flight Zotero SDT caption access, PDF-anchor projection, and result retirement;
+- `caption-targets.ts` — session-owned, lazy single-flight Zotero SDT caption/heading access, genuine PDF-anchor projection, conservative Figure image association, and result retirement;
 - `comment-editor.ts` — transient annotation-comment editor state;
 - `selection-actions.ts` — view-scoped selection action registry/palette and async
   result lifetime. It retires input/theme ownership before touching detached DOM.
@@ -200,14 +200,18 @@ the active Outline row, and sidebar state. `[s`/`]s` also delegate from the four
 sidebar contexts. Live active-view geometry selects the next/previous target with
 rounding/clamping tolerance and wrap; pending metadata work is fenced to its view/input owner.
 
-Figure/Table requests additionally load genuine native SDT caption blocks via
-`ReaderCaptionTargets`, preserving explicit native bookmark targets and deduplicating
-matching identities. Caption DTO positions are cloned into Reader before native geometry
-or navigation calls. The SDK validates/reuses its attachment cache; a cold call can
-process the whole PDF locally and cannot be cancelled. Only an explicit category request
-or caption-group expansion starts this work, never Reader open or heading traversal.
-Unavailable/missing captions stay absent; Neo adds no OCR/network dependency and does not
-invent image identities or alter the native Outline tree.
+Explicit heading/Figure/Table requests share genuine native SDT blocks through
+`ReaderCaptionTargets`. A unique matching heading on an authored bookmark's page or
+its next page supplies the printed heading geometry, correcting page-broken bookmarks
+without adding headings or changing the native hierarchy. Ambiguous/missing matches
+retain the authored position. Figures retain caption-derived identities but align a
+trustworthy same-page image above the caption; Tables retain caption positions.
+Matching native Figure identities prefer an earlier supplied image region.
+Projected positions are cloned into Reader before native geometry/navigation calls.
+The SDK validates/reuses its attachment cache; a cold call can process the whole PDF
+locally and cannot be cancelled. Only an explicit structural navigation request or
+caption-group expansion starts this work, never Reader open. Unavailable/missing
+captions stay absent; Neo adds no OCR/network dependency or invented image identities.
 
 Bookmark traversal is owned by `ReaderMarks`, ordered by document position and
 wrapping across persisted and legacy marks while retaining existing

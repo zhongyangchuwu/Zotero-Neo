@@ -315,7 +315,7 @@ same surface to resolve an `ActionId`. Tag candidate sources may project namespa
 create candidates, and action-specific metadata, but they do not mutate item tags or Main
 filter state; those effects belong to `TagActions`.
 
-The native Reader Outline retains Zotero's rows and hosts bounded Neo caption and Bookmarks groups. `src/reader/native-sidebar.ts` owns reversible compact decoration and group DOM; `src/reader/outline-presentation.ts` derives kinds; `src/reader/caption-targets.ts` owns lazy native caption data; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
+The native Reader Outline retains Zotero's rows and hosts bounded Neo caption and Bookmarks groups. `src/reader/native-sidebar.ts` owns reversible compact decoration and group DOM; `src/reader/outline-presentation.ts` derives kinds; `src/reader/caption-targets.ts` owns lazy native caption/heading data and PDF-position projection; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
 
 Reader panels and category navigation retain native ownership boundaries. The
 Normal defaults `<Space>ro`, `<Space>rm`, `<Space>ra`, and `<Space>rt` focus/open
@@ -326,8 +326,12 @@ the complete native heading hierarchy (including Section/Subsection), `[f` / `]f
 bookmarks. Heading actions are also explicit defaults in all four sidebar contexts and
 delegate to Reader navigation without moving sidebar focus. Candidate order/currentness
 uses the exact PDF view's live geometry, never the active native row or expanded/filter subset.
+Heading requests resolve unique genuine native heading geometry when an authored bookmark
+precedes its printed heading, including a page break, without changing the native hierarchy.
 Figure/Table requests merge explicit native targets with valid native SDT captions on demand;
-missing data stays absent. Bookmark traversal preserves persisted/legacy marks and annotation links.
+Figures align trustworthy image regions above captions, while Tables retain caption positions.
+Missing or ambiguous geometry retains its honest fallback. Bookmark traversal preserves
+persisted/legacy marks and annotation links.
 Panel focus creates no synthetic history route. Outline destinations use their
 exact-view native-hard evidence; bookmark jumps are one managed-final excursion
 through the shared navigation coordinator.
@@ -582,7 +586,7 @@ Zotero's Reader document owns `_internalReader._state.sidebarOpen`, `sidebarView
 
 `src/reader/outline-presentation.ts` derives kinds from title and hierarchy: every meaningful unnumbered root, including a leaf such as Introduction, is a Section; nested headings are Subsections, with authored numeric hints retained. Explicit numbered Figure/Fig/图 and Table/表 titles are separate kinds. The sidebar projects stable `1`, `2`, `3.1`, etc. from the whole tree, independent of expansion/filtering and excluding Figure/Table entries from heading counters. Compact colored icons/ordinals and numeric direct-child counts have localized accessible/hover descriptions. Native titles and numbering remain untouched; badges are presentation, not verified PDF semantics.
 
-`ReaderCaptionTargets` calls `Zotero.SDT.getReader(itemID)` only for an explicit Figure/Table request or caption-group expansion. The installed SDK exposes no cache-only or cancellation option: a warm validated pack is reused; a missing/invalid source cache can queue native whole-file PDF text/layout/block processing. Neo adds no OCR engine, upload, or runtime dependency. Only labeled `caption` blocks with valid `anchor.pageRects` become targets, anchored at their first page; image/table blocks alone are not invented Figure/Table identities. The single-flight session result publishes honest loading/ready/unavailable states, ignores retired results, and is released with the Reader. Derived caption positions must be cloned into the Reader window even for native geometry calls, not only `navigate()`. Heading traversal never calls this SDK loader.
+`ReaderCaptionTargets` calls `Zotero.SDT.getReader(itemID)` only for an explicit heading/Figure/Table request or caption-group expansion, sharing one single-flight session result. The installed SDK exposes no cache-only or cancellation option: a warm validated pack is reused; a missing/invalid source cache can queue native whole-file PDF text/layout/block processing. Reader open never starts this extra work; Neo adds no OCR engine, upload, or runtime dependency. A unique genuine `heading` block matching an authored title (with optional native numeric/appendix ordinal) on the authored or immediately following page supplies its printed geometry; unavailable/ambiguous matches retain the authored position. This changes destinations, not the native hierarchy or titles. Only labeled `caption` blocks with valid `anchor.pageRects` create Figure/Table identities. A Figure may use a single same-page image above its caption with compatible horizontal spans; only native excluded paragraphs geometrically contained within that image may intervene. A 0.01 PDF-point comparison tolerance accommodates native anchor precision without moving coordinates. Ambiguous images retain caption geometry; Tables remain caption-anchored. The cache publishes honest loading/ready/unavailable states, ignores retired results, and is released with the Reader. All projected positions are cloned into the Reader window for both native geometry and `navigate()` calls; native scrolling and zoom policies are unchanged.
 
 The sidebar belongs to the Reader document, not a PDF view: PDF focus and split-pane changes do not mirror or transfer sidebar ownership. Zotero's native sidebar state remains authoritative. Keyboard forwarding qualifies the focused target in the Reader document's `#sidebarContainer`, then selects the exact Outline, Marks, Annotations, or Thumbnails context; visibility alone does not claim PDF commands. Native `focusin` and pointer handoff deactivate the sidebar matcher and retire pending PDF shortcut sequences.
 

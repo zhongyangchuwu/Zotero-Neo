@@ -43,7 +43,7 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
 - Link hints for visible internal, citation, and external PDF links.
 - Native Zotero Reader Outline enhanced in place with compact color/icon badges, stable
   hierarchical ordinals (including unnumbered Introduction), numeric child counts, and Neo Bookmarks.
-- Direct Reader panel focus with `<Space>ro/rm/ra/rt` opens or focuses Outline, Bookmarks, Annotations, or Thumbnails without toggling the panel closed. `[s`/`]s` traverse the full native heading tree from the active PDF position, including from all four focused sidebar contexts. `[f`/`]f` and `[t`/`]t` also reuse genuine Zotero structured-document captions with PDF anchors; recognition is explicit and cached, and a cold native cache may require local whole-PDF processing. No new OCR dependency, upload, or invented targets.
+- Direct Reader panel focus with `<Space>ro/rm/ra/rt` opens or focuses Outline, Bookmarks, Annotations, or Thumbnails without toggling the panel closed. `[s`/`]s` traverse the full native heading tree from the active PDF position, including from all four focused sidebar contexts, and resolve printed heading positions when authored bookmarks precede a page break. `[f`/`]f` align associated native images above their genuine captions; `[t`/`]t` retain caption positions. Native structured-document recognition is explicit and cached for heading/Figure/Table requests; a cold native cache may require local whole-PDF processing. No new OCR dependency, upload, or invented targets.
 - Snapshot and EPUB navigation/search where Zotero exposes compatible Reader
   behavior.
 
