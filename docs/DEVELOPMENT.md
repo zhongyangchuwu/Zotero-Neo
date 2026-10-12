@@ -28,6 +28,38 @@ Both builders run the same `npm run verify` workflow: Prettier, strict
 TypeScript checks, Vitest contracts, the esbuild package build, and the XPI
 member check. Run `npm ci` before either builder.
 
+### Documentation site
+
+The official documentation site is a separate VitePress application rooted at
+the repository root. Its config is `.vitepress/config.ts`; Markdown pages come
+from root `index.md`, `README.md`, `CHANGELOG.md`, and canonical `docs/*.md`
+files. Generated output is written to `.vitepress/dist/`. Edit those sources in
+place instead of keeping a second website-copy corpus. The site has one current
+edition, not versioned documentation sets. Use Node 24 to match CI.
+
+```bash
+npm run docs:dev
+npm run docs:build
+npm run docs:preview
+```
+
+Use `docs:dev` for live editing. `docs:preview` serves the last static build;
+restart it after rebuilding so cached file metadata does not serve old HTML or
+asset names. Verify the built site under `/Zotero-Neo/`, not just the dev root.
+
+npm 12 blocks Git dependencies by default. The existing frozen lock includes
+two Git dependencies of `zotero-types`; they are unrelated to VitePress. For
+that trusted lock, the Linux installation path exercised for this site was
+`npm ci --allow-git=all --ignore-scripts`. This is a per-command opt-in, not a
+global policy change or permission to add arbitrary Git dependencies.
+
+GitHub Pages deployment uses the project base `/Zotero-Neo/`. Before the first
+publication, a repository administrator must enable Pages with **GitHub Actions**
+as its build source. Pull requests build and check the site but never publish;
+production deployment is guarded to `main`. The Pages workflow and output are
+independent of the XPI builder, extension runtime, update feed, and release
+process. Site-only development dependencies are not bundled into the plugin.
+
 ### Local GUI iteration from WSL
 
 Ordinary GUI work should not depend on a GitHub Actions artifact. Use a
@@ -440,8 +472,8 @@ surface; an action may intentionally request close-before-confirm, as Command
 Palette does when opening another chooser.
 
 Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` adapter, backed by
-the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the runtime IIFE; no
-npm/CDN/native dependency is resolved at runtime. Keep consumers behind the adapter instead of
+the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the extension runtime IIFE; no
+npm/CDN/native dependency is resolved at plugin runtime. VitePress is a site-only development dependency, not a vendored plugin runtime dependency. Keep consumers behind the adapter instead of
 importing the vendor module throughout feature code.
 
 The shell owns generic navigation: unmodified ArrowUp/ArrowDown when search/list owns interaction,

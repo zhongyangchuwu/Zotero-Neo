@@ -6,6 +6,7 @@ All notable changes to Zotero Neo are documented here.
 
 ### Added
 
+- Add a single-source VitePress documentation site with the default theme, local Chinese/key-notation search, and responsive light/dark navigation. Existing repository Markdown remains canonical; GitHub Pages checks and guarded main-only deployment are independent of XPI publication, and current-source documentation remains distinct from the public v0.1.0 package.
 - Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains a distinct action from Back/Forward.
 - Add per-Main-window stack-style navigation history with a 100-location bound and forward-suffix truncation. Canonical `navigateBack` / `navigateForward` actions default to `<C-o>` / `<C-i>` in Main, Reader, and Note Normal; shortcut counts traverse history, while palette actions remain uncounted.
 - Add a help-style command reference for Main, Reader, Note, and modal surfaces, including shipped bindings, action IDs, counts, targets, feature dependencies, and the shared jumplist's recording, restoration, and failure boundaries.

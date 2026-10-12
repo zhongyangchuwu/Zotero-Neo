@@ -116,13 +116,19 @@ comment semantics, navigation history, the native-sidebar layout, or the impleme
 Notes choice workflow. Phase 9.3 still has a distinct physical-input/package
 acceptance boundary, not a mandate for another broad refactor.
 
-1. **Finish current-package acceptance** in
-   [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
-   Pin the integrated candidate and reuse unchanged package migration/restart and
-   schema-18 preference evidence when the XPI is byte-identical. Observe one action
-   per shortcut in each live view, then record actual human OS-IME/native-editable,
-   clipboard and Outline outcomes. Historical DOM composition is not human PASS.
-   A concrete failure gets its own bounded defect; no speculative rewrite.
+1. **Complete the remaining human-input acceptance** in
+   [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137). The native-tested
+   v0.2.0 package (`bfda2cdaae4b6233cf69309325a6e37d12de08ca`, XPI SHA256
+   `687c291d32310ddb971a495f918b79f11a7517949c945bd31519239aac8ffab2`) was
+   persistently installed and upgraded from the actual public v0.1.0 package in
+   isolated Zotero 10.0.6 profiles; restart, preference migration, and trusted
+   Gecko per-view routes were observed. Those receipts belong to draft PR #143,
+   not this main-derived tree, whose manifest and public feed remain v0.1.0.
+   Physical OS-IME candidate confirmation/composing Escape and Backspace, human
+   clipboard, and native Outline activation remain **NOT PERFORMED**. Trusted
+   events and API/UI evidence are not human PASS. Do not rerun unchanged package
+   checks or infer physical acceptance; a concrete failure gets its own bounded
+   defect, not a speculative rewrite.
 2. **Finish the remaining integration acceptance**, not another Notes rewrite.
    [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140) implements the
    accepted [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) contract;
@@ -154,12 +160,15 @@ compatibility path until that external prerequisite exists.
 
 ## Release gate
 
-The published release and manifest/package/update-feed versions remain v0.1.0;
-the current v0.2 source work is not a published release.
+The public release and the manifest/package/update feed on `main` remain v0.1.0.
+The separately prepared v0.2.0 candidate package belongs to draft PR #143; its
+native installation, upgrade, and trusted-route receipts are recorded in #137,
+but it is not published or part of this main-derived site's manifest/package.
 
 Passing the v0.1.0 metadata validator proves the existing baseline, not readiness
-for v0.2: the public update feed still points to the old published asset, while
-source builds retain the same version until a new release is explicitly prepared.
+for v0.2.0. This main-derived tree still has manifest version `0.1.0`, and a source
+build from it remains unreleased; the public update feed points to the v0.1.0 asset.
+Do not mistake either package identity for a public v0.2.0 release.
 
 Before another release:
 
