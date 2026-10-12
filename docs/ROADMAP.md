@@ -154,12 +154,14 @@ compatibility path until that external prerequisite exists.
 
 ## Release gate
 
-The published release and manifest/package/update-feed versions remain v0.1.0;
-the current v0.2 source work is not a published release.
+The published release remains v0.1.0. The preparation branch now carries matching
+v0.2.0 manifest/package metadata and its proposed update-feed entry; this is an
+unpublished candidate, not a new public release. The public `main` update feed
+must keep serving v0.1.0 until acceptance and publication are explicitly authorized.
 
-Passing the v0.1.0 metadata validator proves the existing baseline, not readiness
-for v0.2: the public update feed still points to the old published asset, while
-source builds retain the same version until a new release is explicitly prepared.
+Passing `tools/check-release.mjs v0.2.0` proves candidate metadata consistency, not
+human acceptance or a live release asset. Keep this preparation branch unmerged
+while #137's remaining criteria and the final packaged upgrade are unperformed.
 
 Before another release:
 
@@ -170,6 +172,13 @@ Before another release:
   notes, and installation links before tagging; use `tools/check-release.mjs`;
 - describe actual CI coverage: the current workflow verifies/packages on Ubuntu.
   Do not claim Windows CI coverage without restoring that job and observing it pass.
+
+Release preparation and documentation content are owned by
+[#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142). The selected scope
+is content first, website later: the [website copy](WEBSITE_CONTENT.md) and
+[recording guide](RECORDING_GUIDE.md) prepare complete workflows without site code
+or invented demonstrations. Use the [candidate acceptance guide](V0_2_ACCEPTANCE.md)
+for real installation, upgrade, native input and per-view results.
 
 Longer-term candidates remain command-palette arguments/history, richer safe
 tag operations, keymap import/export after the schema stabilizes in real use,

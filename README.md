@@ -7,6 +7,10 @@ for Zotero's reader and main window.
 
 > **Status:** v0.1.0 released on 2026-09-19. Download the packaged XPI from
 > [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
+>
+> **Candidate:** v0.2.0 is being prepared for acceptance and is not published.
+> See the [candidate acceptance guide](docs/V0_2_ACCEPTANCE.md) before installing
+> a preparation-branch build. The public download above remains v0.1.0.
 
 ## Support
 
@@ -120,9 +124,9 @@ npm ci
 
 The output is `zotero-neo.xpi`.
 
-The source build is an unreleased candidate, even while its manifest still says
-`0.1.0`. Install that XPI explicitly to try current-source behavior; the public
-update feed and release link above still deliver the published v0.1.0 package.
+The preparation branch builds an unreleased `0.2.0` candidate. Install that XPI
+explicitly for isolated acceptance; the public update feed and release link above
+still deliver the published v0.1.0 package until an authorized release completes.
 Reinstalling retains Neo preferences and is not a clean-install or upgrade test.
 
 On Windows:
@@ -136,6 +140,9 @@ From File…** and restart when prompted.
 
 ## Documentation
 
+- [v0.2 candidate acceptance](docs/V0_2_ACCEPTANCE.md) — isolated install/upgrade, native-input and per-view acceptance steps; not a claim of completed manual verification.
+- [Website content](docs/WEBSITE_CONTENT.md) — Chinese feature/workflow copy and page organization for the later documentation website.
+- [Recording guide](docs/RECORDING_GUIDE.md) — real screencast/key-operation scripts and media conventions; no fabricated demonstration assets.
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
 - [Command reference](docs/COMMAND_REFERENCE.md) — complete ActionId/default-key lookup, mode and temporary-surface grammars, and shared navigation/jumplist behavior.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,

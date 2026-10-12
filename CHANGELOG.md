@@ -2,7 +2,34 @@
 
 All notable changes to Zotero Neo are documented here.
 
-## [Unreleased]
+## [0.2.0] - Release candidate (unreleased)
+
+This candidate is prepared for acceptance, not published. The public release is
+still v0.1.0. Human/native input and per-view package acceptance remain open in
+[#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137); the final v0.1.0 to
+v0.2.0 packaged upgrade must be observed before publication.
+
+### Release overview
+
+- Keep Main, Reader and Note interaction separate: exact mode/feature contexts,
+  Zotero-owned native data, and Surface-owned action targets without hidden keymap
+  inheritance or borrowed Main Selection.
+- Bring Library worksets, contextual tag/collection actions and optional citekey
+  output into complete keyboard workflows, with explicit destructive-target safety.
+- Add shared Back/Forward across Main, Reader and Note, preserving readable Reader
+  locations and keeping Show in Library separate.
+- Enhance the native Reader Sidebar and document-position navigation for headings,
+  genuine Figures/Tables, annotations and Bookmarks; keep native Thumbnails and
+  annotations authoritative.
+- Make existing-note capture current-Item-first and target-safe: honest empty state,
+  explicit Library browsing, actual-parent Preview and native-save receipts.
+- Expose action-centric shortcut discovery and staged Apply across 14 exact
+  contexts, alongside shared language/theme settings and Plugin Manager over native
+  add-on APIs.
+- Retire Reader Insert and preserve upgrade intent through binding schema 18;
+  annotation comments retain Enter newline, Escape save-close and fixed autosave.
+- Prepare Chinese website content and real recording/acceptance scripts; no website
+  implementation, recording assets or new runtime dependency is included.
 
 ### Added
 
