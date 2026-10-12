@@ -1,5 +1,5 @@
 import type { ActionId } from '../input/actions';
-import type { BindingMap, Mode } from '../input/bindings';
+import type { BindingMap, BindingContext } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
@@ -12,7 +12,7 @@ export type CommandPaletteMode = 'normal' | 'main' | 'note';
 
 export interface CommandPaletteContext {
   readonly mode: CommandPaletteMode;
-  readonly bindingMode: Mode;
+  readonly bindingMode: BindingContext;
   readonly actions: readonly ActionId[];
   readonly bindings: BindingMap;
   readonly language: 'en' | 'zh-CN';

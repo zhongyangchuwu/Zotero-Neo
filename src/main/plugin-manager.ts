@@ -1,5 +1,13 @@
 import type { MainWindow } from '../core/contracts';
+import { ACTION_LABELS, type ActionId } from '../input/actions';
+import { DEFAULT_BINDINGS, type BindingContext, type BindingMap } from '../input/bindings';
+import { LocalBindingRuntime } from '../input/local-binding-runtime';
+import { nativeReservation, shortcutsForAction } from '../input/shortcut-catalog';
 import { keyString } from '../input/keys';
+import { serializeBindingTokens } from '../input/key-sequence';
+import { bindCompositionState, compositionOwnsKey, isCommittedInput } from '../input/composition';
+import { asElement, isEditableElement } from '../platform/dom';
+import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './plugin-manager-capabilities';
 import { THEME_VARS } from '../ui/theme';
 import { fuzzyMatchScore } from './picker/fuzzy';
 import {
@@ -38,9 +46,12 @@ export function filterInstalledPlugins(
 
 export class PluginManagerPanel {
   readonly #logger: PluginManagerLogger;
+  readonly #bindings: () => BindingMap;
+  readonly #sessions = new WeakSet<MainWindowSession>();
 
-  constructor(logger: PluginManagerLogger) {
+  constructor(logger: PluginManagerLogger, bindings: () => BindingMap = () => DEFAULT_BINDINGS) {
     this.#logger = logger;
+    this.#bindings = bindings;
   }
 
   open(window: MainWindow, session: MainWindowSession): void {
@@ -48,6 +59,10 @@ export class PluginManagerPanel {
     if (state.open) {
       state.overlay?.focus();
       return;
+    }
+    if (!this.#sessions.has(session)) {
+      this.#sessions.add(session);
+      session.cleanup.add(() => this.close(session));
     }
 
     const doc = window.document;
@@ -69,7 +84,7 @@ export class PluginManagerPanel {
     count.style.cssText = `color:${THEME_VARS.muted};white-space:nowrap`;
     const input = doc.createElementNS(H, 'input') as HTMLInputElement;
     input.type = 'text';
-    input.placeholder = '/ Filter installed plugins';
+    input.placeholder = 'Filter installed plugins';
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.style.cssText = `flex:1;min-width:140px;padding:6px 9px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:5px;outline:none;font:inherit`;
@@ -103,7 +118,6 @@ export class PluginManagerPanel {
     state.notice = '';
     state.query = '';
     state.selected = 0;
-    state.commandBuffer = '';
     state.overlay = overlay;
     state.list = list;
     state.details = details;
@@ -112,18 +126,49 @@ export class PluginManagerPanel {
     state.footer = footer;
     state.previousElement = doc.activeElement;
     state.themeCleanup = session.theme.add(overlay);
+    state.composition = { active: false };
+    state.localBindings = new LocalBindingRuntime({
+      bindings: this.#bindings,
+      execute: (action, event) =>
+        state.open && state.overlay === overlay && this.execute(action, event, window, session),
+      schedule: (callback, delay) => window.setTimeout(callback, delay),
+      clearTimer: (timer) => window.clearTimeout(timer),
+    });
+    const compositionCleanup = bindCompositionState(input, state.composition);
+    const localBindings = state.localBindings;
+    const deactivate = (): void => localBindings?.deactivate();
+    const focus = (): void => {
+      if (!state.open || state.overlay !== overlay) return;
+      deactivate();
+      this.renderFooter(session);
+    };
+    input.addEventListener('compositionstart', deactivate);
+    overlay.addEventListener('focusout', deactivate);
+    input.addEventListener('focus', focus);
 
-    const onInput = (): void => {
+    const onInput = (event: Event): void => {
+      if (
+        !state.open ||
+        state.overlay !== overlay ||
+        !isCommittedInput(event, state.composition.active)
+      )
+        return;
       state.query = input.value;
       state.selected = 0;
       this.filter(session);
       this.render(session);
     };
     input.addEventListener('input', onInput);
-    state.inputCleanup = () => input.removeEventListener('input', onInput);
+    state.inputCleanup = () => {
+      compositionCleanup();
+      input.removeEventListener('input', onInput);
+      input.removeEventListener('compositionstart', deactivate);
+      input.removeEventListener('focus', focus);
+      overlay.removeEventListener('focusout', deactivate);
+    };
 
     overlay.addEventListener('mousedown', (event) => {
-      if (event.target === overlay) this.close(session);
+      if (state.open && state.overlay === overlay && event.target === overlay) this.close(session);
     });
 
     overlay.focus();
@@ -135,8 +180,8 @@ export class PluginManagerPanel {
     const state = session.pluginManager;
     if (!state.open) return;
     state.generation += 1;
-    session.window.clearTimeout(state.commandTimer);
-    state.commandTimer = undefined;
+    state.localBindings?.dispose();
+    state.localBindings = null;
     state.inputCleanup?.();
     state.inputCleanup = null;
     state.themeCleanup?.();
@@ -150,7 +195,6 @@ export class PluginManagerPanel {
     state.selected = 0;
     state.query = '';
     state.notice = '';
-    state.commandBuffer = '';
     state.overlay = null;
     state.list = null;
     state.details = null;
@@ -166,117 +210,114 @@ export class PluginManagerPanel {
   handleKey(event: KeyboardEvent, window: MainWindow, session: MainWindowSession): void {
     const state = session.pluginManager;
     if (!state.open) return;
-
-    const inputFocused = event.target === state.input;
-    if (inputFocused) {
-      event.stopPropagation();
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        state.input?.blur();
-        state.overlay?.focus();
-      }
+    const eventTarget = asElement(event.target);
+    let target = eventTarget;
+    while (
+      target &&
+      target !== state.input &&
+      target !== state.overlay &&
+      target !== state.list &&
+      target !== state.details
+    )
+      target = target.parentElement;
+    if (!target) {
+      state.localBindings?.deactivate();
       return;
     }
-
+    if (
+      eventTarget?.localName === 'button' ||
+      (eventTarget !== state.input && isEditableElement(eventTarget))
+    ) {
+      state.localBindings?.deactivate();
+      event.stopPropagation();
+      return;
+    }
+    if (
+      compositionOwnsKey(event, state.composition.active) ||
+      event.getModifierState?.('AltGraph')
+    ) {
+      state.localBindings?.deactivate();
+      event.stopPropagation();
+      return;
+    }
+    const context = target === state.input ? 'plugins-input' : 'plugins-list';
     const key = keyString(event);
-    const consume = (): void => {
+    if (key && nativeReservation(context, serializeBindingTokens([key])) === 'exclusive') {
+      state.localBindings?.deactivate();
+      event.stopPropagation();
+      return;
+    }
+    this.renderFooter(session, context);
+    if (state.localBindings?.handle(event, context)) {
       event.preventDefault();
       event.stopImmediatePropagation?.();
-      event.stopPropagation();
-    };
-    if (!key) {
-      event.stopPropagation();
-      return;
     }
+    event.stopPropagation();
+    void window;
+  }
 
-    if (key === 'escape' || key === 'q') {
-      consume();
-      this.close(session);
-      return;
-    }
-    if (key === '/') {
-      consume();
-      state.input?.focus();
-      state.input?.select();
-      return;
-    }
-    if (key === 'r') {
-      consume();
-      void this.refresh(window, session);
-      return;
-    }
-    if (key === 'e') {
-      consume();
-      void this.setEnabled(window, session, true);
-      return;
-    }
-    if (key === 'd') {
-      consume();
-      void this.setEnabled(window, session, false);
-      return;
-    }
-    if (key === 'p') {
-      consume();
-      this.openPreferences(session);
-      return;
-    }
-    if (key === 'o') {
-      consume();
-      this.openInfo(session, 'homepage');
-      return;
-    }
-    if (key === 'R') {
-      consume();
-      this.openInfo(session, 'readme');
-      return;
-    }
-    if (key === 'L') {
-      consume();
-      this.openInfo(session, 'git-log');
-      return;
-    }
-    if (key === 'G' || key === 'end') {
-      consume();
-      this.select(session, Math.max(0, state.filtered.length - 1));
-      return;
-    }
-    if (key === 'home') {
-      consume();
-      this.select(session, 0);
-      return;
-    }
-    if (key === 'g') {
-      consume();
-      if (state.commandBuffer === 'g') {
-        this.clearCommand(session);
+  private execute(
+    action: ActionId,
+    _event: KeyboardEvent | null,
+    window: MainWindow,
+    session: MainWindowSession,
+  ): boolean {
+    const state = session.pluginManager;
+    switch (action) {
+      case 'uiFocusList':
+        state.overlay?.focus();
+        this.renderFooter(session);
+        break;
+      case 'uiCancel':
+        this.close(session);
+        break;
+      case 'uiSearch':
+        state.input?.focus();
+        state.input?.select();
+        break;
+      case 'uiNext':
+        this.move(session, 1);
+        break;
+      case 'uiPrevious':
+        this.move(session, -1);
+        break;
+      case 'uiFirst':
         this.select(session, 0);
-      } else {
-        state.commandBuffer = 'g';
-        session.window.clearTimeout(state.commandTimer);
-        state.commandTimer = session.window.setTimeout(() => this.clearCommand(session), 700);
-        this.renderFooter(session, 'g … (gg top)');
-      }
-      return;
+        break;
+      case 'uiLast':
+        this.select(session, Math.max(0, state.filtered.length - 1));
+        break;
+      case 'uiPageDown':
+        this.move(session, 8);
+        break;
+      case 'uiPageUp':
+        this.move(session, -8);
+        break;
+      case 'pluginsRefresh':
+        void this.refresh(window, session);
+        break;
+      case 'pluginsEnable':
+        void this.setEnabled(window, session, true);
+        break;
+      case 'pluginsDisable':
+        void this.setEnabled(window, session, false);
+        break;
+      case 'pluginsPreferences':
+        this.openPreferences(session);
+        break;
+      case 'pluginsHomepage':
+        this.openInfo(session, 'homepage');
+        break;
+      case 'pluginsReadme':
+        this.openInfo(session, 'readme');
+        break;
+      case 'pluginsGitLog':
+        this.openInfo(session, 'git-log');
+        break;
+      default:
+        return false;
     }
-    this.clearCommand(session);
-
-    if (key === 'j' || key === 'arrowdown') {
-      consume();
-      this.move(session, 1);
-      return;
-    }
-    if (key === 'k' || key === 'arrowup') {
-      consume();
-      this.move(session, -1);
-      return;
-    }
-    if (key === 'ctrl+d' || key === 'ctrl+u') {
-      consume();
-      this.move(session, key === 'ctrl+d' ? 8 : -8);
-      return;
-    }
-
-    consume();
+    return true;
   }
 
   async refresh(window: MainWindow, session: MainWindowSession): Promise<void> {
@@ -308,7 +349,6 @@ export class PluginManagerPanel {
       if (!state.open || state.generation !== generation) return;
       state.loading = false;
       this.render(session);
-      state.overlay?.focus();
       void window;
     }
   }
@@ -341,19 +381,22 @@ export class PluginManagerPanel {
       return;
     }
 
+    const overlay = state.overlay;
     state.busy = true;
     state.notice = `${enabled ? 'Enabling' : 'Disabling'} ${plugin.name}…`;
     this.render(session);
     try {
       await setPluginEnabled(plugin.id, enabled);
+      if (!state.open || state.overlay !== overlay) return;
       state.notice = `${enabled ? 'Enabled' : 'Disabled'} ${plugin.name}`;
       await this.refresh(window, session);
     } catch (error) {
+      if (!state.open || state.overlay !== overlay) return;
       state.notice = `Failed to ${enabled ? 'enable' : 'disable'} ${plugin.name}: ${String(error)}`;
       this.#logger.debug(`plugin manager lifecycle action failed: ${String(error)}`);
       this.#logger.diagnostic(`plugin manager lifecycle action failed: ${String(error)}`);
     } finally {
-      if (!state.open) return;
+      if (!state.open || state.overlay !== overlay) return;
       state.busy = false;
       this.render(session);
     }
@@ -426,13 +469,6 @@ export class PluginManagerPanel {
     this.render(session);
   }
 
-  private clearCommand(session: MainWindowSession): void {
-    const state = session.pluginManager;
-    session.window.clearTimeout(state.commandTimer);
-    state.commandTimer = undefined;
-    state.commandBuffer = '';
-  }
-
   private render(session: MainWindowSession): void {
     const state = session.pluginManager;
     const list = state.list;
@@ -481,7 +517,12 @@ export class PluginManagerPanel {
       version.textContent = plugin.version || '—';
       version.style.cssText = `color:${THEME_VARS.muted};font-size:11px`;
       row.append(marker, label, version);
-      row.addEventListener('click', () => this.select(session, index));
+      row.addEventListener('click', () => {
+        if (!state.open || state.list !== list || row.parentElement !== list) return;
+        state.localBindings?.deactivate();
+        state.list?.focus();
+        this.select(session, index);
+      });
       list.append(row);
     });
 
@@ -494,6 +535,7 @@ export class PluginManagerPanel {
     const state = session.pluginManager;
     const details = state.details;
     if (!details) return;
+    const bindings = this.#bindings();
     const plugin = state.filtered[state.selected];
     if (!plugin) {
       details.textContent = state.loading ? 'Loading plugin details…' : 'No plugin selected.';
@@ -545,19 +587,26 @@ export class PluginManagerPanel {
       link.textContent = labelText;
       link.title = url;
       link.style.cssText = `padding:0;border:0;background:none;color:${THEME_VARS.accent};font:inherit;text-decoration:underline;cursor:pointer`;
-      link.addEventListener('click', () => openPluginInfoURL(url));
+      link.addEventListener('click', () => {
+        if (state.open && state.details === details && links.parentElement === details)
+          openPluginInfoURL(url);
+      });
       links.append(link);
     }
 
     const actions = doc.createElementNS(H, 'div');
     actions.style.cssText = `margin-top:24px;padding-top:16px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted}`;
     const hints = [
-      !plugin.enabled && plugin.canEnable ? 'e  Enable' : null,
-      plugin.enabled && plugin.canDisable ? 'd  Disable' : null,
-      plugin.preferencePaneID ? 'p  Settings' : null,
-      plugin.homepageURL ? 'o  Homepage' : null,
-      plugin.readmeURL ? 'R  README' : null,
-      plugin.gitLogURL ? 'L  Git log' : null,
+      !plugin.enabled && plugin.canEnable
+        ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
+        : null,
+      plugin.enabled && plugin.canDisable
+        ? this.hint(bindings, 'plugins-list', 'pluginsDisable')
+        : null,
+      plugin.preferencePaneID ? this.hint(bindings, 'plugins-list', 'pluginsPreferences') : null,
+      plugin.homepageURL ? this.hint(bindings, 'plugins-list', 'pluginsHomepage') : null,
+      plugin.readmeURL ? this.hint(bindings, 'plugins-list', 'pluginsReadme') : null,
+      plugin.gitLogURL ? this.hint(bindings, 'plugins-list', 'pluginsGitLog') : null,
     ].filter((hint): hint is string => !!hint);
     actions.textContent = hints.length
       ? `Shortcuts\n${hints.join('  ·  ')}`
@@ -568,26 +617,46 @@ export class PluginManagerPanel {
     details.append(actions);
   }
 
-  private renderFooter(session: MainWindowSession, message?: string): void {
+  private renderFooter(session: MainWindowSession, context?: BindingContext): void {
     const state = session.pluginManager;
     if (!state.footer) return;
-    if (message) {
-      state.footer.textContent = message;
-      return;
-    }
+    const bindings = this.#bindings();
     const plugin = state.filtered[state.selected];
     const actions = plugin
       ? [
-          !plugin.enabled && plugin.canEnable ? 'e enable' : null,
-          plugin.enabled && plugin.canDisable ? 'd disable' : null,
-          plugin.preferencePaneID ? 'p settings' : null,
-          plugin.homepageURL ? 'o homepage' : null,
-          plugin.readmeURL ? 'R README' : null,
-          plugin.gitLogURL ? 'L git-log' : null,
+          !plugin.enabled && plugin.canEnable
+            ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
+            : null,
+          plugin.enabled && plugin.canDisable
+            ? this.hint(bindings, 'plugins-list', 'pluginsDisable')
+            : null,
+          plugin.preferencePaneID
+            ? this.hint(bindings, 'plugins-list', 'pluginsPreferences')
+            : null,
+          plugin.homepageURL ? this.hint(bindings, 'plugins-list', 'pluginsHomepage') : null,
+          plugin.readmeURL ? this.hint(bindings, 'plugins-list', 'pluginsReadme') : null,
+          plugin.gitLogURL ? this.hint(bindings, 'plugins-list', 'pluginsGitLog') : null,
         ].filter((hint): hint is string => !!hint)
       : [];
     const notice = state.notice ? ` · ${state.notice}` : '';
     const busy = state.busy ? ' · working…' : '';
-    state.footer.textContent = `j/k move · gg/G top/bottom · / filter · r refresh${actions.length ? ` · ${actions.join(' · ')}` : ''} · Esc/q close${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}${busy}${notice}`;
+    const ownedContext =
+      context ??
+      (session.window.document.activeElement === state.input ? 'plugins-input' : 'plugins-list');
+    const navigation =
+      ownedContext === 'plugins-input'
+        ? PLUGINS_INPUT_ACTIONS
+        : PLUGINS_LIST_ACTIONS.filter(
+            (action) => !action.startsWith('plugins') || action === 'pluginsRefresh',
+          );
+    const hints = navigation
+      .map((action) => this.hint(bindings, ownedContext, action))
+      .filter(Boolean);
+    state.footer.textContent = `${[...hints, ...(ownedContext === 'plugins-list' ? actions : [])].join(' · ')}${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}${busy}${notice}`;
+  }
+
+  private hint(bindings: BindingMap, context: BindingContext, action: ActionId): string | null {
+    const keys = shortcutsForAction(bindings, context, action);
+    return keys.length ? `${keys.join('/')} ${ACTION_LABELS[action].en}` : null;
   }
 }

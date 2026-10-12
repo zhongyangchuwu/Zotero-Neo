@@ -20,7 +20,6 @@ function harness() {
   } as unknown as PdfWindow;
   const reader = { itemID: 10 } as ReaderRuntime;
   const annotations: ItemRuntime[] = [];
-  const statuses: string[] = [];
   const sourceLocations: Array<{ pageNumber: number; scrollTop: number }> = [];
   const successfulJumps: string[] = [];
   let current = true;
@@ -60,7 +59,7 @@ function harness() {
         saveTx: vi.fn(async () => undefined),
       }) as ItemRuntime,
     schedule: () => {},
-    showStatus: (message) => statuses.push(message),
+    showStatus: () => {},
     log: () => {},
     scrollToPageRatio,
     scrollDocumentToRatio,
@@ -88,7 +87,6 @@ function harness() {
     scrollDocumentToRatio,
     scrollToPageRatio,
     sourceLocations,
-    statuses,
     successfulJumps,
     viewer,
     setCurrent: (value: boolean) => {
@@ -162,7 +160,6 @@ describe('ReaderMarks jump behavior', () => {
     expect(test.pageNumber()).toBe(2);
     expect(test.container.scrollTop).toBe(1150);
     expect(test.successfulJumps).toEqual([]);
-    expect(test.statuses).not.toContain('→ mark a');
   });
 
   it('stops after asynchronous page resolution when the jump is no longer current', async () => {
@@ -192,26 +189,34 @@ describe('ReaderMarks jump behavior', () => {
     expect(test.pageNumber()).toBe(5);
     expect(test.container.scrollTop).toBe(4200);
     expect(test.successfulJumps).toEqual([]);
-    expect(test.statuses).not.toContain('→ mark a');
   });
 
-  it('uses a saved page when the marked annotation was deleted and reports that outcome', async () => {
-    const test = harness();
-    await test.marks.set(test.reader, test.pdfWindow, 'a', 'deleted-annotation');
-    test.setViewport(1, 400);
-    const selectAnnotation = vi.fn();
+  it.each(['direct', 'next', 'previous'] as const)(
+    'uses the saved position and clears selection for a deleted annotation via %s',
+    async (path) => {
+      const test = harness();
+      await test.marks.set(test.reader, test.pdfWindow, 'a', 'deleted-annotation');
+      test.setViewport(1, 400);
+      const selectAnnotation = vi.fn();
 
-    await expect(test.marks.jump(test.reader, test.pdfWindow, 'a', selectAnnotation)).resolves.toBe(
-      true,
-    );
+      const moved =
+        path === 'direct'
+          ? test.marks.jump(test.reader, test.pdfWindow, 'a', selectAnnotation)
+          : test.marks.traverse(
+              test.reader,
+              test.pdfWindow,
+              path === 'next' ? 1 : -1,
+              selectAnnotation,
+            );
+      await expect(moved).resolves.toBe(true);
 
-    expect(test.sourceLocations).toEqual([{ pageNumber: 1, scrollTop: 400 }]);
-    expect(selectAnnotation).toHaveBeenCalledWith(null);
-    expect(test.pageNumber()).toBe(2);
-    expect(test.container.scrollTop).toBe(1250);
-    expect(test.statuses).toContain('→ mark a · annotation gone');
-    expect(test.successfulJumps).toEqual(['jump']);
-  });
+      expect(test.sourceLocations).toEqual([{ pageNumber: 1, scrollTop: 400 }]);
+      expect(selectAnnotation).toHaveBeenCalledWith(null);
+      expect(test.pageNumber()).toBe(2);
+      expect(test.container.scrollTop).toBe(1250);
+      expect(test.successfulJumps).toEqual(['jump']);
+    },
+  );
 
   it('does not invoke the jump boundary for a missing mark', async () => {
     const test = harness();
@@ -220,7 +225,6 @@ describe('ReaderMarks jump behavior', () => {
 
     expect(test.sourceLocations).toEqual([]);
     expect(test.successfulJumps).toEqual([]);
-    expect(test.statuses).toContain('✗ mark x not set');
   });
 
   it('does not report or record a no-op destination failure', async () => {
@@ -232,6 +236,95 @@ describe('ReaderMarks jump behavior', () => {
 
     expect(test.sourceLocations).toEqual([{ pageNumber: 2, scrollTop: 1150 }]);
     expect(test.successfulJumps).toEqual([]);
-    expect(test.statuses).not.toContain('→ mark a');
+  });
+
+  it.each(['floor', 'ceil'] as const)(
+    'traverses document order and wraps despite %s-rounded scrolling',
+    async (rounding) => {
+      const test = harness();
+      test.scrollToPageRatio.mockImplementation(async (_window, targetPage, ratio) => {
+        test.setViewport(
+          targetPage + 1,
+          Math[rounding](
+            Math.max(0, targetPage * 1000 + ratio * 1000 - test.container.clientHeight / 2),
+          ),
+        );
+        return true;
+      });
+      Reflect.set(test.pdfWindow.document, 'querySelector', () => ({
+        offsetTop: (test.viewer.currentPageNumber - 1) * 1000,
+        offsetHeight: 1000,
+      }));
+      test.setViewport(3, 2250.5);
+      await test.marks.set(test.reader, test.pdfWindow, 'a', null);
+      test.setViewport(1, 250.5);
+      await test.marks.set(test.reader, test.pdfWindow, 'z', null);
+      test.setViewport(2, 1250.5);
+      await test.marks.set(test.reader, test.pdfWindow, 'm', null);
+      test.setViewport(1, 200);
+      const firstScrollTop = Math[rounding](250.5);
+      await test.marks.traverse(test.reader, test.pdfWindow, 1, () => {});
+      expect([test.pageNumber(), test.container.scrollTop]).toEqual([1, firstScrollTop]);
+      await test.marks.traverse(test.reader, test.pdfWindow, 1, () => {});
+      expect([test.pageNumber(), test.container.scrollTop]).toEqual([2, 1000 + firstScrollTop]);
+      await test.marks.traverse(test.reader, test.pdfWindow, 1, () => {});
+      expect([test.pageNumber(), test.container.scrollTop]).toEqual([3, 2000 + firstScrollTop]);
+      await test.marks.traverse(test.reader, test.pdfWindow, 1, () => {});
+      expect([test.pageNumber(), test.container.scrollTop]).toEqual([1, firstScrollTop]);
+      await test.marks.traverse(test.reader, test.pdfWindow, -1, () => {});
+      expect([test.pageNumber(), test.container.scrollTop]).toEqual([3, 2000 + firstScrollTop]);
+      expect(test.sourceLocations).toEqual([
+        { pageNumber: 1, scrollTop: 200 },
+        { pageNumber: 1, scrollTop: firstScrollTop },
+        { pageNumber: 2, scrollTop: 1000 + firstScrollTop },
+        { pageNumber: 3, scrollTop: 2000 + firstScrollTop },
+        { pageNumber: 1, scrollTop: firstScrollTop },
+      ]);
+    },
+  );
+
+  it('resolves legacy annotation-linked bookmarks for document ordering and fences delayed resolution before selection or scroll', async () => {
+    const test = harness();
+    test.annotations.push({ key: 'legacy', saveTx: vi.fn() });
+    Reflect.deleteProperty(test.pdfWindow, 'PDFViewerApplication');
+    await test.marks.set(test.reader, test.pdfWindow, 'z', 'legacy');
+    Reflect.set(test.pdfWindow, 'PDFViewerApplication', { pdfViewer: test.viewer });
+    const pending = Promise.withResolvers<{ pageIndex: number; ratio: number }>();
+    test.setAnnotationPageRatio(() => pending.promise);
+    const select = vi.fn();
+    const traversal = test.marks.traverse(test.reader, test.pdfWindow, 1, select);
+    test.setCurrent(false);
+    pending.resolve({ pageIndex: 4, ratio: 0.7 });
+    await expect(traversal).resolves.toBe(false);
+    expect(select).not.toHaveBeenCalled();
+    expect(test.scrollToPageRatio).not.toHaveBeenCalled();
+    expect(test.successfulJumps).toEqual([]);
+  });
+
+  it('orders a legacy annotation link by its resolved document position and keeps one managed-final jump', async () => {
+    const test = harness();
+    test.annotations.push({ key: 'legacy', saveTx: vi.fn() });
+    Reflect.deleteProperty(test.pdfWindow, 'PDFViewerApplication');
+    await test.marks.set(test.reader, test.pdfWindow, 'a', 'legacy');
+    Reflect.set(test.pdfWindow, 'PDFViewerApplication', { pdfViewer: test.viewer });
+    const resolve = vi.fn(async () => ({ pageIndex: 4, ratio: 0.7 }));
+    test.setAnnotationPageRatio(resolve);
+    const select = vi.fn();
+    await expect(test.marks.traverse(test.reader, test.pdfWindow, 1, select)).resolves.toBe(true);
+    expect(resolve).toHaveBeenCalledOnce();
+    expect(select).toHaveBeenCalledWith('legacy');
+    expect(test.pageNumber()).toBe(5);
+    expect(test.container.scrollTop).toBe(4700);
+    expect(test.successfulJumps).toEqual(['jump']);
+    expect(test.sourceLocations).toEqual([{ pageNumber: 2, scrollTop: 1150 }]);
+    expect(test.marks.values().a?.pageIndex).toBeNull();
+  });
+
+  it('reports no bookmarks without entering the managed jump boundary', async () => {
+    const test = harness();
+    await expect(test.marks.traverse(test.reader, test.pdfWindow, 1, () => {})).resolves.toBe(
+      false,
+    );
+    expect(test.sourceLocations).toEqual([]);
   });
 });

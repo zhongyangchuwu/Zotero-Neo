@@ -1,3 +1,5 @@
+import type { CompositionState } from '../input/composition';
+import type { LocalBindingRuntime } from '../input/local-binding-runtime';
 import type { InstalledPlugin } from './plugin-host';
 
 /** Mutable state owned by one Main plugin-manager feature instance. */
@@ -12,8 +14,8 @@ export class PluginManagerRuntime {
   filtered: InstalledPlugin[] = [];
   selected = 0;
   query = '';
-  commandBuffer = '';
-  commandTimer: number | undefined;
+  composition: CompositionState = { active: false };
+  localBindings: LocalBindingRuntime | null = null;
   overlay: HTMLElement | null = null;
   list: HTMLElement | null = null;
   details: HTMLElement | null = null;

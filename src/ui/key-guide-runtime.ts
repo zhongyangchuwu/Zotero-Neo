@@ -1,4 +1,4 @@
-import type { BindingMap, Mode } from '../input/bindings';
+import type { BindingMap, BindingContext } from '../input/bindings';
 import { guideEntries, isGuidePrefix } from '../input/key-guide';
 import type { KeyGuideLanguage } from '../input/key-guide-config';
 import type { InputRuntime, InputTimerHost } from '../input/runtime';
@@ -6,7 +6,7 @@ import { KeyGuide, type KeyGuideThemeHost } from './key-guide';
 
 export interface PrefixGuideView {
   readonly input: InputRuntime;
-  readonly mode: Mode;
+  readonly mode: BindingContext;
   readonly bindings: BindingMap;
   readonly enabled: boolean;
   readonly language: KeyGuideLanguage;

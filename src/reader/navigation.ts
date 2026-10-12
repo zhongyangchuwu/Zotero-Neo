@@ -1,6 +1,13 @@
 import { cloneInto } from '../platform/cross-compartment';
 import type { FocusDirection } from '../input/actions';
 import type { PdfWindow, ReaderRuntime } from './types';
+import { outlineEntryKind } from './outline-presentation';
+import type { ReaderNativeOutlineEntry, ReaderViewRuntime } from './types';
+import {
+  captionLabel,
+  type ReaderCaptionTarget,
+  type ReaderCaptionTargets,
+} from './caption-targets';
 import type { NavigationExecution, NavigationIntent, NavigationOutcome } from '../navigation/types';
 import type { ReaderNativeNavigation } from './jump-history-bridge';
 
@@ -13,6 +20,7 @@ export type ReaderNavigationCommand = (
 
 export interface ReaderNavigationDependencies {
   readonly reader: ReaderRuntime;
+  readonly captions: ReaderCaptionTargets;
   readonly activePdfWindow: () => PdfWindow;
   readonly setActivePdfWindow: (pdfWindow: PdfWindow) => void;
   readonly syncViews: () => void;
@@ -34,9 +42,256 @@ function asPdfWindow(window: Window | undefined): PdfWindow | null {
  */
 export class ReaderNavigation {
   readonly #dependencies: ReaderNavigationDependencies;
+  #outlineLoading: { readonly view: ReaderViewRuntime; readonly promise: Promise<void> } | null =
+    null;
 
   constructor(dependencies: ReaderNavigationDependencies) {
     this.#dependencies = dependencies;
+  }
+
+  /** Uses authored, resolved Outline locations and the exact view's native history producer. */
+  async traverseOutline(
+    category: 'heading' | 'figure' | 'table',
+    direction: -1 | 1,
+    pdfWindow: PdfWindow,
+    isCurrent: () => boolean,
+  ): Promise<boolean> {
+    const internal = this.#dependencies.reader._internalReader;
+    const view =
+      internal?._primaryView?._iframeWindow === pdfWindow
+        ? internal._primaryView
+        : internal?._secondaryView?._iframeWindow === pdfWindow
+          ? internal._secondaryView
+          : null;
+    if (!view?.navigate) {
+      this.#dependencies.showStatus('✗ Outline navigation unavailable', 2000);
+      return false;
+    }
+    if (view.initializedPromise) await view.initializedPromise;
+    if (!isCurrent() || this.activePdfWindow() !== pdfWindow) return false;
+    const primary = internal?._primaryView;
+    if (internal?._state?.outline == null && typeof primary?.setSidebarView === 'function') {
+      let loading = this.#outlineLoading;
+      if (!loading || loading.view !== primary) {
+        const promise = Promise.resolve(primary.setSidebarView('outline'));
+        loading = { view: primary, promise };
+        this.#outlineLoading = loading;
+      }
+      try {
+        await loading.promise;
+      } finally {
+        if (this.#outlineLoading === loading) this.#outlineLoading = null;
+      }
+    }
+    if (
+      !isCurrent() ||
+      this.activePdfWindow() !== pdfWindow ||
+      this.#dependencies.reader._internalReader !== internal ||
+      internal?._primaryView !== primary ||
+      (view !== internal?._primaryView && view !== internal?._secondaryView)
+    )
+      return false;
+    // Load native semantic anchors only on an explicit structural navigation request.
+    const captions = await this.#dependencies.captions.load();
+    if (
+      !isCurrent() ||
+      this.activePdfWindow() !== pdfWindow ||
+      this.#dependencies.reader._internalReader !== internal ||
+      internal?._primaryView !== primary ||
+      (view !== internal?._primaryView && view !== internal?._secondaryView)
+    )
+      return false;
+    const entries: {
+      entry: ReaderNativeOutlineEntry;
+      page: number;
+      top: number;
+      order: number;
+      clonePosition: boolean;
+    }[] = [];
+    let order = 0;
+    const visit = (
+      outline: readonly ReaderNativeOutlineEntry[],
+      depth: number,
+      clonePosition = false,
+    ): void => {
+      for (const entry of outline) {
+        const currentOrder = order++;
+        const kind = outlineEntryKind(entry.title, depth);
+        const heading = kind === 'section' || kind === 'subsection';
+        // Some authored bookmarks precede their printed heading by a page. Keep their
+        // hierarchy and identity, but land at the genuine semantic heading when available.
+        const headingPosition =
+          category === 'heading' && heading
+            ? this.#dependencies.captions.headingPosition(entry)
+            : null;
+        const position = headingPosition ?? entry.location?.position;
+        if (
+          position &&
+          Number.isInteger(position.pageIndex) &&
+          position.pageIndex >= 0 &&
+          Array.isArray(position.rects) &&
+          (kind === category ||
+            (category === 'heading' && (kind === 'section' || kind === 'subsection')))
+        ) {
+          let top = -Infinity;
+          for (const rect of position.rects) {
+            if (!Array.isArray(rect) || rect.length < 4 || !rect.every(Number.isFinite)) {
+              top = -Infinity;
+              break;
+            }
+            top = Math.max(top, rect[1], rect[3]);
+          }
+          if (Number.isFinite(top))
+            entries.push({
+              entry: headingPosition
+                ? { ...entry, location: { position: headingPosition } }
+                : entry,
+              page: position.pageIndex,
+              top,
+              order: currentOrder,
+              clonePosition: clonePosition || headingPosition !== null,
+            });
+        }
+        if (entry.items) visit(entry.items, depth + 1, clonePosition);
+      }
+    };
+    visit(internal?._state?.outline ?? [], 0);
+    if (category !== 'heading') {
+      const seen = new Map(
+        entries.map((entry) => [`${entry.page}:${captionLabel(entry.entry.title)}`, entry]),
+      );
+      for (const caption of captions) {
+        if (caption.kind !== category) continue;
+        const key = `${caption.location.position.pageIndex}:${caption.label}`;
+        const existing = seen.get(key);
+        if (existing) {
+          // A genuine Figure projection may start at its image, above the authored bookmark.
+          // Keep the native identity/order unless the supplied region starts earlier.
+          if (category === 'figure') {
+            let top = -Infinity;
+            for (const rect of caption.location.position.rects) {
+              if (!Array.isArray(rect) || rect.length < 4 || !rect.every(Number.isFinite)) {
+                top = -Infinity;
+                break;
+              }
+              top = Math.max(top, rect[1], rect[3]);
+            }
+            if (Number.isFinite(top) && top > existing.top) {
+              existing.entry = caption;
+              existing.top = top;
+              existing.clonePosition = true;
+            }
+          }
+          continue;
+        }
+        visit([caption], 0, true);
+        const added = entries[entries.length - 1];
+        if (added && added.entry === caption) seen.set(key, added);
+      }
+    }
+    if (!entries.length) {
+      this.#dependencies.showStatus(
+        `✗ no ${category === 'heading' ? 'headings in Outline' : category === 'figure' ? 'recognized figures' : 'recognized tables'}`,
+        2000,
+      );
+      return false;
+    }
+    entries.sort((a, b) => a.page - b.page || b.top - a.top || a.order - b.order);
+    const outerWindow = this.#dependencies.reader._iframeWindow;
+    if (!outerWindow) return false;
+    const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
+    const location = viewer?._location;
+    const pageNumber = location?.pageNumber ?? viewer?.currentPageNumber;
+    if (typeof pageNumber !== 'number' || !Number.isInteger(pageNumber) || pageNumber < 1) {
+      this.#dependencies.showStatus('✗ PDF position unavailable', 2000);
+      return false;
+    }
+    const page = pageNumber - 1;
+    const pageView = viewer?._pages?.[page] ?? viewer?.getPageView?.(page);
+    const container = viewer?.container;
+    const pageElement = pageView?.div;
+    let top: number | undefined;
+    // Prefer unrounded live viewport geometry; PDF.js rounds _location.top to whole PDF units.
+    if (container && pageElement && pageView?.viewport?.convertToPdfPoint) {
+      const containerRect = container.getBoundingClientRect();
+      const pageRect = pageElement.getBoundingClientRect();
+      const point = pageView.viewport.convertToPdfPoint(
+        Math.max(0, containerRect.left + container.clientLeft - pageRect.left),
+        Math.max(0, containerRect.top + container.clientTop - pageRect.top),
+      );
+      if (Number.isFinite(point[1])) top = point[1];
+    }
+    const scale = pageView?.viewport?.scale;
+    const scrollRounding = scale && Number.isFinite(scale) && scale > 0 ? 1 / scale : 0;
+    // Native scroll offsets can round by a CSS pixel, in addition to _location's PDF-unit rounding.
+    const tolerance = scrollRounding + (top === undefined ? 0.5 : 0.01);
+    top ??= location?.top;
+    if (top === undefined || !Number.isFinite(top)) {
+      this.#dependencies.showStatus('✗ PDF position unavailable', 2000);
+      return false;
+    }
+    const currentTop = top;
+    const relative = (entry: (typeof entries)[number]): number => {
+      const position = entry.entry.location?.position;
+      if (
+        container &&
+        position &&
+        view.getPositionBoundingViewRect &&
+        Number.isFinite(container.scrollTop) &&
+        Number.isFinite(container.scrollHeight) &&
+        container.clientHeight > 0
+      ) {
+        // Native Outline positions already belong to Reader; SDT projections belong to chrome.
+        const nativePosition = entry.clonePosition ? cloneInto(position, outerWindow) : position;
+        const targetTop = view.getPositionBoundingViewRect(nativePosition)[1];
+        if (Number.isFinite(targetTop)) {
+          // Mirror native block:start clamping: unreachable last-page tops must not trap traversal.
+          const alignedTop = Math.max(
+            0,
+            Math.min(targetTop, container.scrollHeight - container.clientHeight),
+          );
+          const distance = alignedTop - container.scrollTop;
+          return Math.abs(distance) <= 1 ? 0 : distance;
+        }
+      }
+      if (entry.page !== page) return entry.page - page;
+      const distance = currentTop - entry.top;
+      return Math.abs(distance) <= tolerance ? 0 : distance;
+    };
+    let target = direction > 0 ? entries[0] : entries[entries.length - 1];
+    if (direction > 0) target = entries.find((entry) => relative(entry) > 0) ?? target;
+    else {
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        if (relative(entries[index]) < 0) {
+          target = entries[index];
+          break;
+        }
+      }
+    }
+    if (!target?.entry.location || !isCurrent() || this.activePdfWindow() !== pdfWindow)
+      return false;
+    await view.navigate(
+      cloneInto(target.entry.location, outerWindow),
+      cloneInto({ block: 'start' as const }, outerWindow),
+    );
+    return isCurrent();
+  }
+
+  /** A caption choice uses the exact active view's native position/history producer. */
+  async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<void> {
+    const internal = this.#dependencies.reader._internalReader;
+    const view =
+      internal?._primaryView?._iframeWindow === pdfWindow
+        ? internal._primaryView
+        : internal?._secondaryView?._iframeWindow === pdfWindow
+          ? internal._secondaryView
+          : null;
+    const outerWindow = this.#dependencies.reader._iframeWindow;
+    if (!view?.navigate || !outerWindow || this.activePdfWindow() !== pdfWindow) return;
+    await view.navigate(
+      cloneInto(target.location, outerWindow),
+      cloneInto({ block: 'start' as const }, outerWindow),
+    );
   }
 
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {

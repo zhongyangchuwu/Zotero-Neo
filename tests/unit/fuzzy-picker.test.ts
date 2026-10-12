@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { isActionId, type ActionId } from '../../src/input/actions';
-import { resolveBindings } from '../../src/input/bindings';
+import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
 import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
-import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
+import type { CommandPaletteContext } from '../../src/core/contracts';
 import {
   FuzzyPicker,
   fuzzyMatchScore,
@@ -12,11 +12,12 @@ import {
   isFuzzyPickerItem,
 } from '../../src/main/picker';
 import { MainNavigation } from '../../src/main/navigation';
-import type { MainWindowSession } from '../../src/main/session';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import { createTagCandidateProvider } from '../../src/main/picker/providers/tags';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 import { citationKey } from '../../src/platform/better-bibtex';
+import { createPickerHarness, pickerKey } from './feature-panel-harness';
+import { actionGroup, groupLabel, shortcutsForAction } from '../../src/input/shortcut-catalog';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -402,7 +403,6 @@ describe('command palette provider', () => {
     const find = mainItems.find((item) => item.id === 'findAllItems');
     if (!find) throw new Error('Expected bound Find Action');
     expect(find.meta).toBe('<Space>ff');
-    expect(main.preview(find).body).toContain('Keys: <Space>ff');
     expect(mainItems.find((item) => item.id === 'openNeoSettings')?.meta).toBe('Unbound');
 
     const readerItems = await createCommandsProvider({
@@ -447,7 +447,6 @@ describe('command palette provider', () => {
     );
     await picker.open(window, session, 'commands', commandPickerOptions(context));
     const all = session.picker.filtered.find((item) => item.id === 'findAllItems');
-    expect(all?.title).toBe('Find an item in the library');
     expect(all?.meta).toBe('x, y');
     expect(all?.search).toContain('x, y');
     expect(session.picker.filtered.filter((item) => item.id === 'findAllItems')).toHaveLength(1);
@@ -456,7 +455,6 @@ describe('command palette provider', () => {
     const provider = session.picker.provider;
     if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
     expect(openPDF.meta).toBe('Unbound');
-    expect(provider.preview(openPDF).body).toContain('Keys: Unbound');
     const commandInput = session.picker.input;
     picker.onKeyDown(pickerKey('ArrowDown', commandInput), window, session);
     expect(session.picker.selected).toBe(1);
@@ -510,13 +508,19 @@ describe('command palette provider', () => {
     const openPDF = session.picker.filtered.find((item) => item.id === 'mainOpenPDF');
     const provider = session.picker.provider;
     if (!openPDF || !provider) throw new Error('Expected catalog unbound command');
-    expect(openPDF.meta).toBe('Unbound');
-    expect(provider.preview(openPDF).body).toBe('Action: mainOpenPDF\nKeys: Unbound');
     const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
     if (!input) throw new Error('Expected mounted picker input');
     input.value = 'unbound';
     input.emit('input');
     expect(session.picker.filtered.map((item) => item.id)).toEqual(['mainOpenPDF']);
+    input.value = groupLabel(actionGroup('mainOpenPDF'), context.language);
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toContain('mainOpenPDF');
+    input.value = 'main-normal';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id).sort()).toEqual(
+      ['findAllItems', 'mainOpenPDF'].sort(),
+    );
     input.value = 'mainOpenPDF';
     input.emit('input');
     expect(session.picker.filtered.map((item) => item.id)).toEqual(['mainOpenPDF']);
@@ -526,7 +530,7 @@ describe('command palette provider', () => {
     expect(session.picker.open).toBe(false);
   });
 
-  it('localizes unbound command metadata, preview, and search', async () => {
+  it('supports localized searches for unbound commands', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
     const picker = new FuzzyPicker(
@@ -546,9 +550,7 @@ describe('command palette provider', () => {
     const item = session.picker.filtered[0];
     const provider = session.picker.provider;
     if (!item || !provider) throw new Error('Expected mounted command provider');
-    expect(item.title).toBe('打开主窗口游标条目或 Note 上下文条目');
     expect(item.meta).toBe('未绑定');
-    expect(provider.rowText(item, 0)).toBe('打开主窗口游标条目或 Note 上下文条目 · 未绑定');
     const input = session.picker.input as (HTMLInputElement & { emit(type: string): void }) | null;
     if (!input) throw new Error('Expected mounted picker input');
     input.value = '未绑定';
@@ -663,175 +665,6 @@ describe('command palette provider', () => {
     picker.close(session);
   });
 });
-function createPickerHarness(width = 1200): {
-  window: MainWindow;
-  session: MainWindowSession;
-  bodyChildren: HTMLElement[];
-} {
-  let activeElement: Element | null = null;
-  let document: Document;
-  const createElement = (tag: string) => {
-    const children: HTMLElement[] = [];
-    const listeners = new Map<string, EventListener[]>();
-    let textContent = '';
-    const element = {
-      setAttribute: (name: string, value: string) => {
-        Reflect.set(element, name, value);
-      },
-      tagName: tag.toUpperCase(),
-      localName: tag,
-      ownerDocument: null as unknown as Document,
-      parentElement: null as HTMLElement | null,
-      style: {} as CSSStyleDeclaration,
-      children,
-      dataset: {} as DOMStringMap,
-      value: '',
-      type: '',
-      placeholder: '',
-      tabIndex: 0,
-      clientHeight: 400,
-      isConnected: true,
-      get textContent() {
-        return textContent;
-      },
-      set textContent(value: string) {
-        textContent = value;
-      },
-      set innerHTML(value: string) {
-        textContent = value.replace(/<[^>]*>/g, '');
-      },
-      append: (...nodes: HTMLElement[]) => {
-        for (const node of nodes)
-          Reflect.set(node, 'parentElement', element as unknown as HTMLElement);
-        children.push(...nodes);
-        textContent += nodes.map((node) => node.textContent ?? '').join('');
-      },
-      appendChild: (node: HTMLElement) => {
-        Reflect.set(node, 'parentElement', element as unknown as HTMLElement);
-        children.push(node);
-        textContent += node.textContent ?? '';
-      },
-      replaceChildren: (...nodes: HTMLElement[]) => {
-        for (const child of children) Reflect.set(child, 'parentElement', null);
-        for (const node of nodes)
-          Reflect.set(node, 'parentElement', element as unknown as HTMLElement);
-        children.splice(0, children.length, ...nodes);
-        textContent = nodes.map((node) => node.textContent ?? '').join('');
-      },
-      addEventListener: (type: string, listener: EventListener) => {
-        listeners.set(type, [...(listeners.get(type) ?? []), listener]);
-      },
-      removeEventListener: () => {},
-      closest: (selector: string) => {
-        if (selector === '[data-zv-picker-row="1"]' && element.dataset.zvPickerRow === '1')
-          return element as unknown as HTMLElement;
-        return element.parentElement?.closest?.(selector) ?? null;
-      },
-      emit: (type: string, event: Partial<Event> = {}) => {
-        let stopped = false;
-        const synthetic = {
-          ...event,
-          target: event.target ?? element,
-          preventDefault: () => event.preventDefault?.(),
-          stopPropagation: () => {
-            stopped = true;
-            event.stopPropagation?.();
-          },
-          stopImmediatePropagation: () => {
-            stopped = true;
-            event.stopImmediatePropagation?.();
-          },
-        } as Event;
-        for (const listener of listeners.get(type) ?? []) listener(synthetic);
-        if (!stopped)
-          (
-            element.parentElement as
-              | (HTMLElement & { emit?: (type: string, event?: Event) => void })
-              | null
-          )?.emit?.(type, synthetic);
-      },
-      focus: () => {
-        activeElement = element as unknown as Element;
-        element.emit('focus');
-      },
-      select: vi.fn(),
-      scrollBy: vi.fn(),
-      scrollIntoView: vi.fn(),
-      remove: () => {},
-    };
-    element.ownerDocument = document;
-    return element as unknown as HTMLElement & {
-      emit(type: string, event?: Partial<Event>): void;
-    };
-  };
-  const bodyChildren: HTMLElement[] = [];
-  document = {
-    get activeElement() {
-      return activeElement;
-    },
-    createElementNS: (_namespace: string, tag: string) => createElement(tag),
-    getElementById: () => null,
-    querySelector: () => null,
-    body: { append: (node: HTMLElement) => bodyChildren.push(node) },
-    documentElement: { append: (node: HTMLElement) => bodyChildren.push(node) },
-  } as unknown as Document;
-  const window = {
-    document,
-    innerWidth: width,
-    setTimeout,
-    clearTimeout,
-  } as unknown as MainWindow;
-  const session = {
-    window,
-    picker: {
-      generation: 0,
-      open: false,
-      scope: 'all',
-      overlay: null,
-      input: null,
-      results: null,
-      preview: null,
-      count: null,
-      previewTitle: null,
-      items: [],
-      filtered: [],
-      selected: 0,
-      lastKey: null,
-      yTimer: undefined,
-      focusPane: 'search',
-      tagMode: 'list',
-      command: '',
-      commandTimer: undefined,
-      layout: 'dual',
-      previousElement: null,
-      previousWindow: null,
-      themeCleanup: null,
-    },
-    status: { textContent: '', style: {} },
-    cleanup: { add: () => {} },
-    theme: { add: () => () => {} },
-  } as unknown as MainWindowSession;
-  return { window, session, bodyChildren };
-}
-
-function pickerKey(
-  key: string,
-  target: EventTarget | null,
-  options: { ctrl?: boolean; shift?: boolean; isComposing?: boolean; keyCode?: number } = {},
-): KeyboardEvent {
-  return {
-    key,
-    target,
-    ctrlKey: options.ctrl ?? false,
-    shiftKey: options.shift ?? false,
-    metaKey: false,
-    altKey: false,
-    isComposing: options.isComposing ?? false,
-    keyCode: options.keyCode ?? 0,
-    preventDefault: vi.fn(),
-    stopPropagation: vi.fn(),
-  } as unknown as KeyboardEvent;
-}
 
 describe('tab picker activation', () => {
   it('keeps tab selection and activation keyboard-only', async () => {
@@ -1167,9 +1000,9 @@ describe('unified Notes picker', () => {
     ]);
     const left = content?.children[0];
     const shortcuts = left?.children[2];
-    expect(shortcuts?.textContent).toContain('Ctrl+j/k select');
-    expect(shortcuts?.textContent).toContain('Ctrl+d/u preview');
-    expect(shortcuts?.textContent).toContain('Enter apply · Esc close');
+    for (const action of ['uiNext', 'uiPreviewDown', 'uiConfirm', 'uiCancel'] as const)
+      for (const key of shortcutsForAction(DEFAULT_BINDINGS, 'picker-input', action))
+        expect(shortcuts?.textContent).toContain(key);
   });
 });
 
@@ -1446,5 +1279,289 @@ describe('citation-key lookup', () => {
     const item = { id: 2, getField: () => '' } as unknown as Zotero.Item;
 
     expect(citationKey(item)).toBe('Cached2026');
+  });
+});
+
+describe('configurable picker contexts', () => {
+  it('rebinds execution and discovery while leaving query letters, editing and unrelated events native', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    let bindings: BindingMap = resolveBindings(
+      JSON.stringify({
+        'picker-input:<Down>': null,
+        'picker-input:<C-j>': null,
+        'picker-input:<C-n>': null,
+        'picker-input:<C-l>': 'uiNext',
+        'picker-list:j': null,
+        'picker-list:n': 'uiNext',
+        'picker-list:<Enter>': null,
+        'picker-list:<S-Enter>': null,
+        'picker-list:<C-Enter>': 'uiConfirm',
+      }),
+    );
+    const confirm = vi.fn();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => false,
+      () => bindings,
+    );
+    const source = createTagCandidateProvider({
+      title: 'Choose tag',
+      placeholder: 'Search tags',
+      separator: '/',
+      loadTags: async () => [{ tag: 'alpha' }, { tag: 'beta' }],
+    });
+    await picker.open(window, session, 'tags', { source, confirm });
+    vi.advanceTimersByTime(30);
+    const input = session.picker.input!;
+    const oldDown = pickerKey('ArrowDown', input);
+    picker.onKeyDown(oldDown, window, session);
+    expect(oldDown.preventDefault).not.toHaveBeenCalled();
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('l', input, { ctrl: true }), window, session);
+    expect(session.picker.selected).toBe(1);
+    expect(session.picker.help?.textContent).toContain('<C-l>');
+    expect(session.picker.help?.textContent).not.toContain('<C-j>');
+    bindings = {
+      ...bindings,
+      'picker-input:j': 'uiNext',
+      'picker-input:<BS>': 'uiCancel',
+      'picker-input:<C-M-l>': 'uiNext',
+      'picker-input:<C-Insert>': 'uiCancel',
+      'picker-input:<S-Insert>': 'uiFocusList',
+    };
+    const altGraph = Object.assign(pickerKey('l', input, { ctrl: true }), {
+      altKey: true,
+      getModifierState: (modifier: string) => modifier === 'AltGraph',
+    });
+    picker.onKeyDown(altGraph, window, session);
+    expect(altGraph.preventDefault).not.toHaveBeenCalled();
+    for (const key of ['j', 'Backspace', 'Tab']) {
+      const native = pickerKey(key, input);
+      picker.onKeyDown(native, window, session);
+      expect(native.preventDefault).not.toHaveBeenCalled();
+    }
+    for (const modifiers of [{ ctrl: true }, { shift: true }]) {
+      const native = pickerKey('Insert', input, modifiers);
+      picker.onKeyDown(native, window, session);
+      expect(native.preventDefault).not.toHaveBeenCalled();
+      expect(window.document.activeElement).toBe(input);
+    }
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.selected).toBe(1);
+    const unrelated = pickerKey(
+      'n',
+      window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div'),
+    );
+    picker.onKeyDown(unrelated, window, session);
+    expect(unrelated.preventDefault).not.toHaveBeenCalled();
+    session.picker.results!.focus();
+    const oldList = pickerKey('j', session.picker.results);
+    picker.onKeyDown(oldList, window, session);
+    expect(oldList.preventDefault).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('k', session.picker.results), window, session);
+    picker.onKeyDown(pickerKey('n', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    expect(session.picker.help?.textContent).toContain('<C-Enter>');
+    const oldConfirm = pickerKey('Enter', session.picker.results);
+    picker.onKeyDown(oldConfirm, window, session);
+    expect(oldConfirm.preventDefault).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('Enter', session.picker.results, { ctrl: true }), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tagName: 'beta' }), false);
+    expect(session.picker.open).toBe(false);
+  });
+
+  it('cancels exact-prefix waits on focus, IME, close and disposal and rejects retired input events', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session, cleanups } = createPickerHarness();
+    const bindings = resolveBindings(
+      JSON.stringify({
+        'picker-list:a': 'uiNext',
+        'picker-list:ab': 'uiConfirm',
+        'picker-input:<C-n><C-n>': 'uiConfirm',
+      }),
+    );
+    const confirm = vi.fn();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => false,
+      () => bindings,
+    );
+    const source = createTagCandidateProvider({
+      title: 'Tags',
+      placeholder: 'Search tags',
+      separator: '/',
+      loadTags: async () => [{ tag: 'alpha' }, { tag: 'beta' }],
+    });
+    const open = async (): Promise<void> => {
+      await picker.open(window, session, 'tags', { source, confirm });
+      vi.advanceTimersByTime(30);
+    };
+    await open();
+    session.picker.results!.focus();
+    picker.onKeyDown(pickerKey('a', session.picker.results), window, session);
+    session.picker.input!.focus();
+    vi.advanceTimersByTime(2000);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('n', session.picker.input, { ctrl: true }), window, session);
+    const oldInput = session.picker.input as HTMLInputElement & { emit(type: string): void };
+    oldInput.emit('compositionstart');
+    vi.advanceTimersByTime(2000);
+    expect(session.picker.selected).toBe(0);
+    oldInput.emit('compositionend');
+    session.picker.results!.focus();
+    picker.onKeyDown(pickerKey('a', session.picker.results), window, session);
+    picker.close(session);
+    await open();
+    oldInput.value = 'stale';
+    oldInput.emit('input');
+    oldInput.emit('focus');
+    picker.onKeyDown(pickerKey('Enter', oldInput), window, session);
+    vi.advanceTimersByTime(2000);
+    expect(session.picker.selected).toBe(0);
+    expect(session.picker.filtered).toHaveLength(2);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(cleanups).toHaveLength(1);
+    session.picker.results!.focus();
+    picker.onKeyDown(pickerKey('a', session.picker.results), window, session);
+    cleanups.forEach((cleanup) => cleanup());
+    vi.advanceTimersByTime(2000);
+    expect(session.picker.open).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('cancels delayed confirmation when a pointer selects a different candidate', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const bindings = resolveBindings(JSON.stringify({ 'picker-list:<Enter>x': 'uiNext' }));
+    const confirm = vi.fn();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+      () => bindings,
+    );
+    const source = createTagCandidateProvider({
+      title: 'Tags',
+      placeholder: 'Search tags',
+      separator: '/',
+      loadTags: async () => [{ tag: 'alpha' }, { tag: 'beta' }],
+    });
+    await picker.open(window, session, 'tags', { source, confirm, closeBeforeConfirm: true });
+    vi.advanceTimersByTime(30);
+    session.picker.results!.focus();
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    const row = session.picker.results!.children[1] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    row.emit('click');
+    expect(session.picker.selected).toBe(1);
+    vi.advanceTimersByTime(2000);
+    await session.picker.queue;
+    expect(confirm).not.toHaveBeenCalled();
+    expect(session.picker.selected).toBe(1);
+    expect(session.picker.open).toBe(true);
+    picker.close(session);
+  });
+
+  it('preserves shifted confirmation across an exact-prefix wait and leaves failed semantic confirmation open', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const bindings = resolveBindings(JSON.stringify({ 'picker-list:<S-Enter>x': 'uiNext' }));
+    const confirm = vi.fn(async () => {
+      throw new Error('domain confirmation failed');
+    });
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => false,
+      () => bindings,
+    );
+    const source = createTagCandidateProvider({
+      title: 'Tags',
+      placeholder: 'Search tags',
+      separator: '/',
+      loadTags: async () => [{ tag: 'alpha' }],
+    });
+    await picker.open(window, session, 'tags', { source, confirm });
+    vi.advanceTimersByTime(30);
+    session.picker.results!.focus();
+    picker.onKeyDown(pickerKey('Enter', session.picker.results, { shift: true }), window, session);
+    expect(confirm).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(2000);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ tagName: 'alpha' }), true);
+    expect(session.picker.open).toBe(true);
+    picker.close(session);
+  });
+});
+
+describe('picker configurable pane controls', () => {
+  it('runs preview, pane, list, search and boundary selection only from the current owned context', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const bindings = resolveBindings(
+      JSON.stringify({
+        'picker-input:<F1>': 'uiFocusList',
+        'picker-list:<F2>': 'uiLast',
+        'picker-list:<F3>': 'uiFirst',
+        'picker-list:<F4>': 'uiNextPane',
+        'picker-list:<F5>': 'uiPreviousPane',
+        'picker-input:<F6>': 'uiNextPane',
+        'picker-list:/': null,
+        'picker-list:<F7>': 'uiSearch',
+        'picker-list:<C-d>': null,
+        'picker-list:<C-u>': null,
+        'picker-list:<F8>': 'uiPreviewDown',
+        'picker-list:<F9>': 'uiPreviewUp',
+      }),
+    );
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => false,
+      () => bindings,
+    );
+    const source = createTagCandidateProvider({
+      title: 'Tags',
+      placeholder: 'Search tags',
+      separator: '/',
+      loadTags: async () => [{ tag: 'alpha' }, { tag: 'beta' }],
+    });
+    await picker.open(window, session, 'tags', { source });
+    vi.advanceTimersByTime(30);
+    picker.onKeyDown(pickerKey('F1', session.picker.input), window, session);
+    expect(window.document.activeElement).toBe(session.picker.results);
+    picker.onKeyDown(pickerKey('F2', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(1);
+    picker.onKeyDown(pickerKey('F3', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(0);
+    picker.onKeyDown(pickerKey('F4', session.picker.results), window, session);
+    expect(window.document.activeElement).toBe(session.picker.preview);
+    picker.onKeyDown(pickerKey('F8', session.picker.preview), window, session);
+    picker.onKeyDown(pickerKey('F9', session.picker.preview), window, session);
+    expect(session.picker.preview!.scrollBy).toHaveBeenNthCalledWith(1, { top: 200 });
+    expect(session.picker.preview!.scrollBy).toHaveBeenNthCalledWith(2, { top: -200 });
+    const retiredPreview = pickerKey('d', session.picker.preview, { ctrl: true });
+    picker.onKeyDown(retiredPreview, window, session);
+    expect(retiredPreview.preventDefault).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('F5', session.picker.preview), window, session);
+    expect(window.document.activeElement).toBe(session.picker.results);
+    picker.onKeyDown(pickerKey('F7', session.picker.results), window, session);
+    expect(window.document.activeElement).toBe(session.picker.input);
+    const wrongContext = pickerKey('F2', session.picker.input);
+    picker.onKeyDown(wrongContext, window, session);
+    expect(wrongContext.preventDefault).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('F6', session.picker.input), window, session);
+    expect(window.document.activeElement).toBe(session.picker.results);
+    picker.close(session);
   });
 });

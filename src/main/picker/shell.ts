@@ -17,6 +17,13 @@ import { createItemsProvider } from './providers/items';
 import { createTabsProvider } from './providers/tabs';
 import { createCommandsProvider } from './providers/commands';
 
+import { ACTION_LABELS, type ActionId } from '../../input/actions';
+import { DEFAULT_BINDINGS, type BindingContext, type BindingMap } from '../../input/bindings';
+import { LocalBindingRuntime } from '../../input/local-binding-runtime';
+import { nativeReservation, shortcutsForAction } from '../../input/shortcut-catalog';
+import { keyString } from '../../input/keys';
+import { serializeBindingTokens } from '../../input/key-sequence';
+import { PICKER_INPUT_ACTIONS, PICKER_LIST_ACTIONS } from './action-capabilities';
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -52,15 +59,19 @@ export class FuzzyPicker {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
   readonly #mouseEnabled: () => boolean;
+  readonly #bindings: () => BindingMap;
+  readonly #sessions = new WeakSet<MainWindowSession>();
 
   constructor(
     logger: Logger,
     navigation: MainNavigation,
     mouseEnabled: () => boolean = () => false,
+    bindings: () => BindingMap = () => DEFAULT_BINDINGS,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#mouseEnabled = mouseEnabled;
+    this.#bindings = bindings;
   }
 
   async open(
@@ -72,6 +83,10 @@ export class FuzzyPicker {
     if (session.picker.open) return;
     this.#navigation.panel(window, session);
     const generation = ++session.picker.generation;
+    if (!this.#sessions.has(session)) {
+      this.#sessions.add(session);
+      session.cleanup.add(() => this.close(session));
+    }
     let orphanOverlay: HTMLElement | null = null;
     try {
       this.trace(`picker open scope=${scope}`);
@@ -127,7 +142,7 @@ export class FuzzyPicker {
         left.append(leftHeader, input, queryHelp, results, listHelp);
       } else {
         shortcuts = helpStyle();
-        shortcuts.textContent = this.shortcutReference();
+        shortcuts.textContent = this.shortcutReference('picker-input');
         left.append(leftHeader, input, shortcuts, results);
       }
 
@@ -170,33 +185,59 @@ export class FuzzyPicker {
         previousWindow: focusedWindow,
         themeCleanup,
       });
+      session.picker.localBindings = new LocalBindingRuntime({
+        bindings: this.#bindings,
+        execute: (action, event) =>
+          this.isCurrent(session, generation) && this.execute(action, event, window, session),
+        schedule: (callback, delay) => window.setTimeout(callback, delay),
+        clearTimer: (timer) => window.clearTimeout(timer),
+      });
       orphanOverlay = null;
       this.trace(`picker mounted scope=${scope} layout=${single ? 'single' : 'dual'}`);
       const loadStartedAt = Date.now();
       const compositionCleanup = bindCompositionState(input, session.picker.composition);
+      const localBindings = session.picker.localBindings;
+      const deactivate = (): void => localBindings?.deactivate();
+      input.addEventListener('compositionstart', deactivate);
+      overlay.addEventListener('focusout', deactivate);
       const inputHandler = (event: Event): void => {
+        if (!this.isCurrent(session, generation)) return;
         if (!isCommittedInput(event, session.picker.composition.active)) return;
         session.picker.selected = 0;
         this.filter(session, input.value);
       };
       input.addEventListener('input', inputHandler);
-      input.addEventListener('focus', () => this.markFocus(session, 'search'));
-      input.addEventListener('click', () => this.markFocus(session, 'search'));
+      const focusSearch = (): void => {
+        if (this.isCurrent(session, generation)) this.markFocus(session, 'search');
+      };
+      const focusList = (): void => {
+        if (this.isCurrent(session, generation)) this.markFocus(session, 'list');
+      };
+      const focusPreview = (): void => {
+        if (this.isCurrent(session, generation)) this.markFocus(session, 'preview');
+      };
+      input.addEventListener('focus', focusSearch);
+      input.addEventListener('click', focusSearch);
+      results.addEventListener('focus', focusList);
+      preview.addEventListener('focus', focusPreview);
       const pointerRowHandler = (event: Event): void => {
+        if (!this.isCurrent(session, generation)) return;
         if (!this.#mouseEnabled() || !isPrimaryMouseEvent(event)) return;
         const index = pickerRowIndex(event, results);
         if (index === null || index < 0 || index >= session.picker.filtered.length) return;
+        session.picker.localBindings?.deactivate();
         event.preventDefault();
         event.stopPropagation();
         this.focusPane(session, 'list');
         this.selectRow(session, index);
       };
       const doubleClickRowHandler = (event: Event): void => {
+        if (!this.isCurrent(session, generation)) return;
         if (!this.#mouseEnabled() || !isPrimaryMouseEvent(event)) return;
         const index = pickerRowIndex(event, results);
         const item = index === null ? undefined : session.picker.filtered[index];
         if (index === null || !item) return;
-        const generation = session.picker.generation;
+        session.picker.localBindings?.deactivate();
         const itemID = item.id;
         event.preventDefault();
         event.stopPropagation();
@@ -216,14 +257,18 @@ export class FuzzyPicker {
       results.addEventListener('dblclick', doubleClickRowHandler);
       session.picker.inputCleanup = () => {
         compositionCleanup();
+        input.removeEventListener('compositionstart', deactivate);
+        overlay.removeEventListener('focusout', deactivate);
         input.removeEventListener('input', inputHandler);
+        input.removeEventListener('focus', focusSearch);
+        input.removeEventListener('click', focusSearch);
+        results.removeEventListener('focus', focusList);
+        preview.removeEventListener('focus', focusPreview);
         results.removeEventListener('click', pointerRowHandler);
         results.removeEventListener('dblclick', doubleClickRowHandler);
       };
-      results.addEventListener('focus', () => this.markFocus(session, 'list'));
-      preview.addEventListener('focus', () => this.markFocus(session, 'preview'));
       overlay.addEventListener('mousedown', (event) => {
-        if (event.target === overlay) this.close(session);
+        if (this.isCurrent(session, generation) && event.target === overlay) this.close(session);
       });
       if (provider.loadingText) {
         results.style.color = THEME_VARS.muted;
@@ -276,6 +321,8 @@ export class FuzzyPicker {
   }
   close(session: MainWindowSession): void {
     if (!session.picker.open) return;
+    session.picker.localBindings?.dispose();
+    session.picker.localBindings = null;
     this.trace(`picker close scope=${session.picker.scope}`);
     const { overlay, previousElement, previousWindow, themeCleanup, onClose } = session.picker;
     session.picker.provider = null;
@@ -314,87 +361,103 @@ export class FuzzyPicker {
   }
 
   onKeyDown(event: HandledKey, window: MainWindow, session: MainWindowSession): void {
-    if (event._zvPickerHandled) return;
-    event._zvPickerHandled = true;
+    if (event._zvPickerHandled || !session.picker.open) return;
     const picker = session.picker;
-    if (compositionOwnsKey(event, picker.composition.active)) {
+    let target = asElement(event.target);
+    while (
+      target &&
+      target !== picker.input &&
+      target !== picker.results &&
+      target !== picker.preview
+    )
+      target = target.parentElement;
+    if (!target) {
+      picker.localBindings?.deactivate();
+      return;
+    }
+    event._zvPickerHandled = true;
+    if (
+      compositionOwnsKey(event, picker.composition.active) ||
+      event.getModifierState?.('AltGraph')
+    ) {
+      picker.localBindings?.deactivate();
       event.stopPropagation();
       return;
     }
-    const key = event.key;
-    const lower = key.toLowerCase();
-    const stop = (): void => {
+    const context = target === picker.input ? 'picker-input' : 'picker-list';
+    const key = keyString(event);
+    if (key && nativeReservation(context, serializeBindingTokens([key])) === 'exclusive') {
+      picker.localBindings?.deactivate();
+      event.stopPropagation();
+      return;
+    }
+    this.markFocus(
+      session,
+      target === picker.input ? 'search' : target === picker.results ? 'list' : 'preview',
+    );
+    if (picker.localBindings?.handle(event, context)) {
       event.preventDefault();
       event.stopImmediatePropagation?.();
-      event.stopPropagation();
-    };
-    if (event.ctrlKey && ['j', 'n'].includes(lower)) {
-      stop();
-      this.moveSelection(session, 1);
-      return;
-    }
-    if (event.ctrlKey && ['k', 'p'].includes(lower)) {
-      stop();
-      this.moveSelection(session, -1);
-      return;
-    }
-    if (event.ctrlKey && (lower === 'd' || lower === 'u')) {
-      stop();
-      const amount = Math.max(120, Math.floor((picker.preview?.clientHeight || 480) / 2));
-      picker.preview?.scrollBy({ top: lower === 'd' ? amount : -amount });
-      return;
-    }
-    if (
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      (key === 'ArrowDown' || key === 'ArrowUp') &&
-      (event.target === picker.input ||
-        event.target === picker.results ||
-        picker.focusPane === 'search' ||
-        picker.focusPane === 'list')
-    ) {
-      stop();
-      this.moveSelection(session, key === 'ArrowDown' ? 1 : -1);
-      return;
-    }
-    if (key === 'Escape') {
-      stop();
-      this.close(session);
-      return;
-    }
-    if (
-      key === '/' &&
-      event.target !== picker.input &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey
-    ) {
-      stop();
-      this.focusPane(session, 'search');
-      picker.input?.select();
-      return;
-    }
-    if (event.target !== picker.input && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      if (key === 'ArrowDown' || lower === 'j') {
-        stop();
-        this.moveSelection(session, 1);
-        return;
-      }
-      if (key === 'ArrowUp' || lower === 'k') {
-        stop();
-        this.moveSelection(session, -1);
-        return;
-      }
-    }
-    if (key === 'Enter') {
-      stop();
-      void this.enqueue(session, 'select result', () =>
-        this.select(window, session, event.shiftKey),
-      );
-      return;
     }
     event.stopPropagation();
+    void window;
+  }
+
+  private execute(
+    action: ActionId,
+    event: KeyboardEvent | null,
+    window: MainWindow,
+    session: MainWindowSession,
+  ): boolean {
+    const picker = session.picker;
+    const actions: readonly ActionId[] =
+      picker.focusPane === 'search' ? PICKER_INPUT_ACTIONS : PICKER_LIST_ACTIONS;
+    if (!actions.includes(action)) return false;
+    switch (action) {
+      case 'uiNext':
+        this.moveSelection(session, 1);
+        break;
+      case 'uiPrevious':
+        this.moveSelection(session, -1);
+        break;
+      case 'uiFirst':
+        this.selectRow(session, 0);
+        break;
+      case 'uiLast':
+        this.selectRow(session, picker.filtered.length - 1);
+        break;
+      case 'uiConfirm':
+        void this.enqueue(session, 'select result', () =>
+          this.select(window, session, event?.shiftKey ?? false),
+        );
+        break;
+      case 'uiCancel':
+        this.close(session);
+        break;
+      case 'uiSearch':
+        this.focusPane(session, 'search');
+        picker.input?.select();
+        break;
+      case 'uiFocusList':
+        this.focusPane(session, 'list');
+        break;
+      case 'uiPreviewDown':
+      case 'uiPreviewUp': {
+        const amount = Math.max(120, Math.floor((picker.preview?.clientHeight || 480) / 2));
+        picker.preview?.scrollBy({ top: action === 'uiPreviewDown' ? amount : -amount });
+        break;
+      }
+      case 'uiNextPane':
+      case 'uiPreviousPane': {
+        const panes: readonly PickerPane[] = ['search', 'list', 'preview'];
+        const offset = action === 'uiNextPane' ? 1 : 2;
+        this.focusPane(session, panes[(panes.indexOf(picker.focusPane) + offset) % panes.length]!);
+        break;
+      }
+      default:
+        return false;
+    }
+    return true;
   }
 
   private filter(session: MainWindowSession, query: string): void {
@@ -460,7 +523,7 @@ export class FuzzyPicker {
       session.picker.count.textContent =
         provider?.countText?.(session.picker.filtered.length, session.picker.items.length) ??
         `${session.picker.filtered.length}/${session.picker.items.length}`;
-    if (session.picker.help) session.picker.help.textContent = this.shortcutReference();
+    this.refreshHints(session);
     const doc = container.ownerDocument;
     const query = session.picker.input?.value.trim() ?? '';
     if (!session.picker.filtered.length) {
@@ -587,7 +650,9 @@ export class FuzzyPicker {
   }
 
   private markFocus(session: MainWindowSession, pane: PickerPane): void {
+    if (session.picker.focusPane !== pane) session.picker.localBindings?.deactivate();
     session.picker.focusPane = pane;
+    this.refreshHints(session);
     if (session.picker.results)
       session.picker.results.style.boxShadow =
         pane === 'list' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
@@ -654,7 +719,36 @@ export class FuzzyPicker {
     return session.picker.open && session.picker.generation === generation;
   }
 
-  private shortcutReference(): string {
-    return 'Search · Ctrl+j/k select · Ctrl+d/u preview · Enter apply · Esc close';
+  private shortcutReference(context: BindingContext): string {
+    const actions = context === 'picker-input' ? PICKER_INPUT_ACTIONS : PICKER_LIST_ACTIONS;
+    const bindings = this.#bindings();
+    return actions
+      .flatMap((action) => {
+        const keys = shortcutsForAction(bindings, context, action);
+        return keys.length ? [`${keys.join('/')} ${ACTION_LABELS[action].en}`] : [];
+      })
+      .join(' · ');
+  }
+
+  private refreshHints(session: MainWindowSession): void {
+    const picker = session.picker;
+    if (picker.help)
+      picker.help.textContent = this.shortcutReference(
+        picker.focusPane === 'search' ? 'picker-input' : 'picker-list',
+      );
+    if (picker.queryHelp)
+      picker.queryHelp.textContent = [
+        picker.provider?.help?.query,
+        this.shortcutReference('picker-input'),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    if (picker.listHelp)
+      picker.listHelp.textContent = [
+        picker.provider?.help?.list,
+        this.shortcutReference('picker-list'),
+      ]
+        .filter(Boolean)
+        .join(' · ');
   }
 }

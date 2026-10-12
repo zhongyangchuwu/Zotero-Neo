@@ -199,8 +199,9 @@ never recolour Zotero documents, PDF pages, annotation colours, or link hints.
 
 `src/input/engine.ts` is a pure, stateless reducer for key normalization inputs:
 matching, count/prefix transitions, leader cancellation/backspace transforms, timeout
-resolution, and side-effect-free consumption prediction. Main and Reader sessions retain
-event gates, timers, guides, focus decisions, and action execution.
+resolution, and side-effect-free consumption prediction. Host consumers retain event
+gates, timers, guides, focus decisions, and action execution; Reader sidebar, Picker,
+and Plugin Manager instantiate the shared local binding runtime where applicable.
 
 `src/main/host.ts` is the narrow boundary for private main-window APIs: tabs, panes,
 selected items, reader-tab context, and tag filtering. Main-window control flow should use
@@ -246,6 +247,59 @@ depend on Zotero Preferences/XUL controls. Zotero Preferences is now a
 launcher-only compatibility bridge into Neo Settings; no editable Neo setting
 is duplicated there.
 
+Keyboard configuration has one shared source rather than parallel per-surface maps.
+`src/input/bindings.ts` owns the exact `BindingContext` set, defaults, resolution,
+and migration helpers; `actions.ts` is the canonical ActionId registry, and
+`binding-capabilities.ts` delegates availability to each real owner executor.
+`shortcut-catalog.ts` projects localized action/group/context metadata, effective
+and default keys, origin, and separate native/read-only records. `binding-editor.ts`
+is the pure draft/validation state machine; `settings-keybindings.ts` and its view
+own interaction, serialization, and Apply. The Settings browser searches action
+labels and IDs, assigned/default keys, groups, and contexts, and distinguishes
+Default, Custom, and Unbound. Add/Record, Done/Cancel, and Apply are explicit:
+Enter and Escape can be recorded tokens, not implicit recorder completion. Drafts
+remain staged until Apply. On recorder exit, restore the edited action's summary
+when it remains in the filtered results; otherwise return focus to Apply/search.
+Keep the result/native region bounded so Apply remains reachable before results,
+and keep Prefix Guide collapsed. Duplicate, malformed, incompatible, and
+native-reserved bindings block Apply; strict prefixes warn without blocking.
+Unbind/reset changes only one action in one context and preserves other rows.
+Carried incompatible orphan rows can be deleted but are not presented as
+executable actions.
+
+Action choices come from owner capabilities, not from labels or default rows.
+The local contracts that are easiest to misstate are:
+
+| Context | Configurable contract and native ownership |
+| --- | --- |
+| `reader-outline` | Neo local next/previous, parent/child, confirm/cancel, panel focus and document heading actions; `uiConfirm` is default-unbound. Native arrows, Tab, and Enter/Return (including modified Enter) stay with Zotero. Caption controls reuse this context. |
+| `reader-marks` | Neo list movement, first/last, confirm/cancel, delete/clear, panel focus and document heading actions. Native arrows and Tab stay with Zotero. |
+| `reader-annotations`, `reader-thumbnails` | Neo movement, cancel, panel focus and document heading actions; native arrows and Tab stay with Zotero. |
+| `picker-input`, `picker-list` | Separate query-input and list contexts; owner-supported movement/first/last, confirm/cancel, preview scrolling, and pane-switching actions are configurable, with `uiSearch` available on the list side. Text editing and native editor keys are never claimed. |
+| `plugins-input` | Only `uiFocusList` is supported (Escape is the default); it does not support `uiNext`. |
+| `plugins-list` | Owner-supported list navigation/search/cancel and actual Plugin Manager operations. |
+
+Use the capability modules in `src/reader/action-capabilities.ts`,
+`src/main/picker/action-capabilities.ts`, and
+`src/main/plugin-manager-capabilities.ts` for any further context inventory.
+`nativeShortcutCatalog()` is disclosure, not an editable binding map; native
+records are read-only, context-labeled, and shown only when All groups is selected. Reservations
+are checked at every token in a sequence. In particular, Picker/Plugin query
+`Ctrl+Insert` and `Shift+Insert` remain native copy/paste, and a Neo remap never
+claims to disable a host shortcut.
+
+`LocalBindingRuntime` is instantiated by each owning surface with host-provided
+timer adapters and action execution. The host qualifies target, context, editable
+and composing input, and native reservations before invoking it. It resets on
+context/target/binding changes and native handoff; the surface deactivates it on
+focus or pointer transfer and disposes its timers/runtime on close or teardown.
+
+`migrateBindingPreferences()` in `src/core/preferences.ts` owns the binding schema
+version (currently 18); `bindings.ts` provides the key/action transformations.
+The schema-18 migration is repeat-safe, writes changed overrides before the
+version, preserves non-null custom mappings, and moves an explicit-null
+cancellation only when its destination has no override.
+
 Reader preference policy is centralized in `src/core/preferences.ts`: Reader mode
 flags, marks persistence, default annotation colour, scroll defaults/ranges, and
 the legacy `smoothScroll` migration all resolve there. Reader runtime and
@@ -261,7 +315,32 @@ same surface to resolve an `ActionId`. Tag candidate sources may project namespa
 create candidates, and action-specific metadata, but they do not mutate item tags or Main
 filter state; those effects belong to `TagActions`.
 
-The native Reader Outline retains Zotero's rows and hosts Neo's Bookmarks group. `src/reader/native-sidebar.ts` owns reversible sidebar decoration and the group; `src/reader/outline-presentation.ts` derives conservative row labels and child counts; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
+The native Reader Outline retains Zotero's rows and hosts bounded Neo caption and Bookmarks groups. `src/reader/native-sidebar.ts` owns reversible compact decoration and group DOM; `src/reader/outline-presentation.ts` derives kinds; `src/reader/caption-targets.ts` owns lazy native caption/heading data and PDF-position projection; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
+
+Reader panels and category navigation retain native ownership boundaries. The
+Normal defaults `<Space>ro`, `<Space>rm`, `<Space>ra`, and `<Space>rt` focus/open
+Outline, Bookmarks, Annotations, and Thumbnails directly; repeating a focus action
+does not toggle the pane closed. Previous/next defaults are `[s` / `]s` for
+the complete native heading hierarchy (including Section/Subsection), `[f` / `]f` for figures,
+`[t` / `]t` for tables, `[a` / `]a` for annotations, and `[m` / `]m` for
+bookmarks. Heading actions are also explicit defaults in all four sidebar contexts and
+delegate to Reader navigation without moving sidebar focus. Candidate order/currentness
+uses the exact PDF view's live geometry, never the active native row or expanded/filter subset.
+Heading requests resolve unique genuine native heading geometry when an authored bookmark
+precedes its printed heading, including a page break, without changing the native hierarchy.
+Figure/Table requests merge explicit native targets with valid native SDT captions on demand;
+Figures align trustworthy image regions above captions, while Tables retain caption positions.
+Missing or ambiguous geometry retains its honest fallback. Bookmark traversal preserves
+persisted/legacy marks and annotation links.
+Panel focus creates no synthetic history route. Outline destinations use their
+exact-view native-hard evidence; bookmark jumps are one managed-final excursion
+through the shared navigation coordinator.
+
+Native Outline arrow and Tab events pass through to Zotero. Default `j/k` bind
+to configurable `uiNext` / `uiPrevious` aliases that dispatch native Up/Down,
+preserving immediate row navigation; `h/l` bind to `uiParent` / `uiChild` and
+dispatch native Left/Right. `uiConfirm` is remappable but default-unbound;
+Enter/Return, including modified Enter, remains exclusively host-owned.
 
 ## Reader keyboard forwarding
 
@@ -503,13 +582,17 @@ Reader session state must not mirror the continuous hold/RAF fields.
 
 ## Reader native sidebar ownership
 
-Zotero's Reader document owns `_internalReader._state.sidebarOpen`, `sidebarView`, `outline`, and `pageLabels`; `setSidebarView(view)` and `toggleSidebar(open?)` control the native sidebar. `src/reader/native-sidebar.ts` adds only reversible Neo-prefixed attributes/styles and one Bookmarks section inside the existing Outline wrapper. It does not replace React-owned titles, rows, or children. Native Annotations and Thumbnails remain Zotero-owned, independent sidebar views. `src/reader/marks.ts` remains the persisted ReaderMarks map and managed mark-jump owner.
+Zotero's Reader document owns `_internalReader._state.sidebarOpen`, `sidebarView`, `outline`, and `pageLabels`; `setSidebarView(view)` and `toggleSidebar(open?)` control the native sidebar. `src/reader/native-sidebar.ts` adds reversible Neo-prefixed attributes/styles and bounded caption/Bookmarks sections inside the Outline wrapper. It does not replace React-owned titles, rows, or children. Native Annotations and Thumbnails remain independent Zotero views; `src/reader/marks.ts` remains the persisted marks and managed mark-jump owner.
 
-`src/reader/outline-presentation.ts` infers optional display categories from existing title text and hierarchy: a one-component number is Section, a dotted number is Subsection, otherwise nested rows are Subsection and a root row with children is Section. Explicitly numbered Figure/Fig/图 and Table/表 titles receive Figure or Table labels; an unknown root leaf remains unlabeled. The original title and numbering are never rewritten. The separate child badge counts direct Outline children; it is not generated numbering or a full-text figure/table count. Neo does not scan PDF full text to identify figures or tables, so these labels are conservative presentation hints rather than verified document semantics.
+`src/reader/outline-presentation.ts` derives kinds from title and hierarchy: every meaningful unnumbered root, including a leaf such as Introduction, is a Section; nested headings are Subsections, with authored numeric hints retained. Explicit numbered Figure/Fig/图 and Table/表 titles are separate kinds. The sidebar projects stable `1`, `2`, `3.1`, etc. from the whole tree, independent of expansion/filtering and excluding Figure/Table entries from heading counters. Compact colored icons/ordinals and numeric direct-child counts have localized accessible/hover descriptions. Native titles and numbering remain untouched; badges are presentation, not verified PDF semantics.
 
-The sidebar belongs to the Reader document, not a PDF view: PDF focus and split-pane changes do not mirror or transfer sidebar ownership. Native host sidebar state remains authoritative and is not duplicated in Reader session state. Keyboard forwarding qualifies only targets in the Reader document's `#sidebarContainer`; sidebar visibility alone does not claim PDF commands. Native editable, composing, annotation, and thumbnail targets stay native. In Outline, `j/k/h/l` are translated to native arrow keys, so Zotero owns immediate row navigation and `Enter` expands/collapses a branch or opens its URL. `Escape` closes the sidebar and focuses the active PDF. `<Space>e` toggles the native Outline view; `<Space>m` focuses Bookmarks, and repeating it while Bookmarks is focused closes the sidebar.
+`ReaderCaptionTargets` calls `Zotero.SDT.getReader(itemID)` only for an explicit heading/Figure/Table request or caption-group expansion, sharing one single-flight session result. The installed SDK exposes no cache-only or cancellation option: a warm validated pack is reused; a missing/invalid source cache can queue native whole-file PDF text/layout/block processing. Reader open never starts this extra work; Neo adds no OCR engine, upload, or runtime dependency. A unique genuine `heading` block matching an authored title (with optional native numeric/appendix ordinal) on the authored or immediately following page supplies its printed geometry; unavailable/ambiguous matches retain the authored position. This changes destinations, not the native hierarchy or titles. Only labeled `caption` blocks with valid `anchor.pageRects` create Figure/Table identities. A Figure may use a single same-page image above its caption with compatible horizontal spans; only native excluded paragraphs geometrically contained within that image may intervene. A 0.01 PDF-point comparison tolerance accommodates native anchor precision without moving coordinates. Ambiguous images retain caption geometry; Tables remain caption-anchored. The cache publishes honest loading/ready/unavailable states, ignores retired results, and is released with the Reader. All projected positions are cloned into the Reader window for both native geometry and `navigate()` calls; native scrolling and zoom policies are unchanged.
 
-Reader deactivation clears transient focus and toggle-prefix intent without closing the native sidebar or erasing host sidebar state or stored marks. The Bookmarks group is not a fake PDF annotation; its list controls jump to or delete Neo's persisted marks, independently of native annotation and thumbnail surfaces.
+The sidebar belongs to the Reader document, not a PDF view: PDF focus and split-pane changes do not mirror or transfer sidebar ownership. Zotero's native sidebar state remains authoritative. Keyboard forwarding qualifies the focused target in the Reader document's `#sidebarContainer`, then selects the exact Outline, Marks, Annotations, or Thumbnails context; visibility alone does not claim PDF commands. Native `focusin` and pointer handoff deactivate the sidebar matcher and retire pending PDF shortcut sequences.
+
+The Normal defaults `<Space>ro`, `<Space>rm`, `<Space>ra`, and `<Space>rt` directly open/focus Outline, Bookmarks, Annotations, and Thumbnails; repeating a focus action does not close the pane. Toggle actions are separate. Schema 18 retires the old `<Space>e` / `<Space>m` and bare `[` / `]` defaults while preserving non-null custom overrides. In Outline, default `j/k/h/l` bind to `uiNext` / `uiPrevious` / `uiParent` / `uiChild` in `reader-outline` and dispatch the corresponding native arrows, preserving immediate native row/tree navigation; those Neo bindings are configurable. Physical arrow keys and Tab remain host-owned. Enter/Return, including modified Enter, is exclusively host-owned; `uiConfirm` remains available but default-unbound and remappable. Escape's default `uiCancel` closes the sidebar and focuses the active PDF.
+
+Reader deactivation clears transient focus and pending local sequences without closing the native sidebar or erasing host sidebar state or stored marks. The Bookmarks group is not a fake PDF annotation; its list controls jump to or delete Neo's persisted marks, independently of native annotation and thumbnail surfaces.
 
 ## Annotation comment overlay
 

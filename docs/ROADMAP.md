@@ -38,6 +38,20 @@ acceptance backlog. Current interaction ownership is defined by
 [the interaction model](INTERACTION_MODEL.md) and
 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98).
 
+The keyboard-system and Reader-local navigation change tracked by
+[#135](https://github.com/zhongyangchuwu/Zotero-Neo/issues/135) is implemented
+in the source branch, but is not merged or released. It replaces retired Reader
+defaults with direct panel focus, full-document native heading/category and bookmark
+traversal, plus lazy native caption targets, using the shared 14-context binding source, action-centric Apply
+editor, and schema-18 migration. Implementation and verification evidence belong
+to the owning issue/PR; branch implementation is not an issue-completion claim.
+
+Isolated latest-stable Zotero smoke covers migration repeat-safety, live Reader
+panels/categories/splits/bookmarks, configured input/list controls, Main/Note
+commands, and Settings recording, conflicts, focus, and lifetime. This automation
+does not prove physical OS IME/clipboard or keyboard-only interaction; keep those
+manual acceptance boundaries explicit.
+
 The unified navigation history and document-bottom Reader `G` are implemented,
 owner-accepted, and merged through
 [#113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).

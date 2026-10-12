@@ -31,7 +31,12 @@ import {
   noteEditorEnabled,
   pickerMouseEnabled,
 } from '../core/preferences';
-import { bindingsForMode, resolveBindings, type BindingMap, type Mode } from '../input/bindings';
+import {
+  bindingsForMode,
+  resolveBindings,
+  type BindingMap,
+  type BindingContext,
+} from '../input/bindings';
 import { compositionOwnsKey } from '../input/composition';
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
@@ -90,7 +95,7 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
-    this.#pluginManager = new PluginManagerPanel(dependencies.logger);
+    this.#pluginManager = new PluginManagerPanel(dependencies.logger, () => this.bindings());
     this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
     this.#navigationExecutor = new MainNavigationExecutor(
       dependencies.logger,
@@ -121,8 +126,11 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#navigationExecutor,
       (window, session) => this.#itemSelect.refresh(window, session.selection),
     );
-    this.#picker = new FuzzyPicker(dependencies.logger, this.#navigation, () =>
-      pickerMouseEnabled(dependencies.preferences),
+    this.#picker = new FuzzyPicker(
+      dependencies.logger,
+      this.#navigation,
+      () => pickerMouseEnabled(dependencies.preferences),
+      () => this.bindings(),
     );
     this.#collections = new CollectionMembershipActions(
       dependencies.logger,
@@ -536,11 +544,11 @@ export class MainWindowController implements MainWindowControllerApi {
   private bindings() {
     return resolveBindings(this.#dependencies.preferences.get('bindings', ''));
   }
-  private activeBindings(mode: Mode) {
+  private activeBindings(mode: BindingContext) {
     return bindingsForMode(this.bindings(), mode);
   }
 
-  private bindingMode(window: MainWindow): Extract<Mode, 'main-normal' | 'main-select'> {
+  private bindingMode(window: MainWindow): Extract<BindingContext, 'main-normal' | 'main-select'> {
     return this.#itemSelect.isVisual(window) ? 'main-select' : 'main-normal';
   }
   private rescan = (window: MainWindow): void => this.#dependencies.reader.rescan(window);
@@ -706,7 +714,7 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     session.prefixGuide.refresh(() => {
       const fromNote = input === session.note.input;
-      let active: { mode: Mode; bindings: BindingMap };
+      let active: { mode: BindingContext; bindings: BindingMap };
       if (fromNote) active = this.#noteEditor.activeBindings(session);
       else {
         const mode = this.bindingMode(window);

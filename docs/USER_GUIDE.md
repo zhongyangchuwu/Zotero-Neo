@@ -139,12 +139,16 @@ Plugin Manager panel. Unlike a picker, this surface stays open while you browse 
 plugins and inspect their state. Zotero/Mozilla AddonManager remains the authoritative
 source for plugin lifecycle state.
 
+The configurable commands use `plugins-list` while the results are focused and
+`plugins-input` while the filter field owns input. The filter's ordinary text
+and IME remain native; `Escape` in that field returns focus to the list.
+
 - `j` / `k` or `↑` / `↓`: move through installed plugins.
 - `Ctrl+d` / `Ctrl+u`: move quickly through the list.
 - `gg` / `G`: first / last plugin.
 - `/`: focus the fuzzy filter field; `Escape` leaves the field without closing the panel.
 - `r`: reload installed plugin state from AddonManager.
-- `Escape` / `q`: close the panel and restore the previous focus when possible.
+- In the results list, `Escape` / `q` close the panel and restore previous focus when possible; in the filter field, `Escape` returns focus to the list.
 
 The panel shows plugin name, version, ID, enabled/disabled state, and the lifecycle actions
 that Zotero currently allows for the selected plugin.
@@ -268,6 +272,11 @@ Common controls:
 | Type | Edit/filter the focused query input |
 | `Escape` | Close the chooser |
 
+The Neo-owned movement, preview, confirmation, and cancellation actions are
+configurable in `picker-input` and `picker-list`. Query typing and IME remain
+browser/Gecko-owned; native editing shortcuts are disclosed separately in
+Settings and are not disabled by changing a Neo binding.
+
 Result rows are keyboard-first by default. Enable **Preferences → Picker →
 Enable mouse row selection and double-click confirmation** to let a single click
 select a row and a double-click confirm it. Hover remains inert.
@@ -341,19 +350,24 @@ engine in the editor itself.
 
 #### Native Reader Outline and Bookmarks
 
-`<Space>e` opens Zotero's native Reader sidebar in Outline view; if that view is already open, it closes. Neo appends one Bookmarks group to the existing native Outline without replacing its rows or titles. Zotero's native Annotations and Thumbnails views remain independent sidebar surfaces.
+The native Reader sidebar has four direct focus commands in Reader Normal: `<Space>ro` for Outline, `<Space>rm` for Bookmarks, `<Space>ra` for Annotations, and `<Space>rt` for Thumbnails. They open or focus the named surface; repeating a command does not close it. The same panel-focus actions are available from each Reader panel's local binding context.
 
-| Key | Action |
+| Local context | Default Neo controls |
 | --- | --- |
-| `<Space>e` | Open/close the native Outline view |
-| `j` / `k` / `h` / `l` | While focused in native Outline, forward ArrowDown/ArrowUp/ArrowLeft/ArrowRight to Zotero's immediate row navigation |
-| `Enter` | Follow native behavior: expand/collapse a branch or open its URL |
-| `Escape` | Close the native sidebar and focus the active PDF |
-| `<Space>m` | Focus Bookmarks; repeat while Bookmarks has focus to close the sidebar |
+| `reader-outline` | `j` / `k` move, `h` / `l` parent / child, `Escape` cancel; `uiConfirm` is supported but unbound by default |
+| `reader-marks` | `j` / `k` move, `gg` / `G` first / last, `Enter` confirm, `Escape` cancel, `d` delete, `x` clear |
+| `reader-annotations` | `j` / `k` move, `Escape` cancel |
+| `reader-thumbnails` | `j` / `k` move, `Escape` cancel |
 
-Neo adds presentation labels inferred from existing Outline titles and hierarchy. A one-component number (such as `1`) is labeled Section; a dotted number (such as `1.1`) is Subsection. Other nested rows are labeled Subsection, and a root row with children is labeled Section. Explicitly numbered Figure/Fig/图 and Table/表 titles receive Figure or Table labels; an unknown root leaf remains unclassified. These labels are not verified document semantics: the original title and numbering stay unchanged, the separate child badge counts direct Outline children, and Neo does not search PDF full text to discover figures or tables.
+These Neo-owned controls can be remapped in their matching contexts. Native arrows and `Tab` / `Shift+Tab` remain Zotero-owned; in Outline, `Enter` / `Return` (including modified Enter) is exclusively native. If you want a configurable confirmation in Outline, bind `uiConfirm` to another non-reserved key. Escape follows each surface's own return/cancel behavior.
 
-In Bookmarks, `j` / `k` move between marks; `G` / `End` moves to the last mark; `Enter` or clicking a mark jumps to it; `d` deletes the selected mark; and `x` deletes all marks. An assigned mark label jumps directly except `j`, `k`, `g`, `d`, and `x`, which are reserved for group controls. These are Neo Reader marks, not PDF annotations; their persistence follows the Marks preference.
+Neo adds bounded Bookmarks and collapsible `▧ / ▤` caption groups to the native Outline without replacing its rows or titles. `[s` / `]s` traverse the whole native heading hierarchy, including Subsections, from the actual active PDF position; the same shortcuts work from Outline, Bookmarks, Annotations and Thumbnails. If an authored bookmark points to the previous page's end, a uniquely matching native heading supplies the printed title's actual position. Missing or ambiguous matches retain the authored destination. Collapse, search filtering, the active Outline row and sidebar visibility never scope traversal. Navigation follows document order and wraps; native editing/IME remains authoritative.
+
+Figure `[f` / `]f` and Table `[t` / `]t` navigation reuse genuine Zotero structured-document caption blocks with valid PDF anchors. Figures align the top of a trustworthy associated native image above its caption, so the image is visible; ambiguous associations fall back to the caption. Tall images may extend below the viewport; navigation does not change zoom. Tables retain caption positions. Expand `▧ / ▤` to recognize and choose a caption, or request a category directly. Heading/Figure/Table recognition shares one lazy Reader cache: the first explicit request may require Zotero to process the whole PDF locally, but opening Reader does not start this extra work. No upload or new OCR dependency is added. Absent captions stay absent, and missing targets are reported honestly. Bookmark `[m` / `]m` navigation retains existing document-position ordering, jumps and annotation links.
+
+Compact colored icons and derived tree ordinals replace long type labels: an unnumbered Introduction root is `1`, the next root is `2`, and child headings are `3.1`, `3.2`, etc. Numbering uses the full hierarchy, not only expanded/filtered rows; explicit Figure/Table entries do not increment heading counters. Meaningful unnumbered root leaves are Sections. Native titles and authored numbering remain unchanged; hover and accessible names explain the icons, and the separate number is a direct-child count. These presentation hints do not verify PDF semantics.
+
+Inside Bookmarks, `j` / `k` move between marks; `gg` / `G` move to the first / last mark; `Enter` confirms; `d` deletes the selected mark; and `x` clears marks. Mark labels jump directly except `j`, `k`, `g`, `d`, and `x`, which are group controls. These are Neo Reader marks, not PDF annotations; their persistence follows the Marks preference.
 
 #### Reader split view
 
@@ -378,7 +392,7 @@ or `0`–`9` (sioyek-style numbered tags).
 | `` `<x> `` | Jump to the mark — instant page flip, reproducing the exact view that was marked (e.g. `` `a ``, `` `1 ``)                    |
 | `dm<x>`    | Delete the mark (e.g. `dma`)                                                                                                  |
 | `dM`       | Delete all marks                                                                                                              |
-| `<Space>m` | Focus the Bookmarks group in the native Outline sidebar; repeat while Bookmarks has focus to close the sidebar |
+| `<Space>rm` | Focus the Bookmarks group in the native Outline sidebar |
 
 Notes:
 
@@ -387,9 +401,9 @@ Notes:
 - A mark stores the viewport-centre position: whatever was in the middle of
   the screen when you pressed `m<x>` will be in the middle of the screen when
   you jump back — even mid-page.
-- If an annotation is selected (via `[`/`]`), the mark also binds to it so
-  follow-up commands (`[`/`]`, `zy`, `y`, …) work after a jump. `[`/`]`
-  annotation navigation is unaffected.
+- If an annotation is selected (via `[a`/`]a`), the mark also binds to it so
+  follow-up commands (`[a`/`]a`, `zy`, `y`, …) work after a jump. Annotation
+  navigation remains available alongside the other Reader category keys.
 - With **Persist marks** enabled (Preferences → Marks) the whole mark set is
   saved as a `zv-marks-<attachmentKey>:` line in the **parent item's Extra
   field** (syncs via Zotero sync — attachments do not expose the bibliographic Extra field used here,
@@ -578,23 +592,31 @@ search first.
 
 #### Annotation navigation and editing
 
-Use `[` and `]` to move between annotations. The selected annotation is
-highlighted in the PDF and scrolled to in the sidebar.
+In Reader Normal, category navigation shares one bracket grammar. Each pair
+moves to the previous / next matching target, follows document order, and wraps:
 
-| Key     | Action                                                       |
-| ------- | ------------------------------------------------------------ |
-| `[`     | Jump to previous annotation                                  |
-| `]`     | Jump to next annotation                                      |
-| `Enter` | Open the selected annotation's comment field for editing     |
-| `i`     | Open the annotation comment editor with the Insert indicator |
-| `y`     | Copy the annotation's **highlighted text** to the clipboard  |
-| `Y`     | Copy the annotation's **comment text** to the clipboard      |
-| `dd`    | Confirm permanent deletion of the selected Reader annotation (not undoable) |
-| `zy`    | Change annotation colour → Yellow                            |
-| `zr`    | Change annotation colour → Red                               |
-| `zg`    | Change annotation colour → Green                             |
-| `zb`    | Change annotation colour → Blue                              |
-| `zp`    | Change annotation colour → Purple                            |
+| Keys | Category |
+| --- | --- |
+| `[s` / `]s` | Headings, including Sections and Subsections |
+| `[f` / `]f` | Figures from explicit native targets or recognized native captions |
+| `[t` / `]t` | Tables from explicit native targets or recognized native captions |
+| `[a` / `]a` | Annotations |
+| `[m` / `]m` | Bookmarks, ordered by document position |
+
+The selected annotation is highlighted in the PDF and scrolled to in the sidebar.
+
+| Key | Action |
+| --- | --- |
+| `Enter` | Open the selected annotation's comment field for editing |
+| `i` | Open the annotation comment editor with the Insert indicator |
+| `y` | Copy the annotation's **highlighted text** to the clipboard |
+| `Y` | Copy the annotation's **comment text** to the clipboard |
+| `dd` | Confirm permanent deletion of the selected Reader annotation (not undoable) |
+| `zy` | Change annotation colour → Yellow |
+| `zr` | Change annotation colour → Red |
+| `zg` | Change annotation colour → Green |
+| `zb` | Change annotation colour → Blue |
+| `zp` | Change annotation colour → Purple |
 
 #### Selection workflow
 
@@ -636,7 +658,7 @@ and IME keep their native text behavior rather than invoking Reader shortcuts.
 With comment entry disabled in Settings, `i` instead activates Reader-wide native
 passthrough (`-- NATIVE --`): ordinary keys stay native until Escape exits it.
 
-Press `i` in Normal while an annotation is selected via `[`/`]` to open Neo's floating
+Press `i` in Normal while an annotation is selected via `[a`/`]a` to open Neo's floating
 comment textarea inside that PDF view. The existing comment is pre-filled and the quoted
 text is shown as context. Enter inserts a newline, and Escape saves and closes rather
 than discarding the draft. Escape during active IME composition does not close the editor.
@@ -717,7 +739,7 @@ a highlight and opens its annotation comment editor.
 
 ### Navigating and editing existing annotations
 
-1. Press `]` / `[` to move to the next / previous annotation. The annotation
+1. Press `]a` / `[a` to move to the next / previous annotation. The annotation
    is highlighted in the PDF viewer and the sidebar scrolls to its card.
 2. Press `y` to copy the highlighted text, `Y` to copy the comment.
 3. Press `i` (or `Enter`) to open the comment overlay and type a note.
@@ -731,31 +753,47 @@ a highlight and opens its annotation comment editor.
 
 ## Customising keybindings
 
-Open Neo Settings with `<Space>ps` from Main, Reader, or Note Normal mode, then choose
-**Keybindings**. The same page also owns Prefix Guide visibility, delay, and font size.
+Open Neo Settings with `<Space>ps` from Main, Reader, or Note Normal, then choose
+**Keybindings**. The action browser spans the six Reader/Main/Note mode contexts
+and eight focused local contexts: `reader-outline`, `reader-marks`,
+`reader-annotations`, `reader-thumbnails`, `picker-input`, `picker-list`,
+`plugins-input`, and `plugins-list`. Prefix Guide settings are collapsed by
+default.
 
-- Every row in the **Keybindings** table maps a _mode + key sequence_ to an _action_. Multiple rows may bind keys to the same action.
-- Edit the key sequence directly in its cell. Key sequences preserve case: `b` and `B` are different.
-- Neo uses a Neovim-style notation for symbolic keys: `<C-d>`, `<Enter>`,
-  `<Esc>`, `<S-Tab>`, `<F1>`, and `<Space>`. Printable characters remain
-  literal, so `gg` is two `g` keys, `f1` is `f` then `1`, and the word
-  `enter` is five printable letters. Only `<Enter>` means the Enter key.
-- Symbolic tokens compose directly with printable sequences, for example
-  `<C-d>g`. A literal `<` is written `<lt>`. Unmodified printable
-  characters do not have an angle-bracket form, so `<f>` is intentionally
-  invalid rather than becoming a second spelling of `f`.
-- Click **+ Add binding** to insert a new row immediately below the table header. The row is visible at once, starts in Normal mode with an empty Key Sequence and no selected Action, and focuses/selects the Key Sequence field. Click **×** to remove a row; removing a row truly unbinds that mode-and-sequence once the change is applied.
-- The native **Mode** menu is available on every row. Changing a row's Mode updates the Action choices to show only actions supported by that Mode.
-- The Action selector is searchable by localized action label or action identifier (case-insensitive). Use `↑` / `↓`, `Enter`, or `Escape`, or click an option to choose it.
-- An existing row whose Action is not supported by its selected Mode remains visible so it can be corrected. Such incompatible rows block **Apply bindings** until they are fixed; they are never removed automatically.
-- Rows show visible selected and hover states, separators distinguish adjacent rows, and the table headings remain visible while the table is scrolled.
-- Add, edit, and delete operations are drafts until you click **Apply bindings**. Switching Settings sections or closing and reopening Neo Settings keeps the dirty draft for the current Zotero Main-window session; it is not persisted as active bindings until Apply.
-- Click **Reset to defaults** to stage the default bindings. Reset is also a draft operation: the defaults take effect only after **Apply bindings**.
-- **Apply bindings** checks all rows before saving. Empty or malformed rows, incompatible mode/action rows, and exact duplicate mode-and-sequence rows block Apply. A valid same-mode prefix pair such as `f` and `ff` is allowed but shows a warning because the shorter sequence may wait for a continuation and introduce a timeout delay.
-- If saving fails, the draft remains in the table and the failure is reported; retry **Apply bindings** after addressing the reported failure.
-- After a successful Apply, a deleted shortcut remains unbound after restart and no longer appears in the resolved Key Guide or Command Palette hints.
-- Appearance, Prefix Guide, highlight colour, mode, marks and scroll settings save automatically on change.
-- Note editor Vim mode can be turned on or off independently from Neo Settings.
+- Filter by action group and context. Search covers localized labels, canonical
+  ActionIds, current keys, default keys, groups, and contexts. Results show
+  **Default**, **Custom**, or **Unbound**, including supported unbound actions.
+- Select an action and context to inspect or edit its bindings. **Add** adds a
+  binding; **Record** captures a key sequence. Recorded `Enter` and `Escape` are
+  tokens, not recorder completion/cancellation; use explicit **Done** or
+  **Cancel** controls.
+- **Unbind** or **Reset** affects one action in one context and preserves
+  unrelated bindings. Edits remain staged until **Apply**.
+- Exact duplicates, unsupported action/context pairs, and reserved native keys
+  block Apply. Strict-prefix pairs are allowed with a warning because the
+  shorter sequence may wait for a continuation. Incompatible carried-over rows
+  remain **Delete**-only; they cannot be recorded or retained as inert commands.
+- Key ownership is reserved across every token in a sequence. Native query
+  editing includes `<C-Insert>` / `<S-Insert>`; Outline `Enter` / `Return`,
+  including modified Enter, remains exclusively Zotero-owned. Outline
+  `uiConfirm` is supported but unbound by default and can use another
+  non-reserved key. Native text entry and IME remain host-authoritative.
+- Native shortcuts are separate, read-only, and context-labeled; they appear
+  only with the **All groups** filter. Changing a Neo binding does not disable
+  its native counterpart. Result/native regions are bounded and **Apply** stays
+  reachable before them.
+- Leaving the recorder restores the edited action's connected summary; if it is
+  filtered out, focus returns to Apply or search. A save failure keeps the
+  staged draft and reports the failure.
+
+Key notation remains Neovim-style. Printable keys preserve case (`b` differs
+from `B`); symbolic tokens include `<C-d>`, `<Enter>`, `<Esc>`, `<S-Tab>`,
+`<F1>`, and `<Space>`. Printable sequences such as `gg` are multi-key input;
+`<C-d>g` composes symbolic and printable tokens, `<lt>` represents a literal
+`<`, and `<f>` is invalid rather than another spelling of `f`.
+
+Appearance, Prefix Guide, highlight colour, mode, marks, and scroll settings
+save automatically. Note editor Vim mode remains independent.
 
 The legacy Zotero Preferences pane remains a compatibility bridge for settings that
 have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in the profile directory with
@@ -763,7 +801,7 @@ have not migrated yet. Init failures are reported to `zotero-neo-startup.log` in
 
 ### Action reference
 
-For the complete action-ID lookup, capability by mode, unbound-action status, and canonical default binding map, see the [Command Reference](COMMAND_REFERENCE.md#action-id-index). This guide keeps the beginner workflow and quick default-key examples above; the command reference is the sole detailed action and history lookup.
+For the complete action-ID lookup, capabilities across all binding contexts, unbound-action status, and canonical default binding map, see the [Command Reference](COMMAND_REFERENCE.md#action-id-index). This guide keeps the beginner workflow and quick default-key examples above; the command reference is the sole detailed action and history lookup.
 
 ## Settings
 
@@ -794,7 +832,7 @@ the Settings workspace opens in the owning Zotero window without switching back 
 | Tag namespace separator  | `/`                      | Interpret flat Zotero tag strings as virtual Neo paths; an empty separator keeps tag matching completely flat                                    |
 
 Appearance, Prefix Guide, picker, Reader, interface/command language, and tag namespace settings save automatically on change.
-Keybinding table edits remain drafts until **Apply bindings**.
+Keybinding edits remain staged until **Apply**.
 The Zotero Preferences pane is now only a compatibility launcher for opening Neo Settings; it no longer contains duplicate editable controls.
 
 - **Step scrolling** moves instantly by the scroll step per `j`/`k`/`zh`/`zl` press.

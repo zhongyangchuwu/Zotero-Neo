@@ -100,8 +100,11 @@ export interface ReaderViewRuntime {
   _scrolling?: boolean;
   _pageLabelsPromise?: unknown;
   _pushHistoryPoint?(): Promise<unknown> | unknown;
+  /** Native PDFView loader: unlike Reader.setSidebarView, this does not change the sidebar UI. */
+  setSidebarView?(view: 'outline' | 'annotations' | 'thumbnails'): void | Promise<void>;
   navigateToPosition?(position: ReaderLinkPosition, options?: unknown): void | Promise<void>;
   getClientRectForPopup?(position: ReaderLinkPosition): readonly number[];
+  getPositionBoundingViewRect?(position: ReaderLinkPosition): readonly number[];
   navigate?(
     payload:
       | { readonly position: ReaderLinkPosition }
@@ -110,7 +113,7 @@ export interface ReaderViewRuntime {
       | { readonly pageLabel: string }
       | { readonly pageNumber: string }
       | { readonly annotationID: string },
-    options?: { readonly skipHistory?: boolean },
+    options?: { readonly skipHistory?: boolean; readonly block?: 'start' | 'center' | 'nearest' },
   ): void | Promise<void>;
   focus?(): void;
   navigateToNextPage?(): void;
@@ -168,6 +171,7 @@ export interface PdfViewerRuntime {
 }
 
 export interface PdfPageViewRuntime {
+  readonly div?: HTMLElement;
   readonly viewport?: {
     readonly scale: number;
     readonly height: number;
@@ -249,6 +253,9 @@ export interface MarksPayload {
 export interface ReaderNativeOutlineEntry {
   readonly title: string;
   readonly items?: readonly ReaderNativeOutlineEntry[];
+  /** Zotero 10.0.6 native Outline resolves PDF destinations to a position before publishing. */
+  readonly location?: { readonly position: ReaderLinkPosition };
+  readonly active?: boolean;
   readonly expanded?: boolean;
   readonly matched?: boolean;
   readonly childMatched?: boolean;

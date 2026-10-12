@@ -1,68 +1,63 @@
-import { MODES, type BindingMap, type Mode } from '../input/bindings';
+import { BINDING_CONTEXTS, type BindingContext, type BindingMap } from '../input/bindings';
+import { compositionOwnsKey } from '../input/composition';
 import {
-  setSettingsSelectOptions,
-  settingsButtonElement,
-  settingsSelectElement,
-  styleSettingsField,
-} from './settings-ui';
-import {
-  actionLabel,
-  actionOptions,
-  createBindingEditor,
+  addActionBinding,
   deriveBindingEditor,
+  resetAction,
   transition,
+  unbindAction,
   type BindingEditorDerived,
-  type BindingEditorEvent,
   type BindingEditorIssue,
   type BindingEditorLanguage,
   type BindingEditorRow,
   type BindingEditorState,
 } from '../input/binding-editor';
 import { isActionId, type ActionId } from '../input/actions';
+import {
+  ACTION_GROUPS,
+  contextLabel,
+  groupLabel,
+  nativeShortcutCatalog,
+  type ActionGroup,
+  type NativeShortcutEntry,
+  type ShortcutCatalogEntry,
+} from '../input/shortcut-catalog';
+import { keyString } from '../input/keys';
+import { serializeBindingTokens } from '../input/key-sequence';
+import { THEME_VARS } from '../ui/theme';
+import { settingsButtonElement, settingsSelectElement, styleSettingsField } from './settings-ui';
 
 const XHTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
-const ROW_ATTRIBUTE = 'data-zv-binding-row-id';
-const ACTIVE_ACTION_INPUT_CLASS = 'zv-binding-action-input';
+type ContextFilter = BindingContext | 'all';
+type GroupFilter = ActionGroup | 'all';
+type AvailabilityFilter = 'all' | 'bound' | 'unbound';
+type BrowserMessage = (message: string, language: BindingEditorLanguage) => string;
 
-export interface BindingEditorGeometryAdapter {
-  setScrollTop?(wrapper: HTMLElement, top: number): void;
-  focusAndSelect?(input: HTMLInputElement): void;
-}
-
-export interface BindingEditorViewOptions {
+export interface ShortcutBrowserOptions {
   readonly document?: Document;
   readonly root?: Element;
-  readonly baseline?: BindingMap;
-  readonly language?: BindingEditorLanguage;
-  readonly state?: BindingEditorState;
-  readonly geometry?: BindingEditorGeometryAdapter;
+  readonly state: BindingEditorState;
+  readonly localize?: BrowserMessage;
   readonly onSave?: (bindings: BindingMap) => boolean | void;
-  readonly localize?: (key: string, language: BindingEditorLanguage) => string;
   readonly onStateChange?: (state: BindingEditorState, derived: BindingEditorDerived) => void;
 }
 
-export interface MountedBindingEditor {
-  readonly dispatch: (event: BindingEditorEvent) => void;
-  readonly getState: () => BindingEditorState;
-  readonly getDerived: () => BindingEditorDerived;
-  readonly render: () => void;
+export interface MountedShortcutBrowser {
   readonly dispose: () => void;
 }
 
-function createXhtmlElement<K extends keyof HTMLElementTagNameMap>(
+interface KeyRecording {
+  readonly context: BindingContext;
+  readonly action: ActionId;
+  readonly rowId: number | null;
+  readonly tokens: readonly string[];
+}
+
+function createElement<K extends keyof HTMLElementTagNameMap>(
   document: Document,
   localName: K,
 ): HTMLElementTagNameMap[K] {
   return document.createElementNS(XHTML_NAMESPACE, localName) as HTMLElementTagNameMap[K];
-}
-
-function defaultSetScrollTop(wrapper: HTMLElement, top: number): void {
-  wrapper.scrollTop = top;
-}
-
-function defaultFocusAndSelect(input: HTMLInputElement): void {
-  input.focus();
-  input.select();
 }
 
 function elementFromTarget(target: EventTarget | null): Element | null {
@@ -71,537 +66,696 @@ function elementFromTarget(target: EventTarget | null): Element | null {
   return node.nodeType === 1 ? (node as Element) : node.parentElement;
 }
 
-function rowIdFromElement(element: Element | null): number | null {
-  let current = element;
-  while (current) {
-    const value = current.getAttribute(ROW_ATTRIBUTE);
-    if (value !== null) {
-      const rowId = Number.parseInt(value, 10);
-      return Number.isFinite(rowId) ? rowId : null;
-    }
-    current = current.parentElement;
-  }
-  return null;
-}
-
-function issueText(
+function issueMessage(
   issue: BindingEditorIssue,
   language: BindingEditorLanguage,
-  localize: (key: string, language: BindingEditorLanguage) => string,
+  localize: BrowserMessage,
 ): string {
-  const key =
+  const message =
     issue.kind === 'empty'
-      ? 'zv.bindings.error.empty'
+      ? 'Enter a key sequence and action.'
       : issue.kind === 'malformed'
-        ? 'zv.bindings.error.malformed'
+        ? 'Invalid mode, key sequence, or action.'
         : issue.kind === 'incompatible'
-          ? 'zv.bindings.error.incompatible'
+          ? 'Action is not supported in this mode.'
           : issue.kind === 'duplicate'
-            ? 'zv.bindings.error.duplicate'
-            : 'zv.bindings.warning.prefix';
-  return localize(key, language);
+            ? 'Duplicate mode and key sequence.'
+            : issue.kind === 'prefix'
+              ? 'Strict prefix of another sequence.'
+              : 'Native key is reserved by Zotero or text editing.';
+  return localize(message, language);
 }
 
-function defaultLocalize(key: string): string {
-  return key;
-}
-
-function actionDisplayValue(row: BindingEditorRow, state: BindingEditorState): string {
-  if (state.actionEditor?.rowId === row.id && state.actionEditor.open) {
-    return state.actionEditor.query;
-  }
-  return isActionId(row.action) ? actionLabel(row.action, state.language) : row.action;
-}
-
-export function mountBindingEditor(options: BindingEditorViewOptions): MountedBindingEditor {
+export function mountShortcutBrowser(options: ShortcutBrowserOptions): MountedShortcutBrowser {
   const resolvedDocument = options.document ?? options.root?.ownerDocument;
-  if (!resolvedDocument) throw new Error('Binding editor requires a document');
+  if (!resolvedDocument) throw new Error('Shortcut browser requires a document');
   const document: Document = resolvedDocument;
   const root = options.root ?? document.documentElement;
-  const geometry: Required<BindingEditorGeometryAdapter> = {
-    setScrollTop: options.geometry?.setScrollTop ?? defaultSetScrollTop,
-    focusAndSelect: options.geometry?.focusAndSelect ?? defaultFocusAndSelect,
-  };
-  const localize: (key: string, language: BindingEditorLanguage) => string =
-    options.localize ?? ((key: string, _language: BindingEditorLanguage) => defaultLocalize(key));
-  const baseline = options.baseline;
-  let state = options.state ?? createBindingEditor(baseline, options.language ?? 'en');
+  const localize = options.localize ?? ((message: string) => message);
+  let state = options.state;
   let disposed = false;
-  let blurTimer: number | null = null;
+  let recording: KeyRecording | null = null;
+  let keyListener: EventListener | null = null;
+  let keyListenerOnWindow = false;
+  let statusMessage = '';
+  let contextFilter: ContextFilter = 'all';
+  let groupFilter: GroupFilter = 'all';
+  let availabilityFilter: AvailabilityFilter = 'all';
+  const openActions = new Set<string>();
 
-  const tableBody = (): HTMLTableSectionElement | null =>
-    root.querySelector('#zv-bindings-body') as HTMLTableSectionElement | null;
-  const tableWrapper = (): HTMLElement | null =>
-    root.querySelector('#zv-bindings-table-wrap') as HTMLElement | null;
-  const activeInput = (): HTMLInputElement | null => {
-    const editor = state.actionEditor;
-    if (!editor) return null;
-    return root.querySelector(
-      `.${ACTIVE_ACTION_INPUT_CLASS}[${ROW_ATTRIBUTE}="${editor.rowId}"]`,
-    ) as HTMLInputElement | null;
-  };
+  const toolbar = createElement(document, 'div');
+  toolbar.style.cssText =
+    'display:flex;align-items:center;flex-wrap:wrap;gap:0.55em;margin:0 0 0.65em';
+  const search = createElement(document, 'input');
+  search.type = 'search';
+  search.autocomplete = 'off';
+  search.setAttribute('aria-label', localize('Search shortcuts', state.language));
+  search.placeholder = localize('Search actions, IDs, keys, and contexts', state.language);
+  styleSettingsField(search, 'min(32em, 100%)');
 
-  function renderModeControl(row: BindingEditorRow): HTMLSelectElement {
-    const select = settingsSelectElement(
-      document,
-      localize('zv.bindings.mode', state.language),
-      MODES.map((mode) => ({ value: mode, label: mode })),
-      row.mode,
-      '10.5em',
-    );
-    select.className = 'zv-binding-mode';
-    select.setAttribute(ROW_ATTRIBUTE, String(row.id));
-    return select;
+  const contexts = [
+    { value: 'all' as const, label: localize('All contexts', state.language) },
+    ...BINDING_CONTEXTS.map((context) => ({
+      value: context,
+      label: contextLabel(context, state.language),
+    })),
+  ];
+  const contextSelect = settingsSelectElement<ContextFilter>(
+    document,
+    localize('All contexts', state.language),
+    contexts,
+    contextFilter,
+    '13em',
+  );
+  const groups = [
+    { value: 'all' as const, label: localize('All groups', state.language) },
+    ...ACTION_GROUPS.map((group) => ({ value: group, label: groupLabel(group, state.language) })),
+  ];
+  const groupSelect = settingsSelectElement<GroupFilter>(
+    document,
+    localize('All groups', state.language),
+    groups,
+    groupFilter,
+    '12em',
+  );
+  const availability = settingsSelectElement<AvailabilityFilter>(
+    document,
+    localize('Show bound and unbound', state.language),
+    [
+      { value: 'all', label: localize('Show bound and unbound', state.language) },
+      { value: 'bound', label: localize('Bound actions', state.language) },
+      { value: 'unbound', label: localize('Unbound actions', state.language) },
+    ],
+    availabilityFilter,
+    '13em',
+  );
+  toolbar.append(search, contextSelect, groupSelect, availability);
+
+  const resultsStatus = createElement(document, 'p');
+  resultsStatus.setAttribute('role', 'status');
+  resultsStatus.setAttribute('aria-live', 'polite');
+  resultsStatus.style.cssText = `margin:0 0 0.5em;color:${THEME_VARS.muted}`;
+  const results = createElement(document, 'div');
+  results.className = 'zv-shortcut-results';
+  const nativeDisclosure = createElement(document, 'details');
+  nativeDisclosure.className = 'zv-shortcut-native';
+  nativeDisclosure.style.cssText = `margin:0.7em 0;padding:0.55em 0;border-top:1px solid ${THEME_VARS.border}`;
+  const resultScroll = createElement(document, 'div');
+  resultScroll.className = 'zv-shortcut-scroll';
+  resultScroll.style.cssText = 'max-height:55vh;overflow:auto;scrollbar-gutter:stable';
+  resultScroll.tabIndex = 0;
+  resultScroll.setAttribute('role', 'region');
+  resultScroll.setAttribute('aria-label', localize('Search results', state.language));
+  resultScroll.append(results, nativeDisclosure);
+  const validationStatus = createElement(document, 'p');
+  validationStatus.setAttribute('role', 'status');
+  validationStatus.setAttribute('aria-live', 'polite');
+  validationStatus.style.cssText = 'margin:0;color:' + THEME_VARS.warning;
+  const footer = createElement(document, 'div');
+  footer.style.cssText = `display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:0.75em;padding:0.65em 0;margin-bottom:0.65em;position:sticky;top:0;z-index:1;background:${THEME_VARS.surface};border-bottom:1px solid ${THEME_VARS.border}`;
+  const apply = settingsButtonElement(document, localize('Apply bindings', state.language));
+  apply.className = 'zv-shortcut-apply';
+  apply.tabIndex = 0;
+  const saveStatus = createElement(document, 'span');
+  saveStatus.setAttribute('role', 'status');
+  saveStatus.setAttribute('aria-live', 'polite');
+  footer.append(validationStatus, apply, saveStatus);
+  root.replaceChildren(toolbar, resultsStatus, footer, resultScroll);
+
+  function language(): BindingEditorLanguage {
+    return state.language;
   }
 
-  function renderActionResults(
-    row: BindingEditorRow,
-    actionInput: HTMLInputElement,
-    actionResults: HTMLSelectElement,
-  ): void {
-    const editor = state.actionEditor;
-    const active = editor?.rowId === row.id && editor.open;
-    actionResults.hidden = !active;
-    actionInput.setAttribute('aria-expanded', active ? 'true' : 'false');
-    actionInput.removeAttribute('aria-activedescendant');
-    if (!active || !editor) {
-      setSettingsSelectOptions<ActionId>(document, actionResults, [], '');
-      return;
-    }
-
-    const options = actionOptions(row.mode, editor.query, state.language);
-    const selected = options[editor.selectedIndex] ?? '';
-    setSettingsSelectOptions(
-      document,
-      actionResults,
-      options.map((action) => ({
-        value: action,
-        label: actionLabel(action, state.language),
-      })),
-      selected,
-      `zv-binding-action-${row.id}-option`,
-    );
-    actionResults.size = Math.max(1, Math.min(8, options.length));
-    const selectedOption = actionResults.selectedOptions[0];
-    if (selectedOption) actionInput.setAttribute('aria-activedescendant', selectedOption.id);
+  function text(message: string): string {
+    return localize(message, language());
   }
 
-  function renderRow(row: BindingEditorRow, derived: BindingEditorDerived): HTMLTableRowElement {
-    const tableRow = createXhtmlElement(document, 'tr');
-    tableRow.setAttribute(ROW_ATTRIBUTE, String(row.id));
-    if ((MODES as readonly string[]).includes(row.mode)) {
-      tableRow.classList.add(`zv-binding-mode-${row.mode}`);
-    }
-    const issues = [
-      ...derived.validation.errors.filter((issue) => issue.rowId === row.id),
-      ...derived.validation.warnings.filter((issue) => issue.rowId === row.id),
-    ];
-    const hasError = derived.validation.errors.some((issue) => issue.rowId === row.id);
-    const hasWarning = derived.validation.warnings.some((issue) => issue.rowId === row.id);
-    if (hasError) tableRow.classList.add('zv-binding-row-error');
-    else if (hasWarning) tableRow.classList.add('zv-binding-row-warning');
-    if (issues.length) {
-      tableRow.title = [
-        ...new Set(issues.map((issue) => issueText(issue, state.language, localize))),
-      ].join(' ');
-      if (hasError) tableRow.setAttribute('aria-invalid', 'true');
-    }
-
-    const modeCell = createXhtmlElement(document, 'td');
-    modeCell.className = 'zv-binding-mode-cell';
-    modeCell.appendChild(renderModeControl(row));
-    tableRow.appendChild(modeCell);
-
-    const keyCell = createXhtmlElement(document, 'td');
-    keyCell.className = 'zv-binding-key-cell';
-    const keyInput = createXhtmlElement(document, 'input');
-    keyInput.className = 'zv-binding-key';
-    keyInput.type = 'text';
-    keyInput.value = row.key.startsWith(' ') ? `<space>${row.key.slice(1)}` : row.key;
-    keyInput.setAttribute('aria-label', localize('zv.bindings.key', state.language));
-    keyInput.setAttribute(ROW_ATTRIBUTE, String(row.id));
-    styleSettingsField(keyInput, '100%');
-    keyCell.appendChild(keyInput);
-    tableRow.appendChild(keyCell);
-
-    const actionCell = createXhtmlElement(document, 'td');
-    actionCell.className = 'zv-binding-action-cell';
-    const actionRoot = createXhtmlElement(document, 'div');
-    actionRoot.className = 'zv-binding-action';
-    const actionInput = createXhtmlElement(document, 'input');
-    actionInput.className = ACTIVE_ACTION_INPUT_CLASS;
-    actionInput.type = 'text';
-    actionInput.setAttribute('role', 'combobox');
-    actionInput.autocomplete = 'off';
-    actionInput.setAttribute('aria-autocomplete', 'list');
-    actionInput.setAttribute('aria-haspopup', 'listbox');
-    actionInput.setAttribute('aria-label', localize('zv.bindings.action', state.language));
-    actionInput.setAttribute(ROW_ATTRIBUTE, String(row.id));
-    styleSettingsField(actionInput, '100%');
-    actionInput.id = `zv-binding-action-${row.id}`;
-    actionInput.value = actionDisplayValue(row, state);
-    const actionResults = settingsSelectElement<ActionId>(
-      document,
-      localize('zv.bindings.action', state.language),
-      [],
-      '',
-      '100%',
-    );
-    actionResults.className = 'zv-binding-action-results';
-    actionResults.id = `${actionInput.id}-listbox`;
-    actionResults.tabIndex = -1;
-    actionInput.setAttribute('aria-controls', actionResults.id);
-    actionRoot.append(actionInput, actionResults);
-    actionCell.appendChild(actionRoot);
-    tableRow.appendChild(actionCell);
-
-    const deleteCell = createXhtmlElement(document, 'td');
-    deleteCell.className = 'zv-binding-delete-cell';
-    const deleteButton = settingsButtonElement(document, '×');
-    deleteButton.className += ' zv-binding-delete';
-    deleteButton.setAttribute('aria-label', localize('zv.bindings.delete', state.language));
-    deleteCell.appendChild(deleteButton);
-    tableRow.appendChild(deleteCell);
-
-    renderActionResults(row, actionInput, actionResults);
-    return tableRow;
+  function selectedRows(entry: ShortcutCatalogEntry): readonly BindingEditorRow[] {
+    return state.rows.filter((row) => row.mode === entry.context && row.action === entry.action);
   }
-  function renderRowValidation(rowId: number, derived: BindingEditorDerived): void {
-    const tableRow = root.querySelector(`tr[${ROW_ATTRIBUTE}="${rowId}"]`) as HTMLElement | null;
-    if (!tableRow) return;
-    const issues = [
-      ...derived.validation.errors.filter((issue) => issue.rowId === rowId),
-      ...derived.validation.warnings.filter((issue) => issue.rowId === rowId),
-    ];
-    const hasError = derived.validation.errors.some((issue) => issue.rowId === rowId);
-    const hasWarning = derived.validation.warnings.some((issue) => issue.rowId === rowId);
-    tableRow.classList.remove('zv-binding-row-error', 'zv-binding-row-warning');
-    if (hasError) tableRow.classList.add('zv-binding-row-error');
-    else if (hasWarning) tableRow.classList.add('zv-binding-row-warning');
-    if (issues.length) {
-      tableRow.title = [
-        ...new Set(issues.map((issue) => issueText(issue, state.language, localize))),
-      ].join(' ');
+
+  function stopKeyCapture(): void {
+    if (!keyListener) return;
+    if (keyListenerOnWindow && document.defaultView) {
+      document.defaultView.removeEventListener('keydown', keyListener, true);
     } else {
-      tableRow.title = '';
+      root.removeEventListener('keydown', keyListener, true);
     }
-    if (hasError) tableRow.setAttribute('aria-invalid', 'true');
-    else tableRow.removeAttribute('aria-invalid');
+    keyListener = null;
+    keyListenerOnWindow = false;
   }
 
-  function renderStatus(derived: BindingEditorDerived): void {
-    const validationStatus = root.querySelector(
-      '#zv-bindings-validation-status',
-    ) as HTMLElement | null;
-    const validationState = !derived.validation.valid
-      ? 'invalid'
-      : derived.validation.warnings.length
-        ? 'warning'
-        : derived.dirty
-          ? 'dirty'
-          : 'clean';
-    if (validationStatus) {
-      validationStatus.className = `zv-status zv-binding-status-${validationState}`;
-      validationStatus.textContent =
-        validationState === 'invalid'
-          ? localize('zv.bindings.status.invalid', state.language)
-          : validationState === 'warning'
-            ? localize('zv.bindings.status.warning', state.language)
-            : validationState === 'dirty'
-              ? localize('zv.bindings.status.dirty', state.language)
-              : '';
-    }
-
-    const saveStatus = root.querySelector('#zv-save-status') as HTMLElement | null;
-    if (saveStatus) {
-      const saveState = state.saveOutcome ?? validationState;
-      saveStatus.className = `zv-status zv-binding-save-${saveState}`;
-      saveStatus.textContent =
-        state.saveOutcome === 'saved'
-          ? localize('zv.status.saved', state.language)
-          : state.saveOutcome === 'save-failed'
-            ? localize('zv.status.saveFailed', state.language)
-            : '';
-    }
-    const saveButton = root.querySelector('#zv-save') as HTMLButtonElement | null;
-    if (saveButton) saveButton.disabled = !derived.dirty || !derived.validation.valid;
+  function cancelRecording(showMessage: boolean): void {
+    if (!recording) return;
+    stopKeyCapture();
+    recording = null;
+    if (showMessage) statusMessage = text('Shortcut recording cancelled.');
   }
 
-  function notify(): void {
-    options.onStateChange?.(state, deriveBindingEditor(state));
+  function recorderKeydown(event: KeyboardEvent): void {
+    const target = elementFromTarget(event.target);
+    if (!recording || !target?.closest('.zv-shortcut-recorder-target')) return;
+    if (event.key === 'Tab' || compositionOwnsKey(event, false)) return;
+    const key = keyString(event);
+    if (!key) return;
+    const tokens = [...recording.tokens, key];
+    const sequence = serializeBindingTokens(tokens);
+    if (!sequence) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    recording = { ...recording, tokens };
+    const preview = root.querySelector('.zv-shortcut-recorder-sequence');
+    if (preview) preview.textContent = sequence;
+    const done = root.querySelector(
+      'button[data-shortcut-operation="finish-recording"]',
+    ) as HTMLButtonElement | null;
+    if (done) done.disabled = false;
+    const message = root.querySelector('.zv-shortcut-recorder-status');
+    if (message) message.textContent = text('Shortcut recorded; choose Done to keep it.');
   }
 
-  function renderActionProjection(rowId: number): void {
-    const row = state.rows.find((candidate) => candidate.id === rowId);
-    const input = root.querySelector(
-      `.${ACTIVE_ACTION_INPUT_CLASS}[${ROW_ATTRIBUTE}="${rowId}"]`,
-    ) as HTMLInputElement | null;
-    const results = input?.parentElement?.querySelector(
-      '.zv-binding-action-results',
-    ) as HTMLSelectElement | null;
-    if (!row || !input || !results) {
-      render();
-      return;
+  function beginRecording(context: BindingContext, action: ActionId, rowId: number | null): void {
+    cancelRecording(false);
+    statusMessage = '';
+    recording = { context, action, rowId, tokens: [] };
+    keyListener = (event) => recorderKeydown(event as KeyboardEvent);
+    if (document.defaultView) {
+      keyListenerOnWindow = true;
+      document.defaultView.addEventListener('keydown', keyListener, true);
+    } else {
+      root.addEventListener('keydown', keyListener, true);
     }
-    input.value = actionDisplayValue(row, state);
-    renderActionResults(row, input, results);
+    renderResults();
+    (root.querySelector('.zv-shortcut-recorder-target') as HTMLElement | null)?.focus();
+  }
+
+  function notify(): BindingEditorDerived {
     const derived = deriveBindingEditor(state);
-    renderRowValidation(rowId, derived);
-    renderStatus(derived);
-    notify();
+    options.onStateChange?.(state, derived);
+    return derived;
   }
 
-  function render(): void {
-    if (disposed) return;
-    const body = tableBody();
-    if (body) {
-      const derived = deriveBindingEditor(state);
-      body.replaceChildren(...state.rows.map((row) => renderRow(row, derived)));
-      renderStatus(derived);
+  function actionButton(
+    label: string,
+    operation: string,
+    entry: ShortcutCatalogEntry,
+    rowId?: number,
+  ): HTMLButtonElement {
+    const button = settingsButtonElement(document, label);
+    button.tabIndex = 0;
+    button.setAttribute('data-shortcut-operation', operation);
+    button.setAttribute('data-shortcut-context', entry.context);
+    button.setAttribute('data-shortcut-action', entry.action);
+    if (rowId !== undefined) button.setAttribute('data-shortcut-row', String(rowId));
+    return button;
+  }
+
+  function renderIssues(rowId: number, derived: BindingEditorDerived): HTMLElement | null {
+    const errors = derived.validation.errors.filter((issue) => issue.rowId === rowId);
+    const warnings = derived.validation.warnings.filter((issue) => issue.rowId === rowId);
+    if (!errors.length && !warnings.length) return null;
+    const list = createElement(document, 'ul');
+    list.style.cssText = `margin:0.2em 0 0.4em;padding-left:1.5em;font-size:0.9em;color:${errors.length ? THEME_VARS.error : THEME_VARS.warning}`;
+    for (const issue of [...errors, ...warnings]) {
+      const message = createElement(document, 'li');
+      message.textContent = issueMessage(issue, language(), localize);
+      list.append(message);
     }
-    notify();
+    return list;
   }
 
-  function isActionEvent(event: BindingEditorEvent): boolean {
-    return (
-      event.type === 'open-action-editor' ||
-      event.type === 'update-action-query' ||
-      event.type === 'move-action-selection' ||
-      event.type === 'select-action' ||
-      event.type === 'commit-action-selection' ||
-      event.type === 'close-action-editor'
-    );
+  function renderNativeRows(entries: readonly NativeShortcutEntry[]): HTMLElement {
+    const list = createElement(document, 'ul');
+    list.style.cssText = 'margin:0.45em 0 0;padding-left:1.5em';
+    for (const entry of entries) {
+      const item = createElement(document, 'li');
+      const key = createElement(document, 'kbd');
+      key.textContent = entry.key;
+      const detail = createElement(document, 'span');
+      detail.textContent = ` — ${contextLabel(entry.context, language())}: ${entry.label}`;
+      item.append(key, detail);
+      list.append(item);
+    }
+    return list;
   }
 
-  function dispatch(event: BindingEditorEvent): void {
-    if (disposed) return;
-    const focused = document.activeElement as HTMLInputElement | null;
-    const focusedKind = focused?.classList.contains(ACTIVE_ACTION_INPUT_CLASS)
-      ? 'action'
-      : focused?.classList.contains('zv-binding-key')
-        ? 'key'
-        : null;
-    const focusedRowId = focusedKind ? rowIdFromElement(focused) : null;
-    const selectionStart = focused?.selectionStart;
-    const selectionEnd = focused?.selectionEnd;
-    const previous = state;
-    state = transition(state, event);
-    const eventRowId = 'rowId' in event ? event.rowId : previous.actionEditor?.rowId;
-    if (isActionEvent(event) && eventRowId !== undefined) {
-      const existing = root.querySelector(
-        `.${ACTIVE_ACTION_INPUT_CLASS}[${ROW_ATTRIBUTE}="${eventRowId}"]`,
-      );
-      if (existing) renderActionProjection(eventRowId);
-      else render();
+  function renderContext(entry: ShortcutCatalogEntry, derived: BindingEditorDerived): HTMLElement {
+    const section = createElement(document, 'section');
+    section.style.cssText = `padding:0.55em 0;border-top:1px solid ${THEME_VARS.border}`;
+    const heading = createElement(document, 'h5');
+    heading.textContent = contextLabel(entry.context, language());
+    heading.style.cssText = 'margin:0 0 0.35em;font-size:1em';
+    section.append(heading);
+
+    const rows = selectedRows(entry);
+    const current = createElement(document, 'p');
+    current.style.cssText = 'margin:0.15em 0';
+    const currentLabel = createElement(document, 'strong');
+    currentLabel.textContent = `${text('Current shortcuts')}: `;
+    current.append(currentLabel);
+    if (rows.length) {
+      rows.forEach((row, index) => {
+        if (index) current.append(document.createTextNode(', '));
+        const key = createElement(document, 'kbd');
+        key.textContent = row.key || '—';
+        current.append(key);
+      });
     } else {
-      render();
+      current.append(document.createTextNode(text('No shortcut is assigned in this context.')));
     }
-    if (focusedRowId === null || focusedKind === null) return;
-    if (focusedKind === 'action') {
-      if (!state.actionEditor || state.actionEditor.rowId !== focusedRowId) return;
-      const replacement = activeInput();
-      if (!replacement) return;
-      replacement.focus();
-      if (selectionStart !== null && selectionStart !== undefined) {
-        replacement.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
-      }
-      return;
+    section.append(current);
+
+    const defaults = createElement(document, 'p');
+    defaults.style.cssText = 'margin:0.15em 0';
+    const defaultLabel = createElement(document, 'strong');
+    defaultLabel.textContent = `${text('Default shortcuts')}: `;
+    defaults.append(defaultLabel);
+    if (entry.defaultKeys.length) {
+      entry.defaultKeys.forEach((keyValue, index) => {
+        if (index) defaults.append(document.createTextNode(', '));
+        const key = createElement(document, 'kbd');
+        key.textContent = keyValue;
+        defaults.append(key);
+      });
+    } else {
+      defaults.append(document.createTextNode(text('Unbound')));
     }
-    const replacement = root.querySelector(
-      `.zv-binding-key[${ROW_ATTRIBUTE}="${focusedRowId}"]`,
-    ) as HTMLInputElement | null;
-    if (!replacement) return;
-    replacement.focus();
-    if (selectionStart !== null && selectionStart !== undefined) {
-      replacement.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+    section.append(defaults);
+
+    const source = createElement(document, 'p');
+    source.style.cssText = 'margin:0.15em 0 0.45em';
+    source.textContent = `${text('Origin')}: ${text(entry.source === 'default' ? 'Default' : entry.source === 'custom' ? 'Custom' : 'Unbound')}`;
+    section.append(source);
+
+    for (const row of rows) {
+      const keyRow = createElement(document, 'div');
+      keyRow.style.cssText =
+        'display:flex;align-items:center;flex-wrap:wrap;gap:0.45em;margin:0.25em 0';
+      const key = createElement(document, 'kbd');
+      key.textContent = row.key || '—';
+      keyRow.append(key);
+      const edit = actionButton(text('Record keys'), 'record', entry, row.id);
+      edit.setAttribute(
+        'aria-label',
+        `${text('Record keys')}: ${entry.label} (${contextLabel(entry.context, language())}) ${row.key}`,
+      );
+      keyRow.append(edit);
+      const issues = renderIssues(row.id, derived);
+      if (issues) keyRow.append(issues);
+      section.append(keyRow);
+    }
+
+    const actions = createElement(document, 'div');
+    actions.style.cssText =
+      'display:flex;align-items:center;flex-wrap:wrap;gap:0.45em;margin-top:0.45em';
+    actions.append(actionButton(text('Add shortcut'), 'add', entry));
+    actions.append(actionButton(text('Unbind this action'), 'unbind', entry));
+    actions.append(actionButton(text('Reset this action'), 'reset', entry));
+    section.append(actions);
+    if (recording?.context === entry.context && recording.action === entry.action) {
+      const recorder = createElement(document, 'div');
+      recorder.className = 'zv-shortcut-recorder';
+      recorder.style.cssText = `margin-top:0.6em;padding:0.55em;border:1px solid ${THEME_VARS.accent};border-radius:5px`;
+      const instructions = createElement(document, 'p');
+      instructions.textContent = text('Recording keys — press keys in order, then choose Done');
+      instructions.style.cssText = 'margin:0 0 0.45em';
+      const target = createElement(document, 'div');
+      target.className = 'zv-shortcut-recorder-target';
+      target.tabIndex = 0;
+      target.setAttribute('role', 'group');
+      target.setAttribute('aria-label', instructions.textContent);
+      target.style.cssText = `min-height:2.3em;padding:0.35em 0.55em;border:1px solid ${THEME_VARS.border};border-radius:4px;background:${THEME_VARS.input}`;
+      const preview = createElement(document, 'code');
+      preview.className = 'zv-shortcut-recorder-sequence';
+      preview.textContent = recording.tokens.length
+        ? serializeBindingTokens(recording.tokens)
+        : '—';
+      target.append(preview);
+      const recorderStatus = createElement(document, 'p');
+      recorderStatus.className = 'zv-shortcut-recorder-status';
+      recorderStatus.textContent = recording.tokens.length
+        ? text('Shortcut recorded; choose Done to keep it.')
+        : '';
+      recorderStatus.setAttribute('role', 'status');
+      const recorderButtons = createElement(document, 'div');
+      recorderButtons.style.cssText = 'display:flex;gap:0.45em;margin-top:0.45em';
+      const done = settingsButtonElement(document, text('Done'));
+      done.tabIndex = 0;
+      done.disabled = recording.tokens.length === 0;
+      done.setAttribute('data-shortcut-operation', 'finish-recording');
+      const cancel = settingsButtonElement(document, text('Cancel'));
+      cancel.tabIndex = 0;
+      cancel.setAttribute('data-shortcut-operation', 'cancel-recording');
+      recorderButtons.append(done, cancel);
+      recorder.append(instructions, target, recorderStatus, recorderButtons);
+      section.append(recorder);
+    }
+
+    return section;
+  }
+
+  function renderAction(
+    entry: ShortcutCatalogEntry,
+    derived: BindingEditorDerived,
+    searchActive: boolean,
+  ): HTMLElement {
+    const details = createElement(document, 'details');
+    const actionKey = `${entry.context}:${entry.action}`;
+    details.setAttribute('data-action-key', actionKey);
+    details.open = searchActive || openActions.has(actionKey);
+    details.addEventListener('toggle', () => {
+      if (details.open) openActions.add(actionKey);
+      else openActions.delete(actionKey);
+    });
+    details.style.cssText = `margin:0.25em 0;padding:0.45em 0.6em;border:1px solid ${THEME_VARS.border};border-radius:5px`;
+    const summary = createElement(document, 'summary');
+    summary.style.cssText = 'display:list-item;cursor:pointer;line-height:1.6';
+    const label = createElement(document, 'strong');
+    label.textContent = entry.label;
+    const id = createElement(document, 'code');
+    id.textContent = entry.action;
+    const context = createElement(document, 'span');
+    context.textContent = contextLabel(entry.context, language());
+    summary.append(label, id, context);
+    for (const child of Array.from(summary.children))
+      (child as HTMLElement).style.marginInlineEnd = '0.55em';
+    details.append(summary, renderContext(entry, derived));
+    return details;
+  }
+  function renderOrphanRows(
+    knownRowIds: ReadonlySet<number>,
+    derived: BindingEditorDerived,
+  ): HTMLElement | null {
+    const orphanRows = state.rows.filter((row) => !knownRowIds.has(row.id));
+    if (!orphanRows.length) return null;
+    const section = createElement(document, 'section');
+    section.style.cssText = `margin-top:0.8em;padding:0.6em;border:1px solid ${THEME_VARS.error};border-radius:5px`;
+    const heading = createElement(document, 'h4');
+    heading.textContent = text('Fix invalid rows before applying.');
+    section.append(heading);
+    for (const row of orphanRows) {
+      const item = createElement(document, 'div');
+      item.style.cssText =
+        'display:flex;align-items:center;flex-wrap:wrap;gap:0.45em;margin:0.35em 0';
+      const label = createElement(document, 'code');
+      label.textContent = `${row.mode}:${row.key} → ${row.action}`;
+      item.append(label);
+      const issues = renderIssues(row.id, derived);
+      if (issues) item.append(issues);
+      const remove = settingsButtonElement(document, text('Delete binding'));
+      remove.tabIndex = 0;
+      remove.setAttribute('data-shortcut-operation', 'remove-invalid-row');
+      remove.setAttribute('data-shortcut-row', String(row.id));
+      item.append(remove);
+      section.append(item);
+    }
+    return section;
+  }
+
+  function rememberOpenActions(): void {
+    for (const details of Array.from(
+      results.querySelectorAll('details[data-action-key]'),
+    ) as HTMLDetailsElement[]) {
+      const actionKey = details.getAttribute('data-action-key');
+      if (!actionKey) continue;
+      if (details.open) openActions.add(actionKey);
+      else openActions.delete(actionKey);
     }
   }
 
-  function scheduleClose(rowId: number): void {
-    const view = document.defaultView;
-    if (blurTimer !== null) {
-      if (view) view.clearTimeout(blurTimer);
-      else globalThis.clearTimeout(blurTimer);
+  function renderResults(): void {
+    if (disposed) return;
+    const focused = elementFromTarget(document.activeElement);
+    const restoreFocus = focused?.closest('.zv-shortcut-results') === results;
+    const focusKey = focused?.closest('details[data-action-key]')?.getAttribute('data-action-key');
+    rememberOpenActions();
+    const derived = notify();
+    const query = search.value.trim().toLowerCase();
+    const records = derived.catalog.filter((entry) => {
+      if (contextFilter !== 'all' && entry.context !== contextFilter) return false;
+      if (groupFilter !== 'all' && entry.group !== groupFilter) return false;
+      const isBound = state.rows.some(
+        (row) => row.mode === entry.context && row.action === entry.action && Boolean(row.key),
+      );
+      if (availabilityFilter === 'bound' && !isBound) return false;
+      if (availabilityFilter === 'unbound' && isBound) return false;
+      const values = [
+        entry.label,
+        entry.action,
+        entry.group,
+        groupLabel(entry.group, language()),
+        entry.context,
+        contextLabel(entry.context, language()),
+        ...entry.keys,
+        ...entry.defaultKeys,
+      ];
+      return !query || values.some((value) => value.toLowerCase().includes(query));
+    });
+    const nativeEntries = nativeShortcutCatalog(
+      contextFilter === 'all' ? undefined : contextFilter,
+      language(),
+    ).filter((entry) => {
+      if (groupFilter !== 'all') return false;
+      const values = [
+        entry.key,
+        entry.label,
+        entry.context,
+        contextLabel(entry.context, language()),
+      ];
+      return !query || values.some((value) => value.toLowerCase().includes(query));
+    });
+
+    results.replaceChildren();
+    const knownRowIds = new Set<number>();
+    for (const entry of derived.catalog) {
+      for (const row of selectedRows(entry)) knownRowIds.add(row.id);
     }
-    const close = () => {
-      blurTimer = null;
-      if (disposed || state.actionEditor?.rowId !== rowId) return;
-      const input = activeInput();
-      if (input && document.activeElement && input === document.activeElement) return;
-      dispatch({ type: 'close-action-editor', rowId });
-    };
-    blurTimer = (view
-      ? view.setTimeout(close, 0)
-      : globalThis.setTimeout(close, 0)) as unknown as number;
+    const groups = new Map<ActionGroup, Map<ActionId, ShortcutCatalogEntry[]>>();
+    for (const entry of records) {
+      const group = groups.get(entry.group) ?? new Map<ActionId, ShortcutCatalogEntry[]>();
+      const actionEntries = group.get(entry.action) ?? [];
+      actionEntries.push(entry);
+      group.set(entry.action, actionEntries);
+      groups.set(entry.group, group);
+    }
+
+    for (const group of ACTION_GROUPS) {
+      const actionMap = groups.get(group);
+      if (!actionMap?.size) continue;
+      const section = createElement(document, 'section');
+      section.style.cssText = 'margin:0 0 0.9em';
+      const heading = createElement(document, 'h4');
+      heading.textContent = groupLabel(group, language());
+      heading.style.cssText = 'margin:0.55em 0 0.35em;font-size:1.05em';
+      section.append(heading);
+      const sorted = [...actionMap.entries()].sort((left, right) => {
+        const nameDelta = left[1][0].label.localeCompare(right[1][0].label);
+        return nameDelta || left[0].localeCompare(right[0]);
+      });
+      for (const [, entries] of sorted) {
+        entries.sort((left, right) =>
+          contextLabel(left.context, language()).localeCompare(
+            contextLabel(right.context, language()),
+          ),
+        );
+        for (const entry of entries) {
+          section.append(renderAction(entry, derived, Boolean(query)));
+        }
+      }
+      results.append(section);
+    }
+
+    const orphanRows = renderOrphanRows(knownRowIds, derived);
+    if (orphanRows) results.append(orphanRows);
+
+    nativeDisclosure.replaceChildren();
+    if (nativeEntries.length) {
+      const summary = createElement(document, 'summary');
+      summary.textContent = `${text('Native shortcuts')} — ${text('Read-only; Zotero or the operating system owns these keys.')}`;
+      nativeDisclosure.open = Boolean(query || contextFilter !== 'all');
+      nativeDisclosure.append(summary, renderNativeRows(nativeEntries));
+    }
+    nativeDisclosure.hidden = !nativeEntries.length;
+
+    const totalResults = records.length + nativeEntries.length;
+    resultsStatus.textContent = `${text('Search results')}: ${totalResults}`;
+    if (totalResults === 0) {
+      const empty = createElement(document, 'p');
+      empty.textContent = text('No matching actions.');
+      results.append(empty);
+    }
+
+    const hasErrors = derived.validation.errors.length > 0;
+    const hasWarnings = derived.validation.warnings.length > 0;
+    validationStatus.textContent = hasErrors
+      ? text('Fix invalid rows before applying.')
+      : hasWarnings
+        ? text('Prefix conflicts detected; Apply is allowed.')
+        : derived.dirty
+          ? text('Unsaved changes')
+          : '';
+    validationStatus.style.color = hasErrors ? THEME_VARS.error : THEME_VARS.warning;
+    apply.disabled = !derived.dirty || !derived.validation.valid || !derived.effectiveMap;
+    const saveState = state.saveOutcome;
+    saveStatus.className = `zv-shortcut-save-${saveState ?? 'clean'}`;
+    saveStatus.style.color = saveState === 'save-failed' ? THEME_VARS.error : THEME_VARS.success;
+    saveStatus.textContent =
+      saveState === 'saved'
+        ? text('Saved.')
+        : saveState === 'save-failed'
+          ? text('Could not save bindings.')
+          : statusMessage;
+    if (restoreFocus) {
+      const card = focusKey
+        ? results.querySelector(`details[data-action-key="${focusKey}"]`)
+        : null;
+      const summary = card?.querySelector('summary') as HTMLElement | null;
+      (summary ?? (apply.disabled ? search : apply)).focus();
+    }
+  }
+
+  function finishRecording(): void {
+    const active = recording;
+    if (!active || !active.tokens.length) return;
+    const sequence = serializeBindingTokens(active.tokens);
+    if (!sequence) return;
+    stopKeyCapture();
+    recording = null;
+    state =
+      active.rowId === null
+        ? addActionBinding(state, active.context, active.action, sequence)
+        : transition(state, { type: 'update-row', rowId: active.rowId, patch: { key: sequence } });
+    statusMessage = '';
+    renderResults();
+  }
+
+  function save(): void {
+    const derived = deriveBindingEditor(state);
+    if (!derived.dirty || !derived.validation.valid || !derived.effectiveMap) return;
+    try {
+      if (options.onSave?.(derived.effectiveMap) === false) {
+        state = transition(state, { type: 'save-failure' });
+      } else {
+        state = transition(state, { type: 'save-success', bindings: derived.effectiveMap });
+      }
+    } catch {
+      state = transition(state, { type: 'save-failure' });
+    }
+    statusMessage = '';
+    renderResults();
   }
 
   function handleClick(event: MouseEvent): void {
     const target = elementFromTarget(event.target);
-    if (!target) return;
-    if (target.id === 'zv-add-binding' || target.closest('#zv-add-binding')) {
-      event.preventDefault();
-      dispatch({ type: 'add-row' });
-      const wrapper = tableWrapper();
-      const body = tableBody();
-      const key = body?.querySelector('.zv-binding-key') as HTMLInputElement | null;
-      if (wrapper) geometry.setScrollTop(wrapper, 0);
-      if (key) geometry.focusAndSelect(key);
+    const button = target?.closest('button[data-shortcut-operation]') as HTMLButtonElement | null;
+    if (!button) return;
+    event.preventDefault();
+    const operation = button.getAttribute('data-shortcut-operation');
+    if (operation === 'finish-recording') {
+      finishRecording();
       return;
     }
-    if (target.id === 'zv-reset-bindings' || target.closest('#zv-reset-bindings')) {
-      event.preventDefault();
-      dispatch({ type: 'reset' });
+    if (operation === 'cancel-recording') {
+      cancelRecording(true);
+      renderResults();
       return;
     }
-    if (target.id === 'zv-save' || target.closest('#zv-save')) {
-      event.preventDefault();
-      const derived = deriveBindingEditor(state);
-      if (!derived.dirty || !derived.validation.valid || !derived.effectiveMap) return;
-      try {
-        if (options.onSave?.(derived.effectiveMap) === false) {
-          dispatch({ type: 'save-failure' });
-        } else {
-          dispatch({ type: 'save-success', bindings: derived.effectiveMap });
-        }
-      } catch {
-        dispatch({ type: 'save-failure' });
-      }
+    if (recording) cancelRecording(false);
+    if (operation === 'apply') {
+      save();
       return;
     }
-    const actionInput = target.closest(`.${ACTIVE_ACTION_INPUT_CLASS}`) as HTMLInputElement | null;
-    if (actionInput) {
-      const rowId = rowIdFromElement(actionInput);
-      if (rowId !== null) dispatch({ type: 'open-action-editor', rowId });
+    const rowAttribute = button.getAttribute('data-shortcut-row');
+    if (operation === 'remove-invalid-row' && rowAttribute !== null) {
+      state = transition(state, { type: 'delete-row', rowId: Number(rowAttribute) });
+      statusMessage = '';
+      renderResults();
+      return;
     }
-    const deleteButton = target.closest('.zv-binding-delete');
-    if (deleteButton) {
-      const rowId = rowIdFromElement(deleteButton);
-      if (rowId !== null) {
-        event.preventDefault();
-        dispatch({ type: 'delete-row', rowId });
-      }
+    const context = button.getAttribute('data-shortcut-context');
+    const action = button.getAttribute('data-shortcut-action');
+    if (
+      !context ||
+      !(BINDING_CONTEXTS as readonly string[]).includes(context) ||
+      !action ||
+      !isActionId(action)
+    )
+      return;
+    const typedContext = context as BindingContext;
+    if (operation === 'record') {
+      beginRecording(typedContext, action, rowAttribute === null ? null : Number(rowAttribute));
+      return;
     }
+    if (operation === 'add') {
+      beginRecording(typedContext, action, null);
+      return;
+    }
+    if (operation === 'unbind') {
+      state = unbindAction(state, typedContext, action);
+    } else if (operation === 'reset') {
+      state = resetAction(state, typedContext, action);
+    } else if (operation === 'remove-row' && rowAttribute !== null) {
+      state = transition(state, { type: 'delete-row', rowId: Number(rowAttribute) });
+    } else {
+      return;
+    }
+    statusMessage = '';
+    renderResults();
   }
 
   function handleInput(event: Event): void {
     const target = elementFromTarget(event.target);
-    if (!target || !target.classList.contains(ACTIVE_ACTION_INPUT_CLASS)) return;
-    const rowId = rowIdFromElement(target);
-    if (rowId === null) return;
-    dispatch({ type: 'update-action-query', rowId, query: (target as HTMLInputElement).value });
-  }
-
-  function handleKeyInput(event: Event): void {
-    const target = elementFromTarget(event.target);
-    if (!target || !target.classList.contains('zv-binding-key')) return;
-    const rowId = rowIdFromElement(target);
-    if (rowId === null) return;
-    const input = target as HTMLInputElement;
-    const value = input.value.startsWith('<space>')
-      ? ` ${input.value.slice('<space>'.length)}`
-      : input.value;
-    dispatch({ type: 'update-row', rowId, patch: { key: value } });
-  }
-
-  function handleKeyDown(event: KeyboardEvent): void {
-    const target = elementFromTarget(event.target);
-    if (!target || !target.classList.contains(ACTIVE_ACTION_INPUT_CLASS)) return;
-    const rowId = rowIdFromElement(target);
-    if (rowId === null) return;
-    if (event.key === 'Escape') {
-      if (!state.actionEditor?.open) return;
-      event.preventDefault();
-      event.stopPropagation();
-      dispatch({ type: 'close-action-editor', rowId });
-    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      if (!state.actionEditor?.open) return;
-      event.preventDefault();
-      event.stopPropagation();
-      dispatch({
-        type: 'move-action-selection',
-        rowId,
-        delta: event.key === 'ArrowDown' ? 1 : -1,
-      });
-    } else if (event.key === 'Enter') {
-      if (!state.actionEditor?.open) return;
-      event.preventDefault();
-      event.stopPropagation();
-      dispatch({ type: 'commit-action-selection', rowId });
-    } else if (event.key === 'Tab') {
-      dispatch({ type: 'close-action-editor', rowId });
-    }
-  }
-
-  function handleFocusIn(event: FocusEvent): void {
-    const target = elementFromTarget(event.target);
-    if (!target || !target.classList.contains(ACTIVE_ACTION_INPUT_CLASS)) return;
-    const rowId = rowIdFromElement(target);
-    if (rowId !== null) dispatch({ type: 'open-action-editor', rowId });
-  }
-
-  function handleFocusOut(event: FocusEvent): void {
-    const target = elementFromTarget(event.target);
-    if (!target || !target.classList.contains(ACTIVE_ACTION_INPUT_CLASS)) return;
-    const actionRoot = target.closest('.zv-binding-action');
-    const next = elementFromTarget(event.relatedTarget);
-    if (actionRoot && next?.closest('.zv-binding-action') === actionRoot) return;
-    const rowId = rowIdFromElement(target);
-    if (rowId !== null) scheduleClose(rowId);
+    if (target !== search) return;
+    if (recording) cancelRecording(true);
+    renderResults();
   }
 
   function handleChange(event: Event): void {
     const target = elementFromTarget(event.target);
-    const select = target?.closest('select') as HTMLSelectElement | null;
-    if (!select) return;
-    const rowId = rowIdFromElement(select);
-    if (rowId === null) return;
-    if (select.classList.contains('zv-binding-mode')) {
-      const selected = select.value;
-      if ((MODES as readonly string[]).includes(selected)) {
-        dispatch({ type: 'update-row', rowId, patch: { mode: selected as Mode } });
-      }
-      return;
+    if (recording) cancelRecording(true);
+    if (
+      target === contextSelect &&
+      (contextSelect.value === 'all' ||
+        (BINDING_CONTEXTS as readonly string[]).includes(contextSelect.value))
+    ) {
+      contextFilter = contextSelect.value as ContextFilter;
+    } else if (
+      target === groupSelect &&
+      (groupSelect.value === 'all' ||
+        (ACTION_GROUPS as readonly string[]).includes(groupSelect.value))
+    ) {
+      groupFilter = groupSelect.value as GroupFilter;
+    } else if (
+      target === availability &&
+      (availability.value === 'all' ||
+        availability.value === 'bound' ||
+        availability.value === 'unbound')
+    ) {
+      availabilityFilter = availability.value;
     }
-    if (select.classList.contains('zv-binding-action-results') && isActionId(select.value)) {
-      dispatch({ type: 'select-action', rowId, action: select.value });
-    }
+    renderResults();
   }
 
   const onClick: EventListener = (event) => handleClick(event as MouseEvent);
-  const onKeyDown: EventListener = (event) => handleKeyDown(event as KeyboardEvent);
-  const onFocusIn: EventListener = (event) => handleFocusIn(event as FocusEvent);
-  const onFocusOut: EventListener = (event) => handleFocusOut(event as FocusEvent);
-
+  const onInput: EventListener = (event) => handleInput(event);
+  const onChange: EventListener = (event) => handleChange(event);
   root.addEventListener('click', onClick);
-  root.addEventListener('input', handleInput);
-  root.addEventListener('input', handleKeyInput);
-  root.addEventListener('keydown', onKeyDown);
-  root.addEventListener('focusin', onFocusIn);
-  root.addEventListener('focusout', onFocusOut);
-  root.addEventListener('change', handleChange);
+  root.addEventListener('input', onInput);
+  root.addEventListener('change', onChange);
+  apply.setAttribute('data-shortcut-operation', 'apply');
 
-  render();
+  renderResults();
 
   return {
-    dispatch,
-    getState: () => state,
-    getDerived: () => deriveBindingEditor(state),
-    render,
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      cancelRecording(false);
       root.removeEventListener('click', onClick);
-      root.removeEventListener('input', handleInput);
-      root.removeEventListener('input', handleKeyInput);
-      root.removeEventListener('keydown', onKeyDown);
-      root.removeEventListener('focusin', onFocusIn);
-      root.removeEventListener('focusout', onFocusOut);
-      root.removeEventListener('change', handleChange);
-      if (blurTimer !== null) {
-        if (document.defaultView) document.defaultView.clearTimeout(blurTimer);
-        else globalThis.clearTimeout(blurTimer);
-        blurTimer = null;
-      }
+      root.removeEventListener('input', onInput);
+      root.removeEventListener('change', onChange);
+      root.replaceChildren();
     },
   };
 }

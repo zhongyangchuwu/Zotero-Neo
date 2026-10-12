@@ -6,6 +6,7 @@ import type { PdfWindow, ReaderRuntime } from './types';
 interface ViewHandlers {
   readonly keyDown: EventListener;
   readonly keyUp: EventListener;
+  readonly pointerDown: EventListener;
   readonly blur: EventListener;
   readonly selection: EventListener;
   readonly resize: EventListener;
@@ -18,6 +19,7 @@ export interface ReaderViewLifecycleDependencies {
   readonly timerWindow: PdfWindow;
   readonly onKeyDown: (event: KeyboardEvent, pdfWindow: PdfWindow) => void;
   readonly onKeyUp: (event: KeyboardEvent) => void;
+  readonly onPointerDown: (pdfWindow: PdfWindow) => void;
   readonly onBlur: (pdfWindow: PdfWindow, event: FocusEvent) => void;
   readonly onSelectionChange: (pdfWindow: PdfWindow) => void;
   readonly onScroll: (pdfWindow: PdfWindow) => void;
@@ -116,6 +118,10 @@ export class ReaderViewLifecycle {
       const keyEvent = asKeyboardEvent(event);
       if (keyEvent) this.#dependencies.onKeyUp(keyEvent);
     }) as EventListener;
+    const pointerDown = (() => {
+      if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
+      this.#dependencies.onPointerDown(pdfWindow);
+    }) as EventListener;
     const blur = ((event: Event) => {
       if (this.#disposed || this.#handlers.get(pdfWindow) !== handlers) return;
       this.#dependencies.onBlur(pdfWindow, event as FocusEvent);
@@ -138,6 +144,7 @@ export class ReaderViewLifecycle {
     const handlers: ViewHandlers = {
       keyDown,
       keyUp,
+      pointerDown,
       blur,
       selection,
       resize,
@@ -147,6 +154,7 @@ export class ReaderViewLifecycle {
 
     pdfWindow.addEventListener('keydown', keyDown, true);
     pdfWindow.addEventListener('keyup', keyUp, true);
+    pdfWindow.addEventListener('pointerdown', pointerDown, true);
     pdfWindow.addEventListener('blur', blur, true);
     pdfWindow.document.addEventListener('selectionchange', selection);
     pdfWindow.addEventListener('resize', resize, { passive: true });
@@ -161,6 +169,7 @@ export class ReaderViewLifecycle {
     if (!isDeadObject(pdfWindow)) {
       failure.run(() => pdfWindow.removeEventListener('keydown', handlers.keyDown, true));
       failure.run(() => pdfWindow.removeEventListener('keyup', handlers.keyUp, true));
+      failure.run(() => pdfWindow.removeEventListener('pointerdown', handlers.pointerDown, true));
       failure.run(() => pdfWindow.removeEventListener('blur', handlers.blur, true));
       failure.run(() =>
         pdfWindow.document.removeEventListener('selectionchange', handlers.selection),

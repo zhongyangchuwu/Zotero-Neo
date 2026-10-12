@@ -62,10 +62,7 @@ export class MainWindowSession {
       this.window.clearTimeout(this.selectionPanel.commandTimer);
       this.selectionPanel.commandTimer = undefined;
     });
-    this.cleanup.add(() => {
-      this.window.clearTimeout(this.pluginManager.commandTimer);
-      this.pluginManager.commandTimer = undefined;
-    });
+    this.cleanup.add(() => this.pluginManager.localBindings?.dispose());
     this.cleanup.add(() => this.status.remove());
   }
   get window(): MainWindow {

@@ -22,7 +22,7 @@ import {
 } from '../input/binding-editor';
 import { encodeBindingOverrides } from '../input/bindings';
 import { THEME_VARS } from '../ui/theme';
-import { mountBindingEditor, type MountedBindingEditor } from './settings-keybindings-view';
+import { mountShortcutBrowser, type MountedShortcutBrowser } from './settings-keybindings-view';
 import {
   settingsText,
   settingsToggleLabels,
@@ -30,7 +30,6 @@ import {
   type SettingsMessage,
 } from './settings-i18n';
 import {
-  settingsButtonElement,
   settingsGroup,
   settingsNumberRow,
   settingsStatus,
@@ -40,22 +39,6 @@ import {
 } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const EDITOR_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
-  'zv.bindings.mode': 'Mode',
-  'zv.bindings.key': 'Key sequence',
-  'zv.bindings.action': 'Action',
-  'zv.bindings.delete': 'Delete binding',
-  'zv.bindings.status.dirty': 'Unsaved changes',
-  'zv.bindings.status.invalid': 'Fix invalid rows before applying.',
-  'zv.bindings.status.warning': 'Prefix conflicts detected; Apply is allowed.',
-  'zv.bindings.error.empty': 'Enter a key sequence and action.',
-  'zv.bindings.error.malformed': 'Invalid mode, key sequence, or action.',
-  'zv.bindings.error.incompatible': 'Action is not supported in this mode.',
-  'zv.bindings.error.duplicate': 'Duplicate mode and key sequence.',
-  'zv.bindings.warning.prefix': 'Strict prefix of another sequence.',
-  'zv.status.saved': 'Saved.',
-  'zv.status.saveFailed': 'Could not save bindings.',
-};
 
 export interface SettingsKeybindingsState {
   editor: BindingEditorState | null;
@@ -64,6 +47,7 @@ export interface SettingsKeybindingsState {
 /** Owns Prefix Guide configuration and one explicit-Apply keybinding draft. */
 export class SettingsKeybindings {
   readonly #root: HTMLElement;
+  readonly #browserRoot: HTMLElement;
   readonly #preferences: PreferenceStore;
   readonly #language: SettingsLanguage;
   readonly #state: SettingsKeybindingsState;
@@ -71,8 +55,7 @@ export class SettingsKeybindings {
   readonly #guideToggle: SettingsToggle;
   readonly #guideNumbers: Record<KeyGuideNumberSetting, SettingsNumberInput>;
   readonly #guideStatus: HTMLElement;
-  #bindingView: MountedBindingEditor | null = null;
-
+  #browserView: MountedShortcutBrowser | null = null;
   constructor(
     window: MainWindow,
     root: HTMLElement,
@@ -87,39 +70,26 @@ export class SettingsKeybindings {
     const doc = window.document;
     root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
 
-    const style = doc.createElementNS(H, 'style');
-    style.textContent = `
-      #zv-settings-keybindings-table { width:100%; border-collapse:collapse; font-size:0.9em; color:${THEME_VARS.text}; }
-      #zv-settings-keybindings-table th { position:sticky; top:0; z-index:2; padding:7px 9px; text-align:left; background:${THEME_VARS.elevated}; border-bottom:1px solid ${THEME_VARS.border}; }
-      #zv-settings-keybindings-table td { padding:5px 7px; vertical-align:top; border-bottom:1px solid ${THEME_VARS.border}; }
-      #zv-settings-keybindings-table .zv-binding-mode-cell { width:11em; }
-      #zv-settings-keybindings-table .zv-binding-key-cell { width:10em; }
-      #zv-settings-keybindings-table .zv-binding-delete-cell { width:3em; text-align:center; }
-      #zv-settings-keybindings-table .zv-binding-action { position:relative; display:flex; min-width:0; flex-direction:column; }
-      #zv-settings-keybindings-table .zv-binding-action-results[hidden] { display:none; }
-      #zv-settings-keybindings-table .zv-binding-action-results { position:relative; z-index:3; width:100%; max-height:180px; margin-top:2px; box-shadow:0 6px 18px ${THEME_VARS.shadow}; }
-      #zv-settings-keybindings-table tr.zv-binding-row-error { box-shadow:inset 4px 0 ${THEME_VARS.error}; }
-      #zv-settings-keybindings-table tr.zv-binding-row-warning { box-shadow:inset 4px 0 ${THEME_VARS.warning}; }
-      #zv-settings-keybindings-table .zv-binding-delete { min-height:2.1em; padding:0.2em 0.55em; }
-      #zv-bindings-validation-status.zv-binding-status-invalid,
-      #zv-save-status.zv-binding-save-save-failed { color:${THEME_VARS.error}; }
-      #zv-bindings-validation-status.zv-binding-status-warning,
-      #zv-bindings-validation-status.zv-binding-status-dirty { color:${THEME_VARS.warning}; }
-      #zv-save-status.zv-binding-save-saved { color:${THEME_VARS.success}; }
-    `;
-
     const title = doc.createElementNS(H, 'h2');
     title.textContent = settingsText(language, 'Keybindings');
     title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
 
-    const guide = settingsGroup(
-      doc,
-      settingsText(language, 'Prefix Guide'),
-      settingsText(
-        language,
-        'Show valid continuations while a multi-key command prefix is pending.',
-      ),
+    const browser = settingsGroup(doc, settingsText(language, 'Shortcut browser'));
+    this.#browserRoot = doc.createElementNS(H, 'div');
+    browser.append(this.#browserRoot);
+
+    const guide = doc.createElementNS(H, 'details');
+    guide.style.cssText = 'margin:0 0 1.5em';
+    const guideSummary = doc.createElementNS(H, 'summary');
+    guideSummary.textContent = settingsText(language, 'Prefix Guide');
+    guideSummary.style.cssText = 'cursor:pointer;font-weight:600';
+    const guideDescription = doc.createElementNS(H, 'p');
+    guideDescription.textContent = settingsText(
+      language,
+      'Show valid continuations while a multi-key command prefix is pending.',
     );
+    guideDescription.style.cssText = `margin:0.5em 0;color:${THEME_VARS.muted}`;
+
     const config = keyGuideConfig(preferences);
     this.#guideToggle = settingsToggleRow(
       doc,
@@ -158,68 +128,15 @@ export class SettingsKeybindings {
     };
     this.#guideStatus = settingsStatus(doc);
     guide.append(
+      guideSummary,
+      guideDescription,
       this.#guideToggle.element,
       this.#guideNumbers.delayMs.element,
       this.#guideNumbers.fontSizePx.element,
       this.#guideStatus,
     );
 
-    const bindings = settingsGroup(
-      doc,
-      settingsText(language, 'Bindings'),
-      settingsText(
-        language,
-        'Edit mode + key sequence + action rows, then Apply. Named keys use <Enter>, <Esc>, <F1>, <Space>; chords use forms such as <C-d>.',
-      ),
-    );
-    const toolbar = doc.createElementNS(H, 'div');
-    toolbar.style.cssText = 'display:flex;align-items:center;gap:0.55em;margin:0 0 0.65em';
-    const add = settingsButtonElement(doc, settingsText(language, '+ Add binding'));
-    add.id = 'zv-add-binding';
-    const reset = settingsButtonElement(doc, settingsText(language, 'Reset to defaults'));
-    reset.id = 'zv-reset-bindings';
-    toolbar.append(add, reset);
-
-    const tableWrap = doc.createElementNS(H, 'div');
-    tableWrap.id = 'zv-bindings-table-wrap';
-    tableWrap.style.cssText = `max-height:420px;overflow:auto;border:1px solid ${THEME_VARS.border};border-radius:5px`;
-    const table = doc.createElementNS(H, 'table');
-    table.id = 'zv-settings-keybindings-table';
-    const head = doc.createElementNS(H, 'thead');
-    const headRow = doc.createElementNS(H, 'tr');
-    for (const [text, width] of [
-      [settingsText(language, 'Mode'), '11em'],
-      [settingsText(language, 'Key sequence'), '10em'],
-      [settingsText(language, 'Action'), 'auto'],
-      ['', '3em'],
-    ] as const) {
-      const cell = doc.createElementNS(H, 'th');
-      cell.textContent = text;
-      cell.style.width = width;
-      headRow.append(cell);
-    }
-    head.append(headRow);
-    const body = doc.createElementNS(H, 'tbody');
-    body.id = 'zv-bindings-body';
-    table.append(head, body);
-    tableWrap.append(table);
-
-    const footer = doc.createElementNS(H, 'div');
-    footer.style.cssText =
-      'display:flex;align-items:center;justify-content:flex-end;gap:0.75em;margin-top:0.65em';
-    const validation = doc.createElementNS(H, 'span');
-    validation.id = 'zv-bindings-validation-status';
-    validation.setAttribute('role', 'status');
-    const save = settingsButtonElement(doc, settingsText(language, 'Apply bindings'));
-    save.id = 'zv-save';
-    const saveStatus = doc.createElementNS(H, 'span');
-    saveStatus.id = 'zv-save-status';
-    saveStatus.setAttribute('role', 'status');
-    saveStatus.setAttribute('aria-live', 'polite');
-    footer.append(validation, save, saveStatus);
-    bindings.append(toolbar, tableWrap, footer);
-
-    root.append(style, title, guide, bindings);
+    root.append(title, browser, guide);
     this.#prepareDraft();
     this.#mountEditor();
 
@@ -282,18 +199,14 @@ export class SettingsKeybindings {
   }
 
   #mountEditor(): void {
-    this.#bindingView?.dispose();
+    this.#browserView?.dispose();
     const state = this.#state.editor;
     if (!state) return;
-    this.#bindingView = mountBindingEditor({
+    this.#browserView = mountShortcutBrowser({
       document: this.#root.ownerDocument,
-      root: this.#root,
+      root: this.#browserRoot,
       state,
-      language: this.#editorLanguage(),
-      localize: (key, editorLanguage) => {
-        const message = EDITOR_MESSAGES[key];
-        return message ? settingsText(editorLanguage, message) : key;
-      },
+      localize: (key, editorLanguage) => settingsText(editorLanguage, key as SettingsMessage),
       onSave: (bindings) => {
         this.#preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(bindings));
       },
@@ -333,8 +246,8 @@ export class SettingsKeybindings {
   }
 
   dispose(): void {
-    this.#bindingView?.dispose();
-    this.#bindingView = null;
+    this.#browserView?.dispose();
+    this.#browserView = null;
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
     this.#root.replaceChildren();
   }

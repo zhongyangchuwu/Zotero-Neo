@@ -1,4 +1,4 @@
-import type { BindingMap, Mode } from './bindings';
+import type { BindingMap, BindingContext } from './bindings';
 import {
   advanceInput,
   backspacePendingInput,
@@ -33,7 +33,7 @@ export class InputRuntime {
     return this.#countBuffer;
   }
 
-  #state(mode: Mode): InputState {
+  #state(mode: BindingContext): InputState {
     return { mode, keyBuffer: this.#keyBuffer, countBuffer: this.#countBuffer };
   }
 
@@ -60,21 +60,26 @@ export class InputRuntime {
     }, delayMs);
   }
 
-  cancel(mode: Mode): boolean {
+  cancel(mode: BindingContext): boolean {
     const next = cancelPendingInput(this.#state(mode));
     if (!next) return false;
     this.replace(next.keyBuffer, next.countBuffer);
     return true;
   }
 
-  backspace(mode: Mode): boolean {
+  backspace(mode: BindingContext): boolean {
     const next = backspacePendingInput(this.#state(mode));
     if (!next) return false;
     this.replace(next.keyBuffer, next.countBuffer);
     return true;
   }
 
-  advance(mode: Mode, bindings: BindingMap, key: string, allowCountPrefix: boolean): InputDecision {
+  advance(
+    mode: BindingContext,
+    bindings: BindingMap,
+    key: string,
+    allowCountPrefix: boolean,
+  ): InputDecision {
     const decision = advanceInput({ ...this.#state(mode), bindings, allowCountPrefix }, key);
     this.replace(decision.state.keyBuffer, decision.state.countBuffer);
     return decision;
