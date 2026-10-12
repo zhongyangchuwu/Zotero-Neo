@@ -69,9 +69,9 @@ Disposable-data acceptance covered preserved HTML, immutable text/page snapshots
 child and other same-library notes, stale-target refusal, wrong-library exclusion,
 cancel/no mutation, Reader focus return, and the separate annotation-comment action.
 
-The owner-approved selection-safe Notes revision is implemented in
-[#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140), not yet merged or
-published. Notes default to the frozen current Item, with an honest empty state
+The owner-approved selection-safe Notes revision is merged through
+[#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140), not published.
+Notes default to the frozen current Item, with an honest empty state
 and explicit Library browsing. Confirmation fixes the Note ID before async work;
 source/owner changes reject stale targets, and only the actual native save produces
 a receipt. Current-candidate contracts and isolated Zotero package/UI proofs are
@@ -118,37 +118,36 @@ acceptance boundary, not a mandate for another broad refactor.
 
 1. **Finish current-package acceptance** in
    [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
-   Pin the merged candidate, test persistent install/upgrade/restart and schema-18
-   custom/null preference preservation, then record actual human OS-IME/native
-   editable/clipboard outcomes and exact split-view ownership. Refresh the old
-   acceptance package rather than treating historical DOM composition as human
-   PASS. A concrete failure gets its own bounded defect; no speculative rewrite.
-2. **Review and integrate the approved existing-note choice workflow** in
-   [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140), owned by
-   [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) under #98 Phase 9.4.
+   Pin the integrated candidate and reuse unchanged package migration/restart and
+   schema-18 preference evidence when the XPI is byte-identical. Observe one action
+   per shortcut in each live view, then record actual human OS-IME/native-editable,
+   clipboard and Outline outcomes. Historical DOM composition is not human PASS.
+   A concrete failure gets its own bounded defect; no speculative rewrite.
+2. **Finish the remaining integration acceptance**, not another Notes rewrite.
+   [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140) implements the
+   accepted [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) contract;
+   [#141](https://github.com/zhongyangchuwu/Zotero-Neo/pull/141) implements Phase 10
+   documentation reconciliation and the proved-unused target-dispatcher removal.
    Current-Item scope, explicit Library browsing, actual-parent Preview, title-only
-   rows and nonselectable owner boundaries are implemented. Confirmation identity,
-   single-flight save, failed-save rollback and late receipt/focus fencing have
-   contract and native API evidence. Do not rebuild them or infer creation/backlinks.
-   Merge still requires authorization; refresh acceptance only when the candidate
-   changes, and keep #137's unperformed physical-input criteria separate.
-3. **Complete Phase 10 documentation reconciliation and release gates** under #98.
+   rows, single-flight native saves and late receipt/focus fencing have contract
+   and native API evidence. Keep #137's unperformed physical-input criteria
+   separate; do not rebuild these workflows or infer creation/backlinks.
+3. **Meet release gates only after selected acceptance is complete** under #98.
    Current interaction, architecture, development and contributor guidance describe
-   the implemented owners; historical inventories are not current instructions.
-   Preference decoders remain because packaged upgrades still consume them; an old
-   persisted name is not a live runtime alias. Remove a helper only after its actual
-   consumers are retired, not for an abstract cleanup goal. Release preparation
-   remains gated below; publication still needs explicit authorization.
+   implemented owners; historical inventories are not current instructions.
+   Preference decoders remain because packaged upgrades consume them; persisted
+   old names are not live runtime aliases. Release preparation remains gated below,
+   and publication still requires explicit authorization.
 
 PDF cover preview, Note Vim expansion, macros/Ex commands and generic Manager or
 provider frameworks remain outside this selected sequence. A new workflow should
 come from observed use, not speculative feature parity.
 
-Keep
-[#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49)
-as the batteries-included workflow direction: Plugin Manager phases 1–3 are
-accepted, and the next workflow should come from observed use after safety and
-acceptance, not speculative provider/manager abstractions. Track
+The batteries-included direction recorded in
+[#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49) is accepted; Plugin
+Manager phases 1–3 are complete, not an unfinished feature backlog. A new workflow
+must come from observed use after safety and acceptance, not speculative
+provider/manager abstractions. Track
 [#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20)
 for a supported Zotero semantic-selection seam; retain the current DOM
 compatibility path until that external prerequisite exists.
