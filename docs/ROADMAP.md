@@ -38,13 +38,16 @@ acceptance backlog. Current interaction ownership is defined by
 [the interaction model](INTERACTION_MODEL.md) and
 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98).
 
-The keyboard-system and Reader-local navigation change tracked by
-[#135](https://github.com/zhongyangchuwu/Zotero-Neo/issues/135) is implemented
-in the source branch, but is not merged or released. It replaces retired Reader
-defaults with direct panel focus, full-document native heading/category and bookmark
-traversal, plus lazy native caption targets, using the shared 14-context binding source, action-centric Apply
-editor, and schema-18 migration. Implementation and verification evidence belong
-to the owning issue/PR; branch implementation is not an issue-completion claim.
+Native Reader Sidebar integration and the keyboard-system/navigation work are
+owner-accepted and merged through
+[#134](https://github.com/zhongyangchuwu/Zotero-Neo/pull/134) and
+[#136](https://github.com/zhongyangchuwu/Zotero-Neo/pull/136); #133/#135 are complete.
+The shared 14-context binding source, action-centric Apply editor and schema-18
+migration are now on `main`. Reader navigation preserves the native heading tree
+but resolves trustworthy printed-heading starts across page breaks, and Figures
+use trustworthy native image regions above their captions. Explicit structural
+requests share a native SDK cache; cold processing cost remains disclosed.
+This is merged source, not a new published release.
 
 Isolated latest-stable Zotero smoke covers migration repeat-safety, live Reader
 panels/categories/splits/bookmarks, configured input/list controls, Main/Note
@@ -100,16 +103,39 @@ archive. Other contexts and disabled `i` native-input intent are preserved.
 
 ## Next
 
-Prioritize narrow feature-input ownership before adding another broad interaction layer.
+Do not repeat completed Reader overlay/input reviews or reopen accepted keys,
+comment semantics, navigation history or the native-sidebar layout. Phase 9.3
+still has a distinct physical-input/package acceptance boundary, not a mandate
+for another broad refactor.
 
-1. **Review Phase 9.3 overlays as separate input owners.** Reader Insert retirement
-   and its explicit deletion migration are complete in this candidate; do not use
-   overlay review to reopen frozen comment keys or introduce a generic state store.
-2. **Keep physical OS IME acceptance explicit.** Trusted Gecko composition and
-   composition-aware key contracts do not prove candidate-window selection on the
-   operating system.
-3. **Keep Phase 9.3 overlay review and Phase 9.4 Knowledge Capture separate.** Do not
-   expand either workflow as a side effect of editor preference/binding migration.
+1. **Finish current-package acceptance** in
+   [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
+   Pin the merged candidate, test persistent install/upgrade/restart and schema-18
+   custom/null preference preservation, then record actual human OS-IME/native
+   editable/clipboard outcomes and exact split-view ownership. Refresh the old
+   acceptance package rather than treating historical DOM composition as human
+   PASS. A concrete failure gets its own bounded defect; no speculative rewrite.
+2. **Design one next Knowledge Capture workflow** in
+   [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138), under #98 Phase 9.4.
+   Existing-note capture and current-paper-first ranking are already accepted;
+   do not rebuild them. The recommended decision candidate is explicit creation
+   of a related note when none is suitable, followed by capture with deliberate
+   confirmation. Source/backlink navigation is a separate alternative/later slice.
+   These are proposals, not accepted runtime behavior. Design must settle one
+   workflow with the owner, its empty/read-only/stale/cancel/save-error states and
+   observable host acceptance before implementation. Design research can proceed
+   while acceptance is recorded; runtime expansion follows its prerequisite gates.
+3. **Reconcile Phase 10 documentation and release readiness** under #98.
+   Review current ownership/interaction guidance against accepted source and mark
+   obsolete issue instructions as historical without deleting useful evidence.
+   Remove code only when a verified replacement makes it obsolete, not to chase
+   an abstract cleanup goal. Prepare another release only after its acceptance,
+   package/update-feed/version and installation gates below are satisfied; release
+   publication still needs explicit authorization.
+
+PDF cover preview, Note Vim expansion, macros/Ex commands and generic Manager or
+provider frameworks remain outside this selected sequence. A new workflow should
+come from observed use, not speculative feature parity.
 
 Keep
 [#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49)
