@@ -79,6 +79,31 @@ describe('Reader note capture', () => {
     expect(target.saveTx).toHaveBeenCalledTimes(1);
   });
 
+  it('restores failed append contents before a deliberate retry', async () => {
+    vi.stubGlobal('Zotero', { Utilities: { text2html: (value: string) => value } });
+    const target = note(10, 7);
+    vi.mocked(target.saveTx).mockRejectedValueOnce(new Error('read-only'));
+
+    await expect(appendReaderSelectionToNote(target, context(), 7)).rejects.toThrow('read-only');
+    expect(target.getNote()).toBe('<p>Existing</p>');
+    await appendReaderSelectionToNote(target, context(), 7);
+    expect(target.getNote()).toBe(
+      '<p>Existing</p><blockquote>Selected <text>\n\nPage 12</blockquote>',
+    );
+  });
+
+  it('does not roll back a newer native edit after a failed save', async () => {
+    vi.stubGlobal('Zotero', { Utilities: { text2html: (value: string) => value } });
+    const target = note(10, 7);
+    const pending = Promise.withResolvers<number>();
+    vi.mocked(target.saveTx).mockReturnValueOnce(pending.promise);
+    const capture = appendReaderSelectionToNote(target, context(), 7);
+    target.setNote('<p>Newer native edit</p>');
+    pending.reject(new Error('failed save'));
+    await expect(capture).rejects.toThrow('failed save');
+    expect(target.getNote()).toBe('<p>Newer native edit</p>');
+  });
+
   it('refuses deleted, non-note, and cross-library targets without saving', async () => {
     vi.stubGlobal('Zotero', { Utilities: { text2html: (value: string) => value } });
     const deleted = note(10, 7);

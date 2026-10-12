@@ -115,16 +115,15 @@ for another broad refactor.
    editable/clipboard outcomes and exact split-view ownership. Refresh the old
    acceptance package rather than treating historical DOM composition as human
    PASS. A concrete failure gets its own bounded defect; no speculative rewrite.
-2. **Design one next Knowledge Capture workflow** in
+2. **Implement the approved existing-note choice workflow** in
    [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138), under #98 Phase 9.4.
-   Existing-note capture and current-paper-first ranking are already accepted;
-   do not rebuild them. The recommended decision candidate is explicit creation
-   of a related note when none is suitable, followed by capture with deliberate
-   confirmation. Source/backlink navigation is a separate alternative/later slice.
-   These are proposals, not accepted runtime behavior. Design must settle one
-   workflow with the owner, its empty/read-only/stale/cancel/save-error states and
-   observable host acceptance before implementation. Design research can proceed
-   while acceptance is recorded; runtime expansion follows its prerequisite gates.
+   The owner selected current-Item-only Notes by default, explicit Library browsing,
+   actual-parent Preview and title-only rows with nonselectable Item boundaries.
+   First protect admitted confirmation identity, repeated confirmation, failed save
+   and late receipts; retain immutable Reader snapshots and Main-owned same-library
+   note mutation. Creation and source/backlink expansion are deferred, not implied
+   by empty-state handling. Record current-candidate host evidence; #137's physical
+   input criteria stay distinct and unperformed scenarios must not become PASS.
 3. **Reconcile Phase 10 documentation and release readiness** under #98.
    Review current ownership/interaction guidance against accepted source and mark
    obsolete issue instructions as historical without deleting useful evidence.

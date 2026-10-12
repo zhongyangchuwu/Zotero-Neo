@@ -339,10 +339,11 @@ absent. Membership changes do not redefine Neo Selection.
 
 ##### Notes
 
-`fn` searches normalized note titles and note body content. Notes related
-to the current item are grouped ahead of the remaining notes in the active
-library. Confirming a note opens it through Zotero; `Shift+Enter` requests the
-alternate window presentation.
+`fn` searches normalized titles and paragraph-preserving note body text in the
+current Item's notes by default. **Browse library** explicitly expands to the
+same Library; **Current item** narrows again without losing the query. Rows show
+titles only, with thin Item boundaries; Preview shows actual ownership and body.
+Confirming opens the chosen note through Zotero; `Shift+Enter` requests another window.
 
 Note creation, deletion, restore, yank, and editing are not a second grammar
 inside the chooser. Note editor Normal/Insert operations use the shared binding
@@ -711,18 +712,29 @@ editors keeps its Zotero behavior).
 
 While a Reader Visual selection is active, press `a` or `Enter` and choose
 **Capture to note**. Neo snapshots the selected text and Reader item context,
-then opens the shared Notes picker. Notes belonging to the current paper are
-ranked first, followed by other notes in the same library.
+then opens the shared Notes picker with only the current paper's notes. No notes
+means an empty list, not an automatic Library search. Use **Browse library** to
+choose another existing note in the same library; **Current item** narrows it again.
+The source button is reachable with native Tab/Shift-Tab and Enter, including when
+Picker mouse interaction is disabled. Switching preserves the query and capture.
+
+Rows contain only note titles. Thin boundaries separate different Item owners;
+Preview shows the selected note's actual parent and body, or an honest standalone
+or unavailable-source label. Citation terminology does not hide ordinary notes.
 
 Confirming a note appends a blockquote containing the captured text and the PDF
 page label when available. Existing note content is preserved. The target note
 is revalidated before writing; deleted, non-note, or cross-library targets are
-refused. Cancelling the chooser leaves notes unchanged and returns focus to the
-Reader.
+refused. Confirmation locks that Note ID; repeated Enter/double-click cannot write
+to a later preview. Before confirmation, Escape closes without writing and returns
+focus to Reader. During saving, Escape/backdrop does not cancel an already admitted
+native save. A failure is visible and leaves the chooser available for a deliberate
+new choice; success names the saved note only if the Reader invocation is still current.
+An ownership change since Preview also refuses the write; refresh the source before confirming.
 
-The first v0.2 slice only captures into an existing note. It does not create a
-new note automatically and does not redefine `visual i`, which still creates
-a highlight and opens its annotation comment editor.
+Capture writes to an existing note only. It does not create a note or source backlink
+automatically and does not redefine `visual i`, which still creates a highlight and
+opens its annotation comment editor.
 
 ---
 

@@ -201,7 +201,17 @@ export class ReaderSelectionActions {
     try {
       const outcome = await action.run(context);
       if (!this.#canComplete(generation, pdfWindow)) return;
-      if (outcome && typeof outcome === 'object' && outcome.body) {
+      if (outcome && typeof outcome === 'object' && 'retired' in outcome) {
+        this.close();
+        return;
+      }
+      if (outcome && typeof outcome === 'object' && 'status' in outcome) {
+        this.close();
+        this.#host.showStatus(outcome.status, 1500);
+        pdfWindow.focus();
+        return;
+      }
+      if (outcome && typeof outcome === 'object' && 'body' in outcome && outcome.body) {
         this.#stage = 'result';
         this.#resultText = outcome.body;
         this.#renderResult(outcome);
@@ -276,7 +286,7 @@ export class ReaderSelectionActions {
     overlay.appendChild(help);
   }
 
-  #renderResult(outcome: ReaderSelectionActionOutcome): void {
+  #renderResult(outcome: Extract<ReaderSelectionActionOutcome, { body: string }>): void {
     const overlay = this.#overlay;
     if (!overlay) return;
     overlay.replaceChildren();

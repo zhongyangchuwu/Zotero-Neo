@@ -226,6 +226,59 @@ describe('ReaderSelectionActions', () => {
     expect(palette.isOpen).toBe(false);
   });
 
+  it('shows a completed target receipt only while its invocation still owns the view', async () => {
+    const created = createWindow();
+    const showStatus = vi.fn();
+    let pending = Promise.withResolvers<{ status: string }>();
+    const palette = new ReaderSelectionActions({
+      actions: () => [{ id: 'capture', label: 'Capture', run: () => pending.promise }],
+      themeRoot: () => () => {},
+      copyText: () => {},
+      showStatus,
+      debug: () => {},
+    });
+    palette.open(created.pdfWindow, context);
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    pending.resolve({ status: 'Saved to Note A' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(showStatus).toHaveBeenCalledWith('Saved to Note A', 1500);
+    expect(palette.isOpen).toBe(false);
+
+    showStatus.mockClear();
+    pending = Promise.withResolvers<{ status: string }>();
+    palette.open(created.pdfWindow, context);
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    palette.open(created.pdfWindow, { ...context, text: 'new selection' });
+    pending.resolve({ status: 'Late save to Note B' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(showStatus).not.toHaveBeenCalled();
+    expect(palette.isOpen).toBe(true);
+    palette.close();
+  });
+
+  it('retires completed capture presentation without stealing replacement workspace focus', async () => {
+    const created = createWindow();
+    const showStatus = vi.fn();
+    const pending = Promise.withResolvers<{ retired: true }>();
+    const palette = new ReaderSelectionActions({
+      actions: () => [{ id: 'capture', label: 'Capture', run: () => pending.promise }],
+      themeRoot: () => () => {},
+      copyText: () => {},
+      showStatus,
+      debug: () => {},
+    });
+    palette.open(created.pdfWindow, context);
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    pending.resolve({ retired: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(palette.isOpen).toBe(false);
+    expect(showStatus).not.toHaveBeenCalled();
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+  });
+
   it('retires dead-view ownership and ignores a late result over a new menu', async () => {
     const primary = createWindow();
     const secondary = createWindow();

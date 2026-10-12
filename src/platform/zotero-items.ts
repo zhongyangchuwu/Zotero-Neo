@@ -3,6 +3,14 @@ export function zoteroItem(itemID: number): Zotero.Item | undefined {
   return item === false ? undefined : item;
 }
 
+/** Stable actual ownership used by Notes Preview and confirmation revalidation. */
+export function noteOwnerKey(note: Zotero.Item): string {
+  const parent = note.parentItemID;
+  return typeof parent === 'number' && Number.isInteger(parent) && parent > 0
+    ? `library:${note.libraryID}:item:${parent}`
+    : `library:${note.libraryID}:note:${note.id}`;
+}
+
 function fallbackTopLevel(item: Zotero.Item): Zotero.Item {
   if ((item.isAttachment?.() || item.isNote?.()) && item.parentItemID) {
     return zoteroItem(item.parentItemID) ?? item;

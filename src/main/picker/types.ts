@@ -9,6 +9,7 @@ export interface PickerPreview {
 }
 
 export type PickerConfirm = (item: PickerItem, openInWindow: boolean) => Promise<void> | void;
+export type PickerCloseReason = 'cancel' | 'confirm' | 'retire';
 
 /**
  * One invocation of the shared candidate surface.
@@ -21,7 +22,7 @@ export interface PickerOpenOptions {
   readonly closeBeforeConfirm?: boolean;
   readonly commandContext?: CommandPaletteContext;
   readonly source?: PickerProvider;
-  readonly onClose?: () => void;
+  readonly onClose?: (reason: PickerCloseReason) => void;
 }
 
 /** Candidate data/presentation contract for the shared search/list/preview surface. */
@@ -31,6 +32,11 @@ export interface PickerProvider {
   readonly initialFocusPane?: PickerPane;
   readonly loadingText?: string;
   readonly help?: { readonly query: string; readonly list: string };
+  /** Explicit data-source switch that keeps this invocation's semantic confirmation. */
+  readonly alternateSource?: {
+    readonly label: string;
+    readonly provider: () => PickerProvider;
+  };
   load(): Promise<PickerItem[]>;
   rowText(item: PickerItem, index: number): string;
   preview(item: PickerItem): PickerPreview;

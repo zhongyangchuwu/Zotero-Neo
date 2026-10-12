@@ -18,7 +18,8 @@ export interface PickerItem {
   selected?: boolean;
   preview?: string;
   meta?: string;
-  section?: 'current' | 'all';
+  /** Stable owner identity for decorative boundaries; never a selectable row. */
+  group?: string;
   tagType?: 'manual' | 'automatic';
   tagName?: string;
   tagCandidate?: 'tag' | 'create' | 'namespace';

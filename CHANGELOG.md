@@ -14,6 +14,8 @@ All notable changes to Zotero Neo are documented here.
 
 ### Changed
 
+- Notes and Reader capture now default to the current Item's notes, with an explicit Library source switch that retains the same query and confirmation. Rows show titles only, thin nonselectable boundaries separate Item owners, and Preview reports each note's actual parent or standalone/unavailable source. Human notes containing citation-tool terminology remain visible.
+
 - Reader scan failures now retain native exception stacks, bounded cause chains, failure stages, and cached Reader identities in Debug and the profile log. First failure and recovery are recorded without recurring failure/idle spam; unreadable exceptions and failed logging sinks cannot abort error reporting. Profile logs preserve UTF-8 and close native streams after failed writes. Reader lifecycle/retry policy is unchanged; this is diagnostic hardening, not a fix for an underlying dead-object fault.
 
 - Complete Reader view/session and composed Reader/Main retirement even when a live cleanup throws, preserving the original failure after all owners are released. Split-pane listeners and native bridges no longer require a second disposal; Bootstrap drops its retired controller before shutdown; profile-write diagnostics retain both primary and additional close failures.
@@ -36,6 +38,8 @@ All notable changes to Zotero Neo are documented here.
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ### Fixed
+- Lock Picker confirmation to the admitted candidate and make it single-flight across keyboard and pointer activation. Async loads preserve the committed query; source and generation fences discard stale work. Save failures remain visible, and Escape cannot pretend to cancel an admitted native operation.
+- Settle Reader note capture from the actual native save even after forced teardown, preserve unchanged note contents on save failure, and show target-named success only after the Reader invocation/view guard.
 - Correct `[s` / `]s` landing when an authored PDF bookmark points to the previous page's end: match a unique genuine native heading on the authored or next page and align its printed start, preserving the native hierarchy and honest fallback. Heading/Figure/Table requests share one explicit, cached native SDK load; Reader open still starts no extra processing.
 - Align Figure navigation and caption choices to trustworthy native image regions above their genuine captions, including enclosed native chart-label text and anchor precision differences. Ambiguous associations retain the caption; Table positions, native scrolling, zoom, and other keys are unchanged.
 - Make `[s` / `]s` Reader-wide from the PDF and all four focused sidebar contexts. Whole-tree traversal ignores collapse/filter/current-row state, uses live exact-view geometry with rounding/bottom-clamp tolerance, wraps across document boundaries, and fences delayed native work to the current input/view owner. Native text editing and IME retain ownership.
