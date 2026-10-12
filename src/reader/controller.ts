@@ -2371,12 +2371,20 @@ export class ReaderSession {
       label: language === 'zh-CN' ? '捕获到笔记' : 'Capture to note',
       isAvailable: (selection) => selection.itemID !== null && !!selection.text.trim(),
       run: async (selection) => {
-        const captured =
+        const receipt =
           await this.#dependencies.controller.dependencies.main.captureReaderSelectionToNote(
             selection,
             this.#dependencies.reader._window ?? null,
           );
-        if (captured) this.showStatus('✓ captured to note', 1500);
+        if (receipt && 'retired' in receipt) return { retired: true };
+        if (receipt) {
+          return {
+            status:
+              language === 'zh-CN'
+                ? `✓ 已保存到「${receipt.noteTitle}」`
+                : `✓ Saved to “${receipt.noteTitle}”`,
+          };
+        }
       },
     });
     addBuiltIn('neo.underline', 'underlineSelection');

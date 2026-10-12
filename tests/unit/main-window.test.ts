@@ -1448,6 +1448,114 @@ function settingsMainHost() {
   return { ...host, controller, press, drawer, backdrop, values, writes };
 }
 
+describe('Main note capture settlement', () => {
+  it.each(['saved', 'failed', 'moved'] as const)(
+    'waits for the admitted %s native save after owner teardown',
+    async (outcome) => {
+      const originalZotero = Reflect.get(globalThis, 'Zotero');
+      const originalServices = Reflect.get(globalThis, 'Services');
+      const pending = Promise.withResolvers<number>();
+      let html = '<p>Existing note</p>';
+      const base = {
+        id: 5,
+        libraryID: 7,
+        isNote: () => false,
+        isAttachment: () => false,
+        getNotes: () => [11],
+        getDisplayTitle: () => 'Paper A',
+      } as unknown as Zotero.Item;
+      const target = {
+        id: 11,
+        libraryID: 7,
+        parentItemID: 5,
+        deleted: false,
+        isNote: () => true,
+        getDisplayTitle: () => 'Note A',
+        getNote: () => html,
+        setNote: (value: string) => {
+          html = value;
+        },
+        saveTx: vi.fn(() => pending.promise),
+      } as unknown as Zotero.Item;
+      const byID = new Map([
+        [5, base],
+        [11, target],
+      ]);
+      vi.stubGlobal('Zotero', {
+        Schema: { schemaUpdatePromise: Promise.resolve() },
+        Libraries: { userLibraryID: 1 },
+        Items: {
+          get: (id: number | number[]) =>
+            Array.isArray(id)
+              ? id.map((value) => byID.get(value)).filter(Boolean)
+              : (byID.get(id) ?? false),
+          keepTopLevel: () => [base],
+        },
+        Utilities: { text2html: (value: string) => value },
+      });
+      const host = settingsMainHost();
+      try {
+        let settled = false;
+        const result = host.controller
+          .captureReaderSelectionToNote(
+            {
+              text: 'Selected quote',
+              itemID: 5,
+              pageLabel: '2',
+              position: null,
+            },
+            host.window,
+          )
+          .then((receipt) => {
+            settled = true;
+            return receipt;
+          });
+        await vi.waitFor(() =>
+          expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(true),
+        );
+        const overlay = host.bodyChildren.find((node) => node.id === 'zv-picker-overlay')!;
+        const input = overlay.querySelector('input');
+        if (!input) throw new Error('Expected mounted capture query');
+        await vi.waitFor(() => expect(overlay.textContent).toContain('Note A'));
+        if (outcome === 'moved') Reflect.set(target, 'parentItemID', 6);
+        host.press('Enter', input);
+        if (outcome === 'moved') {
+          await vi.waitFor(() => expect(overlay.textContent).toContain('Note source changed'));
+          await vi.waitFor(() => expect(overlay.querySelector('button')?.disabled).toBe(false));
+          expect(target.saveTx).not.toHaveBeenCalled();
+          expect(html).toBe('<p>Existing note</p>');
+          host.press('Escape', input);
+          expect(await result).toBeNull();
+          return;
+        }
+        await vi.waitFor(() => expect(target.saveTx).toHaveBeenCalledOnce());
+        host.controller.openSettings(host.window);
+        const settingsFocus = host.window.document.activeElement;
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        if (outcome === 'saved') pending.resolve(11);
+        else pending.reject(new Error('read-only native library'));
+        expect(await result).toEqual({
+          retired: true,
+          receipt: outcome === 'saved' ? { noteID: 11, noteTitle: 'Note A' } : null,
+        });
+        expect(host.window.document.activeElement).toBe(settingsFocus);
+        expect(html).toBe(
+          outcome === 'saved'
+            ? '<p>Existing note</p><blockquote>Selected quote\n\nPage 2</blockquote>'
+            : '<p>Existing note</p>',
+        );
+      } finally {
+        host.controller.shutdown();
+        if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+        else Reflect.set(globalThis, 'Zotero', originalZotero);
+        if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+        else Reflect.set(globalThis, 'Services', originalServices);
+      }
+    },
+  );
+});
+
 describe('Main Settings Center shell', () => {
   it('opens centered once, remembers section, and removes backdrop and panel on close', () => {
     const host = settingsMainHost();
@@ -2137,7 +2245,7 @@ describe('Reader to Main command palette integration', () => {
           main?.openReaderCollectionPicker(ownerWindow, present, resolveTargets),
         openCommandPalette: (window, context) => main?.openCommandPalette(window, context),
         captureReaderSelectionToNote: (context, ownerWindow) =>
-          main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(false),
+          main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(null),
       },
     });
     main = createMainWindowController({ preferences, logger, reader: readerController });

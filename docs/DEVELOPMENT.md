@@ -385,9 +385,10 @@ after a target is found.
 `src/main/picker/` is a shared candidate resolver, not a domain-operation layer.
 For ordinary item, current-collection, tab, and note choices, providers supply rows and preview
 metadata only. The opening semantic action supplies `PickerOpenOptions.confirm`; Enter or an enabled
-double-click resolves the highlighted candidate through that callback, and successful confirmation
-closes the surface. A semantic action may intentionally request close-before-confirm, as Command
-Palette does when the chosen action can open another chooser.
+double-click admits one candidate ID and revalidates it against the same source before invoking that
+callback. Confirmation is single-flight while Preview may still move; failed confirmation names the
+admitted target in an accessible status. Successful confirmation closes the surface. A semantic action
+may intentionally request close-before-confirm, as Command Palette does when it opens another chooser.
 
 Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` adapter, backed by
 the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the runtime IIFE; no
@@ -396,9 +397,13 @@ importing the vendor module throughout feature code.
 
 The shell owns generic navigation: unmodified ArrowUp/ArrowDown when search/list owns interaction,
 Ctrl+j/k (and Ctrl+n/p aliases), list-local j/k, `/` to return to search, Ctrl+d/u preview
-scrolling, Enter confirmation, Escape cancellation, pointer selection when enabled, IME ownership,
-and generation-based stale-work rejection. Ordinary sources must not duplicate this navigation or
-claim domain mutation keys.
+scrolling, Enter confirmation, Escape cancellation before admission, pointer selection when enabled,
+IME ownership, and generation/source-revision stale-work rejection. Escape/backdrop cannot undo an
+admitted operation, but public close still releases lifecycle ownership immediately. Committed queries
+survive initial/source-switch loading and exclude intermediate composition text. Optional source
+switching is candidate data only and preserves invocation callbacks; ordinary sources must not add
+domain mutation keys. Stable candidate `group` keys decorate existing rows with boundaries, never
+extra selectable rows or display-name identities.
 
 The command source is a finite projection of the active resolved `BindingMap`: it deduplicates
 supported `ActionId` values, displays key hints separately from key-independent
@@ -409,10 +414,21 @@ execution.
 
 Bibliographic candidate previews remain bounded and synchronous: title, creator, year, and citation-key metadata plus attachment and child-note counts and up to six safely accessible filenames/titles. The chooser does not render PDF pages. A Picker cover preview is separate future work and should be selected-attachment, asynchronous work. Zotero's live Reader has a thumbnail data-URL cache/`ReaderPreview` path, but that is not a ready-made closed-file image API; this change adds no Picker cover-preview service.
 
-Note candidates search normalized title and normalized HTML-stripped body from `getNote()` in the
-same in-memory snapshot used for ordering. Current-item notes remain first. Zotero's native Search
-query remains the library-scope loader and local matching covers body content consistently. Note
-create/trash/restore operations are deliberately outside the chooser contract.
+Notes default to the captured current Item's child IDs (or a standalone Note context), without
+searching or parsing the whole Library; missing/empty context never silently expands scope. Explicit
+Library browsing uses Zotero Search and retains the same context, query and confirmation. Candidates
+search normalized title and HTML-stripped body from `getNote()`. Empty-query Library groups use stable
+Library/parent IDs with current ownership first; fuzzy-query relevance remains authoritative. Rows show
+titles only and Preview resolves each actual parent independently, including honest standalone and
+unavailable-source labels. Citation-related text is not grounds for hiding a human note. Note
+create/trash/restore remain outside the chooser contract.
+
+Main returns a `ReaderNoteCaptureReceipt` only after native save succeeds. Closing during forced
+teardown waits for that admitted save's actual outcome, not a false cancellation. A forced chooser
+replacement returns a retired result retaining that receipt/null and suppressing Reader status and
+focus. Failed appends restore only unchanged in-memory content, never a concurrent native edit.
+Preview and confirmation share `noteOwnerKey`; reparenting requires a refreshed source before writing.
+Reader converts a current receipt to target-named status only after its generation/view guard.
 
 Tag candidate sources follow the same chooser contract as ordinary object sources. They may
 project virtual namespaces, explicit create candidates, and action-specific metadata, but they do

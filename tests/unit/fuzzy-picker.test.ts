@@ -4,7 +4,8 @@ import { isActionId, type ActionId } from '../../src/input/actions';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
 import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
-import type { CommandPaletteContext } from '../../src/core/contracts';
+import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
+import type { MainWindowSession } from '../../src/main/session';
 import {
   FuzzyPicker,
   fuzzyMatchScore,
@@ -12,7 +13,8 @@ import {
   isFuzzyPickerItem,
 } from '../../src/main/picker';
 import { MainNavigation } from '../../src/main/navigation';
-import type { PickerOpenOptions } from '../../src/main/picker/types';
+import type { PickerOpenOptions, PickerProvider } from '../../src/main/picker/types';
+import type { PickerItem } from '../../src/main/picker/model';
 import { createTagCandidateProvider } from '../../src/main/picker/providers/tags';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 import { citationKey } from '../../src/platform/better-bibtex';
@@ -38,6 +40,51 @@ function commandPickerOptions(context: CommandPaletteContext): PickerOpenOptions
       if (isActionId(item.id) && item.id !== 'openCommandPalette') context.execute(item.id, 0);
     },
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function candidateSource(items: PickerItem[], title = 'Candidates'): PickerProvider {
+  return {
+    title,
+    placeholder: 'Search candidates',
+    load: async () => items,
+    rowText: (item) => item.title,
+    preview: (item) => ({ title: item.title, body: item.title }),
+  };
+}
+
+type EmittingElement = HTMLElement & { emit(type: string, event?: Partial<Event>): void };
+
+function activateSourceButton(
+  picker: FuzzyPicker,
+  window: MainWindow,
+  session: MainWindowSession,
+): void {
+  const button = session.picker.sourceButton as HTMLButtonElement & EmittingElement;
+  expect(button).not.toBeNull();
+  expect(button.type).toBe('button');
+  expect(button.tabIndex).toBe(0);
+  session.picker.input!.focus();
+  const tab = pickerKey('Tab', session.picker.input, { shift: true });
+  picker.onKeyDown(tab, window, session);
+  expect(tab.preventDefault).not.toHaveBeenCalled();
+  // The source button precedes the input in native tab order; emulate that browser focus default.
+  button.focus();
+  expect(window.document.activeElement).toBe(button);
+  const enter = pickerKey('Enter', button);
+  picker.onKeyDown(enter, window, session);
+  expect(enter.preventDefault).not.toHaveBeenCalled();
+  // The browser's native Enter default dispatches a keyboard-origin click on the real button.
+  button.emit('click', { detail: 0 } as unknown as Partial<Event>);
 }
 
 describe('fuzzy picker bibliographic items', () => {
@@ -807,6 +854,8 @@ describe('unified Notes picker', () => {
     vi.useFakeTimers();
     const current = {
       id: 1,
+      libraryID: 3,
+      parentItemID: 10,
       deleted: false,
       dateModified: '2026-09-11 08:00:00',
       isNote: () => true,
@@ -815,6 +864,7 @@ describe('unified Notes picker', () => {
     } as unknown as Zotero.Item;
     const other = {
       id: 2,
+      libraryID: 3,
       deleted: false,
       dateModified: '2026-09-10 00:00:00',
       isNote: () => true,
@@ -831,6 +881,7 @@ describe('unified Notes picker', () => {
     } as unknown as Zotero.Item;
     const attachment = {
       id: 11,
+      libraryID: parent.libraryID,
       parentItemID: parent.id,
       isNote: () => false,
       isAttachment: () => true,
@@ -874,6 +925,9 @@ describe('unified Notes picker', () => {
     await picker.open(window, session, 'notes');
     vi.advanceTimersByTime(30);
     expect(session.picker.preview?.textContent).toContain('Current preview body');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([current.id]);
+    activateSourceButton(picker, window, session);
+    await vi.waitFor(() => expect(session.picker.filtered).toHaveLength(2));
     const input = session.picker.input as HTMLInputElement & { emit(type: string): void };
     input.value = 'other';
     input.emit('input');
@@ -912,6 +966,7 @@ describe('unified Notes picker', () => {
   it('selects and confirms a note row with enabled mouse', async () => {
     const note = {
       id: 7,
+      libraryID: 1,
       deleted: false,
       dateModified: '2026-09-12 08:00:00',
       isNote: () => true,
@@ -951,6 +1006,11 @@ describe('unified Notes picker', () => {
         await openNote(id, { openInWindow });
       },
     });
+    expect(session.picker.filtered).toEqual([]);
+    activateSourceButton(picker, window, session);
+    await vi.waitFor(() =>
+      expect(session.picker.filtered.map((item) => item.id)).toEqual([note.id]),
+    );
     const row = session.picker.results?.children[0] as HTMLElement & { emit(type: string): void };
     row.emit('mouseenter');
     expect(session.picker.selected).toBe(0);
@@ -1563,5 +1623,531 @@ describe('picker configurable pane controls', () => {
     picker.onKeyDown(pickerKey('F6', session.picker.input), window, session);
     expect(window.document.activeElement).toBe(session.picker.results);
     picker.close(session);
+  });
+});
+
+describe('picker admitted confirmation safety', () => {
+  const candidates: PickerItem[] = [
+    { id: 'A', title: 'Alpha', search: 'alpha' },
+    { id: 'B', title: 'Beta', search: 'beta' },
+    { id: 'C', title: 'Gamma', search: 'gamma' },
+  ];
+
+  it.each(['keyboard', 'pointer'] as const)(
+    'locks %s admission through a held failure, ignores duplicates and permits an intentional retry',
+    async (activation) => {
+      vi.useFakeTimers();
+      vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+      const { window, session } = createPickerHarness();
+      const diagnostic = vi.fn();
+      const picker = new FuzzyPicker(
+        { debug: vi.fn(), diagnostic },
+        new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+        () => true,
+      );
+      const save = deferred<void>();
+      const started = deferred<void>();
+      const mutations: Array<string | number> = [];
+      let firstConfirmation = true;
+      const confirm = vi.fn(async (item: PickerItem) => {
+        if (firstConfirmation) {
+          firstConfirmation = false;
+          started.resolve();
+          await save.promise;
+        }
+        mutations.push(item.id);
+      });
+      await picker.open(window, session, 'notes', {
+        source: candidateSource(candidates),
+        confirm,
+      });
+      if (activation === 'keyboard')
+        picker.onKeyDown(
+          pickerKey('Enter', session.picker.results, { shift: true }),
+          window,
+          session,
+        );
+      else
+        (session.picker.results!.children[0] as EmittingElement).emit('dblclick', {
+          shiftKey: true,
+        } as unknown as Partial<Event>);
+      const admitted = session.picker.queue;
+      picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+      picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+      (session.picker.results!.children[1] as EmittingElement).emit('dblclick');
+      await started.promise;
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(confirm).toHaveBeenCalledWith(candidates[0], true);
+      expect(Reflect.get(session.picker.operationStatus!, 'role')).toBe('status');
+      expect(Reflect.get(session.picker.operationStatus!, 'aria-live')).toBe('polite');
+      picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+      expect(session.picker.previewTitle?.textContent).toBe('Gamma');
+      picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+      (session.picker.results!.children[2] as EmittingElement).emit('dblclick');
+      expect(session.picker.operationStatus?.textContent).toContain('Alpha');
+      save.reject(new Error('native save failed'));
+      await admitted;
+      expect(confirm).toHaveBeenCalledOnce();
+      expect(mutations).toEqual([]);
+      expect(session.picker.open).toBe(true);
+      expect(session.picker.operationStatus?.hidden).toBe(false);
+      expect(session.picker.operationStatus?.textContent).toContain('Alpha');
+      expect(session.picker.operationStatus?.textContent).toContain('native save failed');
+      expect(session.picker.operationStatus?.textContent).not.toContain('Gamma');
+      expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('native save failed'));
+      picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+      await session.picker.queue;
+      expect(confirm).toHaveBeenCalledTimes(2);
+      expect(mutations).toEqual(['C']);
+      expect(session.picker.open).toBe(false);
+    },
+  );
+
+  it('re-resolves a keyboard target by ID and does not confirm a removed candidate', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const confirm = vi.fn();
+    await picker.open(window, session, 'notes', { source: candidateSource(candidates), confirm });
+    picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+    const admitted = session.picker.queue;
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'beta';
+    input.emit('input');
+    await admitted;
+    expect(confirm).not.toHaveBeenCalled();
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.operationStatus?.hidden).toBe(false);
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith(candidates[1], false);
+  });
+
+  it('does not treat Escape or backdrop as rollback but public close releases pending resources', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session, cleanups } = createPickerHarness();
+    const releaseTheme = vi.fn();
+    session.theme.add = () => releaseTheme;
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const save = deferred<void>();
+    const started = deferred<void>();
+    const onClose = vi.fn();
+    const confirm = vi.fn(() => {
+      started.resolve();
+      return save.promise;
+    });
+    await picker.open(window, session, 'notes', {
+      source: candidateSource(candidates),
+      confirm,
+      onClose,
+    });
+    const retiredInput = session.picker.input as HTMLInputElement & EmittingElement;
+    const overlay = session.picker.overlay as EmittingElement;
+    const bindings = session.picker.localBindings!;
+    const dispose = vi.spyOn(bindings, 'dispose');
+    picker.onKeyDown(pickerKey('Enter', retiredInput), window, session);
+    const admitted = session.picker.queue;
+    await started.promise;
+    picker.onKeyDown(pickerKey('Escape', retiredInput), window, session);
+    overlay.emit('mousedown');
+    expect(session.picker.open).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(releaseTheme).not.toHaveBeenCalled();
+    // Session teardown uses the public force-close path, even while the host owns an admitted save.
+    cleanups[0]!();
+    expect(session.picker.open).toBe(false);
+    expect(overlay.isConnected).toBe(false);
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(releaseTheme).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+    picker.close(session);
+    retiredInput.value = 'beta';
+    retiredInput.emit('input');
+    save.resolve();
+    await admitted;
+    expect(session.picker.items).toEqual([]);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledOnce();
+  });
+
+  it.each(['resolve', 'reject'] as const)(
+    'cannot let an old %s completion close or overwrite a reopened operation',
+    async (outcome) => {
+      vi.useFakeTimers();
+      vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+      const { window, session } = createPickerHarness();
+      const picker = new FuzzyPicker(
+        { debug: vi.fn(), diagnostic: vi.fn() },
+        new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      );
+      const oldSave = deferred<void>();
+      const oldStarted = deferred<void>();
+      await picker.open(window, session, 'notes', {
+        source: candidateSource(candidates),
+        confirm: () => {
+          oldStarted.resolve();
+          return oldSave.promise;
+        },
+      });
+      picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+      const oldOperation = session.picker.queue;
+      await oldStarted.promise;
+      picker.close(session);
+      const newSave = deferred<void>();
+      const newStarted = deferred<void>();
+      const newConfirm = vi.fn(() => {
+        newStarted.resolve();
+        return newSave.promise;
+      });
+      await picker.open(window, session, 'notes', {
+        source: candidateSource([candidates[1]!]),
+        confirm: newConfirm,
+      });
+      picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+      const newOperation = session.picker.queue;
+      await newStarted.promise;
+      const status = session.picker.operationStatus;
+      const message = status?.textContent;
+      if (outcome === 'resolve') oldSave.resolve();
+      else oldSave.reject(new Error('old failed save'));
+      await oldOperation;
+      expect(session.picker.open).toBe(true);
+      expect(session.picker.operationStatus).toBe(status);
+      expect(status?.textContent).toBe(message);
+      expect(status?.textContent).toContain('Beta');
+      picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+      expect(newConfirm).toHaveBeenCalledOnce();
+      newSave.resolve();
+      await newOperation;
+      expect(session.picker.open).toBe(false);
+    },
+  );
+});
+
+describe('picker committed query and explicit sources', () => {
+  it.each([false, true])('cancels from the source button after switching=%s', async (switched) => {
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const confirm = vi.fn();
+    const onClose = vi.fn();
+    const target: PickerItem = { id: 'note-a', title: 'Note A', search: 'note a' };
+    const current: PickerProvider = {
+      ...candidateSource([target]),
+      alternateSource: { label: 'Browse library', provider: () => library },
+    };
+    const library: PickerProvider = {
+      ...candidateSource([target]),
+      alternateSource: { label: 'Current item', provider: () => current },
+    };
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    await picker.open(window, session, 'notes', { source: current, confirm, onClose });
+    if (switched) activateSourceButton(picker, window, session);
+    const button = session.picker.sourceButton;
+    if (!button) throw new Error('Expected source button');
+    button.focus();
+    const cancel = pickerKey('Escape', button);
+    picker.onKeyDown(cancel, window, session);
+    expect(cancel.preventDefault).toHaveBeenCalledOnce();
+    expect(session.picker.open).toBe(false);
+    expect(onClose).toHaveBeenCalledWith('cancel');
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('uses the latest committed query when initial data arrives during IME composition', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const items: PickerItem[] = [
+      { id: 1, title: 'Alpha', search: 'alpha' },
+      { id: 2, title: 'Beta', search: 'beta' },
+    ];
+    const data = deferred<PickerItem[]>();
+    const source: PickerProvider = {
+      ...candidateSource(items),
+      load: () => data.promise,
+    };
+    const opening = picker.open(window, session, 'notes', { source });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'beta';
+    input.emit('input');
+    input.emit('compositionstart');
+    input.value = 'alpha';
+    input.emit('input', { isComposing: true } as unknown as Partial<Event>);
+    data.resolve(items);
+    await opening;
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([2]);
+    expect(input.value).toBe('alpha');
+    input.emit('compositionend');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([2]);
+    input.emit('input', { isComposing: false } as unknown as Partial<Event>);
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([1]);
+    picker.close(session);
+  });
+
+  it('preserves query and invocation callbacks, fences superseded loads even after switching back', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const diagnostic = vi.fn();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => false,
+    );
+    const initial = deferred<PickerItem[]>();
+    const broader = deferred<PickerItem[]>();
+    const refreshed = deferred<PickerItem[]>();
+    const target: PickerItem = { id: 'current', title: 'Match Beta', search: 'match beta' };
+    const itemLoad = vi
+      .fn()
+      .mockImplementationOnce(() => initial.promise)
+      .mockImplementationOnce(() => refreshed.promise);
+    const libraryLoad = vi.fn(() => broader.promise);
+    const itemSource: PickerProvider = {
+      ...candidateSource([], 'Item notes'),
+      load: itemLoad,
+      alternateSource: { label: 'Browse library', provider: () => librarySource },
+    };
+    const librarySource: PickerProvider = {
+      ...candidateSource([], 'Library notes'),
+      load: libraryLoad,
+      alternateSource: { label: 'Current item', provider: () => itemSource },
+    };
+    const confirm = vi.fn();
+    const onClose = vi.fn();
+    const opening = picker.open(window, session, 'notes', { source: itemSource, confirm, onClose });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'match';
+    input.emit('input');
+    const button = session.picker.sourceButton as HTMLButtonElement & EmittingElement;
+    button.emit('click', { detail: 1 } as unknown as Partial<Event>);
+    expect(libraryLoad).not.toHaveBeenCalled();
+    activateSourceButton(picker, window, session);
+    expect(libraryLoad).toHaveBeenCalledOnce();
+    expect(session.picker.provider).toBe(librarySource);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(input.value).toBe('match');
+    input.value = 'match beta';
+    input.emit('input');
+    input.emit('compositionstart');
+    input.value = 'uncommitted';
+    input.emit('input', { isComposing: true } as unknown as Partial<Event>);
+    expect(button.disabled).toBe(true);
+    button.emit('click', { detail: 0 } as unknown as Partial<Event>);
+    expect(itemLoad).toHaveBeenCalledOnce();
+    input.emit('compositionend');
+    expect(button.disabled).toBe(false);
+    activateSourceButton(picker, window, session);
+    expect(itemLoad).toHaveBeenCalledTimes(2);
+    expect(session.picker.provider).toBe(itemSource);
+    refreshed.resolve([target, { id: 'other', title: 'Other', search: 'other' }]);
+    await refreshed.promise;
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['current']);
+    initial.resolve([{ id: 'stale', title: 'Stale Match Beta', search: 'match beta' }]);
+    await opening;
+    broader.reject(new Error('superseded library failure'));
+    await broader.promise.catch(() => undefined);
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['current']);
+    expect(session.picker.operationStatus?.hidden).toBe(true);
+    expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('picker load discarded'));
+    expect(diagnostic).toHaveBeenCalledWith(
+      expect.stringContaining('picker load failure discarded'),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith(target, false);
+    expect(onClose).toHaveBeenCalledOnce();
+    button.emit('click', { detail: 0 } as unknown as Partial<Event>);
+    expect(libraryLoad).toHaveBeenCalledOnce();
+  });
+
+  it('confirms a broader-source candidate with the original callback and blocks switching during save', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    let mouseEnabled = true;
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => mouseEnabled,
+    );
+    const data = deferred<PickerItem[]>();
+    const target: PickerItem = {
+      id: 'library-note',
+      title: 'Broader note',
+      search: 'broader note',
+    };
+    const itemSource: PickerProvider = {
+      ...candidateSource([]),
+      alternateSource: { label: 'Browse library', provider: () => librarySource },
+    };
+    const librarySource: PickerProvider = {
+      ...candidateSource([]),
+      load: () => data.promise,
+      alternateSource: { label: 'Current item', provider: () => itemSource },
+    };
+    const save = deferred<void>();
+    const started = deferred<void>();
+    const confirm = vi.fn((item: PickerItem, inWindow: boolean) => {
+      expect(item).toBe(target);
+      expect(inWindow).toBe(true);
+      started.resolve();
+      return save.promise;
+    });
+    const onClose = vi.fn();
+    await picker.open(window, session, 'notes', { source: itemSource, confirm, onClose });
+    const button = session.picker.sourceButton as HTMLButtonElement & EmittingElement;
+    button.emit('click', { detail: 1, button: 0 } as unknown as Partial<Event>);
+    expect(session.picker.provider).toBe(librarySource);
+    data.resolve([target]);
+    await data.promise;
+    picker.onKeyDown(pickerKey('Enter', session.picker.results, { shift: true }), window, session);
+    const operation = session.picker.queue;
+    await started.promise;
+    expect(button.disabled).toBe(true);
+    mouseEnabled = false;
+    button.emit('click', { detail: 0 } as unknown as Partial<Event>);
+    expect(session.picker.provider).toBe(librarySource);
+    expect(onClose).not.toHaveBeenCalled();
+    save.reject(new Error('write failed'));
+    await operation;
+    expect(session.picker.open).toBe(true);
+    expect(button.disabled).toBe(false);
+    expect(session.picker.operationStatus?.textContent).toContain('write failed');
+    expect(confirm).toHaveBeenCalledOnce();
+    picker.close(session);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('reports a current load failure accessibly without retrying or closing the invocation', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const diagnostic = vi.fn();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const data = deferred<PickerItem[]>();
+    const load = vi.fn(() => data.promise);
+    const source = { ...candidateSource([]), loadingText: 'Loading notes…', load };
+    const onClose = vi.fn();
+    const opening = picker.open(window, session, 'notes', { source, onClose });
+    data.reject(new Error('library unavailable'));
+    await opening;
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.operationStatus?.hidden).toBe(false);
+    expect(session.picker.operationStatus?.textContent).toContain('library unavailable');
+    expect(Reflect.get(session.picker.operationStatus!, 'role')).toBe('status');
+    expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('library unavailable'));
+    expect(load).toHaveBeenCalledOnce();
+    expect(onClose).not.toHaveBeenCalled();
+    picker.close(session);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('keeps ordinary ranking and the 100-candidate cap after an explicit switch', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const items = Array.from({ length: 120 }, (_, index) => ({
+      id: index,
+      title: `A long beta ${index}`,
+      search: `a long beta ${index}`,
+    }));
+    const data = deferred<PickerItem[]>();
+    const library = { ...candidateSource(items), load: () => data.promise };
+    const source = {
+      ...candidateSource([]),
+      alternateSource: { label: 'Browse library', provider: () => library },
+    };
+    await picker.open(window, session, 'notes', { source });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'beta';
+    input.emit('input');
+    activateSourceButton(picker, window, session);
+    data.resolve([...items, { id: 999, title: 'Beta', search: 'beta' }]);
+    await data.promise;
+    expect(session.picker.filtered).toHaveLength(100);
+    expect(session.picker.filtered[0]?.id).toBe(999);
+    expect(session.picker.results?.children).toHaveLength(100);
+    expect(session.picker.sourceButton?.hidden).toBe(true);
+    picker.close(session);
+  });
+});
+
+describe('picker owner boundaries', () => {
+  it('decorates only real rows and preserves boundaries through navigation and pointer selection', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      () => true,
+    );
+    const items: PickerItem[] = [
+      { id: 1, title: 'One', search: 'one', group: '1:10' },
+      { id: 2, title: 'Two', search: 'two', group: '1:10' },
+      { id: 3, title: 'Three', search: 'three', group: '1:20' },
+      { id: 4, title: 'Four', search: 'four' },
+      { id: 5, title: 'Five', search: 'five', group: '1:30' },
+      { id: 6, title: 'Six', search: 'six', group: '2:30' },
+    ];
+    const confirm = vi.fn();
+    await picker.open(window, session, 'notes', { source: candidateSource(items), confirm });
+    const rows = Array.from(session.picker.results!.children) as EmittingElement[];
+    expect(rows).toHaveLength(items.length);
+    expect(rows.map((row) => row.dataset.zvPickerIndex)).toEqual(['0', '1', '2', '3', '4', '5']);
+    expect(rows.map((row) => row.textContent)).toEqual(items.map((item) => item.title));
+    expect(rows.map((row) => row.style.borderTop !== '0')).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+    ]);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(2);
+    expect(session.picker.previewTitle?.textContent).toBe('Three');
+    const boundary = session.picker.results!.children[2] as EmittingElement;
+    const border = boundary.style.borderTop;
+    (session.picker.results!.children[4] as EmittingElement).emit('click');
+    expect(session.picker.selected).toBe(4);
+    expect(boundary.style.borderTop).toBe(border);
+    expect(session.picker.results?.children).toHaveLength(items.length);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.selected).toBe(5);
+    expect(session.picker.previewTitle?.textContent).toBe('Six');
+    (session.picker.results!.children[5] as EmittingElement).emit('dblclick');
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith(items[5], false);
   });
 });

@@ -43,10 +43,22 @@ export interface ReaderJumpLocation {
   readonly position?: ReaderJumpPosition;
 }
 
-export interface ReaderSelectionActionOutcome {
-  readonly title?: string;
-  readonly body: string;
+export type ReaderSelectionActionOutcome =
+  | { readonly title?: string; readonly body: string }
+  | { readonly status: string }
+  | { readonly retired: true };
+
+/** Receipt for a completed native note save, not merely a chosen target. */
+export interface ReaderNoteCaptureReceipt {
+  readonly noteID: number;
+  readonly noteTitle: string;
 }
+
+/** Forced chooser replacement keeps the save outcome but retires Reader status/focus. */
+export type ReaderNoteCaptureResult =
+  | ReaderNoteCaptureReceipt
+  | { readonly retired: true; readonly receipt: ReaderNoteCaptureReceipt | null }
+  | null;
 
 export interface ReaderSelectionActionDefinition {
   readonly id: string;
@@ -90,7 +102,7 @@ export interface ReaderMainOperations {
   captureReaderSelectionToNote(
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
-  ): Promise<boolean>;
+  ): Promise<ReaderNoteCaptureResult>;
 }
 
 export interface ReaderControllerApi extends ReaderSelectionApi {

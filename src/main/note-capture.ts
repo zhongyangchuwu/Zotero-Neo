@@ -26,6 +26,14 @@ export async function appendReaderSelectionToNote(
     throw new Error('Note target belongs to another library');
 
   const fragment = readerSelectionNoteFragment(context);
-  note.setNote(`${note.getNote() ?? ''}${fragment}`);
-  await note.saveTx();
+  const previous = note.getNote() ?? '';
+  const appended = `${previous}${fragment}`;
+  note.setNote(appended);
+  try {
+    await note.saveTx();
+  } catch (error) {
+    // Preserve a concurrent native edit, but do not leave a failed append to duplicate on retry.
+    if (note.getNote() === appended) note.setNote(previous);
+    throw error;
+  }
 }

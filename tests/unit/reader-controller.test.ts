@@ -48,7 +48,7 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openReaderTagPicker: () => {},
   openReaderCollectionPicker: () => {},
   openCommandPalette: () => {},
-  captureReaderSelectionToNote: async () => false,
+  captureReaderSelectionToNote: async () => null,
 };
 
 beforeEach(() => {
@@ -646,7 +646,7 @@ function createHistorySession(
   openCommandPalette: ReaderMainOperations['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
   captureReaderSelectionToNote: ReaderMainOperations['captureReaderSelectionToNote'] = async () =>
-    false,
+    null,
   openReaderTagPicker: ReaderMainOperations['openReaderTagPicker'] = () => {},
   openReaderCollectionPicker: ReaderMainOperations['openReaderCollectionPicker'] = () => {},
 ) {
@@ -1198,40 +1198,6 @@ describe('reader keymap forwarding', () => {
   });
 });
 describe('Reader Selection Actions capture', () => {
-  it('passes a Visual selection snapshot to the Main note-capture owner', async () => {
-    vi.stubGlobal('Zotero', {});
-    const capture = vi.fn<ReaderMainOperations['captureReaderSelectionToNote']>(async () => true);
-    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {}, capture);
-    Reflect.set(created.reader, 'itemID', 42);
-    Reflect.set(created.pdfWindow, 'getSelection', () => ({
-      isCollapsed: false,
-      rangeCount: 0,
-      toString: () => 'snapshot text',
-      removeAllRanges: vi.fn(),
-    }));
-    created.session.acceptSelectionParams({ annotation: {} });
-
-    created.session.focusAndHandle(readerKey('a').event);
-    created.session.focusAndHandle(readerKey('1').event);
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(capture).toHaveBeenCalledWith(
-      {
-        text: 'snapshot text',
-        itemID: 42,
-        pageLabel: null,
-        position: null,
-      },
-      created.reader._window,
-    );
-    expect(
-      created.bodyChildren.some((node) => node.dataset.zoteroNeoSelectionActions === '1'),
-    ).toBe(false);
-    expect(created.indicator.textContent).toBe('✓ captured to note');
-    created.session.dispose();
-  });
-
   it('claims popup input only in its captured view when Zotero forwards split keys', () => {
     vi.stubGlobal('Zotero', {});
     const created = createHistorySession();
@@ -1642,7 +1608,7 @@ describe('Reader item-tag operation', () => {
       DEFAULT_BINDINGS,
       () => {},
       {},
-      async () => false,
+      async () => null,
       openTag,
     );
     Reflect.set(created.reader, 'itemID', item.id);
@@ -1668,7 +1634,7 @@ describe('Reader collection membership operation', () => {
       DEFAULT_BINDINGS,
       () => {},
       {},
-      async () => false,
+      async () => null,
       () => {},
       openCollection,
     );

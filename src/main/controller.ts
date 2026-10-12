@@ -4,6 +4,8 @@ import type {
   MainWindowControllerDependencies,
   MainWindow,
   ReaderSelectionContext,
+  ReaderNoteCaptureReceipt,
+  ReaderNoteCaptureResult,
 } from '../core/contracts';
 import { reportDiagnostic, reportDiagnosticError } from '../core/logging';
 import type {
@@ -54,7 +56,7 @@ import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
-import { mainHost, mainReaderForTab, selectedMainTabID } from './host';
+import { currentMainItem, mainHost, mainItem, mainReaderForTab, selectedMainTabID } from './host';
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
@@ -67,6 +69,7 @@ import { CollectionMembershipActions } from './collection-actions';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
 import { appendReaderSelectionToNote, readerCaptureBaseItem } from './note-capture';
+import { noteOwnerKey } from '../platform/zotero-items';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -473,42 +476,61 @@ export class MainWindowController implements MainWindowControllerApi {
   async captureReaderSelectionToNote(
     context: ReaderSelectionContext,
     ownerWindow: MainWindow | null,
-  ): Promise<boolean> {
+  ): Promise<ReaderNoteCaptureResult> {
     if (!ownerWindow) {
       this.#dependencies.logger.debug('ignored Reader note capture: no owner window');
-      return false;
+      return null;
     }
     const session = this.#sessions.get(ownerWindow);
     if (!session) {
       this.#dependencies.logger.debug('ignored Reader note capture: owner window detached');
-      return false;
+      return null;
     }
     if (session.picker.open) {
       this.#navigation.status(session, '✗ Close the current picker before capturing');
-      return false;
+      return null;
     }
 
     const snapshot: ReaderSelectionContext = Object.freeze({ ...context });
     const base = readerCaptureBaseItem(snapshot);
     if (!base || !Number.isInteger(base.libraryID) || base.libraryID <= 0) {
       this.#navigation.status(session, '✗ Reader item is unavailable');
-      return false;
+      return null;
     }
     const libraryID = base.libraryID;
-    let captured = false;
+    let receipt: ReaderNoteCaptureReceipt | null = null;
+    let saving = false;
+    let closed = false;
+    let retired = false;
 
-    return await new Promise<boolean>((resolve) => {
+    return await new Promise<ReaderNoteCaptureResult>((resolve) => {
+      const settle = (): void => resolve(retired ? { retired: true, receipt } : receipt);
       void this.#picker.open(ownerWindow, session, 'notes', {
         source: createNotesProvider(ownerWindow, this.#dependencies.logger, {
           baseItem: base,
           libraryID,
         }),
-        onClose: () => resolve(captured),
+        // Teardown cannot undo an admitted native save; settle with its actual outcome.
+        onClose: (reason) => {
+          closed = true;
+          retired = reason === 'retire';
+          if (!saving) settle();
+        },
         confirm: async (candidate) => {
-          const note = Zotero.Items.get(Number(candidate.id));
-          if (!note) throw new Error('Note target is unavailable');
-          await appendReaderSelectionToNote(note, snapshot, libraryID);
-          captured = true;
+          saving = true;
+          try {
+            const note = Zotero.Items.get(Number(candidate.id));
+            if (!note) throw new Error('Note target is unavailable');
+            if (noteOwnerKey(note) !== candidate.group)
+              throw new Error('Note source changed. Refresh the Notes source before confirming.');
+            const noteTitle =
+              note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim() || candidate.title;
+            await appendReaderSelectionToNote(note, snapshot, libraryID);
+            receipt = { noteID: note.id, noteTitle };
+          } finally {
+            saving = false;
+            if (closed) settle();
+          }
         },
       });
     });
@@ -1027,7 +1049,18 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
     surface: NavigationSurface = 'main',
   ): void {
+    let baseItem: Zotero.Item | null;
+    if (surface === 'reader') {
+      const tabID = selectedMainTabID(window);
+      const reader = tabID ? mainReaderForTab(tabID) : null;
+      baseItem = reader?.itemID ? (mainItem(reader.itemID) ?? null) : null;
+    } else if (surface === 'note') {
+      baseItem = NOTE_ITEM_TARGET.resolve(window).items[0] ?? null;
+    } else {
+      baseItem = currentMainItem(window) ?? null;
+    }
     void this.#picker.open(window, session, 'notes', {
+      source: createNotesProvider(window, this.#dependencies.logger, { baseItem }),
       confirm: async (item, openInWindow) => {
         const pane = mainHost(window).ZoteroPane;
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
