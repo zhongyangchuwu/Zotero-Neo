@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import type { ItemTargetSet } from '../../src/core/item-target';
-import { resolveItemTargets } from '../../src/main/item-targets';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
@@ -33,7 +31,7 @@ function item(
   } as unknown as Zotero.Item;
 }
 
-function install(items: readonly Zotero.Item[], readerItemID?: number): void {
+function install(items: readonly Zotero.Item[]): void {
   const byID = new Map(items.map((value) => [value.id, value]));
   vi.stubGlobal('Zotero', {
     Items: {
@@ -43,9 +41,6 @@ function install(items: readonly Zotero.Item[], readerItemID?: number): void {
           value.parentItemID ? (byID.get(value.parentItemID) ?? value) : value,
         ),
     },
-    Reader: {
-      getByTabID: () => (readerItemID ? { itemID: readerItemID } : null),
-    },
   });
 }
 
@@ -53,39 +48,7 @@ function session(): MainWindowSession {
   return { selection: new SelectionStore() } as unknown as MainWindowSession;
 }
 
-describe('shared item target resolution', () => {
-  it('exposes exact typed item Target resolvers for Main, Reader, and Note', () => {
-    const main = item(1);
-    const reader = item(2);
-    const note = item(3, { kind: 'note' });
-    install([main, reader, note], reader.id);
-    const s = session();
-    s.selection.add({ libraryID: 1, itemID: main.id });
-    const mainWindow = {
-      ZoteroPane: { itemsView: { rowCount: 0, selection: { focused: 0 } } },
-    } as unknown as MainWindow;
-    const readerWindow = {
-      Zotero_Tabs: { selectedID: 'reader-tab' },
-    } as unknown as MainWindow;
-    const noteWindow = {
-      Zotero_Tabs: {
-        selectedID: 'note-tab',
-        getTabInfo: () => ({ type: 'note', data: { itemID: note.id } }),
-      },
-    } as unknown as MainWindow;
-
-    const mainTarget: ItemTargetSet<'main'> = MAIN_ITEM_TARGET.resolve(mainWindow, s);
-    const readerTarget: ItemTargetSet<'reader'> = READER_ITEM_TARGET.resolve({ itemID: reader.id });
-    const noteTarget: ItemTargetSet<'note'> = NOTE_ITEM_TARGET.resolve(noteWindow);
-
-    expect(MAIN_ITEM_TARGET.source).toBe('main');
-    expect(READER_ITEM_TARGET.source).toBe('reader');
-    expect(NOTE_ITEM_TARGET.source).toBe('note');
-    expect(mainTarget.items.map((value) => value.id)).toEqual([main.id]);
-    expect(readerTarget.items.map((value) => value.id)).toEqual([reader.id]);
-    expect(noteTarget.items.map((value) => value.id)).toEqual([note.id]);
-  });
-
+describe('Surface-owned item target resolution', () => {
   it('uses Main EffectiveSelection and normalizes/deduplicates top-level targets', () => {
     const parent = item(1);
     const child = item(2, { parentItemID: 1, kind: 'attachment' });
@@ -100,7 +63,7 @@ describe('shared item target resolution', () => {
       ZoteroPane: { itemsView: { rowCount: 0, selection: { focused: 0 } } },
     } as unknown as MainWindow;
 
-    expect(resolveItemTargets(window, s, 'main')).toMatchObject({
+    expect(MAIN_ITEM_TARGET.resolve(window, s)).toMatchObject({
       source: 'main',
       items: [{ id: 1 }, { id: 3 }],
       total: 3,
@@ -112,22 +75,20 @@ describe('shared item target resolution', () => {
     const main = item(1);
     const parent = item(2);
     const attachment = item(3, { parentItemID: 2, kind: 'attachment' });
-    install([main, parent, attachment], attachment.id);
+    install([main, parent, attachment]);
 
     const s = session();
     s.selection.add({ libraryID: 1, itemID: main.id });
-    const window = {
-      Zotero_Tabs: { selectedID: 'reader-tab' },
-    } as unknown as MainWindow;
+    const window = {} as MainWindow;
 
-    expect(resolveItemTargets(window, s, 'reader')).toMatchObject({
+    expect(READER_ITEM_TARGET.resolve({ itemID: attachment.id })).toMatchObject({
       source: 'reader',
       items: [{ id: parent.id }],
       total: 1,
       missing: 0,
     });
     expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
-    expect(resolveItemTargets(window, s, 'main')).toMatchObject({
+    expect(MAIN_ITEM_TARGET.resolve(window, s)).toMatchObject({
       source: 'main',
       items: [{ id: main.id }],
       total: 1,
@@ -159,12 +120,12 @@ describe('shared item target resolution', () => {
       },
     } as unknown as MainWindow;
 
-    expect(resolveItemTargets(window, s, 'note')).toMatchObject({
+    expect(NOTE_ITEM_TARGET.resolve(window)).toMatchObject({
       source: 'note',
       items: [{ id: parent.id }],
     });
     expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: tabNote.id }]);
-    expect(resolveItemTargets(window, s, 'main')).toMatchObject({
+    expect(MAIN_ITEM_TARGET.resolve(window, s)).toMatchObject({
       source: 'main',
       items: [{ id: tabNote.id }],
       total: 1,
@@ -172,17 +133,18 @@ describe('shared item target resolution', () => {
   });
 
   it('reports a missing contextual Reader item without falling back to Main', () => {
-    install([], 99);
+    const main = item(1);
+    install([main]);
     const s = session();
-    s.selection.add({ libraryID: 1, itemID: 1 });
-    const window = { Zotero_Tabs: { selectedID: 'reader-tab' } } as unknown as MainWindow;
+    s.selection.add({ libraryID: 1, itemID: main.id });
 
-    expect(resolveItemTargets(window, s, 'reader')).toMatchObject({
+    expect(READER_ITEM_TARGET.resolve({ itemID: 99 })).toMatchObject({
       source: 'reader',
       items: [],
       total: 1,
       missing: 1,
     });
+    expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
   it('reports a missing Note item without borrowing the live Main workset', () => {
     const main = item(1);
@@ -196,7 +158,7 @@ describe('shared item target resolution', () => {
       },
     } as unknown as MainWindow;
 
-    expect(resolveItemTargets(window, s, 'note')).toMatchObject({
+    expect(NOTE_ITEM_TARGET.resolve(window)).toMatchObject({
       source: 'note',
       items: [],
       total: 1,

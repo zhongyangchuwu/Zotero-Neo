@@ -14,6 +14,9 @@ All notable changes to Zotero Neo are documented here.
 
 ### Changed
 
+- Reconcile the current interaction, runtime ownership and contributor guidance after the Surface/Target/Input cleanup and selection-safe Notes revision. Historical workflow inventories no longer define current behavior; source-build instructions distinguish the unreleased candidate from the public v0.1.0 update asset.
+- Remove the unused cross-Surface item-target dispatcher/re-exports and keep behavioral target contracts on the existing Main, Reader and Note resolvers. Persisted-preference migration helpers remain in use and are unchanged.
+
 - Notes and Reader capture now default to the current Item's notes, with an explicit Library source switch that retains the same query and confirmation. Rows show titles only, thin nonselectable boundaries separate Item owners, and Preview reports each note's actual parent or standalone/unavailable source. Human notes containing citation-tool terminology remain visible.
 
 - Reader scan failures now retain native exception stacks, bounded cause chains, failure stages, and cached Reader identities in Debug and the profile log. First failure and recovery are recorded without recurring failure/idle spam; unreadable exceptions and failed logging sinks cannot abort error reporting. Profile logs preserve UTF-8 and close native streams after failed writes. Reader lifecycle/retry policy is unchanged; this is diagnostic hardening, not a fix for an underlying dead-object fault.
