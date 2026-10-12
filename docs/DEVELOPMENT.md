@@ -8,6 +8,9 @@ untested older Zotero majors. The current supported major is Zotero 10.
 GitHub Actions verifies formatting, strict TypeScript, Node contracts, and XPI
 packaging on Ubuntu; it does not prove Zotero GUI behavior. Exercise a changed
 reader, main-window, note, or preferences flow in the current stable Zotero host.
+Physical OS-IME candidate confirmation, composing Escape/Backspace, native
+clipboard, and human Outline paths remain unperformed under #137; CI, contracts,
+and API-driven fault injection do not count as those human acceptance paths.
 
 ## Build
 
@@ -294,6 +297,48 @@ and composing input, and native reservations before invoking it. It resets on
 context/target/binding changes and native handoff; the surface deactivates it on
 focus or pointer transfer and disposes its timers/runtime on close or teardown.
 
+#### Current Surface and runtime ownership
+
+A Surface is distinct from its Zotero host, exact `BindingContext`, and any
+feature input owner. `src/addon.ts` composes Main and Reader controllers and
+passes Reader narrowly named Main-window capabilities. `src/main/window-runtime.ts`
+owns services for the physical MainWindow; one `src/main/session.ts` composes
+that host runtime with Main Surface state and feature runtimes. Its separate
+`src/main/note-runtime.ts` owns Note mode, input, and register state for the
+currently attached editor. `src/main/note-editor.ts` identifies Note interaction
+by editor Window plus Note item ID and rebinds when either changes.
+`src/main/active-surface.ts` derives context-pane Note, selected Note tab,
+selected Reader tab, or Main from Zotero state; the Main controller invokes
+explicit deactivation hooks rather than storing another mutable active-Surface flag.
+
+`src/input/engine.ts` is the pure matcher/reducer. `src/input/runtime.ts`
+(`InputRuntime`) owns pending sequence/count/timer/revision state per input
+owner: Main and Note have separate instances in their Main-window session, and
+each Reader session owns one. `src/ui/key-guide-runtime.ts`
+(`PrefixGuideRuntime`) owns guide presentation and timers, not input state; Main
+and Note share the Main-window guide, while each Reader session owns its guide.
+`src/input/local-binding-runtime.ts` is reused by local controls such as Picker
+and Plugin Manager; the host feature still qualifies input and owns focus/lifecycle.
+
+`src/core/item-target.ts` defines the common `ItemTargetSet` shape;
+`src/platform/zotero-items.ts` supplies Zotero item lookup, Note ownership keys,
+and top-level normalization/deduplication. Surface choice stays in
+`src/main/main-item-target.ts` (Main EffectiveSelection),
+`src/reader/item-target.ts` (Reader item context), and
+`src/main/note-item-target.ts` (active Note context). Consumers use the typed
+Surface resolver directly; no shared compatibility dispatcher/re-export remains.
+Concrete Operations under `src/operations/` implement actions over explicit resolved
+items or IDs. `src/main/tag-actions.ts` and `src/main/collection-actions.ts`
+own chooser/action orchestration; `item-tags.ts` and `item-collections.ts` own
+the mutations.
+
+`src/reader/controller.ts` owns Reader sessions keyed by Zotero `instanceID`.
+Each session composes Reader-local owners, including `ReaderViewLifecycle`,
+`ReaderNavigation`, `ReaderSelectionRange`, `ReaderMarks`, `ReaderNativeSidebar`,
+`ReaderCommentEditor`, `ReaderNativeInput`, `ReaderFlash`, `ReaderLinkHints`, and
+`ReaderSelectionActions`; these feature lifecycles do not become additional
+Reader Surface modes or one generic overlay framework.
+
 `migrateBindingPreferences()` in `src/core/preferences.ts` owns the binding schema
 version (currently 18); `bindings.ts` provides the key/action transformations.
 The schema-18 migration is repeat-safe, writes changed overrides before the
@@ -313,7 +358,8 @@ only candidate loading and presentation; the semantic action that opens the surf
 the confirmation callback and therefore owns the host operation. Command Palette reuses the
 same surface to resolve an `ActionId`. Tag candidate sources may project namespaces,
 create candidates, and action-specific metadata, but they do not mutate item tags or Main
-filter state; those effects belong to `TagActions`.
+filter state. `TagActions` owns candidate/action orchestration; `operations/item-tags.ts`
+performs item mutation, while `MainViewActions` owns Main filter mutation.
 
 The native Reader Outline retains Zotero's rows and hosts bounded Neo caption and Bookmarks groups. `src/reader/native-sidebar.ts` owns reversible compact decoration and group DOM; `src/reader/outline-presentation.ts` derives kinds; `src/reader/caption-targets.ts` owns lazy native caption/heading data and PDF-position projection; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
 
@@ -382,13 +428,16 @@ movement ranks visible pane rectangles in the requested half-plane, prefers cand
 aligned on the movement axis, and never wraps. A directional key is prevented only
 after a target is found.
 
-`src/main/picker/` is a shared candidate resolver, not a domain-operation layer.
-For ordinary item, current-collection, tab, and note choices, providers supply rows and preview
-metadata only. The opening semantic action supplies `PickerOpenOptions.confirm`; Enter or an enabled
-double-click admits one candidate ID and revalidates it against the same source before invoking that
-callback. Confirmation is single-flight while Preview may still move; failed confirmation names the
-admitted target in an accessible status. Successful confirmation closes the surface. A semantic action
-may intentionally request close-before-confirm, as Command Palette does when it opens another chooser.
+`src/main/picker/` is the shared candidate search/list/preview surface, not a
+domain-operation layer. Ordinary providers supply candidate data and presentation;
+the opening semantic action supplies `PickerOpenOptions.confirm`. Confirmation
+admission synchronously captures candidate ID/title, provider callback, picker
+generation, and source revision before queueing. It is single-flight; before the
+callback runs, the shell rechecks the same generation/source/provider and admitted
+candidate, so Preview movement cannot retarget the operation. Failures expose an
+accessible error naming the admitted target. Successful confirmation closes the
+surface; an action may intentionally request close-before-confirm, as Command
+Palette does when opening another chooser.
 
 Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` adapter, backed by
 the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the runtime IIFE; no
@@ -414,28 +463,37 @@ execution.
 
 Bibliographic candidate previews remain bounded and synchronous: title, creator, year, and citation-key metadata plus attachment and child-note counts and up to six safely accessible filenames/titles. The chooser does not render PDF pages. A Picker cover preview is separate future work and should be selected-attachment, asynchronous work. Zotero's live Reader has a thumbnail data-URL cache/`ReaderPreview` path, but that is not a ready-made closed-file image API; this change adds no Picker cover-preview service.
 
-Notes default to the captured current Item's child IDs (or a standalone Note context), without
-searching or parsing the whole Library; missing/empty context never silently expands scope. Explicit
-Library browsing uses Zotero Search and retains the same context, query and confirmation. Candidates
-search normalized title and HTML-stripped body from `getNote()`. Empty-query Library groups use stable
-Library/parent IDs with current ownership first; fuzzy-query relevance remains authoritative. Rows show
-titles only and Preview resolves each actual parent independently, including honest standalone and
-unavailable-source labels. Citation-related text is not grounds for hiding a human note. Note
-create/trash/restore remain outside the chooser contract.
+Notes default to the frozen invoking Item's child IDs (or the standalone Note
+itself); a missing Item or zero child Notes stays honestly empty, with no Library
+fallback. The explicit same-invocation Library switch uses Zotero Search and
+preserves the original context, committed query, and confirmation callback.
+Candidates search normalized title and HTML-stripped body from `getNote()`.
+Library grouping uses stable library/owner IDs; current ownership is preferred
+where ordering allows, while fuzzy-query relevance remains authoritative. Candidate
+rows show titles only; owner boundaries are nonselectable decorations. Preview
+resolves the selected Note's actual parent independently and preserves body
+paragraph boundaries, including honest standalone and unavailable-source labels.
+Citation-related text is not grounds for hiding a human Note. Note create,
+trash, and restore remain outside the chooser contract.
 
-Main returns a `ReaderNoteCaptureReceipt` only after native save succeeds. Closing during forced
-teardown waits for that admitted save's actual outcome, not a false cancellation. A forced chooser
-replacement returns a retired result retaining that receipt/null and suppressing Reader status and
-focus. Failed appends restore only unchanged in-memory content, never a concurrent native edit.
-Preview and confirmation share `noteOwnerKey`; reparenting requires a refreshed source before writing.
-Reader converts a current receipt to target-named status only after its generation/view guard.
+Main freezes the Reader's DOM-free `ReaderSelectionContext` before opening the
+Notes chooser, which confirms an existing Note in the captured library. It checks
+that the target's `noteOwnerKey` still matches the admitted source before calling
+the append/save primitive; a reparented Note must be refreshed before mutation.
+A `ReaderNoteCaptureReceipt` with the saved note ID and title is returned only
+after native save succeeds. Forced
+chooser replacement waits for the admitted save's actual outcome and returns a
+retired result carrying its receipt or null, suppressing stale Reader status and
+focus without undoing a completed save. Failed appends restore only unchanged
+in-memory content, never a concurrent native edit. Reader shows receipt status
+only while its captured action generation and PDF view remain current.
 
 Tag candidate sources follow the same chooser contract as ordinary object sources. They may
 project virtual namespaces, explicit create candidates, and action-specific metadata, but they do
-not mutate item tags or Main filter state. `TagActions` owns tag candidate resolution and
-persistent `ta/tr` item mutation. `MainViewActions` owns Main View mutation for Quick Search,
-Advanced Search, and the tag-filter application behind `tf/tc`. These remain distinct from
-persistent data mutation even when they reuse tag candidate-search primitives.
+not mutate item tags or Main filter state. `src/main/tag-actions.ts` owns tag candidate/action
+orchestration and passes explicit targets to `src/operations/item-tags.ts` for persistent item
+mutation. `MainViewActions` owns Main View mutation for Quick Search, Advanced Search, and the
+tag-filter application behind `tf/tc`; these remain distinct from persistent data mutation.
 
 ## Reader Flash visible-text targeting
 

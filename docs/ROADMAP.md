@@ -1,9 +1,9 @@
 # Roadmap
 
 Zotero Neo is an independent project. The first public release, **v0.1.0**, was
-published on 2026-09-19. Shipped behavior is documented in the
-[user guide](USER_GUIDE.md); current bugs and host/API limitations are tracked
-in GitHub Issues.
+published on 2026-09-19. The [user guide](USER_GUIDE.md) describes current source;
+the [changelog](../CHANGELOG.md) separates unreleased work from published behavior.
+Current bugs and host/API limitations are tracked in GitHub Issues.
 
 ## v0.1.0
 
@@ -69,6 +69,14 @@ Disposable-data acceptance covered preserved HTML, immutable text/page snapshots
 child and other same-library notes, stale-target refusal, wrong-library exclusion,
 cancel/no mutation, Reader focus return, and the separate annotation-comment action.
 
+The owner-approved selection-safe Notes revision is implemented in
+[#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140), not yet merged or
+published. Notes default to the frozen current Item, with an honest empty state
+and explicit Library browsing. Confirmation fixes the Note ID before async work;
+source/owner changes reject stale targets, and only the actual native save produces
+a receipt. Current-candidate contracts and isolated Zotero package/UI proofs are
+recorded in [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138).
+
 Destructive-target safety is host-accepted and
 [#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88) is complete.
 Real confirmation messages and native buttons proved Cursor, persistent Selection,
@@ -104,9 +112,9 @@ archive. Other contexts and disabled `i` native-input intent are preserved.
 ## Next
 
 Do not repeat completed Reader overlay/input reviews or reopen accepted keys,
-comment semantics, navigation history or the native-sidebar layout. Phase 9.3
-still has a distinct physical-input/package acceptance boundary, not a mandate
-for another broad refactor.
+comment semantics, navigation history, the native-sidebar layout, or the implemented
+Notes choice workflow. Phase 9.3 still has a distinct physical-input/package
+acceptance boundary, not a mandate for another broad refactor.
 
 1. **Finish current-package acceptance** in
    [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
@@ -115,22 +123,22 @@ for another broad refactor.
    editable/clipboard outcomes and exact split-view ownership. Refresh the old
    acceptance package rather than treating historical DOM composition as human
    PASS. A concrete failure gets its own bounded defect; no speculative rewrite.
-2. **Implement the approved existing-note choice workflow** in
-   [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138), under #98 Phase 9.4.
-   The owner selected current-Item-only Notes by default, explicit Library browsing,
-   actual-parent Preview and title-only rows with nonselectable Item boundaries.
-   First protect admitted confirmation identity, repeated confirmation, failed save
-   and late receipts; retain immutable Reader snapshots and Main-owned same-library
-   note mutation. Creation and source/backlink expansion are deferred, not implied
-   by empty-state handling. Record current-candidate host evidence; #137's physical
-   input criteria stay distinct and unperformed scenarios must not become PASS.
-3. **Reconcile Phase 10 documentation and release readiness** under #98.
-   Review current ownership/interaction guidance against accepted source and mark
-   obsolete issue instructions as historical without deleting useful evidence.
-   Remove code only when a verified replacement makes it obsolete, not to chase
-   an abstract cleanup goal. Prepare another release only after its acceptance,
-   package/update-feed/version and installation gates below are satisfied; release
-   publication still needs explicit authorization.
+2. **Review and integrate the approved existing-note choice workflow** in
+   [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140), owned by
+   [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) under #98 Phase 9.4.
+   Current-Item scope, explicit Library browsing, actual-parent Preview, title-only
+   rows and nonselectable owner boundaries are implemented. Confirmation identity,
+   single-flight save, failed-save rollback and late receipt/focus fencing have
+   contract and native API evidence. Do not rebuild them or infer creation/backlinks.
+   Merge still requires authorization; refresh acceptance only when the candidate
+   changes, and keep #137's unperformed physical-input criteria separate.
+3. **Complete Phase 10 documentation reconciliation and release gates** under #98.
+   Current interaction, architecture, development and contributor guidance describe
+   the implemented owners; historical inventories are not current instructions.
+   Preference decoders remain because packaged upgrades still consume them; an old
+   persisted name is not a live runtime alias. Remove a helper only after its actual
+   consumers are retired, not for an abstract cleanup goal. Release preparation
+   remains gated below; publication still needs explicit authorization.
 
 PDF cover preview, Note Vim expansion, macros/Ex commands and generic Manager or
 provider frameworks remain outside this selected sequence. A new workflow should
@@ -148,7 +156,13 @@ compatibility path until that external prerequisite exists.
 ## Release gate
 
 The published release and manifest/package/update-feed versions remain v0.1.0;
-the current v0.2 source work is not a published release. Before another release:
+the current v0.2 source work is not a published release.
+
+Passing the v0.1.0 metadata validator proves the existing baseline, not readiness
+for v0.2: the public update feed still points to the old published asset, while
+source builds retain the same version until a new release is explicitly prepared.
+
+Before another release:
 
 - complete the selected current-host acceptance and integration gates;
 - verify packaged install/update behavior separately from RDP temporary loading,

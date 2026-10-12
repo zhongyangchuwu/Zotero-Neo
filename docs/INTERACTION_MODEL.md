@@ -1,13 +1,20 @@
-# Library Interaction Model (v0.2)
+# Library Interaction Model
 
-This document records the v0.2 Library interaction contract developed under
-issue #55, now closed as historical substrate. Current architecture decisions
-and any superseding interaction rules are owned by issue #98; navigation details
-are specified in [the command reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist).
+This document is the current source-oriented interaction contract for the Library
+and its related Main, Reader, and Note Surfaces. It preserves the useful Library
+substrate from issue #55 while reconciling it to the implementation tracked by
+issue #98. Conflicting proposal language in #55 and later historical notes is
+not current behavior.
 
-The goal is not to reproduce Vim or Yazi mechanically. Neo should expose a
-keyboard-first model that fits Zotero's actual host behavior while keeping
-navigation, selection, filtering, and object actions predictable.
+This document describes current source, not the shipped v0.1.0 contract. The
+[Changelog](../CHANGELOG.md) separates unreleased work from published behavior;
+the [Roadmap](ROADMAP.md) records integration and release gates. Source contracts
+do not imply complete human acceptance. Exact action defaults and key grammars
+are in the [Command Reference](COMMAND_REFERENCE.md).
+
+The goal is not to reproduce Vim or Yazi mechanically. Neo fits Zotero's host
+behavior while keeping navigation, selection, filtering, and object actions
+predictable.
 
 ## Core model
 
@@ -31,17 +38,14 @@ These concepts are related but must not be conflated.
 
 ### View
 
-A View is the native Zotero result set and ordering produced by:
+A View is Zotero's native result set and ordering within the current native
+Scope. Zotero owns the item tree, native search/filter/sort state, and the
+underlying Item data. Neo invokes those host mechanisms rather than maintaining a
+parallel query AST or duplicate library state.
 
-- one or more library / collection / saved-search scopes;
-- Quick Search;
-- tag predicates;
-- Advanced Search;
-- result-level options;
-- sort order.
-
-Neo should adapt these native mechanisms rather than introduce a parallel query
-AST unless a future workflow demonstrates a concrete need.
+The View can be affected by Quick Search, tag predicates, Advanced Search,
+result-level options, and sort order. Scope is a separate native collection-tree
+selection; see **Scope** below.
 
 Changing a View may make previously selected items invisible. It must not, by
 itself, redefine Neo's persistent Selection.
@@ -92,16 +96,14 @@ Zotero's native item TreeSelection may also temporarily contain multiple visible
 items from host gestures such as `Ctrl+A` or pointer selection. That native
 selection is an immediate CurrentTarget, not a persistent Neo workset.
 
-A minimal ambient indicator should eventually make this distinction visible,
-for example:
-
-```text
-Selection 7 · 3 visible
-```
+Main displays a persistent Selection badge with its total and visible count,
+adding the hidden count when nonzero. Visible row decorations are a projection
+for host/UI compatibility; the Main-owned Selection identities remain the
+complete source of truth.
 
 ### EffectiveSelection
 
-Object actions that are defined as workset actions use:
+Main workset-style Operations resolve this target as:
 
 ```text
 EffectiveSelection =
@@ -123,30 +125,27 @@ action-specific; see **Action target contracts** below.
 
 ### VisualTarget
 
-Visual is a transient contiguous range-shaped Cursor.
-
-It is not persistent Selection and it is not a generic "Target Edit" mode.
-
-```text
-Normal Cursor -> v -> VisualTarget(anchor, head)
-```
+Visual is a transient, contiguous range-shaped Main Cursor. Entering Visual
+starts an anchor/head range; exact key sequences are specified in the Command
+Reference.
 
 While Visual is active:
 
-- motion changes `head`;
-- grow and shrink are both reversible;
-- `o` may swap anchor/head;
-- Selection is unchanged until an explicit selection operation commits the
+- motion changes the range head;
+- extending and shrinking are reversible;
+- endpoint swap exchanges anchor and head;
+- Selection is unchanged until an explicit Selection operation commits the
   range;
 - cancel discards the transient range without modifying Selection.
 
-Visual must track stable item identities where needed. It must not implement
-editable range semantics by repeatedly unioning native `shiftSelect(...,
-augment=true)`, because shrinking such a range leaves the old tail selected.
+Visual tracks stable item identities where needed. It does not implement an
+editable range by repeatedly unioning native `shiftSelect(..., augment=true)`,
+because shrinking such a range leaves the old tail selected.
 
 ## Selection operations
 
-Selection operations act on the current CurrentTarget:
+Selection operations act on CurrentTarget, not on an implied persistent-set
+mode:
 
 ```text
 Normal + native multi-set -> CurrentTarget = native selected items
@@ -154,9 +153,7 @@ Normal otherwise          -> CurrentTarget = { cursor item }
 Visual                     -> CurrentTarget = contiguous visual range
 ```
 
-The initial high-frequency operation is Toggle Selection.
-
-For a target set `T`:
+Toggle Selection applies an all-or-none rule to its target set `T`:
 
 ```text
 if T is entirely contained in Selection:
@@ -165,32 +162,10 @@ else:
     Selection = Selection union T
 ```
 
-This all-or-none rule treats a Visual range as one target. It intentionally does
-not use symmetric difference, which would create surprising holes when only
-part of a range was already selected.
-
-### Normal target toggle
-
-The default persistent-set interaction accepts the current transient target:
-
-```text
-native multi-set present -> s toggles that whole target in Selection
-otherwise                -> s toggles Cursor item in Selection
-                            then moves Cursor down
-```
-
-This makes native gestures such as `Ctrl+A` composable with Neo. The all-or-none
-rule applies to the whole native target. After a successful Normal toggle, the
-transient native multi-selection may collapse to the new Cursor anchor while the
-persistent Selection remains visible through Neo markers/status.
-
-### Visual toggle
-
-In Visual:
-
-```text
-s -> apply Toggle Selection to VisualTarget -> return to Normal
-```
+This treats a Visual range as one target and avoids surprising holes from a
+symmetric difference. In Normal, Toggle Selection acts on CurrentTarget; in
+Visual, an explicit commit applies it to VisualTarget and returns to Normal.
+The exact bindings remain in the Command Reference.
 
 Visual commit does not require a second independent "finish selection mode"
 concept.
@@ -204,9 +179,9 @@ compatibility artifact. Its owner accepts Visual range-editing actions while
 Main's Visual state is active. Selection remains a distinct interaction workset;
 the binding context does not define or persist Selection.
 
-Do not reintroduce a generic mode whose purpose is "editing the selected set".
-Toggle/add/remove operations should instead operate on the target represented by
-Cursor or Visual.
+Persistent Selection itself has no mode. Main selection Operations act on
+CurrentTarget or VisualTarget as specified above; no mode edits the stored
+workset independently of those targets.
 
 ## Local find versus filter
 
@@ -222,9 +197,9 @@ Local find:
 - does not fall back to a global item chooser;
 - does not clear filters when no match is found.
 
-`/` opens local find and confirmed `n/N` repeat the committed query in the current
-View. This key grammar is current; confirmed `n/N` Cursor jumps are recorded in
-navigation history.
+Local Find opens through its Main Normal binding and confirmed repeat action in
+the current View; exact keys are in the Command Reference. Confirmed result jumps
+are recorded in navigation history.
 
 ### Filter
 
@@ -233,76 +208,80 @@ Quick Search, Advanced Search, and tag predicates mutate View.
 They may change which Selection members are visible but must not silently mutate
 the complete Selection workset.
 
-Tag actions such as `tf/tc` remain convenience operations over tag predicates;
-they are not the complete filter model.
+Tag-filter actions operate on Zotero's native tag predicates; they are not the
+complete filter model.
 
-## Scope
+The collection/library tree is Zotero's native Scope layer. It may contain
+multiple selected library, collection, or saved-search rows (`ScopeSet`); Neo
+observes that host state rather than creating a second collection workset.
 
-The collection/library tree is a separate Scope layer.
-
-Zotero can represent multiple selected collection/saved-search/library rows.
-Neo may continue to observe that native capability as `ScopeSet`, but item
-Selection and ScopeSet remain distinct concepts. Neo does not currently assign
-`s` a ScopeSet mutation grammar; collection-tree `s` is left to Zotero native
-behavior.
-
-Do not create a collection-selection mode merely for symmetry with item
-selection.
+Item `Selection` and ScopeSet remain distinct. Collection-tree input remains
+native to Zotero; Neo has no ScopeSet mutation grammar or collection-selection
+mode. Neo may snapshot native Scope IDs for navigation restoration, but Zotero
+remains authoritative for their membership and meaning.
 
 ## Action target contracts
 
-Neo distinguishes **item actions** from View/local-surface actions.
+Neo resolves item targets per Surface; a shared Operation does not imply a
+shared target resolver. Main View actions and Reader-local PDF actions do not
+use an item target.
 
-Item actions share one contextual item-target resolver:
+- **MainItemTarget**: persistent Main Selection when nonempty; otherwise
+  CurrentTarget (Main Visual range, native item multi-selection, or Cursor, in
+  that order). This is the target for ordinary Main item Operations.
+- **ReaderItemTarget**: the active Reader item's context, normalized through
+  Zotero's top-level item rules when an Operation needs a bibliographic item.
+- **NoteItemTarget**: the active context-pane Note, or selected standalone Note
+  tab, normalized to its bibliographic parent when present.
 
-- Main -> EffectiveSelection (persistent Selection, otherwise CurrentTarget: Visual, native multi-selection, or Cursor);
-- Reader -> the active Reader item, normalized to its parent bibliographic item when present;
-- Note -> the active note-context item, with the same parent normalization.
+Reader and Note targets are contextual and never borrow Main Selection. The
+Surface resolver supplies the target; each Operation still owns cardinality,
+normalization, mutation safety, and preflight. There is no universal Target
+resolver for every command and no silent Cursor fallback when a resolved target
+is unavailable or has unsupported cardinality.
 
-The semantic action still owns cardinality, mutation safety, and any additional
-preflight. Main View actions and Reader-local PDF actions do not use this item
-resolver.
-
-There is intentionally no universal Target resolver for every command.
-
-Each semantic action must document:
-
-- owning surface/state;
-- target kind;
-- whether it changes View, Cursor, Selection, or Zotero data;
-- behavior when Selection is non-empty;
-- cardinality requirements;
-- cancellation/restoration semantics;
-- unavailable-target behavior.
-
-Initial target policy:
+Current action-target policy:
 
 | Action family | Target contract |
 | --- | --- |
-| `j/k/gg/G`, local find | Cursor only |
-| Main `o` / Enter | one Main Cursor item regardless of persistent Selection or native multi-set |
-| Note `o` | the Note-context item normalized to its bibliographic parent when present |
-| Show in Library | Reader/Note uses that Surface's contextual item, normalized to its parent; Selection Panel reveals the explicitly selected member |
-| Add/Remove Tag | shared contextual item target; Main may be batch, Reader/Note contextual single target |
-| Trash/restore batch operations | Trash uses Main EffectiveSelection with target/count confirmation and hidden-member refusal; restore uses Neo's last Trash batch |
-| Reader annotation deletion | one selected Reader annotation; explicit permanent-delete confirmation |
-| Add/remove collection membership | shared contextual item target; Main batch or Reader contextual item |
-| Visual selection operation | VisualTarget -> Selection |
-| Quick/Advanced/tag filtering, sort | View only |
-| citekey/citation copy | shared contextual item target; Main supports batches, Reader/Note remain contextual single-target |
+| Cursor motion and local find | Cursor only |
+| Main Open/Activate in Items | Main Cursor only, regardless of persistent Selection or native multi-selection; missing Cursor fails closed. Items-pane Enter has the same rule; collection-pane Enter selects its native Scope cursor and moves focus to Items. |
+| Note Open | Note-context item, normalized to its bibliographic parent when present; never Main Selection. |
+| Reader Open | No default Reader Open action; the historical Reader `o` binding is retired. |
+| Show in Library | Reader/Note uses that Surface's contextual item; Selection Panel Reveal uses the exact ItemRef selected there. |
+| Add/Remove Tag | Main uses MainItemTarget; Reader/Note use their contextual single-item targets. |
+| Trash / restore | Trash uses MainItemTarget with target/count confirmation and hidden-member refusal; restore uses Neo's last Trash batch. |
+| Reader annotation deletion | One selected Reader annotation; explicit permanent-delete confirmation. |
+| Collection membership | Main may batch; Reader uses its contextual item; Note collection actions are unsupported. |
+| Visual selection operation | VisualTarget mutates Main Selection; it is not an ordinary Main item Operation. |
+| Quick/Advanced/tag filtering and sort | View only; these do not mutate Main Selection. |
+| Citekey copy | Main may batch through MainItemTarget; Reader/Note remain contextual single-target. |
 
-Open/Activate is the intentional single-item inspection exception to ordinary
-Main item Operations: persistent Selection and native multi-selection do not
-replace Cursor. If Cursor cannot resolve, fail closed; never open the first
-host-selected item. Note opens its own context target and never borrows Main
-Selection.
+Main Open/Activate is the accepted Cursor-only exception to ordinary Main item
+Operations: persistent Selection and native multi-selection do not replace
+Cursor. If Cursor cannot resolve, fail closed; never open the first host-selected
+item. Note Open uses its own context target. This is not a batch-open contract.
 
 Action-specific normalization remains important. For example, tagging an
-attachment may intentionally normalize to its parent while deleting an
-attachment must not silently do so.
+attachment may intentionally normalize to its parent while an action that
+deletes that attachment must not silently do so.
 
 Code patterns such as `getSelectedItems()[0]` are not a valid implicit target
 contract once Cursor can be detached from Selection.
+
+### Main batch-operation details
+
+Main citekey copy uses MainItemTarget, normalizes through Zotero's
+`Items.keepTopLevel()`, deduplicates, and fails closed for stale or partially
+missing citekeys; the resulting raw Better BibTeX keys are space-separated.
+Reader and Note copy remain contextual single-target Operations.
+
+Main collection membership also uses MainItemTarget and supports a batch only
+within one library. Its chooser resolves one collection but does not own the
+mutation. Confirmation rechecks the item-target signature before applying the
+batch; existing no-op memberships are skipped and Neo Selection is unchanged.
+Reader membership is contextual single-target; Note collection actions are not
+supported.
 
 ## Hidden Selection safety
 
@@ -310,9 +289,9 @@ A persistent workset introduces hidden targets by design.
 
 High-impact mutations expose their actual resolved target before changing Zotero data:
 
-- Main Trash refuses missing targets and persistent Neo Selection members hidden by the current View. Its status reports hidden/total counts and points to `<Space>ss` Selection Panel for inspection, reveal, or removal.
-- Visible Main Trash targets require a confirmation naming Neo Selection, Visual range, Zotero native multi-selection, or Cursor and the item count. Cancel changes neither Zotero data, Selection, nor Trash history; completion feedback repeats the resolved target and count.
-- Reader `dd` confirms deletion of exactly one selected Reader annotation and states that it is permanent. Cancel preserves the annotation selection; Neo clears it only after Zotero deletion succeeds.
+- Main Trash refuses missing targets and persistent Neo Selection members hidden by the current View. Its status reports hidden/total counts and directs users to the Selection Panel for inspection, reveal, or removal.
+- Visible Main Trash targets require confirmation naming Neo Selection, Visual range, Zotero native multi-selection, or Cursor and the item count. Cancel changes neither Zotero data, Selection, nor Trash history; completion feedback repeats the resolved target and count.
+- Reader annotation deletion confirms exactly one selected annotation and states that deletion is permanent. Cancel preserves the annotation selection; Neo clears it only after Zotero deletion succeeds.
 
 A Selection Panel is an inspector/manager for the workset:
 
@@ -326,27 +305,41 @@ It is not an operation console.
 
 ## Knowledge capture
 
-Reader text capture is a cross-surface workflow but not a cross-surface target
-ambiguity. Reader owns the transient Visual selection and passes a DOM-free
-`ReaderSelectionContext` snapshot to Main. Main owns the persistent Notes
-picker and note mutation.
+Reader owns the transient Visual text selection and passes a DOM-free
+`ReaderSelectionContext` (`text`, Reader `itemID`, page label, and position) to
+Main. Main freezes the invocation snapshot, opens the existing-note picker, and
+owns confirmation and Zotero note mutation. Capture does not create a Note or
+add a Reader backlink; annotation-comment creation remains a separate action.
 
-The initial capture contract is:
+The Notes picker starts in **Current item** scope. For Reader capture, the Reader
+attachment is resolved to its bibliographic parent before choosing notes and
+before fixing the library scope. This scope lists only notes on that item; it
+does not silently fall back to the library. If there is no current item, the
+picker honestly reports that state and stays empty. **Browse library** explicitly
+switches this same invocation to notes in that library; the source can be
+switched back to Current item without reopening the picker.
 
-- snapshot selected text, Reader item identity, page label, and position before
-  opening any chooser;
-- resolve the Reader attachment to its bibliographic parent for note ranking and
-  library scope;
-- list existing notes from only that library, with current-item child notes
-  first;
-- re-resolve and validate the chosen note before mutation;
-- append through Zotero-native `getNote()/setNote()/saveTx()`;
-- keep annotation-comment creation (`Add note`) separate from persistent
-  Zotero-note capture (`Capture to note`);
-- cancellation or target invalidation performs no mutation.
+In Library scope, notes are grouped by their actual parent item (or as standalone
+notes); the current item's owner group ranks first, then groups and notes follow
+their modification order. Result rows contain only note titles. A group boundary
+is a non-selectable visual separator, not a candidate row. Preview names the
+actual parent (or standalone/unavailable owner) and preserves paragraph breaks
+in the note text.
 
-Picker remains a target resolver. It does not own note creation, append
-semantics, or Reader selection state.
+Confirmation synchronously binds the chosen note ID, source revision, and picker
+generation, then admits one confirmation at a time. Before mutation, Main
+re-resolves that ID and checks the note's actual owner and library; a reparented
+or changed target is refused before appending. Capture appends to the existing
+note through Zotero-native `getNote()/setNote()/saveTx()` and never creates one.
+Visible errors name the chosen note; success returns a receipt naming the note.
+If the picker is forcibly replaced after a save is admitted, the save's actual
+outcome is retained, but the retired Reader invocation does not reclaim status
+or focus in the replacement context.
+
+The picker resolves a target; it does not own note creation, append semantics,
+or Reader selection state. Cancellation before admission performs no mutation;
+invalidated targets reject before append. Closing after native save admission
+cannot undo that operation.
 
 ## Show in Library
 
@@ -364,34 +357,45 @@ Main Selection.
 ## Navigation jump history
 
 Each Main window owns one stack-style ordered list of at most 100 locations and
-a current position. Canonical actions are `navigateBack` and
-`navigateForward`, defaulted to `<C-o>` and `<C-i>` in Main, Reader, and Note
-Normal. Shortcut counts traverse multiple locations; Command Palette invocation
-is uncounted. Back/Forward never record themselves. Before traversal, Neo
-refreshes the departing location when its contextual identity still matches, so
-ordinary movement since the last recorded jump is preserved. A new qualifying
-jump after Back truncates the forward suffix (`A → B → C`, Back, then `D` gives
-`A → B → D`). Empty boundaries are safe no-ops. Disposing a Main window discards
-its history; no session persistence is added.
+a current position. The canonical actions are `navigateBack` and
+`navigateForward`, shared by Main, Reader, and Note Normal; see the
+[Command Reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist) for
+their exact bindings. Counts traverse multiple locations; Command Palette
+invocation is uncounted. Back/Forward never record themselves. Before traversal,
+Neo refreshes the departing location when its contextual identity still matches,
+so ordinary movement since the last recorded jump is preserved. A new
+qualifying jump after Back truncates the forward suffix (`A → B → C`, Back, then
+`D` gives `A → B → D`). Empty boundaries are safe no-ops. Disposing a Main
+window discards its history; no session persistence is added.
+
+The former `returnBookmark` / `mainReturnContext` and default `gr` return workflow
+are historical, not current navigation behavior. The accepted model is shared
+stack-style Back/Forward; Show in Library remains separate and unbound.
 
 Record completed explicit jumps:
 
-- Main `gg`/`G` in Items and confirmed local-find `n`/`N`;
-- explicit Main Open and successful all-library, collection-scoped, or note item
+- Main first/last-Cursor jumps in Items and confirmed local-find result jumps;
+- explicit Main Open and successful all-library, collection-scoped, or Note
   picker confirmation;
 - successful Reader/Note Show in Library and Selection Panel Reveal;
-- Neo `H`/`L` tab switches and open-tab picker confirmation;
-- Reader PDF page destinations (`gg`/`G`, including counted page jumps), marks, annotation navigation, internal/citation links, native search-result navigation, and Zotero-native Outline destinations.
+- successful Neo tab switches and open-tab picker confirmation;
+- Reader explicit page destinations, marks, annotation navigation,
+  internal/citation links, native search-result navigation, and Zotero-native
+  Outline destinations.
 
-Reader page, annotation, internal/citation link, and search destinations enter the shared list only when producer-bound completion supplies a native-hard receipt matching the exact current view and settled geometry. Zotero-native Outline navigation follows native immediate controls and uses the existing `reader-native.hard` observation; there is no Neo select-then-confirm step or dedicated Outline confirmation event. A raw non-transient history save is not an independent recording entrance. Marks instead record one managed final destination. `H`/`L`
-ignore numeric counts and cycle once through Zotero's open tabs, including Library;
-the current host and fallback wrap at the ends. Opening, browsing, or cancelling
-the tab chooser does not record. Confirming the current tab is a no-op and preserves
-an existing forward suffix.
+Reader page, annotation, internal/citation-link, and search destinations enter
+the shared list only when producer-bound completion supplies a native-hard
+receipt matching the exact current view and settled geometry. Zotero-native
+Outline navigation follows native immediate controls and uses the existing
+`reader-native.hard` observation; there is no Neo select-then-confirm step or
+dedicated Outline confirmation event. A raw non-transient history save is not
+an independent recording entrance. Marks instead record one managed final
+destination. Tab switching and chooser confirmation follow the explicit
+completion policy in the Command Reference.
 
-Do not record continuous Main `j`/`k`, ordinary Reader scrolling or adjacent
-page turns, native tab clicks, or manual collection/filter edits. Failed or
-no-op operations do not create locations.
+Do not record continuous Main Cursor motion, ordinary Reader scrolling or
+adjacent page turns, native tab clicks, or manual collection/filter edits.
+Failed or no-op operations do not create locations.
 
 Locations are DOM-free. Reader entries retain library/item identity, a tabID
 lookup hint, and optional primary/secondary PDF page index and top/left
@@ -433,212 +437,130 @@ same readable attachment remains available.
 
 ## Keymap direction
 
+This section defines ownership, not a second shortcut inventory. Main, Reader,
+and Note are interaction Surfaces; a Surface mode changes that Surface's
+interaction grammar. The implemented modes are:
+
+| Surface | Modes |
+| --- | --- |
+| Main | Normal, Visual |
+| Reader | Normal, Visual |
+| Note | Normal, Insert |
+
 ### Main
 
-The v0.2 Main grammar is:
+Main Visual is owned by one transient range in `MainItemSelect`. Main's active
+mode is derived from whether that range exists; `main-select` is its exact
+binding context, not a second Visual state store. Persistent Selection remains
+independent and Main-owned. Visual motion changes only the range; explicit
+commit changes Selection, while cancel or deactivation leaves it unchanged.
 
-```text
-Space       command namespace / leader
-s           item list: toggle CurrentTarget in Selection; collection tree: native Zotero behavior
-j/k         move Cursor
-<num>j/k    relative Cursor jump
-gg/G        first/last Cursor
-/ n N       local find/repeat without changing View
-v           enter Visual
-Visual j/k  move Visual head
-Visual o    swap endpoints
-Visual s    commit Toggle Selection and exit
-Visual Esc/v cancel Visual and exit
-```
+### Exact binding contexts
 
-The same Space-led semantic groups are used across Main, Reader, and Note where
-the action exists. Main keeps navigation and activation direct: local find,
-motions, pane/tree navigation, `o`, `H/L`, and `:` do not require the leader.
+The binding engine has exactly 14 `BindingContext` values. Six are the Surface
+mode contexts: `main-normal`, `main-select`, `reader-normal`, `reader-select`,
+`note-normal`, and `note-insert`. The other eight are focused feature/list
+contexts, not more Surface modes. The full inventory and capabilities stay in
+the [Command Reference](COMMAND_REFERENCE.md#modes-focus-and-capabilities).
 
-Back/Forward are part of direct navigation: `<C-o>` and `<C-i>` invoke the
-canonical `navigateBack` / `navigateForward` actions in Main, Reader, and Note
-Normal. Shortcut counts are supported; palette invocation remains uncounted.
+No binding context inherits from a sibling mode or a global fallback. Reusing an
+Operation does not inherit or imply its binding. Current shortcut defaults,
+overrides, and context-specific grammars are documented only in the Command
+Reference; this document adds no binding contract.
 
-`Ctrl+h/j/k/l` remains directional pane focus and is not reused for item
-selection.
+### Input ownership
 
-`Tab/Shift+Tab` is not a default selection proposal. Besides native focus
-semantics, the current key-token representation does not encode Shift as an
-independent modifier for keys such as Tab/Arrow.
+Input ownership is separate from Surface mode. When a feature captures input,
+that feature owns its input for the defined target/lifetime; otherwise the
+active Surface's exact mode applies. Feature-local owners include Selection
+Actions, the Picker, Plugin Manager, Reader sidebar controls, and Annotation
+Comment Editor; none adds another Surface mode.
 
-### Unified Space command namespace
-
-Main semantic command groups use the same root as Reader/Note:
-
-```text
-<Space>ff  <Space>fc  <Space>fq  <Space>fa  <Space>fn
-<Space>ta  <Space>tr  <Space>tf  <Space>tc
-<Space>ca  <Space>cr
-<Space>yy  <Space>pp
-<Space>,   <Space>q
-```
-
-Space has no exact Main action. Persistent-set manipulation belongs to `s`, so
-the leader never competes with Selection for timeout/prefix ownership.
-
-This migration must go through the binding engine and keymap migration machinery;
-do not special-case raw Space in the Main controller.
+Reader Surface modes remain Normal/Visual. The Annotation Comment Editor owns
+the captured PDF view while open: Enter inserts a native newline, Escape saves
+and closes, and edits autosave after two seconds. With its entry gate disabled,
+`i` uses Reader-wide native passthrough ownership until Escape/deactivation; it
+does not create Reader.Insert. Note Insert remains a Note Surface mode with
+ordinary text owned by Zotero's native editor. See the
+[Command Reference](COMMAND_REFERENCE.md#annotation-comment-editor) for the full
+existing input behavior.
 
 ## Prefix Guide
 
-The Prefix Guide is a projection of the resolved binding map. Space is the
-default command root across Main, Reader, and Note, while the same guide engine
-also supports non-Space pending prefixes such as `g` or `z`.
-
-Examples:
-
-```text
-SPC › t
-|- a  Add Tag
-|- r  Remove Tag
-|- f  Toggle Tag Filter
-'- c  Clear Tag Filters
-
-SPC › f
-|- f  Find Items
-|- c  Find Collection Items
-|- q  Quick Search
-|- a  Advanced Search
-'- n  Find Notes
-```
-
-The guide must not create a second command registry.
+The Prefix Guide projects the resolved bindings for the exact active
+`BindingContext`. Its prefix nodes and action leaves come from the binding map;
+the Guide is not a second command registry. Exact shortcuts and presentation
+remain in the [Command Reference](COMMAND_REFERENCE.md).
 
 ## Host/state ownership
 
-The intended ownership boundary is:
+Current ownership is:
 
-```text
-Zotero
-  owns Item data, native queries, result trees, and host operations
+- **Zotero** owns Items, Notes, Annotations, Collections, the native View and
+  Scope, tabs/focus, PDF position, and native Note document contents.
+- **Main runtime** is composed per Zotero MainWindow. It owns ephemeral
+  persistent Selection identities and that window's navigation history, while
+  composing smaller input and feature runtimes. Selection is not a copy of
+  TreeSelection or persisted library data.
+- **MainItemSelect** owns the transient Main Visual range and visible native-tree
+  projection/status UI; Main mode is derived from the range, while persistent
+  workset identities remain in the session's SelectionStore.
+- **Reader runtime** is per Zotero Reader `instanceID`. Its primary and
+  secondary PDF views share one Reader Surface; Reader features retain their
+  own input/lifecycle state.
+- **Note runtime** tracks one active Note editor host and Note item identity.
+  Zotero still owns the Note content; Neo mode, pending input, and yank register
+  are interaction state.
+- **Target resolution and Operations** remain separate. Each Surface resolves
+  its own item target; reusable domain Operations do not turn Main into a shared
+  executor or transfer Main Selection to Reader/Note.
 
-Neo Main session
-  owns ephemeral Selection identities
+## Runtime identity and activation
 
-Neo Visual feature
-  owns only transient anchor/head range state
+Active Surface is derived from Zotero focus/tab state, in this order: focused
+context-pane Note, selected standalone Note tab, selected Reader tab, otherwise
+Main. Neo does not keep a mutable global `currentSurface`. Changing the active
+split PDF view does not change Reader Surface identity.
 
-Neo host adapter
-  owns guarded private seams required for focus-only movement/projection
-```
+| Transition | Preserve | Clear, normalize, or dispose |
+| --- | --- | --- |
+| Main deactivation | Main Persistent Selection | Main Visual range, pending input, Prefix Guide; mode becomes Normal. |
+| Reader deactivation | Reader session and Zotero PDF state | Reader activation-transient input/Visual; an active comment editor hands input back through its save/close path. |
+| Note deactivation | Note identity and yank/register | Pending input and Insert mode; mode becomes Normal. |
+| Note A → Note B or editor-host replacement | Zotero Note data | Rebind by Note item ID plus editor-host identity; reset Note mode, pending input, and yank/register. |
+| Reader primary → secondary PDF view | Same Reader Surface/runtime | Only active view changes. |
+| Reader A → Reader B | Both live `instanceID` runtimes | Deactivate the inactive Reader's transient interaction state. |
+| Reader close | Zotero data | Reconcile and dispose that Reader runtime. |
+| MainWindow close | Zotero application data | Dispose window-scoped Main, Note, and Reader runtimes. |
 
-Avoid introducing a generic project-wide Target framework solely for this work.
-Use narrow feature owners and action contracts.
+The context-pane Note is still Note interaction even though its editor DOM is
+hosted by the MainWindow. A reused editor host showing another Note is an
+identity transition, not continuation of the former Note's Neo input state.
 
 ## Implementation sequence
 
-### Phase A - Freeze interaction contract
+**Historical proposals only.** The phase checklists and dogfood scenarios formerly
+listed here came from the original #55 substrate plan. They describe work since
+implemented or superseded by #98; they are neither current requirements nor test
+or GUI evidence. The current contracts above follow source, and the #98 issue
+history distinguishes implementation from pending human acceptance. Historical
+return-bookmark/`mainReturnContext`/`gr` behavior and the arbitrary-note-first
+capture prototype are not current workflows. No new capture workflow, Note Vim
+expansion, PDF expansion, or binding is proposed here.
 
-1. Persist this document.
-2. Link it from Architecture/Roadmap.
-3. Update #55 so its goal and phases no longer describe native TreeSelection as
-   the complete persistent TargetSet.
-4. Do not merge the old `feat/library-targeting-phase1` prototype as-is.
+## Evidence boundary
 
-### Phase B - Selection and Cursor substrate
-
-1. Add a session-scoped `SelectionStore<ItemRef>`.
-2. Add host adapters for focus-only Cursor movement and visible item/row mapping.
-3. Make normal Main navigation preserve Selection.
-4. Project visible Selection members into the current tree only where required.
-5. Track items by stable identity across sort/refresh.
-6. Add minimal ambient Selection count feedback.
-
-### Phase C - Main keymap and Prefix Guide
-
-1. Generalize Key Guide from a hard-coded leader UI to arbitrary pending prefixes.
-2. Keep Space as the shared command namespace across Main/Reader/Note.
-3. Bind Main persistent-set operations to `s` in Normal and Visual.
-4. Preserve `Ctrl+h/j/k/l` pane-focus grammar and direct local navigation.
-5. Add migration/override tests so existing user customizations are not silently
-   re-enabled or reassigned.
-
-### Phase D - Visual range
-
-1. Rework the old Main Item Select feature into Visual range state.
-2. Keep Selection unchanged while Visual moves.
-3. Implement grow/shrink/swap by anchor/head, not accumulated native range
-   union.
-4. Commit Toggle Selection on `s`.
-5. Cancel on Esc/`v` without Selection mutation.
-
-`main-select` remains the canonical exact `BindingContext` for Main Visual range
-editing; it is not a context rename proposal. Binding contexts and Surface state
-are separate contracts; the complete context inventory is in
-[Architecture](ARCHITECTURE.md#layers).
-
-### Phase E - Action target audit
-
-Start with actions that expose different target semantics:
-
-1. Open PDF / inspect current item;
-2. citekey/citation copy;
-3. Trash/restore;
-4. Add/Remove Tag.
-
-Main citekey copy is the second batch workflow built on the same target contract:
-`<Space>yy` uses EffectiveSelection, normalizes through Zotero `Items.keepTopLevel()`,
-deduplicates normalized targets, refuses stale or partially missing citekeys, and
-copies raw Better BibTeX keys separated by one space. Reader/Note delegation
-remains contextual single-target behavior.
-
-Collection membership is the first batch workflow built on this contract:
-
-- `<Space>ca` / `<Space>cr` operate on EffectiveSelection;
-- normalize targets with Zotero's native `Items.keepTopLevel()`;
-- require one library before resolving a collection target;
-- Picker resolves one collection from that library but does not own mutation;
-- confirmation re-resolves the item target signature so stale/changed worksets
-  cannot receive a partial batch;
-- add/remove skips existing no-op memberships and leaves Neo Selection unchanged.
-
-Later batch actions should preserve the same owner/target/preflight separation.
-
-### Phase F - Selection inspection and safety
-
-Add Selection Panel / hidden-target preflight once the substrate is stable.
-
-### Phase G - Local find, View filters, ScopeSet
-
-Only after Cursor/Selection/Visual semantics are stable:
-
-1. add non-destructive local find;
-2. unify Quick/Advanced/tag View actions;
-3. audit multi-scope collection selection;
-
-
-## Acceptance scenarios
-
-Before the model is considered stable, dogfood at least these scenarios:
-
-1. Press `s` repeatedly on adjacent rows: each item toggles and Cursor advances.
-2. Selection contains A/C; move Cursor from C to F: A/C remains selected.
-3. With Selection A/C and Visual B..E, grow, shrink, swap endpoints, then cancel:
-   Selection remains A/C.
-4. Commit the same Visual range with `s`: the all-or-none target rule is
-   applied.
-5. Change a filter so only three of seven selected items remain visible:
-   Selection still contains seven stable item identities and UI reports the
-   visible subset.
-6. Sort or refresh: Cursor and Selection recover by item identity, not stale row
-   index.
-7. Move focus to the collection tree and press `s`: Neo leaves the key native
-   and does not mutate item Selection or synthesize ScopeSet behavior.
-8. Reader/Main/Note Space leader, IME handling, and `Ctrl+h/j/k/l` focus behavior do
-   not regress.
-9. Selection A/B with Cursor on unselected C: inspect/open targets C while
-   workset actions target A/B according to their explicit contracts.
-10. A local find miss leaves Query/scope/filter/Selection untouched.
+Source contracts and automated checks prove only the properties exercised;
+native package/API evidence and human interaction are separate acceptance levels.
+Physical OS IME candidate-window confirmation, composing Escape/Backspace, native
+clipboard, and Outline human paths remain unperformed under
+[#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137). Trusted DOM/Gecko
+input is not a substitute for human PASS; documentation reconciliation cannot
+close an unobserved criterion.
 
 ## Compatibility watch
 
-Zotero host seams involved here are private and may change across rapid Zotero
-major releases. In particular, before depending more deeply on private
-TreeSelection/item-tree behavior, run this interaction slice against Zotero 11
-Beta when it becomes available and keep version-sensitive operations behind
-named adapters.
+Zotero host seams can be private and version-sensitive. Neo keeps Zotero's native
+state authoritative and isolates required private focus/tree operations behind
+the existing host adapters. This is a maintenance boundary, not a claim of
+Zotero 11 Beta acceptance or a pending product workflow.

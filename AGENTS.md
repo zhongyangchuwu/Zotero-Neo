@@ -213,17 +213,27 @@ Ordinary item/note/tab candidate sources own data and presentation only; the sem
 opens the chooser injects what confirmation means. Do not add provider-local create/delete/yank/
 open grammars or move domain mutation into Picker to save a dispatch step. Command Palette may
 reuse the candidate surface to choose an `ActionId`. Tag sources may constrain/project candidates.
-`TagActions` owns tag candidate choice and persistent item-tag mutation; `MainViewActions` owns
-Main Quick/Advanced/tag View mutations while Zotero's native filter UIs remain authoritative.
-Cross-context item actions should resolve targets through `main/item-targets.ts`:
-Main uses EffectiveSelection (persistent Selection, otherwise CurrentTarget), Reader uses the active Reader item, and Note uses
-its active note context. Do not make Reader item actions borrow Main Selection.
-Main View actions and Reader-local PDF actions remain surface-specific.
-Cross-surface knowledge capture follows the same ownership rule: Reader owns the
-transient text selection and passes a DOM-free `ReaderSelectionContext`
-snapshot; Main owns the persistent Notes picker and Zotero note mutation. Keep
-Picker providers candidate-only, and do not let Reader capture code borrow Main
-Selection or mutate notes directly.
+`TagActions` owns tag candidate/action orchestration; `src/operations/item-tags.ts`
+applies the explicit item mutation. `MainViewActions` owns Main Quick/Advanced/tag
+View mutations while Zotero's native filter UIs remain authoritative.
+
+Resolve item targets in the initiating Surface: `src/main/main-item-target.ts`
+applies Main EffectiveSelection (Persistent Selection before CurrentTarget),
+`src/reader/item-target.ts` resolves the active Reader item, and
+`src/main/note-item-target.ts` resolves the active Note context. Share only the
+result shape in `src/core/item-target.ts` and lookup/top-level normalization in
+`src/platform/zotero-items.ts`; concrete Operations under `src/operations/`
+consume explicit resolved items or IDs. Reader and Note never borrow Main
+Selection. Consumers import the typed Surface resolver directly; no shared
+compatibility dispatcher/re-export remains.
+
+Cross-surface capture passes an immutable, DOM-free `ReaderSelectionContext`
+snapshot from Reader to Main. Main owns the existing-Note chooser, source/owner
+revalidation, append/save, and post-save receipt. Confirmation binds candidate
+identity and source/generation before queueing; a reparented target is rejected
+before mutation. A forced chooser replacement preserves the actual save receipt
+but retires Reader status/focus. Picker providers remain candidate-only; Reader
+capture code must not borrow Main Selection or mutate notes directly.
 
 ## Key Files
 

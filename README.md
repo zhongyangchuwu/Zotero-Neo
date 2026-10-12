@@ -80,6 +80,11 @@ current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROA
 ### Notes
 
 - Note search across normalized titles and note bodies with chooser-based opening.
+- Notes default to the invoking Item's notes; an empty Item stays empty. Explicit
+  Library browsing keeps the same query and confirmation. Title-only rows use
+  nonselectable owner boundaries; Preview shows the actual parent and note body.
+- Reader text capture chooses an existing same-library note and reports the saved
+  target only after native persistence. It does not create notes or backlinks.
 - Keyboard Normal/Insert handoff and Vim-style editing inside Zotero note editors.
 - Note chooser results resolve a note target only; note editing/lifecycle behavior
   is not hidden behind a provider-local Picker command grammar.
@@ -113,7 +118,14 @@ npm ci
 ./tools/build.sh
 ```
 
-The output is `zotero-neo.xpi`. On Windows:
+The output is `zotero-neo.xpi`.
+
+The source build is an unreleased candidate, even while its manifest still says
+`0.1.0`. Install that XPI explicitly to try current-source behavior; the public
+update feed and release link above still deliver the published v0.1.0 package.
+Reinstalling retains Neo preferences and is not a clean-install or upgrade test.
+
+On Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build.ps1

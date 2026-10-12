@@ -12,9 +12,13 @@ than one concrete workflow needs the same contract.
 
 The [unified navigation execution and history policy](NAVIGATION_HISTORY_DESIGN.md)
 documents the current shared navigation owners, recording rules, and Reader
-transport constraints. The navigation implementation and document-bottom `G`
-behavior have passed automated, supported-host, and owner acceptance; integration
-is tracked in [PR #113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
+transport constraints. PR #113 was merged; its CI, supported-host, and owner
+acceptance receipts apply to that recorded checkpoint, not automatically to later
+source or every host path. This guide describes checked-in source after the
+v0.1.0 release; it does not redefine what shipped in v0.1.0. Physical OS-IME
+candidate confirmation, composing Escape/Backspace, native clipboard, and human
+Outline paths remain unperformed under [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
+Contracts, CI, and API-driven receipts are not substitutes for those human paths.
 
 ## Layers
 
@@ -23,9 +27,13 @@ is tracked in [PR #113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
 `src/input/` owns key normalization, semantic key-token parsing, sequence/count matching,
 resolved bindings, Key Guide projection, and composition boundaries. Named keys and modifier
 chords are matched as tokens rather than raw string prefixes, so `e` is distinct from `enter`
-and `escape`. The shared input engine is a pure reducer; each host consumer owns
-event qualification/gating, timers, focus, and action execution. Sidebar, Picker,
-and Plugin Manager local controls reuse the common binding runtime.
+and `escape`. `engine.ts` is the pure matcher/reducer. `InputRuntime` owns pending
+sequence/count/timer/revision mechanics per input owner, not globally: Main and Note compose
+separate instances in their Main-window session, and each Reader session owns one.
+`PrefixGuideRuntime` owns guide presentation and timers separately; Main and Note use the
+main-window guide while each Reader session has its own. Hosts qualify native, editable, and
+composing input and own focus, action execution, and lifecycle. Sidebar, Picker, and Plugin
+Manager local controls use `LocalBindingRuntime` where applicable.
 
 The runtime has 14 exact `BindingContext` identifiers. Six established contexts are
 `reader-normal`, `reader-select`, `main-normal`, `main-select`, `note-normal`, and
@@ -98,13 +106,22 @@ private default maps.
 
 Cross-surface coordination uses a named capability or shared Operation, not
 generic redispatch of another Surface's `ActionId`. Item Operations resolve
-their targets through the initiating Surface's resolver.
+their targets in the initiating Surface. `src/core/item-target.ts` defines only
+the common result shape; `src/platform/zotero-items.ts` owns Zotero item lookup,
+top-level normalization, and identity deduplication. Neither chooses a Surface.
+`src/main/main-item-target.ts` resolves Main EffectiveSelection (Persistent
+Selection before CurrentTarget); `src/reader/item-target.ts` resolves the active
+Reader item; and `src/main/note-item-target.ts` resolves the active context-pane
+Note or selected standalone Note tab. Reader and Note do not borrow Main Selection.
+Current production call sites use their typed Surface resolver directly; the
+obsolete cross-Surface dispatcher/re-export has been removed. View actions and
+Reader-local PDF actions remain surface-owned.
 
-Item-targeted actions also share a contextual target contract: Main resolves
-EffectiveSelection (persistent Selection when non-empty, otherwise CurrentTarget),
-Reader resolves the active Reader item (normally its parent bibliographic item),
-and Note resolves its active note context. View actions and
-Reader-local PDF actions remain surface-owned and do not use that resolver.
+Concrete item Operations live under `src/operations/` and receive explicit
+resolved items or IDs. For example, `item-tags.ts`, `item-collections.ts`,
+`citekeys.ts`, `open-item.ts`, `trash-items.ts`, and `show-in-library.ts` implement
+domain actions; the initiating Surface retains target choice and any host-level
+confirmation, navigation, and status policy.
 
 ### 3. Feature owners
 
@@ -112,6 +129,16 @@ Feature modules should own one coherent state/lifecycle or one host operation
 family. Controllers coordinate them; they should not mirror child feature state.
 
 #### Main
+
+`ZoteroWindowRuntime` in `main/window-runtime.ts` is the lifecycle root for
+services belonging to the physical Zotero MainWindow. `MainWindowSession` in
+`main/session.ts` composes that host runtime with Main state and feature runtimes;
+its `NoteSurfaceRuntime` is a distinct Note interaction owner for the currently
+attached editor. `NoteEditor` identifies that attachment by editor Window plus
+Note item ID and rebinds when either changes. `main/active-surface.ts` derives
+the active Surface from Zotero state (context-pane Note, selected Note tab,
+selected Reader tab, otherwise Main); the controller runs explicit activation
+and deactivation paths rather than storing a mutable global `currentSurface`.
 
 - `main/controller.ts` — Main session orchestration and semantic action dispatch.
 - `main/navigation.ts` — collection/item tree navigation operations; v0.2 item
@@ -126,17 +153,21 @@ family. Controllers coordinate them; they should not mirror child feature state.
 - `main/plugin-manager.ts` — persistent installed-plugin management surface. It owns
   Plugin Manager panel/filter/navigation lifecycle while `plugin-host.ts` projects
   authoritative Mozilla/Zotero AddonManager state.
-- `main/tag-actions.ts` — semantic Add Tag / Remove Tag / Toggle Tag Filter /
-  Clear Tag Filters orchestration; it invokes the shared chooser only when a tag
-  target must be resolved.
-- `main/item-targets.ts` — shared contextual item-target resolution for Main
-  EffectiveSelection (Selection > CurrentTarget) and Reader/Note contextual items; item actions reuse this
-  contract instead of borrowing another surface's selection.
-- `main/tag-targets.ts` — batched item-tag mutation primitives.
-- `main/note-capture.ts` — persistent Reader-selection capture mutation into an
-  existing Zotero note. Reader supplies a DOM-free selection snapshot; Main owns
-  note target resolution and persistence.
-- `main/note-editor.ts` — note-editor Normal/Insert integration.
+- `main/tag-actions.ts` — tag candidate and action orchestration; item mutation
+  is implemented by the shared `operations/item-tags.ts` Operation.
+- `main/collection-actions.ts` — collection chooser/currentness orchestration;
+  membership mutation is implemented by `operations/item-collections.ts`.
+- `main/main-item-target.ts` — Main EffectiveSelection (Persistent Selection
+  before CurrentTarget) resolver.
+- `main/note-item-target.ts` — active Note-context target resolver.
+- `main/note-capture.ts` — DOM-free Reader snapshot conversion and append/save
+  primitive for an existing Zotero note. Main controller owns the Notes chooser,
+  source/target revalidation, and capture receipt/current UI status.
+- `main/note-editor.ts` / `main/note-runtime.ts` — Note editor input and its
+  identity-scoped interaction state.
+- `main/session.ts` — Main Surface composition for one MainWindow.
+- `main/window-runtime.ts` — host-window theme, appearance, and Settings lifecycle.
+- `main/active-surface.ts` — derived active Surface from Zotero focus/tab/editor state.
 - `main/host.ts` — named adapters over private Main-window host seams.
 
 The shared candidate surface is a **target resolver**, not an operation console.
@@ -152,15 +183,17 @@ for an invoking action and normally closes; a Manager owns a bounded domain cont
 that can remain open across browsing and repeated operations. Plugin Manager is the
 first concrete Manager surface. Do not extract a generic Manager framework until a
 second real consumer demonstrates a stable shared contract. Tag candidate sources
-may constrain or describe candidates. Persistent item-tag mutation remains in
-`TagActions`; Quick Search, Advanced Search, and tag-predicate View mutation are
-coordinated by `MainViewActions` through narrow `main/host.ts` seams.
+may constrain or describe candidates. `TagActions` owns tag candidate/action
+orchestration; the shared `operations/item-tags.ts` Operation performs persistent
+item-tag mutation. Quick Search, Advanced Search, and tag-predicate View mutation
+are coordinated by `MainViewActions` through narrow `main/host.ts` seams.
 
 #### Reader
 
 `ReaderController` discovers and owns Reader sessions keyed by Zotero
-`instanceID`. `ReaderSession` coordinates input and semantic execution, while
-host/view lifecycle seams are owned separately:
+`instanceID`. Each `ReaderSession` is the composition/lifecycle boundary for one
+Reader Surface and owns its own `InputRuntime` and `PrefixGuideRuntime`, while
+feature state and host/view lifecycle seams remain in their dedicated owners:
 
 - `host-key-bridge.ts` — installation/restoration of private Zotero
   `PdfView._onKeyDown` and `_textAnnotationFocused` patches; input policy remains
@@ -309,13 +342,17 @@ Reader compatibility path when Zotero exposes a supported seam.
 The following are appropriate shared primitives because multiple concrete
 features already use them:
 
-- binding/input reducer;
+- binding engine and per-owner `InputRuntime` / `PrefixGuideRuntime` mechanisms;
 - semantic `ActionId` catalog and capability sets;
 - composition/input guard;
+- the `core/item-target.ts` result shape and `platform/zotero-items.ts`
+  identity/normalization helpers; neither selects a Surface target;
 - `fuzzyMatchScore()` adapter backed by pinned `fuzzysort`;
-- theme tokens/managers;
-- host adapters with a clear Zotero ownership boundary.
-- `operations/show-in-library.ts` — select one explicit Zotero item; each caller owns target resolution and return-bookmark capture.
+- theme tokens/managers and host adapters with clear Zotero ownership boundaries;
+- concrete Operations under `operations/`, such as `item-tags`,
+  `item-collections`, `citekeys`, and `show-in-library`, after Surface target
+  resolution. `show-in-library.ts` selects one explicit Zotero item; navigation
+  history admission remains with its caller.
 
 The following are intentionally **not** project-wide frameworks today:
 
@@ -328,16 +365,19 @@ The following are intentionally **not** project-wide frameworks today:
 Create one only when a second real consumer demonstrates a stable shared
 contract.
 
-## Remaining interaction cleanup
+## Source and acceptance status
 
-The structural Reader cleanup for v0.1.0 is complete. Current ownership and
-interaction follow-up is tracked in
-[#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98) and the
-[roadmap](ROADMAP.md). Annotation Comment Editor ownership and its fixed key/save
-contract are implemented. Phase 5.7 retires Reader Insert: schema 17 deletes its
-inactive overrides/unbindings with owner approval, while the effective feature
-boolean migrates to `annotationCommentEditor.enabled`. Remaining overlays and
-Knowledge Capture are separate follow-up slices.
+The v0.1.0 Reader architecture is a historical release checkpoint, not the
+entirety of checked-in source. Current #98 work includes the fixed Annotation
+Comment Editor contract, the Phase 5.7 persisted Reader Insert retirement,
+feature-local Reader owners, and capture into existing Zotero notes. Schema
+migration code that reads retired mappings remains persistence migration only;
+it does not restore runtime aliases or keymap inheritance. These later source
+contracts do not imply that they shipped in v0.1.0 or that historical CI/native
+receipts prove every later host path. Physical OS-IME candidate confirmation,
+composing Escape/Backspace, native clipboard, and human Outline paths remain
+unperformed under #137. Phase 10 documentation/legacy reconciliation remains
+tracked by [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98).
 
 The Note input grammar is already on the shared sequence/count/binding machinery;
 browser-native Insert editing remains outside Neo unless an explicit Note binding
