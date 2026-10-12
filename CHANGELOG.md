@@ -14,13 +14,14 @@ All notable changes to Zotero Neo are documented here.
 
 - Reader scan failures now retain native exception stacks, bounded cause chains, failure stages, and cached Reader identities in Debug and the profile log. First failure and recovery are recorded without recurring failure/idle spam; unreadable exceptions and failed logging sinks cannot abort error reporting. Profile logs preserve UTF-8 and close native streams after failed writes. Reader lifecycle/retry policy is unchanged; this is diagnostic hardening, not a fix for an underlying dead-object fault.
 
-- Complete Reader view/session and composed Reader/Main retirement even when a live cleanup throws, preserving the original failure after all owners are released. Split-pane listeners and native bridges no longer require a second disposal; Bootstrap drops its retired controller before shutdown. Outline logs current confirmation-close failures instead of misclassifying them as stale navigation, and profile-write diagnostics retain both primary and additional close failures.
+- Complete Reader view/session and composed Reader/Main retirement even when a live cleanup throws, preserving the original failure after all owners are released. Split-pane listeners and native bridges no longer require a second disposal; Bootstrap drops its retired controller before shutdown; profile-write diagnostics retain both primary and additional close failures.
 
 - Annotation Comment Editor owns pending and mounted input per PDF view independently of the Reader Surface. Native typing/IME, Enter newline, two-second autosave, and Escape save/close are fixed; privileged system Escape handles earlier host interception and cross-compartment wrappers. Stale open/save/focus work cannot reset newer input ownership.
 - Retire Reader Insert as a Surface mode and configurable binding context. The Annotation comment editing boolean migrates to `annotationCommentEditor.enabled`, preserving old true/false intent and preferring an existing new value before clearing the old key. Binding schema 17 deletes inactive Reader Insert custom mappings and explicit unbindings without an archive, as explicitly approved; other contexts remain unchanged. Disabled `i` native passthrough has its own input owner; Note Insert is unchanged.
 
 - Reader `gg`, `G`, and counted page jumps now use one native navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view. Uncounted `G` reaches the document bottom rather than the last page's start; `nG` still targets the numbered page's start, without changing zoom.
-- Navigation recording now uses one state, coordinator, and typed policy. Reader search, annotation, or Outline may complete without appending when no owned exact-view hard receipt qualifies; marks record one managed final, ignored motion has no history-only capture, and launch/Back fences protect currentness.
+- Navigation recording now uses one state, coordinator, and typed policy. Reader search and annotation navigation may complete without appending when no owned exact-view hard receipt qualifies; native Outline destinations use the existing `reader-native.hard` observation, marks record one managed final, ignored motion has no history-only capture, and launch/Back fences protect currentness.
+- Enhance the existing Zotero Reader Outline with a Neo Bookmarks group and conservative derived heading/figure/table labels plus direct-child counts, preserving native title/numbering and leaving Zotero's Annotations and Thumbnails views independent.
 
 - Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
 
@@ -36,10 +37,6 @@ All notable changes to Zotero Neo are documented here.
 - Retired PDF view callbacks no longer consume native keys or deliver late blur/selection/viewport events when listener removal fails. Event ownership matches the exact registration, so reattaching the same PDF window does not reactivate an older listener; original cleanup failures remain observable.
 
 - New Main windows no longer abort Neo attachment by reading the context Note getter before Zotero initializes its inner pane. Surface, Note target, and editor identity consumers now read the published native context through one host adapter, without suppressing live errors or changing Note precedence, bindings, or preferences.
-
-- Marks preserves native IME input and claims keys/toggle prefixes only in its captured PDF pane. Reader deactivation and destroyed panels release transient ownership without clearing mark values; live cleanup failures still notify sidebar coordination. Retired toggle expiry cannot cancel a newer invocation, and deleting the selected last row leaves the surviving mark confirmable. Existing mark grammar, storage, bindings, and managed navigation remain unchanged.
-
-- Outline preserves native IME keys and scopes input/toggle prefixes to its captured PDF pane. Reader deactivation, destroyed panels, retired expiry/navigation work, and queued sidebar focus restoration no longer retain or steal transient ownership. Fresh loads and cached trees in uninitialized panes wait for the captured host view before publishing or confirming; an early open no longer caches a missing document as an empty outline. Tree hierarchy, expansion, hints, bindings, and navigation policy remain unchanged.
 
 - PDF link hints preserve native IME keys and claim input only in their captured pane. Dead badges/cues/windows no longer strand ownership; retired RAF/timer callbacks and late navigation failures cannot alter a newer invocation. Reader deactivation clears the transient cue and pending activation without changing link discovery, labels, geometry or native navigation.
 
@@ -69,7 +66,7 @@ All notable changes to Zotero Neo are documented here.
 - `f` follow-link hints for visible internal, citation, and external PDF links, including a
   transient destination cue for internal jumps.
 - Horizontal and vertical Reader split control plus directional `Ctrl+h/j/k/l` pane focus.
-- Outline and marks explorers with keyboard navigation and view-local lifecycle ownership.
+- Introduced keyboard navigation for PDF outlines and persisted marks through custom explorers; the native Reader Outline/Bookmarks integration is documented above as their current replacement.
 - A configurable Space-leader key guide generated from the active resolved keymap.
 - Normal-mode `:` command palettes for Reader, Main, and Note contexts, including unbound but
   executable actions.

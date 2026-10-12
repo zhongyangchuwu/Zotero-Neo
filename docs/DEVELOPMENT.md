@@ -261,10 +261,7 @@ same surface to resolve an `ActionId`. Tag candidate sources may project namespa
 create candidates, and action-specific metadata, but they do not mutate item tags or Main
 filter state; those effects belong to `TagActions`.
 
-Reader outline and marks retain separate domain behavior. `src/reader/sidebar-overlay.ts`
-coordinates only their view-local lifecycle: mutual exclusion, theme-root cleanup, PDF-view
-replacement cleanup, and delayed focus restoration. Outline owns loading, tree navigation,
-expansion, hints, and destination navigation; Marks owns persistence, jumping, and deletion.
+The native Reader Outline retains Zotero's rows and hosts Neo's Bookmarks group. `src/reader/native-sidebar.ts` owns reversible sidebar decoration and the group; `src/reader/outline-presentation.ts` derives conservative row labels and child counts; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
 
 ## Reader keyboard forwarding
 
@@ -331,11 +328,7 @@ through the invocation confirmation callback, so command execution remains in se
 rather than provider activation. Reader contexts still revalidate session/view ownership before
 execution.
 
-Bibliographic candidate previews are deliberately bounded and synchronous: they retain title,
-creator, year, and citation-key metadata, then add attachment and child-note counts plus up to six
-safely accessible filenames/titles. The chooser does not render PDF pages; Zotero exposes no stable
-add-on first-page thumbnail API, so progressive PDF preview remains deferred rather than relying on
-private Reader/PDF.js internals.
+Bibliographic candidate previews remain bounded and synchronous: title, creator, year, and citation-key metadata plus attachment and child-note counts and up to six safely accessible filenames/titles. The chooser does not render PDF pages. A Picker cover preview is separate future work and should be selected-attachment, asynchronous work. Zotero's live Reader has a thumbnail data-URL cache/`ReaderPreview` path, but that is not a ready-made closed-file image API; this change adds no Picker cover-preview service.
 
 Note candidates search normalized title and normalized HTML-stripped body from `getNote()` in the
 same in-memory snapshot used for ordering. Current-item notes remain first. Zotero's native Search
@@ -471,8 +464,7 @@ the original field immediately, and publishes the immutable invocation only acro
 the PDF microtask that resumes the SDK. Exact patch/window/history/view stamps reject
 retired continuations. Do not copy the label parser, patch global Promise behavior, or
 assign delayed label work to whichever operation is latest. Revalidate the single-await
-producer seam on host updates. Outline confirmation also carries a per-confirmation
-guard so an older completion cannot close or update a newer confirmation's overlay.
+producer seam on host updates. Native Outline navigation uses Zotero's native controls and the existing `reader-native.hard` observation, not a separate Neo confirmation callback.
 
 Managed marks report one final exact-view destination; their intermediate native
 producers remain children. Restore producers are Traverse children and cannot
@@ -509,40 +501,15 @@ that exact window rather than whichever Reader view happens to be active later. 
 keyup; trapezoid mode decelerates unless `smoothScroll.stopOnRelease` requests an immediate stop.
 Reader session state must not mirror the continuous hold/RAF fields.
 
-## Reader sidebar ownership
+## Reader native sidebar ownership
 
-`ReaderMarksExplorer` and `ReaderOutline` own their transient open/selection/DOM/theme state.
-Every close path notifies `ReaderSidebarOverlay` so the shared coordinator never retains a stale
-active kind. `ReaderOutline` also owns its cached tree, hint/command timers, and load-generation
-token; closing or replacing a PDF view invalidates pending `getOutline()` work before it can
-repaint a later overlay. `ReaderSessionState` must not mirror either sidebar's transient state.
+Zotero's Reader document owns `_internalReader._state.sidebarOpen`, `sidebarView`, `outline`, and `pageLabels`; `setSidebarView(view)` and `toggleSidebar(open?)` control the native sidebar. `src/reader/native-sidebar.ts` adds only reversible Neo-prefixed attributes/styles and one Bookmarks section inside the existing Outline wrapper. It does not replace React-owned titles, rows, or children. Native Annotations and Thumbnails remain Zotero-owned, independent sidebar views. `src/reader/marks.ts` remains the persisted ReaderMarks map and managed mark-jump owner.
 
-Both sidebars capture their PDF-window identity independently of panel DOM. Their input and
-sidebar-toggle prefix belong only to that pane; composing keys remain native, while keys dispatched
-from another pane or an editable target cancel and yield. The focus-only action transfers Outline
-to its requested pane. Reader deactivation closes both panels and retires pending sidebar focus
-restoration, preserving the Reader-owned mark map and Zotero's page, zoom, and scroll without
-changing the Reader Surface mode vocabulary.
+`src/reader/outline-presentation.ts` infers optional display categories from existing title text and hierarchy: a one-component number is Section, a dotted number is Subsection, otherwise nested rows are Subsection and a root row with children is Section. Explicitly numbered Figure/Fig/图 and Table/表 titles receive Figure or Table labels; an unknown root leaf remains unlabeled. The original title and numbering are never rewritten. The separate child badge counts direct Outline children; it is not generated numbering or a full-text figure/table count. Neo does not scan PDF full text to identify figures or tables, so these labels are conservative presentation hints rather than verified document semantics.
 
-Fresh loads, and cached-tree publication into a pane whose document is not ready, await that exact
-view's captured `initializedPromise`. After the wait, currentness is checked before reading the PDF
-document or publishing rows. Already-ready cached panes stay synchronous; early opening must not
-cache a missing document as an empty outline or confirm a destination before the pane is ready.
-Closing retires panel/window/timer ownership before DOM cleanup and notifies the coordinator even
-when a live cleanup fails. Destroyed wrappers are skipped; unexpected live failures remain visible.
-Successful Outline navigation retires the panel outside the stale-navigation catch. A live
-close failure is logged as `outline close failed`, and the completed confirmation still
-returns to Normal; only obsolete navigation failures are discarded.
-Hint/command expiries retain their timer and invocation, and navigation errors retain their current
-receipt. The shared sidebar focus callback retains a revision and checks the live destination window,
-so a queued old restore cannot refocus after deactivation, view release, or a newer sidebar activation.
+The sidebar belongs to the Reader document, not a PDF view: PDF focus and split-pane changes do not mirror or transfer sidebar ownership. Native host sidebar state remains authoritative and is not duplicated in Reader session state. Keyboard forwarding qualifies only targets in the Reader document's `#sidebarContainer`; sidebar visibility alone does not claim PDF commands. Native editable, composing, annotation, and thumbnail targets stay native. In Outline, `j/k/h/l` are translated to native arrow keys, so Zotero owns immediate row navigation and `Enter` expands/collapses a branch or opens its URL. `Escape` closes the sidebar and focuses the active PDF. `<Space>e` toggles the native Outline view; `<Space>m` focuses Bookmarks, and repeating it while Bookmarks is focused closes the sidebar.
 
-Marks clamps its selected row after deletion so Enter can still confirm the surviving mark. Close
-retires its captured pane, selection, and DOM pointers before theme/DOM cleanup, skipping destroyed
-wrappers while keeping live failures observable and notifying the coordinator in either case.
-Persistent mark values and existing `ReaderMarks` managed navigation/storage remain separate from
-the transient panel. Shared sidebar-toggle expiry callbacks check their captured timer identity
-before clearing a later invocation's prefix.
+Reader deactivation clears transient focus and toggle-prefix intent without closing the native sidebar or erasing host sidebar state or stored marks. The Bookmarks group is not a fake PDF annotation; its list controls jump to or delete Neo's persisted marks, independently of native annotation and thumbnail surfaces.
 
 ## Annotation comment overlay
 
@@ -617,7 +584,7 @@ src/
   input/                   canonical bindings, actions, and input matcher
   main/                    main-window controller and UI features
   main/host.ts              narrow private-Zotero main-window boundary
-  reader/                  reader lifecycle, input, annotations, marks, outline
+  reader/                  reader lifecycle, input, annotations, marks, native sidebar
   preferences/index.ts     preference-pane behavior and localization
   platform/                narrow Gecko and optional-addon boundaries
   ui/theme.ts              shared appearance resolution and semantic palette

@@ -35,11 +35,6 @@ import { InputRuntime, type InputTimerHost } from '../input/runtime';
 import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
 import { isLeaderPrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
-import {
-  appendInputKey,
-  bindingEqualsInput,
-  bindingMatchesInputPrefix,
-} from '../input/key-sequence';
 import { resolveBindings, type BindingMap, type Mode } from '../input/bindings';
 import { t } from '../i18n';
 import { copyCitekeys } from '../operations/citekeys';
@@ -54,9 +49,7 @@ import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, ThemeManager } from '../ui/theme';
 import { ReaderAnnotationNavigationState } from './annotation-navigation-state';
 import { ReaderMarks } from './marks';
-import { ReaderOutline, type OutlineHost } from './outline';
-import { ReaderSidebarOverlay } from './sidebar-overlay';
-import { ReaderMarksExplorer } from './marks-explorer';
+import { ReaderNativeSidebar } from './native-sidebar';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
@@ -544,9 +537,7 @@ export class ReaderSession {
   readonly #navigation: ReaderNavigation;
   readonly #annotationNavigation = new ReaderAnnotationNavigationState();
   readonly #marks: ReaderMarks;
-  readonly #marksExplorer: ReaderMarksExplorer;
-  readonly #sidebar: ReaderSidebarOverlay;
-  readonly #outline: ReaderOutline;
+  readonly #sidebar: ReaderNativeSidebar;
   readonly #linkHints: ReaderLinkHints;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #nativeInput: ReaderNativeInput;
@@ -557,8 +548,6 @@ export class ReaderSession {
   readonly #themeManagers = new Map<Window, ThemeManager>();
   readonly #prefixGuide = new PrefixGuideRuntime(READER_INPUT_TIMERS);
   readonly input = new InputRuntime(READER_INPUT_TIMERS);
-  #sidebarToggleBuffer = '';
-  #sidebarToggleTimer: ReaderTimer | null = null;
   #markJumpRevision = 0;
   #surfaceMode: ReaderMode = 'normal';
   #interactionRevision = 0;
@@ -633,7 +622,7 @@ export class ReaderSession {
         if (!this.#commentEditor.ownsInput) this.#editorReleaseRevision = this.#interactionRevision;
         this.input.reset();
         this.clearKeyGuide();
-        this.clearSidebarToggleInput();
+        this.#sidebar.deactivate();
         this.#smoothScroller.stop(true);
         this.updateIndicator();
       },
@@ -641,6 +630,9 @@ export class ReaderSession {
         if (
           this.#nativeInput.ownsInput ||
           this.#commentEditor.ownsInput ||
+          this.#sidebar.containsTarget(
+            this.#dependencies.reader._iframeWindow?.document.activeElement ?? null,
+          ) ||
           this.#interactionRevision !== this.#editorReleaseRevision ||
           this.#navigation.activePdfWindow() !== pdfWindow
         )
@@ -671,6 +663,15 @@ export class ReaderSession {
       itemForReader: (reader) => this.itemForReader(reader),
       schedule: (delay, task) => this.schedule(delay, task),
       showStatus: (message, duration) => this.showStatus(message, duration),
+      onChange: () => {
+        try {
+          this.#sidebar.refreshMarks();
+        } catch (error) {
+          dependencies.controller.dependencies.logger.debug(
+            `reader bookmark presentation failed: ${String(error)}`,
+          );
+        }
+      },
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
       scrollToPageRatio: (pdfWindow, pageIndex, ratio, isCurrent) =>
         this.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent),
@@ -681,35 +682,21 @@ export class ReaderSession {
         this.annotationPageRatio(pdfWindow, annotation),
       onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
     });
-    this.#sidebar = new ReaderSidebarOverlay({
-      schedule: (delay, task) => this.schedule(delay, task),
-      clearTimer: (timer) => this.clearTimer(timer),
-      themeRoot: (root) => this.themeRoot(root),
-    });
-    this.#marksExplorer = new ReaderMarksExplorer({
-      marks: this.#marks,
+    this.#sidebar = new ReaderNativeSidebar({
       reader: dependencies.reader,
-      themeRoot: (root) => this.#sidebar.themeRoot(root),
+      marks: this.#marks,
+      bindings: dependencies.bindings,
+      language: () => this.keyGuideLanguage(),
+      activePdfWindow: () => this.#navigation.activePdfWindow(),
       onAnnotation: (key) => this.#annotationNavigation.rememberAnnotation(key),
-      onClose: (pdfWindow) => {
-        this.clearSidebarToggleInput();
-        this.#sidebar.closed('marks', pdfWindow);
+      onInput: () => {
+        this.#markJumpRevision += 1;
+        this.#interactionRevision += 1;
       },
-    });
-    const outlineHost: OutlineHost = {
       schedule: (delay, task) => this.schedule(delay, task),
       clearTimer: (timer) => this.clearTimer(timer),
       log: (message) => dependencies.controller.dependencies.logger.debug(message),
-      setModeNormal: () => this.setMode('normal'),
-      themeRoot: (root) => this.#sidebar.themeRoot(root),
-      executeNavigation: (pdfWindow, intent, perform) =>
-        this.executeReaderNavigation(pdfWindow, intent, perform),
-      onClose: (pdfWindow) => {
-        this.clearSidebarToggleInput();
-        this.#sidebar.closed('outline', pdfWindow);
-      },
-    };
-    this.#outline = new ReaderOutline(outlineHost);
+    });
     this.#viewLifecycle = new ReaderViewLifecycle({
       reader: dependencies.reader,
       timerWindow: dependencies.firstPdfWindow,
@@ -988,6 +975,7 @@ export class ReaderSession {
     this.#viewLifecycle.start();
     this.installOuterReaderListeners();
     this.#marks.load(this.#dependencies.reader);
+    this.#sidebar.start();
   }
 
   /** Retires all owners once, preserving the first live cleanup failure for the caller. */
@@ -1003,17 +991,11 @@ export class ReaderSession {
     failure.run(() => this.#dependencies.selection?.clearOwner(this));
     failure.run(() => this.#flash.dispose());
     failure.run(() => this.#smoothScroller.dispose());
-    failure.run(() => this.clearSidebarToggleInput());
     failure.run(() => this.#selectionRange.leave());
     failure.run(() => this.#viewLifecycle.dispose());
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
-    failure.run(() =>
-      this.#sidebar.dispose(() => {
-        failure.run(() => this.#marksExplorer.close());
-        failure.run(() => this.#outline.close());
-      }),
-    );
+    failure.run(() => this.#sidebar.dispose());
     const indicatorCleanup = this.state.indicatorThemeCleanup;
     this.state.indicatorThemeCleanup = null;
     failure.run(() => indicatorCleanup?.());
@@ -1039,9 +1021,7 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
-    this.#sidebar.cancelFocusRestore();
-    this.#marksExplorer.close();
-    this.#outline.close();
+    this.#sidebar.deactivate();
     this.#linkHints.close();
     this.#nativeInput.release();
     if (this.#commentEditor.ownsInput) {
@@ -1058,10 +1038,12 @@ export class ReaderSession {
   }
 
   focusAndHandle(event: KeyboardEvent): void {
+    if (this.#scope.disposed) return;
     const pdfWindow = this.#navigation.activePdfWindow();
     if (!pdfWindow) return;
-    pdfWindow.focus();
-    this.handleKeyDown(event, pdfWindow);
+    const sidebarTarget = this.#sidebar.containsTarget(event.target);
+    if (!sidebarTarget) pdfWindow.focus();
+    this.handleKeyDown(event, pdfWindow, sidebarTarget);
   }
 
   private installOuterReaderListeners(): void {
@@ -1113,15 +1095,7 @@ export class ReaderSession {
     const failure = new CleanupFailure();
     failure.run(() => this.#flash.releaseView(pdfWindow));
     failure.run(() => this.#smoothScroller.releaseView(pdfWindow));
-    failure.run(() => {
-      if (this.#outline.ownsView(pdfWindow))
-        this.#sidebar.releaseView(pdfWindow, () => this.#outline.close(pdfWindow));
-    });
     failure.run(() => this.#commentEditor.releaseView(pdfWindow));
-    failure.run(() => {
-      if (this.#marksExplorer.ownsView(pdfWindow))
-        this.#sidebar.releaseView(pdfWindow, () => this.#marksExplorer.close(pdfWindow));
-    });
     const manager = this.#themeManagers.get(pdfWindow);
     this.#themeManagers.delete(pdfWindow);
     failure.run(() => manager?.dispose());
@@ -1132,7 +1106,17 @@ export class ReaderSession {
     this.#smoothScroller.handleKeyUp(event);
   }
 
-  private handleKeyDown(event: KeyboardEvent, pdfWindow: PdfWindow): void {
+  private handleKeyDown(
+    event: KeyboardEvent,
+    pdfWindow: PdfWindow,
+    sidebarTarget = this.#sidebar.containsTarget(event.target),
+  ): void {
+    if (this.#scope.disposed) return;
+    if (!this.#nativeInput.ownsInput && sidebarTarget) {
+      this.#sidebar.handleKey(event);
+      return;
+    }
+    this.#sidebar.deactivate();
     this.#navigation.activatePdfWindow(pdfWindow);
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
@@ -1140,13 +1124,6 @@ export class ReaderSession {
     if (this.#nativeInput.handleKey(event, pdfWindow)) return;
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
-    if (this.handleSidebarToggleKey(event, pdfWindow)) return;
-    if (
-      this.#outline.isOpen &&
-      this.#outline.handleKey(this.#dependencies.reader, pdfWindow, event)
-    )
-      return;
-    if (this.#marksExplorer.isOpen && this.#marksExplorer.handleKey(pdfWindow, event)) return;
     if (this.#linkHints.hasHints && this.#linkHints.handleKey(event, pdfWindow)) return;
     if (isEditableElement(asElement(event.target))) {
       this.clearKeyGuide();
@@ -1229,69 +1206,6 @@ export class ReaderSession {
     }
   }
 
-  private handleSidebarToggleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
-    if (
-      (this.#outline.isOpen && !this.#outline.ownsView(pdfWindow)) ||
-      (this.#marksExplorer.isOpen && !this.#marksExplorer.ownsView(pdfWindow)) ||
-      isEditableElement(asElement(event.target)) ||
-      compositionOwnsKey(event, false)
-    )
-      return false;
-    const action = this.#outline.isOpen
-      ? 'toggleReaderSidebarOutline'
-      : this.#marksExplorer.isOpen
-        ? 'toggleMarksExplorer'
-        : null;
-    if (!action) {
-      this.clearSidebarToggleInput();
-      return false;
-    }
-    const key = keyString(event);
-    if (!key) return false;
-    const modePrefix = 'reader-normal:';
-    const sequences = Object.entries(this.#dependencies.bindings())
-      .filter(([binding, boundAction]) => binding.startsWith(modePrefix) && boundAction === action)
-      .map(([binding]) => binding.slice(modePrefix.length));
-    const matching = (buffer: string): string[] =>
-      sequences.filter((sequence) => bindingMatchesInputPrefix(sequence, buffer));
-
-    let next = appendInputKey(this.#sidebarToggleBuffer, key);
-    let matches = matching(next);
-    if (!matches.length && this.#sidebarToggleBuffer) {
-      next = appendInputKey('', key);
-      matches = matching(next);
-    }
-    if (!matches.length) {
-      this.clearSidebarToggleInput();
-      return false;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (matches.some((sequence) => bindingEqualsInput(sequence, next))) {
-      this.clearSidebarToggleInput();
-      if (action === 'toggleReaderSidebarOutline') this.#outline.close(pdfWindow);
-      else this.#marksExplorer.close(pdfWindow);
-      return true;
-    }
-
-    this.#sidebarToggleBuffer = next;
-    this.clearTimer(this.#sidebarToggleTimer);
-    const timer = this.schedule(1200, () => {
-      if (this.#sidebarToggleTimer !== timer) return;
-      this.#sidebarToggleBuffer = '';
-      this.#sidebarToggleTimer = null;
-    });
-    this.#sidebarToggleTimer = timer;
-    return true;
-  }
-
-  private clearSidebarToggleInput(): void {
-    this.#sidebarToggleBuffer = '';
-    this.clearTimer(this.#sidebarToggleTimer);
-    this.#sidebarToggleTimer = null;
-  }
-
   private handleMarkChord(event: KeyboardEvent, key: string, pdfWindow: PdfWindow): boolean {
     const bindings = this.#dependencies.bindings();
     if (
@@ -1364,9 +1278,6 @@ export class ReaderSession {
       return true;
     if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
     if (this.#linkHints.hasHints && pdfWindow && this.#linkHints.ownsView(pdfWindow)) return true;
-    if (this.#outline.isOpen && pdfWindow && this.#outline.ownsView(pdfWindow)) return true;
-    if (this.#marksExplorer.isOpen && pdfWindow && this.#marksExplorer.ownsView(pdfWindow))
-      return true;
     if (
       this.input.keyBuffer === 'm' ||
       this.input.keyBuffer === '`' ||
@@ -1388,14 +1299,8 @@ export class ReaderSession {
     return direction ? this.#navigation.canFocusDirection(direction) : true;
   }
   private openOrFocusOutline(pdfWindow: PdfWindow, focusOnly: boolean): void {
-    if (this.#outline.isOpen && !this.#outline.ownsView(pdfWindow)) this.#outline.close();
-    this.#sidebar.activate('outline', pdfWindow, () => this.#marksExplorer.close(pdfWindow));
-    if (focusOnly) {
-      void this.#outline.focus(this.#dependencies.reader, pdfWindow);
-      return;
-    }
-    if (this.#outline.isOpen) this.#outline.close(pdfWindow);
-    else void this.#outline.toggle(this.#dependencies.reader, pdfWindow);
+    if (focusOnly) this.#sidebar.focus(pdfWindow);
+    else this.#sidebar.toggle('outline', pdfWindow);
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
@@ -2559,7 +2464,7 @@ export class ReaderSession {
     if (this.#commentEditor.ownsInput) void this.handOverNativeEditor();
     this.setMode('normal');
     this.#nativeInput.enter();
-    this.clearSidebarToggleInput();
+    this.#sidebar.deactivate();
     this.#smoothScroller.stop(true);
     this.updateIndicator();
   }
@@ -2620,12 +2525,7 @@ export class ReaderSession {
   }
 
   private toggleMarksExplorer(pdfWindow: PdfWindow): void {
-    if (this.#marksExplorer.isOpen) {
-      this.#marksExplorer.close(pdfWindow);
-      return;
-    }
-    this.#sidebar.activate('marks', pdfWindow, () => this.#outline.close());
-    this.#marksExplorer.toggle(pdfWindow);
+    this.#sidebar.toggle('marks', pdfWindow);
   }
 
   /**

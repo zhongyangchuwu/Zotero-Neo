@@ -62,7 +62,7 @@ Distinctions:
 1. **Bound by default:** present in `DEFAULT_BINDINGS` / `NOTE_LOCAL_DEFAULT_BINDINGS`; tables below list each one.
 2. **Supported but unbound:** included in an executor capability and reachable via the context's Command Palette (or the indicated temporary surface), but no shipped binding exists. Examples include Reader Normal `showInLibrary`, Reader Normal `scrollBottom`, Reader Select `underlineSelection`, and Note Normal `showInLibrary`.
 3. **Not supported in that mode:** absent from that mode's capability set. A binding cannot make an unsupported action execute there. `NOTE_LOCAL_DEFAULT_BINDINGS` does not mean every Note action is global or bound in other modes.
-4. **Temporary grammar / native input:** a chooser, marks explorer, selection panel, Plugin Manager, Settings, Flash, or editor may own keys while active; its controls are not ordinary action bindings.
+4. **Temporary grammar / native input:** a chooser, the Reader Bookmarks group, Selection Panel, Plugin Manager, Settings, Flash, or an editor may own keys while active; these controls are not ordinary action bindings.
 
 ## Navigation and the shared jumplist
 
@@ -90,7 +90,7 @@ describe default eligibility, not a promise that every invocation appends:
 | Successful `showInLibrary` / Selection Panel Reveal | Queued Main Library reveal records only after success/current validation. Selection Panel closes only after successful/current reveal. |
 | `H`/`L` previous/next tab or confirmed chooser (`switchTab`) | Successful selected-tab change records. Main prefers Zotero `selectPrev()`/`selectNext()` when available; the current host cycle wraps across all open tab types, including Library, and fallback enumeration uses modulo over tabs. Count is ignored (one operation). One-tab/no-change cycle and selecting current tab do not record. Native tab-bar changes/clicks are not directly recorded. |
 | Reader PDF page destinations, including `gg`, `G`, and counted boundary jumps | When the host page-navigation API is supported, explicit page destinations may record only with a causally owned native hard receipt matching the exact current view and settled final geometry. Without the API, `gg/G` fall back to top/bottom scrolling and do not create a hard-jump entry. Positive count targets the one-based page; absent/zero count selects first/last. Ordinary scrolling and adjacent `h`/`l` page turns are excluded. |
-| Reader marks, outline jumps, annotation navigation, internal/citation links, and native search-result navigation | Marks use one managed final destination; the other routes require an owned, exact-view native hard receipt under the central policy. They may complete without an entry when no qualifying hard point occurs. Outline selection is not a jump; Enter confirms. |
+| Reader marks, native Outline navigation, annotation navigation, internal/citation links, and native search-result navigation | Marks use one managed final destination; native Outline navigation uses the existing `reader-native.hard` observation; other Reader routes require an owned exact-view native hard receipt under the central policy and may complete without history when no qualifying hard point occurs. |
 | External PDF link | Opens through Zotero's normal handler; not a Neo Reader history location. |
 | Scroll/zoom/split layout, selection/caret movement, filters, manual collection edits, and other non-location state changes | Excluded. |
 | Failure, no-op, stale async operation, cancelled chooser, or target that cannot be resolved/restored | No new location. `H/L` are the only shipped tab-cycle defaults; no `J/K` aliases exist. `H/L` ignore count and perform one native tab cycle. |
@@ -150,7 +150,7 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | Filter/clear annotation sidebar color filter; not history. |
 | `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, open eligible comment input, or leave the owned interaction. Settings gate Select and comment entry; disabled comment/Insert retains bare `i` native-pass-through compatibility. `exitMode` is unbound in Reader Normal. |
 | `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus nearest supported direction/split/context pane; no wrap. Missing target leaves focus unchanged. |
-| `toggleReaderSidebarOutline` | `<Space>e` | Toggle custom outline explorer. Opening/selecting is not itself a history jump; a confirmed destination may record only when its owned native hard receipt qualifies. A successful jump without that receipt has no entry. |
+| `toggleReaderSidebarOutline` | `<Space>e` | Toggle Zotero's native Reader sidebar in Outline view. Opening/closing the panel is not a history jump; qualifying native Outline destinations use the existing `reader-native.hard` observation. |
 | `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle Reader split layout; layout is not part of jumplist snapshot. |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared item/note chooser. A successful confirmed destination can record under the central settled-change rule; chooser activity itself does not. Escape cancels. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Choose open tab, cycle tabs, or close current tab. Successful chooser/H/L changes record; H/L counts are ignored and each cycles once. Closing alone is not Back and does not delete older entries. |
@@ -159,7 +159,7 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `addTag` / `removeTag` / `addToCollection` / `removeFromCollection` | `<Space>ta` / `<Space>tr` / `<Space>ca` / `<Space>cr` | Resolve active Reader bibliographic item and run chooser operation. Explicit user data operation, not a jump; failure/revalidation cancels whole action. |
 | `mainYankCitekey` | `<Space>yy` | Copy active Reader item's citekey; does not use Main Selection. |
 | `showInLibrary` | **Unbound** | Show active Reader item in Main Library; supported from Reader Normal palette. A successful changed reveal is eligible under the central settled-change rule. |
-| `focusReaderSidebar` | **Unbound** | Focus/reopen custom outline surface where the Reader executor exposes it; does not jump until an outline destination is confirmed. |
+| `focusReaderSidebar` | **Unbound** | Focus/reopen the native Reader sidebar's Outline view; does not itself navigate. |
 
 Other Reader actions are Select-only; see [Reader Select](#reader-select-and-annotation-actions). Actual split focus direction may target another pane type, including a Note context pane; it does not promise pane creation.
 Reader Normal counts are action-specific: step scroll, half/full viewport, `h/l` page turns, zoom in/out, and history traverse/repeat as their rows state; numeric `gg/G` is a single page target when supported. Search, annotation, tab-cycle, pane/layout, chooser, and other Reader Normal actions run once. Reader Select ignores counts for all its binding actions.
@@ -285,13 +285,21 @@ Flash runs under Reader Select `s` (or Select start entered by `v`). It uses a r
 
 Reader Normal `f` enumerates visible internal, citation, and external PDF links in the active Reader view. Type hint characters to choose; matching is case-insensitive, Backspace removes a hint character, Escape cancels. Activation follows the Reader's PDF navigation handler; internal/citation jumps may record only when their owned exact-view native hard receipt qualifies, external links are not Neo history. Off-screen links and reference-preview overlays are not included.
 
-### Outline explorer
+### Native Reader Outline and Bookmarks
 
-`<Space>e` toggles the Reader outline overlay. While it owns input: `j/k`, `Ctrl+d/u`, `l/h`, `R/M`, and `gg/G` navigate/expand/collapse outline rows; counts are not forwarded as general movement counts. Hint letters select without jumping; Enter confirms the selected outline destination; Escape closes. Selection and navigation are separate. The overlay closes after a successful completed or unchanged host outcome, independently of whether the central history policy appends. A confirmed jump records only when its owned native hard receipt qualifies; a successful jump without that evidence has no entry. If current page cannot map reliably to an outline entry, explorer chooses a fallback rather than claiming exact location.
+`<Space>e` opens the native Reader sidebar in Outline view or closes it when that view is already open. In the native Outline, `j/k/h/l` forward the corresponding arrow keys to Zotero, preserving native immediate row navigation. Native `Enter` expands/collapses a branch or opens its URL; `Escape` closes the sidebar and focuses the active PDF. Outline has no hint-entry grammar or Neo select-then-confirm step. A qualifying native Outline destination is observed through `reader-native.hard`; opening or closing the panel does not record a location.
 
-### Marks and Marks Explorer
+For Outline entries, Neo decorates native rows without changing their titles or numbering. The separate child count is the number of direct Outline children, not generated heading numbering.
 
-The marks grammar is Reader-owned and not represented by `ActionId` entries. `m` then a lowercase letter or digit sets a viewport mark; backtick then a letter/digit jumps; `dm` then a mark deletes one; `dM` deletes all; `<Space>m` toggles Marks Explorer. The mark character after the prefix is a label, not a count (`4j` counts movement; `` `1 `` jumps to mark `1`). Mark jumps restore marked viewport and can restore selected annotation association; successful jumps record one completed excursion, not each intermediate scroll. Explorer accepts direct mark labels, `j/k`, `G` or End to go last, Enter to jump, `d` to delete, `x` to delete all, Escape to close. It has no Home/gg shortcut; marks `j`, `k`, `g`, `d`, and `x` are not direct-character shortcuts in the explorer (use list selection and Enter); uppercase letters are not mark labels. Mark persistence is governed by Preferences; not a second navigation stack.
+Display categories are conservative inferences from title and hierarchy: a one-component number indicates Section, a dotted number indicates Subsection; otherwise nested rows infer Subsection and a root row with children infers Section. Explicitly numbered Figure/Fig/图 and Table/表 titles infer Figure or Table; unknown root leaves remain unclassified. These labels do not verify document semantics, and Neo does not extract figures or tables from PDF full text.
+
+The Bookmarks group is appended inside Outline; Zotero's native Annotations and Thumbnails views remain independent.
+
+### Marks and Bookmarks group
+
+The marks grammar is Reader-owned and is not represented by `ActionId` entries. `m` then a lowercase letter or digit sets a viewport mark; backtick then a letter/digit jumps; `dm` then a mark deletes one; `dM` deletes all; `<Space>m` focuses the Bookmarks group in native Outline. Repeating `<Space>m` while Bookmarks has focus closes the sidebar. The mark character after the prefix is a label, not a count (`4j` counts movement; `` `1 `` jumps to mark `1`). Mark jumps restore the marked viewport and can restore selected annotation association; successful jumps record one completed excursion, not each intermediate scroll.
+
+Inside Bookmarks, `j/k` move, `G` or End goes to the last mark, Enter or click jumps, `d` deletes the selected mark, and `x` deletes all marks. Assigned labels jump directly except `j`, `k`, `g`, `d`, and `x`, which are group controls; there is no Home/gg shortcut and uppercase letters are not labels. Marks remain in the persisted ReaderMarks map and are not PDF annotations; Preferences controls persistence.
 
 ### Annotation comment editor
 
@@ -456,9 +464,9 @@ This index covers all 179 canonical `ActionId`s in `ACTION_IDS`, including every
 | `focusReaderSplitRight` | Reader/Note/Main Normal and Note Insert `<C-l>` | Directional pane focus |
 | `toggleReaderSplitHorizontal` | Reader Normal `<Space>-` | Toggle horizontal split |
 | `toggleReaderSplitVertical` | Reader Normal <code>&lt;Space&gt;&#124;</code> | Toggle vertical split |
-| `toggleReaderSidebarOutline` | Reader Normal `<Space>e` | Toggle outline explorer |
-| `focusReaderSidebar` | **unbound** | Reader outline focus capability where exposed |
-| `toggleMarksExplorer` | Reader Normal `<Space>m` | Toggle marks explorer |
+| `toggleReaderSidebarOutline` | Reader Normal `<Space>e` | Toggle Zotero's native Reader sidebar in Outline view |
+| `focusReaderSidebar` | **unbound** | Focus/reopen native Outline view in the Reader sidebar |
+| `toggleMarksExplorer` | Reader Normal `<Space>m` | Focus Bookmarks in native Outline; repeat while focused to close the sidebar |
 | `noteMoveLeft` | Note Normal `h` | Note caret motion |
 | `noteMoveDown` | Note Normal `j` | Note caret motion |
 | `noteMoveUp` | Note Normal `k` | Note caret motion |

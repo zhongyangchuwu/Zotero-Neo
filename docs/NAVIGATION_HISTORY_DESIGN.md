@@ -183,17 +183,16 @@ Implemented central default policy inventory:
 | `firstPage`, `lastPage` | Supported explicit Reader page path | Record on owned native hard point |
 | `prevAnnotation`, `nextAnnotation` | Supported Reader destination, not mere selection UI | Record on owned native hard point |
 | `followLink` | Confirmed internal/citation destination; external URL excluded | Record on owned native hard point |
-| `reader-outline.confirm` | Outline destination confirmation; opening/browsing excluded | Record on owned native hard point |
 | `reader-mark.jump` | One managed mark excursion; set/delete/browse excluded | Record once on managed final destination |
-| `reader-native.hard` | Unowned non-transient native destination in the selected Reader tab | Record on native hard point |
+| `reader-native.hard` | Unowned non-transient native destination, including Zotero-native Outline navigation, in the selected Reader tab | Record on qualifying native hard point |
 | `navigateBack`, `navigateForward` | Counted or uncounted traversal | Traverse, never append |
 | Main `j/k`, Reader `h/l`, scroll/viewport motions | Navigation-capable ordinary movement | Ignore by default |
 | Native tab-bar selection/close; manual scope/filter changes | Not current standalone jump events | Ignore |
-| Selection/caret editing, zoom/layout, annotation/tag/item mutations, overlay launch/browse | Not navigation destinations | No recording rule |
+| Selection/caret editing, zoom/layout, annotation/tag/item mutations, temporary-surface launch/browse | Not navigation destinations | No recording rule |
 
-A named event is used where there is no executable ActionId; do not invent an ActionId merely to fit policy. Delayed chooser callbacks carry their semantic action cause. Delayed outline and link confirmation carry their owning navigation cause, not the current key or provider name.
+A named event is used where there is no executable ActionId; do not invent an ActionId merely to fit policy. Delayed chooser callbacks carry their semantic action cause. Link-hint activation carries its owning navigation cause; native Outline actions follow Zotero's native navigation and use the existing `reader-native.hard` observation.
 
-The Reader hard-point default does not imply that every listed command emits a hard point. In the pinned host, search's `_onNavigate` calls `navigateToPosition()` without a hard save, and `setSelectedAnnotationIDs()` updates selection without declaring a destination. Those routes may complete successfully without an entry. Their adapters return the real completion/no-op and preserve ownership; no settled-change entry is inferred without changing the central evidence rule and proving that route's completion/provenance contract. Outline closes on successful completed or unchanged host outcome independently of whether history append succeeds.
+The Reader hard-point default does not imply that every listed command emits a hard point. In the pinned host, search's `_onNavigate` calls `navigateToPosition()` without a hard save, and `setSelectedAnnotationIDs()` updates selection without declaring a destination. Those routes may complete successfully without an entry. Their adapters return the real completion/no-op and preserve ownership; no settled-change entry is inferred without changing the central evidence rule and proving that route's completion/provenance contract.
 
 The rule controls the **transition**, not whether a location can ever appear in history. An ignored motion can establish the actual departure of a later recorded jump; that location may legitimately become that later jump's source.
 

@@ -28,7 +28,6 @@ export type NavigationSurface = 'main' | 'reader' | 'note';
 export type NavigationEventId =
   | 'main-local-find.confirm'
   | 'main-selection-panel.reveal'
-  | 'reader-outline.confirm'
   | 'reader-mark.jump'
   | 'reader-native.hard';
 
@@ -42,7 +41,6 @@ export type ReaderNavigationPath =
   | 'annotation'
   | 'internal-link'
   | 'external-link'
-  | 'outline'
   | 'mark'
   | 'page-step'
   | 'scroll'

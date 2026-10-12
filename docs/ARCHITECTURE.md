@@ -159,15 +159,17 @@ host/view lifecycle seams are owned separately:
   Select anchor/preferred-X state, range motions, endpoint swaps, and view markers;
 - `flash.ts` — visible-text targeting and hint lifecycle;
 - `link-hints.ts` — PDF link targeting;
-- `marks.ts` / `marks-explorer.ts` — persisted marks and explorer behavior;
-- `outline.ts` — outline tree/navigation;
+- `marks.ts` — persisted Reader marks and managed mark navigation;
+- `native-sidebar.ts` — reversible decoration of the native Reader Outline and Neo Bookmarks group;
+- `outline-presentation.ts` — conservative derived Outline categories and child counts;
 - `comment-editor.ts` — transient annotation-comment editor state;
 - `selection-actions.ts` — view-scoped selection action registry/palette and async
   result lifetime. It retires input/theme ownership before touching detached DOM.
   Cross-surface capture passes immutable selection context to its semantic owner
   and remains pending until the owner's chooser closes;
 - `smooth-scroll.ts` — smooth-hold state;
-- `sidebar-overlay.ts` — only the shared Outline/Marks overlay lifecycle.
+
+The native sidebar is Reader-document-scoped; PDF focus and split changes do not select a sidebar owner. Editable and composing targets remain host-owned.
 
 `ReaderController` owns the native Reader event registrations by event type and
 callback identity; Zotero's registration API returns no listener handle. Shutdown

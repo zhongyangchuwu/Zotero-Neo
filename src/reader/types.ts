@@ -34,6 +34,10 @@ export interface InternalReaderRuntime {
     readonly primaryViewFindState?: { readonly active?: boolean };
     readonly secondaryViewFindState?: { readonly active?: boolean };
     readonly primary?: boolean;
+    readonly sidebarOpen?: boolean;
+    readonly sidebarView?: 'outline' | 'annotations' | 'thumbnails';
+    readonly outline?: readonly ReaderNativeOutlineEntry[] | null;
+    readonly pageLabels?: readonly string[];
   };
   readonly splitType?: 'horizontal' | 'vertical' | null;
   _enableAnnotationDeletionFromComment?: boolean;
@@ -58,9 +62,8 @@ export interface InternalReaderRuntime {
   findNext?(): void;
   findPrevious?(): void;
   setFilter?(filter: { readonly colors: readonly string[] }): void;
-  toggleSidebar?(): void;
-  setSidebarOpen?(options: { readonly open: boolean } | boolean): void;
-  setSidebarView?(options: { readonly view: 'outline' } | 'outline'): void;
+  toggleSidebar?(open?: boolean): void;
+  setSidebarView?(view: 'outline' | 'annotations' | 'thumbnails'): void;
   toggleHorizontalSplit?(enable?: boolean): void;
   toggleVerticalSplit?(enable?: boolean): void;
   focusView?(primary?: boolean): void;
@@ -173,7 +176,6 @@ export interface PdfPageViewRuntime {
 }
 
 export interface PdfDocumentRuntime {
-  getOutline?(): Promise<readonly OutlineSourceNode[] | null>;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
   getPage?(page: number): Promise<{
@@ -243,27 +245,13 @@ export interface MarksPayload {
   readonly marks: Readonly<Record<string, Omit<Mark, 'ts'>>>;
 }
 
-export interface OutlineSourceNode {
-  readonly title?: string;
-  readonly label?: string;
-  readonly dest?: unknown;
-  readonly url?: string;
-  readonly pageIndex?: number;
-  readonly items?: readonly OutlineSourceNode[];
-  readonly children?: readonly OutlineSourceNode[];
-}
-
-export interface OutlineNode {
-  readonly id: string;
-  readonly parentID: string | null;
-  readonly depth: number;
+/** Native Reader navigation entries; kind and numbering are not document metadata fields. */
+export interface ReaderNativeOutlineEntry {
   readonly title: string;
-  readonly dest: unknown;
-  readonly url: string | null;
-  pageIndex: number | null;
-  expanded: boolean;
-  children: OutlineNode[];
-  hint: string;
+  readonly items?: readonly ReaderNativeOutlineEntry[];
+  readonly expanded?: boolean;
+  readonly matched?: boolean;
+  readonly childMatched?: boolean;
 }
 
 export interface Pointer {
