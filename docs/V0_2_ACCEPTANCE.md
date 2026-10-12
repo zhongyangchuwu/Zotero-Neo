@@ -90,7 +90,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 然后执行：
 
-1. 关闭 Reader 和 Zotero，用原生插件管理器在同一升级 profile 中安装候选 0.2.0 包，重启。
+1. 先关闭旧版 Reader；在同一个仍运行的升级 profile 中，用原生插件管理器安装候选 0.2.0 包，按安装结果要求退出／重启 Zotero。不要先退出整个程序后再要求在已关闭的窗口里安装。
 2. 核实插件版本 0.2.0、schema 18、自定义 `Q` 的行为和 `j` 的明确取消均保留；原保存的无关设置未丢失。
 3. 核实旧 Reader Insert 行消失，其他上下文映射／取消仍在；不是把全部配置重置为默认。
 4. 核实新的 `extensions.zotero-neo.annotationCommentEditor.enabled` 为 `false`，旧 `mode.insert.enabled` 清除；Reader Normal `i` 是原生 passthrough 所有者，Escape 退出它，不产生 Reader Insert 模式。
@@ -192,6 +192,16 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 - `PASS` / `FAIL` / `NOT PERFORMED`；仅可选且确实缺少条件的场景使用 `NOT APPLICABLE`。
 - 未剪掉失败的截图／录像位置和原始诊断；剪辑版宣传片另外标明，不覆盖原始证据。
 - 变更前／后笔记、Selection、目标 item、偏好等与该用例相关的结果。不要公开真实资料或凭空增加动作日志。
+
+### 程序化观测与真实输入的界限
+
+- RDP 端口就绪不等于 Zotero 数据层就绪：调用 Reader／Item API 前等待 `Zotero.initializationPromise`。原生 PDF 初始化也不保证 Neo 视图已经挂载；键路由验收要先确认当前安装包的视图处理者可用。
+- 遵循项目的跨 compartment 约束：传给内容 Window 构造器的事件初始化对象要 `cloneInto` 到目标 realm。否则可能收到 `isTrusted=true` 但 key/code 为空的测试事件；这种观测不能算功能失败或通过。
+- 原生输入处理器的 Control/Shift 状态应由实际 modifier keydown/keyup 事务建立，不能把构造器中的 `ctrlKey=true` 当作已经送出了组合键。每个事务释放 modifier，避免污染下一步。
+- DOM `Window.focus()`／容器 focus 不等于 Zotero 已切换 native PDF owner。使用实际支持的 pane-focus 操作（例如 `<C-h>`／`<C-l>`），核实目标视图后再送键；不要直接改 `_lastViewPrimary` 等私有状态制造正确结果。
+- 滚动／导航动画必须完成后再读取位置，并考虑原生边界 clamp；第一帧的位置不证明多处理或错处理。Note 的可见文字也要等原生保存后读取，不把草稿或立即关闭时的旧缓存当成最终持久值。
+- 程序化可信 Gecko 事件、原生 Add-on Manager API 和实际 UI 图像，各自证明其已执行属性；它们不是物理键盘、OS 候选窗或人工剪贴板 PASS。后台窗口的前台保护拒绝时，停止全局发键，不向别的窗口重试。
+
 
 发生失败：停止该用例，保留原始状态，在独立缺陷 Issue 写明复现和已观察后果。修复后只复验受影响的行为，并记录新候选身份；不要为了清空列表伪造 PASS 或重启覆盖证据。
 

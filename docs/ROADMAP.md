@@ -160,8 +160,10 @@ unpublished candidate, not a new public release. The public `main` update feed
 must keep serving v0.1.0 until acceptance and publication are explicitly authorized.
 
 Passing `tools/check-release.mjs v0.2.0` proves candidate metadata consistency, not
-human acceptance or a live release asset. Keep this preparation branch unmerged
-while #137's remaining criteria and the final packaged upgrade are unperformed.
+human acceptance or a live release asset. Native candidate installation, real
+public-v0.1.0 upgrade and trusted per-view key routing have separate evidence in
+#137; keep this branch unmerged until its remaining physical-input criteria and
+explicit publication authorization are satisfied.
 
 Before another release:
 
