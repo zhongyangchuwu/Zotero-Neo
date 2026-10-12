@@ -6,3 +6,5 @@ addon/
 docs/
 .planning/
 *.xpi
+.vitepress/cache/
+.vitepress/dist/
