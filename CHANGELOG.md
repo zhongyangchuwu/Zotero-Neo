@@ -44,6 +44,8 @@ v0.2.0 packaged upgrade must be observed before publication.
 - Reconcile the current interaction, runtime ownership and contributor guidance after the Surface/Target/Input cleanup and selection-safe Notes revision. Historical workflow inventories no longer define current behavior; source-build instructions distinguish the unreleased candidate from the public v0.1.0 update asset.
 - Remove the unused cross-Surface item-target dispatcher/re-exports and keep behavioral target contracts on the existing Main, Reader and Note resolvers. Persisted-preference migration helpers remain in use and are unchanged.
 - Prune historical source-text, error-wording, CSS-spelling and duplicated default-table assertions while retaining preference migrations, native input boundaries, cleanup races and package-byte contracts.
+- Keep unchanged serialized bindings and immutable mode projections off the per-key parsing path; preference edits and mutable editor drafts still take effect immediately.
+- Bound Picker ranking to the displayed top 100 while preserving source order for equal scores, and move keyboard selection without rebuilding result rows.
 
 - Notes and Reader capture now default to the current Item's notes, with an explicit Library source switch that retains the same query and confirmation. Rows show titles only, thin nonselectable boundaries separate Item owners, and Preview reports each note's actual parent or standalone/unavailable source. Human notes containing citation-tool terminology remain visible.
 
@@ -70,6 +72,9 @@ v0.2.0 packaged upgrade must be observed before publication.
 
 ### Fixed
 - Use the initiating Reader/PDF view's current selection and geometry for annotations. Admitted saves survive view retirement, while stale continuations cannot clear/refocus newer selection or open a different annotation's comment.
+- Reject annotation selections spanning more than two pages or non-adjacent pages instead of saving truncated geometry. Incomplete PDF coordinates fail closed without clearing Select or its text.
+- Compute cross-page annotation rectangles from selected text nodes, excluding intervening PDF canvas/page boxes and preserving partial text endpoints.
+- Retain only pending Reader timers; completed or cancelled callbacks cannot refocus an editor or save a newer draft.
 - Keep native Find composition Enter native and fence delayed return-to-PDF focus to the same live input/view.
 - Main Notes now uses the focused Cursor item independently of native multi-selection and persistent Neo Selection.
 - Restore only the explicit last Neo Trash batch, report the number of successfully persisted items and roll back the in-memory deleted flag after a failed save; never invoke parameterless native Undo.

@@ -938,22 +938,44 @@ export function encodeBindingOverrides(bindings: BindingMap): string {
   return stringifyBindingOverrides(overrides);
 }
 
+// Preferences are serialized; retain only the latest value, not an edit history.
+let lastSerializedBindings: string | undefined;
+let lastResolvedBindings: BindingMap | undefined;
+const MODE_BINDINGS = new WeakMap<BindingMap, Map<BindingContext, BindingMap>>();
+
 export function resolveBindings(raw: unknown): BindingMap {
+  if (typeof raw === 'string' && raw === lastSerializedBindings && lastResolvedBindings) {
+    return lastResolvedBindings;
+  }
   const bindings: Record<string, ActionId> = { ...DEFAULT_BINDINGS };
   for (const [key, action] of Object.entries(parseBindingOverrides(raw))) {
     if (action === null) delete bindings[key];
     else bindings[key] = action;
   }
-  return Object.freeze(bindings);
+  const resolved = Object.freeze(bindings);
+  if (typeof raw === 'string') {
+    lastSerializedBindings = raw;
+    lastResolvedBindings = resolved;
+  }
+  return resolved;
 }
 
-/** Projects only the bindings explicitly declared for one mode. */
+/** Projects one explicit mode; mutable editor drafts are never cached. */
 export function bindingsForMode(bindings: BindingMap, mode: BindingContext): BindingMap {
+  const cacheable = Object.isFrozen(bindings);
+  let modes = cacheable ? MODE_BINDINGS.get(bindings) : undefined;
+  const cached = modes?.get(mode);
+  if (cached) return cached;
   const result: Record<string, ActionId> = {};
   for (const [key, action] of Object.entries(bindings)) {
     const binding = parseBindingKey(key);
     const sequence = binding ? canonicalBindingSequence(binding.sequence) : null;
     if (binding?.mode === mode && sequence) result[`${mode}:${sequence}`] = action;
   }
-  return Object.freeze(result);
+  const projected = Object.freeze(result);
+  if (cacheable) {
+    if (!modes) MODE_BINDINGS.set(bindings, (modes = new Map()));
+    modes.set(mode, projected);
+  }
+  return projected;
 }

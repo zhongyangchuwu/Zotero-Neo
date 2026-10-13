@@ -918,6 +918,7 @@ function configureAnnotationSelection(
     let first = start;
     let last = end;
     return {
+      commonAncestorContainer: node,
       startContainer: node,
       endContainer: node,
       get startOffset() {
@@ -1012,6 +1013,57 @@ function configureAnnotationSelection(
   return { selection, node, container };
 }
 
+function configureAnnotationGeometry(
+  created: ReaderHistoryHarness,
+  pageIndices: readonly number[],
+  fragmentsPerPage = 1,
+  pageCount = 6,
+) {
+  const text = pageIndices.map((index) => `page ${index + 1} text`).join(' ');
+  const fixture = configureAnnotationSelection(created, text, 0, text.length);
+  const document = created.pdfWindow.document;
+  const pages = Array.from({ length: pageCount }, (_, index) => ({
+    dataset: { pageNumber: String(index + 1) },
+    getBoundingClientRect: vi.fn(() => ({ left: 20, top: index * 600, bottom: index * 600 + 500 })),
+  }));
+  const rectangles = pageIndices.flatMap((index) =>
+    Array.from({ length: fragmentsPerPage }, (_, fragment) => ({
+      left: 30 + fragment * 10,
+      right: 38 + fragment * 10,
+      top: index * 600 + 20,
+      bottom: index * 600 + 40,
+      width: 8,
+      height: 20,
+    })),
+  );
+  const getRangeAt = fixture.selection.getRangeAt;
+  Reflect.set(fixture.selection, 'getRangeAt', () => ({
+    ...getRangeAt(),
+    getClientRects: () => rectangles,
+  }));
+  const querySelectorAll = document.querySelectorAll.bind(document);
+  Reflect.set(document, 'querySelectorAll', (selector: string) =>
+    selector === '.page[data-page-number]' ? pages : querySelectorAll(selector),
+  );
+  const pageViews = pages.map(() => ({
+    viewport: {
+      height: 500,
+      scale: 1,
+      convertToPdfPoint: (x: number, y: number) => [x, 500 - y],
+    },
+  }));
+  Reflect.set(created.pdfWindow.PDFViewerApplication!.pdfViewer!, '_pages', pageViews);
+  Reflect.set(created.pdfWindow.PDFViewerApplication!.pdfViewer!, '_pageLabels', [
+    'i',
+    'ii',
+    'iii',
+    'iv',
+    'v',
+    'vi',
+  ]);
+  return { ...fixture, text, pages, pageViews, rectangles };
+}
+
 function recordReaderDocumentEvents(document: Document) {
   const listeners = new Map<string, EventListener[]>();
   Reflect.set(document, 'addEventListener', (type: string, listener: EventListener) => {
@@ -1038,6 +1090,227 @@ describe('Reader annotation creation ownership', () => {
     },
     onAddAnnotation: () => {},
   };
+
+  it.each(
+    [
+      { span: 'three pages', pageIndices: [0, 1, 2] },
+      { span: 'two non-adjacent pages', pageIndices: [0, 2] },
+    ].flatMap((fixture) =>
+      (['none', 'original', 'full'] as const).map((native) => ({ ...fixture, native })),
+    ),
+  )(
+    'rejects $span with $native native params without changing the selection',
+    async ({ pageIndices, native }) => {
+      const created = createHistorySession();
+      const { selection, text } = configureAnnotationGeometry(created, pageIndices);
+      const persistence = configureAnnotationPersistence([created]);
+      executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+      if (native !== 'none') {
+        created.session.acceptSelectionParams({
+          ...nativeParams,
+          annotation: { ...nativeParams.annotation, text: native === 'full' ? text : 'page 1' },
+        });
+      }
+      expect(created.session.selectionContext()).toEqual({
+        text,
+        itemID: 41,
+        pageLabel: 'i',
+        position: null,
+      });
+      executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+      await settleReaderMicrotasks();
+      expect(persistence.drafts).toEqual([]);
+      expect(persistence.saved).toEqual([]);
+      expect(selection.toString()).toBe(text);
+      expect(selection.removeAllRanges).not.toHaveBeenCalled();
+      expect(created.session.mode).toBe('visual');
+      expect(created.indicator.textContent).toContain('unsupported page span');
+      expect(created.session.selectionContext()).toEqual({
+        text,
+        itemID: 41,
+        pageLabel: 'i',
+        position: null,
+      });
+      created.session.dispose();
+    },
+  );
+
+  it.each([
+    { span: 'one page', pageIndices: [1] },
+    { span: 'two adjacent pages', pageIndices: [1, 2] },
+  ])('saves every rectangle and the full text for $span', async ({ pageIndices }) => {
+    const created = createHistorySession();
+    const { selection, text } = configureAnnotationGeometry(created, pageIndices, 2);
+    const persistence = configureAnnotationPersistence([created]);
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    const rects = [
+      [10, 460, 18, 480],
+      [20, 460, 28, 480],
+    ];
+    const position = JSON.stringify({
+      pageIndex: 1,
+      rects,
+      ...(pageIndices.length === 2 ? { nextPageRects: rects } : {}),
+    });
+    expect(created.session.selectionContext()).toEqual({
+      text,
+      itemID: 41,
+      pageLabel: 'ii',
+      position,
+    });
+    executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      {
+        annotationText: text,
+        annotationPosition: position,
+        annotationPageLabel: 'ii',
+        annotationSortIndex: '00001|000000|00020',
+      },
+    ]);
+    expect(selection.removeAllRanges).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('saves only selected text rectangles across pages, not intervening canvas boxes', async () => {
+    const created = createHistorySession();
+    const fixture = configureAnnotationGeometry(created, [0, 1]);
+    const persistence = configureAnnotationPersistence([created]);
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    const first = { nodeType: 3, textContent: 'alpha' };
+    const last = { nodeType: 3, textContent: 'beta' };
+    const outside = { nodeType: 3, textContent: 'outside' };
+    const nodes = [first, last, outside];
+    const range = {
+      commonAncestorContainer: { nodeType: 1 },
+      startContainer: first,
+      endContainer: last,
+      startOffset: 1,
+      endOffset: 3,
+      comparePoint: (node: typeof first) => (node === outside ? 1 : 0),
+      intersectsNode: (node: typeof first) => node !== outside,
+      getClientRects: () => [
+        ...fixture.rectangles,
+        { left: 20, right: 620, top: 600, bottom: 1100, width: 600, height: 500 },
+      ],
+    };
+    Reflect.set(fixture.selection, 'getRangeAt', () => range);
+    Reflect.set(fixture.selection, 'toString', () => 'lpha bet');
+    Reflect.set(created.pdfWindow.document, 'createTreeWalker', () => {
+      let index = -1;
+      return {
+        set currentNode(node: typeof first) {
+          index = nodes.indexOf(node);
+        },
+        nextNode: () => nodes[++index] ?? null,
+      };
+    });
+    Reflect.set(created.pdfWindow.document, 'createRange', () => {
+      let node = first;
+      let start = 0;
+      let end = 0;
+      return {
+        selectNodeContents: (value: typeof first) => {
+          node = value;
+          end = value.textContent.length;
+        },
+        setStart: (_node: typeof first, offset: number) => {
+          start = offset;
+        },
+        setEnd: (_node: typeof first, offset: number) => {
+          end = offset;
+        },
+        getClientRects: () => [
+          {
+            left: 30 + start * 8,
+            right: 30 + end * 8,
+            top: node === first ? 20 : 620,
+            bottom: node === first ? 40 : 640,
+            width: (end - start) * 8,
+            height: 20,
+          },
+        ],
+      };
+    });
+    const position = JSON.stringify({
+      pageIndex: 0,
+      rects: [[18, 460, 50, 480]],
+      nextPageRects: [[10, 460, 34, 480]],
+    });
+    expect(created.session.selectionContext()?.position).toBe(position);
+    executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      { annotationText: 'lpha bet', annotationPosition: position },
+    ]);
+    created.session.dispose();
+  });
+
+  it('preserves viewport rotation conversion and three-decimal rounding', async () => {
+    const created = createHistorySession();
+    const { text, pageViews } = configureAnnotationGeometry(created, [1, 2]);
+    for (const pageView of pageViews) {
+      pageView.viewport.convertToPdfPoint = (x, y) => [y + 0.12345, 500 - x + 0.67891];
+    }
+    const persistence = configureAnnotationPersistence([created]);
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    const position = JSON.stringify({
+      pageIndex: 1,
+      rects: [[20.123, 482.679, 40.123, 490.679]],
+      nextPageRects: [[20.123, 482.679, 40.123, 490.679]],
+    });
+    expect(created.session.selectionContext()?.position).toBe(position);
+    executeReaderAction(created.session, 'underlineSelection', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      { annotationText: text, annotationPosition: position },
+    ]);
+    created.session.dispose();
+  });
+
+  it.each([
+    'missing viewport',
+    'missing conversion',
+    'invalid next page',
+    'invalid fragment',
+    'unmatched fragment',
+  ] as const)('does not partially save when geometry has a %s', async (failure) => {
+    const created = createHistorySession();
+    const { selection, text, pageViews, rectangles } = configureAnnotationGeometry(
+      created,
+      [0, 1],
+      2,
+    );
+    const persistence = configureAnnotationPersistence([created]);
+    if (failure === 'missing viewport') Reflect.set(pageViews[1]!, 'viewport', undefined);
+    else if (failure === 'missing conversion')
+      Reflect.set(pageViews[1]!.viewport, 'convertToPdfPoint', undefined);
+    else if (failure === 'invalid next page')
+      pageViews[1]!.viewport.convertToPdfPoint = () => [Number.NaN, 0];
+    else if (failure === 'invalid fragment')
+      pageViews[0]!.viewport.convertToPdfPoint = (x, y) =>
+        x >= 20 ? [Number.POSITIVE_INFINITY, y] : [x, 500 - y];
+    else {
+      rectangles[3]!.top = 10_000;
+      rectangles[3]!.bottom = 10_020;
+    }
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    expect(created.session.selectionContext()).toEqual({
+      text,
+      itemID: 41,
+      pageLabel: 'i',
+      position: null,
+    });
+    executeReaderAction(created.session, 'addNote', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.drafts).toEqual([]);
+    expect(persistence.saved).toEqual([]);
+    expect(selection.toString()).toBe(text);
+    expect(selection.removeAllRanges).not.toHaveBeenCalled();
+    expect(created.session.mode).toBe('visual');
+    expect(created.indicator.textContent).toContain('no complete PDF selection rects');
+    created.session.dispose();
+  });
 
   it('saves the extended DOM text and PDF position instead of the original native selection', async () => {
     const created = createHistorySession();
@@ -3314,6 +3587,70 @@ describe('Reader annotation comment input ownership', () => {
     Reflect.set(created.reader, 'itemID', attachment.id);
     return { ...created, annotation };
   }
+
+  it('does not refocus an open comment when its completed timer is delivered again', async () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createCommentSession();
+    try {
+      created.session.focusAndHandle(readerKey('i').event);
+      await settleReaderMicrotasks();
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+      const input = Array.from(overlay?.children ?? []).find(
+        (node) => node.id === 'zv-annotation-comment-input',
+      ) as HTMLTextAreaElement | undefined;
+      if (!input) throw new Error('Expected mounted comment textarea');
+      Reflect.set(input, 'isConnected', true);
+      const completedFocus = timers.mock.calls.find(([, delay]) => delay === 60)![0] as () => void;
+
+      vi.advanceTimersByTime(60);
+      expect(input.focus).toHaveBeenCalled();
+      const focusCount = vi.mocked(input.focus).mock.calls.length;
+      completedFocus();
+      expect(input.focus).toHaveBeenCalledTimes(focusCount);
+      expect(created.bodyChildren).toContain(overlay);
+    } finally {
+      created.session.dispose();
+      timers.mockRestore();
+    }
+  });
+
+  it('does not save a newer comment draft when a cancelled autosave is delivered late', async () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createCommentSession();
+    try {
+      created.session.focusAndHandle(readerKey('i').event);
+      await settleReaderMicrotasks();
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+      const input = Array.from(overlay?.children ?? []).find(
+        (node) => node.id === 'zv-annotation-comment-input',
+      );
+      if (!input) throw new Error('Expected mounted comment textarea');
+      const changed = vi
+        .mocked(input.addEventListener)
+        .mock.calls.find(([type]) => type === 'input')![1] as () => void;
+      Reflect.set(input, 'value', 'first draft');
+      changed();
+      const cancelledAutosave = timers.mock.calls.find(
+        ([, delay]) => delay === 2000,
+      )![0] as () => void;
+      Reflect.set(input, 'value', 'latest draft');
+      changed();
+
+      cancelledAutosave();
+      await settleReaderMicrotasks();
+      expect(created.annotation.annotationComment).toBe('saved comment');
+      expect(created.annotation.saveTx).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2000);
+      await settleReaderMicrotasks();
+      expect(created.annotation.annotationComment).toBe('latest draft');
+      expect(created.annotation.saveTx).toHaveBeenCalledOnce();
+    } finally {
+      created.session.dispose();
+      timers.mockRestore();
+    }
+  });
 
   it('keeps disabled Normal Enter a no-op while disabled i admits native input', async () => {
     const created = createCommentSession(async () => {}, {

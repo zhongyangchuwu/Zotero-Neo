@@ -3,6 +3,7 @@ import { ACTION_IDS, ACTION_LABELS, type ActionId } from '../../src/input/action
 
 import {
   DEFAULT_BINDINGS,
+  bindingsForMode,
   encodeBindingOverrides,
   migrateLegacyBindingOverrides,
   migrateBindingModeOverrides,
@@ -173,6 +174,45 @@ describe('binding parsing and overrides', () => {
     expect(bindings['reader-normal:h']).toBe('prevPage');
     expect(bindings['main-normal:<Enter>']).toBeUndefined();
     expect(bindings['main-normal:<Return>']).toBe('mainActivate');
+  });
+
+  it('observes override, unbind, reset, and restored preference transitions immediately', () => {
+    const override = '{"reader-normal:j":"scrollUp"}';
+    const unbound = '{"reader-normal:j":null}';
+    for (const [raw, expected] of [
+      [override, 'scrollUp'],
+      [unbound, undefined],
+      ['', 'scrollDown'],
+      [override, 'scrollUp'],
+    ] as const) {
+      const active = bindingsForMode(resolveBindings(raw), 'reader-normal');
+      const decision = advanceInput(context(normalState(), active), 'j');
+      if (expected === undefined) expect(decision.kind).toBe('pass');
+      else expect(decision).toMatchObject({ kind: 'execute', action: expected });
+    }
+  });
+
+  it('keeps projections isolated by mode and refreshes mutable binding drafts', () => {
+    const draft: Record<string, ActionId> = {
+      'reader-normal:j': 'scrollDown',
+      'main-normal:j': 'mainNavDown',
+    };
+    const check = (bindings: BindingMap) => {
+      const reader = bindingsForMode(bindings, 'reader-normal');
+      const main = bindingsForMode(bindings, 'main-normal');
+      expect(reader['main-normal:j']).toBeUndefined();
+      expect(main['reader-normal:j']).toBeUndefined();
+      expect(main['main-normal:j']).toBe('mainNavDown');
+      return reader;
+    };
+    expect(check(draft)['reader-normal:j']).toBe('scrollDown');
+    draft['reader-normal:j'] = 'scrollUp';
+    expect(check(draft)['reader-normal:j']).toBe('scrollUp');
+    delete draft['reader-normal:j'];
+    expect(check(draft)['reader-normal:j']).toBeUndefined();
+    expect(
+      check(Object.freeze({ ...draft, 'reader-normal:j': 'scrollDown' }))['reader-normal:j'],
+    ).toBe('scrollDown');
   });
 
   it('honors explicit history-key overrides independently', () => {

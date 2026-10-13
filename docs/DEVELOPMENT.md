@@ -124,6 +124,10 @@ a second disposal must not be needed to release a split pane. During fault-injec
 acceptance, confirm that disabling Neo still removes Main command handling when a live
 Reader sidebar removal throws.
 
+Reader session timers retain only pending handles. Completion or cancellation removes
+ownership before running consumer work; a queued old callback cannot refocus an editor
+or save a newer draft. Disposal cancels the pending set once, not the timer history.
+
 Pending Reader injection checks Zotero's `_isTabClosed` flag before reading any
 PDF view or iframe. A closed Reader retires its pending identity and retry timer
 without creating a session; queued ready callbacks cannot revive that identity.
@@ -267,6 +271,10 @@ Keep the result/native region bounded so Apply remains reachable before results,
 and keep Prefix Guide collapsed. Duplicate, malformed, incompatible, and
 native-reserved bindings block Apply; strict prefixes warn without blocking.
 Unbind/reset changes only one action in one context and preserves other rows.
+Resolution retains only the latest serialized preference value; a different value
+invalidates it immediately. Mode projections are cached only for frozen binding maps
+using weak ownership. Mutable editor drafts are always projected afresh; there is no
+inherited scope or extra preference observer.
 Carried incompatible orphan rows can be deleted but are not presented as
 executable actions.
 
@@ -443,6 +451,10 @@ Shared Picker and TagPath fuzzy ranking goes through Neo's `fuzzyMatchScore()` a
 the pinned, audited `fuzzysort` vendor snapshot. esbuild folds that ESM into the runtime IIFE; no
 npm/CDN/native dependency is resolved at runtime. Keep consumers behind the adapter instead of
 importing the vendor module throughout feature code.
+Picker keeps only the best 100 ranked candidates, retaining source order for equal
+scores and the full matched count. An empty query slices the source directly.
+Keyboard row movement updates selection and Preview on the existing result DOM;
+query/source changes still rebuild the candidate list.
 
 The shell owns generic navigation: unmodified ArrowUp/ArrowDown when search/list owns interaction,
 Ctrl+j/k (and Ctrl+n/p aliases), list-local j/k, `/` to return to search, Ctrl+d/u preview
@@ -487,6 +499,16 @@ retired result carrying its receipt or null, suppressing stale Reader status and
 focus without undoing a completed save. Failed appends restore only unchanged
 in-memory content, never a concurrent native edit. Reader shows receipt status
 only while its captured action generation and PDF view remain current.
+
+Reader annotation geometry supports one page or two adjacent pages. More page groups,
+non-adjacent groups, unmatched fragments, or incomplete PDF conversion cannot create
+a partial annotation, even when native selection parameters are present. Select and
+its full text remain available after rejection. Selection snapshots keep that full text
+and the first readable page label, with `position: null` when geometry is unsupported
+or incomplete. Bounds are measured once per visited page within one computation,
+never cached across selection or viewport changes.
+Cross-page rectangles come from text-node ranges clipped to the actual endpoints;
+whole-page/canvas boxes returned by a broad DOM Range are not annotation rectangles.
 
 Tag candidate sources follow the same chooser contract as ordinary object sources. They may
 project virtual namespaces, explicit create candidates, and action-specific metadata, but they do

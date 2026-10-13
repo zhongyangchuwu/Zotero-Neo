@@ -154,11 +154,19 @@ interface SessionDependencies {
   readonly selection?: SessionSelectionBridge;
 }
 
-interface ComputedAnnotationPosition {
-  readonly position: string;
-  readonly sortIndex: string;
-  readonly pageLabel: string;
-}
+type ComputedAnnotationPosition =
+  | {
+      readonly position: string;
+      readonly sortIndex: string;
+      readonly pageLabel: string;
+      readonly failure?: never;
+    }
+  | {
+      readonly position: null;
+      readonly sortIndex?: never;
+      readonly pageLabel: string;
+      readonly failure: 'unsupported-page-span' | 'invalid-geometry';
+    };
 
 function zoteroRuntime(): ZoteroRuntime {
   // Zotero's typed surface intentionally omits private reader internals; this is the single validated host boundary.
@@ -509,6 +517,7 @@ const READER_INPUT_TIMERS: InputTimerHost = {
 export class ReaderSession {
   readonly #dependencies: SessionDependencies;
   readonly #scope = new CleanupScope();
+  readonly #pendingTimers = new Set<ReaderTimer>();
   readonly #hostKeyBridge: ReaderHostKeyBridge;
   readonly #jumpHistoryBridge: ReaderJumpHistoryBridge;
   readonly #viewLifecycle: ReaderViewLifecycle;
@@ -780,6 +789,11 @@ export class ReaderSession {
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
     this.#scope.add(() => this.input.dispose());
+    this.#scope.addTimeout(() => {
+      const failure = new CleanupFailure();
+      for (const timer of this.#pendingTimers) failure.run(() => this.clearTimer(timer));
+      failure.rethrow();
+    });
   }
 
   get itemID(): number | undefined {
@@ -2192,20 +2206,30 @@ export class ReaderSession {
         ? this.state.selectionParams
         : null;
     const selection = pdfWindow.getSelection();
+    const hasDomSelection = selection && !selection.isCollapsed;
+    const computed = hasDomSelection ? this.computeSelectionPosition(pdfWindow, selection) : null;
+    if (hasDomSelection && (!computed || computed.position === null)) {
+      this.showStatus(
+        computed?.failure === 'unsupported-page-span'
+          ? '✗ unsupported page span: select one page or two adjacent pages'
+          : '✗ no complete PDF selection rects',
+        2000,
+      );
+      return;
+    }
+    const useNativeParams =
+      params?.annotation &&
+      (!hasDomSelection ||
+        annotationText(params.annotation.text ?? '') === annotationText(selection.toString()));
     let text: string;
     let position: unknown;
     let sortIndex: string | undefined;
     let pageLabel: string | undefined;
-    if (params?.annotation) {
+    if (useNativeParams) {
       ({ text = '', position, sortIndex, pageLabel } = params.annotation);
     } else {
-      if (!selection || selection.isCollapsed) {
+      if (!selection || !computed || computed.position === null) {
         this.showStatus('✗ no selection', 1500);
-        return;
-      }
-      const computed = this.computeSelectionPosition(pdfWindow, selection);
-      if (!computed) {
-        this.showStatus('✗ no PDF selection rects', 2000);
         return;
       }
       text = selection.toString();
@@ -2224,7 +2248,7 @@ export class ReaderSession {
     if (!key || !isCurrent()) return;
     this.clearNativeSelection();
     this.#annotationNavigation.rememberAnnotation(key);
-    if (!params) {
+    if (!useNativeParams) {
       selection?.removeAllRanges();
       if (!focusComment) this.setMode('normal');
     }
@@ -2245,73 +2269,111 @@ export class ReaderSession {
     if (!selection.rangeCount) return null;
     const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
     if (!viewer) return null;
-    const rectangles = Array.from(selection.getRangeAt(0).getClientRects() ?? []).filter(
-      (rectangle) => rectangle.width > 1 && rectangle.height > 1,
-    );
+    const range = selection.getRangeAt(0);
+    const rectangles: DOMRect[] = [];
+    let incomplete = false;
+    const collect = (fragment: Range) => {
+      const bounds = fragment.getClientRects();
+      if (!bounds) {
+        incomplete = true;
+        return;
+      }
+      for (const rectangle of bounds) {
+        if (rectangle.width > 1 && rectangle.height > 1) rectangles.push(rectangle);
+      }
+    };
+    if (range.commonAncestorContainer.nodeType === 3) {
+      collect(range);
+    } else {
+      // A cross-page Range also reports selected canvas/page boxes, not just text.
+      const walker = pdfWindow.document.createTreeWalker(range.commonAncestorContainer, 4);
+      walker.currentNode = range.startContainer;
+      let node = range.startContainer.nodeType === 3 ? range.startContainer : walker.nextNode();
+      for (; node; node = walker.nextNode()) {
+        if (range.comparePoint(node, 0) > 0) break;
+        if (!range.intersectsNode(node)) continue;
+        const fragment = pdfWindow.document.createRange();
+        fragment.selectNodeContents(node);
+        if (node === range.startContainer) fragment.setStart(node, range.startOffset);
+        if (node === range.endContainer) fragment.setEnd(node, range.endOffset);
+        collect(fragment);
+      }
+    }
     const pages = Array.from(
       pdfWindow.document.querySelectorAll('.page[data-page-number]'),
     ) as HTMLElement[];
-    const groups = new Map<number, { page: HTMLElement; rectangles: DOMRect[] }>();
+    const pageBounds = new Array<DOMRect>(pages.length);
+    const groups = new Map<number, { bounds: DOMRect; rectangles: DOMRect[] }>();
     for (const rectangle of rectangles) {
       const center = (rectangle.top + rectangle.bottom) / 2;
-      const page = pages.find((candidate) => {
-        const bounds = candidate.getBoundingClientRect();
-        return center >= bounds.top && center <= bounds.bottom;
-      });
-      const pageNumber = page?.dataset.pageNumber;
-      if (!page || !pageNumber) continue;
-      const index = Number(pageNumber) - 1;
-      if (!Number.isInteger(index) || index < 0) continue;
+      let page: HTMLElement | undefined;
+      let bounds: DOMRect | undefined;
+      for (let index = 0; index < pages.length; index += 1) {
+        const candidate = pages[index]!;
+        const candidateBounds = (pageBounds[index] ??= candidate.getBoundingClientRect());
+        if (center >= candidateBounds.top && center <= candidateBounds.bottom) {
+          page = candidate;
+          bounds = candidateBounds;
+          break;
+        }
+      }
+      const index = Number(page?.dataset.pageNumber) - 1;
+      if (!bounds || !Number.isInteger(index) || index < 0) {
+        incomplete = true;
+        continue;
+      }
       const group = groups.get(index);
       if (group) group.rectangles.push(rectangle);
-      else groups.set(index, { page, rectangles: [rectangle] });
+      else groups.set(index, { bounds, rectangles: [rectangle] });
     }
-    const ordered = [...groups.entries()].sort(([left], [right]) => left - right).slice(0, 2);
-    if (!ordered.length) return null;
-    const convert = ([pageIndex, group]: [
-      number,
-      { page: HTMLElement; rectangles: DOMRect[] },
-    ]): number[][] => {
-      const pageView = viewer._pages?.[pageIndex] ?? viewer.getPageView?.(pageIndex);
-      const viewport = pageView?.viewport;
-      if (!viewport) return [];
-      const bounds = group.page.getBoundingClientRect();
-      return group.rectangles
-        .map((rectangle) => {
-          const upperLeft = viewport.convertToPdfPoint?.(
-            rectangle.left - bounds.left,
-            rectangle.top - bounds.top,
-          );
-          const lowerRight = viewport.convertToPdfPoint?.(
-            rectangle.right - bounds.left,
-            rectangle.bottom - bounds.top,
-          );
-          if (!upperLeft || !lowerRight) return [];
-          const x1 = Math.min(upperLeft[0], lowerRight[0]);
-          const y1 = Math.min(upperLeft[1], lowerRight[1]);
-          const x2 = Math.max(upperLeft[0], lowerRight[0]);
-          const y2 = Math.max(upperLeft[1], lowerRight[1]);
-          return [x1, y1, x2, y2].map((value) => Math.round(value * 1000) / 1000);
-        })
-        .filter(
-          (rectangle) =>
-            rectangle.length === 4 &&
-            rectangle[2]! > rectangle[0]! &&
-            rectangle[3]! > rectangle[1]!,
-        );
-    };
+    const ordered = [...groups.entries()].sort(([left], [right]) => left - right);
     const first = ordered[0];
     if (!first) return null;
+    const pageLabel = viewer._pageLabels?.[first[0]] ?? String(first[0] + 1);
+    const next = ordered[1];
+    if (ordered.length > 2 || (next && next[0] !== first[0] + 1)) {
+      return { position: null, pageLabel, failure: 'unsupported-page-span' };
+    }
+    if (incomplete) return { position: null, pageLabel, failure: 'invalid-geometry' };
+    const convert = ([pageIndex, group]: [number, { bounds: DOMRect; rectangles: DOMRect[] }]):
+      | number[][]
+      | null => {
+      const pageView = viewer._pages?.[pageIndex] ?? viewer.getPageView?.(pageIndex);
+      const viewport = pageView?.viewport;
+      if (!viewport?.convertToPdfPoint) return null;
+      const converted: number[][] = [];
+      for (const rectangle of group.rectangles) {
+        const upperLeft = viewport.convertToPdfPoint(
+          rectangle.left - group.bounds.left,
+          rectangle.top - group.bounds.top,
+        );
+        const lowerRight = viewport.convertToPdfPoint(
+          rectangle.right - group.bounds.left,
+          rectangle.bottom - group.bounds.top,
+        );
+        if (!upperLeft || !lowerRight) return null;
+        const rect = [
+          Math.min(upperLeft[0], lowerRight[0]),
+          Math.min(upperLeft[1], lowerRight[1]),
+          Math.max(upperLeft[0], lowerRight[0]),
+          Math.max(upperLeft[1], lowerRight[1]),
+        ].map((value) => Math.round(value * 1000) / 1000);
+        if (!rect.every(Number.isFinite) || rect[2]! <= rect[0]! || rect[3]! <= rect[1]!)
+          return null;
+        converted.push(rect);
+      }
+      return converted;
+    };
     const rects = convert(first);
-    if (!rects.length) return null;
+    if (!rects?.length) return { position: null, pageLabel, failure: 'invalid-geometry' };
     const position: { pageIndex: number; rects: number[][]; nextPageRects?: number[][] } = {
       pageIndex: first[0],
       rects,
     };
-    const next = ordered[1];
     if (next) {
       const nextRects = convert(next);
-      if (nextRects.length) position.nextPageRects = nextRects;
+      if (!nextRects?.length) return { position: null, pageLabel, failure: 'invalid-geometry' };
+      position.nextPageRects = nextRects;
     }
     const pageHeight =
       viewer._pages?.[first[0]]?.viewport?.height ??
@@ -2322,7 +2384,7 @@ export class ReaderSession {
     return {
       position: JSON.stringify(position),
       sortIndex,
-      pageLabel: viewer._pageLabels?.[first[0]] ?? String(first[0] + 1),
+      pageLabel,
     };
   }
 
@@ -2853,13 +2915,16 @@ export class ReaderSession {
 
   private schedule(delay: number, task: () => void): ReaderTimer {
     const timer = setTimeout(() => {
-      if (!this.#scope.disposed) task();
+      if (!this.#pendingTimers.delete(timer) || this.#scope.disposed) return;
+      task();
     }, delay);
-    this.#scope.addTimeout(() => clearTimeout(timer));
+    this.#pendingTimers.add(timer);
+    if (this.#scope.disposed) this.clearTimer(timer);
     return timer;
   }
 
   private clearTimer(timer: ReaderTimer | null): void {
+    if (timer !== null) this.#pendingTimers.delete(timer);
     clearTimeout(timer ?? undefined);
   }
 }
