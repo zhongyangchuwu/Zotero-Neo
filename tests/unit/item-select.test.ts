@@ -47,6 +47,7 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
   const badgeChildren: Array<{ textContent?: string | null; className?: string }> = [];
   const badge = {
     id: '',
+    isConnected: false,
     style: { cssText: '', display: '' },
     textContent: '',
     replaceChildren: vi.fn(() => {
@@ -57,7 +58,9 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
       badgeChildren.push(child);
       badge.textContent = badgeChildren.map((entry) => entry.textContent ?? '').join('');
     }),
-    remove: vi.fn(),
+    remove: vi.fn((): void => {
+      Reflect.set(badge, 'isConnected', false);
+    }),
   } as unknown as HTMLElement;
   const style = {
     id: '',
@@ -132,8 +135,16 @@ function harness(focusedRow = 0, initialSelected: readonly number[] = [focusedRo
               textContent: '',
               style: { color: '' },
             } as unknown as HTMLElement),
-    body: { append: vi.fn() },
-    documentElement: { append: vi.fn() },
+    body: {
+      append: vi.fn((node: HTMLElement) => {
+        if (node === badge) Reflect.set(badge, 'isConnected', true);
+      }),
+    },
+    documentElement: {
+      append: vi.fn((node: HTMLElement) => {
+        if (node === badge) Reflect.set(badge, 'isConnected', true);
+      }),
+    },
   } as unknown as Document;
   const window = {
     document,
@@ -194,20 +205,77 @@ describe('Main item attach', () => {
   it('fails safely when the focused row or native select seam is unavailable', () => {
     const missingCursor = harness(-1, []);
     const missingCursorFeature = new MainItemSelect(logger);
-    expect(() =>
-      missingCursorFeature.addWindow(missingCursor.window, new SelectionStore(), appearance),
-    ).not.toThrow();
+    missingCursorFeature.addWindow(missingCursor.window, new SelectionStore(), appearance);
     expect(missingCursor.selection.select).not.toHaveBeenCalled();
     missingCursorFeature.removeWindow(missingCursor.window);
 
     const missingSelect = harness(1, [0, 1]);
     Reflect.deleteProperty(missingSelect.selection, 'select');
     const missingSelectFeature = new MainItemSelect(logger);
-    expect(() =>
-      missingSelectFeature.addWindow(missingSelect.window, new SelectionStore(), appearance),
-    ).not.toThrow();
+    missingSelectFeature.addWindow(missingSelect.window, new SelectionStore(), appearance);
     expect(missingSelect.selectedRows()).toEqual([0, 1]);
     missingSelectFeature.removeWindow(missingSelect.window);
+  });
+});
+
+describe('Main Selection retirement ownership', () => {
+  it('keeps persistent Selection visible when an older transient status timer is delivered', () => {
+    const host = harness();
+    const store = new SelectionStore();
+    store.add({ libraryID: 1, itemID: 10 });
+    const feature = new MainItemSelect(logger);
+    feature.addWindow(host.window, store, appearanceSource());
+    feature.clearSelection(host.window, store);
+    const timer = vi
+      .mocked(host.window.setTimeout)
+      .mock.calls.find((args) => args[1] === 1200)?.[0];
+    if (typeof timer !== 'function') throw new Error('Transient status timer was not scheduled');
+    store.add({ libraryID: 1, itemID: 11 });
+    timer();
+    expect(host.badge.isConnected).toBe(true);
+    feature.removeWindow(host.window);
+  });
+
+  it('keeps a replacement Selection badge unchanged after failed old observer cleanup', () => {
+    const host = harness();
+    const oldSelection = new SelectionStore();
+    oldSelection.add({ libraryID: 1, itemID: 10 });
+    const observe = oldSelection.observe.bind(oldSelection);
+    const failure = new Error('old Selection observer cleanup failed');
+    vi.spyOn(oldSelection, 'observe').mockImplementation((listener) => {
+      observe(listener);
+      return () => {
+        throw failure;
+      };
+    });
+    const appearanceCallbacks: Array<Parameters<InteractionAppearanceSource['observe']>[0]> = [];
+    const appearance: InteractionAppearanceSource = {
+      ...appearanceSource(),
+      observe: (listener) => {
+        appearanceCallbacks.push(listener);
+        return () => {};
+      },
+    };
+    const feature = new MainItemSelect(logger);
+    feature.addWindow(host.window, oldSelection, appearance);
+    feature.refresh(host.window, oldSelection);
+    let observed: unknown;
+    try {
+      feature.removeWindow(host.window);
+    } catch (error) {
+      observed = error;
+    }
+    expect(observed).toBe(failure);
+    const selection = new SelectionStore();
+    selection.add({ libraryID: 1, itemID: 12 });
+    feature.addWindow(host.window, selection, appearanceSource());
+    feature.refresh(host.window, selection);
+    const status = host.badge.textContent;
+    oldSelection.add({ libraryID: 1, itemID: 11 });
+    for (const callback of appearanceCallbacks) callback(appearance.appearance);
+    expect(host.badge.textContent).toBe(status);
+    expect(host.badge.isConnected).toBe(true);
+    feature.removeWindow(host.window);
   });
 });
 

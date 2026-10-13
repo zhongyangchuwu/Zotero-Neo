@@ -157,6 +157,10 @@ export class MainNavigation {
     this.#rescan = rescan;
   }
   status(session: MainWindowSession, text: string, milliseconds = 2000): void {
+    if (session.cleanup.disposed) return;
+    const previousTimer = session.statusTimer;
+    session.statusTimer = undefined;
+    session.window.clearTimeout(previousTimer);
     session.status.textContent = text;
     session.status.style.display = 'block';
     const success = text.startsWith('✓');
@@ -172,9 +176,11 @@ export class MainNavigation {
         ? THEME_VARS.statusInfo
         : THEME_VARS.statusError;
     const timer = session.window.setTimeout(() => {
+      if (session.cleanup.disposed || session.statusTimer !== timer) return;
+      session.statusTimer = undefined;
       session.status.style.display = 'none';
     }, milliseconds);
-    session.cleanup.add(() => session.window.clearTimeout(timer));
+    session.statusTimer = timer;
   }
   panel(window: MainWindow, session: MainWindowSession): MainPanel {
     const current = window.document.activeElement;
@@ -383,27 +389,22 @@ export class MainNavigation {
     this.status(session, '▶ items', 900);
   }
 
-  async restoreTrashedItems(ids: readonly number[]): Promise<boolean> {
-    const valid = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
-    if (!valid.length) return false;
-    const undo = (
-      Zotero as unknown as {
-        UndoHistory?: {
-          getUndoAction?(): { readonly action?: string } | null;
-          undo?(): Promise<boolean>;
-        };
-      }
-    ).UndoHistory;
-    if (undo?.getUndoAction?.()?.action === 'undo-action-trash' && undo.undo) {
-      return undo.undo();
-    }
-    let restored = false;
+  /** Restores explicit Neo Trash identities and returns the number successfully saved. */
+  async restoreTrashedItems(ids: readonly number[]): Promise<number> {
+    const valid = new Set(ids);
+    let restored = 0;
     for (const id of valid) {
+      if (!Number.isInteger(id) || id <= 0) continue;
       const item = Zotero.Items.get(id);
       if (!item || !item.deleted) continue;
       item.deleted = false;
-      await item.saveTx();
-      restored = true;
+      try {
+        await item.saveTx();
+      } catch (error) {
+        item.deleted = true;
+        throw error;
+      }
+      restored += 1;
     }
     return restored;
   }
@@ -467,12 +468,11 @@ export class MainNavigation {
   async restoreLastTrashedItems(session: MainWindowSession): Promise<void> {
     try {
       const itemIDs = session.trashHistory.values();
-      const restored = await this.restoreTrashedItems(itemIDs);
-      if (!restored) {
+      const count = await this.restoreTrashedItems(itemIDs);
+      if (!count) {
         this.status(session, '✗ Nothing to restore');
         return;
       }
-      const count = itemIDs.length;
       session.trashHistory.clear();
       this.status(session, `✓ Restored ${count} item${count === 1 ? '' : 's'}`);
     } catch (error) {

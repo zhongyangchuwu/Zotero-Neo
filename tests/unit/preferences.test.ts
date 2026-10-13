@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { advanceInput } from '../../src/input/engine';
-import { bindingsForMode } from '../../src/input/bindings';
+import { DEFAULT_BINDINGS, bindingsForMode } from '../../src/input/bindings';
 
 import {
   ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
@@ -373,28 +373,7 @@ describe('binding preferences', () => {
     const preferences = new TestPreferences({ bindings: '{"reader-normal:j":' });
 
     const bindings = bindingsFromPreferences(preferences);
-    expect(bindings['reader-normal:j']).toBe('scrollDown');
-    expect(bindings['main-normal:<Enter>']).toBe('mainActivate');
-    expect(bindings['reader-normal:<Space>fn']).toBe('findNotes');
-    expect(bindings['main-normal:<Space>fn']).toBe('findNotes');
-    expect(bindings['reader-normal: n']).toBeUndefined();
-    expect(bindings['main-normal: n']).toBeUndefined();
-    expect(bindings['reader-normal:<Space>,']).toBe('switchTab');
-    expect(bindings['main-normal:<Space>,']).toBe('switchTab');
-    expect(bindings['main-normal:<Space>ta']).toBe('addTag');
-    expect(bindings['main-normal:<Space>tr']).toBe('removeTag');
-    expect(bindings['main-normal:<Space>tf']).toBe('toggleTagFilter');
-    expect(bindings['main-normal:<Space>tc']).toBe('clearTagFilters');
-    expect(bindings['main-normal: fT']).toBeUndefined();
-    expect(bindings['reader-normal:<Space>q']).toBe('closeCurrentTab');
-    expect(bindings['main-normal:<Space>q']).toBe('closeCurrentTab');
-    expect(bindings['reader-normal: ft']).toBeUndefined();
-    expect(bindings['main-normal: ft']).toBeUndefined();
-    expect(bindings['main-normal: td']).toBeUndefined();
-    expect(bindings['main-normal:u']).toBe('mainRestoreTrashedItems');
-    expect(bindings['reader-normal: tp']).toBeUndefined();
-    expect(bindings['main-normal: tp']).toBeUndefined();
-    expect(bindings['main-normal:<C-u>']).toBeUndefined();
+    expect(bindings).toEqual(DEFAULT_BINDINGS);
   });
 
   it('canonicalizes pre-release Tag action aliases without changing custom key sequences', () => {

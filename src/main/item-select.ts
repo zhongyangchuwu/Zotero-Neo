@@ -1,4 +1,5 @@
 import type { MainWindow } from '../core/contracts';
+import { CleanupFailure } from '../core/cleanup';
 import type { Logger } from '../core/logging';
 import {
   currentMainItemCursorRef,
@@ -117,6 +118,7 @@ export class MainItemSelect {
       appearance,
     );
     ui.selectionCleanup = selection.observe(() => {
+      if (this.#ui.get(window) !== ui) return;
       const visual = this.#visual.get(window);
       if (visual) this.showMode(window, visual.range?.count ?? 0, selection);
       else
@@ -127,6 +129,7 @@ export class MainItemSelect {
         );
     });
     ui.appearanceCleanup = appearance.observe(() => {
+      if (this.#ui.get(window) !== ui) return;
       if (ui.status) this.renderBadge(window, ui, ui.status);
     });
 
@@ -379,15 +382,17 @@ export class MainItemSelect {
 
   removeWindow(window: MainWindow): void {
     const ui = this.#ui.get(window);
-    if (ui) {
-      window.clearTimeout(ui.timer);
-      ui.selectionCleanup?.();
-      ui.appearanceCleanup?.();
-      ui.badge?.remove();
-      this.#ui.delete(window);
-    }
+    this.#ui.delete(window);
     this.#visual.delete(window);
-    this.#decoration.removeWindow(window);
+    const failure = new CleanupFailure();
+    if (ui) {
+      failure.run(() => window.clearTimeout(ui.timer));
+      failure.run(() => ui.selectionCleanup?.());
+      failure.run(() => ui.appearanceCleanup?.());
+      failure.run(() => ui.badge?.remove());
+    }
+    failure.run(() => this.#decoration.removeWindow(window));
+    failure.rethrow();
   }
 
   clearSelection(window: MainWindow, selection: SelectionStore): boolean {
@@ -469,7 +474,12 @@ export class MainItemSelect {
     ui.timer = undefined;
     ui.status = status;
     this.renderBadge(window, ui, status);
-    if (!persistent) ui.timer = window.setTimeout(() => this.hide(window), 1200);
+    if (!persistent) {
+      const timer = window.setTimeout(() => {
+        if (this.#ui.get(window) === ui && ui.timer === timer) this.hide(window);
+      }, 1200);
+      ui.timer = timer;
+    }
   }
 
   private renderBadge(window: MainWindow, ui: ItemSelectUi, status: ItemSelectStatus): void {

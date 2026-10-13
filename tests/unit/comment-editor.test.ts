@@ -113,10 +113,12 @@ function createView() {
 
 function createHarness() {
   vi.useFakeTimers();
+  const destroyed = new WeakSet<object>();
   const nativeTargets = new WeakMap<object, object>();
   Reflect.set(globalThis, 'Components', {
     utils: {
       cloneInto: <T extends object>(value: T) => ({ ...value }),
+      isDeadWrapper: (value: object) => destroyed.has(value),
       waiveXrays: <T extends object>(value: T) => nativeTargets.get(value) ?? value,
       unwaiveXrays: (value: PdfWindow) =>
         value === primary.pdfWindow ? primary.privilegedWindow : secondary.privilegedWindow,
@@ -175,6 +177,8 @@ function createHarness() {
   });
   return {
     editor,
+    destroyed,
+    reader,
     nativeTargets,
     primary,
     secondary,
@@ -195,6 +199,49 @@ function createHarness() {
     },
     setNativeEditableFocused: (value: boolean) => {
       nativeEditableFocused = value;
+    },
+  };
+}
+
+function createPopupGuard(reader: ReaderRuntime) {
+  let connected = false;
+  let callback: MutationCallback;
+  const disconnect = vi.fn(() => {
+    connected = false;
+  });
+  const popupInput = { dispatchEvent: vi.fn(() => true) };
+  const popup = {
+    tagName: 'DIV',
+    matches: () => true,
+    querySelector: () => popupInput,
+  };
+  class PopupObserver {
+    constructor(onMutation: MutationCallback) {
+      callback = onMutation;
+    }
+    observe() {
+      connected = true;
+    }
+    disconnect = disconnect;
+  }
+  Reflect.set(reader, '_iframeWindow', {
+    document: { body: {} },
+    MutationObserver: PopupObserver,
+    KeyboardEvent: class {
+      constructor(
+        readonly type: string,
+        readonly options: object,
+      ) {}
+    },
+  });
+  const deliverRetainedPopup = () =>
+    callback([{ addedNodes: [popup] }] as unknown as MutationRecord[], {} as MutationObserver);
+  return {
+    disconnect,
+    popupInput,
+    deliverRetainedPopup,
+    deliverPopup: () => {
+      if (connected) deliverRetainedPopup();
     },
   };
 }
@@ -623,4 +670,123 @@ describe('ReaderCommentEditor stale work containment', () => {
     pending.reject(new Error('save target lookup failed'));
     await expect(exiting).rejects.toThrow('save target lookup failed');
   });
+});
+
+describe('ReaderCommentEditor failure-safe retirement', () => {
+  it.each(['view', 'input'] as const)(
+    'retires a destroyed comment %s without touching dead wrappers or reviving focus and autosave',
+    async (destroyedOwner) => {
+      const h = createHarness();
+      const guard = createPopupGuard(h.reader);
+      await h.editor.open('ANN');
+      const input = h.primary.input();
+      const overlay = h.primary.mounted[0]!;
+      const removeInputListeners = vi.spyOn(input, 'removeEventListener').mockImplementation(() => {
+        throw new Error('dead input wrapper');
+      });
+      h.destroyed.add(input);
+      if (destroyedOwner === 'view') {
+        h.destroyed.add(h.primary.pdfWindow);
+        h.destroyed.add(overlay);
+        vi.spyOn(h.primary.privilegedWindow, 'removeEventListener').mockImplementation(() => {
+          throw new Error('dead window wrapper');
+        });
+        vi.spyOn(overlay, 'remove').mockImplementation(() => {
+          throw new Error('dead overlay wrapper');
+        });
+      }
+      input.value = 'discarded draft';
+      input.emit('input');
+      const retainedTasks = [...h.scheduled];
+      guard.deliverPopup();
+      expect(guard.popupInput.dispatchEvent).toHaveBeenCalledOnce();
+
+      expect(() => h.editor.releaseView(h.primary.pdfWindow)).not.toThrow();
+
+      expect(h.editor.ownsInput).toBe(false);
+      expect(h.editor.hasInput).toBe(false);
+      expect(h.editor.ownsTarget(input)).toBe(false);
+      expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+      expect(removeInputListeners).not.toHaveBeenCalled();
+      expect(guard.disconnect).toHaveBeenCalledOnce();
+      expect(h.cleanupTheme).toHaveBeenCalledOnce();
+      if (destroyedOwner === 'input') expect(h.primary.systemKeys.size).toBe(0);
+      for (const task of retainedTasks) task.task();
+      input.emit('input');
+      guard.deliverPopup();
+      guard.deliverRetainedPopup();
+      vi.advanceTimersByTime(3000);
+      expect(input.focus).not.toHaveBeenCalled();
+      expect(h.annotationForSave).not.toHaveBeenCalled();
+      expect(h.annotation.annotationComment).toBe('before');
+      expect(guard.popupInput.dispatchEvent).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+      h.editor.dispose();
+    },
+  );
+
+  it.each(['system listener', 'input listener', 'theme', 'overlay'] as const)(
+    'preserves a live %s cleanup failure after retiring every owner and restoring native deletion',
+    async (failureSite) => {
+      const h = createHarness();
+      const guard = createPopupGuard(h.reader);
+      await h.editor.open('ANN');
+      const input = h.primary.input();
+      const retainedSystemListener = [...h.primary.systemKeys][0]!;
+      vi.advanceTimersByTime(60);
+      input.value = 'unsaved draft';
+      input.emit('input');
+      const retainedTasks = [...h.scheduled];
+      const failure = new Error(`live ${failureSite} cleanup failed`);
+      const fail = () => {
+        expect(h.editor.ownsInput).toBe(false);
+        expect(h.editor.hasInput).toBe(false);
+        expect(h.editor.ownsTarget(input)).toBe(false);
+        throw failure;
+      };
+      if (failureSite === 'system listener')
+        vi.spyOn(h.primary.privilegedWindow, 'removeEventListener').mockImplementationOnce(fail);
+      else if (failureSite === 'input listener')
+        vi.spyOn(input, 'removeEventListener').mockImplementationOnce(fail);
+      else if (failureSite === 'theme') h.cleanupTheme.mockImplementationOnce(fail);
+      else vi.spyOn(h.primary.mounted[0]!, 'remove').mockImplementationOnce(fail);
+
+      let thrown: unknown;
+      try {
+        h.editor.releaseView(h.primary.pdfWindow);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBe(failure);
+      expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+      expect(h.editor.ownsView(h.primary.pdfWindow)).toBe(false);
+      expect(h.editor.consumesKey('escape', h.primary.pdfWindow)).toBe(false);
+      expect(guard.disconnect).toHaveBeenCalledOnce();
+      expect(h.cleanupTheme).toHaveBeenCalledOnce();
+      expect(h.primary.mounted).toHaveLength(failureSite === 'overlay' ? 1 : 0);
+      expect(h.onInputOwnerChanged).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+      for (const task of retainedTasks) task.task();
+      input.emit('input');
+      input.emit('compositionstart');
+      const escape = keyboard('Escape', input);
+      retainedSystemListener(escape);
+      guard.deliverRetainedPopup();
+      vi.advanceTimersByTime(3000);
+      expect(input.focus).toHaveBeenCalledOnce();
+      expect(escape.preventDefault).not.toHaveBeenCalled();
+      expect(h.annotationForSave).not.toHaveBeenCalled();
+      expect(guard.popupInput.dispatchEvent).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+
+      h.setActiveWindow(h.secondary.pdfWindow);
+      await h.editor.open('OTHER');
+      expect(h.editor.ownsView(h.secondary.pdfWindow)).toBe(true);
+      expect(h.secondary.input().value).toBe('other draft');
+      expect(h.editor.consumesKey('escape', h.secondary.pdfWindow)).toBe(true);
+      h.editor.dispose();
+      expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
 });

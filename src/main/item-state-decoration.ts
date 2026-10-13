@@ -1,4 +1,5 @@
 import type { MainWindow } from '../core/contracts';
+import { CleanupFailure } from '../core/cleanup';
 import { currentMainItemCursorRef, mainItemRefAtRow } from './host';
 import {
   type InteractionAppearance,
@@ -117,6 +118,9 @@ export class MainItemStateDecoration {
     const styleParent = doc.head ?? doc.documentElement;
     if (typeof styleParent.append === 'function') styleParent.append(style);
     else styleParent.appendChild(style);
+    const refresh = (): void => {
+      if (this.#windows.get(window) === state) this.refresh(window);
+    };
 
     const state: WindowDecoration = {
       rowObserver: null,
@@ -126,15 +130,15 @@ export class MainItemStateDecoration {
       selection,
       visual,
       appearance,
-      scrollListener: () => this.refresh(window),
+      scrollListener: refresh,
       selectionCleanup: null,
       appearanceCleanup: null,
       scheduled: undefined,
       renderedAppearance: appearance.appearance,
     };
     this.#windows.set(window, state);
-    state.selectionCleanup = selection.observe(() => this.refresh(window));
-    state.appearanceCleanup = appearance.observe(() => this.refresh(window));
+    state.selectionCleanup = selection.observe(refresh);
+    state.appearanceCleanup = appearance.observe(refresh);
     this.syncRoot(window, state);
     this.refresh(window);
   }
@@ -144,20 +148,30 @@ export class MainItemStateDecoration {
     if (!state) return;
     window.clearTimeout(state.scheduled);
     state.scheduled = window.setTimeout(() => {
+      if (this.#windows.get(window) !== state) return;
       state.scheduled = undefined;
       this.render(window, state);
     }, 0);
   }
 
+  /** Retires the registration before releasing host resources; the first live error survives. */
   removeWindow(window: MainWindow): void {
     const state = this.#windows.get(window);
     if (!state) return;
-    window.clearTimeout(state.scheduled);
-    state.selectionCleanup?.();
-    state.appearanceCleanup?.();
-    this.releaseRoot(state);
-    state.style.remove();
     this.#windows.delete(window);
+    const scheduled = state.scheduled;
+    const selectionCleanup = state.selectionCleanup;
+    const appearanceCleanup = state.appearanceCleanup;
+    state.scheduled = undefined;
+    state.selectionCleanup = null;
+    state.appearanceCleanup = null;
+    const failure = new CleanupFailure();
+    failure.run(() => window.clearTimeout(scheduled));
+    failure.run(() => selectionCleanup?.());
+    failure.run(() => appearanceCleanup?.());
+    failure.run(() => this.releaseRoot(state));
+    failure.run(() => state.style.remove());
+    failure.rethrow();
   }
 
   private createObserver(window: MainWindow, listener: MutationCallback): MutationObserver | null {
@@ -219,7 +233,9 @@ export class MainItemStateDecoration {
         ? getElementById.call(window.document, 'zotero-items-tree')
         : null);
     if (replacementTarget) {
-      state.rootObserver = this.createObserver(window, () => this.refresh(window));
+      state.rootObserver = this.createObserver(window, () => {
+        if (this.#windows.get(window) === state) this.refresh(window);
+      });
       state.rootObserver?.observe(replacementTarget, {
         childList: true,
         subtree: root === null,
@@ -228,7 +244,9 @@ export class MainItemStateDecoration {
 
     if (!root) return;
     root.addEventListener('scroll', state.scrollListener, true);
-    state.rowObserver = this.createObserver(window, () => this.refresh(window));
+    state.rowObserver = this.createObserver(window, () => {
+      if (this.#windows.get(window) === state) this.refresh(window);
+    });
     state.rowObserver?.observe(root, {
       childList: true,
       subtree: true,
@@ -238,15 +256,24 @@ export class MainItemStateDecoration {
   }
 
   private releaseRoot(state: WindowDecoration): void {
-    state.rowObserver?.disconnect();
-    state.rowObserver = null;
-    state.rootObserver?.disconnect();
-    state.rootObserver = null;
+    const rowObserver = state.rowObserver;
+    const rootObserver = state.rootObserver;
     const root = state.root;
+    state.rowObserver = null;
+    state.rootObserver = null;
     state.root = undefined;
-    if (!root) return;
-    root.removeEventListener('scroll', state.scrollListener, true);
-    for (const row of this.rows(root)) row.classList.remove(...DECORATION_CLASSES);
+    if (!rowObserver && !rootObserver && !root) return;
+    const failure = new CleanupFailure();
+    failure.run(() => rowObserver?.disconnect());
+    failure.run(() => rootObserver?.disconnect());
+    if (root) {
+      failure.run(() => root.removeEventListener('scroll', state.scrollListener, true));
+      failure.run(() => {
+        for (const row of this.rows(root))
+          failure.run(() => row.classList.remove(...DECORATION_CLASSES));
+      });
+    }
+    failure.rethrow();
   }
 
   private rows(root: HTMLElement | null): HTMLElement[] {

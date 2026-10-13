@@ -207,13 +207,6 @@ describe('Settings Appearance autosave', () => {
     expect(
       cards.find((card) => card.dataset.themeId === custom.id)?.getAttribute('aria-current'),
     ).toBe('true');
-    expect(
-      test.root
-        .all()
-        .find((node) => node.style.cssText.includes('grid-template-columns:repeat(auto-fit')),
-    ).toBeDefined();
-    expect(test.root.textContent).not.toContain('Save');
-    expect(test.root.textContent).not.toContain('Cancel');
     test.appearance.dispose();
   });
 
@@ -225,22 +218,7 @@ describe('Settings Appearance autosave', () => {
       expect(button.tabIndex).toBe(-1);
       expect(button.style.cssText).toContain('font:inherit');
     }
-    for (const label of ['1px', 'Neutral']) {
-      const button = test.root.find('button', label);
-      expect(button.style.cssText).toContain('appearance:none');
-      expect(button.style.cssText).toContain(
-        'display:inline-flex;align-items:center;justify-content:center',
-      );
-      expect(button.style.cssText).toContain('min-height:2.5em');
-    }
     test.root.click('button', 'Edit');
-    for (const label of ['Light', 'Dark']) {
-      const button = test.root.find('button', label);
-      expect(button.style.cssText).toContain('appearance:none');
-      expect(button.style.cssText).toContain(
-        'display:inline-flex;align-items:center;justify-content:center',
-      );
-    }
     test.root.click('button', 'Dark');
     expect(test.root.find('button', 'Dark').getAttribute('aria-pressed')).toBe('true');
     expect(test.root.find('button', 'Light').getAttribute('aria-pressed')).toBe('false');

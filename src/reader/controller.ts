@@ -216,14 +216,11 @@ export class ReaderController implements ReaderControllerApi {
   readonly #dependencies: ReaderControllerDependencies;
   readonly #jumpHost = new ReaderJumpHostAdapter();
   readonly #sessions = new Map<string, ReaderSession>();
-  readonly #sessionsByItem = new Map<number, ReaderSession>();
   readonly #pending = new Set<string>();
   readonly #waitTimers = new Map<string, ReaderTimer>();
   #toolbarListener: ReaderEventListener | null = null;
   #selectionPopupListener: ReaderEventListener | null = null;
   #pluginID: string | null = null;
-  #lastSelection: AnnotationSelectionParams | null = null;
-  #lastSelectionAt = 0;
   readonly #selectionActions = new ReaderSelectionActionRegistry();
   #selectionOwner: ReaderSession | null = null;
 
@@ -286,9 +283,6 @@ export class ReaderController implements ReaderControllerApi {
     const failure = new CleanupFailure();
     for (const session of this.#sessions.values()) failure.run(() => session.dispose());
     this.#sessions.clear();
-    this.#sessionsByItem.clear();
-    this.#lastSelection = null;
-    this.#lastSelectionAt = 0;
     this.#selectionOwner = null;
     this.#selectionActions.clear();
     failure.rethrow();
@@ -367,12 +361,6 @@ export class ReaderController implements ReaderControllerApi {
     );
   }
 
-  selection(): AnnotationSelectionParams | null {
-    return this.#lastSelection && Date.now() - this.#lastSelectionAt < 10_000
-      ? this.#lastSelection
-      : null;
-  }
-
   getSelection(): ReaderSelectionContext | null {
     return this.#selectionOwner?.selectionContext() ?? null;
   }
@@ -406,15 +394,10 @@ export class ReaderController implements ReaderControllerApi {
   #onSelectionPopup(event: ReaderEventRuntime): void {
     if (!this.#pluginID) return;
     const params = event.params;
-    if (!params?.annotation || !params.onAddAnnotation) return;
-    this.#lastSelection = params;
-    this.#lastSelectionAt = Date.now();
-    let session: ReaderSession | undefined;
-    if (event.reader?._instanceID) session = this.#sessions.get(event.reader._instanceID);
-    if (!session && event.reader?.itemID !== undefined)
-      session = this.#sessionsByItem.get(event.reader.itemID);
-    if (!session && this.#sessions.size === 1) session = this.#sessions.values().next().value;
-    session?.acceptSelectionParams(params);
+    const reader = event.reader;
+    if (!params?.annotation || !params.onAddAnnotation || !reader?._instanceID) return;
+    const session = this.#sessions.get(reader._instanceID);
+    if (session?.reader === reader) session.acceptSelectionParams(params);
   }
 
   #ensure(reader: ReaderRuntime): void {
@@ -443,7 +426,7 @@ export class ReaderController implements ReaderControllerApi {
           reader,
           firstPdfWindow: pdfWindow,
           bindings: () => resolveBindings(this.#dependencies.preferences.get('bindings', '')),
-          release: () => this.#release(instanceID, reader),
+          release: () => this.#release(instanceID),
           jumpHost: this.#jumpHost,
           selection: {
             registered: (context) => this.registeredSelectionActions(context),
@@ -453,7 +436,6 @@ export class ReaderController implements ReaderControllerApi {
           },
         });
         this.#sessions.set(instanceID, session);
-        if (reader.itemID !== undefined) this.#sessionsByItem.set(reader.itemID, session);
         session.start();
         this.#dependencies.logger.diagnostic(
           `inject reader ${instanceID} itemID=${reader.itemID ?? '?'}`,
@@ -504,21 +486,14 @@ export class ReaderController implements ReaderControllerApi {
     }
   }
 
-  #release(instanceID: string, reader: ReaderRuntime): void {
+  #release(instanceID: string): void {
     const session = this.#sessions.get(instanceID);
     if (session && this.#selectionOwner === session) this.#selectionOwner = null;
     this.#sessions.delete(instanceID);
     this.#pending.delete(instanceID);
     const timer = this.#waitTimers.get(instanceID);
-    if (timer !== undefined) clearTimeout(timer);
+    clearTimeout(timer);
     this.#waitTimers.delete(instanceID);
-    if (reader.itemID !== undefined && this.#sessionsByItem.get(reader.itemID) === session) {
-      const replacement = [...this.#sessions.values()].find(
-        (candidate) => candidate.itemID === reader.itemID,
-      );
-      if (replacement) this.#sessionsByItem.set(reader.itemID, replacement);
-      else this.#sessionsByItem.delete(reader.itemID);
-    }
   }
 
   get dependencies(): ReaderControllerDependencies {
@@ -556,6 +531,8 @@ export class ReaderSession {
   #surfaceMode: ReaderMode = 'normal';
   #interactionRevision = 0;
   #editorReleaseRevision = 0;
+  #selectionView: ReaderViewRuntime | null = null;
+  #selectionWindow: PdfWindow | null = null;
   readonly state: ReaderSessionState;
 
   constructor(dependencies: SessionDependencies) {
@@ -575,7 +552,7 @@ export class ReaderSession {
       mode: () => this.#surfaceMode,
       setModeVisual: () => this.setMode('visual'),
       invalidateNativeSelection: () => {
-        this.state.selectionParams = null;
+        this.clearNativeSelection();
       },
       noteOwner: () => this.#dependencies.selection?.noteOwner(this),
       updateIndicator: () => this.updateIndicator(),
@@ -756,7 +733,9 @@ export class ReaderSession {
         this.#flash.onBlur(pdfWindow, event);
       },
       onSelectionChange: (pdfWindow) => {
-        if (pdfWindow.getSelection()?.isCollapsed) this.state.selectionParams = null;
+        this.#interactionRevision += 1;
+        if (this.#selectionWindow === pdfWindow && pdfWindow.getSelection()?.isCollapsed)
+          this.clearNativeSelection();
       },
       onScroll: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
@@ -768,11 +747,15 @@ export class ReaderSession {
         this.#linkHints.onViewportChange(pdfWindow);
       },
       releaseView: (pdfWindow) => {
-        this.#selectionRange.releaseView(pdfWindow);
-        this.#linkHints.releaseView(pdfWindow);
-        this.#selectionActions.releaseView(pdfWindow);
-        this.releaseViewTheme(pdfWindow);
-        this.#jumpHistoryBridge.releaseWindow(pdfWindow);
+        this.#interactionRevision += 1;
+        if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
+        const failure = new CleanupFailure();
+        failure.run(() => this.#selectionRange.releaseView(pdfWindow));
+        failure.run(() => this.#linkHints.releaseView(pdfWindow));
+        failure.run(() => this.#selectionActions.releaseView(pdfWindow));
+        failure.run(() => this.releaseViewTheme(pdfWindow));
+        failure.run(() => this.#jumpHistoryBridge.releaseWindow(pdfWindow));
+        failure.rethrow();
       },
       syncHostBridge: () => {
         this.#hostKeyBridge.sync();
@@ -1035,6 +1018,7 @@ export class ReaderSession {
     this.#interactionRevision += 1;
     // Reject reentrant input and queued work before any host cleanup can fail.
     this.#scope.dispose();
+    this.clearNativeSelection();
     const failure = new CleanupFailure();
     failure.run(() => this.#nativeInput.release());
     failure.run(() => this.#commentEditor.dispose());
@@ -1066,10 +1050,27 @@ export class ReaderSession {
 
   acceptSelectionParams(params: AnnotationSelectionParams): void {
     const pdfWindow = this.#navigation.activePdfWindow();
-    if (this.#nativeInput.ownsInput || (pdfWindow && this.#commentEditor.ownsView(pdfWindow)))
+    const view = this.readerViewForWindow(pdfWindow);
+    const internal = this.#dependencies.reader._internalReader;
+    if (
+      this.#scope.disposed ||
+      !view ||
+      (internal?._primaryView !== view && internal?._secondaryView !== view) ||
+      this.#nativeInput.ownsInput ||
+      this.#commentEditor.ownsView(pdfWindow)
+    )
       return;
+    this.#interactionRevision += 1;
+    this.#selectionView = view;
+    this.#selectionWindow = pdfWindow;
     this.state.selectionParams = params;
     if (this.mode === 'normal' && this.modeEnabled('visual')) this.setMode('visual');
+  }
+
+  private clearNativeSelection(): void {
+    this.state.selectionParams = null;
+    this.#selectionView = null;
+    this.#selectionWindow = null;
   }
 
   deactivateInteraction(): void {
@@ -1107,6 +1108,7 @@ export class ReaderSession {
       document,
       'focusin',
       ((event: Event) => {
+        this.#interactionRevision += 1;
         if (!this.#commentEditor.ownsInput || !isEditableElement(asElement(event.target))) return;
         void this.handOverNativeEditor();
       }) as EventListener,
@@ -1134,12 +1136,21 @@ export class ReaderSession {
       'keydown',
       ((event: Event) => {
         const keyEvent = asKeyboardEvent(event);
-        if (!keyEvent || keyEvent.key !== 'Enter') return;
+        if (!keyEvent || keyEvent.key !== 'Enter' || compositionOwnsKey(keyEvent, false)) return;
         const active = document.activeElement;
         if (active?.tagName !== 'INPUT' || !active.closest('.find-popup')) return;
+        const pdfWindow = this.#navigation.activePdfWindow();
+        const isCurrent = this.invocationCurrent(pdfWindow);
         this.schedule(150, () => {
+          if (
+            !isCurrent() ||
+            isDeadObject(active) ||
+            document.activeElement !== active ||
+            !active.isConnected
+          )
+            return;
           if ('blur' in active && typeof active.blur === 'function') active.blur();
-          this.#navigation.activePdfWindow()?.focus();
+          if (isCurrent()) pdfWindow.focus();
         });
       }) as EventListener,
       true,
@@ -1953,6 +1964,7 @@ export class ReaderSession {
     this.#surfaceMode = mode;
     this.input.reset();
     this.clearKeyGuide();
+    if (mode !== 'visual') this.clearNativeSelection();
     if (mode !== 'visual') this.#selectionRange.leave();
     this.updateIndicator();
   }
@@ -2141,47 +2153,89 @@ export class ReaderSession {
     return null;
   }
 
+  private invocationCurrent(pdfWindow: PdfWindow): () => boolean {
+    const reader = this.#dependencies.reader;
+    const view = this.readerViewForWindow(pdfWindow);
+    const revision = this.#interactionRevision;
+    const tabID = reader.tabID;
+    const ownerWindow = reader._window as MainWindowRuntime | undefined;
+    return () => {
+      if (
+        this.#scope.disposed ||
+        this.#interactionRevision !== revision ||
+        !view ||
+        isDeadObject(pdfWindow) ||
+        isDeadObject(view)
+      )
+        return false;
+      const internal = reader._internalReader;
+      return (
+        (internal?._primaryView === view || internal?._secondaryView === view) &&
+        view._iframeWindow === pdfWindow &&
+        this.#navigation.activePdfWindow() === pdfWindow &&
+        (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID)
+      );
+    };
+  }
+
   private async highlight(
     pdfWindow: PdfWindow,
     color: AnnotationColor,
     focusComment = false,
     annotationType: 'highlight' | 'underline' = 'highlight',
   ): Promise<void> {
-    const params = this.state.selectionParams ?? this.#dependencies.controller.selection();
-    if (params?.annotation) {
-      this.state.selectionParams = null;
-      await this.createAnnotation(
-        params.annotation.text ?? '',
-        params.annotation.position,
-        params.annotation.sortIndex,
-        params.annotation.pageLabel,
-        color,
-        focusComment,
-        annotationType,
-      );
-      return;
-    }
+    const isCurrent = this.invocationCurrent(pdfWindow);
+    if (!isCurrent()) return;
+    const params =
+      this.#selectionWindow === pdfWindow &&
+      this.#selectionView === this.readerViewForWindow(pdfWindow)
+        ? this.state.selectionParams
+        : null;
     const selection = pdfWindow.getSelection();
-    if (!selection || selection.isCollapsed) {
-      this.showStatus('✗ no selection', 1500);
-      return;
+    let text: string;
+    let position: unknown;
+    let sortIndex: string | undefined;
+    let pageLabel: string | undefined;
+    if (params?.annotation) {
+      ({ text = '', position, sortIndex, pageLabel } = params.annotation);
+    } else {
+      if (!selection || selection.isCollapsed) {
+        this.showStatus('✗ no selection', 1500);
+        return;
+      }
+      const computed = this.computeSelectionPosition(pdfWindow, selection);
+      if (!computed) {
+        this.showStatus('✗ no PDF selection rects', 2000);
+        return;
+      }
+      text = selection.toString();
+      ({ position, sortIndex, pageLabel } = computed);
     }
-    const computed = this.computeSelectionPosition(pdfWindow, selection);
-    if (!computed) {
-      this.showStatus('✗ no PDF selection rects', 2000);
-      return;
-    }
-    await this.createAnnotation(
-      selection.toString(),
-      computed.position,
-      computed.sortIndex,
-      computed.pageLabel,
+    const key = await this.createAnnotation(
+      text,
+      position,
+      sortIndex,
+      pageLabel,
       color,
-      focusComment,
       annotationType,
+      isCurrent,
     );
-    selection.removeAllRanges();
-    if (!focusComment) this.setMode('normal');
+    // An admitted native save survives retirement; only its presentation is conditional.
+    if (!key || !isCurrent()) return;
+    this.clearNativeSelection();
+    this.#annotationNavigation.rememberAnnotation(key);
+    if (!params) {
+      selection?.removeAllRanges();
+      if (!focusComment) this.setMode('normal');
+    }
+    this.showStatus('✓ annotated', 1200);
+    if (focusComment) {
+      if (!isCurrent()) return;
+      this.#nativeInput.release();
+      this.setMode('normal');
+      // open() captures the active window synchronously; never resolve the host selection anew.
+      if (this.#navigation.activePdfWindow() === pdfWindow) await this.#commentEditor.open(key);
+    }
   }
 
   private computeSelectionPosition(
@@ -2278,13 +2332,13 @@ export class ReaderSession {
     sortIndex: string | undefined,
     pageLabel: string | undefined,
     color: AnnotationColor,
-    focusComment: boolean,
     annotationType: 'highlight' | 'underline',
-  ): Promise<void> {
+    isCurrent: () => boolean,
+  ): Promise<string | null> {
     const attachment = this.itemForReader(this.#dependencies.reader);
     if (!attachment?.id || attachment.libraryID === undefined) {
       this.showStatus('✗ no attachment', 2000);
-      return;
+      return null;
     }
     try {
       const item = new (zoteroRuntime().Item)('annotation');
@@ -2301,11 +2355,10 @@ export class ReaderSession {
         item.annotationPosition =
           typeof position === 'string' ? position : JSON.stringify(position);
       await item.saveTx();
-      this.#annotationNavigation.rememberAnnotation(item.key);
-      this.showStatus('✓ annotated', 1200);
-      if (focusComment) await this.openAnnotationComment();
+      return item.key;
     } catch (error) {
-      this.showStatus(`✗ ${String(error).slice(0, 40)}`, 4000);
+      if (isCurrent()) this.showStatus(`✗ ${String(error).slice(0, 40)}`, 4000);
+      return null;
     }
   }
 
