@@ -1,14 +1,14 @@
 # v0.2 候选验收指南
 
-本指南是发布候选的执行协议，不是已经通过的验收报告。当前公开版本仍为 v0.1.0；准备分支构建的 v0.2.0 尚未发布。网站本轮只整理[中文内容](WEBSITE_CONTENT.md)和[录屏操作脚本](RECORDING_GUIDE.md)，不实现站点或制造演示素材。
+本指南是发布候选的执行协议，不是已经通过的验收报告。当前公开版本／更新 feed 仍为 v0.1.0；v0.2.0 源码候选已合入 `main`，接下来由用户统一审查功能和文档，尚未发布。U1–U10 是待执行、记录的步骤，不是预填的 PASS。
 
-实际人工／宿主结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137)，候选版本、提交、包身份及发布准备记录到 [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)。未执行的项目始终写 `NOT PERFORMED`，不能用 CI、DOM composition、可信事件注入、桥接安装或宣传录像代替真实结果。
+实际人工／宿主结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 和 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)，两者在 issue owner 完成验收前保持 OPEN；候选版本、提交、包身份及发布准备记录到 [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)。未执行的项目始终写 `NOT PERFORMED`，不能用 CI、DOM composition、可信事件注入、桥接安装或宣传录像代替真实结果。
 
 ## 1. 固定候选与边界
 
 每轮先记录：候选完整提交 SHA、XPI SHA256、Neo 版本、Zotero 完整版本、操作系统、键盘布局、输入法名称、profile 和数据目录、是否为持久安装。支持范围仍是当前最新稳定 Zotero；清单不承诺旧 major 或 Beta。
 
-在准备分支构建和检查：
+合入 `main` 后，在集成源码上构建和检查：
 
 ```bash
 npm ci
@@ -25,9 +25,18 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 Get-FileHash zotero-neo.xpi -Algorithm SHA256
 ```
 
-以上检查只证明构建、包成员和版本／更新元数据的一致性。`updates.json` 中 v0.2.0 的资产地址是准备发布的目标地址，发布前不是已存在的下载入口。候选从准备 PR 的 CI 附件或本地构建取得；公共 v0.1.0 包仍从[已发布资产](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)取得。
+以上检查只证明构建、包成员和版本／候选更新元数据的一致性。根目录的 `updates.candidate.json` 是发布候选元数据，供 `tools/check-release.mjs` 和 `tools/publish-release.mjs` 读取；根目录 `updates.json` 是公开更新 feed，在已验证的 v0.2.0 资产存在且明确授权 promotion 前，必须只保留官方 v0.1.0 entry。两个 JSON 文件都不打包进 XPI。
 
-过去源码仍标记 0.1.0 时的安装／外部高版本夹具，不等同于“官方发布 v0.1.0 → 最终 v0.2.0 包”的实际升级。最终候选包的版本变化也使整个 XPI 哈希变化；不能继续把旧包的人工结果无条件标到新包上。
+合入 `main` 后，从该确切集成 head 的 CI 构建附件或同一源码的本地构建取得候选 XPI；发布前不存在 v0.2.0 Release 下载入口。官方 v0.1.0 包仍从[已发布资产](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)取得。
+冻结最终包后，将该 SHA256 写入 `updates.candidate.json` 的候选 update entry 的 `update_hash`，形式为
+`sha256:<digest>`。它不进入 XPI，不会造成自引用；但任何包内容变化都需要重新
+固定哈希与受影响验收。发布器会核对实际包内 manifest、提交／tag 和这个哈希。
+它先创建 Draft，按捕获的 Release／asset ID 上传并下载核对 XPI 与
+`zotero-neo.xpi.sha256`，之后才发布；已有同 tag 的资产必须逐字节一致，
+缺失／冲突／不完整 Draft 均拒绝自动修补。发布期间保留单一写入者；
+GitHub 没有原子的“仅 Draft 可上传”条件，不能把读取后校验说成对外部写入的锁。
+
+过去源码仍标记 0.1.0 时的安装／外部高版本夹具，不等同于“官方发布 v0.1.0 → 最终 v0.2.0 包”的实际升级。最终候选包的版本变化也使整个 XPI 哈希变化；不能继续把旧包的人工结果无条件标到新包上。最终 XPI SHA256 `d1d197594a2ad0681bb8dc8670871b2e6194bfe3b2cd3eae6e5e431e020d54ba` 在 Windows Zotero 10.0.6 上的持久干净安装和官方 v0.1.0/schema 11 → v0.2.0/schema 18 升级／重启观察已记录在 [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552)；这是该包的安装／升级证据，不代表 U1–U10 全部通过或 #137/#98 的整体人工／物理输入验收完成。
 
 ## 2. 建立安全的验收环境
 
@@ -172,6 +181,7 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 ### U9：查询、历史和 native Sidebars
 
 - Main `/` 是可见列表 local find，`<Space>fq` / `<Space>fa` 是原生 Quick/Advanced Search，二者不混淆。
+- 单集合、多个集合以及宿主支持的集合／Saved Search／Library 混合选择，都能打开 Toggle Tag Filter。候选来自当前完整 View，排除范围外标签；Quick／Advanced Search 不被清除，零结果时仍可取消当前 active tag。
 - 用真实 Main → Reader → Tab／PDF 位置跳转，再执行 `<C-o>` / `<C-i>`。恢复合格位置而不是复制 Main Selection；历史不承诺恢复缩放、布局或 Note caret。
 - `<Space>ro/rm/ra/rt` 直接打开／聚焦 Outline、Bookmarks、Annotations、Thumbnails，重复操作不把目标侧栏关闭。
 - `[s` / `]s` 从 PDF 和四种侧栏上下文按实际位置遍历原生完整 heading tree；Figure/Table 只在存在真实 native 数据时验收，不通过标题正则编造目标。冷 SDT 处理可有等待，不能把等待宣传为零成本。
@@ -210,8 +220,8 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 ## 8. 发布门禁
 
 1. U1/U2 和 #137 的必需人体／每视图项目有实际通过记录；未执行项不能以已完成文档顶替。
-2. 最终版本、包、兼容范围、更新 entry、release notes 和安装入口一致；最后改版本／源码后重新固定候选，不发布被另一推送替换的包。
+2. 最终版本、包、兼容范围、更新 entry／`update_hash`、release notes 和安装入口一致；最后改版本／源码后重新固定候选，不发布被另一推送替换的包。XPI 包含完整项目和第三方许可，Release 提供同 tag 对应源码入口与校验资产。
 3. 保留已有 schema/native 证据的准确来源；新的 0.2.0 XPI 和真实官方旧版升级分别有身份和观察。
 4. 仓库 CI 当前验证 Ubuntu。不要把历史 Windows job 或本地包装检查写成当前 Windows/macOS GUI 验收。
-5. #137/#98 只按实际完成条件收束。准备分支不要提前合入 `main` 暴露不存在的 v0.2.0 下载；版本 tag／发布仍需要明确授权。
+5. 源码可以在统一的 owner 功能／文档验收前合入 `main`；合并不代表验收完成或发布。#137/#98 在 issue owners 记录并接受结果前保持 OPEN。必需验收完成且有明确发布授权前，不打 tag、不发布。
 6. 正式网站下载链接和“已发布”文案只在实际资产可用后切换。当前[网页内容](WEBSITE_CONTENT.md)与[录屏脚本](RECORDING_GUIDE.md)不要求虚构素材来完成页面。

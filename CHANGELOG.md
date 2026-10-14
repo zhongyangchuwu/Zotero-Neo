@@ -4,10 +4,12 @@ All notable changes to Zotero Neo are documented here.
 
 ## [0.2.0] - Release candidate (unreleased)
 
-This candidate is prepared for acceptance, not published. The public release is
-still v0.1.0. Human/native input and per-view package acceptance remain open in
-[#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137); the final v0.1.0 to
-v0.2.0 packaged upgrade must be observed before publication.
+The v0.2.0 source candidate is integrated for the owner-led functional and
+documentation review, but it is not published. The public release and update feed
+remain v0.1.0. Prepared metadata is in `updates.candidate.json` for release
+validation and publishing; `updates.json` stays at v0.1.0 until a verified asset
+exists and promotion is explicitly authorized. Neither file is packaged. Human
+physical-input and per-view acceptance remain open in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98). The final XPI's persistent clean-install and official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552), scoped as package evidence rather than broad owner acceptance.
 
 ### Release overview
 
@@ -41,6 +43,9 @@ v0.2.0 packaged upgrade must be observed before publication.
 
 ### Changed
 
+- Centralize required private Main/Note/Reader SDK and host-DOM capabilities in the internal `src/toolkit/` boundary. Keep target precedence, modes, workflows, bookmark storage choice and history policy in their business owners; public handles expose no native pane/tree/PDF/editor internals.
+- Prefer the documented collection-selection API for its single-selection contract while preserving zero/multiple ScopeSet behavior. Cache only the selected tab's immutable metadata on Note key dispatch instead of copying the full tab inventory.
+
 - Reconcile the current interaction, runtime ownership and contributor guidance after the Surface/Target/Input cleanup and selection-safe Notes revision. Historical workflow inventories no longer define current behavior; source-build instructions distinguish the unreleased candidate from the public v0.1.0 update asset.
 - Remove the unused cross-Surface item-target dispatcher/re-exports and keep behavioral target contracts on the existing Main, Reader and Note resolvers. Persisted-preference migration helpers remain in use and are unchanged.
 - Prune historical source-text, error-wording, CSS-spelling and duplicated default-table assertions while retaining preference migrations, native input boundaries, cleanup races and package-byte contracts.
@@ -71,6 +76,17 @@ v0.2.0 packaged upgrade must be observed before publication.
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ### Fixed
+- Read Main View state and Toggle Tag Filter candidates from the complete native rendered scope, including multiple collections and supported mixed/cross-library selections, without calling single-selection APIs or broadening tags to entire libraries.
+- Report Tag Filter matches using native object rows, excluding multiselection library headers and spacers.
+- Ship the complete project AGPL-3 license and fuzzysort MIT notice inside the XPI and validate the actual archived license payloads.
+- Constrain the candidate to the tested Zotero minor (`10.0.*`). Preserve the published v0.1.0 update entry.
+- Bind publication to the accepted XPI SHA256, packaged metadata and source/tag identity; publish only verified draft assets, make identical reruns read-only, and reject conflicting or incomplete releases instead of overwriting them.
+- Pin all Actions dependencies to verified upstream commits while retaining existing triggers and least-privilege permissions.
+- Keep Plugin Manager's current query/navigation selection when a pending refresh completes, so the next enable/disable action cannot target the plugin selected before that refresh.
+- Reconcile Main Cursor identity after settled native row-provider updates, including sorting without a refresh event, while honoring explicit native selection of newly saved items.
+- Retire Main view observers before unregistering so callbacks captured by an asynchronous native dispatch cannot restore an old Cursor into a replacement session.
+- Rebind Note input when its Document changes even if Window and item identity stay the same; clear pending mode/chord state and fence old callbacks before independent listener cleanup.
+- Release partially acquired Main row-decoration resources when initial observer/listener installation fails, keep retired callbacks inert, and preserve the original installation error.
 - Use the initiating Reader/PDF view's current selection and geometry for annotations. Admitted saves survive view retirement, while stale continuations cannot clear/refocus newer selection or open a different annotation's comment.
 - Reject annotation selections spanning more than two pages or non-adjacent pages instead of saving truncated geometry. Incomplete PDF coordinates fail closed without clearing Select or its text.
 - Compute cross-page annotation rectangles from selected text nodes, excluding intervening PDF canvas/page boxes and preserving partial text endpoints.

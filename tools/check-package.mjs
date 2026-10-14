@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { listZipMembers } from './zip.mjs';
+import { listZipMembers, readZipMember } from './zip.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const archive = resolve(root, 'zotero-neo.xpi');
 const members = listZipMembers(archive);
 const expected = [
+  'LICENSE',
   'bootstrap.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
@@ -18,6 +19,7 @@ const expected = [
   'icons/icon-48x48.png',
   'icons/icon-64x64.png',
   'icons/icon-96x96.png',
+  'licenses/fuzzysort-LICENSE',
   'manifest.json',
 ].sort();
 
@@ -32,6 +34,14 @@ for (const member of members) {
   }
   if (member.endsWith('.map') || member.endsWith('.ts')) {
     throw new Error(`Source artifact packaged: ${member}`);
+  }
+}
+for (const [member, source] of [
+  ['LICENSE', resolve(root, 'LICENSE')],
+  ['licenses/fuzzysort-LICENSE', resolve(root, 'vendor/fuzzysort/LICENSE')],
+]) {
+  if (!readZipMember(archive, member).equals(readFileSync(source))) {
+    throw new Error(`Packaged license notice differs from authoritative source: ${member}`);
   }
 }
 

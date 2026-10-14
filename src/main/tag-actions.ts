@@ -7,7 +7,7 @@ import type { FuzzyPicker } from './picker';
 import { createTagCandidateProvider, type TagRecord } from './picker/providers/tags';
 import type { MainNavigation } from './navigation';
 import type { MainWindowSession } from './session';
-import { mainHost } from './host';
+import { mainTagScope } from '../toolkit/main';
 import type { MainViewActions } from './view-actions';
 
 function sameTag(left: string, right: string): boolean {
@@ -162,17 +162,13 @@ export class TagActions {
   toggleFilter(window: MainWindow, session: MainWindowSession): void {
     const active = [...this.#viewActions.state(window).tags];
     const activeSet = new Set(active);
-    const pane = mainHost(window).ZoteroPane;
-    const row = pane?.getCollectionTreeRow?.();
-    const libraryID = row?.ref?.libraryID ?? Zotero.Libraries.userLibraryID;
+    const { getTags } = mainTagScope(window);
     const source = createTagCandidateProvider({
       title: 'Toggle Tag Filter',
       placeholder: '> Search tags to toggle…',
       separator: tagSeparatorFromPreferences(this.#preferences),
       loadTags: async () => {
-        const scoped: readonly TagRecord[] = row?.getTags
-          ? await row.getTags()
-          : await Zotero.Tags.getAll(libraryID);
+        const scoped = await getTags();
         return mergeTags(
           scoped,
           active.map((tag) => ({ tag })),

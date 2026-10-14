@@ -45,20 +45,39 @@ function harness(options: {
   items?: Zotero.Item[];
   activeFilters?: string[];
   scopedTags?: _ZoteroTypes.Tags.TagJson[];
+  renderedRows?: readonly { isObjectRow: boolean; ref?: Zotero.Item }[];
+  scopes?: Array<{
+    type: 'collection' | 'search' | 'library';
+    libraryID: number;
+    itemIDs: readonly number[];
+  }>;
 }) {
   const items = options.items ?? [];
   const activeFilters = new Set(options.activeFilters ?? []);
-  const scopedTags = options.scopedTags ?? [];
+  const scopes = options.scopes ?? [
+    { type: 'collection', libraryID: 1, itemIDs: items.map((item) => item.id) },
+  ];
   const setFilter = vi.fn(async (_type: 'tags', tags: ReadonlySet<string>) => {
     activeFilters.clear();
     for (const tag of tags) activeFilters.add(tag);
   });
   const tagSelector = { selectedTags: new Set<string>() };
-  const row = {
-    ref: { libraryID: 1 },
+  const rows = scopes.map((scope) => ({
+    type: scope.type,
+    ref: { libraryID: scope.libraryID },
     tags: activeFilters,
-    getTags: vi.fn(async () => scopedTags),
-  };
+    searchText: '',
+    advancedSearch: undefined as object | undefined,
+    getSearchResults: async () => [...scope.itemIDs],
+    getTags: async () =>
+      options.scopedTags ??
+      scope.itemIDs.flatMap((id) => {
+        const item = Zotero.Items.get(id);
+        return item ? item.getTags() : [];
+      }),
+  }));
+  const renderedRows =
+    options.renderedRows ?? items.map((item) => ({ isObjectRow: true, ref: item }));
   const window = {
     document: { activeElement: null, getElementById: () => null },
     setTimeout: () => 1,
@@ -69,14 +88,21 @@ function harness(options: {
     },
     ZoteroPane: {
       getSelectedItems: () => items,
-      getCollectionTreeRow: () => row,
+      getCollectionTreeRows: () => rows,
+      getCollectionTreeRow: () => {
+        if (rows.length > 1) throw new Error('Expected a single selected collection tree row');
+        return rows[0];
+      },
       itemsView: {
-        rowCount: items.length,
+        rowCount: renderedRows.length,
+        get objectRowCount() {
+          return renderedRows.filter((row) => row.isObjectRow).length;
+        },
+        collectionTreeRows: rows,
         selection: { focused: 0 },
-        getRow: (index: number) =>
-          items[index] ? { isObjectRow: true, ref: items[index] } : undefined,
+        getRow: (index: number) => renderedRows[index],
         getRowIndexByID: (id: number) => {
-          const index = items.findIndex((item) => item.id === id);
+          const index = renderedRows.findIndex((row) => row.isObjectRow && row.ref?.id === id);
           return index < 0 ? false : index;
         },
         setFilter,
@@ -125,6 +151,7 @@ function harness(options: {
     setFilter,
     tagSelector,
     activeFilters,
+    rows,
     open: () => {
       if (!lastOpen) throw new Error('Tag action did not open a chooser');
       return lastOpen;
@@ -142,6 +169,14 @@ function installZotero(
     Items: { get: (id: number) => byID.get(id) ?? false },
     Reader: { getByTabID: () => null },
     Libraries: { userLibraryID: 1 },
+    CollectionTreeRow: {
+      getTagsAcrossRows: async (
+        rows: readonly { getSearchResults: () => Promise<readonly number[]> }[],
+      ) => {
+        const ids = new Set((await Promise.all(rows.map((row) => row.getSearchResults()))).flat());
+        return [...ids].flatMap((id) => byID.get(id)?.getTags() ?? []);
+      },
+    },
     Tags: { getAll: vi.fn(async () => libraryTags) },
     DB: { executeTransaction },
   });
@@ -321,6 +356,147 @@ describe('semantic Tag actions', () => {
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
     expect(first.hasTag('robotics')).toBe(true);
     expect(second.hasTag('robotics')).toBe(true);
+  });
+
+  it.each([
+    {
+      name: 'one collection',
+      scopes: [{ type: 'collection' as const, libraryID: 1, itemIDs: [1] }],
+      expected: ['red', 'shared'],
+    },
+    {
+      name: 'multiple collections',
+      scopes: [
+        { type: 'collection' as const, libraryID: 1, itemIDs: [1] },
+        { type: 'collection' as const, libraryID: 1, itemIDs: [2] },
+      ],
+      expected: ['blue', 'red', 'shared'],
+    },
+    {
+      name: 'a collection and saved search across libraries',
+      scopes: [
+        { type: 'collection' as const, libraryID: 1, itemIDs: [1] },
+        { type: 'search' as const, libraryID: 2, itemIDs: [4] },
+      ],
+      expected: ['green', 'red', 'shared'],
+    },
+    {
+      name: 'multiple saved searches across libraries',
+      scopes: [
+        { type: 'search' as const, libraryID: 1, itemIDs: [2] },
+        { type: 'search' as const, libraryID: 2, itemIDs: [4] },
+      ],
+      expected: ['blue', 'green', 'shared'],
+    },
+    {
+      name: 'multiple library roots',
+      scopes: [
+        { type: 'library' as const, libraryID: 1, itemIDs: [1, 2] },
+        { type: 'library' as const, libraryID: 2, itemIDs: [4] },
+      ],
+      expected: ['blue', 'green', 'red', 'shared'],
+    },
+  ])('toggles tags in the native whole-view results for $name', async ({ scopes, expected }) => {
+    const red = tagItem(1, [
+      { tag: 'red', type: 0 },
+      { tag: 'shared', type: 1 },
+    ]);
+    const blue = tagItem(2, [
+      { tag: 'blue', type: 0 },
+      { tag: 'shared', type: 0 },
+    ]);
+    const outside = tagItem(3, [{ tag: 'unrelated', type: 0 }]);
+    const green = tagItem(4, [
+      { tag: 'green', type: 0 },
+      { tag: 'shared', type: 0 },
+    ]);
+    Reflect.set(green, 'libraryID', 2);
+    installZotero([red, blue, outside, green], [{ tag: 'global-only' }]);
+    const h = harness({ items: [outside], scopes });
+    h.tagSelector.selectedTags.add('stale-selector');
+    for (const row of h.rows) {
+      row.searchText = 'native quick search';
+      row.advancedSearch = {};
+    }
+
+    h.actions.toggleFilter(h.window, h.session);
+    const toggle = h.open();
+    const candidates = await toggle.options.source!.load();
+    expect(candidates.map((candidate) => candidate.tagName).sort()).toEqual(expected);
+    expect(candidates.every((candidate) => candidate.meta !== 'Active filter')).toBe(true);
+
+    await toggle.options.confirm?.(
+      {
+        id: 'tag:shared',
+        title: 'shared',
+        search: 'shared',
+        tagName: 'shared',
+        tagCandidate: 'tag',
+      } as PickerItem,
+      false,
+    );
+
+    expect(h.rows.map((row) => [...row.tags])).toEqual(scopes.map(() => ['shared']));
+    expect(h.tagSelector.selectedTags).toEqual(new Set(['shared']));
+    expect(
+      h.rows.every((row) => row.searchText === 'native quick search' && row.advancedSearch),
+    ).toBe(true);
+    expect(outside.getTags()).toEqual([{ tag: 'unrelated', type: 0 }]);
+  });
+
+  it('keeps an active tag removable when the whole view currently has no results', async () => {
+    installZotero([], [{ tag: 'global-only' }]);
+    const h = harness({
+      activeFilters: ['missing'],
+      scopes: [
+        { type: 'collection', libraryID: 1, itemIDs: [] },
+        { type: 'search', libraryID: 2, itemIDs: [] },
+      ],
+    });
+
+    h.actions.toggleFilter(h.window, h.session);
+    const toggle = h.open();
+    const candidates = await toggle.options.source!.load();
+    expect(candidates.map((candidate) => [candidate.tagName, candidate.meta])).toEqual([
+      ['missing', 'Active filter'],
+    ]);
+    await toggle.options.confirm?.(candidates[0]!, false);
+    expect(h.rows.map((row) => [...row.tags])).toEqual([[], []]);
+    expect(h.tagSelector.selectedTags).toEqual(new Set());
+  });
+
+  it('reports matching items without counting native library headers and spacers', async () => {
+    const first = tagItem(1, [{ tag: 'shared', type: 0 }]);
+    const second = tagItem(2, [{ tag: 'shared', type: 0 }]);
+    Reflect.set(second, 'libraryID', 2);
+    installZotero([first, second]);
+    const h = harness({
+      items: [first, second],
+      scopes: [
+        { type: 'collection', libraryID: 1, itemIDs: [first.id] },
+        { type: 'library', libraryID: 2, itemIDs: [second.id] },
+      ],
+      renderedRows: [
+        { isObjectRow: false },
+        { isObjectRow: true, ref: first },
+        { isObjectRow: false },
+        { isObjectRow: false },
+        { isObjectRow: true, ref: second },
+      ],
+    });
+
+    h.actions.toggleFilter(h.window, h.session);
+    const toggle = h.open();
+    const [candidate] = await toggle.options.source!.load();
+    await toggle.options.confirm?.(candidate!, false);
+    expect(h.session.status.textContent).toBe('✓ Added tag filter “shared” · 2 items');
+
+    h.actions.clearFilters(h.window, h.session);
+    await vi.waitFor(() =>
+      expect(h.session.status.textContent).toBe('✓ Cleared tag filters · 2 items'),
+    );
+    expect(first.hasTag('shared')).toBe(true);
+    expect(second.hasTag('shared')).toBe(true);
   });
 
   it('toggles one Main tag filter and clears all filters without mutating item tags', async () => {

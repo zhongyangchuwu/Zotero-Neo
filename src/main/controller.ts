@@ -57,7 +57,13 @@ import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
-import { mainHost, mainItem, mainReaderForTab, selectedMainTabID } from './host';
+import {
+  mainLibrarySelection,
+  openMainNote,
+  mainItem,
+  mainReaderForTab,
+  selectedMainTabID,
+} from '../toolkit/main';
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
@@ -979,7 +985,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
 
-    const pane = mainHost(window).ZoteroPane;
+    const pane = mainLibrarySelection(window);
     if (!pane?.selectItem) {
       this.#navigation.status(session, t('status.showInLibraryHostUnavailable', language));
       return;
@@ -1016,7 +1022,7 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     void this.#picker.open(window, session, 'all', {
       confirm: async (item) => {
-        const pane = mainHost(window).ZoteroPane;
+        const pane = mainLibrarySelection(window);
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         await this.confirmLibrarySelection(
           window,
@@ -1037,7 +1043,7 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     void this.#picker.open(window, session, 'collection', {
       confirm: async (item) => {
-        const pane = mainHost(window).ZoteroPane;
+        const pane = mainLibrarySelection(window);
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         await this.confirmLibrarySelection(
           window,
@@ -1069,7 +1075,7 @@ export class MainWindowController implements MainWindowControllerApi {
     void this.#picker.open(window, session, 'notes', {
       source: createNotesProvider(window, this.#dependencies.logger, { baseItem }),
       confirm: async (item, openInWindow) => {
-        const pane = mainHost(window).ZoteroPane;
+        const pane = mainLibrarySelection(window);
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         const id = Number(item.id);
         await this.confirmLibrarySelection(
@@ -1081,8 +1087,7 @@ export class MainWindowController implements MainWindowControllerApi {
           surface,
           {
             afterSelection: async () => {
-              if (pane.openNote) await pane.openNote(id, { openInWindow });
-              else await Zotero.Notes.open(id, null, { openInWindow });
+              await openMainNote(window, id, openInWindow);
             },
           },
         );

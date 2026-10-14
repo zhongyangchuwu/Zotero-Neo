@@ -656,6 +656,22 @@ describe('ReaderCommentEditor stale work containment', () => {
     h.editor.dispose();
   });
 
+  it('restores only the captured native deletion owner when the Reader replaces its internals', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    expect(h.internal._enableAnnotationDeletionFromComment).toBe(false);
+    const replacement = { _enableAnnotationDeletionFromComment: false };
+    Reflect.set(h.reader, '_internalReader', replacement);
+
+    h.editor.releaseView(h.primary.pdfWindow);
+
+    expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+    expect(replacement._enableAnnotationDeletionFromComment).toBe(false);
+    expect(h.editor.ownsInput).toBe(false);
+    expect(h.primary.systemKeys.size).toBe(0);
+    h.editor.dispose();
+  });
+
   it('restores an originally absent deletion flag synchronously even when final persistence rejects', async () => {
     const h = createHarness();
     h.internal._enableAnnotationDeletionFromComment = undefined;

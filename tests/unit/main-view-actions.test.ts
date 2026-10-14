@@ -6,7 +6,7 @@ import {
   focusMainQuickSearch,
   mainViewFilterState,
   openMainAdvancedSearch,
-} from '../../src/main/host';
+} from '../../src/toolkit/main';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -15,7 +15,12 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Zotero', originalZotero);
 });
 
-function harness(options: { quick?: string; tags?: string[]; advanced?: boolean }) {
+function harness(options: {
+  quick?: string;
+  tags?: string[];
+  advanced?: boolean;
+  libraries?: number[];
+}) {
   const quick = options.quick ?? '';
   const activeTags = new Set(options.tags ?? []);
   const select = vi.fn();
@@ -29,12 +34,12 @@ function harness(options: { quick?: string; tags?: string[]; advanced?: boolean 
     value: quick,
     searchTextbox: { value: quick, select },
   };
-  const row = {
-    ref: { libraryID: 1 },
+  const rows = (options.libraries ?? [1]).map((libraryID) => ({
+    ref: { libraryID },
     searchText: quick,
     tags: activeTags,
     advancedSearch: options.advanced ? {} : undefined,
-  };
+  }));
   const tagSelector = { selectedTags: new Set<string>(activeTags) };
   const document = {
     getElementById: (id: string) => (id === 'zotero-tb-search' ? searchBar : null),
@@ -42,8 +47,12 @@ function harness(options: { quick?: string; tags?: string[]; advanced?: boolean 
   const window = {
     document,
     ZoteroPane: {
-      getCollectionTreeRow: () => row,
-      itemsView: { rowCount: 7, setFilter },
+      getCollectionTreeRows: () => rows,
+      getCollectionTreeRow: () => {
+        if (rows.length > 1) throw new Error('Expected a single selected collection tree row');
+        return rows[0];
+      },
+      itemsView: { rowCount: 7, objectRowCount: 7, collectionTreeRows: rows, setFilter },
       tagSelector,
       openAdvancedSearchFromQuickSearch,
       toggleAdvancedSearchState,
@@ -55,6 +64,7 @@ function harness(options: { quick?: string; tags?: string[]; advanced?: boolean 
     select,
     setFilter,
     activeTags,
+    rows,
     tagSelector,
     openAdvancedSearchFromQuickSearch,
     toggleAdvancedSearchState,
@@ -69,6 +79,48 @@ describe('Main View host adapter', () => {
       quickSearchText: 'robotics',
       tags: ['embodied', 'policy'],
       advancedSearch: true,
+    });
+  });
+
+  it.each([
+    [1, 1],
+    [1, 2],
+  ])(
+    'reads and applies whole-view filters across selected libraries %j',
+    async (...libraries: number[]) => {
+      const h = harness({
+        quick: 'robotics',
+        tags: ['embodied'],
+        advanced: true,
+        libraries,
+      });
+
+      expect(mainViewFilterState(h.window)).toEqual({
+        quickSearchText: 'robotics',
+        tags: ['embodied'],
+        advancedSearch: true,
+      });
+      await expect(applyMainTagFilter(h.window, ['policy'])).resolves.toBe(7);
+      expect(h.rows.map((row) => [...row.tags])).toEqual(libraries.map(() => ['policy']));
+      expect(mainViewFilterState(h.window)).toEqual({
+        quickSearchText: 'robotics',
+        tags: ['policy'],
+        advancedSearch: true,
+      });
+    },
+  );
+
+  it('keeps empty Quick Search and rendered filter rows authoritative over stale tree state', () => {
+    const h = harness({ quick: '', libraries: [1, 2] });
+    for (const row of h.rows) row.searchText = 'stale row text';
+    Reflect.set(Reflect.get(h.window, 'ZoteroPane'), 'getCollectionTreeRows', () => [
+      { searchText: 'stale tree text', tags: new Set(['stale']), advancedSearch: {} },
+    ]);
+
+    expect(mainViewFilterState(h.window)).toEqual({
+      quickSearchText: '',
+      tags: [],
+      advancedSearch: false,
     });
   });
 

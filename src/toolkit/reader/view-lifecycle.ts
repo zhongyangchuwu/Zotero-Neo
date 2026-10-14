@@ -1,7 +1,8 @@
-import { CleanupFailure } from '../core/cleanup';
-import { isDeadObject } from '../platform/cross-compartment';
-import { asKeyboardEvent } from '../platform/dom';
-import type { PdfWindow, ReaderRuntime } from './types';
+import { CleanupFailure } from '../../core/cleanup';
+import { isDeadObject } from '../../platform/cross-compartment';
+import { asKeyboardEvent } from '../../platform/dom';
+import type { PdfWindow, ReaderRuntime } from './contracts';
+import type { NativeReaderRuntime } from './private-types';
 
 interface ViewHandlers {
   readonly keyDown: EventListener;
@@ -40,6 +41,7 @@ function asPdfWindow(window: Window | undefined): PdfWindow | null {
  */
 export class ReaderViewLifecycle {
   readonly #dependencies: ReaderViewLifecycleDependencies;
+  readonly #reader: NativeReaderRuntime;
   readonly #handlers = new Map<PdfWindow, ViewHandlers>();
   #activePdfWindow: PdfWindow;
   #syncTimer: number | null = null;
@@ -47,6 +49,8 @@ export class ReaderViewLifecycle {
 
   constructor(dependencies: ReaderViewLifecycleDependencies) {
     this.#dependencies = dependencies;
+    // Resolving private structure does not create or replace the Reader identity.
+    this.#reader = dependencies.reader as NativeReaderRuntime;
     this.#activePdfWindow = dependencies.timerWindow;
   }
 
@@ -66,7 +70,7 @@ export class ReaderViewLifecycle {
 
   sync(): void {
     if (this.#disposed) return;
-    const internal = this.#dependencies.reader._internalReader;
+    const internal = this.#reader._internalReader;
     const wanted = [
       asPdfWindow(internal?._primaryView?._iframeWindow),
       asPdfWindow(internal?._secondaryView?._iframeWindow),

@@ -8,11 +8,11 @@ import type {
   NavigationPort,
   NativeNavigationReceipt,
 } from '../../src/navigation/types';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
+import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
 import {
   ReaderJumpHistoryBridge,
   type ReaderOwnedCompletion,
-} from '../../src/reader/jump-history-bridge';
+} from '../../src/toolkit/reader/history-bridge';
 import type {
   InternalReaderRuntime,
   PdfWindow,
@@ -21,7 +21,7 @@ import type {
   ReaderPdfHistoryRuntime,
   ReaderRuntime,
   ReaderViewRuntime,
-} from '../../src/reader/types';
+} from '../fixtures/reader-native-types';
 
 type ViewPayload = Parameters<NonNullable<ReaderViewRuntime['navigate']>>[0];
 type InternalPayload = Parameters<NonNullable<InternalReaderRuntime['navigate']>>[0];

@@ -2,9 +2,9 @@
 
 ## Compatibility and verification
 
-Official support covers the latest stable Zotero release at the time of a Zotero
-Neo release. The manifest enforces that supported major instead of advertising
-untested older Zotero majors. The current supported major is Zotero 10.
+Support is limited to the latest stable Zotero release at the time of a Neo
+release. The candidate manifest and update entry constrain the tested minor
+(`10.0.*`), rather than advertising unverified future Zotero 10 minors.
 GitHub Actions verifies formatting, strict TypeScript, Node contracts, and XPI
 packaging on Ubuntu; it does not prove Zotero GUI behavior. Exercise a changed
 reader, main-window, note, or preferences flow in the current stable Zotero host.
@@ -149,8 +149,41 @@ pull requests targeting `main`, version tags, and manual dispatch, then uploads
 one canonical XPI artifact. The guarded release job runs for a `v*` tag or a
 manual dispatch from `main` with a non-empty `release_tag`.
 `tools/check-release.mjs` requires the tag, manifest version, compatibility range,
-and prepared `updates.json` entry to agree before publication. Do not create a
-release tag until its update-feed entry exists.
+and prepared entry in the root `updates.candidate.json` to agree before publication.
+Prepare and validate release metadata in that candidate feed; do not add the
+candidate release to root `updates.json`, the live `update_url` feed, until its
+matching published assets are actually available and publication is explicitly
+authorized. Until then, `updates.json` remains limited to the unchanged official
+0.1.0 entry. Do not create a release tag until its candidate-feed entry exists.
+
+A source merge does not complete the user's unified functional and documentation
+acceptance; that review remains separate from source and release preparation.
+
+The publisher in `tools/publish-release.mjs` reads the same candidate feed,
+additionally reads the manifest from the actual canonical XPI, and requires the
+prepared entry's `update_hash` to be `sha256:<that XPI's digest>`. Freeze this hash
+after the final build; changing runtime or packaged files requires a new hash and
+affected acceptance. The feed is not packaged, so recording the digest does not
+change the XPI.
+
+Publication verifies the checkout and resolved remote tag commit, captures the
+draft Release ID, uploads to that exact asset endpoint, and downloads by captured
+asset IDs. Only verified `zotero-neo.xpi` and `zotero-neo.xpi.sha256` are published.
+An identical published release is a read-only no-op; conflicting bytes, incomplete
+drafts, missing/additional assets and moved tags are rejected without overwrite or
+automatic repair. Resolve those failures explicitly, not by substituting another
+package. Keep published assets available alongside their corresponding tagged source.
+
+The release job serializes its own runs by tag and rechecks captured draft and
+asset state immediately before mutation. GitHub has no atomic draft-only upload
+precondition: an external writer can publish between a check and an accepted
+upload. Keep one publishing owner. Detected interference stops further mutations,
+but local checks cannot guarantee isolation from other writers or undo their actions.
+
+All Actions dependencies are pinned to verified upstream commit SHAs. Default
+permissions remain read-only; only the existing formatter and release jobs have
+their required repository-write permission. No repository immutability setting or
+release publication is changed by local verification.
 
 ## Branding assets
 
@@ -210,13 +243,68 @@ resolution, and side-effect-free consumption prediction. Host consumers retain e
 gates, timers, guides, focus decisions, and action execution; Reader sidebar, Picker,
 and Plugin Manager instantiate the shared local binding runtime where applicable.
 
-`src/main/host.ts` is the narrow boundary for private main-window APIs: tabs, panes,
-selected items, reader-tab context, and tag filtering. Main-window control flow should use
-these named adapters rather than spreading structural casts through feature code.
+`src/toolkit/index.ts` is the unified host-capability entry and re-exports
+`src/toolkit/main/index.ts` and `src/toolkit/reader/index.ts`, the Main and Reader
+entries. Note-pane capabilities are exposed through Main; there is no separate
+Note Toolkit entry. Business code uses these entries, not implementation modules,
+native structural types, or private host selectors. Necessary private abilities
+remain available behind the same capability contracts.
 
-Context Note resolution reads the native `ZoteroContextPane.context.activeEditor` through
-`activeContextNoteEditor()`. Zotero publishes `context` during initialization; its controller-level
-`activeEditor` getter dereferences the not-yet-created inner pane when a new Main window first loads.
+### Host capability Toolkit
+
+The Toolkit is internal, bundled with Neo, and adds no runtime dependency. It is
+not a generic private-method dispatcher and does not expose internal Reader,
+PDF viewer, item-tree, context-editor, or preference-registry objects. Standard DOM
+windows are allowed for own UI and listeners; native PDF view identity is an opaque
+handle. Handles reuse host identity rather than allocating a wrapper per key event.
+
+Prefer documented APIs when they satisfy the existing semantics. Underdocumented
+outer methods, Proxy forwarding, or third-party wrappers are not proof of a stable
+public contract. `getSelectedCollection()` is used only for exactly one native
+scope selection: Zotero's singular API rejects zero/multiple selection. Those
+cases retain the explicit outer plural method and legacy tree fallback; detached
+Scope Cursor is not substituted for the selected collection.
+
+The current capability/dependency inventory is:
+
+| Capability | Toolkit owner | Current host dependency and update check |
+| --- | --- | --- |
+| Selected items/collection and item opening/reveal | `main/host.ts` | Public item/selection APIs where equivalent; preserve singular/plural preconditions, returned failure and native save/navigation receipts. |
+| Main Cursor, ScopeSet, tree focus and generation | `main/host.ts`, `main/tree.ts` | Private tree rows, focus-only selection seam and deferred generation identity; observe settled row-provider updates (including sort without refresh), preserve stable Cursor for identity-preserving updates, adopt explicit native target selection, and retire callbacks before unregistering. |
+| Main tabs and selected metadata | `main/host.ts` | `Zotero_Tabs` inventory/selection; selected-tab immutable projection is reused until metadata changes, without full-inventory allocation per key. |
+| Quick/Advanced/tag View | `main/host.ts` | Native UI/filter APIs and DOM; use the rendered view's plural scope rows, including supported mixed/cross-library selection, and the native combined tag query. Empty active tags win over stale UI state; never broaden candidates to entire libraries. |
+| Main row-state decoration | `main/rendered-items.ts` | Native rendered-row IDs and DOM observers; installation failure retires callbacks, releases acquired resources and preserves the original error. |
+| Note context/editor discovery | `main/host.ts` | Published context object, editor iframe and DOM identification; keep Note identity independent of Main selection and rebind on Window/Document/item changes. |
+| Plugin registry/preferences | `main/plugins.ts` | Mozilla AddonManager plus private Zotero preference registry/launcher; return metadata/capabilities, not the registry. URL and self-disable policy stay in Plugin Manager. |
+| Reader registration/inventory/identity | `reader/host.ts` | Official Reader event registration; private inventory/instance/closed/owner fields for lifecycle. Only authoritative inventory permits absent-reader retirement. |
+| Reader keyboard forwarding | `reader/input-bridge.ts` | Private `_onKeyDown`/`_textAnnotationFocused`; policy is injected, old callbacks retire before restoration, only still-owned methods are restored. |
+| PDF view discovery/listeners | `reader/view-lifecycle.ts` | Private primary/secondary windows and internal scroll surface; exact registration fences late events, including reuse of the same Window. |
+| Reader page/search/zoom/split/focus | `reader/navigation.ts` | Native Reader/PDF view APIs and viewport geometry; preserve exact view, captured Find document/window and payload cloning. Semantic traversal stays in `ReaderNavigation`. |
+| Navigation capture/reopen/completion | `reader/jump-host.ts`, `reader/history-bridge.ts` | Private histories, Find/link producers, promises and native hard receipts; verify ownership/settlement, not merely that a save callback ran. Shared history policy stays outside Toolkit. |
+| PDF text/selection/annotation geometry | `reader/pdf-text.ts`, `reader/selection-geometry.ts` | Private PDF text-layer/page structure and viewport conversion; preserve text-only clipped rectangles, full text, adjacent-page limits and fail-closed incomplete geometry. |
+| PDF link hints | `reader/links.ts` | Private link overlay map, client rectangles and native link delegation; preserve exact source/destination, pane ownership and external native handling. |
+| Native Sidebar | `reader/sidebar.ts` | Private state and Outline/Annotations/Thumbnails DOM; reversible decoration and focus/mutation mechanics only. Binding contexts and target choice stay in `ReaderNativeSidebar`. |
+| Annotation selection/filter/comment protection | `reader/annotations.ts` | Private native selection/filter/deletion/popup seams; actual item mutation uses public item APIs. Release restores the captured native owner, not its replacement. |
+| Bookmark geometry/Extra compatibility | `reader/marks.ts` | Private PDF page geometry and legacy Extra access; parent-versus-attachment storage target is chosen by `ReaderMarks`, not Toolkit. |
+| Structured document blocks | `reader/structured-document.ts` | Underdocumented `Zotero.SDT` reader; native processing cannot be cancelled. Retire results without starting later stages; semantic caption/heading classification stays in `ReaderCaptionTargets`. |
+
+All paths in the owner column are relative to `src/toolkit/`. Public Zotero item
+operations and `platform/zotero-items.ts` remain usable directly; do not wrap every
+public getter/save solely to make imports uniform. Do not replace Cursor with
+`getSelectedItems()`, exact-view navigation with a default-view call, or a reliable
+completion contract with an interface-presence check.
+
+For a host update, inspect the affected capability's implementation and caller
+invariants, then exercise its native workflow and lifecycle. Keep a small number
+of high-consequence contracts for target identity, save admission, duplicate
+commit, retirement and migration; reuse existing workflow coverage rather than
+adding private-helper/source-text assertions. Node contracts and packaged-member
+checks do not substitute for actual Zotero input/focus/save verification.
+
+Context Note resolution reads the native `ZoteroContextPane.context.activeEditor`
+inside Toolkit through `activeContextNoteItem()` and `mainNoteEditorWindow()`.
+Zotero publishes `context` during initialization; its controller-level `activeEditor`
+getter dereferences the not-yet-created inner pane when a new Main window first loads.
 Missing context means no context Note is available yet, not a failed Main attachment. Re-read the
 native context on every resolution so later initialization, editor replacement, and focused Note
 precedence remain host-authoritative. Live getter failures are not hidden, and no retry or mirrored
@@ -314,7 +402,9 @@ owns services for the physical MainWindow; one `src/main/session.ts` composes
 that host runtime with Main Surface state and feature runtimes. Its separate
 `src/main/note-runtime.ts` owns Note mode, input, and register state for the
 currently attached editor. `src/main/note-editor.ts` identifies Note interaction
-by editor Window plus Note item ID and rebinds when either changes.
+by editor Window, Document and Note item ID and rebinds when any changes. Pending
+operators/counts and old key callbacks belong to that exact attachment; retirement
+fences input before independent host listener removal.
 `src/main/active-surface.ts` derives context-pane Note, selected Note tab,
 selected Reader tab, or Main from Zotero state; the Main controller invokes
 explicit deactivation hooks rather than storing another mutable active-Surface flag.
@@ -368,6 +458,14 @@ same surface to resolve an `ActionId`. Tag candidate sources may project namespa
 create candidates, and action-specific metadata, but they do not mutate item tags or Main
 filter state. `TagActions` owns candidate/action orchestration; `operations/item-tags.ts`
 performs item mutation, while `MainViewActions` owns Main filter mutation.
+
+Main View filtering follows the complete native rendered scope, not an arbitrary
+first selected collection. Toolkit uses `CollectionTreeRow.getTagsAcrossRows()`
+for multiple rows, matching Zotero's tag selector and respecting current search
+and filter predicates. Active tags remain available for removal when a filter
+produces no results. Matching item counts use native `objectRowCount`, excluding
+library headers and spacers. Native selection normalization remains authoritative.
+
 
 The native Reader Outline retains Zotero's rows and hosts bounded Neo caption and Bookmarks groups. `src/reader/native-sidebar.ts` owns reversible compact decoration and group DOM; `src/reader/outline-presentation.ts` derives kinds; `src/reader/caption-targets.ts` owns lazy native caption/heading data and PDF-position projection; `src/reader/marks.ts` owns persisted marks and managed jumps. Zotero remains authoritative for native Outline content, navigation, and sidebar state.
 
@@ -606,7 +704,7 @@ activation receipts, so late navigation failures cannot affect a newer invocatio
 The destination cue does not create a Reader Surface mode.
 
 Main's jump-history adapter and the shared coordinator own qualifying Reader jumps
-and cross-surface Back/Forward. The bridge in `src/reader/jump-history-bridge.ts`
+and cross-surface Back/Forward. The bridge in `src/toolkit/reader/history-bridge.ts`
 observes native payloads to maintain actual hard/transient baselines, but a raw save
 is never an append path. Its native-hard receipt must belong to the exact patched
 view/window/history and producer, and its saved destination must match that producer's
@@ -762,7 +860,7 @@ src/
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and input matcher
   main/                    main-window controller and UI features
-  main/host.ts              narrow private-Zotero main-window boundary
+  toolkit/                 internal host-capability Toolkit (main/ and reader/)
   reader/                  reader lifecycle, input, annotations, marks, native sidebar
   preferences/index.ts     preference-pane behavior and localization
   platform/                narrow Gecko and optional-addon boundaries
@@ -773,14 +871,17 @@ src/
 action labels. `key-guide-config.ts` contains only localized pending-prefix group
 and display labels plus timing and sizing defaults; `key-guide.ts` projects currently valid
 continuations from resolved bindings, so it never owns a second command map.
-The preference pane imports this metadata directly. `tools/build.mjs` creates
-deterministic ZIP bytes with the twelve packaged members verified by
-`tools/check-package.mjs`.
+The preference pane imports this metadata directly. `tools/build.mjs` copies the
+canonical project `LICENSE` and vendored MIT notice (`licenses/fuzzysort-LICENSE`)
+into the XPI alongside generated JavaScript, markup, manifest and icons.
+`tools/check-package.mjs` verifies all fourteen members and compares actual archive
+license payloads byte-for-byte with their authoritative sources. Raw vendor modules,
+TypeScript, tests and source maps remain excluded.
 
-`src/main/host.ts` owns the narrow structural boundary for private Zotero window, Reader,
-tag, and item APIs used by main-window features. `src/main/picker/` owns the candidate
-surface and finite sources; keep host casts in `main/host.ts` rather than picker UI/control-
-flow code. Openings carry a generation token: close invalidates pending loads and queued
+`src/toolkit/main/` owns the structural boundary for private Zotero window,
+tree/tab/editor/filter and plugin APIs used by Main features. `src/main/picker/`
+owns the candidate surface and finite sources; keep host casts/selectors in Toolkit,
+not chooser control flow. Openings carry a generation token: close invalidates pending loads and queued
 confirmation work, so stale host responses cannot repaint a later chooser. Domain operations
 that need a selected candidate belong to the semantic invocation, not a provider-private key
 grammar.

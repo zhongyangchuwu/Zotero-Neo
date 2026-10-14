@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ReaderHostKeyBridge } from '../../src/reader/host-key-bridge';
-import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
+import { ReaderHostKeyBridge } from '../../src/toolkit/reader/input-bridge';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 

@@ -11,7 +11,7 @@ describe('ReaderAnnotationNavigationState', () => {
       _internalReader: {
         _state: { selectedAnnotationIDs: ['host-selected'] },
       },
-    } as ReaderRuntime;
+    } as unknown as ReaderRuntime;
 
     expect(state.selectedAnnotationKey(reader)).toBe('host-selected');
   });

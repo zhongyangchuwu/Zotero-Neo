@@ -323,6 +323,34 @@ describe('configurable plugin manager contexts', () => {
     expect(session.pluginManager.open).toBe(false);
   });
 
+  it('preserves the current query selection when an earlier refresh completes', async () => {
+    const host = installManagerHost();
+    const { window, session } = createPickerHarness();
+    const panel = new PluginManagerPanel({ debug: vi.fn(), diagnostic: vi.fn() });
+    panel.open(window, session);
+    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
+    panel.handleKey(pickerKey('j', session.pluginManager.overlay), window, session);
+    expect(session.pluginManager.filtered[session.pluginManager.selected]?.id).toBe(host.beta.id);
+
+    const pending = Promise.withResolvers<[typeof host.alpha, typeof host.beta, typeof host.neo]>();
+    host.manager.getAddonsByTypes.mockReturnValueOnce(pending.promise);
+    const refresh = panel.refresh(window, session);
+    const input = session.pluginManager.input as HTMLInputElement & { emit(type: string): void };
+    input.value = 'a';
+    input.emit('input');
+    expect(session.pluginManager.filtered[session.pluginManager.selected]?.id).toBe(host.alpha.id);
+
+    pending.resolve([host.alpha, host.beta, host.neo]);
+    await refresh;
+    expect(session.pluginManager.query).toBe('a');
+    expect(session.pluginManager.filtered[session.pluginManager.selected]?.id).toBe(host.alpha.id);
+    panel.handleKey(pickerKey('e', session.pluginManager.overlay), window, session);
+    await vi.waitFor(() => expect(session.pluginManager.busy).toBe(false));
+    expect(host.alpha.enable).toHaveBeenCalledOnce();
+    expect(host.beta.enable).not.toHaveBeenCalled();
+    panel.close(session);
+  });
+
   it('preserves permissions, surfaces domain failures and discards lifecycle completion after close/reopen', async () => {
     const host = installManagerHost();
     const { window, session } = createPickerHarness();

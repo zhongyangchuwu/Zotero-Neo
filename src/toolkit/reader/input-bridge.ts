@@ -1,8 +1,12 @@
-import { CleanupFailure } from '../core/cleanup';
-import { compositionOwnsKey } from '../input/composition';
-import { keyString } from '../input/keys';
-import { isDeadObject } from '../platform/cross-compartment';
-import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from './types';
+import { CleanupFailure } from '../../core/cleanup';
+import { compositionOwnsKey } from '../../input/composition';
+import { keyString } from '../../input/keys';
+import { isDeadObject } from '../../platform/cross-compartment';
+import type { PdfWindow, ReaderRuntime } from './contracts';
+import type {
+  NativeReaderRuntime,
+  NativeReaderViewRuntime as ReaderViewRuntime,
+} from './private-types';
 
 export interface ReaderHostKeyBridgeDependencies {
   readonly reader: ReaderRuntime;
@@ -26,6 +30,7 @@ interface HostKeyPatch<Callback> {
  */
 export class ReaderHostKeyBridge {
   readonly #dependencies: ReaderHostKeyBridgeDependencies;
+  readonly #reader: NativeReaderRuntime;
   readonly #keyPatches = new Map<
     ReaderViewRuntime,
     HostKeyPatch<(event: KeyboardEvent) => unknown>
@@ -34,6 +39,8 @@ export class ReaderHostKeyBridge {
 
   constructor(dependencies: ReaderHostKeyBridgeDependencies) {
     this.#dependencies = dependencies;
+    // The opaque handle is the native host object; keep its exact identity.
+    this.#reader = dependencies.reader as NativeReaderRuntime;
   }
 
   sync(): void {
@@ -76,12 +83,8 @@ export class ReaderHostKeyBridge {
   }
 
   #views(): readonly ReaderViewRuntime[] {
-    const primary = this.#dependencies.reader._internalReader?._primaryView as
-      | ReaderViewRuntime
-      | undefined;
-    const secondary = this.#dependencies.reader._internalReader?._secondaryView as
-      | ReaderViewRuntime
-      | undefined;
+    const primary = this.#reader._internalReader?._primaryView;
+    const secondary = this.#reader._internalReader?._secondaryView;
     return [primary, secondary].filter((view): view is ReaderViewRuntime => view != null);
   }
 

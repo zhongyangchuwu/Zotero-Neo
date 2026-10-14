@@ -1,0 +1,29 @@
+{
+  "addons": {
+    "zotero-neo@zotero-neo": {
+      "updates": [
+        {
+          "version": "0.2.0",
+          "update_link": "https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.2.0/zotero-neo.xpi",
+          "update_hash": "sha256:d1d197594a2ad0681bb8dc8670871b2e6194bfe3b2cd3eae6e5e431e020d54ba",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.0.*"
+            }
+          }
+        },
+        {
+          "version": "0.1.0",
+          "update_link": "https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.*"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

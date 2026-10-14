@@ -1,6 +1,6 @@
 import type { Logger } from '../../../core/logging';
 import type { MainWindow } from '../../../core/contracts';
-import { currentMainItem, mainItem } from '../../host';
+import { currentMainItem, mainItem } from '../../../toolkit/main';
 import { noteOwnerKey } from '../../../platform/zotero-items';
 import type { PickerItem } from '../model';
 import type { PickerProvider } from '../types';

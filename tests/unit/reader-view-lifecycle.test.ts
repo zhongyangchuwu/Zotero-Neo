@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ReaderViewLifecycle } from '../../src/reader/view-lifecycle';
-import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../../src/reader/types';
+import { ReaderViewLifecycle } from '../../src/toolkit/reader/view-lifecycle';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 afterEach(() => {

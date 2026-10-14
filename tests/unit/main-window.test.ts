@@ -18,14 +18,15 @@ import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
-import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
-import {
-  MainNavigation,
-  selectedCollection,
-  selectedCollectionID,
-  type TreeView,
-} from '../../src/main/navigation';
+import type {
+  InternalReaderRuntime,
+  PdfWindow,
+  ReaderRuntime,
+} from '../fixtures/reader-native-types';
+import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
+import { MainNavigation } from '../../src/main/navigation';
+import { mainSelectedCollection } from '../../src/toolkit/main';
+import type { TreeView } from '../../src/toolkit/main/private-types';
 import { MainWindowSession } from '../../src/main/session';
 import { SelectionStore } from '../../src/main/selection-store';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
@@ -419,14 +420,44 @@ describe('current Zotero collection APIs', () => {
     expect(h.view.ensureRowIsVisible).toHaveBeenCalledWith(0);
   });
 
-  it('uses plural collection selection methods for object and ID lookup', () => {
+  it('uses the public selected collection API without confusing it with the Scope Cursor', () => {
     const collection = { id: 42 } as Zotero.Collection;
-    const view = {
-      getSelectedCollections: (idOnly?: boolean) => (idOnly ? [42] : [collection]),
-    } as TreeView;
+    const firstSelected = { id: 99 } as Zotero.Collection;
+    let selectedCount = 1;
+    const getSelectedCollection = vi.fn(() => collection as Zotero.Collection | undefined);
+    const window = {
+      ZoteroPane: {
+        getSelectedCollection,
+        collectionsView: {
+          selection: {
+            focused: 7,
+            get count() {
+              return selectedCount;
+            },
+          },
+          getSelectedCollections: () => (selectedCount ? [firstSelected] : []),
+        },
+      },
+    } as unknown as MainWindow;
 
-    expect(selectedCollection(view)).toBe(collection);
-    expect(selectedCollectionID(view)).toBe(42);
+    expect(mainSelectedCollection(window)).toBe(collection);
+    expect(mainSelectedCollection(window)?.id).toBe(42);
+
+    selectedCount = 2;
+    getSelectedCollection.mockImplementation(() => {
+      throw new Error('Requires single selection');
+    });
+    expect(mainSelectedCollection(window)).toBe(firstSelected);
+
+    selectedCount = 1;
+    getSelectedCollection.mockReturnValue(undefined);
+    expect(mainSelectedCollection(window)).toBe(firstSelected);
+
+    selectedCount = 0;
+    getSelectedCollection.mockImplementation(() => {
+      throw new Error('Requires single selection');
+    });
+    expect(mainSelectedCollection(window)).toBeUndefined();
   });
 
   it('navigates a collection tree whose React tree object has no contains method', () => {
@@ -1182,6 +1213,7 @@ describe('Note contextual Open', () => {
   it('opens the Note parent rather than an unrelated Main selected item', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const originalServices = Reflect.get(globalThis, 'Services');
+    const originalComponents = Reflect.get(globalThis, 'Components');
     const host = pickerMainWindow();
     const pdf = {
       id: 24,
@@ -1260,6 +1292,7 @@ describe('Note contextual Open', () => {
       initialized: false,
     });
     Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
+    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
     const controller = createMainWindowController({
       preferences: {
         has: () => false,
@@ -1393,6 +1426,8 @@ describe('Note contextual Open', () => {
       else Reflect.set(globalThis, 'Zotero', originalZotero);
       if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
       else Reflect.set(globalThis, 'Services', originalServices);
+      if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+      else Reflect.set(globalThis, 'Components', originalComponents);
     }
   });
 });

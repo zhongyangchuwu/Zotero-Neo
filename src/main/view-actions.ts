@@ -10,7 +10,7 @@ import {
   mainViewFilterState,
   openMainAdvancedSearch,
   type MainViewFilterState,
-} from './host';
+} from '../toolkit/main';
 
 /**
  * Owns semantic mutations of the Main Zotero View while leaving the actual

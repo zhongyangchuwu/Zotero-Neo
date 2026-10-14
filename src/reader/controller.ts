@@ -54,16 +54,40 @@ import { ReaderCaptionTargets } from './caption-targets';
 import { ReaderLinkHints } from './link-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
-import { ReaderHostKeyBridge } from './host-key-bridge';
-import { ReaderJumpHostAdapter } from './jump-host';
-import { ReaderJumpHistoryBridge } from './jump-history-bridge';
-import type {
-  ReaderNativeNavigation,
-  ReaderOwnedCompletion,
-  ReaderOwnedNavigation,
-} from './jump-history-bridge';
+import {
+  ReaderHostKeyBridge,
+  ReaderJumpHostAdapter,
+  ReaderJumpHistoryBridge,
+  ReaderViewLifecycle,
+  readerInstanceID,
+  readerOwnerWindow,
+  readerWindow,
+  readerPrimaryWindow,
+  readerIsClosed,
+  readerViewForWindow,
+  readerViewIsLive,
+  readerInventory,
+  readerByTabID,
+  readerSelectedTabID,
+  registerReaderEvent,
+  unregisterReaderEvent,
+  computeSelectionPosition,
+  readerScrollContainer,
+  readerPagePositionTop,
+  readerPageRatioTop,
+  readerAnnotationPageRatio,
+  selectReaderAnnotation,
+  clearAnnotationSelection,
+  setAnnotationColorFilter,
+  readerFindInputFocused,
+  openReaderSelectionSearch,
+  setReaderSearchText,
+  type ReaderEventListener,
+  type ReaderNativeNavigation,
+  type ReaderOwnedCompletion,
+  type ReaderOwnedNavigation,
+} from '../toolkit';
 import { ReaderNavigation, type ReaderNavigationCommand } from './navigation';
-import { ReaderViewLifecycle } from './view-lifecycle';
 import { ReaderFlash } from './flash';
 import { READER_ITEM_TARGET } from './item-target';
 import { ReaderSelectionActionRegistry, ReaderSelectionActions } from './selection-actions';
@@ -87,22 +111,7 @@ import {
   type ReaderViewRuntime,
 } from './types';
 
-type ReaderEventName = 'renderToolbar' | 'renderTextSelectionPopup';
-type ReaderEventListener = (event: ReaderEventRuntime) => void;
-
-interface ReaderService {
-  readonly _readers?: readonly ReaderRuntime[] | ReadonlyMap<unknown, ReaderRuntime>;
-  registerEventListener(
-    name: ReaderEventName,
-    listener: ReaderEventListener,
-    pluginID: string,
-  ): void;
-  unregisterEventListener(name: ReaderEventName, listener: ReaderEventListener): void;
-  getByTabID?(tabID: string): ReaderRuntime | null;
-}
-
 interface ZoteroRuntime {
-  readonly Reader: ReaderService;
   readonly Items: {
     get(id: number): ItemRuntime | null | false;
     getByLibraryAndKey?(libraryID: number, key: string): AnnotationRuntime | null | false;
@@ -123,18 +132,6 @@ interface ZoteroRuntime {
   readonly locale?: string;
 }
 
-interface TabRuntime {
-  readonly id?: string;
-}
-
-type MainWindowRuntime = MainWindow & {
-  readonly Zotero_Tabs?: {
-    readonly selectedID?: string;
-    readonly _tabs?: readonly TabRuntime[];
-    readonly tabs?: readonly TabRuntime[];
-  };
-};
-
 interface SessionSelectionBridge {
   readonly registered: (
     context: ReaderSelectionContext,
@@ -154,29 +151,8 @@ interface SessionDependencies {
   readonly selection?: SessionSelectionBridge;
 }
 
-type ComputedAnnotationPosition =
-  | {
-      readonly position: string;
-      readonly sortIndex: string;
-      readonly pageLabel: string;
-      readonly failure?: never;
-    }
-  | {
-      readonly position: null;
-      readonly sortIndex?: never;
-      readonly pageLabel: string;
-      readonly failure: 'unsupported-page-span' | 'invalid-geometry';
-    };
-
 function zoteroRuntime(): ZoteroRuntime {
-  // Zotero's typed surface intentionally omits private reader internals; this is the single validated host boundary.
-  const host = Zotero as unknown as ZoteroRuntime;
-  return host;
-}
-
-function asPdfWindow(window: Window | undefined): PdfWindow | null {
-  const pdfWindow = window as PdfWindow | undefined;
-  return pdfWindow ?? null;
+  return Zotero as unknown as ZoteroRuntime;
 }
 
 function annotationText(value: string): string {
@@ -239,7 +215,6 @@ export class ReaderController implements ReaderControllerApi {
   start(pluginId: string): void {
     if (this.#pluginID === pluginId) return;
     this.shutdown();
-    const service = zoteroRuntime().Reader;
     const toolbarListener: ReaderEventListener = (event) => {
       if (this.#toolbarListener === toolbarListener) this.#onToolbar(event);
     };
@@ -250,8 +225,8 @@ export class ReaderController implements ReaderControllerApi {
     this.#selectionPopupListener = selectionPopupListener;
     try {
       // Zotero returns no listener ID: teardown requires the exact event/handler pair.
-      service.registerEventListener('renderToolbar', toolbarListener, pluginId);
-      service.registerEventListener('renderTextSelectionPopup', selectionPopupListener, pluginId);
+      registerReaderEvent('renderToolbar', toolbarListener, pluginId);
+      registerReaderEvent('renderTextSelectionPopup', selectionPopupListener, pluginId);
       this.#pluginID = pluginId;
       this.#dependencies.logger.debug('reader listeners registered');
       this.#dependencies.logger.diagnostic('reader listeners registered');
@@ -264,7 +239,6 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   shutdown(): void {
-    const service = zoteroRuntime().Reader;
     const toolbarListener = this.#toolbarListener;
     const selectionPopupListener = this.#selectionPopupListener;
     // Retire before touching the host registry so queued callbacks cannot reclaim input.
@@ -273,14 +247,14 @@ export class ReaderController implements ReaderControllerApi {
     this.#pluginID = null;
     if (toolbarListener) {
       try {
-        service.unregisterEventListener('renderToolbar', toolbarListener);
+        unregisterReaderEvent('renderToolbar', toolbarListener);
       } catch {
         // Host shutdown may already have discarded the reader registry.
       }
     }
     if (selectionPopupListener) {
       try {
-        service.unregisterEventListener('renderTextSelectionPopup', selectionPopupListener);
+        unregisterReaderEvent('renderTextSelectionPopup', selectionPopupListener);
       } catch {
         // Host shutdown may already have discarded the reader registry.
       }
@@ -299,26 +273,11 @@ export class ReaderController implements ReaderControllerApi {
   rescan(window: MainWindow): void {
     let stage = 'inventory';
     try {
-      const service = zoteroRuntime().Reader;
-      const readers: ReaderRuntime[] = [];
-      const all = service._readers;
-      const hasAuthoritativeInventory = Array.isArray(all) || all instanceof Map;
-      if (Array.isArray(all)) readers.push(...all);
-      else if (all instanceof Map) readers.push(...all.values());
-      if (!readers.length) {
-        stage = 'tabs';
-        const tabs =
-          (window as MainWindowRuntime).Zotero_Tabs?._tabs ??
-          (window as MainWindowRuntime).Zotero_Tabs?.tabs ??
-          [];
-        for (const tab of tabs) {
-          if (!tab.id) continue;
-          const reader = service.getByTabID?.(tab.id);
-          if (reader) readers.push(reader);
-        }
-      }
+      const { readers, authoritative } = readerInventory(window, (next) => {
+        stage = next;
+      });
       stage = 'reconcile';
-      if (hasAuthoritativeInventory) this.#reconcileReaders(readers);
+      if (authoritative) this.#reconcileReaders(readers);
       stage = 'ensure';
       for (const reader of readers) this.#ensure(reader);
     } catch (error) {
@@ -330,9 +289,7 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   deactivateInactive(window: MainWindow, activeTabID: string | null): void {
-    const activeReader = activeTabID
-      ? (zoteroRuntime().Reader.getByTabID?.(activeTabID) ?? null)
-      : null;
+    const activeReader = activeTabID ? (readerByTabID(activeTabID) ?? null) : null;
     for (const session of this.#sessions.values()) {
       const ownerWindow = session.ownerWindow;
       if (
@@ -345,12 +302,13 @@ export class ReaderController implements ReaderControllerApi {
   }
 
   forwardKey(event: KeyboardEvent, window: MainWindow): void {
-    const tabID = (window as MainWindowRuntime).Zotero_Tabs?.selectedID;
+    const tabID = readerSelectedTabID(window);
     if (!tabID) return;
-    const reader = zoteroRuntime().Reader.getByTabID?.(tabID);
+    const reader = readerByTabID(tabID);
     if (!reader) return;
     this.#ensure(reader);
-    const session = reader._instanceID ? this.#sessions.get(reader._instanceID) : null;
+    const instanceID = readerInstanceID(reader);
+    const session = instanceID ? this.#sessions.get(instanceID) : null;
     if (!session || session.nativeEditableFocused()) return;
     session.focusAndHandle(event);
   }
@@ -403,14 +361,15 @@ export class ReaderController implements ReaderControllerApi {
     if (!this.#pluginID) return;
     const params = event.params;
     const reader = event.reader;
-    if (!params?.annotation || !params.onAddAnnotation || !reader?._instanceID) return;
-    const session = this.#sessions.get(reader._instanceID);
+    const instanceID = reader ? readerInstanceID(reader) : undefined;
+    if (!params?.annotation || !params.onAddAnnotation || !reader || !instanceID) return;
+    const session = this.#sessions.get(instanceID);
     if (session?.reader === reader) session.acceptSelectionParams(params);
   }
 
   #ensure(reader: ReaderRuntime): void {
     if (!this.#pluginID) return;
-    const instanceID = reader._instanceID;
+    const instanceID = readerInstanceID(reader);
     if (!instanceID || this.#pending.has(instanceID) || this.#sessions.has(instanceID)) return;
     this.#pending.add(instanceID);
     this.#waitAndInject(reader, instanceID, 0);
@@ -420,12 +379,12 @@ export class ReaderController implements ReaderControllerApi {
     try {
       if (!this.#pending.has(instanceID)) return;
       // Native close can outpace inventory reconciliation and destroy the pending PDF view.
-      if (reader._isTabClosed === true) {
+      if (readerIsClosed(reader)) {
         this.#pending.delete(instanceID);
         this.#waitTimers.delete(instanceID);
         return;
       }
-      const pdfWindow = asPdfWindow(reader._internalReader?._primaryView?._iframeWindow);
+      const pdfWindow = readerPrimaryWindow(reader);
       if (pdfWindow) {
         this.#waitTimers.delete(instanceID);
         this.#pending.delete(instanceID);
@@ -473,7 +432,7 @@ export class ReaderController implements ReaderControllerApi {
   #reconcileReaders(readers: readonly ReaderRuntime[]): void {
     const live = new Set(
       readers
-        .map((reader) => reader._instanceID)
+        .map((reader) => readerInstanceID(reader))
         .filter((instanceID): instanceID is string => !!instanceID),
     );
     for (const [instanceID, session] of [...this.#sessions]) {
@@ -621,7 +580,7 @@ export class ReaderSession {
           this.#nativeInput.ownsInput ||
           this.#commentEditor.ownsInput ||
           this.#sidebar.containsTarget(
-            this.#dependencies.reader._iframeWindow?.document.activeElement ?? null,
+            readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
           ) ||
           this.#interactionRevision !== this.#editorReleaseRevision ||
           this.#navigation.activePdfWindow() !== pdfWindow
@@ -644,7 +603,7 @@ export class ReaderSession {
       host: dependencies.jumpHost,
       navigation: () =>
         dependencies.controller.dependencies.main.navigationForReader(
-          dependencies.reader._window ?? null,
+          readerOwnerWindow(dependencies.reader) ?? null,
         ),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
@@ -809,7 +768,7 @@ export class ReaderSession {
   }
 
   get ownerWindow(): MainWindow | null {
-    return this.#dependencies.reader._window ?? null;
+    return readerOwnerWindow(this.#dependencies.reader) ?? null;
   }
 
   /** Routes one Reader effect through exact-view ownership and evidence-based completion. */
@@ -831,13 +790,13 @@ export class ReaderSession {
 
     const parentCurrent = intent.context?.isCurrent;
     const tabID = reader.tabID;
-    const ownerWindow = reader._window as MainWindowRuntime | undefined;
+    const ownerWindow = readerOwnerWindow(reader);
     const isCurrent = (): boolean => {
       try {
         return (
           !this.#scope.disposed &&
           this.readerViewForWindow(pdfWindow) === view &&
-          (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID) &&
+          (!tabID || !ownerWindow || readerSelectedTabID(ownerWindow) === tabID) &&
           (parentCurrent?.() ?? true)
         );
       } catch {
@@ -855,7 +814,7 @@ export class ReaderSession {
       tabID ? this.#dependencies.jumpHost.captureReader(reader, tabID, view) : null;
 
     const port = this.#dependencies.controller.dependencies.main.navigationForReader(
-      reader._window ?? null,
+      readerOwnerWindow(reader) ?? null,
     );
     if (port) {
       const operation: NavigationOperation = {
@@ -984,14 +943,14 @@ export class ReaderSession {
     const reader = this.#dependencies.reader;
     const view = this.readerViewForWindow(pdfWindow);
     const tabID = reader.tabID;
-    const ownerWindow = reader._window as MainWindowRuntime | undefined;
+    const ownerWindow = readerOwnerWindow(reader);
     const isCurrent = (): boolean =>
       revision === this.#markJumpRevision &&
       !this.#scope.disposed &&
       !!view &&
       this.#navigation.activePdfWindow() === pdfWindow &&
       this.readerViewForWindow(pdfWindow) === view &&
-      (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID);
+      (!tabID || !ownerWindow || readerSelectedTabID(ownerWindow) === tabID);
     if (!isCurrent()) return false;
     const execution = this.executeReaderNavigation(
       pdfWindow,
@@ -1013,10 +972,10 @@ export class ReaderSession {
 
   start(): void {
     this.#dependencies.controller.dependencies.logger.debug(
-      `injecting reader ${this.#dependencies.reader._instanceID ?? '?'}`,
+      `injecting reader ${readerInstanceID(this.#dependencies.reader) ?? '?'}`,
     );
     this.state.indicator = this.createIndicator(
-      this.#dependencies.reader._iframeWindow?.document ?? null,
+      readerWindow(this.#dependencies.reader)?.document ?? null,
     );
     if (this.state.indicator)
       this.state.indicatorThemeCleanup = this.themeRoot(this.state.indicator);
@@ -1065,11 +1024,10 @@ export class ReaderSession {
   acceptSelectionParams(params: AnnotationSelectionParams): void {
     const pdfWindow = this.#navigation.activePdfWindow();
     const view = this.readerViewForWindow(pdfWindow);
-    const internal = this.#dependencies.reader._internalReader;
     if (
       this.#scope.disposed ||
       !view ||
-      (internal?._primaryView !== view && internal?._secondaryView !== view) ||
+      !readerViewIsLive(this.#dependencies.reader, view, pdfWindow) ||
       this.#nativeInput.ownsInput ||
       this.#commentEditor.ownsView(pdfWindow)
     )
@@ -1102,7 +1060,7 @@ export class ReaderSession {
 
   nativeEditableFocused(): boolean {
     return isEditableElement(
-      this.#dependencies.reader._iframeWindow?.document.activeElement ?? null,
+      readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
     );
   }
 
@@ -1116,7 +1074,7 @@ export class ReaderSession {
   }
 
   private installOuterReaderListeners(): void {
-    const document = this.#dependencies.reader._iframeWindow?.document;
+    const document = readerWindow(this.#dependencies.reader)?.document;
     if (!document) return;
     this.#scope.addEventListener(
       document,
@@ -1152,7 +1110,7 @@ export class ReaderSession {
         const keyEvent = asKeyboardEvent(event);
         if (!keyEvent || keyEvent.key !== 'Enter' || compositionOwnsKey(keyEvent, false)) return;
         const active = document.activeElement;
-        if (active?.tagName !== 'INPUT' || !active.closest('.find-popup')) return;
+        if (!active || !readerFindInputFocused(document)) return;
         const pdfWindow = this.#navigation.activePdfWindow();
         const isCurrent = this.invocationCurrent(pdfWindow);
         this.schedule(150, () => {
@@ -1413,7 +1371,7 @@ export class ReaderSession {
   ): void {
     if (action === 'openCommandPalette') {
       if (!pdfWindow || this.#scope.disposed) return;
-      const ownerWindow = this.#dependencies.reader._window;
+      const ownerWindow = readerOwnerWindow(this.#dependencies.reader);
       if (!ownerWindow) return;
       this.#dependencies.controller.dependencies.main.openCommandPalette(ownerWindow, {
         mode: 'normal',
@@ -1431,7 +1389,7 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
-    const ownerWindow = this.#dependencies.reader._window ?? null;
+    const ownerWindow = readerOwnerWindow(this.#dependencies.reader) ?? null;
     const main = this.#dependencies.controller.dependencies.main;
     const number = Math.max(1, count || 1);
     switch (action) {
@@ -1479,23 +1437,23 @@ export class ReaderSession {
     }
     if (action === 'addTag' || action === 'removeTag') {
       this.#dependencies.controller.dependencies.main.openReaderTagPicker(
-        this.#dependencies.reader._window ?? null,
+        readerOwnerWindow(this.#dependencies.reader) ?? null,
         READER_ITEM_TARGET.resolve(this.#dependencies.reader),
         action === 'addTag',
       );
       return;
     }
     if (action === 'addToCollection' || action === 'removeFromCollection') {
-      const ownerWindow = this.#dependencies.reader._window ?? null;
+      const ownerWindow = readerOwnerWindow(this.#dependencies.reader) ?? null;
       this.#dependencies.controller.dependencies.main.openReaderCollectionPicker(
         ownerWindow,
         action === 'addToCollection',
         () => {
-          const selectedID = (ownerWindow as MainWindowRuntime | null)?.Zotero_Tabs?.selectedID;
+          const selectedID = ownerWindow ? readerSelectedTabID(ownerWindow) : undefined;
           if (
             this.#scope.disposed ||
             !selectedID ||
-            zoteroRuntime().Reader.getByTabID?.(selectedID) !== this.#dependencies.reader
+            readerByTabID(selectedID) !== this.#dependencies.reader
           )
             return READER_ITEM_TARGET.resolve(null);
           return READER_ITEM_TARGET.resolve(this.#dependencies.reader);
@@ -2004,7 +1962,7 @@ export class ReaderSession {
         language: this.keyGuideLanguage(),
         delayMs: config.delayMs,
         fontSizePx: config.fontSizePx,
-        document: this.#dependencies.reader._iframeWindow?.document ?? null,
+        document: readerWindow(this.#dependencies.reader)?.document ?? null,
         theme: { add: (root) => this.themeRoot(root as HTMLElement) },
       };
     });
@@ -2088,10 +2046,7 @@ export class ReaderSession {
   }
 
   private scrollContainer(pdfWindow: PdfWindow): HTMLElement {
-    return (pdfWindow.PDFViewerApplication?.pdfViewer?.container ??
-      pdfWindow.document.getElementById('viewerContainer') ??
-      pdfWindow.document.scrollingElement ??
-      pdfWindow.document.documentElement) as HTMLElement;
+    return readerScrollContainer(pdfWindow);
   }
 
   private scrollBy(pdfWindow: PdfWindow, x: number, y: number, smooth = false): boolean {
@@ -2134,37 +2089,12 @@ export class ReaderSession {
     pdfWindow: PdfWindow,
     position: 'top' | 'center' | 'bottom',
   ): boolean {
-    const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
-    const container = viewer?.container;
-    if (!viewer || !container) {
-      const element = this.scrollContainer(pdfWindow);
-      const available = Math.max(0, element.scrollHeight - element.clientHeight);
-      return this.scrollTo(
-        pdfWindow,
-        position === 'top' ? 0 : position === 'bottom' ? available : available / 2,
-        true,
-      );
-    }
-    const pageNumber = viewer.currentPageNumber ?? 1;
-    const page = pdfWindow.document.querySelector<HTMLElement>(
-      `.page[data-page-number="${pageNumber}"]`,
-    );
-    if (!page) return false;
-    const target =
-      position === 'top'
-        ? page.offsetTop
-        : position === 'bottom'
-          ? page.offsetTop + page.offsetHeight - container.clientHeight
-          : page.offsetTop + page.offsetHeight / 2 - container.clientHeight / 2;
-    return this.scrollTo(pdfWindow, Math.max(0, target), true);
+    const top = readerPagePositionTop(pdfWindow, position);
+    return top === null ? false : this.scrollTo(pdfWindow, top, true);
   }
 
   private readerViewForWindow(pdfWindow: PdfWindow): ReaderViewRuntime | null {
-    const internal = this.#dependencies.reader._internalReader;
-    if (internal?._primaryView?._iframeWindow === pdfWindow) return internal._primaryView;
-    if (internal?._secondaryView?._iframeWindow === pdfWindow) return internal._secondaryView;
-    if (internal?._lastView?._iframeWindow === pdfWindow) return internal._lastView;
-    return null;
+    return readerViewForWindow(this.#dependencies.reader, pdfWindow);
   }
 
   private invocationCurrent(pdfWindow: PdfWindow): () => boolean {
@@ -2172,7 +2102,7 @@ export class ReaderSession {
     const view = this.readerViewForWindow(pdfWindow);
     const revision = this.#interactionRevision;
     const tabID = reader.tabID;
-    const ownerWindow = reader._window as MainWindowRuntime | undefined;
+    const ownerWindow = readerOwnerWindow(reader);
     return () => {
       if (
         this.#scope.disposed ||
@@ -2182,12 +2112,10 @@ export class ReaderSession {
         isDeadObject(view)
       )
         return false;
-      const internal = reader._internalReader;
       return (
-        (internal?._primaryView === view || internal?._secondaryView === view) &&
-        view._iframeWindow === pdfWindow &&
+        readerViewIsLive(reader, view, pdfWindow) &&
         this.#navigation.activePdfWindow() === pdfWindow &&
-        (!tabID || !ownerWindow || ownerWindow.Zotero_Tabs?.selectedID === tabID)
+        (!tabID || !ownerWindow || readerSelectedTabID(ownerWindow) === tabID)
       );
     };
   }
@@ -2207,7 +2135,7 @@ export class ReaderSession {
         : null;
     const selection = pdfWindow.getSelection();
     const hasDomSelection = selection && !selection.isCollapsed;
-    const computed = hasDomSelection ? this.computeSelectionPosition(pdfWindow, selection) : null;
+    const computed = hasDomSelection ? computeSelectionPosition(pdfWindow, selection) : null;
     if (hasDomSelection && (!computed || computed.position === null)) {
       this.showStatus(
         computed?.failure === 'unsupported-page-span'
@@ -2262,132 +2190,6 @@ export class ReaderSession {
     }
   }
 
-  private computeSelectionPosition(
-    pdfWindow: PdfWindow,
-    selection: Selection,
-  ): ComputedAnnotationPosition | null {
-    if (!selection.rangeCount) return null;
-    const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
-    if (!viewer) return null;
-    const range = selection.getRangeAt(0);
-    const rectangles: DOMRect[] = [];
-    let incomplete = false;
-    const collect = (fragment: Range) => {
-      const bounds = fragment.getClientRects();
-      if (!bounds) {
-        incomplete = true;
-        return;
-      }
-      for (const rectangle of bounds) {
-        if (rectangle.width > 1 && rectangle.height > 1) rectangles.push(rectangle);
-      }
-    };
-    if (range.commonAncestorContainer.nodeType === 3) {
-      collect(range);
-    } else {
-      // A cross-page Range also reports selected canvas/page boxes, not just text.
-      const walker = pdfWindow.document.createTreeWalker(range.commonAncestorContainer, 4);
-      walker.currentNode = range.startContainer;
-      let node = range.startContainer.nodeType === 3 ? range.startContainer : walker.nextNode();
-      for (; node; node = walker.nextNode()) {
-        if (range.comparePoint(node, 0) > 0) break;
-        if (!range.intersectsNode(node)) continue;
-        const fragment = pdfWindow.document.createRange();
-        fragment.selectNodeContents(node);
-        if (node === range.startContainer) fragment.setStart(node, range.startOffset);
-        if (node === range.endContainer) fragment.setEnd(node, range.endOffset);
-        collect(fragment);
-      }
-    }
-    const pages = Array.from(
-      pdfWindow.document.querySelectorAll('.page[data-page-number]'),
-    ) as HTMLElement[];
-    const pageBounds = new Array<DOMRect>(pages.length);
-    const groups = new Map<number, { bounds: DOMRect; rectangles: DOMRect[] }>();
-    for (const rectangle of rectangles) {
-      const center = (rectangle.top + rectangle.bottom) / 2;
-      let page: HTMLElement | undefined;
-      let bounds: DOMRect | undefined;
-      for (let index = 0; index < pages.length; index += 1) {
-        const candidate = pages[index]!;
-        const candidateBounds = (pageBounds[index] ??= candidate.getBoundingClientRect());
-        if (center >= candidateBounds.top && center <= candidateBounds.bottom) {
-          page = candidate;
-          bounds = candidateBounds;
-          break;
-        }
-      }
-      const index = Number(page?.dataset.pageNumber) - 1;
-      if (!bounds || !Number.isInteger(index) || index < 0) {
-        incomplete = true;
-        continue;
-      }
-      const group = groups.get(index);
-      if (group) group.rectangles.push(rectangle);
-      else groups.set(index, { bounds, rectangles: [rectangle] });
-    }
-    const ordered = [...groups.entries()].sort(([left], [right]) => left - right);
-    const first = ordered[0];
-    if (!first) return null;
-    const pageLabel = viewer._pageLabels?.[first[0]] ?? String(first[0] + 1);
-    const next = ordered[1];
-    if (ordered.length > 2 || (next && next[0] !== first[0] + 1)) {
-      return { position: null, pageLabel, failure: 'unsupported-page-span' };
-    }
-    if (incomplete) return { position: null, pageLabel, failure: 'invalid-geometry' };
-    const convert = ([pageIndex, group]: [number, { bounds: DOMRect; rectangles: DOMRect[] }]):
-      | number[][]
-      | null => {
-      const pageView = viewer._pages?.[pageIndex] ?? viewer.getPageView?.(pageIndex);
-      const viewport = pageView?.viewport;
-      if (!viewport?.convertToPdfPoint) return null;
-      const converted: number[][] = [];
-      for (const rectangle of group.rectangles) {
-        const upperLeft = viewport.convertToPdfPoint(
-          rectangle.left - group.bounds.left,
-          rectangle.top - group.bounds.top,
-        );
-        const lowerRight = viewport.convertToPdfPoint(
-          rectangle.right - group.bounds.left,
-          rectangle.bottom - group.bounds.top,
-        );
-        if (!upperLeft || !lowerRight) return null;
-        const rect = [
-          Math.min(upperLeft[0], lowerRight[0]),
-          Math.min(upperLeft[1], lowerRight[1]),
-          Math.max(upperLeft[0], lowerRight[0]),
-          Math.max(upperLeft[1], lowerRight[1]),
-        ].map((value) => Math.round(value * 1000) / 1000);
-        if (!rect.every(Number.isFinite) || rect[2]! <= rect[0]! || rect[3]! <= rect[1]!)
-          return null;
-        converted.push(rect);
-      }
-      return converted;
-    };
-    const rects = convert(first);
-    if (!rects?.length) return { position: null, pageLabel, failure: 'invalid-geometry' };
-    const position: { pageIndex: number; rects: number[][]; nextPageRects?: number[][] } = {
-      pageIndex: first[0],
-      rects,
-    };
-    if (next) {
-      const nextRects = convert(next);
-      if (!nextRects?.length) return { position: null, pageLabel, failure: 'invalid-geometry' };
-      position.nextPageRects = nextRects;
-    }
-    const pageHeight =
-      viewer._pages?.[first[0]]?.viewport?.height ??
-      viewer.getPageView?.(first[0])?.viewport?.height ??
-      0;
-    const y = rects[0]?.[3] ?? 0;
-    const sortIndex = `${String(first[0]).padStart(5, '0')}|000000|${String(Math.max(0, Math.floor(pageHeight - y))).padStart(5, '0')}`;
-    return {
-      position: JSON.stringify(position),
-      sortIndex,
-      pageLabel,
-    };
-  }
-
   private async createAnnotation(
     text: string,
     position: unknown,
@@ -2432,7 +2234,7 @@ export class ReaderSession {
     if (!selection || selection.isCollapsed) return null;
     const text = annotationText(selection.toString());
     if (!text) return null;
-    const computed = this.computeSelectionPosition(pdfWindow, selection);
+    const computed = computeSelectionPosition(pdfWindow, selection);
     return {
       text,
       itemID: this.#dependencies.reader.itemID ?? null,
@@ -2489,7 +2291,7 @@ export class ReaderSession {
         const receipt =
           await this.#dependencies.controller.dependencies.main.captureReaderSelectionToNote(
             selection,
-            this.#dependencies.reader._window ?? null,
+            readerOwnerWindow(this.#dependencies.reader) ?? null,
           );
         if (receipt && 'retired' in receipt) return { retired: true };
         if (receipt) {
@@ -2522,18 +2324,10 @@ export class ReaderSession {
     if (!selection || selection.isCollapsed) return;
     const text = annotationText(selection.toString());
     if (!text) return;
-    const readerWindow = this.#dependencies.reader._iframeWindow;
-    const internal = this.#dependencies.reader._internalReader;
-    if (readerWindow && internal?.toggleFindPopup)
-      internal.toggleFindPopup(cloneInto({ open: true }, readerWindow));
-    this.schedule(200, () => {
-      const input = readerWindow?.document.querySelector<HTMLInputElement>(
-        '.primary-view .find-popup input',
-      );
-      if (!input || !readerWindow) return;
-      input.value = text;
-      input.dispatchEvent(new readerWindow.Event('input', { bubbles: true }));
-    });
+    const reader = this.#dependencies.reader;
+    const searchWindow = readerWindow(reader);
+    openReaderSelectionSearch(reader);
+    this.schedule(200, () => setReaderSearchText(searchWindow, text));
     this.setMode('normal');
     selection.removeAllRanges();
   }
@@ -2585,26 +2379,7 @@ export class ReaderSession {
     annotation: AnnotationRuntime,
     navigation?: ReaderNativeNavigation,
   ): unknown {
-    const readerWindow = this.#dependencies.reader._iframeWindow;
-    const internal = this.#dependencies.reader._internalReader;
-    if (!readerWindow || !internal) return { kind: 'unavailable' };
-    if (internal.setSelectedAnnotations) {
-      const before = internal._state?.selectedAnnotationIDs ?? [];
-      internal.setSelectedAnnotations(cloneInto([annotation.key], readerWindow));
-      const selected = internal._state?.selectedAnnotationIDs;
-      if (!selected || (before.length === 1 && before[0] === annotation.key))
-        return { kind: 'unchanged' };
-      return selected.length === 1 && selected[0] === annotation.key
-        ? { kind: 'completed', evidence: 'settled-change' }
-        : { kind: 'unchanged' };
-    }
-    if (!internal.navigate) return { kind: 'unavailable' };
-    const request = cloneInto({ annotationID: annotation.key }, readerWindow);
-    if (navigation) {
-      navigation.bindRequest(request);
-      return navigation.navigate(request);
-    }
-    return internal.navigate(request);
+    return selectReaderAnnotation(this.#dependencies.reader, annotation.key, navigation);
   }
 
   private async deleteAnnotation(): Promise<void> {
@@ -2614,7 +2389,7 @@ export class ReaderSession {
       this.showStatus('✗ select an annotation first', 2000);
       return;
     }
-    const window = this.#dependencies.reader._window;
+    const window = readerOwnerWindow(this.#dependencies.reader);
     if (!window) {
       this.showStatus(`✗ ${t('status.readerAnnotationDeleteUnconfirmable', language)}`, 2000);
       return;
@@ -2633,10 +2408,7 @@ export class ReaderSession {
       const reader = this.#dependencies.reader;
       try {
         if (this.#annotationNavigation.selectedAnnotationKey(reader) === target.key) {
-          const internal = reader._internalReader;
-          const readerWindow = reader._iframeWindow;
-          if (internal?.setSelectedAnnotations && readerWindow)
-            internal.setSelectedAnnotations(cloneInto([], readerWindow));
+          clearAnnotationSelection(reader);
         }
       } catch {
         // The permanent erase succeeded; host selection cleanup is best-effort.
@@ -2669,10 +2441,7 @@ export class ReaderSession {
   }
 
   private filterByColor(color: AnnotationColor | null): void {
-    const internal = this.#dependencies.reader._internalReader;
-    const readerWindow = this.#dependencies.reader._iframeWindow;
-    if (internal?.setFilter && readerWindow)
-      internal.setFilter(cloneInto({ colors: color ? [color] : [] }, readerWindow));
+    setAnnotationColorFilter(this.#dependencies.reader, color ? [color] : []);
     this.#annotationNavigation.setFilterColor(color);
     this.showStatus(color ? '✓ filter set' : '✓ filter cleared', 1200);
   }
@@ -2839,29 +2608,11 @@ export class ReaderSession {
     return zoteroRuntime().Items.get(reader.itemID) || null;
   }
 
-  private async annotationPageRatio(
+  private annotationPageRatio(
     pdfWindow: PdfWindow,
     annotation: ItemRuntime,
   ): Promise<{ pageIndex: number; ratio: number }> {
-    try {
-      const parsed: unknown = JSON.parse(annotation.annotationPosition ?? '{}');
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-        return { pageIndex: 0, ratio: 0.5 };
-      const pageIndexValue = 'pageIndex' in parsed ? parsed.pageIndex : undefined;
-      const rectsValue = 'rects' in parsed ? parsed.rects : undefined;
-      const pageIndex = typeof pageIndexValue === 'number' ? pageIndexValue : 0;
-      if (!Array.isArray(rectsValue) || !Array.isArray(rectsValue[0]))
-        return { pageIndex, ratio: 0.5 };
-      const y = rectsValue[0][3] ?? rectsValue[0][1];
-      if (typeof y !== 'number') return { pageIndex, ratio: 0.5 };
-      const page = await pdfWindow.PDFViewerApplication?.pdfDocument?.getPage?.(pageIndex + 1);
-      const viewport = page?.getViewport({ scale: 1 });
-      return viewport
-        ? { pageIndex, ratio: Math.max(0, Math.min(1, (viewport.height - y) / viewport.height)) }
-        : { pageIndex, ratio: 0.5 };
-    } catch {
-      return { pageIndex: 0, ratio: 0.5 };
-    }
+    return readerAnnotationPageRatio(pdfWindow, annotation.annotationPosition);
   }
 
   private async scrollToPageRatio(
@@ -2872,26 +2623,17 @@ export class ReaderSession {
   ): Promise<boolean> {
     for (let attempt = 0; attempt <= 10; attempt += 1) {
       const reader = this.#dependencies.reader;
+      const ownerWindow = readerOwnerWindow(reader);
       if (
         this.#scope.disposed ||
         !isCurrent() ||
         !this.readerViewForWindow(pdfWindow) ||
-        (reader.tabID &&
-          (reader._window as MainWindowRuntime | undefined)?.Zotero_Tabs?.selectedID !==
-            reader.tabID)
+        (reader.tabID && (!ownerWindow || readerSelectedTabID(ownerWindow) !== reader.tabID))
       )
         return false;
-      const container =
-        pdfWindow.PDFViewerApplication?.pdfViewer?.container ??
-        pdfWindow.document.getElementById('viewerContainer');
-      const page = pdfWindow.document.querySelector<HTMLElement>(
-        `.page[data-page-number="${pageIndex + 1}"]`,
-      );
-      if (page && page.offsetHeight > 0 && container) {
-        this.scrollTo(
-          pdfWindow,
-          Math.max(0, page.offsetTop + page.offsetHeight * ratio - container.clientHeight / 2),
-        );
+      const top = readerPageRatioTop(pdfWindow, pageIndex, ratio);
+      if (top !== null) {
+        this.scrollTo(pdfWindow, top);
         return true;
       }
       if (attempt === 10) return false;

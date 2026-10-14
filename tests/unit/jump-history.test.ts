@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow, ReaderJumpLocation } from '../../src/core/contracts';
-import { activeContextNoteItem } from '../../src/main/host';
+import { activeContextNoteItem } from '../../src/toolkit/main';
 import { MainNavigationExecutor, type LibrarySelectionOptions } from '../../src/main/jump-history';
 import { MainNavigation } from '../../src/main/navigation';
 import type { ShowInLibraryHost } from '../../src/operations/show-in-library';

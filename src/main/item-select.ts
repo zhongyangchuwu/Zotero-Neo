@@ -3,7 +3,7 @@ import { CleanupFailure } from '../core/cleanup';
 import type { Logger } from '../core/logging';
 import {
   currentMainItemCursorRef,
-  mainHost,
+  mainTreeFocused,
   mainItemCursorRow,
   mainItemRefAtRow,
   mainItemRowCount,
@@ -11,7 +11,7 @@ import {
   mainItemRowForRef,
   selectMainItemCursorAnchor,
   visibleMainSelectionCount,
-} from './host';
+} from '../toolkit/main';
 import { resolveMainCurrentTarget, type MainCurrentTarget } from './action-targets';
 import type { ItemRef } from './selection-store';
 import type { SelectionStore } from './selection-store';
@@ -43,19 +43,6 @@ type VisualState = {
   readonly range: MainVisualRange | undefined;
   readonly revision: number;
 };
-
-function containsTarget(root: unknown, node: unknown): boolean {
-  if (!root || !node) return false;
-  if (root === node) return true;
-  if (typeof root !== 'object') return false;
-  const contains = (root as { contains?: unknown }).contains;
-  if (typeof contains !== 'function') return false;
-  try {
-    return Boolean(contains.call(root, node));
-  } catch {
-    return false;
-  }
-}
 
 export function nextItemSelectIndex(
   current: number,
@@ -428,31 +415,7 @@ export class MainItemSelect {
   }
 
   private treeFocused(window: MainWindow, panel: 'items' | 'collections'): boolean {
-    const active = window.document.activeElement;
-    if (!active) return false;
-    const pane = mainHost(window).ZoteroPane;
-    const view = panel === 'items' ? pane?.itemsView : pane?.collectionsView;
-    const targets =
-      panel === 'items'
-        ? [
-            view?.tree,
-            view?.domEl,
-            window.document.getElementById('item-tree-main-default'),
-            window.document.getElementById('zotero-items-tree'),
-            window.document.querySelector('#zotero-items-tree .virtualized-table'),
-          ]
-        : [
-            view?.tree,
-            view?.domEl,
-            window.document.getElementById('collection-tree'),
-            window.document.getElementById('zotero-collections-tree'),
-            window.document.querySelector('#zotero-collections-tree .virtualized-table'),
-          ];
-    const id = active.id ?? '';
-    return (
-      targets.some((target) => containsTarget(target, active) || containsTarget(active, target)) ||
-      (panel === 'items' ? id.includes('item-tree') : id.includes('collection'))
-    );
+    return mainTreeFocused(window, panel);
   }
 
   private showMode(window: MainWindow, targetCount: number, selection: SelectionStore): void {

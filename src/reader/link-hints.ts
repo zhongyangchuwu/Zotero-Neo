@@ -1,5 +1,13 @@
+import {
+  readerVisibleLinks,
+  readerLinkClientRect,
+  readerPositionClientRect,
+  openReaderExternalLink,
+  prepareReaderLinkLocation,
+  navigateReaderLink,
+} from '../toolkit/reader';
 import { compositionOwnsKey } from '../input/composition';
-import { cloneInto, isDeadObject } from '../platform/cross-compartment';
+import { isDeadObject } from '../platform/cross-compartment';
 import { asElement, isEditableElement } from '../platform/dom';
 import { hintLabels } from './hint-labels';
 import type { NavigationExecution, NavigationIntent, NavigationResult } from '../navigation/types';
@@ -60,28 +68,7 @@ export class ReaderLinkHints {
     try {
       const view = this.#host.viewForWindow(pdfWindow);
       if (!view) throw new Error('active PDF view not found');
-      const pages = view._pdfPages;
-      if (!pages || typeof pages !== 'object')
-        throw new Error(`PDF page map unavailable (${typeof pages})`);
-      if (typeof view.getClientRectForPopup !== 'function')
-        throw new Error('PDF client-rectangle conversion unavailable');
-      const seen = new Set<string>();
-      const targets: {
-        readonly overlay: ReaderLinkOverlay;
-        readonly rect: readonly number[];
-      }[] = [];
-      for (const page of Object.values(pages)) {
-        if (!Array.isArray(page?.overlays)) continue;
-        for (const value of page.overlays) {
-          if (!this.#isReaderLinkOverlay(value)) continue;
-          const rect = this.#linkClientRect(view, value);
-          if (!rect || !this.#linkRectIsVisible(pdfWindow, rect)) continue;
-          const key = this.#linkSourceKey(value);
-          if (seen.has(key)) continue;
-          seen.add(key);
-          targets.push({ overlay: value, rect });
-        }
-      }
+      const targets = readerVisibleLinks(view, pdfWindow);
       const labels = hintLabels(targets.length);
       targets.forEach(({ overlay, rect }, index) => {
         const badge = pdfWindow.document.createElement('span');
@@ -204,31 +191,29 @@ export class ReaderLinkHints {
     try {
       const view = this.#host.viewForWindow(pdfWindow);
       if (overlay.type === 'external-link') {
-        if (typeof view?._onOpenLink !== 'function') throw new Error('missing external open-link');
+        if (!view) throw new Error('active PDF view not found');
         const execution = this.#host.executeNavigation(
           pdfWindow,
           this.#intent('external-link', invocation),
-          (navigation) => navigation.runNative(() => view._onOpenLink!(overlay.url)),
+          (navigation) => navigation.runNative(() => openReaderExternalLink(view, overlay.url)),
         );
         if (!execution) throw new Error('reader navigation unavailable');
         this.#observeActivation(execution, invocation);
         return;
       }
 
-      if (typeof view?.navigate !== 'function') throw new Error('missing internal navigation');
-      const readerWindow = this.#host.reader._iframeWindow;
-      if (!readerWindow) throw new Error('reader window unavailable');
+      if (!view) throw new Error('active PDF view not found');
       const position =
         overlay.type === 'internal-link'
           ? overlay.destinationPosition
           : overlay.references[0]!.position;
-      const location = cloneInto({ position }, readerWindow);
+      const location = prepareReaderLinkLocation(this.#host.reader, position);
       const execution = this.#host.executeNavigation(
         pdfWindow,
         this.#intent('internal-link', invocation),
         (navigation) => {
           navigation.bindRequest(location);
-          return navigation.runNative(() => view.navigate!(location));
+          return navigation.runNative(() => navigateReaderLink(view, location));
         },
       );
       if (!execution) throw new Error('reader navigation unavailable');
@@ -283,12 +268,12 @@ export class ReaderLinkHints {
   #refreshHints(pdfWindow: PdfWindow): void {
     try {
       const view = this.#host.viewForWindow(pdfWindow);
-      if (!view || typeof view.getClientRectForPopup !== 'function') {
+      if (!view) {
         this.cancelHints();
         return;
       }
       for (const badge of this.#badges) {
-        const rect = this.#linkClientRect(view, badge.overlay);
+        const rect = readerLinkClientRect(view, badge.overlay);
         const visible = !!rect && this.#linkRectIsVisible(pdfWindow, rect);
         badge.element.hidden = !visible || !badge.label.startsWith(this.#buffer);
         if (rect) this.#positionLinkHint(badge.element, rect);
@@ -336,9 +321,8 @@ export class ReaderLinkHints {
     if (!cue || !position || this.#destinationWindow !== pdfWindow) return;
     try {
       const view = this.#host.viewForWindow(pdfWindow);
-      if (!view || typeof view.getClientRectForPopup !== 'function')
-        throw new Error('destination rectangle conversion unavailable');
-      const rect = this.#positionClientRect(view, position);
+      if (!view) throw new Error('destination rectangle conversion unavailable');
+      const rect = readerPositionClientRect(view, position);
       if (!rect) throw new Error('invalid destination rectangle');
       this.#positionDestinationCue(pdfWindow, cue, rect);
     } catch (error) {
@@ -423,66 +407,10 @@ export class ReaderLinkHints {
     cue.style.borderRadius = '0';
   }
 
-  #isReaderLinkOverlay(value: unknown): value is ReaderLinkOverlay {
-    if (!value || typeof value !== 'object') return false;
-    const overlay = value as {
-      readonly type?: unknown;
-      readonly position?: unknown;
-      readonly destinationPosition?: unknown;
-      readonly url?: unknown;
-    };
-    if (!this.#isReaderLinkPosition(overlay.position)) return false;
-    if (overlay.type === 'internal-link')
-      return this.#isReaderLinkPosition(overlay.destinationPosition);
-    if (overlay.type === 'citation') {
-      const references = (overlay as { readonly references?: unknown }).references;
-      if (!Array.isArray(references) || !references.length) return false;
-      const first = references[0];
-      return (
-        !!first &&
-        typeof first === 'object' &&
-        this.#isReaderLinkPosition((first as { readonly position?: unknown }).position)
-      );
-    }
-    return overlay.type === 'external-link' && typeof overlay.url === 'string' && !!overlay.url;
-  }
-
-  #isReaderLinkPosition(value: unknown): value is ReaderLinkPosition {
-    if (!value || typeof value !== 'object') return false;
-    const position = value as { readonly pageIndex?: unknown; readonly rects?: unknown };
-    return (
-      Number.isInteger(position.pageIndex) &&
-      Array.isArray(position.rects) &&
-      position.rects.length > 0 &&
-      position.rects.every(
-        (rect) => Array.isArray(rect) && rect.length === 4 && rect.every(Number.isFinite),
-      )
-    );
-  }
-
-  #positionClientRect(
-    view: ReaderViewRuntime,
-    position: ReaderLinkPosition,
-  ): readonly number[] | null {
-    const rect = view.getClientRectForPopup?.(position);
-    return rect?.length === 4 && rect.every(Number.isFinite) ? rect : null;
-  }
-
-  #linkClientRect(view: ReaderViewRuntime, overlay: ReaderLinkOverlay): readonly number[] | null {
-    const rect = this.#positionClientRect(view, overlay.position);
-    return rect && rect[2]! > rect[0]! && rect[3]! > rect[1]! ? rect : null;
-  }
-
   #linkRectIsVisible(pdfWindow: PdfWindow, rect: readonly number[]): boolean {
     const width = pdfWindow.innerWidth || pdfWindow.document.documentElement.clientWidth;
     const height = pdfWindow.innerHeight || pdfWindow.document.documentElement.clientHeight;
     return rect[2]! > 0 && rect[3]! > 0 && rect[0]! < width && rect[1]! < height;
-  }
-
-  #linkSourceKey(overlay: ReaderLinkOverlay): string {
-    return `${overlay.position.pageIndex}:${overlay.position.rects
-      .map((rect) => rect.map((value) => Math.round(value * 10)).join(','))
-      .join(';')}`;
   }
 
   #positionLinkHint(element: HTMLElement, rect: readonly number[]): void {

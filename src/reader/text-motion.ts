@@ -1,3 +1,4 @@
+import { pdfTextSpans } from '../toolkit/reader';
 import type { PdfWindow, Pointer } from './types';
 
 interface RectLike {
@@ -21,10 +22,6 @@ interface TextLineGeometry {
 export interface VerticalTextMotion {
   readonly pointer: Pointer;
   readonly preferredX: number;
-}
-
-function isTextNode(node: Node | null): node is Text {
-  return node?.nodeType === 3;
 }
 
 function validRect(rect: RectLike): boolean {
@@ -61,17 +58,9 @@ function caretRect(pdfWindow: PdfWindow, pointer: Pointer): RectLike | null {
 }
 
 function textLines(pdfWindow: PdfWindow): TextLineGeometry[] {
-  const spans = Array.from(pdfWindow.document.querySelectorAll('.textLayer span')) as HTMLElement[];
   const lines: TextLineGeometry[] = [];
-  for (const span of spans) {
-    const textNode = span.firstChild;
-    if (!isTextNode(textNode) || !textNode.length || !textNode.isConnected) continue;
-    const rect = span.getBoundingClientRect();
-    if (!validRect(rect)) continue;
-    const geometry: TextSpanGeometry = {
-      pointer: { textNode, offset: 0 },
-      rect,
-    };
+  for (const { textNode, rect } of pdfTextSpans(pdfWindow)) {
+    const geometry: TextSpanGeometry = { pointer: { textNode, offset: 0 }, rect };
     const current = lines.at(-1);
     if (current?.spans.some((entry) => sameVisualLine(entry.rect, rect)))
       current.spans.push(geometry);

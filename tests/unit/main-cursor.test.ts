@@ -11,9 +11,103 @@ import {
   restoreMainItemCursorAnchor,
   selectMainItemCursorAnchor,
   visibleMainSelectionCount,
-} from '../../src/main/host';
+} from '../../src/toolkit/main';
 import { installMainViewLifecycle } from '../../src/main/view-lifecycle';
 import { SelectionStore } from '../../src/main/selection-store';
+
+type NativeRowUpdateOptions = {
+  readonly selection?: number;
+  readonly selectInActiveWindow?: boolean;
+  readonly restoreSelection?: boolean;
+};
+
+/** Zotero snapshots listeners, then awaits each delivery; removal cannot cancel that snapshot. */
+function nativeEventBinding<Args extends unknown[] = []>() {
+  const listeners = new Set<(...args: Args) => void | Promise<void>>();
+  return {
+    addListener: (listener: (...args: Args) => void | Promise<void>) => {
+      listeners.add(listener);
+    },
+    removeListener: (listener: (...args: Args) => void | Promise<void>) => {
+      listeners.delete(listener);
+    },
+    async run(...args: Args): Promise<void> {
+      for (const listener of [...listeners]) await listener(...args);
+    },
+  };
+}
+
+function nativeCursorLifecycleHarness() {
+  const items = [10, 11, 12].map((id) => ({ id, libraryID: 1 }) as Zotero.Item);
+  let rows = items.map((ref) => ({ isObjectRow: true, ref }));
+  let focused = 0;
+  let generation: object = {};
+  let settled = true;
+  let nextRows: readonly number[] = [];
+  let nextFocused = 0;
+  const onSelect = nativeEventBinding();
+  const onRefresh = nativeEventBinding();
+  const onUpdate = nativeEventBinding<[unknown, NativeRowUpdateOptions?]>();
+  // Registered by the SDK before Neo: replace the deferred and finish rendering before
+  // delivering later row-provider listeners. Sorting deliberately has no onRefresh.
+  onUpdate.addListener(async (_rows, options) => {
+    generation = {};
+    settled = false;
+    rows = nextRows.map((id) => ({
+      isObjectRow: true,
+      ref: items.find((item) => item.id === id)!,
+    }));
+    focused = nextFocused;
+    if (options?.selection && (!options.restoreSelection || options.selectInActiveWindow))
+      focused = rows.findIndex(({ ref }) => ref.id === options.selection);
+    await Promise.resolve();
+    settled = true;
+  });
+  const view = {
+    get rowCount() {
+      return rows.length;
+    },
+    get _itemTreeLoadingDeferred() {
+      return generation;
+    },
+    get _loadingDeferredResolved() {
+      return settled;
+    },
+    onSelect,
+    onRefresh,
+    rowProvider: { onUpdate },
+    selection: {
+      get focused() {
+        return focused;
+      },
+      select: vi.fn((row: number) => {
+        focused = row;
+      }),
+    },
+    getRow: (row: number) => rows[row],
+    getRowIndexByID: (id: number) => {
+      const row = rows.findIndex(({ ref }) => ref.id === id);
+      return row < 0 ? false : row;
+    },
+  };
+  const window = { ZoteroPane: { itemsView: view } } as unknown as MainWindow;
+  return {
+    window,
+    view,
+    async updateRows(
+      ids: readonly number[],
+      nativeFocused: number,
+      options: NativeRowUpdateOptions = { restoreSelection: true },
+    ): Promise<void> {
+      nextRows = ids;
+      nextFocused = nativeFocused;
+      await onUpdate.run(true, options);
+    },
+    focusItem(id: number): void {
+      focused = rows.findIndex(({ ref }) => ref.id === id);
+    },
+  };
+}
 
 describe('Main View lifecycle', () => {
   it('restores only the Cursor host anchor by identity after a View reorder', () => {
@@ -157,6 +251,80 @@ describe('Main View lifecycle', () => {
     ]);
 
     cleanup();
+  });
+
+  it('tracks the chosen Cursor after native sorting without onRefresh and preserves it through a later filter', async () => {
+    const host = nativeCursorLifecycleHarness();
+    const cleanup = installMainViewLifecycle(host.window, { debug: vi.fn(), diagnostic: vi.fn() });
+
+    await host.updateRows([11, 10, 12], 1);
+    host.focusItem(11);
+    await host.view.onSelect.run();
+    // Filter completion supplies a native fallback while both old and chosen items remain visible.
+    await host.updateRows([10, 11, 12], 0);
+    await host.view.onRefresh.run();
+
+    expect(currentMainItemCursorRef(host.window)).toEqual({ libraryID: 1, itemID: 11 });
+    cleanup();
+  });
+
+  it('adopts a newly added native item target and retains it through a later filter', async () => {
+    const host = nativeCursorLifecycleHarness();
+    await host.updateRows([10, 12], 0);
+    const cleanup = installMainViewLifecycle(host.window, { debug: vi.fn(), diagnostic: vi.fn() });
+
+    await host.updateRows([10, 11, 12], 0, {
+      selectInActiveWindow: true,
+      selection: 11,
+      restoreSelection: false,
+    });
+    expect(currentMainItemCursorRef(host.window)).toEqual({ libraryID: 1, itemID: 11 });
+
+    await host.updateRows([12, 10, 11], 1);
+    await host.view.onRefresh.run();
+    expect(currentMainItemCursorRef(host.window)).toEqual({ libraryID: 1, itemID: 11 });
+    cleanup();
+  });
+
+  it('retires callbacks captured before asynchronous native dispatch finishes', async () => {
+    const host = nativeCursorLifecycleHarness();
+    const refreshEntered = Promise.withResolvers<void>();
+    const refreshRelease = Promise.withResolvers<void>();
+    const selectEntered = Promise.withResolvers<void>();
+    const selectRelease = Promise.withResolvers<void>();
+    host.view.onRefresh.addListener(async () => {
+      refreshEntered.resolve();
+      await refreshRelease.promise;
+    });
+    host.view.onSelect.addListener(async () => {
+      selectEntered.resolve();
+      await selectRelease.promise;
+    });
+    const retiredStateChange = vi.fn();
+    const cleanup = installMainViewLifecycle(
+      host.window,
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      retiredStateChange,
+    );
+    const pendingRefresh = host.view.onRefresh.run();
+    const pendingSelect = host.view.onSelect.run();
+    await Promise.all([refreshEntered.promise, selectEntered.promise]);
+
+    cleanup();
+    host.focusItem(11);
+    const replacementCleanup = installMainViewLifecycle(host.window, {
+      debug: vi.fn(),
+      diagnostic: vi.fn(),
+    });
+    refreshRelease.resolve();
+    await pendingRefresh;
+    selectRelease.resolve();
+    await pendingSelect;
+
+    expect(currentMainItemCursorRef(host.window)).toEqual({ libraryID: 1, itemID: 11 });
+    expect(host.view.selection.select).not.toHaveBeenCalled();
+    expect(retiredStateChange).toHaveBeenCalledOnce();
+    replacementCleanup();
   });
 
   it('keeps hidden workset members and does not restore a hidden Cursor to another row', () => {

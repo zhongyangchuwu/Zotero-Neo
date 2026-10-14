@@ -9,7 +9,8 @@ import {
   mainTabList,
   selectMainTab,
   selectedMainTabID,
-} from '../../src/main/host';
+  selectedMainTabSnapshot,
+} from '../../src/toolkit/main';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -30,6 +31,18 @@ describe('main host adapter', () => {
     const window = { Zotero_Tabs: primary } as unknown as MainWindow;
 
     expect(mainTabList(window).map((tab) => tab.id)).toEqual(['a', 'b']);
+    Object.defineProperty(primary._tabs[1]!, 'title', {
+      get() {
+        throw new Error('Inactive tab metadata should not be read');
+      },
+    });
+    const snapshot = selectedMainTabSnapshot(window);
+    expect(snapshot?.id).toBe('a');
+    expect(selectedMainTabSnapshot(window)).toBe(snapshot);
+    Reflect.set(primary._tabs[0]!, 'title', 'note A');
+    const refreshed = selectedMainTabSnapshot(window);
+    expect(refreshed).not.toBe(snapshot);
+    expect(refreshed?.title).toBe('note A');
     selectMainTab(window, 'b');
     cycleMainTab(window, 1);
     expect(selected).toEqual(['select:b', 'select:b']);
@@ -41,6 +54,7 @@ describe('main host adapter', () => {
     };
     const fallbackWindow = { Zotero_Tabs: fallback } as unknown as MainWindow;
     expect(selectedMainTabID(fallbackWindow)).toBe('b');
+    expect(selectedMainTabSnapshot(fallbackWindow)?.id).toBe('b');
     cycleMainTab(fallbackWindow, -1);
     expect(selected).toContain('selectTab:a');
 
@@ -78,21 +92,19 @@ describe('main host adapter', () => {
     const selectedTags = new Set<string>();
     const window = {
       ZoteroPane: {
-        itemsView: { rowCount: 4, collectionTreeRows: [activeRow], setFilter },
+        itemsView: { rowCount: 4, objectRowCount: 4, collectionTreeRows: [activeRow], setFilter },
         tagSelector: { selectedTags },
       },
     } as unknown as MainWindow;
 
-    await expect(applyMainTagFilter(window, ['blue', 'green'])).resolves.toBe(4);
-    expect(setFilter).toHaveBeenCalledWith('tags', new Set(['blue', 'green']));
+    await applyMainTagFilter(window, ['blue', 'green']);
     expect(currentTagSelection(window)).toEqual(['blue', 'green']);
     expect(
       (window as unknown as { ZoteroPane: { tagSelector: { selectedTags: Set<string> } } })
         .ZoteroPane.tagSelector.selectedTags,
     ).toEqual(new Set(['blue', 'green']));
 
-    await expect(applyMainTagFilter(window, [])).resolves.toBe(4);
-    expect(setFilter).toHaveBeenLastCalledWith('tags', new Set());
+    await applyMainTagFilter(window, []);
     expect(currentTagSelection(window)).toEqual([]);
     expect(
       (window as unknown as { ZoteroPane: { tagSelector: { selectedTags: Set<string> } } })
@@ -112,14 +124,32 @@ describe('main host adapter', () => {
     expect(currentTagSelection(window)).toEqual([]);
   });
 
-  it('prefers collection-row active filters over distinct native tag-selector state', () => {
+  it('reads plural collection filters without reviving stale selector tags', () => {
+    const rows = [{ tags: new Set(['row-active']) }, { tags: new Set(['row-active']) }];
     const window = {
       ZoteroPane: {
-        getCollectionTreeRow: () => ({ tags: new Set(['row-active']) }),
+        getCollectionTreeRows: () => rows,
+        getCollectionTreeRow: () => {
+          throw new Error('A single collection tree row is unavailable for multiple selection');
+        },
         tagSelector: { getTagSelection: () => new Set(['native-selected']) },
       },
     } as unknown as MainWindow;
 
     expect(currentTagSelection(window)).toEqual(['row-active']);
+    for (const row of rows) row.tags.clear();
+    expect(currentTagSelection(window)).toEqual([]);
+  });
+
+  it('does not resurrect stale tags when the rendered view has no active rows', () => {
+    const window = {
+      ZoteroPane: {
+        itemsView: { collectionTreeRows: [] },
+        getCollectionTreeRows: () => [{ tags: new Set(['stale-row']) }],
+        tagSelector: { getTagSelection: () => new Set(['stale-selector']) },
+      },
+    } as unknown as MainWindow;
+
+    expect(currentTagSelection(window)).toEqual([]);
   });
 });

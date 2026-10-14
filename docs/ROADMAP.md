@@ -116,13 +116,10 @@ comment semantics, navigation history, the native-sidebar layout, or the impleme
 Notes choice workflow. Phase 9.3 still has a distinct physical-input/package
 acceptance boundary, not a mandate for another broad refactor.
 
-1. **Finish current-package acceptance** in
-   [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
-   Pin the integrated candidate and reuse unchanged package migration/restart and
-   schema-18 preference evidence when the XPI is byte-identical. Observe one action
-   per shortcut in each live view, then record actual human OS-IME/native-editable,
-   clipboard and Outline outcomes. Historical DOM composition is not human PASS.
-   A concrete failure gets its own bounded defect; no speculative rewrite.
+1. **After source integration, conduct the unified owner review** of functional behavior
+   and documentation. Use the [candidate acceptance guide](V0_2_ACCEPTANCE.md);
+   U1–U10 are execution steps, not a completed PASS report. Record actual outcomes
+   in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98); keep both issues open until their owners accept the remaining results. Final-package native clean-install and official-upgrade evidence is reusable only for the exact package; trusted input is not physical OS-IME, native clipboard or human Outline acceptance. A concrete failure gets its own bounded defect; no speculative rewrite.
 2. **Finish the remaining integration acceptance**, not another Notes rewrite.
    [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140) implements the
    accepted [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) contract;
@@ -154,24 +151,25 @@ compatibility path until that external prerequisite exists.
 
 ## Release gate
 
-The published release remains v0.1.0. The preparation branch now carries matching
-v0.2.0 manifest/package metadata and its proposed update-feed entry; this is an
-unpublished candidate, not a new public release. The public `main` update feed
-must keep serving v0.1.0 until acceptance and publication are explicitly authorized.
+The v0.1.0 release and live `updates.json` feed remain public. The v0.2.0 source
+can be merged into `main` before unified owner acceptance; integration does not
+publish it. Prepared candidate metadata lives in `updates.candidate.json`, read by
+`tools/check-release.mjs` and `tools/publish-release.mjs`. Keep public
+`updates.json` at its sole official v0.1.0 entry until a verified v0.2.0 asset
+exists and promotion is explicitly authorized. Neither feed file is packaged in
+the XPI.
 
 Passing `tools/check-release.mjs v0.2.0` proves candidate metadata consistency, not
-human acceptance or a live release asset. Native candidate installation, real
-public-v0.1.0 upgrade and trusted per-view key routing have separate evidence in
-#137; keep this branch unmerged until its remaining physical-input criteria and
-explicit publication authorization are satisfied.
+human acceptance or a live release asset. Final-XPI native clean-install and
+official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552), scoped to that package; they do not complete the open physical-input, per-view or owner review in #137/#98. Do not hold source integration until those reviews finish; tagging and publication remain gated on required acceptance and explicit authorization.
 
 Before another release:
 
 - complete the selected current-host acceptance and integration gates;
 - verify packaged install/update behavior separately from RDP temporary loading,
   including binding/preference migration and single runtime ownership;
-- prepare matching manifest/package version, update-feed asset entry, release
-  notes, and installation links before tagging; use `tools/check-release.mjs`;
+- prepare matching manifest/package version, candidate-feed entry, release notes,
+  and installation links before tagging; use `tools/check-release.mjs`;
 - describe actual CI coverage: the current workflow verifies/packages on Ubuntu.
   Do not claim Windows CI coverage without restoring that job and observing it pass.
 

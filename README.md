@@ -8,9 +8,10 @@ for Zotero's reader and main window.
 > **Status:** v0.1.0 released on 2026-09-19. Download the packaged XPI from
 > [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
 >
-> **Candidate:** v0.2.0 is being prepared for acceptance and is not published.
-> See the [candidate acceptance guide](docs/V0_2_ACCEPTANCE.md) before installing
-> a preparation-branch build. The public download above remains v0.1.0.
+> **Candidate:** v0.2.0 source is integrated for the owner-led functional and
+> documentation review; it is not published. Obtain a candidate package from the
+> exact integrated-`main` CI artifact or a local build of that source. The public
+> release download and update feed above remain v0.1.0.
 
 ## Support
 
@@ -124,10 +125,13 @@ npm ci
 
 The output is `zotero-neo.xpi`.
 
-The preparation branch builds an unreleased `0.2.0` candidate. Install that XPI
-explicitly for isolated acceptance; the public update feed and release link above
-still deliver the published v0.1.0 package until an authorized release completes.
-Reinstalling retains Neo preferences and is not a clean-install or upgrade test.
+The integrated source builds an unpublished v0.2.0 candidate. Obtain it from the
+exact integrated-`main` CI artifact or build that source locally; there is no
+v0.2.0 release download before publication. `updates.candidate.json` contains
+prepared metadata read by release validators and the publisher. Public
+`updates.json` remains at v0.1.0 until a verified asset exists and promotion is
+explicitly authorized. Neither file is packaged in the XPI. Reinstalling retains
+Neo preferences and is not a clean-install or upgrade test.
 
 On Windows:
 
@@ -166,3 +170,7 @@ incorporated work from [zotero-vim](https://codeberg.org/finktank/zotero-vim).
 Historical copyright notices are preserved under the project license.
 
 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+The XPI includes the complete project license at `LICENSE` and the bundled
+fuzzysort MIT notice at `licenses/fuzzysort-LICENSE`. Published binaries correspond
+to the source available from the same release tag.

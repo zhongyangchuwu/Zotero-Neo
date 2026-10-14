@@ -1,19 +1,21 @@
-import type { ReaderJumpLocation, ReaderJumpPosition } from '../core/contracts';
+import type { ReaderJumpLocation, ReaderJumpPosition } from '../../core/contracts';
 import type {
   HistoryDecision,
   NavigationAttempt,
   NavigationOutcome,
   NavigationPort,
-} from '../navigation/types';
-import { cloneIntoWithFunctions, nativeObjectIdentity } from '../platform/cross-compartment';
+} from '../../navigation/types';
+import { cloneIntoWithFunctions, nativeObjectIdentity } from '../../platform/cross-compartment';
 import { ReaderJumpHostAdapter } from './jump-host';
+import type { ReaderRuntime, ReaderViewRuntime as ReaderViewHandle } from './contracts';
 import type {
-  PdfWindow,
+  NativePdfWindow as PdfWindow,
+  NativeReaderRuntime,
+  NativeReaderViewRuntime as ReaderViewRuntime,
   ReaderFindControllerRuntime,
   ReaderPdfHistoryRuntime,
-  ReaderRuntime,
-  ReaderViewRuntime,
-} from './types';
+} from './private-types';
+import { readerTabIsActive, readerViewIsLive } from './host';
 
 interface ReaderLinkServiceRuntime {
   goToDestination?: (...args: unknown[]) => unknown;
@@ -107,15 +109,6 @@ interface ReaderLinkInvocation {
   navigationStarted: boolean;
 }
 
-interface ReaderTabsRuntime {
-  readonly selectedID?: string;
-  readonly _tabs?: readonly { readonly id?: string; readonly type?: string }[];
-}
-
-interface ReaderOwnerWindowRuntime {
-  readonly Zotero_Tabs?: ReaderTabsRuntime;
-}
-
 export interface ReaderNativeNavigation {
   readonly policy: HistoryDecision;
   isCurrent(): boolean;
@@ -186,6 +179,7 @@ function nativeIdentity(value: unknown): object | null {
  */
 export class ReaderJumpHistoryBridge {
   readonly #dependencies: ReaderJumpHistoryBridgeDependencies;
+  readonly #reader: NativeReaderRuntime;
   readonly #patches = new Map<ReaderViewRuntime, ReaderViewPatch>();
   readonly #ownedRequests = new WeakMap<object, OwnedScope>();
   readonly #currentOwners = new WeakMap<ReaderViewRuntime, OwnedScope>();
@@ -211,11 +205,13 @@ export class ReaderJumpHistoryBridge {
 
   constructor(dependencies: ReaderJumpHistoryBridgeDependencies) {
     this.#dependencies = dependencies;
+    // The capability handle retains the native Reader's identity.
+    this.#reader = dependencies.reader as NativeReaderRuntime;
   }
 
   sync(): void {
     if (this.#disposed) return;
-    const internal = this.#dependencies.reader._internalReader;
+    const internal = this.#reader._internalReader;
     const primary = internal?._primaryView;
     const secondary = internal?._secondaryView;
     for (const view of this.#patches.keys()) {
@@ -227,7 +223,7 @@ export class ReaderJumpHistoryBridge {
 
   /** Runs an owned adapter and waits only for the native/managed children it actually starts. */
   runOwned<T>(
-    view: ReaderViewRuntime,
+    view: ReaderViewHandle,
     attempt: NavigationAttempt,
     perform: (navigation: ReaderOwnedNavigation) => T,
     finish: (
@@ -248,7 +244,7 @@ export class ReaderJumpHistoryBridge {
 
   /** Runs a native host callback without a Main owner or any history capture/recording. */
   runDetached<T>(
-    view: ReaderViewRuntime,
+    view: ReaderViewHandle,
     isCurrent: () => boolean,
     perform: (navigation: ReaderNativeNavigation) => T,
     finish: (
@@ -262,7 +258,7 @@ export class ReaderJumpHistoryBridge {
 
   /** Cheap no-history scope for ignored motion or a host with no exact Main navigation port. */
   runIgnoredMotion<T>(
-    view: ReaderViewRuntime,
+    view: ReaderViewHandle,
     ownership: NavigationAttempt | (() => boolean),
     perform: (navigation: ReaderNativeNavigation) => T,
   ): NavigationOutcome {
@@ -311,7 +307,7 @@ export class ReaderJumpHistoryBridge {
   }
 
   #createScope(
-    view: ReaderViewRuntime,
+    viewHandle: ReaderViewHandle,
     attempt: NavigationAttempt | null,
     policy: HistoryDecision,
     isCurrent: () => boolean,
@@ -319,11 +315,13 @@ export class ReaderJumpHistoryBridge {
     captureViewOrigin: boolean,
     cancellable = true,
   ): OwnedScope {
+    // Resolve the opaque handle only at this native ownership boundary.
+    const view = viewHandle as ReaderViewRuntime;
     const abort = cancellable ? Promise.withResolvers<void>() : null;
     let origin: ReaderJumpPosition | null = null;
     if (captureViewOrigin) {
       try {
-        origin = this.#dependencies.host.captureViewPosition(this.#dependencies.reader, view);
+        origin = this.#dependencies.host.captureViewPosition(this.#reader, view);
       } catch {
         origin = null;
       }
@@ -382,7 +380,7 @@ export class ReaderJumpHistoryBridge {
       hasMoved: () => {
         const origin = scope.origin;
         if (!origin || !this.#scopeIsCurrent(scope)) return null;
-        return this.#dependencies.host.hasViewMoved(this.#dependencies.reader, scope.view, origin);
+        return this.#dependencies.host.hasViewMoved(this.#reader, scope.view, origin);
       },
     });
     return attempt
@@ -566,7 +564,7 @@ export class ReaderJumpHistoryBridge {
   }
 
   #capture(view: ReaderViewRuntime, origin?: ReaderJumpPosition | null): ReaderJumpLocation | null {
-    const reader = this.#dependencies.reader;
+    const reader = this.#reader;
     const tabID = reader.tabID;
     if (!tabID) return null;
     try {
@@ -584,7 +582,7 @@ export class ReaderJumpHistoryBridge {
     const baseline = this.#baselines.get(view) ?? view._history?._currentLocation;
     if (!baseline) return null;
     try {
-      return this.#dependencies.host.captureHardLocation(this.#dependencies.reader, view, baseline);
+      return this.#dependencies.host.captureHardLocation(this.#reader, view, baseline);
     } catch {
       return null;
     }
@@ -596,7 +594,7 @@ export class ReaderJumpHistoryBridge {
   }
 
   #navigate(scope: OwnedScope, location: object, options?: object): unknown {
-    const reader = this.#dependencies.reader;
+    const reader = this.#reader;
     const internal = reader._internalReader;
     if (!internal?.navigate) return undefined;
     this.#bindRequest(scope, location);
@@ -721,7 +719,7 @@ export class ReaderJumpHistoryBridge {
       return Reflect.apply(originalMethod, receiver, args);
     const descriptor = Object.getOwnPropertyDescriptor(view, '_pageLabelsPromise');
     const original = view._pageLabelsPromise;
-    const target = this.#dependencies.reader._iframeWindow;
+    const target = this.#reader._iframeWindow;
     const window = view._iframeWindow;
     const patch = this.#patches.get(view);
     const history = view._history;
@@ -940,7 +938,7 @@ export class ReaderJumpHistoryBridge {
     }
     try {
       ticket.destination = this.#dependencies.host.captureHardLocation(
-        this.#dependencies.reader,
+        this.#reader,
         view,
         location,
       );
@@ -952,16 +950,7 @@ export class ReaderJumpHistoryBridge {
   }
 
   #nativeEligible(view: ReaderViewRuntime): boolean {
-    const reader = this.#dependencies.reader;
-    const tabID = reader.tabID;
-    const owner = reader._window as ReaderOwnerWindowRuntime | undefined;
-    const tabs = owner?.Zotero_Tabs;
-    if (!tabID || !tabs || tabs.selectedID !== tabID || reader._isTabClosed === true) return false;
-    const tab = tabs._tabs?.find((candidate) => candidate.id === tabID);
-    if (tabs._tabs && (!tab || (tab.type !== 'reader' && tab.type !== 'reader-unloaded')))
-      return false;
-    const internal = reader._internalReader;
-    return internal?._primaryView === view || internal?._secondaryView === view;
+    return readerTabIsActive(this.#reader) && readerViewIsLive(this.#reader, view);
   }
 
   #patch(view: ReaderViewRuntime): void {

@@ -1,7 +1,9 @@
-import type { SelectLibraryItemResult } from '../operations/show-in-library';
-import type { MainWindow } from '../core/contracts';
-import type { TreeView } from './navigation';
-import type { ItemRef } from './selection-store';
+import type { SelectLibraryItemResult, ShowInLibraryHost } from '../../operations/show-in-library';
+import type { ItemOpenHost } from '../../operations/open-item';
+import type { MainWindow } from '../../core/contracts';
+import type { TreeView } from './private-types';
+import type { ItemRef } from '../../main/selection-store';
+import { CleanupFailure } from '../../core/cleanup';
 
 export type TagJson = _ZoteroTypes.Tags.TagJson;
 
@@ -21,12 +23,21 @@ type MainTabInfo = {
   readonly data?: { readonly itemID?: number };
 };
 
+export interface MainTabSnapshot {
+  readonly id?: string;
+  readonly title?: string;
+  readonly label?: string;
+  readonly type?: string;
+  readonly displayTitle?: string;
+  readonly kind: string;
+}
+
 type TagScopeRow = {
   readonly ref?: { readonly libraryID?: number };
   readonly tags?: Iterable<string>;
   readonly searchText?: string;
   readonly advancedSearch?: unknown;
-  getTags?(): Promise<readonly TagJson[]>;
+  getTags(): Promise<readonly TagJson[]>;
 };
 
 type MainTabs = {
@@ -47,17 +58,20 @@ type MainPane = {
   readonly collectionsView?: TreeView;
   readonly itemsView?: TreeView & {
     readonly rowCount?: number;
+    readonly objectRowCount: number;
     readonly collectionTreeRows?: readonly TagScopeRow[];
     setFilter?(type: 'tags' | 'search', value: ReadonlySet<string> | string): Promise<void> | void;
   };
   getSelectedItems?(): Zotero.Item[];
+  getSelectedCollection?(): Zotero.Collection | false | undefined;
+  getSelectedCollections?(): Zotero.Collection[];
   selectItem?(id: number): SelectLibraryItemResult;
   toggleAdvancedSearchState?(state: 'open' | 'collapsed' | 'closed'): Promise<void> | void;
   openAdvancedSearchFromQuickSearch?(text: string, mode?: string): Promise<void> | void;
   viewAttachment?(id: number): void;
   openNote?(id: number, options?: { openInWindow: boolean }): Promise<void> | void;
   loadURI?(uri: string): void;
-  getCollectionTreeRow?(): TagScopeRow | undefined;
+  getCollectionTreeRows?(): readonly TagScopeRow[];
   tagSelector?: {
     getTagSelection?(): ReadonlySet<string>;
     selectedTags?: Set<string>;
@@ -129,11 +143,26 @@ type MainEventBinding = {
   removeListener(listener: () => void | Promise<void>): void;
 };
 
+type MainRowUpdateOptions = {
+  readonly selection?: unknown;
+  readonly selectInActiveWindow?: boolean;
+  readonly restoreSelection?: boolean;
+};
+type MainRowUpdateBinding = {
+  addListener(
+    listener: (rows: unknown, options?: MainRowUpdateOptions) => void | Promise<void>,
+  ): void;
+  removeListener(
+    listener: (rows: unknown, options?: MainRowUpdateOptions) => void | Promise<void>,
+  ): void;
+};
+
 type ItemCursorView = {
   readonly rowCount?: number;
   readonly tree?: ItemCursorTree;
   readonly onSelect?: MainEventBinding;
   readonly onRefresh?: MainEventBinding;
+  readonly rowProvider?: { readonly onUpdate?: MainRowUpdateBinding };
   readonly _itemTreeLoadingDeferred?: unknown;
   readonly _loadingDeferredResolved?: boolean;
   readonly selection?: {
@@ -154,7 +183,7 @@ type ContextNoteEditor = {
 /** Minimal registry entry exposed by Zotero's main-window tab lookup; not a Reader runtime. */
 type MainReaderRegistryEntry = { readonly itemID?: number; focus?(): void | Promise<void> };
 
-export type MainHostWindow = MainWindow & {
+type MainHostWindow = MainWindow & {
   readonly ZoteroPane?: MainPane;
   readonly Zotero_Tabs?: MainTabs;
   readonly ZoteroContextPane?: {
@@ -164,11 +193,11 @@ export type MainHostWindow = MainWindow & {
 };
 
 /** Narrows Zotero's private main-window APIs without conflating them with Reader/PDF hosts. */
-export function mainHost(window: MainWindow): MainHostWindow {
+function mainHost(window: MainWindow): MainHostWindow {
   return window as MainHostWindow;
 }
 
-export function mainTabs(window: MainWindow): MainTabs | undefined {
+function mainTabs(window: MainWindow): MainTabs | undefined {
   return mainHost(window).Zotero_Tabs;
 }
 
@@ -178,13 +207,57 @@ export function selectedMainTabID(window: MainWindow): string | undefined {
 }
 
 export function selectedMainTabInfo(window: MainWindow): MainTabInfo | undefined {
-  const tabs = mainTabs(window);
-  return tabs?.getTabInfo?.(selectedMainTabID(window));
+  const info = mainTabs(window)?.getTabInfo?.(selectedMainTabID(window));
+  if (!info) return undefined;
+  return {
+    id: info.id,
+    type: info.type,
+    subType: info.subType,
+    data: info.data ? { itemID: info.data.itemID } : undefined,
+  };
 }
 
-export function mainTabList(window: MainWindow): readonly MainTab[] {
+const mainTabSnapshots = new WeakMap<MainTab, MainTabSnapshot>();
+
+function mainTabSnapshot(tab: MainTab): MainTabSnapshot {
+  const id = tab.id ?? tab.tabID ?? tab.dataset?.id;
+  const title = tab.title;
+  const label = tab.label;
+  const type = tab.type;
+  const displayTitle = title ?? label ?? tab.dataset?.title ?? id;
+  const kind = type ?? tab.dataset?.type ?? 'tab';
+  const previous = mainTabSnapshots.get(tab);
+  if (
+    previous &&
+    previous.id === id &&
+    previous.title === title &&
+    previous.label === label &&
+    previous.type === type &&
+    previous.displayTitle === displayTitle &&
+    previous.kind === kind
+  )
+    return previous;
+  const snapshot = Object.freeze({ id, title, label, type, displayTitle, kind });
+  mainTabSnapshots.set(tab, snapshot);
+  return snapshot;
+}
+
+/** Projects only the selected inventory member, preserving native ID fallbacks. */
+export function selectedMainTabSnapshot(window: MainWindow): MainTabSnapshot | undefined {
   const tabs = mainTabs(window);
-  return tabs?._tabs ?? tabs?.tabs ?? [];
+  const inventory = tabs?._tabs ?? tabs?.tabs;
+  if (!inventory) return undefined;
+  const selectedID = tabs?.selectedID ?? tabs?._selectedID;
+  for (const tab of inventory) {
+    if ((tab.id ?? tab.tabID ?? tab.dataset?.id) === selectedID) return mainTabSnapshot(tab);
+  }
+  return undefined;
+}
+
+/** Full inventory projection is reserved for explicit inventory consumers such as Picker. */
+export function mainTabList(window: MainWindow): readonly MainTabSnapshot[] {
+  const tabs = mainTabs(window);
+  return (tabs?._tabs ?? tabs?.tabs ?? []).map(mainTabSnapshot);
 }
 
 export function selectMainTab(window: MainWindow, id: string): boolean {
@@ -212,9 +285,11 @@ export function cycleMainTab(window: MainWindow, direction: 1 | -1): void {
   if (direction < 0 && tabs.selectPrev) tabs.selectPrev();
   else if (direction > 0 && tabs.selectNext) tabs.selectNext();
   else {
-    const ids = mainTabList(window)
-      .map((tab) => tab.id ?? tab.tabID ?? tab.dataset?.id)
-      .filter((id): id is string => !!id);
+    const ids: string[] = [];
+    for (const tab of tabs._tabs ?? tabs.tabs ?? []) {
+      const id = tab.id ?? tab.tabID ?? tab.dataset?.id;
+      if (id) ids.push(id);
+    }
     const index = ids.indexOf(selectedMainTabID(window) ?? '');
     const next = ids[(index + direction + ids.length) % ids.length];
     if (next) selectMainTab(window, next);
@@ -269,7 +344,7 @@ export function mainQuickSearchFocusEvent(window: MainWindow, event: Event): boo
 export function focusMainItemsImmediately(window: MainWindow): boolean {
   const doc = window.document;
   const view = mainPane(window)?.itemsView;
-  const topDiv = (view?.tree as { readonly _topDiv?: HTMLElement } | undefined)?._topDiv;
+  const topDiv = view?.tree?._topDiv;
   const candidates = [
     topDiv,
     view?.domEl?.querySelector<HTMLElement>('.virtualized-table'),
@@ -289,16 +364,22 @@ export function focusMainItemsImmediately(window: MainWindow): boolean {
   return false;
 }
 
+/** The rendered view owns filter rows, which can differ from the collection tree's objects. */
+function mainViewScopeRows(window: MainWindow): readonly TagScopeRow[] | undefined {
+  const pane = mainPane(window);
+  return pane?.itemsView?.collectionTreeRows ?? pane?.getCollectionTreeRows?.();
+}
+
 export function mainViewFilterState(window: MainWindow): MainViewFilterState {
-  const row = mainPane(window)?.getCollectionTreeRow?.();
+  const rows = mainViewScopeRows(window) ?? [];
   const quick = mainQuickSearch(window);
   const quickSearchText = String(
-    quick?.value ?? quick?.searchTextbox?.value ?? row?.searchText ?? '',
+    quick?.value ?? quick?.searchTextbox?.value ?? rows[0]?.searchText ?? '',
   );
   return {
     quickSearchText,
     tags: currentTagSelection(window),
-    advancedSearch: !!row?.advancedSearch,
+    advancedSearch: rows.some((row) => !!row.advancedSearch),
   };
 }
 
@@ -496,30 +577,85 @@ export function mainItemViewSettled(window: MainWindow): boolean {
   return view?._loadingDeferredResolved !== false;
 }
 
-/** Returns Zotero's current item-tree rebuild generation token. */
-export function mainItemViewGenerationToken(window: MainWindow): unknown {
+export type MainItemViewGeneration = string | number | boolean | bigint | symbol | null | undefined;
+const itemViewGenerations = new WeakMap<object, symbol>();
+
+/** Equality follows native identity, but the private deferred never leaves Toolkit. */
+export function mainItemViewGenerationToken(window: MainWindow): MainItemViewGeneration {
   const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
-  return view?._itemTreeLoadingDeferred;
+  const native = view?._itemTreeLoadingDeferred;
+  if ((typeof native !== 'object' || native === null) && typeof native !== 'function')
+    return native as MainItemViewGeneration;
+  const previous = itemViewGenerations.get(native);
+  if (previous) return previous;
+  const generation = Symbol('main-item-view-generation');
+  itemViewGenerations.set(native, generation);
+  return generation;
 }
+
+export type MainItemViewSelectionIntent = 'preserve' | 'explicit';
 
 export function observeMainItemView(
   window: MainWindow,
   handlers: {
     readonly onSelect?: () => void | Promise<void>;
     readonly onRefresh?: () => void | Promise<void>;
+    readonly onRowsSettled?: (intent: MainItemViewSelectionIntent) => void | Promise<void>;
   },
 ): () => void {
   const view = mainPane(window)?.itemsView as unknown as ItemCursorView | undefined;
-  const select = handlers.onSelect;
-  const refresh = handlers.onRefresh;
-
-  if (select) view?.onSelect?.addListener(select);
-  if (refresh) view?.onRefresh?.addListener(refresh);
-
-  return () => {
-    if (select) view?.onSelect?.removeListener(select);
-    if (refresh) view?.onRefresh?.removeListener(refresh);
+  let retired = false;
+  const onSelect = handlers.onSelect;
+  const onRefresh = handlers.onRefresh;
+  const onRowsSettled = handlers.onRowsSettled;
+  const select = onSelect
+    ? () => {
+        if (!retired) return onSelect();
+      }
+    : undefined;
+  const refresh = onRefresh
+    ? () => {
+        if (!retired) return onRefresh();
+      }
+    : undefined;
+  // The SDK's earlier provider listener awaits the row update and resolves its load deferred.
+  const rows = onRowsSettled
+    ? (_rows: unknown, options?: MainRowUpdateOptions) => {
+        if (retired || view?._loadingDeferredResolved === false) return;
+        let intent: MainItemViewSelectionIntent = 'preserve';
+        if (options?.selection) {
+          if (!options.restoreSelection) intent = 'explicit';
+          else if (options.selectInActiveWindow) {
+            const activePane = Zotero.getActiveZoteroPane() as unknown as MainPane | undefined;
+            if (activePane?.itemsView === view) intent = 'explicit';
+          }
+        }
+        return onRowsSettled(intent);
+      }
+    : undefined;
+  const providerUpdates = view?.rowProvider?.onUpdate;
+  const cleanup = (): void => {
+    if (retired) return;
+    retired = true;
+    const failure = new CleanupFailure();
+    if (select) failure.run(() => view?.onSelect?.removeListener(select));
+    if (refresh) failure.run(() => view?.onRefresh?.removeListener(refresh));
+    if (rows) failure.run(() => providerUpdates?.removeListener(rows));
+    failure.rethrow();
   };
+  try {
+    if (select) view?.onSelect?.addListener(select);
+    if (refresh) view?.onRefresh?.addListener(refresh);
+    if (rows) providerUpdates?.addListener(rows);
+  } catch (error) {
+    try {
+      cleanup();
+    } catch {
+      // Acquired listeners are retired; preserve the registration error over cleanup failures.
+    }
+    throw error;
+  }
+  return cleanup;
 }
 
 export function mainItemRowCount(window: MainWindow): number {
@@ -631,7 +767,7 @@ export function currentMainItem(window: MainWindow): Zotero.Item | undefined {
 }
 
 /** Zotero publishes context during init; its wrapper editor getter dereferences unready native state. */
-export function activeContextNoteEditor(window: MainWindow): ContextNoteEditor | undefined {
+function activeContextNoteEditor(window: MainWindow): ContextNoteEditor | undefined {
   return mainHost(window).ZoteroContextPane?.context?.activeEditor;
 }
 
@@ -644,22 +780,17 @@ export function activeContextNoteItem(window: MainWindow): Zotero.Item | undefin
 }
 
 export function currentTagSelection(window: MainWindow): string[] {
-  const pane = mainPane(window);
-  // CollectionViewItemTree owns the active tag predicate on its current rows.
-  // Prefer those rows over presentation state or a stale singular tree-row helper.
-  const activeRows = pane?.itemsView?.collectionTreeRows;
-  if (activeRows?.length) {
+  // Native setFilter applies the same predicate to every current view row.
+  // An explicitly empty predicate (or empty view) wins over stale selector state.
+  const rows = mainViewScopeRows(window);
+  if (rows) {
     return [
       ...new Set(
-        activeRows.flatMap((row) => [...(row.tags ?? [])]).filter((tag) => typeof tag === 'string'),
+        rows.flatMap((row) => [...(row.tags ?? [])]).filter((tag) => typeof tag === 'string'),
       ),
     ];
   }
-  const row = pane?.getCollectionTreeRow?.();
-  if (row?.tags) {
-    return [...new Set([...row.tags].filter((tag): tag is string => typeof tag === 'string'))];
-  }
-  const selected = pane?.tagSelector?.getTagSelection?.() ?? [];
+  const selected = mainPane(window)?.tagSelector?.getTagSelection?.() ?? [];
   return [...new Set([...selected].filter((tag): tag is string => typeof tag === 'string'))];
 }
 
@@ -671,8 +802,136 @@ export async function applyMainTagFilter(
   if (!pane?.itemsView?.setFilter) throw new Error('Zotero item tag filtering is unavailable');
   await pane.itemsView.setFilter('tags', new Set(tags));
   if (pane.tagSelector?.selectedTags) pane.tagSelector.selectedTags = new Set(tags);
-  return pane.itemsView.rowCount ?? 0;
+  return pane.itemsView.objectRowCount;
 }
 export function activeContextEditorWindow(window: MainWindow): Window | undefined {
   return activeContextNoteEditor(window)?._iframe?.contentWindow;
+}
+
+/** Preserve first-selected semantics, not the detached Scope Cursor. */
+export function mainSelectedCollection(window: MainWindow): Zotero.Collection | undefined {
+  const pane = mainPane(window);
+  const selectedCount =
+    pane?.collectionsView?.selection?.count ?? mainScopeSelectedRows(window).length;
+  // Use the documented singular API only when its single-selection precondition holds.
+  if (selectedCount === 1 && pane?.getSelectedCollection) {
+    const collection = pane.getSelectedCollection();
+    if (collection) return collection;
+  }
+  // The underdocumented outer plural API, then legacy tree access, preserves zero/multi selection.
+  return (
+    pane?.getSelectedCollections?.()[0] ?? pane?.collectionsView?.getSelectedCollections?.()[0]
+  );
+}
+
+export function mainTagScope(window: MainWindow): {
+  readonly getTags: () => Promise<readonly TagJson[]>;
+} {
+  const rows = mainViewScopeRows(window) ?? [];
+  return {
+    // Match the native tag selector: search the current view, including Quick/Advanced/tag
+    // predicates, rather than broadening each selected row to its entire library.
+    getTags: async () => {
+      if (!rows.length) return [];
+      if (rows.length === 1) return rows[0]!.getTags();
+      const native = Zotero as unknown as {
+        CollectionTreeRow: {
+          getTagsAcrossRows(rows: readonly TagScopeRow[]): Promise<readonly TagJson[]>;
+        };
+      };
+      return native.CollectionTreeRow.getTagsAcrossRows(rows);
+    },
+  };
+}
+
+export function mainLibraryTreesAvailable(window: MainWindow): boolean {
+  const pane = mainPane(window);
+  return !!(pane?.collectionsView?.selection && pane.itemsView?.selection);
+}
+
+/** Operation capabilities capture the owning pane, never expose it to callers. */
+export function mainLibrarySelection(window: MainWindow): ShowInLibraryHost | undefined {
+  const pane = mainPane(window);
+  if (!pane?.selectItem) return undefined;
+  return { selectItem: (itemID) => pane.selectItem!(itemID) };
+}
+
+export function mainItemOpening(window: MainWindow): ItemOpenHost {
+  const pane = mainPane(window);
+  return {
+    viewAttachment: pane?.viewAttachment ? (itemID) => pane.viewAttachment!(itemID) : undefined,
+    openNote: pane?.openNote ? (itemID) => pane.openNote!(itemID) : undefined,
+    loadURI: pane?.loadURI ? (uri) => pane.loadURI!(uri) : undefined,
+  };
+}
+
+export async function openMainNote(
+  window: MainWindow,
+  itemID: number,
+  openInWindow: boolean,
+): Promise<void> {
+  const pane = mainPane(window);
+  if (pane?.openNote) await pane.openNote(itemID, { openInWindow });
+  else await Zotero.Notes.open(itemID, null, { openInWindow });
+}
+
+export function focusMainContextPane(window: MainWindow): boolean {
+  const context = mainHost(window).ZoteroContextPane;
+  if (!context?.focus) return false;
+  context.focus();
+  return true;
+}
+
+export function mainNoteItemID(window: MainWindow, candidate: Window | null): number | null {
+  const editor = activeContextNoteEditor(window);
+  if (candidate && editor?._iframe?.contentWindow === candidate && editor.item?.id)
+    return editor.item.id;
+  const tab = selectedMainTabInfo(window);
+  const itemID = tab?.type?.startsWith('note') ? tab.data?.itemID : undefined;
+  return typeof itemID === 'number' && itemID > 0 ? itemID : null;
+}
+
+function likelyNoteWindow(
+  candidate: Window | null | undefined,
+  main: MainWindow,
+): candidate is Window {
+  if (
+    !candidate ||
+    candidate === main ||
+    ('PDFViewerApplication' in candidate && candidate.PDFViewerApplication)
+  )
+    return false;
+  const doc = candidate.document;
+  return !!(
+    doc.body?.isContentEditable ||
+    doc.querySelector('[contenteditable="true"],.ProseMirror,.editor-core,.editor') ||
+    doc.designMode.toLowerCase() === 'on'
+  );
+}
+
+/** Note editor discovery is host structure; bindings and modes remain business-owned. */
+export function mainNoteEditorWindow(main: MainWindow): Window | null {
+  const focused = Services.focus?.focusedWindow as unknown as Window | null;
+  if (likelyNoteWindow(focused, main)) return focused;
+  for (const frame of Array.from(main.document.querySelectorAll('browser,iframe'))) {
+    const candidate = (frame as HTMLIFrameElement).contentWindow;
+    if (likelyNoteWindow(candidate, main)) return candidate;
+  }
+  const editor = activeContextEditorWindow(main);
+  return likelyNoteWindow(editor, main) ? editor : null;
+}
+
+/** Captures an invocation's focus baseline without leaking the native Quick Search node. */
+export function captureMainQuickSearchFocusClaim(window: MainWindow): () => boolean {
+  const before = window.document.activeElement;
+  const search = mainQuickSearch(window);
+  return () => {
+    const focused = window.document.activeElement;
+    return !!(
+      search &&
+      focused &&
+      focused !== before &&
+      (focused === search || search.contains?.(focused))
+    );
+  };
 }

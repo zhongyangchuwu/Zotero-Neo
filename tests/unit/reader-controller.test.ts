@@ -13,20 +13,22 @@ import {
   ReaderSession,
   createReaderController,
 } from '../../src/reader/controller';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
+import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
   AnnotationDraft,
-  InternalReaderRuntime,
-  PdfWindow,
   ReaderEventRuntime,
   ReaderLinkOverlay,
   ReaderLinkPosition,
   ReaderNativeOutlineEntry,
+} from '../../src/reader/types';
+import type {
+  InternalReaderRuntime,
+  PdfWindow,
   ReaderPdfHistoryLocationRuntime,
   ReaderRuntime,
   ReaderViewRuntime,
-} from '../../src/reader/types';
+} from '../fixtures/reader-native-types';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 
@@ -381,12 +383,12 @@ describe('Reader event lifecycle', () => {
           expect(() => created.session.dispose()).toThrow(original);
           failRemoval = false;
         } else {
-          internal._primaryView = replacement.reader._internalReader!._primaryView;
+          Reflect.set(internal, '_primaryView', replacement.reader._internalReader!._primaryView);
           expect(() => created.intervalTasks[0]!()).toThrow(original);
           failRemoval = false;
           created.intervalTasks[0]!();
           if (retirement === 'reattached') {
-            internal._primaryView = originalView;
+            Reflect.set(internal, '_primaryView', originalView);
             created.intervalTasks[0]!();
             const currentKey = readerKey('j');
             listeners[1]!(currentKey.event);
@@ -2867,7 +2869,7 @@ describe('Reader command palette', () => {
       },
     );
     const secondary = { ...created.pdfWindow, focus: vi.fn() } as unknown as PdfWindow;
-    Reflect.set(created.reader._internalReader, '_secondaryView', { _iframeWindow: secondary });
+    Reflect.set(created.reader._internalReader!, '_secondaryView', { _iframeWindow: secondary });
 
     created.session.focusAndHandle(readerKey('3').event);
     const colon = readerKey(':');
@@ -2889,12 +2891,12 @@ describe('Reader command palette', () => {
     palette.execute('findAllItems', 123);
     expect(openAllItemsPicker).toHaveBeenCalledWith(created.reader._window);
 
-    Reflect.set(created.reader._internalReader, '_primaryView', undefined);
-    Reflect.set(created.reader._internalReader, '_secondaryView', undefined);
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    Reflect.set(created.reader._internalReader!, '_secondaryView', undefined);
     palette.execute('zoomIn', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(openAllItemsPicker).toHaveBeenCalledOnce();
-    Reflect.set(created.reader._internalReader, '_primaryView', {
+    Reflect.set(created.reader._internalReader!, '_primaryView', {
       _iframeWindow: created.pdfWindow,
     });
     created.session.dispose();

@@ -11,8 +11,13 @@ import {
   type InteractionAppearanceSource,
 } from '../../src/main/interaction-appearance';
 import type { PreferenceReader } from '../../src/core/preferences';
+import { installMainRenderedItemDecoration } from '../../src/toolkit/main';
 
 type TestRow = HTMLElement & { readonly classes: Set<string> };
+type TestRoot = HTMLElement & {
+  readonly rows: TestRow[];
+  readonly scrollListeners: ReadonlySet<EventListenerOrEventListenerObject>;
+};
 
 type ObservedMutation = {
   readonly target: Node;
@@ -62,13 +67,19 @@ function decorationHarness(
 
   const makeRoot = (indexes: readonly number[]) => {
     const rows = indexes.map(rowElement);
+    const scrollListeners = new Set<EventListenerOrEventListenerObject>();
     const root = {
       parentElement: parent,
       rows,
+      scrollListeners,
       querySelectorAll: () => rows,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as HTMLElement & { readonly rows: TestRow[] };
+      addEventListener: vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+        scrollListeners.add(listener);
+      }),
+      removeEventListener: vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+        scrollListeners.delete(listener);
+      }),
+    } as unknown as TestRoot;
     return root;
   };
   currentRoot = makeRoot(renderedIndexes);
@@ -172,9 +183,9 @@ function decorationHarness(
     getRow,
     flush,
     emit,
-    root: () => currentRoot as HTMLElement & { readonly rows: TestRow[] },
+    root: () => currentRoot as TestRoot,
     replaceRoot: (indexes: readonly number[]) => {
-      const previous = currentRoot as HTMLElement & { readonly rows: TestRow[] };
+      const previous = currentRoot as TestRoot;
       currentRoot = makeRoot(indexes);
       return previous;
     },
@@ -306,6 +317,57 @@ describe('Main item state decoration', () => {
     expect(host.root().rows[1]!.classes.has('zotero-neo-selection')).toBe(true);
     expect(host.timers.size).toBe(0);
     host.decoration.removeWindow(host.window);
+  });
+
+  it('releases acquired resources and retires callbacks after an initial installation failure', () => {
+    const host = decorationHarness([0, 1], undefined);
+    const installationFailure = new Error('Initial row observation failed');
+    const cleanupFailure = new Error('Observer disconnect reported failure');
+    const prototype = host.window.MutationObserver.prototype;
+    const nativeObserve = prototype.observe;
+    const nativeDisconnect = prototype.disconnect;
+    const observe = vi.spyOn(prototype, 'observe').mockImplementation(function (
+      this: MutationObserver,
+      target,
+      options,
+    ) {
+      nativeObserve.call(this, target, options);
+      if (target === host.root()) throw installationFailure;
+    });
+    const disconnect = vi.spyOn(prototype, 'disconnect').mockImplementationOnce(function (
+      this: MutationObserver,
+    ) {
+      nativeDisconnect.call(this);
+      throw cleanupFailure;
+    });
+    let notifications = 0;
+    let observed: unknown;
+    try {
+      installMainRenderedItemDecoration(
+        host.window,
+        host.appearance.appearance,
+        ['zotero-neo-selection'],
+        () => {
+          notifications += 1;
+        },
+      );
+    } catch (error) {
+      observed = error;
+    }
+
+    expect(observed).toBe(installationFailure);
+    expect(host.style.isConnected).toBe(false);
+    expect(host.mutations).toHaveLength(2);
+    expect(host.mutations.every((mutation) => mutation.disconnected)).toBe(true);
+    expect(host.root().scrollListeners.size).toBe(0);
+    const scroll = vi.mocked(host.root().addEventListener).mock.calls[0]![1] as EventListener;
+    for (const mutation of host.mutations) mutation.callback([], {} as MutationObserver);
+    scroll({} as Event);
+    expect(notifications).toBe(0);
+    expect(host.timers.size).toBe(0);
+    expect(host.getRow).not.toHaveBeenCalled();
+    observe.mockRestore();
+    disconnect.mockRestore();
   });
 
   it.each(['observer', 'scroll listener'] as const)(

@@ -18,7 +18,8 @@ packaging.
 
 On Windows (no bash needed): `powershell -ExecutionPolicy Bypass -File tools\build.ps1`
 Creates `zotero-neo.xpi` — a deterministic archive containing generated runtime
-bundles, the preference pane markup, the manifest, and icons.
+bundles, the preference pane markup, the manifest, icons, the project `LICENSE`,
+and the complete vendored notice at `licenses/fuzzysort-LICENSE`.
 
 ### Installing
 
@@ -129,7 +130,7 @@ src/
   input/                   canonical bindings, actions, and matcher
   main/                    main-window controller and UI features
   reader/                  reader lifecycle and features
-  preferences/index.ts     legacy Preferences registration / Settings launcher
+  toolkit/                 internal Main (including Note-pane) and Reader host capabilities
   platform/                narrow host-boundary adapters
 vendor/                    pinned, licensed third-party source/build snapshots
 ```
@@ -141,9 +142,13 @@ vendor/                    pinned, licensed third-party source/build snapshots
   dependencies stay limited to build/test tooling; small audited zero-dependency
   libraries may be vendored and bundled by esbuild when their version, upstream
   source, and license are pinned under `vendor/`.
-- Keep global Gecko and private Zotero APIs behind small structural guards or
-  named platform adapters. Bootstrap globals do not provide DOM constructors;
-  do not use cross-compartment `instanceof` checks.
+- Keep global Gecko guards in named platform adapters and private Zotero SDK/DOM
+  seams inside `src/toolkit/`. Business modules import the public Toolkit entries,
+  never private implementation types or raw pane/tree/PDF/editor objects. Prefer
+  semantically equivalent documented APIs; preserve required private abilities
+  behind capability contracts. Targets, modes, workflows and history policy stay
+  with business owners. Bootstrap globals do not provide DOM constructors; do not
+  use cross-compartment `instanceof` checks.
 - Use semicolons and 2-space indentation. Prettier is authoritative.
 - Methods and variables use `camelCase`; internal fields use native `#private`
   fields. Constants use `SCREAMING_SNAKE_CASE`.
@@ -196,16 +201,19 @@ before changing annotation navigation, text selection, PDF link hints, or iframe
 
 The plugin patches Zotero's reader key-forwarding callback (`_onKeyDown` on
 `PdfView` instances) so keys consumed by Neo are not re-handled by Zotero
-(Read Aloud on `l`/`r`, tools on `h`/`s`). `ReaderHostKeyBridge` owns
-installation/restoration of that private callback and the
-`_textAnnotationFocused` seam; `ReaderSession.readerConsumesKey()` remains the
-policy source. `ReaderViewLifecycle` owns primary/secondary PDF-window discovery,
-the rescan timer, view-local DOM listeners, and detached-view release.
-`ReaderNavigation` owns history/zoom/page/search/split/focus host delegation and
-active Reader-view resolution. `ReaderSelectionRange` owns the temporary DOM Select
+(Read Aloud on `l`/`r`, tools on `h`/`s`). `ReaderHostKeyBridge` in
+`src/toolkit/reader/input-bridge.ts` owns installation/restoration of that private
+callback and the `_textAnnotationFocused` seam; `ReaderSession.readerConsumesKey()`
+remains the policy source.
+`ReaderViewLifecycle` in `src/toolkit/reader/view-lifecycle.ts` owns primary/secondary
+PDF-window discovery, the rescan timer, view-local DOM listeners, and detached-view
+release. `ReaderNavigation` in `src/reader/navigation.ts` owns semantic traversal and
+user feedback; `ReaderNavigationHost` in `src/toolkit/reader/navigation.ts` owns native
+zoom/page/search/split/focus delegation and active-view resolution.
+`ReaderSelectionRange` in `src/reader/selection-range.ts` owns the temporary DOM Select
 anchor/preferred-X state, range motions, endpoint swaps, and Select view markers.
-Input policy, native popup geometry, annotation mutations, and smooth-scroll behavior
-remain in their existing owners.
+Input policy, annotation target/save admission, and smooth-scroll behavior remain in
+their feature owners; Toolkit owns private native geometry and DOM discovery.
 
 Main chooser ownership follows the same rule. `src/main/picker/` owns candidate search,
 ranking, rendering, preview, focus, IME, confirmation/cancellation, and stale-work containment.
@@ -244,9 +252,12 @@ capture code must not borrow Main Selection or mutate notes directly.
 | `src/i18n/`                          | Shared application localization, action labels, and locale catalogs                      |
 | `src/input/`                         | Canonical bindings and action metadata                                                   |
 | `src/reader/controller.ts`           | Reader session orchestration, input, actions, selection, annotation, and scroll behavior |
-| `src/reader/host-key-bridge.ts`      | Private PdfView key/focus patch lifecycle                                                |
-| `src/reader/view-lifecycle.ts`       | Primary/secondary PDF-view discovery, listeners, and release                             |
-| `src/reader/navigation.ts`           | Reader history/zoom/page/search/split/focus host operations                              |
+| `src/toolkit/index.ts` | Unified host-capability entry, re-exporting Main and Reader entries |
+| `src/toolkit/main/index.ts` | Public Main host capabilities, including Note-pane capabilities |
+| `src/toolkit/reader/index.ts` | Public Reader host capabilities |
+| `src/toolkit/reader/input-bridge.ts` | Private PdfView key/focus patch lifecycle |
+| `src/toolkit/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
+| `src/reader/navigation.ts` | Semantic Reader traversal and feedback over Toolkit navigation capabilities |
 | `src/reader/selection-range.ts`      | Temporary DOM Select range state, motions, and view markers                              |
 | `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
 | `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |
@@ -269,6 +280,9 @@ capture code must not borrow Main Selection or mutate notes directly.
 - **TypeScript source, JavaScript XPI.** Package only generated JavaScript and
   static assets; never source maps, TypeScript, tests, `node_modules`, or raw
   vendor modules as separate XPI runtime files.
+- **Distribution notices.** Copy canonical project and vendored license texts into
+  every XPI; validate actual archive payloads, and provide the corresponding tagged
+  source beside published assets. Raw vendor code remains bundled, not separately shipped.
 - **CI covers packaging and Node contracts.** Zotero GUI/runtime behavior still
   requires manual verification.
 - **No pre-commit hooks.**

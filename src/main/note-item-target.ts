@@ -1,7 +1,7 @@
 import type { MainWindow } from '../core/contracts';
 import type { ItemTargetSet } from '../core/item-target';
 import { normalizeTopLevelItemTargets, zoteroItem } from '../platform/zotero-items';
-import { activeContextNoteItem, selectedMainTabInfo } from './host';
+import { activeContextNoteItem, selectedMainTabInfo } from '../toolkit/main';
 
 export interface NoteItemTargetResolver {
   readonly source: 'note';

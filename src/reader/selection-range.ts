@@ -1,3 +1,4 @@
+import { decoratePdfSelection, firstPdfTextPosition } from '../toolkit/reader';
 import { isDeadObject } from '../platform/cross-compartment';
 import type { FlashIntent, FlashSelectionTarget } from './flash';
 import { verticalTextPosition } from './text-motion';
@@ -142,17 +143,7 @@ export class ReaderSelectionRange {
     this.#removeViewMarker(pdfWindow);
     if (this.#host.mode() !== 'visual') return;
     const document = pdfWindow.document;
-    let style = document.querySelector<HTMLStyleElement>('style[data-zv-select-selection]');
-    if (!style) {
-      style = document.createElement('style');
-      style.dataset.zvSelectSelection = '1';
-      // Zotero/PDF.js makes ordinary desktop DOM selection transparent. Mirror the
-      // Reader's own native-selection blue only while Neo Select owns the range.
-      style.textContent =
-        ':root[data-zv-select-active] .textLayer ::selection { background-color: rgb(66, 133, 244); }';
-      document.documentElement.appendChild(style);
-    }
-    document.documentElement.setAttribute('data-zv-select-active', '');
+    decoratePdfSelection(pdfWindow);
     this.#styledViews.add(pdfWindow);
 
     const selection = pdfWindow.getSelection();
@@ -193,13 +184,7 @@ export class ReaderSelectionRange {
     const anchor = selection?.anchorNode ?? null;
     if (isTextNode(anchor))
       this.#anchor = { textNode: anchor, offset: selection?.anchorOffset ?? 0 };
-    else this.#anchor = this.#firstTextPosition(pdfWindow);
-  }
-
-  #firstTextPosition(pdfWindow: PdfWindow): Pointer | null {
-    const span = pdfWindow.document.querySelector('.textLayer span') as HTMLElement | null;
-    const text = span?.firstChild ?? null;
-    return isTextNode(text) ? { textNode: text, offset: 0 } : null;
+    else this.#anchor = firstPdfTextPosition(pdfWindow);
   }
 
   #comparePointers(left: Pointer, right: Pointer): number {

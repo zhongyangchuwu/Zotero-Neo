@@ -4,7 +4,7 @@ import {
   mainItem,
   mainSelectedItemRefs,
   visibleMainSelectionCount,
-} from './host';
+} from '../toolkit/main';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 
