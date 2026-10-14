@@ -28,7 +28,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 以上检查只证明构建、包成员和版本／候选更新元数据的一致性。根目录的 `updates.candidate.json` 是发布候选元数据，供 `tools/check-release.mjs` 和 `tools/publish-release.mjs` 读取；根目录 `updates.json` 是公开更新 feed，在已验证的 v0.2.0 资产存在且明确授权 promotion 前，必须只保留官方 v0.1.0 entry。两个 JSON 文件都不打包进 XPI。
 
 合入 `main` 后，从该确切集成 head 的 CI 构建附件或同一源码的本地构建取得候选 XPI；发布前不存在 v0.2.0 Release 下载入口。官方 v0.1.0 包仍从[已发布资产](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)取得。
-冻结最终包后，将该 SHA256 写入 `updates.candidate.json` 的候选 update entry 的 `update_hash`，形式为
+冻结正式验收／发布用的 canonical CI 包后，将该 SHA256 写入 `updates.candidate.json` 的候选 update entry 的 `update_hash`，形式为
 `sha256:<digest>`。它不进入 XPI，不会造成自引用；但任何包内容变化都需要重新
 固定哈希与受影响验收。发布器会核对实际包内 manifest、提交／tag 和这个哈希。
 它先创建 Draft，按捕获的 Release／asset ID 上传并下载核对 XPI 与
@@ -36,7 +36,9 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 缺失／冲突／不完整 Draft 均拒绝自动修补。发布期间保留单一写入者；
 GitHub 没有原子的“仅 Draft 可上传”条件，不能把读取后校验说成对外部写入的锁。
 
-过去源码仍标记 0.1.0 时的安装／外部高版本夹具，不等同于“官方发布 v0.1.0 → 最终 v0.2.0 包”的实际升级。最终候选包的版本变化也使整个 XPI 哈希变化；不能继续把旧包的人工结果无条件标到新包上。最终 XPI SHA256 `d1d197594a2ad0681bb8dc8670871b2e6194bfe3b2cd3eae6e5e431e020d54ba` 在 Windows Zotero 10.0.6 上的持久干净安装和官方 v0.1.0/schema 11 → v0.2.0/schema 18 升级／重启观察已记录在 [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552)；这是该包的安装／升级证据，不代表 U1–U10 全部通过或 #137/#98 的整体人工／物理输入验收完成。
+过去源码仍标记 0.1.0 时的安装／外部高版本夹具，不等同于“官方发布 v0.1.0 → 最终 v0.2.0 包”的实际升级。版本、源码或归档字节变化后，都不能把旧包的人工结果无条件标到新包上。
+
+本轮统一验收候选是 canonical CI XPI SHA256 `f4649c7b8dfbf58de8875f41f163671eed7f6fb0004394ee916ffc5340957dd9`。先前本地 XPI SHA256 `d1d197594a2ad0681bb8dc8670871b2e6194bfe3b2cd3eae6e5e431e020d54ba` 在 Windows Zotero 10.0.6 上的持久干净安装和官方 v0.1.0/schema 11 → v0.2.0/schema 18 升级／重启观察已记录在 [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552)。两包逐项解包的 14 个成员内容完全相同，但归档字节／哈希不同；旧包的安装记录不自动成为 CI 包的安装或人工 PASS，统一功能／文档验收仍由用户执行。
 
 ## 2. 建立安全的验收环境
 

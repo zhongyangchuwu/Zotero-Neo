@@ -9,7 +9,7 @@ documentation review, but it is not published. The public release and update fee
 remain v0.1.0. Prepared metadata is in `updates.candidate.json` for release
 validation and publishing; `updates.json` stays at v0.1.0 until a verified asset
 exists and promotion is explicitly authorized. Neither file is packaged. Human
-physical-input and per-view acceptance remain open in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98). The final XPI's persistent clean-install and official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552), scoped as package evidence rather than broad owner acceptance.
+physical-input and per-view acceptance remain open in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98). The prior local XPI's persistent clean-install and official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552). The canonical CI archive has identical extracted payloads but a different whole-package digest; those observations are not relabeled as its installation or owner acceptance.
 
 ### Release overview
 

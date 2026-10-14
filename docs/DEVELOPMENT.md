@@ -162,9 +162,11 @@ acceptance; that review remains separate from source and release preparation.
 The publisher in `tools/publish-release.mjs` reads the same candidate feed,
 additionally reads the manifest from the actual canonical XPI, and requires the
 prepared entry's `update_hash` to be `sha256:<that XPI's digest>`. Freeze this hash
-after the final build; changing runtime or packaged files requires a new hash and
-affected acceptance. The feed is not packaged, so recording the digest does not
-change the XPI.
+from the canonical CI artifact; changing runtime or packaged files requires a new
+hash and affected acceptance. Local and CI archives can have different compressed
+bytes even when every extracted payload matches. Do not transfer an install/upgrade
+receipt to another whole-archive digest. The feed is not packaged, so recording the
+digest does not change the XPI.
 
 Publication verifies the checkout and resolved remote tag commit, captures the
 draft Release ID, uploads to that exact asset endpoint, and downloads by captured
