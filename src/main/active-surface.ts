@@ -4,7 +4,7 @@ import {
   mainReaderForTab,
   selectedMainTabID,
   selectedMainTabInfo,
-} from './host';
+} from '../toolkit/main';
 
 export type ActiveSurface =
   | { readonly kind: 'main' }

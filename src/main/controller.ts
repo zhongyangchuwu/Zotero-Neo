@@ -7,6 +7,7 @@ import type {
   ReaderNoteCaptureReceipt,
   ReaderNoteCaptureResult,
 } from '../core/contracts';
+import { CleanupFailure } from '../core/cleanup';
 import { reportDiagnostic, reportDiagnosticError } from '../core/logging';
 import type {
   NavigationCause,
@@ -56,7 +57,13 @@ import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { TagActions } from './tag-actions';
 import { MainItemSelect } from './item-select';
-import { currentMainItem, mainHost, mainItem, mainReaderForTab, selectedMainTabID } from './host';
+import {
+  mainLibrarySelection,
+  openMainNote,
+  mainItem,
+  mainReaderForTab,
+  selectedMainTabID,
+} from '../toolkit/main';
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
@@ -170,15 +177,17 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#sessions.set(window, session);
     this.#itemSelect.addWindow(window, session.selection, session.interactionAppearance);
     session.cleanup.add(
-      installMainViewLifecycle(window, this.#dependencies.logger, () =>
-        this.#itemSelect.refresh(window, session.selection),
-      ),
+      installMainViewLifecycle(window, this.#dependencies.logger, () => {
+        if (this.#sessions.get(window) === session)
+          this.#itemSelect.refresh(window, session.selection);
+      }),
     );
     session.focusOwnership.start();
     this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
     let readerScanFailed = false;
     const scan = (): void => {
+      if (this.#sessions.get(window) !== session) return;
       try {
         this.rescan(window);
         if (readerScanFailed) {
@@ -216,22 +225,21 @@ export class MainWindowController implements MainWindowControllerApi {
     const keydown: EventListener = (event) =>
       this.onKeyDown(event as KeyboardEventWithHandled, window, session);
     const pickerKeydown: EventListener = (event) => {
-      if (session.picker.open)
+      if (this.#sessions.get(window) === session && session.picker.open)
         this.#picker.onKeyDown(event as KeyboardEventWithHandled, window, session);
     };
     session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.addEventListener(window.document, 'focusin', (event) => {
+      if (this.#sessions.get(window) !== session) return;
       if (session.settings.contains(event.target)) this.resetMainInput(window, session);
       this.syncSurfaceActivation(window, session);
     });
-    session.cleanup.add(() => {
-      this.#picker.close(session);
-      this.#pluginManager.close(session);
-      this.#selectionPanel.close(session);
-      this.#localFind.close(session);
-      this.#noteEditor.clear(session);
-    });
+    session.cleanup.add(() => this.#noteEditor.clear(session));
+    session.cleanup.add(() => this.#localFind.close(session));
+    session.cleanup.add(() => this.#selectionPanel.close(session));
+    session.cleanup.add(() => this.#pluginManager.close(session));
+    session.cleanup.add(() => this.#picker.close(session));
   }
 
   removeWindow(window: MainWindow): void {
@@ -240,12 +248,16 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#sessions.delete(window);
     this.#dependencies.logger.debug(`main window detached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`);
-    this.#itemSelect.removeWindow(window);
-    session.dispose();
+    const failure = new CleanupFailure();
+    failure.run(() => this.#itemSelect.removeWindow(window));
+    failure.run(() => session.dispose());
+    failure.rethrow();
   }
 
   shutdown(): void {
-    for (const window of [...this.#sessions.keys()]) this.removeWindow(window);
+    const failure = new CleanupFailure();
+    for (const window of this.#sessions.keys()) failure.run(() => this.removeWindow(window));
+    failure.rethrow();
   }
 
   openSettings(owner?: Window | null): boolean {
@@ -580,6 +592,7 @@ export class MainWindowController implements MainWindowControllerApi {
     window: MainWindow,
     session: MainWindowSession,
   ): void {
+    if (this.#sessions.get(window) !== session) return;
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
     if (session.settings.open) {
@@ -972,7 +985,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
 
-    const pane = mainHost(window).ZoteroPane;
+    const pane = mainLibrarySelection(window);
     if (!pane?.selectItem) {
       this.#navigation.status(session, t('status.showInLibraryHostUnavailable', language));
       return;
@@ -1009,7 +1022,7 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     void this.#picker.open(window, session, 'all', {
       confirm: async (item) => {
-        const pane = mainHost(window).ZoteroPane;
+        const pane = mainLibrarySelection(window);
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         await this.confirmLibrarySelection(
           window,
@@ -1030,7 +1043,7 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     void this.#picker.open(window, session, 'collection', {
       confirm: async (item) => {
-        const pane = mainHost(window).ZoteroPane;
+        const pane = mainLibrarySelection(window);
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         await this.confirmLibrarySelection(
           window,
@@ -1057,12 +1070,12 @@ export class MainWindowController implements MainWindowControllerApi {
     } else if (surface === 'note') {
       baseItem = NOTE_ITEM_TARGET.resolve(window).items[0] ?? null;
     } else {
-      baseItem = currentMainItem(window) ?? null;
+      baseItem = mainCursorItem(window) ?? null;
     }
     void this.#picker.open(window, session, 'notes', {
       source: createNotesProvider(window, this.#dependencies.logger, { baseItem }),
       confirm: async (item, openInWindow) => {
-        const pane = mainHost(window).ZoteroPane;
+        const pane = mainLibrarySelection(window);
         if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
         const id = Number(item.id);
         await this.confirmLibrarySelection(
@@ -1074,8 +1087,7 @@ export class MainWindowController implements MainWindowControllerApi {
           surface,
           {
             afterSelection: async () => {
-              if (pane.openNote) await pane.openNote(id, { openInWindow });
-              else await Zotero.Notes.open(id, null, { openInWindow });
+              await openMainNote(window, id, openInWindow);
             },
           },
         );

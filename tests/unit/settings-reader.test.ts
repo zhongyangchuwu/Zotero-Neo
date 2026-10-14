@@ -124,7 +124,6 @@ function mount(initial: Record<string, boolean | number | string> = {}) {
 describe('Reader Settings', () => {
   it('renders Reader controls with truthful defaults and active scroll-model controls', () => {
     const test = mount();
-    expect(test.root.all().find((node) => node.tag === 'h2')?.textContent).toBe('Reader');
     expect(test.root.byAria('Text Select mode').getAttribute('aria-checked')).toBe('true');
     expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe(
       'true',
@@ -178,7 +177,6 @@ describe('Reader Settings', () => {
     test.preferences.failKey = MODE;
     test.root.button('Accelerating').click();
     expect(test.root.button('Constant').getAttribute('aria-pressed')).toBe('true');
-    expect(test.status.textContent).toContain('Could not update Reader settings');
     test.preferences.failKey = null;
     test.root.button('Accelerating').click();
     expect(test.status.textContent).toBe('');

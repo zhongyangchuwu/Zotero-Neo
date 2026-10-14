@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { MainWindow, ReaderJumpLocation, ReaderJumpPosition } from '../../src/core/contracts';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
-import type {
-  ItemRuntime,
-  PdfWindow,
-  ReaderRuntime,
-  ReaderViewRuntime,
-} from '../../src/reader/types';
+import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
+import type { ItemRuntime } from '../../src/reader/types';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
 
 interface TestTab {
   id: string;

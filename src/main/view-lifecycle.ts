@@ -6,7 +6,8 @@ import {
   mainItemViewSettled,
   observeMainItemView,
   restoreMainItemCursorAnchor,
-} from './host';
+  type MainItemViewSelectionIntent,
+} from '../toolkit/main';
 import type { ItemRef } from './selection-store';
 
 /** Keeps Neo's stable Cursor identity anchored to Zotero's current item-tree View. */
@@ -18,39 +19,63 @@ export function installMainViewLifecycle(
   let cursor: ItemRef | undefined = currentMainItemCursorRef(window);
   let viewGeneration = mainItemViewGenerationToken(window);
   let applying = false;
+  let retired = false;
 
   const rememberCursor = (): void => {
-    if (applying || !mainItemViewSettled(window)) return;
-    // Zotero can emit onSelect after replacing the View rows but before onRefresh.
-    // Keep the stable Cursor from the previous item-tree generation in that window.
+    if (retired || applying || !mainItemViewSettled(window)) return;
+    // Ignore native fallback selections until row completion or refresh reconciles the generation.
+    // Reconciliation restores the cached identity before admitting later user selections.
     if (mainItemViewGenerationToken(window) !== viewGeneration) return;
     cursor = currentMainItemCursorRef(window);
     onStateChange?.();
   };
 
   const restoreCursor = (): void => {
-    if (applying) return;
+    if (retired || applying) return;
     applying = true;
     try {
       const restored = cursor ? restoreMainItemCursorAnchor(window, cursor) : false;
-      logger.debug(`Main View refresh restored Cursor anchor=${restored}`);
+      logger.debug(`Main View update restored Cursor anchor=${restored}`);
     } catch (error) {
       logger.debug(`Main View Cursor restore failed: ${String(error)}`);
     } finally {
-      viewGeneration = mainItemViewGenerationToken(window);
       applying = false;
-      onStateChange?.();
+      if (!retired) {
+        viewGeneration = mainItemViewGenerationToken(window);
+        onStateChange?.();
+      }
     }
+  };
+
+  const settleRows = (intent: MainItemViewSelectionIntent): void => {
+    if (retired || applying || !mainItemViewSettled(window)) return;
+    const generation = mainItemViewGenerationToken(window);
+    if (intent === 'explicit') {
+      const selectedCursor = currentMainItemCursorRef(window);
+      cursor = selectedCursor;
+      viewGeneration = generation;
+      onStateChange?.();
+      return;
+    }
+    if (generation === viewGeneration) return;
+    // Preserve updates restore the stable anchor before admitting this generation's
+    // later selections. Explicit native targets above are adopted instead.
+    restoreCursor();
   };
 
   const removeObservers = observeMainItemView(window, {
     onSelect: rememberCursor,
     onRefresh: restoreCursor,
+    onRowsSettled: settleRows,
   });
 
   // Capture the initial Cursor after observers are attached so the lifecycle
   // starts from the same stable identity used by later refreshes.
   rememberCursor();
 
-  return removeObservers;
+  return () => {
+    if (retired) return;
+    retired = true;
+    removeObservers();
+  };
 }

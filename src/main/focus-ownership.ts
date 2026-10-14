@@ -5,7 +5,7 @@ import {
   mainEmptyQuickSearchFocused,
   mainQuickSearchFocusEvent,
   selectedMainTabID,
-} from './host';
+} from '../toolkit/main';
 import type { MainWindowSession } from './session';
 
 /** Claims only an application-startup Library Quick Search autofocus, never a reload's editor. */

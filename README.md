@@ -7,6 +7,11 @@ for Zotero's reader and main window.
 
 > **Status:** v0.1.0 released on 2026-09-19. Download the packaged XPI from
 > [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
+>
+> **Candidate:** v0.2.0 source is integrated for the owner-led functional and
+> documentation review; it is not published. Obtain a candidate package from the
+> exact integrated-`main` CI artifact or a local build of that source. The public
+> release download and update feed above remain v0.1.0.
 
 ## Support
 
@@ -120,10 +125,13 @@ npm ci
 
 The output is `zotero-neo.xpi`.
 
-The source build is an unreleased candidate, even while its manifest still says
-`0.1.0`. Install that XPI explicitly to try current-source behavior; the public
-update feed and release link above still deliver the published v0.1.0 package.
-Reinstalling retains Neo preferences and is not a clean-install or upgrade test.
+The integrated source builds an unpublished v0.2.0 candidate. Obtain it from the
+exact integrated-`main` CI artifact or build that source locally; there is no
+v0.2.0 release download before publication. `updates.candidate.json` contains
+prepared metadata read by release validators and the publisher. Public
+`updates.json` remains at v0.1.0 until a verified asset exists and promotion is
+explicitly authorized. Neither file is packaged in the XPI. Reinstalling retains
+Neo preferences and is not a clean-install or upgrade test.
 
 On Windows:
 
@@ -136,6 +144,9 @@ From File…** and restart when prompted.
 
 ## Documentation
 
+- [v0.2 candidate acceptance](docs/V0_2_ACCEPTANCE.md) — isolated install/upgrade, native-input and per-view acceptance steps; not a claim of completed manual verification.
+- [Website content](docs/WEBSITE_CONTENT.md) — Chinese feature/workflow copy and page organization for the later documentation website.
+- [Recording guide](docs/RECORDING_GUIDE.md) — real screencast/key-operation scripts and media conventions; no fabricated demonstration assets.
 - [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
 - [Command reference](docs/COMMAND_REFERENCE.md) — complete ActionId/default-key lookup, mode and temporary-surface grammars, and shared navigation/jumplist behavior.
 - [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
@@ -159,3 +170,7 @@ incorporated work from [zotero-vim](https://codeberg.org/finktank/zotero-vim).
 Historical copyright notices are preserved under the project license.
 
 [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
+The XPI includes the complete project license at `LICENSE` and the bundled
+fuzzysort MIT notice at `licenses/fuzzysort-LICENSE`. Published binaries correspond
+to the source available from the same release tag.

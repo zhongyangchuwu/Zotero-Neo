@@ -26,6 +26,7 @@ export class MainWindowSession {
   readonly cleanup = new CleanupScope();
   readonly host: ZoteroWindowRuntime;
   readonly status: HTMLElement;
+  statusTimer: number | undefined;
   readonly focusOwnership: MainFocusOwnership;
   readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
@@ -64,6 +65,11 @@ export class MainWindowSession {
     });
     this.cleanup.add(() => this.pluginManager.localBindings?.dispose());
     this.cleanup.add(() => this.status.remove());
+    this.cleanup.add(() => {
+      const timer = this.statusTimer;
+      this.statusTimer = undefined;
+      this.window.clearTimeout(timer);
+    });
   }
   get window(): MainWindow {
     return this.host.window;

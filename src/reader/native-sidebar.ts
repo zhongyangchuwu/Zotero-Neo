@@ -1,3 +1,19 @@
+import { readerWindow } from '../toolkit/reader';
+import {
+  ReaderSidebarDecoration,
+  readerSidebarState,
+  readerPageLabels,
+  setReaderSidebar,
+  closeReaderSidebar,
+  readerSidebarContainsTarget,
+  readerSidebarPaneForTarget,
+  readerSidebarTargetHidden,
+  readerOutlineContainer,
+  readerSidebarFocusTarget,
+  dispatchReaderSidebarKey,
+  readerOutlineMutation,
+  type ReaderOutlineDecoration,
+} from '../toolkit/reader';
 import { CleanupFailure } from '../core/cleanup';
 import { t } from '../i18n';
 import type { BindingMap, BindingContext } from '../input/bindings';
@@ -44,79 +60,6 @@ const OUTLINE_ICON: Readonly<Record<OutlineBadgeKind, string>> = {
   subsection: '↳',
 };
 
-const STYLE = `
-[data-zv-outline-navigation] {
-  --zv-outline-section: #4c78a8; --zv-outline-subsection: #6d7b91;
-  --zv-outline-figure: #95551f; --zv-outline-table: #286f5e;
-}
-html[data-color-scheme="dark"] [data-zv-outline-navigation] {
-  --zv-outline-section: #82b1e5; --zv-outline-subsection: #a5b4ca;
-  --zv-outline-figure: #e0a06b; --zv-outline-table: #72bdac;
-}
-#sidebarContent > .viewWrapper[data-zv-outline-navigation]:not(.hidden) {
-  display: flex; flex-direction: column; height: 100%; min-height: 0;
-}
-[data-zv-outline-navigation] > #outlineView {
-  flex: 1 1 auto; min-height: 0; height: auto; overflow: auto;
-}
-#outlineView .zv-outline-badge {
-  display: inline-flex; flex: none; align-items: center; gap: 3px;
-  margin-inline-end: 6px; padding: 0 4px; border: 1px solid currentColor;
-  border-radius: 3px; color: inherit; font-size: 10px; font-weight: 600;
-  line-height: 16px; vertical-align: middle;
-}
-#outlineView .zv-outline-badge[data-zv-outline-kind="section"] {
-  --zv-outline-tone: var(--zv-outline-section);
-}
-#outlineView .zv-outline-badge[data-zv-outline-kind="subsection"] {
-  --zv-outline-tone: var(--zv-outline-subsection);
-}
-#outlineView .zv-outline-badge[data-zv-outline-kind="figure"] {
-  --zv-outline-tone: var(--zv-outline-figure);
-}
-#outlineView .zv-outline-badge[data-zv-outline-kind="table"] {
-  --zv-outline-tone: var(--zv-outline-table);
-}
-#outlineView .zv-outline-badge[data-zv-outline-kind] {
-  border-color: var(--zv-outline-tone, currentColor);
-  background-color: color-mix(in srgb, var(--zv-outline-tone, currentColor) 12%, transparent);
-}
-#outlineView .zv-outline-count {
-  display: inline-flex; flex: none; margin-inline: 6px;
-  font-size: 11px; opacity: .65;
-}
-#zv-reader-captions {
-  flex: 0 1 auto; max-height: 35%; overflow: auto;
-  border-top: 1px solid var(--color-border, currentColor); padding: 4px 8px;
-  font: inherit; color: inherit;
-}
-#zv-reader-captions summary { cursor: pointer; padding-block: 3px; }
-#zv-reader-captions details details { margin-inline-start: 8px; }
-#zv-reader-captions button {
-  display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  border: 0; background: transparent; color: inherit; font: inherit;
-  padding: 4px; text-align: start; cursor: pointer;
-}
-#zv-reader-captions [data-zv-caption-kind="figure"] > summary { color: var(--zv-outline-figure); }
-#zv-reader-captions [data-zv-caption-kind="table"] > summary { color: var(--zv-outline-table); }
-#zv-reader-captions :focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-#zv-reader-captions .zv-caption-status { opacity: .7; padding: 4px; }
-#zv-reader-marks {
-  flex: 0 1 auto; max-height: 35%; overflow: auto;
-  border-top: 1px solid var(--color-border, currentColor); padding: 8px;
-  font: inherit; color: inherit;
-}
-#zv-reader-marks summary { cursor: pointer; padding-block: 3px; }
-#zv-reader-marks .zv-mark-row { display: flex; align-items: center; gap: 4px; }
-#zv-reader-marks button {
-  font: inherit; color: inherit; background: transparent; border: 0;
-  border-radius: 3px; padding: 5px; text-align: start; cursor: pointer;
-}
-#zv-reader-marks button[data-zv-mark] { flex: 1; min-width: 0; }
-#zv-reader-marks button:focus-visible { outline: 2px solid currentColor; }
-#zv-reader-marks .zv-empty-marks { opacity: .65; padding-block: 5px; }
-`;
-
 type SidebarPane = 'outline' | 'marks' | 'annotations' | 'thumbnails';
 
 /** Owns one reversible native-sidebar enhancement, never the host's sidebar or annotation state. */
@@ -124,14 +67,13 @@ export class ReaderNativeSidebar {
   readonly #host: ReaderNativeSidebarHost;
   #document: Document | null = null;
   #observer: MutationObserver | null = null;
-  #style: HTMLStyleElement | null = null;
+  readonly #decoration = new ReaderSidebarDecoration();
   #marksRoot: HTMLElement | null = null;
   #captionsRoot: HTMLElement | null = null;
   #captionEntries: readonly ReaderCaptionTarget[] | null = null;
   #captionState = '';
   #captionLanguage = '';
   #marksSignature = '';
-  #decorated = new Set<HTMLElement>();
   #pageLabels: readonly string[] | undefined;
   #language = '';
   #focusRequest: SidebarPane | null = null;
@@ -179,7 +121,7 @@ export class ReaderNativeSidebar {
 
   start(): void {
     if (this.#disposed || this.#document) return;
-    const window = this.#host.reader._iframeWindow as NativeSidebarWindow | undefined;
+    const window = readerWindow(this.#host.reader) as NativeSidebarWindow | undefined;
     if (!window || isDeadObject(window)) return;
     this.#document = window.document;
     window.document.addEventListener('focusin', this.#onFocus, true);
@@ -189,11 +131,10 @@ export class ReaderNativeSidebar {
         if (this.#disposed) return;
         if (
           this.#language !== this.#host.language() ||
-          records.some((record) => this.isOutlineMutation(record))
+          records.some((record) => readerOutlineMutation(record))
         )
           this.refresh();
-        else if (this.#pageLabels !== this.#host.reader._internalReader?._state?.pageLabels)
-          this.refreshMarks();
+        else if (this.#pageLabels !== readerPageLabels(this.#host.reader)) this.refreshMarks();
         this.refreshFocus();
       });
       this.#observer.observe(
@@ -215,24 +156,14 @@ export class ReaderNativeSidebar {
 
   /** Target qualification, not sidebar visibility, decides whether PDF bindings must yield. */
   containsTarget(target: EventTarget | null): boolean {
-    const element = asElement(target);
-    const window = this.#host.reader._iframeWindow;
-    return (
-      !!element &&
-      !isDeadObject(element) &&
-      !!window &&
-      !isDeadObject(window) &&
-      element.ownerDocument === window.document &&
-      !!element.closest?.('#sidebarContainer')
-    );
+    return readerSidebarContainsTarget(this.#host.reader, target);
   }
 
   toggle(group: 'outline' | 'marks', _pdfWindow: PdfWindow): void {
     if (this.#disposed) return;
     this.start();
-    const internal = this.#host.reader._internalReader;
-    if (!internal) return;
-    const state = internal._state;
+    const state = readerSidebarState(this.#host.reader);
+    if (!state) return;
     const marksFocused = !!this.#document?.activeElement?.closest('#zv-reader-marks');
     if (
       state?.sidebarOpen &&
@@ -249,9 +180,7 @@ export class ReaderNativeSidebar {
     if (this.#disposed) return;
     this.start();
     this.#local.deactivate();
-    const internal = this.#host.reader._internalReader;
-    internal?.setSidebarView?.(group === 'marks' ? 'outline' : group);
-    internal?.toggleSidebar?.(true);
+    setReaderSidebar(this.#host.reader, group === 'marks' ? 'outline' : group);
     this.#focusRequest = group;
     this.refresh();
     this.refreshFocus();
@@ -282,17 +211,14 @@ export class ReaderNativeSidebar {
   }
 
   private contextForTarget(target: Element): BindingContext | null {
-    const state = this.#host.reader._internalReader?._state;
-    if (!state?.sidebarOpen || target.closest('.viewWrapper.hidden')) return null;
+    const state = readerSidebarState(this.#host.reader);
+    if (!state?.sidebarOpen || readerSidebarTargetHidden(target)) return null;
     if (state.sidebarView === 'outline') {
       if (target.closest('#zv-reader-marks')) return 'reader-marks';
-      if (target.closest('#outlineView, #zv-reader-captions')) return 'reader-outline';
+      if (target.closest('#zv-reader-captions')) return 'reader-outline';
     }
-    if (state.sidebarView === 'annotations' && target.closest('#annotationsView'))
-      return 'reader-annotations';
-    if (state.sidebarView === 'thumbnails' && target.closest('#thumbnailsView'))
-      return 'reader-thumbnails';
-    return null;
+    const pane = readerSidebarPaneForTarget(this.#host.reader, target);
+    return pane ? `reader-${pane}` : null;
   }
 
   private executeLocal(action: ActionId, _event: KeyboardEvent | null): boolean {
@@ -364,7 +290,7 @@ export class ReaderNativeSidebar {
       return true;
     }
     if (context !== 'reader-marks') {
-      const outline = context === 'reader-outline' ? target.closest('#outlineView') : null;
+      const outline = context === 'reader-outline';
       const key =
         action === 'uiNext'
           ? 'ArrowDown'
@@ -378,11 +304,7 @@ export class ReaderNativeSidebar {
                   ? 'Enter'
                   : null;
       if (!key) return false;
-      if (outline && !outline.querySelector('.item')) return true;
-      if (outline && key !== 'ArrowDown' && !outline.querySelector('.active'))
-        this.dispatchNativeKey(outline, 'ArrowDown');
-      if (key !== 'Enter' || outline?.querySelector('.active'))
-        this.dispatchNativeKey(outline ?? target, key);
+      this.dispatchNativeKey(target, key);
       return true;
     }
     const marks = target.closest('#zv-reader-marks');
@@ -424,17 +346,7 @@ export class ReaderNativeSidebar {
   refresh(): void {
     const document = this.#document;
     if (this.#disposed || !document || isDeadObject(document)) return;
-    const outline = document.getElementById('outlineView');
-    const wrapper = outline?.parentElement;
-    if (!outline || !wrapper) return;
-    if (!this.#style) {
-      this.#style = document.createElement('style');
-      this.#style.id = 'zv-native-sidebar-style';
-      this.#style.textContent = STYLE;
-      document.head.appendChild(this.#style);
-    }
-    wrapper.setAttribute('data-zv-outline-navigation', '');
-    const decorated = new Set<HTMLElement>([wrapper]);
+    const rows: ReaderOutlineDecoration[] = [];
     let renderedIndex = 0;
     const language = this.#host.language();
     const visit = (
@@ -453,71 +365,31 @@ export class ReaderNativeSidebar {
             : null;
         const rowIndex = rendered ? renderedIndex++ : -1;
         if (rendered && (entry.matched !== false || entry.childMatched !== false)) {
-          const row = document
-            .getElementById(`outline-${rowIndex}`)
-            ?.querySelector<HTMLElement>('.item');
-          const title = row?.querySelector<HTMLElement>('.title');
-          if (row && title) {
-            let badge = row.querySelector<HTMLElement>('[data-zv-outline-badge]');
-            if (kind) {
-              if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'zv-outline-badge';
-                badge.setAttribute('role', 'img');
-                badge.setAttribute('data-zv-outline-badge', '');
-              }
-              const titleParent = title.parentElement;
-              if (
-                titleParent &&
-                (badge.parentElement !== titleParent || badge.nextSibling !== title)
-              )
-                titleParent.insertBefore(badge, title);
-              const label = t(`reader.sidebar.${kind}`, language);
-              const accessibleLabel = ordinal ? `${label} ${ordinal}` : label;
-              this.setAttribute(badge, 'data-zv-outline-kind', kind);
-              this.setAttribute(badge, 'aria-label', accessibleLabel);
-              this.setAttribute(badge, 'title', accessibleLabel);
-              const text = ordinal ? `${OUTLINE_ICON[kind]} ${ordinal}` : OUTLINE_ICON[kind];
-              if (badge.textContent !== text) badge.textContent = text;
-              decorated.add(badge);
-            } else {
-              badge?.remove();
-            }
-
-            let countBadge = row.querySelector<HTMLElement>('[data-zv-outline-count]');
-            if (count) {
-              if (!countBadge) {
-                countBadge = document.createElement('span');
-                countBadge.className = 'zv-outline-count';
-                countBadge.setAttribute('role', 'img');
-                countBadge.setAttribute('data-zv-outline-count', '');
-              }
-              const titleParent = title.parentElement;
-              if (
-                titleParent &&
-                (countBadge.parentElement !== titleParent || countBadge.previousSibling !== title)
-              )
-                titleParent.insertBefore(countBadge, title.nextSibling);
-              const countLabel = t('reader.sidebar.children', language).replace(
-                '{count}',
-                String(count),
-              );
-              this.setAttribute(countBadge, 'aria-label', countLabel);
-              this.setAttribute(countBadge, 'title', countLabel);
-              if (countBadge.textContent !== String(count)) countBadge.textContent = String(count);
-              decorated.add(countBadge);
-            } else {
-              countBadge?.remove();
-            }
-          }
+          const label = kind ? t(`reader.sidebar.${kind}`, language) : '';
+          rows.push({
+            rowIndex,
+            badge: kind
+              ? {
+                  kind,
+                  label: ordinal ? `${label} ${ordinal}` : label,
+                  text: ordinal ? `${OUTLINE_ICON[kind]} ${ordinal}` : OUTLINE_ICON[kind],
+                }
+              : null,
+            count: count
+              ? {
+                  label: t('reader.sidebar.children', language).replace('{count}', String(count)),
+                  text: String(count),
+                }
+              : null,
+          });
         }
         if (entry.items)
           visit(entry.items, depth + 1, ordinal ?? parentOrdinal, rendered && !!entry.expanded);
       }
     };
-    visit(this.#host.reader._internalReader?._state?.outline ?? [], 0, null, true);
-    for (const old of this.#decorated) if (!decorated.has(old)) this.clearDecoration(old);
-    this.#decorated = decorated;
+    visit(readerSidebarState(this.#host.reader)?.outline ?? [], 0, null, true);
+    const wrapper = this.#decoration.update(document, rows);
+    if (!wrapper) return;
     this.refreshCaptions();
     if (!this.#marksRoot || this.#marksRoot.parentElement !== wrapper) {
       if (this.#marksRoot && !isDeadObject(this.#marksRoot)) this.#marksRoot.remove();
@@ -532,7 +404,7 @@ export class ReaderNativeSidebar {
       this.refreshMarks();
     }
     if (
-      this.#pageLabels !== this.#host.reader._internalReader?._state?.pageLabels ||
+      this.#pageLabels !== readerPageLabels(this.#host.reader) ||
       this.#language !== this.#host.language()
     )
       this.refreshMarks();
@@ -544,7 +416,7 @@ export class ReaderNativeSidebar {
   refreshCaptions(): void {
     const document = this.#document;
     if (this.#disposed || !document || isDeadObject(document)) return;
-    const wrapper = document.getElementById('outlineView')?.parentElement;
+    const wrapper = readerOutlineContainer(document);
     if (!wrapper) return;
     if (!this.#captionsRoot || this.#captionsRoot.parentElement !== wrapper) {
       this.#captionsRoot?.remove();
@@ -671,8 +543,8 @@ export class ReaderNativeSidebar {
     const root = this.#marksRoot;
     if (this.#disposed || !root || isDeadObject(root)) return;
     const language = this.#host.language();
-    const labels = this.#host.reader._internalReader?._state?.pageLabels ?? [];
-    this.#pageLabels = this.#host.reader._internalReader?._state?.pageLabels;
+    const labels = readerPageLabels(this.#host.reader) ?? [];
+    this.#pageLabels = readerPageLabels(this.#host.reader);
     const entries = Object.entries(this.#host.marks.values()).sort(([a], [b]) =>
       a.localeCompare(b),
     );
@@ -799,24 +671,18 @@ export class ReaderNativeSidebar {
     failure.run(() => {
       if (captions && !isDeadObject(captions)) captions.remove();
     });
-    const style = this.#style;
     this.#marksRoot = null;
-    this.#style = null;
     this.#document = null;
-    for (const element of this.#decorated) failure.run(() => this.clearDecoration(element));
-    this.#decorated.clear();
+    failure.run(() => this.#decoration.dispose());
     failure.run(() => {
       if (marks && !isDeadObject(marks)) marks.remove();
-    });
-    failure.run(() => {
-      if (style && !isDeadObject(style)) style.remove();
     });
     failure.rethrow();
   }
 
   private close(): void {
     this.deactivate();
-    this.#host.reader._internalReader?.toggleSidebar?.(false);
+    closeReaderSidebar(this.#host.reader);
     this.#host.activePdfWindow()?.focus();
   }
 
@@ -855,49 +721,13 @@ export class ReaderNativeSidebar {
   }
 
   private dispatchNativeKey(target: Element, key: string): void {
-    const window = this.#host.reader._iframeWindow as NativeSidebarWindow | undefined;
-    if (!window || isDeadObject(window)) return;
+    if (!readerWindow(this.#host.reader)) return;
     this.#dispatching = true;
     try {
-      target.dispatchEvent(
-        new window.KeyboardEvent(
-          'keydown',
-          cloneInto({ key, bubbles: true, cancelable: true }, window),
-        ),
-      );
+      dispatchReaderSidebarKey(this.#host.reader, target, key);
     } finally {
       this.#dispatching = false;
     }
-  }
-
-  /** Ignores native chrome/annotation/thumbnail work and our own projection mutations. */
-  private isOutlineMutation(record: MutationRecord): boolean {
-    const target = asElement(record.target) ?? record.target.parentElement;
-    if (
-      !target ||
-      target.closest('#zv-reader-marks, #zv-reader-captions, #annotationsView, #thumbnailsView')
-    )
-      return false;
-    if (target.closest('#outlineView')) return record.type !== 'attributes';
-    if (target.parentElement?.id === 'sidebarContent') return true;
-    if (record.type !== 'childList') return false;
-    return (
-      this.containsOutlineNode(record.addedNodes) || this.containsOutlineNode(record.removedNodes)
-    );
-  }
-
-  private containsOutlineNode(nodes: NodeList): boolean {
-    for (const node of nodes) {
-      const element = asElement(node);
-      if (
-        element &&
-        (element.id === 'outlineView' ||
-          element.id === 'sidebarContainer' ||
-          element.querySelector('#outlineView'))
-      )
-        return true;
-    }
-    return false;
   }
 
   /** A request is valid only while its native pane remains open and authoritative. */
@@ -905,7 +735,7 @@ export class ReaderNativeSidebar {
     const request = this.#focusRequest;
     const document = this.#document;
     if (!document || this.#disposed || isDeadObject(document)) return;
-    const state = this.#host.reader._internalReader?._state;
+    const state = readerSidebarState(this.#host.reader);
     const open = state?.sidebarOpen ?? false;
     if (this.#observedOpen && (!open || state?.sidebarView !== this.#observedView)) {
       this.#local.deactivate();
@@ -932,7 +762,7 @@ export class ReaderNativeSidebar {
     }
     let target: HTMLElement | null = null;
     if (request === 'outline' && state.outline != null)
-      target = document.getElementById('outlineView');
+      target = readerSidebarFocusTarget(document, 'outline');
     else if (request === 'marks') {
       const details = this.#marksRoot?.querySelector<HTMLDetailsElement>('details');
       if (details) details.open = true;
@@ -940,14 +770,9 @@ export class ReaderNativeSidebar {
         this.#marksRoot?.querySelector<HTMLElement>('button[data-zv-mark]') ??
         this.#marksRoot?.querySelector<HTMLElement>('summary') ??
         this.#marksRoot;
-    } else if (request === 'annotations')
-      target =
-        document.querySelector<HTMLElement>('#annotationsView .annotation.selected') ??
-        document.querySelector<HTMLElement>('#annotationsView .annotation') ??
-        document.getElementById('annotationsView');
-    else if (request === 'thumbnails')
-      target = document.querySelector<HTMLElement>('#thumbnailsView .thumbnails');
-    if (!target || target.closest('.viewWrapper.hidden')) return;
+    } else if (request === 'annotations' || request === 'thumbnails')
+      target = readerSidebarFocusTarget(document, request);
+    if (!target || readerSidebarTargetHidden(target)) return;
     if (
       !target.hasAttribute('tabindex') &&
       target.tagName !== 'BUTTON' &&
@@ -963,25 +788,5 @@ export class ReaderNativeSidebar {
   private consume(event: KeyboardEvent): void {
     event.preventDefault();
     event.stopImmediatePropagation();
-  }
-
-  private setAttribute(element: HTMLElement, name: string, value: string | null): void {
-    if (value === null) {
-      if (element.hasAttribute(name)) element.removeAttribute(name);
-    } else if (element.getAttribute(name) !== value) element.setAttribute(name, value);
-  }
-
-  private clearDecoration(element: HTMLElement): void {
-    if (isDeadObject(element)) return;
-    if (
-      element.hasAttribute('data-zv-outline-badge') ||
-      element.hasAttribute('data-zv-outline-count')
-    ) {
-      element.remove();
-      return;
-    }
-    element.removeAttribute('data-zv-outline-navigation');
-    element.removeAttribute('data-zv-outline-kind');
-    element.removeAttribute('data-zv-outline-count');
   }
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Zotero Neo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Neovim-inspired, keyboard-first interaction layer for navigating, reading, annotating, and managing research in Zotero.",
   "author": "ZorroStardust, Alex Fink (original author)",
   "homepage_url": "https://github.com/zhongyangchuwu/Zotero-Neo",
@@ -25,7 +25,7 @@
       "id": "zotero-neo@zotero-neo",
       "update_url": "https://raw.githubusercontent.com/zhongyangchuwu/Zotero-Neo/main/updates.json",
       "strict_min_version": "10.0",
-      "strict_max_version": "10.*"
+      "strict_max_version": "10.0.*"
     }
   }
 }

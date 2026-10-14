@@ -2,13 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReaderNavigation } from '../../src/reader/navigation';
 import { ReaderCaptionTargets } from '../../src/reader/caption-targets';
-import type {
-  PdfWindow,
-  ReaderRuntime,
-  ReaderViewRuntime,
-  ReaderNativeOutlineEntry,
-  ReaderLinkPosition,
-} from '../../src/reader/types';
+import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
+import type { ReaderNativeOutlineEntry, ReaderLinkPosition } from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
 const originalServices = Reflect.get(globalThis, 'Services');

@@ -5,8 +5,8 @@ import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
 import type { NavigationPort } from '../navigation/types';
 
-export type MainWindow = _ZoteroTypes.MainWindow;
-export type ReaderInstance = _ZoteroTypes.ReaderInstance;
+/** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
+export type MainWindow = Window;
 
 export type CommandPaletteMode = 'normal' | 'main' | 'note';
 

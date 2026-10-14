@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
+import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
 const CRC_TABLE = new Uint32Array(256);
 for (let index = 0; index < CRC_TABLE.length; index += 1) {
@@ -100,7 +100,7 @@ export function zipDirectory(sourceDirectory, outputFile) {
   writeFileSync(outputFile, Buffer.concat([...localParts, centralDirectory, end]));
 }
 
-export function listZipMembers(archive) {
+function readZipEntries(archive) {
   const data = readFileSync(archive);
   let endOffset = data.length - 22;
   while (endOffset >= 0 && data.readUInt32LE(endOffset) !== 0x06054b50) endOffset -= 1;
@@ -108,7 +108,7 @@ export function listZipMembers(archive) {
 
   const fileCount = data.readUInt16LE(endOffset + 10);
   let offset = data.readUInt32LE(endOffset + 16);
-  const members = [];
+  const entries = [];
   for (let index = 0; index < fileCount; index += 1) {
     if (data.readUInt32LE(offset) !== 0x02014b50) {
       throw new Error(`Invalid central directory entry at ${offset}`);
@@ -116,8 +116,67 @@ export function listZipMembers(archive) {
     const nameLength = data.readUInt16LE(offset + 28);
     const extraLength = data.readUInt16LE(offset + 30);
     const commentLength = data.readUInt16LE(offset + 32);
-    members.push(data.subarray(offset + 46, offset + 46 + nameLength).toString('utf8'));
+    entries.push({
+      name: data.subarray(offset + 46, offset + 46 + nameLength).toString('utf8'),
+      flags: data.readUInt16LE(offset + 8),
+      compressionMethod: data.readUInt16LE(offset + 10),
+      checksum: data.readUInt32LE(offset + 16),
+      compressedSize: data.readUInt32LE(offset + 20),
+      uncompressedSize: data.readUInt32LE(offset + 24),
+      localOffset: data.readUInt32LE(offset + 42),
+    });
     offset += 46 + nameLength + extraLength + commentLength;
   }
-  return members;
+  return { data, entries };
+}
+
+export function listZipMembers(archive) {
+  return readZipEntries(archive).entries.map(({ name }) => name);
+}
+
+export function readZipMember(archive, member) {
+  const { data, entries } = readZipEntries(archive);
+  const entry = entries.find(({ name }) => name === member);
+  if (!entry) throw new Error(`ZIP member not found: ${member}`);
+  if (entry.flags & 1) throw new Error(`Encrypted ZIP member is unsupported: ${member}`);
+
+  const { localOffset } = entry;
+  if (localOffset + 30 > data.length) {
+    throw new Error(`Truncated local ZIP header for member: ${member}`);
+  }
+  if (data.readUInt32LE(localOffset) !== 0x04034b50) {
+    throw new Error(`Invalid local ZIP header for member: ${member}`);
+  }
+  const localFlags = data.readUInt16LE(localOffset + 6);
+  const localCompressionMethod = data.readUInt16LE(localOffset + 8);
+  if (localFlags & 1) throw new Error(`Encrypted ZIP member is unsupported: ${member}`);
+  if (localCompressionMethod !== entry.compressionMethod) {
+    throw new Error(`Mismatched ZIP compression method for member: ${member}`);
+  }
+
+  const localNameLength = data.readUInt16LE(localOffset + 26);
+  const localExtraLength = data.readUInt16LE(localOffset + 28);
+  const localName = data
+    .subarray(localOffset + 30, localOffset + 30 + localNameLength)
+    .toString('utf8');
+  if (localName !== member) throw new Error(`Mismatched local ZIP member name: ${member}`);
+  const payloadOffset = localOffset + 30 + localNameLength + localExtraLength;
+  const payloadEnd = payloadOffset + entry.compressedSize;
+  if (payloadEnd > data.length) throw new Error(`Truncated ZIP member: ${member}`);
+
+  const compressed = data.subarray(payloadOffset, payloadEnd);
+  let payload;
+  if (entry.compressionMethod === 0) payload = compressed;
+  else if (entry.compressionMethod === 8) {
+    try {
+      payload = inflateRawSync(compressed);
+    } catch (error) {
+      throw new Error(`Unable to decompress ZIP member: ${member}`, { cause: error });
+    }
+  } else throw new Error(`Unsupported ZIP compression method for member: ${member}`);
+
+  if (payload.length !== entry.uncompressedSize || crc32(payload) !== entry.checksum) {
+    throw new Error(`Invalid ZIP payload for member: ${member}`);
+  }
+  return payload;
 }

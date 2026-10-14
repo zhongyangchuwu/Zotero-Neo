@@ -1,7 +1,6 @@
 import type { MainWindow } from '../../../core/contracts';
 import { citationKey } from '../../../platform/better-bibtex';
-import { mainHost, mainItem } from '../../host';
-import { selectedCollection } from '../../navigation';
+import { mainSelectedCollection, mainItem } from '../../../toolkit/main';
 import type { PickerItem, PickerScope } from '../model';
 import type { PickerPreview, PickerProvider } from '../types';
 
@@ -72,7 +71,7 @@ export function createItemsProvider(
     title: scope === 'collection' ? 'Collection' : 'All items',
     placeholder: scope === 'collection' ? '> Search current collection…' : '> Search all items…',
     async load() {
-      const collection = selectedCollection(mainHost(window).ZoteroPane?.collectionsView);
+      const collection = mainSelectedCollection(window);
       const source =
         scope === 'collection' && collection
           ? collection.getChildItems(false, false)

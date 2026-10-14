@@ -1,3 +1,4 @@
+import { pdfTextSpans } from '../toolkit/reader';
 import {
   bindCompositionState,
   compositionOwnsKey,
@@ -623,16 +624,9 @@ export class ReaderFlash {
   }
 
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {
-    const spans = Array.from(
-      pdfWindow.document.querySelectorAll('.textLayer span'),
-    ) as HTMLElement[];
     const segments: FlashTextSegment[] = [];
-    for (const span of spans) {
-      const textNode = span.firstChild;
-      if (!isTextNode(textNode) || !textNode.length || !textNode.isConnected) continue;
-      const rect = span.getBoundingClientRect();
-      if (!validRect(rect) || !this.#rectVisible(pdfWindow, rect)) continue;
-      segments.push({ textNode, text: textNode.data });
+    for (const { textNode, text, rect } of pdfTextSpans(pdfWindow)) {
+      if (this.#rectVisible(pdfWindow, rect)) segments.push({ textNode, text });
     }
     return segments;
   }

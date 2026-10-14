@@ -1,19 +1,19 @@
+import {
+  guardAnnotationCommentPopups,
+  navigateToAnnotation,
+  protectAnnotationCommentDeletion,
+} from '../toolkit/reader';
+import { CleanupFailure } from '../core/cleanup';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import {
   cloneInto,
+  isDeadObject,
   nativeObjectIdentity,
   privilegedEventTarget,
 } from '../platform/cross-compartment';
-import { asElement } from '../platform/dom';
 import { THEME_VARS } from '../ui/theme';
-import type {
-  AnnotationRuntime,
-  InternalReaderRuntime,
-  PdfWindow,
-  ReaderRuntime,
-  ReaderTimer,
-} from './types';
+import type { AnnotationRuntime, PdfWindow, ReaderRuntime, ReaderTimer } from './types';
 
 export interface AnnotationCommentTarget {
   readonly key: string;
@@ -58,10 +58,7 @@ export class ReaderCommentEditor {
   #focusTimer: ReaderTimer | null = null;
   #watchdogTimer: ReaderTimer | null = null;
   #composing = false;
-  #deletionOverride: {
-    readonly internal: InternalReaderRuntime;
-    readonly previous: boolean | undefined;
-  } | null = null;
+  #deletionOverride: (() => void) | null = null;
   #popupGuard: MutationObserver | null = null;
   #systemKeyOptions: (AddEventListenerOptions & { mozSystemGroup: boolean }) | null = null;
   readonly #handledEscapes = new WeakSet<KeyboardEvent>();
@@ -167,21 +164,13 @@ export class ReaderCommentEditor {
         itemID: annotation?.id ?? null,
         libraryID: annotation?.libraryID ?? null,
       };
-      const internal = this.#host.reader._internalReader;
-      const readerWindow = this.#host.reader._iframeWindow ?? pdfWindow;
-      const navigation = internal?.navigate?.(cloneInto({ annotationID: key }, readerWindow));
+      const navigation = navigateToAnnotation(this.#host.reader, key, pdfWindow);
       if (navigation)
         void navigation.catch((error: unknown) => {
           this.#host.debug(`Annotation comment navigation failed: ${String(error)}`);
         });
       if (!this.#isCurrent(generation, pdfWindow)) return;
-      if (internal) {
-        this.#deletionOverride = {
-          internal,
-          previous: internal._enableAnnotationDeletionFromComment,
-        };
-        internal._enableAnnotationDeletionFromComment = false;
-      }
+      this.#deletionOverride = protectAnnotationCommentDeletion(this.#host.reader);
       this.#mount(
         pdfWindow,
         target,
@@ -278,9 +267,12 @@ export class ReaderCommentEditor {
     input.addEventListener('compositionend', compositionEnd);
     input.addEventListener('input', changed);
     this.#inputCleanup = () => {
-      input.removeEventListener('compositionstart', compositionStart);
-      input.removeEventListener('compositionend', compositionEnd);
-      input.removeEventListener('input', changed);
+      if (isDeadObject(input)) return;
+      const failure = new CleanupFailure();
+      failure.run(() => input.removeEventListener('compositionstart', compositionStart));
+      failure.run(() => input.removeEventListener('compositionend', compositionEnd));
+      failure.run(() => input.removeEventListener('input', changed));
+      failure.rethrow();
     };
     const hint = document.createElement('div');
     hint.style.cssText = `padding:5px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
@@ -297,32 +289,54 @@ export class ReaderCommentEditor {
   #release(): void {
     this.#generation += 1;
     const pdfWindow = this.#ownerWindow;
-    if (pdfWindow && this.#systemKeyOptions)
-      privilegedEventTarget(pdfWindow).removeEventListener(
-        'keydown',
-        this.#systemKeyListener,
-        this.#systemKeyOptions,
-      );
+    const systemKeyOptions = this.#systemKeyOptions;
+    const focusTimer = this.#focusTimer;
+    const watchdogTimer = this.#watchdogTimer;
+    const autosaveTimer = this.#autosaveTimer;
+    const popupGuard = this.#popupGuard;
+    const inputCleanup = this.#inputCleanup;
+    const themeCleanup = this.#themeCleanup;
+    const overlay = this.#overlay;
+    const override = this.#deletionOverride;
+    this.#ownerWindow = null;
     this.#systemKeyOptions = null;
-    this.#clearFocusTimers();
-    this.#host.clearTimer(this.#autosaveTimer);
+    this.#focusTimer = null;
+    this.#watchdogTimer = null;
     this.#autosaveTimer = null;
-    this.#popupGuard?.disconnect();
     this.#popupGuard = null;
-    this.#inputCleanup?.();
     this.#inputCleanup = null;
-    this.#themeCleanup?.();
     this.#themeCleanup = null;
-    this.#overlay?.remove();
     this.#overlay = null;
     this.#input = null;
     this.#target = null;
     this.#composing = false;
-    const override = this.#deletionOverride;
     this.#deletionOverride = null;
-    if (override) override.internal._enableAnnotationDeletionFromComment = override.previous;
-    this.#ownerWindow = null;
-    if (pdfWindow) this.#host.onInputOwnerChanged();
+
+    const failure = new CleanupFailure();
+    failure.run(() => {
+      if (pdfWindow && systemKeyOptions && !isDeadObject(pdfWindow))
+        privilegedEventTarget(pdfWindow).removeEventListener(
+          'keydown',
+          this.#systemKeyListener,
+          systemKeyOptions,
+        );
+    });
+    failure.run(() => this.#host.clearTimer(focusTimer));
+    failure.run(() => this.#host.clearTimer(watchdogTimer));
+    failure.run(() => this.#host.clearTimer(autosaveTimer));
+    failure.run(() => {
+      if (popupGuard && !isDeadObject(popupGuard)) popupGuard.disconnect();
+    });
+    failure.run(() => inputCleanup?.());
+    failure.run(() => themeCleanup?.());
+    failure.run(() => {
+      if (overlay && !isDeadObject(overlay)) overlay.remove();
+    });
+    failure.run(() => override?.());
+    failure.run(() => {
+      if (pdfWindow) this.#host.onInputOwnerChanged();
+    });
+    failure.rethrow();
   }
 
   #scheduleAutosave(generation: number, pdfWindow: PdfWindow): void {
@@ -357,40 +371,9 @@ export class ReaderCommentEditor {
   }
 
   #armPopupGuard(generation: number, pdfWindow: PdfWindow): void {
-    const outerWindow = this.#host.reader._iframeWindow;
-    const root = outerWindow?.document.body;
-    if (!outerWindow || !root || typeof outerWindow.MutationObserver !== 'function') return;
-    const guard = new outerWindow.MutationObserver((mutations: MutationRecord[]) => {
-      if (!this.#isCurrent(generation, pdfWindow)) return;
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          const element = asElement(node);
-          if (!element) continue;
-          const popup = element.matches('.annotation-popup')
-            ? element
-            : element.querySelector('.annotation-popup');
-          const input = popup?.querySelector<HTMLElement>(
-            '[contenteditable="true"],textarea,input',
-          );
-          input?.dispatchEvent(
-            new outerWindow.KeyboardEvent(
-              'keydown',
-              cloneInto(
-                {
-                  key: 'Escape',
-                  code: 'Escape',
-                  bubbles: true,
-                  cancelable: true,
-                },
-                outerWindow,
-              ),
-            ),
-          );
-        }
-      }
-    });
-    guard.observe(root, cloneInto({ childList: true, subtree: true }, outerWindow));
-    this.#popupGuard = guard;
+    this.#popupGuard = guardAnnotationCommentPopups(this.#host.reader, () =>
+      this.#isCurrent(generation, pdfWindow),
+    );
   }
 
   #keepFocus(generation: number, pdfWindow: PdfWindow): void {
@@ -408,12 +391,5 @@ export class ReaderCommentEditor {
       this.#watchdogTimer = null;
       this.#keepFocus(generation, pdfWindow);
     });
-  }
-
-  #clearFocusTimers(): void {
-    this.#host.clearTimer(this.#focusTimer);
-    this.#focusTimer = null;
-    this.#host.clearTimer(this.#watchdogTimer);
-    this.#watchdogTimer = null;
   }
 }

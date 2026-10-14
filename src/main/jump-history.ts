@@ -14,15 +14,16 @@ import type { MainPanel, MainWindowSession } from './session';
 import {
   currentMainItemCursorRef,
   focusMainItemsImmediately,
-  mainHost,
   mainReaderForTab,
+  mainLibraryTreesAvailable,
+  captureMainQuickSearchFocusClaim,
   mainScopeSelectedIDs,
   restoreMainItemCursorAnchor,
   restoreMainScopeIDs,
   selectMainTab,
   selectedMainTabID,
   selectedMainTabInfo,
-} from './host';
+} from '../toolkit/main';
 import type { MainNavigation } from './navigation';
 import type { MainViewActions } from './view-actions';
 
@@ -111,8 +112,7 @@ export class MainNavigationExecutor {
     }
     if (!libraryTab) return { kind: 'tab', tabID };
 
-    const pane = mainHost(window).ZoteroPane;
-    if (!pane?.collectionsView?.selection || !pane.itemsView?.selection) return null;
+    if (!mainLibraryTreesAvailable(window)) return null;
     const view = this.#viewActions.state(window);
     return {
       kind: 'library',
@@ -245,8 +245,7 @@ export class MainNavigationExecutor {
 
     if (location.kind === 'tab') return { restored: true, stale: false, missing: [] };
 
-    const focusBeforeScope = window.document.activeElement;
-    const quickSearch = window.document.getElementById('zotero-tb-search');
+    const quickSearchClaimed = captureMainQuickSearchFocusClaim(window);
     let scopeRestored: boolean;
     try {
       scopeRestored = await restoreMainScopeIDs(window, location.scopeIDs, isCurrentLocation);
@@ -257,13 +256,7 @@ export class MainNavigationExecutor {
     if (!isCurrentLocation()) return { restored: false, stale: true, missing: [] };
     if (!scopeRestored) return { restored: false, stale: false, missing: ['scope'] };
 
-    const focused = window.document.activeElement;
-    if (
-      quickSearch &&
-      focused &&
-      focused !== focusBeforeScope &&
-      (focused === quickSearch || quickSearch.contains?.(focused))
-    ) {
+    if (quickSearchClaimed()) {
       // The user claimed native Quick Search while scope selection was pending.
       return { restored: false, stale: true, missing: [] };
     }

@@ -48,7 +48,7 @@ This table describes the pre-cutover runtime at `adba932b9219b40ee56860322060725
 | Reader marks | Managed wrapper holds intermediate saves, then calls `recordReaderJump()` | One excursion is correct, but policy and suppression are Reader-local. |
 | Back/Forward | Queued restoration with a retained revision | Traversal is not a new record and must retain batch semantics. |
 
-Historical source owners: [Main history](../src/main/jump-history.ts), [Main dispatch](../src/main/controller.ts), [local find](../src/main/local-find.ts), [Selection Panel](../src/main/selection-panel.ts), [Reader bridge](../src/reader/jump-history-bridge.ts), [Reader controller](../src/reader/controller.ts), and [composition contracts](../src/core/contracts.ts).
+Historical source owners: [Main history](../src/main/jump-history.ts), [Main dispatch](../src/main/controller.ts), [local find](../src/main/local-find.ts), [Selection Panel](../src/main/selection-panel.ts), [Reader bridge at the pre-Toolkit checkpoint](https://github.com/zhongyangchuwu/Zotero-Neo/blob/33ed4ea44250dc316135d6fffa3e93bb5d156f87/src/reader/jump-history-bridge.ts), [Reader controller](../src/reader/controller.ts), and [composition contracts](../src/core/contracts.ts).
 
 Current ownership is `src/navigation/history.ts` (`NavigationHistoryState`),
 `src/navigation/history-policy.ts` (only typed eligibility/evidence rules), and
@@ -59,6 +59,14 @@ exports `MainNavigationExecutor`, Main's host adapter/facade for building
 operations and capturing/restoring locations; it delegates all commits to the
 coordinator. Reader execution uses that same port. No legacy wrapper or parallel
 Recorder API remains.
+
+Required private host mechanics now live behind `src/toolkit/`: Reader producer
+transport is `src/toolkit/reader/history-bridge.ts`, restoration is
+`src/toolkit/reader/jump-host.ts`, and Main tree/tab/filter capabilities are in
+`src/toolkit/main/`. Business feature owners still choose targets, semantic traversal,
+causes and history eligibility; Toolkit exposes opaque view identity and host
+results rather than raw internal SDK objects.
+
 
 The pinned Zotero method inspection established that PDF `navigate()` calls `_pushHistoryPoint()` without awaiting it. `_pushHistoryPoint()` waits for scroll settling, reads actual PDF XYZ geometry, and then calls native history save. Thus `await navigate()` is **not** the settled destination contract. The current bridge associates the hard save with the exact producer's terminal completion instead of inferring it from `navigate()` or a global save queue.
 
@@ -93,8 +101,8 @@ Implemented module responsibilities:
 | `src/navigation/history-policy.ts` | Recording decisions and named context predicates; complete configured-cause lookup | Async queues, target mutation, host patching |
 | `src/navigation/coordinator.ts` | One execute entry; operation admission, completion fences, currentness, private commit | Picker search/ranking, Reader geometry algorithms |
 | `src/navigation/history.ts` | Existing bounded stack/equality/refresh/remap behavior | Cause classification or host calls |
-| Main `MainNavigationExecutor` | Main/tab operation building and library capture/restore, using `main/navigation.ts`, `host.ts`, and View owners; exposes the shared coordinator port | History policy or direct append |
-| Reader navigation/completion adapters | Page/search/link/outline/mark/motion execution, exact-view completion and native provenance | Another traversal stack |
+| Main `MainNavigationExecutor` | Main/tab operation building and library capture/restore, using `src/main/navigation.ts`, `src/toolkit/main/` and View owners; exposes the shared coordinator port | History policy or direct append |
+| Reader navigation/completion adapters | Semantic traversal in Reader; private page/search/link/geometry/restore/provenance in `src/toolkit/reader/`, with exact-view completion | Another traversal stack or target/recording policy |
 | `src/addon.ts` and Main window lifecycle | Compose ports and attach/dispose the one navigation session | A second window registry or fallback to a different window |
 
 These are responsibility boundaries, not a requirement to create a file for every method. Keep existing Main and Reader feature owners; move only shared history/coordinator responsibilities. MainWindowSession remains the lifecycle owner. Reader and Note use its navigation capability through the existing composition boundary; they never borrow Main Selection or redispatch an ActionId merely to execute it.

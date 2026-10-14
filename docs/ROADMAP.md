@@ -116,13 +116,10 @@ comment semantics, navigation history, the native-sidebar layout, or the impleme
 Notes choice workflow. Phase 9.3 still has a distinct physical-input/package
 acceptance boundary, not a mandate for another broad refactor.
 
-1. **Finish current-package acceptance** in
-   [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
-   Pin the integrated candidate and reuse unchanged package migration/restart and
-   schema-18 preference evidence when the XPI is byte-identical. Observe one action
-   per shortcut in each live view, then record actual human OS-IME/native-editable,
-   clipboard and Outline outcomes. Historical DOM composition is not human PASS.
-   A concrete failure gets its own bounded defect; no speculative rewrite.
+1. **After source integration, conduct the unified owner review** of functional behavior
+   and documentation. Use the [candidate acceptance guide](V0_2_ACCEPTANCE.md);
+   U1–U10 are execution steps, not a completed PASS report. Record actual outcomes
+   in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98); keep both issues open until their owners accept the remaining results. Final-package native clean-install and official-upgrade evidence is reusable only for the exact package; trusted input is not physical OS-IME, native clipboard or human Outline acceptance. A concrete failure gets its own bounded defect; no speculative rewrite.
 2. **Finish the remaining integration acceptance**, not another Notes rewrite.
    [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140) implements the
    accepted [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) contract;
@@ -154,22 +151,34 @@ compatibility path until that external prerequisite exists.
 
 ## Release gate
 
-The published release and manifest/package/update-feed versions remain v0.1.0;
-the current v0.2 source work is not a published release.
+The v0.1.0 release and live `updates.json` feed remain public. The v0.2.0 source
+can be merged into `main` before unified owner acceptance; integration does not
+publish it. Prepared candidate metadata lives in `updates.candidate.json`, read by
+`tools/check-release.mjs` and `tools/publish-release.mjs`. Keep public
+`updates.json` at its sole official v0.1.0 entry until a verified v0.2.0 asset
+exists and promotion is explicitly authorized. Neither feed file is packaged in
+the XPI.
 
-Passing the v0.1.0 metadata validator proves the existing baseline, not readiness
-for v0.2: the public update feed still points to the old published asset, while
-source builds retain the same version until a new release is explicitly prepared.
+Passing `tools/check-release.mjs v0.2.0` proves candidate metadata consistency, not
+human acceptance or a live release asset. Final-XPI native clean-install and
+official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552), scoped to that package; they do not complete the open physical-input, per-view or owner review in #137/#98. Do not hold source integration until those reviews finish; tagging and publication remain gated on required acceptance and explicit authorization.
 
 Before another release:
 
 - complete the selected current-host acceptance and integration gates;
 - verify packaged install/update behavior separately from RDP temporary loading,
   including binding/preference migration and single runtime ownership;
-- prepare matching manifest/package version, update-feed asset entry, release
-  notes, and installation links before tagging; use `tools/check-release.mjs`;
+- prepare matching manifest/package version, candidate-feed entry, release notes,
+  and installation links before tagging; use `tools/check-release.mjs`;
 - describe actual CI coverage: the current workflow verifies/packages on Ubuntu.
   Do not claim Windows CI coverage without restoring that job and observing it pass.
+
+Release preparation and documentation content are owned by
+[#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142). The selected scope
+is content first, website later: the [website copy](WEBSITE_CONTENT.md) and
+[recording guide](RECORDING_GUIDE.md) prepare complete workflows without site code
+or invented demonstrations. Use the [candidate acceptance guide](V0_2_ACCEPTANCE.md)
+for real installation, upgrade, native input and per-view results.
 
 Longer-term candidates remain command-palette arguments/history, richer safe
 tag operations, keymap import/export after the schema stabilizes in real use,

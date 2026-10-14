@@ -134,8 +134,9 @@ family. Controllers coordinate them; they should not mirror child feature state.
 services belonging to the physical Zotero MainWindow. `MainWindowSession` in
 `main/session.ts` composes that host runtime with Main state and feature runtimes;
 its `NoteSurfaceRuntime` is a distinct Note interaction owner for the currently
-attached editor. `NoteEditor` identifies that attachment by editor Window plus
-Note item ID and rebinds when either changes. `main/active-surface.ts` derives
+attached editor. `NoteEditor` identifies that attachment by editor Window,
+Document and Note item ID; replacing any of them resets pending interaction and
+retires the old key callback before listener removal. `main/active-surface.ts` derives
 the active Surface from Zotero state (context-pane Note, selected Note tab,
 selected Reader tab, otherwise Main); the controller runs explicit activation
 and deactivation paths rather than storing a mutable global `currentSurface`.
@@ -151,8 +152,8 @@ and deactivation paths rather than storing a mutable global `currentSurface`.
   invoking semantic action owns confirmation and the resulting host operation.
   Command Palette reuses the same surface to choose an `ActionId`.
 - `main/plugin-manager.ts` — persistent installed-plugin management surface. It owns
-  Plugin Manager panel/filter/navigation lifecycle while `plugin-host.ts` projects
-  authoritative Mozilla/Zotero AddonManager state.
+  Plugin Manager panel/filter/navigation lifecycle while Toolkit projects authoritative
+  Mozilla/Zotero AddonManager state and preference-entry capabilities.
 - `main/tag-actions.ts` — tag candidate and action orchestration; item mutation
   is implemented by the shared `operations/item-tags.ts` Operation.
 - `main/collection-actions.ts` — collection chooser/currentness orchestration;
@@ -168,7 +169,8 @@ and deactivation paths rather than storing a mutable global `currentSurface`.
 - `main/session.ts` — Main Surface composition for one MainWindow.
 - `main/window-runtime.ts` — host-window theme, appearance, and Settings lifecycle.
 - `main/active-surface.ts` — derived active Surface from Zotero focus/tab/editor state.
-- `main/host.ts` — named adapters over private Main-window host seams.
+- `src/toolkit/main/` — Main tree/tab/filter, editor discovery, row-decoration and plugin host capabilities;
+  private pane/tree/editor objects do not escape its public entry.
 
 The shared candidate surface is a **target resolver**, not an operation console.
 For ordinary object choices its sources load/search/render candidates and return
@@ -186,7 +188,7 @@ second real consumer demonstrates a stable shared contract. Tag candidate source
 may constrain or describe candidates. `TagActions` owns tag candidate/action
 orchestration; the shared `operations/item-tags.ts` Operation performs persistent
 item-tag mutation. Quick Search, Advanced Search, and tag-predicate View mutation
-are coordinated by `MainViewActions` through narrow `main/host.ts` seams.
+are coordinated by `MainViewActions` through `src/toolkit/main` capabilities.
 
 #### Reader
 
@@ -195,17 +197,17 @@ are coordinated by `MainViewActions` through narrow `main/host.ts` seams.
 Reader Surface and owns its own `InputRuntime` and `PrefixGuideRuntime`, while
 feature state and host/view lifecycle seams remain in their dedicated owners:
 
-- `host-key-bridge.ts` — installation/restoration of private Zotero
+- `src/toolkit/reader/input-bridge.ts` — installation/restoration of private Zotero
   `PdfView._onKeyDown` and `_textAnnotationFocused` patches; input policy remains
   in the session callbacks;
-- `view-lifecycle.ts` — primary/secondary PDF-view discovery, periodic rescan,
-  view-local DOM listeners, active-view fallback, and detached-view release;
-- `navigation.ts` — zoom, page/search delegation, split control, directional
-  focus, and active primary/secondary host-view resolution;
-- `jump-host.ts` — attachment/XYZ capture, exact-pane restoration, and readable
-  closed-attachment reopen;
-- `jump-history-bridge.ts` — native producer/callback provenance and completion
-  transport to the shared coordinator, not a separate Reader history stack;
+- `src/toolkit/reader/view-lifecycle.ts` — primary/secondary PDF-view discovery,
+  periodic rescan, view-local DOM listeners, and detached-view release;
+- `src/reader/navigation.ts` — semantic traversal, caption choice and user feedback;
+  `src/toolkit/reader/navigation.ts` owns native zoom/page/search/split/focus and geometry;
+- `src/toolkit/reader/jump-host.ts` — attachment/XYZ capture, exact-pane restoration,
+  and readable closed-attachment reopen;
+- `src/toolkit/reader/history-bridge.ts` — native producer/callback provenance and
+  completion transport to the shared coordinator, not a separate Reader history stack;
 - `selection-range.ts` — Neo's temporary DOM Selection compatibility range,
   Select anchor/preferred-X state, range motions, endpoint swaps, and view markers;
 - `flash.ts` — visible-text targeting and hint lifecycle;
@@ -314,7 +316,7 @@ fence; Back/Forward waits for pending admitted navigation before traversing.
 See the navigation design for private SDK transport details and the acceptance
 status.
 
-### 4. Zotero host adapters
+### 4. Host capability Toolkit
 
 Zotero state is authoritative wherever possible:
 
@@ -325,9 +327,22 @@ Zotero state is authoritative wherever possible:
   The visible tree may project the visible subset, but it is not the complete
   Selection source of truth. See [INTERACTION_MODEL.md](INTERACTION_MODEL.md).
 - Item/tag mutations use Zotero item APIs and database transactions.
-- Main private APIs are concentrated in `main/host.ts` where practical.
-- Reader actions use stable native operations when available and guarded private
-  seams only where Zotero currently exposes no public equivalent.
+- `src/toolkit/index.ts`, `src/toolkit/main/index.ts` and `src/toolkit/reader/index.ts` are the public capability
+  entries for host interaction. Business modules must not import private implementation
+  modules or discover Zotero's internal DOM/SDK structure themselves.
+- Prefer documented APIs or semantically equivalent platform alternatives. Keep a
+  required private implementation when no equivalent contract exists; moving a call
+  to a facade or third-party wrapper does not make the underlying dependency public.
+- Standard DOM windows and narrow Reader handles carry identity without per-key
+  wrapping. PDF view handles are opaque; native structural types remain inside Toolkit.
+- Target precedence, bookmark storage target choice, modes, bindings, history eligibility,
+  workflow, confirmations and status belong to business owners. Toolkit owns host lookup,
+  cloning, native protocol, patches, DOM seams and their resource retirement.
+- Public Zotero item APIs and the existing `platform/zotero-items.ts` lookup/normalization
+  remain directly usable; do not add one-to-one forwarding wrappers for uniformity.
+
+The capability/dependency inventory and host-update checks live in
+[DEVELOPMENT.md](DEVELOPMENT.md#host-capability-toolkit).
 
 Neo must not duplicate Zotero domain data merely to make an abstraction look
 uniform. Neo-owned interaction state is acceptable where the host cannot

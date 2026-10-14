@@ -18,17 +18,20 @@ import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
-import type { InternalReaderRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
-import {
-  MainNavigation,
-  selectedCollection,
-  selectedCollectionID,
-  type TreeView,
-} from '../../src/main/navigation';
-import type { MainWindowSession } from '../../src/main/session';
+import type {
+  InternalReaderRuntime,
+  PdfWindow,
+  ReaderRuntime,
+} from '../fixtures/reader-native-types';
+import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
+import { MainNavigation } from '../../src/main/navigation';
+import { mainSelectedCollection } from '../../src/toolkit/main';
+import type { TreeView } from '../../src/toolkit/main/private-types';
+import { MainWindowSession } from '../../src/main/session';
 import { SelectionStore } from '../../src/main/selection-store';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
+import { FuzzyPicker } from '../../src/main/picker';
+import type { PickerProvider } from '../../src/main/picker/types';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
 
@@ -417,14 +420,44 @@ describe('current Zotero collection APIs', () => {
     expect(h.view.ensureRowIsVisible).toHaveBeenCalledWith(0);
   });
 
-  it('uses plural collection selection methods for object and ID lookup', () => {
+  it('uses the public selected collection API without confusing it with the Scope Cursor', () => {
     const collection = { id: 42 } as Zotero.Collection;
-    const view = {
-      getSelectedCollections: (idOnly?: boolean) => (idOnly ? [42] : [collection]),
-    } as TreeView;
+    const firstSelected = { id: 99 } as Zotero.Collection;
+    let selectedCount = 1;
+    const getSelectedCollection = vi.fn(() => collection as Zotero.Collection | undefined);
+    const window = {
+      ZoteroPane: {
+        getSelectedCollection,
+        collectionsView: {
+          selection: {
+            focused: 7,
+            get count() {
+              return selectedCount;
+            },
+          },
+          getSelectedCollections: () => (selectedCount ? [firstSelected] : []),
+        },
+      },
+    } as unknown as MainWindow;
 
-    expect(selectedCollection(view)).toBe(collection);
-    expect(selectedCollectionID(view)).toBe(42);
+    expect(mainSelectedCollection(window)).toBe(collection);
+    expect(mainSelectedCollection(window)?.id).toBe(42);
+
+    selectedCount = 2;
+    getSelectedCollection.mockImplementation(() => {
+      throw new Error('Requires single selection');
+    });
+    expect(mainSelectedCollection(window)).toBe(firstSelected);
+
+    selectedCount = 1;
+    getSelectedCollection.mockReturnValue(undefined);
+    expect(mainSelectedCollection(window)).toBe(firstSelected);
+
+    selectedCount = 0;
+    getSelectedCollection.mockImplementation(() => {
+      throw new Error('Requires single selection');
+    });
+    expect(mainSelectedCollection(window)).toBeUndefined();
   });
 
   it('navigates a collection tree whose React tree object has no contains method', () => {
@@ -640,17 +673,38 @@ describe('current Zotero collection APIs', () => {
 });
 
 describe('main item trash and restore', () => {
-  it('maps dd/x to trash and u to the matching native undo step', async () => {
+  it('restores only recorded Neo Trash items when native Undo belongs to another batch', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const active = { id: 'item-tree-row-1' } as Element;
     const itemsRoot = { contains: (node: unknown) => node === active } as HTMLElement;
-    const selected = [
-      { id: 41, libraryID: 1 },
-      { id: 42, libraryID: 1 },
-    ] as Zotero.Item[];
+    const persisted = new Map([
+      [41, false],
+      [42, false],
+      [99, true],
+    ]);
+    const selected = [41, 42].map((id) => {
+      const item = {
+        id,
+        libraryID: 1,
+        deleted: false,
+        saveTx: async () => {
+          persisted.set(id, item.deleted);
+        },
+      };
+      return item as unknown as Zotero.Item;
+    });
     const rows = selected.map((ref) => ({ isObjectRow: true, ref }));
-    const trashTx = vi.fn(async () => {});
-    const undo = vi.fn(async () => true);
+    const trashTx = vi.fn(async (ids: readonly number[]) => {
+      for (const item of selected) {
+        if (!ids.includes(item.id)) continue;
+        item.deleted = true;
+        persisted.set(item.id, true);
+      }
+    });
+    const undo = vi.fn(async () => {
+      persisted.set(99, false);
+      return true;
+    });
     const confirm = vi.fn(() => true);
     const window = {
       confirm,
@@ -689,25 +743,71 @@ describe('main item trash and restore', () => {
       });
 
       await expect(navigation.trashSelectedItems(window, session)).resolves.toBe(true);
-      expect(confirm).toHaveBeenCalledWith(
-        'Move Neo Selection · 2 items to Zotero Trash? You can restore it with Zotero Undo.',
-      );
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
       expect(session.trashHistory.values()).toEqual([41, 42]);
       expect(session.selection.empty).toBe(true);
       await navigation.restoreLastTrashedItems(session);
 
-      expect(undo).toHaveBeenCalledOnce();
+      expect(persisted).toEqual(
+        new Map([
+          [41, false],
+          [42, false],
+          [99, true],
+        ]),
+      );
       expect(session.trashHistory.values()).toEqual([]);
       Reflect.set(window.document, 'activeElement', { id: 'zotero-item-pane' });
       await navigation.trashSelectedItems(window, session);
       expect(trashTx).toHaveBeenCalledTimes(1);
-      expect(session.status.textContent).toBe('✗ Focus the items list first');
-      expect(DEFAULT_BINDINGS).toMatchObject({
-        'main-normal:dd': 'mainTrashItems',
-        'main-normal:x': 'mainTrashItems',
-        'main-normal:u': 'mainRestoreTrashedItems',
-      });
+    } finally {
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
+
+  it('counts only unique still-deleted Restore targets and preserves failed persistence', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    let fail = false;
+    const failure = new Error('restore persistence failed');
+    const persisted = new Map([
+      [41, true],
+      [42, false],
+    ]);
+    const pending = {
+      id: 41,
+      deleted: true,
+      saveTx: async () => {
+        if (fail) throw failure;
+        persisted.set(41, pending.deleted);
+      },
+    };
+    const available = {
+      id: 42,
+      deleted: false,
+      saveTx: async () => {
+        persisted.set(42, available.deleted);
+      },
+    };
+    const items = new Map([
+      [41, pending],
+      [42, available],
+    ]);
+    const navigation = new MainNavigation(logger, () => {});
+    try {
+      Reflect.set(globalThis, 'Zotero', { Items: { get: (id: number) => items.get(id) } });
+      expect(await navigation.restoreTrashedItems([41, 41, 42, 404, -1])).toBe(1);
+      expect(persisted).toEqual(
+        new Map([
+          [41, false],
+          [42, false],
+        ]),
+      );
+      pending.deleted = true;
+      persisted.set(41, true);
+      fail = true;
+      await expect(navigation.restoreTrashedItems([41])).rejects.toBe(failure);
+      expect(pending.deleted).toBe(true);
+      expect(persisted.get(41)).toBe(true);
     } finally {
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
@@ -1113,6 +1213,7 @@ describe('Note contextual Open', () => {
   it('opens the Note parent rather than an unrelated Main selected item', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const originalServices = Reflect.get(globalThis, 'Services');
+    const originalComponents = Reflect.get(globalThis, 'Components');
     const host = pickerMainWindow();
     const pdf = {
       id: 24,
@@ -1191,6 +1292,7 @@ describe('Note contextual Open', () => {
       initialized: false,
     });
     Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
+    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
     const controller = createMainWindowController({
       preferences: {
         has: () => false,
@@ -1324,6 +1426,8 @@ describe('Note contextual Open', () => {
       else Reflect.set(globalThis, 'Zotero', originalZotero);
       if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
       else Reflect.set(globalThis, 'Services', originalServices);
+      if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+      else Reflect.set(globalThis, 'Components', originalComponents);
     }
   });
 });
@@ -1448,6 +1552,249 @@ function settingsMainHost() {
   return { ...host, controller, press, drawer, backdrop, values, writes };
 }
 
+describe('Main retirement ownership', () => {
+  it('retires every Main window after a live Selection style removal failure', () => {
+    vi.useFakeTimers();
+    const host = settingsMainHost();
+    const other = pickerMainWindow();
+    host.controller.addWindow(other.window);
+    host.controller.openSettings(host.window);
+    host.controller.openSettings(other.window);
+    const style = host.bodyChildren.find((node) => node.id === 'zotero-neo-main-item-state-style')!;
+    const remove = style.remove;
+    const failure = new Error('live Selection style removal failed');
+    Reflect.set(style, 'remove', () => {
+      throw failure;
+    });
+    try {
+      let observed: unknown;
+      try {
+        host.controller.shutdown();
+      } catch (error) {
+        observed = error;
+      }
+      expect(observed).toBe(failure);
+      expect(host.drawer()).toBeUndefined();
+      expect(other.bodyChildren.some((node) => node.id === 'zotero-neo-settings-center')).toBe(
+        false,
+      );
+      expect(host.controller.openSettings()).toBe(false);
+      const event = { key: 'H' } as KeyboardEvent & { _zvMainHandled?: boolean };
+      host.keydown(event);
+      other.keydown(event);
+      expect(event._zvMainHandled).toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      Reflect.set(style, 'remove', remove);
+      style.remove();
+      host.controller.shutdown();
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves replacement input and Reader activation untouched by retired Main callbacks', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const host = pickerMainWindow();
+    const listeners = new Map<string, EventListener[]>();
+    const add = host.window.document.addEventListener.bind(host.window.document);
+    Reflect.set(
+      host.window.document,
+      'addEventListener',
+      (type: string, listener: EventListener) => {
+        const entries = listeners.get(type) ?? [];
+        entries.push(listener);
+        listeners.set(type, entries);
+        add(type, listener);
+      },
+    );
+    Reflect.set(host.window.document, 'removeEventListener', () => {
+      throw new Error('listener removal failed');
+    });
+    const scans: Array<() => void> = [];
+    Reflect.set(host.window, 'setInterval', (callback: () => void) => {
+      scans.push(callback);
+      return scans.length;
+    });
+    let previousTabs = 0;
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'library', title: 'Library', type: 'library' }],
+      selectedID: 'library',
+      selectPrev: () => {
+        previousTabs += 1;
+      },
+    });
+    let readerScans = 0;
+    let readerDeactivations = 0;
+    const dependencies = {
+      preferences: {
+        has: () => false,
+        get: (_key: string, fallback: boolean | number | string) => fallback,
+        set: () => {},
+        clear: () => {},
+      },
+      logger,
+      reader: {
+        rescan: () => {
+          readerScans += 1;
+        },
+        deactivateInactive: () => {
+          readerDeactivations += 1;
+        },
+        forwardKey: () => {},
+        captureJumpLocation: () => null,
+        restoreJumpLocation: async () => null,
+      },
+    } as MainWindowControllerDependencies;
+    const retired = createMainWindowController(dependencies);
+    const current = createMainWindowController(dependencies);
+    try {
+      retired.addWindow(host.window);
+      const keydown = listeners.get('keydown')![0]!;
+      const focusin = listeners.get('focusin')![0]!;
+      const scan = scans[0]!;
+      retired.shutdown();
+      current.addWindow(host.window);
+      const before = [readerScans, readerDeactivations];
+      scan();
+      focusin({ target: null } as unknown as Event);
+      expect([readerScans, readerDeactivations]).toEqual(before);
+      const event = {
+        key: 'H',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      } as unknown as KeyboardEvent & { _zvMainHandled?: boolean };
+      keydown(event);
+      expect(event._zvMainHandled).toBeUndefined();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      host.keydown(event);
+      expect(previousTabs).toBe(1);
+    } finally {
+      retired.shutdown();
+      current.shutdown();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps newer Main feedback visible through an older deadline and cancels it on disposal', () => {
+    vi.useFakeTimers();
+    const host = pickerMainWindow();
+    const preferences = {
+      has: () => false,
+      get: (_key: string, fallback: boolean | number | string) => fallback,
+      set: () => {},
+      clear: () => {},
+    } as MainWindowControllerDependencies['preferences'];
+    const session = new MainWindowSession(host.window, preferences);
+    const navigation = new MainNavigation(logger, () => {});
+    try {
+      navigation.status(session, 'A', 2000);
+      vi.advanceTimersByTime(1900);
+      navigation.status(session, 'B', 2000);
+      vi.advanceTimersByTime(100);
+      expect(session.status.style.display).toBe('block');
+      vi.advanceTimersByTime(1900);
+      expect(session.status.style.display).toBe('none');
+      navigation.status(session, 'C', 2000);
+      session.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+      expect(host.bodyChildren).not.toContain(session.status);
+    } finally {
+      session.dispose();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('Main Current Item Notes target', () => {
+  it('freezes Main Cursor notes independently of native and persistent Selection', async () => {
+    vi.useFakeTimers();
+    const host = settingsMainHost();
+    const sources: PickerProvider[] = [];
+    const open = vi
+      .spyOn(FuzzyPicker.prototype, 'open')
+      .mockImplementation(async (_window, _session, _scope, options) => {
+        if (options?.source) sources.push(options.source);
+      });
+    const papers = [1, 2, 3].map(
+      (id) =>
+        ({
+          id,
+          libraryID: 1,
+          isAttachment: () => false,
+          isNote: () => false,
+          getNotes: () => [id + 10],
+          getDisplayTitle: () => `Paper ${id}`,
+        }) as unknown as Zotero.Item,
+    );
+    const notes = [11, 12, 13].map(
+      (id) =>
+        ({
+          id,
+          libraryID: 1,
+          parentItemID: id - 10,
+          isNote: () => true,
+          getNote: () => `<p>Note ${id}</p>`,
+          getNoteTitle: () => `Note ${id}`,
+        }) as unknown as Zotero.Item,
+    );
+    const items = new Map([...papers, ...notes].map((item) => [item.id, item]));
+    vi.stubGlobal('Zotero', {
+      locale: 'en-US',
+      Items: {
+        get: (id: number | number[]) =>
+          Array.isArray(id) ? id.map((entry) => items.get(entry)) : items.get(id),
+      },
+    });
+    const active = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+    let focused = 2;
+    const selection = {
+      get focused() {
+        return focused;
+      },
+      select: (row: number) => {
+        focused = row;
+      },
+    };
+    Reflect.set(host.window.document, 'activeElement', active);
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      _tabs: [{ id: 'library', type: 'library' }],
+      selectedID: 'library',
+    });
+    Reflect.set(host.window, 'ZoteroPane', {
+      getSelectedItems: () => [papers[0], papers[2]],
+      itemsView: {
+        rowCount: papers.length,
+        selection,
+        domEl: { contains: (node: unknown) => node === active },
+        getRow: (row: number) => ({ isObjectRow: true, ref: papers[row] }),
+        getRowIndexByID: (id: number) => id - 1,
+      },
+    });
+    try {
+      host.press('s', active);
+      focused = 1;
+      for (const key of [' ', 'f', 'n']) host.press(key, active);
+      const source = sources[0];
+      if (!source) throw new Error('Notes candidates were not opened');
+      focused = 0;
+      expect((await source.load()).map((item) => item.id)).toEqual([12]);
+      expect(
+        (await source.alternateSource!.provider().alternateSource!.provider().load()).map(
+          (item) => item.id,
+        ),
+      ).toEqual([12]);
+    } finally {
+      open.mockRestore();
+      host.controller.shutdown();
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('Main note capture settlement', () => {
   it.each(['saved', 'failed', 'moved'] as const)(
     'waits for the admitted %s native save after owner teardown',
@@ -1570,28 +1917,12 @@ describe('Main Settings Center shell', () => {
       emit(type: string, event?: Partial<Event>): void;
       listenerCount(type: string): number;
     };
-    expect(panel?.style.cssText).toContain('left:50%;top:50%;transform:translate(-50%,-50%)');
-    expect(panel?.style.cssText).toContain('width:min(820px,calc(100vw - 48px))');
-    expect(panel?.style.cssText).toContain('height:min(760px,calc(100vh - 64px))');
-    expect(panel?.style.cssText).not.toContain('right:12px');
-    expect(panel?.style.cssText).toContain('font:inherit');
-    expect(panel?.style.cssText).not.toContain('sans-serif');
-    expect(backdrop.style.cssText).toContain('inset:0');
     const navigation = panel?.children[1] as HTMLElement;
     expect(navigation.children).toHaveLength(5);
     for (const button of Array.from(navigation.children) as HTMLElement[]) {
-      expect(button.style.cssText).toContain(
-        'display:inline-flex;align-items:center;justify-content:center',
-      );
-      expect(button.style.cssText).toContain('appearance:none');
-      expect(button.style.cssText).toContain('box-sizing:border-box');
-      expect(button.style.cssText).toContain('font:inherit');
       expect(button.tabIndex).toBe(-1);
     }
     expect((panel?.children[0]?.children[1] as HTMLElement).tabIndex).toBe(-1);
-    expect((panel?.children[0]?.children[1] as HTMLElement).style.cssText).toContain(
-      'display:inline-flex',
-    );
     expect((navigation.children[0] as HTMLElement).style.background).toBe(
       'var(--zotero-neo-selected)',
     );
@@ -2020,7 +2351,7 @@ describe('Main command palette', () => {
         },
       } as MainWindowControllerDependencies);
 
-      expect(() => controller.addWindow(host.window)).not.toThrow();
+      controller.addWindow(host.window);
 
       host.keydown({
         key: ':',

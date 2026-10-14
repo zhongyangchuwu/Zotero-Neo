@@ -1,5 +1,6 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
+import { CleanupFailure } from '../core/cleanup';
 import type { MainWindowSession, NoteMode } from './session';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
@@ -10,15 +11,15 @@ import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { MainNavigation } from './navigation';
 import { copyToClipboard } from '../platform/clipboard';
+import { isDeadObject } from '../platform/cross-compartment';
 import { asElement } from '../platform/dom';
 import {
-  activeContextEditorWindow,
-  activeContextNoteEditor,
+  mainNoteEditorWindow,
+  mainNoteItemID,
   mainReaderForTab,
-  mainTabList,
+  selectedMainTabSnapshot,
   selectedMainTabID,
-  selectedMainTabInfo,
-} from './host';
+} from '../toolkit/main';
 
 export type NoteBindingMode = Extract<BindingContext, 'note-normal' | 'note-insert'>;
 export type NoteExternalExecute = (
@@ -79,8 +80,7 @@ export class NoteEditor {
   }
 
   isStandalone(window: MainWindow): boolean {
-    const selected = selectedMainTabID(window);
-    const entry = mainTabList(window).find((value) => value.id === selected);
+    const entry = selectedMainTabSnapshot(window);
     const value = (
       String(entry?.id ?? '') +
       ' ' +
@@ -103,33 +103,63 @@ export class NoteEditor {
       this.clear(session);
       return;
     }
-    const candidate = this.find(main);
-    const itemID = this.noteItemID(main, candidate);
-    if (candidate === session.note.editorWindow && itemID === session.note.itemID) return;
+    const candidate = mainNoteEditorWindow(main);
+    const document = candidate?.document ?? null;
+    const itemID = mainNoteItemID(main, candidate);
+    if (
+      candidate === session.note.editorWindow &&
+      document === session.note.editorDocument &&
+      itemID === session.note.itemID
+    )
+      return;
     this.clear(session);
-    if (!candidate) return;
-    const handler: EventListener = (event) =>
+    if (!candidate || !document) return;
+    const handler: EventListener = (event) => {
+      if (
+        session.note.handler !== handler ||
+        session.note.editorWindow !== candidate ||
+        session.note.editorDocument !== document ||
+        isDeadObject(candidate) ||
+        candidate.document !== document
+      )
+        return;
       this.onKeyDown(event as KeyboardEvent, main, session, execute);
-    candidate.addEventListener('keydown', handler, true);
-    candidate.document.addEventListener('keydown', handler, true);
+    };
     session.note.editorWindow = candidate;
-    session.note.editorDocument = candidate.document;
+    session.note.editorDocument = document;
     session.note.handler = handler;
     session.note.itemID = itemID;
-    this.style(candidate.document, session.note.mode);
+    try {
+      candidate.addEventListener('keydown', handler, true);
+      document.addEventListener('keydown', handler, true);
+      this.style(document, session.note.mode);
+    } catch (error) {
+      try {
+        this.clear(session);
+      } catch {
+        /* Preserve the original attachment failure. */
+      }
+      throw error;
+    }
   }
 
   clear(session: MainWindowSession): void {
     const { editorWindow, editorDocument, handler } = session.note;
     const mode = session.note.mode;
-    if (editorWindow && handler) editorWindow.removeEventListener('keydown', handler, true);
-    if (editorDocument && handler) editorDocument.removeEventListener('keydown', handler, true);
-    session.note.resetInteraction();
-    if (editorDocument && mode !== 'normal') this.style(editorDocument, 'normal');
+    // Retire before host removal so a queued/reentrant old key cannot enter newer Note state.
     session.note.editorWindow = null;
     session.note.editorDocument = null;
     session.note.handler = null;
-    this.#leaderGuide.clear(session.window, session);
+    const failure = new CleanupFailure();
+    failure.run(() => session.note.resetInteraction());
+    if (editorWindow && handler && !isDeadObject(editorWindow))
+      failure.run(() => editorWindow.removeEventListener('keydown', handler, true));
+    if (editorDocument && !isDeadObject(editorDocument)) {
+      if (handler) failure.run(() => editorDocument.removeEventListener('keydown', handler, true));
+      if (mode !== 'normal') failure.run(() => this.style(editorDocument, 'normal'));
+    }
+    failure.run(() => this.#leaderGuide.clear(session.window, session));
+    failure.rethrow();
   }
 
   deactivateInteraction(main: MainWindow, session: MainWindowSession): void {
@@ -415,41 +445,6 @@ export class NoteEditor {
     const range = selection.getRangeAt(0);
     range.insertNode(el.ownerDocument.createTextNode(text));
     return true;
-  }
-
-  private noteItemID(main: MainWindow, candidate: Window | null): number | null {
-    const contextEditor = activeContextNoteEditor(main);
-    if (candidate && contextEditor?._iframe?.contentWindow === candidate && contextEditor.item?.id)
-      return contextEditor.item.id;
-    const tab = selectedMainTabInfo(main);
-    const itemID = tab?.type?.startsWith('note') ? tab.data?.itemID : undefined;
-    return typeof itemID === 'number' && itemID > 0 ? itemID : null;
-  }
-
-  private find(main: MainWindow): Window | null {
-    const focused = Services.focus?.focusedWindow;
-    if (this.likely(focused as unknown as Window | null, main)) return focused as unknown as Window;
-    for (const frame of Array.from(main.document.querySelectorAll('browser,iframe'))) {
-      const candidate = (frame as HTMLIFrameElement).contentWindow;
-      if (this.likely(candidate, main)) return candidate;
-    }
-    const editor = activeContextEditorWindow(main);
-    return this.likely(editor, main) ? editor : null;
-  }
-
-  private likely(candidate: Window | null | undefined, main: MainWindow): candidate is Window {
-    if (
-      !candidate ||
-      candidate === main ||
-      (candidate as unknown as { PDFViewerApplication?: unknown }).PDFViewerApplication
-    )
-      return false;
-    const doc = candidate.document;
-    return !!(
-      doc.body?.isContentEditable ||
-      doc.querySelector('[contenteditable="true"],.ProseMirror,.editor-core,.editor') ||
-      doc.designMode.toLowerCase() === 'on'
-    );
   }
 
   private style(doc: Document, mode: NoteMode): void {

@@ -1,13 +1,16 @@
-import type { MainWindow, ReaderJumpLocation, ReaderJumpPosition } from '../core/contracts';
-import { cloneInto } from '../platform/cross-compartment';
+import type { MainWindow, ReaderJumpLocation, ReaderJumpPosition } from '../../core/contracts';
+import { cloneInto } from '../../platform/cross-compartment';
+import type { ItemRuntime, ReaderTimer } from '../../reader/types';
 import type {
-  ItemRuntime,
+  ReaderRuntime as ReaderHandle,
+  ReaderViewRuntime as ReaderViewHandle,
+} from './contracts';
+import type {
   PdfViewerRuntime,
-  PdfWindow,
-  ReaderRuntime,
-  ReaderTimer,
-  ReaderViewRuntime,
-} from './types';
+  NativePdfWindow as PdfWindow,
+  NativeReaderRuntime as ReaderRuntime,
+  NativeReaderViewRuntime as ReaderViewRuntime,
+} from './private-types';
 
 interface ReaderTabsRuntime {
   readonly selectedID?: string;
@@ -161,11 +164,13 @@ export class ReaderJumpHostAdapter {
   }
 
   captureReader(
-    reader: ReaderRuntime,
-    tabID = reader.tabID ?? '',
-    requestedView?: ReaderViewRuntime,
+    readerHandle: ReaderHandle,
+    tabID = readerHandle.tabID ?? '',
+    requestedView?: ReaderViewHandle,
     capturedPosition?: ReaderJumpPosition | null,
   ): ReaderJumpLocation | null {
+    // Native structure is resolved only inside the adapter; identity is unchanged.
+    const reader = readerHandle as ReaderRuntime;
     if (!tabID || reader.itemID === undefined) return null;
     const identity = this.#identityLocation(tabID, reader.itemID);
     if (!identity) return null;
@@ -176,7 +181,12 @@ export class ReaderJumpHostAdapter {
     return position ? { ...identity, position } : identity;
   }
 
-  captureViewPosition(reader: ReaderRuntime, view: ReaderViewRuntime): ReaderJumpPosition | null {
+  captureViewPosition(
+    readerHandle: ReaderHandle,
+    viewHandle: ReaderViewHandle,
+  ): ReaderJumpPosition | null {
+    const reader = readerHandle as ReaderRuntime;
+    const view = viewHandle as ReaderViewRuntime;
     try {
       const primary = this.#viewPrimary(reader, view);
       if (primary === null) return null;
@@ -193,8 +203,8 @@ export class ReaderJumpHostAdapter {
   }
 
   hasViewMoved(
-    reader: ReaderRuntime,
-    view: ReaderViewRuntime,
+    reader: ReaderHandle,
+    view: ReaderViewHandle,
     origin: ReaderJumpPosition,
   ): boolean | null {
     const current = this.captureViewPosition(reader, view);
@@ -203,10 +213,12 @@ export class ReaderJumpHostAdapter {
   }
 
   captureHardLocation(
-    reader: ReaderRuntime,
-    view: ReaderViewRuntime,
+    readerHandle: ReaderHandle,
+    viewHandle: ReaderViewHandle,
     location: unknown,
   ): ReaderJumpLocation | null {
+    const reader = readerHandle as ReaderRuntime;
+    const view = viewHandle as ReaderViewRuntime;
     const tabID = reader.tabID;
     if (!tabID || reader.itemID === undefined) return null;
     const identity = this.#identityLocation(tabID, reader.itemID);
@@ -221,7 +233,7 @@ export class ReaderJumpHostAdapter {
     window: MainWindow,
     location: ReaderJumpLocation,
     isCurrent: () => boolean,
-    beforeNavigate: (reader: ReaderRuntime) => void,
+    beforeNavigate: (reader: ReaderHandle) => void,
   ): Promise<string | null> {
     if (!validLocation(location) || !isCurrentSafely(isCurrent)) return null;
     const deadline = Date.now() + RESTORE_TIMEOUT_MS;

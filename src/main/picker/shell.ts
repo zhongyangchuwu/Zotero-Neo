@@ -497,24 +497,43 @@ export class FuzzyPicker {
       this.traceSlowFilter(session, query, filtered.length, startedAt);
       return;
     }
-    const ranked = session.picker.items.flatMap((item, index) => {
-      const score = fuzzyMatchScore(item.search, query);
-      return score === null ? [] : [{ item, index, score }];
-    });
-    if (query.trim()) ranked.sort((a, b) => b.score - a.score || a.index - b.index);
-    session.picker.filtered = ranked.slice(0, 100).map(({ item }) => item);
+    const needle = query.trim();
+    let matches = session.picker.items.length;
+    if (!needle) {
+      session.picker.filtered = session.picker.items.slice(0, 100);
+    } else {
+      const ranked: Array<{ item: PickerItem; score: number }> = [];
+      matches = 0;
+      for (const item of session.picker.items) {
+        const score = fuzzyMatchScore(item.search, needle);
+        if (score === null) continue;
+        matches += 1;
+        if (ranked.length === 100 && score <= ranked[99]!.score) continue;
+        let start = 0;
+        let end = ranked.length;
+        while (start < end) {
+          const middle = (start + end) >>> 1;
+          if (score > ranked[middle]!.score) end = middle;
+          else start = middle + 1;
+        }
+        // Insert after equal scores to preserve source order, including at the result cap.
+        ranked.splice(start, 0, { item, score });
+        if (ranked.length > 100) ranked.pop();
+      }
+      session.picker.filtered = ranked.map(({ item }) => item);
+    }
     session.picker.selected = Math.max(
       0,
       Math.min(session.picker.selected, Math.max(0, session.picker.filtered.length - 1)),
     );
     this.render(session);
-    this.traceSlowFilter(session, query, ranked.length, startedAt);
+    this.traceSlowFilter(session, query, matches, startedAt);
   }
 
   private moveSelection(session: MainWindowSession, direction: -1 | 1): void {
     const max = Math.max(0, session.picker.filtered.length - 1);
-    session.picker.selected = Math.max(0, Math.min(max, session.picker.selected + direction));
-    this.render(session);
+    this.selectRow(session, Math.max(0, Math.min(max, session.picker.selected + direction)));
+    session.picker.results?.children[session.picker.selected]?.scrollIntoView({ block: 'nearest' });
   }
 
   private selectRow(session: MainWindowSession, index: number): void {

@@ -1,18 +1,15 @@
+import {
+  readerMarkPosition,
+  readerMarkTolerance,
+  readerPageCount,
+  setReaderMarkPage,
+  readerMarkExtra,
+  setReaderMarkExtra,
+} from '../toolkit/reader';
 import type { PreferenceStore } from '../core/preference-store';
 import { readerMarksPersist } from '../core/preferences';
+import { zoteroItem } from '../platform/zotero-items';
 import type { ItemRuntime, Mark, MarksPayload, PdfWindow, ReaderRuntime } from './types';
-
-interface ItemRepository {
-  get(id: number): ItemRuntime | false | null;
-}
-
-interface ZoteroItemsRuntime {
-  readonly Items: ItemRepository;
-}
-
-interface LegacyExtraItem {
-  extra?: string;
-}
 
 export interface MarksHost {
   readonly preferences: PreferenceStore;
@@ -41,12 +38,6 @@ export interface MarksHost {
     pdfWindow: PdfWindow,
     perform: (isCurrent: () => boolean) => Promise<boolean>,
   ) => Promise<boolean>;
-}
-
-function items(): ItemRepository {
-  // Zotero's public declaration intentionally omits private storage access.
-  const host = Zotero as unknown as ZoteroItemsRuntime;
-  return host.Items;
 }
 
 function isMark(value: unknown): value is Omit<Mark, 'ts'> {
@@ -104,43 +95,7 @@ export class ReaderMarks {
   }
 
   position(pdfWindow: PdfWindow): { pageIndex: number | null; ratio: number } {
-    try {
-      const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
-      const container = viewer?.container ?? pdfWindow.document.getElementById('viewerContainer');
-      if (viewer && container) {
-        const pageNumber = viewer.currentPageNumber ?? 1;
-        const page = pdfWindow.document.querySelector<HTMLElement>(
-          `.page[data-page-number="${pageNumber}"]`,
-        );
-        if (page && page.offsetHeight > 0) {
-          const ratio =
-            (container.scrollTop - page.offsetTop + container.clientHeight / 2) / page.offsetHeight;
-          return { pageIndex: pageNumber - 1, ratio: Math.max(0, Math.min(1, ratio)) };
-        }
-        return { pageIndex: pageNumber - 1, ratio: 0 };
-      }
-      const fallbackContainer =
-        pdfWindow.document.scrollingElement ?? pdfWindow.document.documentElement;
-      const range = Math.max(0, fallbackContainer.scrollHeight - fallbackContainer.clientHeight);
-      return { pageIndex: null, ratio: range ? fallbackContainer.scrollTop / range : 0 };
-    } catch {
-      return { pageIndex: null, ratio: 0 };
-    }
-  }
-
-  /** Treats browser-rounded scroll offsets as the same visible bookmark destination. */
-  private positionTolerance(pdfWindow: PdfWindow, pageIndex: number | null, pages: number): number {
-    if (pageIndex !== null) {
-      const page = pdfWindow.document.querySelector<HTMLElement>(
-        `.page[data-page-number="${pageIndex + 1}"]`,
-      );
-      if (page && page.offsetHeight > 0) return 1 / page.offsetHeight;
-    } else {
-      const container = pdfWindow.document.scrollingElement ?? pdfWindow.document.documentElement;
-      const range = container.scrollHeight - container.clientHeight;
-      if (range > 0) return pages / range;
-    }
-    return 0.000001;
+    return readerMarkPosition(pdfWindow);
   }
 
   async set(
@@ -198,7 +153,7 @@ export class ReaderMarks {
     let char = '';
     let annotationExists = true;
     const moved = await this.#host.onJump(pdfWindow, async (isCurrent) => {
-      const pages = pdfWindow.PDFViewerApplication?.pdfViewer?.pagesCount ?? 1;
+      const pages = readerPageCount(pdfWindow);
       const annotations = this.#host.itemForReader(reader)?.getAnnotations?.() ?? [];
       const ordered: { char: string; mark: Mark; position: number }[] = [];
       for (const [name, mark] of entries) {
@@ -226,7 +181,7 @@ export class ReaderMarks {
       const current = this.position(pdfWindow);
       const position =
         current.pageIndex === null ? current.ratio * pages : current.pageIndex + current.ratio;
-      const tolerance = this.positionTolerance(pdfWindow, current.pageIndex, pages);
+      const tolerance = readerMarkTolerance(pdfWindow, current.pageIndex, pages);
       let target = direction > 0 ? ordered[0] : ordered[ordered.length - 1];
       if (direction > 0)
         target = ordered.find((entry) => entry.position > position + tolerance) ?? target;
@@ -280,8 +235,7 @@ export class ReaderMarks {
       }
       if (!isCurrent()) return false;
       if (pageIndex !== null && this.#host.pageNavigationSupported(reader, pdfWindow)) {
-        const viewer = pdfWindow.PDFViewerApplication?.pdfViewer;
-        if (viewer) viewer.currentPageNumber = pageIndex + 1;
+        setReaderMarkPage(pdfWindow, pageIndex);
         return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
       }
       return this.#host.scrollDocumentToRatio(pdfWindow, ratio, isCurrent);
@@ -376,33 +330,15 @@ export class ReaderMarks {
     if (migrated) void this.save(reader);
   }
 
+  /** Bookmark storage belongs to the attachment's parent, or the standalone attachment. */
   private storeItem(attachment: ItemRuntime): ItemRuntime | null {
     try {
-      return attachment.parentItemID ? items().get(attachment.parentItemID) || null : attachment;
+      return attachment.parentItemID
+        ? ((zoteroItem(attachment.parentItemID) as ItemRuntime | undefined) ?? null)
+        : attachment;
     } catch {
       return null;
     }
-  }
-
-  private extra(item: ItemRuntime | null): string {
-    if (!item) return '';
-    try {
-      // Older Zotero versions expose Extra as a private property rather than getField().
-      const legacyItem = item as unknown as LegacyExtraItem;
-      return item.getField?.('extra') ?? legacyItem.extra ?? '';
-    } catch {
-      return '';
-    }
-  }
-
-  private setExtra(item: ItemRuntime, value: string): void {
-    if (item.setField) {
-      item.setField('extra', value);
-      return;
-    }
-    // Older Zotero versions expose Extra as a private property rather than setField().
-    const legacyItem = item as unknown as LegacyExtraItem;
-    legacyItem.extra = value;
   }
 
   private prefix(attachmentKey: string): string {
@@ -410,7 +346,7 @@ export class ReaderMarks {
   }
 
   private readExtra(item: ItemRuntime | null, attachmentKey: string): MarksPayload | null {
-    const line = this.extra(item)
+    const line = readerMarkExtra(item)
       .split('\n')
       .find((candidate) => candidate.startsWith(this.prefix(attachmentKey)));
     if (!line) return null;
@@ -428,23 +364,23 @@ export class ReaderMarks {
     payload: MarksPayload,
   ): Promise<void> {
     const prefix = this.prefix(attachmentKey);
-    const lines = this.extra(item)
+    const lines = readerMarkExtra(item)
       .split('\n')
       .filter((line) => line.trim() && !line.startsWith(prefix));
     lines.push(`${prefix}${JSON.stringify(payload)}`);
-    this.setExtra(item, lines.join('\n'));
+    setReaderMarkExtra(item, lines.join('\n'));
     await item.saveTx();
   }
 
   private async clearExtra(item: ItemRuntime, attachmentKey: string): Promise<void> {
     const prefix = this.prefix(attachmentKey);
-    const current = this.extra(item);
+    const current = readerMarkExtra(item);
     const next = current
       .split('\n')
       .filter((line) => line.trim() && !line.startsWith(prefix))
       .join('\n');
     if (next !== current) {
-      this.setExtra(item, next);
+      setReaderMarkExtra(item, next);
       await item.saveTx();
     }
   }

@@ -1,3 +1,4 @@
+import { selectedAnnotationIDs } from '../toolkit/reader';
 import type { AnnotationColor, ReaderRuntime } from './types';
 
 /**
@@ -25,7 +26,7 @@ export class ReaderAnnotationNavigationState {
   }
 
   selectedAnnotationKey(reader: ReaderRuntime): string | null {
-    return reader._internalReader?._state?.selectedAnnotationIDs?.[0] ?? this.#lastAnnotationKey;
+    return selectedAnnotationIDs(reader)[0] ?? this.#lastAnnotationKey;
   }
 
   /**

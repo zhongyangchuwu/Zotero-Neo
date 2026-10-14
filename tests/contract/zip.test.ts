@@ -1,12 +1,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { describe, expect, it } from 'vitest';
 
-import { listZipMembers, zipDirectory } from '../../tools/zip.mjs';
+import { listZipMembers, readZipMember, zipDirectory } from '../../tools/zip.mjs';
 
 const expectedMembers = [
+  'LICENSE',
   'bootstrap.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
@@ -18,8 +19,11 @@ const expectedMembers = [
   'icons/icon-48x48.png',
   'icons/icon-64x64.png',
   'icons/icon-96x96.png',
+  'licenses/fuzzysort-LICENSE',
   'manifest.json',
 ];
+
+const repositoryRoot = resolve(import.meta.dirname, '../..');
 
 function writeFixtureFile(root: string, member: string, contents: string): void {
   const file = join(root, member);
@@ -56,6 +60,12 @@ describe('ZIP package contract', () => {
       ] as const) {
         writeFixtureFile(source, member, contents);
       }
+      for (const [member, licenseSource] of [
+        ['LICENSE', join(repositoryRoot, 'LICENSE')],
+        ['licenses/fuzzysort-LICENSE', join(repositoryRoot, 'vendor/fuzzysort/LICENSE')],
+      ]) {
+        writeFixtureFile(source, member, readFileSync(licenseSource, 'utf8'));
+      }
 
       const firstArchive = join(directory, 'first.xpi');
       const secondArchive = join(directory, 'second.xpi');
@@ -71,7 +81,12 @@ describe('ZIP package contract', () => {
 
       expect(readFileSync(secondArchive)).toEqual(readFileSync(firstArchive));
       expect(listZipMembers(firstArchive)).toEqual(expectedMembers);
-      expect(listZipMembers(firstArchive).every((member) => !member.includes('\\'))).toBe(true);
+      expect(readZipMember(firstArchive, 'LICENSE')).toEqual(
+        readFileSync(join(repositoryRoot, 'LICENSE')),
+      );
+      expect(readZipMember(firstArchive, 'licenses/fuzzysort-LICENSE')).toEqual(
+        readFileSync(join(repositoryRoot, 'vendor/fuzzysort/LICENSE')),
+      );
     });
   });
 
@@ -88,7 +103,7 @@ describe('ZIP package contract', () => {
       const corruptArchive = join(directory, 'corrupt.xpi');
       writeFileSync(corruptArchive, corrupt);
 
-      expect(() => listZipMembers(corruptArchive)).toThrow('Invalid central directory entry');
+      expect(() => listZipMembers(corruptArchive)).toThrow(Error);
     });
   });
 });

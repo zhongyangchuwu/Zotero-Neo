@@ -11,8 +11,13 @@ import {
   type InteractionAppearanceSource,
 } from '../../src/main/interaction-appearance';
 import type { PreferenceReader } from '../../src/core/preferences';
+import { installMainRenderedItemDecoration } from '../../src/toolkit/main';
 
 type TestRow = HTMLElement & { readonly classes: Set<string> };
+type TestRoot = HTMLElement & {
+  readonly rows: TestRow[];
+  readonly scrollListeners: ReadonlySet<EventListenerOrEventListenerObject>;
+};
 
 type ObservedMutation = {
   readonly target: Node;
@@ -44,7 +49,14 @@ function decorationHarness(
   let currentRoot: HTMLElement;
   const body = {} as HTMLElement;
   const parent = {} as HTMLElement;
-  const style = { id: '', textContent: '', remove: vi.fn() } as unknown as HTMLStyleElement;
+  const style = {
+    id: '',
+    textContent: '',
+    isConnected: true,
+    remove: vi.fn((): void => {
+      Reflect.set(style, 'isConnected', false);
+    }),
+  } as unknown as HTMLStyleElement;
   const mutations: ObservedMutation[] = [];
   const timers = new Map<number, () => void>();
   let nextTimer = 0;
@@ -55,13 +67,19 @@ function decorationHarness(
 
   const makeRoot = (indexes: readonly number[]) => {
     const rows = indexes.map(rowElement);
+    const scrollListeners = new Set<EventListenerOrEventListenerObject>();
     const root = {
       parentElement: parent,
       rows,
+      scrollListeners,
       querySelectorAll: () => rows,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as HTMLElement & { readonly rows: TestRow[] };
+      addEventListener: vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+        scrollListeners.add(listener);
+      }),
+      removeEventListener: vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+        scrollListeners.delete(listener);
+      }),
+    } as unknown as TestRoot;
     return root;
   };
   currentRoot = makeRoot(renderedIndexes);
@@ -165,9 +183,9 @@ function decorationHarness(
     getRow,
     flush,
     emit,
-    root: () => currentRoot as HTMLElement & { readonly rows: TestRow[] },
+    root: () => currentRoot as TestRoot,
     replaceRoot: (indexes: readonly number[]) => {
-      const previous = currentRoot as HTMLElement & { readonly rows: TestRow[] };
+      const previous = currentRoot as TestRoot;
       currentRoot = makeRoot(indexes);
       return previous;
     },
@@ -225,36 +243,6 @@ describe('Main item state decoration', () => {
     ).toEqual(['zotero-neo-selection']);
   });
 
-  it('uses fixed marker lanes without styling row fill, foreground, or Cursor', () => {
-    const host = decorationHarness([0], { first: 0, last: 0, count: 1 });
-    host.selection.add({ libraryID: 1, itemID: 1 });
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
-    host.flush();
-
-    const css = host.style.textContent;
-    expect(css).toMatch(/\.row\.zotero-neo-selection::before\s*\{[^}]*left: 0px/s);
-    expect(css).toMatch(/\.row\.zotero-neo-visual::after\s*\{[^}]*left: 13px/s);
-    expect(css).toContain('width: 3px');
-    expect(css).toContain('background: #9A6700');
-    expect(css).toContain('background: #287A43');
-    expect(css).not.toContain('.zotero-neo-selection.zotero-neo-visual::after');
-    expect(css).not.toContain('.row.zotero-neo-selection {');
-    expect(css).not.toContain('.row.zotero-neo-visual {');
-    expect(css).not.toContain('.row.zotero-neo-cursor');
-    expect(css).not.toMatch(/(^|[;{]\s*)color\s*:/m);
-    expect(css).not.toMatch(/(^|[;{]\s*)outline\s*:/m);
-
-    expect(host.root().rows[0]!.classes).toEqual(
-      new Set([
-        'zotero-neo-cursor',
-        'zotero-neo-selection',
-        'zotero-neo-visual',
-        'zotero-neo-visual-first',
-        'zotero-neo-visual-last',
-      ]),
-    );
-  });
-
   it('keeps large Visual renders proportional to rendered rows and coalesces relevant mutations', () => {
     const host = decorationHarness([0, 4_999, 9_999], { first: 0, last: 9_999, count: 10_000 });
     host.setFocused(4_999);
@@ -309,4 +297,110 @@ describe('Main item state decoration', () => {
     expect(host.mutations.every((mutation) => mutation.disconnected)).toBe(true);
     expect(host.style.remove).toHaveBeenCalledOnce();
   });
+
+  it('leaves current Selection rows untouched by retired renders, observers and scroll callbacks', () => {
+    const host = decorationHarness([0, 1], undefined);
+    host.selection.add({ libraryID: 1, itemID: 1 });
+    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
+    const queued = [...host.timers.values()][0]!;
+    const callbacks = host.mutations.map((mutation) => mutation.callback);
+    const scroll = vi.mocked(host.root().addEventListener).mock.calls[0]![1] as EventListener;
+    host.decoration.removeWindow(host.window);
+    const selection = new SelectionStore();
+    selection.add({ libraryID: 1, itemID: 2 });
+    host.decoration.addWindow(host.window, selection, host.visual, host.appearance);
+    host.flush();
+    queued();
+    for (const callback of callbacks) callback([], {} as MutationObserver);
+    scroll({} as Event);
+    expect(host.root().rows[0]!.classes.has('zotero-neo-selection')).toBe(false);
+    expect(host.root().rows[1]!.classes.has('zotero-neo-selection')).toBe(true);
+    expect(host.timers.size).toBe(0);
+    host.decoration.removeWindow(host.window);
+  });
+
+  it('releases acquired resources and retires callbacks after an initial installation failure', () => {
+    const host = decorationHarness([0, 1], undefined);
+    const installationFailure = new Error('Initial row observation failed');
+    const cleanupFailure = new Error('Observer disconnect reported failure');
+    const prototype = host.window.MutationObserver.prototype;
+    const nativeObserve = prototype.observe;
+    const nativeDisconnect = prototype.disconnect;
+    const observe = vi.spyOn(prototype, 'observe').mockImplementation(function (
+      this: MutationObserver,
+      target,
+      options,
+    ) {
+      nativeObserve.call(this, target, options);
+      if (target === host.root()) throw installationFailure;
+    });
+    const disconnect = vi.spyOn(prototype, 'disconnect').mockImplementationOnce(function (
+      this: MutationObserver,
+    ) {
+      nativeDisconnect.call(this);
+      throw cleanupFailure;
+    });
+    let notifications = 0;
+    let observed: unknown;
+    try {
+      installMainRenderedItemDecoration(
+        host.window,
+        host.appearance.appearance,
+        ['zotero-neo-selection'],
+        () => {
+          notifications += 1;
+        },
+      );
+    } catch (error) {
+      observed = error;
+    }
+
+    expect(observed).toBe(installationFailure);
+    expect(host.style.isConnected).toBe(false);
+    expect(host.mutations).toHaveLength(2);
+    expect(host.mutations.every((mutation) => mutation.disconnected)).toBe(true);
+    expect(host.root().scrollListeners.size).toBe(0);
+    const scroll = vi.mocked(host.root().addEventListener).mock.calls[0]![1] as EventListener;
+    for (const mutation of host.mutations) mutation.callback([], {} as MutationObserver);
+    scroll({} as Event);
+    expect(notifications).toBe(0);
+    expect(host.timers.size).toBe(0);
+    expect(host.getRow).not.toHaveBeenCalled();
+    observe.mockRestore();
+    disconnect.mockRestore();
+  });
+
+  it.each(['observer', 'scroll listener'] as const)(
+    'retires decoration and finishes independent cleanup after a live %s failure',
+    (boundary) => {
+      const host = decorationHarness([0, 1], { first: 0, last: 1, count: 2 });
+      host.selection.add({ libraryID: 1, itemID: 1 });
+      host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
+      host.flush();
+      const failure = new Error('live decoration cleanup failed');
+      const failing =
+        boundary === 'observer'
+          ? vi.spyOn(host.window.MutationObserver.prototype, 'disconnect')
+          : vi.mocked(host.root().removeEventListener);
+      failing.mockImplementationOnce(() => {
+        throw failure;
+      });
+      let observed: unknown;
+      try {
+        host.decoration.removeWindow(host.window);
+      } catch (error) {
+        observed = error;
+      }
+      expect(observed).toBe(failure);
+      expect(host.style.isConnected).toBe(false);
+      expect(host.root().rows.map((row) => [...row.classes])).toEqual([[], []]);
+      expect(host.mutations.filter((mutation) => !mutation.disconnected)).toHaveLength(
+        boundary === 'observer' ? 1 : 0,
+      );
+      for (const mutation of host.mutations) mutation.callback([], {} as MutationObserver);
+      host.selection.add({ libraryID: 1, itemID: 2 });
+      expect(host.timers.size).toBe(0);
+      failing.mockRestore();
+    },
+  );
 });

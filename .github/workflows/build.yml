@@ -29,8 +29,10 @@ jobs:
     name: Build on Ubuntu
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v7
+      # Verified upstream ref: https://api.github.com/repos/actions/checkout/git/ref/tags/v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      # Verified upstream ref: https://api.github.com/repos/actions/setup-node/git/ref/tags/v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: npm
@@ -39,7 +41,7 @@ jobs:
       - name: Build XPI
         run: ./tools/build.sh
       - name: Upload Linux XPI
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7; https://api.github.com/repos/actions/upload-artifact/git/ref/tags/v7
         with:
           name: zotero-neo-linux
           path: zotero-neo.xpi
@@ -55,13 +57,16 @@ jobs:
     needs:
       - build-linux
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ inputs.release_tag || github.ref_name }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
       - name: Resolve release tag
@@ -82,35 +87,13 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Validate release metadata
         run: node tools/check-release.mjs "${{ steps.release.outputs.tag }}"
-      - name: Create release tag for manual publication
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          tag="${{ steps.release.outputs.tag }}"
-          existing="$(git ls-remote origin "refs/tags/$tag" | cut -f1)"
-          if [[ -n "$existing" && "$existing" != "$GITHUB_SHA" ]]; then
-            echo "Tag $tag already exists at $existing, expected $GITHUB_SHA" >&2
-            exit 1
-          fi
-          if [[ -z "$existing" ]]; then
-            git tag "$tag" "$GITHUB_SHA"
-            git push origin "refs/tags/$tag"
-          fi
       - name: Download canonical XPI
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8; https://api.github.com/repos/actions/download-artifact/git/ref/tags/v8
         with:
           name: zotero-neo-linux
           path: release
-      - name: Verify XPI archive
-        run: unzip -t release/zotero-neo.xpi
-      - name: Publish release
+      - name: Verify and publish immutable release
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          tag="${{ steps.release.outputs.tag }}"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" release/zotero-neo.xpi --clobber
-          else
-            gh release create "$tag" release/zotero-neo.xpi --verify-tag --generate-notes --title "Zotero Neo $tag"
-          fi
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: node tools/publish-release.mjs "$RELEASE_TAG" "$GITHUB_SHA" release/zotero-neo.xpi

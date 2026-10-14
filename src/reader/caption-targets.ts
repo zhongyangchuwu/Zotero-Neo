@@ -1,3 +1,4 @@
+import { structuredDocumentBlocks } from '../toolkit/reader';
 import { outlineEntryKind } from './outline-presentation';
 import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from './types';
 
@@ -229,24 +230,9 @@ export class ReaderCaptionTargets {
   private async read(): Promise<readonly ReaderCaptionTarget[]> {
     if (this.#disposed) return [];
     try {
-      const sdk = typeof Zotero === 'undefined' ? null : record(Reflect.get(Zotero, 'SDT'));
-      const getReader = sdk?.getReader;
-      if (typeof getReader !== 'function' || !this.#itemID) return this.finish([], false);
-      const reader = record(await getReader.call(sdk, this.#itemID));
+      const blocks = await structuredDocumentBlocks(this.#itemID, () => !this.#disposed);
       if (this.#disposed) return [];
-      if (
-        !reader ||
-        typeof reader.getTopLevelBlockCount !== 'function' ||
-        typeof reader.getBlocks !== 'function'
-      )
-        return this.finish([], false);
-      const count: unknown = await reader.getTopLevelBlockCount();
-      if (this.#disposed) return [];
-      if (typeof count !== 'number' || !Number.isInteger(count) || count < 0)
-        return this.finish([], false);
-      const blocks: unknown = count ? await reader.getBlocks(0, count - 1) : [];
-      if (this.#disposed) return [];
-      if (!Array.isArray(blocks)) return this.finish([], false);
+      if (!blocks) return this.finish([], false);
       const entries: ReaderCaptionTarget[] = [];
       const headings: { title: string; position: ReaderLinkPosition }[] = [];
       const seen = new Set<string>();

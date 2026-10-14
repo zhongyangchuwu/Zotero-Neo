@@ -9,10 +9,13 @@ import type { MainWindowSession } from '../../src/main/session';
 import { PrefixGuideRuntime, type PrefixGuideView } from '../../src/ui/key-guide-runtime';
 
 const originalServices = Reflect.get(globalThis, 'Services');
+const originalComponents = Reflect.get(globalThis, 'Components');
 
 afterEach(() => {
   if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
   else Reflect.set(globalThis, 'Services', originalServices);
+  if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+  else Reflect.set(globalThis, 'Components', originalComponents);
 });
 
 function harness() {
@@ -99,6 +102,7 @@ function harness() {
     },
   } as unknown as MainWindow;
   Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
+  Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
 
   const note = new NoteSurfaceRuntime(main);
   const session = {
@@ -277,6 +281,40 @@ describe('Note surface runtime identity', () => {
     expect(h.addDocumentListener).toHaveBeenCalledOnce();
     expect(h.removeWindowListener).not.toHaveBeenCalled();
     expect(h.removeDocumentListener).not.toHaveBeenCalled();
+  });
+
+  it('retires Note input when the same Window and item replace their Document', () => {
+    const h = harness();
+    h.sync();
+    const retired = h.addDocumentListener.mock.calls[0]![1] as EventListener;
+    h.note.mode = 'insert';
+    h.note.input.replace('d', '2');
+    const replacement = { ...h.editorDocument } as Document;
+    Reflect.set(h.editorWindow, 'document', replacement);
+    try {
+      h.sync();
+      expect(h.note.mode).toBe('normal');
+      expect(h.note.input.keyBuffer).toBe('');
+      expect(h.note.input.countBuffer).toBe('');
+      const target = { ...h.target, ownerDocument: replacement } as HTMLElement;
+      const event = {
+        key: 'i',
+        target,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      } as unknown as Event;
+      retired(event);
+      expect(h.note.mode).toBe('normal');
+      const current = h.addDocumentListener.mock.calls.at(-1)![1] as EventListener;
+      current(event);
+      expect(h.note.mode).toBe('insert');
+    } finally {
+      h.editor.clear(h.session);
+    }
   });
 
   it('resets Note interaction state when the same editor host displays another Note item', () => {

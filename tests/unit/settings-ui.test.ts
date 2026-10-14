@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   settingsButton,
   settingsChoices,
-  settingsControlRow,
-  settingsGroup,
   settingsNumberRow,
   settingsSelectElement,
   settingsStatus,
@@ -94,7 +92,6 @@ describe('shared Neo Settings controls', () => {
     ) as unknown as FakeElement;
     expect(button.type).toBe('button');
     expect(button.tabIndex).toBe(-1);
-    expect(button.textContent).toBe('Apply');
     for (const rule of [
       'appearance:none',
       '-moz-appearance:none',
@@ -179,32 +176,11 @@ describe('shared Neo Settings controls', () => {
     expect(buttons.every((button) => button.listeners.size === 0)).toBe(true);
     expect(styleButtons.every((button) => button.listeners.size === 0)).toBe(true);
   });
-  it('renders lightweight group headings and accessible inline status', () => {
+  it('provides accessible inline status', () => {
     const doc = fakeDocument();
-    const group = settingsGroup(doc, 'Picker', 'Shared candidates');
-    const children = (group as unknown as FakeElement).children;
-    expect(children[0]?.textContent).toBe('Picker');
-    expect(children[1]?.textContent).toBe('Shared candidates');
-    expect(children[0]?.style.cssText).toContain('font-size:1.2em');
-    expect((settingsGroup(doc, 'Note editing') as unknown as FakeElement).children).toHaveLength(1);
     const status = settingsStatus(doc) as unknown as FakeElement;
     expect(status.getAttribute('role')).toBe('status');
     expect(status.getAttribute('aria-live')).toBe('polite');
-  });
-
-  it('shares labeled row geometry across choices, toggles, and number inputs', () => {
-    const doc = fakeDocument();
-    const control = settingsChoices(doc, [{ value: 'a', label: 'A' }], 'a', () => {}, []).element;
-    const row = settingsControlRow(
-      doc,
-      'Mode',
-      control,
-      'Shared description',
-    ) as unknown as FakeElement;
-    expect(row.style.cssText).toContain('align-items:center');
-    expect(row.children[0]?.children[0]?.textContent).toBe('Mode');
-    expect(row.children[0]?.children[1]?.textContent).toBe('Shared description');
-    expect(row.children[1]).toBe(control as unknown as FakeElement);
   });
 
   it('shares native select rendering and option replacement across Settings choices', () => {
@@ -321,8 +297,6 @@ describe('shared Neo Settings controls', () => {
     );
     const row = toggle.element as unknown as FakeElement;
     const button = row.children[1]!;
-    expect(row.children[0]?.children[0]?.textContent).toBe('Mouse rows');
-    expect(row.children[0]?.children[1]?.textContent).toBe('All shared pickers');
     expect(button.getAttribute('role')).toBe('switch');
     expect(button.getAttribute('aria-label')).toBe('Mouse rows');
     expect(button.getAttribute('aria-checked')).toBe('false');

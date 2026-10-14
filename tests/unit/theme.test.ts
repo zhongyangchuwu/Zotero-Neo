@@ -114,7 +114,7 @@ describe('appearance theme contract', () => {
     const manager = new ThemeManager(host.window, source);
     const panel = root();
 
-    expect(() => manager.add(panel)).not.toThrow();
+    manager.add(panel);
     expect(panel.attributes.get('data-zotero-neo-theme')).toBe('dark');
     manager.dispose();
   });

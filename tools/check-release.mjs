@@ -25,12 +25,14 @@ export function validateRelease(tag, manifest, updates) {
 
   const updatesForAddon = updates.addons?.[geckoId]?.updates;
   if (!Array.isArray(updatesForAddon)) {
-    throw new Error(`updates.json has no updates array for ${geckoId}`);
+    throw new Error(`candidate metadata has no updates array for ${geckoId}`);
   }
 
   const matching = updatesForAddon.filter((entry) => entry?.version === manifest.version);
   if (matching.length !== 1) {
-    throw new Error(`updates.json must contain exactly one entry for version ${manifest.version}`);
+    throw new Error(
+      `candidate metadata must contain exactly one entry for version ${manifest.version}`,
+    );
   }
 
   const homepage = String(manifest.homepage_url || '').replace(/\/+$/, '');
@@ -55,7 +57,11 @@ export function validateRelease(tag, manifest, updates) {
 function runCli() {
   try {
     const tag = process.argv[2] || process.env.GITHUB_REF_NAME;
-    const addonId = validateRelease(tag, readJson('manifest.json'), readJson('updates.json'));
+    const addonId = validateRelease(
+      tag,
+      readJson('manifest.json'),
+      readJson('updates.candidate.json'),
+    );
     console.log(`[release] validated ${tag} for ${addonId}`);
   } catch (error) {
     console.error(`[release] ${error instanceof Error ? error.message : String(error)}`);

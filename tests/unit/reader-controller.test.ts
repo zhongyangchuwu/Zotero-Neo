@@ -13,19 +13,22 @@ import {
   ReaderSession,
   createReaderController,
 } from '../../src/reader/controller';
-import { ReaderJumpHostAdapter } from '../../src/reader/jump-host';
+import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import type {
-  InternalReaderRuntime,
-  PdfWindow,
+  AnnotationDraft,
   ReaderEventRuntime,
   ReaderLinkOverlay,
   ReaderLinkPosition,
   ReaderNativeOutlineEntry,
+} from '../../src/reader/types';
+import type {
+  InternalReaderRuntime,
+  PdfWindow,
   ReaderPdfHistoryLocationRuntime,
   ReaderRuntime,
   ReaderViewRuntime,
-} from '../../src/reader/types';
+} from '../fixtures/reader-native-types';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 
@@ -302,33 +305,52 @@ describe('Reader event lifecycle', () => {
   });
 
   it.each(['restart', 'replacement'] as const)(
-    'retires native selection callbacks across %s without changing the current input',
-    (operation) => {
+    'retires native selection callbacks across %s without changing the saved selection',
+    async (operation) => {
+      const created = createHistorySession();
       const { service, dependencies } = createReaderRegistryHarness();
+      const persistence = configureAnnotationPersistence([created]);
+      service._readers = [created.reader];
+      Reflect.set(service, 'getByTabID', () => created.reader);
       const retired = new ReaderController(dependencies);
       retired.start('zotero-neo@zotero-neo');
+      retired.rescan(created.ownerWindow);
       const queued = service._registeredListeners.find(
         (entry) => entry.type === 'renderTextSelectionPopup',
       )!.handler;
-      const oldParams = { annotation: { text: 'old selection' }, onAddAnnotation: () => {} };
-      service.dispatch('renderTextSelectionPopup', { params: oldParams });
-      expect(retired.selection()).toBe(oldParams);
+      const oldParams = {
+        annotation: { text: 'old selection', position: { pageIndex: 0, rects: [[1, 2, 3, 4]] } },
+        onAddAnnotation: () => {},
+      };
+      service.dispatch('renderTextSelectionPopup', { reader: created.reader, params: oldParams });
       retired.shutdown();
-      expect(retired.selection()).toBeNull();
 
       const current = operation === 'restart' ? retired : new ReaderController(dependencies);
       try {
         current.start('zotero-neo@zotero-neo');
-        const newParams = { annotation: { text: 'current selection' }, onAddAnnotation: () => {} };
-        service.dispatch('renderTextSelectionPopup', { params: newParams });
-        expect(current.selection()).toBe(newParams);
-        if (operation === 'replacement') expect(retired.selection()).toBeNull();
-
-        queued({ params: oldParams });
-        expect(current.selection()).toBe(newParams);
-        if (operation === 'replacement') expect(retired.selection()).toBeNull();
+        current.rescan(created.ownerWindow);
+        const newParams = {
+          annotation: {
+            text: 'current selection',
+            position: { pageIndex: 1, rects: [[11, 12, 13, 14]] },
+          },
+          onAddAnnotation: () => {},
+        };
+        service.dispatch('renderTextSelectionPopup', { reader: created.reader, params: newParams });
+        queued({ reader: created.reader, params: oldParams });
+        current.forwardKey(readerKey('z').event, created.ownerWindow);
+        current.forwardKey(readerKey('y').event, created.ownerWindow);
+        await settleReaderMicrotasks();
+        expect(persistence.saved).toMatchObject([
+          {
+            parentID: created.reader.itemID,
+            annotationText: 'current selection',
+            annotationPosition: JSON.stringify(newParams.annotation.position),
+          },
+        ]);
       } finally {
         current.shutdown();
+        created.session.dispose();
       }
     },
   );
@@ -361,12 +383,12 @@ describe('Reader event lifecycle', () => {
           expect(() => created.session.dispose()).toThrow(original);
           failRemoval = false;
         } else {
-          internal._primaryView = replacement.reader._internalReader!._primaryView;
+          Reflect.set(internal, '_primaryView', replacement.reader._internalReader!._primaryView);
           expect(() => created.intervalTasks[0]!()).toThrow(original);
           failRemoval = false;
           created.intervalTasks[0]!();
           if (retirement === 'reattached') {
-            internal._primaryView = originalView;
+            Reflect.set(internal, '_primaryView', originalView);
             created.intervalTasks[0]!();
             const currentKey = readerKey('j');
             listeners[1]!(currentKey.event);
@@ -772,23 +794,21 @@ function createHistorySession(
     },
   } as ReaderRuntime;
   const preferences = readerPreferences(preferenceValues);
-  const controller = {
-    dependencies: {
-      preferences,
-      logger: {
-        debug: (message: string) => debug.push(message),
-        diagnostic: (message: string) => diagnostics.push(message),
-      },
-      main: {
-        ...noopReaderMainOperations,
-        ...mainOperations,
-        openReaderTagPicker,
-        openReaderCollectionPicker,
-        openCommandPalette,
-        captureReaderSelectionToNote,
-      },
+  const controller = new ReaderController({
+    preferences,
+    logger: {
+      debug: (message: string) => debug.push(message),
+      diagnostic: (message: string) => diagnostics.push(message),
     },
-  };
+    main: {
+      ...noopReaderMainOperations,
+      ...mainOperations,
+      openReaderTagPicker,
+      openReaderCollectionPicker,
+      openCommandPalette,
+      captureReaderSelectionToNote,
+    },
+  });
   const session = new ReaderSession({
     controller,
     reader,
@@ -816,10 +836,937 @@ function createHistorySession(
     confirm,
     cloneInto,
     bodyChildren,
+    controller,
     animationFrameTasks,
     intervalTasks,
   };
 }
+
+function configureAnnotationPersistence(
+  readers: readonly ReaderHistoryHarness[],
+  save: () => Promise<void> = async () => {},
+) {
+  const drafts: AnnotationDraft[] = [];
+  const saved: AnnotationDraft[] = [];
+  const attachments = readers.map((created, index) => {
+    const id = 41 + index;
+    const tabID = `annotation-reader-${index}`;
+    Reflect.set(created.reader, 'itemID', id);
+    Reflect.set(created.reader, '_instanceID', tabID);
+    Reflect.set(created.reader, 'tabID', tabID);
+    Reflect.set(created.ownerWindow, 'Zotero_Tabs', { selectedID: tabID });
+    return {
+      id,
+      libraryID: 1,
+      getAnnotations: () =>
+        drafts.filter(
+          (draft) => draft.parentID === id && saved.some((receipt) => receipt.key === draft.key),
+        ),
+    };
+  });
+  Reflect.set(globalThis, 'Zotero', {
+    Reader: Reflect.get(globalThis, 'Zotero')?.Reader,
+    Items: {
+      get: (id: number) =>
+        attachments.find((item) => item.id === id) ??
+        drafts.find((item) => item.id === id) ??
+        false,
+      getByLibraryAndKey: (_libraryID: number, key: string) =>
+        drafts.find((item) => item.key === key) ?? false,
+    },
+    Item: function () {
+      const item: AnnotationDraft = {
+        id: 100 + drafts.length,
+        key: `CREATED-${drafts.length + 1}`,
+        libraryID: 0,
+        parentID: 0,
+        annotationIsExternal: false,
+        saveTx: vi.fn(async () => {
+          await save();
+          saved.push({ ...item });
+        }),
+      };
+      drafts.push(item);
+      return item;
+    },
+  });
+  return { drafts, saved, attachments };
+}
+
+function configureAnnotationSelection(
+  created: ReaderHistoryHarness,
+  text = 'alpha beta',
+  start = 0,
+  end = 5,
+) {
+  const document = created.pdfWindow.document;
+  const node = {
+    nodeType: 3,
+    data: text,
+    length: text.length,
+    isConnected: true,
+    ownerDocument: document,
+  } as unknown as Text;
+  const rectangle = (left: number, right: number) =>
+    ({
+      left,
+      right,
+      top: 20,
+      bottom: 40,
+      width: right - left,
+      height: 20,
+    }) as DOMRect;
+  const range = () => {
+    let first = start;
+    let last = end;
+    return {
+      commonAncestorContainer: node,
+      startContainer: node,
+      endContainer: node,
+      get startOffset() {
+        return first;
+      },
+      get endOffset() {
+        return last;
+      },
+      setStart: (_node: Node, offset: number) => {
+        first = offset;
+      },
+      setEnd: (_node: Node, offset: number) => {
+        last = offset;
+      },
+      collapse: () => {
+        last = first;
+      },
+      getBoundingClientRect: () => rectangle(10 + first * 8, 10 + Math.max(first + 1, last) * 8),
+      getClientRects: () => [
+        rectangle(10 + Math.min(start, end) * 8, 10 + Math.max(start, end) * 8),
+      ],
+    };
+  };
+  const selection = {
+    anchorNode: node,
+    focusNode: node,
+    get anchorOffset() {
+      return start;
+    },
+    get focusOffset() {
+      return end;
+    },
+    get isCollapsed() {
+      return start === end;
+    },
+    get rangeCount() {
+      return start === end ? 0 : 1;
+    },
+    getRangeAt: range,
+    toString: () => text.slice(Math.min(start, end), Math.max(start, end)),
+    modify: vi.fn(() => {
+      end = text.length;
+    }),
+    setBaseAndExtent: (_anchor: Node, first: number, _focus: Node, last: number) => {
+      start = first;
+      end = last;
+    },
+    removeAllRanges: vi.fn(() => {
+      start = end;
+    }),
+  };
+  const page = {
+    dataset: { pageNumber: '1' },
+    getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 500 }),
+  };
+  const span = {
+    firstChild: node,
+    getBoundingClientRect: () => rectangle(10, 10 + text.length * 8),
+  };
+  Reflect.set(node, 'parentElement', span);
+  Reflect.set(created.pdfWindow, 'getSelection', () => selection);
+  Reflect.set(document, 'createRange', range);
+  Reflect.set(document, 'querySelectorAll', (selector: string) =>
+    selector === '.page[data-page-number]' ? [page] : selector === '.textLayer span' ? [span] : [],
+  );
+  Reflect.set(document.documentElement, 'setAttribute', vi.fn());
+  Reflect.set(document.documentElement, 'removeAttribute', vi.fn());
+  const container = {
+    clientHeight: 600,
+    scrollHeight: 1000,
+    scrollBy: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  };
+  Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
+    pdfViewer: {
+      _location: { pageNumber: 1, top: 500, left: 0 },
+      container,
+      currentPageNumber: 1,
+      pagesCount: 2,
+      _pages: [
+        {
+          viewport: {
+            scale: 1,
+            height: 500,
+            convertToPdfPoint: (x: number, y: number) => [x, 500 - y],
+          },
+        },
+      ],
+    },
+  });
+  return { selection, node, container };
+}
+
+function configureAnnotationGeometry(
+  created: ReaderHistoryHarness,
+  pageIndices: readonly number[],
+  fragmentsPerPage = 1,
+  pageCount = 6,
+) {
+  const text = pageIndices.map((index) => `page ${index + 1} text`).join(' ');
+  const fixture = configureAnnotationSelection(created, text, 0, text.length);
+  const document = created.pdfWindow.document;
+  const pages = Array.from({ length: pageCount }, (_, index) => ({
+    dataset: { pageNumber: String(index + 1) },
+    getBoundingClientRect: vi.fn(() => ({ left: 20, top: index * 600, bottom: index * 600 + 500 })),
+  }));
+  const rectangles = pageIndices.flatMap((index) =>
+    Array.from({ length: fragmentsPerPage }, (_, fragment) => ({
+      left: 30 + fragment * 10,
+      right: 38 + fragment * 10,
+      top: index * 600 + 20,
+      bottom: index * 600 + 40,
+      width: 8,
+      height: 20,
+    })),
+  );
+  const getRangeAt = fixture.selection.getRangeAt;
+  Reflect.set(fixture.selection, 'getRangeAt', () => ({
+    ...getRangeAt(),
+    getClientRects: () => rectangles,
+  }));
+  const querySelectorAll = document.querySelectorAll.bind(document);
+  Reflect.set(document, 'querySelectorAll', (selector: string) =>
+    selector === '.page[data-page-number]' ? pages : querySelectorAll(selector),
+  );
+  const pageViews = pages.map(() => ({
+    viewport: {
+      height: 500,
+      scale: 1,
+      convertToPdfPoint: (x: number, y: number) => [x, 500 - y],
+    },
+  }));
+  Reflect.set(created.pdfWindow.PDFViewerApplication!.pdfViewer!, '_pages', pageViews);
+  Reflect.set(created.pdfWindow.PDFViewerApplication!.pdfViewer!, '_pageLabels', [
+    'i',
+    'ii',
+    'iii',
+    'iv',
+    'v',
+    'vi',
+  ]);
+  return { ...fixture, text, pages, pageViews, rectangles };
+}
+
+function recordReaderDocumentEvents(document: Document) {
+  const listeners = new Map<string, EventListener[]>();
+  Reflect.set(document, 'addEventListener', (type: string, listener: EventListener) => {
+    listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+  });
+  Reflect.set(document, 'removeEventListener', (type: string, listener: EventListener) => {
+    listeners.set(
+      type,
+      (listeners.get(type) ?? []).filter((current) => current !== listener),
+    );
+  });
+  return (type: string, event: Event) => {
+    for (const listener of listeners.get(type) ?? []) listener(event);
+  };
+}
+
+describe('Reader annotation creation ownership', () => {
+  const nativeParams = {
+    annotation: {
+      text: 'alpha',
+      position: { pageIndex: 1, rects: [[1, 2, 30, 40]] },
+      sortIndex: 'native-sort',
+      pageLabel: 'ii',
+    },
+    onAddAnnotation: () => {},
+  };
+
+  it.each(
+    [
+      { span: 'three pages', pageIndices: [0, 1, 2] },
+      { span: 'two non-adjacent pages', pageIndices: [0, 2] },
+    ].flatMap((fixture) =>
+      (['none', 'original', 'full'] as const).map((native) => ({ ...fixture, native })),
+    ),
+  )(
+    'rejects $span with $native native params without changing the selection',
+    async ({ pageIndices, native }) => {
+      const created = createHistorySession();
+      const { selection, text } = configureAnnotationGeometry(created, pageIndices);
+      const persistence = configureAnnotationPersistence([created]);
+      executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+      if (native !== 'none') {
+        created.session.acceptSelectionParams({
+          ...nativeParams,
+          annotation: { ...nativeParams.annotation, text: native === 'full' ? text : 'page 1' },
+        });
+      }
+      expect(created.session.selectionContext()).toEqual({
+        text,
+        itemID: 41,
+        pageLabel: 'i',
+        position: null,
+      });
+      executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+      await settleReaderMicrotasks();
+      expect(persistence.drafts).toEqual([]);
+      expect(persistence.saved).toEqual([]);
+      expect(selection.toString()).toBe(text);
+      expect(selection.removeAllRanges).not.toHaveBeenCalled();
+      expect(created.session.mode).toBe('visual');
+      expect(created.indicator.textContent).toContain('unsupported page span');
+      expect(created.session.selectionContext()).toEqual({
+        text,
+        itemID: 41,
+        pageLabel: 'i',
+        position: null,
+      });
+      created.session.dispose();
+    },
+  );
+
+  it.each([
+    { span: 'one page', pageIndices: [1] },
+    { span: 'two adjacent pages', pageIndices: [1, 2] },
+  ])('saves every rectangle and the full text for $span', async ({ pageIndices }) => {
+    const created = createHistorySession();
+    const { selection, text } = configureAnnotationGeometry(created, pageIndices, 2);
+    const persistence = configureAnnotationPersistence([created]);
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    const rects = [
+      [10, 460, 18, 480],
+      [20, 460, 28, 480],
+    ];
+    const position = JSON.stringify({
+      pageIndex: 1,
+      rects,
+      ...(pageIndices.length === 2 ? { nextPageRects: rects } : {}),
+    });
+    expect(created.session.selectionContext()).toEqual({
+      text,
+      itemID: 41,
+      pageLabel: 'ii',
+      position,
+    });
+    executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      {
+        annotationText: text,
+        annotationPosition: position,
+        annotationPageLabel: 'ii',
+        annotationSortIndex: '00001|000000|00020',
+      },
+    ]);
+    expect(selection.removeAllRanges).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('saves only selected text rectangles across pages, not intervening canvas boxes', async () => {
+    const created = createHistorySession();
+    const fixture = configureAnnotationGeometry(created, [0, 1]);
+    const persistence = configureAnnotationPersistence([created]);
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    const first = { nodeType: 3, textContent: 'alpha' };
+    const last = { nodeType: 3, textContent: 'beta' };
+    const outside = { nodeType: 3, textContent: 'outside' };
+    const nodes = [first, last, outside];
+    const range = {
+      commonAncestorContainer: { nodeType: 1 },
+      startContainer: first,
+      endContainer: last,
+      startOffset: 1,
+      endOffset: 3,
+      comparePoint: (node: typeof first) => (node === outside ? 1 : 0),
+      intersectsNode: (node: typeof first) => node !== outside,
+      getClientRects: () => [
+        ...fixture.rectangles,
+        { left: 20, right: 620, top: 600, bottom: 1100, width: 600, height: 500 },
+      ],
+    };
+    Reflect.set(fixture.selection, 'getRangeAt', () => range);
+    Reflect.set(fixture.selection, 'toString', () => 'lpha bet');
+    Reflect.set(created.pdfWindow.document, 'createTreeWalker', () => {
+      let index = -1;
+      return {
+        set currentNode(node: typeof first) {
+          index = nodes.indexOf(node);
+        },
+        nextNode: () => nodes[++index] ?? null,
+      };
+    });
+    Reflect.set(created.pdfWindow.document, 'createRange', () => {
+      let node = first;
+      let start = 0;
+      let end = 0;
+      return {
+        selectNodeContents: (value: typeof first) => {
+          node = value;
+          end = value.textContent.length;
+        },
+        setStart: (_node: typeof first, offset: number) => {
+          start = offset;
+        },
+        setEnd: (_node: typeof first, offset: number) => {
+          end = offset;
+        },
+        getClientRects: () => [
+          {
+            left: 30 + start * 8,
+            right: 30 + end * 8,
+            top: node === first ? 20 : 620,
+            bottom: node === first ? 40 : 640,
+            width: (end - start) * 8,
+            height: 20,
+          },
+        ],
+      };
+    });
+    const position = JSON.stringify({
+      pageIndex: 0,
+      rects: [[18, 460, 50, 480]],
+      nextPageRects: [[10, 460, 34, 480]],
+    });
+    expect(created.session.selectionContext()?.position).toBe(position);
+    executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      { annotationText: 'lpha bet', annotationPosition: position },
+    ]);
+    created.session.dispose();
+  });
+
+  it('preserves viewport rotation conversion and three-decimal rounding', async () => {
+    const created = createHistorySession();
+    const { text, pageViews } = configureAnnotationGeometry(created, [1, 2]);
+    for (const pageView of pageViews) {
+      pageView.viewport.convertToPdfPoint = (x, y) => [y + 0.12345, 500 - x + 0.67891];
+    }
+    const persistence = configureAnnotationPersistence([created]);
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    const position = JSON.stringify({
+      pageIndex: 1,
+      rects: [[20.123, 482.679, 40.123, 490.679]],
+      nextPageRects: [[20.123, 482.679, 40.123, 490.679]],
+    });
+    expect(created.session.selectionContext()?.position).toBe(position);
+    executeReaderAction(created.session, 'underlineSelection', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      { annotationText: text, annotationPosition: position },
+    ]);
+    created.session.dispose();
+  });
+
+  it.each([
+    'missing viewport',
+    'missing conversion',
+    'invalid next page',
+    'invalid fragment',
+    'unmatched fragment',
+  ] as const)('does not partially save when geometry has a %s', async (failure) => {
+    const created = createHistorySession();
+    const { selection, text, pageViews, rectangles } = configureAnnotationGeometry(
+      created,
+      [0, 1],
+      2,
+    );
+    const persistence = configureAnnotationPersistence([created]);
+    if (failure === 'missing viewport') Reflect.set(pageViews[1]!, 'viewport', undefined);
+    else if (failure === 'missing conversion')
+      Reflect.set(pageViews[1]!.viewport, 'convertToPdfPoint', undefined);
+    else if (failure === 'invalid next page')
+      pageViews[1]!.viewport.convertToPdfPoint = () => [Number.NaN, 0];
+    else if (failure === 'invalid fragment')
+      pageViews[0]!.viewport.convertToPdfPoint = (x, y) =>
+        x >= 20 ? [Number.POSITIVE_INFINITY, y] : [x, 500 - y];
+    else {
+      rectangles[3]!.top = 10_000;
+      rectangles[3]!.bottom = 10_020;
+    }
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    expect(created.session.selectionContext()).toEqual({
+      text,
+      itemID: 41,
+      pageLabel: 'i',
+      position: null,
+    });
+    executeReaderAction(created.session, 'addNote', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.drafts).toEqual([]);
+    expect(persistence.saved).toEqual([]);
+    expect(selection.toString()).toBe(text);
+    expect(selection.removeAllRanges).not.toHaveBeenCalled();
+    expect(created.session.mode).toBe('visual');
+    expect(created.indicator.textContent).toContain('no complete PDF selection rects');
+    created.session.dispose();
+  });
+
+  it('saves the extended DOM text and PDF position instead of the original native selection', async () => {
+    const created = createHistorySession();
+    configureAnnotationSelection(created);
+    const { service, dependencies } = createReaderRegistryHarness();
+    const persistence = configureAnnotationPersistence([created]);
+    service._readers = [created.reader];
+    Reflect.set(service, 'getByTabID', () => created.reader);
+    const controller = new ReaderController(dependencies);
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan(created.ownerWindow);
+      service.dispatch('renderTextSelectionPopup', {
+        reader: created.reader,
+        params: nativeParams,
+      });
+      for (const key of ['w', 'z', 'y'])
+        controller.forwardKey(readerKey(key).event, created.ownerWindow);
+      await settleReaderMicrotasks();
+      expect(persistence.saved).toMatchObject([
+        {
+          parentID: 41,
+          annotationText: 'alpha beta',
+          annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[10, 460, 90, 480]] }),
+          annotationPageLabel: '1',
+        },
+      ]);
+    } finally {
+      controller.shutdown();
+      created.session.dispose();
+    }
+  });
+
+  it('saves Reader B Flash text and geometry without reusing Reader A native selection', async () => {
+    const first = createHistorySession();
+    const second = createHistorySession();
+    configureAnnotationSelection(first);
+    configureAnnotationSelection(second, 'beta', 0, 0);
+    const { service, dependencies } = createReaderRegistryHarness();
+    const persistence = configureAnnotationPersistence([first, second]);
+    service._readers = [first.reader, second.reader];
+    Reflect.set(service, 'getByTabID', (tabID: string) =>
+      service._readers.find((reader) => reader.tabID === tabID),
+    );
+    const controller = new ReaderController(dependencies);
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan(first.ownerWindow);
+      service.dispatch('renderTextSelectionPopup', { reader: first.reader, params: nativeParams });
+      controller.forwardKey(readerKey('v').event, second.ownerWindow);
+      const input = second.bodyChildren.find((node) => node.dataset.zoteroNeoFlashInput === '1');
+      if (!input) throw new Error('Expected Flash query input');
+      Reflect.set(input, 'value', 'beta');
+      const changed = vi
+        .mocked(input.addEventListener)
+        .mock.calls.find(([type]) => type === 'input')?.[1];
+      if (typeof changed !== 'function') throw new Error('Expected Flash input listener');
+      changed({ target: input } as unknown as Event);
+      for (const key of ['Enter', 'z', 'y'])
+        controller.forwardKey(readerKey(key).event, second.ownerWindow);
+      await settleReaderMicrotasks();
+      expect(persistence.saved).toMatchObject([
+        {
+          parentID: 42,
+          annotationText: 'beta',
+          annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[10, 460, 42, 480]] }),
+        },
+      ]);
+    } finally {
+      controller.shutdown();
+      first.session.dispose();
+      second.session.dispose();
+    }
+  });
+
+  it('retains native geometry only for its exact Reader PDF view', async () => {
+    const created = createHistorySession({ _lastViewPrimary: true });
+    const secondary = createHistorySession();
+    configureAnnotationSelection(secondary, 'secondary selection', 0, 19);
+    const persistence = configureAnnotationPersistence([created]);
+    Reflect.set(created.reader._internalReader!, '_secondaryView', {
+      _iframeWindow: secondary.pdfWindow,
+    });
+    created.session.acceptSelectionParams(nativeParams);
+    Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+    executeReaderAction(created.session, 'highlightYellow', secondary.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      {
+        parentID: 41,
+        annotationText: 'secondary selection',
+        annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[10, 460, 162, 480]] }),
+      },
+    ]);
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+
+  it('preserves the exact native text, attachment and geometry when the selection is unchanged', async () => {
+    const created = createHistorySession();
+    const persistence = configureAnnotationPersistence([created]);
+    created.session.acceptSelectionParams(nativeParams);
+    executeReaderAction(created.session, 'underlineSelection', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      {
+        parentID: 41,
+        libraryID: 1,
+        annotationType: 'underline',
+        annotationText: 'alpha',
+        annotationPosition: JSON.stringify(nativeParams.annotation.position),
+        annotationSortIndex: 'native-sort',
+        annotationPageLabel: 'ii',
+      },
+    ]);
+    created.session.dispose();
+  });
+
+  it.each(['highlightYellow', 'addNote'] as const)(
+    'persists pending %s without clearing or resetting a newer selection',
+    async (action) => {
+      vi.useFakeTimers();
+      const saving = Promise.withResolvers<void>();
+      const created = createHistorySession({ _lastViewPrimary: true });
+      const { selection, node } = configureAnnotationSelection(created);
+      const persistence = configureAnnotationPersistence([created], () => saving.promise);
+      executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+      executeReaderAction(created.session, action, created.pdfWindow);
+      selection.setBaseAndExtent(node, 6, node, 10);
+      created.session.acceptSelectionParams({
+        annotation: {
+          text: 'beta',
+          position: { pageIndex: 0, rects: [[58, 460, 90, 480]] },
+        },
+      });
+      created.session.focusAndHandle(readerKey('z').event);
+      const focusCount = vi.mocked(created.pdfWindow.focus).mock.calls.length;
+      saving.resolve();
+      await settleReaderMicrotasks();
+      vi.advanceTimersByTime(150);
+      expect(persistence.saved).toMatchObject([
+        {
+          parentID: 41,
+          annotationText: 'alpha',
+          annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[10, 460, 50, 480]] }),
+        },
+      ]);
+      expect(selection.toString()).toBe('beta');
+      expect(selection.removeAllRanges).not.toHaveBeenCalled();
+      expect(created.session.mode).toBe('visual');
+      expect(created.session.input.keyBuffer).toBe('z');
+      expect(created.session.state.selectionParams?.annotation.text).toBe('beta');
+      expect(created.bodyChildren.some((node) => node.id === 'zv-annotation-comment')).toBe(false);
+      expect(created.pdfWindow.focus).toHaveBeenCalledTimes(focusCount);
+      created.session.dispose();
+    },
+  );
+
+  it.each(['pane change', 'deactivation'] as const)(
+    'persists admitted Add note without opening or refocusing a comment after %s',
+    async (change) => {
+      vi.useFakeTimers();
+      const saving = Promise.withResolvers<void>();
+      const created = createHistorySession({ _lastViewPrimary: true });
+      const secondary = createHistorySession();
+      const { selection } = configureAnnotationSelection(created);
+      const persistence = configureAnnotationPersistence([created], () => saving.promise);
+      Reflect.set(created.reader._internalReader!, '_secondaryView', {
+        _iframeWindow: secondary.pdfWindow,
+      });
+      executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+      executeReaderAction(created.session, 'addNote', created.pdfWindow);
+      if (change === 'pane change')
+        Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+      else created.session.deactivateInteraction();
+      saving.resolve();
+      await settleReaderMicrotasks();
+      vi.advanceTimersByTime(150);
+      expect(persistence.saved).toMatchObject([
+        {
+          parentID: 41,
+          annotationText: 'alpha',
+          annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[10, 460, 50, 480]] }),
+        },
+      ]);
+      expect(selection.toString()).toBe('alpha');
+      expect(selection.removeAllRanges).not.toHaveBeenCalled();
+      expect(created.session.mode).toBe(change === 'pane change' ? 'visual' : 'normal');
+      expect(
+        [...created.bodyChildren, ...secondary.bodyChildren].some(
+          (node) => node.id === 'zv-annotation-comment',
+        ),
+      ).toBe(false);
+      expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+      expect(secondary.pdfWindow.focus).not.toHaveBeenCalled();
+      created.session.dispose();
+      secondary.session.dispose();
+    },
+  );
+
+  it('opens and saves the created annotation comment even if native annotation selection changes during save', async () => {
+    vi.useFakeTimers();
+    const saving = Promise.withResolvers<void>();
+    const created = createHistorySession({
+      _state: { selectedAnnotationIDs: [] },
+      navigate: vi.fn(),
+    });
+    const persistence = configureAnnotationPersistence([created], () => saving.promise);
+    const other: AnnotationDraft = {
+      id: 999,
+      key: 'OTHER',
+      libraryID: 1,
+      parentID: 41,
+      annotationIsExternal: false,
+      annotationText: 'other annotation text',
+      annotationComment: 'other annotation comment',
+      saveTx: vi.fn(async () => {}),
+    };
+    const annotations = persistence.attachments[0]!.getAnnotations;
+    Reflect.set(persistence.attachments[0]!, 'getAnnotations', () => [...annotations(), other]);
+    created.session.acceptSelectionParams(nativeParams);
+    executeReaderAction(created.session, 'addNote', created.pdfWindow);
+    Reflect.set(created.reader._internalReader!._state!, 'selectedAnnotationIDs', [other.key]);
+    saving.resolve();
+    await settleReaderMicrotasks();
+    const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+    const input = Array.from(overlay?.children ?? []).find(
+      (node) => node.id === 'zv-annotation-comment-input',
+    );
+    if (!input) throw new Error('Expected created annotation comment input');
+    Reflect.set(input, 'value', 'comment on created annotation');
+    created.session.focusAndHandle(readerKey('Escape', { target: input }).event);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      { key: 'CREATED-1', parentID: 41, annotationText: 'alpha', annotationComment: '' },
+      {
+        key: 'CREATED-1',
+        parentID: 41,
+        annotationText: 'alpha',
+        annotationComment: 'comment on created annotation',
+      },
+    ]);
+    expect(other.annotationComment).toBe('other annotation comment');
+    expect(other.saveTx).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+
+  it('keeps the DOM selection and Select mode when native annotation save fails', async () => {
+    const created = createHistorySession();
+    const { selection } = configureAnnotationSelection(created);
+    const persistence = configureAnnotationPersistence([created], async () => {
+      throw new Error('native save rejected');
+    });
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    executeReaderAction(created.session, 'highlightYellow', created.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toEqual([]);
+    expect(selection.toString()).toBe('alpha');
+    expect(selection.removeAllRanges).not.toHaveBeenCalled();
+    expect(created.session.mode).toBe('visual');
+    expect(created.indicator.textContent).toContain('native save rejected');
+    created.session.dispose();
+  });
+});
+
+describe('Reader native geometry view recreation', () => {
+  it('does not transfer cached native geometry when a view object receives a new iframe', async () => {
+    const created = createHistorySession();
+    const replacement = createHistorySession();
+    configureAnnotationSelection(replacement, 'replacement text', 0, 16);
+    const persistence = configureAnnotationPersistence([created]);
+    created.session.acceptSelectionParams({
+      annotation: {
+        text: 'retired text',
+        position: { pageIndex: 1, rects: [[1, 2, 30, 40]] },
+      },
+    });
+    Reflect.set(
+      created.reader._internalReader!._primaryView!,
+      '_iframeWindow',
+      replacement.pdfWindow,
+    );
+    executeReaderAction(created.session, 'highlightYellow', replacement.pdfWindow);
+    await settleReaderMicrotasks();
+    expect(persistence.saved).toMatchObject([
+      {
+        parentID: 41,
+        annotationText: 'replacement text',
+        annotationPosition: JSON.stringify({ pageIndex: 0, rects: [[10, 460, 138, 480]] }),
+      },
+    ]);
+    created.session.dispose();
+    replacement.session.dispose();
+  });
+});
+
+describe('Reader native Find Enter ownership', () => {
+  it.each([
+    { name: 'composing Enter', isComposing: true, keyCode: 0 },
+    { name: 'Enter keyCode 229', isComposing: false, keyCode: 229 },
+    { name: 'committed Enter', isComposing: false, keyCode: 13 },
+  ])('defers $name to native input and hands off only committed Enter', (options) => {
+    vi.useFakeTimers();
+    const created = createHistorySession({ _lastViewPrimary: true });
+    const emit = recordReaderDocumentEvents(created.readerWindow.document);
+    const input = {
+      tagName: 'INPUT',
+      localName: 'input',
+      isConnected: true,
+      closest: (selector: string) => (selector === '.find-popup' ? {} : null),
+      blur: vi.fn(),
+    };
+    Reflect.set(created.readerWindow.document, 'activeElement', input);
+    created.session.start();
+    const key = readerKey('Enter', { ...options, target: input as unknown as EventTarget });
+    emit('keydown', key.event);
+    vi.advanceTimersByTime(150);
+    const committed = options.name === 'committed Enter';
+    expect(input.blur).toHaveBeenCalledTimes(committed ? 1 : 0);
+    expect(created.pdfWindow.focus).toHaveBeenCalledTimes(committed ? 1 : 0);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect(key.stopImmediatePropagation).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+
+  it.each(['another input', 'another pane', 'deactivation', 'view replacement'] as const)(
+    'does not blur Find or refocus a PDF when committed Enter is followed by %s',
+    (change) => {
+      vi.useFakeTimers();
+      const created = createHistorySession({ _lastViewPrimary: true });
+      const secondary = createHistorySession();
+      const emit = recordReaderDocumentEvents(created.readerWindow.document);
+      const input = {
+        tagName: 'INPUT',
+        localName: 'input',
+        isConnected: true,
+        closest: () => ({}),
+        blur: vi.fn(),
+      };
+      Reflect.set(created.readerWindow.document, 'activeElement', input);
+      Reflect.set(created.reader._internalReader!, '_secondaryView', {
+        _iframeWindow: secondary.pdfWindow,
+      });
+      created.session.start();
+      emit('keydown', readerKey('Enter', { target: input as unknown as EventTarget }).event);
+      if (change === 'another input') {
+        Reflect.set(created.readerWindow.document, 'activeElement', {
+          tagName: 'INPUT',
+          localName: 'input',
+        });
+      } else if (change === 'another pane') {
+        Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+      } else if (change === 'view replacement') {
+        Reflect.set(created.reader._internalReader!, '_primaryView', {
+          _iframeWindow: created.pdfWindow,
+        });
+      } else created.session.deactivateInteraction();
+      vi.advanceTimersByTime(150);
+      expect(input.blur).not.toHaveBeenCalled();
+      expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+      expect(secondary.pdfWindow.focus).not.toHaveBeenCalled();
+      created.session.dispose();
+      secondary.session.dispose();
+    },
+  );
+
+  it('does not reclaim PDF focus when Find blur transfers ownership to another pane', () => {
+    vi.useFakeTimers();
+    const created = createHistorySession({ _lastViewPrimary: true });
+    const secondary = createHistorySession();
+    const emit = recordReaderDocumentEvents(created.readerWindow.document);
+    Reflect.set(created.reader._internalReader!, '_secondaryView', {
+      _iframeWindow: secondary.pdfWindow,
+    });
+    const input = {
+      tagName: 'INPUT',
+      localName: 'input',
+      isConnected: true,
+      closest: () => ({}),
+      blur: vi.fn(() => {
+        Reflect.set(created.reader._internalReader!, '_lastViewPrimary', false);
+        secondary.pdfWindow.focus();
+      }),
+    };
+    Reflect.set(created.readerWindow.document, 'activeElement', input);
+    created.session.start();
+    emit('keydown', readerKey('Enter', { target: input as unknown as EventTarget }).event);
+    vi.advanceTimersByTime(150);
+    expect(input.blur).toHaveBeenCalledOnce();
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    expect(secondary.pdfWindow.focus).toHaveBeenCalledOnce();
+    created.session.dispose();
+    secondary.session.dispose();
+  });
+});
+
+describe('Reader per-view owner retirement', () => {
+  it('retires later view resources and pending navigation after the first selection cleanup error', async () => {
+    const history = navigationHistoryPort();
+    const execute = vi.spyOn(history.port, 'execute');
+    const pending = Promise.withResolvers<void>();
+    const created = createHistorySession({}, { navigationForReader: () => history.port });
+    attachNativeReaderHistory(created);
+    configureAnnotationPersistence([created]);
+    const { selection } = configureAnnotationSelection(created);
+    const view = created.reader._internalReader!._primaryView!;
+    const nativeNavigate = vi.fn(() => pending.promise);
+    Reflect.set(view, 'navigate', nativeNavigate);
+    Reflect.set(view, 'navigateToNextPage', vi.fn());
+    Reflect.set(
+      created.reader._internalReader!,
+      'navigate',
+      (location: { readonly pageIndex: number }) => view.navigate?.(location),
+    );
+    const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
+    Reflect.set(created.pdfWindow, 'matchMedia', () => media);
+    created.session.start();
+    executeReaderAction(created.session, 'firstPage', created.pdfWindow);
+    expect(nativeNavigate).toHaveBeenCalledOnce();
+    const navigation = execute.mock.results[0]?.value;
+    if (!navigation?.pending) throw new Error('Expected pending native navigation');
+    executeReaderAction(created.session, 'enterVisual', created.pdfWindow);
+    executeReaderAction(created.session, 'openSelectionActions', created.pdfWindow);
+    const overlay = created.bodyChildren.find(
+      (node) => node.dataset.zoteroNeoSelectionActions === '1',
+    );
+    if (!overlay) throw new Error('Expected view-owned Selection Actions');
+    const original = new TypeError('selection marker removal failed');
+    vi.mocked(created.pdfWindow.document.documentElement.removeAttribute).mockImplementationOnce(
+      () => {
+        throw original;
+      },
+    );
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    let failure: unknown;
+    try {
+      created.intervalTasks[0]?.();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBe(original);
+    await settleReaderMicrotasks();
+    expect(created.bodyChildren).not.toContain(overlay);
+    expect(media.removeEventListener).toHaveBeenCalledOnce();
+    expect(view.navigate).toBe(nativeNavigate);
+    await expect(navigation.result).resolves.toEqual({ kind: 'stale', recorded: false });
+    expect(selection.toString()).toBe('alpha');
+    pending.resolve();
+    await settleReaderMicrotasks();
+    expect(history.history.locations).toEqual([]);
+    created.session.dispose();
+  });
+});
+
 function navigationHistoryPort() {
   const history = new NavigationHistoryState();
   const intents: NavigationIntent[] = [];
@@ -1385,12 +2332,12 @@ describe('reader zoom shortcuts', () => {
     vi.useFakeTimers();
     const missing = createHistorySession();
     const missingKey = readerKey('+');
-    expect(() => missing.session.focusAndHandle(missingKey.event)).not.toThrow();
+    missing.session.focusAndHandle(missingKey.event);
     expect(missing.indicator.textContent).toBe('Zoom unavailable');
 
     const missingReset = createHistorySession();
     const missingResetKey = readerKey('=');
-    expect(() => missingReset.session.focusAndHandle(missingResetKey.event)).not.toThrow();
+    missingReset.session.focusAndHandle(missingResetKey.event);
     expect(missingReset.indicator.textContent).toBe('Zoom unavailable');
 
     const failed = createHistorySession({
@@ -1398,7 +2345,7 @@ describe('reader zoom shortcuts', () => {
         throw new Error('reader reloaded');
       },
     });
-    expect(() => failed.session.focusAndHandle(readerKey('-').event)).not.toThrow();
+    failed.session.focusAndHandle(readerKey('-').event);
     expect(failed.indicator.textContent).toBe('Zoom unavailable');
     expect(failed.debug).toEqual(['reader zoom out failed: Error: reader reloaded']);
 
@@ -1407,7 +2354,7 @@ describe('reader zoom shortcuts', () => {
         throw new Error('reader reloaded');
       },
     });
-    expect(() => failedReset.session.focusAndHandle(readerKey('=').event)).not.toThrow();
+    failedReset.session.focusAndHandle(readerKey('=').event);
     expect(failedReset.indicator.textContent).toBe('Zoom unavailable');
     expect(failedReset.debug).toEqual(['reader zoom reset failed: Error: reader reloaded']);
     expect(missingKey.preventDefault).toHaveBeenCalledOnce();
@@ -1922,7 +2869,7 @@ describe('Reader command palette', () => {
       },
     );
     const secondary = { ...created.pdfWindow, focus: vi.fn() } as unknown as PdfWindow;
-    Reflect.set(created.reader._internalReader, '_secondaryView', { _iframeWindow: secondary });
+    Reflect.set(created.reader._internalReader!, '_secondaryView', { _iframeWindow: secondary });
 
     created.session.focusAndHandle(readerKey('3').event);
     const colon = readerKey(':');
@@ -1944,12 +2891,12 @@ describe('Reader command palette', () => {
     palette.execute('findAllItems', 123);
     expect(openAllItemsPicker).toHaveBeenCalledWith(created.reader._window);
 
-    Reflect.set(created.reader._internalReader, '_primaryView', undefined);
-    Reflect.set(created.reader._internalReader, '_secondaryView', undefined);
+    Reflect.set(created.reader._internalReader!, '_primaryView', undefined);
+    Reflect.set(created.reader._internalReader!, '_secondaryView', undefined);
     palette.execute('zoomIn', 123);
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(openAllItemsPicker).toHaveBeenCalledOnce();
-    Reflect.set(created.reader._internalReader, '_primaryView', {
+    Reflect.set(created.reader._internalReader!, '_primaryView', {
       _iframeWindow: created.pdfWindow,
     });
     created.session.dispose();
@@ -2642,6 +3589,70 @@ describe('Reader annotation comment input ownership', () => {
     Reflect.set(created.reader, 'itemID', attachment.id);
     return { ...created, annotation };
   }
+
+  it('does not refocus an open comment when its completed timer is delivered again', async () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createCommentSession();
+    try {
+      created.session.focusAndHandle(readerKey('i').event);
+      await settleReaderMicrotasks();
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+      const input = Array.from(overlay?.children ?? []).find(
+        (node) => node.id === 'zv-annotation-comment-input',
+      ) as HTMLTextAreaElement | undefined;
+      if (!input) throw new Error('Expected mounted comment textarea');
+      Reflect.set(input, 'isConnected', true);
+      const completedFocus = timers.mock.calls.find(([, delay]) => delay === 60)![0] as () => void;
+
+      vi.advanceTimersByTime(60);
+      expect(input.focus).toHaveBeenCalled();
+      const focusCount = vi.mocked(input.focus).mock.calls.length;
+      completedFocus();
+      expect(input.focus).toHaveBeenCalledTimes(focusCount);
+      expect(created.bodyChildren).toContain(overlay);
+    } finally {
+      created.session.dispose();
+      timers.mockRestore();
+    }
+  });
+
+  it('does not save a newer comment draft when a cancelled autosave is delivered late', async () => {
+    vi.useFakeTimers();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const created = createCommentSession();
+    try {
+      created.session.focusAndHandle(readerKey('i').event);
+      await settleReaderMicrotasks();
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+      const input = Array.from(overlay?.children ?? []).find(
+        (node) => node.id === 'zv-annotation-comment-input',
+      );
+      if (!input) throw new Error('Expected mounted comment textarea');
+      const changed = vi
+        .mocked(input.addEventListener)
+        .mock.calls.find(([type]) => type === 'input')![1] as () => void;
+      Reflect.set(input, 'value', 'first draft');
+      changed();
+      const cancelledAutosave = timers.mock.calls.find(
+        ([, delay]) => delay === 2000,
+      )![0] as () => void;
+      Reflect.set(input, 'value', 'latest draft');
+      changed();
+
+      cancelledAutosave();
+      await settleReaderMicrotasks();
+      expect(created.annotation.annotationComment).toBe('saved comment');
+      expect(created.annotation.saveTx).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(2000);
+      await settleReaderMicrotasks();
+      expect(created.annotation.annotationComment).toBe('latest draft');
+      expect(created.annotation.saveTx).toHaveBeenCalledOnce();
+    } finally {
+      created.session.dispose();
+      timers.mockRestore();
+    }
+  });
 
   it('keeps disabled Normal Enter a no-op while disabled i admits native input', async () => {
     const created = createCommentSession(async () => {}, {
@@ -3844,7 +4855,7 @@ describe('PDF follow-link hints', () => {
         throw new Error('reader reloaded');
       },
     });
-    expect(() => missing.session.focusAndHandle(readerKey('f').event)).not.toThrow();
+    missing.session.focusAndHandle(readerKey('f').event);
     expect(missing.indicator.textContent).toBe('Link hints unavailable');
     expect(missing.debug).toEqual(['reader follow link discovery failed: Error: reader reloaded']);
     expect(missing.diagnostics).toEqual([
@@ -3864,7 +4875,7 @@ describe('PDF follow-link hints', () => {
       throw new Error('blocked URI');
     });
     failed.session.focusAndHandle(readerKey('f').event);
-    expect(() => failed.session.focusAndHandle(readerKey('a').event)).not.toThrow();
+    failed.session.focusAndHandle(readerKey('a').event);
     await settleReaderMicrotasks();
     expect(failed.indicator.textContent).toBe('Link unavailable');
     expect(failed.debug).toEqual(['reader follow link activation failed: Error: blocked URI']);

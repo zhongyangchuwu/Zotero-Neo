@@ -324,13 +324,13 @@ export class PluginManagerPanel {
     const state = session.pluginManager;
     if (!state.open) return;
     const generation = ++state.generation;
-    const selectedID = state.filtered[state.selected]?.id;
     state.loading = true;
     state.error = '';
     this.render(session);
     try {
       const plugins = await installedPlugins();
       if (!state.open || state.generation !== generation) return;
+      const selectedID = state.filtered[state.selected]?.id;
       state.plugins = plugins;
       this.filter(session);
       const selectedIndex = selectedID

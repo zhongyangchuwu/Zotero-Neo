@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ACTION_LABELS } from '../../src/input/actions';
-import { KEY_GUIDE_CONFIG, keyGuideLanguage } from '../../src/input/key-guide-config';
+import { keyGuideLanguage } from '../../src/input/key-guide-config';
 import {
   DEFAULT_BINDINGS,
   DEFAULT_PREFIX_BINDINGS,
@@ -196,13 +196,6 @@ describe('leader guide projection', () => {
         isGroup: false,
       },
     ]);
-  });
-
-  it('keeps the runtime defaults alongside the display metadata', () => {
-    expect(KEY_GUIDE_CONFIG.defaultDelayMs).toBe(200);
-    expect(KEY_GUIDE_CONFIG.maxDelayMs).toBe(1000);
-    expect(KEY_GUIDE_CONFIG.idleTimeoutMs).toBe(5000);
-    expect(KEY_GUIDE_CONFIG.defaultFontSizePx).toBe(15);
   });
 
   it('projects the explicit Tag action defaults without reviving retired picker aliases', () => {

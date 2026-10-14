@@ -13,6 +13,10 @@ rmSync(resolve(root, 'build'), { recursive: true, force: true });
 rmSync(outputXpi, { force: true });
 mkdirSync(buildRoot, { recursive: true });
 cpSync(packageAssets, buildRoot, { recursive: true });
+cpSync(resolve(root, 'LICENSE'), resolve(buildRoot, 'LICENSE'));
+const licenseDirectory = resolve(buildRoot, 'licenses');
+mkdirSync(licenseDirectory, { recursive: true });
+cpSync(resolve(root, 'vendor/fuzzysort/LICENSE'), resolve(licenseDirectory, 'fuzzysort-LICENSE'));
 cpSync(resolve(root, 'manifest.json'), resolve(buildRoot, 'manifest.json'));
 
 const common = {

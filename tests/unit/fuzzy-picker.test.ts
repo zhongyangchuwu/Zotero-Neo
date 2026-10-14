@@ -114,6 +114,66 @@ describe('shared fuzzy ranking', () => {
     );
     expect(fuzzyMatchScore('alpha', 'az')).toBeNull();
   });
+
+  it('keeps the earliest equal-score candidates at the cap when a later best match arrives', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const items = Array.from({ length: 120 }, (_, index) => ({
+      id: index + 1,
+      title: `Candidate ${index + 1}`,
+      search: 'memory',
+    }));
+    const best = { id: 999, title: 'Exact match', search: 'm' };
+    const confirm = vi.fn();
+    await picker.open(window, session, 'all', {
+      source: candidateSource([...items, best]),
+      confirm,
+    });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = ' m ';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([
+      best.id,
+      ...items.slice(0, 99).map((item) => item.id),
+    ]);
+    picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
+    expect(session.picker.previewTitle?.textContent).toBe(items[0]!.title);
+    picker.onKeyDown(pickerKey('Enter', session.picker.results), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledWith(items[0], false);
+  });
+
+  it('preserves source order when a query is cleared to whitespace', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const items = Array.from({ length: 121 }, (_, index) => ({
+      id: (index * 37) % 121,
+      title: `Source row ${index}`,
+      search: `source row ${index}`,
+    }));
+    await picker.open(window, session, 'all', { source: candidateSource(items) });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'row 120';
+    input.emit('input');
+    input.value = ' \t ';
+    input.emit('input');
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(
+      items.slice(0, 100).map((item) => item.id),
+    );
+    expect(session.picker.selected).toBe(0);
+    expect(session.picker.previewTitle?.textContent).toBe(items[0]!.title);
+    picker.close(session);
+  });
 });
 
 describe('bibliographic picker previews', () => {

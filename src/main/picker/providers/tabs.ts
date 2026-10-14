@@ -1,5 +1,5 @@
 import type { MainWindow } from '../../../core/contracts';
-import { mainTabList, selectedMainTabID } from '../../host';
+import { mainTabList, selectedMainTabID } from '../../../toolkit/main';
 import type { PickerProvider } from '../types';
 
 export function createTabsProvider(window: MainWindow): PickerProvider {
@@ -9,13 +9,13 @@ export function createTabsProvider(window: MainWindow): PickerProvider {
     async load() {
       const selected = selectedMainTabID(window);
       return mainTabList(window).flatMap((tab) => {
-        const id = tab.id ?? tab.tabID ?? tab.dataset?.id;
+        const id = tab.id;
         return id
           ? [
               {
                 id,
-                title: tab.title ?? tab.label ?? tab.dataset?.title ?? id,
-                kind: tab.type ?? tab.dataset?.type ?? 'tab',
+                title: tab.displayTitle ?? id,
+                kind: tab.kind,
                 selected: id === selected,
                 search: `${tab.title ?? tab.label ?? id} ${id}`.toLowerCase(),
               },

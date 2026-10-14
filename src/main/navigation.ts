@@ -10,9 +10,17 @@ import type { MainPanel, MainWindowSession } from './session';
 import {
   closeSelectedMainTab,
   cycleMainTab,
-  mainHost,
+  focusMainPanel,
+  focusMainDirection,
+  mainFocusedPanel,
+  mainTreeFocused,
+  mainTreeCursorState,
+  mainScopeCursorNode,
+  toggleMainScopeRow,
+  setMainScopeExpansionAll,
+  selectMainScopeRow,
+  mainItemOpening,
   mainScopeCursorDetached,
-  mainScopeCursorRow,
   mainScopeSelectedRows,
   moveMainScopeCursor,
   moveMainItemCursor,
@@ -20,120 +28,13 @@ import {
   selectMainTab,
   selectedMainTabID,
   selectOnlyMainScopeCursor,
-} from './host';
+} from '../toolkit/main';
 import {
   mainCursorItem,
   resolveMainEffectiveTargets,
   type MainCurrentTarget,
   type MainResolvedTargets,
 } from './action-targets';
-
-type Selection = {
-  focused?: number;
-  count?: number;
-  selected?: Iterable<number>;
-  select?(index: number, shouldDebounce?: boolean): void;
-  toggleSelect?(index: number, shouldDebounce?: boolean): void;
-};
-type TreeFocusTarget = { focus?(): void };
-export type TreeView = {
-  tree?: TreeFocusTarget;
-  domEl?: HTMLElement;
-  rowCount?: number;
-  selection?: Selection;
-  focus?(): void;
-  ensureRowIsVisible?(index: number): void;
-  isContainer?(index: number): boolean;
-  isContainerOpen?(index: number): boolean;
-  isContainerEmpty?(index: number): boolean;
-  toggleOpenState?(index: number): Promise<void> | void;
-  getParentIndex?(index: number): number;
-  getRow?(index: number): unknown;
-  getSelectedCollections?(idOnly?: false): Zotero.Collection[];
-  getSelectedCollections?(idOnly: true): number[];
-  getRowIndexByID?(id: string): number;
-};
-
-type FocusElement = Element & {
-  readonly hidden?: boolean;
-  focus?(): void;
-  getBoundingClientRect(): {
-    readonly left: number;
-    readonly right: number;
-    readonly top: number;
-    readonly bottom: number;
-    readonly width?: number;
-    readonly height?: number;
-  };
-};
-
-interface FocusTarget {
-  readonly root: FocusElement;
-  readonly focus: () => boolean;
-}
-
-function asFocusElement(value: unknown): FocusElement | null {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    typeof (value as { getBoundingClientRect?: unknown }).getBoundingClientRect !== 'function'
-  )
-    return null;
-  return value as FocusElement;
-}
-
-function focusRect(element: FocusElement): {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-} | null {
-  if (element.hidden || element.getAttribute?.('hidden') === 'true') return null;
-  const rect = element.getBoundingClientRect();
-  const width = rect.width ?? rect.right - rect.left;
-  const height = rect.height ?? rect.bottom - rect.top;
-  return width > 0 && height > 0 ? rect : null;
-}
-
-function containsFocus(root: FocusElement, active: Element | null): boolean {
-  if (!active) return false;
-  try {
-    return root === active || root.contains(active);
-  } catch {
-    return false;
-  }
-}
-
-function focusElement(document: Document, root: FocusElement): boolean {
-  const target =
-    asFocusElement(
-      root.querySelector?.(
-        'input:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ) ?? root;
-  target.focus?.();
-  return containsFocus(root, document.activeElement);
-}
-function containsTarget(root: unknown, node: unknown): boolean {
-  if (!root || !node) return false;
-  if (root === node) return true;
-  if (typeof root !== 'object') return false;
-  const contains = (root as { contains?: unknown }).contains;
-  if (typeof contains !== 'function') return false;
-  try {
-    return Boolean(contains.call(root, node));
-  } catch {
-    return false;
-  }
-}
-
-export function selectedCollection(view: TreeView | undefined): Zotero.Collection | undefined {
-  return view?.getSelectedCollections?.()[0];
-}
-
-export function selectedCollectionID(view: TreeView | undefined): number | undefined {
-  return view?.getSelectedCollections?.(true)[0];
-}
 
 const TRASH_TARGET_LABEL_KEYS: Readonly<Record<MainResolvedTargets['source'], string>> = {
   selection: 'target.trashSelection',
@@ -157,6 +58,10 @@ export class MainNavigation {
     this.#rescan = rescan;
   }
   status(session: MainWindowSession, text: string, milliseconds = 2000): void {
+    if (session.cleanup.disposed) return;
+    const previousTimer = session.statusTimer;
+    session.statusTimer = undefined;
+    session.window.clearTimeout(previousTimer);
     session.status.textContent = text;
     session.status.style.display = 'block';
     const success = text.startsWith('✓');
@@ -172,70 +77,19 @@ export class MainNavigation {
         ? THEME_VARS.statusInfo
         : THEME_VARS.statusError;
     const timer = session.window.setTimeout(() => {
+      if (session.cleanup.disposed || session.statusTimer !== timer) return;
+      session.statusTimer = undefined;
       session.status.style.display = 'none';
     }, milliseconds);
-    session.cleanup.add(() => session.window.clearTimeout(timer));
+    session.statusTimer = timer;
   }
   panel(window: MainWindow, session: MainWindowSession): MainPanel {
-    const current = window.document.activeElement;
-    const h = mainHost(window);
-    const collections = h.ZoteroPane?.collectionsView;
-    const collectionTargets = [
-      collections?.tree,
-      collections?.domEl,
-      window.document.getElementById('collection-tree'),
-      window.document.getElementById('zotero-collections-tree'),
-      window.document.querySelector('#zotero-collections-tree .virtualized-table'),
-    ];
-    if (
-      current &&
-      (collectionTargets.some(
-        (target) => containsTarget(target, current) || containsTarget(current, target),
-      ) ||
-        (typeof current.id === 'string' && current.id.includes('collection')))
-    ) {
-      session.activePanel = 'collections';
-    } else if (this.itemPaneContainsFocus(window)) {
-      session.activePanel = 'items';
-    } else if (collections?.selection?.count) {
-      session.activePanel = 'collections';
-    }
+    session.activePanel = mainFocusedPanel(window, session.activePanel);
     return session.activePanel;
   }
   focusPanel(window: MainWindow, session: MainWindowSession, panel: MainPanel): boolean {
-    const view =
-      panel === 'collections'
-        ? mainHost(window).ZoteroPane?.collectionsView
-        : mainHost(window).ZoteroPane?.itemsView;
-    // Capture the cursor before tree focus, which may reset TreeSelection.focused to row zero.
-    const scopeCursor = panel === 'collections' ? mainScopeCursorRow(window) : undefined;
-    const selectedScopeRows = panel === 'collections' ? mainScopeSelectedRows(window) : [];
-    const leavingItems = panel === 'collections' && this.itemPaneContainsFocus(window);
-    const hasScopeSelection =
-      panel === 'collections' && (selectedScopeRows.length > 0 || !!view?.selection?.count);
-    const fallback = window.document.querySelector(
-      panel === 'collections'
-        ? '#collection-tree,#zotero-collections-tree .virtualized-table,#zotero-collections-tree'
-        : '#item-tree-main-default,#zotero-items-tree .virtualized-table,#zotero-items-tree',
-    );
-    const topDiv = (view?.tree as { readonly _topDiv?: HTMLElement } | undefined)?._topDiv;
-    const focusTarget = (topDiv ?? view?.tree ?? view?.domEl ?? fallback) as HTMLElement | null;
-    if (!focusTarget?.focus && !view?.focus) return false;
-    focusTarget?.focus?.();
-    // Native tree/view focus defers the DOM focus; avoid leaving that stale callback queued.
-    if (!topDiv?.focus) view?.focus?.();
+    if (!focusMainPanel(window, panel)) return false;
     session.activePanel = panel;
-    // Restore only the cursor so the selected ScopeSet, including multi-selection, is retained.
-    if (hasScopeSelection) {
-      const cursor =
-        leavingItems && selectedScopeRows.length === 1
-          ? selectedScopeRows[0]
-          : scopeCursor !== undefined && Number.isInteger(scopeCursor) && scopeCursor >= 0
-            ? scopeCursor
-            : selectedScopeRows[0];
-      if (cursor !== undefined && view?.selection?.focused !== cursor)
-        moveMainScopeCursor(window, cursor);
-    } else this.ensureSelection(view);
     return true;
   }
 
@@ -244,91 +98,9 @@ export class MainNavigation {
     session: MainWindowSession,
     direction: FocusDirection,
   ): boolean {
-    const h = mainHost(window);
-    const document = window.document;
-    const collections = h.ZoteroPane?.collectionsView;
-    const items = h.ZoteroPane?.itemsView;
-    const collectionsRoot =
-      asFocusElement(collections?.domEl) ??
-      asFocusElement(collections?.tree) ??
-      asFocusElement(
-        document.querySelector(
-          '#collection-tree,#zotero-collections-tree .virtualized-table,#zotero-collections-tree',
-        ),
-      );
-    const itemsRoot =
-      asFocusElement(items?.domEl) ??
-      asFocusElement(items?.tree) ??
-      asFocusElement(
-        document.querySelector(
-          '#item-tree-main-default,#zotero-items-tree .virtualized-table,#zotero-items-tree',
-        ),
-      );
-    const detailRoot = asFocusElement(document.getElementById('zotero-item-pane'));
-    const contextRoot = asFocusElement(document.getElementById('zotero-context-pane'));
-    const targets: FocusTarget[] = [];
-    if (collectionsRoot)
-      targets.push({
-        root: collectionsRoot,
-        focus: () => this.focusPanel(window, session, 'collections'),
-      });
-    if (itemsRoot)
-      targets.push({ root: itemsRoot, focus: () => this.focusPanel(window, session, 'items') });
-    if (detailRoot)
-      targets.push({ root: detailRoot, focus: () => focusElement(document, detailRoot) });
-    if (contextRoot)
-      targets.push({
-        root: contextRoot,
-        focus: () => {
-          if (h.ZoteroContextPane?.focus) {
-            h.ZoteroContextPane.focus();
-            return true;
-          }
-          return focusElement(document, contextRoot);
-        },
-      });
-
-    const visible = targets.flatMap((target) => {
-      const rect = focusRect(target.root);
-      return rect ? [{ target, rect }] : [];
-    });
-    const active = document.activeElement;
-    const current = visible
-      .filter(({ target }) => containsFocus(target.root, active))
-      .sort(
-        (a, b) =>
-          (a.rect.right - a.rect.left) * (a.rect.bottom - a.rect.top) -
-          (b.rect.right - b.rect.left) * (b.rect.bottom - b.rect.top),
-      )[0];
-    const activeElement = asFocusElement(active);
-    const origin = current?.rect ?? (activeElement ? focusRect(activeElement) : null);
-    if (!origin) return false;
-    const originX = (origin.left + origin.right) / 2;
-    const originY = (origin.top + origin.bottom) / 2;
-    const ranked = visible
-      .filter(({ target, rect }) => {
-        if (target === current?.target) return false;
-        const x = (rect.left + rect.right) / 2;
-        const y = (rect.top + rect.bottom) / 2;
-        if (direction === 'left') return x < originX;
-        if (direction === 'right') return x > originX;
-        if (direction === 'up') return y < originY;
-        return y > originY;
-      })
-      .sort((a, b) => {
-        const overlapsAxis = (rect: (typeof visible)[number]['rect']): boolean =>
-          direction === 'left' || direction === 'right'
-            ? rect.bottom > origin.top && rect.top < origin.bottom
-            : rect.right > origin.left && rect.left < origin.right;
-        const alignedDifference = Number(overlapsAxis(b.rect)) - Number(overlapsAxis(a.rect));
-        if (alignedDifference) return alignedDifference;
-        const ax = (a.rect.left + a.rect.right) / 2 - originX;
-        const ay = (a.rect.top + a.rect.bottom) / 2 - originY;
-        const bx = (b.rect.left + b.rect.right) / 2 - originX;
-        const by = (b.rect.top + b.rect.bottom) / 2 - originY;
-        return ax * ax + ay * ay - (bx * bx + by * by);
-      });
-    return ranked.some(({ target }) => target.focus());
+    return focusMainDirection(window, direction, (panel) =>
+      this.focusPanel(window, session, panel),
+    );
   }
   navigate(
     window: MainWindow,
@@ -338,13 +110,10 @@ export class MainNavigation {
     shouldDebounce = false,
   ): boolean {
     const panel = this.panel(window, session);
-    const view =
-      panel === 'collections'
-        ? mainHost(window).ZoteroPane?.collectionsView
-        : mainHost(window).ZoteroPane?.itemsView;
-    if (!view?.selection) return false;
-    const current = view.selection.focused ?? 0;
-    const last = Math.max(0, (view.rowCount ?? 1) - 1);
+    const cursor = mainTreeCursorState(window, panel);
+    if (!cursor) return false;
+    const current = cursor.focused;
+    const last = Math.max(0, cursor.rowCount - 1);
     const next =
       direction === 'first'
         ? 0
@@ -371,9 +140,7 @@ export class MainNavigation {
       }
       return true;
     }
-    if (!view.selection.select) return false;
-    view.selection.select(next, shouldDebounce);
-    return true;
+    return selectMainScopeRow(window, next, shouldDebounce);
   }
 
   activate(window: MainWindow, session: MainWindowSession): void {
@@ -383,27 +150,22 @@ export class MainNavigation {
     this.status(session, '▶ items', 900);
   }
 
-  async restoreTrashedItems(ids: readonly number[]): Promise<boolean> {
-    const valid = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
-    if (!valid.length) return false;
-    const undo = (
-      Zotero as unknown as {
-        UndoHistory?: {
-          getUndoAction?(): { readonly action?: string } | null;
-          undo?(): Promise<boolean>;
-        };
-      }
-    ).UndoHistory;
-    if (undo?.getUndoAction?.()?.action === 'undo-action-trash' && undo.undo) {
-      return undo.undo();
-    }
-    let restored = false;
+  /** Restores explicit Neo Trash identities and returns the number successfully saved. */
+  async restoreTrashedItems(ids: readonly number[]): Promise<number> {
+    const valid = new Set(ids);
+    let restored = 0;
     for (const id of valid) {
+      if (!Number.isInteger(id) || id <= 0) continue;
       const item = Zotero.Items.get(id);
       if (!item || !item.deleted) continue;
       item.deleted = false;
-      await item.saveTx();
-      restored = true;
+      try {
+        await item.saveTx();
+      } catch (error) {
+        item.deleted = true;
+        throw error;
+      }
+      restored += 1;
     }
     return restored;
   }
@@ -467,12 +229,11 @@ export class MainNavigation {
   async restoreLastTrashedItems(session: MainWindowSession): Promise<void> {
     try {
       const itemIDs = session.trashHistory.values();
-      const restored = await this.restoreTrashedItems(itemIDs);
-      if (!restored) {
+      const count = await this.restoreTrashedItems(itemIDs);
+      if (!count) {
         this.status(session, '✗ Nothing to restore');
         return;
       }
-      const count = itemIDs.length;
       session.trashHistory.clear();
       this.status(session, `✓ Restored ${count} item${count === 1 ? '' : 's'}`);
     } catch (error) {
@@ -492,7 +253,7 @@ export class MainNavigation {
       return false;
     }
     try {
-      const unavailable = await openItem(target, mainHost(window).ZoteroPane, isCurrent);
+      const unavailable = await openItem(target, mainItemOpening(window), isCurrent);
       if (isCurrent && !isCurrent()) return false;
       if (unavailable) {
         this.status(session, `✗ ${unavailable}`);
@@ -532,38 +293,37 @@ export class MainNavigation {
     return selectedAfter !== selectedBefore;
   }
   async toggleTree(window: MainWindow, session: MainWindowSession): Promise<void> {
-    const view = this.collections(window, session);
-    const row = this.row(view);
-    if (!view || row < 0) return;
-    if (!view.isContainer?.(row) || view.isContainerEmpty?.(row)) {
+    this.focusPanel(window, session, 'collections');
+    const node = mainScopeCursorNode(window);
+    if (!node) return;
+    if (!node.container || node.empty) {
       this.status(session, '→ no child collections', 1000);
       return;
     }
-    const open = !!view.isContainerOpen?.(row);
-    await view.toggleOpenState?.(row);
+    await toggleMainScopeRow(window, node.row);
     this.focusPanel(window, session, 'collections');
-    this.status(session, open ? '→ collapsed' : '→ expanded', 900);
+    this.status(session, node.open ? '→ collapsed' : '→ expanded', 900);
   }
   async openTree(window: MainWindow, session: MainWindowSession): Promise<void> {
-    const view = this.collections(window, session);
-    const row = this.row(view);
-    if (!view || row < 0 || view.isContainerOpen?.(row)) return;
-    await view.toggleOpenState?.(row);
+    this.focusPanel(window, session, 'collections');
+    const node = mainScopeCursorNode(window);
+    if (!node || node.open) return;
+    await toggleMainScopeRow(window, node.row);
     this.status(session, '→ expanded', 900);
   }
   async closeTree(window: MainWindow, session: MainWindowSession): Promise<void> {
-    const view = this.collections(window, session);
-    const row = this.row(view);
-    if (!view || row < 0 || !view.isContainerOpen?.(row)) return;
-    await view.toggleOpenState?.(row);
+    this.focusPanel(window, session, 'collections');
+    const node = mainScopeCursorNode(window);
+    if (!node || !node.open) return;
+    await toggleMainScopeRow(window, node.row);
     this.status(session, '→ collapsed', 900);
   }
   expandTree(window: MainWindow, session: MainWindowSession): void {
-    const view = this.collections(window, session);
-    const row = this.row(view);
-    if (!view || row < 0) return;
-    if (view.isContainer?.(row) && !view.isContainerOpen?.(row) && !view.isContainerEmpty?.(row)) {
-      void view.toggleOpenState?.(row);
+    this.focusPanel(window, session, 'collections');
+    const node = mainScopeCursorNode(window);
+    if (!node) return;
+    if (node.container && !node.open && !node.empty) {
+      void toggleMainScopeRow(window, node.row);
       this.status(session, '→ expanded');
     } else this.focusPanel(window, session, 'items');
   }
@@ -572,51 +332,32 @@ export class MainNavigation {
       this.focusPanel(window, session, 'collections');
       return;
     }
-    const view = this.collections(window, session);
-    const row = this.row(view);
-    if (!view || row < 0) return;
-    if (view.isContainer?.(row) && view.isContainerOpen?.(row)) {
-      void view.toggleOpenState?.(row);
+    this.focusPanel(window, session, 'collections');
+    const node = mainScopeCursorNode(window);
+    if (!node) return;
+    if (node.container && node.open) {
+      void toggleMainScopeRow(window, node.row);
       this.status(session, '→ collapsed');
     } else this.parentTree(window, session);
   }
   parentTree(window: MainWindow, session: MainWindowSession): void {
-    const view = this.collections(window, session);
-    const parent = view?.getParentIndex?.(this.row(view));
+    this.focusPanel(window, session, 'collections');
+    const parent = mainScopeCursorNode(window)?.parent;
     if (typeof parent === 'number' && parent >= 0) {
-      view?.selection?.select?.(parent);
-      view?.ensureRowIsVisible?.(parent);
+      selectMainScopeRow(window, parent, false, true);
       this.status(session, '→ parent', 900);
     }
   }
   expandAll(window: MainWindow, session: MainWindowSession): void {
-    const view = this.collections(window, session);
-    if (!view) return;
-    let changed = false;
-    for (let pass = 0; pass < Math.min(300, Math.max(25, (view.rowCount ?? 0) + 10)); pass += 1) {
-      let passChanged = false;
-      for (let row = 0; row < (view.rowCount ?? 0); row += 1)
-        if (
-          view.isContainer?.(row) &&
-          !view.isContainerOpen?.(row) &&
-          !view.isContainerEmpty?.(row)
-        ) {
-          void view.toggleOpenState?.(row);
-          changed = passChanged = true;
-        }
-      if (!passChanged) break;
-    }
+    this.focusPanel(window, session, 'collections');
+    const changed = setMainScopeExpansionAll(window, true);
+    if (changed === undefined) return;
     this.status(session, changed ? '→ expanded all' : '→ already expanded', 900);
   }
   collapseAll(window: MainWindow, session: MainWindowSession): void {
-    const view = this.collections(window, session);
-    if (!view) return;
-    let changed = false;
-    for (let row = (view.rowCount ?? 0) - 1; row >= 0; row -= 1)
-      if (view.isContainer?.(row) && view.isContainerOpen?.(row)) {
-        void view.toggleOpenState?.(row);
-        changed = true;
-      }
+    this.focusPanel(window, session, 'collections');
+    const changed = setMainScopeExpansionAll(window, false);
+    if (changed === undefined) return;
     this.status(session, changed ? '→ collapsed all' : '→ already collapsed', 900);
   }
   afterTabSwitch(window: MainWindow): void {
@@ -624,44 +365,6 @@ export class MainNavigation {
       window.setTimeout(() => this.#rescan(window), delay);
   }
   private itemPaneContainsFocus(window: MainWindow): boolean {
-    const current = window.document.activeElement;
-    if (!current) return false;
-    const items = mainHost(window).ZoteroPane?.itemsView;
-    const targets = [
-      items?.tree,
-      items?.domEl,
-      window.document.getElementById('item-tree-main-default'),
-      window.document.getElementById('zotero-items-tree'),
-      window.document.querySelector('#zotero-items-tree .virtualized-table'),
-    ];
-    return (
-      targets.some(
-        (target) => containsTarget(target, current) || containsTarget(current, target),
-      ) ||
-      (typeof current.id === 'string' && current.id.includes('item-tree'))
-    );
-  }
-
-  private collections(window: MainWindow, session: MainWindowSession): TreeView | undefined {
-    this.focusPanel(window, session, 'collections');
-    return mainHost(window).ZoteroPane?.collectionsView;
-  }
-  private row(view: TreeView | undefined): number {
-    if (!view) return -1;
-    const focused = view.selection?.focused ?? -1;
-    if (focused >= 0 && view.getRow?.(focused)) return focused;
-    const id = selectedCollectionID(view);
-    return id ? (view.getRowIndexByID?.(`C${id}`) ?? -1) : -1;
-  }
-  private ensureSelection(view: TreeView | undefined): void {
-    if (
-      !view?.selection ||
-      (view.selection.count && (view.selection.focused ?? -1) >= 0) ||
-      !(view.rowCount && view.rowCount > 0)
-    )
-      return;
-    const row = Math.max(0, Math.min(view.selection.focused ?? 0, view.rowCount - 1));
-    view.selection.select?.(row);
-    view.ensureRowIsVisible?.(row);
+    return mainTreeFocused(window, 'items');
   }
 }

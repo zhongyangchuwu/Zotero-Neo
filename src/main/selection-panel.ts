@@ -1,7 +1,7 @@
 import type { MainWindow } from '../core/contracts';
 import { keyString } from '../input/keys';
 import { THEME_VARS } from '../ui/theme';
-import { mainHost, mainItem, mainItemRowForRef } from './host';
+import { mainLibrarySelection, mainItem, mainItemRowForRef } from '../toolkit/main';
 import type { MainWindowSession } from './session';
 import type { ItemRef } from './selection-store';
 import type { MainNavigationExecutor } from './jump-history';
@@ -290,7 +290,7 @@ export class SelectionPanel {
       this.renderFooter(session, 'Unavailable item cannot be revealed');
       return;
     }
-    const pane = mainHost(window).ZoteroPane;
+    const pane = mainLibrarySelection(window);
     if (!pane?.selectItem) {
       this.renderFooter(session, 'Reveal is unavailable in this Zotero view');
       return;

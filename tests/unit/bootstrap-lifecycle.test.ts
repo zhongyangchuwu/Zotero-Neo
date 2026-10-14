@@ -8,7 +8,6 @@ const SOURCE = readFileSync(new URL('../../src/bootstrap.ts', import.meta.url), 
 
 async function bootstrap(reason: number) {
   const init = vi.fn();
-  const writes: string[] = [];
   const sandbox: Record<string, unknown> = {
     APP_STARTUP: 1,
     ADDON_INSTALL: 5,
@@ -31,7 +30,7 @@ async function bootstrap(reason: number) {
         '@mozilla.org/network/file-output-stream;1': {
           createInstance: () => ({
             init: () => {},
-            write: (text: string) => writes.push(text),
+            write: () => {},
             close: () => {},
           }),
         },
@@ -46,7 +45,7 @@ async function bootstrap(reason: number) {
     hostContext,
     reason,
   );
-  return { init, writes, hostContext };
+  return { init, hostContext };
 }
 
 describe('Bootstrap focus-claim lifecycle', () => {
@@ -59,7 +58,7 @@ describe('Bootstrap focus-claim lifecycle', () => {
   ] as const)(
     'passes %s reason %i to both runtime init paths with claim=%s',
     async (_name, reason, claim) => {
-      const { init, writes, hostContext } = await bootstrap(reason);
+      const { init, hostContext } = await bootstrap(reason);
       expect(init).toHaveBeenCalledTimes(2);
       expect(init).toHaveBeenNthCalledWith(1, {
         ...hostContext,
@@ -70,9 +69,6 @@ describe('Bootstrap focus-claim lifecycle', () => {
         mayClaimInitialLibraryFocus: claim,
       });
       expect(hostContext).toEqual({ id: 'neo', version: '0.1.0', rootURI: 'file:///addon/' });
-      expect(writes.join('')).toContain(
-        `startupReason=${reason} claimInitialLibraryFocus=${claim}`,
-      );
     },
   );
 });

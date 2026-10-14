@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
-import { focusMainItemsImmediately } from '../../src/main/host';
+import { focusMainItemsImmediately } from '../../src/toolkit/main';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import type { MainWindowSession } from '../../src/main/session';
 

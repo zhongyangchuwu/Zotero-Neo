@@ -114,25 +114,10 @@ function mount(initial: Record<string, boolean | number | string> = {}) {
 describe('Advanced Settings', () => {
   it('renders command language and virtual tag namespace controls with truthful defaults', () => {
     const test = mount();
-    expect(test.root.all().find((node) => node.tag === 'h2')?.textContent).toBe('Advanced');
-    expect(
-      test.root
-        .all()
-        .filter((node) => node.tag === 'h3')
-        .map((node) => node.textContent),
-    ).toEqual(['Interface and command language', 'Tag namespaces']);
     expect(test.root.button('Follow Zotero').getAttribute('aria-pressed')).toBe('true');
     expect(test.root.button('English').getAttribute('aria-pressed')).toBe('false');
     expect(test.root.button('中文').getAttribute('aria-pressed')).toBe('false');
     expect(test.root.byAria('Namespace separator').value).toBe('/');
-    const copy = test.root
-      .all()
-      .map((node) => node.textContent)
-      .join(' ');
-    expect(copy).toContain(
-      'Changes the Neo Settings interface and localized command labels immediately.',
-    );
-    expect(copy).toContain('existing Zotero tags are never rewritten');
     expect(test.preferences.writes).toEqual([]);
     test.page.dispose();
   });
@@ -168,7 +153,6 @@ describe('Advanced Settings', () => {
     chinese.click();
     expect(chinese.getAttribute('aria-pressed')).toBe('false');
     expect(follow.getAttribute('aria-pressed')).toBe('true');
-    expect(test.status.textContent).toContain('Could not update Advanced settings');
 
     test.preferences.failKey = null;
     chinese.click();

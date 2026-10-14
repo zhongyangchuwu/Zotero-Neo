@@ -10,7 +10,7 @@ import {
   mainItemRefAtRow,
   mainItemRowCount,
   moveMainItemCursor,
-} from './host';
+} from '../toolkit/main';
 import type { MainWindowSession } from './session';
 
 const H = 'http://www.w3.org/1999/xhtml';
