@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 
 /** VitePress serializes this function into the browser, so its patterns must be local. */
@@ -29,10 +30,73 @@ function tokenizeSearchText(text: string): string[] {
   return tokens;
 }
 
+const userSidebar = [
+  {
+    text: 'Start here',
+    items: [
+      { text: 'Features', link: '/docs/FEATURES' },
+      { text: 'Get started', link: '/docs/GETTING_STARTED' },
+    ],
+  },
+  {
+    text: 'User guide',
+    items: [
+      { text: 'Overview and workflows', link: '/docs/USER_GUIDE' },
+      { text: 'How Neo works', link: '/docs/CONCEPTS' },
+      { text: 'Library and reading lists', link: '/docs/MAIN_GUIDE' },
+      { text: 'Read and navigate a PDF', link: '/docs/READER_GUIDE' },
+      { text: 'Select text and annotate', link: '/docs/SELECTION_GUIDE' },
+      { text: 'Capture passages to notes', link: '/docs/CAPTURE_GUIDE' },
+      { text: 'Find and edit notes', link: '/docs/NOTE_GUIDE' },
+      { text: 'Organize with tags', link: '/docs/TAGS' },
+      { text: 'Search and navigation', link: '/docs/SEARCH_GUIDE' },
+      { text: 'Shortcuts and settings', link: '/docs/SETTINGS_GUIDE' },
+    ],
+  },
+  {
+    text: 'Reference',
+    items: [
+      { text: 'Commands and shortcuts', link: '/docs/COMMAND_REFERENCE' },
+      { text: 'Settings reference', link: '/docs/SETTINGS_REFERENCE' },
+    ],
+  },
+  {
+    text: 'Help',
+    items: [{ text: 'Troubleshooting', link: '/docs/TROUBLESHOOTING' }],
+  },
+];
+
+const developerSidebar = [
+  {
+    text: 'Developer guide',
+    items: [
+      { text: 'Development', link: '/docs/DEVELOPMENT' },
+      { text: 'Documentation authoring', link: '/docs/DOCUMENTATION_AUTHORING' },
+    ],
+  },
+  {
+    text: 'Design and architecture',
+    items: [
+      { text: 'Architecture', link: '/docs/ARCHITECTURE' },
+      { text: 'Interaction model', link: '/docs/INTERACTION_MODEL' },
+      { text: 'Input methods and text entry', link: '/docs/INPUT_METHODS' },
+      { text: 'Navigation history design', link: '/docs/NAVIGATION_HISTORY_DESIGN' },
+    ],
+  },
+  {
+    text: 'Project material (Chinese source)',
+    items: [
+      { text: 'v0.2 candidate acceptance (Chinese source)', link: '/docs/V0_2_ACCEPTANCE' },
+      { text: 'Recording guide (Chinese source)', link: '/docs/RECORDING_GUIDE' },
+    ],
+  },
+];
+
 export default defineConfig({
-  lang: 'zh-CN',
+  lang: 'en',
   title: 'Zotero Neo',
-  description: '面向 Zotero 的键盘交互层：浏览文献、阅读 PDF、处理选区与笔记。',
+  description:
+    'Keyboard-friendly tools for browsing your Zotero library, reading PDFs, and working with notes.',
   base: '/Zotero-Neo/',
   srcExclude: [
     '**/AGENTS.md',
@@ -51,119 +115,70 @@ export default defineConfig({
     'tools/**',
     'vendor/**',
   ],
+  vite: {
+    resolve: {
+      alias: [
+        {
+          find: './VPFeature.vue',
+          replacement: fileURLToPath(new URL('./theme/AccessibleFeature.vue', import.meta.url)),
+        },
+      ],
+    },
+  },
   themeConfig: {
     siteTitle: 'Zotero Neo',
     nav: [
-      { text: '开始使用', link: '/docs/GETTING_STARTED' },
-      { text: '用户指南', link: '/docs/USER_GUIDE' },
-      { text: '命令参考', link: '/docs/COMMAND_REFERENCE' },
+      { text: 'Features', link: '/docs/FEATURES' },
+      { text: 'Get started', link: '/docs/GETTING_STARTED' },
+      { text: 'User guide', link: '/docs/USER_GUIDE' },
       {
-        text: '交互、标签与输入',
+        text: 'Reference',
         items: [
-          { text: '交互模型', link: '/docs/INTERACTION_MODEL' },
-          { text: 'Selection 与标签', link: '/docs/TAGS' },
-          { text: '输入法与文本输入', link: '/docs/INPUT_METHODS' },
+          { text: 'Commands and shortcuts', link: '/docs/COMMAND_REFERENCE' },
+          { text: 'Settings reference', link: '/docs/SETTINGS_REFERENCE' },
         ],
       },
       {
-        text: '开发与架构',
+        text: 'Project',
         items: [
-          { text: '开发指南', link: '/docs/DEVELOPMENT' },
-          { text: '架构', link: '/docs/ARCHITECTURE' },
-        ],
-      },
-      {
-        text: '设计与路线图',
-        items: [
-          { text: '导航历史设计', link: '/docs/NAVIGATION_HISTORY_DESIGN' },
-          { text: '路线图', link: '/docs/ROADMAP' },
-        ],
-      },
-      {
-        text: '验收与录屏',
-        items: [
-          { text: 'v0.2 候选验收指南', link: '/docs/V0_2_ACCEPTANCE' },
-          { text: '录屏与键盘操作指南', link: '/docs/RECORDING_GUIDE' },
-        ],
-      },
-      {
-        text: '项目资料',
-        items: [
-          { text: '项目介绍（README）', link: '/README' },
-          { text: '变更日志', link: '/CHANGELOG' },
+          { text: 'Changelog', link: '/CHANGELOG' },
+          { text: 'Roadmap', link: '/docs/ROADMAP' },
+          { text: 'Development', link: '/docs/DEVELOPMENT' },
+          { text: 'GitHub', link: 'https://github.com/zhongyangchuwu/Zotero-Neo' },
         ],
       },
     ],
-    sidebar: [
-      {
-        text: '开始使用',
-        items: [{ text: '开始使用', link: '/docs/GETTING_STARTED' }],
-      },
-      {
-        text: '用户指南',
-        items: [{ text: '用户指南', link: '/docs/USER_GUIDE' }],
-      },
-      {
-        text: '命令参考',
-        items: [{ text: '完整命令参考', link: '/docs/COMMAND_REFERENCE' }],
-      },
-      {
-        text: '交互、标签与输入',
-        items: [
-          { text: '交互模型', link: '/docs/INTERACTION_MODEL' },
-          { text: 'Selection 与标签', link: '/docs/TAGS' },
-          { text: '输入法与文本输入', link: '/docs/INPUT_METHODS' },
-        ],
-      },
-      {
-        text: '开发与架构',
-        items: [
-          { text: '开发指南', link: '/docs/DEVELOPMENT' },
-          { text: '架构', link: '/docs/ARCHITECTURE' },
-        ],
-      },
-      {
-        text: '设计、历史与路线图',
-        items: [
-          { text: '导航历史设计', link: '/docs/NAVIGATION_HISTORY_DESIGN' },
-          { text: '路线图', link: '/docs/ROADMAP' },
-        ],
-      },
-      {
-        text: '验收与录屏',
-        items: [
-          { text: 'v0.2 候选验收指南', link: '/docs/V0_2_ACCEPTANCE' },
-          { text: '录屏与键盘操作指南', link: '/docs/RECORDING_GUIDE' },
-        ],
-      },
-      {
-        text: '项目资料',
-        items: [
-          { text: '项目介绍（README）', link: '/README' },
-          { text: '变更日志', link: '/CHANGELOG' },
-        ],
-      },
-    ],
+    sidebar: {
+      '/': userSidebar,
+      '/docs/DEVELOPMENT': developerSidebar,
+      '/docs/DOCUMENTATION_AUTHORING': developerSidebar,
+      '/docs/ARCHITECTURE': developerSidebar,
+      '/docs/INTERACTION_MODEL': developerSidebar,
+      '/docs/INPUT_METHODS': developerSidebar,
+      '/docs/NAVIGATION_HISTORY_DESIGN': developerSidebar,
+      '/docs/V0_2_ACCEPTANCE': developerSidebar,
+      '/docs/RECORDING_GUIDE': developerSidebar,
+    },
     outline: {
-      label: '本页目录',
+      label: 'On this page',
       level: [2, 3],
     },
     editLink: {
       pattern: 'https://github.com/zhongyangchuwu/Zotero-Neo/edit/main/:path',
-      text: '在 GitHub 上编辑此页',
+      text: 'Edit this page on GitHub',
     },
     docFooter: {
-      prev: '上一页',
-      next: '下一页',
+      prev: 'Previous page',
+      next: 'Next page',
     },
     lastUpdated: {
-      text: '最后更新于',
+      text: 'Last updated',
     },
-    darkModeSwitchLabel: '切换深色模式',
-    lightModeSwitchTitle: '切换浅色模式',
-    darkModeSwitchTitle: '切换深色模式',
-    sidebarMenuLabel: '目录',
-    returnToTopLabel: '返回顶部',
+    darkModeSwitchLabel: 'Appearance',
+    lightModeSwitchTitle: 'Switch to light theme',
+    darkModeSwitchTitle: 'Switch to dark theme',
+    sidebarMenuLabel: 'Menu',
+    returnToTopLabel: 'Return to top',
     search: {
       provider: 'local',
       options: {
@@ -171,22 +186,22 @@ export default defineConfig({
           root: {
             translations: {
               button: {
-                buttonText: '搜索文档',
-                buttonAriaLabel: '搜索文档',
+                buttonText: 'Search',
+                buttonAriaLabel: 'Search',
               },
               modal: {
-                displayDetails: '显示详细匹配',
-                resetButtonTitle: '清除查询',
-                backButtonTitle: '关闭搜索',
-                noResultsText: '没有找到相关结果',
+                displayDetails: 'Show detailed results',
+                resetButtonTitle: 'Clear search',
+                backButtonTitle: 'Close search',
+                noResultsText: 'No results found',
                 footer: {
-                  selectText: '选择',
-                  selectKeyAriaLabel: '回车',
-                  navigateText: '移动',
-                  navigateUpKeyAriaLabel: '上箭头',
-                  navigateDownKeyAriaLabel: '下箭头',
-                  closeText: '关闭',
-                  closeKeyAriaLabel: 'Esc',
+                  selectText: 'Select',
+                  selectKeyAriaLabel: 'Enter',
+                  navigateText: 'Navigate',
+                  navigateUpKeyAriaLabel: 'Up arrow',
+                  navigateDownKeyAriaLabel: 'Down arrow',
+                  closeText: 'Close',
+                  closeKeyAriaLabel: 'Escape',
                 },
               },
             },

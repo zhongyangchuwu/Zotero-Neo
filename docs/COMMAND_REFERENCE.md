@@ -1,6 +1,6 @@
 # Command Reference
 
-This is the detailed, source-oriented reference for Zotero Neo's current commands. It describes Neo's implemented behavior, not a promise of full Neovim compatibility. The User Guide remains the short workflow and setup guide; see [the User Guide](USER_GUIDE.md), [Input methods](INPUT_METHODS.md), [Selection and Tags](TAGS.md), and [Architecture](ARCHITECTURE.md) for those topics.
+Look up an action, its default key, the place where it works, and its count or target behavior. For complete workflows, use the [User guide](USER_GUIDE.md).
 
 ## Contents
 
@@ -22,11 +22,11 @@ This is the detailed, source-oriented reference for Zotero Neo's current command
 
 Command tables give each canonical `ActionId`, its default binding(s), and the exact `BindingContext` where it is executable. The same sequence can mean different things in different contexts. Preferences may add alternatives or unbind defaults; a valid ActionId is not automatically supported everywhere.
 
-“History” means Neo's shared Back/Forward jumplist, not Zotero's native PDF history. `recorded` means an eligible completed discrete location change can be added; it does not promise a node for a no-op, failed, cancelled, or duplicate destination. Continuous movement and transient state changes are not jumps. See [Navigation and the shared jumplist](#navigation-and-the-shared-jumplist) for exact classification and snapshots.
+“History” means Neo's shared Back/Forward jumplist. It records completed jumps to restorable locations; ordinary scrolling, selection changes, cancelled actions, and unchanged destinations do not add entries. See [Navigation and the shared jumplist](#navigation-and-the-shared-jumplist).
 
 ## Modes, focus, and capabilities
 
-The six Reader/Main/Note mode contexts are surface grammar scopes. The remaining eight are focused local contexts, not additional Reader Surface modes.
+Main, Reader, and Note have their own command contexts. Sidebars, chooser fields, and plugin lists use the local contexts shown below.
 
 | Owner | BindingContext | Capability |
 | --- | --- | --- |
@@ -45,25 +45,25 @@ The six Reader/Main/Note mode contexts are surface grammar scopes. The remaining
 | Plugin Manager filter | `plugins-input` | Only `uiFocusList`; its default `Escape` returns focus to the results. |
 | Plugin Manager results | `plugins-list` | Local next/previous/first/last/page movement, search, cancel, and Plugin Manager operations. |
 
-Reader Select applies only when an eligible PDF text selection can be owned; Main Select operates on visible item rows, not the collection tree. Settings offers only actions in the selected context's capability catalog. Reader has no Insert binding context; comment and native input owners use fixed feature controls. Note Insert retains its explicit directional focus actions. Native editors, chooser inputs, and composition events are not silently converted to Neo Normal commands.
+Reader Select works on PDF text; Main Select works on visible item rows. Text fields and IME composition keep their normal editing keys. Settings lists the actions available in each context.
 
-Reader `enterVisual` (`v`) starts/adopts a text selection; `enterInsert` (`i`) starts feature-owned comment input when eligible rather than entering another Reader mode. Opening it normalizes Select to Normal; other split views retain Surface grammar. Settings gates Select and Normal selected-annotation entry. When comment entry is disabled, `i` starts a Reader-wide native input owner until Escape. Main `mainEnterSelect` (`v`) starts a temporary item-row range, and its finish/cancel actions end it. Note `enterInsert` still begins Note Insert; Escape is its default exit. Note editor Vim mode remains independently configurable.
+Reader `v` starts or adopts a text selection. Reader `i` opens an annotation comment when one is selected and comment editing is enabled. When that setting is off, `i` gives input back to Zotero until Escape. In Main, `v` starts a temporary item range. In Note, `i` enters Insert and Escape returns to Normal when Vim-style note editing is enabled.
 
 ## Key notation and input grammar
 
 - Printable keys are literal and case-sensitive: `g` differs from `G`; `gg` is two `g` presses. `<Space>` is the Space key, while `:` is a literal colon key. Symbolic keys use angle-bracket notation such as `<C-o>`, `<Enter>`, `<Return>`, `<Esc>`, and `<BS>`. `<Enter>` and `<Return>` are aliases where both appear in the table.
 - Ctrl and Meta are normalized as Ctrl; `Ctrl`, `Alt`, and `Shift` modifiers combine with a key. For example `<C-d>` is Ctrl+d. Printable shifted symbols use their produced character (for example `+`); named keys can retain explicit Shift.
-- A leading decimal count is buffered at the root only in modes whose executor enables counts. `0` starts a count only after a count digit has already started; otherwise it is a command token (for example Reader Select `0` means line start). The engine supplies the count to the action, but that action defines whether it repeats, chooses a position, or ignores it.
-- If a sequence is both an action and a prefix of a longer binding, the exact action waits briefly for continuation; if no continuation arrives it executes. In the generic engine, exact-plus-prefix waits 800 ms and prefix-only waits 1200 ms. A nonmatching continuation resets the pending sequence and is retried as a fresh command; a Neo-owned surface may have its own grammar/timing.
-- Escape cancels pending key sequences or exits the relevant temporary surface/mode. Backspace removes one pending sequence token (or returns to an earlier prefix) where the binding engine owns the sequence. The pure engine's cancel/backspace operations preserve a pending count; individual surface handlers determine whether/how pending count is cleared. A chooser/editor may use Escape and Backspace for its own query/input instead.
-- Browser/Gecko owns actual text entry and IME composition. While composition is active, or a native editable control has focus, Neo does not reinterpret composition keystrokes as commands. `Dead`, unidentified, and modifier-only key events are not commands. See [Input methods](INPUT_METHODS.md).
-- The bindings below are defaults from the canonical catalogs, not a guarantee that a host widget accepts every physical key. Unbound keys generally remain with Zotero/browser; explicit host bridges suppress Zotero's duplicate Reader handling only for keys Neo consumes.
+- A decimal prefix supplies a count to actions that support it. Each action defines whether the count repeats a motion or selects a numbered destination. `0` starts part of a count only after another count digit; otherwise it is a command, such as line start in Reader Select.
+- A binding that also begins a longer sequence waits briefly for the next key. A matching continuation chooses the longer binding; a timeout runs the shorter one. An unmatched key starts a new sequence.
+- Escape cancels a pending sequence or exits the current temporary interaction. Backspace removes a pending sequence key; inside a query or editor it edits the text instead.
+- Text fields and active IME composition receive their normal typing, editing, Enter, and Escape keys.
+- Unbound keys stay available to Zotero and the browser. Reserved native shortcuts appear as read-only entries in Settings.
 
-Default `DEFAULT_PREFIX_BINDINGS` are non-executing namespaces; they accept only their listed descendants and never run an action by themselves. Reader Normal prefixes are `g` (Navigation), `d` (Delete), `z` (View), `Z` (Filters), `<Space>` (Commands), and nested `<Space>f` (Find), `<Space>t` (Tags), `<Space>c` (Collections), `<Space>p` (Neo), `<Space>y` (Citations). Reader Select has `z` (View). Main Normal has `g` (Navigation), `d` (Delete), `z` (View), `w` (Panes), `<Space>` (Commands), and nested `<Space>f/t/c/p/s/y` (Find/Tags/Collections/Neo/Selection/Citations). Main Select has `g` (Navigation). Note Normal has `g` (Navigation), `d` (Delete), `di` (Inner), `y` (Yank), `yi` (Inner), `c` (Change), `ci` (Inner), `<Space>` (Commands), and nested `<Space>f/t/p/y` (Find/Tags/Neo/Citations). These are the shipped namespaces; resolved remaps change the active guide. Prefix Guide is a continuation index, not another command map.
+Prefix Guide shows the continuations available after a key sequence. Reader and Main use prefixes such as `g` for navigation, `z` for view controls, and `<Space>` for grouped commands. Note adds `d`, `y`, and `c` for delete, yank, and change. The displayed guide follows your active context and saved bindings.
 
 ## Command Palette, remapping, and unbound actions
 
-In Reader Normal, Main Normal, and Note Normal, `:` runs `openCommandPalette`. The palette is a query-only command list from the actions executable in that current context, including supported actions with no binding; it omits `openCommandPalette` itself. It does not parse counts, arguments, Ex commands, aliases, external registrations, or provider-local command grammars. A count before `:` can open it, but the selected action runs once with its ordinary semantics. `↑/↓`, `j/k` (outside query focus), and `Ctrl+j/Ctrl+k` select; Enter runs; Escape closes. It returns execution to the originating context. The palette's action set is broader than the defaults and is constrained to the executor's current capability; an action unavailable in this context is absent, not merely unbound.
+In Reader Normal, Main Normal, and Note Normal, `:` opens the Command Palette. Type an action name, choose a result with arrows or `Ctrl+j` / `Ctrl+k`, and press Enter to run it once. Escape closes the palette. Results include available actions that have no assigned shortcut. When the result list has focus, `j` / `k` also move the selection.
 
 The Settings shortcut browser is action- and context-centric. Filter by action group or `BindingContext`; search matches localized labels, canonical ActionIds, current keys, default keys, groups, and contexts. Groups are Navigation, Reader, Annotations, Selection, Notes, Library, Interface, Plugins, and Commands. Results identify **Default**, **Custom**, or **Unbound**, including supported actions with no default.
 
@@ -71,10 +71,10 @@ Choose an action and context to add, record, unbind, or reset its bindings; per-
 
 Native shortcut records are independent, read-only, context-labeled, and shown only when the group filter is **All groups**. Reservations apply at every token in a sequence. Native query editing includes `<C-Insert>` and `<S-Insert>`; Outline `Enter` / `Return`, including modified Enter, is exclusively host-owned. `uiConfirm` is supported in Outline but has no default and can be remapped to another non-reserved key. Native text entry and IME remain host-authoritative. The result/native regions are bounded and **Apply** stays reachable before them; leaving the recorder restores the connected edited-action summary or, if filtered away, focus to Apply or search.
 
-1. **Bound by default:** present in `DEFAULT_BINDINGS` / `NOTE_LOCAL_DEFAULT_BINDINGS`; the complete index below lists every shipped context/sequence pair.
-2. **Supported but unbound:** included in the selected context's executor capability but with no shipped binding; the ActionId index distinguishes this from unsupported actions.
-3. **Not supported in that context:** absent from that context's capability set. A binding cannot make an unsupported action executable there.
-4. **Native or feature-owned input:** native arrows, text editing, IME, and non-configurable editor behavior remain owned by Zotero/browser or the feature. Configurable Neo local controls are ActionIds in the exact local context catalogs, not a second private grammar.
+1. **Default:** an action has a shipped shortcut in that context.
+2. **Unbound:** an available action has no assigned key; find it in the palette or add a binding in Settings.
+3. **Unavailable in this context:** choose the Library, Reader, Note, or local control where the action is offered.
+4. **Native text or editor control:** use the control's normal editing keys. Reserved shortcuts are shown read-only in Settings.
 
 ## Navigation and the shared jumplist
 
@@ -82,16 +82,11 @@ Native shortcut records are independent, read-only, context-labeled, and shown o
 
 `navigateBack` and `navigateForward` are available in Main Normal, Reader Normal, and Note Normal; defaults are `<C-o>` and `<C-i>` respectively. On these keyboard shortcuts a positive count traverses that many locations (for example `2<C-o>`). Palette invocation is uncounted. At either end, traversal is a safe no-op. Insert mode, native editable fields, and Neo-owned modal inputs keep their own input and do not invoke these commands.
 
-The list is one per owning Main window and stores at most 100 locations. Its index identifies the current entry (or `-1` when empty); Back/Forward do not wrap and clamp a positive count to the available range. A new recorded jump after Back discards the forward suffix; equivalent consecutive destinations are not duplicated. Main Selection is never part of a location.
+Each Main window keeps up to 100 locations. Back and Forward stop at the ends. Taking a new jump after going Back replaces the old Forward branch. Consecutive equivalent destinations are combined, and navigating history leaves Main Selection unchanged.
 
 ### Recording and exclusions
 
-A successful host operation does not guarantee a history entry. Central typed rules
-in [`history-policy.ts`](NAVIGATION_HISTORY_DESIGN.md#one-history-policy-source)
-decide eligibility and required evidence; the navigation design documents the
-coordinator and completion contract. A command may complete unchanged or without
-history when no qualifying destination/evidence exists. The following examples
-describe default eligibility, not a promise that every invocation appends:
+History records completed location changes, not every key press. The following table shows which actions can add a destination. Reader jumps need a final position reported by Zotero; a search or annotation action can finish without adding an entry if that position is unavailable.
 
 | Surface/action | History behavior |
 | --- | --- |
@@ -100,41 +95,30 @@ describe default eligibility, not a promise that every invocation appends:
 | Explicit Main Open / item activation | Queued operation records only a successful/current destination. Enter on a collection scope changes view/tree state and is not by itself a location entry. Opening an item does not batch-open Neo Selection. |
 | Confirmed all-library/current-collection item chooser or Note chooser | Successful destination records. A Note result's library selection and Note opening are one queued request, not two entries. Opening chooser, typing, highlighting, cancelling, and failed resolution do not record. |
 | Successful `showInLibrary` / Selection Panel Reveal | Queued Main Library reveal records only after success/current validation. Selection Panel closes only after successful/current reveal. |
-| `H`/`L` previous/next tab or confirmed chooser (`switchTab`) | Successful selected-tab change records. Main prefers Zotero `selectPrev()`/`selectNext()` when available; the current host cycle wraps across all open tab types, including Library, and fallback enumeration uses modulo over tabs. Count is ignored (one operation). One-tab/no-change cycle and selecting current tab do not record. Native tab-bar changes/clicks are not directly recorded. |
-| Reader PDF page destinations, including `gg`, `G`, and counted boundary jumps | When the host page-navigation API is supported, explicit page destinations may record only with a causally owned native hard receipt matching the exact current view and settled final geometry. Without the API, `gg/G` fall back to top/bottom scrolling and do not create a hard-jump entry. Positive count targets the one-based page; absent/zero count selects first/last. Ordinary scrolling and adjacent `h`/`l` page turns are excluded. |
-| Reader marks, native Outline navigation, annotation navigation, internal/citation links, and native search-result navigation | Marks use one managed final destination; native Outline navigation uses the existing `reader-native.hard` observation; other Reader routes require an owned exact-view native hard receipt under the central policy and may complete without history when no qualifying hard point occurs. |
+| `H`/`L` previous/next tab or confirmed chooser (`switchTab`) | Record a change to another open tab, including Library. Each invocation cycles once; selecting the current tab or clicking a native tab directly does not add an entry. |
+| Reader PDF page destinations, including `gg`, `G`, and counted boundary jumps | Can record a completed jump when Zotero provides a final PDF position. A positive count chooses a one-based page; bare `gg` goes to the first-page start and bare `G` to the document bottom. Scrolling and adjacent `h`/`l` page turns do not add entries. |
+| Reader marks, Outline destinations, annotation navigation, internal/citation links, and search results | A completed mark jump records its destination. Other Reader actions can record when Zotero supplies a usable final position in the active document view. |
 | External PDF link | Opens through Zotero's normal handler; not a Neo Reader history location. |
 | Scroll/zoom/split layout, selection/caret movement, filters, manual collection edits, and other non-location state changes | Excluded. |
-| Failure, no-op, stale async operation, cancelled chooser, or target that cannot be resolved/restored | No new location. `H/L` are the only shipped tab-cycle defaults; no `J/K` aliases exist. `H/L` ignore count and perform one native tab cycle. |
+| Failure, unchanged destination, cancelled chooser, or an unavailable target | No new history location. |
 
-For Main-originating transitions, current/cursor state is captured only for supported locations; exact recording is performed through the existing navigation owners. Back/Forward is transactional for the history index, not atomic for UI state: restoration selects the target tab and applies scope, Quick Search, tags, Advanced Search, Cursor, and focus sequentially. If a later component is unavailable or stale, earlier UI changes are not rolled back, but the index remains unchanged. Host-native actions outside an observed Neo path (for example manually clicking tabs) are not directly recorded.
-
-Reader recording is governed by the central cause/context policy and evidence rule,
-not by an action whitelist or raw save kind alone. `native-hard` requires a causally
-owned producer receipt matching the exact current view and settled final geometry;
-the owning Reader tab must be selected, but the split need not be focused. Search,
-annotation selection, and Outline can finish without such a receipt and therefore
-without appending. Marks use `managed-final`; Main cursor and tab changes use their
-configured `settled-change` evidence. Default-ignored motion does not capture a
-history snapshot or allocate a Promise solely for recording. Ordinary Reader `h/l`
-page turns remain excluded. Counts repeat host page-step calls, not a guaranteed
-arithmetic change in the visible viewport's page number.
+Back and Forward restore the available tab, Library view, Cursor, or PDF position. If part of a destination is unavailable, the history position stays unchanged, although a tab or filter already restored may remain changed. Native tab clicks do not add entries to Neo's history.
 
 ### Snapshots and restoration
 
-- **Main location:** records the restorable view context, including available scope, Quick Search, tag filters, Advanced Search, Cursor, and panel/focus state. It does not serialize persistent Neo Selection; no traversal changes that workset.
-- **Reader PDF:** records stable library/item identity, a tab ID hint, and available primary/secondary PDF page index plus top/left viewport position. Zoom and split layout are not restored. An available open same-item tab is reused; when closed, the same readable attachment can be reopened. Old tab IDs can be remapped to the actual reopened tab ID.
-- **Other Reader tab types:** identity-only; native retained position is used instead of claiming PDF geometry.
-- **Other tabs:** non-library/non-Reader/non-Note tab snapshots retain tab identity only. Native retained state remains host-owned; a missing ordinary tab cannot use the Reader attachment-reopen path.
-- **Standalone Note tab:** tab identity only; restoration follows native retained position. A Note context pane restores the underlying Main View, not Note editor focus or caret.
-- **Partial/missing state:** a missing/deleted/trashed/unreadable attachment, missing required split view, changed/stale target, or failed restoration reports failure/partial restoration as applicable and does not advance the jumplist index. Earlier UI restoration steps are not rolled back. A closed Reader tab by itself does not trigger Back; traversal can reopen a same-window readable attachment, restore its available position, and remap the old tab hint to the actual tab ID. Missing ordinary tabs do not have this attachment-reopen path.
+- **Main location:** restores the available collection/library view, Quick Search, tag filters, Advanced Search, Cursor, and focus. Your persistent Selection stays unchanged.
+- **Reader PDF:** restores the attachment and available position in its primary or secondary view. Zoom and split layout stay as they are. A readable attachment can reopen if its Reader tab was closed.
+- **Other Reader tabs:** return to the open tab and its retained Zotero position.
+- **Other tabs:** return to the existing tab. Closed ordinary tabs cannot be reopened through attachment history.
+- **Note:** returns to a standalone Note tab, or restores the Library view containing a context-pane note. It does not move the Note caret.
+- **Unavailable destination:** deleted or unreadable attachments, missing required views, and failed restores leave the history position unchanged. Any tab or filter already restored may remain changed.
 
-Before traversal, Neo refreshes the departure snapshot when its contextual identity still matches, so ordinary movement since the last discrete jump becomes the return point. Reader native PDF history is observed through a bridge that records non-transient hard saves; managed restoration saves are suppressed and native saves continue even if capture/record diagnostics fail. Mark navigation records one completed source-to-destination excursion, not each intermediate scroll/annotation movement; stale or superseded work does not append. Back/Forward refreshes departure first and changes the index only after successful restoration. Closing a Reader/Note tab does not discard the shared list; closing the owning Main window discards that window's list.
+Before leaving a location, Neo updates its return position, so scrolling since the last jump can become the place Back returns to. Closing a Reader or Note tab keeps the shared history; closing its Main window clears that window's list.
 
-Reader command routing for a newly opened Reader becomes active as Neo's Reader session/view hooks install. Zotero's native `_isReaderInitialized` flag alone does not mean Neo is already receiving input: a key pressed during this loading window is not guaranteed to be handled. Wait until the Reader's Neo interaction is present before expecting its bindings.
+Wait for a newly opened PDF to finish loading before using Reader commands.
 ### Mixed navigation examples
 
-- In one Reader PDF where the host page-navigation API is supported, `1gg`, `5gg`, `G` are separate completed destinations; `<C-o>` / `<C-i>` walk them in order. `4gg` means page four, whereas bare `gg` means first page; `G` means last page and a positive count with `G`/`gg` targets that one-based page number. Without that API, `gg/G` scroll to document boundaries instead of creating page-jump history. Invalid targets and no-ops do not create a successful destination.
+- In one Reader PDF where the host page-navigation API is supported, `1gg`, `5gg`, `G` are separate completed destinations; `<C-o>` / `<C-i>` walk them in order. `4gg` means page four, whereas bare `gg` means first-page start; uncounted `G` reaches the document bottom without changing zoom. A positive count with `G`/`gg` targets that one-based page start. Without that API, `gg/G` scroll to document boundaries instead of creating page-jump history. Invalid targets and no-ops do not create a successful destination.
 - Reader A → `L` to Reader B → a mark jump in B creates a mixed surface sequence. Back traverses the mark, then the tab transition; Forward traverses them back. H/L are not exempt merely because they switch tabs.
 - If a Reader tab represented by an older entry is closed, Back to it can reopen the attachment and map the former tab hint to the reopened tab. Closing it does not erase the old entry. If the file is no longer readable, restoration fails without consuming the entry.
 - Back, then make a new qualifying jump: the old Forward branch is discarded. A failed target, native tab click, ordinary scroll, or chooser cancellation does not create that branch.
@@ -148,18 +132,18 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | Move half viewport per step; counts repeat. |
 | `fullPageDown` / `fullPageUp` | `<C-f>` / `<C-b>` | Move a full viewport; counts repeat. |
 | `prevPage` / `nextPage` | `h` / `l` | Repeat Zotero's previous/next-page host step `max(1,count)` times; this is page turning, not a jumplist destination. The host step's current location/viewport is authoritative. |
-| `firstPage` / `lastPage` | `gg` / `G` | When page navigation is supported, positive count (`ngg` or `nG`) passes that one-based page start to Zotero. Absent/zero count means first page start for `gg`, document bottom for `G`. The uncounted `G` uses one native XYZ destination derived from the active last-page viewport, including rotation, without changing zoom. Neo does not clamp numeric pages; target validity is host-owned. Recording requires an owned native hard receipt matching the exact current view and settled final geometry. If page navigation is unsupported, Neo falls back to top/bottom scrolling, ignores count, and does not create a hard-jump history entry; missing required navigation or last-page geometry reports unsupported. |
+| `firstPage` / `lastPage` | `gg` / `G` | Go to the first-page start or document bottom without changing zoom. A positive count (`ngg` or `nG`) targets that one-based page start when page navigation is available. Otherwise these commands scroll to the document boundary. A completed page jump can add history when Zotero provides its final position. |
 | `zoomIn` / `zoomOut` | `+`, `zI` / `-`, `zO` | One Reader zoom step; count repeats. Not history. |
 | `zoomReset` | `=`, `z0` | Reset/Fit page width once; count does not repeat. |
 | `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place current page at top/center/bottom of viewport; view position only, no history. `scrollBottom` has no default sequence. |
-| `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's native PDF find bar; `n/N` each ask Zotero for one next/previous result regardless of count. A result may complete without an entry; only a qualifying owned native hard receipt records under the central policy. Query editing is not navigation history. |
-| `followLink` | `f` | Start visible PDF link hints; count is ignored. Hint activation may navigate internal/citation links; recording requires a qualifying owned exact-view native hard receipt. External links open outside Neo Reader history. Escape cancels; see [link hints](#temporary-surfaces-and-chooser-grammars). |
-| `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse the entire native Outline heading tree, including Sections/Subsections, in document order with wrap. Match genuine native heading geometry to correct bookmarks at the previous page's end; unavailable/ambiguous matches retain authored geometry. Also available in every focused Reader sidebar context, independent of collapse/filter/current-row/sidebar state. Uses the same explicit native SDK/cache/cost boundary as Figures. |
-| `prevFigure` / `nextFigure` | `[f` / `]f` | Traverse explicit native Figure targets plus genuine native SDT captions; align trustworthy associated image regions above their captions, otherwise retain caption positions. Explicit lazy recognition, cache reuse and honest missing targets; cold native processing may process the whole PDF locally. |
-| `prevTable` / `nextTable` | `[t` / `]t` | Traverse explicit native Table targets plus genuine native SDT captions with PDF anchors; the same lazy/cache/cost boundary as Figures. |
-| `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | Select previous/next annotation, wrapping at the end; count is ignored. Selection alone can complete without an entry; recording requires a qualifying owned native hard receipt. |
-| `prevBookmark` / `nextBookmark` | `[m` / `]m` | Navigate Reader marks in document order with wrap, preserving existing mark-jump and managed-final history behavior. |
-| `editAnnotation` | `<Enter>`, `<Return>` | Open/focus the selected annotation comment's feature-owned input, displaying Insert; not jumplist. |
+| `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open PDF search; choose the next or previous result once regardless of count; close or clear search. A result can add history when its final position is available. |
+| `followLink` | `f` | Label the visible PDF links. Type a label to follow it, Backspace to edit the label, or Escape to cancel. Internal destinations can add history; external links open through Zotero. Count is ignored. |
+| `prevHeading` / `nextHeading` | `[s` / `]s` | Move through the full Outline's headings in document order, wrapping at the ends. Works from the PDF and all Reader sidebars regardless of which branches are collapsed. |
+| `prevFigure` / `nextFigure` | `[f` / `]f` | Move between figures identified by the PDF's structure or recognized captions. Land on an associated image when available, otherwise its caption. First use may require local document analysis. |
+| `prevTable` / `nextTable` | `[t` / `]t` | Move between identified tables and their captions. First use may require local document analysis. |
+| `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | Select the previous or next annotation, wrapping at the ends. Count is ignored; a destination can add history when its final position is available. |
+| `prevBookmark` / `nextBookmark` | `[m` / `]m` | Jump between Reader marks in document order, wrapping at the ends. |
+| `editAnnotation` | `<Enter>`, `<Return>` | Open or focus the selected annotation comment. The editing indicator reads COMMENT. |
 | `deleteAnnotation` | `dd` | Delete selected annotation after confirmation; cancellation leaves it unchanged. Not a navigation entry. |
 | `yankAnnotation` / `yankAnnotationComment` | `y` / `Y` | Copy selected annotation text / comment. No target means no copy. |
 | `recolorYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | Recolor selected annotation. No selected annotation means no effect. |
@@ -167,8 +151,8 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, open eligible comment input, or leave the owned interaction. Settings gate Select and comment entry; disabled comment/Insert retains bare `i` native-pass-through compatibility. `exitMode` is unbound in Reader Normal. |
 | `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus nearest supported direction/split/context pane; no wrap. Missing target leaves focus unchanged. |
 | `focusReaderOutline` / `focusReaderMarks` / `focusReaderAnnotations` / `focusReaderThumbnails` | `<Space>ro` / `<Space>rm` / `<Space>ra` / `<Space>rt` | Open or focus Outline, Bookmarks, Annotations, or Thumbnails. Repeating a command leaves that surface focused rather than toggling it closed; the same focus actions are available from every Reader local panel context. |
-| `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle Reader split layout; layout is not part of jumplist snapshot. |
-| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Shared item/note chooser. A successful confirmed destination can record under the central settled-change rule; chooser activity itself does not. Escape cancels. |
+| `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle horizontal or vertical PDF split layout. Back/Forward does not change that layout. |
+| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Search and choose an item or note. Confirm to open the result, or Escape to cancel. Browsing results does not add history until you confirm a destination. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Choose open tab, cycle tabs, or close current tab. Successful chooser/H/L changes record; H/L counts are ignored and each cycles once. Closing alone is not Back and does not delete older entries. |
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Shared history traversal; positive counts accepted on shortcut; palette execution is once. |
 | `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | Open query-only palette, Settings, or persistent Plugin Manager panel. Modal/surface transition, not history. |
@@ -178,7 +162,7 @@ Reader command routing for a newly opened Reader becomes active as Neo's Reader 
 | `toggleReaderSidebarOutline` | **Unbound** | Explicit toggle of Zotero's native Reader Outline sidebar; it has no shipped shortcut. |
 | `toggleMarksExplorer` | **Unbound** | Explicit toggle of the Bookmarks view; it has no shipped shortcut. |
 
-Reader Select actions are listed in [Reader Select](#reader-select-and-annotation-actions). Actual split focus direction may target another pane type, including a Note context pane; it does not promise pane creation.
+Reader Select actions are listed in [Reader Select](#reader-select-and-annotation-actions). Directional focus moves to an existing pane, which can include the Note pane.
 Reader Normal counts are action-specific: step scroll, half/full viewport, `h/l` page turns, zoom in/out, and history traverse/repeat as their rows state; numeric `gg/G` is a single page target when supported. Search, annotation, tab-cycle, pane/layout, chooser, and other Reader Normal actions run once. Reader Select ignores counts for all its binding actions.
 
 ## Reader Select and annotation actions
@@ -203,8 +187,9 @@ Reader `v` enters Select and uses Flash to choose a text range (or adopts an exi
 | `exitMode` | `v`, `<Esc>` | Cancel Reader Select and return to Normal. |
 | `underlineSelection` | **Unbound** | Supported Select action via Selection Actions when its built-in action is available; no default key. |
 
-Flash labels disambiguate query typing from target selection. A label's exact completed prefix activates its target immediately; Enter activates the first/nearest current result. If many targets exist, Neo shows a match count before drawing per-target label geometry until the query narrows. Escape cancels and preserves the selection. Selection Actions built-ins include Capture to note, Underline, and Add note; colored highlights, copy, and search have direct bindings. Optional Translate appears only when Zotero Translate integration is available; its result is displayed in the action surface. Keyboard-created selection is copied through Neo's DOM range, not Zotero's separate native semantic range. See [Input methods](INPUT_METHODS.md) and the [User Guide selection workflow](USER_GUIDE.md#selection-workflow).
-Annotation Comment Editor is a view-scoped Feature Input Owner, not a Reader mode. Pending/mounted ownership displays COMMENT; native text and IME remain browser-owned, Enter inserts a newline, and ordinary Escape saves/closes. Composing Escape stays with IME. Edits autosave after two seconds. Saving uses the captured annotation target; exit releases input synchronously and late completion cannot change a newer owner's focus/status. Missing targets cannot be saved. Disabled Normal entry retains Reader-wide NATIVE passthrough until Escape, not a Reader Insert mode. In Reader Select, counts are ignored: each motion extends once and each selection action runs once.
+Type a visible phrase into Flash and choose its completed hint, or press Enter for the nearest match. Narrow a broad query to reveal its labels. Escape cancels Flash while keeping the previous selection. Selection Actions offers **Capture to note**, **Underline**, and **Add note**; **Translate** appears when Translate for Zotero is installed. See [Select text and annotate](SELECTION_GUIDE.md#try-it).
+
+Annotation comments accept ordinary text and IME input, save after two seconds of inactivity, and save and close on Escape. Enter inserts a new line. See [Annotation comment editor](#annotation-comment-editor). Reader Select motions and actions run once regardless of count.
 
 ## Main window
 
@@ -257,7 +242,7 @@ When item-list focus and Main local find own the interaction, `/` opens a prompt
 
 ## Note editor
 
-Note Vim editing is gated by **Note editor Vim mode**. With the gate off, Zotero/browser editor owns normal typing. With it on, Normal motions and operators edit through the Note editor integration; Insert text and IME are native. `Escape` exits Insert to Note Normal. Note actions are in `NOTE_ACTION_IDS`; each default comes from `NOTE_LOCAL_DEFAULT_BINDINGS` in `note-actions.ts`.
+Enable **Vim-style note editing** to use Normal motions and editing commands in notes. Press `i` for Insert and Escape for Normal. Insert accepts ordinary text and IME input. With the setting off, type directly in Zotero's editor.
 
 | ActionId | Default | Effect |
 | --- | --- | --- |
@@ -292,17 +277,17 @@ Note counts are command-specific: counts repeat `h/l/j/k/w/b/0/$` caret motions 
 
 ### Shared chooser
 
-`ff`, `fc`, `fn`, `,`, tag actions, and collection actions invoke the shared chooser as described in their owning surface tables. Neo-owned controls use `picker-input` while the query field owns focus and `picker-list` while results are focused. Defaults include Up/Down, `Ctrl+j/n` and `Ctrl+k/p` for movement, `Ctrl+d/u` for preview scrolling, Enter/Shift+Enter to confirm, and Escape to cancel; `j/k` and `/` are additionally bound in `picker-list`, with `/` focusing the query. `uiNextPane` / `uiPreviousPane` are supported in `picker-input` but unbound by default. Query typing and IME remain browser/Gecko-owned; native editing shortcuts remain separate and read-only. Mouse row selection requires the preference to enable it; hover alone is inert. A chooser only resolves an action target; it does not add provider-local command grammars.
+Item, note, tab, tag, and collection choosers share query and result controls. Up/Down, `Ctrl+j/n`, and `Ctrl+k/p` move results; `Ctrl+d/u` scrolls the preview; Enter or Shift+Enter confirms; Escape cancels. In the result list, `j/k` move and `/` focuses the query. Query text and IME use normal editing keys. The `picker-input` and `picker-list` contexts can be customized separately. `uiNextPane` and `uiPreviousPane` are supported in the query context but have no default. Mouse row selection follows the Picker mouse preference; hovering does not change the selection.
 
-Notes (`fn`) default to the invoking Item's notes, including an honest empty state. **Browse library** explicitly expands the same invocation; native Tab/Shift-Tab and Enter/Space activate its source button, while local cancellation remains available. Rows contain titles only with nonselectable owner boundaries; Preview resolves actual parent ownership and readable body paragraphs. Query/source loading preserves committed input without exposing partial IME text. Confirmation locks one candidate ID and rejects an ownership change since Preview. Repeated confirmation is ignored until settlement; Escape/backdrop cannot undo an admitted save. Failures name the admitted target, and forced chooser replacement retires Reader completion status/focus without falsifying the native save outcome.
+Notes (`fn`) start with the current paper's notes. Choose **Browse library** for other existing notes in that library, or **Current item** to narrow the list again. Tab/Shift+Tab reaches the source button, and Enter/Space activates it. Preview shows the note's parent and body. Before confirmation, Escape cancels without a write. After confirming a capture, wait for the save result; closing the chooser does not undo that save. If the destination has moved or become unavailable, choose it again.
 
 Tag behavior is operation-specific: Add Tag may expose an explicit create candidate; Remove Tag lists tags assigned to at least one target. Main `tf` toggles one Zotero-native tag filter; `tc` clears filters without a chooser. With a configured separator, a tag query is refined segment by segment: a non-terminal virtual namespace is not a tag mutation, and Enter on that candidate replaces the query with the namespace path while keeping the chooser open. A terminal tag is the candidate for the invoking action. Paths are a presentation over flat Zotero strings and never rewrite tag data. Collection actions require same-library targets, re-resolve before confirmation, and skip already-present/absent membership. A changed target/library or cancelled chooser refuses the whole operation.
 
 ### Flash and link hints
 
-Flash runs under Reader Select `s` (or Select start entered by `v`). It uses a real browser input for literal query, with composition-aware IME; label characters are separate from committed query characters. Enter chooses nearest labelled target, Escape cancels, Backspace edits query/label according to focus. No match leaves selection unchanged. It does not synthesize Unicode from keydown data.
+Reader Select `s`, or `v` when starting a selection, opens Flash. Type literal visible text, choose its hint, or press Enter for the nearest match. Escape cancels; Backspace edits the query or label. A miss leaves the existing selection unchanged.
 
-Reader Normal `f` enumerates visible internal, citation, and external PDF links in the active Reader view. Type hint characters to choose; matching is case-insensitive, Backspace removes a hint character, Escape cancels. Activation follows the Reader's PDF navigation handler; internal/citation jumps may record only when their owned exact-view native hard receipt qualifies, external links are not Neo history. Off-screen links and reference-preview overlays are not included.
+Reader Normal `f` shows labels for visible PDF links. Type a case-insensitive label to follow a link, Backspace to edit it, or Escape to cancel. Internal and citation links stay in the PDF; external links use Zotero's normal handler. Internal destinations can add history when Zotero reports their final position.
 
 ### Native Reader Outline and Bookmarks
 
@@ -312,11 +297,11 @@ In `reader-outline`, Neo defaults `j/k` to immediate native row movement and `h/
 
 Neo decorates native Outline rows without changing their titles or authored numbering. Compact theme-aware icon/ordinal badges and numeric direct-child counts have localized accessible/hover labels. Full-tree numbering includes meaningful unnumbered roots such as Introduction as `1`, preserves `parent.child` ordinals across filtering/collapse, and excludes explicit Figure/Table entries from heading counters. Native Annotations and Thumbnails remain independent sidebar surfaces.
 
-`[s`/`]s` delegate from all four focused sidebar contexts to the same Reader-wide heading traversal, not local tree movement. Genuine matching native heading geometry corrects page-broken bookmark destinations without adding headings. Caption `▧ / ▤` controls share `reader-outline`; `j/k` move through visible owned controls and `h/l` close/open their groups. Opening a caption group or explicitly requesting heading/Figure/Table navigation lazily calls the shared Zotero structured-document SDK. Valid labeled captions create Figure/Table identities; trustworthy associated native images supply Figure landing positions, otherwise captions remain the fallback. Tables retain caption geometry, and image/table blocks alone never invent targets. A warm native cache is reused, while a cold/invalid cache can require local whole-PDF processing that the SDK cannot cancel. Reader open starts no extra processing. Retired results cannot navigate or revive a Reader. There is no upload/new OCR dependency and recognition is not guaranteed for every caption or scanned PDF.
+`[s` / `]s` traverse document headings from the PDF and all four sidebars. The Figure and Table groups use the Outline controls: `j/k` moves between visible entries and `h/l` closes or opens groups. Opening a group or requesting structural navigation can start local PDF analysis; later requests reuse the result. Figures use an associated image position when available, otherwise a caption; tables use their caption positions. A document without usable structure can be read using page navigation and PDF search.
 
 ### Marks and Bookmarks group
 
-The mark creation/jump grammar remains Reader-owned and is not represented by `ActionId` entries: `m` then a lowercase letter or digit sets a viewport mark; backtick then a letter/digit jumps; `dm` then a mark deletes one; `dM` deletes all. Reader Normal `[m` / `]m` navigates marks in document order with wrap. `<Space>rm` directly opens or focuses the Bookmarks group; repeating it does not close the sidebar. Mark jumps restore the marked viewport and can restore selected-annotation association; successful jumps record one managed-final excursion, not each intermediate scroll.
+Press `m` then a lowercase letter or digit to set a Reader mark; press backtick then that label to return. `dm` then a label deletes one mark and `dM` clears all. `[m` / `]m` visits marks in document order with wrap. `<Space>rm` opens or focuses Bookmarks. A jump restores the marked position and its selected annotation when available, and adds one history destination.
 
 The Bookmark list uses configurable `reader-marks` actions. Defaults are `j/k` to move, `gg/G` to reach first/last, Enter to jump, `d` to delete the selected mark, and `x` to clear marks. Assigned mark labels jump directly except `j`, `k`, `g`, `d`, and `x`, which are group controls; Home/End are not default list commands, and uppercase letters are not mark labels. These remain Reader marks, not PDF annotations; persistence follows the Marks preference.
 
@@ -330,21 +315,13 @@ controls, not inherited Reader Normal actions. There is no cancel/rollback comma
 Escape saves changes since the last autosave rather than discarding them. IME-owned
 Escape remains native.
 
-Settings → Reader → **Annotation comment editing** gates Normal-mode selected-annotation
-entry (default On); it persists as `extensions.zotero-neo.annotationCommentEditor.enabled`.
-Off preserves `i` native passthrough and its Escape exit without disabling Zotero-native
-comments. Existing mode-preference true/false values migrate to this feature key;
-an existing canonical value wins and the old key is removed. Schema 17 deletes the
-inactive `reader-insert:` / legacy `insert:` mappings and null unbindings with owner
-approval, without archiving, new shortcuts, or runtime aliases. Other contexts remain.
-Select **Add note** still creates an annotation and opens its comment editor; it is
-not gated by the Normal-mode entry switch.
+**Settings → Reader → Annotation comment editing** controls `i` / Enter entry to an existing annotation comment and is on by default. When off, `i` gives input to Zotero until Escape. Zotero's own comment fields remain available, and **Add note** from Reader Select can still create an annotation and open its comment editor.
 
 ### Selection Actions, Plugin Manager, Settings, and Selection Panel
 
-Selection Actions (`a`/Enter in Reader Select) offers capture-to-note, underline, add note and optional Translate integration. Escape cancels; action availability depends on active Reader selection and optional integration. Capture-to-note opens the shared Notes chooser and appends quoted captured context only after target revalidation; it is distinct from adding an annotation comment.
+Selection Actions (`a` / Enter in Reader Select) offers **Capture to note**, **Underline**, and **Add note**. **Translate** appears when Translate for Zotero is installed. Capture appends a quote to a chosen existing note; Add note creates a PDF annotation comment.
 
-Its fixed controls are `j/k` or arrows to move, `Home`/`g` for first, `End`/`G` for last, and `1–9` or Enter to run. A result uses `y` to copy and Enter/Escape to close. Ordinary Escape closes only the palette and preserves Reader Select. Composing keys remain native without cancelling, navigating, or running an action. Key capture belongs to the PDF pane that opened the palette; ordinary input in another pane closes it and yields to that pane. Closing the palette or its owning view invalidates late results and focus/status work.
+Use `j/k` or arrows to move, `Home` / `g` for the first action, `End` / `G` for the last, and `1–9` or Enter to run one. A displayed result uses `y` to copy and Enter/Escape to close. Escape closes the palette while keeping the PDF selection. IME composition keeps its typing keys. Input in a different PDF pane hands control to that pane and closes the palette.
 
 Plugin Manager (`<Space>pp`) is persistent, unlike a chooser. Its Neo list actions are configurable in `plugins-list`; defaults are `j` / Down and `k` / Up for movement, `gg` / Home and `G` / End for first/last, `Ctrl+d/u` for page movement, `/` for filtering, and `Escape` / `q` to close. `r` reloads; `e/d` enable/disable only if AddonManager grants that operation; `p` opens registered plugin settings; `o` opens the homepage; `R` opens a mapped GitHub README; `L` opens repository commit history. `plugins-input` supports only `uiFocusList`, defaulted to Escape to return focus to results; ordinary filter text and IME remain native. Neo cannot disable itself through its own panel. Zotero AddonManager remains authoritative.
 
@@ -352,7 +329,7 @@ Settings (`<Space>ps`) is Neo-owned, with binding edits staged until Apply. Main
 
 ## Action ID index
 
-This index covers all 215 canonical `ActionId`s in `ACTION_IDS`, including every `NOTE_ACTION_ID`. Defaults are the only shipped shortcuts; **unbound** means no shipped binding. Availability names identify the exact executor contexts, not a guarantee a target exists at runtime. See the detailed context and grammar tables above.
+Look up each action's ID, default keys, and available contexts. **Unbound** means the action has no default shortcut; assign one in Settings or find the action in the relevant Command Palette.
 
 | ActionId | Default binding(s) | Capability / principal effect |
 | --- | --- | --- |
@@ -383,12 +360,12 @@ This index covers all 215 canonical `ActionId`s in `ACTION_IDS`, including every
 | `nextAnnotation` | Reader Normal `]a` | Reader annotation navigation |
 | `prevHeading` | Reader Normal and four sidebar contexts `[s` | Previous Section/Subsection in the whole native Outline; active PDF position, document order and wrap |
 | `nextHeading` | Reader Normal and four sidebar contexts `]s` | Next Section/Subsection in the whole native Outline; active PDF position, document order and wrap |
-| `prevFigure` | Reader Normal `[f` | Previous native Figure target or genuine recognized caption; lazy local SDK processing |
-| `nextFigure` | Reader Normal `]f` | Next native Figure target or genuine recognized caption; lazy local SDK processing |
-| `prevTable` | Reader Normal `[t` | Previous native Table target or genuine recognized caption; lazy local SDK processing |
-| `nextTable` | Reader Normal `]t` | Next native Table target or genuine recognized caption; lazy local SDK processing |
-| `prevBookmark` | Reader Normal `[m` | Previous Reader mark by document position; wraps and preserves managed-final jump behavior |
-| `nextBookmark` | Reader Normal `]m` | Next Reader mark by document position; wraps and preserves managed-final jump behavior |
+| `prevFigure` | Reader Normal `[f` | Previous identified figure or figure caption; first use may analyse the PDF locally |
+| `nextFigure` | Reader Normal `]f` | Next identified figure or figure caption; first use may analyse the PDF locally |
+| `prevTable` | Reader Normal `[t` | Previous identified table caption; first use may analyse the PDF locally |
+| `nextTable` | Reader Normal `]t` | Next identified table caption; first use may analyse the PDF locally |
+| `prevBookmark` | Reader Normal `[m` | Previous Reader mark in document order; wraps at the start |
+| `nextBookmark` | Reader Normal `]m` | Next Reader mark in document order; wraps at the end |
 | `clearSearch` | Reader Normal `<Esc>` | Reader search clear/close |
 | `enterVisual` | Reader Normal `v` | Reader Select entry |
 | `openSelectionActions` | Reader Select `a`, `<Enter>`, `<Return>` | Selection Actions |
@@ -574,7 +551,7 @@ This index covers all 215 canonical `ActionId`s in `ACTION_IDS`, including every
 
 ## Default binding index
 
-The table is the complete default lookup: each canonical `BindingContext:sequence` is paired with its exact `ActionId`. It contains all 337 entries from `DEFAULT_BINDINGS`, including the spread `NOTE_LOCAL_DEFAULT_BINDINGS`; saved user remaps can replace defaults.
+Each `BindingContext:sequence` below maps a default key sequence to its action ID. Saved custom bindings replace these defaults for their chosen context.
 
 | Canonical `BindingContext:sequence` | ActionId |
 | --- | --- |
@@ -919,15 +896,15 @@ The table is the complete default lookup: each canonical `BindingContext:sequenc
 
 ## Neovim comparison and examples
 
-Neo borrows familiar notation, counts, key sequences, Visual selection, and a bounded stack-style jumplist model. It is not Neovim and does not implement an Ex command line, buffers/windows/tabs as Neovim entities, arbitrary registers, full operator-pending grammar, or a universal motion/count algebra. Zotero owns documents, item scopes, tabs, text inputs and native PDF behavior. Neo's `:` is a query-only action palette, not `:` Ex; `H/L` mean adjacent Zotero tabs; `gg/G` are surface-specific; Note registers are internal to the Note editor. Counts are honored only by the actions that actually consume them. No default `J/K` tab grammar is provided.
+Familiar keys have jobs suited to Zotero: `:` opens the Command Palette, `H` / `L` switch tabs, and `gg` / `G` move within the current Library list, PDF, or Note. The action tables specify count behavior and the Note editor's available motions and operators.
 
 Examples:
 
 - Reader `3j`: three configured scroll steps; Reader `3l`: three adjacent page turns; neither is a jumplist boundary.
-- Reader `3gg` or `3G`: target PDF page three, a discrete jump; bare `gg` / `G`: first / last page.
+- Reader `3gg` or `3G`: jump to page three; bare `gg`: first-page start; bare `G`: document bottom.
 - Main `3j`: Cursor motion, not three Reader scrolls; Main `gg/G`: first/last row of its supported list.
-- Note `3j`: counted caret motion where Note mode is active; `3x`: repeated character deletion where its command consumes count. Do not assume `3dw` equals a general Vim operator count form.
+- Note `3j`: move the caret three lines; `3x`: delete three characters. Note delete, yank, and change operators apply once, including when preceded by a count.
 - Reader `2<C-o>` traverses two shared history entries; `2:` merely opens the palette and does not repeat the chosen action.
-- Reader `L` followed by mark jump, then `<C-o>`: Back visits the mark's departure and then the prior tab destination, subject to successful snapshots/restoration.
+- Reader `L` followed by a mark jump, then `<C-o>`: go Back through the mark jump and the earlier tab change.
 
-When a key does not act as expected, check current surface and mode, focus owner (especially native text/IME or an open Neo panel), mode capability and feature gate, resolved custom binding, pending sequence/timeout, and whether the operation has a resolvable target. A missing/default-unbound command may still appear in the appropriate palette; a command outside the active mode's capability cannot be made available merely by assigning a key.
+If a key does not act as expected, check focus and search for the action in **Settings → Keybindings**. Confirm its context and whether it is Default, Custom, or Unbound. See [Troubleshooting](TROUBLESHOOTING.md).

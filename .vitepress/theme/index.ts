@@ -1,16 +1,18 @@
 /// <reference path="../env.d.ts" />
 
 import { h } from 'vue';
+import type { Theme } from 'vitepress';
 import DefaultTheme from 'vitepress/theme';
-import SourceVersionNotice from './SourceVersionNotice.vue';
+import FeatureMedia from './FeatureMedia.vue';
 import bannerUrl from '../../assets/branding/zotero-neo-banner.png';
 
 export default {
   extends: DefaultTheme,
+  enhanceApp({ app }) {
+    app.component('FeatureMedia', FeatureMedia);
+  },
   Layout: () =>
     h(DefaultTheme.Layout, null, {
-      'doc-before': () => h(SourceVersionNotice),
-      'home-hero-before': () => h(SourceVersionNotice),
       'home-hero-image': () =>
         h('img', {
           src: bannerUrl,
@@ -18,4 +20,4 @@ export default {
           class: 'VPImage image-src',
         }),
     }),
-};
+} satisfies Theme;

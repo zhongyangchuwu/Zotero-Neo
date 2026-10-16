@@ -2,65 +2,54 @@
 layout: home
 hero:
   name: Zotero Neo
-  text: 面向 Zotero 的键盘交互层
-  tagline: 用键盘浏览文献、阅读 PDF、处理选区与标注，并在需要时回到 Zotero 原生界面输入。
+  text: Read and organize in Zotero.
+  tagline: Keyboard controls for your Library, PDFs, and notes.
   actions:
     - theme: brand
-      text: 下载公开版 v0.1.0
-      link: https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi
-      target: _blank
-      rel: noopener noreferrer
+      text: Features
+      link: /docs/FEATURES
     - theme: alt
-      text: 开始使用
+      text: User guide
+      link: /docs/USER_GUIDE
+    - theme: alt
+      text: Install Neo
       link: /docs/GETTING_STARTED
-    - theme: alt
-      text: 命令参考
-      link: /docs/COMMAND_REFERENCE
 features:
-  - title: 文献库与 Main
-    details: 在当前视图中浏览项目，用明确的 Selection 管理多项目目标，并查找当前可见项目。
-  - title: Reader 阅读
-    details: 导航 PDF 页面、原生侧栏与分栏，在可见文本上建立选区并执行标注操作。
-  - title: 选区与笔记
-    details: 将摘录捕获到已有 Zotero Note；笔记内容仍由 Zotero 原生编辑器负责。
+  - title: Select text without dragging
+    details: Type a phrase you can see in the PDF, choose a hint, and highlight the passage.
+    link: /docs/SELECTION_GUIDE#try-it
+    linkText: Try text selection
+  - title: Keep excerpts in your notes
+    details: Preview an existing note and append a selected passage alongside what you already wrote.
+    link: /docs/CAPTURE_GUIDE#try-it
+    linkText: Try capture to note
+  - title: Build a reading list as you browse
+    details: Mark papers independently of the current row, then organize the group with tags and collections.
+    link: /docs/MAIN_GUIDE
+    linkText: Work with reading lists
+  - title: Follow the structure of a paper
+    details: Move between headings, figures, and tables, follow PDF links by label, and return to your reading position.
+    link: /docs/READER_GUIDE
+    linkText: Explore Reader workflows
 ---
 
-## 了解 Zotero Neo
+## User guide
 
-Zotero Neo 为 Zotero 主窗口和 Reader 提供可配置的键盘交互。它受 Vim/Neovim 启发，但不是完整仿制品；它尊重 Zotero 的文献数据和原生编辑器，并根据当前窗口、焦点、模式与操作目标决定按键如何生效。
+Find and organize papers, read and annotate PDFs, collect passages in notes, and return to previous work. The [User guide](./docs/USER_GUIDE.md) covers these tasks by module.
 
-当前可公开安装的是 **v0.1.0**：
+Start with [installing Neo](./docs/GETTING_STARTED.md), explore the [Features](./docs/FEATURES.md), or follow a workflow:
 
-- [下载官方 v0.1.0 XPI](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)
-- [查看 v0.1.0 发布说明](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)
-- [阅读项目介绍与安装说明](./README.md)
+- [Read a paper and keep a running note](./docs/USER_GUIDE.md#read-a-paper-and-keep-a-running-note).
+- [Review and organize a group of papers](./docs/USER_GUIDE.md#review-and-organize-a-group-of-papers).
+- [Follow a thread across papers and notes](./docs/USER_GUIDE.md#follow-a-thread-across-papers-and-notes).
 
-支持范围为当前最新稳定版 Zotero；请从 Zotero 的 **Tools → Plugins → Install Plugin From File…** 安装 XPI，并按提示重启。
+## Find an answer
 
-## 从常见任务开始
+- [Commands and shortcuts](./docs/COMMAND_REFERENCE.md).
+- [Settings reference](./docs/SETTINGS_REFERENCE.md).
+- [Troubleshooting](./docs/TROUBLESHOOTING.md).
+- [How Neo works](./docs/CONCEPTS.md).
 
-### 在文献库中定位项目
+The public release is [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
 
-在 Main 的项目列表中，`j` / `k` 可移动 Cursor；`s` 可将当前目标加入或移出 Neo Selection。`/` 用于查找当前可见项目，不会替代 Zotero 的 Quick Search 或 Advanced Search。
-
-[了解 Main、Cursor 与 Selection](./docs/INTERACTION_MODEL.md) · [查看 Selection 与标签](./docs/TAGS.md)
-
-### 阅读和处理 PDF
-
-Reader 提供页面导航、查找、分栏及原生侧栏工作流。需要选取可见 PDF 文本时，可进入 Select 流程，调整选区后执行高亮、复制、搜索或其他可用动作。
-
-[阅读 Reader 工作流](./docs/USER_GUIDE.md) · [核对准确按键与上下文](./docs/COMMAND_REFERENCE.md)
-
-### 将摘录捕获到已有笔记
-
-从 Reader 选中文本后，可选择把摘录追加到已有 Zotero Note。确认目标前可以检查笔记预览；此流程不自动创建笔记。Note 编辑仍在 Zotero 的原生笔记编辑器中完成。
-
-[开始使用与首次操作](./docs/GETTING_STARTED.md) · [查看输入法与焦点边界](./docs/INPUT_METHODS.md)
-
-## 文档入口
-
-- [用户指南](./docs/USER_GUIDE.md)：按任务了解浏览、Reader、选区、笔记与设置工作流。
-- [完整命令参考](./docs/COMMAND_REFERENCE.md)：查询 ActionId、默认绑定、上下文和限制；这是唯一完整按键表。
-- [开发与架构](./docs/DEVELOPMENT.md) · [项目路线图](./docs/ROADMAP.md)
-- [v0.2 候选验收指南](./docs/V0_2_ACCEPTANCE.md) · [录屏与键盘操作指南](./docs/RECORDING_GUIDE.md)
-- [项目变更日志](./CHANGELOG.md)
+[Release notes](./CHANGELOG.md) · [Roadmap](./docs/ROADMAP.md) · [GitHub](https://github.com/zhongyangchuwu/Zotero-Neo)
