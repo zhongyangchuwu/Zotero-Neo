@@ -22,9 +22,35 @@ function harness(
     searchTextbox,
     contains: (target: unknown) => target === searchTextbox,
   };
+  const rowUpdates = new Set<() => void>();
+  const refreshes = new Set<() => void>();
+  const selection = {
+    focused: -1,
+    count: 0,
+    select: vi.fn<(row: number) => void>(),
+  };
+  selection.select.mockImplementation((row) => {
+    selection.focused = row;
+    selection.count = 1;
+  });
+  const itemsView = {
+    rowCount: 3,
+    selection,
+    onRefresh: {
+      addListener: (callback: () => void) => refreshes.add(callback),
+      removeListener: (callback: () => void) => refreshes.delete(callback),
+    },
+    rowProvider: {
+      onUpdate: {
+        addListener: (callback: () => void) => rowUpdates.add(callback),
+        removeListener: (callback: () => void) => rowUpdates.delete(callback),
+      },
+    },
+  };
   const items = {
     id: 'item-tree-main-default',
     localName: 'div',
+    isConnected: true,
     focus: vi.fn(() => {
       document.activeElement = items;
       emit('focusin', items);
@@ -50,7 +76,7 @@ function harness(
   const window = {
     document,
     Zotero_Tabs: { selectedID: 'zotero-pane' },
-    ZoteroPane: { loaded: true, itemsView: {} },
+    ZoteroPane: { loaded: true, itemsView },
     setTimeout: (callback: () => void, delay = 0) => {
       const id = ++nextTimer;
       timers.set(id, { dueAt: now + delay, run: callback });
@@ -74,6 +100,12 @@ function harness(
     items,
     editor,
     searchTextbox,
+    itemsView,
+    selection,
+    rowsReady: () => {
+      items.isConnected = true;
+      for (const callback of [...rowUpdates]) callback();
+    },
     listeners,
     timers,
     advance: (elapsed: number) => {
@@ -135,6 +167,57 @@ describe('synchronous Items focus host adapter', () => {
 });
 
 describe('Main startup focus ownership', () => {
+  it('waits for the startup Items table and anchors its first row only once', () => {
+    const h = harness({ initial: 'search' });
+    h.items.isConnected = false;
+    h.owner.start();
+    h.advance(0);
+    expect(h.document.activeElement).toBe(h.searchTextbox);
+    expect(h.selection.count).toBe(0);
+
+    h.rowsReady();
+    expect(h.document.activeElement).toBe(h.items);
+    expect(h.selection.focused).toBe(0);
+    expect(h.selection.count).toBe(1);
+
+    h.selection.focused = 2;
+    h.focusSearch();
+    h.rowsReady();
+    expect(h.document.activeElement).toBe(h.searchTextbox);
+    expect(h.selection.focused).toBe(2);
+  });
+
+  it('preserves user search intent while the initial Items table is loading', () => {
+    const h = harness({ initial: 'search' });
+    h.items.isConnected = false;
+    h.owner.start();
+    h.advance(0);
+    h.intent('keydown');
+    h.rowsReady();
+    expect(h.document.activeElement).toBe(h.searchTextbox);
+    expect(h.selection.count).toBe(0);
+  });
+
+  it('focuses an empty current collection without selecting a nonexistent row', () => {
+    const h = harness({ initial: 'search' });
+    h.itemsView.rowCount = 0;
+    h.owner.start();
+    h.advance(0);
+    expect(h.document.activeElement).toBe(h.items);
+    expect(h.selection.focused).toBe(-1);
+    expect(h.selection.count).toBe(0);
+  });
+
+  it('recognizes the startup search owner before the native window receives foreground focus', () => {
+    const h = harness({ initial: 'search' });
+    h.searchTextbox.matches = () => false;
+    h.owner.start();
+    h.advance(0);
+    expect(h.document.activeElement).toBe(h.items);
+    expect(h.selection.focused).toBe(0);
+    expect(h.selection.count).toBe(1);
+  });
+
   it('moves only observed native empty Quick Search startup focus to Items once', () => {
     const h = harness();
     h.owner.start();

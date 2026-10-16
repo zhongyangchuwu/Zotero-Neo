@@ -30,6 +30,8 @@ Note editors use Normal and Insert when **Vim-style note editing** is enabled. T
 
 Focus matters: the collection tree, item list, Reader pane, Note editor, picker input, and picker results do not all use the same commands. Native text fields and active IME composition keep their text-editing keys. See the [Command Reference](COMMAND_REFERENCE.md#modes-focus-and-capabilities) for the exact contexts and actions available in each.
 
+On startup with Main active, Neo focuses the item list and places the Cursor on the first visible item in the current View. An empty View receives list focus without selecting an item. This does not override deliberate search or text input, and returning from Reader does not reset the Cursor.
+
 ## Quick navigation examples
 
 A few examples show how the same key can have different jobs on each surface:

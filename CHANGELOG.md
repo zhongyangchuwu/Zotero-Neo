@@ -45,6 +45,7 @@
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ### Fixed
+- Keep Main's startup focus claim until the item table is ready, then focus the first item in the current View. Handle background-window startup and empty Views without overriding deliberate search, later Reader returns, or add-on reloads.
 - Read Main View state and Toggle Tag Filter candidates from the complete native rendered scope, including multiple collections and supported mixed/cross-library selections, without calling single-selection APIs or broadening tags to entire libraries.
 - Report Tag Filter matches using native object rows, excluding multiselection library headers and spacers.
 - Ship the complete project AGPL-3 license and fuzzysort MIT notice inside the XPI and validate the actual archived license payloads.

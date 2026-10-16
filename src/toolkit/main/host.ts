@@ -319,8 +319,11 @@ export function mainEmptyQuickSearchFocused(window: MainWindow): boolean {
   if (!search || !textbox || !active || (active !== search && !search.contains(active)))
     return false;
   try {
+    // Gecko can retain the document's search owner without :focus-within while
+    // the startup window is still in the background.
     return (
-      !!(textbox.matches?.(':focus-within') || textbox.hasAttribute?.('focused')) &&
+      (active === textbox ||
+        !!(textbox.matches?.(':focus-within') || textbox.hasAttribute?.('focused'))) &&
       !String(textbox.value ?? '').length
     );
   } catch {
