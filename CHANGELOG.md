@@ -16,6 +16,7 @@
 
 - Keep installation and version information in Getting Started.
 - Organize workflows by module, with separate feature descriptions and command/settings reference.
+- Share project terminology between the interaction model and authoring guide; align Chinese interface names and comment-save instructions.
 - Remove unused cross-Surface item-target dispatchers; each Surface resolves the items used by its actions.
 
 - Notes and Reader capture now default to the current Item's notes, with an explicit Library source switch that retains the same query and confirmation. Rows show titles only, thin nonselectable boundaries separate Item owners, and Preview reports each note's actual parent or standalone/unavailable source. Human notes containing citation-tool terminology remain visible.
