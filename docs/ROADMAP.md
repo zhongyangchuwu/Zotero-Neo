@@ -1,193 +1,34 @@
 # Roadmap
 
-Zotero Neo is an independent project. The first public release, **v0.1.0**, was
-published on 2026-09-19. The [user guide](USER_GUIDE.md) describes current source;
-the [changelog](../CHANGELOG.md) separates unreleased work from published behavior.
-Current bugs and host/API limitations are tracked in GitHub Issues.
+Zotero Neo is an independent project. The public release is v0.1.0; the
+[changelog](../CHANGELOG.md) separates published behavior from unreleased source.
+For current workflows and exact bindings, see the [user guide](USER_GUIDE.md) and
+[command reference](COMMAND_REFERENCE.md).
 
-## v0.1.0
+## Current
 
-The first public release established the keyboard-first interaction model before
-broader Vim feature parity.
+The v0.2.0 source is merged into `main` and includes the selected Library
+workflows, Reader sidebar and navigation work, existing-note capture, and
+context-specific settings. This is not a published release: the public update
+feed remains at official v0.1.0 until a verified v0.2.0 asset is authorized for
+promotion.
 
-Completed release gates:
-
-- Item-tag assignment/removal is implemented through Main Item Select plus
-  explicit [Tag actions](TAGS.md), using Zotero-native selection, item APIs, and
-  batched transactions; Main-only `tf/tc` own view filtering (#22, #39).
-- Flash, chooser/tag candidate inputs, and Note editing support Unicode/CJK and
-  browser-owned IME composition on the current Zotero host (#23).
-- Shared fuzzy matching uses the pinned `fuzzysort` adapter rather than a local
-  ad-hoc scorer (#26).
-- Pre-release interaction architecture is unified across Main Item Select and Note, while Reader
-  orchestration has explicit host-key, PDF-view lifecycle, navigation, and Select-range owners
-  (#29).
-- The default 0.1.0 keymap is frozen with an automated no-exact-prefix-ambiguity guard; Reader
-  annotation copy uses `y` / `Y` without timeout ambiguity (#24).
-
-The v0.1.0 release gate (#24), update metadata, dual-platform build, and public
-GitHub Release are complete.
-
-## Current v0.2 work
-
-The Library substrate and its first workflows are implemented. Settings, custom
-interaction themes, and shared i18n were merged in
-[#93](https://github.com/zhongyangchuwu/Zotero-Neo/pull/93); #89/#90/#91 are complete.
-Issue #55 is closed as historical Library-substrate evidence, not the current
-acceptance backlog. Current interaction ownership is defined by
-[the interaction model](INTERACTION_MODEL.md) and
-[#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98).
-
-Native Reader Sidebar integration and the keyboard-system/navigation work are
-owner-accepted and merged through
-[#134](https://github.com/zhongyangchuwu/Zotero-Neo/pull/134) and
-[#136](https://github.com/zhongyangchuwu/Zotero-Neo/pull/136); #133/#135 are complete.
-The shared 14-context binding source, action-centric Apply editor and schema-18
-migration are now on `main`. Reader navigation preserves the native heading tree
-but resolves trustworthy printed-heading starts across page breaks, and Figures
-use trustworthy native image regions above their captions. Explicit structural
-requests share a native SDK cache; cold processing cost remains disclosed.
-This is merged source, not a new published release.
-
-Isolated latest-stable Zotero smoke covers migration repeat-safety, live Reader
-panels/categories/splits/bookmarks, configured input/list controls, Main/Note
-commands, and Settings recording, conflicts, focus, and lifetime. This automation
-does not prove physical OS IME/clipboard or keyboard-only interaction; keep those
-manual acceptance boundaries explicit.
-
-The unified navigation history and document-bottom Reader `G` are implemented,
-owner-accepted, and merged through
-[#113](https://github.com/zhongyangchuwu/Zotero-Neo/pull/113).
-The resulting `main` checkpoint passed CI and #112 is complete. Do not reimplement
-Back/Forward or assign their defaults again; the
-[command reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)
-owns the accepted behavior.
-
-Existing-note capture is host-accepted and
-[#85](https://github.com/zhongyangchuwu/Zotero-Neo/issues/85) is complete.
-Disposable-data acceptance covered preserved HTML, immutable text/page snapshots,
-child and other same-library notes, stale-target refusal, wrong-library exclusion,
-cancel/no mutation, Reader focus return, and the separate annotation-comment action.
-
-The owner-approved selection-safe Notes revision is merged through
-[#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140), not published.
-Notes default to the frozen current Item, with an honest empty state
-and explicit Library browsing. Confirmation fixes the Note ID before async work;
-source/owner changes reject stale targets, and only the actual native save produces
-a receipt. Current-candidate contracts and isolated Zotero package/UI proofs are
-recorded in [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138).
-
-Destructive-target safety is host-accepted and
-[#88](https://github.com/zhongyangchuwu/Zotero-Neo/issues/88) is complete.
-Real confirmation messages and native buttons proved Cursor, persistent Selection,
-and Zotero multi-selection targets; hidden-member refusal; cancellation preserving
-Selection and prior Trash undo; and exactly-one permanent Reader annotation deletion.
-
-Annotation Comment Editor input ownership is implemented and host-verified for
-[#98 Phase 9.1](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98), merged through
-[#114](https://github.com/zhongyangchuwu/Zotero-Neo/pull/114). The resulting `main`
-checkpoint passed CI. Pending and mounted input belong to the captured PDF view,
-not a writable Reader mode flag.
-Enter newline, ordinary Escape save/close, two-second autosave, IME ownership,
-split-view isolation, native editable handoff, target snapshot, and close/reopen are
-preserved. Reader now has only Normal/Select Surface modes; comment/native input is feature-owned.
-
-The separately observed mixed-generation Reader lifecycle gap
-[#115](https://github.com/zhongyangchuwu/Zotero-Neo/issues/115) is resolved through
-[PR #116](https://github.com/zhongyangchuwu/Zotero-Neo/pull/116), merged at `0c9833f`;
-merged-main CI passed. Callback-identity unregistration and closed Reader/split-view
-dead-wrapper teardown were repaired. Final Zotero 10.0.6 disposable-data acceptance
-covered three same-root reloads, three different-root replacements, existing/reopened
-Reader input, split/native handoff, disable/enable, and separate persistent XPI
-install/update/restart.
-
-For Phase 9.2, the owner selected the existing Enter-newline / Escape-save-close /
-two-second-autosave contract. There is no cancel or alternate autosave/key policy.
-The one **Annotation comment editing** entry switch is backed by
-`annotationCommentEditor.enabled`; legacy true/false values migrate before the old
-key is cleared. Phase 5.7 removes `reader-insert` runtime contexts and, with explicit
-owner approval, deletes their inactive saved mappings/null unbindings without an
-archive. Other contexts and disabled `i` native-input intent are preserved.
+Required candidate and owner acceptance remains in progress. Use the
+[acceptance protocol](V0_2_ACCEPTANCE.md) for U1–U10. Record actual human and host
+results in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and
+[#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98); candidate identity
+and release preparation are tracked in
+[#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142).
 
 ## Next
 
-Do not repeat completed Reader overlay/input reviews or reopen accepted keys,
-comment semantics, navigation history, the native-sidebar layout, or the implemented
-Notes choice workflow. Phase 9.3 still has a distinct physical-input/package
-acceptance boundary, not a mandate for another broad refactor.
+- Complete required candidate installation, upgrade, physical-input, per-view, and owner-review acceptance.
+- Finish release preparation under #142. Tagging, feed promotion, and publication
+  require the release gates and explicit authorization.
 
-1. **After source integration, conduct the unified owner review** of functional behavior
-   and documentation. Use the [candidate acceptance guide](V0_2_ACCEPTANCE.md);
-   U1–U10 are execution steps, not a completed PASS report. Record actual outcomes
-   in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98); keep both issues open until their owners accept the remaining results. Final-package native clean-install and official-upgrade evidence is reusable only for the exact package; trusted input is not physical OS-IME, native clipboard or human Outline acceptance. A concrete failure gets its own bounded defect; no speculative rewrite.
-2. **Finish the remaining integration acceptance**, not another Notes rewrite.
-   [#140](https://github.com/zhongyangchuwu/Zotero-Neo/pull/140) implements the
-   accepted [#138](https://github.com/zhongyangchuwu/Zotero-Neo/issues/138) contract;
-   [#141](https://github.com/zhongyangchuwu/Zotero-Neo/pull/141) implements Phase 10
-   documentation reconciliation and the proved-unused target-dispatcher removal.
-   Current-Item scope, explicit Library browsing, actual-parent Preview, title-only
-   rows, single-flight native saves and late receipt/focus fencing have contract
-   and native API evidence. Keep #137's unperformed physical-input criteria
-   separate; do not rebuild these workflows or infer creation/backlinks.
-3. **Meet release gates only after selected acceptance is complete** under #98.
-   Current interaction, architecture, development and contributor guidance describe
-   implemented owners; historical inventories are not current instructions.
-   Preference decoders remain because packaged upgrades consume them; persisted
-   old names are not live runtime aliases. Release preparation remains gated below,
-   and publication still requires explicit authorization.
-
-PDF cover preview, Note Vim expansion, macros/Ex commands and generic Manager or
-provider frameworks remain outside this selected sequence. A new workflow should
-come from observed use, not speculative feature parity.
-
-The batteries-included direction recorded in
-[#49](https://github.com/zhongyangchuwu/Zotero-Neo/issues/49) is accepted; Plugin
-Manager phases 1–3 are complete, not an unfinished feature backlog. A new workflow
-must come from observed use after safety and acceptance, not speculative
-provider/manager abstractions. Track
-[#20](https://github.com/zhongyangchuwu/Zotero-Neo/issues/20)
-for a supported Zotero semantic-selection seam; retain the current DOM
-compatibility path until that external prerequisite exists.
-
-## Release gate
-
-The v0.1.0 release and live `updates.json` feed remain public. The v0.2.0 source
-can be merged into `main` before unified owner acceptance; integration does not
-publish it. Prepared candidate metadata lives in `updates.candidate.json`, read by
-`tools/check-release.mjs` and `tools/publish-release.mjs`. Keep public
-`updates.json` at its sole official v0.1.0 entry until a verified v0.2.0 asset
-exists and promotion is explicitly authorized. Neither feed file is packaged in
-the XPI.
-
-Passing `tools/check-release.mjs v0.2.0` proves candidate metadata consistency, not
-human acceptance or a live release asset. Final-XPI native clean-install and
-official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552), scoped to that package; they do not complete the open physical-input, per-view or owner review in #137/#98. Do not hold source integration until those reviews finish; tagging and publication remain gated on required acceptance and explicit authorization.
-
-Before another release:
-
-- complete the selected current-host acceptance and integration gates;
-- verify packaged install/update behavior separately from RDP temporary loading,
-  including binding/preference migration and single runtime ownership;
-- prepare matching manifest/package version, candidate-feed entry, release notes,
-  and installation links before tagging; use `tools/check-release.mjs`;
-- describe actual CI coverage: the current workflow verifies/packages on Ubuntu.
-  Do not claim Windows CI coverage without restoring that job and observing it pass.
-
-Release preparation and documentation content are owned by
-[#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142). The selected scope
-is content first, website later: the [website copy](WEBSITE_CONTENT.md) and
-[recording guide](RECORDING_GUIDE.md) prepare complete workflows without site code
-or invented demonstrations. Use the [candidate acceptance guide](V0_2_ACCEPTANCE.md)
-for real installation, upgrade, native input and per-view results.
-
-Longer-term candidates remain command-palette arguments/history, richer safe
-tag operations, keymap import/export after the schema stabilizes in real use,
-and an optional Spotlight adapter only if it adds material value beyond Neo's
-existing pickers and Command Palette. Prefer native Reader/sidebar integration
-only where Zotero exposes a supported extension seam.
-
-## Deferred ideas
-
-Whole-document Flash indexing, advanced character motions, richer Select text
-objects, repeat/macro support, a full Ex-style command line, and deeper
-EPUB/snapshot parity are not 0.1.0 commitments.
+Longer-term candidates include command-palette arguments/history, richer safe tag
+operations, keymap import/export after the schema stabilizes in use, and an
+optional Spotlight adapter only if it adds material value. A supported Zotero
+semantic-selection seam remains an external prerequisite for replacing the
+current compatibility path. Macros, Ex commands, broad Vim parity, and deeper
+EPUB/snapshot support are outside the selected work.

@@ -1,37 +1,6 @@
 # Changelog
 
-All notable changes to Zotero Neo are documented here.
-
 ## [0.2.0] - Release candidate (unreleased)
-
-The v0.2.0 source candidate is integrated for the owner-led functional and
-documentation review, but it is not published. The public release and update feed
-remain v0.1.0. Prepared metadata is in `updates.candidate.json` for release
-validation and publishing; `updates.json` stays at v0.1.0 until a verified asset
-exists and promotion is explicitly authorized. Neither file is packaged. Human
-physical-input and per-view acceptance remain open in [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) and [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98). The prior local XPI's persistent clean-install and official v0.1.0-to-v0.2.0 upgrade/restart observations are recorded in [#142](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142#issuecomment-6164049552). The canonical CI archive has identical extracted payloads but a different whole-package digest; those observations are not relabeled as its installation or owner acceptance.
-
-### Release overview
-
-- Keep Main, Reader and Note interaction separate: exact mode/feature contexts,
-  Zotero-owned native data, and Surface-owned action targets without hidden keymap
-  inheritance or borrowed Main Selection.
-- Bring Library worksets, contextual tag/collection actions and optional citekey
-  output into complete keyboard workflows, with explicit destructive-target safety.
-- Add shared Back/Forward across Main, Reader and Note, preserving readable Reader
-  locations and keeping Show in Library separate.
-- Enhance the native Reader Sidebar and document-position navigation for headings,
-  genuine Figures/Tables, annotations and Bookmarks; keep native Thumbnails and
-  annotations authoritative.
-- Make existing-note capture current-Item-first and target-safe: honest empty state,
-  explicit Library browsing, actual-parent Preview and native-save receipts.
-- Expose action-centric shortcut discovery and staged Apply across 14 exact
-  contexts, alongside shared language/theme settings and Plugin Manager over native
-  add-on APIs.
-- Retire Reader Insert and preserve upgrade intent through binding schema 18;
-  annotation comments retain Enter newline, Escape save-close and fixed autosave.
-- Prepare Chinese website content and real recording/acceptance scripts; no website
-  implementation, recording assets or new runtime dependency is included.
 
 ### Added
 
@@ -46,7 +15,6 @@ physical-input and per-view acceptance remain open in [#137](https://github.com/
 - Centralize required private Main/Note/Reader SDK and host-DOM capabilities in the internal `src/toolkit/` boundary. Keep target precedence, modes, workflows, bookmark storage choice and history policy in their business owners; public handles expose no native pane/tree/PDF/editor internals.
 - Prefer the documented collection-selection API for its single-selection contract while preserving zero/multiple ScopeSet behavior. Cache only the selected tab's immutable metadata on Note key dispatch instead of copying the full tab inventory.
 
-- Reconcile the current interaction, runtime ownership and contributor guidance after the Surface/Target/Input cleanup and selection-safe Notes revision. Historical workflow inventories no longer define current behavior; source-build instructions distinguish the unreleased candidate from the public v0.1.0 update asset.
 - Remove the unused cross-Surface item-target dispatcher/re-exports and keep behavioral target contracts on the existing Main, Reader and Note resolvers. Persisted-preference migration helpers remain in use and are unchanged.
 - Prune historical source-text, error-wording, CSS-spelling and duplicated default-table assertions while retaining preference migrations, native input boundaries, cleanup races and package-byte contracts.
 - Keep unchanged serialized bindings and immutable mode projections off the per-key parsing path; preference edits and mutable editor drafts still take effect immediately.
@@ -54,21 +22,21 @@ physical-input and per-view acceptance remain open in [#137](https://github.com/
 
 - Notes and Reader capture now default to the current Item's notes, with an explicit Library source switch that retains the same query and confirmation. Rows show titles only, thin nonselectable boundaries separate Item owners, and Preview reports each note's actual parent or standalone/unavailable source. Human notes containing citation-tool terminology remain visible.
 
-- Reader scan failures now retain native exception stacks, bounded cause chains, failure stages, and cached Reader identities in Debug and the profile log. First failure and recovery are recorded without recurring failure/idle spam; unreadable exceptions and failed logging sinks cannot abort error reporting. Profile logs preserve UTF-8 and close native streams after failed writes. Reader lifecycle/retry policy is unchanged; this is diagnostic hardening, not a fix for an underlying dead-object fault.
+- Include Reader failure stages, exception stacks, and causes in Debug and the profile log; record first failures and recovery without recurring idle messages.
 
 - Complete Reader view/session and composed Reader/Main retirement even when a live cleanup throws, preserving the original failure after all owners are released. Main UI/observer ownership retires before cleanup, and late callbacks cannot reattach it. Removed PDF views restore only still-owned native key bridges; retired wrappers delegate to the native Reader. Split-pane listeners and native bridges no longer require a second disposal; Bootstrap drops its retired controller before shutdown; profile-write diagnostics retain both primary and additional close failures.
 
-- Annotation Comment Editor owns pending and mounted input per PDF view independently of the Reader Surface. Native typing/IME, Enter newline, two-second autosave, and Escape save/close are fixed; privileged system Escape handles earlier host interception and cross-compartment wrappers. Stale open/save/focus work cannot reset newer input ownership.
-- Retire Reader Insert as a Surface mode and configurable binding context. The Annotation comment editing boolean migrates to `annotationCommentEditor.enabled`, preserving old true/false intent and preferring an existing new value before clearing the old key. Binding schema 17 deletes inactive Reader Insert custom mappings and explicit unbindings without an archive, as explicitly approved; other contexts remain unchanged. Disabled `i` native passthrough has its own input owner; Note Insert is unchanged.
+- Keep annotation-comment input attached to its PDF view. Enter inserts a newline, Escape saves and closes, and edits autosave after two seconds. Retired callbacks cannot change a newer editor's focus or draft.
+- Retire Reader Insert as a mode and binding context. Migrate the comment-editing preference to `annotationCommentEditor.enabled`, preserving an existing canonical value, and remove inactive Reader Insert bindings. Note Insert and unrelated custom bindings remain unchanged.
 
 - Reader `gg`, `G`, and counted page jumps now use one native navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view. Uncounted `G` reaches the document bottom rather than the last page's start; `nG` still targets the numbered page's start, without changing zoom.
-- Navigation recording now uses one state, coordinator, and typed policy. Reader search and annotation navigation may complete without appending when no owned exact-view hard receipt qualifies; native Outline destinations use the existing `reader-native.hard` observation, marks record one managed final, ignored motion has no history-only capture, and launch/Back fences protect currentness.
+- Centralize navigation recording across Main, Reader, and Note, using completed locations for history entries. Reader searches and annotation moves can finish without a history entry when Zotero provides no restorable position.
 - Enhance the native Reader Outline with compact theme-aware color/icon badges, stable full-tree ordinals (including unnumbered Introduction as the first Section), numeric direct-child counts, and bounded Bookmarks/caption groups. Native titles/numbering and independent Annotations/Thumbnails views remain untouched.
 - Replace the old Reader `<Space>e` / `<Space>m` and bare `[` / `]` defaults with direct panel focus (`<Space>ro/rm/ra/rt`) and categorized `[s` / `]s`, `[f` / `]f`, `[t` / `]t`, `[a` / `]a`, and `[m` / `]m` navigation. Direct focus opens/focuses a panel without toggling it closed.
 - Make Neo-owned Reader panel, picker input/list, and Plugin Manager input/list controls configurable through the shared action/context catalogs. Native text and IME remain host-owned; native shortcuts are separate read-only disclosures.
 - Migrate binding preferences at schema 18: preserve non-null custom exact overrides, move retired explicit-null cancellations only when the destination is absent, and migrate persisted `focusReaderSidebar` IDs to `focusReaderOutline` without a runtime alias. The override is written before the schema version and migration is idempotent.
 
-- Main `o` / Enter now open only the focused Cursor item, even when persistent Neo Selection or Zotero native multi-selection exists; they fail closed when Cursor cannot resolve. Note `o` now opens its own Note-context item instead of falling back to Main's selected row. This does not add batch-open or a Reader Open binding.
+- Main `o` / Enter opens the Cursor item. Note `<Space>o` opens the item associated with the active note. Both use their own current context rather than Main's marked Selection.
 
 - Main Trash confirms the resolved target kind/count, refuses hidden Selection members, and preserves Selection/history on cancel or failure. Reader annotation deletion states its single target and permanent consequence; cancellation preserves the selected annotation. New confirmations and target feedback follow the UI language.
 - Navigation history records explicit Main, Reader, and cross-surface jumps without capturing persistent Main Selection. It restores readable closed Reader attachments and available PDF position, but not zoom/layout or Note caret; unavailable or partially restorable destinations do not advance the history pointer. Zotero retains ownership of actual PDF link navigation.

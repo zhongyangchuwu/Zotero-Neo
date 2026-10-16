@@ -6,4 +6,4 @@
 - License: MIT (see `LICENSE`)
 - Vendored file: upstream `fuzzysort.min.js`, renamed to `fuzzysort.js`
 
-Zotero Neo vendors this small zero-dependency ESM build so esbuild can inline it into the generated XPI. There is no CDN fetch, dynamic module load, native binary, or runtime package-manager dependency.
+esbuild bundles this vendored ESM file into the generated Neo runtime.
