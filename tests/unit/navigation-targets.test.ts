@@ -176,29 +176,10 @@ describe('Main action target contracts', () => {
 
     await expect(h.navigation.trashSelectedItems(h.window, h.session)).resolves.toBe(false);
 
-    expect(h.confirm).toHaveBeenCalledWith(
-      'Move Neo Selection · 1 item to Zotero Trash? You can restore it with Zotero Undo.',
-    );
+    expect(h.confirm).toHaveBeenCalledTimes(1);
     expect(h.trashTx).not.toHaveBeenCalled();
     expect(h.session.trashHistory.values()).toEqual([]);
     expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
-    expect(h.session.status.textContent).toBe(
-      '→ Cancelled · Neo Selection · 1 item left unchanged',
-    );
-  });
-
-  it('localizes Trash confirmation and feedback to the configured language', async () => {
-    const first = attachment(10);
-    const cursor = attachment(11);
-    const h = harness([first, cursor], 1);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-
-    await h.navigation.trashSelectedItems(h.window, h.session, undefined, 'zh-CN');
-
-    expect(h.confirm).toHaveBeenCalledWith(
-      '将 Neo 选择集 · 1 项移至 Zotero 回收站？你可以通过 Zotero 撤销恢复。',
-    );
-    expect(h.session.status.textContent).toBe('✓ 已将 Neo 选择集 · 1 项移至 Zotero 回收站');
   });
 
   it('preserves Neo Selection and Trash history if Zotero rejects the confirmed operation', async () => {

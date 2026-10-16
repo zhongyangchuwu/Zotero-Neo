@@ -15,6 +15,7 @@
 - Centralize required private Main/Note/Reader SDK and host-DOM capabilities in the internal `src/toolkit/` boundary. Keep target precedence, modes, workflows, bookmark storage choice and history policy in their business owners; public handles expose no native pane/tree/PDF/editor internals.
 - Prefer the documented collection-selection API for its single-selection contract while preserving zero/multiple ScopeSet behavior. Cache only the selected tab's immutable metadata on Note key dispatch instead of copying the full tab inventory.
 
+- Standardize Chinese UI and documentation terms for item worksets, visual ranges, text selections, and annotations; clarify comment saving and disposal boundaries.
 - Remove the unused cross-Surface item-target dispatcher/re-exports and keep behavioral target contracts on the existing Main, Reader and Note resolvers. Persisted-preference migration helpers remain in use and are unchanged.
 - Prune historical source-text, error-wording, CSS-spelling and duplicated default-table assertions while retaining preference migrations, native input boundaries, cleanup races and package-byte contracts.
 - Keep unchanged serialized bindings and immutable mode projections off the per-key parsing path; preference edits and mutable editor drafts still take effect immediately.
