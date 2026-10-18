@@ -42,6 +42,10 @@ coverage/
 npm-debug.log*
 yarn-error.log*
 
+# VitePress generated site output
+.vitepress/cache/
+.vitepress/dist/
+
 # Temporary files
 *.tmp
 *.bak

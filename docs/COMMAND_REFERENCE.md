@@ -153,7 +153,7 @@ Before Back or Forward, Neo updates the departure location so movement since the
 | `toggleReaderSidebarOutline` | **Unbound** | Toggle Zotero's native Reader Outline sidebar. No default binding is shipped. |
 | `toggleMarksExplorer` | **Unbound** | Toggle the Bookmarks view. No default binding is shipped. |
 
-Reader Select actions are listed in [Reader Select](#reader-select-and-annotation-actions). Actual split focus direction may target another pane type, including a Note context pane; it does not promise pane creation.
+Reader Select actions are listed in [Reader Select](#reader-select-and-annotation-actions). Directional focus moves to an existing pane, which can include the Note pane.
 Reader Normal counts are action-specific: step scroll, half/full viewport, `h/l` page turns, zoom in/out, and history traverse/repeat as their rows state; numeric `gg/G` is a single page target when supported. Search, annotation, tab-cycle, pane/layout, chooser, and other Reader Normal actions run once. Reader Select ignores counts for all its binding actions.
 
 ## Reader Select and annotation actions
@@ -178,7 +178,7 @@ Reader `v` enters Select and uses Flash to choose a text range (or adopts an exi
 | `exitMode` | `v`, `<Esc>` | Cancel Reader Select and return to Normal. |
 | `underlineSelection` | **Unbound** | Supported Select action via Selection Actions when its built-in action is available; no default key. |
 
-Flash accepts visible text, including Unicode and IME input. Choose a displayed hint or press Enter for the nearest match; narrow broad queries to show labels. Escape cancels Flash and keeps the current selection. Selection Actions includes Capture to note, Underline, and Add note; **Translate** appears only when the Zotero Translate integration is available. See [Input methods](INPUT_METHODS.md) and the [User Guide selection workflow](USER_GUIDE.md#selection-workflow).
+Flash accepts visible text, including Unicode and IME input. Choose a displayed hint or press Enter for the nearest match; narrow broad queries to show labels. Escape cancels Flash and keeps the current selection. Selection Actions includes Capture to note, Underline, and Add note; **Translate** appears only when the Zotero Translate integration is available. See [Input methods](INPUT_METHODS.md) and the [Selection and annotation guide](SELECTION_GUIDE.md#try-it).
 Reader Select ignores counts: each motion and selection action runs once. Comment-editor controls and save behavior are listed under [Annotation comment editor](#annotation-comment-editor).
 
 ## Main window

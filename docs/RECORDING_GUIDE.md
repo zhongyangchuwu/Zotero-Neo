@@ -1,6 +1,6 @@
 # 录屏与键盘操作拍摄指南
 
-> 本指南按 S0–S7 说明如何准备并拍摄完整工作流。候选包身份见 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)，实际验收结果记在 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 与 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)；录屏只支持其实际显示的操作与结果，不替代验收记录。按 [候选验收协议](V0_2_ACCEPTANCE.md) 准备安装与输入条件；产品工作流见[用户指南](USER_GUIDE.md)和[命令参考](COMMAND_REFERENCE.md)。
+> 本指南按 S0–S7 说明如何准备并拍摄完整工作流。候选包身份见 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)，实际验收结果记在 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 与 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)；录屏只支持其实际显示的操作与结果，不替代验收记录。按[候选验收协议](V0_2_ACCEPTANCE.md)准备安装与输入条件；产品工作流见[用户指南](USER_GUIDE.md)和[命令参考](COMMAND_REFERENCE.md)。
 
 ## 共同拍摄规则
 
@@ -57,7 +57,7 @@
 - **可见结果：** 画面显示四种阅读器原生面板及其内容、类别命令实际到达的 PDF 位置，以及标记跳转前后的两个位置。Neo 阅读器标记与 PDF 批注应明确区分。
 - **持久变化／重置：** 标记保存在阅读器会话内；面板与页面状态由 Zotero 管理。预置批注及文档均属于一次性测试数据，拍后重建；不写入用户条目的 Extra。
 - **镜头／不录条件：** 画面同时包含 PDF、当前焦点面板和侧栏；若 Outline、批注、书签或历史目标缺失，改用具备这些原生内容的授权测试文档。
-- **依据：** [阅读器 Normal 模式、类别、页导航与面板快捷键](COMMAND_REFERENCE.md#reader-normal)、[阅读器标记与侧栏局部控制](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[历史记录边界与恢复限制](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)、[原生 Outline、Bookmarks 与批注面板](USER_GUIDE.md#native-reader-outline-and-bookmarks)。
+- **依据：** [阅读器 Normal 模式、类别、页导航与面板快捷键](COMMAND_REFERENCE.md#reader-normal)、[阅读器标记与侧栏局部控制](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[历史记录边界与恢复限制](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)、[原生 Outline、Bookmarks 与批注面板](READER_GUIDE.md#find-a-passage-and-inspect-document-structure)。
 
 ## S3 — Reader：Flash、范围修整与批注评论
 
@@ -72,7 +72,7 @@
 - **每个活动视图的输入归属（仅在实际分屏上录）：** 左侧 PDF 视图打开批注评论后，用鼠标将焦点移到右侧 PDF 视图，按 `j`。预期只有右侧 PDF 位置移动，左侧批注评论草稿／编辑器仍属于原 PDF 视图；回到左侧批注评论输入框，再按 `Escape` 保存并关闭。两侧视图、焦点交接和各自结果须同框可见。
 - **可见结果／持久变化：** Flash 文本范围与端点可见，`za` 创建真实批注；`COMMENT` 显示换行内容，按 `Escape` 后重开可见已保存批注评论。只修改本次测试 PDF。
 - **重置／不录条件：** 丢弃本次一次性配置。若 Select／`COMMENT` 指示、提示、目标或批注缺失，或批注评论重开后的内容不一致，不录成成功。翻译或 OCR 内容不属于本场操作结果。
-- **依据：** [阅读器 Select/Flash、范围操作与添加批注评论](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[评论输入的 Enter/Escape/两秒自动保存](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[原生输入法所有权](INPUT_METHODS.md#text-entry-controls)、[批注评论输入与视图范围](USER_GUIDE.md#annotation-comment-input)。
+- **依据：** [阅读器 Select/Flash、范围操作与添加批注评论](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[评论输入的 Enter/Escape/两秒自动保存](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[原生输入法所有权](INPUT_METHODS.md#text-entry-controls)、[批注评论输入与视图范围](SELECTION_GUIDE.md#edit-an-annotation-comment)。
 
 ## S4 — Reader 文本选区 → 已有笔记：空状态、切换来源与保存回执
 
@@ -84,7 +84,7 @@
 - **明确切换及写入：** 用原生 `Tab`／`Shift+Tab` 移动，直到可见焦点落在 **Browse library** 按钮；按原生 `Enter` 或 Space 激活。选择器切至同一文库，保留本次查询和捕获内容。选中现有笔记；结果行显示笔记标题，Preview 显示其所属条目与正文。按 `Enter` 确认一次，等待保存完成，并拍到列出所选笔记标题的成功回执。核对最终正文时，从阅读器 Normal 模式按 `<Space>fn`，在新的笔记选择器中再次显式激活 **Browse library**；搜索并确认相同标题和所属条目，打开笔记，检查原正文保留且已追加引文和可用的 PDF 页码标签。
 - **可见结果／持久变化：** 空的 **Current item** 结果不会悄悄扩展；只有显式激活 **Browse library** 后，其他所属条目的现有笔记才会出现。写入的是 Preview／确认时锁定的现有 `Note ID`，回执标题与笔记所属条目一致。笔记选择器不会自动新建笔记或添加阅读器反向链接。
 - **重置／不录条件：** 只在本次一次性配置中操作。若 **Browse library** 按钮或焦点、所属条目、锁定目标、回执标题或正文追加结果无法辨认，立即取消；确认一次后等待保存结果，不要重复按 `Enter` 或双击。已受理的保存不能用 `Escape` 取消；不能把取消尝试或另一轮写入剪进来当作成功证据。
-- **依据：** [阅读器文本选区与 Capture to note](USER_GUIDE.md#knowledge-capture-workflow)、[笔记选择器的 Current item、Browse library、标题与 Preview](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[目标锁定、所属条目核对与单次原生保存](INTERACTION_MODEL.md#knowledge-capture)。阅读器和笔记编辑器不借用主窗口的 Neo 选择集。
+- **依据：** [阅读器文本选区与 Capture to note](CAPTURE_GUIDE.md#try-it)、[笔记选择器的 Current item、Browse library、标题与 Preview](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[目标锁定、所属条目核对与单次原生保存](INTERACTION_MODEL.md#knowledge-capture)。阅读器和笔记编辑器不借用主窗口的 Neo 选择集。
 
 ## S5 — Settings：暂存快捷键修改与原生输入
 
@@ -99,7 +99,7 @@
 - **剪贴板接收与原生 Outline Enter：** 按 `<Space>ff` 打开选择器；查询框获得焦点后按 `<S-Insert>`，确认此前从 Settings 字段复制的同一公开标题通过原生粘贴进入查询框并显示匹配行。按 `Enter` 打开对应 PDF。阅读器 Normal 模式下按 `<Space>ro` 聚焦 Outline，在一条真实行上物理按 `Enter`，观察 Zotero 原生 Outline 跳到目标；不要把此 `Enter` 标成 Neo `uiConfirm`。
 - **可见结果／持久变化：** 同一设备拍到 Settings 搜索中的输入法组合与提交、录制器不误收组合／候选按键、显式 **Done**、未按 **Apply** 前旧 `j` 有效、应用后 `]j` 与 `j` 都有效；`<C-Insert>` 复制的标题通过 `<S-Insert>` 原生粘贴到选择器，Outline Enter 仍由 Zotero 处理。重映射只保存在本次配置文件中。
 - **重置／不录条件：** 拍后销毁本次配置文件。若输入法组合／提交、录制器按键标记、Done、Apply 前后绑定、原生剪贴板往返或 Outline 结果不符，先修正条件再重拍。
-- **依据：** [Settings 键位录制、Done/Cancel/Apply](USER_GUIDE.md#customising-keybindings)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[Outline Enter 原生所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[U6/U7 验收步骤](V0_2_ACCEPTANCE.md)。
+- **依据：** [Settings 键位录制、Done/Cancel/Apply](SETTINGS_GUIDE.md#try-it)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[Outline Enter 原生所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[U6/U7 验收步骤](V0_2_ACCEPTANCE.md)。
 
 ## S6 — Note：Vim 开关与 Normal/Insert（两条独立短片）
 
@@ -112,7 +112,7 @@
 - **操作：** 按 `<Space>fn`，在笔记选择器中选该笔记；根据结果行标题确认目标，Preview 核对所属条目和正文，再按 `Enter` 打开。焦点转到笔记编辑器，旁白说明 `note-normal`。按 `gg` 到文首，按 `w` 执行一次笔记 Normal 移动，按 `i` 进入笔记 Insert 模式，输入一小段无敏感内容，再按 `<Esc>` 返回笔记 Normal 模式。
 - **可见结果／持久变化：** 笔记正文显示新文字；当前笔记标签页／编辑器显示的标题和所属条目始终对应。Insert 中的文字由原生编辑器接收，不作为 Neo 命令；修改只写入一次性测试笔记。
 - **重置／不录条件：** 销毁本次配置文件。若设置未启用、焦点或笔记身份不明，或 `i` 未进入笔记编辑器 Insert 模式，修正配置后重拍。
-- **依据：** [笔记编辑器开启条件、Insert/Normal 与默认移动](COMMAND_REFERENCE.md#note-editor)、[Current Item 笔记选择器](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[设置页开关名称](USER_GUIDE.md#settings)。
+- **依据：** [笔记编辑器开启条件、Insert/Normal 与默认移动](COMMAND_REFERENCE.md#note-editor)、[Current Item 笔记选择器](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[设置页开关名称](SETTINGS_REFERENCE.md)。
 
 ### S6-off — Vim 风格笔记编辑关闭
 
@@ -121,7 +121,7 @@
 - **操作：** 在正文中物理输入一个包含字母 `i` 的测试短语，并如实保留按键和文字；不要先进入 Neo 模式，也不要在 `i` 后接指令序列，让这些字符写入笔记。
 - **可见结果／持久变化：** 普通字符进入原生笔记正文，不执行 `noteInsert` 或其他 Neo Normal 操作；画面可辨认仍是同一笔记。文字只写入一次性测试笔记。
 - **重置／不录条件：** 销毁本次配置文件。若设置未关闭、按 `i` 触发 Neo 命令／模式，或输入没有落到笔记正文，停止并修正拍摄配置，不用字幕代替。
-- **依据：** [笔记编辑器开关](COMMAND_REFERENCE.md#note-editor)、[Vim-style note editing 设置](USER_GUIDE.md#settings)。开启和关闭是设置开关；本片不假定同一编辑器中的设置变更会即时生效。
+- **依据：** [笔记编辑器开关](COMMAND_REFERENCE.md#note-editor)、[Vim-style note editing 设置](SETTINGS_REFERENCE.md)。开启和关闭是设置开关；本片不假定同一编辑器中的设置变更会即时生效。
 
 ## S7 — Plugin Manager：真实 AddonManager 状态与自我保护
 
@@ -133,14 +133,14 @@
 - **可见结果：** Plugin Manager 保持面板形态而非选择器；重载后显示 AddonManager 状态。Neo 不能在自身面板内禁用，须通过 Zotero 原生 Plugins 界面管理。插件信息和可用操作与当前列表一致。
 - **持久变化／重置：** 本流程只读取或重载状态，不切换其他插件；关闭后按共同规则处理本次配置文件。如另行获准演示 `e/d`，须使用专用的一次性配置文件，确认目标插件、依赖和预期恢复方法，并拍下操作前后的 AddonManager 状态；不得在本场混入未经授权的停用。
 - **镜头／不录条件：** 若 Zotero Neo 不在当前列表、状态或版本无法读取、禁用操作仍可用，或无法判断焦点在筛选框还是结果列表，不录成“自我保护成功”。
-- **依据：** [Plugin Manager 生命周期和自我保护](USER_GUIDE.md#plugin-manager-panel)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#modes-focus-and-capabilities)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#selection-actions-plugin-manager-settings-and-selection-panel)。Zotero AddonManager 是生命周期状态权威；此面板不提供任意软件包安装、更新、卸载或远端插件发现。
+- **依据：** [Plugin Manager 生命周期和自我保护](SETTINGS_GUIDE.md#manage-installed-plugins-and-integrations)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#modes-focus-and-capabilities)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#selection-actions-plugin-manager-settings-and-selection-panel)。Zotero AddonManager 是生命周期状态权威；此面板不提供任意软件包安装、更新、卸载或远端插件发现。
 
 ## 可选第三方集成（与 S0–S7 核心片分开）
 
 第三方集成只录独立的可选片，不并入核心 S0–S7；只有当前已安装、启用的集成在界面提供相应操作时才拍，条件不符便跳过。
 
 - **Better BibTeX：** 仅当当前 Zotero 已安装并启用 Better BibTeX，且一次性测试条目确有 citekey（引文键）时，才单独拍主窗口 Normal 模式下按 `<Space>yy` 为有效目标复制 citekey。按目标名称确认目标是主窗口当前条目或 Neo 选择集；若目标没有可用 citekey，不录成成功。
-- **Translate for Zotero：** 仅当已安装的 Translate 集成使 Selection Actions 中出现 **Translate** 时，才从阅读器 Select 模式的文本选区打开该项并录下实际翻译结果。字幕标明实际插件／集成名称。可用性的依据见 [Selection Actions 与可选 Translate](USER_GUIDE.md#selection-workflow)。
+- **Translate for Zotero：** 仅当已安装的 Translate 集成使 Selection Actions 中出现 **Translate** 时，才从阅读器 Select 模式的文本选区打开该项并录下实际翻译结果。字幕标明实际插件／集成名称。可用性的依据见 [Selection Actions 与可选 Translate](SELECTION_GUIDE.md#use-the-selected-text)。
 
 ## 参考边界
 

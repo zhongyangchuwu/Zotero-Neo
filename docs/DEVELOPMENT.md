@@ -4,9 +4,19 @@
 
 The checked-in `manifest.json` supports Zotero `10.0.*` (`strict_min_version: 10.0`, `strict_max_version: 10.0.*`). When changing a host seam, run repository verification and exercise the affected workflow in Zotero.
 
+Node.js 24 and npm are required. Use one repository-root checkout for both the plugin and VitePress site; the root `package.json` defines both command sets. Install the locked dependencies once from that root before running either set:
+
+```bash
+npm ci
+```
+
+If npm 12 rejects the locked Git dependency with `EALLOWGIT`, run `npm ci --allow-git=all --ignore-scripts` from the same root instead. This applies to the shared root install and does not change global npm policy.
+
+Both XPI builders call `npm run verify`, which runs Prettier checks, strict TypeScript checks, Vitest, the package build, and the XPI member check.
+
 ## Build
 
-Node.js 24 and npm are required. From the plugin worktree root, run `npm ci` before invoking either builder. Both builders call `npm run verify`: Prettier checks, strict TypeScript checks, Vitest, the package build, and the XPI member check.
+Run either build entry point from the repository root:
 
 ```bash
 ./tools/build.sh
@@ -17,6 +27,22 @@ On Windows, use:
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
+
+### Documentation site
+
+The repository root also contains the VitePress site. Its config is `.vitepress/config.ts`; Markdown sources include root pages and `docs/*.md`, and VitePress writes the static site to `.vitepress/dist/`.
+
+Run these scripts from the repository root after the shared dependency install above:
+
+```bash
+npm run docs:dev
+npm run docs:build
+npm run docs:preview
+```
+
+Use `docs:dev` while editing. `docs:preview` serves the most recent static build; restart it after rebuilding so cached file metadata does not serve old HTML or asset names. Check the build under the GitHub Pages base path `/Zotero-Neo/`.
+
+GitHub Pages uses `/Zotero-Neo/`; a repository administrator must enable Pages with GitHub Actions as its build source. Pull requests build/check the site but do not publish, and deployment is guarded to `main`. The generated site output is separate from the XPI package and plugin runtime. See [Documentation authoring](DOCUMENTATION_AUTHORING.md) for page and media conventions.
 
 ### Local GUI iteration from WSL
 
