@@ -184,6 +184,9 @@ type ContextNoteEditor = {
 type MainReaderRegistryEntry = { readonly itemID?: number; focus?(): void | Promise<void> };
 
 type MainHostWindow = MainWindow & {
+  readonly windowState?: number;
+  readonly STATE_MINIMIZED?: number;
+  restore?(): void;
   readonly ZoteroPane?: MainPane;
   readonly Zotero_Tabs?: MainTabs;
   readonly ZoteroContextPane?: {
@@ -258,6 +261,14 @@ export function selectedMainTabSnapshot(window: MainWindow): MainTabSnapshot | u
 export function mainTabList(window: MainWindow): readonly MainTabSnapshot[] {
   const tabs = mainTabs(window);
   return (tabs?._tabs ?? tabs?.tabs ?? []).map(mainTabSnapshot);
+}
+
+/** Restores a minimized Library window before handing keyboard focus to its UI. */
+export function activateMainWindow(window: MainWindow): void {
+  const host = mainHost(window);
+  if (typeof host.STATE_MINIMIZED === 'number' && host.windowState === host.STATE_MINIMIZED)
+    host.restore?.();
+  window.focus();
 }
 
 export function selectMainTab(window: MainWindow, id: string): boolean {

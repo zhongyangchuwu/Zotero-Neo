@@ -129,6 +129,8 @@ Before Back or Forward, Neo updates the departure location so movement since the
 | `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place the current page at the top, center, or bottom of the viewport. `scrollBottom` has no default binding. |
 | `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's PDF find bar; `n` / `N` ask Zotero for one next/previous result regardless of count. A result that moves to a different Reader location can add history. |
 | `followLink` | `f` | Show hints for visible internal, citation, or external links in the active PDF view. Type a hint to follow it, Backspace to edit, or Escape to cancel; count is ignored. Internal/citation destinations can add history; external links do not. |
+| `copyIdentifier` | **Unbound** | Show hints for visible DOI/arXiv/HTTP(S) text and native external links in the active PDF view. Confirm a hint to copy a bare DOI/arXiv ID (keeping `vN`) or full URL; Escape or no candidates leaves the clipboard unchanged. Count is ignored. |
+| `followIdentifier` | **Unbound** | Show hints for visible DOI/arXiv/HTTP(S) text and native PDF links. Bare DOI/arXiv text uses its resolver; literal HTTP(S) URLs keep their original destination, even when recognized as an identifier. Native links retain Zotero's behavior. Escape cancels; count is ignored. |
 | `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse headings in the native Outline, including Sections and Subsections, in document order with wrap. Available from Reader Normal and each Reader sidebar, independent of collapsed branches or the selected row. |
 | `prevFigure` / `nextFigure` | `[f` / `]f` | Move between explicit Figure targets and recognized captions. Land on an associated image when available, otherwise on the caption. First use may require local PDF processing. |
 | `prevTable` / `nextTable` | `[t` / `]t` | Move between explicit Table targets and recognized captions. First use may require local PDF processing. |
@@ -144,6 +146,7 @@ Before Back or Forward, Neo updates the departure location so movement since the
 | `focusReaderOutline` / `focusReaderMarks` / `focusReaderAnnotations` / `focusReaderThumbnails` | `<Space>ro` / `<Space>rm` / `<Space>ra` / `<Space>rt` | Open or focus Outline, Bookmarks, Annotations, or Thumbnails. Repeating a command leaves that surface focused. |
 | `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle Reader split layout. Back/Forward does not restore the split layout. |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Open an item/note chooser. Confirm a result to open it; browsing or cancelling does not add a history location. |
+| `mainAddByIdentifier` | `<Space>ai` | Bring the associated Library window forward and open native identifier entry without changing its collection scope. Uses that Main context, not the Reader item's collections; count is ignored. See [identifier entry](MAIN_GUIDE.md#add-items-by-identifier). |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Choose an open tab, cycle to the previous/next tab, or close the current tab. A tab change can add history; `H` / `L` each cycle once regardless of count. Closing a tab does not erase older locations. |
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Traverse shared history; shortcut counts are accepted, while Command Palette actions run once. |
 | `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | Open the Command Palette, Settings, or persistent Plugin Manager. |
@@ -212,6 +215,7 @@ Main Normal commands depend on focus in the collection tree, item list, Quick Se
 | `openSearch` | `/` | Main Normal requires Items focus; it cancels a transient Visual range and opens Neo's local-find prompt over visible item rows. It is not Zotero Quick Search; use `mainQuickSearch` (`<Space>fq`) for that. |
 | `findNext` / `findPrevious` | `n` / `N` | With the item list focused, repeat the committed local-find query once forward/backward; count is ignored. No query, a miss, or unchanged Cursor leaves location unchanged. A changed Cursor can add history. |
 | `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | Focus native Quick Search or open Advanced Search; `fa` can convert existing Quick Search text. These alter Main View scope, not Reader page location. |
+| `mainAddByIdentifier` | `<Space>ai` | Open native identifier entry for one writable library and its selected collections, not an item target or Neo Selection. Cross-library/read-only scopes are unavailable; count is ignored. See [identifier entry](MAIN_GUIDE.md#add-items-by-identifier). |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Open the shared item/note chooser. Confirming a result can add a history location; browsing or cancelling does not. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Open-tab chooser, previous/next open tab, close active tab. Successful chooser/H/L changes record; H/L ignore counts. Closing alone is not recorded and does not delete older entries.
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Shared counted history traversal. |
@@ -322,6 +326,8 @@ The index lists each ActionId with its shipped default binding and available con
 | `prevPage` | Reader Normal `h` | Reader Normal page turn |
 | `nextPage` | Reader Normal `l` | Reader Normal page turn |
 | `followLink` | Reader Normal `f` | Reader Normal visible PDF link hints |
+| `copyIdentifier` | **Unbound** | Reader Normal visible identifier/URL copy after hint confirmation |
+| `followIdentifier` | **Unbound** | Reader Normal visible identifier or native PDF-link follow |
 | `flashText` | Reader Select `s` | Reader Select endpoint targeting |
 | `firstPage` | Reader Normal `gg` | Reader Normal first/count page jump |
 | `lastPage` | Reader Normal `G` | Reader Normal document-end/count page jump |
@@ -409,6 +415,7 @@ The index lists each ActionId with its shipped default binding and available con
 | `mainFocusRight` | Main Normal `wl` | Focus detail pane |
 | `mainFocusItems` | Main Normal `ww` | Focus item list |
 | `mainYankCitekey` | Reader/Main/Note Normal `<Space>yy` | Copy context-sensitive citekeys |
+| `mainAddByIdentifier` | Reader/Main Normal `<Space>ai` | Native Add Item by Identifier in the associated Library window; does not use item Selection |
 | `mainOpenPDF` | Main Normal `o`; Note Normal `<Space>o` | Open Main Cursor / Note context item |
 | `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | Close active tab |
 | `addTag` | Reader/Main/Note Normal `<Space>ta` | Add tag to eligible target(s) |
@@ -617,6 +624,7 @@ Use this table to find the ActionId for a shipped `BindingContext:sequence`. Sav
 | `reader-normal:<Space>pp` | `managePlugins` |
 | `reader-normal:<Space>ps` | `openNeoSettings` |
 | `reader-normal:<Space>yy` | `mainYankCitekey` |
+| `reader-normal:<Space>ai` | `mainAddByIdentifier` |
 | `reader-select:s` | `flashText` |
 | `reader-select:a` | `openSelectionActions` |
 | `reader-select:<Enter>` | `openSelectionActions` |
@@ -670,6 +678,7 @@ Use this table to find the ActionId for a shipped `BindingContext:sequence`. Sav
 | `main-normal:<Space>sc` | `mainClearSelection` |
 | `main-normal:e` | `mainFocusTree` |
 | `main-normal:<Space>yy` | `mainYankCitekey` |
+| `main-normal:<Space>ai` | `mainAddByIdentifier` |
 | `main-normal:o` | `mainOpenPDF` |
 | `main-normal:wh` | `mainFocusLeft` |
 | `main-normal:wl` | `mainFocusRight` |

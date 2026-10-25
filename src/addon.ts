@@ -52,6 +52,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
+        openAddByIdentifier: (ownerWindow) => main?.openAddByIdentifier(ownerWindow),
         openAllItemsPicker: (ownerWindow) => main?.openAllItemsPicker(ownerWindow),
         openCollectionItemsPicker: (ownerWindow) => main?.openCollectionItemsPicker(ownerWindow),
         openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),

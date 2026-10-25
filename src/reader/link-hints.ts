@@ -6,10 +6,8 @@ import {
   prepareReaderLinkLocation,
   navigateReaderLink,
 } from '../toolkit/reader';
-import { compositionOwnsKey } from '../input/composition';
 import { isDeadObject } from '../platform/cross-compartment';
-import { asElement, isEditableElement } from '../platform/dom';
-import { hintLabels } from './hint-labels';
+import { ReaderTargetHints } from './target-hints';
 import type { NavigationExecution, NavigationIntent, NavigationResult } from '../navigation/types';
 import type { ReaderNavigationCommand } from './navigation';
 import type {
@@ -20,12 +18,6 @@ import type {
   ReaderTimer,
   ReaderViewRuntime,
 } from './types';
-
-interface LinkHintBadge {
-  readonly element: HTMLElement;
-  readonly label: string;
-  readonly overlay: ReaderLinkOverlay;
-}
 
 export interface ReaderLinkHintsHost {
   readonly reader: ReaderRuntime;
@@ -38,10 +30,8 @@ export interface ReaderLinkHintsHost {
 
 export class ReaderLinkHints {
   readonly #host: ReaderLinkHintsHost;
-  #badges: LinkHintBadge[] = [];
-  #buffer = '';
-  #window: PdfWindow | null = null;
-  #repositionFrame: number | null = null;
+  readonly #hints: ReaderTargetHints<ReaderLinkOverlay>;
+  #hintView: ReaderViewRuntime | null = null;
   #activation = 0;
   #activationWindow: PdfWindow | null = null;
   #destinationCue: HTMLElement | null = null;
@@ -52,34 +42,39 @@ export class ReaderLinkHints {
 
   constructor(host: ReaderLinkHintsHost) {
     this.#host = host;
+    this.#hints = new ReaderTargetHints({
+      attribute: 'zoteroNeoLinkHint',
+      isCurrent: (window) =>
+        this.#hintView !== null && host.viewForWindow(window) === this.#hintView,
+      choose: (window, overlay) => this.follow(window, overlay),
+      closed: () => {
+        this.#hintView = null;
+      },
+    });
   }
 
   get hasHints(): boolean {
-    return this.#badges.length > 0;
+    return this.#hints.isOpen;
   }
 
   ownsView(pdfWindow: PdfWindow): boolean {
-    return this.#window === pdfWindow;
+    return this.#hints.ownsView(pdfWindow);
   }
 
   open(pdfWindow: PdfWindow): void {
     this.cancelHints();
-    this.#window = pdfWindow;
     try {
       const view = this.#host.viewForWindow(pdfWindow);
       if (!view) throw new Error('active PDF view not found');
-      const targets = readerVisibleLinks(view, pdfWindow);
-      const labels = hintLabels(targets.length);
-      targets.forEach(({ overlay, rect }, index) => {
-        const badge = pdfWindow.document.createElement('span');
-        badge.dataset.zoteroNeoLinkHint = '1';
-        badge.textContent = labels[index] ?? '';
-        badge.style.cssText =
-          'position:fixed;z-index:99999;background:#f9e2af;color:#1e1e2e;padding:1px 3px;border:1px solid #1e1e2e;border-radius:2px;font:bold 10px monospace;line-height:1.2;pointer-events:none;';
-        this.#positionLinkHint(badge, rect);
-        pdfWindow.document.body?.appendChild(badge);
-        this.#badges.push({ element: badge, label: labels[index] ?? '', overlay });
-      });
+      this.#hintView = view;
+      this.#hints.open(
+        pdfWindow,
+        readerVisibleLinks(view, pdfWindow).map(({ overlay, rect }) => ({
+          value: overlay,
+          rect,
+          currentRect: () => readerLinkClientRect(view, overlay),
+        })),
+      );
     } catch (error) {
       this.cancelHints();
       const message = `reader follow link discovery failed: ${String(error)}`;
@@ -88,56 +83,16 @@ export class ReaderLinkHints {
       this.#host.showStatus('Link hints unavailable', 1500);
       return;
     }
-    if (!this.#badges.length) {
-      this.cancelHints();
-      this.#host.showStatus('No visible links', 1500);
-    }
+    if (!this.hasHints) this.#host.showStatus('No visible links', 1500);
   }
 
   handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
-    if (
-      !this.ownsView(pdfWindow) ||
-      isDeadObject(pdfWindow) ||
-      isEditableElement(asElement(event.target))
-    ) {
-      this.cancelHints();
-      return false;
-    }
-    if (compositionOwnsKey(event, false)) return true;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (event.key === 'Escape') {
-      this.cancelHints();
-      pdfWindow.focus();
-      return true;
-    }
-    if (event.key === 'Backspace') {
-      this.#buffer = this.#buffer.slice(0, -1);
-      this.#refreshHints(pdfWindow);
-      return true;
-    }
-    if (!/^[a-z]$/i.test(event.key)) return true;
-    const next = `${this.#buffer}${event.key.toUpperCase()}`;
-    const matches = this.#badges.filter(
-      (badge) => !badge.element.hidden && badge.label.startsWith(next),
-    );
-    if (!matches.length) {
-      this.#buffer = '';
-      this.#refreshHints(pdfWindow);
-      return true;
-    }
-    this.#buffer = next;
-    this.#refreshHints(pdfWindow);
-    const visibleMatches = matches.filter((badge) => !badge.element.hidden);
-    const exact = visibleMatches.find((badge) => badge.label === next);
-    if (exact || visibleMatches.length === 1)
-      this.#activate(pdfWindow, exact ?? visibleMatches[0]!);
-    return true;
+    return this.#hints.handleKey(event, pdfWindow);
   }
 
   onViewportChange(pdfWindow: PdfWindow): void {
     if (isDeadObject(pdfWindow)) return;
-    if (this.#window === pdfWindow) this.#repositionHints(pdfWindow);
+    this.#hints.onViewportChange(pdfWindow);
     if (this.#destinationWindow === pdfWindow) this.#repositionDestinationCue(pdfWindow);
   }
 
@@ -153,28 +108,17 @@ export class ReaderLinkHints {
     }
   }
 
-  /** Retires the invocation before releasing DOM/RAF resources; live failures remain observable. */
+  /** Retires native activation before releasing the shared label interaction. */
   cancelHints(): void {
-    const badges = this.#badges;
-    const owner = this.#window;
-    const frame = this.#repositionFrame;
     this.#activation += 1;
     this.#activationWindow = null;
-    this.#badges = [];
-    this.#buffer = '';
-    this.#repositionFrame = null;
-    this.#window = null;
-    try {
-      if (owner && !isDeadObject(owner) && frame !== null) owner.cancelAnimationFrame(frame);
-    } finally {
-      for (const badge of badges) {
-        if (!isDeadObject(badge.element)) badge.element.remove();
-      }
-    }
+    this.#hintView = null;
+    this.#hints.cancel();
   }
 
   close(): void {
-    if (!this.#window && !this.#activationWindow && !this.#destinationWindow) return;
+    if (!this.hasHints && !this.#hintView && !this.#activationWindow && !this.#destinationWindow)
+      return;
     try {
       this.cancelHints();
     } finally {
@@ -182,8 +126,12 @@ export class ReaderLinkHints {
     }
   }
 
-  #activate(pdfWindow: PdfWindow, badge: { readonly overlay: ReaderLinkOverlay }): void {
-    const overlay = badge.overlay;
+  /** Uses the original native destination and history policy for a confirmed target. */
+  follow(
+    pdfWindow: PdfWindow,
+    overlay: ReaderLinkOverlay,
+    action: 'followLink' | 'followIdentifier' = 'followLink',
+  ): void {
     this.cancelHints();
     this.#clearDestinationCue();
     const invocation = ++this.#activation;
@@ -194,7 +142,7 @@ export class ReaderLinkHints {
         if (!view) throw new Error('active PDF view not found');
         const execution = this.#host.executeNavigation(
           pdfWindow,
-          this.#intent('external-link', invocation),
+          this.#intent('external-link', invocation, action),
           (navigation) => navigation.runNative(() => openReaderExternalLink(view, overlay.url)),
         );
         if (!execution) throw new Error('reader navigation unavailable');
@@ -210,7 +158,7 @@ export class ReaderLinkHints {
       const location = prepareReaderLinkLocation(this.#host.reader, position);
       const execution = this.#host.executeNavigation(
         pdfWindow,
-        this.#intent('internal-link', invocation),
+        this.#intent('internal-link', invocation, action),
         (navigation) => {
           navigation.bindRequest(location);
           return navigation.runNative(() => navigateReaderLink(view, location));
@@ -224,9 +172,13 @@ export class ReaderLinkHints {
     }
   }
 
-  #intent(path: 'internal-link' | 'external-link', invocation: number): NavigationIntent {
+  #intent(
+    path: 'internal-link' | 'external-link',
+    invocation: number,
+    action: 'followLink' | 'followIdentifier',
+  ): NavigationIntent {
     return {
-      cause: { kind: 'action', action: 'followLink' },
+      cause: { kind: 'action', action },
       surface: 'reader',
       context: {
         readerPath: path,
@@ -263,34 +215,6 @@ export class ReaderLinkHints {
     this.#host.debug(message);
     this.#host.diagnostic(message);
     this.#host.showStatus('Link unavailable', 1500);
-  }
-
-  #refreshHints(pdfWindow: PdfWindow): void {
-    try {
-      const view = this.#host.viewForWindow(pdfWindow);
-      if (!view) {
-        this.cancelHints();
-        return;
-      }
-      for (const badge of this.#badges) {
-        const rect = readerLinkClientRect(view, badge.overlay);
-        const visible = !!rect && this.#linkRectIsVisible(pdfWindow, rect);
-        badge.element.hidden = !visible || !badge.label.startsWith(this.#buffer);
-        if (rect) this.#positionLinkHint(badge.element, rect);
-      }
-    } catch {
-      this.cancelHints();
-    }
-  }
-
-  #repositionHints(pdfWindow: PdfWindow): void {
-    if (this.#repositionFrame !== null) return;
-    const badges = this.#badges;
-    this.#repositionFrame = pdfWindow.requestAnimationFrame(() => {
-      if (this.#badges !== badges || this.#window !== pdfWindow || isDeadObject(pdfWindow)) return;
-      this.#repositionFrame = null;
-      this.#refreshHints(pdfWindow);
-    });
   }
 
   #showDestinationCue(pdfWindow: PdfWindow, position: ReaderLinkPosition): void {
@@ -405,16 +329,5 @@ export class ReaderLinkHints {
     cue.style.width = `${width}px`;
     cue.style.height = `${height}px`;
     cue.style.borderRadius = '0';
-  }
-
-  #linkRectIsVisible(pdfWindow: PdfWindow, rect: readonly number[]): boolean {
-    const width = pdfWindow.innerWidth || pdfWindow.document.documentElement.clientWidth;
-    const height = pdfWindow.innerHeight || pdfWindow.document.documentElement.clientHeight;
-    return rect[2]! > 0 && rect[3]! > 0 && rect[0]! < width && rect[1]! < height;
-  }
-
-  #positionLinkHint(element: HTMLElement, rect: readonly number[]): void {
-    element.style.left = `${Math.max(0, rect[0]!)}px`;
-    element.style.top = `${Math.max(0, rect[1]! - 14)}px`;
   }
 }

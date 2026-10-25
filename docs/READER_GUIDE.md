@@ -39,6 +39,19 @@ Use a PDF with a clickable citation or link visible on the page.
 
 An internal link takes you to its place in the PDF; an external link opens through Zotero as usual.
 
+### Copy or follow visible identifiers
+
+In Reader Normal, `copyIdentifier` (Copy visible identifier or URL) and `followIdentifier` (Follow visible identifier or link) show hints for targets in the active PDF view. Open the Command Palette with `:` and choose an action; neither has a default key. If you prefer, assign a key in Settings → Keybindings.
+
+1. Keep the DOI, arXiv ID, or URL visible in the active PDF view, then run the action.
+2. Type the hint for the target. Press `Escape` to cancel.
+
+Copy waits for a confirmed hint. It writes a bare DOI or arXiv ID (including its `vN` version), or the full HTTP(S) URL. For a native external link, a recognized DOI or arXiv destination is copied as a bare identifier; otherwise the full destination URL is copied. Escape or no candidate leaves the clipboard unchanged; no candidates are reported in Reader status.
+
+Following a bare DOI or arXiv ID opens its resolver URL. A visible HTTP(S) URL is followed unchanged, including its path, query, fragment, and letter case, even if it contains a recognized DOI or arXiv ID. Native PDF links keep Zotero's existing destination behavior. These actions do not change the existing `y`, `Y`, or `f` bindings.
+
+To add a referenced paper by DOI or another identifier, press `<Space>ai` in Reader Normal or choose **Add Item by Identifier** in its Command Palette. Neo brings the associated Library window forward, keeps its current collection scope, and focuses Zotero's native entry. See [Add items by identifier](MAIN_GUIDE.md#add-items-by-identifier) for batch input, submission keys, and writable-library requirements.
+
 ## Compare two places in split Reader
 
 Press `Space`, then `-` for a horizontal split or `Space`, then `|` for a vertical split. Each pane can show a different PDF position. Use `Ctrl+h` / `Ctrl+l` to focus the nearest pane to the left or right, and `Ctrl+j` / `Ctrl+k` for down or up. Then navigate the focused view independently. Focus commands move to an existing supported pane; use the split command to create the comparison layout.

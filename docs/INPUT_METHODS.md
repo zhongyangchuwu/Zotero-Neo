@@ -39,6 +39,8 @@ In the Reader Outline, native arrows, Tab, and Enter/Return—including modified
 Enter—remain Zotero-owned; native Annotation, Bookmarks, and Thumbnail panels
 also keep their arrow and Tab behavior.
 
+The native **Add Item by Identifier** popup owns input while showing, open, or closing. Neo retires its pending Main sequence and leaves text, paste, IME, Enter/Shift+Enter, Escape, and popup-menu keys to Zotero instead of applying the generic editable-field Escape behavior. This is native text entry, not a new Neo mode or binding context.
+
 ## Reader Flash
 
 Flash takes its query from a focused real input. Normal text editing, Backspace,

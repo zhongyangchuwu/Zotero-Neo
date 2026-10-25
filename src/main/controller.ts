@@ -63,6 +63,9 @@ import {
   mainItem,
   mainReaderForTab,
   selectedMainTabID,
+  activateMainWindow,
+  openMainIdentifierLookup,
+  mainIdentifierLookupOwnsInput,
 } from '../toolkit/main';
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
@@ -225,7 +228,11 @@ export class MainWindowController implements MainWindowControllerApi {
     const keydown: EventListener = (event) =>
       this.onKeyDown(event as KeyboardEventWithHandled, window, session);
     const pickerKeydown: EventListener = (event) => {
-      if (this.#sessions.get(window) === session && session.picker.open)
+      if (
+        this.#sessions.get(window) === session &&
+        session.picker.open &&
+        !mainIdentifierLookupOwnsInput(window)
+      )
         this.#picker.onKeyDown(event as KeyboardEventWithHandled, window, session);
     };
     session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
@@ -377,6 +384,27 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     run(ownerWindow, session);
+  }
+
+  openAddByIdentifier(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'mainAddByIdentifier', (window, session) => {
+      this.#picker.close(session);
+      if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+      this.resetMainInput(window, session);
+      try {
+        if (!openMainIdentifierLookup(window))
+          this.#navigation.status(
+            session,
+            t('status.identifierLookupUnavailable', this.keyGuideLanguage()),
+          );
+      } catch (error) {
+        this.#dependencies.logger.debug(`add by identifier failed: ${String(error)}`);
+        this.#navigation.status(
+          session,
+          t('status.identifierLookupFailed', this.keyGuideLanguage()),
+        );
+      }
+    });
   }
 
   openAllItemsPicker(ownerWindow: MainWindow | null): void {
@@ -554,6 +582,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.logger.debug('ignored command palette: owner window detached');
       return;
     }
+    activateMainWindow(window);
     const execute = context.execute;
     const ownerContext: CommandPaletteContext = {
       ...context,
@@ -593,6 +622,10 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
+    if (mainIdentifierLookupOwnsInput(window)) {
+      this.resetMainInput(window, session);
+      return;
+    }
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
     if (session.settings.open) {
@@ -1196,6 +1229,9 @@ export class MainWindowController implements MainWindowControllerApi {
       }
       case 'openNeoSettings':
         this.openSettings(window);
+        break;
+      case 'mainAddByIdentifier':
+        this.openAddByIdentifier(window);
         break;
       case 'mainQuickSearch':
         if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);

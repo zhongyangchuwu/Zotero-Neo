@@ -4,6 +4,7 @@ export {
   selectedMainTabInfo,
   selectedMainTabSnapshot,
   mainTabList,
+  activateMainWindow,
   selectMainTab,
   cycleMainTab,
   closeSelectedMainTab,
@@ -57,6 +58,7 @@ export {
   type MainViewFilterState,
   type TagJson,
 } from './host';
+export { openMainIdentifierLookup, mainIdentifierLookupOwnsInput } from './identifier';
 export {
   mainTreeFocused,
   mainFocusedPanel,
