@@ -2,175 +2,36 @@
 
 # Zotero Neo
 
-Zotero Neo is a standalone, Neovim/LazyVim-inspired keyboard interaction layer
-for Zotero's reader and main window.
+Zotero Neo adds keyboard controls to Zotero's Library, PDF Reader, and note editor. Use it to find papers, select PDF text, make annotations, and collect passages in existing notes.
 
-> **Status:** v0.1.0 released on 2026-09-19. Download the packaged XPI from
-> [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
->
-> **Candidate:** v0.2.0 source is integrated for the owner-led functional and
-> documentation review; it is not published. Obtain a candidate package from the
-> exact integrated-`main` CI artifact or a local build of that source. The public
-> release download and update feed above remain v0.1.0.
+The public release is [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0). The current source builds v0.2.0, which is unreleased. Neo supports the latest stable Zotero release on macOS, Linux, and Windows; package compatibility is specified by the release manifest.
 
-## Support
+## Get started
 
-Zotero Neo supports the **latest stable Zotero release only**. The current
-v0.1.0 target is Zotero 10; older Zotero major versions are outside the install
-and test contract.
+- [Install Neo and try the public v0.1.0 release](docs/GETTING_STARTED.md) — the installation steps and first-use check.
+- [Features](docs/FEATURES.md) — text selection, note capture, reading lists, and PDF navigation.
+- [User guide](docs/USER_GUIDE.md) — task-oriented workflows across the Library, Reader, and notes.
+- [How Neo works](docs/CONCEPTS.md) — focus, modes, Cursor, and Selection.
 
-Zotero Neo targets macOS, Linux, and Windows. The current GitHub Actions workflow
-verifies and packages the XPI on Ubuntu; Windows has a local PowerShell build
-wrapper. Zotero GUI behavior still requires verification in the current stable host.
+## Help and reference
 
-## Major features
+- [Troubleshooting](docs/TROUBLESHOOTING.md).
+- [Commands and default keys](docs/COMMAND_REFERENCE.md).
+- [Settings reference](docs/SETTINGS_REFERENCE.md).
+- [Released v0.1.0 user guide](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/docs/USER_GUIDE.md) and [release notes](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
 
-The features below describe the current source tree. Some v0.2 workflows and
-navigation changes are unreleased; the published v0.1.0 XPI does not include every
-current-source feature. See the [changelog](CHANGELOG.md) and [roadmap](docs/ROADMAP.md).
+## Development and project information
 
-### Library and Main window
+- [Development guide](docs/DEVELOPMENT.md) — build, debug, test, and edit the documentation.
+- [Architecture](docs/ARCHITECTURE.md) and [interaction contract](docs/INTERACTION_MODEL.md).
+- [Acceptance protocol](docs/V0_2_ACCEPTANCE.md) and [recording guide](docs/RECORDING_GUIDE.md).
+- [Changelog](CHANGELOG.md), [roadmap](docs/ROADMAP.md), and [issue tracker](https://github.com/zhongyangchuwu/Zotero-Neo/issues).
 
-- Keyboard navigation across collections, saved searches, feeds, item lists, and
-  tabs, including Vim-style `j/k`, `gg/G`, tree expansion/collapse, pane focus,
-  PDF opening, tab switching/closing, trash, and restore.
-- Main **Selection** workset with detached Cursor navigation, Yazi-style `s`
-  toggle/advance, and transient **Visual** ranges whose commit/cancel semantics
-  are independent from Zotero's row-index TreeSelection.
-- Better BibTeX citekey copying when Better BibTeX is available.
-
-### Reader navigation
-
-- Reader **Normal and Select** Surface modes, with feature-owned annotation comment input and native keyboard passthrough.
-- Page turns, scrolling, half/full-page movement, zoom, horizontal pan, native
-  reading history, annotation navigation, and Zotero Reader search.
-- Horizontal/vertical split control and directional pane focus.
-- Link hints for visible internal, citation, and external PDF links.
-- Native Zotero Reader Outline enhanced in place with compact color/icon badges, stable
-  hierarchical ordinals (including unnumbered Introduction), numeric child counts, and Neo Bookmarks.
-- Direct Reader panel focus with `<Space>ro/rm/ra/rt` opens or focuses Outline, Bookmarks, Annotations, or Thumbnails without toggling the panel closed. `[s`/`]s` traverse the full native heading tree from the active PDF position, including from all four focused sidebar contexts, and resolve printed heading positions when authored bookmarks precede a page break. `[f`/`]f` align associated native images above their genuine captions; `[t`/`]t` retain caption positions. Native structured-document recognition is explicit and cached for heading/Figure/Table requests; a cold native cache may require local whole-PDF processing. No new OCR dependency, upload, or invented targets.
-- Snapshot and EPUB navigation/search where Zotero exposes compatible Reader
-  behavior.
-
-### PDF text selection and actions
-
-- Flash-assisted visible-text targeting for Select start/end with literal
-  Unicode matching, CJK/IME input, bounded hint rendering, and stable labels.
-- Range refinement by character/word/sentence/paragraph/line motions plus
-  endpoint swapping.
-- Copy, search, coloured highlight, underline, annotation comment, and Selection
-  Actions workflows.
-- Optional Translate for Zotero selection integration through its public API.
-
-### Search, Picker, and commands
-
-- Shared fuzzy chooser for all-library items, current-collection items, notes,
-  tabs, and action-specific tag candidates, backed by the pinned `fuzzysort` matcher.
-- Command Palette in Reader, Main, and Note Normal contexts, with actions projected
-  from the active resolved binding map.
-- Browser/Gecko-owned text input and IME composition for chooser queries, tag
-  candidates, and Flash instead of reconstructing text from keydown events.
-
-### Tags
-
-- Main, Reader, and Note share the Space-led item-action vocabulary where the
-  capability exists, including `<Space>ta` / `<Space>tr`.
-- Main-only `<Space>tf` toggles one tag in Zotero's native AND-filter state;
-  `<Space>tc` clears all active tag filters without opening a chooser.
-- Tag actions reuse the shared target chooser instead of exposing a persistent
-  tag-operation console. Add Tag may offer an explicit create candidate.
-- Optional virtual tag-path refinement such as `method/...` is presentation-only;
-  Zotero keeps ordinary flat tag strings as the authoritative data model.
-
-### Notes
-
-- Note search across normalized titles and note bodies with chooser-based opening.
-- Notes default to the invoking Item's notes; an empty Item stays empty. Explicit
-  Library browsing keeps the same query and confirmation. Title-only rows use
-  nonselectable owner boundaries; Preview shows the actual parent and note body.
-- Reader text capture chooses an existing same-library note and reports the saved
-  target only after native persistence. It does not create notes or backlinks.
-- Keyboard Normal/Insert handoff and Vim-style editing inside Zotero note editors.
-- Note chooser results resolve a note target only; note editing/lifecycle behavior
-  is not hidden behind a provider-local Picker command grammar.
-
-### Keymaps and appearance
-
-- Action- and context-centric bindings across Reader/Main/Note modes, Reader
-  Outline/Marks/Annotations/Thumbnails, picker input/list, and Plugin Manager
-  input/list controls. Search finds action labels/IDs, current/default keys,
-  groups, and contexts; results distinguish Default, Custom, and Unbound.
-- Per-context add/record/unbind/reset with staged Apply, duplicate/native
-  conflict blocking, and strict-prefix warnings. Native shortcuts stay
-  separately read-only; host text input and IME remain native.
-- Prefix Guide derived from the active resolved keymap; Space is the default semantic command namespace across Reader/Main/Note.
-- Auto, Light, and Dark appearance modes on Neo-owned surfaces.
-
-## Install
-
-1. Download [`zotero-neo.xpi`](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi) from the v0.1.0 release.
-2. In Zotero, open **Tools → Plugins**, click the gear menu, and choose **Install Plugin From File…**.
-3. Select the downloaded XPI and restart Zotero when prompted.
-
-See the [v0.1.0 release page](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0) for release notes and the packaged asset.
-
-## Build from source
-
-```bash
-git clone https://github.com/zhongyangchuwu/Zotero-Neo.git
-cd Zotero-Neo
-npm ci
-./tools/build.sh
-```
-
-The output is `zotero-neo.xpi`.
-
-The integrated source builds an unpublished v0.2.0 candidate. Obtain it from the
-exact integrated-`main` CI artifact or build that source locally; there is no
-v0.2.0 release download before publication. `updates.candidate.json` contains
-prepared metadata read by release validators and the publisher. Public
-`updates.json` remains at v0.1.0 until a verified asset exists and promotion is
-explicitly authorized. Neither file is packaged in the XPI. Reinstalling retains
-Neo preferences and is not a clean-install or upgrade test.
-
-On Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\build.ps1
-```
-
-Install development builds in Zotero through **Tools → Plugins → Install Plugin
-From File…** and restart when prompted.
-
-## Documentation
-
-- [v0.2 candidate acceptance](docs/V0_2_ACCEPTANCE.md) — isolated install/upgrade, native-input and per-view acceptance steps; not a claim of completed manual verification.
-- [Website content](docs/WEBSITE_CONTENT.md) — Chinese feature/workflow copy and page organization for the later documentation website.
-- [Recording guide](docs/RECORDING_GUIDE.md) — real screencast/key-operation scripts and media conventions; no fabricated demonstration assets.
-- [User guide](docs/USER_GUIDE.md) — modes, bindings, workflows, and settings.
-- [Command reference](docs/COMMAND_REFERENCE.md) — complete ActionId/default-key lookup, mode and temporary-surface grammars, and shared navigation/jumplist behavior.
-- [Architecture](docs/ARCHITECTURE.md) — interaction scopes, feature ownership,
-  semantic actions, and Zotero host boundaries.
-- [Selection and Tags](docs/TAGS.md) — Main Selection/Visual semantics, explicit
-  tag actions, filtering, and virtual tag-path semantics.
-- [Input methods](docs/INPUT_METHODS.md) — Unicode/IME ownership and composition
-  boundaries.
-- [Development guide](docs/DEVELOPMENT.md) — build, CI, release, host seams, and
-  debugging constraints.
-- [Roadmap](docs/ROADMAP.md) — work planned before and after the first release.
-- [Issue tracker](https://github.com/zhongyangchuwu/Zotero-Neo/issues) — current bugs and tracked host/API limitations.
-- [Changelog](CHANGELOG.md)
-
-## License and provenance
-
-Zotero Neo is independently developed and is not maintained as an upstream-compatible
-fork. Its history began from code in
-[Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus), which itself
-incorporated work from [zotero-vim](https://codeberg.org/finktank/zotero-vim).
+The project began with code from
+[Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus), which incorporated
+work from [zotero-vim](https://codeberg.org/finktank/zotero-vim).
 Historical copyright notices are preserved under the project license.
 
-[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+[GNU Affero General Public License v3.0](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/LICENSE) (AGPL-3.0).
 
-The XPI includes the complete project license at `LICENSE` and the bundled
-fuzzysort MIT notice at `licenses/fuzzysort-LICENSE`. Published binaries correspond
-to the source available from the same release tag.
+The XPI includes the complete project license at `LICENSE` and the bundled fuzzysort MIT notice at `licenses/fuzzysort-LICENSE`. Published binaries correspond to the source available from the same release tag.

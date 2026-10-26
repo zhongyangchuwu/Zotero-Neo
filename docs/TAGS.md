@@ -1,144 +1,35 @@
-# Selection and Tag Actions
+# Tag items and filter the Main view
 
-Zotero Neo keeps Zotero authoritative for Item data and mutations, while Main
-interaction state separates Cursor, persistent Selection, native multi-selection,
-and transient Visual ranges. Neo Selection stores stable item identities across
-Views; Zotero's native TreeSelection can also supply the current transient target
-when several items are selected, but is not the complete persistent workset.
+Tag actions change Zotero tags on items; tag filters change which items Main displays. Mutation targets and filter candidates follow different rules.
 
-## Main Selection and Visual
+## Add or remove tags
 
-With focus in Zotero's main item list:
+In Main, Reader, or Note Normal, press `<Space>ta` to add a tag or `<Space>tr` to remove one. Choose a tag in the chooser; the same chooser has different candidates for each action:
 
-- `j` / `k` move Cursor without changing persistent Selection or collapsing an
-  existing native multi-selection when the focus-only host seam is available.
-- In Normal, `s` toggles CurrentTarget (native multi-selection or Cursor) in
-  persistent Selection, then advances Cursor.
-- `v` enters a transient Visual range anchored at Cursor.
-- Visual `j` / `k` / `gg` / `G` move the range head.
-- Visual `o` swaps anchor and head.
-- Visual `s` commits the whole range to Selection and returns to Normal.
-- Visual `v` / `Esc` cancel the range without modifying Selection.
+- **Add** searches tags in the target item's library and tags already assigned to the targets. If the query is not an existing tag, an explicit **+ Create** candidate can create it.
+- **Remove** offers tags assigned to at least one target. If a tag is assigned to some but not all targets, the chooser can show that mixed state.
+- Add ensures the chosen tag is present on every target; Remove ensures it is absent from every target. Items already in the requested state are not changed or saved.
 
-Range commit is all-or-none: if every item in the Visual range is already in
-Selection, the whole range is removed; otherwise the whole range is added.
+A mutation needs at least one target, and every target must be available. Neo refuses the whole mutation if any target is missing rather than changing only the available items. All targets must belong to one library; a batch across libraries is refused.
 
-Visual temporarily uses Zotero's native row selection to render the contiguous
-range, then restores the visible Selection projection on commit/cancel.
-Selection itself is a Neo-owned session workset of stable item identities, so
-moving Cursor or editing a Visual range does not redefine it.
+### Which items are changed?
 
-The collection tree remains a separate scope/navigation context. Neo does not
-assign `s` a ScopeSet mutation grammar there; the key remains available to
-Zotero native behavior. Native multi-scope state may still exist and is not
-converted into Neo item Selection. Space remains the command leader in both
-item and collection panes.
+- **Main:** a non-empty persistent Neo Selection takes precedence. Otherwise, the current target is the temporary Visual range, Zotero native multi-selection, or item Cursor.
+- **Reader:** the active Reader item's parent bibliographic item when it has one. Main Selection is not used.
+- **Note:** the active note-context item's parent bibliographic item when it has one; otherwise the standalone note itself.
 
-## Tag action vocabulary
+Before a batch tag change, review the effective target. In particular, a Main Selection can include items outside the current filtered rows; see [Library worksets and the Selection Panel](MAIN_GUIDE.md#keep-opening-and-batch-selection-separate).
 
-The default Tag namespace is explicit:
+## Filter the Main item list
 
-| Action | Main | Reader / Note |
-| --- | --- | --- |
-| Add one tag to the current target(s) | `<Space>ta` | `<Space>ta` |
-| Remove one tag from the current target(s) | `<Space>tr` | `<Space>tr` |
-| Toggle one Main-window tag filter | `<Space>tf` | — |
-| Clear all Main-window tag filters | `<Space>tc` | — |
+From Main Normal, `<Space>tf` opens the tag chooser and toggles one tag filter. Candidates come from the current library or collection view plus active filters, not from the mutation target Selection. Confirming a tag changes the Main view and closes the chooser. Zotero combines active tag filters with **AND** semantics.
 
-`<Space>ta` and `<Space>tr` share one item-tag Operation across Main, Reader,
-and Note. Each Surface resolves its own item target and passes it to the shared
-chooser and Operation; Reader/Note do not execute a Main action. The chooser is
-hosted by the Main window without borrowing Main Selection. `<Space>tf` and
-`<Space>tc` only change the Main item View through `MainViewActions`, so
-Reader/Note commands cannot silently change an off-screen Main filter.
-
-## Target resolution for tag mutation
-
-Add/Remove Tag are available from Main, Reader, and Note when Neo can resolve
-a taggable target set:
-
-- **Main**: EffectiveSelection (persistent Neo Selection when non-empty, otherwise CurrentTarget: Visual, native multi-selection, or Cursor).
-- **Reader**: the active Reader item's parent bibliographic item when one exists;
-  Main Selection is never borrowed.
-- **Note**: the active note-context item's parent bibliographic item when one
-  exists; otherwise the standalone note itself.
-
-Each Surface owns its target resolver; the tag chooser receives an explicit
-normalized target set instead of detecting the caller's context.
-
-Child attachments/notes are normalized and deduplicated before mutation.
-Cross-library target sets are rejected rather than silently mixing library tag
-catalogues.
-
-For multi-item targets, assignment state is presentation metadata rather than a
-toggle rule. The chooser may show that a tag is assigned to all targets or only
-some of them, but the action stays unambiguous:
-
-- `ta` ensures the chosen tag is present on every target.
-- `tr` ensures the chosen tag is absent from every target.
-
-## Shared tag chooser
-
-Actions that need a tag use the same narrow candidate surface as the other Neo
-choosers. The surface owns query, ranking, highlight, preview, IME handling,
-confirmation, and cancellation. It does not own a second Tag-specific command
-grammar.
-
-Common controls:
-
-- type in the focused input to filter candidates;
-- `Up` / `Down` or `Ctrl+k` / `Ctrl+j` move the highlighted row;
-- `Ctrl+u` / `Ctrl+d` scroll the preview;
-- `Enter` confirms one terminal tag candidate;
-- `Escape` cancels.
-
-Add Tag searches the current library tag catalogue plus tags already present on
-the targets. If the query does not exactly match an existing tag, Neo offers an
-explicit `+ Create "..."` candidate.
-
-Remove Tag lists only tags currently present on at least one target.
-
-`<Space>tf` lists tags relevant to the current Main collection/library view together
-with already-active filters. Confirming one candidate toggles only that tag and
-then closes the chooser. Active filters continue to use Zotero's native **AND**
-semantics.
-
-`<Space>tc` opens no chooser. It is safe when no tag filter is active.
+`<Space>tc` clears all Main tag filters without opening a chooser. With no filters active, it leaves the view unchanged. Reader and Note do not offer these filter commands. See [Search and navigation](SEARCH_GUIDE.md) for how tag filters combine with other Main view scopes.
 
 ## Virtual tag paths
 
-Zotero still stores ordinary flat tag strings. Neo may interpret a configurable
-separator as a virtual path only for candidate refinement.
+Zotero tags remain flat strings. In a tag chooser, Neo can present matching prefixes as virtual folders to narrow the search. For example, with the default `/` separator, `method/diffusion-transformer` and `method/flow-matching` can offer `method/` as a namespace candidate. Choose one to narrow the query. A namespace candidate only refines the query; it never adds, removes, or filters a tag.
 
-With the default `/` separator, existing tags such as:
+For Add Tag, choose a terminal existing tag or an explicit **+ Create** candidate. Remove Tag and Main filters use existing tags. The separator is configured in **Neo Settings → Advanced → Tag namespaces** and defaults to `/`; an empty value uses flat tag matching. Changing the separator changes how candidates are grouped, not stored tag names, and does not create parent tags. See [Tag namespace settings](SETTINGS_GUIDE.md#use-tag-namespaces).
 
-```text
-method/diffusion-transformer
-method/flow-matching
-dataset/libero
-```
-
-produce virtual namespace candidates such as `method/` and `dataset/`.
-Confirming a namespace candidate narrows the query; it does not mutate data.
-A terminal existing/create candidate is still required before the semantic
-action executes.
-
-There are no parent tag objects, inheritance rules, or Neo-owned taxonomy data.
-Changing the separator only changes Neo's interpretation. An empty separator
-means completely flat tag matching.
-
-The separator is configured in **Neo Settings → Advanced → Tag namespaces**,
-is stored in the Neo preference key `tags.separator`, and defaults to `/`.
-
-## Persistence and performance
-
-Tag mutations use Zotero `Item.addTag()` / `removeTag()` and save inside one
-`Zotero.DB.executeTransaction()` per semantic batch. Neo does not write the
-`itemTags` database table directly.
-
-Only targets that need the requested transition are saved.
-
-Library-wide rename/delete/color operations remain outside this workflow. Those
-are catalogue-management operations with different semantics. If repeated
-high-volume tag management later justifies a persistent surface, it should be an
-explicit Tag Manager rather than an expansion of the chooser contract.
+For complete bindings and target-resolution behavior, see the [Command Reference: Main window](COMMAND_REFERENCE.md#main-window).

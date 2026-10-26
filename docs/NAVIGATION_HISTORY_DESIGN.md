@@ -1,11 +1,10 @@
 # Unified Navigation Execution and History Policy
 
-**Status:** implemented and verified with automated contracts and supported-host smoke. The runtime owns one per-window `NavigationHistoryState` and routes policy, admission, completion, and commits through `NavigationCoordinator`. See [Navigation and the shared jumplist](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist) for command behavior and [Development Guide](DEVELOPMENT.md#runtime-architecture) for private Reader transport constraints. Historical source observations and contract-model evidence below remain rationale, not current acceptance evidence.
+Neo keeps one bounded navigation history per Main window. `NavigationHistoryState` owns its locations and traversal index; `NavigationCoordinator` applies typed policy and owns admission, dispatch, completion, and commits. Neo-initiated operations use `NavigationPort.execute()`; already-running native Reader navigation is observed through `observeNative()` rather than redispatched. See [Navigation and the shared jumplist](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist) for command behavior and [Development Guide](DEVELOPMENT.md#runtime-architecture) for private Reader transport constraints.
 
 ## Contents
 
 - [Intent and decisions](#intent-and-decisions)
-- [Baseline coupling and evidence (historical)](#baseline-coupling-and-evidence-historical)
 - [Ownership and dependency direction](#ownership-and-dependency-direction)
 - [One execution contract](#one-execution-contract)
 - [One history policy source](#one-history-policy-source)
@@ -13,64 +12,23 @@
 - [Reader provenance and native completion](#reader-provenance-and-native-completion)
 - [Location and restoration contract](#location-and-restoration-contract)
 - [Lifecycle and performance](#lifecycle-and-performance)
-- [Implementation state and acceptance](#implementation-state-and-acceptance)
 - [Acceptance matrix](#acceptance-matrix)
-- [Historical proposal evidence, limits, and rejected alternatives](#historical-proposal-evidence-limits-and-rejected-alternatives)
+- [Design tradeoffs](#design-tradeoffs)
 
 ## Intent and decisions
 
-The maintainer must be able to see which navigation actions enter Neo history in one file and change that policy without finding and editing command-specific history wrappers. All admitted Neo-initiated navigation uses one execution interface. Synchronous and asynchronous completion are adapter details, not separate history APIs.
+The design centralizes Neo's navigation-history decisions without changing host navigation semantics: actions and semantic events use one policy, operations use one coordinator path, and adapters supply the completion evidence their route supports. Synchronous and deferred execution share one interface.
 
-Implemented contract:
+1. `history-policy.ts` is the typed source for action and event recording policy. Unconfigured actions default to Ignore.
+2. `NavigationCoordinator.execute()` is the Neo-initiated execution and commit path. Native Reader work that already ran is observed through `NavigationPort.observeNative()`, not redispatched.
+3. Adapters declare inline, serial-navigation, or serial-traversal dispatch before host work and return immediate or deferred completion. An arbitrary host Promise is not settled-destination evidence.
+4. `NavigationHistoryState` is the per-window bounded stack, with a 100-location limit and shared equality, refresh, and Reader-tab remapping rules.
+5. Each admitted operation carries immutable cause and execution ownership. Delayed callbacks and native producers retain that ownership; ignored, superseded, completed, or disposed work never becomes generic native navigation.
+6. Evidence requirements are context-sensitive. A completed host operation is distinct from a recorded transition; explicit Reader navigation establishes its epoch at launch, and Back/Forward waits for admitted Reader completion.
+7. Direct ports connect the coordinator to adapters. Neo's Ignore policy does not suppress Zotero's own native history.
 
-1. `history-policy.ts` is the sole typed source for action/event recording policy. Unconfigured actions default to Ignore; named non-Action events use the same policy.
-2. `NavigationCoordinator.execute()` is the one Neo-initiated execution/commit path. Reader native observation uses the same coordinator through `NavigationPort.observeNative()`; callers do not select a history implementation.
-3. Adapters declare inline, serial-navigation, or serial-traversal dispatch before host work and report immediate/deferred navigation completion. Completion is not inferred from an arbitrary host Promise.
-4. `NavigationHistoryState` is the one window-owned stack and retains the bounded stack/equality/refresh/remap contract.
-5. Each admitted execution stamps immutable cause/context and ownership. Native producers and delayed callbacks retain that ownership; ignored, superseded, completed, or disposed ownership never becomes generic native navigation.
-6. The default evidence rules remain context-sensitive. Explicit Reader navigation establishes its epoch at launch; Back/Forward waits for admitted Reader completion. Integrated and owner acceptance evidence is recorded below.
-7. Direct completion ports are used; there is no event bus, plugin registration framework, universal command executor, preference UI, or runtime package dependency.
+**Scope:** policy centralization, navigation execution/completion, provenance, cancellation, and caller migration. **Not in scope:** new bindings/count semantics, recording every native tab click, persistent history, zoom/layout/Note-caret snapshots, full UI rollback, or external plugin APIs.
 
-**Scope:** policy centralization, navigation execution/completion, provenance, cancellation, and clean caller migration. **Not in scope:** new bindings/count semantics, recording all native tab clicks, persistent history, zoom/layout/Note-caret snapshots, full UI rollback, or external plugin APIs.
-
-## Baseline coupling and evidence (historical)
-
-This table describes the pre-cutover runtime at `adba932b9219b40ee568603220607257cc9d4f1b`, not current owners.
-
-| Baseline path | Baseline history coupling | Pre-cutover issue |
-| --- | --- | --- |
-| Main/Note/Reader `H/L` | Main facade or dispatch wraps `MainNavigation.cycleTab()` in `navigateNow()` | Whether to record is encoded at call sites. |
-| Tab chooser | Confirmation uses the same synchronous `navigateNow()` around `selectMainTab()` | Opening the chooser is not navigation; confirmation must carry its semantic origin. |
-| Main Items `gg/G` | Controller conditionally wraps navigation only in Items | Context-sensitive recording is scattered in dispatch. |
-| Main local find | Owner receives an injected history-wrapped move callback | Prompt confirmation has no ActionId of its own. |
-| Open/reveal/item/note chooser | `requestNavigation()` / `requestLibrarySelection()` | Async scheduling and recording are coupled in different APIs. |
-| Reader PDF destinations | `ReaderJumpHistoryBridge` observes hard `history.save()` | Observation currently has source/destination but no operation cause. |
-| Reader marks | Managed wrapper holds intermediate saves, then calls `recordReaderJump()` | One excursion is correct, but policy and suppression are Reader-local. |
-| Back/Forward | Queued restoration with a retained revision | Traversal is not a new record and must retain batch semantics. |
-
-Historical source owners: [Main history](../src/main/jump-history.ts), [Main dispatch](../src/main/controller.ts), [local find](../src/main/local-find.ts), [Selection Panel](../src/main/selection-panel.ts), [Reader bridge at the pre-Toolkit checkpoint](https://github.com/zhongyangchuwu/Zotero-Neo/blob/33ed4ea44250dc316135d6fffa3e93bb5d156f87/src/reader/jump-history-bridge.ts), [Reader controller](../src/reader/controller.ts), and [composition contracts](../src/core/contracts.ts).
-
-Current ownership is `src/navigation/history.ts` (`NavigationHistoryState`),
-`src/navigation/history-policy.ts` (only typed eligibility/evidence rules), and
-`src/navigation/coordinator.ts` (`NavigationCoordinator`, the admission,
-currentness, lane, completion, and commit owner). `NavigationPort.execute()` and
-`observeNative()` are the only public recording entrances. `src/main/jump-history.ts`
-exports `MainNavigationExecutor`, Main's host adapter/facade for building
-operations and capturing/restoring locations; it delegates all commits to the
-coordinator. Reader execution uses that same port. No legacy wrapper or parallel
-Recorder API remains.
-
-Required private host mechanics now live behind `src/toolkit/`: Reader producer
-transport is `src/toolkit/reader/history-bridge.ts`, restoration is
-`src/toolkit/reader/jump-host.ts`, and Main tree/tab/filter capabilities are in
-`src/toolkit/main/`. Business feature owners still choose targets, semantic traversal,
-causes and history eligibility; Toolkit exposes opaque view identity and host
-results rather than raw internal SDK objects.
-
-
-The pinned Zotero method inspection established that PDF `navigate()` calls `_pushHistoryPoint()` without awaiting it. `_pushHistoryPoint()` waits for scroll settling, reads actual PDF XYZ geometry, and then calls native history save. Thus `await navigate()` is **not** the settled destination contract. The current bridge associates the hard save with the exact producer's terminal completion instead of inferring it from `navigate()` or a global save queue.
-
-The source check is pinned to Zotero stable **10.0.5** and its Reader submodule `9d821fa2c1941bdfdd7bee3199936401b45be852`: [PDF view](https://github.com/zotero/reader/blob/9d821fa2c1941bdfdd7bee3199936401b45be852/src/pdf/pdf-view.js) and [find controller](https://github.com/zotero/reader/blob/9d821fa2c1941bdfdd7bee3199936401b45be852/src/pdf/pdf-find-controller.js). Search uses `_findController`, not upstream master's newer grouped-navigation/search APIs. These are private SDK assumptions and must be revalidated on every supported host update.
 
 ## Ownership and dependency direction
 
@@ -93,45 +51,49 @@ Coordinator -> NavigationHistoryState
                append / refresh / move / remap
 ```
 
-Implemented module responsibilities:
+Current module responsibilities:
 
-| Module | Responsibility | Must not own |
+| Module / owner | Responsibility | Must not own |
 | --- | --- | --- |
-| `src/navigation/types.ts` | DOM-free locations; typed causes, intents, tokens, outcomes and completion contracts | Input matching or host execution |
-| `src/navigation/history-policy.ts` | Recording decisions and named context predicates; complete configured-cause lookup | Async queues, target mutation, host patching |
-| `src/navigation/coordinator.ts` | One execute entry; operation admission, completion fences, currentness, private commit | Picker search/ranking, Reader geometry algorithms |
-| `src/navigation/history.ts` | Existing bounded stack/equality/refresh/remap behavior | Cause classification or host calls |
-| Main `MainNavigationExecutor` | Main/tab operation building and library capture/restore, using `src/main/navigation.ts`, `src/toolkit/main/` and View owners; exposes the shared coordinator port | History policy or direct append |
-| Reader navigation/completion adapters | Semantic traversal in Reader; private page/search/link/geometry/restore/provenance in `src/toolkit/reader/`, with exact-view completion | Another traversal stack or target/recording policy |
-| `src/addon.ts` and Main window lifecycle | Compose ports and attach/dispose the one navigation session | A second window registry or fallback to a different window |
+| `src/navigation/types.ts` | DOM-free locations; typed causes, intents, tokens, outcomes, and completion contracts | Input matching or host execution |
+| `src/navigation/history-policy.ts` | Action/event recording decisions, context predicates, and evidence requirements | Queues, target mutation, or host patching |
+| `src/navigation/coordinator.ts` | Admission, dispatch lanes, currentness, completion fences, and the private commit path | Picker search/ranking or Reader geometry algorithms |
+| `src/navigation/history.ts` | Per-window bounded stack, equality, refresh, movement, and Reader tab remapping | Cause classification or host calls |
+| `MainNavigationExecutor` in `src/main/jump-history.ts` | Main/tab operation building and library capture/restore through `src/main/navigation.ts`, `src/toolkit/main/`, and View owners; delegates commits to the coordinator | History policy or direct append |
+| Reader feature owners in `src/reader/` and private adapters in `src/toolkit/reader/` | Semantic traversal and exact-view PDF execution, restoration, and producer provenance | A second traversal stack or recording policy |
+| `src/addon.ts` and Main window lifecycle | Compose ports and attach/dispose the one navigation session | A second window registry or cross-window fallback |
 
-These are responsibility boundaries, not a requirement to create a file for every method. Keep existing Main and Reader feature owners; move only shared history/coordinator responsibilities. MainWindowSession remains the lifecycle owner. Reader and Note use its navigation capability through the existing composition boundary; they never borrow Main Selection or redispatch an ActionId merely to execute it.
+These are responsibility boundaries, not a requirement to create a file for every method. MainWindowSession remains the lifecycle owner. Reader and Note use its navigation capability through the existing composition boundary; they do not borrow Main Selection or redispatch an ActionId merely to execute it.
+
+Reader feature owners choose semantic targets, traversal, and recording context. Private Reader producer transport lives in `src/toolkit/reader/history-bridge.ts`, PDF host execution and restoration in `src/toolkit/reader/jump-host.ts`, and Main tree/tab/filter capabilities under `src/toolkit/main/`. Toolkit adapters expose opaque view identity and host results rather than raw SDK objects.
 
 ## One execution contract
 
-These are the implemented typed execution contracts (abridged):
+Representative execution and result declarations from `src/navigation/types.ts`:
 
 ```ts
-type NavigationSurface = 'main' | 'reader' | 'note';
+export type NavigationEvidence = 'settled-change' | 'native-hard' | 'managed-final';
 
-type NavigationCause =
-  | { readonly kind: 'action'; readonly action: ActionId }
-  | { readonly kind: 'event'; readonly event: NavigationEventId };
+export type HistoryDecision =
+  | { readonly kind: 'ignore' }
+  | { readonly kind: 'traverse' }
+  | { readonly kind: 'record'; readonly evidence: NavigationEvidence };
 
-interface NavigationIntent {
-  readonly cause: NavigationCause;
-  readonly surface: NavigationSurface;
-  readonly context?: NavigationContext;
-}
-
-type NavigationCompletion =
-  | { readonly kind: 'immediate'; readonly outcome: NavigationOutcome }
+export type NavigationOutcome =
   | {
-      readonly kind: 'deferred';
-      readonly settled: Promise<NavigationOutcome>;
-    };
+      readonly kind: 'completed';
+      readonly evidence: NavigationEvidence;
+      readonly destination?: NavigationLocation;
+      readonly targetIndex?: number;
+    }
+  | { readonly kind: 'unchanged' | 'unavailable' | 'cancelled' | 'stale' }
+  | { readonly kind: 'failed'; readonly error: unknown };
 
-interface NavigationOperation {
+export type NavigationCompletion =
+  | { readonly kind: 'immediate'; readonly outcome: NavigationOutcome }
+  | { readonly kind: 'deferred'; readonly settled: Promise<NavigationOutcome> };
+
+export interface NavigationOperation {
   readonly dispatch: 'inline' | 'serial-navigation' | 'serial-traversal';
   readonly admission?: 'replace' | 'motion';
   readonly capture?: () => NavigationLocation | null;
@@ -139,27 +101,38 @@ interface NavigationOperation {
   start(attempt: NavigationAttempt): NavigationCompletion;
 }
 
-interface NavigationPort {
-  execute(intent: NavigationIntent, operation: NavigationOperation): NavigationExecution;
-  observeNative(receipt: NativeNavigationReceipt): void;
+export type NavigationResult = NavigationOutcome & { readonly recorded: boolean };
+
+interface NavigationExecutionOwnership {
+  isCurrent(): boolean;
+  cancel(): void;
 }
 
-interface NavigationCoordinator {
-  execute(
-    intent: NavigationIntent,
-    operation: NavigationOperation,
-  ): NavigationExecution;
+export type NavigationExecution = NavigationExecutionOwnership &
+  (
+    | { readonly pending: false; readonly result: NavigationResult }
+    | { readonly pending: true; readonly result: Promise<NavigationResult> }
+  );
+
+export interface NativeNavigationReceipt {
+  readonly source: ReaderJumpLocation;
+  readonly destination: ReaderJumpLocation;
+  readonly isCurrent: () => boolean;
+}
+
+export interface NavigationPort {
+  execute(intent: NavigationIntent, operation: NavigationOperation): NavigationExecution;
   observeNative(receipt: NativeNavigationReceipt): void;
 }
 ```
 
-`NavigationContext` carries optional Main panel or Reader path/currentness context. Window/session identity belongs to the coordinator's host boundary; Reader view and callback ownership is carried by its adapters, not stored in history locations. Context is transient, not persisted. The coordinator stamps/freezes the intent at admission; do not retain a mutable picker row or read the then-focused input as the semantic target.
+`NavigationCoordinator` is the class in `src/navigation/coordinator.ts`; the port is its adapter-facing capability, not a second coordinator interface. `NavigationIntent` carries a cause, surface, and optional transient context. At admission, the coordinator copies and freezes the cause and context wrapper; semantic targets must not be read later from whichever input has focus. Window/session currentness is checked at the host boundary, while exact Reader view and callback ownership stays with adapters rather than history locations.
 
-`NavigationAttempt` exposes the immutable token, policy decision, currentness check, and cancel function. Operation ID and history epoch are separate: consecutive Back requests have different IDs but intentionally share an epoch. Reader callback binding and lifecycle cleanup are implemented by scoped bridge/adapters, not by a public callback-binding method on the attempt.
+`NavigationAttempt` exposes the immutable token, policy decision, currentness check, and cancellation. Operation IDs and history epochs are separate: consecutive Back requests have different IDs but share an epoch. Reader callback binding and lifecycle cleanup belong to scoped bridge/adapters, not to a public callback-binding method on the attempt.
 
-`NavigationOutcome` distinguishes completed, unchanged, unavailable, cancelled, failed, and stale; completed outcomes carry the required evidence and may carry a destination. Reader adapters validate native hard receipts against the exact producer/view and settled final geometry before reporting `native-hard`; an ordinary geometry change alone is insufficient. Successful host execution and successful append are separate results: missing snapshots, equality, or unmet evidence policy may yield a successful outcome with `recorded: false`. Unexpected host failures retain normal logging; stale attempts do not publish success or failure into a newer UI invocation.
+Completed outcomes carry evidence and may carry a destination or traversal target. Reader adapters require the exact producer/view receipt and settled final geometry for `native-hard`; geometry change alone is insufficient. Host completion and append are separate: missing snapshots, equality, or unmet evidence policy can yield `recorded: false`. Unexpected host failures are reported; stale work does not publish a current result.
 
-The coordinator captures destination synchronously for an immediate outcome. A deferred outcome is resolved only by the adapter's real completion receipt. Callers use one `NavigationExecution` result shape with an immediate result or pending result/currentness handle; async UI callers may await the pending result. Key dispatch does not create a Promise merely to process an immediate navigation.
+The coordinator captures the destination synchronously for an immediate outcome. A deferred outcome settles only when the adapter reports its real completion. Callers receive the same `NavigationExecution` shape in both cases; async UI callers may await a pending result, while key dispatch need not create a Promise for immediate navigation.
 
 ### H/L and chooser use the same interface
 
@@ -172,9 +145,9 @@ The coordinator captures destination synchronously for an immediate outcome. A d
 
 `history-policy.ts` contains typed action rules, event rules, and named predicates. Policy decisions are Record, Ignore, or Traverse. A Record rule also declares its required completion evidence: `settled-change`, `native-hard`, or `managed-final`. Cheap cause/context/path checks resolve eligibility before source capture; the private commit checks the receipt against the evidence requirement after completion. Traverse is a semantic role that cannot be converted into append by a flag.
 
-A rule such as `mainNavFirst: recordWhen(mainItems)` replaces the Controller's ad-hoc `if (panel === 'items')` history wrapper. The operation still knows how to move the cursor; it does not decide whether that move enters history. A shared ActionId can have different surface/path predicates, for example Main and Reader `findNext`.
+For example, `mainNavFirst` records only when the intent is for Main's Items panel; the operation still moves the cursor and does not decide whether the move enters history. A shared ActionId can use different context/path rules: `findNext` is `settled-change` in Main Items and `native-hard` on the Reader search path.
 
-Implemented central default policy inventory:
+Default recording policy by cause and context:
 
 | Cause | Context / moment | Default policy |
 | --- | --- | --- |
@@ -182,7 +155,7 @@ Implemented central default policy inventory:
 | `switchTab` | Successful chooser confirmation only | Record |
 | `mainNavFirst`, `mainNavLast` | Main Items; Collections is excluded | Record when Items |
 | `findNext`, `findPrevious` | Main visible-row repeat / Reader supported search destination | Main: settled change; Reader: owned native hard point only |
-| `main-local-find.confirm` | Enter commits query and moves to the first match | Record |
+| `main-local-find.confirm` | Main Items: Enter commits the query and moves to the first match | Record |
 | `mainOpenPDF` | Main Cursor or captured Note-context target | Record after successful navigation |
 | `mainActivate` | Items opens Cursor; collection activation is View mutation | Record when Items |
 | `findAllItems`, `findCollectionItems`, `findNotes` | Semantic chooser confirmation, not provider/query activity | Record |
@@ -200,7 +173,7 @@ Implemented central default policy inventory:
 
 A named event is used where there is no executable ActionId; do not invent an ActionId merely to fit policy. Delayed chooser callbacks carry their semantic action cause. Link-hint activation carries its owning navigation cause; native Outline actions follow Zotero's native navigation and use the existing `reader-native.hard` observation.
 
-The Reader hard-point default does not imply that every listed command emits a hard point. In the pinned host, search's `_onNavigate` calls `navigateToPosition()` without a hard save, and `setSelectedAnnotationIDs()` updates selection without declaring a destination. Those routes may complete successfully without an entry. Their adapters return the real completion/no-op and preserve ownership; no settled-change entry is inferred without changing the central evidence rule and proving that route's completion/provenance contract.
+The Reader hard-point default does not imply that every listed command emits a hard point. In the inspected Zotero 10.0.5 source, search's `_onNavigate` calls `navigateToPosition()` without a hard save, and `setSelectedAnnotationIDs()` updates selection without declaring a destination. Those routes may complete successfully without an entry. Their adapters return the real completion/no-op and preserve ownership; no settled-change entry is inferred without changing the evidence rule and establishing that route's completion/provenance contract.
 
 The rule controls the **transition**, not whether a location can ever appear in history. An ignored motion can establish the actual departure of a later recorded jump; that location may legitimately become that later jump's source.
 
@@ -244,7 +217,7 @@ Cancellation is not rollback or proof that native work stopped. A stale or cance
 
 ### Reader launch and traversal fences: deliberate normalization
 
-An admitted explicit Neo Reader jump establishes its window epoch at launch, like a Main jump. This supersedes an older explicit operation even if recording for the new action is disabled. The Reader host call still dispatches inline; deferred completion registers a fence for later Back/Forward without queueing the jump itself. Back/Forward waits for that actual outcome, then computes its target from resulting history. This accepted normalization supersedes the baseline's accepted-record-time invalidation.
+An admitted explicit Neo Reader jump establishes its window epoch at launch, like a Main jump. This supersedes older explicit work even if recording for the new action is disabled. The Reader host call still dispatches inline; deferred completion registers a fence for later Back/Forward without queueing the jump itself. Back/Forward waits for that actual outcome, then computes its target from resulting history. This separates launch-time supersession from the recording policy and queued host dispatch.
 
 Ordinary default-ignored motion keeps its no-epoch fast path. Independently, the existing Reader input transition must retire an in-flight mark even for an unbound/prefix/ordinary key. Execution ownership cancellation and history-epoch advancement are not the same thing.
 
@@ -265,11 +238,11 @@ completed/retired ownership is never reclassified as native
 
 A root has a unique operation ID, epoch, cause, context stamps, recording decision, and terminal/commit state. Child native producers inherit the root; they do not create additional history roots. Completion validates window/session, target tab/item, view identity, invocation generation, and epoch as appropriate. At most one successful commit is possible per root.
 
-Genuinely unowned native work enters through the adapter's observation port, not by redispatching the host command. Preserve the current native bridge's accepted-completion-time window admission: the producer ticket captures source, view and native cause at invocation, but only an eligible, changed, current completion admits a native history root and supersedes window work. An owned ticket never becomes such a root, even after its original epoch ends. Background/cold-initialization observations only update their baseline. This keeps native observation separate from the two deliberate **explicit Neo Reader jump** scheduling changes above, while sharing the same private commit.
+Native observation admits window work at completion: the producer ticket captures source, view, and native cause at invocation, but only an eligible, changed, current completion admits a native history root and supersedes window work. An owned ticket never becomes such a root, even after its original epoch ends. Background/cold-initialization observations only update their baseline. Native observation remains separate from explicit Neo Reader jump scheduling while sharing the private commit path.
 
 ## Reader provenance and native completion
 
-This is the highest-risk implementation seam. A central action table is ineffective if delayed native saves have lost the action cause. A host Promise, a current-action variable, a 750 ms window, or a matching XYZ position does not establish ownership.
+Reader transport needs producer and callback ownership because a delayed native save does not identify the Neo action that caused it. The private method observations here are pinned to Zotero stable **10.0.5** and Reader submodule `9d821fa2c1941bdfdd7bee3199936401b45be852`: [PDF view](https://github.com/zotero/reader/blob/9d821fa2c1941bdfdd7bee3199936401b45be852/src/pdf/pdf-view.js) and [find controller](https://github.com/zotero/reader/blob/9d821fa2c1941bdfdd7bee3199936401b45be852/src/pdf/pdf-find-controller.js). This identifies the inspected source version, not current-host acceptance; revalidate private assumptions on each supported host update. In that source, PDF `navigate()` invokes `_pushHistoryPoint()` without awaiting it. That producer waits for scroll settling, reads actual PDF XYZ geometry, and then saves native history, so `await navigate()` is not settled-destination evidence. Search uses `_findController`, not upstream master's newer grouped-navigation/search APIs; the bridge associates a hard save with the exact producer's terminal completion rather than inferring it from `navigate()` or a global save queue.
 
 Required provenance protocol:
 
@@ -285,7 +258,7 @@ Primary and secondary views are observed. Native eligibility means the owning Re
 
 ### Pinned route and completion matrix
 
-| Stable host route | Pinned SDK behavior | Implemented ownership/completion boundary | Default recording evidence |
+| Route in inspected Zotero 10.0.5 source | Source behavior | Adapter ownership/completion boundary | Default recording evidence |
 | --- | --- | --- | --- |
 | `navigate({ pageIndex / position / annotationID })` | Starts direct movement and invokes `_pushHistoryPoint()` before its first await; it does not await that producer | Scope at producer invocation; associate the producer's own terminal Promise boundary with its exact-view hard-save receipt | Native hard point; no entry if no matching receipt |
 | `navigate({ dest })`, outline/hash/internal link service | `goToDestination()` can resolve its target asynchronously; a surrounding save alone does not prove the route's target | Carry the originating scope through owned link/callback work and require the exact producer's settled final destination | Native hard point; no entry absent owned receipt |
@@ -325,10 +298,6 @@ Main navigation port or exact owner exists, the bridge produces no synthetic
 Main token/history. Unsupported owned transport rejects rather than falling back
 to generic native recording.
 
-This is pinned private Zotero/Reader behavior, not a stable public API. Revalidate
-the wrapper, terminal-save order, callback/request ownership, and save emission
-boundary against each supported stable host update. No generic native fallback
-or copied native navigation body is permitted.
 
 Ordinary page-turn or Neo-owned smooth-scroll motion promoted to Record uses
 the motion owner's real completion and exact-view settle/capture. Smooth holds
@@ -349,13 +318,11 @@ Restore uses the same coordinator and adapters with a Traverse root. Reuse reada
 
 Library restore remains ordered: tab, scope, Quick Search, tags, Advanced Search availability, Cursor, focus. Failure leaves the index unchanged but does not undo earlier UI mutations. Report partial/stale honestly.
 
-Add explicit currentness guards at effect/feedback boundaries:
+Currentness guards apply at effect and feedback boundaries:
 
-- A Selection Panel reveal can close or update only the panel invocation that started it, not a newly reopened panel.
-- Reader restore's geometry verification and final focus must use the same exact view/window identity. A replaced view must produce Stale/Unavailable rather than successful index movement.
-- A chooser callback retains its originating surface/target context even if focus moved to its input.
-
-Currentness guards are part of the implemented attempt/context contract: panel feedback remains scoped to its originating invocation; Reader restore geometry and focus share exact view/window identity; chooser callbacks retain their originating surface and target even after focus changes.
+- A Selection Panel reveal may close or update only the panel invocation that started it, not a newly reopened panel.
+- Reader restore geometry verification and final focus use the same exact view/window identity. A replaced view is Stale/Unavailable rather than a successful index move.
+- A chooser callback retains its originating surface and target context even if focus moves to its input.
 
 ## Lifecycle and performance
 
@@ -364,23 +331,8 @@ Currentness guards are part of the implemented attempt/context contract: panel f
 - Tokens are in-memory references/IDs, not persisted history and not chrome objects passed into content. Host payloads remain cloned through existing adapters; use chrome `Reflect.apply` for native invocation.
 - Keep hard/transient baseline updates even when recording is disabled. Native calls, results, exceptions, and native history are preserved.
 - Default-ignored motion performs a cheap policy/path check and uses the existing executor without full library/PDF snapshot capture, history array copies, a Promise, or a completion observer allocated solely for history. Reuse installed view observation rather than installing a listener per key. Owned native work still needs provenance when recording is off; allocate deferred receipts/tokens where execution ownership requires them, not an entire history snapshot/completion pipeline for every ordinary motion.
-- Producer/operation metadata is scoped to pending work, with deterministic cleanup on completion, cancellation and disposal. No unbounded ticket log, user-facing telemetry, new retry system, or global Promise patch.
+- Operation and producer metadata exists only while work is pending and is cleaned on completion, cancellation, and disposal.
 
-## Implementation state and acceptance
-
-The cutover described above is implemented across Main, Note, Reader, native observation, and traversal. `NavigationHistoryState`, `history-policy.ts`, and `NavigationCoordinator` are the real shared owners; `MainNavigationExecutor` builds Main operations and location adapters, while `NavigationPort.execute()` / `observeNative()` are the only public recording entrances. No old recording wrappers or parallel Reader stack are retained.
-
-The runtime separates host completion from history append. Its inline, serial-navigation, and serial-traversal lanes preserve their respective launch/capture boundaries; immutable cause/currentness and completion fences prevent retired ownership from being reclassified as native. The Reader bridge uses the pinned private producer/callback protocol described above, including selected-tab eligibility and the no-hard successful-completion case.
-
-Integrated verification ran formatting, both strict TypeScript projects, 72 Vitest files / 675 contracts, deterministic esbuild/XPI packaging, and the 12-member package check. Subsequent deferred-fixture conversions also passed both TypeScript projects and all 39 affected Main-history/Reader-restore contracts.
-
-Supported-host smoke used Zotero 10.0.5 / Gecko 140.15.0 in the dedicated development profile, with trusted native Gecko text input and actual refresh/viewport observation. Exercised page jumps and Back/Forward, inline tab chains and rapid Back, chooser cancel/current/changed confirmation, Items versus Collections boundary recording, a closed readable attachment reopen/remap without duplicate tabs, managed marks, ordinary ignored motion, and a selected Reader's unfocused secondary pane. Policy-only acceptance variants preserved H/G host effects and native hard history while retaining the Neo Forward suffix; promoting a smooth hold recorded its actual settled geometry without a hard point; promoting search recorded a distinct owned destination with zero producers/hard points.
-
-The final uninstrumented default build was cold-started and exercised `5gg`, `G`, Back/Forward, native page-number Enter and shared traversal, default non-hard search, and the annotation-empty no-op. Native viewport geometry and a Gecko surface snapshot were observed; temporary diagnostic exports and policy variants were removed. The Windows desktop was locked, so this was native Gecko automation, not physical desktop-key verification. No note or annotation mutation fixture was created; those routes and lifecycle/reentrancy/error boundaries are covered by automated contracts rather than a claim that every matrix row received manual GUI testing. Private SDK assumptions must still be revalidated on supported-host updates.
-
-The uncounted Reader `G` boundary subsequently changed to a single native XYZ destination at the last page's bottom, derived through the active page viewport's PDF-coordinate transform. Counted `nG` and `gg` retain page-start semantics and zoom remains unchanged. Focused contracts cover primary and rotated secondary geometry; supported-host smoke observed the primary document end and a secondary view at its actual maximum scroll, with Back/Forward restoring the recorded bottom in that same pane. A native receipt that disagrees with settled geometry remains non-recording; the new boundary does not weaken that evidence rule.
-
-The matrix below remains the regression contract; the historical proposal models do not replace implementation or host evidence.
 
 ## Acceptance matrix
 
@@ -416,21 +368,14 @@ The matrix below remains the regression contract; the historical proposal models
 
 Permanent tests should assert location/order/target/currentness outcomes and real adapter/observer composition, not source strings or calls to a wrapper. Toggle tests must assert both preserved navigation effects and changed history behavior.
 
-## Historical proposal evidence, limits, and rejected alternatives
+## Design tradeoffs
 
-The following records proposal-time validation only; it is not current implementation, test, GUI, CI, or integrated-acceptance evidence. Design validation used an in-memory contract model with the then-current `MainJumpHistoryState`. Eleven exercised scenarios passed: inline ordering, no-op Forward preservation, policy-only suppression, Items context, retired and ignored native ownership, queued source capture after stale drainage, Reader completion fence, traversal batches, origin replacement, and queue rejection recovery. This verifies the proposal's coordination invariants against that historical stack; it is **not** proof of current runtime behavior or native provenance transport.
+The shared operation and evidence contract avoids several tempting but unsafe alternatives:
 
-Three additional proposal-time evidence-rule model cases passed against that historical stack: a completed non-hard destination preserves the default no-record/Forward suffix, an owned hard receipt meets `native-hard`, and an explicit `settled-change` policy records without a native hard point. These are contract-model checks, not tests of implemented policy code. The model does not prove Reader transport or the ordinary-motion allocation fast path.
-
-At proposal time, read-only review identified mark-input cancellation, selected-tab versus split-focus eligibility, and unsupported Reader fallback as preservation requirements. Host inspection and the pinned stable source established settled hard-point timing and search's separate callback route. A later RDP connection was unavailable at that proposal stage; the user application was not restarted or changed for that plan. That historical note does not describe the subsequent implementation work.
-
-Rejected alternatives:
-
-- Separate public synchronous/async history APIs: callers should express navigation, not choose recording machinery.
-- Universal `await`: loses immediate source/destination ordering and still cannot prove native settling.
-- A boolean on every ActionId alone: lacks context, confirmation events, native causes and actual adapter enforcement.
-- A policy table used only for documentation: does not change runtime eligibility.
-- Recording both explicit Reader navigation and raw native saves: duplicates roots and ignores policy-off semantics.
-- A view-global current action, arbitrary timer, FIFO producer queue, or XYZ match as provenance: delayed/concurrent/native work can be assigned to the wrong action.
-- Disabling Neo recording with native `skipHistory`: changes Zotero's own history.
-- A second Reader stack, generic event bus/Completion Engine, global Promise patch, or copied native navigation body: unnecessary coupling or host risk.
+- Separate synchronous and asynchronous history APIs would make callers choose storage machinery; one operation contract lets adapters report immediate or deferred completion without changing the recording path.
+- Unconditionally awaiting host work can lose immediate source/destination ordering and still does not prove that a native Reader destination settled.
+- A boolean per ActionId or a policy table used only for documentation cannot express context, confirmation events, native causes, or enforce evidence requirements at commit time.
+- Recording both Neo-owned Reader completion and raw native saves can duplicate roots and make policy-off work appear as generic native navigation.
+- A view-global current action, arbitrary timer, FIFO producer queue, or matching XYZ position cannot reliably attribute delayed or concurrent producers; ownership is tied to the exact producer and view instead.
+- Native `skipHistory` is not Neo's Ignore policy because it changes Zotero's own history.
+- A second Reader stack, generic event bus/completion engine, global Promise patch, or copied native navigation body duplicates state or risks changing host behavior; direct ports and narrow adapters preserve the original call.

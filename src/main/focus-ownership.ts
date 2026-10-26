@@ -3,7 +3,10 @@ import { CleanupScope } from '../core/cleanup';
 import {
   focusMainItemsImmediately,
   mainEmptyQuickSearchFocused,
+  mainItemViewSettled,
   mainQuickSearchFocusEvent,
+  moveMainItemCursor,
+  observeMainItemView,
   selectedMainTabID,
 } from '../toolkit/main';
 import type { MainWindowSession } from './session';
@@ -57,6 +60,12 @@ export class MainFocusOwnership {
     this.#scope.addEventListener(doc, 'focusin', onFocus, true);
     for (const type of ['pointerdown', 'keydown', 'beforeinput', 'input', 'compositionstart'])
       this.#scope.addEventListener(doc, type, cancel, true);
+    this.#scope.add(
+      observeMainItemView(this.#window, {
+        onRefresh: () => this.#claim(),
+        onRowsSettled: () => this.#claim(),
+      }),
+    );
     // APP_STARTUP can attach after Zotero's 1ms select; defer only that
     // already-focused claim so direct input has an opportunity to veto it.
     // When native focus has not happened, retain the one-shot gate until an
@@ -77,8 +86,19 @@ export class MainFocusOwnership {
 
   #claim(): void {
     if (!this.#armed) return;
+    if (
+      selectedMainTabID(this.#window) !== 'zotero-pane' ||
+      !mainEmptyQuickSearchFocused(this.#window)
+    ) {
+      this.dispose();
+      return;
+    }
+    // Cold startup can focus Quick Search before the Items table mounts.
+    // Keep the one-shot claim until native row completion, unless direct intent cancels it.
+    if (!mainItemViewSettled(this.#window) || !focusMainItemsImmediately(this.#window)) return;
     this.dispose();
-    if (focusMainItemsImmediately(this.#window)) this.#session.activePanel = 'items';
+    moveMainItemCursor(this.#window, 0);
+    this.#session.activePanel = 'items';
   }
 
   /** A semantic Neo search command is explicit intent even if no user event preceded it. */
