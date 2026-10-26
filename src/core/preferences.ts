@@ -23,7 +23,7 @@ import {
 } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
-export const BINDING_SCHEMA_VERSION = 18;
+export const BINDING_SCHEMA_VERSION = 19;
 export const BINDINGS_PREFERENCE_KEY = 'bindings' as const;
 export const LANGUAGE_PREFERENCE_KEY = 'language' as const;
 export const TAG_SEPARATOR_PREFERENCE_KEY = 'tags.separator' as const;

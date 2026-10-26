@@ -39,7 +39,6 @@ const ACTION_RULES: Partial<Record<ActionId, Rule>> = {
   prevAnnotation: (intent) => (isReaderPath(intent, 'annotation') ? NATIVE_HARD : IGNORE),
   nextAnnotation: (intent) => (isReaderPath(intent, 'annotation') ? NATIVE_HARD : IGNORE),
   followLink: (intent) => (isReaderPath(intent, 'internal-link') ? NATIVE_HARD : IGNORE),
-  followIdentifier: (intent) => (isReaderPath(intent, 'internal-link') ? NATIVE_HARD : IGNORE),
   navigateBack: () => TRAVERSE,
   navigateForward: () => TRAVERSE,
 };

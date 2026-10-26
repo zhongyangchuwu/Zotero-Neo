@@ -5,7 +5,7 @@
 ### Added
 
 - Add **Add Item by Identifier** to Main and Reader Normal, with configurable `<Space>ai` defaults and Command Palette discovery. Reuse Zotero's native input, batch lookup, saving, and errors; keep drafts and native IME/Enter/Escape ownership. Reader tabs and standalone windows return to their associated Library context without borrowing item Selection, and ambiguous or read-only library scopes are refused.
-- Add unbound Reader Normal `copyIdentifier` and `followIdentifier` actions for visible DOI, arXiv, and HTTP(S) targets through the Command Palette or a user binding, without changing existing `y` / `Y` / `f` bindings.
+- Bind Reader Normal `y` to `copyTarget` for grouped, separate annotation Excerpt/Comment, DOI, arXiv, HTTP(S), and native external-link copy hints; extend `followLink` (`f`) to follow recognized DOI/arXiv/HTTP(S) text alongside native links. Select `y` and Normal `Y` remain unchanged; direct `yankAnnotation` is unbound. Binding schema 19 migrates persisted `copyIdentifier`/`followIdentifier` IDs to `copyTarget`/`followLink` while preserving custom key positions, explicit-null overrides, and a custom `reader-normal:y` → `yankAnnotation` binding. No `<Space>ya` default is added.
 - Add a VitePress documentation site with local search and responsive light/dark navigation.
 - Add contributor instructions for screenshots and videos with native playback controls and text alternatives.
 - Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains a distinct action from Back/Forward.

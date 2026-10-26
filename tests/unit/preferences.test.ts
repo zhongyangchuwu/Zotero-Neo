@@ -689,7 +689,6 @@ describe('binding preferences', () => {
     });
     expect(unbound.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     const resolvedUnbound = bindingsFromPreferences(unbound);
-    expect(resolvedUnbound['reader-normal:y']).toBe('yankAnnotation');
     expect(resolvedUnbound['reader-normal:Y']).toBeUndefined();
     expect(resolvedUnbound['reader-normal:yy']).toBeUndefined();
     expect(resolvedUnbound['reader-select:y']).toBe('copySelection');
@@ -829,7 +828,7 @@ describe('note editor preferences', () => {
   });
 });
 
-describe('schema 18 shortcut cutover', () => {
+describe('binding schema migrations', () => {
   it('moves explicit unbindings without overwriting destinations or moving deliberate custom keys', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 17,
@@ -901,7 +900,7 @@ describe('schema 18 shortcut cutover', () => {
     expect(preferences.get('bindings', '')).toBe(raw);
     preferences.failKey = null;
     migrateBindingPreferences(preferences);
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(18);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
       'reader-normal:<Space>ro': null,
       'reader-normal:]a': null,
@@ -920,15 +919,85 @@ describe('schema 18 shortcut cutover', () => {
     preferences.failKey = null;
     migrateBindingPreferences(preferences);
     expect(preferences.get('bindings', '')).toBe(persisted);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+  });
+
+  it('rewrites schema-18 action IDs in place while preserving custom bindings and tombstones', () => {
+    const raw = JSON.stringify({
+      'reader-normal:y': 'yankAnnotation',
+      'reader-normal:Y': 'yankAnnotationComment',
+      'reader-normal:gc': 'copyIdentifier',
+      'reader-normal:gf': 'followIdentifier',
+      'reader-normal:f': null,
+      'reader-normal:<C-y>': null,
+    });
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 18, bindings: raw });
+
+    const unmigrated = bindingsFromPreferences(new TestPreferences({ bindings: raw }));
+    expect(unmigrated['reader-normal:gc']).toBeUndefined();
+    expect(unmigrated['reader-normal:gf']).toBeUndefined();
+    migrateBindingPreferences(preferences);
+
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'reader-normal:y': 'yankAnnotation',
+      'reader-normal:Y': 'yankAnnotationComment',
+      'reader-normal:gc': 'copyTarget',
+      'reader-normal:gf': 'followLink',
+      'reader-normal:f': null,
+      'reader-normal:<C-y>': null,
+    });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    const bindings = bindingsFromPreferences(preferences);
+    expect(bindings['reader-normal:y']).toBe('yankAnnotation');
+    expect(bindings['reader-normal:Y']).toBe('yankAnnotationComment');
+    expect(bindings['reader-normal:gc']).toBe('copyTarget');
+    expect(bindings['reader-normal:gf']).toBe('followLink');
+    expect(bindings['reader-normal:f']).toBeUndefined();
+    expect(bindings['reader-normal:<C-y>']).toBeUndefined();
+  });
+
+  it('retries a retired action rewrite without advancing the schema before persistence', () => {
+    const raw =
+      '{"reader-normal:gc":"copyIdentifier","reader-normal:gf":"followIdentifier","reader-normal:f":null}';
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 18, bindings: raw });
+    preferences.failKey = 'bindings';
+    expect(() => migrateBindingPreferences(preferences)).toThrow();
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(18);
+    expect(preferences.get('bindings', '')).toBe(raw);
+
+    preferences.failKey = null;
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'reader-normal:gc': 'copyTarget',
+      'reader-normal:gf': 'followLink',
+      'reader-normal:f': null,
+    });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    const persisted = preferences.get('bindings', '');
+    const writes = preferences.writes.length;
+    migrateBindingPreferences(preferences);
+    expect(preferences.get('bindings', '')).toBe(persisted);
+    expect(preferences.writes).toHaveLength(writes);
   });
 
   it('translates retired action IDs before older schema parsers discard them', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 16,
-      bindings: '{"reader-normal:x":"focusReaderSidebar"}',
+      bindings: JSON.stringify({
+        'reader-normal:x': 'focusReaderSidebar',
+        'reader-normal:gc': 'copyIdentifier',
+        'reader-normal:gf': 'followIdentifier',
+        'reader-normal:y': 'yankAnnotation',
+        'reader-normal:f': null,
+      }),
     });
     migrateBindingPreferences(preferences);
-    expect(bindingsFromPreferences(preferences)['reader-normal:x']).toBe('focusReaderOutline');
+    const bindings = bindingsFromPreferences(preferences);
+    expect(bindings['reader-normal:x']).toBe('focusReaderOutline');
+    expect(bindings['reader-normal:gc']).toBe('copyTarget');
+    expect(bindings['reader-normal:gf']).toBe('followLink');
+    expect(bindings['reader-normal:y']).toBe('yankAnnotation');
+    expect(bindings['reader-normal:f']).toBeUndefined();
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
   });
 });

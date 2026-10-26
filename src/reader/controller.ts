@@ -52,7 +52,7 @@ import { ReaderMarks } from './marks';
 import { ReaderNativeSidebar } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
 import { ReaderLinkHints } from './link-hints';
-import { ReaderIdentifierHints } from './identifier-hints';
+import { ReaderCopyHints } from './copy-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
 import {
@@ -488,7 +488,7 @@ export class ReaderSession {
   readonly #sidebar: ReaderNativeSidebar;
   readonly #captions: ReaderCaptionTargets;
   readonly #linkHints: ReaderLinkHints;
-  readonly #identifierHints: ReaderIdentifierHints;
+  readonly #copyHints: ReaderCopyHints;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #nativeInput: ReaderNativeInput;
   readonly #flash: ReaderFlash;
@@ -549,16 +549,14 @@ export class ReaderSession {
       executeNavigation: (pdfWindow, intent, perform) =>
         this.executeReaderNavigation(pdfWindow, intent, perform),
       showStatus: (message, duration) => this.showStatus(message, duration),
+      text: (key) => t(key, this.keyGuideLanguage()),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       diagnostic: (message) => dependencies.controller.dependencies.logger.diagnostic(message),
     });
-    this.#identifierHints = new ReaderIdentifierHints({
+    this.#copyHints = new ReaderCopyHints({
+      reader: dependencies.reader,
       viewForWindow: (pdfWindow) => this.readerViewForWindow(pdfWindow),
       copyText: (text) => this.copyText(text),
-      followNative: (pdfWindow, overlay) =>
-        this.#linkHints.follow(pdfWindow, overlay, 'followIdentifier'),
-      executeNavigation: (pdfWindow, intent, perform) =>
-        this.executeReaderNavigation(pdfWindow, intent, perform),
       text: (key) => t(key, this.keyGuideLanguage()),
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
@@ -704,7 +702,8 @@ export class ReaderSession {
       onPointerDown: () => {
         this.#markJumpRevision += 1;
         this.#interactionRevision += 1;
-        this.#identifierHints.close();
+        this.#copyHints.close();
+        this.#linkHints.cancelHints();
         this.input.reset();
         this.clearKeyGuide();
         this.updateIndicator();
@@ -714,8 +713,8 @@ export class ReaderSession {
         this.#interactionRevision += 1;
         this.#smoothScroller.stop(true);
         this.#flash.onBlur(pdfWindow, event);
-        if (this.#identifierHints.ownsView(pdfWindow)) this.#linkHints.close();
-        this.#identifierHints.releaseView(pdfWindow);
+        if (this.#linkHints.ownsView(pdfWindow)) this.#linkHints.cancelHints();
+        this.#copyHints.releaseView(pdfWindow);
       },
       onSelectionChange: (pdfWindow) => {
         this.#interactionRevision += 1;
@@ -725,13 +724,13 @@ export class ReaderSession {
       onScroll: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
-        this.#identifierHints.onViewportChange(pdfWindow);
+        this.#copyHints.onViewportChange(pdfWindow);
         if (this.#surfaceMode === 'visual') this.#selectionRange.refresh(pdfWindow, false);
       },
       onResize: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
-        this.#identifierHints.onViewportChange(pdfWindow);
+        this.#copyHints.onViewportChange(pdfWindow);
       },
       releaseView: (pdfWindow) => {
         this.#interactionRevision += 1;
@@ -739,7 +738,7 @@ export class ReaderSession {
         const failure = new CleanupFailure();
         failure.run(() => this.#selectionRange.releaseView(pdfWindow));
         failure.run(() => this.#linkHints.releaseView(pdfWindow));
-        failure.run(() => this.#identifierHints.releaseView(pdfWindow));
+        failure.run(() => this.#copyHints.releaseView(pdfWindow));
         failure.run(() => this.#selectionActions.releaseView(pdfWindow));
         failure.run(() => this.releaseViewTheme(pdfWindow));
         failure.run(() => this.#jumpHistoryBridge.releaseWindow(pdfWindow));
@@ -1036,7 +1035,7 @@ export class ReaderSession {
       if (indicator && !isDeadObject(indicator)) indicator.remove();
     });
     failure.run(() => this.#linkHints.close());
-    failure.run(() => this.#identifierHints.close());
+    failure.run(() => this.#copyHints.close());
     failure.run(() => this.#prefixGuide.dispose());
     failure.run(() => this.#dependencies.release());
     failure.rethrow();
@@ -1071,7 +1070,7 @@ export class ReaderSession {
     this.#interactionRevision += 1;
     this.#sidebar.deactivate();
     this.#linkHints.close();
-    this.#identifierHints.close();
+    this.#copyHints.close();
     this.#nativeInput.release();
     if (this.#commentEditor.ownsInput) {
       void this.handOverNativeEditor();
@@ -1193,7 +1192,7 @@ export class ReaderSession {
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.#linkHints.hasHints && this.#linkHints.handleKey(event, pdfWindow)) return;
-    if (this.#identifierHints.hasHints && this.#identifierHints.handleKey(event, pdfWindow)) return;
+    if (this.#copyHints.hasHints && this.#copyHints.handleKey(event, pdfWindow)) return;
     if (isEditableElement(asElement(event.target))) {
       this.input.reset();
       this.clearKeyGuide();
@@ -1348,8 +1347,7 @@ export class ReaderSession {
       return true;
     if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
     if (this.#linkHints.hasHints && pdfWindow && this.#linkHints.ownsView(pdfWindow)) return true;
-    if (this.#identifierHints.hasHints && pdfWindow && this.#identifierHints.ownsView(pdfWindow))
-      return true;
+    if (this.#copyHints.hasHints && pdfWindow && this.#copyHints.ownsView(pdfWindow)) return true;
     if (
       this.input.keyBuffer === 'm' ||
       this.input.keyBuffer === '`' ||
@@ -1585,18 +1583,16 @@ export class ReaderSession {
         break;
       }
       case 'followLink':
-        this.#identifierHints.close();
-        this.#linkHints.open(pdfWindow);
-        break;
-      case 'copyIdentifier':
-      case 'followIdentifier':
+      case 'copyTarget':
+        this.#copyHints.close();
         this.#linkHints.close();
         if (this.#flash.isOpen) this.#flash.cancel();
         this.#smoothScroller.stop(true);
         this.input.reset();
         this.clearKeyGuide();
         pdfWindow.focus();
-        this.#identifierHints.open(pdfWindow, action === 'copyIdentifier' ? 'copy' : 'follow');
+        if (action === 'copyTarget') this.#copyHints.open(pdfWindow);
+        else this.#linkHints.open(pdfWindow);
         break;
       case 'flashText':
         if (this.#surfaceMode === 'visual') this.#flash.open(pdfWindow, 'visual-end');
@@ -1967,7 +1963,7 @@ export class ReaderSession {
     const previousMode = this.#surfaceMode;
     if (this.#flash.isOpen) this.#flash.cancel();
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
-    this.#identifierHints.close();
+    this.#copyHints.close();
     if (previousMode === 'visual' && mode !== 'visual') {
       this.#selectionActions.close();
       this.#dependencies.selection?.clearOwner(this);

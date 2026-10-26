@@ -1,6 +1,4 @@
 import {
-  readerVisibleLinks,
-  readerLinkClientRect,
   readerPositionClientRect,
   openReaderExternalLink,
   prepareReaderLinkLocation,
@@ -8,11 +6,15 @@ import {
 } from '../toolkit/reader';
 import { isDeadObject } from '../platform/cross-compartment';
 import { ReaderTargetHints } from './target-hints';
+import {
+  identifierHintTargets,
+  identifierOpenURL,
+  type IdentifierTarget,
+} from './identifier-targets';
 import type { NavigationExecution, NavigationIntent, NavigationResult } from '../navigation/types';
 import type { ReaderNavigationCommand } from './navigation';
 import type {
   PdfWindow,
-  ReaderLinkOverlay,
   ReaderLinkPosition,
   ReaderRuntime,
   ReaderTimer,
@@ -23,6 +25,7 @@ export interface ReaderLinkHintsHost {
   readonly reader: ReaderRuntime;
   viewForWindow(pdfWindow: PdfWindow): ReaderViewRuntime | null;
   showStatus(message: string, duration?: number): void;
+  text(key: string): string;
   debug(message: string): void;
   diagnostic(message: string): void;
   readonly executeNavigation: ReaderNavigationCommand;
@@ -30,7 +33,7 @@ export interface ReaderLinkHintsHost {
 
 export class ReaderLinkHints {
   readonly #host: ReaderLinkHintsHost;
-  readonly #hints: ReaderTargetHints<ReaderLinkOverlay>;
+  readonly #hints: ReaderTargetHints<IdentifierTarget>;
   #hintView: ReaderViewRuntime | null = null;
   #activation = 0;
   #activationWindow: PdfWindow | null = null;
@@ -69,11 +72,8 @@ export class ReaderLinkHints {
       this.#hintView = view;
       this.#hints.open(
         pdfWindow,
-        readerVisibleLinks(view, pdfWindow).map(({ overlay, rect }) => ({
-          value: overlay,
-          rect,
-          currentRect: () => readerLinkClientRect(view, overlay),
-        })),
+        identifierHintTargets(view, pdfWindow, 'follow'),
+        this.#host.text('reader.hints.followPrompt'),
       );
     } catch (error) {
       this.cancelHints();
@@ -126,31 +126,24 @@ export class ReaderLinkHints {
     }
   }
 
-  /** Uses the original native destination and history policy for a confirmed target. */
-  follow(
-    pdfWindow: PdfWindow,
-    overlay: ReaderLinkOverlay,
-    action: 'followLink' | 'followIdentifier' = 'followLink',
-  ): void {
+  /** Preserves native destinations; only bare identifiers construct resolver URLs. */
+  follow(pdfWindow: PdfWindow, target: IdentifierTarget): void {
     this.cancelHints();
     this.#clearDestinationCue();
     const invocation = ++this.#activation;
     this.#activationWindow = pdfWindow;
     try {
       const view = this.#host.viewForWindow(pdfWindow);
-      if (overlay.type === 'external-link') {
-        if (!view) throw new Error('active PDF view not found');
-        const execution = this.#host.executeNavigation(
-          pdfWindow,
-          this.#intent('external-link', invocation, action),
-          (navigation) => navigation.runNative(() => openReaderExternalLink(view, overlay.url)),
-        );
-        if (!execution) throw new Error('reader navigation unavailable');
-        this.#observeActivation(execution, invocation);
+      if (!view) throw new Error('active PDF view not found');
+      if (target.kind === 'text') {
+        this.#followExternal(pdfWindow, view, identifierOpenURL(target.match), invocation);
         return;
       }
-
-      if (!view) throw new Error('active PDF view not found');
+      const overlay = target.overlay;
+      if (overlay.type === 'external-link') {
+        this.#followExternal(pdfWindow, view, overlay.url, invocation);
+        return;
+      }
       const position =
         overlay.type === 'internal-link'
           ? overlay.destinationPosition
@@ -158,7 +151,7 @@ export class ReaderLinkHints {
       const location = prepareReaderLinkLocation(this.#host.reader, position);
       const execution = this.#host.executeNavigation(
         pdfWindow,
-        this.#intent('internal-link', invocation, action),
+        this.#intent('internal-link', invocation),
         (navigation) => {
           navigation.bindRequest(location);
           return navigation.runNative(() => navigateReaderLink(view, location));
@@ -172,13 +165,24 @@ export class ReaderLinkHints {
     }
   }
 
-  #intent(
-    path: 'internal-link' | 'external-link',
+  #followExternal(
+    window: PdfWindow,
+    view: ReaderViewRuntime,
+    url: string,
     invocation: number,
-    action: 'followLink' | 'followIdentifier',
-  ): NavigationIntent {
+  ): void {
+    const execution = this.#host.executeNavigation(
+      window,
+      this.#intent('external-link', invocation),
+      (navigation) => navigation.runNative(() => openReaderExternalLink(view, url)),
+    );
+    if (!execution) throw new Error('reader navigation unavailable');
+    this.#observeActivation(execution, invocation);
+  }
+
+  #intent(path: 'internal-link' | 'external-link', invocation: number): NavigationIntent {
     return {
-      cause: { kind: 'action', action },
+      cause: { kind: 'action', action: 'followLink' },
       surface: 'reader',
       context: {
         readerPath: path,

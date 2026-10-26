@@ -128,9 +128,8 @@ Before Back or Forward, Neo updates the departure location so movement since the
 | `zoomReset` | `=`, `z0` | Reset/Fit page width once; count does not repeat. |
 | `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place the current page at the top, center, or bottom of the viewport. `scrollBottom` has no default binding. |
 | `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's PDF find bar; `n` / `N` ask Zotero for one next/previous result regardless of count. A result that moves to a different Reader location can add history. |
-| `followLink` | `f` | Show hints for visible internal, citation, or external links in the active PDF view. Type a hint to follow it, Backspace to edit, or Escape to cancel; count is ignored. Internal/citation destinations can add history; external links do not. |
-| `copyIdentifier` | **Unbound** | Show hints for visible DOI/arXiv/HTTP(S) text and native external links in the active PDF view. Confirm a hint to copy a bare DOI/arXiv ID (keeping `vN`) or full URL; Escape or no candidates leaves the clipboard unchanged. Count is ignored. |
-| `followIdentifier` | **Unbound** | Show hints for visible DOI/arXiv/HTTP(S) text and native PDF links. Bare DOI/arXiv text uses its resolver; literal HTTP(S) URLs keep their original destination, even when recognized as an identifier. Native links retain Zotero's behavior. Escape cancels; count is ignored. |
+| `followLink` | `f` | Show hints for visible native internal, citation, or external links and recognized DOI/arXiv/HTTP(S) text in the active PDF view. Type a hint to follow; Backspace edits and Escape cancels. Native links keep Zotero's behavior; bare DOI/arXiv text uses its resolver. Internal/citation destinations can add history; external links do not. Count is ignored. |
+| `copyTarget` | `y` | Show hints for visible DOI/arXiv/HTTP(S) text, native external links, and annotation Excerpt/Comment targets in the active PDF view. No preselection is required. A confirmed hint copies its value; Escape or no candidates leaves the clipboard unchanged. Count is ignored. |
 | `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse headings in the native Outline, including Sections and Subsections, in document order with wrap. Available from Reader Normal and each Reader sidebar, independent of collapsed branches or the selected row. |
 | `prevFigure` / `nextFigure` | `[f` / `]f` | Move between explicit Figure targets and recognized captions. Land on an associated image when available, otherwise on the caption. First use may require local PDF processing. |
 | `prevTable` / `nextTable` | `[t` / `]t` | Move between explicit Table targets and recognized captions. First use may require local PDF processing. |
@@ -138,7 +137,8 @@ Before Back or Forward, Neo updates the departure location so movement since the
 | `prevBookmark` / `nextBookmark` | `[m` / `]m` | Move between Reader marks in document order, wrapping at either end. A mark jump can add a history location. |
 | `editAnnotation` | `<Enter>`, `<Return>` | Open/focus the selected annotation's comment editor. Its input indicator is `COMMENT`; Enter inserts a newline and Escape saves and closes. |
 | `deleteAnnotation` | `dd` | Delete the selected annotation after confirmation. Cancellation leaves it unchanged. |
-| `yankAnnotation` / `yankAnnotationComment` | `y` / `Y` | Copy the selected annotation text / comment. No target means no copy. |
+| `yankAnnotation` | **Unbound** | Directly copy the selected annotation's excerpt text from the Command Palette. No selected annotation means no copy. |
+| `yankAnnotationComment` | `Y` | Directly copy the selected annotation's comment. No selected annotation means no copy. |
 | `recolorYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | Recolor the selected annotation. No selected annotation means no effect. |
 | `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | Filter or clear the annotation sidebar's color filter. |
 | `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, open an eligible annotation comment, or exit the current interaction. **Text Select mode** and **Annotation comment editing** control those Reader actions; `exitMode` has no Reader Normal binding. |
@@ -325,9 +325,8 @@ The index lists each ActionId with its shipped default binding and available con
 | `scrollRight` | Reader Normal `zl` | Reader Normal horizontal pan |
 | `prevPage` | Reader Normal `h` | Reader Normal page turn |
 | `nextPage` | Reader Normal `l` | Reader Normal page turn |
-| `followLink` | Reader Normal `f` | Reader Normal visible PDF link hints |
-| `copyIdentifier` | **Unbound** | Reader Normal visible identifier/URL copy after hint confirmation |
-| `followIdentifier` | **Unbound** | Reader Normal visible identifier or native PDF-link follow |
+| `followLink` | Reader Normal `f` | Reader Normal follow hints for visible native links and recognized DOI/arXiv/HTTP(S) text |
+| `copyTarget` | Reader Normal `y` | Reader Normal copy hints for visible annotation and identifier targets |
 | `flashText` | Reader Select `s` | Reader Select endpoint targeting |
 | `firstPage` | Reader Normal `gg` | Reader Normal first/count page jump |
 | `lastPage` | Reader Normal `G` | Reader Normal document-end/count page jump |
@@ -394,8 +393,8 @@ The index lists each ActionId with its shipped default binding and available con
 | `recolorGreen` | Reader Normal `zg` | Recolor annotation |
 | `recolorBlue` | Reader Normal `zb` | Recolor annotation |
 | `recolorPurple` | Reader Normal `zp` | Recolor annotation |
-| `yankAnnotation` | Reader Normal `y` | Copy annotation text |
-| `yankAnnotationComment` | Reader Normal `Y` | Copy annotation comment |
+| `yankAnnotation` | **Unbound** | Direct copy of the selected annotation's excerpt from the Command Palette |
+| `yankAnnotationComment` | Reader Normal `Y` | Direct copy of the selected annotation's comment |
 | `openCommandPalette` | Reader/Main/Note Normal `:` | Context command palette |
 | `openNeoSettings` | Reader/Main/Note Normal `<Space>ps` | Settings surface |
 | `findAllItems` | Reader/Main/Note Normal `<Space>ff` | Shared library item chooser |
@@ -584,7 +583,7 @@ Use this table to find the ActionId for a shipped `BindingContext:sequence`. Sav
 | `reader-normal:<Enter>` | `editAnnotation` |
 | `reader-normal:<Return>` | `editAnnotation` |
 | `reader-normal:dd` | `deleteAnnotation` |
-| `reader-normal:y` | `yankAnnotation` |
+| `reader-normal:y` | `copyTarget` |
 | `reader-normal:Y` | `yankAnnotationComment` |
 | `reader-normal:zy` | `recolorYellow` |
 | `reader-normal:zr` | `recolorRed` |

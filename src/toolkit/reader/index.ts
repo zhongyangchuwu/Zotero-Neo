@@ -21,5 +21,6 @@ export * from './links';
 export * from './marks';
 export * from './pdf-text';
 export * from './identifier-text';
+export * from './annotation-targets';
 export * from './sidebar';
 export * from './structured-document';

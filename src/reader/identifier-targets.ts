@@ -71,14 +71,17 @@ export function identifierHintTargets(
 }
 
 /** Copy policy is separate from recognition, including native links whose visible label is not a URL. */
-export function identifierCopyValue(target: IdentifierTarget): string | null {
-  if (target.kind === 'text') return target.match.value;
+export function identifierCopyData(target: IdentifierTarget): {
+  readonly kind: IdentifierMatch['kind'] | 'link';
+  readonly text: string;
+} | null {
+  if (target.kind === 'text') return { kind: target.match.kind, text: target.match.value };
   if (target.overlay.type !== 'external-link') return null;
   const url = target.overlay.url;
   const match = recognizeIdentifiers(url).find(
     (candidate) => candidate.start === 0 && candidate.end === url.length,
   );
-  return match?.value ?? url;
+  return match ? { kind: match.kind, text: match.value } : { kind: 'link', text: url };
 }
 
 /** Resolver URLs belong to the follow action, not to the recognizers or the copy representation. */

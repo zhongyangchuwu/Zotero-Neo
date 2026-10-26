@@ -30,25 +30,29 @@ Use `[s` / `]s` for the previous or next heading, `[f` / `]f` for a figure, and 
 
 Other native Reader panels are available with `<Space>rm` for Bookmarks, `<Space>ra` for Annotations, and `<Space>rt` for Thumbnails. Each command opens or focuses its panel; use `j` / `k` to move among panel rows.
 
-## Follow PDF links
+## Copy or follow visible targets
 
-Use a PDF with a clickable citation or link visible on the page.
+In Reader Normal, `y` (`copyTarget`) shows hints for copyable targets in the active PDF view; `f` (`followLink`) shows hints for recognized DOI, arXiv, and HTTP(S) text as well as native PDF links. Neither action requires a text selection or a selected annotation.
 
-1. Click the PDF page and press `f`. Neo puts letter hints over links visible in the active Reader view.
-2. Type the letters on the link you want to follow. Press `Escape` to cancel.
+Copy hints keep each target as a separate intent:
 
-An internal link takes you to its place in the PDF; an external link opens through Zotero as usual.
+| Hint label | Copied value |
+| --- | --- |
+| `Excerpt` | The annotation's excerpt text. |
+| `Comment` | The annotation's comment. |
+| `DOI` / `arXiv` | The bare identifier; arXiv versions such as `v2` are retained. |
+| `URL` | The full HTTP(S) URL. |
+| `Link` | The native external-link destination. A destination recognized as a DOI or arXiv identifier is copied as that bare identifier. |
 
-### Copy or follow visible identifiers
+An annotation with both an excerpt and a comment gets separate adjacent labels grouped together; an empty role is omitted. A DOI in an excerpt remains a separate target, so you can copy either the whole excerpt or just the DOI. Neo does not combine excerpt and comment text.
 
-In Reader Normal, `copyIdentifier` (Copy visible identifier or URL) and `followIdentifier` (Follow visible identifier or link) show hints for targets in the active PDF view. Open the Command Palette with `:` and choose an action; neither has a default key. If you prefer, assign a key in Settings → Keybindings.
+Hints use visible targets and supported geometry in the current PDF view. Annotation candidates respect Zotero's annotation visibility, hidden state, and active filter; unsupported or off-screen geometry is omitted. Text matching uses visible PDF text only: it does not guess ambiguous cross-line joins or use OCR.
 
-1. Keep the DOI, arXiv ID, or URL visible in the active PDF view, then run the action.
-2. Type the hint for the target. Press `Escape` to cancel.
+The prompt identifies the action as `Copy target · Esc cancels` or `Follow link · Esc cancels`. Type a displayed hint to act immediately; no Enter is needed. Backspace removes the last label character, Escape cancels, and repeated key events are ignored so holding a key cannot confirm a target. If there is no copy target, Neo reports that and leaves the clipboard unchanged.
 
-Copy waits for a confirmed hint. It writes a bare DOI or arXiv ID (including its `vN` version), or the full HTTP(S) URL. For a native external link, a recognized DOI or arXiv destination is copied as a bare identifier; otherwise the full destination URL is copied. Escape or no candidate leaves the clipboard unchanged; no candidates are reported in Reader status.
+Following a bare DOI or arXiv identifier opens its resolver URL. A visible HTTP(S) target keeps its original destination; native PDF links keep Zotero's existing internal, citation, or external-link behavior. `f` does not include annotation excerpts or comments.
 
-Following a bare DOI or arXiv ID opens its resolver URL. A visible HTTP(S) URL is followed unchanged, including its path, query, fragment, and letter case, even if it contains a recognized DOI or arXiv ID. Native PDF links keep Zotero's existing destination behavior. These actions do not change the existing `y`, `Y`, or `f` bindings.
+Reader Normal `Y` still copies the selected annotation's comment. To copy the selected annotation's excerpt directly instead of choosing a visible target, run the unbound `yankAnnotation` action from the Command Palette.
 
 To add a referenced paper by DOI or another identifier, press `<Space>ai` in Reader Normal or choose **Add Item by Identifier** in its Command Palette. Neo brings the associated Library window forward, keeps its current collection scope, and focuses Zotero's native entry. See [Add items by identifier](MAIN_GUIDE.md#add-items-by-identifier) for batch input, submission keys, and writable-library requirements.
 

@@ -95,7 +95,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Enter>': 'editAnnotation',
   'reader-normal:<Return>': 'editAnnotation',
   'reader-normal:dd': 'deleteAnnotation',
-  'reader-normal:y': 'yankAnnotation',
+  'reader-normal:y': 'copyTarget',
   'reader-normal:Y': 'yankAnnotationComment',
   'reader-normal:zy': 'recolorYellow',
   'reader-normal:zr': 'recolorRed',
@@ -872,16 +872,27 @@ export function migrateRetiredReaderInsertOverrides(raw: unknown): string {
   return retained.length ? JSON.stringify(Object.fromEntries(retained)) : '';
 }
 
+const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId>([
+  ['copyIdentifier', 'copyTarget'],
+  ['followIdentifier', 'followLink'],
+  ['focusReaderSidebar', 'focusReaderOutline'],
+]);
+
 /** Translate persisted retired IDs before earlier schema steps parse ActionIds. */
 export function migrateRetiredShortcutActions(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const entries = parseBindingEntries(raw);
-  if (!entries.some(([, action]) => action === 'focusReaderSidebar')) return raw;
+  if (
+    !entries.some(
+      ([, action]) => typeof action === 'string' && RETIRED_SHORTCUT_ACTIONS.has(action),
+    )
+  )
+    return raw;
   return JSON.stringify(
     Object.fromEntries(
       entries.map(([key, action]) => [
         key,
-        action === 'focusReaderSidebar' ? 'focusReaderOutline' : action,
+        typeof action === 'string' ? (RETIRED_SHORTCUT_ACTIONS.get(action) ?? action) : action,
       ]),
     ),
   );
