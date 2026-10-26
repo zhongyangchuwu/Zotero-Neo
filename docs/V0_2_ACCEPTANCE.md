@@ -1,6 +1,6 @@
 # v0.2 候选验收指南
 
-本指南是 v0.2.0 候选的 U1–U10 执行协议。每轮候选提交、版本与 XPI SHA-256 以 [`updates.candidate.json`](../updates.candidate.json) 和 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142) 为准；不在此固定本轮包身份。将实际验收结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 和 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)：未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
+本指南是 v0.2.0 候选的 U1–U10 执行协议。每轮候选提交、版本与 XPI SHA-256 以 [`updates.candidate.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/updates.candidate.json) 和 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142) 为准；不在此固定本轮包身份。将实际验收结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 和 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)：未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
 
 ## 1. 固定候选与边界
 
@@ -62,7 +62,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 2. 在插件列表核实 Neo 版本为 `0.2.0`，不是仅修改了文件名的旧包。
 3. 在主窗口条目列表的 Normal 状态下，按 `:` 打开 Command Palette；只有一个面板，输入查询和取消正常。
 4. 用 `<Space>ps` 打开 Settings，查看阅读器、主窗口、笔记编辑器和本地控件对应的实际上下文；Reader 不出现 Insert，Note Insert 保留。
-5. 在配置编辑器核实 `extensions.zotero-neo.bindings.schemaVersion` 为 `18`。本轮不凭修改 schema 数值制造升级结果。
+5. 在配置编辑器记录 `extensions.zotero-neo.bindings.schemaVersion`，核实它与本轮确切源码 `src/core/preferences.ts` 的 `BINDING_SCHEMA_VERSION` 一致。不手动修改 schema 数值制造升级结果。
 6. 关闭并重启该 profile，再执行一次入口命令；没有重复面板或遗留旧代键处理。
 
 **通过标准**：持久版本正确、默认功能入口可用、配置上下文正确、重启后只有一个当前输入处理方。单凭“插件列表显示启用”不算功能通过。
@@ -71,7 +71,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 在升级 profile 中先安装[官方 v0.1.0 包](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)并重启；不能用把当前源码改成旧版本号后构建的包替代官方发行版。
 
-官方 v0.1.0 的[偏好源码](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/src/core/preferences.ts)使用 binding schema `11`，当前候选为 `18`。记录实际安装后的观察值，不手动改写 schema 数值。
+官方 v0.1.0 的[偏好源码](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/src/core/preferences.ts)使用 binding schema `11`；候选目标值以其确切源码中的 `BINDING_SCHEMA_VERSION` 为准，不在协议里固定。记录实际安装后的观察值，不手动改写 schema 数值。
 
 在**仅属于升级验收的 profile**里保存现有 `extensions.zotero-neo.bindings` 原值，再通过旧版配置／高级配置编辑器加入以下测试配置，确保不覆盖其他已有 override：
 
@@ -91,7 +91,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 然后执行：
 
 1. 先关闭旧版阅读器；在同一个仍运行的升级 profile 中，用原生插件管理器安装候选 0.2.0 包，按安装结果要求退出／重启 Zotero。不要先退出整个程序后再要求在已关闭的窗口里安装。
-2. 核实插件版本 0.2.0、schema 18、自定义 `Q` 的行为和 `j` 的明确取消均保留；原保存的无关设置未丢失。
+2. 核实插件版本 0.2.0、schema 与本轮确切源码一致、自定义 `Q` 的行为和 `j` 的明确取消均保留；原保存的无关设置未丢失。
 3. 核实旧 Reader Insert 行消失，其他上下文映射／取消仍在；不是把全部配置重置为默认。
 4. 核实新的 `extensions.zotero-neo.annotationCommentEditor.enabled` 为 `false`，旧 `mode.insert.enabled` 清除；在 Reader Normal 中，`i` 将输入交给 Zotero 原生输入处理，按 `Escape` 退出该输入状态，不出现 Reader Insert 模式。
 5. 再重启，重复版本／映射／取消／开关检查，确认第二次迁移不改变结果。
