@@ -26,7 +26,7 @@ Once the text is selected, adjust the moving endpoint with `h` / `l` by characte
 
 ## Find and manage existing annotations
 
-In Reader Normal, press `[a` / `]a` to select the previous or next annotation. Open the native Annotations panel with `<Space>ra` to browse its rows. With an annotation selected, `Y` copies its comment. Normal `y` opens the visible-target copy hints instead; to copy the selected annotation's excerpt directly, run the unbound `yankAnnotation` action from the Command Palette. Use `Zy`, `Zr`, `Zg`, `Zb`, or `Zp` to filter the panel by annotation color, and `Za` to clear the filter.
+In Reader Normal, press `[a` / `]a` to select the previous or next annotation. Open the native Annotations panel with `<Space>ra` to browse its rows. `Y` directly copies the current annotation target's comment. For content elsewhere on the visible page, use [Normal `y` copy hints](READER_GUIDE.md#copy-or-follow-visible-targets) without selecting an annotation first. The direct excerpt action `yankAnnotation` remains available in the Command Palette without a default key. Use `Zy`, `Zr`, `Zg`, `Zb`, or `Zp` to filter annotations by color, and `Za` to clear the filter.
 
 Give colors a consistent purpose in your reading: for example, yellow for main claims, blue for methods, and purple for questions to follow up. To change an existing annotation, select it and use `zy`, `zr`, `zg`, `zb`, or `zp` to recolor it. Later, filter the Annotations panel to one color to review the same kind of evidence across the paper, then clear the filter with `Za`.
 

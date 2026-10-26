@@ -13,9 +13,11 @@ Use the Library to choose a collection, browse papers, and open the item at the 
 In Main Normal, press `<Space>ai`, or choose **Add Item by Identifier** in the Command Palette. Neo opens Zotero's native input; it does not read the clipboard or submit a lookup automatically.
 
 1. Select one writable library or collections within that library. Cross-library and read-only scopes cannot open this action.
-2. Enter or paste ISBNs, DOIs, PubMed IDs, arXiv IDs, or ADS Bibcodes. Separate several identifiers with spaces, commas, or line breaks.
+2. Enter ISBNs, DOIs, PubMed IDs, arXiv IDs, or ADS Bibcodes. For a batch, use one identifier type per submission and put each entry on its own line.
 3. In a single-line entry, press Enter to submit or Shift+Enter to add a line. In multiline entry, Enter adds a line and Shift+Enter submits. These are Zotero's native controls.
 4. Escape closes entry without submitting its draft. Closing after submission does not undo items already saved. Zotero owns lookup progress, failures, attachment preferences, and post-import selection.
+
+Zotero's native parser chooses an identifier family for each submission; a mixed DOI/ISBN/arXiv batch is not a request to import every family. Submit mixed references in separate batches instead of relying on that parser priority.
 
 The destination is the current native library and selected collections, not the Cursor item or Neo Selection. Multiple selected collections in one library are passed to Zotero together. Opening the action leaves persistent Selection unchanged; refocusing an already open input preserves its draft and caret.
 

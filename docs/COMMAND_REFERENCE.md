@@ -137,8 +137,8 @@ Before Back or Forward, Neo updates the departure location so movement since the
 | `prevBookmark` / `nextBookmark` | `[m` / `]m` | Move between Reader marks in document order, wrapping at either end. A mark jump can add a history location. |
 | `editAnnotation` | `<Enter>`, `<Return>` | Open/focus the selected annotation's comment editor. Its input indicator is `COMMENT`; Enter inserts a newline and Escape saves and closes. |
 | `deleteAnnotation` | `dd` | Delete the selected annotation after confirmation. Cancellation leaves it unchanged. |
-| `yankAnnotation` | **Unbound** | Directly copy the selected annotation's excerpt text from the Command Palette. No selected annotation means no copy. |
-| `yankAnnotationComment` | `Y` | Directly copy the selected annotation's comment. No selected annotation means no copy. |
+| `yankAnnotation` | **Unbound** | Directly copy the current annotation target's excerpt from the Command Palette. No valid annotation target means no copy. |
+| `yankAnnotationComment` | `Y` | Directly copy the current annotation target's comment. No valid annotation target means no copy. |
 | `recolorYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | Recolor the selected annotation. No selected annotation means no effect. |
 | `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | Filter or clear the annotation sidebar's color filter. |
 | `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, open an eligible annotation comment, or exit the current interaction. **Text Select mode** and **Annotation comment editing** control those Reader actions; `exitMode` has no Reader Normal binding. |
@@ -393,8 +393,8 @@ The index lists each ActionId with its shipped default binding and available con
 | `recolorGreen` | Reader Normal `zg` | Recolor annotation |
 | `recolorBlue` | Reader Normal `zb` | Recolor annotation |
 | `recolorPurple` | Reader Normal `zp` | Recolor annotation |
-| `yankAnnotation` | **Unbound** | Direct copy of the selected annotation's excerpt from the Command Palette |
-| `yankAnnotationComment` | Reader Normal `Y` | Direct copy of the selected annotation's comment |
+| `yankAnnotation` | **Unbound** | Direct copy of the current annotation target's excerpt from the Command Palette |
+| `yankAnnotationComment` | Reader Normal `Y` | Direct copy of the current annotation target's comment |
 | `openCommandPalette` | Reader/Main/Note Normal `:` | Context command palette |
 | `openNeoSettings` | Reader/Main/Note Normal `<Space>ps` | Settings surface |
 | `findAllItems` | Reader/Main/Note Normal `<Space>ff` | Shared library item chooser |
