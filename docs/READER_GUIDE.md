@@ -58,6 +58,7 @@ Following a bare DOI or arXiv identifier opens its resolver URL. An existing HTT
 
 - Candidates belong to the active PDF view, including in split or standalone Reader. Annotation candidates respect Zotero's visibility and filter state and need a visible anchor; their comment editor can remain closed.
 - Only supported rectangle-based annotation geometry is used. Ink and rotated free-text anchors are omitted rather than guessed. Text matching uses visible same-line PDF text; it does not guess ambiguous cross-line joins or use OCR. A scanned PDF can still offer native links or positioned annotations even when it has no text matches.
+- Hidden containing PDF frames are not targets, including the base PDF retained by Zotero's Reading Mode. Hiding a view after hints open also invalidates its copy/follow confirmations; Neo does not discover targets from Reading Mode's replacement content.
 - Changed annotation content, position, filter, or view invalidates its old labels. If a target disappears, reopen hints rather than trying to confirm its old label. No candidate or cancellation leaves the clipboard unchanged.
 - If a very small or crowded pane cannot fit the labels safely, the whole hint interaction is cancelled. Enlarge the pane or zoom in to reduce visible targets, then reopen hints.
 

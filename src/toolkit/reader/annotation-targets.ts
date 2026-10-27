@@ -1,5 +1,6 @@
 import { cloneInto } from '../../platform/cross-compartment';
 import { readerWindow } from './host';
+import { visibleElement, visibleWindow } from './visibility';
 import type { ReaderRuntime, ReaderViewRuntime } from './contracts';
 import type {
   NativeReaderAnnotationRuntime,
@@ -21,34 +22,6 @@ function validRect(rect: readonly number[]): boolean {
   return (
     rect.length === 4 && rect.every(Number.isFinite) && rect[2]! > rect[0]! && rect[3]! > rect[1]!
   );
-}
-
-function visibleElement(window: Window, element: Element): boolean {
-  if (!element.isConnected || element.ownerDocument !== window.document) return false;
-  for (let current: Element | null = element; current; current = current.parentElement) {
-    const style = window.getComputedStyle(current);
-    if (
-      !style ||
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.visibility === 'collapse' ||
-      style.opacity === '0'
-    )
-      return false;
-  }
-  return true;
-}
-
-function visibleWindow(window: Window): boolean {
-  if (window.closed) return false;
-  // A PDF iframe may remain live while its parent view is hidden (e.g. Reading Mode).
-  let frame = window.frameElement;
-  while (frame) {
-    const owner = frame.ownerDocument.defaultView;
-    if (!owner || owner.closed || !visibleElement(owner, frame)) return false;
-    frame = owner.frameElement;
-  }
-  return true;
 }
 
 function intersect(left: readonly number[], right: readonly number[]): readonly number[] | null {

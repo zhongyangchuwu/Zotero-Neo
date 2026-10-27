@@ -71,6 +71,7 @@
 - Compute cross-page annotation rectangles from selected text nodes, excluding intervening PDF canvas/page boxes and preserving partial text endpoints.
 - Retain only pending Reader timers; completed or cancelled callbacks cannot refocus an editor or save a newer draft.
 - Keep native Find composition Enter native and fence delayed return-to-PDF focus to the same live input/view.
+- Reject copy/follow targets in retained but hidden PDF frames, including Reading Mode's underlying view, and revalidate containing-frame visibility before confirmation without disabling visible native-link fallback.
 - Main Notes now uses the focused Cursor item independently of native multi-selection and persistent Neo Selection.
 - Restore only the explicit last Neo Trash batch, report the number of successfully persisted items and roll back the in-memory deleted flag after a failed save; never invoke parameterless native Undo.
 - Replace each Main session's feedback deadline so older timers cannot erase newer messages.
