@@ -190,6 +190,8 @@ Failing to do this throws a security error.
 
 ### Documentation
 
+项目文档默认只维护中文，不再维护英文版本。现有英文文档在相关任务涉及时按需翻译，更新引用后移除英文副本；没有独立双语文件时直接原位替换正文，保留文件名和 URL。命令、API、配置键与第三方许可证原文保持不变。具体规范见 `docs/DOCUMENTATION_AUTHORING.md`。
+
 Add JSDoc-style block comments for non-obvious methods explaining parameters and
 side effects. Inline comments are welcome for host constraints and complex logic.
 

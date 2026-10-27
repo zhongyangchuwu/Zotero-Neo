@@ -16,9 +16,9 @@ defineProps<{
   <figure class="feature-media" :aria-label="title">
     <div v-if="!src" class="feature-media-plan" role="note">
       <span class="feature-media-status">
-        {{ kind === 'video' ? 'Video planned' : 'Screenshot planned' }}
+        {{ kind === 'video' ? '待录制视频' : '待添加截图' }}
       </span>
-      <p>No media yet. The description below is the planned demo, not a recording.</p>
+      <p>暂无媒体素材。下方描述的是计划演示，并非实际录制。</p>
     </div>
     <video
       v-else-if="kind === 'video'"
@@ -32,11 +32,11 @@ defineProps<{
         v-if="captions"
         kind="captions"
         :src="withBase(captions)"
-        srclang="en"
-        label="English"
+        srclang="zh-CN"
+        label="中文"
         default
       />
-      <a :href="withBase(src)">Download the video</a>
+      <a :href="withBase(src)">下载视频</a>
     </video>
     <img v-else :src="withBase(src)" :alt="alt || title" loading="lazy" decoding="async" />
     <figcaption>

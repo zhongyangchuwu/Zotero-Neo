@@ -1,4 +1,5 @@
 import type { ActionId } from '../input/actions';
+import { TAG_ITEM_ACTIONS } from '../modules/tags/capabilities';
 
 export type ReaderCapabilityMode = 'normal' | 'visual';
 
@@ -67,8 +68,7 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'focusReaderAnnotations',
   'focusReaderThumbnails',
   'toggleMarksExplorer',
-  'addTag',
-  'removeTag',
+  ...TAG_ITEM_ACTIONS,
   'addToCollection',
   'removeFromCollection',
   'mainYankCitekey',

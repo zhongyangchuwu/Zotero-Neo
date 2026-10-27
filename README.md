@@ -1,37 +1,35 @@
-![Zotero Neo — Neovim-inspired keyboard layer for Zotero](assets/branding/zotero-neo-banner.png)
+![Zotero Neo — 受 Neovim 启发的 Zotero 键盘交互层](assets/branding/zotero-neo-banner.png)
 
 # Zotero Neo
 
-Zotero Neo adds keyboard controls to Zotero's Library, PDF Reader, and note editor. Use it to find papers, select PDF text, make annotations, and collect passages in existing notes.
+Zotero Neo 为 Zotero 文献库、PDF Reader 和笔记编辑器提供键盘操作。用它查找论文、选择 PDF 文本、添加批注，并将摘录收集到已有笔记中。
 
-The public release is [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0). The current source builds v0.2.0, which is unreleased. Neo supports the latest stable Zotero release on macOS, Linux, and Windows; package compatibility is specified by the release manifest.
+已发布版本为 [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)。当前源码构建的是尚未发布的 v0.2.0。Neo 支持 macOS、Linux 和 Windows 上最新的 Zotero 稳定版；具体包兼容范围以发布版本的 manifest 为准。
 
-## Get started
+## 开始使用
 
-- [Install Neo and try the public v0.1.0 release](docs/GETTING_STARTED.md) — the installation steps and first-use check.
-- [Features](docs/FEATURES.md) — text selection, note capture, reading lists, and PDF navigation.
-- [User guide](docs/USER_GUIDE.md) — task-oriented workflows across the Library, Reader, and notes.
-- [How Neo works](docs/CONCEPTS.md) — focus, modes, Cursor, and Selection.
+- [安装 Neo 并体验已发布的 v0.1.0](docs/GETTING_STARTED.md)：安装步骤与首次使用检查。
+- [功能介绍](docs/FEATURES.md)：文本选择、笔记摘录、阅读清单与 PDF 导航。
+- [使用指南](docs/USER_GUIDE.md)：串联文献库、Reader 和笔记的任务工作流。
+- [基本概念](docs/CONCEPTS.md)：焦点、模式、Cursor 与 Selection。
 
-## Help and reference
+## 帮助与参考
 
-- [Troubleshooting](docs/TROUBLESHOOTING.md).
-- [Commands and default keys](docs/COMMAND_REFERENCE.md).
-- [Settings reference](docs/SETTINGS_REFERENCE.md).
-- [Released v0.1.0 user guide](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/docs/USER_GUIDE.md) and [release notes](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
+- [故障排查](docs/TROUBLESHOOTING.md)。
+- [命令与默认按键](docs/COMMAND_REFERENCE.md)。
+- [设置参考](docs/SETTINGS_REFERENCE.md)。
+- [已发布 v0.1.0 的使用指南](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/docs/USER_GUIDE.md)与[发布说明](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)。
 
-## Development and project information
+## 开发与项目信息
 
-- [Development guide](docs/DEVELOPMENT.md) — build, debug, test, and edit the documentation.
-- [Architecture](docs/ARCHITECTURE.md) and [interaction contract](docs/INTERACTION_MODEL.md).
-- [Acceptance protocol](docs/V0_2_ACCEPTANCE.md) and [recording guide](docs/RECORDING_GUIDE.md).
-- [Changelog](CHANGELOG.md), [roadmap](docs/ROADMAP.md), and [issue tracker](https://github.com/zhongyangchuwu/Zotero-Neo/issues).
+- [开发指南](docs/DEVELOPMENT.md)：构建、调试、测试与文档站维护。
+- [架构](docs/ARCHITECTURE.md)、[交互模型](docs/INTERACTION_MODEL.md)与[模块拆分及基座设计提案](docs/MODULE_DESIGN.md)。
+- [文档编写规范](docs/DOCUMENTATION_AUTHORING.md)：默认只维护中文，现有英文按需迁移，不保留双语副本。
+- [验收规范](docs/V0_2_ACCEPTANCE.md)与[录制指南](docs/RECORDING_GUIDE.md)。
+- [更新记录](CHANGELOG.md)、[路线图](docs/ROADMAP.md)与[问题追踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues)。
 
-The project began with code from
-[Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus), which incorporated
-work from [zotero-vim](https://codeberg.org/finktank/zotero-vim).
-Historical copyright notices are preserved under the project license.
+项目最初使用了 [Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus) 的代码，后者包含来自 [zotero-vim](https://codeberg.org/finktank/zotero-vim) 的工作。历史版权声明按项目许可证保留。
 
-[GNU Affero General Public License v3.0](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/LICENSE) (AGPL-3.0).
+[GNU Affero General Public License v3.0](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/LICENSE)（AGPL-3.0）。
 
-The XPI includes the complete project license at `LICENSE` and the bundled fuzzysort MIT notice at `licenses/fuzzysort-LICENSE`. Published binaries correspond to the source available from the same release tag.
+XPI 在 `LICENSE` 中包含完整项目许可证，并在 `licenses/fuzzysort-LICENSE` 中包含所捆绑 fuzzysort 的 MIT 声明。发布的二进制文件对应同一发布标签下可获得的源码。

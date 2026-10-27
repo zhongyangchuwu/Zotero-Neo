@@ -1,63 +1,71 @@
-# Architecture
+# 架构 {#architecture}
 
-Zotero Neo adds interaction over Zotero rather than maintaining a parallel document, selection, or data model. The usual path is:
+Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选择或数据模型。通常的调用路径为：
 
 ```text
-Context -> Target / TargetSet -> Semantic Action -> Zotero host operation
+上下文 -> 目标 / 目标集 -> 语义动作 -> Zotero 宿主操作
 ```
 
-Each layer has one owner. A shared abstraction belongs where multiple concrete workflows use the same contract.
+每一层只有一个负责方。只有多个具体工作流使用相同契约时，才提取共享抽象。
 
-The shared navigation stack and its recording/restoration policy are documented in [NAVIGATION_HISTORY_DESIGN.md](NAVIGATION_HISTORY_DESIGN.md). This guide describes runtime ownership; [INTERACTION_MODEL.md](INTERACTION_MODEL.md) defines Main interaction semantics, and [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md) owns exact bindings.
+共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-## Layers
+[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座和标签模块接入；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
 
-### 1. Input and interaction scope
+## 分层 {#layers}
 
-`src/input/` owns key normalization, semantic tokens, sequence/count matching, resolved bindings, and the pure reducer in `src/input/engine.ts`. `src/input/runtime.ts` owns pending sequence/count/timer state per input owner. `src/ui/key-guide-runtime.ts` separately owns guide presentation; local controls use `src/input/local-binding-runtime.ts`.
+### 1. 输入与交互作用域 {#_1-input-and-interaction-scope}
 
-Hosts qualify native, editable, and composing input and own focus, action execution, and lifecycle. A `BindingContext` names an exact owner/capability contract, not a Surface mode; contexts do not inherit bindings from another mode or a global fallback. Main and Reader have Normal/Visual interaction; Note has Normal/Insert. Main Visual's `main-select` context applies while its transient range exists, not to persistent Selection. Annotation-comment input and disabled-editor native passthrough are feature input owners, not additional Reader modes. See [INPUT_METHODS.md](INPUT_METHODS.md) for composition and text entry; the Command Reference owns the full context/key inventory.
+`src/input/` 负责按键归一化、语义 token、序列/count 匹配、已解析绑定，以及 `src/input/engine.ts` 中的纯 reducer。`src/input/runtime.ts` 为每个输入处理方维护待完成序列、count 和定时器。`src/ui/key-guide-runtime.ts` 单独负责按键指引展示；局部控件使用 `src/input/local-binding-runtime.ts`。
 
-Persisted binding migrations live in `src/core/preferences.ts`; they do not create runtime aliases or inherited keymaps.
+宿主判定原生输入、可编辑输入和输入法组合状态，并负责焦点、动作执行与生命周期。`BindingContext` 表示精确的输入处理方/能力契约，不是 Surface mode；上下文不继承其他模式的绑定，也不使用全局后备绑定。Main 和 Reader 具有 Normal/Visual 交互，Note 具有 Normal/Insert。Main Visual 的 `main-select` 上下文只在临时范围存在时适用，不取决于 Persistent Selection。批注评论输入与编辑功能关闭后的原生透传属于功能输入处理方，不是额外的 Reader mode。输入法与文本输入见[输入说明](INPUT_METHODS.md)；完整上下文和按键清单由命令参考维护。
 
-### 2. Semantic actions and capabilities
+持久化绑定迁移位于 `src/core/preferences.ts`，不创建运行时别名或继承 keymap。
 
-`src/input/actions.ts` is the canonical `ActionId` registry. Feature capability modules define executable actions; controllers dispatch resolved semantic actions rather than synthesizing keyboard events. Settings, Key Guide, shortcut hints, and matching project the same registry, owner capabilities, and resolved bindings.
+### 2. 语义动作与能力 {#_2-semantic-actions-and-capabilities}
 
-Item targets are resolved by the initiating Surface. `src/core/item-target.ts` defines the shared result shape; `src/platform/zotero-items.ts` owns Zotero lookup, normalization, and identity deduplication. `src/main/main-item-target.ts` resolves Main Selection before CurrentTarget; `src/reader/item-target.ts` resolves the active Reader item; `src/main/note-item-target.ts` resolves the active Note. Reader and Note never borrow Main Selection.
+`src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-Concrete domain operations live in `src/operations/` and receive explicit items or IDs. Surface owners retain target choice, cardinality, confirmation, navigation, and status. Cross-surface coordination uses a named capability or shared Operation, not redispatch of another Surface's `ActionId`.
+条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
-### 3. Feature owners
+具体领域操作位于 `src/operations/`，接收显式条目或 ID。Surface 负责目标选择、基数、确认、导航与状态反馈。跨 Surface 协作使用命名能力或共享 Operation，不重新分发另一 Surface 的 `ActionId`。
 
-#### Main
+### 3. 功能所有权 {#_3-feature-owners}
 
-`src/main/window-runtime.ts` owns services for one physical Zotero MainWindow. `src/main/session.ts` composes that host runtime with Main and feature state; `src/main/active-surface.ts` derives active Main, Reader, or Note interaction from Zotero focus, tabs, and editor state.
+#### Main {#main}
 
-The Note surface is a separate interaction owner hosted by MainWindow. `src/main/note-editor.ts` identifies its attachment by editor Window, Document, and Note item ID; replacing any identity retires old input before listener cleanup. Zotero remains authoritative for Note content.
+`src/main/window-runtime.ts` 为一个物理 Zotero MainWindow 提供服务。`src/main/session.ts` 将宿主 runtime 与 Main、各功能状态组合；`src/main/active-surface.ts` 根据 Zotero 焦点、标签页和编辑器状态推导当前 Main、Reader 或 Note 交互。
 
-`src/main/controller.ts` coordinates Main actions; `src/main/navigation.ts` owns item/collection-tree motion; and `src/main/item-select.ts` owns the transient Visual range and its visible native-tree projection. Persistent Selection is session-owned and independent of native row selection. `src/main/picker/` resolves one transient candidate for the invoking action; the action owns confirmation and host mutation. Plugin Manager is a persistent surface with its own lifecycle. Shared mutations live in `src/operations/`; Main host capabilities live in `src/toolkit/main/`.
+Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份；任一身份被替换时，先退休旧输入，再清理监听器。Note 内容仍以 Zotero 为准。
 
-#### Reader
+`src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动；`src/main/item-select.ts` 负责临时 Visual 范围及其可见原生树投影。Persistent Selection 属于 session，独立于原生行选择。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。Plugin Manager 是拥有独立生命周期的常驻界面。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
 
-`src/reader/controller.ts` owns Reader sessions keyed by Zotero `instanceID`. Primary and secondary PDF views share one Reader Surface while retaining exact view identity for input, geometry, and navigation.
+`src/core/module-host.ts` 为每个 MainWindow 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
-Reader feature modules own their state: `src/reader/navigation.ts` owns semantic traversal and feedback; `src/reader/selection-range.ts` owns the temporary keyboard Select range; `src/reader/flash.ts` and `src/reader/link-hints.ts` own targeting invocations; `src/reader/marks.ts` owns persisted marks; `src/reader/native-sidebar.ts` owns reversible Outline integration; `src/reader/caption-targets.ts` owns lazy caption/heading classification; `src/reader/comment-editor.ts` and `src/reader/native-input.ts` own feature input; `src/reader/selection-actions.ts` owns the view-scoped action palette. Feature input ownership does not create another Reader Surface mode.
+`src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
-Host capabilities are in `src/toolkit/reader/`; exact paths and private seams are listed in the [development guide](DEVELOPMENT.md#host-capability-toolkit). Reader lifecycle work is fenced to its live session and exact PDF view. Native event callbacks are retired by identity before unregistering, and only an authoritative Reader inventory permits retiring absent sessions. Teardown guards destroyed Gecko wrappers but keeps failures on live objects observable.
+标签模块不持有 Main session、原生 pane 或 Reader 对象。Picker 端口返回仅能关闭本次调用的释放句柄；视图或窗口退休后不能确认旧选择、重画状态或关闭后来替换的界面。已接纳的保存继续按原生事务结果完成，不因模块退休而伪装成取消。
 
-#### Shared navigation history
+#### Reader {#reader}
 
-`src/navigation/history.ts` owns one per-MainWindow stack; `src/navigation/history-policy.ts` defines eligibility/evidence, and `src/navigation/coordinator.ts` owns admission, currentness, completion, and commits. `NavigationPort` is the recording entrance, with Main and Reader host adapters supplying native operations. Recording, restoration, and transport details belong in [NAVIGATION_HISTORY_DESIGN.md](NAVIGATION_HISTORY_DESIGN.md).
+`src/reader/controller.ts` 按 Zotero `instanceID` 管理 Reader session。主、次 PDF 视图共享一个 Reader Surface，但输入、几何与导航始终保留精确视图身份。
 
-### 4. Host capability Toolkit
+Reader 各功能维护自己的状态：`src/reader/navigation.ts` 负责语义遍历与反馈；`src/reader/selection-range.ts` 负责临时键盘 Select 范围；`src/reader/flash.ts` 与 `src/reader/link-hints.ts` 负责各次目标提示交互；`src/reader/marks.ts` 负责持久化 marks；`src/reader/native-sidebar.ts` 负责可逆的 Outline 集成；`src/reader/caption-targets.ts` 负责按需图表/标题分类；`src/reader/comment-editor.ts` 和 `src/reader/native-input.ts` 负责功能输入；`src/reader/selection-actions.ts` 负责视图级动作面板。功能输入所有权不新增 Reader Surface mode。
 
-Zotero owns its domain data and native views. Neo owns interaction state only where the host cannot express the contract: Main persistent Selection stores stable item identities rather than rendered row indexes, and Reader keyboard Select uses a temporary DOM range because no supported host API currently updates Zotero's private PDF selection model.
+宿主能力位于 `src/toolkit/reader/`；具体路径和私有接缝见[开发指南](DEVELOPMENT.md#host-capability-toolkit)。Reader 生命周期工作仅对活跃 session 及精确 PDF 视图有效。原生事件回调在注销前先按身份退休；只有权威 Reader 清单才能据此退休缺失 session。退出时防护已销毁的 Gecko wrapper，同时保持活对象上的失败可观测。
 
-`src/toolkit/index.ts`, `src/toolkit/main/index.ts`, and `src/toolkit/reader/index.ts` are the host-capability entries. Main includes Note-pane capabilities; there is no separate Note Toolkit. Toolkit contains native structural types, host lookup, callback patches, DOM integration, and resource retirement. Payloads crossing chrome/content compartments are cloned into the receiving window with `Components.utils.cloneInto`, centralized in `src/platform/cross-compartment.ts`. Feature owners—not Toolkit—choose targets, modes, bindings, history eligibility, confirmation, and feedback. Public item APIs and `src/platform/zotero-items.ts` stay directly usable when they satisfy the contract.
+#### 共享导航历史 {#shared-navigation-history}
 
-Required private abilities remain behind named capability contracts when a documented API cannot provide the same behavior; wrapping a private call does not make its dependency public. The [development guide](DEVELOPMENT.md#host-capability-toolkit) lists current owners and singular-versus-plural Scope preconditions.
+`src/navigation/history.ts` 维护每个 MainWindow 唯一的历史栈；`src/navigation/history-policy.ts` 定义记录资格与证据；`src/navigation/coordinator.ts` 负责接纳、当前性、完成与提交。`NavigationPort` 是记录入口，Main 与 Reader 宿主适配器提供原生操作。记录、恢复与传输细节由[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)维护。
 
-## Shared primitives, not generic frameworks
+### 4. 宿主能力 Toolkit {#_4-host-capability-toolkit}
 
-Shared primitives are those already used across concrete owners: the input reducer and per-owner runtimes, semantic `ActionId`/capability projections, composition guard, typed item-target shape and Zotero normalization helpers, `fuzzyMatchScore()` adapter, theme managers, and concrete Operations. Picker, Plugin Manager, Reader overlays, and Surface target resolvers retain their own lifecycle and domain policy; sharing a primitive does not merge their contracts.
+Zotero 拥有领域数据和原生视图。Neo 只在宿主无法表达对应契约时维护交互状态：Main Persistent Selection 保存稳定条目身份而非渲染行号；Reader 键盘 Select 使用临时 DOM range，因为目前没有受支持的宿主 API 能更新 Zotero 私有 PDF 选择模型。
+
+`src/toolkit/index.ts`、`src/toolkit/main/index.ts`、`src/toolkit/reader/index.ts` 是宿主能力入口。Main 包含 Note-pane 能力，没有独立 Note Toolkit。Toolkit 负责原生结构类型、宿主查找、回调 patch、DOM 集成与资源退休。跨 chrome/content compartment 的载荷通过 `Components.utils.cloneInto` 克隆到接收窗口，统一由 `src/platform/cross-compartment.ts` 处理。目标、模式、绑定、历史记录资格、确认与反馈由功能负责，不由 Toolkit 决定。公开条目 API 和 `src/platform/zotero-items.ts` 满足契约时可以直接使用。
+
+文档化 API 无法提供相同行为时，保留必要的私有能力，并放在命名契约后；包装私有调用不代表依赖已变成公开 API。[开发指南](DEVELOPMENT.md#host-capability-toolkit)列出当前负责方，以及单数/复数 Scope 的前置条件。
+
+## 共享原语，而非通用框架 {#shared-primitives-not-generic-frameworks}
+
+共享原语应已被具体功能使用：输入 reducer 与各处理方 runtime、语义 `ActionId`/能力投影、输入法组合防护、类型化条目目标及 Zotero 归一化辅助、`fuzzyMatchScore()` 适配器、主题管理器和具体 Operations。Picker、Plugin Manager、Reader overlay 与各 Surface 目标解析器保留自己的生命周期和领域策略；共享原语不意味着合并它们的契约。
