@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座、标签和扩展管理模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
 
 ## 范围与取舍
 
@@ -8,7 +8,7 @@
 
 本轮不设计 AI 接口或模块，不引入 Actions & Tags 的代码、运行时依赖或脚本执行机制，也不改变现有按键、默认行为、数据格式与 Zotero 兼容范围。
 
-先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签和扩展管理两条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
+先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签、扩展管理和分类三条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
 
 需要区分三种边界：
 
@@ -23,6 +23,7 @@
 - `src/modules/tags/`：在每个 MainWindow 中接入 Main/Reader/Note 的 Add/Remove Tag，以及 Main 的 Toggle/Clear Tag Filter。标签模块只取得明确目标与具名端口，不直接持有整个 Main session。
 - Main controller 的 Picker 端口返回精确调用代次的释放句柄；模块在确认前检查作用域，已接纳保存完成后只在原作用域仍有效时显示反馈。旧输入不能触发新窗口或新模块的写入。
 - `src/modules/extensions/`：第二条真实接入路径，拥有按窗口隔离的 Plugin Manager 状态与 UI 生命周期。复用现有基座和局部输入机制，不扩张 `ModuleHost` 接口；原生扩展适配仍由 Toolkit 提供。资源获取失败会释放部分界面，模块退休后旧 DOM 与异步完成不能重画或关闭替换界面。
+- `src/modules/collections/`：按窗口拥有分类工作流、候选来源与重命名草稿，保留 Main/Reader 的原有贡献。多步骤 Picker 和原生对话框使用精确交互当前性；复用现有 Operations 的事务重验证、回滚和真实提交回执，不把分类写入改为通用“已接纳就不可取消”。
 
 尚未实现通用静态清单/依赖图、Reader/Note 独立模块附着或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
 
@@ -48,10 +49,10 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 
 | 模块 ID | 用户功能与业务状态 | 当前实现来源 | 实例范围及依赖 |
 | --- | --- | --- | --- |
-| `library` | Main 树导航、可见行查找、Quick/Advanced Search、条目选择器、打开条目、原生标识符录入、citekey、移入回收站及最近一批恢复。最近回收批次归本模块。 | `src/main/navigation.ts`、`local-find.ts`、`view-actions.ts`、`picker/providers/items.ts`、`collection-items.ts`、`trash-history.ts`；`src/operations/trash-items.ts`、`citekeys.ts` | 每个 MainWindow；Reader/Note 可通过命名能力调用。Better BibTeX 只作为现有可选 citekey 适配。无其他模块的硬依赖。 |
+| `library` | Main 树导航、可见行查找、Quick/Advanced Search、条目选择器、打开条目、原生标识符录入、citekey、移入回收站及最近一批恢复。最近回收批次归本模块。 | `src/main/navigation.ts`、`local-find.ts`、`view-actions.ts`、`picker/providers/items.ts`、`trash-history.ts`；`src/operations/trash-items.ts`、`citekeys.ts` | 每个 MainWindow；Reader/Note 可通过命名能力调用。Better BibTeX 只作为现有可选 citekey 适配。无其他模块的硬依赖。 |
 | `worksets` | Main Persistent Selection、Visual 行范围、Selection Panel、选择增删清空及范围投影。 | `src/main/selection-store.ts`、`item-select.ts`、`selection-panel.ts` | 每个 MainWindow，维持会话内状态。提供 Main Selection 读取及成功操作后的成员移除能力；不依赖 `library` 的动作处理器。 |
 | `tags` | 标签选择、添加/移除、标签命名空间展示、Main 标签过滤。 | `src/modules/tags/`、`src/main/picker/providers/tags.ts`、`src/operations/item-tags.ts` | 已按 MainWindow 接入；处理三个 Surface 传入的目标。无 `worksets` 硬依赖。标签过滤归本模块，不与 `library` 重复注册。 |
-| `collections` | 分类选择、成员添加/移除/移动、分类创建/重命名/删除、连续添加条目等现有工作流。 | `src/main/collection-actions.ts`、`picker/providers/collections.ts`、`src/operations/item-collections.ts`、`collections.ts` | MainWindow 内的交互及操作队列；可处理显式 Reader/Note 目标。无 `worksets` 硬依赖。 |
+| `collections` | 分类选择、成员添加/移除/移动、分类创建/重命名/删除、连续添加条目等现有工作流。 | `src/modules/collections/`、`src/operations/item-collections.ts`、`collections.ts` | 已按 MainWindow 接入，现有 Main/Reader 入口保留，不新增 Note 命令。无 `worksets` 硬依赖；目标由发起 Surface 明确提供。 |
 | `reader-navigation` | 页面、滚动、缩放、平移、PDF 搜索、批注位置遍历、Outline、标题/图表导航、原生侧栏增强和命名 marks。marks 数据及持久化策略归本模块。 | `src/reader/navigation.ts`、`marks.ts`、`native-sidebar.ts`、`caption-targets.ts` | ReaderSession 与精确 ReaderView。结构分析仍按需进行；不在模块启动时分析全部 PDF。分屏创建与窗口焦点切换不归本模块。 |
 | `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/reader/selection-range.ts`、`flash.ts`、`selection-actions.ts`、`controller.ts` 中选择流程 | ReaderSession / ReaderView / 单次交互。保留已有可选 PDFTranslate 动作对接；不扩展成新服务设计。 |
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/reader/controller.ts` 中批注流程、`comment-editor.ts`、`src/operations/delete-annotation.ts` | ReaderSession / ReaderView；注入 Select 的动作要求 `reader-selection` 可用，原生批注操作本身不要求它启用。 |
@@ -258,7 +259,7 @@ src/
 
 ## 实施顺序与验收
 
-契约走读、标签与扩展管理路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
+契约走读、标签、扩展管理与分类路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
 
 1. **先评审基座与接入契约。** 确认输入/目标/资源/写入结果的负责方，区分内部模块与公共插件 API；用上表现有流程走读后，再决定模块边界是否需要调整。未通过前不创建运行时模块框架、不搬文件。
 2. **以一条现有路径验证最小基座。** 接口确认后，选一条真实功能路径接入必要的作用域与贡献机制，核对 `(BindingContext, ActionId)` 所有权与依赖注入。验证真实宿主行为，不先搭完全部机制或引入没有消费者的接口。
@@ -280,3 +281,5 @@ src/
 - 现有 `getSelection()` / `registerSelectionAction()` 消费方无需改调用签名；选择功能停用时不执行旧选择回调，恢复后不重复注册。
 
 标签路径已通过契约测试及 Zotero 10.0.6 的 Main、Reader、Note、原生过滤和重载场景验证。扩展管理已通过筛选、权限、重绑定/IME、异步退休、部分获取/释放失败和双窗口隔离契约，并在 Zotero 10.0.6 实测 Main/Reader 入口、筛选、刷新、关闭/重开与重载释放；实机未启停无关扩展。其余拆分及模块开关仍需在各自实施时验证，文档构建不代表整体模块系统完成。
+
+分类模块已在 Zotero 10.0.6 验证 Main Persistent Selection 优先级、Reader 独立目标、部分直接成员覆盖率、真实添加/移除、重载后的旧输入失效及新模块继续写入；仅使用自有测试条目/分类，验证后已清理。命名对话框期间退休、事务中退休回滚、busy/replacement Picker 隔离由行为契约覆盖，未将所有原生结构对话框宣称为实机验证。

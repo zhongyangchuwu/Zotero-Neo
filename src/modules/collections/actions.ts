@@ -1,14 +1,14 @@
-import type { MainWindow } from '../core/contracts';
-import type { ItemTargetSet } from '../core/item-target';
-import type { Logger } from '../core/logging';
-import { moveCollectionItems, setCollectionMembership } from '../operations/item-collections';
+import type { MainWindow } from '../../core/contracts';
+import type { ItemTargetSet } from '../../core/item-target';
+import type { Logger } from '../../core/logging';
+import { moveCollectionItems, setCollectionMembership } from '../../operations/item-collections';
 import {
   createCollection,
   createCollectionAndAdd,
   deleteCollection,
   moveCollection,
   renameCollection,
-} from '../operations/collections';
+} from '../../operations/collections';
 import {
   confirmMainCollectionAction,
   mainActiveCollection,
@@ -21,14 +21,37 @@ import {
   prepareMainCollectionItem,
   promptMainCollectionName,
   type MainCollectionRef,
-} from '../toolkit/main';
-import type { PickerItem } from './picker/model';
-import { createCollectionCandidateProvider } from './picker/providers/collections';
-import { createCollectionItemsProvider } from './picker/providers/collection-items';
-import type { PickerConfirmationResult, PickerContinuation, PickerProvider } from './picker/types';
-import type { FuzzyPicker } from './picker';
-import type { MainNavigation } from './navigation';
-import type { MainWindowSession } from './session';
+} from '../../toolkit/main';
+import type { PickerItem } from '../../main/picker/model';
+import { createCollectionCandidateProvider } from './providers/collections';
+import { createCollectionItemsProvider } from './providers/items';
+import type {
+  PickerConfirmationResult,
+  PickerContinuation,
+  PickerProvider,
+} from '../../main/picker/types';
+
+export interface CollectionTargetRequest {
+  readonly source: 'main' | 'reader';
+  readonly resolveTargets: () => ItemTargetSet;
+  readonly label: 'Selection' | 'context item';
+}
+
+export type CollectionConfirmation = (
+  candidate: PickerItem,
+  isCurrent: () => boolean,
+  query: string,
+) => PickerConfirmationResult | Promise<PickerConfirmationResult>;
+
+export interface CollectionActionHost {
+  readonly window: MainWindow;
+  readonly logger: Logger;
+  readonly isCurrent: () => boolean;
+  readonly status: (message: string) => void;
+  readonly navigate: (collectionID: number) => Promise<void>;
+  readonly choose: (source: PickerProvider, confirm: CollectionConfirmation) => void;
+  readonly captureCurrent: () => () => boolean;
+}
 
 export interface CollectionMembershipTargets {
   readonly items: readonly Zotero.Item[];
@@ -79,46 +102,21 @@ function candidateID(candidate: PickerItem, libraryID: number): number {
 }
 
 export class CollectionMembershipActions {
-  readonly #logger: Logger;
-  readonly #navigation: MainNavigation;
-  readonly #picker: FuzzyPicker;
-  readonly #navigate: (
-    window: MainWindow,
-    session: MainWindowSession,
-    collectionID: number,
-  ) => Promise<void>;
-  readonly #renameDrafts = new WeakMap<
-    MainWindowSession,
-    { readonly id: number; readonly name: string }
-  >();
+  readonly #host: CollectionActionHost;
+  #renameDraft: { readonly id: number; readonly name: string } | undefined;
 
-  constructor(
-    logger: Logger,
-    navigation: MainNavigation,
-    picker: FuzzyPicker,
-    navigate: (
-      window: MainWindow,
-      session: MainWindowSession,
-      collectionID: number,
-    ) => Promise<void>,
-  ) {
-    this.#logger = logger;
-    this.#navigation = navigation;
-    this.#picker = picker;
-    this.#navigate = navigate;
+  constructor(host: CollectionActionHost) {
+    this.#host = host;
   }
 
-  open(
-    window: MainWindow,
-    session: MainWindowSession,
-    present: boolean,
-    resolveTargets: () => ItemTargetSet,
-  ): void {
-    this.start(session, () => {
+  open(request: CollectionTargetRequest, present: boolean): void {
+    const { window } = this.#host;
+    const { resolveTargets } = request;
+    this.start(() => {
       const initial = resolveCollectionMembershipTargets(resolveTargets());
       writable(initial.libraryID);
       const source = createCollectionCandidateProvider(initial.libraryID, {
-        title: `${present ? 'Add' : 'Remove'} · ${initial.items.length} items · ${initial.source === 'main' && session.selection.size ? 'Selection' : 'context item'}`,
+        title: `${present ? 'Add' : 'Remove'} · ${initial.items.length} items · ${request.label}`,
         items: initial.items,
         present,
         includeCreate: present,
@@ -137,11 +135,11 @@ export class CollectionMembershipActions {
           throw new Error('Collection target changed; retry');
         return current;
       };
-      this.openPicker(window, session, source, async (candidate, isCurrent) => {
+      this.openPicker(source, async (candidate, isCurrent, query) => {
         const current = targets();
         writable(current.libraryID);
         if (candidate.collectionCandidate === 'create') {
-          originalQuery = session.picker.committedQuery;
+          originalQuery = query;
           creating = true;
           return {
             keepOpen: true,
@@ -165,6 +163,7 @@ export class CollectionMembershipActions {
             `Create and add ${current.items.length} items · ${parentPath}`,
             name,
           );
+          if (!isCurrent()) throw new Error('Collection workflow expired');
           const back = (): PickerContinuation => {
             creating = false;
             return { keepOpen: true, source, query: originalQuery };
@@ -189,17 +188,13 @@ export class CollectionMembershipActions {
             parentID,
             isCurrent,
           );
-          this.#navigation.status(
-            session,
-            `✓ Created “${name}” and added ${confirmed.items.length} items`,
-          );
+          this.#host.status(`✓ Created “${name}” and added ${confirmed.items.length} items`);
           return;
         }
         const id = candidateID(candidate, current.libraryID);
         const collection = currentCollection(id, current.libraryID);
         const changed = await setCollectionMembership(current.items, id, present, isCurrent);
-        this.#navigation.status(
-          session,
+        this.#host.status(
           changed
             ? `✓ ${present ? 'Added' : 'Removed'} ${changed} items ${present ? 'to' : 'from'} ${collection.path}`
             : `→ No collection membership changes for ${collection.path}`,
@@ -208,54 +203,49 @@ export class CollectionMembershipActions {
     });
   }
 
-  find(window: MainWindow, session: MainWindowSession): void {
-    this.start(session, () => {
+  find(): void {
+    const { window } = this.#host;
+    this.start(() => {
       const scope = mainCollectionLibrary(window);
       if (!scope) throw new Error('Choose one library scope to find collections');
       const source = createCollectionCandidateProvider(scope.libraryID, {
         title: `Find collections · ${scope.name}`,
         libraryName: scope.name,
       });
-      this.openPicker(window, session, source, async (candidate, isCurrent) => {
+      this.openPicker(source, async (candidate, isCurrent) => {
         const collection = mainCollectionRef(Number(candidate.id));
         if (!collection || collection.libraryID !== scope.libraryID)
           throw new Error('Collection target is unavailable');
         if (!isCurrent()) throw new Error('Collection workflow expired');
-        await this.#navigate(window, session, collection.id);
+        await this.#host.navigate(collection.id);
       });
     });
   }
 
-  addItems(window: MainWindow, session: MainWindowSession): void {
-    this.start(session, () => {
+  addItems(): void {
+    const { window } = this.#host;
+    this.start(() => {
       const collection = mainActiveCollection(window);
       if (!collection) throw new Error('Choose one active ordinary collection to add items');
       writable(collection.libraryID);
-      this.openPicker(
-        window,
-        session,
-        createCollectionItemsProvider(collection),
-        async (candidate, isCurrent) => {
-          currentCollection(collection.id, collection.libraryID);
-          const item = await prepareMainCollectionItem(Number(candidate.id), collection.libraryID);
-          const changed = await setCollectionMembership([item], collection.id, true, isCurrent);
-          return {
-            keepOpen: true,
-            message: changed
-              ? `Added “${candidate.title}” to ${collection.path}. Current filters remain unchanged; the item may be hidden. Esc ends; saved additions remain.`
-              : `“${candidate.title}” is already directly assigned. No changes. Esc ends.`,
-          };
-        },
-      );
+      this.openPicker(createCollectionItemsProvider(collection), async (candidate, isCurrent) => {
+        currentCollection(collection.id, collection.libraryID);
+        const item = await prepareMainCollectionItem(Number(candidate.id), collection.libraryID);
+        const changed = await setCollectionMembership([item], collection.id, true, isCurrent);
+        return {
+          keepOpen: true,
+          message: changed
+            ? `Added “${candidate.title}” to ${collection.path}. Current filters remain unchanged; the item may be hidden. Esc ends; saved additions remain.`
+            : `“${candidate.title}” is already directly assigned. No changes. Esc ends.`,
+        };
+      });
     });
   }
 
-  moveItems(
-    window: MainWindow,
-    session: MainWindowSession,
-    resolveTargets: () => ItemTargetSet,
-  ): void {
-    this.start(session, () => {
+  moveItems(request: CollectionTargetRequest): void {
+    const { window } = this.#host;
+    const { resolveTargets } = request;
+    this.start(() => {
       const source = mainActiveCollection(window);
       if (!source)
         throw new Error(
@@ -281,10 +271,8 @@ export class CollectionMembershipActions {
       };
       targets();
       this.openPicker(
-        window,
-        session,
         createCollectionCandidateProvider(source.libraryID, {
-          title: `Move · ${initial.items.length} items · ${initial.source === 'main' && session.selection.size ? 'Selection' : 'context item'} · from ${source.path}`,
+          title: `Move · ${initial.items.length} items · ${request.label} · from ${source.path}`,
           excludeIDs: new Set([source.id]),
         }),
         async (candidate, isCurrent) => {
@@ -299,17 +287,15 @@ export class CollectionMembershipActions {
             destination.id,
             isCurrent,
           );
-          this.#navigation.status(
-            session,
-            `✓ Moved ${changed} items from ${source.path} to ${destination.path}`,
-          );
+          this.#host.status(`✓ Moved ${changed} items from ${source.path} to ${destination.path}`);
         },
       );
     });
   }
 
-  move(window: MainWindow, session: MainWindowSession): void {
-    this.start(session, () => {
+  move(): void {
+    const { window } = this.#host;
+    this.start(() => {
       const target = this.target(window);
       const excluded = new Set([target.id]);
       const refs = mainCollectionRefs(target.libraryID);
@@ -324,8 +310,6 @@ export class CollectionMembershipActions {
         }
       }
       this.openPicker(
-        window,
-        session,
         createCollectionCandidateProvider(target.libraryID, {
           title: `Move collection · ${target.path}`,
           includeRoot: true,
@@ -338,14 +322,15 @@ export class CollectionMembershipActions {
               ? false
               : candidateID(candidate, target.libraryID);
           await moveCollection(target.id, parentID, isCurrent);
-          this.#navigation.status(session, `✓ Moved collection ${target.name}`);
+          this.#host.status(`✓ Moved collection ${target.name}`);
         },
       );
     });
   }
 
-  create(window: MainWindow, session: MainWindowSession): void {
-    this.start(session, () => {
+  create(): void {
+    const { window } = this.#host;
+    this.start(() => {
       const cursor = mainTreeFocused(window, 'collections')
         ? mainCursorCollection(window)
         : undefined;
@@ -355,8 +340,6 @@ export class CollectionMembershipActions {
       writable(libraryID);
       let name = '';
       this.openPicker(
-        window,
-        session,
         createCollectionCandidateProvider(libraryID, {
           title: 'Create collection · choose parent',
           libraryName: scope?.name,
@@ -370,6 +353,7 @@ export class CollectionMembershipActions {
             ? currentCollection(parentID, libraryID).path
             : `Library ${libraryID} / (root)`;
           const input = promptMainCollectionName(window, `New collection · ${parentPath}`, name);
+          if (!isCurrent()) throw new Error('Collection workflow expired');
           if (input === undefined) return { keepOpen: true };
           name = input;
           if (!name.trim()) throw new Error('Collection name is required');
@@ -383,35 +367,37 @@ export class CollectionMembershipActions {
             return { keepOpen: true };
           if (!isCurrent()) throw new Error('Collection workflow expired');
           await createCollection(libraryID, name, parentID, isCurrent);
-          this.#navigation.status(session, `✓ Created “${name}” under ${parentPath}`);
+          this.#host.status(`✓ Created “${name}” under ${parentPath}`);
         },
       );
     });
   }
 
-  rename(window: MainWindow, session: MainWindowSession): void {
-    this.dialogAction(window, session, async (target, isCurrent) => {
-      const draft = this.#renameDrafts.get(session);
+  rename(): void {
+    const { window } = this.#host;
+    this.dialogAction(async (target, isCurrent) => {
+      const draft = this.#renameDraft;
       const name = promptMainCollectionName(
         window,
         `Rename collection · ${target.path}`,
         draft?.id === target.id ? draft.name : target.name,
       );
       if (name === undefined) {
-        this.#renameDrafts.delete(session);
+        this.#renameDraft = undefined;
         return;
       }
-      this.#renameDrafts.set(session, { id: target.id, name });
+      this.#renameDraft = { id: target.id, name };
       if (!name.trim()) throw new Error('Collection name is required');
       currentCollection(target.id, target.libraryID);
       await renameCollection(target.id, name, isCurrent);
-      this.#renameDrafts.delete(session);
-      this.#navigation.status(session, `✓ Renamed ${target.path} to “${name}”`);
+      this.#renameDraft = undefined;
+      this.#host.status(`✓ Renamed ${target.path} to “${name}”`);
     });
   }
 
-  removeCollection(window: MainWindow, session: MainWindowSession): void {
-    this.dialogAction(window, session, async (target, isCurrent) => {
+  removeCollection(): void {
+    const { window } = this.#host;
+    this.dialogAction(async (target, isCurrent) => {
       if (
         !confirmMainCollectionAction(
           window,
@@ -422,7 +408,7 @@ export class CollectionMembershipActions {
         return;
       currentCollection(target.id, target.libraryID);
       await deleteCollection(target.id, isCurrent);
-      this.#navigation.status(session, `✓ Deleted ${target.path}; all items kept`);
+      this.#host.status(`✓ Deleted ${target.path}; all items kept`);
     });
   }
 
@@ -435,56 +421,31 @@ export class CollectionMembershipActions {
     return currentCollection(target.id, target.libraryID);
   }
 
-  private openPicker(
-    window: MainWindow,
-    session: MainWindowSession,
-    source: PickerProvider,
-    confirm: (
-      candidate: PickerItem,
-      isCurrent: () => boolean,
-    ) => Promise<PickerConfirmationResult> | PickerConfirmationResult,
-  ): void {
-    if (session.picker.open) return;
-    const generation = session.picker.generation + 1;
-    const isCurrent = (): boolean =>
-      !session.cleanup.disposed &&
-      !window.closed &&
-      session.picker.open &&
-      session.picker.generation === generation;
-    void this.#picker.open(window, session, 'collections', {
-      source,
-      confirm: (candidate) => {
-        if (!isCurrent()) throw new Error('Collection workflow expired');
-        return confirm(candidate, isCurrent);
-      },
-    });
+  private openPicker(source: PickerProvider, confirm: CollectionConfirmation): void {
+    this.#host.choose(source, confirm);
   }
 
   private dialogAction(
-    window: MainWindow,
-    session: MainWindowSession,
     action: (target: MainCollectionRef, isCurrent: () => boolean) => Promise<void>,
   ): void {
-    this.start(session, () => {
-      const target = this.target(window);
-      const generation = session.picker.generation;
-      const isCurrent = (): boolean =>
-        !session.cleanup.disposed && session.picker.generation === generation && !window.closed;
-      void action(target, isCurrent).catch((error) => this.failure(session, error));
+    this.start(() => {
+      const target = this.target(this.#host.window);
+      const isCurrent = this.#host.captureCurrent();
+      void action(target, isCurrent).catch((error) => this.failure(error));
     });
   }
 
-  private start(session: MainWindowSession, action: () => void): void {
-    if (session.cleanup.disposed) return;
+  private start(action: () => void): void {
+    if (!this.#host.isCurrent()) return;
     try {
       action();
     } catch (error) {
-      this.failure(session, error);
+      this.failure(error);
     }
   }
 
-  private failure(session: MainWindowSession, error: unknown): void {
-    this.#logger.debug(`collection workflow failed: ${String(error)}`);
-    this.#navigation.status(session, `✗ ${error instanceof Error ? error.message : String(error)}`);
+  private failure(error: unknown): void {
+    this.#host.logger.debug(`collection workflow failed: ${String(error)}`);
+    this.#host.status(`✗ ${error instanceof Error ? error.message : String(error)}`);
   }
 }

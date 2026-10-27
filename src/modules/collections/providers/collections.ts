@@ -1,7 +1,7 @@
 import { mainCollectionRefs } from '../../../toolkit/main';
-import { fuzzyMatchScore } from '../fuzzy';
-import type { PickerItem } from '../model';
-import type { PickerProvider } from '../types';
+import { fuzzyMatchScore } from '../../../main/picker/fuzzy';
+import type { PickerItem } from '../../../main/picker/model';
+import type { PickerProvider } from '../../../main/picker/types';
 
 export interface CollectionCandidateOptions {
   readonly title?: string;

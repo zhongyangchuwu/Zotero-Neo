@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座、标签和扩展管理模块接入；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座及标签、扩展管理、分类模块接入；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
 
 ## 分层 {#layers}
 
@@ -49,6 +49,10 @@ Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts
 `src/modules/extensions/` 拥有已安装 Zotero 扩展的 Plugin Manager。`index.ts` 为每个 MainWindow 创建模块作用域、面板和状态；Main session 不再持有插件面板状态。Main/Reader/Note 的 `managePlugins` 进入实际所属窗口的同一面板，局部输入继续使用 `plugins-input` / `plugins-list` 和既有重绑定。
 
 面板关闭先退休交互，再分别释放局部绑定、输入监听、主题与 DOM；某项释放失败仍尝试其余资源，并保留原始错误。异步刷新和原生启停完成后同时核对模块作用域与本次界面身份，不更新退休界面或恢复其焦点。已接纳的原生操作不伪装成可取消。原生 AddonManager 接缝仍在 Toolkit；该模块不负责 Neo 内部模块配置，也不新增安装、更新或卸载功能。
+
+`src/modules/collections/` 拥有分类成员操作、查找、连续添加条目、分类结构操作、候选展示及每个窗口的重命名草稿。Main/Reader 传入各自的目标解析器和显示标签，确认时重验证来源、库与目标签名；模块不持有整个 Main session、共享 Picker 或 MainNavigation。Main 保留现有九个分类命令，Reader 保留 Add/Remove，Note 不新增命令。
+
+组合根为分类工作流提供精确 Picker 代次、确认时的已提交查询和本次释放句柄。多步骤创建保留返回原查询与取消语义；原生命名对话框的嵌套事件循环返回后，先检查当前性，不能让退休工作流继续弹出确认框。作用域退出只释放自有 Picker，不关闭替换交互。现有分类 Operations 在事务内继续验证当前性，失效时按原有规则回滚未提交写入并恢复缓存；模块不改变 Toolkit 的提交回执或回滚屏障。
 
 #### Reader {#reader}
 

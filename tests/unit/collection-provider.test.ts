@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createCollectionCandidateProvider } from '../../src/main/picker/providers/collections';
+import { createCollectionCandidateProvider } from '../../src/modules/collections/providers/collections';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
