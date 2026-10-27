@@ -145,7 +145,22 @@ function createWindow(specs: readonly TextSpec[]) {
     getComputedStyle: (target: FakeElement) => target.style,
   } as unknown as Window;
 
-  return { window, rangeOffsets };
+  const frameDocument = { defaultView: null as unknown as Window };
+  const frameOwner = {
+    document: frameDocument,
+    closed: false,
+    frameElement: null,
+    getComputedStyle: (target: { style: Record<string, string> }) => target.style,
+  };
+  frameDocument.defaultView = frameOwner as unknown as Window;
+  const frame = {
+    ownerDocument: frameDocument,
+    parentElement: null,
+    isConnected: true,
+    style: { display: 'block', visibility: 'visible', opacity: '1' },
+  };
+  Reflect.set(window, 'frameElement', frame);
+  return { window, rangeOffsets, frame };
 }
 
 describe('visible PDF identifier text chunks', () => {
@@ -286,4 +301,42 @@ describe('visible PDF identifier text chunks', () => {
 
     expect(chunk?.rects(0, 4)).toEqual([]);
   });
+});
+
+describe('identifier targets in retained native PDF frames', () => {
+  function retainedView() {
+    const host = createWindow([{ text: '10.1000/retained', left: 10, right: 180 }]);
+    const overlay = {
+      type: 'external-link',
+      url: 'https://example.invalid/retained',
+      position: { pageIndex: 0, rects: [[300, 30, 450, 50]] },
+    };
+    const view = {
+      _pdfPages: { 0: { overlays: [overlay] } },
+      getClientRectForPopup: () => [300, 30, 450, 50],
+    } as unknown as ReaderViewRuntime;
+    return { ...host, view };
+  }
+
+  it.each(['copy', 'follow'] as const)(
+    'omits text and scanned-PDF native-link targets from a hidden retained frame for %s',
+    (intent) => {
+      const h = retainedView();
+      expect(
+        identifierHintTargets(h.view, h.window as PdfWindow, intent).map(({ value }) => value.kind),
+      ).toEqual(['text', 'native']);
+      h.frame.style.visibility = 'hidden';
+      expect(identifierHintTargets(h.view, h.window as PdfWindow, intent)).toEqual([]);
+    },
+  );
+
+  it.each(['copy', 'follow'] as const)(
+    'rejects admitted text and native-link targets when their iframe becomes hidden before %s confirmation',
+    (intent) => {
+      const h = retainedView();
+      const targets = identifierHintTargets(h.view, h.window as PdfWindow, intent);
+      h.frame.style.visibility = 'hidden';
+      expect(targets.map((target) => target.currentRect())).toEqual([null, null]);
+    },
+  );
 });

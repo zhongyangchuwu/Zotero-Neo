@@ -3,6 +3,7 @@ import type { ReaderLinkOverlay, ReaderLinkPosition } from '../../reader/types';
 import type { ReaderRuntime, ReaderViewRuntime } from './contracts';
 import type { NativeReaderViewRuntime } from './private-types';
 import { readerWindow } from './host';
+import { visibleWindow } from './visibility';
 
 function isPosition(value: unknown): value is ReaderLinkPosition {
   if (!value || typeof value !== 'object') return false;
@@ -46,12 +47,21 @@ export function readerPositionClientRect(
   const rect = native.getClientRectForPopup(position);
   return rect?.length === 4 && rect.every(Number.isFinite) ? rect : null;
 }
-export function readerLinkClientRect(
+function linkClientRect(
   view: ReaderViewRuntime,
   overlay: ReaderLinkOverlay,
 ): readonly number[] | null {
   const rect = readerPositionClientRect(view, overlay.position);
   return rect && rect[2]! > rect[0]! && rect[3]! > rect[1]! ? rect : null;
+}
+
+/** Revalidate the containing view as well as native geometry at confirmation. */
+export function readerLinkClientRect(
+  view: ReaderViewRuntime,
+  overlay: ReaderLinkOverlay,
+  window: Window,
+): readonly number[] | null {
+  return visibleWindow(window) ? linkClientRect(view, overlay) : null;
 }
 
 /** Native overlays retain exact source/destination identity; discovery performs no navigation. */
@@ -62,6 +72,7 @@ export function readerVisibleLinks(
   readonly overlay: ReaderLinkOverlay;
   readonly rect: readonly number[];
 }[] {
+  if (!visibleWindow(window)) return [];
   const native = view as NativeReaderViewRuntime;
   const pages = native._pdfPages;
   if (!pages || typeof pages !== 'object')
@@ -76,7 +87,7 @@ export function readerVisibleLinks(
     if (!Array.isArray(page?.overlays)) continue;
     for (const overlay of page.overlays) {
       if (!isLink(overlay)) continue;
-      const rect = readerLinkClientRect(view, overlay);
+      const rect = linkClientRect(view, overlay);
       if (!rect || rect[2]! <= 0 || rect[3]! <= 0 || rect[0]! >= width || rect[1]! >= height)
         continue;
       const key = `${overlay.position.pageIndex}:${overlay.position.rects

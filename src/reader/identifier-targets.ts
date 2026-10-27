@@ -33,7 +33,7 @@ export function identifierHintTargets(
     .map(({ overlay, rect }) => ({
       value: { kind: 'native', overlay },
       rect,
-      currentRect: () => readerLinkClientRect(view, overlay),
+      currentRect: () => readerLinkClientRect(view, overlay, window),
     }));
   const result = [...native];
   const textOccurrences: {

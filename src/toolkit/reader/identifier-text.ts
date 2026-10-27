@@ -1,4 +1,5 @@
 import type { PdfTextRect } from './pdf-text';
+import { visibleWindow } from './visibility';
 
 export interface PdfIdentifierTextChunk {
   readonly text: string;
@@ -173,6 +174,7 @@ function createChunk(window: Window, spans: readonly TextSpan[]): PdfIdentifierT
     text,
     rects(start: number, end: number): readonly PdfTextRect[] {
       if (
+        !visibleWindow(window) ||
         !Number.isInteger(start) ||
         !Number.isInteger(end) ||
         start < 0 ||
@@ -231,6 +233,7 @@ function createChunk(window: Window, spans: readonly TextSpan[]): PdfIdentifierT
 
 /** Reads visible PDF.js text as independent same-line runs with source-preserving offsets. */
 export function visiblePdfTextChunks(window: Window): readonly PdfIdentifierTextChunk[] {
+  if (!visibleWindow(window)) return [];
   const chunks: PdfIdentifierTextChunk[] = [];
   let line: TextSpan[] = [];
   const flush = () => {
