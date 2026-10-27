@@ -4,6 +4,7 @@
 
 ### Added
 
+- Add seven default-unbound Main commands for collection finding, continuous addition of existing items, item/collection moves, and native-dialog create/rename/delete workflows. Reuse the existing Palette and Picker without new controls; preserve native collection editing, drag-and-drop, `<Space>fc`, and persistent item Selection.
 - Add **Add Item by Identifier** to Main and Reader Normal, with configurable `<Space>ai` defaults and Command Palette discovery. Reuse Zotero's native input, batch lookup, saving, and errors; keep drafts and native IME/Enter/Escape ownership. Reader tabs and standalone windows return to their associated Library context without borrowing item Selection, and ambiguous or read-only library scopes are refused.
 - Bind Reader Normal `y` to `copyTarget` for grouped, separate annotation Excerpt/Comment, DOI, arXiv, HTTP(S), and native external-link copy hints; extend `followLink` (`f`) to follow recognized DOI/arXiv/HTTP(S) text alongside native links. Select `y` and Normal `Y` remain unchanged; direct `yankAnnotation` is unbound. Binding schema 19 migrates persisted `copyIdentifier`/`followIdentifier` IDs to `copyTarget`/`followLink` while preserving custom key positions, explicit-null overrides, and a custom `reader-normal:y` → `yankAnnotation` binding. No `<Space>ya` default is added.
 - Add a VitePress documentation site with local search and responsive light/dark navigation.
@@ -16,6 +17,7 @@
 
 ### Changed
 
+- Show direct-membership coverage in `<Space>ca` / `<Space>cr`, add only missing memberships, and offer explicit parent/name confirmation for atomic create-and-add. Item moves require one ordinary direct source and preserve other memberships; deleting a collection keeps every item.
 - Keep plugin source, the VitePress site, and their shared Markdown guides in one checkout with one dependency lock; build and preview the site from the project root.
 - Centralize required private Main/Note/Reader SDK and host-DOM capabilities in the internal `src/toolkit/` boundary. Keep target precedence, modes, workflows, bookmark storage choice and history policy in their business owners; public handles expose no native pane/tree/PDF/editor internals.
 - Prefer the documented collection-selection API for its single-selection contract while preserving zero/multiple ScopeSet behavior. Cache only the selected tab's immutable metadata on Note key dispatch instead of copying the full tab inventory.
@@ -50,6 +52,8 @@
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ### Fixed
+- Record confirmed collection-tree Enter and Find collection destinations in existing Back/Forward history without recording tree motion; restore native scope completion and focus before accepting a history location.
+- Keep collection transaction callbacks local to their owning commit/rollback outcome, preventing failed writes from contaminating native inverse caches on a later unrelated commit. Hydrate only a confirmed continuous-add item before making it visible in Zotero's item tree.
 - Keep Main's startup focus claim until the item table is ready, then focus the first item in the current View. Handle background-window startup and empty Views without overriding deliberate search, later Reader returns, or add-on reloads.
 - Read Main View state and Toggle Tag Filter candidates from the complete native rendered scope, including multiple collections and supported mixed/cross-library selections, without calling single-selection APIs or broadening tags to entire libraries.
 - Report Tag Filter matches using native object rows, excluding multiselection library headers and spacers.

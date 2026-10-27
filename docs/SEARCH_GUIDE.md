@@ -14,6 +14,7 @@ Use a chooser to find a paper or note, Quick or Advanced Search to narrow the Li
 | --- | --- | --- |
 | Locate an item in the current library | `<Space>ff` | Shared item chooser for the current library; confirm a result to go to it. |
 | Locate an item in the current collection | `<Space>fc` | Shared item chooser scoped to the current collection. |
+| Find a collection | `:` → **Find and enter a collection** (**Unbound**) | Search collection names or full paths in one library; confirming enters the result and a changed destination can be revisited with shared history. |
 | Find a note | `<Space>fn` | Starts with notes belonging to the invoking item; choose **Browse library** to search notes across that library. |
 | Narrow the Main item list with Zotero's search | `<Space>fq` or `<Space>fa` | Focuses Quick Search or opens Advanced Search; the visible Main view changes. |
 | Jump among the rows already visible in Main | `/`, then `Enter`; `n` / `N` | Searches only current item rows, including the active collection, Quick/Advanced Search, and tag filters. |
@@ -27,6 +28,14 @@ Use [Library workflows](MAIN_GUIDE.md) for tree navigation and opening the Main 
 Open `<Space>ff`, `<Space>fc`, or `<Space>fn` and type a query. Inspect the highlighted result and its preview, then press `Enter` to open it or `Escape` to cancel. Arrow keys or `Ctrl+j` / `Ctrl+k` move between results; `Ctrl+d` / `Ctrl+u` scroll the preview.
 
 `<Space>ff` looks across the current library; `<Space>fc` uses the current collection. The chooser helps resolve an item, while opening the item at Main's Cursor is a separate action: in the item list, `Enter` or `o` opens that one item, not every item in persistent Selection. For Notes, `<Space>fn` starts with the invoking item's notes. In its chooser, **Browse library** expands the search to the same library, and **Current item** returns to the original note scope without losing the query. See the [Notes guide](NOTE_GUIDE.md) for note results and previews.
+
+## Find a collection
+
+In Main Normal, press `:` and choose **Find and enter a collection**. This Palette action is unbound; `<Space>fc` keeps its existing meaning of finding items in the current collection.
+
+The chooser searches names and full paths within one library. It uses the tree Cursor's library when the collection tree is focused; otherwise it requires one active library or collection scope. Full paths distinguish same-name collections. Browsing candidates or pressing `Escape` leaves Main's collection scope and tree expansion unchanged. Press `Enter` to enter the chosen collection. If Zotero's collection-tree filter is active, Neo clears it to reveal the target. A changed confirmed destination is added to shared history; use `<C-o>` / `<C-i>` to return Back or Forward.
+
+For collection membership and structure workflows, see [Library workflows](MAIN_GUIDE.md#find-and-organize-collections).
 
 ## Narrow Main's view
 

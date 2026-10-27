@@ -2211,3 +2211,279 @@ describe('picker owner boundaries', () => {
     expect(confirm).toHaveBeenCalledWith(items[5], false);
   });
 });
+
+describe('bounded query and continuous confirmation', () => {
+  it('retires out-of-order native queries and never confirms the old query while loading', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const older = deferred<PickerItem[]>();
+    const newer = deferred<PickerItem[]>();
+    const source = candidateSource([]);
+    const load = vi.spyOn(source, 'load');
+    const query = vi.fn(async (text: string) =>
+      text === 'old' ? older.promise : text === 'new' ? newer.promise : [],
+    );
+    source.query = query;
+    const confirm = vi.fn();
+    await picker.open(window, session, 'all', { source, confirm });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.emit('compositionstart');
+    input.value = 'uncommitted';
+    input.emit('input', { isComposing: true } as unknown as Partial<Event>);
+    expect(query).toHaveBeenCalledTimes(1);
+    input.emit('compositionend');
+    input.value = 'old';
+    input.emit('input');
+    input.value = 'new';
+    input.emit('input');
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    expect(confirm).not.toHaveBeenCalled();
+    newer.resolve([{ id: 2, title: 'Native ranked result', search: 'not a fuzzy match' }]);
+    await query.mock.results[2]!.value;
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([2]);
+    older.resolve([{ id: 1, title: 'Old result', search: 'old' }]);
+    await query.mock.results[1]!.value;
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([2]);
+    expect(load).not.toHaveBeenCalled();
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }), false);
+  });
+
+  it('keeps successful commits open, fences duplicate and IME admission, and retains failed candidates for retry', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const first = deferred<void>();
+    const items = [{ id: 1, title: 'Paper', search: 'paper' }];
+    const source = candidateSource(items);
+    const confirm = vi.fn(async () => {
+      if (confirm.mock.calls.length === 1) await first.promise;
+      return { keepOpen: true as const, message: 'Added; Esc ends' };
+    });
+    await picker.open(window, session, 'all', { source, confirm });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.value = 'paper';
+    input.emit('input');
+    input.emit('compositionstart');
+    picker.onKeyDown(pickerKey('Enter', input, { isComposing: true }), window, session);
+    expect(confirm).not.toHaveBeenCalled();
+    input.emit('compositionend');
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    first.reject(new Error('save failed'));
+    await session.picker.queue;
+    expect(session.picker.open).toBe(true);
+    expect(input.value).toBe('paper');
+    expect(session.picker.filtered).toEqual(items);
+    expect(session.picker.operationStatus?.textContent).toContain('save failed');
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(session.picker.open).toBe(true);
+    expect(input.value).toBe('paper');
+    expect(session.picker.operationStatus?.textContent).toBe('Added; Esc ends');
+    const repeated = pickerKey('Enter', input);
+    Reflect.set(repeated, 'repeat', true);
+    picker.onKeyDown(repeated, window, session);
+    await session.picker.queue;
+    expect(confirm).toHaveBeenCalledTimes(2);
+    picker.onKeyDown(pickerKey('Escape', input), window, session);
+    expect(session.picker.open).toBe(false);
+  });
+
+  it('never refreshes or reopens a continuous picker retired during an admitted save', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session, cleanups } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const saving = deferred<void>();
+    const source = candidateSource([{ id: 1, title: 'Paper', search: 'paper' }]);
+    const load = vi.spyOn(source, 'load');
+    const started = deferred<void>();
+    await picker.open(window, session, 'all', {
+      source,
+      confirm: async () => {
+        started.resolve();
+        await saving.promise;
+        return { keepOpen: true, message: 'Saved' };
+      },
+    });
+    picker.onKeyDown(pickerKey('Enter', session.picker.input), window, session);
+    const admitted = session.picker.queue;
+    await started.promise;
+    for (const cleanup of cleanups) cleanup();
+    saving.resolve();
+    await admitted;
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(session.picker.open).toBe(false);
+    expect(session.picker.filtered).toEqual([]);
+    expect(session.picker.overlay?.isConnected).not.toBe(true);
+  });
+});
+
+describe('picker semantic handoff and completed mutation refresh', () => {
+  it.each(['cancel', 'membership'] as const)(
+    'restores tree focus after picker-owned %s closure',
+    async (closure) => {
+      vi.useFakeTimers();
+      vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+      const { window, session } = createPickerHarness();
+      const tree = window.document.createElementNS(
+        'http://www.w3.org/1999/xhtml',
+        'div',
+      ) as HTMLElement;
+      tree.id = 'collection-tree';
+      tree.focus();
+      const picker = new FuzzyPicker(
+        { debug: vi.fn(), diagnostic: vi.fn() },
+        new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      );
+      const confirm = vi.fn();
+      await picker.open(window, session, 'collections', {
+        source: candidateSource([{ id: 1, title: 'Collection', search: 'collection' }]),
+        confirm,
+      });
+      session.picker.input!.focus();
+      picker.onKeyDown(
+        pickerKey(closure === 'cancel' ? 'Escape' : 'Enter', session.picker.input),
+        window,
+        session,
+      );
+      await session.picker.queue;
+      expect(session.picker.open).toBe(false);
+      expect(window.document.activeElement).toBe(tree);
+      expect(confirm).toHaveBeenCalledTimes(closure === 'cancel' ? 0 : 1);
+    },
+  );
+
+  it.each(['Enter', 'Escape'] as const)(
+    'publishes saved feedback and permits %s after a newer query supersedes an unresolved post-save refresh',
+    async (activation) => {
+      vi.useFakeTimers();
+      vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+      const { window, session } = createPickerHarness();
+      const picker = new FuzzyPicker(
+        { debug: vi.fn(), diagnostic: vi.fn() },
+        new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      );
+      const refresh = deferred<PickerItem[]>();
+      const refreshStarted = deferred<void>();
+      const newer = deferred<PickerItem[]>();
+      const first = { id: 1, title: 'First paper', search: 'first' };
+      const second = { id: 2, title: 'Next paper', search: 'next' };
+      let initial = true;
+      const query = vi.fn((text: string): Promise<PickerItem[]> => {
+        if (text === 'next') return newer.promise;
+        if (initial) {
+          initial = false;
+          return Promise.resolve([first]);
+        }
+        refreshStarted.resolve();
+        return refresh.promise;
+      });
+      const source = { ...candidateSource([]), query };
+      let commits = 0;
+      const confirm = vi.fn(async () => {
+        commits += 1;
+        return { keepOpen: true as const, message: `Saved addition ${commits}` };
+      });
+      await picker.open(window, session, 'all', { source, confirm });
+      const input = session.picker.input as HTMLInputElement & EmittingElement;
+      input.focus();
+      picker.onKeyDown(pickerKey('Enter', input), window, session);
+      await refreshStarted.promise;
+      input.value = 'next';
+      input.emit('input');
+      newer.resolve([second]);
+      await newer.promise;
+      await vi.waitFor(() => {
+        expect(session.picker.filtered.map((item) => item.id)).toEqual([2]);
+        expect(session.picker.confirming).toBe(false);
+      });
+      expect(session.picker.operationStatus?.textContent).toBe('Saved addition 1');
+      picker.onKeyDown(pickerKey(activation, input), window, session);
+      await session.picker.queue;
+      expect(confirm).toHaveBeenCalledTimes(activation === 'Enter' ? 2 : 1);
+      expect(session.picker.open).toBe(activation === 'Enter');
+      if (activation === 'Enter')
+        expect(session.picker.operationStatus?.textContent).toBe('Saved addition 2');
+      refresh.resolve([{ id: 99, title: 'Obsolete refresh', search: 'obsolete' }]);
+      await refresh.promise;
+      expect(session.picker.open).toBe(activation === 'Enter');
+      if (activation === 'Enter') {
+        expect(session.picker.filtered.map((item) => item.id)).toEqual([2]);
+        expect(session.picker.operationStatus?.textContent).toBe('Saved addition 2');
+      }
+    },
+  );
+
+  it('retires parent candidates before releasing admission while the restored membership source is still loading', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = new FuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const restored = deferred<PickerItem[]>();
+    const loading = deferred<void>();
+    const membership = candidateSource([], 'Membership choices');
+    membership.load = () => {
+      loading.resolve();
+      return restored.promise;
+    };
+    let phase = 'parent';
+    const admitted: Array<{ phase: string; id: string | number }> = [];
+    const confirm = vi.fn((item: PickerItem) => {
+      admitted.push({ phase, id: item.id });
+      if (phase === 'parent') {
+        phase = 'membership';
+        return { keepOpen: true as const, source: membership, query: 'original' };
+      }
+    });
+    await picker.open(window, session, 'collections', {
+      source: candidateSource(
+        [{ id: 10, title: 'Old parent', search: 'parent' }],
+        'Parent choices',
+      ),
+      confirm,
+    });
+    const input = session.picker.input as HTMLInputElement & EmittingElement;
+    input.focus();
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await loading.promise;
+    await vi.waitFor(() => expect(session.picker.confirming).toBe(false));
+    expect(session.picker.items).toEqual([]);
+    expect(session.picker.filtered).toEqual([]);
+    expect(input.value).toBe('original');
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await session.picker.queue;
+    expect(admitted).toEqual([{ phase: 'parent', id: 10 }]);
+    restored.resolve([{ id: 20, title: 'Original collection', search: 'original' }]);
+    await restored.promise;
+    expect(session.picker.filtered.map((item) => item.id)).toEqual([20]);
+    picker.onKeyDown(pickerKey('Enter', input), window, session);
+    await session.picker.queue;
+    expect(admitted).toEqual([
+      { phase: 'parent', id: 10 },
+      { phase: 'membership', id: 20 },
+    ]);
+    expect(session.picker.open).toBe(false);
+  });
+});

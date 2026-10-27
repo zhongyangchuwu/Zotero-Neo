@@ -336,6 +336,15 @@ export class FuzzyPicker {
     session.picker.localBindings = null;
     this.trace(`picker close scope=${session.picker.scope}`);
     const { overlay, previousElement, previousWindow, themeCleanup, onClose } = session.picker;
+    const activeElement = overlay?.ownerDocument.activeElement;
+    let focusOwner = activeElement;
+    while (focusOwner && focusOwner !== overlay) focusOwner = focusOwner.parentElement;
+    const restoreFocus =
+      reason !== 'confirm' ||
+      !activeElement ||
+      activeElement === overlay?.ownerDocument.body ||
+      activeElement === overlay?.ownerDocument.documentElement ||
+      focusOwner === overlay;
     session.picker.provider = null;
     session.picker.confirm = null;
     session.picker.closeBeforeConfirm = false;
@@ -366,8 +375,10 @@ export class FuzzyPicker {
     session.picker.selected = 0;
     session.picker.themeCleanup = null;
     try {
-      if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
-      else previousWindow?.focus();
+      if (restoreFocus) {
+        if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
+        else previousWindow?.focus();
+      }
     } catch {}
     try {
       onClose?.(reason);
@@ -452,6 +463,7 @@ export class FuzzyPicker {
         this.selectRow(session, picker.filtered.length - 1);
         break;
       case 'uiConfirm':
+        if (event?.repeat) break;
         this.admitConfirmation(session, event?.shiftKey ?? false);
         break;
       case 'uiCancel':
@@ -486,6 +498,15 @@ export class FuzzyPicker {
   private filter(session: MainWindowSession, query: string): void {
     const startedAt = Date.now();
     const provider = session.picker.provider;
+    if (provider?.query) {
+      void this.loadSource(
+        session,
+        provider,
+        session.picker.generation,
+        session.picker.sourceRevision,
+      );
+      return;
+    }
     if (provider?.filterItems) {
       const filtered = provider.filterItems(session.picker.items, query).slice(0, 100);
       session.picker.filtered = filtered;
@@ -659,9 +680,32 @@ export class FuzzyPicker {
           return;
         }
         if (closeBeforeConfirm) this.close(session, 'confirm');
-        await confirm(item, openInWindow);
-        if (!closeBeforeConfirm && this.isCurrent(session, generation))
+        const continuation = await confirm(item, openInWindow);
+        if (closeBeforeConfirm || !this.isCurrent(session, generation)) return;
+        if (continuation?.keepOpen) {
+          if (continuation.source) {
+            picker.provider = continuation.source;
+            picker.sourceRevision += 1;
+          }
+          if (continuation.query !== undefined && picker.input) {
+            picker.input.value = continuation.query;
+            picker.committedQuery = continuation.query;
+            picker.selected = 0;
+          }
+          if (continuation.source || continuation.query !== undefined) {
+            picker.items = [];
+            picker.filtered = [];
+            picker.selected = 0;
+            this.render(session);
+          }
+          this.refreshSource(session);
+          this.setOperationStatus(session, continuation.message ?? '');
+          this.focusPane(session, 'search');
+          // The mutation is complete. A supersedable display refresh must not own admission.
+          void this.loadSource(session, picker.provider!, generation, picker.sourceRevision);
+        } else {
           this.close(session, 'confirm');
+        }
       })
       .catch((error) => {
         this.failure(`picker confirm scope=${scope}`, error);
@@ -734,24 +778,46 @@ export class FuzzyPicker {
   ): Promise<void> {
     const scope = session.picker.scope;
     const loadStartedAt = Date.now();
+    const queryRevision = ++session.picker.queryRevision;
+    const query = session.picker.committedQuery;
+    if (provider.query) {
+      session.picker.items = [];
+      session.picker.filtered = [];
+      this.render(session);
+    }
     const results = session.picker.results;
     if (results && provider.loadingText) {
       results.style.color = THEME_VARS.muted;
       results.textContent = provider.loadingText;
     }
     try {
-      const items = await provider.load();
-      if (!this.isCurrentSource(session, generation, sourceRevision, provider)) {
+      const items = await (provider.query ? provider.query(query) : provider.load());
+      if (
+        queryRevision !== session.picker.queryRevision ||
+        !this.isCurrentSource(session, generation, sourceRevision, provider)
+      ) {
         this.trace(`picker load discarded scope=${scope} generation=${generation}`);
         return;
       }
       session.picker.items = items;
-      this.filter(session, session.picker.committedQuery);
+      if (provider.query) {
+        session.picker.filtered = items.slice(0, 100);
+        session.picker.selected = Math.max(
+          0,
+          Math.min(session.picker.selected, Math.max(0, session.picker.filtered.length - 1)),
+        );
+        this.render(session);
+      } else {
+        this.filter(session, session.picker.committedQuery);
+      }
       this.trace(
         `picker loaded scope=${scope} items=${items.length} duration=${Date.now() - loadStartedAt}ms`,
       );
     } catch (error) {
-      if (!this.isCurrentSource(session, generation, sourceRevision, provider)) {
+      if (
+        queryRevision !== session.picker.queryRevision ||
+        !this.isCurrentSource(session, generation, sourceRevision, provider)
+      ) {
         this.trace(`picker load failure discarded scope=${scope} generation=${generation}`);
         return;
       }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 
 import type { MainWindow } from '../../src/core/contracts';
 import {
@@ -12,6 +13,7 @@ import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 import type { FuzzyPicker } from '../../src/main/picker';
 import type { MainNavigation } from '../../src/main/navigation';
+import { PickerRuntime } from '../../src/main/picker/runtime';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -36,6 +38,7 @@ function item(id: number, libraryID = 1, collections: number[] = []): Zotero.Ite
       return true;
     }),
     save: vi.fn(async () => undefined),
+    reload: vi.fn(async () => undefined),
   } as unknown as Zotero.Item;
 }
 
@@ -49,7 +52,9 @@ function targetHarness(
       get: (id: number) => byID.get(id) ?? false,
       keepTopLevel: (values: Zotero.Item[]) => values,
     },
-    DB: { executeTransaction: async (fn: () => Promise<void>) => fn() },
+    Collections: { get: (id: number) => ({ id, libraryID: 1, name: 'Inbox', parentID: false }) },
+    Libraries: { get: () => ({ editable: true, archived: false, libraryType: 'user' }) },
+    DB: createCollectionTransactionDB(),
   });
 
   const rows = visibleIDs
@@ -76,7 +81,11 @@ function targetHarness(
   } as unknown as MainWindow;
 
   const selection = new SelectionStore();
-  const session = { selection } as unknown as MainWindowSession;
+  const session = {
+    selection,
+    picker: new PickerRuntime(),
+    cleanup: { disposed: false },
+  } as unknown as MainWindowSession;
   return { window, session, selection };
 }
 
@@ -133,38 +142,44 @@ describe('collection membership targets', () => {
 });
 
 describe('collection membership mutation', () => {
-  it('adds/removes only changed items inside one transaction', async () => {
-    const first = item(1, 1, [10]);
-    const second = item(2, 1);
-    const transaction = vi.fn(async (fn: () => Promise<void>) => fn());
+  it('changes only the requested membership and does not save existing members again', async () => {
+    const first = item(1, 1, [10, 11]);
+    const second = item(2, 1, [12]);
+    const database = createCollectionTransactionDB();
+    const collection = { id: 10, libraryID: 1, name: 'Inbox', parentID: false };
     vi.stubGlobal('Zotero', {
-      DB: { executeTransaction: transaction },
+      DB: database,
+      Items: { get: (id: number) => [first, second].find((value) => value.id === id) },
+      Collections: { get: (id: number) => (id === collection.id ? collection : false) },
+      Libraries: { get: () => ({ editable: true, archived: false, libraryType: 'user' }) },
     });
 
     await expect(setCollectionMembership([first, second], 10, true)).resolves.toBe(1);
     expect(first.save).not.toHaveBeenCalled();
-    expect(second.addToCollection).toHaveBeenCalledWith(10);
+    expect(first.getCollections()).toEqual([10, 11]);
+    expect(second.getCollections()).toEqual([12, 10]);
     expect(second.save).toHaveBeenCalledTimes(1);
-    expect(transaction).toHaveBeenCalledTimes(1);
 
     vi.mocked(first.save).mockClear();
     vi.mocked(second.save).mockClear();
-    transaction.mockClear();
 
     await expect(setCollectionMembership([first, second], 10, false)).resolves.toBe(2);
-    expect(first.removeFromCollection).toHaveBeenCalledWith(10);
-    expect(second.removeFromCollection).toHaveBeenCalledWith(10);
+    expect(first.getCollections()).toEqual([11]);
+    expect(second.getCollections()).toEqual([12]);
     expect(first.save).toHaveBeenCalledTimes(1);
     expect(second.save).toHaveBeenCalledTimes(1);
-    expect(transaction).toHaveBeenCalledTimes(1);
   });
 
   it('restores every in-memory membership when one item fails to save', async () => {
     const first = item(1);
     const failed = item(2);
     vi.mocked(failed.save).mockRejectedValueOnce(new Error('save failed'));
+    const collection = { id: 10, libraryID: 1, name: 'Inbox', parentID: false };
     vi.stubGlobal('Zotero', {
-      DB: { executeTransaction: async (fn: () => Promise<void>) => fn() },
+      DB: createCollectionTransactionDB(),
+      Items: { get: (id: number) => [first, failed].find((value) => value.id === id) },
+      Collections: { get: (id: number) => (id === collection.id ? collection : false) },
+      Libraries: { get: () => ({ editable: true, archived: false, libraryType: 'user' }) },
     });
 
     await expect(setCollectionMembership([first, failed], 10, true)).rejects.toThrow('save failed');
@@ -186,6 +201,8 @@ describe('CollectionMembershipActions', () => {
     const picker = {
       open: vi.fn(async (_window, _session, scope, options) => {
         expect(scope).toBe('collections');
+        h.session.picker.generation += 1;
+        h.session.picker.open = true;
         confirm = options.confirm;
       }),
     } as unknown as FuzzyPicker;
@@ -194,6 +211,7 @@ describe('CollectionMembershipActions', () => {
       { debug: vi.fn() } as never,
       navigation,
       picker,
+      vi.fn(async () => undefined),
     );
 
     actions.open(h.window, h.session, true, () => MAIN_ITEM_TARGET.resolve(h.window, h.session));
@@ -202,20 +220,17 @@ describe('CollectionMembershipActions', () => {
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 2 });
     expect(confirm).toBeDefined();
-    await confirm!({ id: 10 });
-
-    expect(status).toHaveBeenLastCalledWith(h.session, '✗ Collection target changed; retry');
+    await expect(confirm!({ id: 10 })).rejects.toThrow('Collection target changed; retry');
     expect(first.addToCollection).not.toHaveBeenCalled();
     expect(second.addToCollection).not.toHaveBeenCalled();
 
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 1 });
+    h.session.picker.open = false;
     actions.open(h.window, h.session, true, () => MAIN_ITEM_TARGET.resolve(h.window, h.session));
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 99 });
-    await confirm!({ id: 10 });
-
-    expect(status).toHaveBeenLastCalledWith(h.session, '✗ Collection target changed; retry');
+    await expect(confirm!({ id: 10 })).rejects.toThrow('Selection contains unavailable items');
     expect(first.addToCollection).not.toHaveBeenCalled();
   });
 });

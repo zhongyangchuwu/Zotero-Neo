@@ -89,8 +89,10 @@ Zotero remains authoritative for Items, views, tabs, Notes, and Reader state. Fe
 
 | Capability | Toolkit owner | Boundary and reason |
 | --- | --- | --- |
-| Main item, tab, Note-context, view-filter, and collection APIs | `src/toolkit/main/host.ts` | Projects host data and operations without choosing Surface targets. `getSelectedCollection()` is used only for exactly one native Scope selection; zero or multiple rows use the outer plural API and then the legacy tree plural API. The detached Scope Cursor is not substituted for the selected collection. |
+| Main item, tab, Note-context, and view-filter APIs | `src/toolkit/main/host.ts` | Projects host data and operations without choosing Surface targets. `getSelectedCollection()` is used only for exactly one native Scope selection; zero or multiple rows use the outer plural API and then the legacy tree plural API. The detached Scope Cursor is not substituted for the selected collection. |
 | Main tree focus, ScopeSet, and item-row cursor | `src/toolkit/main/tree.ts`, `src/toolkit/main/host.ts` | Preserves native Scope selection and focus-only item-row operations; generation tokens fence callbacks from replaced or unsettled row views. |
+| Main collection identities, item search, and scope selection | `src/toolkit/main/collections.ts` | Projects stable collection IDs, paths, and library writability; bounds native item-search IDs before loading candidates; and waits for Zotero's `onCollectionSelected()` plus the Main item-view load, checking selected and rendered scope IDs before reporting completion. |
+| Main collection transaction callback barrier | `src/toolkit/main/collection-transactions.ts` | Intercepts commit/rollback callback registration only inside the entered transaction body, then dispatches owned callbacks through native post-SQL outcome hooks and awaits them. It restores only its own temporary registrar; it does not clear shared callback queues or patch the registrar for the host lifetime. |
 | Main rendered-item decoration | `src/toolkit/main/rendered-items.ts` | Owns row markers and observers; failed installation retires callbacks and releases resources while retaining the original error. |
 | Installed-plugin inventory and host preferences | `src/toolkit/main/plugins.ts` | Projects Mozilla AddonManager and Zotero preference-registry data as metadata/capabilities; plugin policy stays with Plugin Manager. |
 | Reader registration, inventory, and host identity | `src/toolkit/reader/host.ts` | Reader identity is the native handle; only an authoritative native inventory permits retiring absent Reader sessions. |
@@ -106,6 +108,10 @@ Zotero remains authoritative for Items, views, tabs, Notes, and Reader state. Fe
 | Visible annotation target models and geometry | `src/toolkit/reader/annotation-targets.ts` | Admits native annotations from the current filtered Reader view and supported anchor geometry clipped to the visible viewport; hidden, filtered, off-screen, and unsupported targets are omitted. |
 | Reader mark geometry and legacy storage access | `src/toolkit/reader/marks.ts` | Exposes host storage/geometry; `ReaderMarks` chooses parent-versus-attachment storage policy. |
 | Zotero structured-document blocks | `src/toolkit/reader/structured-document.ts` | Native cold processing can cover the whole PDF and cannot be cancelled; requests remain explicit and semantic classification stays with `ReaderCaptionTargets`. |
+
+Collection workflow decisions stay in Main: `src/main/collection-actions.ts` resolves Main `EffectiveSelection` or the existing Reader contextual target, fixes the source/library/item identities, and owns confirmation and workflow permissions. `src/operations/collections.ts` and `src/operations/item-collections.ts` receive explicit item objects and collection IDs; they revalidate identity, library, and editability before mutation. Collection Picker providers project same-library candidates and direct-membership coverage only; they do not choose operation targets or mutate data.
+
+The collection-item provider requests at most 100 top-level item results per query through the Toolkit's native title/creator/year search. The Toolkit loads those bounded candidates' creators, item data, and memberships for row projection. Only after Enter does it fully hydrate the confirmed item with `loadAllData()`, which native Main rendering needs for child-item data. This path does not enumerate `Items.getAll()`.
 
 Reader target discovery and interaction use the owners below; the Toolkit capabilities above provide host data and geometry.
 
@@ -127,7 +133,7 @@ Objects passed between Bootstrap chrome and Zotero content compartments must be 
 
 For asynchronous host work, keep the captured Reader/session/view identity and generation current before applying results. Teardown retires callbacks before listener removal, restores a patched method only while its wrapper is still owned, and guards already-destroyed Gecko wrappers. Failures on live host objects remain observable.
 
-Tag filtering follows rows in the current rendered Scope, including native multi-row selection; it does not broaden candidates to entire libraries. The collection chooser resolves one collection, while its caller enforces item/library cardinality before mutation.
+Tag filtering follows rows in the current rendered Scope, including native multi-row selection; it does not broaden candidates to entire libraries. Collection action targets and confirmation are described in the [Library Interaction Model](INTERACTION_MODEL.md#action-target-contracts).
 
 ## Diagnostics
 

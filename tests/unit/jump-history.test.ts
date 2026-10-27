@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow, ReaderJumpLocation } from '../../src/core/contracts';
 import { activeContextNoteItem } from '../../src/toolkit/main';
+import * as mainHost from '../../src/toolkit/main';
 import { MainNavigationExecutor, type LibrarySelectionOptions } from '../../src/main/jump-history';
 import { MainNavigation } from '../../src/main/navigation';
 import type { ShowInLibraryHost } from '../../src/operations/show-in-library';
@@ -126,6 +127,51 @@ function selectLibrary(
   return { result, isCurrent: execution.isCurrent };
 }
 
+function selectCollection(h: HistoryHarness, collectionID: number): NavigationExecution {
+  return h.history.execute(
+    h.window,
+    h.session,
+    { cause: { kind: 'action', action: 'findCollections' }, surface: 'main' },
+    h.history.collectionSelection(h.window, h.session, collectionID),
+  );
+}
+
+function moveTreeCursor(h: HistoryHarness, direction: -1 | 1): NavigationExecution {
+  const navigation = new MainNavigation({ debug: vi.fn() } as never, () => {});
+  vi.spyOn(navigation, 'panel').mockReturnValue('collections');
+  return h.history.execute(
+    h.window,
+    h.session,
+    {
+      cause: { kind: 'action', action: direction > 0 ? 'mainNavDown' : 'mainNavUp' },
+      surface: 'main',
+      context: { mainPanel: 'collections' },
+    },
+    {
+      dispatch: 'inline',
+      admission: 'motion',
+      start: () =>
+        completionFor(
+          () => navigation.navigate(h.window, h.session, direction, 1),
+          () => true,
+        ),
+    },
+  );
+}
+
+function activateScope(h: HistoryHarness): NavigationExecution {
+  return h.history.execute(
+    h.window,
+    h.session,
+    {
+      cause: { kind: 'action', action: 'mainActivate' },
+      surface: 'main',
+      context: { mainPanel: 'collections' },
+    },
+    h.history.scopeActivation(h.window, h.session),
+  );
+}
+
 function recordManagedJump(
   h: HistoryHarness,
   source: ReaderJumpLocation,
@@ -170,6 +216,7 @@ const originalZotero = Reflect.get(globalThis, 'Zotero');
 afterEach(() => {
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
   else Reflect.set(globalThis, 'Zotero', originalZotero);
+  vi.restoreAllMocks();
 });
 
 function item(id: number): Zotero.Item {
@@ -190,7 +237,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     },
   });
 
-  const scopeRows = [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }];
+  const scopeRows = [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }, { id: 'L1' }, { id: 'S1' }];
   const selectedScopes = new Set([0, 1]);
   let scopeFocused = 1;
   let resolveScopeSelection: (() => void) | undefined;
@@ -216,6 +263,10 @@ function harness(isSessionCurrent: () => boolean = () => true) {
       return promise;
     }
     selectScope(index);
+  });
+  let renderedScopeIDs = ['C1', 'C2'];
+  const onCollectionSelected = vi.fn(async () => {
+    renderedScopeIDs = [...selectedScopes].map((index) => scopeRows[index]!.id);
   });
 
   const itemRows = [firstItem, secondItem].map((ref) => ({ isObjectRow: true, ref }));
@@ -257,7 +308,14 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     document,
     Zotero_Tabs: tabs,
     ZoteroPane: {
+      onCollectionSelected,
       collectionsView: {
+        rowCount: scopeRows.length,
+        tree: {
+          _onSelection: (index: number) => {
+            scopeFocused = index;
+          },
+        },
         selection: {
           get focused() {
             return scopeFocused;
@@ -278,7 +336,11 @@ function harness(isSessionCurrent: () => boolean = () => true) {
         selectByID: selectScopeByID,
       },
       itemsView: {
+        get collectionTreeRows() {
+          return renderedScopeIDs.map((id) => ({ id }));
+        },
         rowCount: itemRows.length,
+        waitForLoad: vi.fn(async () => {}),
         selection: {
           get focused() {
             return itemFocused;
@@ -325,11 +387,14 @@ function harness(isSessionCurrent: () => boolean = () => true) {
   } as unknown as MainViewActions;
 
   let panel: 'collections' | 'items' = 'items';
+  let focusEpoch = 0;
   const status = vi.fn();
   const navigation = {
     panel: vi.fn(() => panel),
+    focusEpoch: () => focusEpoch,
     focusPanel: vi.fn((_window: MainWindow, _session: MainWindowSession, next: typeof panel) => {
       panel = next;
+      focusEpoch += 1;
       return true;
     }),
     afterTabSwitch: vi.fn(),
@@ -376,6 +441,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     secondItem,
     status,
     selectScopeByID,
+    onCollectionSelected,
     toggleScope,
     applyQuickSearch: viewActions.applyQuickSearch,
     quickText: () => quickText,
@@ -392,6 +458,9 @@ function harness(isSessionCurrent: () => boolean = () => true) {
         const index = scopeRows.findIndex((row) => row.id === id);
         if (index >= 0) selectedScopes.add(index);
       }
+    },
+    setScopeCursor: (index: number) => {
+      scopeFocused = index;
     },
     setQuickText: (text: string) => {
       quickText = text;
@@ -415,6 +484,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     },
     setPanel: (next: typeof panel) => {
       panel = next;
+      focusEpoch += 1;
     },
     focusContextNote: () => {
       Reflect.set(document, 'activeElement', noteEditorFocus);
@@ -438,6 +508,279 @@ function harness(isSessionCurrent: () => boolean = () => true) {
 }
 
 describe('Main jump history', () => {
+  it('records only settled collection confirmation and restores both scopes with filters, Cursor and panel', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    h.setScopeCursor(2);
+    const selectionBefore = h.selection.values();
+    const source = h.history.capture(h.window, h.session);
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    const select = vi.spyOn(mainHost, 'selectMainCollection').mockImplementation(async () => {
+      await promise;
+      h.setScopes(['C3']);
+      h.setQuickText('destination');
+      h.setTags(['destination-tag']);
+      h.setCursor(1);
+      return true;
+    });
+
+    const jump = selectCollection(h, 3);
+    await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
+    expect(h.session.jumpHistory.locations).toEqual([]);
+    resolve(true);
+    await expect(jump.result).resolves.toMatchObject({ kind: 'completed', recorded: true });
+    const destination = h.history.capture(h.window, h.session);
+    expect(h.session.jumpHistory.locations).toEqual([source, destination]);
+    expect(source).toMatchObject({ scopeIDs: ['C1', 'C2'], panel: 'collections' });
+    expect(destination).toMatchObject({ scopeIDs: ['C3'], panel: 'items' });
+
+    await expect(traversal(h, -1)).resolves.toBe(true);
+    expect(h.history.capture(h.window, h.session)).toEqual(source);
+    await expect(traversal(h, 1)).resolves.toBe(true);
+    expect(h.history.capture(h.window, h.session)).toEqual(destination);
+    expect(h.selection.values()).toEqual(selectionBefore);
+    expect(h.session.jumpHistory.locations).toHaveLength(2);
+  });
+
+  it('waits for restored native items before restoring filters and Cursor', async () => {
+    const h = harness();
+    const source = h.history.capture(h.window, h.session);
+    vi.spyOn(mainHost, 'selectMainCollection').mockImplementation(async () => {
+      h.setScopes(['C3']);
+      h.setQuickText('destination');
+      h.setCursor(1);
+      return true;
+    });
+    await selectCollection(h, 3).result;
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const waitForLoad = vi.fn(() => promise);
+    Reflect.set(h.window.ZoteroPane!.itemsView!, 'waitForLoad', waitForLoad);
+
+    const back = traversal(h, -1);
+    await vi.waitFor(() => expect(waitForLoad).toHaveBeenCalledOnce());
+    expect(h.quickText()).toBe('destination');
+    expect(h.cursor()).toBe(1);
+    expect(h.session.jumpHistory.index).toBe(1);
+    resolve();
+    await expect(back).resolves.toBe(true);
+    expect(h.history.capture(h.window, h.session)).toEqual(source);
+  });
+
+  it('restores filters, Cursor and tree focus only after the native scope handler finishes', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    const source = h.history.capture(h.window, h.session);
+    vi.spyOn(mainHost, 'selectMainCollection').mockImplementation(async () => {
+      h.setScopes(['C3']);
+      h.setQuickText('destination');
+      h.setCursor(1);
+      return true;
+    });
+    await selectCollection(h, 3).result;
+    const release = Promise.withResolvers<void>();
+    const settleScope = h.onCollectionSelected.getMockImplementation()!;
+    h.onCollectionSelected.mockImplementationOnce(async () => {
+      await release.promise;
+      // Native scope rendering may move focus before its serial handler completes.
+      h.setPanel('items');
+      await settleScope();
+    });
+
+    const back = traversal(h, -1);
+    await vi.waitFor(() => expect(h.onCollectionSelected).toHaveBeenCalledOnce());
+    expect(h.applyQuickSearch).not.toHaveBeenCalled();
+    expect(h.quickText()).toBe('destination');
+    expect(h.cursor()).toBe(1);
+    expect(h.panel()).toBe('items');
+    expect(h.session.jumpHistory.index).toBe(1);
+    release.resolve();
+    await expect(back).resolves.toBe(true);
+    expect(h.history.capture(h.window, h.session)).toEqual(source);
+    expect(h.panel()).toBe('collections');
+  });
+
+  it('keeps the history position when restored native items cannot settle', async () => {
+    const h = harness();
+    vi.spyOn(mainHost, 'selectMainCollection').mockImplementation(async () => {
+      h.setScopes(['C3']);
+      return true;
+    });
+    await selectCollection(h, 3).result;
+    const error = new Error('native items failed to load');
+    Reflect.set(h.window.ZoteroPane!.itemsView!, 'waitForLoad', vi.fn().mockRejectedValue(error));
+
+    await expect(traversal(h, -1)).resolves.toBe(false);
+    expect(h.session.jumpHistory.index).toBe(1);
+    expect(h.status).toHaveBeenLastCalledWith(h.session, expect.stringContaining('scope'), 3200);
+  });
+
+  it('does not apply historical filters after native scope changes during item loading', async () => {
+    const h = harness();
+    vi.spyOn(mainHost, 'selectMainCollection').mockImplementation(async () => {
+      h.setScopes(['C3']);
+      return true;
+    });
+    await selectCollection(h, 3).result;
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const waitForLoad = vi.fn(() => promise);
+    Reflect.set(h.window.ZoteroPane!.itemsView!, 'waitForLoad', waitForLoad);
+    const back = traversal(h, -1);
+    await vi.waitFor(() => expect(waitForLoad).toHaveBeenCalledOnce());
+    h.setScopes(['C3']);
+    h.setQuickText('native scope query');
+    resolve();
+
+    await expect(back).resolves.toBe(false);
+    expect(h.applyQuickSearch).not.toHaveBeenCalled();
+    expect(h.quickText()).toBe('native scope query');
+    expect(h.session.jumpHistory.index).toBe(1);
+  });
+
+  it('does not append a location when confirming the already active collection', async () => {
+    const h = harness();
+    h.setScopes(['C3']);
+    vi.spyOn(mainHost, 'selectMainCollection').mockResolvedValue(true);
+    await expect(selectCollection(h, 3).result).resolves.toMatchObject({
+      kind: 'completed',
+      recorded: false,
+    });
+    expect(h.session.jumpHistory.locations).toEqual([]);
+  });
+
+  it('returns to the pre-motion collection after live single-tree j/j/Enter without recording either motion', async () => {
+    const h = harness();
+    h.setScopes(['C1']);
+    h.setScopeCursor(0);
+    h.setPanel('collections');
+    const source = h.history.capture(h.window, h.session);
+    expect(moveTreeCursor(h, 1).result).toMatchObject({ kind: 'completed', recorded: false });
+    expect([...h.selectedScopes]).toEqual([1]);
+    expect(moveTreeCursor(h, 1).result).toMatchObject({ kind: 'completed', recorded: false });
+    expect([...h.selectedScopes]).toEqual([2]);
+    expect(h.session.jumpHistory.locations).toEqual([]);
+    h.setCursor(1);
+    h.setQuickText('browsed scope');
+    vi.spyOn(mainHost, 'selectMainScopeCursor').mockResolvedValue(true);
+
+    await expect(activateScope(h).result).resolves.toMatchObject({
+      kind: 'completed',
+      recorded: true,
+    });
+    const destination = h.history.capture(h.window, h.session);
+    expect(h.session.jumpHistory.locations).toEqual([source, destination]);
+    await expect(traversal(h, -1)).resolves.toBe(true);
+    expect(h.history.capture(h.window, h.session)).toEqual(source);
+    await expect(traversal(h, 1)).resolves.toBe(true);
+    expect(h.history.capture(h.window, h.session)).toEqual(destination);
+  });
+
+  it('does not consume a stale motion origin after an external native scope selection', async () => {
+    const h = harness();
+    h.setScopes(['C1']);
+    h.setScopeCursor(0);
+    h.setPanel('collections');
+    moveTreeCursor(h, 1);
+    h.setScopes(['C3']);
+    h.setScopeCursor(2);
+    vi.spyOn(mainHost, 'selectMainScopeCursor').mockResolvedValue(true);
+
+    await activateScope(h).result;
+    expect(h.session.jumpHistory.locations).toMatchObject([
+      { scopeIDs: ['C3'], panel: 'collections' },
+      { scopeIDs: ['C3'], panel: 'items' },
+    ]);
+    await expect(traversal(h, -1)).resolves.toBe(true);
+    expect([...h.selectedScopes]).toEqual([2]);
+  });
+
+  it('replaces the motion origin when tree movement follows an external native scope selection', async () => {
+    const h = harness();
+    h.setScopes(['C1']);
+    h.setScopeCursor(0);
+    h.setPanel('collections');
+    moveTreeCursor(h, 1);
+    h.setScopes(['C3']);
+    h.setScopeCursor(2);
+    moveTreeCursor(h, -1);
+    vi.spyOn(mainHost, 'selectMainScopeCursor').mockResolvedValue(true);
+
+    await activateScope(h).result;
+    expect(h.session.jumpHistory.locations).toMatchObject([
+      { scopeIDs: ['C3'], panel: 'collections' },
+      { scopeIDs: ['C2'], panel: 'items' },
+    ]);
+  });
+
+  it('records native tree Enter from the selected scope, not the detached tree Cursor', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    h.setScopes(['L1']);
+    h.setScopeCursor(4);
+    vi.spyOn(mainHost, 'selectMainScopeCursor').mockImplementation(async () => {
+      h.setScopes(['S1']);
+      h.setCursor(1);
+      return true;
+    });
+    const enter = h.history.execute(
+      h.window,
+      h.session,
+      {
+        cause: { kind: 'action', action: 'mainActivate' },
+        surface: 'main',
+        context: { mainPanel: 'collections' },
+      },
+      h.history.scopeActivation(h.window, h.session),
+    );
+
+    await expect(enter.result).resolves.toMatchObject({ kind: 'completed', recorded: true });
+    expect(h.session.jumpHistory.locations).toMatchObject([
+      { scopeIDs: ['L1'], panel: 'collections', cursor: { itemID: 10 } },
+      { scopeIDs: ['S1'], panel: 'items', cursor: { itemID: 20 } },
+    ]);
+    await expect(traversal(h, -1)).resolves.toBe(true);
+    expect([...h.selectedScopes]).toEqual([3]);
+    expect(h.panel()).toBe('collections');
+    await expect(traversal(h, 1)).resolves.toBe(true);
+    expect([...h.selectedScopes]).toEqual([4]);
+    expect(h.panel()).toBe('items');
+    expect(h.cursor()).toBe(1);
+  });
+
+  it('does not record or change focus when a confirmed collection is unavailable', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    vi.spyOn(mainHost, 'selectMainCollection').mockResolvedValue(false);
+    const jump = selectCollection(h, 3);
+    await expect(jump.result).resolves.toMatchObject({ kind: 'unavailable', recorded: false });
+    expect(h.panel()).toBe('collections');
+    expect(h.session.jumpHistory.locations).toEqual([]);
+  });
+
+  it('leaves history and focus untouched when native tab navigation retires pending collection selection', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    const { promise, resolve } = Promise.withResolvers<boolean>();
+    const select = vi.spyOn(mainHost, 'selectMainCollection').mockReturnValue(promise);
+    const jump = selectCollection(h, 3);
+    await vi.waitFor(() => expect(select).toHaveBeenCalledOnce());
+    h.setTab('reader-A');
+    resolve(true);
+    await expect(jump.result).resolves.toMatchObject({ kind: 'stale', recorded: false });
+    expect(h.panel()).toBe('collections');
+    expect(h.session.jumpHistory.locations).toEqual([]);
+  });
+
+  it('does not record or focus items when native collection selection fails', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    const error = new Error('native selection failed');
+    vi.spyOn(mainHost, 'selectMainCollection').mockRejectedValue(error);
+    const jump = selectCollection(h, 3);
+    await expect(jump.result).resolves.toMatchObject({ kind: 'failed', error, recorded: false });
+    expect(h.panel()).toBe('collections');
+    expect(h.session.jumpHistory.locations).toEqual([]);
+  });
+
   it('records genuine Reader jumps after tab navigation supersedes a pending restore', async () => {
     const h = harness();
     await queuedJump(h, () => h.setTab('reader-A')).result;

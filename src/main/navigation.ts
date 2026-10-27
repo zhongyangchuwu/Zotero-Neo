@@ -27,7 +27,6 @@ import {
   selectMainItemCursorAnchor,
   selectMainTab,
   selectedMainTabID,
-  selectOnlyMainScopeCursor,
 } from '../toolkit/main';
 import {
   mainCursorItem,
@@ -53,6 +52,7 @@ function trashTargetSummary(targets: MainResolvedTargets, language: KeyGuideLang
 export class MainNavigation {
   readonly #logger: Logger;
   readonly #rescan: (window: MainWindow) => void;
+  readonly #focusEpochs = new WeakMap<MainWindowSession, number>();
   constructor(logger: Logger, rescan: (window: MainWindow) => void) {
     this.#logger = logger;
     this.#rescan = rescan;
@@ -84,13 +84,33 @@ export class MainNavigation {
     session.statusTimer = timer;
   }
   panel(window: MainWindow, session: MainWindowSession): MainPanel {
-    session.activePanel = mainFocusedPanel(window, session.activePanel);
+    const panel = mainFocusedPanel(window, session.activePanel);
+    if (panel !== session.activePanel) this.#focusEpochs.set(session, this.focusEpoch(session) + 1);
+    session.activePanel = panel;
     return session.activePanel;
   }
   focusPanel(window: MainWindow, session: MainWindowSession, panel: MainPanel): boolean {
     if (!focusMainPanel(window, panel)) return false;
+    this.#focusEpochs.set(session, this.focusEpoch(session) + 1);
     session.activePanel = panel;
     return true;
+  }
+
+  /** Identifies a continuous panel visit, including explicit refocusing of the tree. */
+  focusEpoch(session: MainWindowSession): number {
+    return this.#focusEpochs.get(session) ?? 0;
+  }
+
+  /** Native mouse/input focus changes also delimit a continuous tree visit. */
+  observeFocus(window: MainWindow, session: MainWindowSession): void {
+    const panel = mainTreeFocused(window, 'collections')
+      ? 'collections'
+      : mainTreeFocused(window, 'items')
+        ? 'items'
+        : undefined;
+    if (!panel || panel !== session.activePanel)
+      this.#focusEpochs.set(session, this.focusEpoch(session) + 1);
+    if (panel) session.activePanel = panel;
   }
 
   focusDirection(
@@ -141,13 +161,6 @@ export class MainNavigation {
       return true;
     }
     return selectMainScopeRow(window, next, shouldDebounce);
-  }
-
-  activate(window: MainWindow, session: MainWindowSession): void {
-    if (this.panel(window, session) !== 'collections') return;
-    selectOnlyMainScopeCursor(window);
-    this.focusPanel(window, session, 'items');
-    this.status(session, '▶ items', 900);
   }
 
   /** Restores explicit Neo Trash identities and returns the number successfully saved. */

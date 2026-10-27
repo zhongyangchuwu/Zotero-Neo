@@ -217,11 +217,18 @@ Main Normal commands depend on focus in the collection tree, item list, Quick Se
 | `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | Focus native Quick Search or open Advanced Search; `fa` can convert existing Quick Search text. These alter Main View scope, not Reader page location. |
 | `mainAddByIdentifier` | `<Space>ai` | Open native identifier entry for one writable library and its selected collections, not an item target or Neo Selection. Cross-library/read-only scopes are unavailable; count is ignored. See [identifier entry](MAIN_GUIDE.md#add-items-by-identifier). |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Open the shared item/note chooser. Confirming a result can add a history location; browsing or cancelling does not. |
+| `findCollections` | **Unbound** | Main Normal: search collection names or full paths in one library scope. Without a library scope, reports `Choose one library scope to find collections`. Browsing or cancellation leaves scope unchanged; confirming enters the collection and a changed destination can add shared history. |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Open-tab chooser, previous/next open tab, close active tab. Successful chooser/H/L changes record; H/L ignore counts. Closing alone is not recorded and does not delete older entries.
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Shared counted history traversal. |
 | `addTag` / `removeTag` | `<Space>ta` / `<Space>tr` | Apply to Main's current tag-action targets. See [Selection and Tag Actions](TAGS.md) for selection precedence, same-library limits, and candidates. |
 | `toggleTagFilter` / `clearTagFilters` | `<Space>tf` / `<Space>tc` | Main-only native AND tag filter toggle / clear all. Not jumplist entries. |
-| `addToCollection` / `removeFromCollection` | `<Space>ca` / `<Space>cr` | Add or remove the current item target(s) in a collection from the same library. |
+| `addToCollection` / `removeFromCollection` | `<Space>ca` / `<Space>cr` | In Main, use same-library effective item targets. Add shows direct-membership coverage and adds only missing memberships; Remove lists collections directly assigned to at least one target and removes only selected direct memberships. Other memberships and items remain. Reader still applies to its active item. |
+| `addItemsToCurrentCollection` | **Unbound** | Requires one active ordinary collection; otherwise reports `Choose one active ordinary collection to add items`. It freezes that collection, then searches same-library items (up to 100 matches per query). Each Enter saves one addition and keeps the picker open; Escape ends the workflow without undoing saved additions. Main filters and persistent Selection remain unchanged, so an added item may stay hidden. |
+| `moveToCollection` | **Unbound** | Use Main's effective item target(s) only with one active ordinary collection as explicit source and every target directly assigned to it. Otherwise Neo refuses with `Move requires one active ordinary source collection; use Add to collection instead` or `Move requires unchanged targets directly assigned to the active source; use Add to collection instead`. Choose a same-library destination; adding it and removing the source are atomic, and all other memberships remain. |
+| `moveCollection` | **Unbound** | When the tree is focused, use its ordinary collection Cursor even if Zotero has multiple collection scopes selected; otherwise require one active ordinary collection. Without an eligible target, Neo reports `Choose one ordinary collection; multiple selections are not supported`. Choose a same-library parent or root; the collection and its descendants move together, and neither it nor its descendants can be destinations. |
+| `createCollection` | **Unbound** | Use the tree Cursor's library when the tree is focused, or require one active library/collection scope otherwise; without one, Neo reports `Choose one library scope to create a collection`. Choose a parent collection or library root explicitly, enter a name in Zotero's native prompt, and confirm. |
+| `renameCollection` | **Unbound** | Rename the tree Cursor's ordinary collection when the tree is focused; otherwise require one active ordinary collection. With no eligible target, Neo reports `Choose one ordinary collection; multiple selections are not supported`. Uses Zotero's native name prompt. |
+| `deleteCollection` | **Unbound** | Delete the tree Cursor's ordinary collection when the tree is focused; otherwise require one active ordinary collection. With no eligible target, Neo reports `Choose one ordinary collection; multiple selections are not supported`. Zotero's native **Delete collection — keep items** confirmation covers the subtree; all items stay in the library, and `u` does not undo collection-structure changes. |
 | `openCommandPalette` / `managePlugins` / `openNeoSettings` | `:` / `<Space>pp` / `<Space>ps` | Command Palette, persistent Plugin Manager, or Settings. |
 | `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus nearest eligible pane in direction; no wrap at boundaries. |
 | `showInLibrary` | **Not supported** | Main Normal has no such capability. Reader Normal and Note Normal expose the action unbound in their Command Palettes; it resolves the active Reader or Note context item, never Main Selection. |
@@ -277,7 +284,7 @@ Notes (`fn`) start with notes for the current item. **Browse library** searches 
 
 **Capture to note** is a separate Selection Actions workflow: it appends the selected text to an existing note in the same library. Before confirmation, Escape cancels without writing. After the save is admitted, closing the chooser or pressing Escape does not undo it. An unavailable or changed note target is refused; a save failure is shown.
 
-Add Tag may offer an explicit create candidate; Remove Tag lists tags assigned to at least one target. A virtual namespace candidate refines the query and is not itself a tag action. Main `tf` toggles a tag filter from the current view and active filters; `tc` clears all filters without a chooser. See [Selection and Tag Actions](TAGS.md) for tag targets, same-library mutation limits, and flat tag storage. Collection membership actions require targets from one library and skip membership changes that are already satisfied.
+Add Tag may offer an explicit create candidate; Remove Tag lists tags assigned to at least one target. A virtual namespace candidate refines the query and is not itself a tag action. Main `tf` toggles a tag filter from the current view and active filters; `tc` clears all filters without a chooser. See [Selection and Tag Actions](TAGS.md) for tag targets, same-library mutation limits, and flat tag storage. In Main, `ca` and `cr` use same-library targets and direct-membership counts, not recursive visibility: Add changes only missing links, and Remove lists the union of collections directly assigned to at least one target and removes only selected links. The seven collection actions are unbound in Main Normal and open from the existing Palette; workflows reuse the existing Picker or Zotero's native name/confirmation dialogs. **Add existing items to the current collection** saves each Enter separately and stays open; Escape only ends that workflow and does not undo saved additions. See [Library workflows](MAIN_GUIDE.md#change-collection-membership) for details.
 
 ### Flash and link hints
 
@@ -400,6 +407,7 @@ The index lists each ActionId with its shipped default binding and available con
 | `findAllItems` | Reader/Main/Note Normal `<Space>ff` | Shared library item chooser |
 | `findCollectionItems` | Reader/Main/Note Normal `<Space>fc` | Shared collection item chooser |
 | `findNotes` | Reader/Main/Note Normal `<Space>fn` | Shared Note chooser |
+| `findCollections` | **Unbound** | Main Normal collection search by name or full path |
 | `mainQuickSearch` | Main Normal `<Space>fq` | Native Quick Search focus |
 | `mainAdvancedSearch` | Main Normal `<Space>fa` | Native Advanced Search |
 | `managePlugins` | Reader/Main/Note Normal `<Space>pp` | Plugin Manager panel |
@@ -423,6 +431,12 @@ The index lists each ActionId with its shipped default binding and available con
 | `clearTagFilters` | Main Normal `<Space>tc` | Clear Main tag filters |
 | `addToCollection` | Reader/Main Normal `<Space>ca` | Add item(s) to collection |
 | `removeFromCollection` | Reader/Main Normal `<Space>cr` | Remove item(s) from collection |
+| `addItemsToCurrentCollection` | **Unbound** | Main Normal same-library item search; Enter saves one item and keeps the picker open |
+| `moveToCollection` | **Unbound** | Main Normal atomic move from one explicit directly assigned source collection |
+| `moveCollection` | **Unbound** | Main Normal reparent the current collection |
+| `createCollection` | **Unbound** | Main Normal create under an explicit collection or library root |
+| `renameCollection` | **Unbound** | Main Normal rename the current collection |
+| `deleteCollection` | **Unbound** | Main Normal delete a collection subtree while keeping items |
 | `mainEnterSelect` | Main Normal `v` | Begin Main item Visual range |
 | `mainToggleSelection` | Main Normal `s` | Toggle persistent Neo Selection |
 | `mainClearSelection` | Main Normal `<Space>sc` | Clear persistent Selection |

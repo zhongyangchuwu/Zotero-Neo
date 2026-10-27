@@ -121,6 +121,57 @@ describe('navigation history policy', () => {
 });
 
 describe('NavigationCoordinator', () => {
+  it('records collection confirmation and native tree Enter, but ignores tree motion, expansion and mutation', () => {
+    const source: NavigationLocation = {
+      kind: 'library',
+      tabID: 'zotero-pane',
+      scopeIDs: ['C1'],
+      quickSearchText: '',
+      tags: [],
+      advancedSearch: false,
+      panel: 'collections',
+    };
+    const destination: NavigationLocation = { ...source, scopeIDs: ['C2'], panel: 'items' };
+    const cases = [
+      ['findCollections', true],
+      ['mainActivate', true],
+      ['mainNavDown', false],
+      ['mainNavUp', false],
+      ['mainNavFirst', false],
+      ['mainNavLast', false],
+      ['mainTreeToggle', false],
+      ['mainTreeExpand', false],
+      ['mainTreeCollapse', false],
+      ['mainTreeExpandAll', false],
+      ['mainTreeCollapseAll', false],
+      ['addItemsToCurrentCollection', false],
+      ['moveToCollection', false],
+      ['moveCollection', false],
+      ['createCollection', false],
+      ['renameCollection', false],
+      ['deleteCollection', false],
+    ] as const;
+    for (const [action, recorded] of cases) {
+      const h = createCoordinator(source);
+      const execution = h.coordinator.execute(
+        {
+          cause: { kind: 'action', action },
+          surface: 'main',
+          context: { mainPanel: 'collections' },
+        },
+        {
+          dispatch: 'inline',
+          start: () => {
+            h.setCurrent(destination);
+            return immediate({ kind: 'completed', evidence: 'settled-change' });
+          },
+        },
+      );
+      expect(execution.result, action).toMatchObject({ kind: 'completed', recorded });
+      expect(h.history.locations, action).toEqual(recorded ? [source, destination] : []);
+    }
+  });
+
   it('records Reader and Note chooser confirmations through their original surfaces', () => {
     const confirmations = [
       ['findAllItems', 'reader'],

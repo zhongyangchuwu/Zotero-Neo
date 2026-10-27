@@ -23,7 +23,6 @@ export {
   restoreMainScopeIDs,
   mainScopeCursorDetached,
   moveMainScopeCursor,
-  selectOnlyMainScopeCursor,
   mainItemRefAtRow,
   currentMainItemCursorRef,
   mainItemRowForRef,
@@ -84,3 +83,21 @@ export {
   launchMainURL,
   type MainPluginSnapshot,
 } from './plugins';
+export {
+  mainCollectionRef,
+  mainCollectionRefs,
+  mainActiveCollection,
+  mainCursorCollection,
+  mainCollectionLibrary,
+  mainLibraryWritable,
+  promptMainCollectionName,
+  confirmMainCollectionAction,
+  queryMainCollectionItems,
+  prepareMainCollectionItem,
+  selectMainCollection,
+  selectMainScopeCursor,
+  waitForMainItemView,
+  type MainCollectionRef,
+  type MainCollectionLibrary,
+} from './collections';
+export { executeCollectionTransaction } from './collection-transactions';

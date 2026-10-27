@@ -13,6 +13,7 @@ export class PickerRuntime {
   composition: CompositionState = { active: false };
   committedQuery = '';
   sourceRevision = 0;
+  queryRevision = 0;
   confirming = false;
   sourceTitle: HTMLElement | null = null;
   sourceButton: HTMLButtonElement | null = null;

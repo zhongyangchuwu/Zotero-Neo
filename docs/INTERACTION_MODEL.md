@@ -245,11 +245,12 @@ use an item target.
 - **NoteItemTarget**: the active context-pane Note, or selected standalone Note
   tab, normalized to its bibliographic parent when present.
 
-Reader and Note targets are contextual and never borrow Main Selection. The
-Surface resolver supplies the target; each Operation still owns cardinality,
-normalization, mutation safety, and preflight. There is no universal Target
-resolver for every command and no silent Cursor fallback when a resolved target
-is unavailable or has unsupported cardinality.
+Reader and Note targets are contextual and never borrow Main Selection. The Surface
+or feature owner resolves semantic targets and expected cardinality; action-specific
+normalization is explicit in its target contract. Operations receive those resolved
+targets and enforce data-level safety and preflight, but do not substitute another
+Surface's selection or guess a target. There is no universal Target resolver, and
+there is no silent Cursor fallback when a target is unavailable or unsupported.
 
 Current action-target policy:
 
@@ -262,7 +263,7 @@ Current action-target policy:
 | Add/Remove Tag | Main uses MainItemTarget; Reader/Note use their contextual single-item targets. |
 | Trash / restore | Trash uses MainItemTarget with target/count confirmation and hidden-member refusal; restore uses Neo's last Trash batch. |
 | Reader annotation deletion | One selected Reader annotation; explicit permanent-delete confirmation. |
-| Collection membership | Main may batch; Reader uses its contextual item; Note collection actions are unsupported. |
+| Collection membership | Main uses MainItemTarget; existing Reader add/remove uses its contextual item; Note collection actions are unsupported. |
 | Visual selection operation | VisualTarget mutates Main Selection; it is not an ordinary Main item Operation. |
 | Quick/Advanced/tag filtering and sort | View only; these do not mutate Main Selection. |
 | Citekey copy | Main may batch through MainItemTarget; Reader/Note remain contextual single-target. |
@@ -286,12 +287,15 @@ Main citekey copy uses MainItemTarget, normalizes through Zotero's
 missing citekeys; the resulting raw Better BibTeX keys are space-separated.
 Reader and Note copy remain contextual single-target Operations.
 
-Main collection membership also uses MainItemTarget and supports a batch only
-within one library. Its chooser resolves one collection but does not own the
-mutation. Confirmation rechecks the item-target signature before applying the
-batch; existing no-op memberships are skipped and Neo Selection is unchanged.
-Reader membership is contextual single-target; Note collection actions are not
-supported.
+Main collection membership resolves MainItemTarget from Main `EffectiveSelection`: persistent Neo Selection when nonempty, otherwise Main CurrentTarget. The Main workflow fixes the target source, identity set, and one library before showing candidates, then revalidates them and the writable target at confirmation. Existing Reader add/remove callers pass their Reader-context item targets; they do not borrow Main Selection. Note collection actions are unsupported.
+
+`moveToCollection` additionally requires one active ordinary source collection and every target to be a direct member of it. Main revalidates the source and target identities; Operations receive explicit item objects and source/destination collection IDs and move memberships atomically while preserving other collections. Candidate coverage means direct membership only. Confirmation does not change Main Selection.
+
+### Collection structure targets
+
+`moveCollection`, `renameCollection`, and `deleteCollection` target one ordinary collection: the tree cursor when the Collections pane has focus, otherwise exactly one selected active collection. Tree focus can identify a cursor independently of multiple selected scopes; outside that pane, multiple selected scopes fail closed. A library root or unavailable cursor/row is not a target, and the first selected row is never substituted. These actions do not borrow item `Selection`.
+
+`createCollection` requires one library context. With tree focus it uses the cursor's library; otherwise it requires one selected library/scope. The existing picker asks for the parent, including library root. A current collection may be preselected as a parent, but item Selection and native item multi-selection do not select it. Main resolves stable collection IDs; Operations recheck the collection and library before mutation.
 
 ## Hidden Selection safety
 

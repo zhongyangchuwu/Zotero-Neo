@@ -157,9 +157,9 @@ Default recording policy by cause and context:
 | `findNext`, `findPrevious` | Main visible-row repeat / Reader supported search destination | Main: settled change; Reader: owned native hard point only |
 | `main-local-find.confirm` | Main Items: Enter commits the query and moves to the first match | Record |
 | `mainOpenPDF` | Main Cursor or captured Note-context target | Record after successful navigation |
-| `mainActivate` | Items opens Cursor; collection activation is View mutation | Record when Items |
+| `mainActivate` | Items opens Cursor; Collections Enter confirms the tree cursor's scope | Record after a settled change in either panel |
 | `findAllItems`, `findCollectionItems`, `findNotes` | Semantic chooser confirmation, not provider/query activity | Record |
-| `showInLibrary` | Reader/Note contextual target successfully revealed | Record |
+| `findCollections` | Confirmed Main collection candidate, not Picker query/browsing | Record after native scope selection settles |
 | `main-selection-panel.reveal` | Available member revealed by this panel invocation | Record |
 | `firstPage`, `lastPage` | Supported explicit Reader page path | Record on owned native hard point |
 | `prevAnnotation`, `nextAnnotation` | Supported Reader destination, not mere selection UI | Record on owned native hard point |
@@ -167,9 +167,14 @@ Default recording policy by cause and context:
 | `reader-mark.jump` | One managed mark excursion; set/delete/browse excluded | Record once on managed final destination |
 | `reader-native.hard` | Unowned non-transient native destination, including Zotero-native Outline navigation, in the selected Reader tab | Record on qualifying native hard point |
 | `navigateBack`, `navigateForward` | Counted or uncounted traversal | Traverse, never append |
-| Main `j/k`, Reader `h/l`, scroll/viewport motions | Navigation-capable ordinary movement | Ignore by default |
-| Native tab-bar selection/close; manual scope/filter changes | Not current standalone jump events | Ignore |
+| Main item-tree `j/k`, Reader `h/l`, scroll/viewport motions | Navigation-capable ordinary movement | Ignore by default |
+| Main Collections `j/k`, first/last, and expand/collapse | Tree cursor/scope movement without explicit confirmation | Ignore |
+| Native tab-bar selection/close; unconfirmed native scope/filter changes | Not current standalone jump events | Ignore |
 | Selection/caret editing, zoom/layout, annotation/tag/item mutations, temporary-surface launch/browse | Not navigation destinations | No recording rule |
+
+For a collection destination, `mainActivate` in the Collections pane is Enter on the tree cursor. `findCollections` records only a confirmed candidate; both use native scope selection completion, and a transition is eligible only after Zotero's `onCollectionSelected()` and the rendered Main item view agree on the target scope. Opening or searching the Picker is not a visit.
+
+Collection-tree `j/k`, first/last, and expand/collapse do not append history. Single-scope native tree motion can change the actual Scope before Enter, so Main retains the pre-motion Library location only as a possible source for the following `mainActivate`. It reuses that snapshot only while the focus epoch, history revision, selected tab ID, and expected native Scope IDs still match. A changed scope confirmed by Enter is eligible as one new visit after native scope completion; a fence mismatch prevents reuse and captures the actual current location instead.
 
 A named event is used where there is no executable ActionId; do not invent an ActionId merely to fit policy. Delayed chooser callbacks carry their semantic action cause. Link-hint activation carries its owning navigation cause; native Outline actions follow Zotero's native navigation and use the existing `reader-native.hard` observation.
 
@@ -317,6 +322,8 @@ No persistent Main Selection, zoom/layout, Note caret, or synthetic reconstructi
 Restore uses the same coordinator and adapters with a Traverse root. Reuse readable closed attachments and remap all matching historical tab hints. Native history suppression is applied only to managed restore, not to Ignore policy for normal commands.
 
 Library restore remains ordered: tab, scope, Quick Search, tags, Advanced Search availability, Cursor, focus. Failure leaves the index unchanged but does not undo earlier UI mutations. Report partial/stale honestly.
+
+For a nonempty Main ScopeSet, scope selection and restoration wait for the pane's canonical `onCollectionSelected()` completion rather than relying on a selection event or matching IDs alone. They compare settled selected IDs with the native `itemsView.collectionTreeRows`; selection also waits for the item-view load, and history restoration waits for that load before applying filters, Cursor, and focus. A replaced pane/view or mismatched rendered scope cannot complete as a successful visit.
 
 Currentness guards apply at effect and feedback boundaries:
 

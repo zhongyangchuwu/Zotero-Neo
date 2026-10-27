@@ -23,4 +23,5 @@ export interface PickerItem {
   tagType?: 'manual' | 'automatic';
   tagName?: string;
   tagCandidate?: 'tag' | 'create' | 'namespace';
+  collectionCandidate?: 'collection' | 'root' | 'create';
 }

@@ -3,6 +3,7 @@ import type { MainWindow, ReaderControllerApi, ReaderJumpLocation } from '../cor
 import type { Logger } from '../core/logging';
 import { NavigationCoordinator } from '../navigation/coordinator';
 import type {
+  LibraryNavigationLocation,
   NavigationExecution,
   NavigationIntent,
   NavigationLocation,
@@ -20,9 +21,12 @@ import {
   mainScopeSelectedIDs,
   restoreMainItemCursorAnchor,
   restoreMainScopeIDs,
+  selectMainCollection,
+  selectMainScopeCursor,
   selectMainTab,
   selectedMainTabID,
   selectedMainTabInfo,
+  waitForMainItemView,
 } from '../toolkit/main';
 import type { MainNavigation } from './navigation';
 import type { MainViewActions } from './view-actions';
@@ -44,6 +48,15 @@ export class MainNavigationExecutor {
   readonly #viewActions: MainViewActions;
   readonly #reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>;
   readonly #isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean;
+  readonly #scopeMotionSources = new WeakMap<
+    MainWindowSession,
+    {
+      readonly focusEpoch: number;
+      readonly location: LibraryNavigationLocation;
+      revision: number;
+      expectedScopeIDs: readonly string[];
+    }
+  >();
 
   constructor(
     logger: Logger,
@@ -65,7 +78,48 @@ export class MainNavigationExecutor {
     intent: NavigationIntent,
     operation: NavigationOperation,
   ): NavigationExecution {
-    return this.coordinatorFor(window, session).execute(intent, operation);
+    const scopeMotion =
+      intent.surface === 'main' &&
+      intent.context?.mainPanel === 'collections' &&
+      intent.cause.kind === 'action' &&
+      (intent.cause.action === 'mainNavDown' ||
+        intent.cause.action === 'mainNavUp' ||
+        intent.cause.action === 'mainNavFirst' ||
+        intent.cause.action === 'mainNavLast');
+    if (scopeMotion) {
+      const focusEpoch = this.#navigation.focusEpoch(session);
+      const previous = this.#scopeMotionSources.get(session);
+      if (
+        !previous ||
+        previous.focusEpoch !== focusEpoch ||
+        previous.revision !== session.jumpHistory.revision ||
+        previous.location.tabID !== selectedMainTabID(window) ||
+        !sameStrings(previous.expectedScopeIDs, mainScopeSelectedIDs(window))
+      ) {
+        this.#scopeMotionSources.delete(session);
+        const location = this.captureSafely(window, session);
+        if (location?.kind === 'library')
+          this.#scopeMotionSources.set(session, {
+            focusEpoch,
+            revision: session.jumpHistory.revision,
+            location,
+            expectedScopeIDs: location.scopeIDs,
+          });
+      }
+    } else {
+      this.#scopeMotionSources.delete(session);
+    }
+    const execution = this.coordinatorFor(window, session).execute(intent, operation);
+    const source = this.#scopeMotionSources.get(session);
+    if (scopeMotion && source) {
+      if (!execution.pending && execution.result.kind === 'completed') {
+        source.revision = session.jumpHistory.revision;
+        source.expectedScopeIDs = mainScopeSelectedIDs(window);
+      } else {
+        this.#scopeMotionSources.delete(session);
+      }
+    }
+    return execution;
   }
 
   port(window: MainWindow, session: MainWindowSession): NavigationPort {
@@ -164,6 +218,74 @@ export class MainNavigationExecutor {
     };
   }
 
+  collectionSelection(
+    window: MainWindow,
+    session: MainWindowSession,
+    collectionID: number,
+  ): NavigationOperation {
+    return this.scopeSelection(window, session, (isCurrent) =>
+      selectMainCollection(window, collectionID, isCurrent),
+    );
+  }
+
+  scopeActivation(window: MainWindow, session: MainWindowSession): NavigationOperation {
+    const operation = this.scopeSelection(window, session, (isCurrent) =>
+      selectMainScopeCursor(window, isCurrent),
+    );
+    const source = this.#scopeMotionSources.get(session);
+    if (
+      !source ||
+      source.focusEpoch !== this.#navigation.focusEpoch(session) ||
+      source.revision !== session.jumpHistory.revision ||
+      source.location.tabID !== selectedMainTabID(window) ||
+      !sameStrings(source.expectedScopeIDs, mainScopeSelectedIDs(window))
+    )
+      return operation;
+
+    // Native single-scope j/k already changed the view; Enter commits the whole visit.
+    let capturedSource = false;
+    return {
+      ...operation,
+      capture: () => {
+        if (!capturedSource) {
+          capturedSource = true;
+          return source.focusEpoch === this.#navigation.focusEpoch(session) &&
+            source.location.tabID === selectedMainTabID(window) &&
+            sameStrings(source.expectedScopeIDs, mainScopeSelectedIDs(window))
+            ? source.location
+            : this.captureSafely(window, session);
+        }
+        return this.captureSafely(window, session, 'items');
+      },
+    };
+  }
+
+  private scopeSelection(
+    window: MainWindow,
+    session: MainWindowSession,
+    select: (isCurrent: () => boolean) => Promise<boolean>,
+  ): NavigationOperation {
+    return {
+      dispatch: 'serial-navigation',
+      destinationPanel: 'items',
+      start: (attempt) => {
+        const tabID = selectedMainTabID(window);
+        const isCurrent = (): boolean => attempt.isCurrent() && selectedMainTabID(window) === tabID;
+        return {
+          kind: 'deferred',
+          settled: (async (): Promise<NavigationOutcome> => {
+            const selected = await select(isCurrent);
+            if (!isCurrent()) return { kind: 'stale' };
+            if (!selected || !this.#navigation.focusPanel(window, session, 'items'))
+              return { kind: 'unavailable' };
+            focusMainItemsImmediately(window);
+            return { kind: 'completed', evidence: 'settled-change' };
+          })(),
+        };
+      },
+    };
+  }
+
   traversal(
     window: MainWindow,
     session: MainWindowSession,
@@ -249,12 +371,15 @@ export class MainNavigationExecutor {
     let scopeRestored: boolean;
     try {
       scopeRestored = await restoreMainScopeIDs(window, location.scopeIDs, isCurrentLocation);
+      if (scopeRestored) scopeRestored = await waitForMainItemView(window, isCurrentLocation);
     } catch (error) {
       this.#logger.debug(`jump history scope restore failed: ${String(error)}`);
       scopeRestored = false;
     }
     if (!isCurrentLocation()) return { restored: false, stale: true, missing: [] };
     if (!scopeRestored) return { restored: false, stale: false, missing: ['scope'] };
+    if (!sameStrings(mainScopeSelectedIDs(window), location.scopeIDs))
+      return { restored: false, stale: true, missing: [] };
 
     if (quickSearchClaimed()) {
       // The user claimed native Quick Search while scope selection was pending.
