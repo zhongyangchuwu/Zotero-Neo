@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 import type { ItemTargetSet } from '../../src/core/item-target';
-import { CollectionMembershipActions } from '../../src/main/collection-actions';
+import { ModuleHost } from '../../src/core/module-host';
+import { createCollectionsModule } from '../../src/modules/collections';
+import type { CollectionConfirmation } from '../../src/modules/collections/actions';
+import type { PickerProvider } from '../../src/main/picker/types';
 import type { MainNavigation } from '../../src/main/navigation';
 import { FuzzyPicker } from '../../src/main/picker';
 import { SelectionStore } from '../../src/main/selection-store';
@@ -161,9 +164,43 @@ function workflowHarness() {
   const picker = new FuzzyPicker(logger, navigation);
   const opened = vi.spyOn(picker, 'open');
   const navigate = vi.fn(async () => undefined);
-  const actions = new CollectionMembershipActions(logger, navigation, picker, navigate);
+  const host = new ModuleHost(logger, () => session.window === window);
+  const captureCurrent = () => {
+    const generation = session.picker.generation;
+    return () => session.window === window && session.picker.generation === generation;
+  };
+  const actions = createCollectionsModule(host, {
+    window,
+    logger,
+    status: (message) => status(session, message),
+    navigate,
+    captureCurrent,
+    choose: (source: PickerProvider, confirm: CollectionConfirmation) => {
+      if (session.picker.open) return null;
+      const opening = picker.open(window, session, 'collections', {
+        source,
+        confirm: (candidate) => confirm(candidate, isCurrent, session.picker.committedQuery),
+      });
+      const generation = session.picker.generation;
+      const isCurrent = () =>
+        session.window === window &&
+        session.picker.open &&
+        session.picker.generation === generation &&
+        session.picker.scope === 'collections';
+      void opening;
+      return () => {
+        if (
+          session.picker.open &&
+          session.picker.generation === generation &&
+          session.picker.scope === 'collections'
+        )
+          picker.close(session);
+      };
+    },
+  });
   let resolved: ItemTargetSet = { source: 'main', items: [first], total: 1, missing: 0 };
   const resolveTargets = () => resolved;
+  const request = { source: 'main' as const, label: 'context item' as const, resolveTargets };
   const start = async (action: () => void) => {
     action();
     await opened.mock.results.at(-1)?.value;
@@ -186,6 +223,8 @@ function workflowHarness() {
     window,
     session,
     cleanups,
+    host,
+    request,
     actions,
     picker,
     start,
@@ -215,10 +254,25 @@ function workflowHarness() {
 }
 
 describe('collection workflows', () => {
+  it('adds the Reader context item through the Reader contribution', async () => {
+    const h = workflowHarness();
+    h.targets({ source: 'reader', items: [h.second], total: 1, missing: 0 });
+    await h.start(() =>
+      h.actions.add({
+        source: 'reader',
+        label: 'context item',
+        resolveTargets: h.resolveTargets,
+      }),
+    );
+    await h.confirm(20);
+    expect(h.second.getCollections()).toEqual([11, 20]);
+    expect(h.first.getCollections()).toEqual([10]);
+  });
+
   it('continuously adds to the frozen active collection without selecting items, clearing Selection, or loading the library', async () => {
     const h = workflowHarness();
     h.session.selection.add({ libraryID: 1, itemID: 1 });
-    await h.start(() => h.actions.addItems(h.window, h.session));
+    await h.start(() => h.actions.addItems());
     expect(h.session.picker.filtered.find((candidate) => candidate.id === 1)?.meta).toContain(
       'Already',
     );
@@ -250,7 +304,7 @@ describe('collection workflows', () => {
       entered.resolve();
       return loading.promise;
     });
-    await h.start(() => h.actions.addItems(h.window, h.session));
+    await h.start(() => h.actions.addItems());
     h.input('Paper 2');
     const confirmation = h.confirm(2);
     await entered.promise;
@@ -266,7 +320,7 @@ describe('collection workflows', () => {
 
   it('retains query and candidate on a failed addition and rejects changed permissions before save', async () => {
     const h = workflowHarness();
-    await h.start(() => h.actions.addItems(h.window, h.session));
+    await h.start(() => h.actions.addItems());
     h.input('Paper 2');
     await vi.waitFor(() =>
       expect(h.session.picker.filtered.map((candidate) => candidate.id)).toEqual([2]),
@@ -286,14 +340,14 @@ describe('collection workflows', () => {
   it('requires actual direct source membership for movement and refuses a changed source at confirmation', async () => {
     const h = workflowHarness();
     h.targets({ source: 'main', items: [h.first, h.second], total: 2, missing: 0 });
-    h.actions.moveItems(h.window, h.session, h.resolveTargets);
+    h.actions.moveItems(h.request);
     expect(h.opened).not.toHaveBeenCalled();
     expect(h.status).toHaveBeenLastCalledWith(
       h.session,
       expect.stringContaining('directly assigned'),
     );
     h.targets({ source: 'main', items: [h.first], total: 1, missing: 0 });
-    await h.start(() => h.actions.moveItems(h.window, h.session, h.resolveTargets));
+    await h.start(() => h.actions.moveItems(h.request));
     h.scopeSelection.selected = new Set([1]);
     h.scopeSelection.focused = 1;
     await h.confirm(20);
@@ -305,7 +359,7 @@ describe('collection workflows', () => {
   it('keeps explicit creation mutation-free on cancel and restores the original membership query', async () => {
     const h = workflowHarness();
     h.prompt.mockReturnValueOnce(false);
-    await h.start(() => h.actions.open(h.window, h.session, true, h.resolveTargets));
+    await h.start(() => h.actions.add(h.request));
     h.input('Destination');
     await h.confirm('create');
     expect(h.session.picker.provider?.title).toContain('choose parent');
@@ -317,9 +371,37 @@ describe('collection workflows', () => {
     expect(h.first.getCollections()).toEqual([10]);
   });
 
+  it.each(['create', 'create-and-add'] as const)(
+    'does not open a confirmation after %s retires inside the name prompt',
+    async (workflow) => {
+      const h = workflowHarness();
+      await h.start(() => (workflow === 'create' ? h.actions.create() : h.actions.add(h.request)));
+      if (workflow === 'create-and-add') await h.confirm('create');
+      h.prompt.mockImplementationOnce((_window, _title, _label, value) => {
+        value.value = 'Retired name';
+        h.host.dispose();
+        return true;
+      });
+      const feedback = h.status.mock.calls.length;
+
+      await h.confirm('root');
+
+      expect(h.nativeConfirm).not.toHaveBeenCalled();
+      expect(h.transaction).not.toHaveBeenCalled();
+      expect([...h.collections.values()].map((collection) => collection.name)).toEqual([
+        'Source',
+        'Nested',
+        'Destination',
+      ]);
+      expect(h.first.getCollections()).toEqual([10]);
+      expect(h.session.picker.open).toBe(false);
+      expect(h.status.mock.calls.slice(feedback)).toEqual([]);
+    },
+  );
+
   it('creates under the chosen parent and adds the frozen targets only after explicit final confirmation', async () => {
     const h = workflowHarness();
-    await h.start(() => h.actions.open(h.window, h.session, true, h.resolveTargets));
+    await h.start(() => h.actions.add(h.request));
     await h.confirm('create');
     await h.confirm(20);
     expect(h.nativeConfirm).toHaveBeenCalledWith(
@@ -338,7 +420,7 @@ describe('collection workflows', () => {
 
   it('rejects a source-surface change even when item IDs are unchanged', async () => {
     const h = workflowHarness();
-    await h.start(() => h.actions.open(h.window, h.session, true, h.resolveTargets));
+    await h.start(() => h.actions.add(h.request));
     h.targets({ source: 'reader', items: [h.first], total: 1, missing: 0 });
     await h.confirm(20);
     expect(h.first.save).not.toHaveBeenCalled();
@@ -366,14 +448,14 @@ describe('collection workflows', () => {
       h.session.activePanel = 'items';
       recordedPanels.push(h.session.activePanel);
     });
-    await h.start(() => h.actions.find(h.window, h.session));
+    await h.start(() => h.actions.find());
     h.input('Destination');
     expect(h.navigate).not.toHaveBeenCalled();
     h.picker.onKeyDown(pickerKey('Escape', h.session.picker.input), h.window, h.session);
     expect(h.navigate).not.toHaveBeenCalled();
-    await h.start(() => h.actions.find(h.window, h.session));
+    await h.start(() => h.actions.find());
     await h.confirm(20);
-    expect(h.navigate).toHaveBeenCalledWith(h.window, h.session, 20);
+    expect(h.navigate).toHaveBeenCalledWith(20);
     expect(h.window.document.activeElement).toBe(items);
     expect(h.session.activePanel).toBe('items');
     expect(recordedPanels).toEqual(['items']);
@@ -388,37 +470,91 @@ describe('collection workflows', () => {
     tree.id = 'collection-tree';
     tree.focus();
     h.scopeSelection.selected = new Set([1]);
-    await h.start(() => h.actions.move(h.window, h.session));
+    await h.start(() => h.actions.move());
     expect(h.session.picker.filtered.map((candidate) => candidate.id)).toEqual(['root', 20]);
     await h.confirm(20);
     expect(h.collections.get(10)?.parentID).toBe(20);
     expect(h.first.getCollections()).toEqual([10]);
   });
 
-  it('does not start mutations on ambiguous active scopes or after session disposal', async () => {
+  it('does not start mutations on ambiguous active scopes or after module retirement', async () => {
     const h = workflowHarness();
     h.scopeSelection.count = 2;
     h.scopeSelection.selected = new Set([0, 1]);
-    h.actions.addItems(h.window, h.session);
-    h.actions.rename(h.window, h.session);
-    h.actions.removeCollection(h.window, h.session);
+    h.actions.addItems();
+    h.actions.rename();
+    h.actions.removeCollection();
     expect(h.opened).not.toHaveBeenCalled();
     expect(h.prompt).not.toHaveBeenCalled();
     expect(h.nativeConfirm).not.toHaveBeenCalled();
     h.scopeSelection.count = 1;
     h.scopeSelection.selected = new Set([0]);
-    await h.start(() => h.actions.addItems(h.window, h.session));
+    await h.start(() => h.actions.addItems());
     const oldInput = h.session.picker.input;
-    for (const cleanup of h.cleanups) cleanup();
+    h.host.dispose();
     h.picker.onKeyDown(pickerKey('Enter', oldInput), h.window, h.session);
     await h.session.picker.queue;
     expect(h.first.save).not.toHaveBeenCalled();
     expect(h.second.save).not.toHaveBeenCalled();
   });
 
+  it('rejects a retained confirmation after retirement without writing', async () => {
+    const h = workflowHarness();
+    await h.start(() => h.actions.add(h.request));
+    const confirm = h.session.picker.confirm!;
+    const candidate = h.session.picker.filtered.find((item) => item.id === 20)!;
+    h.host.dispose();
+    await expect(Promise.resolve().then(() => confirm(candidate, false))).rejects.toThrow();
+    expect(h.transaction).not.toHaveBeenCalled();
+    expect(h.first.getCollections()).toEqual([10]);
+    expect(h.actions.add(h.request)).toBe(false);
+  });
+
+  it('rolls back membership when retired while a save is in progress', async () => {
+    const h = workflowHarness();
+    const entered = Promise.withResolvers<void>();
+    const saving = Promise.withResolvers<void>();
+    const save = vi.mocked(h.first.save).getMockImplementation()!;
+    vi.mocked(h.first.save).mockImplementationOnce(async () => {
+      entered.resolve();
+      await saving.promise;
+      return save();
+    });
+    await h.start(() => h.actions.add(h.request));
+    const confirmation = h.confirm(20);
+    await entered.promise;
+    h.host.dispose();
+    saving.resolve();
+    await confirmation;
+    expect(h.first.getCollections()).toEqual([10]);
+    expect(h.first.reload).toHaveBeenCalled();
+    expect(h.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains ownership of an open picker when another request finds it busy', async () => {
+    const h = workflowHarness();
+    await h.start(() => h.actions.add(h.request));
+    h.actions.add(h.request);
+    h.host.dispose();
+    expect(h.session.picker.open).toBe(false);
+  });
+
+  it('does not close a replacement picker when the old module retires', async () => {
+    const h = workflowHarness();
+    await h.start(() => h.actions.add(h.request));
+    const source = h.session.picker.provider!;
+    h.picker.close(h.session);
+    await h.picker.open(h.window, h.session, 'all', { source });
+    const generation = h.session.picker.generation;
+    h.host.dispose();
+    expect(h.session.picker.open).toBe(true);
+    expect(h.session.picker.generation).toBe(generation);
+    expect(h.session.picker.provider).toBe(source);
+  });
+
   it('creates only under an explicitly chosen parent and leaves existing memberships alone', async () => {
     const h = workflowHarness();
-    await h.start(() => h.actions.create(h.window, h.session));
+    await h.start(() => h.actions.create());
     await h.confirm(20);
     const created = [...h.collections.values()].find(
       (collection) => collection.name === 'Created collection',
@@ -432,21 +568,21 @@ describe('collection workflows', () => {
   it('cancels native rename and deletion without saving, then renames by stable identity and deletes with items kept', async () => {
     const h = workflowHarness();
     h.prompt.mockReturnValueOnce(false);
-    h.actions.rename(h.window, h.session);
+    h.actions.rename();
     await Promise.resolve();
     expect(h.collections.get(10)?.name).toBe('Source');
     expect(h.collections.get(10)?.save).not.toHaveBeenCalled();
     h.nativeConfirm.mockReturnValueOnce(false);
-    h.actions.removeCollection(h.window, h.session);
+    h.actions.removeCollection();
     await Promise.resolve();
     expect(h.collections.get(10)?.deleted).toBe(false);
     expect(h.collections.get(10)?.save).not.toHaveBeenCalled();
-    h.actions.rename(h.window, h.session);
+    h.actions.rename();
     await vi.waitFor(() =>
       expect(h.status).toHaveBeenCalledWith(h.session, expect.stringContaining('Renamed')),
     );
     expect(h.collections.get(10)?.name).toBe('Created collection');
-    h.actions.removeCollection(h.window, h.session);
+    h.actions.removeCollection();
     await vi.waitFor(() =>
       expect(h.status).toHaveBeenCalledWith(h.session, expect.stringContaining('all items kept')),
     );
@@ -460,7 +596,7 @@ describe('collection workflows', () => {
   it('preserves a failed rename draft for the next explicit native-dialog retry', async () => {
     const h = workflowHarness();
     vi.mocked(h.collections.get(10)!.save).mockRejectedValueOnce(new Error('disk unavailable'));
-    h.actions.rename(h.window, h.session);
+    h.actions.rename();
     await vi.waitFor(() =>
       expect(h.status).toHaveBeenCalledWith(h.session, expect.stringContaining('disk unavailable')),
     );
@@ -469,7 +605,7 @@ describe('collection workflows', () => {
       expect(value.value).toBe('Created collection');
       return false;
     });
-    h.actions.rename(h.window, h.session);
+    h.actions.rename();
     await Promise.resolve();
     expect(h.collections.get(10)?.save).toHaveBeenCalledTimes(1);
   });
@@ -477,7 +613,7 @@ describe('collection workflows', () => {
   it('moves direct members from the explicit source while retaining all other memberships', async () => {
     const h = workflowHarness();
     h.first.addToCollection(11);
-    await h.start(() => h.actions.moveItems(h.window, h.session, h.resolveTargets));
+    await h.start(() => h.actions.moveItems(h.request));
     await h.confirm(20);
     expect(h.first.getCollections()).toEqual([11, 20]);
     expect(h.second.getCollections()).toEqual([11]);
@@ -489,7 +625,7 @@ describe('collection workflows', () => {
   it('retains the parent candidate and typed creation name after a failed transaction', async () => {
     const h = workflowHarness();
     h.transaction.mockRejectedValueOnce(new Error('transaction unavailable'));
-    await h.start(() => h.actions.open(h.window, h.session, true, h.resolveTargets));
+    await h.start(() => h.actions.add(h.request));
     await h.confirm('create');
     await h.confirm(20);
     expect(h.session.picker.open).toBe(true);

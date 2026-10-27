@@ -77,7 +77,7 @@ import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
 import { MainNavigationExecutor } from './jump-history';
-import { CollectionMembershipActions } from './collection-actions';
+import { createCollectionsModule, type CollectionsModule } from '../modules/collections';
 import { installMainViewLifecycle } from './view-lifecycle';
 import { createNotesProvider } from './picker/providers/notes';
 import { appendReaderSelectionToNote, readerCaptureBaseItem } from './note-capture';
@@ -99,14 +99,18 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #noteEditor: NoteEditor;
   readonly #modules = new WeakMap<
     MainWindowSession,
-    { readonly host: ModuleHost; readonly tags: TagModule; readonly extensions: ExtensionsModule }
+    {
+      readonly host: ModuleHost;
+      readonly tags: TagModule;
+      readonly extensions: ExtensionsModule;
+      readonly collections: CollectionsModule;
+    }
   >();
   readonly #itemSelect: MainItemSelect;
   readonly #selectionPanel: SelectionPanel;
   readonly #localFind: MainLocalFind;
   readonly #viewActions: MainViewActions;
   readonly #navigationExecutor: MainNavigationExecutor;
-  readonly #collections: CollectionMembershipActions;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -147,27 +151,6 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#navigation,
       () => pickerMouseEnabled(dependencies.preferences),
       () => this.bindings(),
-    );
-    this.#collections = new CollectionMembershipActions(
-      dependencies.logger,
-      this.#navigation,
-      this.#picker,
-      async (window, session, collectionID) => {
-        const execution = this.#navigationExecutor.execute(
-          window,
-          session,
-          {
-            cause: { kind: 'action', action: 'findCollections' },
-            surface: 'main',
-            context: { mainPanel: session.activePanel },
-          },
-          this.#navigationExecutor.collectionSelection(window, session, collectionID),
-        );
-        const result = execution.pending ? await execution.result : execution.result;
-        if (result.kind === 'failed') throw result.error;
-        if (result.kind !== 'completed' && result.kind !== 'unchanged')
-          throw new Error('Collection navigation is no longer available');
-      },
     );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,
@@ -213,7 +196,57 @@ export class MainWindowController implements MainWindowControllerApi {
         bindings: () => this.bindings(),
         themeRoot: (root) => session.theme.add(root),
       });
-      this.#modules.set(session, { host, tags, extensions });
+      const collections = createCollectionsModule(host, {
+        window,
+        logger: this.#dependencies.logger,
+        status: (message) => this.#navigation.status(session, message),
+        captureCurrent: () => {
+          const generation = session.picker.generation;
+          return () =>
+            this.#sessions.get(window) === session &&
+            !session.cleanup.disposed &&
+            session.picker.generation === generation &&
+            !window.closed;
+        },
+        choose: (source, confirm) => {
+          if (session.picker.open) return null;
+          const previous = session.picker.generation;
+          let generation = -1;
+          const isCurrent = () =>
+            this.#sessions.get(window) === session &&
+            !session.cleanup.disposed &&
+            session.picker.open &&
+            session.picker.generation === generation &&
+            !window.closed;
+          void this.#picker.open(window, session, 'collections', {
+            source,
+            confirm: (candidate) => confirm(candidate, isCurrent, session.picker.committedQuery),
+          });
+          generation = session.picker.generation;
+          if (generation === previous) return null;
+          return () => {
+            if (session.picker.generation === generation && session.picker.scope === 'collections')
+              this.#picker.close(session);
+          };
+        },
+        navigate: async (collectionID) => {
+          const execution = this.#navigationExecutor.execute(
+            window,
+            session,
+            {
+              cause: { kind: 'action', action: 'findCollections' },
+              surface: 'main',
+              context: { mainPanel: session.activePanel },
+            },
+            this.#navigationExecutor.collectionSelection(window, session, collectionID),
+          );
+          const result = execution.pending ? await execution.result : execution.result;
+          if (result.kind === 'failed') throw result.error;
+          if (result.kind !== 'completed' && result.kind !== 'unchanged')
+            throw new Error('Collection navigation is no longer available');
+        },
+      });
+      this.#modules.set(session, { host, tags, extensions, collections });
       session.cleanup.add(() => host.dispose());
     } catch (error) {
       const failure = new CleanupFailure();
@@ -242,6 +275,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const modules = this.#modules.get(session);
     if (!modules) throw new Error('Window modules are not attached');
     return modules.extensions;
+  }
+
+  private collectionsModule(session: MainWindowSession): CollectionsModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.collections;
   }
 
   addWindow(window: MainWindow): void {
@@ -588,7 +627,9 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.logger.debug('ignored Reader collection picker: no attached owner window');
       return;
     }
-    this.#collections.open(ownerWindow, session, present, resolveTargets);
+    const request = { source: 'reader', label: 'context item', resolveTargets } as const;
+    if (present) this.collectionsModule(session).add(request);
+    else this.collectionsModule(session).remove(request);
   }
 
   async captureReaderSelectionToNote(
@@ -1327,22 +1368,22 @@ export class MainWindowController implements MainWindowControllerApi {
         this.openCollectionItemsPickerForSurface(window, session);
         break;
       case 'findCollections':
-        this.#collections.find(window, session);
+        this.collectionsModule(session).find();
         break;
       case 'addItemsToCurrentCollection':
-        this.#collections.addItems(window, session);
+        this.collectionsModule(session).addItems();
         break;
       case 'moveCollection':
-        this.#collections.move(window, session);
+        this.collectionsModule(session).move();
         break;
       case 'createCollection':
-        this.#collections.create(window, session);
+        this.collectionsModule(session).create();
         break;
       case 'renameCollection':
-        this.#collections.rename(window, session);
+        this.collectionsModule(session).rename();
         break;
       case 'deleteCollection':
-        this.#collections.removeCollection(window, session);
+        this.collectionsModule(session).removeCollection();
         break;
       case 'switchTab':
         this.openTabPickerForSurface(window, session);
@@ -1455,9 +1496,15 @@ export class MainWindowController implements MainWindowControllerApi {
         const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
         if (visual) this.#itemSelect.cancel(window, session.selection);
         const resolveTargets = () => MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
-        if (action === 'moveToCollection')
-          this.#collections.moveItems(window, session, resolveTargets);
-        else this.#collections.open(window, session, action === 'addToCollection', resolveTargets);
+        const request = {
+          source: 'main',
+          label: session.selection.size ? 'Selection' : 'context item',
+          resolveTargets,
+        } as const;
+        const collections = this.collectionsModule(session);
+        if (action === 'moveToCollection') collections.moveItems(request);
+        else if (action === 'addToCollection') collections.add(request);
+        else collections.remove(request);
         break;
       }
       case 'mainNavDown':

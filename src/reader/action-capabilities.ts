@@ -1,6 +1,7 @@
 import type { ActionId } from '../input/actions';
 import { TAG_ITEM_ACTIONS } from '../modules/tags/capabilities';
 import { EXTENSIONS_SURFACE_ACTIONS } from '../modules/extensions/capabilities';
+import { COLLECTION_MEMBERSHIP_ACTIONS } from '../modules/collections/capabilities';
 
 export type ReaderCapabilityMode = 'normal' | 'visual';
 
@@ -70,8 +71,7 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'focusReaderThumbnails',
   'toggleMarksExplorer',
   ...TAG_ITEM_ACTIONS,
-  'addToCollection',
-  'removeFromCollection',
+  ...COLLECTION_MEMBERSHIP_ACTIONS,
   'mainYankCitekey',
   'showInLibrary',
   'openCommandPalette',

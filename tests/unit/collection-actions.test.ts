@@ -5,14 +5,13 @@ import type { MainWindow } from '../../src/core/contracts';
 import {
   CollectionMembershipActions,
   resolveCollectionMembershipTargets,
-} from '../../src/main/collection-actions';
+} from '../../src/modules/collections/actions';
+import type { CollectionConfirmation } from '../../src/modules/collections/actions';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { setCollectionMembership } from '../../src/operations/item-collections';
 import { SelectionStore } from '../../src/main/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
-import type { FuzzyPicker } from '../../src/main/picker';
-import type { MainNavigation } from '../../src/main/navigation';
 import { PickerRuntime } from '../../src/main/picker/runtime';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -197,40 +196,43 @@ describe('CollectionMembershipActions', () => {
     h.selection.add({ libraryID: 1, itemID: 1 });
 
     const status = vi.fn();
-    let confirm: ((candidate: { id: number }) => Promise<void>) | undefined;
-    const picker = {
-      open: vi.fn(async (_window, _session, scope, options) => {
-        expect(scope).toBe('collections');
-        h.session.picker.generation += 1;
-        h.session.picker.open = true;
-        confirm = options.confirm;
-      }),
-    } as unknown as FuzzyPicker;
-    const navigation = { status } as unknown as MainNavigation;
-    const actions = new CollectionMembershipActions(
-      { debug: vi.fn() } as never,
-      navigation,
-      picker,
-      vi.fn(async () => undefined),
-    );
-
-    actions.open(h.window, h.session, true, () => MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    let confirm: CollectionConfirmation | undefined;
+    const actions = new CollectionMembershipActions({
+      window: h.window,
+      logger: { debug: vi.fn() } as never,
+      isCurrent: () => true,
+      status,
+      navigate: vi.fn(async () => undefined),
+      choose: (_source, callback) => {
+        confirm = callback;
+      },
+      captureCurrent: () => () => true,
+    });
+    const request = {
+      source: 'main' as const,
+      label: 'Selection' as const,
+      resolveTargets: () => MAIN_ITEM_TARGET.resolve(h.window, h.session),
+    };
+    actions.open(request, true);
     await Promise.resolve();
 
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 2 });
     expect(confirm).toBeDefined();
-    await expect(confirm!({ id: 10 })).rejects.toThrow('Collection target changed; retry');
+    await expect(
+      confirm!({ id: 10, title: 'Inbox', search: 'Inbox' }, () => true, ''),
+    ).rejects.toThrow('Collection target changed; retry');
     expect(first.addToCollection).not.toHaveBeenCalled();
     expect(second.addToCollection).not.toHaveBeenCalled();
 
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 1 });
-    h.session.picker.open = false;
-    actions.open(h.window, h.session, true, () => MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    actions.open(request, true);
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 99 });
-    await expect(confirm!({ id: 10 })).rejects.toThrow('Selection contains unavailable items');
+    await expect(
+      confirm!({ id: 10, title: 'Inbox', search: 'Inbox' }, () => true, ''),
+    ).rejects.toThrow('Selection contains unavailable items');
     expect(first.addToCollection).not.toHaveBeenCalled();
   });
 });
