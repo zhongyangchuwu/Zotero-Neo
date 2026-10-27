@@ -31,7 +31,7 @@ import {
 import {
   PLUGINS_INPUT_ACTIONS,
   PLUGINS_LIST_ACTIONS,
-} from '../../src/main/plugin-manager-capabilities';
+} from '../../src/modules/extensions/capabilities';
 import {
   READER_OUTLINE_ACTIONS,
   READER_MARKS_ACTIONS,

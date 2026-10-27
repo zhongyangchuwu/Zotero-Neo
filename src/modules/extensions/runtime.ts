@@ -1,8 +1,8 @@
-import type { CompositionState } from '../input/composition';
-import type { LocalBindingRuntime } from '../input/local-binding-runtime';
-import type { InstalledPlugin } from './plugin-host';
+import type { CompositionState } from '../../input/composition';
+import type { LocalBindingRuntime } from '../../input/local-binding-runtime';
+import type { InstalledPlugin } from './host';
 
-/** Mutable state owned by one Main plugin-manager feature instance. */
+/** Mutable interaction state owned by one window's extensions module. */
 export class PluginManagerRuntime {
   open = false;
   generation = 0;

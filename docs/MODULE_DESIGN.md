@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座和标签模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：整体设计与渐进接入记录。最小基座、标签和扩展管理模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
 
 ## 范围与取舍
 
@@ -8,7 +8,7 @@
 
 本轮不设计 AI 接口或模块，不引入 Actions & Tags 的代码、运行时依赖或脚本执行机制，也不改变现有按键、默认行为、数据格式与 Zotero 兼容范围。
 
-先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前仅完成标签这一条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
+先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签和扩展管理两条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
 
 需要区分三种边界：
 
@@ -22,6 +22,7 @@
 - `ModuleScope` 只表达模块 ID、当前性与自有 cleanup 注册。复用现有 `CleanupScope` / `CleanupFailure`，释放句柄只执行一次，失败记录到共享 logger。宿主当前性由实际 MainWindow/session 身份提供，不新增全局 ActiveSurface。
 - `src/modules/tags/`：在每个 MainWindow 中接入 Main/Reader/Note 的 Add/Remove Tag，以及 Main 的 Toggle/Clear Tag Filter。标签模块只取得明确目标与具名端口，不直接持有整个 Main session。
 - Main controller 的 Picker 端口返回精确调用代次的释放句柄；模块在确认前检查作用域，已接纳保存完成后只在原作用域仍有效时显示反馈。旧输入不能触发新窗口或新模块的写入。
+- `src/modules/extensions/`：第二条真实接入路径，拥有按窗口隔离的 Plugin Manager 状态与 UI 生命周期。复用现有基座和局部输入机制，不扩张 `ModuleHost` 接口；原生扩展适配仍由 Toolkit 提供。资源获取失败会释放部分界面，模块退休后旧 DOM 与异步完成不能重画或关闭替换界面。
 
 尚未实现通用静态清单/依赖图、Reader/Note 独立模块附着或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
 
@@ -58,7 +59,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/main/note-editor.ts`、`note-runtime.ts`、`picker/providers/notes.ts`、`src/input/note-actions.ts` | MainWindow 与精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找或捕获目的地。 |
 | `capture` | Reader 所选文本追加到已有 Note，拥有源快照、目的地重验证、排队保存及保存回执流程。 | `src/main/note-capture.ts`、`controller.ts` 中捕获编排、Reader Selection Actions 入口 | 一次跨 Surface 交互及已接纳的保存操作；硬依赖 `reader-selection` 与 `notes`，不依赖 Vim Note 编辑开关。 |
 | `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、show in library 等跨窗口/Surface 定位。 | `src/main/navigation.ts`、`picker/providers/tabs.ts`、`src/reader/navigation.ts` 中相应动作、现有命名桥接 | MainWindow、关联 ReaderSession / ReaderView；使用基座导航端口，不拥有第二份 Back/Forward 历史。 |
-| `extensions` | 已安装 Zotero 扩展的 Plugin Manager：筛选、详情、刷新、允许的启停、设置及链接。 | `src/main/plugin-manager.ts`、`plugin-host.ts`、`plugin-manager-capabilities.ts` | 每个 MainWindow 的独立面板。不负责 Neo 内部模块管理，也不新增安装、更新或卸载功能。 |
+| `extensions` | 已安装 Zotero 扩展的 Plugin Manager：筛选、详情、刷新、允许的启停、设置及链接。 | `src/modules/extensions/`；`src/toolkit/main/plugins.ts` | 已按 MainWindow 接入，Main/Reader/Note 进入实际所属窗口的独立面板。不负责 Neo 内部模块管理，也不新增安装、更新或卸载功能。 |
 
 ### 跨模块协作规则
 
@@ -257,7 +258,7 @@ src/
 
 ## 实施顺序与验收
 
-契约走读与第一条标签路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
+契约走读、标签与扩展管理路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
 
 1. **先评审基座与接入契约。** 确认输入/目标/资源/写入结果的负责方，区分内部模块与公共插件 API；用上表现有流程走读后，再决定模块边界是否需要调整。未通过前不创建运行时模块框架、不搬文件。
 2. **以一条现有路径验证最小基座。** 接口确认后，选一条真实功能路径接入必要的作用域与贡献机制，核对 `(BindingContext, ActionId)` 所有权与依赖注入。验证真实宿主行为，不先搭完全部机制或引入没有消费者的接口。
@@ -278,4 +279,4 @@ src/
 - 所有可选模块关闭时，仍能从 Zotero 原生偏好页进入 Neo Settings。原生 Zotero 数据与扩展管理不受影响。
 - 现有 `getSelection()` / `registerSelectionAction()` 消费方无需改调用签名；选择功能停用时不执行旧选择回调，恢复后不重复注册。
 
-标签路径已通过契约测试及 Zotero 10.0.6 的 Main、Reader、Note、原生过滤和重载场景验证。其余拆分及模块开关仍需在各自实施时验证，文档构建不代表整体模块系统完成。
+标签路径已通过契约测试及 Zotero 10.0.6 的 Main、Reader、Note、原生过滤和重载场景验证。扩展管理已通过筛选、权限、重绑定/IME、异步退休、部分获取/释放失败和双窗口隔离契约，并在 Zotero 10.0.6 实测 Main/Reader 入口、筛选、刷新、关闭/重开与重载释放；实机未启停无关扩展。其余拆分及模块开关仍需在各自实施时验证，文档构建不代表整体模块系统完成。

@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { filterInstalledPlugins, PluginManagerPanel } from '../../src/main/plugin-manager';
-import type { InstalledPlugin } from '../../src/main/plugin-host';
-import { resolveBindings, type BindingMap } from '../../src/input/bindings';
-import { ZOTERO_NEO_PLUGIN_ID } from '../../src/main/plugin-host';
+import { filterInstalledPlugins, PluginManagerPanel } from '../../src/modules/extensions/panel';
+import { PluginManagerRuntime } from '../../src/modules/extensions/runtime';
+import { ModuleHost } from '../../src/core/module-host';
+import { createExtensionsModule } from '../../src/modules/extensions';
+import type { InstalledPlugin } from '../../src/modules/extensions/host';
+import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
+import { ZOTERO_NEO_PLUGIN_ID } from '../../src/modules/extensions/host';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
 
 afterEach(() => {
@@ -121,10 +124,32 @@ function installManagerHost() {
   return { alpha, beta, neo, manager, openPreferences, launchURL };
 }
 
+function createPanelFixture(
+  bindings: () => BindingMap = () => DEFAULT_BINDINGS,
+  themeRoot?: (root: HTMLElement) => () => void,
+) {
+  const { window, session } = createPickerHarness();
+  const state = new PluginManagerRuntime();
+  const logger = { debug: vi.fn(), diagnostic: vi.fn() };
+  const host = new ModuleHost(logger, () => true);
+  const panel = host.activate('extensions', (scope) => {
+    const instance = new PluginManagerPanel({
+      window,
+      state,
+      logger,
+      bindings,
+      themeRoot: themeRoot ?? ((root) => session.theme.add(root)),
+      isCurrent: () => scope.isCurrent(),
+    });
+    scope.add(() => instance.close());
+    return instance;
+  });
+  return { window, state, host, panel };
+}
+
 describe('configurable plugin manager contexts', () => {
   it('executes rebinding for every plugin operation and derives both footer and details discovery', async () => {
     const host = installManagerHost();
-    const { window, session } = createPickerHarness();
     const bindings = resolveBindings(
       JSON.stringify({
         'plugins-list:e': null,
@@ -143,26 +168,25 @@ describe('configurable plugin manager contexts', () => {
         'plugins-list:<F7>': 'pluginsRefresh',
       }),
     );
-    const panel = new PluginManagerPanel({ debug: vi.fn(), diagnostic: vi.fn() }, () => bindings);
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
-    const key = (value: string): void =>
-      panel.handleKey(pickerKey(value, session.pluginManager.overlay), window, session);
+    const { state, panel } = createPanelFixture(() => bindings);
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const key = (value: string): void => panel.handleKey(pickerKey(value, state.overlay));
     for (const retired of ['e', 'd', 'p', 'o', 'R', 'L', 'r']) {
-      const event = pickerKey(retired, session.pluginManager.overlay);
-      panel.handleKey(event, window, session);
+      const event = pickerKey(retired, state.overlay);
+      panel.handleKey(event);
       expect(event.preventDefault).not.toHaveBeenCalled();
     }
     expect(host.alpha.enable).not.toHaveBeenCalled();
-    expect(session.pluginManager.footer?.textContent).toContain('<F1>');
-    expect(session.pluginManager.details?.textContent).toContain('<F1>');
+    expect(state.footer?.textContent).toContain('<F1>');
+    expect(state.details?.textContent).toContain('<F1>');
     key('F1');
-    await vi.waitFor(() => expect(session.pluginManager.busy).toBe(false));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
     expect(host.alpha.enable).toHaveBeenCalledOnce();
-    expect(session.pluginManager.filtered[0]?.enabled).toBe(true);
-    expect(session.pluginManager.details?.textContent).toContain('<F2>');
+    expect(state.filtered[0]?.enabled).toBe(true);
+    expect(state.details?.textContent).toContain('<F2>');
     key('F2');
-    await vi.waitFor(() => expect(session.pluginManager.busy).toBe(false));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
     expect(host.alpha.disable).toHaveBeenCalledOnce();
     key('F3');
     expect(host.openPreferences).toHaveBeenCalledWith('alpha-pane');
@@ -176,14 +200,13 @@ describe('configurable plugin manager contexts', () => {
     ]);
     const loads = host.manager.getAddonsByTypes.mock.calls.length;
     key('F7');
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
+    await vi.waitFor(() => expect(state.loading).toBe(false));
     expect(host.manager.getAddonsByTypes).toHaveBeenCalledTimes(loads + 1);
-    panel.close(session);
+    panel.close();
   });
 
   it('rebinds list/search/cancel independently and preserves native query editing and IME', async () => {
     installManagerHost();
-    const { window, session } = createPickerHarness();
     let bindings: BindingMap = resolveBindings(
       JSON.stringify({
         'plugins-list:j': null,
@@ -202,28 +225,28 @@ describe('configurable plugin manager contexts', () => {
         'plugins-list:<F5>': 'uiCancel',
       }),
     );
-    const panel = new PluginManagerPanel({ debug: vi.fn(), diagnostic: vi.fn() }, () => bindings);
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
+    const { window, state, panel } = createPanelFixture(() => bindings);
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
     for (const retired of ['j', 'ArrowDown', '/', 'Escape', 'q']) {
-      const event = pickerKey(retired, session.pluginManager.overlay);
-      panel.handleKey(event, window, session);
+      const event = pickerKey(retired, state.overlay);
+      panel.handleKey(event);
       expect(event.preventDefault).not.toHaveBeenCalled();
     }
-    panel.handleKey(pickerKey('n', session.pluginManager.overlay), window, session);
-    expect(session.pluginManager.selected).toBe(1);
-    panel.handleKey(pickerKey('F2', session.pluginManager.overlay), window, session);
-    expect(session.pluginManager.selected).toBe(2);
-    panel.handleKey(pickerKey('F1', session.pluginManager.overlay), window, session);
-    expect(session.pluginManager.selected).toBe(0);
-    panel.handleKey(pickerKey('d', session.pluginManager.overlay, { ctrl: true }), window, session);
-    expect(session.pluginManager.selected).toBe(2);
-    panel.handleKey(pickerKey('u', session.pluginManager.overlay, { ctrl: true }), window, session);
-    expect(session.pluginManager.selected).toBe(0);
-    panel.handleKey(pickerKey('F3', session.pluginManager.overlay), window, session);
-    const input = session.pluginManager.input as HTMLInputElement & { emit(type: string): void };
+    panel.handleKey(pickerKey('n', state.overlay));
+    expect(state.selected).toBe(1);
+    panel.handleKey(pickerKey('F2', state.overlay));
+    expect(state.selected).toBe(2);
+    panel.handleKey(pickerKey('F1', state.overlay));
+    expect(state.selected).toBe(0);
+    panel.handleKey(pickerKey('d', state.overlay, { ctrl: true }));
+    expect(state.selected).toBe(2);
+    panel.handleKey(pickerKey('u', state.overlay, { ctrl: true }));
+    expect(state.selected).toBe(0);
+    panel.handleKey(pickerKey('F3', state.overlay));
+    const input = state.input as HTMLInputElement & { emit(type: string): void };
     expect(window.document.activeElement).toBe(input);
-    expect(session.pluginManager.footer?.textContent).toContain('<F4>');
+    expect(state.footer?.textContent).toContain('<F4>');
     bindings = {
       ...bindings,
       'plugins-input:j': 'uiFocusList',
@@ -236,16 +259,16 @@ describe('configurable plugin manager contexts', () => {
       altKey: true,
       getModifierState: (modifier: string) => modifier === 'AltGraph',
     });
-    panel.handleKey(altGraph, window, session);
+    panel.handleKey(altGraph);
     expect(altGraph.preventDefault).not.toHaveBeenCalled();
     for (const value of ['j', 'Backspace', 'ArrowLeft', 'Tab']) {
       const native = pickerKey(value, input);
-      panel.handleKey(native, window, session);
+      panel.handleKey(native);
       expect(native.preventDefault).not.toHaveBeenCalled();
     }
     for (const modifiers of [{ ctrl: true }, { shift: true }]) {
       const native = pickerKey('Insert', input, modifiers);
-      panel.handleKey(native, window, session);
+      panel.handleKey(native);
       expect(native.preventDefault).not.toHaveBeenCalled();
       expect(window.document.activeElement).toBe(input);
     }
@@ -253,32 +276,29 @@ describe('configurable plugin manager contexts', () => {
     input.value = 'Beta';
     input.emit('input');
     const ime = pickerKey('F4', input);
-    panel.handleKey(ime, window, session);
+    panel.handleKey(ime);
     expect(ime.preventDefault).not.toHaveBeenCalled();
-    expect(session.pluginManager.filtered).toHaveLength(3);
+    expect(state.filtered).toHaveLength(3);
     expect(window.document.activeElement).toBe(input);
     input.emit('compositionend');
     input.emit('input');
-    expect(session.pluginManager.filtered.map((plugin) => plugin.id)).toEqual([
-      'beta@example.test',
-    ]);
-    panel.handleKey(pickerKey('F4', input), window, session);
-    expect(window.document.activeElement).toBe(session.pluginManager.overlay);
+    expect(state.filtered.map((plugin) => plugin.id)).toEqual(['beta@example.test']);
+    panel.handleKey(pickerKey('F4', input));
+    expect(window.document.activeElement).toBe(state.overlay);
     const outside = pickerKey(
       'F5',
       window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div'),
     );
-    panel.handleKey(outside, window, session);
+    panel.handleKey(outside);
     expect(outside.preventDefault).not.toHaveBeenCalled();
-    expect(session.pluginManager.open).toBe(true);
-    panel.handleKey(pickerKey('F5', session.pluginManager.overlay), window, session);
-    expect(session.pluginManager.open).toBe(false);
+    expect(state.open).toBe(true);
+    panel.handleKey(pickerKey('F5', state.overlay));
+    expect(state.open).toBe(false);
   });
 
   it('fences exact-prefix waits and detached events on focus, close/reopen, IME and disposal', async () => {
     vi.useFakeTimers();
     installManagerHost();
-    const { window, session, cleanups } = createPickerHarness();
     const bindings = resolveBindings(
       JSON.stringify({
         'plugins-list:a': 'uiNext',
@@ -287,86 +307,83 @@ describe('configurable plugin manager contexts', () => {
         'plugins-input:<F1><F1>': 'uiFocusList',
       }),
     );
-    const panel = new PluginManagerPanel({ debug: vi.fn(), diagnostic: vi.fn() }, () => bindings);
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
-    panel.handleKey(pickerKey('a', session.pluginManager.overlay), window, session);
-    session.pluginManager.input!.focus();
+    const { window, state, panel, host } = createPanelFixture(() => bindings);
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    panel.handleKey(pickerKey('a', state.overlay));
+    state.input!.focus();
     vi.advanceTimersByTime(2000);
-    expect(session.pluginManager.selected).toBe(0);
-    panel.handleKey(pickerKey('F1', session.pluginManager.input), window, session);
-    const oldInput = session.pluginManager.input as HTMLInputElement & { emit(type: string): void };
+    expect(state.selected).toBe(0);
+    panel.handleKey(pickerKey('F1', state.input));
+    const oldInput = state.input as HTMLInputElement & { emit(type: string): void };
     oldInput.emit('compositionstart');
     vi.advanceTimersByTime(2000);
     expect(window.document.activeElement).toBe(oldInput);
     oldInput.emit('compositionend');
-    session.pluginManager.overlay!.focus();
-    panel.handleKey(pickerKey('a', session.pluginManager.overlay), window, session);
-    const oldOverlay = session.pluginManager.overlay!;
-    panel.close(session);
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
+    state.overlay!.focus();
+    panel.handleKey(pickerKey('a', state.overlay));
+    const oldOverlay = state.overlay!;
+    panel.close();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
     oldInput.value = 'stale';
     oldInput.emit('input');
     oldInput.emit('focus');
     const stale = pickerKey('q', oldOverlay);
-    panel.handleKey(stale, window, session);
+    panel.handleKey(stale);
     vi.advanceTimersByTime(2000);
     expect(stale.preventDefault).not.toHaveBeenCalled();
-    expect(session.pluginManager.open).toBe(true);
-    expect(session.pluginManager.query).toBe('');
-    expect(session.pluginManager.selected).toBe(0);
-    expect(cleanups).toHaveLength(1);
-    panel.handleKey(pickerKey('a', session.pluginManager.overlay), window, session);
-    cleanups.forEach((cleanup) => cleanup());
+    expect(state.open).toBe(true);
+    expect(state.query).toBe('');
+    expect(state.selected).toBe(0);
+    panel.handleKey(pickerKey('a', state.overlay));
+    host.dispose();
     vi.advanceTimersByTime(2000);
-    expect(session.pluginManager.open).toBe(false);
+    expect(state.open).toBe(false);
   });
 
   it('preserves the current query selection when an earlier refresh completes', async () => {
     const host = installManagerHost();
-    const { window, session } = createPickerHarness();
-    const panel = new PluginManagerPanel({ debug: vi.fn(), diagnostic: vi.fn() });
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
-    panel.handleKey(pickerKey('j', session.pluginManager.overlay), window, session);
-    expect(session.pluginManager.filtered[session.pluginManager.selected]?.id).toBe(host.beta.id);
+    const { state, panel } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    panel.handleKey(pickerKey('j', state.overlay));
+    expect(state.filtered[state.selected]?.id).toBe(host.beta.id);
 
     const pending = Promise.withResolvers<[typeof host.alpha, typeof host.beta, typeof host.neo]>();
     host.manager.getAddonsByTypes.mockReturnValueOnce(pending.promise);
-    const refresh = panel.refresh(window, session);
-    const input = session.pluginManager.input as HTMLInputElement & { emit(type: string): void };
+    const refresh = panel.refresh();
+    const input = state.input as HTMLInputElement & { emit(type: string): void };
     input.value = 'a';
     input.emit('input');
-    expect(session.pluginManager.filtered[session.pluginManager.selected]?.id).toBe(host.alpha.id);
+    expect(state.filtered[state.selected]?.id).toBe(host.alpha.id);
 
     pending.resolve([host.alpha, host.beta, host.neo]);
     await refresh;
-    expect(session.pluginManager.query).toBe('a');
-    expect(session.pluginManager.filtered[session.pluginManager.selected]?.id).toBe(host.alpha.id);
-    panel.handleKey(pickerKey('e', session.pluginManager.overlay), window, session);
-    await vi.waitFor(() => expect(session.pluginManager.busy).toBe(false));
+    expect(state.query).toBe('a');
+    expect(state.filtered[state.selected]?.id).toBe(host.alpha.id);
+    panel.handleKey(pickerKey('e', state.overlay));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
     expect(host.alpha.enable).toHaveBeenCalledOnce();
     expect(host.beta.enable).not.toHaveBeenCalled();
-    panel.close(session);
+    panel.close();
   });
 
   it('preserves permissions, surfaces domain failures and discards lifecycle completion after close/reopen', async () => {
     const host = installManagerHost();
-    const { window, session } = createPickerHarness();
-    const panel = new PluginManagerPanel({ debug: vi.fn(), diagnostic: vi.fn() });
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
-    panel.handleKey(pickerKey('G', session.pluginManager.overlay), window, session);
-    panel.handleKey(pickerKey('d', session.pluginManager.overlay), window, session);
+    const { state, panel } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    panel.handleKey(pickerKey('G', state.overlay));
+    panel.handleKey(pickerKey('d', state.overlay));
     expect(host.neo.disable).not.toHaveBeenCalled();
-    expect(session.pluginManager.notice).toContain('cannot disable itself');
-    panel.handleKey(pickerKey('Home', session.pluginManager.overlay), window, session);
+    expect(state.notice).toContain('cannot disable itself');
+    panel.handleKey(pickerKey('Home', state.overlay));
     host.alpha.enable.mockRejectedValueOnce(new Error('host rejected mutation'));
-    panel.handleKey(pickerKey('e', session.pluginManager.overlay), window, session);
-    await vi.waitFor(() => expect(session.pluginManager.busy).toBe(false));
-    expect(session.pluginManager.notice).toContain('host rejected mutation');
-    expect(session.pluginManager.open).toBe(true);
+    panel.handleKey(pickerKey('e', state.overlay));
+    await vi.waitFor(() => expect(state.busy).toBe(false));
+    expect(state.notice).toContain('host rejected mutation');
+    expect(state.open).toBe(true);
     let release: (() => void) | undefined;
     host.alpha.enable.mockImplementationOnce(
       () =>
@@ -374,25 +391,178 @@ describe('configurable plugin manager contexts', () => {
           release = resolve;
         }),
     );
-    panel.handleKey(pickerKey('e', session.pluginManager.overlay), window, session);
+    panel.handleKey(pickerKey('e', state.overlay));
     await vi.waitFor(() => expect(release).toBeTypeOf('function'));
-    panel.close(session);
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
+    panel.close();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
     const loads = host.manager.getAddonsByTypes.mock.calls.length;
     release!();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
-    expect(session.pluginManager.notice).toBe('');
-    expect(session.pluginManager.busy).toBe(false);
+    expect(state.notice).toBe('');
+    expect(state.busy).toBe(false);
     expect(host.manager.getAddonsByTypes).toHaveBeenCalledTimes(loads);
-    panel.close(session);
+    panel.close();
     host.manager.getAddonsByTypes.mockRejectedValueOnce(new Error('load unavailable'));
-    panel.open(window, session);
-    await vi.waitFor(() => expect(session.pluginManager.loading).toBe(false));
-    expect(session.pluginManager.error).toContain('load unavailable');
-    expect(session.pluginManager.list?.textContent).toContain('Unable to load plugins');
-    panel.close(session);
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    expect(state.error).toContain('load unavailable');
+    expect(state.list?.textContent).toContain('Unable to load plugins');
+    panel.close();
+  });
+
+  it('does not let a detached overlay close its replacement panel', async () => {
+    installManagerHost();
+    const { state, panel } = createPanelFixture();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const oldOverlay = state.overlay as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    panel.close();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+
+    oldOverlay.emit('mousedown', { target: oldOverlay });
+
+    expect(state.open).toBe(true);
+    expect(state.overlay?.isConnected).toBe(true);
+    panel.close();
+  });
+
+  it('releases its overlay and input ownership even when theme cleanup fails', async () => {
+    installManagerHost();
+    const failure = new Error('theme cleanup failed');
+    const { state, panel } = createPanelFixture(undefined, () => () => {
+      throw failure;
+    });
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const overlay = state.overlay!;
+
+    expect(() => panel.close()).toThrow(failure);
+
+    expect(state.open).toBe(false);
+    expect(state.localBindings).toBeNull();
+    expect(overlay.isConnected).toBe(false);
+  });
+});
+
+function createModuleFixture(themeRoot?: (root: HTMLElement) => () => void) {
+  const { window, session, bodyChildren } = createPickerHarness();
+  const logger = { debug: vi.fn(), diagnostic: vi.fn() };
+  const host = new ModuleHost(logger, () => true);
+  const module = createExtensionsModule(host, {
+    window,
+    logger,
+    bindings: () => DEFAULT_BINDINGS,
+    themeRoot: themeRoot ?? ((root) => session.theme.add(root)),
+  });
+  return { host, module, bodyChildren };
+}
+
+function panelElements(overlay: HTMLElement) {
+  const panel = overlay.children[0] as HTMLElement;
+  const header = panel.children[0] as HTMLElement;
+  const content = panel.children[1] as HTMLElement;
+  return {
+    input: header.children[2] as HTMLInputElement & { emit(type: string): void },
+    list: content.children[0] as HTMLElement,
+    details: content.children[1] as HTMLElement,
+  };
+}
+
+describe('extensions module lifetime', () => {
+  it('does not paint or respond to detached events after retirement during a pending refresh', async () => {
+    const native = installManagerHost();
+    const pending =
+      Promise.withResolvers<[typeof native.alpha, typeof native.beta, typeof native.neo]>();
+    native.manager.getAddonsByTypes.mockReturnValueOnce(pending.promise);
+    const { host, module, bodyChildren } = createModuleFixture();
+    expect(module.open('main-normal')).toBe(true);
+    const overlay = bodyChildren[0] as HTMLElement & {
+      emit(type: string, event?: Partial<Event>): void;
+    };
+    const { input, list, details } = panelElements(overlay);
+    host.dispose();
+    expect(module.isOpen).toBe(false);
+    expect(overlay.isConnected).toBe(false);
+    const before = [list.textContent, details.textContent];
+
+    input.value = 'Beta';
+    input.emit('input');
+    overlay.emit('mousedown', { target: overlay });
+    const key = pickerKey('q', overlay);
+    module.handleKey(key);
+    pending.resolve([native.alpha, native.beta, native.neo]);
+    await pending.promise;
+    // The native bridge and panel each resume through several promise layers.
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    expect([list.textContent, details.textContent]).toEqual(before);
+    expect(module.isOpen).toBe(false);
+  });
+
+  it('lets an admitted native mutation finish without painting a retired panel', async () => {
+    const native = installManagerHost();
+    const pending = Promise.withResolvers<void>();
+    native.alpha.enable.mockReturnValueOnce(pending.promise);
+    const { host, module, bodyChildren } = createModuleFixture();
+    module.open('main-normal');
+    const overlay = bodyChildren[0];
+    const { list, details } = panelElements(overlay);
+    await vi.waitFor(() => expect(list.textContent).toContain('Alpha'));
+    module.handleKey(pickerKey('e', overlay));
+    await vi.waitFor(() => expect(native.alpha.enable).toHaveBeenCalledOnce());
+    const loads = native.manager.getAddonsByTypes.mock.calls.length;
+    host.dispose();
+    const before = [list.textContent, details.textContent];
+    pending.resolve();
+    await pending.promise;
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(native.manager.getAddonsByTypes).toHaveBeenCalledTimes(loads);
+    expect([list.textContent, details.textContent]).toEqual(before);
+    expect(module.isOpen).toBe(false);
+    expect(overlay.isConnected).toBe(false);
+  });
+
+  it('keeps two window hosts independent when one is retired', async () => {
+    installManagerHost();
+    const first = createModuleFixture();
+    const second = createModuleFixture();
+    expect(first.module.open('main-normal')).toBe(true);
+    expect(second.module.open('reader-normal')).toBe(true);
+    const firstOverlay = first.bodyChildren[0];
+    const secondOverlay = second.bodyChildren[0];
+    const firstPanel = panelElements(firstOverlay);
+    const secondPanel = panelElements(secondOverlay);
+    await vi.waitFor(() => expect(secondPanel.list.textContent).toContain('Beta'));
+    await vi.waitFor(() => expect(firstPanel.list.textContent).toContain('Beta'));
+    firstPanel.input.value = 'Beta';
+    firstPanel.input.emit('input');
+    expect(firstPanel.list.textContent).not.toContain('Alpha');
+    expect(secondPanel.list.textContent).toContain('Alpha');
+    first.host.dispose();
+    expect(first.module.isOpen).toBe(false);
+    expect(firstOverlay.isConnected).toBe(false);
+    expect(second.module.isOpen).toBe(true);
+    expect(secondOverlay.isConnected).toBe(true);
+    second.module.handleKey(pickerKey('q', secondOverlay));
+    expect(second.module.isOpen).toBe(false);
+    second.host.dispose();
+  });
+
+  it('releases a partially opened panel when theme acquisition throws', () => {
+    installManagerHost();
+    const failure = new Error('theme acquisition failed');
+    const { host, module, bodyChildren } = createModuleFixture(() => {
+      throw failure;
+    });
+    expect(() => module.open('main-normal')).toThrow(failure);
+    expect(module.isOpen).toBe(false);
+    expect(bodyChildren.every((overlay) => !overlay.isConnected)).toBe(true);
+    host.dispose();
   });
 });

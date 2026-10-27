@@ -9,7 +9,7 @@ import {
   READER_THUMBNAILS_ACTIONS,
 } from '../reader/action-capabilities';
 import { PICKER_INPUT_ACTIONS, PICKER_LIST_ACTIONS } from '../main/picker/action-capabilities';
-import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from '../main/plugin-manager-capabilities';
+import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from '../modules/extensions/capabilities';
 import type { BindingContext } from './bindings';
 import type { ActionId } from './actions';
 

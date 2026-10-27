@@ -3,7 +3,7 @@ import {
   setMainPluginEnabled,
   openMainPluginPreferences,
   launchMainURL,
-} from '../toolkit/main';
+} from '../../toolkit/main';
 
 export const ZOTERO_NEO_PLUGIN_ID = 'zotero-neo@zotero-neo';
 

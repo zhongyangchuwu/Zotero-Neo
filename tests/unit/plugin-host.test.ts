@@ -7,7 +7,7 @@ import {
   openPluginPreferences,
   setPluginEnabled,
   ZOTERO_NEO_PLUGIN_ID,
-} from '../../src/main/plugin-host';
+} from '../../src/modules/extensions/host';
 
 const originalChromeUtils = Reflect.get(globalThis, 'ChromeUtils');
 const originalZotero = Reflect.get(globalThis, 'Zotero');
