@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as logging from '../../src/core/logging';
 import {
   createCollection,
   createCollectionAndAdd,
@@ -12,7 +13,10 @@ import {
 } from '../../src/operations/item-collections';
 import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 type StoredCollection = {
   libraryID: number;
@@ -288,6 +292,56 @@ describe('atomic collection item operations', () => {
     expect(target.getChildItems(true)).toEqual([]);
   });
 
+  it.each(['membership', 'create'] as const)(
+    'keeps a later same-item save intact while %s rollback recovery is pending',
+    async (mode) => {
+      const h = host();
+      h.addCollection(10);
+      h.addCollection(20);
+      h.addCollection(30);
+      const first = h.addItem(1, [10]);
+      const last = h.addItem(2, [10]);
+      const failure = new Error('first operation failed');
+      last.save.mockRejectedValueOnce(failure);
+      const reloadStarted = Promise.withResolvers<void>();
+      const releaseReload = Promise.withResolvers<void>();
+      const reload = first.reload.getMockImplementation()!;
+      first.reload.mockImplementationOnce(async () => {
+        reloadStarted.resolve();
+        await releaseReload.promise;
+        await reload();
+      });
+      const failed = (
+        mode === 'create'
+          ? createCollectionAndAdd(targets(first, last), 1, 'Failed child', 10)
+          : moveCollectionItems(targets(first, last), 10, 20)
+      ).catch((error: unknown) => error);
+      await reloadStarted.promise;
+      const saveStarted = Promise.withResolvers<void>();
+      const releaseSave = Promise.withResolvers<void>();
+      const save = first.save.getMockImplementation()!;
+      first.save.mockImplementationOnce(async () => {
+        saveStarted.resolve();
+        await releaseSave.promise;
+        await save();
+      });
+      const later = setCollectionMembership(targets(first), 30, true);
+      // The native barrier completes if recovery owns Neo admission; otherwise
+      // the second mutation reaches its pre-SQL save gate before that barrier.
+      await Promise.race([saveStarted.promise, h.db.executeTransaction(async () => undefined)]);
+      releaseReload.resolve();
+      expect(await failed).toBe(failure);
+      releaseSave.resolve();
+      const changed = await later;
+      expect({ changed, durable: h.persistedMemberships(1) }).toEqual({
+        changed: 1,
+        durable: [10, 30],
+      });
+      expect(first.getCollections()).toEqual([10, 30]);
+      expect(h.collections.get(30)!.getChildItems(true)).toEqual([1]);
+    },
+  );
+
   it('rolls back a move retired during save and never saves the remaining item', async () => {
     const h = host();
     h.addCollection(10);
@@ -367,6 +421,105 @@ describe('collection structure operations', () => {
     expect(h.collections.get(id)!.save).toHaveBeenCalledWith({ skipSelect: true });
     expect(a.getCollections()).toEqual([10, id]);
     expect(h.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['throw', 'reject'] as const)(
+    'retains durable create-and-add state after a shared commit prefix %s fails',
+    async (mode) => {
+      const h = host();
+      const parent = h.addCollection(10);
+      const item = h.addItem(1, [10]);
+      const failure = new Error('shared commit prefix failed');
+      const report = vi.spyOn(logging, 'reportDiagnosticError').mockImplementation(() => undefined);
+      h.db._callbacks.current.commit.push(() => {
+        if (mode === 'throw') throw failure;
+        return Promise.reject(failure);
+      });
+      const createdID = await createCollectionAndAdd(targets(item), 1, 'Committed child', 10);
+      expect(report).toHaveBeenCalledWith(
+        expect.any(logging.ZoteroLogger),
+        'Collection SQL committed; native callback failed',
+        failure,
+      );
+      expect(item.reload).not.toHaveBeenCalled();
+      expect(h.libraries.get(1)!.updateCollections).not.toHaveBeenCalled();
+      expect({
+        durableMemberships: h.persistedMemberships(1),
+        cachedCollection: h.collections.has(createdID),
+        parentChildren: parent.getChildCollections(true),
+      }).toEqual({
+        durableMemberships: [10, createdID],
+        cachedCollection: true,
+        parentChildren: [createdID],
+      });
+      expect(item.getCollections()).toEqual([10, createdID]);
+      expect(h.collections.get(createdID)!.getChildItems(true)).toEqual([1]);
+      await h.db.executeTransaction(async () => undefined);
+      expect(parent.getChildCollections(true)).toEqual([createdID]);
+      expect(h.collections.get(createdID)!.getChildItems(true)).toEqual([1]);
+    },
+  );
+
+  it('does not report a successful receipt or rollback SQL when an owned commit callback fails', async () => {
+    const h = host();
+    h.addCollection(10);
+    const item = h.addItem(1);
+    const failure = new Error('owned inverse-cache callback failed');
+    const save = item.save.getMockImplementation()!;
+    item.save.mockImplementationOnce(async () => {
+      h.db.addCurrentCallback('commit', () => {
+        throw failure;
+      });
+      await save();
+    });
+    const report = vi.spyOn(logging, 'reportDiagnosticError').mockImplementation(() => undefined);
+    await expect(setCollectionMembership(targets(item), 10, true)).rejects.toBe(failure);
+    expect(h.persistedMemberships(1)).toEqual([10]);
+    expect(item.getCollections()).toEqual([10]);
+    expect(item.reload).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith(
+      expect.any(logging.ZoteroLogger),
+      'Collection SQL committed; native callback failed',
+      failure,
+    );
+    await h.db.executeTransaction(async () => undefined);
+    expect(h.collections.get(10)!.getChildItems(true)).toEqual([]);
+  });
+
+  it('preserves the foreign error when owned post-commit completion also rejects', async () => {
+    const h = host();
+    h.addCollection(10);
+    const item = h.addItem(1);
+    const foreignFailure = new Error('shared commit prefix failed');
+    const ownedFailure = new Error('owned commit callback rejected');
+    h.db._callbacks.current.commit.push(() => {
+      throw foreignFailure;
+    });
+    const owned = vi.fn(async () => {
+      throw ownedFailure;
+    });
+    const save = item.save.getMockImplementation()!;
+    item.save.mockImplementationOnce(async () => {
+      h.db.addCurrentCallback('commit', owned);
+      await save();
+    });
+    const report = vi.spyOn(logging, 'reportDiagnosticError').mockImplementation(() => undefined);
+    await expect(setCollectionMembership(targets(item), 10, true)).rejects.toBe(foreignFailure);
+    expect(h.persistedMemberships(1)).toEqual([10]);
+    expect(item.reload).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith(
+      expect.any(logging.ZoteroLogger),
+      'Collection SQL committed; native callback failed',
+      foreignFailure,
+    );
+    expect(report).toHaveBeenCalledWith(
+      expect.any(logging.ZoteroLogger),
+      'Collection owned commit callback failed',
+      ownedFailure,
+    );
+    await h.db.executeTransaction(async () => undefined);
+    expect(owned).toHaveBeenCalledTimes(1);
+    expect(h.collections.get(10)!.getChildItems(true)).toEqual([]);
   });
 
   it('reloads dangling memberships after native rollback unloads the newly created collection', async () => {

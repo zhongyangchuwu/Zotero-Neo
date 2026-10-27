@@ -56,6 +56,38 @@ describe('owned native collection transaction callbacks', () => {
     expect(db._callbacks.current.commit).toBe(shared);
   });
 
+  it.each(['throw', 'reject'] as const)(
+    'settles committed callbacks once when an earlier shared callback %s fails',
+    async (mode) => {
+      const db = host();
+      const shared = db._callbacks.current.commit;
+      const failure = new Error('shared commit prefix failed');
+      const prefix = vi.fn(() => {
+        if (mode === 'throw') throw failure;
+        return Promise.reject(failure);
+      });
+      shared.push(prefix);
+      const commit = vi.fn();
+      const unload = vi.fn();
+      let ownerID = '';
+      await expect(
+        executeCollectionTransaction(async () => {
+          ownerID = db._transactionID!;
+          db.addCurrentCallback('commit', commit);
+          db.addCurrentCallback('rollback', unload);
+        }),
+      ).rejects.toBe(failure);
+      expect({ commits: commit.mock.calls, rollbacks: unload.mock.calls }).toEqual({
+        commits: [[ownerID]],
+        rollbacks: [],
+      });
+      await db.executeTransaction(async () => undefined);
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(unload).not.toHaveBeenCalled();
+      expect(db._callbacks.current.commit).toBe(shared);
+    },
+  );
+
   it('runs owned rollback callbacks but never leaks owned commits into a later unrelated success', async () => {
     const db = host();
     const previous = db.addCurrentCallback;
@@ -272,6 +304,96 @@ describe('owned native collection transaction callbacks', () => {
     });
     expect(db.addCurrentCallback).toBe(previous);
     expect(Object.hasOwn(db, 'addCurrentCallback')).toBe(false);
+  });
+
+  it('restores the native commit counter descriptor and preserves its committed value', async () => {
+    const db = host();
+    const descriptor = Object.getOwnPropertyDescriptor(db, '_commitCount')!;
+    await executeCollectionTransaction(async () => undefined);
+    expect(Object.getOwnPropertyDescriptor(db, '_commitCount')).toEqual({
+      ...descriptor,
+      value: 1,
+    });
+  });
+
+  it('preserves foreign accessors retaining the scoped SQL observer after it is inactive', async () => {
+    const db = host();
+    let count = 0;
+    const originalGet = vi.fn(() => count);
+    const originalSet = vi.fn((value: number) => {
+      count = value;
+    });
+    Object.defineProperty(db, '_commitCount', {
+      configurable: true,
+      enumerable: true,
+      get: originalGet,
+      set: originalSet,
+    });
+    const failure = new Error('shared prefix failed');
+    db._callbacks.current.commit.push(() => {
+      throw failure;
+    });
+    const commit = vi.fn();
+    const rollback = vi.fn();
+    let foreignDescriptor: PropertyDescriptor | undefined;
+    await expect(
+      executeCollectionTransaction(async () => {
+        const retained = Object.getOwnPropertyDescriptor(db, '_commitCount')!;
+        Object.defineProperty(db, '_commitCount', {
+          configurable: true,
+          enumerable: true,
+          get() {
+            return retained.get!.call(this);
+          },
+          set(value: number) {
+            retained.set!.call(this, value);
+          },
+        });
+        foreignDescriptor = Object.getOwnPropertyDescriptor(db, '_commitCount');
+        db.addCurrentCallback('commit', commit);
+        db.addCurrentCallback('rollback', rollback);
+      }),
+    ).rejects.toBe(failure);
+    expect(Object.getOwnPropertyDescriptor(db, '_commitCount')).toEqual(foreignDescriptor);
+    expect({
+      count,
+      commits: commit.mock.calls.length,
+      rollbacks: rollback.mock.calls.length,
+    }).toEqual({
+      count: 1,
+      commits: 1,
+      rollbacks: 0,
+    });
+    await db.executeTransaction(async () => undefined);
+    expect(count).toBe(2);
+    expect(originalSet.mock.calls).toEqual([[1], [2]]);
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(rollback).not.toHaveBeenCalled();
+  });
+
+  it('does not mistake a later unrelated SQL commit for the rolled-back owner outcome', async () => {
+    const db = host();
+    const rollbackStarted = Promise.withResolvers<void>();
+    const releaseRollback = Promise.withResolvers<void>();
+    db._callbacks.current.rollback.push(() => {
+      rollbackStarted.resolve();
+      return releaseRollback.promise;
+    });
+    const failure = new Error('owner SQL body failed');
+    const commit = vi.fn();
+    const rollback = vi.fn();
+    const owned = executeCollectionTransaction(async () => {
+      db.addCurrentCallback('commit', commit);
+      db.addCurrentCallback('rollback', rollback);
+      throw failure;
+    }).catch((error: unknown) => error);
+    await rollbackStarted.promise;
+    await db.executeTransaction(async () => undefined);
+    expect(db._commitCount).toBe(1);
+    releaseRollback.resolve();
+    expect(await owned).toBe(failure);
+    expect(commit).not.toHaveBeenCalled();
+    expect(rollback).toHaveBeenCalledTimes(1);
   });
 
   it('discards held rollback callbacks before a commit callback error can unload committed objects', async () => {

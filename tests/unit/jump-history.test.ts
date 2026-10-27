@@ -306,6 +306,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
   const noteEditorFocus = {} as unknown as Element;
   const window = {
     document,
+    setTimeout: vi.fn().mockReturnValue(1),
     Zotero_Tabs: tabs,
     ZoteroPane: {
       onCollectionSelected,
@@ -660,7 +661,7 @@ describe('Main jump history', () => {
     expect(h.session.jumpHistory.locations).toEqual([]);
     h.setCursor(1);
     h.setQuickText('browsed scope');
-    vi.spyOn(mainHost, 'selectMainScopeCursor').mockResolvedValue(true);
+    vi.spyOn(mainHost, 'selectMainScope').mockResolvedValue(true);
 
     await expect(activateScope(h).result).resolves.toMatchObject({
       kind: 'completed',
@@ -674,6 +675,112 @@ describe('Main jump history', () => {
     expect(h.history.capture(h.window, h.session)).toEqual(destination);
   });
 
+  it('keeps A/C history across j, branch expansion, j and Enter with filters, Cursor, focus and Selection intact', async () => {
+    const h = harness();
+    const navigation = new MainNavigation({ debug: vi.fn() } as never, () => {});
+    vi.spyOn(navigation, 'status').mockImplementation(() => {});
+    const history = new MainNavigationExecutor(
+      { debug: vi.fn() } as never,
+      navigation,
+      h.viewActions,
+      h.readerHost,
+    );
+    const tree = {
+      id: 'collection-tree',
+      focus: () => Reflect.set(h.window.document, 'activeElement', tree),
+    };
+    const items = {
+      id: 'item-tree-main-default',
+      focus: () => Reflect.set(h.window.document, 'activeElement', items),
+    };
+    const view = h.window.ZoteroPane!.collectionsView!;
+    Reflect.set(view.tree!, '_topDiv', tree);
+    Reflect.set(h.window.ZoteroPane!.itemsView!.tree!, '_topDiv', items);
+    let open = false;
+    Reflect.set(view, 'isContainer', (row: number) => row === 1);
+    Reflect.set(view, 'isContainerOpen', () => open);
+    Reflect.set(view, 'isContainerEmpty', () => false);
+    const toggle = vi.fn(() => {
+      open = !open;
+    });
+    Reflect.set(view, 'toggleOpenState', toggle);
+    const native = { ...h, history };
+    h.setScopes(['C1']);
+    h.setScopeCursor(0);
+    navigation.focusPanel(h.window, h.session, 'collections');
+    const source = history.capture(h.window, h.session);
+    const selectionBefore = h.selection.values();
+
+    expect(moveTreeCursor(native, 1).result).toMatchObject({ kind: 'completed', recorded: false });
+    navigation.expandTree(h.window, h.session);
+    expect(toggle).toHaveBeenCalledWith(1);
+    expect(h.window.document.activeElement).toBe(tree);
+    expect(moveTreeCursor(native, 1).result).toMatchObject({ kind: 'completed', recorded: false });
+    h.setQuickText('child query');
+    h.setTags(['child tag']);
+    h.setCursor(1);
+    expect(h.session.jumpHistory.locations).toEqual([]);
+
+    await expect(activateScope(native).result).resolves.toMatchObject({
+      kind: 'completed',
+      recorded: true,
+    });
+    const destination = history.capture(h.window, h.session);
+    expect(destination).toMatchObject({ scopeIDs: ['C3'], panel: 'items', cursor: { itemID: 20 } });
+    expect(h.session.jumpHistory.locations).toEqual([source, destination]);
+    await expect(traversal(native, -1)).resolves.toBe(true);
+    expect(history.capture(h.window, h.session)).toEqual(source);
+    expect(h.window.document.activeElement).toBe(tree);
+    expect(h.selection.values()).toEqual(selectionBefore);
+    await expect(traversal(native, 1)).resolves.toBe(true);
+    expect(history.capture(h.window, h.session)).toEqual(destination);
+    expect(h.window.document.activeElement).toBe(items);
+    expect(h.selection.values()).toEqual(selectionBefore);
+  });
+
+  it.each([
+    ['collection', 2, 'C3'],
+    ['library root', 3, 'L1'],
+    ['saved search', 4, 'S1'],
+  ] as const)(
+    'keeps the admitted %s Enter target while earlier serial work drains and the cursor moves',
+    async (_kind, row, id) => {
+      const h = harness();
+      h.setPanel('collections');
+      const release = Promise.withResolvers<void>();
+      const started = Promise.withResolvers<void>();
+      const earlier = queuedJump(h, async () => {
+        started.resolve();
+        await release.promise;
+      });
+      await started.promise;
+      h.setScopeCursor(row);
+      const selectionBefore = h.selection.values();
+      const enter = activateScope(h);
+      // Enter must not select anything until its serial turn.
+      expect([...h.selectedScopes]).toEqual([0, 1]);
+      expect(h.onCollectionSelected).not.toHaveBeenCalled();
+      moveTreeCursor(h, -1);
+      h.setQuickText('departure at queue turn');
+      const source = h.history.capture(h.window, h.session);
+      release.resolve();
+
+      await expect(earlier.result).resolves.toBe(false);
+      await expect(enter.result).resolves.toMatchObject({ kind: 'completed', recorded: true });
+      expect([...h.selectedScopes]).toEqual([row]);
+      expect(h.history.capture(h.window, h.session)).toMatchObject({
+        scopeIDs: [id],
+        panel: 'items',
+      });
+      expect(h.session.jumpHistory.locations).toEqual([
+        source,
+        h.history.capture(h.window, h.session),
+      ]);
+      expect(h.onCollectionSelected).toHaveBeenCalledOnce();
+      expect(h.selection.values()).toEqual(selectionBefore);
+    },
+  );
+
   it('does not consume a stale motion origin after an external native scope selection', async () => {
     const h = harness();
     h.setScopes(['C1']);
@@ -682,7 +789,7 @@ describe('Main jump history', () => {
     moveTreeCursor(h, 1);
     h.setScopes(['C3']);
     h.setScopeCursor(2);
-    vi.spyOn(mainHost, 'selectMainScopeCursor').mockResolvedValue(true);
+    vi.spyOn(mainHost, 'selectMainScope').mockResolvedValue(true);
 
     await activateScope(h).result;
     expect(h.session.jumpHistory.locations).toMatchObject([
@@ -702,7 +809,7 @@ describe('Main jump history', () => {
     h.setScopes(['C3']);
     h.setScopeCursor(2);
     moveTreeCursor(h, -1);
-    vi.spyOn(mainHost, 'selectMainScopeCursor').mockResolvedValue(true);
+    vi.spyOn(mainHost, 'selectMainScope').mockResolvedValue(true);
 
     await activateScope(h).result;
     expect(h.session.jumpHistory.locations).toMatchObject([
@@ -716,7 +823,7 @@ describe('Main jump history', () => {
     h.setPanel('collections');
     h.setScopes(['L1']);
     h.setScopeCursor(4);
-    vi.spyOn(mainHost, 'selectMainScopeCursor').mockImplementation(async () => {
+    vi.spyOn(mainHost, 'selectMainScope').mockImplementation(async () => {
       h.setScopes(['S1']);
       h.setCursor(1);
       return true;

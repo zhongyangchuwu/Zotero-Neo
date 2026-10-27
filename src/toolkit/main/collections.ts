@@ -230,7 +230,7 @@ export async function waitForMainItemView(
   return isCurrent() && mainPane(window)?.itemsView === view;
 }
 
-async function selectScope(
+export async function selectMainScope(
   window: MainWindow,
   id: string,
   isCurrent: () => boolean,
@@ -296,17 +296,12 @@ export async function selectMainCollection(
   await view.expandToCollection(collectionID);
   if (!isCurrent() || collectionView(window) !== view || !mainCollectionRef(collectionID))
     return false;
-  return selectScope(window, `C${collectionID}`, isCurrent);
+  return selectMainScope(window, `C${collectionID}`, isCurrent);
 }
 
-/** Capture the cursor's scope identity before any await; never retain its unstable row index. */
-export async function selectMainScopeCursor(
-  window: MainWindow,
-  isCurrent: () => boolean,
-): Promise<boolean> {
+/** Capture a native scope identity synchronously; rows may move before queued selection starts. */
+export function mainScopeCursorID(window: MainWindow): string | undefined {
   const view = collectionView(window);
   const row = view?.selection?.focused;
-  const id = row !== undefined && row >= 0 ? view?.getRow?.(row)?.id : undefined;
-  if (!id) return false;
-  return selectScope(window, id, isCurrent);
+  return row !== undefined && row >= 0 ? view?.getRow?.(row)?.id : undefined;
 }

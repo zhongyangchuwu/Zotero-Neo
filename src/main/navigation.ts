@@ -305,8 +305,13 @@ export class MainNavigation {
     if (selectedAfter !== selectedBefore) this.afterTabSwitch(window);
     return selectedAfter !== selectedBefore;
   }
+  private ensureTreeFocus(window: MainWindow, session: MainWindowSession): void {
+    if (mainTreeFocused(window, 'collections')) this.panel(window, session);
+    else this.focusPanel(window, session, 'collections');
+  }
+
   async toggleTree(window: MainWindow, session: MainWindowSession): Promise<void> {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const node = mainScopeCursorNode(window);
     if (!node) return;
     if (!node.container || node.empty) {
@@ -314,25 +319,25 @@ export class MainNavigation {
       return;
     }
     await toggleMainScopeRow(window, node.row);
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     this.status(session, node.open ? '→ collapsed' : '→ expanded', 900);
   }
   async openTree(window: MainWindow, session: MainWindowSession): Promise<void> {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const node = mainScopeCursorNode(window);
     if (!node || node.open) return;
     await toggleMainScopeRow(window, node.row);
     this.status(session, '→ expanded', 900);
   }
   async closeTree(window: MainWindow, session: MainWindowSession): Promise<void> {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const node = mainScopeCursorNode(window);
     if (!node || !node.open) return;
     await toggleMainScopeRow(window, node.row);
     this.status(session, '→ collapsed', 900);
   }
   expandTree(window: MainWindow, session: MainWindowSession): void {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const node = mainScopeCursorNode(window);
     if (!node) return;
     if (node.container && !node.open && !node.empty) {
@@ -342,10 +347,10 @@ export class MainNavigation {
   }
   collapseTree(window: MainWindow, session: MainWindowSession): void {
     if (this.itemPaneContainsFocus(window)) {
-      this.focusPanel(window, session, 'collections');
+      this.ensureTreeFocus(window, session);
       return;
     }
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const node = mainScopeCursorNode(window);
     if (!node) return;
     if (node.container && node.open) {
@@ -354,7 +359,7 @@ export class MainNavigation {
     } else this.parentTree(window, session);
   }
   parentTree(window: MainWindow, session: MainWindowSession): void {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const parent = mainScopeCursorNode(window)?.parent;
     if (typeof parent === 'number' && parent >= 0) {
       selectMainScopeRow(window, parent, false, true);
@@ -362,13 +367,13 @@ export class MainNavigation {
     }
   }
   expandAll(window: MainWindow, session: MainWindowSession): void {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const changed = setMainScopeExpansionAll(window, true);
     if (changed === undefined) return;
     this.status(session, changed ? '→ expanded all' : '→ already expanded', 900);
   }
   collapseAll(window: MainWindow, session: MainWindowSession): void {
-    this.focusPanel(window, session, 'collections');
+    this.ensureTreeFocus(window, session);
     const changed = setMainScopeExpansionAll(window, false);
     if (changed === undefined) return;
     this.status(session, changed ? '→ collapsed all' : '→ already collapsed', 900);

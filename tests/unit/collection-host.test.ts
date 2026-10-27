@@ -11,7 +11,8 @@ import {
   confirmMainCollectionAction,
   queryMainCollectionItems,
   selectMainCollection,
-  selectMainScopeCursor,
+  mainScopeCursorID,
+  selectMainScope,
   waitForMainItemView,
 } from '../../src/toolkit/main/collections';
 import { restoreMainScopeIDs } from '../../src/toolkit/main/host';
@@ -314,10 +315,12 @@ describe('confirmed collection selection settlement', () => {
       return load.promise;
     });
     let settled = false;
-    const result = selectMainScopeCursor(h.window, () => true).then((value) => {
-      settled = true;
-      return value;
-    });
+    const result = selectMainScope(h.window, mainScopeCursorID(h.window)!, () => true).then(
+      (value) => {
+        settled = true;
+        return value;
+      },
+    );
     await started.promise;
     expect(settled).toBe(false);
     expect(h.selection.select).not.toHaveBeenCalled();
@@ -334,7 +337,7 @@ describe('confirmed collection selection settlement', () => {
       await release.promise;
       h.itemView.collectionTreeRows = [{ id: 'C20' }];
     });
-    const result = selectMainScopeCursor(h.window, () => true);
+    const result = selectMainScope(h.window, mainScopeCursorID(h.window)!, () => true);
     expect(h.pane.onCollectionSelected).toHaveBeenCalledTimes(1);
     expect(h.itemView.collectionTreeRows).toEqual([{ id: 'C11' }]);
     expect(h.itemView.waitForLoad).not.toHaveBeenCalled();
@@ -345,7 +348,9 @@ describe('confirmed collection selection settlement', () => {
   it('refuses success when the loaded item view still belongs to another native scope', async () => {
     const h = host();
     h.pane.onCollectionSelected.mockImplementationOnce(async () => {});
-    await expect(selectMainScopeCursor(h.window, () => true)).resolves.toBe(false);
+    await expect(selectMainScope(h.window, mainScopeCursorID(h.window)!, () => true)).resolves.toBe(
+      false,
+    );
     expect(h.selected).toEqual(new Set([3]));
     expect(h.itemView.collectionTreeRows).toEqual([{ id: 'C11' }]);
   });
@@ -354,10 +359,35 @@ describe('confirmed collection selection settlement', () => {
     const h = host();
     h.selection.focused = 4;
     h.selected.add(4);
-    await expect(selectMainScopeCursor(h.window, () => true)).resolves.toBe(true);
+    await expect(selectMainScope(h.window, mainScopeCursorID(h.window)!, () => true)).resolves.toBe(
+      true,
+    );
     expect(h.selected).toEqual(new Set([4]));
     expect(h.pane.onCollectionSelected).toHaveBeenCalledTimes(1);
     expect(h.view.expandToCollection).not.toHaveBeenCalled();
+  });
+
+  it('resolves the confirmed native scope ID again after rows reorder and the cursor moves', async () => {
+    const h = host();
+    const id = mainScopeCursorID(h.window);
+    expect(id).toBe('C20');
+    h.rows.reverse();
+    h.selection.focused = 0;
+
+    await expect(selectMainScope(h.window, id!, () => true)).resolves.toBe(true);
+    expect(h.selected).toEqual(new Set([1]));
+    expect(h.itemView.collectionTreeRows).toEqual([{ id: 'C20' }]);
+  });
+
+  it('does not retarget a removed confirmed native scope to the later cursor', async () => {
+    const h = host();
+    const id = mainScopeCursorID(h.window);
+    h.rows.splice(3, 1);
+    h.selection.focused = 0;
+
+    await expect(selectMainScope(h.window, id!, () => true)).resolves.toBe(false);
+    expect(h.selected).toEqual(new Set([2]));
+    expect(h.pane.onCollectionSelected).not.toHaveBeenCalled();
   });
 
   it('retires navigation after expansion without selecting the stale target', async () => {

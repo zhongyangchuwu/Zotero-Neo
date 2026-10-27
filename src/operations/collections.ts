@@ -51,8 +51,8 @@ async function create(
 ): Promise<number> {
   const touchedItems: Zotero.Item[] = [];
   let createdCollection: Zotero.Collection | undefined;
-  try {
-    return await executeCollectionTransaction(async () => {
+  return executeCollectionTransaction(
+    async () => {
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       validateParent(libraryID, parentID);
       const parent = parentID ? currentCollection(parentID) : undefined;
@@ -104,25 +104,30 @@ async function create(
           throw new Error('Item target changed');
       }
       return id;
-    });
-  } catch (error) {
-    // Outer rollback unloads the new collection before reaching this catch.
-    // Reload directly: filtered getCollections() would dereference that unloaded ID.
-    const recovery = touchedItems.map((item) => item.reload(['primaryData', 'collections'], true));
-    const library = Zotero.Libraries.get(libraryID);
-    if (createdCollection?.id && library) recovery.push(library.updateCollections());
-    const outcomes = await Promise.allSettled(recovery);
-    const failures = outcomes
-      .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
-      .map((outcome) => outcome.reason);
-    if (failures.length)
-      throw new AggregateError(
-        [error, ...failures],
-        `Collection creation failed (${String(error)}); rollback state restoration also failed`,
-        { cause: error },
-      );
-    throw error;
-  }
+    },
+    {
+      reportCommittedError: true,
+      onRollback: async (error) => {
+        // Actual SQL rollback unloads the new collection before restoration.
+        // Reload directly: filtered getCollections() would dereference that unloaded ID.
+        const recovery = touchedItems.map((item) =>
+          item.reload(['primaryData', 'collections'], true),
+        );
+        const library = Zotero.Libraries.get(libraryID);
+        if (createdCollection?.id && library) recovery.push(library.updateCollections());
+        const outcomes = await Promise.allSettled(recovery);
+        const failures = outcomes
+          .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
+          .map((outcome) => outcome.reason);
+        if (failures.length)
+          throw new AggregateError(
+            [error, ...failures],
+            `Collection creation failed (${String(error)}); rollback state restoration also failed`,
+            { cause: error },
+          );
+      },
+    },
+  );
 }
 
 export async function createCollection(
@@ -134,7 +139,7 @@ export async function createCollection(
   return create(libraryID, name, parentID, [], isCurrent);
 }
 
-/** Creation and assignment commit together; failure cannot leave an empty orphan collection. */
+/** Creation and assignment share one SQL transaction; rollback cannot leave an empty orphan. */
 export async function createCollectionAndAdd(
   items: readonly Zotero.Item[],
   libraryID: number,
@@ -153,8 +158,8 @@ export async function moveCollection(
 ): Promise<boolean> {
   let collection: Zotero.Collection | undefined;
   let originalParentID = 0;
-  try {
-    return await executeCollectionTransaction(async () => {
+  return executeCollectionTransaction(
+    async () => {
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       collection = currentCollection(collectionID);
       originalParentID = collection.parentID || 0;
@@ -167,14 +172,17 @@ export async function moveCollection(
       if (currentCollection(collectionID) !== collection)
         throw new Error('Collection target changed');
       return true;
-    });
-  } catch (error) {
-    if (collection) {
-      collection.parentID = originalParentID;
-      await collection.reload(['primaryData'], true);
-    }
-    throw error;
-  }
+    },
+    {
+      reportCommittedError: true,
+      onRollback: async () => {
+        if (collection) {
+          collection.parentID = originalParentID;
+          await collection.reload(['primaryData'], true);
+        }
+      },
+    },
+  );
 }
 
 export async function renameCollection(
@@ -185,8 +193,8 @@ export async function renameCollection(
   const nextName = collectionName(name);
   let collection: Zotero.Collection | undefined;
   let originalName = '';
-  try {
-    return await executeCollectionTransaction(async () => {
+  return executeCollectionTransaction(
+    async () => {
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       collection = currentCollection(collectionID);
       originalName = collection.name;
@@ -197,14 +205,17 @@ export async function renameCollection(
       if (currentCollection(collectionID) !== collection)
         throw new Error('Collection target changed');
       return true;
-    });
-  } catch (error) {
-    if (collection) {
-      collection.name = originalName;
-      await collection.reload(['primaryData'], true);
-    }
-    throw error;
-  }
+    },
+    {
+      reportCommittedError: true,
+      onRollback: async () => {
+        if (collection) {
+          collection.name = originalName;
+          await collection.reload(['primaryData'], true);
+        }
+      },
+    },
+  );
 }
 
 /** Match native 10.0.6 deletion: trash the collection subtree, never its items. */
@@ -213,8 +224,8 @@ export async function deleteCollection(
   isCurrent: () => boolean = () => true,
 ): Promise<void> {
   const snapshots: Array<{ collection: Zotero.Collection; deleted: boolean }> = [];
-  try {
-    await executeCollectionTransaction(async () => {
+  await executeCollectionTransaction(
+    async () => {
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       const collection = currentCollection(collectionID);
       snapshots.push({ collection, deleted: collection.deleted });
@@ -232,14 +243,17 @@ export async function deleteCollection(
       await collection.save(options);
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       writableLibrary(collection.libraryID);
-    });
-  } catch (error) {
-    for (const snapshot of snapshots) snapshot.collection.deleted = snapshot.deleted;
-    await Promise.all(
-      snapshots.map(({ collection }) =>
-        collection.reload(['primaryData', 'childCollections'], true),
-      ),
-    );
-    throw error;
-  }
+    },
+    {
+      reportCommittedError: true,
+      onRollback: async () => {
+        for (const snapshot of snapshots) snapshot.collection.deleted = snapshot.deleted;
+        await Promise.all(
+          snapshots.map(({ collection }) =>
+            collection.reload(['primaryData', 'childCollections'], true),
+          ),
+        );
+      },
+    },
+  );
 }

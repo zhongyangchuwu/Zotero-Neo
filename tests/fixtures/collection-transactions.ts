@@ -7,6 +7,7 @@ export interface CollectionTestTransactionOptions {
 }
 export interface CollectionTransactionTestDB {
   _transactionID: string | null;
+  _commitCount: number;
   readonly _callbacks: {
     readonly current: {
       commit: CollectionTestTransactionCallback[];
@@ -34,6 +35,7 @@ export function createCollectionTransactionDB(): CollectionTransactionTestDB {
   let transactionFinished: Promise<void> = Promise.resolve();
   const db: CollectionTransactionTestDB = {
     _transactionID: null,
+    _commitCount: 0,
     _callbacks: { current: { commit: [], rollback: [] } },
     addCurrentCallback: vi.fn(function (
       this: CollectionTransactionTestDB,
@@ -54,6 +56,7 @@ export function createCollectionTransactionDB(): CollectionTransactionTestDB {
         db._transactionID = id;
         try {
           const result = await callback();
+          db._commitCount++;
           db._transactionID = null;
           if (options.onCommit) db._callbacks.current.commit.push(options.onCommit);
           db._callbacks.current.rollback = [];

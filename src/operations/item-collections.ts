@@ -34,8 +34,8 @@ async function updateMembership(
   isCurrent: () => boolean,
 ): Promise<number> {
   const transitions: MembershipTransition[] = [];
-  try {
-    return await executeCollectionTransaction(async () => {
+  return executeCollectionTransaction(
+    async () => {
       if (!isCurrent()) throw new Error('Collection action is no longer current');
       const target = writableCollection(collectionID);
       const source = sourceID === undefined ? undefined : writableCollection(sourceID);
@@ -95,21 +95,24 @@ async function updateMembership(
           throw new Error('Item target changed');
       }
       return transitions.length;
-    });
-  } catch (error) {
-    // Native save clears changed flags before the outer transaction commits.
-    // Restore all touched objects, including earlier successfully saved objects.
-    for (const { item, collections } of transitions) {
-      for (const id of item.getCollections())
-        if (!collections.includes(id)) item.removeFromCollection(id);
-      for (const id of collections)
-        if (!item.getCollections().includes(id)) item.addToCollection(id);
-    }
-    await Promise.all(
-      transitions.map(({ item }) => item.reload(['primaryData', 'collections'], true)),
-    );
-    throw error;
-  }
+    },
+    {
+      reportCommittedError: true,
+      onRollback: async () => {
+        // Native save clears changed flags before the outer transaction commits.
+        // Restore all touched objects, including earlier successfully saved objects.
+        for (const { item, collections } of transitions) {
+          for (const id of item.getCollections())
+            if (!collections.includes(id)) item.removeFromCollection(id);
+          for (const id of collections)
+            if (!item.getCollections().includes(id)) item.addToCollection(id);
+        }
+        await Promise.all(
+          transitions.map(({ item }) => item.reload(['primaryData', 'collections'], true)),
+        );
+      },
+    },
+  );
 }
 
 /** Apply changed direct memberships only, atomically, after identity and permission revalidation. */

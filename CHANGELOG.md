@@ -52,8 +52,8 @@
 - Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
 
 ### Fixed
-- Record confirmed collection-tree Enter and Find collection destinations in existing Back/Forward history without recording tree motion; restore native scope completion and focus before accepting a history location.
-- Keep collection transaction callbacks local to their owning commit/rollback outcome, preventing failed writes from contaminating native inverse caches on a later unrelated commit. Hydrate only a confirmed continuous-add item before making it visible in Zotero's item tree.
+- Record confirmed collection-tree Enter and Find collection destinations in existing Back/Forward history without recording tree motion; preserve the departure through branch expansion, bind queued Enter to its admitted scope ID, and restore native scope completion and focus before accepting a history location.
+- Keep collection callbacks local to their actual SQL outcome, preserve saved receipts after foreign post-commit callback failure, and serialize later Neo collection mutations through rollback recovery. Failed writes cannot contaminate inverse caches on a later commit or erase a subsequent membership save. Hydrate only a confirmed continuous-add item before native rendering.
 - Keep Main's startup focus claim until the item table is ready, then focus the first item in the current View. Handle background-window startup and empty Views without overriding deliberate search, later Reader returns, or add-on reloads.
 - Read Main View state and Toggle Tag Filter candidates from the complete native rendered scope, including multiple collections and supported mixed/cross-library selections, without calling single-selection APIs or broadening tags to entire libraries.
 - Report Tag Filter matches using native object rows, excluding multiselection library headers and spacers.

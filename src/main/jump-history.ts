@@ -22,7 +22,8 @@ import {
   restoreMainItemCursorAnchor,
   restoreMainScopeIDs,
   selectMainCollection,
-  selectMainScopeCursor,
+  mainScopeCursorID,
+  selectMainScope,
   selectMainTab,
   selectedMainTabID,
   selectedMainTabInfo,
@@ -229,8 +230,9 @@ export class MainNavigationExecutor {
   }
 
   scopeActivation(window: MainWindow, session: MainWindowSession): NavigationOperation {
+    const id = mainScopeCursorID(window);
     const operation = this.scopeSelection(window, session, (isCurrent) =>
-      selectMainScopeCursor(window, isCurrent),
+      id ? selectMainScope(window, id, isCurrent) : Promise.resolve(false),
     );
     const source = this.#scopeMotionSources.get(session);
     if (
