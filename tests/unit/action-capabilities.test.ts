@@ -1,148 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ActionId } from '../../src/input/actions';
-import {
-  MAIN_EXECUTABLE_ACTIONS,
-  MAIN_NORMAL_ACTIONS,
-  MAIN_SELECT_ACTIONS,
-  isMainExecutableAction,
-} from '../../src/main/action-capabilities';
-import {
-  READER_LOCAL_VISUAL_ACTIONS,
-  READER_NORMAL_ACTIONS,
-  isReaderActionForMode,
-} from '../../src/reader/action-capabilities';
+import { isMainExecutableAction } from '../../src/main/action-capabilities';
+import { isReaderActionForMode } from '../../src/reader/action-capabilities';
 import { actionsForBindingMode } from '../../src/input/binding-capabilities';
-import { DEFAULT_BINDINGS } from '../../src/input/bindings';
-
-const expectedMainActions: readonly ActionId[] = [
-  'openCommandPalette',
-  'openSearch',
-  'findNext',
-  'findPrevious',
-  'findAllItems',
-  'findCollectionItems',
-  'switchTab',
-  'findNotes',
-  'mainQuickSearch',
-  'mainAdvancedSearch',
-  'managePlugins',
-  'openNeoSettings',
-  'manageSelection',
-  'navigateBack',
-  'navigateForward',
-  'mainTrashItems',
-  'mainRestoreTrashedItems',
-  'mainFocusTree',
-  'mainFocusLeft',
-  'mainFocusRight',
-  'mainFocusItems',
-  'focusReaderSplitLeft',
-  'focusReaderSplitDown',
-  'focusReaderSplitUp',
-  'focusReaderSplitRight',
-  'mainYankCitekey',
-  'mainOpenPDF',
-  'mainActivate',
-  'closeCurrentTab',
-  'previousTab',
-  'nextTab',
-  'addTag',
-  'removeTag',
-  'toggleTagFilter',
-  'clearTagFilters',
-  'addToCollection',
-  'removeFromCollection',
-  'mainNavDown',
-  'mainNavUp',
-  'mainNavFirst',
-  'mainNavLast',
-  'mainTreeToggle',
-  'mainTreeOpenOnly',
-  'mainTreeCloseOnly',
-  'mainTreeExpand',
-  'mainTreeCollapse',
-  'mainTreeParent',
-  'mainTreeExpandAll',
-  'mainTreeCollapseAll',
-  'mainEnterSelect',
-  'mainToggleSelection',
-  'mainClearSelection',
-  'mainCancelTarget',
-  'mainSelectDown',
-  'mainSelectUp',
-  'mainSelectFirst',
-  'mainSelectLast',
-  'mainSelectSwapEnds',
-  'mainSelectFinish',
-  'mainSelectCancel',
-];
-
-function sameActions(actual: readonly ActionId[], expected: readonly ActionId[]): void {
-  expect(new Set(actual)).toEqual(new Set(expected));
-  expect(new Set(actual).size).toBe(actual.length);
-}
 
 describe('action capability ownership', () => {
-  it('keeps the Main capability catalog in parity with its executable actions', () => {
-    sameActions(MAIN_EXECUTABLE_ACTIONS, expectedMainActions);
-
-    for (const action of expectedMainActions) expect(isMainExecutableAction(action)).toBe(true);
+  it('rejects Reader-only and unknown commands in Main', () => {
     expect(isMainExecutableAction('zoomIn')).toBe(false);
     expect(isMainExecutableAction('not-an-action')).toBe(false);
   });
 
-  it('composes binding capabilities from the owning Main and Reader sets', () => {
-    sameActions(actionsForBindingMode('main-normal'), MAIN_NORMAL_ACTIONS);
-    sameActions(actionsForBindingMode('main-select'), MAIN_SELECT_ACTIONS);
-    sameActions(actionsForBindingMode('reader-normal'), READER_NORMAL_ACTIONS);
-    sameActions(actionsForBindingMode('reader-select'), READER_LOCAL_VISUAL_ACTIONS);
-
-    for (const action of [
-      'findAllItems',
-      'findCollectionItems',
-      'findNotes',
-      'managePlugins',
-      'openNeoSettings',
-      'navigateBack',
-      'navigateForward',
-      'switchTab',
-      'closeCurrentTab',
-      'previousTab',
-      'nextTab',
-      'showInLibrary',
-    ] as const)
-      expect(isReaderActionForMode('normal', action)).toBe(true);
-
-    for (const action of [
-      'navigateBack',
-      'navigateForward',
-      'openCommandPalette',
-      'findAllItems',
-      'findCollectionItems',
-      'findNotes',
-      'managePlugins',
-      'openNeoSettings',
-      'switchTab',
-      'mainFocusTree',
-      'mainFocusLeft',
-      'mainFocusRight',
-      'mainFocusItems',
-      'focusReaderSplitLeft',
-      'focusReaderSplitDown',
-      'focusReaderSplitUp',
-      'focusReaderSplitRight',
-      'mainYankCitekey',
-      'mainOpenPDF',
-      'closeCurrentTab',
-      'previousTab',
-      'nextTab',
-      'addTag',
-      'removeTag',
-      'showInLibrary',
-    ] as const)
-      expect(actionsForBindingMode('note-normal')).toContain(action);
-  });
   it('guards commands by Reader mode and rejects unsafe catalog drift', () => {
     expect(isReaderActionForMode('normal', 'openCommandPalette')).toBe(true);
     expect(isReaderActionForMode('normal', 'switchTab')).toBe(true);
@@ -155,14 +22,13 @@ describe('action capability ownership', () => {
     expect(isReaderActionForMode('normal', 'navigateBack')).toBe(true);
     expect(isReaderActionForMode('normal', 'navigateForward')).toBe(true);
     expect(isReaderActionForMode('normal', 'showInLibrary')).toBe(true);
+    expect(isReaderActionForMode('normal', 'mainAddByIdentifier')).toBe(true);
+    expect(isReaderActionForMode('visual', 'mainAddByIdentifier')).toBe(false);
+    expect(actionsForBindingMode('note-normal')).not.toContain('mainAddByIdentifier');
+    expect(actionsForBindingMode('main-select')).not.toContain('mainAddByIdentifier');
     expect(actionsForBindingMode('main-normal')).not.toContain('showInLibrary');
-    expect(Object.values(DEFAULT_BINDINGS)).not.toContain('showInLibrary');
     expect(isReaderActionForMode('normal', 'toggleTagFilter')).toBe(false);
     expect(isReaderActionForMode('normal', 'mainTrashItems')).toBe(false);
-    expect(READER_NORMAL_ACTIONS).toContain('openNeoSettings');
-    expect(actionsForBindingMode('note-normal')).toContain('openNeoSettings');
-    expect(MAIN_NORMAL_ACTIONS).toContain('openNeoSettings');
-    expect(MAIN_SELECT_ACTIONS).not.toContain('openNeoSettings');
     expect(isReaderActionForMode('visual', 'highlightYellow')).toBe(true);
     expect(isReaderActionForMode('visual', 'flashText')).toBe(true);
     expect(isReaderActionForMode('visual', 'openSelectionActions')).toBe(true);

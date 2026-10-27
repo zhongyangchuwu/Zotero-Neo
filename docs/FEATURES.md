@@ -26,6 +26,14 @@ Review the group in the Selection Panel, then apply tags or collection membershi
 
 [Work with a reading list](MAIN_GUIDE.md) · [Organize papers with tags](TAGS.md)
 
+## Copy references and annotation content by label
+
+In Reader Normal, press `y` to choose a visible DOI, arXiv ID, URL, annotation excerpt, or comment without selecting it first. Excerpt and Comment labels stay together but copy separate contents; an identifier inside an excerpt remains its own choice. Press `f` to follow recognized references and native PDF links.
+
+When a paper is not in your Library, Add Item by Identifier opens Zotero's native lookup. Copying or following a target does not import it automatically.
+
+[Try copy/follow hints](READER_GUIDE.md#copy-or-follow-visible-targets) · [Add papers by identifier](MAIN_GUIDE.md#add-items-by-identifier)
+
 ## Follow the structure of a paper
 
 Move between headings, figures, tables, annotations, and your own bookmarks. Use letter hints to follow a visible citation or PDF link, and open a second view when you need the methods and results side by side.

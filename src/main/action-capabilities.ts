@@ -28,6 +28,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'focusReaderSplitUp',
   'focusReaderSplitRight',
   'mainYankCitekey',
+  'mainAddByIdentifier',
   'mainOpenPDF',
   'mainActivate',
   'closeCurrentTab',

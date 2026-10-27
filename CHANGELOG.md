@@ -4,6 +4,8 @@
 
 ### Added
 
+- Add **Add Item by Identifier** to Main and Reader Normal, with configurable `<Space>ai` defaults and Command Palette discovery. Reuse Zotero's native input, batch lookup, saving, and errors; keep drafts and native IME/Enter/Escape ownership. Reader tabs and standalone windows return to their associated Library context without borrowing item Selection, and ambiguous or read-only library scopes are refused.
+- Bind Reader Normal `y` to `copyTarget` for grouped, separate annotation Excerpt/Comment, DOI, arXiv, HTTP(S), and native external-link copy hints; extend `followLink` (`f`) to follow recognized DOI/arXiv/HTTP(S) text alongside native links. Select `y` and Normal `Y` remain unchanged; direct `yankAnnotation` is unbound. Binding schema 19 migrates persisted `copyIdentifier`/`followIdentifier` IDs to `copyTarget`/`followLink` while preserving custom key positions, explicit-null overrides, and a custom `reader-normal:y` → `yankAnnotation` binding. No `<Space>ya` default is added.
 - Add a VitePress documentation site with local search and responsive light/dark navigation.
 - Add contributor instructions for screenshots and videos with native playback controls and text alternatives.
 - Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains a distinct action from Back/Forward.
@@ -65,6 +67,7 @@
 - Compute cross-page annotation rectangles from selected text nodes, excluding intervening PDF canvas/page boxes and preserving partial text endpoints.
 - Retain only pending Reader timers; completed or cancelled callbacks cannot refocus an editor or save a newer draft.
 - Keep native Find composition Enter native and fence delayed return-to-PDF focus to the same live input/view.
+- Reject copy/follow targets in retained but hidden PDF frames, including Reading Mode's underlying view, and revalidate containing-frame visibility before confirmation without disabling visible native-link fallback.
 - Main Notes now uses the focused Cursor item independently of native multi-selection and persistent Neo Selection.
 - Restore only the explicit last Neo Trash batch, report the number of successfully persisted items and roll back the in-memory deleted flag after a failed save; never invoke parameterless native Undo.
 - Replace each Main session's feedback deadline so older timers cannot erase newer messages.

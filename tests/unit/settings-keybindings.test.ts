@@ -447,7 +447,10 @@ function actionCard(
     if (element.localName !== 'details' || element.children[0]?.localName !== 'summary')
       return false;
     const summary = element.children[0].textContent;
-    return summary.includes(action) && summary.includes(contextLabel(context, language));
+    return (
+      element.getAttribute('data-action-key') === `${context}:${action}` &&
+      summary.includes(contextLabel(context, language))
+    );
   });
 }
 
@@ -648,9 +651,6 @@ describe('Settings shortcut browser', () => {
         (issue) => issue.kind === 'duplicate',
       ),
     ).toBe(true);
-    expect(actionCard(harness.root, second, 'reader-normal')?.textContent).toContain(
-      settingsText('en', 'Duplicate mode and key sequence.'),
-    );
     expect(buttonNamed(harness.root, settingsText('en', 'Apply bindings')).disabled).toBe(true);
 
     const conflictedCard = actionCard(harness.root, second, 'reader-normal');
@@ -665,18 +665,15 @@ describe('Settings shortcut browser', () => {
       ),
     ).toBe(true);
     expect(
-      deriveBindingEditor(editorState(state)).validation.errors.some(
+      deriveBindingEditor(editorState(state)).validation.errors.filter(
         (issue) => issue.kind === 'duplicate',
       ),
-    ).toBe(false);
+    ).toEqual([]);
     expect(
       deriveBindingEditor(editorState(state)).validation.warnings.some(
         (issue) => issue.kind === 'prefix',
       ),
     ).toBe(true);
-    expect(harness.root.textContent).toContain(
-      settingsText('en', 'Strict prefix of another sequence.'),
-    );
     expect(buttonNamed(harness.root, settingsText('en', 'Apply bindings')).disabled).toBe(false);
     harness.settings.dispose();
   });

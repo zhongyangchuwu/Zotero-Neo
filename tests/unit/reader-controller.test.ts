@@ -36,6 +36,7 @@ const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
 const originalComponents = Reflect.get(globalThis, 'Components');
 const noopReaderMainOperations: ReaderMainOperations = {
+  openAddByIdentifier: () => {},
   openAllItemsPicker: () => {},
   openCollectionItemsPicker: () => {},
   openNotesPicker: () => {},
@@ -693,6 +694,7 @@ function createHistorySession(
     },
     getElementById: (id: string) => nodes.get(id) ?? null,
     querySelector: () => null,
+    querySelectorAll: () => [],
     createDocumentFragment: () => {
       const childNodes: HTMLElement[] = [];
       return {
@@ -725,6 +727,13 @@ function createHistorySession(
           colorScheme: '',
           getPropertyValue: () => '',
           setProperty: () => {},
+        },
+        getBoundingClientRect: (): DOMRect => {
+          const width = element.textContent.length * 6 + 8;
+          const prompt = element.dataset.zoteroNeoHintPrompt === '1';
+          const left = prompt ? 800 - width - 4 : Number.parseFloat(element.style.left) || 0;
+          const top = prompt ? 4 : Number.parseFloat(element.style.top) || 0;
+          return { left, top, right: left + width, bottom: top + 16, width, height: 16 } as DOMRect;
         },
         focus: vi.fn(),
         children,
@@ -4396,6 +4405,26 @@ describe('Reader marks lifecycle', () => {
   });
 });
 
+describe('Reader hint trigger safety', () => {
+  it('does not confirm a label from a held trigger-key repeat', () => {
+    const created = createHistorySession();
+    const { navigate } = configureLinkView(created, [
+      internalLink([10, 20, 80, 40], 1),
+      internalLink([100, 20, 180, 40], 2),
+      internalLink([200, 20, 280, 40], 3),
+      internalLink([300, 20, 380, 40], 4),
+    ]);
+    created.session.focusAndHandle(readerKey('f').event);
+    const hints = [...linkHintElements(created)];
+    const repeated = readerKey('f');
+    Reflect.set(repeated.event, 'repeat', true);
+    created.session.focusAndHandle(repeated.event);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(linkHintElements(created)).toEqual(hints);
+    created.session.dispose();
+  });
+});
+
 describe('PDF follow-link hints', () => {
   it('leaves composing Escape and label keys native without changing hints', () => {
     const created = createHistorySession();
@@ -4463,18 +4492,26 @@ describe('PDF follow-link hints', () => {
 
   it('retires hint ownership even when a live badge cannot be removed', () => {
     const created = createHistorySession();
-    const { view } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const { view } = configureLinkView(created, [
+      internalLink([10, 10, 80, 30]),
+      internalLink([100, 10, 180, 30]),
+    ]);
     const native = vi.fn();
     view._onKeyDown = native;
     created.session.start();
     created.session.focusAndHandle(readerKey('f').event);
     const badge = linkHintElements(created)[0]!;
+    const failure = new Error('live badge removal failed');
     vi.mocked(badge.remove).mockImplementationOnce(() => {
-      throw new Error('live badge removal failed');
+      throw failure;
     });
-    expect(() => created.session.focusAndHandle(readerKey('Escape').event)).toThrow(
-      'live badge removal failed',
-    );
+    try {
+      created.session.focusAndHandle(readerKey('Escape').event);
+      throw new Error('Expected cleanup to report the original failure');
+    } catch (error) {
+      expect(error).toBe(failure);
+    }
+    expect(linkHintElements(created)).toEqual([badge]);
     const key = readerKey('x').event;
     view._onKeyDown?.(key);
     expect(native).toHaveBeenCalledExactlyOnceWith(key);
@@ -4622,7 +4659,6 @@ describe('PDF follow-link hints', () => {
     created.session.focusAndHandle(open.event);
 
     expect(linkHintElements(created).map((badge) => badge.textContent)).toEqual(['A', 'S', 'D']);
-    expect(created.bodyChildren).toHaveLength(3);
     expect(open.preventDefault).toHaveBeenCalledOnce();
     expect(open.stopImmediatePropagation).toHaveBeenCalledOnce();
 
@@ -4908,5 +4944,75 @@ describe('PDF follow-link hints', () => {
     created.session.focusAndHandle(focusedInput.event);
     expect(linkHintElements(created)).toHaveLength(0);
     expect(focusedInput.preventDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe('Reader copy target actions', () => {
+  function clipboard(created: ReturnType<typeof createHistorySession>) {
+    const copyString = vi.fn();
+    const components = Reflect.get(globalThis, 'Components');
+    components.classes = {
+      '@mozilla.org/widget/clipboardhelper;1': { getService: () => ({ copyString }) },
+    };
+    components.interfaces = { nsIClipboardHelper: {} };
+    Reflect.set(created.pdfWindow.document, 'querySelectorAll', () => []);
+    return copyString;
+  }
+
+  it.each([
+    ['https://doi.org/10.1000/Alpha', '10.1000/Alpha'],
+    ['https://arxiv.org/pdf/2301.01234v2.pdf', '2301.01234v2'],
+  ])(
+    'copies the identifier behind a native link only after label confirmation: %s',
+    (url, value) => {
+      const created = createHistorySession();
+      const copyString = clipboard(created);
+      configureLinkView(created, [externalLink([10, 10, 200, 30], url)]);
+      const removeAllRanges = vi.fn();
+      Reflect.set(created.pdfWindow, 'getSelection', () => ({
+        isCollapsed: false,
+        removeAllRanges,
+      }));
+      created.session.focusAndHandle(readerKey('y').event);
+      expect(copyString).not.toHaveBeenCalled();
+      created.session.focusAndHandle(readerKey('a').event);
+      expect(copyString).toHaveBeenCalledExactlyOnceWith(value);
+      expect(removeAllRanges).not.toHaveBeenCalled();
+      expect(created.session.mode).toBe('normal');
+      created.session.dispose();
+    },
+  );
+
+  it('never copies an internal destination, composing label or cancelled target', () => {
+    const created = createHistorySession();
+    const copyString = clipboard(created);
+    const { openLink, navigate } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    created.session.focusAndHandle(readerKey('y').event);
+    configureLinkView(created, [externalLink([10, 10, 200, 30], 'https://example.org')]);
+    created.session.focusAndHandle(readerKey('y').event);
+    const composing = readerKey('a', { isComposing: true });
+    created.session.focusAndHandle(composing.event);
+    expect(composing.preventDefault).not.toHaveBeenCalled();
+    created.session.focusAndHandle(readerKey('Escape').event);
+    expect(copyString).not.toHaveBeenCalled();
+    expect(openLink).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+
+  it('rejects confirmation when the captured native view has been replaced', () => {
+    const created = createHistorySession();
+    const copyString = clipboard(created);
+    const { view } = configureLinkView(created, [
+      externalLink([10, 10, 200, 30], 'https://example.org'),
+    ]);
+    created.session.focusAndHandle(readerKey('y').event);
+    Reflect.set(created.reader._internalReader!, '_primaryView', { ...view });
+    created.session.focusAndHandle(readerKey('a').event);
+    expect(copyString).not.toHaveBeenCalled();
+    expect(created.bodyChildren.filter((node) => node.dataset.zoteroNeoCopyHint === '1')).toEqual(
+      [],
+    );
+    created.session.dispose();
   });
 });

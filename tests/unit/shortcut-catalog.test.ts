@@ -109,6 +109,9 @@ describe('unified shortcut catalog consumers', () => {
     expect(
       catalog.find((entry) => entry.context === 'picker-input' && entry.action === 'uiNextPane'),
     ).toMatchObject({ keys: [], defaultKeys: [], source: 'unbound' });
+    expect(
+      catalog.find((entry) => entry.context === 'reader-normal' && entry.action === 'copyTarget'),
+    ).toMatchObject({ group: 'reader', keys: ['y'], defaultKeys: ['y'], source: 'default' });
   });
 
   it('drives local guides from edited settings bindings and removes guides when actions are unbound', () => {

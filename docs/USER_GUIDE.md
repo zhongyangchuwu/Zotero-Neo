@@ -8,8 +8,8 @@ Start with [Install Neo and try it](GETTING_STARTED.md), then choose a workflow 
 
 | Task | Guide |
 | --- | --- |
-| Browse papers, build a workset, change collection membership, or review items before moving them to Trash | [Library](MAIN_GUIDE.md) |
-| Read and navigate a PDF, compare places, follow links, or save a reading position | [Reader](READER_GUIDE.md) |
+| Add papers by identifier, browse items, build a workset, or organize collections | [Library](MAIN_GUIDE.md) |
+| Navigate a PDF, copy visible references or annotation content, follow links, or compare places | [Reader](READER_GUIDE.md) |
 | Find PDF text, refine a selection, annotate it, or revisit annotations | [Selection and annotations](SELECTION_GUIDE.md) |
 | Append a selected passage to an existing note | [Capture](CAPTURE_GUIDE.md) |
 | Find and edit Zotero notes | [Notes](NOTE_GUIDE.md) |
@@ -27,6 +27,6 @@ Use [Search and navigation](SEARCH_GUIDE.md) to narrow the Main view or find a s
 
 ## Follow a thread across papers and notes
 
-Set a position in the [Reader](READER_GUIDE.md) before following a link or switching papers. Use [Search and navigation](SEARCH_GUIDE.md) to find another item, switch tabs, or return through shared history. Append relevant passages to an existing topic note with [Capture](CAPTURE_GUIDE.md), then add your own comparison in [Notes](NOTE_GUIDE.md). A Reader mark names a PDF position; shared history records eligible navigation between surfaces.
+Set a position in the [Reader](READER_GUIDE.md) before following a link or switching papers. Use [copy/follow hints](READER_GUIDE.md#copy-or-follow-visible-targets) to use a visible reference, or [Add Item by Identifier](MAIN_GUIDE.md#add-items-by-identifier) to look up a paper that is not in your Library. These are separate actions: copying or following does not import an item. Use [Search and navigation](SEARCH_GUIDE.md) to find another item, switch tabs, or return through shared history. Append passages to an existing topic note with [Capture](CAPTURE_GUIDE.md), then add your own comparison in [Notes](NOTE_GUIDE.md).
 
 Use the [Command Reference](COMMAND_REFERENCE.md) for the complete current action catalog, or [Troubleshooting](TROUBLESHOOTING.md) when an interaction does not work as described.

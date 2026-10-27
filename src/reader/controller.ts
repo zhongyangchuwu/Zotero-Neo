@@ -52,6 +52,7 @@ import { ReaderMarks } from './marks';
 import { ReaderNativeSidebar } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
 import { ReaderLinkHints } from './link-hints';
+import { ReaderCopyHints } from './copy-hints';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
 import {
@@ -61,6 +62,7 @@ import {
   ReaderViewLifecycle,
   readerInstanceID,
   readerOwnerWindow,
+  readerMainWindow,
   readerWindow,
   readerPrimaryWindow,
   readerIsClosed,
@@ -486,6 +488,7 @@ export class ReaderSession {
   readonly #sidebar: ReaderNativeSidebar;
   readonly #captions: ReaderCaptionTargets;
   readonly #linkHints: ReaderLinkHints;
+  readonly #copyHints: ReaderCopyHints;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #nativeInput: ReaderNativeInput;
   readonly #flash: ReaderFlash;
@@ -546,8 +549,17 @@ export class ReaderSession {
       executeNavigation: (pdfWindow, intent, perform) =>
         this.executeReaderNavigation(pdfWindow, intent, perform),
       showStatus: (message, duration) => this.showStatus(message, duration),
+      text: (key) => t(key, this.keyGuideLanguage()),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       diagnostic: (message) => dependencies.controller.dependencies.logger.diagnostic(message),
+    });
+    this.#copyHints = new ReaderCopyHints({
+      reader: dependencies.reader,
+      viewForWindow: (pdfWindow) => this.readerViewForWindow(pdfWindow),
+      copyText: (text) => this.copyText(text),
+      text: (key) => t(key, this.keyGuideLanguage()),
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
     this.#nativeInput = new ReaderNativeInput((pdfWindow) => {
       this.setMode('normal');
@@ -690,6 +702,8 @@ export class ReaderSession {
       onPointerDown: () => {
         this.#markJumpRevision += 1;
         this.#interactionRevision += 1;
+        this.#copyHints.close();
+        this.#linkHints.cancelHints();
         this.input.reset();
         this.clearKeyGuide();
         this.updateIndicator();
@@ -699,6 +713,8 @@ export class ReaderSession {
         this.#interactionRevision += 1;
         this.#smoothScroller.stop(true);
         this.#flash.onBlur(pdfWindow, event);
+        if (this.#linkHints.ownsView(pdfWindow)) this.#linkHints.cancelHints();
+        this.#copyHints.releaseView(pdfWindow);
       },
       onSelectionChange: (pdfWindow) => {
         this.#interactionRevision += 1;
@@ -708,11 +724,13 @@ export class ReaderSession {
       onScroll: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
+        this.#copyHints.onViewportChange(pdfWindow);
         if (this.#surfaceMode === 'visual') this.#selectionRange.refresh(pdfWindow, false);
       },
       onResize: (pdfWindow) => {
         this.#flash.onViewportChange(pdfWindow);
         this.#linkHints.onViewportChange(pdfWindow);
+        this.#copyHints.onViewportChange(pdfWindow);
       },
       releaseView: (pdfWindow) => {
         this.#interactionRevision += 1;
@@ -720,6 +738,7 @@ export class ReaderSession {
         const failure = new CleanupFailure();
         failure.run(() => this.#selectionRange.releaseView(pdfWindow));
         failure.run(() => this.#linkHints.releaseView(pdfWindow));
+        failure.run(() => this.#copyHints.releaseView(pdfWindow));
         failure.run(() => this.#selectionActions.releaseView(pdfWindow));
         failure.run(() => this.releaseViewTheme(pdfWindow));
         failure.run(() => this.#jumpHistoryBridge.releaseWindow(pdfWindow));
@@ -1016,6 +1035,7 @@ export class ReaderSession {
       if (indicator && !isDeadObject(indicator)) indicator.remove();
     });
     failure.run(() => this.#linkHints.close());
+    failure.run(() => this.#copyHints.close());
     failure.run(() => this.#prefixGuide.dispose());
     failure.run(() => this.#dependencies.release());
     failure.rethrow();
@@ -1050,6 +1070,7 @@ export class ReaderSession {
     this.#interactionRevision += 1;
     this.#sidebar.deactivate();
     this.#linkHints.close();
+    this.#copyHints.close();
     this.#nativeInput.release();
     if (this.#commentEditor.ownsInput) {
       void this.handOverNativeEditor();
@@ -1171,6 +1192,7 @@ export class ReaderSession {
     if (this.#selectionActions.isOpen && this.#selectionActions.handleKey(event, pdfWindow)) return;
     if (this.#flash.isOpen && this.#flash.handleKey(event, pdfWindow)) return;
     if (this.#linkHints.hasHints && this.#linkHints.handleKey(event, pdfWindow)) return;
+    if (this.#copyHints.hasHints && this.#copyHints.handleKey(event, pdfWindow)) return;
     if (isEditableElement(asElement(event.target))) {
       this.input.reset();
       this.clearKeyGuide();
@@ -1325,6 +1347,7 @@ export class ReaderSession {
       return true;
     if (this.#flash.isOpen && pdfWindow && this.#flash.ownsView(pdfWindow)) return true;
     if (this.#linkHints.hasHints && pdfWindow && this.#linkHints.ownsView(pdfWindow)) return true;
+    if (this.#copyHints.hasHints && pdfWindow && this.#copyHints.ownsView(pdfWindow)) return true;
     if (
       this.input.keyBuffer === 'm' ||
       this.input.keyBuffer === '`' ||
@@ -1371,7 +1394,7 @@ export class ReaderSession {
   ): void {
     if (action === 'openCommandPalette') {
       if (!pdfWindow || this.#scope.disposed) return;
-      const ownerWindow = readerOwnerWindow(this.#dependencies.reader);
+      const ownerWindow = readerMainWindow(this.#dependencies.reader);
       if (!ownerWindow) return;
       this.#dependencies.controller.dependencies.main.openCommandPalette(ownerWindow, {
         mode: 'normal',
@@ -1393,6 +1416,9 @@ export class ReaderSession {
     const main = this.#dependencies.controller.dependencies.main;
     const number = Math.max(1, count || 1);
     switch (action) {
+      case 'mainAddByIdentifier':
+        main.openAddByIdentifier(readerMainWindow(this.#dependencies.reader) ?? null);
+        return;
       case 'findAllItems':
         main.openAllItemsPicker(ownerWindow);
         return;
@@ -1557,7 +1583,16 @@ export class ReaderSession {
         break;
       }
       case 'followLink':
-        this.#linkHints.open(pdfWindow);
+      case 'copyTarget':
+        this.#copyHints.close();
+        this.#linkHints.close();
+        if (this.#flash.isOpen) this.#flash.cancel();
+        this.#smoothScroller.stop(true);
+        this.input.reset();
+        this.clearKeyGuide();
+        pdfWindow.focus();
+        if (action === 'copyTarget') this.#copyHints.open(pdfWindow);
+        else this.#linkHints.open(pdfWindow);
         break;
       case 'flashText':
         if (this.#surfaceMode === 'visual') this.#flash.open(pdfWindow, 'visual-end');
@@ -1928,6 +1963,7 @@ export class ReaderSession {
     const previousMode = this.#surfaceMode;
     if (this.#flash.isOpen) this.#flash.cancel();
     if (this.#linkHints.hasHints) this.#linkHints.cancelHints();
+    this.#copyHints.close();
     if (previousMode === 'visual' && mode !== 'visual') {
       this.#selectionActions.close();
       this.#dependencies.selection?.clearOwner(this);

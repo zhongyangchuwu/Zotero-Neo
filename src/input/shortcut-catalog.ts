@@ -36,7 +36,9 @@ export function actionGroup(action: ActionId): ActionGroup {
   if (/^extend|^highlight|Selection|Visual|^flashText|^addNote|^underline/.test(action))
     return 'selection';
   if (
-    /Reader|Page|^zoom|^scroll|Heading|Figure|Table|Bookmark|^followLink|MarksExplorer/.test(action)
+    /Reader|Page|^zoom|^scroll|Heading|Figure|Table|Bookmark|^followLink|^copyTarget|MarksExplorer/.test(
+      action,
+    )
   )
     return 'reader';
   if (/^navigate|Tab$|^switchTab/.test(action)) return 'navigation';

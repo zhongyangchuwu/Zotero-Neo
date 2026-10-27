@@ -205,10 +205,15 @@ describe('0.1.0 default keymap freeze', () => {
     });
   });
 
-  it('keeps primary Reader yank/copy keys immediate', () => {
+  it('uses y for copyTarget while preserving f, Y and Select y', () => {
+    expect(press('reader-normal', 'f')).toMatchObject({
+      kind: 'execute',
+      action: 'followLink',
+      count: 0,
+    });
     expect(press('reader-normal', 'y')).toMatchObject({
       kind: 'execute',
-      action: 'yankAnnotation',
+      action: 'copyTarget',
       count: 0,
     });
     expect(press('reader-normal', 'Y')).toMatchObject({

@@ -76,6 +76,7 @@ export interface ReaderSelectionApi {
 
 /** Concrete Main-window capabilities Reader can invoke without semantic Action redispatch. */
 export interface ReaderMainOperations {
+  openAddByIdentifier(ownerWindow: MainWindow | null): void;
   openAllItemsPicker(ownerWindow: MainWindow | null): void;
   openCollectionItemsPicker(ownerWindow: MainWindow | null): void;
   openNotesPicker(ownerWindow: MainWindow | null): void;

@@ -99,11 +99,30 @@ Zotero remains authoritative for Items, views, tabs, Notes, and Reader state. Fe
 | Reader native navigation, search, zoom, split, and focus | `src/toolkit/reader/navigation.ts` | Uses the active native view and clones request payloads into its realm; semantic action and traversal policy stay in Reader. |
 | Jump capture, reopen, and native completion bridge | `src/toolkit/reader/jump-host.ts`, `src/toolkit/reader/history-bridge.ts` | Keeps captured view/history identity and producer completion at the host boundary; shared history policy stays in `src/navigation/`. |
 | PDF text and selection geometry | `src/toolkit/reader/pdf-text.ts`, `src/toolkit/reader/selection-geometry.ts` | Reads PDF text-layer and viewport geometry; incomplete geometry fails closed rather than creating a partial annotation. |
+| Visible identifier text and geometry | `src/toolkit/reader/identifier-text.ts` | Reads visible PDF.js text into source-preserving same-line runs and maps text ranges to viewport rectangles; it does not guess cross-line joins or use OCR. |
 | PDF link overlays and native delegation | `src/toolkit/reader/links.ts` | Reads Zotero's overlay map and delegates activation to the captured native view. |
+| Reader target frame visibility | `src/toolkit/reader/visibility.ts` | Shares closed-window and containing-frame visibility checks across annotation, identifier-text, and native-link discovery and confirmation. Hidden Reading Mode fallback PDFs are not actionable targets. |
 | Native Reader sidebar | `src/toolkit/reader/sidebar.ts` | Adds reversible presentation/listener mechanics around Zotero-owned panes and rows; binding and target policy stay in `src/reader/native-sidebar.ts`. |
 | Annotation selection, filtering, and popup seams | `src/toolkit/reader/annotations.ts` | Adapts private Reader operations; item mutation remains with public Zotero item APIs. |
+| Visible annotation target models and geometry | `src/toolkit/reader/annotation-targets.ts` | Admits native annotations from the current filtered Reader view and supported anchor geometry clipped to the visible viewport; hidden, filtered, off-screen, and unsupported targets are omitted. |
 | Reader mark geometry and legacy storage access | `src/toolkit/reader/marks.ts` | Exposes host storage/geometry; `ReaderMarks` chooses parent-versus-attachment storage policy. |
 | Zotero structured-document blocks | `src/toolkit/reader/structured-document.ts` | Native cold processing can cover the whole PDF and cannot be cancelled; requests remain explicit and semantic classification stays with `ReaderCaptionTargets`. |
+
+Reader target discovery and interaction use the owners below; the Toolkit capabilities above provide host data and geometry.
+
+| Owner | Responsibility |
+| --- | --- |
+| `src/identifiers/` | Pure DOI, arXiv, and HTTP(S) recognition with original source offsets. |
+| `src/reader/identifier-targets.ts` | Merge recognized text with native links and keep copy values separate from follow destinations. |
+| `src/reader/copy-targets.ts` | Add independent Excerpt/Comment roles, group them per annotation, and omit empty roles without deduplicating them against identifiers. |
+| `src/reader/copy-hints.ts`, `src/reader/link-hints.ts` | Admit copy/follow actions in the exact live view; link following retains native destination and history semantics. |
+| `src/reader/target-hints.ts` | Own temporary prompts, letter input, group layout, collision avoidance, and cleanup. |
+
+Zotero 10.0.6's identifier utilities provide the DOI/arXiv matching and cleaning baseline, not Reader's scanning policy. Reader adds HTTP(S), preserves each visible occurrence and arXiv `vN` versions, and scans only visible same-line runs in the active PDF view; it does not guess ambiguous cross-line joins or use OCR. Annotation targets follow Zotero's visibility and filter state and require supported current-view geometry. A DOI inside an excerpt remains a separate copy intent. Following a bare DOI or arXiv ID builds its resolver URL; a literal HTTP(S) URL keeps its original path, query, fragment, and letter case even when recognized as an identifier.
+
+Annotation geometry is converted by the native Reader one rectangle and page at a time, with payloads cloned into its owner realm. A union spanning off-screen fragments is not sufficient evidence of a visible anchor. Native model identity and field/filter/view snapshots are revalidated before confirmation. If the bounded label layout cannot find nonoverlapping slots, the interaction is retired rather than exposing obscured, selectable targets.
+
+Binding schema 19 rewrites persisted `copyIdentifier` and `followIdentifier` ActionIds to `copyTarget` and `followLink` before canonical parsing. It preserves custom key positions and explicit-null overrides, including an explicit `reader-normal:y` binding to `yankAnnotation`; retired IDs are not runtime aliases.
 
 Objects passed between Bootstrap chrome and Zotero content compartments must be cloned into the receiving window. `src/platform/cross-compartment.ts` centralizes `Components.utils.cloneInto` and wrapper-identity/dead-wrapper helpers; PDF view handles retain native identity rather than allocating a wrapper per event.
 

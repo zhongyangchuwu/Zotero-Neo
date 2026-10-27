@@ -95,7 +95,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Enter>': 'editAnnotation',
   'reader-normal:<Return>': 'editAnnotation',
   'reader-normal:dd': 'deleteAnnotation',
-  'reader-normal:y': 'yankAnnotation',
+  'reader-normal:y': 'copyTarget',
   'reader-normal:Y': 'yankAnnotationComment',
   'reader-normal:zy': 'recolorYellow',
   'reader-normal:zr': 'recolorRed',
@@ -135,6 +135,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>pp': 'managePlugins',
   'reader-normal:<Space>ps': 'openNeoSettings',
   'reader-normal:<Space>yy': 'mainYankCitekey',
+  'reader-normal:<Space>ai': 'mainAddByIdentifier',
   'reader-select:s': 'flashText',
   'reader-select:a': 'openSelectionActions',
   'reader-select:<Enter>': 'openSelectionActions',
@@ -217,6 +218,7 @@ export const DEFAULT_BINDINGS = {
   'main-normal:<Space>sc': 'mainClearSelection',
   'main-normal:e': 'mainFocusTree',
   'main-normal:<Space>yy': 'mainYankCitekey',
+  'main-normal:<Space>ai': 'mainAddByIdentifier',
   'main-normal:o': 'mainOpenPDF',
   'main-normal:wh': 'mainFocusLeft',
   'main-normal:wl': 'mainFocusRight',
@@ -348,6 +350,7 @@ export const DEFAULT_BINDINGS = {
 
 const PREFIX_LABELS = {
   commands: { en: 'Commands', 'zh-CN': '命令' },
+  add: { en: 'Add', 'zh-CN': '添加' },
   navigation: { en: 'Navigation', 'zh-CN': '导航' },
   view: { en: 'View', 'zh-CN': '视图' },
   filters: { en: 'Filters', 'zh-CN': '筛选' },
@@ -380,6 +383,7 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'reader-normal:[': prefix('previous'),
   'reader-normal:]': prefix('next'),
   'reader-normal:<Space>': prefix('commands'),
+  'reader-normal:<Space>a': prefix('add'),
   'reader-normal:<Space>f': prefix('find'),
   'reader-normal:<Space>t': prefix('tags'),
   'reader-normal:<Space>c': prefix('collections'),
@@ -392,6 +396,7 @@ export const DEFAULT_PREFIX_BINDINGS = {
   'main-normal:z': prefix('view'),
   'main-normal:w': prefix('panes'),
   'main-normal:<Space>': prefix('commands'),
+  'main-normal:<Space>a': prefix('add'),
   'main-normal:<Space>f': prefix('find'),
   'main-normal:<Space>t': prefix('tags'),
   'main-normal:<Space>c': prefix('collections'),
@@ -867,16 +872,27 @@ export function migrateRetiredReaderInsertOverrides(raw: unknown): string {
   return retained.length ? JSON.stringify(Object.fromEntries(retained)) : '';
 }
 
+const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId>([
+  ['copyIdentifier', 'copyTarget'],
+  ['followIdentifier', 'followLink'],
+  ['focusReaderSidebar', 'focusReaderOutline'],
+]);
+
 /** Translate persisted retired IDs before earlier schema steps parse ActionIds. */
 export function migrateRetiredShortcutActions(raw: unknown): string {
   if (typeof raw !== 'string') return '';
   const entries = parseBindingEntries(raw);
-  if (!entries.some(([, action]) => action === 'focusReaderSidebar')) return raw;
+  if (
+    !entries.some(
+      ([, action]) => typeof action === 'string' && RETIRED_SHORTCUT_ACTIONS.has(action),
+    )
+  )
+    return raw;
   return JSON.stringify(
     Object.fromEntries(
       entries.map(([key, action]) => [
         key,
-        action === 'focusReaderSidebar' ? 'focusReaderOutline' : action,
+        typeof action === 'string' ? (RETIRED_SHORTCUT_ACTIONS.get(action) ?? action) : action,
       ]),
     ),
   );

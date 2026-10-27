@@ -2,6 +2,7 @@ import type { MainWindow } from '../../core/contracts';
 import type { ReaderEventRuntime } from '../../reader/types';
 import type { ReaderRuntime, ReaderViewRuntime } from './contracts';
 import type { NativeReaderRuntime, NativeReaderViewRuntime } from './private-types';
+import { isDeadObject } from '../../platform/cross-compartment';
 
 export type ReaderEventName = 'renderToolbar' | 'renderTextSelectionPopup';
 export type ReaderEventListener = (event: ReaderEventRuntime) => void;
@@ -98,6 +99,15 @@ export function readerInstanceID(reader: ReaderRuntime): string | undefined {
 export function readerOwnerWindow(reader: ReaderRuntime): MainWindow | undefined {
   const native = reader as NativeReaderRuntime;
   return native._window;
+}
+
+/** Uses a standalone Reader's actual opener, never an unrelated global Main window. */
+export function readerMainWindow(reader: ReaderRuntime): MainWindow | undefined {
+  const owner = readerOwnerWindow(reader);
+  if (!owner || isDeadObject(owner) || owner.closed) return undefined;
+  if (owner.location?.href !== 'chrome://zotero/content/reader.xhtml') return owner;
+  const opener = owner.opener as MainWindow | null;
+  return opener && !isDeadObject(opener) && !opener.closed ? opener : undefined;
 }
 
 export function readerWindow(reader: ReaderRuntime): Window | undefined {

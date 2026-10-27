@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ActionId } from '../../src/input/actions';
+import { t } from '../../src/i18n';
 import type {
   MainWindow,
   MainWindowControllerApi,
   MainWindowControllerDependencies,
 } from '../../src/core/contracts';
-import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
+import {
+  LANGUAGE_PREFERENCE_KEY,
+  NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
+} from '../../src/core/preferences';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 import { InputRuntime } from '../../src/input/runtime';
@@ -26,6 +30,7 @@ import type {
 import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
 import { MainNavigation } from '../../src/main/navigation';
 import { mainSelectedCollection } from '../../src/toolkit/main';
+import * as mainToolkit from '../../src/toolkit/main';
 import type { TreeView } from '../../src/toolkit/main/private-types';
 import { MainWindowSession } from '../../src/main/session';
 import { SelectionStore } from '../../src/main/selection-store';
@@ -1552,6 +1557,210 @@ function settingsMainHost() {
   return { ...host, controller, press, drawer, backdrop, values, writes };
 }
 
+describe('Main Add by Identifier', () => {
+  it('opens the native capability once from a counted shortcut and from the command palette', async () => {
+    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(true);
+    const host = settingsMainHost();
+    host.values.set('bindings', JSON.stringify({ 'main-normal:q': 'mainAddByIdentifier' }));
+    Reflect.set(host.window, 'Zotero_Tabs', { selectedID: 'zotero-pane', _tabs: [] });
+    try {
+      host.press('7');
+      host.press('q');
+      expect(open).toHaveBeenCalledExactlyOnceWith(host.window);
+
+      host.press(':');
+      await vi.waitFor(() =>
+        expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(true),
+      );
+      const overlay = host.bodyChildren.find((node) => node.id === 'zv-picker-overlay')!;
+      const input = overlay.querySelector('input') as HTMLInputElement & {
+        emit(type: string): void;
+      };
+      input.value = 'identifier';
+      input.emit('input');
+      await vi.waitFor(() =>
+        expect(
+          Array.from(overlay.querySelectorAll('div')).filter(
+            (node) => (node as HTMLElement).dataset.zvPickerRow === '1',
+          ),
+        ).toHaveLength(1),
+      );
+      host.press('Enter', input);
+      await vi.waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+      expect(open).toHaveBeenLastCalledWith(host.window);
+      expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
+    } finally {
+      host.controller.shutdown();
+      open.mockRestore();
+    }
+  });
+
+  it('requires the exact attached owner even when another or only one window remains', () => {
+    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(true);
+    const host = settingsMainHost();
+    const other = pickerMainWindow();
+    host.controller.addWindow(other.window);
+    try {
+      host.controller.openAddByIdentifier(other.window);
+      expect(open).toHaveBeenCalledExactlyOnceWith(other.window);
+      host.controller.removeWindow(other.window);
+      host.controller.openAddByIdentifier(other.window);
+      host.controller.openAddByIdentifier(null);
+      expect(open).toHaveBeenCalledOnce();
+      host.controller.openAddByIdentifier(host.window);
+      expect(open).toHaveBeenCalledTimes(2);
+      expect(open).toHaveBeenLastCalledWith(host.window);
+    } finally {
+      host.controller.shutdown();
+      open.mockRestore();
+    }
+  });
+
+  it('reports unavailable native lookup and unexpected host errors locally', () => {
+    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(false);
+    const status = vi.spyOn(MainNavigation.prototype, 'status').mockImplementation(() => {});
+    const debug = vi.spyOn(logger, 'debug');
+    const host = settingsMainHost();
+    host.values.set(LANGUAGE_PREFERENCE_KEY, 'en');
+    try {
+      host.controller.openAddByIdentifier(host.window);
+      expect(status).toHaveBeenLastCalledWith(
+        expect.objectContaining({ window: host.window }),
+        t('status.identifierLookupUnavailable', 'en'),
+      );
+      open.mockImplementation(() => {
+        throw new Error('lookup host failed');
+      });
+      expect(() => host.controller.openAddByIdentifier(host.window)).not.toThrow();
+      expect(status).toHaveBeenLastCalledWith(
+        expect.objectContaining({ window: host.window }),
+        t('status.identifierLookupFailed', 'en'),
+      );
+      expect(debug).toHaveBeenCalledWith(expect.stringContaining('Error: lookup host failed'));
+    } finally {
+      host.controller.shutdown();
+      open.mockRestore();
+      status.mockRestore();
+      debug.mockRestore();
+    }
+  });
+
+  it('cancels only transient Visual while preserving the workset and collection scope', () => {
+    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(true);
+    const attached = vi.spyOn(MainItemSelect.prototype, 'addWindow');
+    const host = settingsMainHost();
+    const selection = attached.mock.calls[0]![1];
+    const items = [10, 11].map((id) => ({ id, libraryID: 1 }) as Zotero.Item);
+    let focused = 0;
+    const active = { id: 'item-tree-row-0', localName: 'div' } as unknown as Element;
+    const collections = [{ id: 31 }, { id: 32 }];
+    const pane = {
+      getSelectedCollections: () => collections,
+      itemsView: {
+        domEl: { contains: (node: unknown) => node === active },
+        rowCount: items.length,
+        selection: {
+          get focused() {
+            return focused;
+          },
+          select: (index: number) => {
+            focused = index;
+          },
+        },
+        getRow: (index: number) => ({ isObjectRow: true, ref: items[index] }),
+        getRowIndexByID: (id: number) => items.findIndex((item) => item.id === id),
+        ensureRowIsVisible: () => {},
+      },
+    };
+    Reflect.set(host.window, 'ZoteroPane', pane);
+    Reflect.set(host.window, 'Zotero_Tabs', { selectedID: 'zotero-pane', _tabs: [] });
+    Reflect.set(host.window.document, 'activeElement', active);
+    selection.add({ libraryID: 1, itemID: 10 });
+    selection.add({ libraryID: 2, itemID: 900 });
+    const before = selection.values();
+    const visual = vi.spyOn(MainItemSelect.prototype, 'extend');
+    try {
+      host.press('v');
+      host.press('j');
+      expect(visual).toHaveBeenCalledOnce();
+      host.controller.openAddByIdentifier(host.window);
+      expect(selection.values()).toEqual(before);
+      expect(pane.getSelectedCollections()).toBe(collections);
+      host.press('j');
+      expect(visual).toHaveBeenCalledOnce();
+      expect(open).toHaveBeenCalledExactlyOnceWith(host.window);
+    } finally {
+      host.controller.shutdown();
+      open.mockRestore();
+      attached.mockRestore();
+      visual.mockRestore();
+    }
+  });
+
+  it('clears pending Neo input and leaves native keys, IME and Escape entirely untouched', () => {
+    vi.useFakeTimers();
+    const ownsInput = vi.spyOn(mainToolkit, 'mainIdentifierLookupOwnsInput').mockReturnValue(false);
+    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(true);
+    const host = settingsMainHost();
+    const next = vi.fn();
+    const previous = vi.fn();
+    host.values.set(
+      'bindings',
+      JSON.stringify({ 'main-normal:x': 'nextTab', 'main-normal:xy': 'previousTab' }),
+    );
+    Reflect.set(host.window, 'Zotero_Tabs', {
+      selectedID: 'zotero-pane',
+      _tabs: [],
+      selectNext: next,
+      selectPrev: previous,
+    });
+    const input = host.window.document.createElement('textarea');
+    const blur = vi.fn();
+    Reflect.set(input, 'blur', blur);
+    try {
+      host.press('x');
+      vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
+      host.controller.openAddByIdentifier(host.window);
+      expect(host.bodyChildren.some((node) => node.id === 'zotero-neo-key-guide')).toBe(false);
+      vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+      expect(next).not.toHaveBeenCalled();
+      host.press('5');
+      host.press('x');
+      vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
+      expect(host.bodyChildren.some((node) => node.id === 'zotero-neo-key-guide')).toBe(true);
+      ownsInput.mockReturnValue(true);
+      Reflect.set(host.window.document, 'activeElement', input);
+      for (const [key, options] of [
+        ['Escape', {}],
+        ['Enter', {}],
+        ['Enter', { shiftKey: true }],
+        ['j', {}],
+        ['Process', { keyCode: 229 }],
+        ['Escape', { isComposing: true }],
+      ] as const) {
+        const event = host.press(key, input, options);
+        expect(event.preventDefault).not.toHaveBeenCalled();
+        expect(event.stopPropagation).not.toHaveBeenCalled();
+        expect(event.stopImmediatePropagation).not.toHaveBeenCalled();
+      }
+      expect(blur).not.toHaveBeenCalled();
+      expect(host.bodyChildren.some((node) => node.id === 'zotero-neo-key-guide')).toBe(false);
+      vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+      expect(next).not.toHaveBeenCalled();
+      expect(previous).not.toHaveBeenCalled();
+      ownsInput.mockReturnValue(false);
+      Reflect.set(host.window.document, 'activeElement', null);
+      host.press('y');
+      expect(previous).not.toHaveBeenCalled();
+    } finally {
+      host.controller.shutdown();
+      ownsInput.mockRestore();
+      open.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('Main retirement ownership', () => {
   it('retires every Main window after a live Selection style removal failure', () => {
     vi.useFakeTimers();
@@ -2557,6 +2766,7 @@ describe('Reader to Main command palette integration', () => {
       preferences,
       logger,
       main: {
+        openAddByIdentifier: (ownerWindow) => main?.openAddByIdentifier(ownerWindow),
         openAllItemsPicker: (ownerWindow) => main?.openAllItemsPicker(ownerWindow),
         openCollectionItemsPicker: (ownerWindow) => main?.openCollectionItemsPicker(ownerWindow),
         openNotesPicker: (ownerWindow) => main?.openNotesPicker(ownerWindow),

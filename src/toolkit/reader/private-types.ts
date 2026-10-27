@@ -23,6 +23,11 @@ export interface InternalReaderRuntime {
   readonly _lastView?: NativeReaderViewRuntime;
   readonly _lastViewPrimary?: boolean;
   readonly _state?: {
+    readonly annotations?: readonly NativeReaderAnnotationRuntime[];
+    readonly filter?: object;
+    readonly showAnnotations?: boolean;
+    readonly primaryReadingModeEnabled?: boolean;
+    readonly secondaryReadingModeEnabled?: boolean;
     readonly selectedAnnotationIDs?: readonly string[];
     readonly primaryViewFindState?: { readonly active?: boolean };
     readonly secondaryViewFindState?: { readonly active?: boolean };
@@ -72,8 +77,27 @@ export interface ReaderFindControllerRuntime {
   getMatchPositionsAsync?(pageIndex: number): Promise<readonly ReaderLinkPosition[]>;
 }
 
+export interface NativeReaderAnnotationRuntime {
+  readonly id?: string;
+  readonly type?: string;
+  readonly text?: string;
+  readonly comment?: string;
+  readonly _hidden?: boolean;
+  readonly position?: {
+    readonly pageIndex?: number;
+    readonly rects?: readonly (readonly number[])[];
+    readonly nextPageRects?: readonly (readonly number[])[];
+    readonly rotation?: number;
+  };
+}
+
 export interface NativeReaderViewRuntime {
   readonly _iframeWindow?: Window;
+  /** AnnotationManager's already-filtered list passed to this exact view. */
+  readonly _annotations?: readonly NativeReaderAnnotationRuntime[];
+  readonly _pages?: readonly {
+    readonly _pageIndex: number;
+  }[];
   readonly initializedPromise?: Promise<unknown>;
   readonly _history?: ReaderPdfHistoryRuntime;
   readonly _findState?: { readonly active?: boolean };
