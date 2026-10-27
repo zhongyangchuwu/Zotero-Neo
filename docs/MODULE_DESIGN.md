@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、Reader hints 模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
 
 ## 范围与取舍
 
@@ -8,7 +8,7 @@
 
 本轮不设计 AI 接口或模块，不引入 Actions & Tags 的代码、运行时依赖或脚本执行机制，也不改变现有按键、默认行为、数据格式与 Zotero 兼容范围。
 
-先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签、扩展管理和分类三条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
+先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签、扩展管理、分类和 Reader hints 四条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
 
 需要区分三种边界：
 
@@ -19,13 +19,14 @@
 ## 当前已落地的接口
 
 - `src/core/module-host.ts`：`ModuleHost.activate()` 同步组合真实模块，失败时释放部分资源并保留原始错误；`bind()` 为既有上下文/动作登记唯一贡献并返回类型化调用入口；`dispose()` 先退休所有回调，再完成各模块释放。
-- `ModuleScope` 只表达模块 ID、当前性与自有 cleanup 注册。复用现有 `CleanupScope` / `CleanupFailure`，释放句柄只执行一次，失败记录到共享 logger。宿主当前性由实际 MainWindow/session 身份提供，不新增全局 ActiveSurface。
+- `ModuleScope` 只表达模块 ID、当前性与自有 cleanup 注册。复用现有 `CleanupScope` / `CleanupFailure`，释放句柄只执行一次，失败记录到共享 logger。宿主当前性由实际 MainWindow 或 ReaderSession 生命周期提供，不新增全局 ActiveSurface。
 - `src/modules/tags/`：在每个 MainWindow 中接入 Main/Reader/Note 的 Add/Remove Tag，以及 Main 的 Toggle/Clear Tag Filter。标签模块只取得明确目标与具名端口，不直接持有整个 Main session。
 - Main controller 的 Picker 端口返回精确调用代次的释放句柄；模块在确认前检查作用域，已接纳保存完成后只在原作用域仍有效时显示反馈。旧输入不能触发新窗口或新模块的写入。
 - `src/modules/extensions/`：第二条真实接入路径，拥有按窗口隔离的 Plugin Manager 状态与 UI 生命周期。复用现有基座和局部输入机制，不扩张 `ModuleHost` 接口；原生扩展适配仍由 Toolkit 提供。资源获取失败会释放部分界面，模块退休后旧 DOM 与异步完成不能重画或关闭替换界面。
 - `src/modules/collections/`：按窗口拥有分类工作流、候选来源与重命名草稿，保留 Main/Reader 的原有贡献。多步骤 Picker 和原生对话框使用精确交互当前性；复用现有 Operations 的事务重验证、回滚和真实提交回执，不把分类写入改为通用“已接纳就不可取消”。
+- `src/modules/reader-hints/`：按 ReaderSession 拥有 copy/link hints、候选与临时 UI，登记原有两个 Reader Normal 动作。精确视图路由、输入与模式策略仍由 Reader Surface 提供；异步导航意图同时检查模块作用域，不创建第二份历史。共享标签辅助保留给 Flash，读取原生批注不依赖 Neo 批注功能。
 
-尚未实现通用静态清单/依赖图、Reader/Note 独立模块附着或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
+尚未实现通用静态清单/依赖图、Note 独立模块附着或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
 
 ## Actions & Tags 提供了什么
 
@@ -56,7 +57,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `reader-navigation` | 页面、滚动、缩放、平移、PDF 搜索、批注位置遍历、Outline、标题/图表导航、原生侧栏增强和命名 marks。marks 数据及持久化策略归本模块。 | `src/reader/navigation.ts`、`marks.ts`、`native-sidebar.ts`、`caption-targets.ts` | ReaderSession 与精确 ReaderView。结构分析仍按需进行；不在模块启动时分析全部 PDF。分屏创建与窗口焦点切换不归本模块。 |
 | `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/reader/selection-range.ts`、`flash.ts`、`selection-actions.ts`、`controller.ts` 中选择流程 | ReaderSession / ReaderView / 单次交互。保留已有可选 PDFTranslate 动作对接；不扩展成新服务设计。 |
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/reader/controller.ts` 中批注流程、`comment-editor.ts`、`src/operations/delete-annotation.ts` | ReaderSession / ReaderView；注入 Select 的动作要求 `reader-selection` 可用，原生批注操作本身不要求它启用。 |
-| `reader-hints` | 批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/reader/copy-hints.ts`、`copy-targets.ts`、`identifier-targets.ts`、`link-hints.ts` | 精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
+| `reader-hints` | 批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/main/note-editor.ts`、`note-runtime.ts`、`picker/providers/notes.ts`、`src/input/note-actions.ts` | MainWindow 与精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找或捕获目的地。 |
 | `capture` | Reader 所选文本追加到已有 Note，拥有源快照、目的地重验证、排队保存及保存回执流程。 | `src/main/note-capture.ts`、`controller.ts` 中捕获编排、Reader Selection Actions 入口 | 一次跨 Surface 交互及已接纳的保存操作；硬依赖 `reader-selection` 与 `notes`，不依赖 Vim Note 编辑开关。 |
 | `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、show in library 等跨窗口/Surface 定位。 | `src/main/navigation.ts`、`picker/providers/tabs.ts`、`src/reader/navigation.ts` 中相应动作、现有命名桥接 | MainWindow、关联 ReaderSession / ReaderView；使用基座导航端口，不拥有第二份 Back/Forward 历史。 |
@@ -259,7 +260,7 @@ src/
 
 ## 实施顺序与验收
 
-契约走读、标签、扩展管理与分类路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
+契约走读、标签、扩展管理、分类与 Reader hints 路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
 
 1. **先评审基座与接入契约。** 确认输入/目标/资源/写入结果的负责方，区分内部模块与公共插件 API；用上表现有流程走读后，再决定模块边界是否需要调整。未通过前不创建运行时模块框架、不搬文件。
 2. **以一条现有路径验证最小基座。** 接口确认后，选一条真实功能路径接入必要的作用域与贡献机制，核对 `(BindingContext, ActionId)` 所有权与依赖注入。验证真实宿主行为，不先搭完全部机制或引入没有消费者的接口。
@@ -283,3 +284,5 @@ src/
 标签路径已通过契约测试及 Zotero 10.0.6 的 Main、Reader、Note、原生过滤和重载场景验证。扩展管理已通过筛选、权限、重绑定/IME、异步退休、部分获取/释放失败和双窗口隔离契约，并在 Zotero 10.0.6 实测 Main/Reader 入口、筛选、刷新、关闭/重开与重载释放；实机未启停无关扩展。其余拆分及模块开关仍需在各自实施时验证，文档构建不代表整体模块系统完成。
 
 分类模块已在 Zotero 10.0.6 验证 Main Persistent Selection 优先级、Reader 独立目标、部分直接成员覆盖率、真实添加/移除、重载后的旧输入失效及新模块继续写入；仅使用自有测试条目/分类，验证后已清理。命名对话框期间退休、事务中退休回滚、busy/replacement Picker 隔离由行为契约覆盖，未将所有原生结构对话框宣称为实机验证。
+
+Reader hints 已在 Zotero 10.0.6 的真实 Reader DOM 命令入口验证批注 Excerpt/Comment 标签、IME 透传、Escape 取消、内部链接及目的地 cue、主次分屏提示隔离和重载释放；切换分屏焦点后旧提示被退休，重载后的旧 DOM 不影响新模块。验证后恢复原标签页、页码、滚动位置和分屏状态。未实测真实剪贴板写入或外链启动；父作用域先退休、在途导航及发现/几何失败叠加清理失败由真实模块行为契约覆盖。异常恢复继续诊断原始原因，清理异常不再产生未处理的导航 Promise rejection。

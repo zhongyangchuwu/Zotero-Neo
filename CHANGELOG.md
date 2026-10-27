@@ -18,6 +18,8 @@
 
 ### 调整 {#changed}
 
+- 将 Reader copy/link hints 接入按 ReaderSession 隔离的 `reader-hints` 模块，拥有可见目标、临时标签、链接激活与目的地 cue。保留 Normal `y` / `f`、精确分屏视图、IME/原生输入优先级及唯一导航历史；父作用域退休后旧确认、异步完成和 RAF 不再写入或重画，清理失败仍释放其他自有资源。原始业务错误与清理异常分别诊断，不再产生未处理的导航 Promise rejection。共享标签辅助继续供 Flash 使用，不开放模块开关。
+
 - 将分类工作流接入按窗口隔离的 `collections` 模块，拥有候选来源、重命名草稿和精确 Picker 释放句柄；移除 controller 的共享业务实例。保留 Main/Reader 目标、原有九个 Main 命令、查询/取消与事务回滚语义，不新增 Note 命令。修复命名对话框期间模块退休后仍弹出下一确认框的问题，旧交互不能写入或关闭替换 Picker。
 
 - 将已安装扩展管理接入 `extensions` 模块，按 MainWindow 拥有面板状态与清理，Main session 不再预建该功能状态。保留 Main/Reader/Note 的 `<Space>pp`、筛选、权限与自保护、重绑定/IME、设置及链接；模块退休后旧 DOM 和异步完成不再改变 UI。主题清理失败仍释放剩余资源，界面获取失败时回滚并保留原始错误。不增加内部模块开关或扩展安装/更新/卸载功能。

@@ -40,7 +40,7 @@ Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts
 
 `src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动；`src/main/item-select.ts` 负责临时 Visual 范围及其可见原生树投影。Persistent Selection 属于 session，独立于原生行选择。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
 
-`src/core/module-host.ts` 为每个 MainWindow 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
+`src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
@@ -58,7 +58,9 @@ Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts
 
 `src/reader/controller.ts` 按 Zotero `instanceID` 管理 Reader session。主、次 PDF 视图共享一个 Reader Surface，但输入、几何与导航始终保留精确视图身份。
 
-Reader 各功能维护自己的状态：`src/reader/navigation.ts` 负责语义遍历与反馈；`src/reader/selection-range.ts` 负责临时键盘 Select 范围；`src/reader/flash.ts` 与 `src/reader/link-hints.ts` 负责各次目标提示交互；`src/reader/marks.ts` 负责持久化 marks；`src/reader/native-sidebar.ts` 负责可逆的 Outline 集成；`src/reader/caption-targets.ts` 负责按需图表/标题分类；`src/reader/comment-editor.ts` 和 `src/reader/native-input.ts` 负责功能输入；`src/reader/selection-actions.ts` 负责视图级动作面板。功能输入所有权不新增 Reader Surface mode。
+Reader 各功能维护自己的状态：`src/reader/navigation.ts` 负责语义遍历与反馈；`src/reader/selection-range.ts` 负责临时键盘 Select 范围；`src/reader/flash.ts` 负责各次 Flash 提示交互；`src/reader/marks.ts` 负责持久化 marks；`src/reader/native-sidebar.ts` 负责可逆的 Outline 集成；`src/reader/caption-targets.ts` 负责按需图表/标题分类；`src/reader/comment-editor.ts` 和 `src/reader/native-input.ts` 负责功能输入；`src/reader/selection-actions.ts` 负责视图级动作面板。功能输入所有权不新增 Reader Surface mode。
+
+`src/modules/reader-hints/` 按 ReaderSession 拥有可见复制/跟随目标、临时标签、原生链接激活和目的地 cue。模块只接收精确视图、复制、反馈与导航端口；Surface 保留输入优先级、模式、Flash、滚动和历史策略。父作用域退休后，旧确认、异步导航完成和 RAF 不能写入或重画；清理仍释放各自的标签、cue 与计时器，并保留原始失败。`src/reader/hint-labels.ts` 继续作为 Flash 与 hints 共用的纯标签辅助。
 
 宿主能力位于 `src/toolkit/reader/`；具体路径和私有接缝见[开发指南](DEVELOPMENT.md#host-capability-toolkit)。Reader 生命周期工作仅对活跃 session 及精确 PDF 视图有效。原生事件回调在注销前先按身份退休；只有权威 Reader 清单才能据此退休缺失 session。退出时防护已销毁的 Gecko wrapper，同时保持活对象上的失败可观测。
 

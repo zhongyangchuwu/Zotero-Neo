@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { visiblePdfTextChunks } from '../../src/toolkit/reader';
-import { identifierHintTargets } from '../../src/reader/identifier-targets';
+import { identifierHintTargets } from '../../src/modules/reader-hints/identifier-targets';
 import type { PdfWindow, ReaderViewRuntime } from '../../src/toolkit/reader';
 
 interface TextSpec {

@@ -1,12 +1,12 @@
-import { recognizeIdentifiers, type IdentifierMatch } from '../identifiers';
+import { recognizeIdentifiers, type IdentifierMatch } from '../../identifiers';
 import {
   readerLinkClientRect,
   readerVisibleLinks,
   visiblePdfTextChunks,
   type ReaderViewRuntime,
-} from '../toolkit/reader';
+} from '../../toolkit/reader';
 import type { ReaderHintTarget } from './target-hints';
-import type { PdfWindow, ReaderLinkOverlay } from './types';
+import type { PdfWindow, ReaderLinkOverlay } from '../../reader/types';
 
 export type IdentifierTarget =
   | { readonly kind: 'native'; readonly overlay: ReaderLinkOverlay }

@@ -1,9 +1,9 @@
-import { CleanupFailure } from '../core/cleanup';
-import { compositionOwnsKey } from '../input/composition';
-import { isDeadObject } from '../platform/cross-compartment';
-import { asElement, isEditableElement } from '../platform/dom';
-import { hintLabels } from './hint-labels';
-import type { PdfWindow } from './types';
+import { CleanupFailure } from '../../core/cleanup';
+import { compositionOwnsKey } from '../../input/composition';
+import { isDeadObject } from '../../platform/cross-compartment';
+import { asElement, isEditableElement } from '../../platform/dom';
+import { hintLabels } from '../../reader/hint-labels';
+import type { PdfWindow } from '../../reader/types';
 
 export interface ReaderHintTarget<Value> {
   readonly value: Value;
@@ -57,13 +57,22 @@ export class ReaderTargetHints<Value> {
 
   open(window: PdfWindow, targets: readonly ReaderHintTarget<Value>[], prompt?: string): void {
     this.cancel();
+    if (!this.#host.isCurrent(window)) return;
     this.#window = window;
     const body = window.document.body;
+    if (!this.#host.isCurrent(window)) {
+      this.cancel();
+      return;
+    }
     if (!body) throw new Error('PDF hint root unavailable');
     const labels = hintLabels(targets.length);
     const geometry = new Map<HintBadge<Value>, readonly number[]>();
     for (const [index, target] of targets.entries()) {
       const element = window.document.createElement('span');
+      if (!this.#host.isCurrent(window)) {
+        this.cancel();
+        return;
+      }
       element.dataset[this.#host.attribute] = '1';
       if (target.group) element.dataset.zoteroNeoHintGroup = target.group;
       const label = labels[index]!;
@@ -73,6 +82,13 @@ export class ReaderTargetHints<Value> {
       this.#badges.push(badge);
       geometry.set(badge, target.rect);
       body.appendChild(element);
+      if (!this.#host.isCurrent(window)) {
+        const failure = new CleanupFailure();
+        failure.run(() => this.cancel());
+        if (!isDeadObject(element)) failure.run(() => element.remove());
+        failure.rethrow();
+        return;
+      }
     }
     if (!this.isOpen) {
       this.cancel();
@@ -80,11 +96,26 @@ export class ReaderTargetHints<Value> {
     }
     if (prompt) {
       const element = window.document.createElement('span');
+      if (!this.#host.isCurrent(window)) {
+        this.cancel();
+        return;
+      }
       this.#prompt = element;
       element.dataset.zoteroNeoHintPrompt = '1';
       element.textContent = prompt;
       element.style.cssText = `${BADGE_STYLE}top:4px;right:4px;padding:3px 6px;`;
       body.appendChild(element);
+      if (!this.#host.isCurrent(window)) {
+        const failure = new CleanupFailure();
+        failure.run(() => this.cancel());
+        if (!isDeadObject(element)) failure.run(() => element.remove());
+        failure.rethrow();
+        return;
+      }
+    }
+    if (!this.#host.isCurrent(window)) {
+      this.cancel();
+      return;
     }
     this.#layout(window, geometry);
   }
@@ -93,8 +124,8 @@ export class ReaderTargetHints<Value> {
     if (
       !this.ownsView(window) ||
       isDeadObject(window) ||
-      isEditableElement(asElement(event.target)) ||
-      !this.#host.isCurrent(window)
+      !this.#host.isCurrent(window) ||
+      isEditableElement(asElement(event.target))
     ) {
       this.cancel();
       return false;
@@ -141,13 +172,30 @@ export class ReaderTargetHints<Value> {
   }
 
   onViewportChange(window: PdfWindow): void {
-    if (!this.ownsView(window) || isDeadObject(window) || this.#frame !== null) return;
+    if (!this.ownsView(window) || isDeadObject(window)) return;
+    if (!this.#host.isCurrent(window)) {
+      this.cancel();
+      return;
+    }
+    if (this.#frame !== null) return;
     const badges = this.#badges;
-    this.#frame = window.requestAnimationFrame(() => {
+    const frame = window.requestAnimationFrame(() => {
       if (this.#badges !== badges || !this.ownsView(window) || isDeadObject(window)) return;
+      if (!this.#host.isCurrent(window)) {
+        this.cancel();
+        return;
+      }
       this.#frame = null;
       this.#refresh(window);
     });
+    if (this.#badges !== badges || !this.ownsView(window) || !this.#host.isCurrent(window)) {
+      const failure = new CleanupFailure();
+      if (this.#badges === badges && this.ownsView(window)) failure.run(() => this.cancel());
+      if (!isDeadObject(window)) failure.run(() => window.cancelAnimationFrame(frame));
+      failure.rethrow();
+      return;
+    }
+    this.#frame = frame;
   }
 
   /** Retires all owners before attempting every live DOM/frame cleanup. */
@@ -177,38 +225,65 @@ export class ReaderTargetHints<Value> {
   }
 
   #refresh(window: PdfWindow): void {
+    let cleanupStarted = false;
     try {
       if (!this.#host.isCurrent(window)) {
+        cleanupStarted = true;
         this.cancel();
         return;
       }
       const width = window.innerWidth || window.document.documentElement.clientWidth;
       const height = window.innerHeight || window.document.documentElement.clientHeight;
+      const badges = this.#badges;
       const geometry = new Map<HintBadge<Value>, readonly number[]>();
       const resolved = new Map<ReaderHintTarget<Value>['currentRect'], readonly number[] | null>();
-      for (const badge of this.#badges) {
+      for (const badge of badges) {
+        if (this.#badges !== badges || !this.#host.isCurrent(window)) {
+          cleanupStarted = true;
+          this.cancel();
+          return;
+        }
         const getter = badge.target.currentRect;
-        if (!resolved.has(getter)) resolved.set(getter, getter());
+        if (!resolved.has(getter)) {
+          const rect = getter();
+          if (this.#badges !== badges || !this.#host.isCurrent(window)) {
+            cleanupStarted = true;
+            this.cancel();
+            return;
+          }
+          resolved.set(getter, rect);
+        }
         const rect = resolved.get(getter);
         const visible =
           !!rect && rect[2]! > 0 && rect[3]! > 0 && rect[0]! < width && rect[1]! < height;
         badge.element.hidden = !visible || !badge.label.startsWith(this.#buffer);
         if (visible && rect) geometry.set(badge, rect);
       }
+      if (this.#badges !== badges || !this.#host.isCurrent(window)) {
+        cleanupStarted = true;
+        this.cancel();
+        return;
+      }
       this.#layout(window, geometry);
     } catch (error) {
-      this.cancel();
-      this.#host.failed?.(error);
+      if (cleanupStarted) throw error;
+      const active = this.#host.isCurrent(window);
+      const failure = new CleanupFailure();
+      failure.run(() => this.cancel());
+      if (active) failure.run(() => this.#host.failed?.(error));
+      failure.rethrow();
     }
   }
 
   /** Measures rendered labels, keeps related roles together and shifts colliding groups vertically. */
   #layout(window: PdfWindow, geometry: ReadonlyMap<HintBadge<Value>, readonly number[]>): void {
+    const badges = this.#badges;
+    if (!this.#host.isCurrent(window)) return;
     const groups = new Map<
       string | HintBadge<Value>,
       { rect: readonly number[]; badges: HintBadge<Value>[] }
     >();
-    for (const badge of this.#badges) {
+    for (const badge of badges) {
       const rect = geometry.get(badge);
       if (!rect || badge.element.hidden) continue;
       const key = badge.target.group ?? badge;
@@ -223,8 +298,8 @@ export class ReaderTargetHints<Value> {
       const rect = this.#prompt.getBoundingClientRect();
       placed.push({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
     }
-    for (const { rect, badges } of groups.values()) {
-      const sizes = badges.map((badge) => badge.element.getBoundingClientRect());
+    for (const { rect, badges: groupBadges } of groups.values()) {
+      const sizes = groupBadges.map((badge) => badge.element.getBoundingClientRect());
       const groupWidth =
         sizes.reduce((sum, size) => sum + size.width, 0) + GAP * (sizes.length - 1);
       const groupHeight = Math.max(...sizes.map((size) => size.height));
@@ -238,9 +313,10 @@ export class ReaderTargetHints<Value> {
         placed,
       );
       if (!box) throw new Error('Hint labels do not fit in this view');
+      if (this.#badges !== badges || !this.#host.isCurrent(window)) return;
       const { left, top } = box;
       let x = left;
-      badges.forEach((badge, index) => {
+      groupBadges.forEach((badge, index) => {
         badge.element.style.left = `${x}px`;
         badge.element.style.top = `${top}px`;
         x += sizes[index]!.width + GAP;

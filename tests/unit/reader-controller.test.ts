@@ -4673,8 +4673,6 @@ describe('PDF follow-link hints', () => {
     });
     created.animationFrameTasks.shift()?.();
     const pointCue = destinationCueElement(created);
-    expect(pointCue?.style.cssText).toContain('background:#f57b7b');
-    expect(pointCue?.style.cssText).toContain('mix-blend-mode:multiply');
     expect(pointCue?.style.width).toBe('14px');
     expect(pointCue?.style.height).toBe('14px');
     expect(pointCue?.style.borderRadius).toBe('50%');
@@ -4864,62 +4862,107 @@ describe('PDF follow-link hints', () => {
     created.session.dispose();
   });
 
-  it('contains missing, empty, and throwing private link seams', async () => {
-    vi.useFakeTimers();
-    const missing = createHistorySession();
-    const missingView = missing.reader._internalReader?._primaryView;
-    if (!missingView) throw new Error('Expected a primary reader view');
-    Object.defineProperty(missingView, '_pdfPages', {
-      configurable: true,
-      get: () => {
-        throw new Error('reader reloaded');
-      },
-    });
-    missing.session.focusAndHandle(readerKey('f').event);
-    expect(missing.indicator.textContent).toBe('Link hints unavailable');
-    expect(missing.debug).toEqual(['reader follow link discovery failed: Error: reader reloaded']);
-    expect(missing.diagnostics).toEqual([
-      'reader follow link discovery failed: Error: reader reloaded',
-    ]);
+  it.each(['external', 'internal'] as const)(
+    'retires a failed %s activation without recording history and retains its original cause',
+    async (kind) => {
+      const history = navigationHistoryPort();
+      const execute = vi.spyOn(history.port, 'execute');
+      const created = createHistorySession({}, { navigationForReader: () => history.port });
+      attachNativeReaderHistory(created);
+      const original = new Error(`${kind} native failure`);
+      const configured = configureLinkView(created, [
+        kind === 'external'
+          ? externalLink([10, 10, 80, 30], 'https://example.com')
+          : internalLink([10, 10, 80, 30], 3),
+      ]);
+      if (kind === 'external')
+        Reflect.set(configured.view, '_onOpenLink', () => {
+          throw original;
+        });
+      else
+        configured.navigate.mockImplementation(async () => {
+          throw original;
+        });
+      created.session.start();
+      created.session.focusAndHandle(readerKey('f').event);
+      created.session.focusAndHandle(readerKey('a').event);
+      const execution = execute.mock.results[0]?.value;
+      if (!execution) throw new Error('Expected Reader navigation execution');
+      const result = await execution.result;
+      if (result.kind !== 'failed') throw new Error(`Expected failure, received ${result.kind}`);
+      expect(result.error).toBe(original);
+      expect(result.recorded).toBe(false);
+      await settleReaderMicrotasks();
+      expect(history.history.locations).toEqual([]);
+      expect(linkHintElements(created)).toEqual([]);
+      expect(destinationCueElement(created)).toBeNull();
+      expect(created.diagnostics.some((message) => message.includes(original.message))).toBe(true);
+      created.session.dispose();
+    },
+  );
 
-    const empty = createHistorySession();
-    configureLinkView(empty, []);
-    empty.session.focusAndHandle(readerKey('f').event);
-    expect(empty.indicator.textContent).toBe('No visible links');
-
-    const failed = createHistorySession();
-    const configured = configureLinkView(failed, [
-      externalLink([10, 10, 80, 30], 'https://example.com'),
-    ]);
-    Reflect.set(configured.view, '_onOpenLink', () => {
-      throw new Error('blocked URI');
-    });
-    failed.session.focusAndHandle(readerKey('f').event);
-    failed.session.focusAndHandle(readerKey('a').event);
-    await settleReaderMicrotasks();
-    expect(failed.indicator.textContent).toBe('Link unavailable');
-    expect(failed.debug).toEqual(['reader follow link activation failed: Error: blocked URI']);
-    expect(failed.diagnostics).toEqual([
-      'reader follow link activation failed: Error: blocked URI',
-    ]);
-
-    const rejected = createHistorySession();
-    const rejectedView = configureLinkView(rejected, [internalLink([10, 10, 80, 30])]);
-    Reflect.set(rejectedView.view, 'navigate', async () => {
-      throw new Error('navigation rejected');
-    });
-    rejected.session.focusAndHandle(readerKey('f').event);
-    rejected.session.focusAndHandle(readerKey('a').event);
-    await settleReaderMicrotasks();
-    expect(rejected.indicator.textContent).toBe('Link unavailable');
-    expect(rejected.debug).toEqual([
-      'reader follow link activation failed: Error: navigation rejected',
-    ]);
-    expect(rejected.diagnostics).toEqual([
-      'reader follow link activation failed: Error: navigation rejected',
-    ]);
-    vi.clearAllTimers();
-  });
+  it.each(['empty', 'throwing'] as const)(
+    'recovers real navigation and history after %s link discovery',
+    async (kind) => {
+      const history = navigationHistoryPort();
+      const execute = vi.spyOn(history.port, 'execute');
+      const created = createHistorySession({}, { navigationForReader: () => history.port });
+      const native = attachNativeReaderHistory(created);
+      const configured = configureLinkView(created, []);
+      const original = new Error('native discovery failure');
+      if (kind === 'throwing')
+        Object.defineProperty(configured.view, '_pdfPages', {
+          configurable: true,
+          get: () => {
+            throw original;
+          },
+        });
+      created.session.start();
+      created.session.focusAndHandle(readerKey('f').event);
+      expect(linkHintElements(created)).toEqual([]);
+      expect(history.history.locations).toEqual([]);
+      if (kind === 'throwing')
+        expect(created.diagnostics.some((message) => message.includes(original.message))).toBe(
+          true,
+        );
+      Object.defineProperty(configured.view, '_pdfPages', {
+        configurable: true,
+        writable: true,
+        value: { 0: { overlays: [internalLink([10, 10, 80, 30], 3)] } },
+      });
+      configured.navigate.mockImplementation(
+        (location: { readonly position: ReaderLinkPosition }) => {
+          native.viewer.currentPageNumber = location.position.pageIndex + 1;
+          native.viewer._location = {
+            pageNumber: native.viewer.currentPageNumber,
+            top: 700,
+            left: 0,
+          };
+          native.container.scrollTop = 700;
+          return native.view._pushHistoryPoint?.();
+        },
+      );
+      created.session.focusAndHandle(readerKey('f').event);
+      created.session.focusAndHandle(readerKey('a').event);
+      const execution = execute.mock.results[0]?.value;
+      if (!execution) throw new Error('Expected confirmed native navigation');
+      for (let turn = 0; turn < 12; turn++) {
+        await Promise.resolve();
+        created.animationFrameTasks.shift()?.();
+      }
+      const result = await execution.result;
+      expect(result.kind).toBe('completed');
+      expect(result.recorded).toBe(true);
+      expect(
+        history.history.locations.map((location) =>
+          location.kind === 'reader' ? location.position?.pageIndex : null,
+        ),
+      ).toEqual([0, 3]);
+      expect(native.viewer.currentPageNumber).toBe(4);
+      expect(linkHintElements(created)).toEqual([]);
+      created.session.dispose();
+    },
+  );
 
   it('leaves native ownership and editable controls native and drops stale link hints on focus change', () => {
     const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {

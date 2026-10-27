@@ -85,9 +85,9 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 ### 模块基座与首条接入
 
-`src/core/module-host.ts` 提供 MainWindow 级模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
+`src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/tags/` 是当前唯一迁入的功能模块。它接收明确目标、偏好、反馈、Picker 与 Main 过滤端口，不依赖整个 Main session。三个 Surface 的目标解析和 `src/operations/item-tags.ts` 的事务保持原样。模块开关、通用依赖图和其余候选模块仍按[整体设计](MODULE_DESIGN.md)逐步推进，不是当前可用功能。
+当前已接入 `src/modules/tags/`、`extensions/`、`collections/` 与 `reader-hints/`。前三者按 MainWindow 组合，Reader hints 按 ReaderSession 组合并保留精确 PDF 视图身份；模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。模块开关、通用依赖图和其余候选模块仍按[整体设计](MODULE_DESIGN.md)逐步推进，不是当前可用功能。
 
 ### 宿主能力 Toolkit {#host-capability-toolkit}
 
@@ -125,10 +125,10 @@ Reader 目标发现与交互由以下功能负责，上述 Toolkit 提供宿主�
 | 负责方 | 职责 |
 | --- | --- |
 | `src/identifiers/` | 纯 DOI、arXiv 和 HTTP(S) 识别，保留原始偏移。 |
-| `src/reader/identifier-targets.ts` | 合并文本识别与原生链接，将复制内容和跟随目的地分开。 |
-| `src/reader/copy-targets.ts` | 将 Excerpt/Comment 作为独立角色，按批注分组，省略空角色；不与标识符去重合并。 |
-| `src/reader/copy-hints.ts`、`link-hints.ts` | 在精确活跃视图接纳复制/跟随；链接保留原生目的地与历史语义。 |
-| `src/reader/target-hints.ts` | 管理临时提示、字母输入、分组布局、防碰撞与清理。 |
+| `src/modules/reader-hints/identifier-targets.ts` | 合并文本识别与原生链接，将复制内容和跟随目的地分开。 |
+| `src/modules/reader-hints/copy-targets.ts` | 将 Excerpt/Comment 作为独立角色，按批注分组，省略空角色；不与标识符去重合并。 |
+| `src/modules/reader-hints/copy-hints.ts`、`link-hints.ts` | 在精确活跃视图接纳复制/跟随；链接保留原生目的地与历史语义，导航当前性同时受模块作用域约束。 |
+| `src/modules/reader-hints/target-hints.ts` | 管理临时提示、字母输入、分组布局、防碰撞与清理；保留可见提示状态，使旧视图确认仍能进入取消路径。 |
 
 Zotero 10.0.6 的标识符工具提供 DOI/arXiv 匹配与清理基线，不决定 Reader 扫描策略。Reader 增加 HTTP(S)，保留每次可见出现和 arXiv `vN` 版本，只扫描当前视图可见同行片段，不猜跨行拼接或使用 OCR。批注目标遵守 Zotero 可见性/过滤状态，并要求支持的当前视图几何。摘录里的 DOI 仍是独立复制意图。裸 DOI/arXiv 跟随时构造解析 URL；HTTP(S) 字面量保留原始路径、查询、fragment 与大小写。
 
