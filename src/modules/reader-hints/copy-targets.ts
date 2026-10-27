@@ -1,8 +1,8 @@
-import { readerVisibleAnnotations } from '../toolkit/reader';
-import type { ReaderRuntime, ReaderViewRuntime } from '../toolkit/reader';
+import { readerVisibleAnnotations } from '../../toolkit/reader';
+import type { ReaderRuntime, ReaderViewRuntime } from '../../toolkit/reader';
 import { identifierCopyData, identifierHintTargets } from './identifier-targets';
 import type { ReaderHintTarget } from './target-hints';
-import type { PdfWindow } from './types';
+import type { PdfWindow } from '../../reader/types';
 
 type IdentifierCopy = NonNullable<ReturnType<typeof identifierCopyData>>;
 export type ReaderCopyTarget =

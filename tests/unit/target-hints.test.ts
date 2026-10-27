@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReaderTargetHints } from '../../src/reader/target-hints';
+import { ReaderTargetHints } from '../../src/modules/reader-hints/target-hints';
 import type { PdfWindow } from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');

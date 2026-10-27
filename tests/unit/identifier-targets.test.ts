@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recognizeIdentifiers } from '../../src/identifiers';
-import { identifierOpenURL } from '../../src/reader/identifier-targets';
+import { identifierOpenURL } from '../../src/modules/reader-hints/identifier-targets';
 
 describe('identifier follow destinations', () => {
   it.each([

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readerVisibleAnnotations, type PdfWindow } from '../../src/toolkit/reader';
-import { readerCopyTargets } from '../../src/reader/copy-targets';
+import { readerCopyTargets } from '../../src/modules/reader-hints/copy-targets';
 import type { ReaderLinkPosition } from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
