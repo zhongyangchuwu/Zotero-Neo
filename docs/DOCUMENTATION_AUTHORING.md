@@ -1,66 +1,73 @@
-# Write user documentation
+# 文档编写规范 {#write-user-documentation}
 
-Use the README for the project overview and installation entry point, workflow guides for tasks, Reference for exact commands and settings, and design documents for decisions and constraints. Add a page only when it answers a question that existing pages do not cover.
+项目默认只维护中文文档，不再同步维护英文版本。README 提供项目概览与安装入口，工作流指南说明具体任务，参考手册维护准确命令和设置，设计文档解释决策与约束。只有现有页面无法回答一个独立问题时才新增页面。
 
-## Terminology and wording
+## 现有英文文档的迁移
 
-Use the [interaction model's terminology](INTERACTION_MODEL.md#terminology) for project concepts and Chinese names. [How Neo works](CONCEPTS.md) introduces those concepts to users; link to it instead of repeating the definitions in each workflow.
+- 在相关任务需要阅读或修改某篇文档时，将其完整翻译为中文；未涉及的英文文档暂不批量重写，也不再单独更新英文内容。
+- 没有独立语言副本时，直接在原文件中替换英文正文，保留文件名和 URL，不另建中文版。若已有独立中英文文件，则合并到中文维护入口，更新所有引用后删除英文副本。
+- 翻译保留事实、前置条件、风险、操作步骤和验证范围；不能趁翻译改产品语义。保留已有章节锚点，或在同一修改中更新全部引用。
+- 不翻译命令、API、ActionId、绑定上下文、路径、配置键和按键记法。第三方许可证及必须保留的版权声明使用原文；应用本身的语言目录不属于英文文档副本。
 
-UI names follow `src/i18n/locales/en-US.json` and `zh-CN.json`. Match the language of the instructions and the visible label. When labels for the same concept disagree, update the catalog and affected instructions together. Keep API names, ActionIds, binding contexts, commands, paths, and configuration keys unchanged.
+## 术语与措辞 {#terminology-and-wording}
 
-In Chinese prose, use ordinary words for implementation-independent details: `fixture` is 测试数据 and a disposable profile is 一次性测试配置. Describe an owner by its job: 所属条目 for a note's parent, 负责模块 for code ownership, or 输入处理方 for keyboard handling. Preserve the distinction between a submitted save and one already executing rather than translating both as “already saved.”
+项目概念及中文名称使用[交互模型中的术语](INTERACTION_MODEL.md#terminology)。[基本概念](CONCEPTS.md)面向用户介绍这些概念，工作流应链接过去，不重复定义。
 
-Give a concrete condition and consequence when a limitation affects the task. State shared recording requirements once; individual scenarios need their own data, actions, expected results, and recovery, not repeated instructions against fabricated evidence.
+UI 名称以 `src/i18n/locales/zh-CN.json` 为准，描述其他语言界面时对照 `en-US.json` 中的实际标签。同一概念的标签不一致时，同步更新目录和受影响的说明。技术标识保持不变。
 
-## A feature card
+与实现无关的细节使用普通中文：`fixture` 写作“测试数据”，临时使用后丢弃的 profile 写作“一次性测试配置”。按职责描述 owner：笔记的父项写作“所属条目”，代码归属写作“负责模块”，键盘处理写作“输入处理方”。区分已提交的保存与已经开始执行的保存，不能都译成“已经保存”。
 
-Homepage cards are defined in `index.md` frontmatter. Give each card a concrete outcome, a short description, and a link to the corresponding task.
+限制影响操作时，明确条件及后果。共享录制要求只写一次；各场景只保留各自的数据、动作、预期结果与恢复方法，不重复声明不得伪造证据。
+
+## 首页功能卡片 {#a-feature-card}
+
+首页卡片在 `index.md` 的 frontmatter 中定义。每张卡片说明一个具体结果，配简短描述，并链接到对应任务。
 
 ```yaml
-- title: Select text without dragging
-  details: Type a few words you can see in the PDF, choose a hint, and highlight the selection.
+- title: 不用拖拽也能选择文本
+  details: 输入 PDF 中可见的短语，按提示选择位置，再为这段文字添加高亮。
   link: /docs/SELECTION_GUIDE#try-it
-  linkText: Try text selection
+  linkText: 体验文本选择
 ```
 
-Keep the card specific. “Select text without dragging” tells the user what to try; “Reader Surface and Input Ownership” does not. Do not make cards link to concepts or a complete command table.
+卡片应让用户知道能尝试什么。“不用拖拽也能选择文本”比“Reader Surface 与输入所有权”更适合作为用户入口。不要将卡片链接到概念说明或完整命令表。
 
-## A feature page
+## 功能介绍页 {#a-feature-page}
 
-Describe a concrete benefit and the task it enables, then link to a working trial in the relevant guide. Focus on standout capabilities rather than listing every command. Use [Features](FEATURES.md) as the discovery entry point.
+说明具体用途与支持的任务，再链接到相关指南中可实际操作的体验步骤。突出有辨识度的能力，不枚举所有命令。[功能介绍](FEATURES.md)是发现功能的入口。
 
-## Workflow guides
+## 工作流指南 {#workflow-guides}
 
-Organize a chapter around the task it serves. State the starting context and necessary data or settings, give the steps, and describe the result. Put save, cancellation, destructive consequences, and recovery beside the relevant operation.
+围绕任务组织章节。说明起始上下文、所需数据或设置，再给出步骤与可见结果。保存、取消、破坏性后果及恢复方法应紧邻相关操作。
 
-Confirm behavior in the current runtime, preferences, manifest, build scripts, and tests before documenting it. Link to Reference for exhaustive key lists and to the relevant design document for implementation reasons. Keep release and download information in [Getting Started](GETTING_STARTED.md#install-the-public-release).
+先依据当前运行时、偏好、manifest、构建脚本和测试确认行为，再写入文档。完整按键表链接到参考手册，实现原因链接到相应设计文档。发布和下载信息由[安装与入门](GETTING_STARTED.md#install-the-public-release)维护。
 
-Use paragraphs for connected explanations, lists for steps or parallel choices, and tables for comparisons or lookup. Choose headings needed by the task rather than filling a fixed template. Keep an existing anchor when its task remains, or update callers when the heading changes.
+连贯解释用段落，步骤与并列选择用列表，对比与查找用表格。按任务选择标题，不填充固定模板；任务未变时保留原锚点，修改锚点时同步更新调用方。
 
-## Media component
+## 媒体组件 {#media-component}
 
-`FeatureMedia` is registered by `.vitepress/theme/index.ts` and renders real screenshots or videos with a caption and text description. Publish a figure on a user page only when its asset is available.
+`FeatureMedia` 由 `.vitepress/theme/index.ts` 注册，展示真实截图或视频，并提供图注与文字说明。只有素材已存在时，才在用户页面发布该图例。
 
-Store media files under `public/media/` and use `/media/` paths in `src`; the component adds the site's configured base path. Publish the written steps with the media, and provide image alt text and captions for spoken or meaningful audio. Recording procedures and privacy requirements are in the [Recording Guide](RECORDING_GUIDE.md).
+媒体文件存放在 `public/media/`，`src` 使用 `/media/` 路径；组件自动添加文档站 base。媒体旁保留书面操作步骤，图片提供替代文本，有语音或有意义声音的视频提供字幕。录制流程和隐私要求见[录制指南](RECORDING_GUIDE.md)。
 
-| Property | Use |
+| 属性 | 用途 |
 | --- | --- |
-| `kind` | `image` or `video`. |
-| `title` | Figure label and caption title. |
-| `src` | Path to the existing image or video asset. |
-| `alt` | Image description; when omitted, the component uses `title`. |
-| `poster` | Video preview image path. |
-| `captions` | WebVTT caption path; the current component labels this track as English. |
+| `kind` | `image` 或 `video`。 |
+| `title` | 图例名称与图注标题。 |
+| `src` | 已存在的图片或视频路径。 |
+| `alt` | 图片描述；省略时使用 `title`。 |
+| `poster` | 视频预览图路径。 |
+| `captions` | 中文 WebVTT 字幕路径；组件将该轨道标为中文。 |
 
-Check the figure on a narrow viewport and in both color themes.
+在窄屏及浅色/深色主题下检查图例。
 
-## Review the page as a user
+## 从用户角度检查页面 {#review-the-page-as-a-user}
 
-- Can a homepage card take me directly to the keys I should try?
-- Do I know where to click and what must already exist?
-- Can I tell what changed, where it was saved, or how to cancel?
-- Does each chapter connect related tasks into a useful workflow?
-- Are user pages free of storyboards, implementation notes, and defensive reading instructions?
-- Does the built page work in light/dark themes and a narrow viewport?
+- 首页卡片能否直接带用户找到可以尝试的按键？
+- 用户是否知道在哪里操作，以及必须事先准备什么？
+- 能否看出发生了什么、保存在哪里、怎样取消？
+- 各章节是否将相关任务连成有用的工作流？
+- 用户页面是否混入分镜脚本、实现笔记或反复的防御性说明？
+- 构建后的页面是否能在浅色/深色主题和窄屏下使用？
 
-Use the [Development Guide](DEVELOPMENT.md#documentation-site) for build and preview commands. Keep the complete command list in the [Command Reference](COMMAND_REFERENCE.md), not in every feature page.
+构建与预览命令见[开发指南](DEVELOPMENT.md#documentation-site)。完整命令清单由[命令参考](COMMAND_REFERENCE.md)维护，不复制到每个功能页面。

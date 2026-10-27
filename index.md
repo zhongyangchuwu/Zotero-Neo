@@ -2,54 +2,54 @@
 layout: home
 hero:
   name: Zotero Neo
-  text: Read and organize in Zotero.
-  tagline: Keyboard controls for your Library, PDFs, and notes.
+  text: 在 Zotero 中阅读与整理。
+  tagline: 通过键盘操作文献库、PDF 和笔记。
   actions:
     - theme: brand
-      text: Features
+      text: 功能介绍
       link: /docs/FEATURES
     - theme: alt
-      text: User guide
+      text: 使用指南
       link: /docs/USER_GUIDE
     - theme: alt
-      text: Install Neo
+      text: 安装 Neo
       link: /docs/GETTING_STARTED
 features:
-  - title: Select text without dragging
-    details: Type a phrase you can see in the PDF, choose a hint, and highlight the passage.
+  - title: 不用拖拽也能选择文本
+    details: 输入 PDF 中可见的短语，按提示选择位置，再为这段文字添加高亮。
     link: /docs/SELECTION_GUIDE#try-it
-    linkText: Try text selection
-  - title: Keep excerpts in your notes
-    details: Preview an existing note and append a selected passage alongside what you already wrote.
+    linkText: 体验文本选择
+  - title: 将摘录收集到笔记
+    details: 预览已有笔记，将选中的段落追加到原有内容之后。
     link: /docs/CAPTURE_GUIDE#try-it
-    linkText: Try capture to note
-  - title: Build a reading list as you browse
-    details: Mark papers independently of the current row, then organize the group with tags and collections.
+    linkText: 体验摘录到笔记
+  - title: 边浏览边建立阅读清单
+    details: 标记论文而不受当前行限制，再通过标签和分类整理整组文献。
     link: /docs/MAIN_GUIDE
-    linkText: Work with reading lists
-  - title: Follow the structure of a paper
-    details: Move between headings, figures, and tables, follow PDF links by label, and return to your reading position.
+    linkText: 管理阅读清单
+  - title: 沿论文结构阅读
+    details: 在标题、图和表之间跳转，按提示跟随 PDF 链接，并返回之前的阅读位置。
     link: /docs/READER_GUIDE
-    linkText: Explore Reader workflows
+    linkText: 查看 Reader 工作流
 ---
 
-## User guide
+## 使用指南
 
-Find and organize papers, read and annotate PDFs, collect passages in notes, and return to previous work. The [User guide](./docs/USER_GUIDE.md) covers these tasks by module.
+查找与整理论文、阅读与批注 PDF、将段落收集到笔记，并返回之前的工作。[使用指南](./docs/USER_GUIDE.md)按任务串联这些操作。
 
-Start with [installing Neo](./docs/GETTING_STARTED.md), explore the [Features](./docs/FEATURES.md), or follow a workflow:
+先[安装 Neo](./docs/GETTING_STARTED.md)，浏览[功能介绍](./docs/FEATURES.md)，或直接跟随工作流：
 
-- [Read a paper and keep a running note](./docs/USER_GUIDE.md#read-a-paper-and-keep-a-running-note).
-- [Review and organize papers](./docs/USER_GUIDE.md#review-and-organize-papers).
-- [Follow a thread across papers and notes](./docs/USER_GUIDE.md#follow-a-thread-across-papers-and-notes).
+- [阅读论文并持续记录笔记](./docs/USER_GUIDE.md#read-a-paper-and-keep-a-running-note)。
+- [审阅与整理论文](./docs/USER_GUIDE.md#review-and-organize-papers)。
+- [在线索涉及的论文与笔记之间跳转](./docs/USER_GUIDE.md#follow-a-thread-across-papers-and-notes)。
 
-## Find an answer
+## 查找答案
 
-- [Commands and shortcuts](./docs/COMMAND_REFERENCE.md).
-- [Settings reference](./docs/SETTINGS_REFERENCE.md).
-- [Troubleshooting](./docs/TROUBLESHOOTING.md).
-- [How Neo works](./docs/CONCEPTS.md).
+- [命令与快捷键](./docs/COMMAND_REFERENCE.md)。
+- [设置参考](./docs/SETTINGS_REFERENCE.md)。
+- [故障排查](./docs/TROUBLESHOOTING.md)。
+- [基本概念](./docs/CONCEPTS.md)。
 
-The public release is [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0).
+已发布版本为 [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)。
 
-[Release notes](./CHANGELOG.md) · [Roadmap](./docs/ROADMAP.md) · [GitHub](https://github.com/zhongyangchuwu/Zotero-Neo)
+[更新记录](./CHANGELOG.md) · [路线图](./docs/ROADMAP.md) · [GitHub](https://github.com/zhongyangchuwu/Zotero-Neo)

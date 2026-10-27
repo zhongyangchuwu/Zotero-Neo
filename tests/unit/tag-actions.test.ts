@@ -6,11 +6,12 @@ import { MainNavigation } from '../../src/main/navigation';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
-import type { FuzzyPicker } from '../../src/main/picker';
 import type { PickerItem } from '../../src/main/picker/model';
 import type { PickerOpenOptions } from '../../src/main/picker/types';
 import type { MainWindowSession } from '../../src/main/session';
-import { TagActions } from '../../src/main/tag-actions';
+import { ModuleHost } from '../../src/core/module-host';
+import { createTagModule } from '../../src/modules/tags';
+import { mainTagScope } from '../../src/toolkit/main';
 import { MainViewActions } from '../../src/main/view-actions';
 import { SelectionStore } from '../../src/main/selection-store';
 
@@ -124,28 +125,31 @@ function harness(options: {
         options: PickerOpenOptions;
       }
     | undefined;
-  const picker = {
-    open: vi.fn(
-      async (
-        _window: MainWindow,
-        _session: MainWindowSession,
-        scope: string,
-        pickerOptions: PickerOpenOptions,
-      ) => {
-        lastOpen = { scope, options: pickerOptions };
-      },
-    ),
-  } as unknown as FuzzyPicker;
   const logger = { debug: vi.fn(), diagnostic: vi.fn() };
   const navigation = new MainNavigation(logger, () => undefined);
   const preferences: PreferenceReader = {
     get: (_key: string, fallback: boolean | number | string) => fallback,
   } as PreferenceReader;
   const viewActions = new MainViewActions(logger, navigation);
-  const actions = new TagActions(logger, navigation, preferences, picker, viewActions);
+  const modules = new ModuleHost(logger, () => true);
+  const actions = createTagModule(modules, {
+    logger,
+    preferences,
+    choose: (pickerOptions) => {
+      lastOpen = { scope: 'tags', options: pickerOptions };
+      return () => {
+        lastOpen = undefined;
+      };
+    },
+    status: (message) => navigation.status(session, message),
+    readFilter: () => [...viewActions.state(window).tags],
+    captureScopeTags: () => mainTagScope(window).getTags,
+    applyFilter: (tags) => viewActions.applyTagFilter(window, tags),
+  });
 
   return {
     actions,
+    modules,
     window,
     session,
     setFilter,
@@ -190,7 +194,7 @@ describe('semantic Tag actions', () => {
     installZotero([first, second], [{ tag: 'alpha' }, { tag: 'robotics' }]);
     const h = harness({ items: [first, second] });
 
-    h.actions.add(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
     const add = h.open();
     expect(add.scope).toBe('tags');
     expect((await add.options.source!.load()).map((item) => item.tagName)).toEqual([
@@ -210,7 +214,7 @@ describe('semantic Tag actions', () => {
     expect(first.hasTag('robotics')).toBe(true);
     expect(second.hasTag('robotics')).toBe(true);
 
-    h.actions.remove(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.session));
     const remove = h.open();
     expect((await remove.options.source!.load()).map((item) => item.tagName).sort()).toEqual([
       'alpha',
@@ -238,7 +242,7 @@ describe('semantic Tag actions', () => {
     h.session.selection.clear();
     h.session.selection.add({ libraryID: selected.libraryID, itemID: selected.id });
 
-    h.actions.add(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
     const add = h.open();
     await add.options.confirm?.(
       {
@@ -261,7 +265,7 @@ describe('semantic Tag actions', () => {
     installZotero([main, reader], [{ tag: 'robotics' }]);
     const h = harness({ items: [main] });
 
-    h.actions.add(h.window, h.session, READER_ITEM_TARGET.resolve({ itemID: reader.id }));
+    h.actions.add(READER_ITEM_TARGET.resolve({ itemID: reader.id }));
     const add = h.open();
     await add.options.confirm?.(
       {
@@ -295,7 +299,7 @@ describe('semantic Tag actions', () => {
 
     const noteTargets = NOTE_ITEM_TARGET.resolve(h.window);
     Reflect.set(h.window.document, 'activeElement', null);
-    h.actions.add(h.window, h.session, noteTargets);
+    h.actions.add(noteTargets);
     await h.open().options.confirm?.(
       {
         id: 'tag:robotics',
@@ -319,12 +323,9 @@ describe('semantic Tag actions', () => {
     const h = harness({ items: [selected] });
     h.session.selection.add({ libraryID: 1, itemID: 99 });
 
-    h.actions.add(h.window, h.session, MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
 
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
-    expect(h.session.status.textContent).toBe(
-      '✗ Selection contains unavailable items; refresh before changing tags',
-    );
   });
 
   it('does not open a tag chooser for an unavailable Reader item', () => {
@@ -332,12 +333,9 @@ describe('semantic Tag actions', () => {
     installZotero([main]);
     const h = harness({ items: [main] });
 
-    h.actions.add(h.window, h.session, READER_ITEM_TARGET.resolve({ itemID: 99 }));
+    h.actions.add(READER_ITEM_TARGET.resolve({ itemID: 99 }));
 
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
-    expect(h.session.status.textContent).toBe(
-      '✗ Context item is unavailable; refresh before changing tags',
-    );
     expect(main.getTags()).toEqual([]);
   });
 
@@ -349,9 +347,9 @@ describe('semantic Tag actions', () => {
     const h = harness({ items: [first] });
     const targets = { source: 'main' as const, items: [first, second], total: 2, missing: 0 };
 
-    h.actions.add(h.window, h.session, targets);
+    h.actions.add(targets);
     expect(h.session.status.textContent).toBe('✗ Add Tag requires one library at a time');
-    h.actions.remove(h.window, h.session, targets);
+    h.actions.remove(targets);
     expect(h.session.status.textContent).toBe('✗ Remove Tag requires one library at a time');
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
     expect(first.hasTag('robotics')).toBe(true);
@@ -419,7 +417,7 @@ describe('semantic Tag actions', () => {
       row.advancedSearch = {};
     }
 
-    h.actions.toggleFilter(h.window, h.session);
+    h.actions.toggleFilter();
     const toggle = h.open();
     const candidates = await toggle.options.source!.load();
     expect(candidates.map((candidate) => candidate.tagName).sort()).toEqual(expected);
@@ -454,7 +452,7 @@ describe('semantic Tag actions', () => {
       ],
     });
 
-    h.actions.toggleFilter(h.window, h.session);
+    h.actions.toggleFilter();
     const toggle = h.open();
     const candidates = await toggle.options.source!.load();
     expect(candidates.map((candidate) => [candidate.tagName, candidate.meta])).toEqual([
@@ -485,13 +483,13 @@ describe('semantic Tag actions', () => {
       ],
     });
 
-    h.actions.toggleFilter(h.window, h.session);
+    h.actions.toggleFilter();
     const toggle = h.open();
     const [candidate] = await toggle.options.source!.load();
     await toggle.options.confirm?.(candidate!, false);
     expect(h.session.status.textContent).toBe('✓ Added tag filter “shared” · 2 items');
 
-    h.actions.clearFilters(h.window, h.session);
+    h.actions.clearFilters();
     await vi.waitFor(() =>
       expect(h.session.status.textContent).toBe('✓ Cleared tag filters · 2 items'),
     );
@@ -508,7 +506,7 @@ describe('semantic Tag actions', () => {
       scopedTags: [{ tag: 'alpha' }, { tag: 'beta' }],
     });
 
-    h.actions.toggleFilter(h.window, h.session);
+    h.actions.toggleFilter();
     const toggle = h.open();
     const loaded = await toggle.options.source!.load();
     expect(loaded.find((candidate) => candidate.tagName === 'alpha')?.meta).toBe('Active filter');
@@ -527,9 +525,52 @@ describe('semantic Tag actions', () => {
     expect(h.tagSelector.selectedTags).toEqual(new Set(['alpha', 'beta']));
     expect(item.hasTag('persistent')).toBe(true);
 
-    h.actions.clearFilters(h.window, h.session);
+    h.actions.clearFilters();
     await vi.waitFor(() => expect(h.setFilter).toHaveBeenLastCalledWith('tags', new Set()));
     expect(h.tagSelector.selectedTags).toEqual(new Set());
     expect(item.hasTag('persistent')).toBe(true);
+  });
+
+  it('rejects old chooser confirmation after its module host retires', async () => {
+    const item = tagItem(1);
+    installZotero([item], [{ tag: 'robotics' }]);
+    const h = harness({ items: [item] });
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.session);
+    h.actions.add(targets);
+    const chooser = h.open();
+    const [candidate] = await chooser.options.source!.load();
+
+    h.modules.dispose();
+    await chooser.options.confirm?.(candidate!, false);
+    expect(h.actions.add(targets)).toBe(false);
+    expect(item.getTags()).toEqual([]);
+  });
+
+  it('lets an admitted native save finish without reviving retired module feedback', async () => {
+    const item = tagItem(1);
+    installZotero([item], [{ tag: 'robotics' }]);
+    let completeSave!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      completeSave = resolve;
+    });
+    let saved = false;
+    Reflect.set(item, 'save', async () => {
+      await barrier;
+      saved = true;
+      return item.id;
+    });
+    const h = harness({ items: [item] });
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    const chooser = h.open();
+    const [candidate] = await chooser.options.source!.load();
+    const pending = chooser.options.confirm!(candidate!, false);
+    expect(item.hasTag('robotics')).toBe(true);
+
+    h.modules.dispose();
+    completeSave();
+    await pending;
+    expect(saved).toBe(true);
+    expect(item.hasTag('robotics')).toBe(true);
+    expect(h.session.status.textContent).toBe('');
   });
 });

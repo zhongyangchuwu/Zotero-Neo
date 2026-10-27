@@ -1,4 +1,5 @@
 import type { ActionId } from '../input/actions';
+import { TAG_MAIN_ACTIONS } from '../modules/tags/capabilities';
 
 /** Actions exposed by the ordinary Main-window interaction mode. */
 export const MAIN_NORMAL_ACTIONS = Object.freeze([
@@ -34,10 +35,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'closeCurrentTab',
   'previousTab',
   'nextTab',
-  'addTag',
-  'removeTag',
-  'toggleTagFilter',
-  'clearTagFilters',
+  ...TAG_MAIN_ACTIONS,
   'addToCollection',
   'removeFromCollection',
   'findCollections',

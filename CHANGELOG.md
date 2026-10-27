@@ -1,205 +1,144 @@
-# Changelog
+# 更新记录 {#changelog}
 
-## [0.2.0] - Release candidate (unreleased)
+## [0.2.0] - 候选版本（未发布） {#_0-2-0-release-candidate-unreleased}
 
-### Added
+### 新增 {#added}
 
-- Add seven default-unbound Main commands for collection finding, continuous addition of existing items, item/collection moves, and native-dialog create/rename/delete workflows. Reuse the existing Palette and Picker without new controls; preserve native collection editing, drag-and-drop, `<Space>fc`, and persistent item Selection.
-- Add **Add Item by Identifier** to Main and Reader Normal, with configurable `<Space>ai` defaults and Command Palette discovery. Reuse Zotero's native input, batch lookup, saving, and errors; keep drafts and native IME/Enter/Escape ownership. Reader tabs and standalone windows return to their associated Library context without borrowing item Selection, and ambiguous or read-only library scopes are refused.
-- Bind Reader Normal `y` to `copyTarget` for grouped, separate annotation Excerpt/Comment, DOI, arXiv, HTTP(S), and native external-link copy hints; extend `followLink` (`f`) to follow recognized DOI/arXiv/HTTP(S) text alongside native links. Select `y` and Normal `Y` remain unchanged; direct `yankAnnotation` is unbound. Binding schema 19 migrates persisted `copyIdentifier`/`followIdentifier` IDs to `copyTarget`/`followLink` while preserving custom key positions, explicit-null overrides, and a custom `reader-normal:y` → `yankAnnotation` binding. No `<Space>ya` default is added.
-- Add a VitePress documentation site with local search and responsive light/dark navigation.
-- Add contributor instructions for screenshots and videos with native playback controls and text alternatives.
-- Reader and Note Command Palettes expose an unbound Show in Library action for the active surface item; it remains a distinct action from Back/Forward.
-- Add per-Main-window stack-style navigation history with a 100-location bound and forward-suffix truncation. Canonical `navigateBack` / `navigateForward` actions default to `<C-o>` / `<C-i>` in Main, Reader, and Note Normal; shortcut counts traverse history, while palette actions remain uncounted.
-- Add a help-style command reference for Main, Reader, Note, and modal surfaces, including shipped bindings, action IDs, counts, targets, feature dependencies, and the shared jumplist's recording, restoration, and failure boundaries.
-- Add action-centric shortcut discovery and staged editing across all 14 binding contexts. Search covers localized labels, canonical ActionIds, current/default keys, groups, and contexts; results identify Default, Custom, or Unbound, while native shortcuts are disclosed separately as read-only.
-- Add Reader navigation for headings, Figures, Tables, annotations, and Bookmarks, plus direct focus for Outline, Bookmarks, Annotations, and Thumbnails. Headings use the full native Outline; Figure/Table navigation also lazily reuses genuine Zotero structured-document captions with PDF anchors, without invented targets. A cold native cache may require local whole-PDF processing; no upload/new OCR dependency is added. Bookmark navigation follows document position and wraps.
+- 增加模块基座和首条标签模块接入：按 MainWindow 隔离作用域，登记唯一上下文/动作贡献，退休回调后清理资源，激活失败时回滚部分资源并保留原始错误。Main、Reader、Note 的标签目标、原生事务与默认绑定不变；尚不开放模块开关。
+- 增加七个默认无绑定的 Main 分类命令，支持查找分类、连续添加已有条目、移动条目/分类，以及通过原生对话框创建、重命名、删除。复用现有 Palette 和 Picker，不新增控件；保留原生分类编辑、拖放、`<Space>fc` 与 Persistent Selection。
+- 在 Main 和 Reader Normal 增加 **Add Item by Identifier**，默认 `<Space>ai`，支持重绑定和 Command Palette 发现。复用 Zotero 原生输入、批量查找、保存与错误处理，保留草稿和原生 IME/Enter/Escape 所有权。Reader 标签页与独立窗口返回实际关联 Library，不借用条目 Selection；拒绝歧义或只读库 Scope。
+- Reader Normal `y` 绑定 `copyTarget`，分别提示批注 Excerpt/Comment、DOI、arXiv、HTTP(S) 与原生外链复制目标；`followLink`（`f`）同时支持识别出的文本标识符和原生链接。Select `y` 与 Normal `Y` 不变，直接 `yankAnnotation` 默认无绑定。schema 19 将 `copyIdentifier` / `followIdentifier` 迁移为新 ID，保留自定义位置、显式 null 和自定义 `reader-normal:y` → `yankAnnotation`，不新增 `<Space>ya`。
+- 增加具有本地搜索、响应式导航及浅色/深色主题的 VitePress 文档站。
+- 增加截图与视频编写规范，提供原生播放控件和文字替代。
+- Reader 和 Note Command Palette 提供默认无绑定的 Show in Library，作用于当前 Surface 条目；它与 Back/Forward 是不同动作。
+- 增加每个 MainWindow 独立的栈式导航历史，最多 100 个位置，新分支截断前进尾部。Main、Reader、Note Normal 的 `navigateBack` / `navigateForward` 默认 `<C-o>` / `<C-i>`；按键 count 支持连续遍历，Palette 动作不计数。
+- 增加 Main、Reader、Note 与局部界面的帮助式命令参考，覆盖发布绑定、动作 ID、count、目标、功能依赖，以及共享 jumplist 的记录、恢复和失败边界。
+- 在全部 14 个绑定上下文提供按动作发现快捷键及暂存编辑。搜索包含本地化标签、ActionId、当前/默认按键、分组与上下文；标明 Default、Custom、Unbound，原生快捷键另以只读方式说明。
+- 增加 Reader 标题、Figure、Table、批注、Bookmark 导航，以及直接聚焦 Outline、Bookmarks、Annotations、Thumbnails。标题使用完整原生 Outline；图表按需复用具有 PDF 锚点的真实 Zotero 结构化 captions，不编造目标。冷缓存可能需要本地处理整个 PDF，不增加上传或 OCR 依赖。Bookmark 按文档位置导航并循环。
 
-### Changed
+### 调整 {#changed}
 
-- Show direct-membership coverage in `<Space>ca` / `<Space>cr`, add only missing memberships, and offer explicit parent/name confirmation for atomic create-and-add. Item moves require one ordinary direct source and preserve other memberships; deleting a collection keeps every item.
-- Keep plugin source, the VitePress site, and their shared Markdown guides in one checkout with one dependency lock; build and preview the site from the project root.
-- Centralize required private Main/Note/Reader SDK and host-DOM capabilities in the internal `src/toolkit/` boundary. Keep target precedence, modes, workflows, bookmark storage choice and history policy in their business owners; public handles expose no native pane/tree/PDF/editor internals.
-- Prefer the documented collection-selection API for its single-selection contract while preserving zero/multiple ScopeSet behavior. Cache only the selected tab's immutable metadata on Note key dispatch instead of copying the full tab inventory.
+- 项目文档默认只维护中文；现有英文按需原位翻译，保留 URL/必要锚点，不建立双语副本。文档站导航和搜索界面改为中文，技术标识与许可证原文不变。
+- `<Space>ca` / `<Space>cr` 显示直接成员覆盖率，只添加缺失成员；创建并添加支持明确父分类/名称确认并原子执行。条目移动要求单一普通直接来源，并保留其他成员关系；删除分类保留全部条目。
+- 插件源码、VitePress 和共享 Markdown 使用同一 checkout 与依赖锁，在根目录构建和预览文档站。
+- 必需的 Main/Note/Reader 私有 SDK 与宿主 DOM 能力集中到内部 `src/toolkit/`。目标优先级、模式、工作流、marks 存储与历史策略保留在业务负责方；公共句柄不暴露原生 pane/tree/PDF/editor 内部对象。
+- 单 Scope 选择优先使用文档化分类选择 API，保留零个/多个 ScopeSet 行为。Note 按键分发只缓存当前标签页不可变元数据，不复制整个标签页清单。
+- 统一条目工作集、可视范围、文本选择与批注的中文 UI/文档术语，明确评论保存与释放边界。
+- 删除未使用的跨 Surface 条目目标分发器和转发导出；Main/Reader/Note 解析器保留行为契约。仍在使用的持久化偏好迁移辅助不变。
+- 删除历史源码文本、错误措辞、CSS 拼写及重复默认表断言，保留偏好迁移、原生输入边界、清理竞争和包字节契约。
+- 不在每次按键中重新解析未变的序列化绑定与不可变模式投影；偏好编辑和可变编辑草稿仍立即生效。
+- Picker 排名限制为显示的前 100 项，同分保留来源顺序；键盘移动选择不重建结果行。
+- Notes 和 Reader Capture 默认显示当前条目的笔记，明确切换到 Library 来源时保留查询与确认语义。行只显示标题，以细小不可选分隔区分所属条目，Preview 显示真实所属条目或独立/不可用来源；包含引文工具术语的人工笔记不被过滤。
+- Debug 与 profile 日志包含 Reader 失败阶段、异常栈和 cause；首次失败及恢复记录一次，不在空闲时重复输出。
+- Reader 视图/session 与 Reader/Main 组合退休在活宿主清理抛错时仍尝试释放全部负责方，最后保留原始失败。Main UI/观察者先退休再清理，晚到回调不能重新附着。PDF 视图只恢复仍自有的按键桥；已退休 wrapper 委托原生 Reader。分屏监听和桥接无需二次释放；Bootstrap 在 shutdown 前丢弃旧 controller；profile 写入诊断保留首个和额外关闭错误。
+- 批注评论输入绑定到捕获的 PDF 视图。Enter 换行，Escape 保存并关闭，两秒自动保存；旧回调不能改变新编辑器的焦点或草稿。
+- 删除 Reader Insert mode 与绑定上下文。评论偏好迁移为 `annotationCommentEditor.enabled`，保留已有规范值，删除失效 Reader Insert 绑定；Note Insert 和无关自定义绑定不变。
+- Reader `gg`、`G` 与计数页跳转共用一条原生导航路径，混用时仍保留正确全局历史位置和当前分屏。无 count 的 `G` 到文档底部，`nG` 仍到指定页，不改变缩放。
+- Main、Reader、Note 通过已完成位置统一记录导航。原生没有可恢复位置时，Reader 搜索或批注移动可以完成而不新增历史。
+- 原生 Outline 增加主题适配的颜色/图标、稳定全树序号（含无编号 Introduction 作为第一 Section）、直接子项计数，以及有界 Bookmarks/caption 分组。原生标题/编号与独立 Annotations/Thumbnails 不变。
+- 旧 Reader `<Space>e` / `<Space>m` 和裸 `[` / `]` 默认改为直接聚焦 `<Space>ro/rm/ra/rt`，以及 `[s` / `]s`、`[f` / `]f`、`[t` / `]t`、`[a` / `]a`、`[m` / `]m` 分类导航。直接聚焦打开面板，不切换关闭。
+- Neo Reader 面板、Picker 输入/列表、Plugin Manager 输入/列表通过共享动作/上下文目录配置。原生文本和 IME 保留宿主所有权，原生快捷键单独只读说明。
+- schema 18 保留非 null 的自定义精确覆盖，仅在目的地缺失时迁移旧显式 null；将 `focusReaderSidebar` 迁移为 `focusReaderOutline`，不留运行时别名。先写覆盖，再写 schema，迁移幂等。
+- Main `o` / Enter 打开 Cursor 条目；Note `<Space>o` 打开当前笔记所属条目。二者使用自身上下文，不使用 Main 标记 Selection。
+- Main Trash 确认目标种类/数量，拒绝隐藏 Selection 成员，取消或失败时保留 Selection/历史。Reader 批注删除说明单个目标及永久后果，取消保留批注选择；确认与目标反馈跟随 UI 语言。
+- 历史记录明确的 Main、Reader 与跨 Surface 跳转，不捕获 Persistent Selection。可恢复关闭的可读附件及可用 PDF 位置，不恢复缩放/布局或 Note caret；不可用或只恢复部分的目的地不推进历史指针。PDF 链接实际导航仍由 Zotero 管理。
+- Show in Library 将原生选择失败视为失败，并按序处理重叠请求，不替换更新的上下文；异步 Trash/删除保留较新的 Visual/批注选择。Reader 批注清理使用克隆的原生数组，Note 失活重置 caret 和 Guide。
+- Main 条目列表 `h` 聚焦当前已选分类，不折叠或跳到 My Library。Note Normal `u` / `Ctrl+r` 在原生无撤销/重做历史时不输入字面文本。
 
-- Standardize Chinese UI and documentation terms for item worksets, visual ranges, text selections, and annotations; clarify comment saving and disposal boundaries.
-- Remove the unused cross-Surface item-target dispatcher/re-exports and keep behavioral target contracts on the existing Main, Reader and Note resolvers. Persisted-preference migration helpers remain in use and are unchanged.
-- Prune historical source-text, error-wording, CSS-spelling and duplicated default-table assertions while retaining preference migrations, native input boundaries, cleanup races and package-byte contracts.
-- Keep unchanged serialized bindings and immutable mode projections off the per-key parsing path; preference edits and mutable editor drafts still take effect immediately.
-- Bound Picker ranking to the displayed top 100 while preserving source order for equal scores, and move keyboard selection without rebuilding result rows.
+### 修复 {#fixed}
 
-- Notes and Reader capture now default to the current Item's notes, with an explicit Library source switch that retains the same query and confirmation. Rows show titles only, thin nonselectable boundaries separate Item owners, and Preview reports each note's actual parent or standalone/unavailable source. Human notes containing citation-tool terminology remain visible.
+- 分类树 Enter 与 Find collection 的确认目的地进入现有 Back/Forward，普通树移动不记录。展开分支时保留出发点，排队 Enter 固定接纳的 Scope ID，原生 Scope 完成与焦点恢复后才接受历史位置。
+- 分类回调绑定实际 SQL 结果；外部提交后回调失败保留已保存回执，后续 Neo 写入等待回滚恢复。失败写入不污染后续逆向缓存或抹掉后来保存的成员关系；连续添加只完整加载已确认条目。
+- Main 启动焦点声明保留到条目表就绪，再聚焦当前 View 第一项；后台窗口和空 View 不覆盖主动搜索、较晚 Reader 返回或扩展重载。
+- Main View 状态和 Toggle Tag Filter 从完整原生渲染 Scope 读取，支持多分类及受支持的跨库混合选择，不调用单选择 API 或扩展候选到全库。
+- Tag Filter 匹配数量只统计原生对象行，不计多选库标题和间隔行。
+- XPI 包含完整项目 AGPL-3 与 fuzzysort MIT 声明，并验证实际归档字节。
+- 候选兼容范围限制到已测试的 Zotero minor `10.0.*`，保留已发布 v0.1.0 更新条目。
+- 发布绑定已接受 XPI SHA256、包元数据与源码/tag 身份；只发布验证过的 draft assets，相同重跑只读，冲突或不完整发布直接拒绝，不覆盖。
+- Actions 依赖固定到已验证上游提交，保留触发方式与最小权限。
+- Plugin Manager 异步刷新完成后保留当前查询/导航选择，避免下一启停操作误作用于刷新前的扩展。
+- Main Cursor 在原生行 provider 稳定后按身份协调，包括无 refresh 的排序；新保存条目的明确原生选择保留。
+- Main 视图观察者在注销前退休，异步原生分发已捕获的回调不能把旧 Cursor 带入替换 session。
+- Note Document 替换时，即使 Window 和条目 ID 不变也重新附着输入；清除旧模式/chord，并在独立监听清理前封住旧回调。
+- Main 行装饰初次观察者/监听安装失败时释放部分资源，使旧回调失效并保留原安装错误。
+- 批注使用发起 Reader/PDF 视图的当前选择与几何。已接纳保存可以跨视图退休完成；旧继续执行不能清除/聚焦新选择或打开另一批注评论。
+- 拒绝跨越两页以上或非相邻页的批注，不保存截断几何。不完整 PDF 坐标拒绝保存，同时保留 Select 和文本。
+- 跨页批注矩形由选中的文本节点计算，排除中间 canvas/page box，保留部分文本端点。
+- 只保留尚未完成的 Reader 定时器；完成/取消的回调不能重聚焦编辑器或保存更新草稿。
+- 原生 Find 的 IME Enter 保持原生行为，延迟返回 PDF 的焦点只属于同一活输入/视图。
+- 保留但隐藏的 PDF frame（包括 Reading Mode 底层视图）不能确认复制/跟随目标；确认前重新检查包含 frame 可见性，不关闭可见原生链接后备。
+- Main Notes 使用聚焦 Cursor 条目，独立于原生多选和 Neo Persistent Selection。
+- 只恢复明确的最近一批 Neo Trash，报告真实保存数量，保存失败恢复内存 deleted 标志；不调用无参数原生 Undo。
+- 每个 Main session 替换旧反馈截止时间，较旧定时器不能擦除新消息。
+- Picker 将确认固定到接纳候选，并在键盘/指针激活间 single-flight。异步加载保留已提交查询，来源/generation 隔离旧工作；保存失败保持可见，Escape 不能假装取消已接纳原生操作。
+- Reader Note Capture 依据实际原生保存结算，即使界面被强制移除；保存失败保留未改的 Note 内容，成功反馈须通过原 Reader 调用/视图检查并指明目标。
+- `[s` / `]s` 的书签若指向标题前一页结尾，匹配原页或下一页唯一真实标题并对齐其印刷起点，保留原生层级与真实后备。Heading/Figure/Table 共用显式、缓存 SDK 加载，打开 Reader 不触发额外处理。
+- Figure 导航与 caption 选择对齐真实 caption 上方可信原生图像区域，包含图内文字并容忍锚点精度差异；有歧义时保留 caption。Table 位置、原生滚动、缩放及其他按键不变。
+- `[s` / `]s` 在 PDF 与四种聚焦侧栏上下文均可用。全树遍历不受折叠/过滤/当前行影响，使用活精确视图几何并容忍取整/底部钳位，跨边界循环；延迟原生工作归当前输入/视图。原生编辑与 IME 保留所有权。
+- 录制序列中每个 token 都检查原生保留键，包括查询编辑的 `<C-Insert>` / `<S-Insert>`，以及 Outline 带修饰键的 Enter/Return。Outline `uiConfirm` 仍支持但默认无绑定，可改为其他非保留键。
+- 焦点/指针交给 Reader 侧栏或原生编辑器时，退休待执行 PDF 命令与 Guide，不让延迟动作越过输入处理方变化。
+- 接受候选行单击/双击时退休延迟 chooser 命令，避免指针选择再触发旧确认。
+- Settings 录制、取消、解绑或重置后恢复仍连接的焦点；原生行按上下文标注，Apply 保持可达，受限旧绑定只提供可用删除。
+- Bookmark 遍历保留已删除批注结果，并将浏览器取整偏移视为相同目的地，避免重复跳到当前 mark。
+- 尚未就绪的 Reader 在原生关闭后，先退休注入再访问 PDF wrapper，避免 dead-object 和幽灵 session；晚到 ready 回调不能复活旧身份，活对象注入错误仍可见。
+- PDF 视图监听移除失败时，已退休回调不再吞原生键或发送晚到 blur/selection/viewport 事件。身份对应精确注册，同一 Window 重附着不会复活旧监听；保留原清理错误。
+- 新 MainWindow 不在 Zotero 初始化内 pane 前读取上下文 Note getter，避免附着中止。Surface、Note 目标和编辑器身份统一通过一个宿主适配器读取已发布原生上下文，不吞活对象错误，也不改 Note 优先级、绑定或偏好。
+- 链接提示保留原生 IME，只在捕获 PDF pane 拥有输入；失效 badge/cue/window 不遗留所有权，旧 RAF/定时器及晚到导航失败不影响新调用。Reader 失活清除临时 cue/激活，不改发现、标签、几何或原生导航。
+- Flash 原生焦点进入查询输入时不再自取消，只在该 PDF pane 接管宿主键。失效输入/prompt/badge 不遗留所有权，旧输入/IME 回调不改新查询；匹配、标签、IME 编辑与 Select 端点不变。
+- Reader 历史清理使用视图活跃时捕获的 PDF Window 身份；销毁 wrapper 不再中断 session 退休并让 Main 激活访问关闭 Reader，精确视图的待执行工作失效，不影响其他分屏。
+- Selection Actions 的组合键保留原生行为，仅在所属 PDF pane 接管转发。关闭 dead Reader/分屏释放 palette/theme，不中断清理；Select marker 跳过销毁窗口，旧异步结果不重画或聚焦新 palette。
+- Reader 退出按事件类型/回调身份注销原生监听，拒绝退休注册的排队回调。关闭的 indicator 与次 PDF dead-wrapper 不再阻止 Reader/Main 清理，避免 reload、替换、禁用/启用或 XPI 更新后残留旧输入/编辑器所有权。
 
-- Include Reader failure stages, exception stacks, and causes in Debug and the profile log; record first failures and recovery without recurring idle messages.
+## [0.1.0] - 2026-09-19 {#_0-1-0-2026-09-19}
 
-- Complete Reader view/session and composed Reader/Main retirement even when a live cleanup throws, preserving the original failure after all owners are released. Main UI/observer ownership retires before cleanup, and late callbacks cannot reattach it. Removed PDF views restore only still-owned native key bridges; retired wrappers delegate to the native Reader. Split-pane listeners and native bridges no longer require a second disposal; Bootstrap drops its retired controller before shutdown; profile-write diagnostics retain both primary and additional close failures.
+### 新增 {#added-1}
 
-- Keep annotation-comment input attached to its PDF view. Enter inserts a newline, Escape saves and closes, and edits autosave after two seconds. Retired callbacks cannot change a newer editor's focus or draft.
-- Retire Reader Insert as a mode and binding context. Migrate the comment-editing preference to `annotationCommentEditor.enabled`, preserving an existing canonical value, and remove inactive Reader Insert bindings. Note Insert and unrelated custom bindings remain unchanged.
+- 为键盘 Reader 工作流提供当时的 Normal、Select、Insert 交互状态。
+- Flash 可见 PDF 文本选择支持实时字面匹配、有界提示、范围微调、端点交换与直接选择动作。
+- Flash 支持 Unicode/CJK；Flash、chooser/标签输入、Note 编辑的 IME 由浏览器管理，不通过 keydown 重建查询。
+- 选择动作支持复制、搜索、彩色高亮、下划线、批注评论，以及通过公共 API 接入的可选 Translate for Zotero。
+- 为外部工作流提供 `Zotero.Neo.reader.getSelection()` 与 `registerSelectionAction(...)` 小型公共入口。
+- Vim 风格翻页、滚动、缩放、原生阅读历史、marks、批注遍历和横向平移。
+- `f` 为可见内部、引文、外部 PDF 链接提供提示，内部跳转具有临时目的地 cue。
+- 水平/垂直分屏与 `Ctrl+h/j/k/l` 方向焦点。
+- 自定义 explorer 提供 PDF Outline 与持久化 marks 键盘导航；其后替换为上文的原生 Outline/Bookmarks 集成。
+- 可配置 Space-leader Guide，由当前已解析 keymap 生成。
+- Reader/Main/Note Normal 的 `:` Command Palette，包含无绑定但可执行动作。
+- 共享模糊选择器支持全库、当前分类、Notes、标签页与动作专属标签候选，具有响应式预览和可选鼠标选择。
+- 显式标签动作：`<Space>ta` 添加、`<Space>tr` 移除；Main 专属 `<Space>tf` 切换过滤、`<Space>tc` 清空过滤。
+- Main Item Select 基于原生 `TreeSelection`，支持 `v`、带 count 的 `j/k`、`gg/G`、端点交换、完成保留和取消回聚焦项。
+- Main/Reader/Note 分别解析标签目标，明确添加/移除、多目标覆盖、创建候选与虚拟分隔符路径细化；Zotero 仍存普通扁平标签。
+- Note 通过规范化标题/正文搜索并由 chooser 打开；编辑使用共享 Normal/Insert 引擎，不使用 Picker 局部 CRUD 语法。
+- Main 提供条目 Trash/恢复、PDF 打开、标签页切换/关闭、分类树导航，以及可用时 Better BibTeX citekey 复制。
+- Neo 界面支持 Auto/Light/Dark，使用成对语义表面与文本色：浅色为浅底深字，深色为深底浅字。
+- 快捷键编辑支持暂存 Apply、按模式动作过滤、重复阻止、前缀警告、一个动作多个绑定及持久解绑。
+- Zotero 提供兼容 Reader 行为时，支持 Snapshot 和 EPUB 导航/搜索。
 
-- Reader `gg`, `G`, and counted page jumps now use one native navigation path, so mixed first/last/numbered jumps retain the correct global history locations, including the active split view. Uncounted `G` reaches the document bottom rather than the last page's start; `nG` still targets the numbered page's start, without changing zoom.
-- Centralize navigation recording across Main, Reader, and Note, using completed locations for history entries. Reader searches and annotation moves can finish without a history entry when Zotero provides no restorable position.
-- Enhance the native Reader Outline with compact theme-aware color/icon badges, stable full-tree ordinals (including unnumbered Introduction as the first Section), numeric direct-child counts, and bounded Bookmarks/caption groups. Native titles/numbering and independent Annotations/Thumbnails views remain untouched.
-- Replace the old Reader `<Space>e` / `<Space>m` and bare `[` / `]` defaults with direct panel focus (`<Space>ro/rm/ra/rt`) and categorized `[s` / `]s`, `[f` / `]f`, `[t` / `]t`, `[a` / `]a`, and `[m` / `]m` navigation. Direct focus opens/focuses a panel without toggling it closed.
-- Make Neo-owned Reader panel, picker input/list, and Plugin Manager input/list controls configurable through the shared action/context catalogs. Native text and IME remain host-owned; native shortcuts are separate read-only disclosures.
-- Migrate binding preferences at schema 18: preserve non-null custom exact overrides, move retired explicit-null cancellations only when the destination is absent, and migrate persisted `focusReaderSidebar` IDs to `focusReaderOutline` without a runtime alias. The override is written before the schema version and migration is idempotent.
+### 调整 {#changed-1}
 
-- Main `o` / Enter opens the Cursor item. Note `<Space>o` opens the item associated with the active note. Both use their own current context rather than Main's marked Selection.
+- 0.1.0 Reader yank 默认避免前缀歧义：批注摘录保留 `y`，评论由 `yy` 移到 `Y`；删除失效 Select `yy` / `yankParagraph` 默认，不冻结无法兑现整段语义的动作。
+- Picker 与 TagPath 的模糊匹配改用锁定的 `fuzzysort` 4.0.2 适配器，调用方仍只使用 `fuzzyMatchScore()`。
+- 绑定 Scope 同时标明 Surface 与状态：`reader-normal`、`reader-select`、当时的 `reader-insert`、`main-normal`、`main-select`、`note-normal`、`note-insert`。开发覆盖迁移到规范 schema，保留 Note 全局自定义和上一预发布 schema 的显式解绑。
+- Main Item Select 复用共享绑定/输入引擎和语义分发，只拥有原生 `TreeSelection` 操作和模式 UI。
+- Note Normal/Insert 复用 sequence/count reducer、绑定、能力、Guide 和 Palette 来源；DOM 编辑仍由 `NoteEditor` 负责，无绑定 Insert 文本保持 Zotero/浏览器原生行为。
+- Reader runtime 状态与持久绑定 Scope 分离，不复用混合 `Mode`。
+- 稳定宿主接缝可用时，Reader/Main 导航使用原生选择、滚动、历史、分屏、Trash 等操作。
+- Collections/Items 长按 `j/k` 的重复与 debounce 交给原生树选择，不由 Neo 节流。
+- 每个语义标签批次只使用一个 DB 事务，只保存需要变化的条目。
+- 标签写入与视图过滤是明确动作，不是标签操作控制台的模式：`ta/tr` 写条目，Main 专属 `tf/tc` 改视图。
+- Picker/provider 不再维护创建/删除/yank/open 小语法，确认和宿主写入归发起的语义动作。
+- Reader/Main/Note 的 Space 默认按语义组织：`ff/fc/fn` 查找、`,` 切换标签页、`q` 关闭当前标签页、`t*` 保留给标签。
+- Main 持久集合使用 `s`：Normal 中切换/推进条目 Selection 与原生 ScopeSet，Visual 中提交 VisualTarget。
+- PDF Select 管理 DOM range 和局部原生风格选择展示，不声称与 Reader 私有语义选择同步；原生语义选择集成另见 issue #20。
+- Picker、Reader 侧栏、评论编辑、平滑滚动、Flash 等临时状态按窗口/视图明确持有和清理。
+- 0.1.0 兼容约定只支持最新 Zotero 稳定版；manifest 面向 Zotero 10，不宣传未支持的旧主版本。
 
-- Main Trash confirms the resolved target kind/count, refuses hidden Selection members, and preserves Selection/history on cancel or failure. Reader annotation deletion states its single target and permanent consequence; cancellation preserves the selected annotation. New confirmations and target feedback follow the UI language.
-- Navigation history records explicit Main, Reader, and cross-surface jumps without capturing persistent Main Selection. It restores readable closed Reader attachments and available PDF position, but not zoom/layout or Note caret; unavailable or partially restorable destinations do not advance the history pointer. Zotero retains ownership of actual PDF link navigation.
-- Library reveal treats Zotero selection failures as failures, orders overlapping requests without replacing newer navigation context, and preserves newer Visual/annotation selections after asynchronous Trash or deletion. Reader annotation cleanup uses a cloned host array, and Note deactivation resets its caret and key guide.
-- Main item-list `h` now focuses the current selected collection without collapsing it or jumping to My Library; Note Normal `u` / `Ctrl+r` no longer enter literal text when native undo/redo reports no history.
+### 开发 {#development}
 
-### Fixed
-- Record confirmed collection-tree Enter and Find collection destinations in existing Back/Forward history without recording tree motion; preserve the departure through branch expansion, bind queued Enter to its admitted scope ID, and restore native scope completion and focus before accepting a history location.
-- Keep collection callbacks local to their actual SQL outcome, preserve saved receipts after foreign post-commit callback failure, and serialize later Neo collection mutations through rollback recovery. Failed writes cannot contaminate inverse caches on a later commit or erase a subsequent membership save. Hydrate only a confirmed continuous-add item before native rendering.
-- Keep Main's startup focus claim until the item table is ready, then focus the first item in the current View. Handle background-window startup and empty Views without overriding deliberate search, later Reader returns, or add-on reloads.
-- Read Main View state and Toggle Tag Filter candidates from the complete native rendered scope, including multiple collections and supported mixed/cross-library selections, without calling single-selection APIs or broadening tags to entire libraries.
-- Report Tag Filter matches using native object rows, excluding multiselection library headers and spacers.
-- Ship the complete project AGPL-3 license and fuzzysort MIT notice inside the XPI and validate the actual archived license payloads.
-- Constrain the candidate to the tested Zotero minor (`10.0.*`). Preserve the published v0.1.0 update entry.
-- Bind publication to the accepted XPI SHA256, packaged metadata and source/tag identity; publish only verified draft assets, make identical reruns read-only, and reject conflicting or incomplete releases instead of overwriting them.
-- Pin all Actions dependencies to verified upstream commits while retaining existing triggers and least-privilege permissions.
-- Keep Plugin Manager's current query/navigation selection when a pending refresh completes, so the next enable/disable action cannot target the plugin selected before that refresh.
-- Reconcile Main Cursor identity after settled native row-provider updates, including sorting without a refresh event, while honoring explicit native selection of newly saved items.
-- Retire Main view observers before unregistering so callbacks captured by an asynchronous native dispatch cannot restore an old Cursor into a replacement session.
-- Rebind Note input when its Document changes even if Window and item identity stay the same; clear pending mode/chord state and fence old callbacks before independent listener cleanup.
-- Release partially acquired Main row-decoration resources when initial observer/listener installation fails, keep retired callbacks inert, and preserve the original installation error.
-- Use the initiating Reader/PDF view's current selection and geometry for annotations. Admitted saves survive view retirement, while stale continuations cannot clear/refocus newer selection or open a different annotation's comment.
-- Reject annotation selections spanning more than two pages or non-adjacent pages instead of saving truncated geometry. Incomplete PDF coordinates fail closed without clearing Select or its text.
-- Compute cross-page annotation rectangles from selected text nodes, excluding intervening PDF canvas/page boxes and preserving partial text endpoints.
-- Retain only pending Reader timers; completed or cancelled callbacks cannot refocus an editor or save a newer draft.
-- Keep native Find composition Enter native and fence delayed return-to-PDF focus to the same live input/view.
-- Reject copy/follow targets in retained but hidden PDF frames, including Reading Mode's underlying view, and revalidate containing-frame visibility before confirmation without disabling visible native-link fallback.
-- Main Notes now uses the focused Cursor item independently of native multi-selection and persistent Neo Selection.
-- Restore only the explicit last Neo Trash batch, report the number of successfully persisted items and roll back the in-memory deleted flag after a failed save; never invoke parameterless native Undo.
-- Replace each Main session's feedback deadline so older timers cannot erase newer messages.
-- Lock Picker confirmation to the admitted candidate and make it single-flight across keyboard and pointer activation. Async loads preserve the committed query; source and generation fences discard stale work. Save failures remain visible, and Escape cannot pretend to cancel an admitted native operation.
-- Settle Reader note capture from the actual native save even after forced teardown, preserve unchanged note contents on save failure, and show target-named success only after the Reader invocation/view guard.
-- Correct `[s` / `]s` landing when an authored PDF bookmark points to the previous page's end: match a unique genuine native heading on the authored or next page and align its printed start, preserving the native hierarchy and honest fallback. Heading/Figure/Table requests share one explicit, cached native SDK load; Reader open still starts no extra processing.
-- Align Figure navigation and caption choices to trustworthy native image regions above their genuine captions, including enclosed native chart-label text and anchor precision differences. Ambiguous associations retain the caption; Table positions, native scrolling, zoom, and other keys are unchanged.
-- Make `[s` / `]s` Reader-wide from the PDF and all four focused sidebar contexts. Whole-tree traversal ignores collapse/filter/current-row state, uses live exact-view geometry with rounding/bottom-clamp tolerance, wraps across document boundaries, and fences delayed native work to the current input/view owner. Native text editing and IME retain ownership.
-- Reserve native-owned keys at every token in a recorded sequence, including `<C-Insert>` / `<S-Insert>` in query editing and Outline `Enter` / `Return` with modifiers. Outline `uiConfirm` remains supported but default-unbound so confirmation can be remapped to another non-reserved key.
-- Retire pending PDF commands and key guides when focus or pointer input hands ownership to the Reader sidebar or native editor, preventing a delayed Reader action after the input owner changes.
-- Retire delayed chooser commands on accepted row click/double-click so pointer selection cannot trigger a pending confirmation.
-- Restore connected Settings focus after recording, cancellation, unbind, or reset; label native rows by context, keep Apply reachable above bounded results, and offer only usable deletion for incompatible orphan bindings.
-- Bookmark traversal preserves the deleted-annotation outcome and treats browser-rounded scroll offsets as the same visible destination, preventing repeated jumps to the current mark.
-
-- Pending Reader injection now retires a natively closed Reader before accessing its PDF wrappers, preventing dead-object errors and ghost sessions after closing an unready Reader. Queued ready callbacks cannot revive the retired identity; live injection errors remain observable.
-
-- Retired PDF view callbacks no longer consume native keys or deliver late blur/selection/viewport events when listener removal fails. Event ownership matches the exact registration, so reattaching the same PDF window does not reactivate an older listener; original cleanup failures remain observable.
-
-- New Main windows no longer abort Neo attachment by reading the context Note getter before Zotero initializes its inner pane. Surface, Note target, and editor identity consumers now read the published native context through one host adapter, without suppressing live errors or changing Note precedence, bindings, or preferences.
-
-- PDF link hints preserve native IME keys and claim input only in their captured pane. Dead badges/cues/windows no longer strand ownership; retired RAF/timer callbacks and late navigation failures cannot alter a newer invocation. Reader deactivation clears the transient cue and pending activation without changing link discovery, labels, geometry or native navigation.
-
-- Flash no longer cancels itself when native focus moves into its query input, and claims host keys only in that PDF pane. Dead input/prompt/badges cannot strand ownership; retired input/composition callbacks cannot alter a newer query. Existing matching, labels, IME editing, and Select endpoint behavior remain unchanged.
-
-- Reader history cleanup uses the PDF-window identity captured while each view is live. Destroyed view wrappers no longer interrupt session retirement and leave Main activation inspecting a closed Reader; pending exact-view work is retired without affecting surviving split views.
-
-- Selection Actions leaves composing keys native and claims host forwarding only in its owning PDF pane. Closing a dead Reader/split view releases palette/theme ownership without interrupting cleanup; Select marker cleanup skips destroyed windows so it cannot block that release. Stale async results cannot repaint or refocus a later palette.
-
-- Reader teardown now unregisters native listeners by event type and callback identity and rejects queued callbacks from retired registrations. Closed Reader indicators and secondary PDF dead wrappers no longer interrupt the remaining Reader/Main cleanup, fixing old-generation input and editor ownership surviving reload, replacement, disable/enable, or XPI update.
-
-## [0.1.0] - 2026-09-19
-
-### Added
-
-- Normal, Select, and Insert interaction states for keyboard-first Zotero Reader workflows.
-- Flash-assisted visible PDF text selection with live literal matching, bounded hint rendering,
-  range refinement, endpoint swapping, and direct selection actions.
-- Unicode/CJK Flash targeting and browser-owned IME composition across Flash, chooser/tag
-  candidate inputs, and Note editing without reconstructing query text from keydown events.
-- Selection actions for copying, searching, coloured highlights, underline, annotation comments,
-  and optional Translate for Zotero integration through its public API.
-- A small public Reader selection/action seam through `Zotero.Neo.reader.getSelection()` and
-  `Zotero.Neo.reader.registerSelectionAction(...)` for external workflows.
-- Vim-style Reader navigation including page turns, scrolling, zoom, native reading history,
-  marks, annotation navigation, and horizontal pan.
-- `f` follow-link hints for visible internal, citation, and external PDF links, including a
-  transient destination cue for internal jumps.
-- Horizontal and vertical Reader split control plus directional `Ctrl+h/j/k/l` pane focus.
-- Introduced keyboard navigation for PDF outlines and persisted marks through custom explorers; the native Reader Outline/Bookmarks integration is documented above as their current replacement.
-- A configurable Space-leader key guide generated from the active resolved keymap.
-- Normal-mode `:` command palettes for Reader, Main, and Note contexts, including unbound but
-  executable actions.
-- A shared fuzzy target chooser for all-library items, current-collection items, notes, tabs,
-  and action-specific tag candidates, with responsive previews and optional mouse row selection.
-- Explicit semantic tag actions: `<Space>ta` Add Tag, `<Space>tr` Remove Tag,
-  Main-only `<Space>tf` Toggle Tag Filter, and `<Space>tc` Clear Tag Filters.
-- Main Item Select backed by Zotero's native `TreeSelection`, with `v`, count-aware `j/k`,
-  `gg/G`, endpoint swapping, preserve-on-finish, and cancel-to-focused-item behavior.
-- Context-aware Main/Reader/Note tag target resolution with explicit add/remove semantics,
-  multi-target assignment metadata, create candidates, and virtual separator-based tag-path
-  refinement while Zotero continues to store ordinary flat tag strings.
-- Note search across normalized titles and note bodies with chooser-based open behavior; Note
-  editing itself uses the shared Normal/Insert binding engine rather than a picker-local CRUD grammar.
-- Main-window item trash/restore, PDF opening, tab switching/closing, collection-tree navigation,
-  and Better BibTeX citekey copying where available.
-- Auto, Light, and Dark appearance modes across Neo-owned surfaces, with semantic mode/status
-  surface-and-text pairs so light mode uses pale surfaces with dark text and dark mode keeps
-  appropriately dark surfaces with light text.
-- Configurable shortcut editing with staged Apply, per-mode action filtering, duplicate blocking,
-  prefix warnings, multiple bindings per action, and persistent unbinding.
-- Snapshot and EPUB navigation/search support where Zotero exposes compatible Reader behavior.
-
-### Changed
-
-- The 0.1.0 Reader yank defaults are prefix-unambiguous: annotation highlighted text remains on
-  `y`, annotation comment text moves from `yy` to `Y`, and the stale Select `yy` /
-  `yankParagraph` default is removed instead of freezing an action whose implementation did not
-  match its advertised whole-paragraph semantics.
-- Shared Picker and TagPath fuzzy matching now goes through the pinned `fuzzysort` 4.0.2 adapter
-  instead of Neo's earlier ad-hoc fuzzy scorer; consumers remain behind `fuzzyMatchScore()`.
-- Configurable binding scopes now name both surface and interaction state (`reader-normal`,
-  `reader-select`, `reader-insert`, `main-normal`, `main-select`, `note-normal`,
-  `note-insert`) instead of mixing Reader modes with host contexts. Development binding
-  overrides migrate to the canonical schema, including Note-global customizations and explicit
-  unbindings from the preceding pre-release schema.
-- Main Item Select now uses the same resolved binding/input engine and semantic action dispatcher
-  as the rest of Main; its feature module owns only Zotero `TreeSelection` operations and mode UI.
-- Note Normal/Insert now use the shared sequence/count reducer, resolved bindings, capabilities,
-  Key Guide, and Command Palette source instead of a parallel handwritten key grammar; Note DOM
-  editing operations remain owned by `NoteEditor` and unbound Insert text remains Zotero/browser
-  native.
-- Reader runtime state is independent from persisted binding scope instead of reusing one mixed
-  `Mode` model.
-- Reader and Main navigation use Zotero-native selection, scrolling, history, split, trash, and
-  other host operations where stable host seams are available.
-- Held `j/k` in Collections and Items delegates repeat/debounce behavior to Zotero's native tree
-  selection path instead of Neo-side throttling.
-- Multi-item tag mutation uses one Zotero DB transaction per semantic batch and saves only items
-  that need the requested transition.
-- Tag filtering and item-tag mutation are explicit semantic actions rather than modes of a tag
-  operation console: `ta/tr` mutate item data, while Main-only `tf/tc` change view state.
-- Picker/chooser providers no longer own create/delete/yank/open mini-grammars; the invoking
-  semantic action owns confirmation and host mutation.
-- Space-leader defaults are organized around semantic namespaces across Reader/Main/Note: `<Space>ff/fc/fn` find targets, `<Space>,` switches tabs, `<Space>q` closes the current tab, and `<Space>t*` is reserved for Tags.
-- Main persistent-set operations use `s`: item Selection and native ScopeSet toggle/advance in Normal, and VisualTarget commit in Visual.
-- PDF Select currently owns a DOM range and scoped native-style selection rendering rather than
-  pretending it is synchronized with Zotero Reader's private semantic selection state; native
-  semantic-selection integration is tracked separately in issue #20.
-- Picker, Reader sidebar, comment editor, smooth scrolling, Flash, and other transient UI state
-  use explicit per-window/per-view lifecycle ownership and cleanup.
-- The 0.1.0 compatibility contract is the latest stable Zotero only; the current manifest targets
-  Zotero 10 rather than advertising unsupported older major versions.
-
-### Development
-
-- Runtime source is strict TypeScript, bundled by esbuild into deterministic JavaScript/XPI
-  artifacts with no runtime npm/CDN/native dependency resolution.
-- The audited `fuzzysort` 4.0.2 ESM snapshot is vendored with its license/provenance and folded
-  into the runtime bundle by esbuild.
-- Focused Vitest contracts cover input matching, picker behavior, Reader state, selection text,
-  host-boundary guards, preferences, tag target batching, virtual tag paths, and package behavior.
-- GitHub Actions validates the native Ubuntu and Windows build wrappers, TypeScript/tests,
-  deterministic XPI contents, and guarded release metadata.
-- Startup diagnostics are bounded and reset with version metadata instead of growing during idle
-  Reader rescans.
-- Architecture ownership is documented in `docs/ARCHITECTURE.md`. Pre-0.1.0 Reader
-  orchestration now has explicit owners for private key patches, PDF-view lifecycle, navigation
-  host operations, and Neo's temporary Select DOM range; further annotation extraction was
-  deliberately rejected where it would only replace coherent local ownership with reverse callbacks.
-- The frozen default keymap is guarded by a contract test that rejects exact default commands which
-  are also strict prefixes of longer defaults, including the effective Main Select fallback map.
+- 严格 TypeScript 经 esbuild 打包为确定性 JavaScript/XPI，不在运行时解析 npm/CDN/原生依赖。
+- 已审计 `fuzzysort` 4.0.2 ESM 快照连同许可证/来源一起 vendored，并折入运行时 bundle。
+- Vitest 覆盖输入匹配、Picker、Reader 状态、选择文本、宿主边界、偏好、标签目标批处理、虚拟路径与包行为。
+- 当时的 GitHub Actions 验证 Ubuntu/Windows 原生构建入口、TypeScript/测试、确定性 XPI 与受保护发布元数据。
+- 启动诊断有界并带版本重置，不随空闲 Reader 扫描持续增长。
+- `docs/ARCHITECTURE.md` 维护架构所有权。0.1.0 前的 Reader 编排拆出私有按键 patch、PDF 视图生命周期、导航宿主和临时 Select DOM range；仅会以反向回调替换清晰局部所有权的进一步批注抽离未被采用。
+- 默认 keymap 契约拒绝“一个完整默认命令同时是更长默认的严格前缀”，包含当时有效的 Main Select 后备映射。

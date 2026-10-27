@@ -1,5 +1,6 @@
 import type { ActionId } from '../input/actions';
 import { NOTE_ACTION_IDS, type NoteActionId } from '../input/note-actions';
+import { TAG_ITEM_ACTIONS } from '../modules/tags/capabilities';
 
 export const NOTE_NORMAL_ACTIONS = Object.freeze([
   ...NOTE_ACTION_IDS,
@@ -28,8 +29,7 @@ export const NOTE_NORMAL_ACTIONS = Object.freeze([
   'closeCurrentTab',
   'previousTab',
   'nextTab',
-  'addTag',
-  'removeTag',
+  ...TAG_ITEM_ACTIONS,
 ] as const satisfies readonly ActionId[]);
 
 export const NOTE_COMMAND_PALETTE_ACTIONS = NOTE_NORMAL_ACTIONS;

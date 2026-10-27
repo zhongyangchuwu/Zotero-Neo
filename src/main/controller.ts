@@ -8,6 +8,7 @@ import type {
   ReaderNoteCaptureResult,
 } from '../core/contracts';
 import { CleanupFailure } from '../core/cleanup';
+import { ModuleHost } from '../core/module-host';
 import { reportDiagnostic, reportDiagnosticError } from '../core/logging';
 import type {
   NavigationCause,
@@ -55,7 +56,7 @@ import { MainNavigation } from './navigation';
 import { FuzzyPicker } from './picker';
 import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
-import { TagActions } from './tag-actions';
+import { createTagModule, type TagModule } from '../modules/tags';
 import { MainItemSelect } from './item-select';
 import {
   mainLibrarySelection,
@@ -66,6 +67,7 @@ import {
   activateMainWindow,
   openMainIdentifierLookup,
   mainIdentifierLookupOwnsInput,
+  mainTagScope,
 } from '../toolkit/main';
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
@@ -95,7 +97,10 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #navigation: MainNavigation;
   readonly #picker: FuzzyPicker;
   readonly #noteEditor: NoteEditor;
-  readonly #tags: TagActions;
+  readonly #modules = new WeakMap<
+    MainWindowSession,
+    { readonly host: ModuleHost; readonly tags: TagModule }
+  >();
   readonly #itemSelect: MainItemSelect;
   readonly #pluginManager: PluginManagerPanel;
   readonly #selectionPanel: SelectionPanel;
@@ -166,13 +171,6 @@ export class MainWindowController implements MainWindowControllerApi {
           throw new Error('Collection navigation is no longer available');
       },
     );
-    this.#tags = new TagActions(
-      dependencies.logger,
-      this.#navigation,
-      dependencies.preferences,
-      this.#picker,
-      this.#viewActions,
-    );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,
       this.#navigation,
@@ -186,6 +184,56 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
+  private attachModules(window: MainWindow, session: MainWindowSession): void {
+    const host = new ModuleHost(
+      this.#dependencies.logger,
+      () => this.#sessions.get(window) === session,
+    );
+    try {
+      const tags = createTagModule(host, {
+        logger: this.#dependencies.logger,
+        preferences: this.#dependencies.preferences,
+        status: (message) => this.#navigation.status(session, message),
+        readFilter: () => [...this.#viewActions.state(window).tags],
+        captureScopeTags: () => mainTagScope(window).getTags,
+        applyFilter: (tags) => this.#viewActions.applyTagFilter(window, tags),
+        choose: (options) => {
+          if (session.picker.open) return null;
+          const previous = session.picker.generation;
+          void this.#picker.open(window, session, 'tags', options);
+          const generation = session.picker.generation;
+          if (generation === previous) return null;
+          return () => {
+            if (session.picker.generation === generation && session.picker.scope === 'tags')
+              this.#picker.close(session);
+          };
+        },
+      });
+      this.#modules.set(session, { host, tags });
+      session.cleanup.add(() => host.dispose());
+    } catch (error) {
+      const failure = new CleanupFailure();
+      failure.run(() => host.dispose());
+      failure.run(() => session.dispose());
+      try {
+        failure.rethrow();
+      } catch (cleanupError) {
+        reportDiagnosticError(
+          this.#dependencies.logger,
+          'Module attachment cleanup failed',
+          cleanupError,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private tagModule(session: MainWindowSession): TagModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.tags;
+  }
+
   addWindow(window: MainWindow): void {
     if (this.#sessions.has(window)) return;
     const session = new MainWindowSession(
@@ -193,6 +241,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.preferences,
       this.#dependencies.mayClaimInitialLibraryFocus?.() ?? false,
     );
+    this.attachModules(window, session);
     this.#sessions.set(window, session);
     this.#itemSelect.addWindow(window, session.selection, session.interactionAppearance);
     session.cleanup.add(
@@ -273,6 +322,9 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#dependencies.logger.debug(`main window detached sessions=${this.#sessions.size}`);
     this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`);
     const failure = new CleanupFailure();
+    const modules = this.#modules.get(session);
+    this.#modules.delete(session);
+    if (modules) failure.run(() => modules.host.dispose());
     failure.run(() => this.#itemSelect.removeWindow(window));
     failure.run(() => session.dispose());
     failure.rethrow();
@@ -513,8 +565,8 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.logger.debug('ignored Reader tag picker: no attached owner window');
       return;
     }
-    if (present) this.#tags.add(ownerWindow, session, targets);
-    else this.#tags.remove(ownerWindow, session, targets);
+    if (present) this.tagModule(session).add(targets);
+    else this.tagModule(session).remove(targets);
   }
 
   openReaderCollectionPicker(
@@ -900,8 +952,8 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'addTag':
       case 'removeTag': {
         const targets = resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window);
-        if (action === 'addTag') this.#tags.add(window, session, targets);
-        else this.#tags.remove(window, session, targets);
+        if (action === 'addTag') this.tagModule(session).add(targets);
+        else this.tagModule(session).remove(targets);
         return true;
       }
       case 'mainYankCitekey':
@@ -1377,15 +1429,15 @@ export class MainWindowController implements MainWindowControllerApi {
         const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
         const targets = MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
         if (visual) this.#itemSelect.cancel(window, session.selection);
-        if (action === 'addTag') this.#tags.add(window, session, targets);
-        else this.#tags.remove(window, session, targets);
+        if (action === 'addTag') this.tagModule(session).add(targets);
+        else this.tagModule(session).remove(targets);
         break;
       }
       case 'toggleTagFilter':
-        this.#tags.toggleFilter(window, session);
+        this.tagModule(session).toggleFilter();
         break;
       case 'clearTagFilters':
-        this.#tags.clearFilters(window, session);
+        this.tagModule(session).clearFilters();
         break;
       case 'addToCollection':
       case 'removeFromCollection':
