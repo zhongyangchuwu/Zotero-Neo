@@ -1,4 +1,8 @@
-import type { ActionId } from '../input/actions';
+import type { ActionId } from '../../input/actions';
+
+export const EXTENSIONS_SURFACE_ACTIONS = Object.freeze([
+  'managePlugins',
+] as const satisfies readonly ActionId[]);
 
 export const PLUGINS_INPUT_ACTIONS = Object.freeze([
   'uiFocusList',

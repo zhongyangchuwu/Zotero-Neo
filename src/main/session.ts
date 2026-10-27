@@ -5,7 +5,6 @@ import type { PreferenceStore } from '../core/preference-store';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import { PickerRuntime } from './picker/runtime';
-import { PluginManagerRuntime } from './plugin-manager-runtime';
 import { SelectionStore } from './selection-store';
 import { SelectionPanelRuntime } from './selection-panel-runtime';
 import type { InteractionAppearanceManager } from './interaction-appearance';
@@ -38,7 +37,6 @@ export class MainWindowSession {
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
   readonly selectionPanel = new SelectionPanelRuntime();
-  readonly pluginManager = new PluginManagerRuntime();
   readonly note: NoteSurfaceRuntime;
   constructor(
     window: MainWindow,
@@ -63,7 +61,6 @@ export class MainWindowSession {
       this.window.clearTimeout(this.selectionPanel.commandTimer);
       this.selectionPanel.commandTimer = undefined;
     });
-    this.cleanup.add(() => this.pluginManager.localBindings?.dispose());
     this.cleanup.add(() => this.status.remove());
     this.cleanup.add(() => {
       const timer = this.statusTimer;

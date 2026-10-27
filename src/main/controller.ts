@@ -72,7 +72,7 @@ import {
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
-import { PluginManagerPanel } from './plugin-manager';
+import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
 import { SelectionPanel } from './selection-panel';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
@@ -99,10 +99,9 @@ export class MainWindowController implements MainWindowControllerApi {
   readonly #noteEditor: NoteEditor;
   readonly #modules = new WeakMap<
     MainWindowSession,
-    { readonly host: ModuleHost; readonly tags: TagModule }
+    { readonly host: ModuleHost; readonly tags: TagModule; readonly extensions: ExtensionsModule }
   >();
   readonly #itemSelect: MainItemSelect;
-  readonly #pluginManager: PluginManagerPanel;
   readonly #selectionPanel: SelectionPanel;
   readonly #localFind: MainLocalFind;
   readonly #viewActions: MainViewActions;
@@ -113,7 +112,6 @@ export class MainWindowController implements MainWindowControllerApi {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
     this.#itemSelect = new MainItemSelect(dependencies.logger);
-    this.#pluginManager = new PluginManagerPanel(dependencies.logger, () => this.bindings());
     this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
     this.#navigationExecutor = new MainNavigationExecutor(
       dependencies.logger,
@@ -209,7 +207,13 @@ export class MainWindowController implements MainWindowControllerApi {
           };
         },
       });
-      this.#modules.set(session, { host, tags });
+      const extensions = createExtensionsModule(host, {
+        window,
+        logger: this.#dependencies.logger,
+        bindings: () => this.bindings(),
+        themeRoot: (root) => session.theme.add(root),
+      });
+      this.#modules.set(session, { host, tags, extensions });
       session.cleanup.add(() => host.dispose());
     } catch (error) {
       const failure = new CleanupFailure();
@@ -232,6 +236,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const modules = this.#modules.get(session);
     if (!modules) throw new Error('Window modules are not attached');
     return modules.tags;
+  }
+
+  private extensionsModule(session: MainWindowSession): ExtensionsModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.extensions;
   }
 
   addWindow(window: MainWindow): void {
@@ -311,7 +321,6 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.add(() => this.#noteEditor.clear(session));
     session.cleanup.add(() => this.#localFind.close(session));
     session.cleanup.add(() => this.#selectionPanel.close(session));
-    session.cleanup.add(() => this.#pluginManager.close(session));
     session.cleanup.add(() => this.#picker.close(session));
   }
 
@@ -343,7 +352,7 @@ export class MainWindowController implements MainWindowControllerApi {
     if (!resolved) return false;
     const window = resolved.window;
     this.#picker.close(resolved);
-    this.#pluginManager.close(resolved);
+    this.extensionsModule(resolved).close();
     this.#selectionPanel.close(resolved);
     this.#localFind.close(resolved);
     this.resetMainInput(window, resolved);
@@ -495,8 +504,8 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   openPluginManager(ownerWindow: MainWindow | null): void {
-    this.withReaderWindow(ownerWindow, 'managePlugins', (window, session) =>
-      this.#pluginManager.open(window, session),
+    this.withReaderWindow(ownerWindow, 'managePlugins', (_window, session) =>
+      this.extensionsModule(session).open('reader-normal'),
     );
   }
 
@@ -723,8 +732,8 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#selectionPanel.handleKey(event, window, session);
       return;
     }
-    if (session.pluginManager.open) {
-      this.#pluginManager.handleKey(event, window, session);
+    if (this.extensionsModule(session).isOpen) {
+      this.extensionsModule(session).handleKey(event);
       return;
     }
     if (session.picker.open) {
@@ -989,7 +998,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.openNotesPickerForSurface(window, session, 'note');
         return true;
       case 'managePlugins':
-        this.#pluginManager.open(window, session);
+        this.extensionsModule(session).open('note-normal');
         return true;
       case 'openNeoSettings':
         this.openSettings(window);
@@ -1342,7 +1351,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.openNotesPickerForSurface(window, session);
         break;
       case 'managePlugins':
-        this.#pluginManager.open(window, session);
+        this.extensionsModule(session).open('main-normal');
         break;
       case 'navigateBack':
       case 'navigateForward':

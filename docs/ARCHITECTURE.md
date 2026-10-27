@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座和标签模块接入；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座、标签和扩展管理模块接入；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
 
 ## 分层 {#layers}
 
@@ -38,13 +38,17 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份；任一身份被替换时，先退休旧输入，再清理监听器。Note 内容仍以 Zotero 为准。
 
-`src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动；`src/main/item-select.ts` 负责临时 Visual 范围及其可见原生树投影。Persistent Selection 属于 session，独立于原生行选择。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。Plugin Manager 是拥有独立生命周期的常驻界面。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
+`src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动；`src/main/item-select.ts` 负责临时 Visual 范围及其可见原生树投影。Persistent Selection 属于 session，独立于原生行选择。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
 
 `src/core/module-host.ts` 为每个 MainWindow 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
 标签模块不持有 Main session、原生 pane 或 Reader 对象。Picker 端口返回仅能关闭本次调用的释放句柄；视图或窗口退休后不能确认旧选择、重画状态或关闭后来替换的界面。已接纳的保存继续按原生事务结果完成，不因模块退休而伪装成取消。
+
+`src/modules/extensions/` 拥有已安装 Zotero 扩展的 Plugin Manager。`index.ts` 为每个 MainWindow 创建模块作用域、面板和状态；Main session 不再持有插件面板状态。Main/Reader/Note 的 `managePlugins` 进入实际所属窗口的同一面板，局部输入继续使用 `plugins-input` / `plugins-list` 和既有重绑定。
+
+面板关闭先退休交互，再分别释放局部绑定、输入监听、主题与 DOM；某项释放失败仍尝试其余资源，并保留原始错误。异步刷新和原生启停完成后同时核对模块作用域与本次界面身份，不更新退休界面或恢复其焦点。已接纳的原生操作不伪装成可取消。原生 AddonManager 接缝仍在 Toolkit；该模块不负责 Neo 内部模块配置，也不新增安装、更新或卸载功能。
 
 #### Reader {#reader}
 

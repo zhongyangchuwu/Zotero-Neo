@@ -1,5 +1,6 @@
 import type { ActionId } from '../input/actions';
 import { TAG_ITEM_ACTIONS } from '../modules/tags/capabilities';
+import { EXTENSIONS_SURFACE_ACTIONS } from '../modules/extensions/capabilities';
 
 export type ReaderCapabilityMode = 'normal' | 'visual';
 
@@ -161,7 +162,7 @@ export const READER_NORMAL_ACTIONS = Object.freeze([
   'findCollectionItems',
   'findNotes',
   'mainAddByIdentifier',
-  'managePlugins',
+  ...EXTENSIONS_SURFACE_ACTIONS,
   'openNeoSettings',
   'navigateBack',
   'navigateForward',

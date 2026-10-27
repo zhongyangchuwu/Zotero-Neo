@@ -2,7 +2,6 @@ import { vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import type { MainWindowSession } from '../../src/main/session';
 import { PickerRuntime } from '../../src/main/picker/runtime';
-import { PluginManagerRuntime } from '../../src/main/plugin-manager-runtime';
 
 export function createPickerHarness(width = 1200): {
   window: MainWindow;
@@ -140,7 +139,6 @@ export function createPickerHarness(width = 1200): {
   const session = {
     window,
     picker: new PickerRuntime(),
-    pluginManager: new PluginManagerRuntime(),
     status: { textContent: '', style: {} },
     cleanup: { add: (cleanup: () => void) => cleanups.push(cleanup) },
     theme: { add: () => () => {} },
