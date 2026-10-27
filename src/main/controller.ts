@@ -149,6 +149,22 @@ export class MainWindowController implements MainWindowControllerApi {
       dependencies.logger,
       this.#navigation,
       this.#picker,
+      async (window, session, collectionID) => {
+        const execution = this.#navigationExecutor.execute(
+          window,
+          session,
+          {
+            cause: { kind: 'action', action: 'findCollections' },
+            surface: 'main',
+            context: { mainPanel: session.activePanel },
+          },
+          this.#navigationExecutor.collectionSelection(window, session, collectionID),
+        );
+        const result = execution.pending ? await execution.result : execution.result;
+        if (result.kind === 'failed') throw result.error;
+        if (result.kind !== 'completed' && result.kind !== 'unchanged')
+          throw new Error('Collection navigation is no longer available');
+      },
     );
     this.#tags = new TagActions(
       dependencies.logger,
@@ -239,6 +255,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
     session.cleanup.addEventListener(window.document, 'focusin', (event) => {
       if (this.#sessions.get(window) !== session) return;
+      this.#navigation.observeFocus(window, session);
       if (session.settings.contains(event.target)) this.resetMainInput(window, session);
       this.syncSurfaceActivation(window, session);
     });
@@ -1248,6 +1265,24 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'findCollectionItems':
         this.openCollectionItemsPickerForSurface(window, session);
         break;
+      case 'findCollections':
+        this.#collections.find(window, session);
+        break;
+      case 'addItemsToCurrentCollection':
+        this.#collections.addItems(window, session);
+        break;
+      case 'moveCollection':
+        this.#collections.move(window, session);
+        break;
+      case 'createCollection':
+        this.#collections.create(window, session);
+        break;
+      case 'renameCollection':
+        this.#collections.rename(window, session);
+        break;
+      case 'deleteCollection':
+        this.#collections.removeCollection(window, session);
+        break;
       case 'switchTab':
         this.openTabPickerForSurface(window, session);
         break;
@@ -1316,9 +1351,16 @@ export class MainWindowController implements MainWindowControllerApi {
         this.openMainItem(window, session, mainCursorItem(window) ?? null, 'main', action);
         break;
       case 'mainActivate':
-        if (this.#navigation.panel(window, session) === 'collections')
-          this.#navigation.activate(window, session);
-        else this.openMainItem(window, session, mainCursorItem(window) ?? null, 'main', action);
+        if (this.#navigation.panel(window, session) === 'collections') {
+          this.executeNavigation(
+            window,
+            session,
+            { kind: 'action', action },
+            'main',
+            this.#navigationExecutor.scopeActivation(window, session),
+            { mainPanel: 'collections' },
+          );
+        } else this.openMainItem(window, session, mainCursorItem(window) ?? null, 'main', action);
         break;
       case 'closeCurrentTab':
         this.#navigation.closePDF(window);
@@ -1346,13 +1388,15 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#tags.clearFilters(window, session);
         break;
       case 'addToCollection':
-      case 'removeFromCollection': {
+      case 'removeFromCollection':
+      case 'moveToCollection': {
         const visual = this.#itemSelect.isVisual(window);
         const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
         if (visual) this.#itemSelect.cancel(window, session.selection);
-        this.#collections.open(window, session, action === 'addToCollection', () =>
-          MAIN_ITEM_TARGET.resolve(window, session, currentTarget),
-        );
+        const resolveTargets = () => MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
+        if (action === 'moveToCollection')
+          this.#collections.moveItems(window, session, resolveTargets);
+        else this.#collections.open(window, session, action === 'addToCollection', resolveTargets);
         break;
       }
       case 'mainNavDown':

@@ -33,6 +33,7 @@ export interface MainTabSnapshot {
 }
 
 type TagScopeRow = {
+  readonly id?: string;
   readonly ref?: { readonly libraryID?: number };
   readonly tags?: Iterable<string>;
   readonly searchText?: string;
@@ -62,6 +63,7 @@ type MainPane = {
     readonly collectionTreeRows?: readonly TagScopeRow[];
     setFilter?(type: 'tags' | 'search', value: ReadonlySet<string> | string): Promise<void> | void;
   };
+  onCollectionSelected?(): Promise<void>;
   getSelectedItems?(): Zotero.Item[];
   getSelectedCollection?(): Zotero.Collection | false | undefined;
   getSelectedCollections?(): Zotero.Collection[];
@@ -471,6 +473,7 @@ export async function restoreMainScopeIDs(
   ids: readonly string[],
   isCurrent: () => boolean,
 ): Promise<boolean> {
+  const pane = mainPane(window);
   const view = mainScopeView(window);
   const selection = view?.selection;
   if (!isCurrent()) return false;
@@ -483,6 +486,7 @@ export async function restoreMainScopeIDs(
     }
     return mainScopeSelectedIDs(window).length === 0;
   }
+  if (!pane?.onCollectionSelected) return false;
 
   const rows = ids.map((id) => view.getRowIndexByID?.(id));
   if (
@@ -510,7 +514,21 @@ export async function restoreMainScopeIDs(
   }
 
   const selected = mainScopeSelectedIDs(window);
-  return isCurrent() && selected.length === ids.length && ids.every((id) => selected.includes(id));
+  if (!isCurrent() || selected.length !== ids.length || !ids.every((id) => selected.includes(id)))
+    return false;
+
+  // selectByID() may observe an earlier native select event. Queue behind the
+  // pane's serial scope handler before restoring filters, Cursor or focus.
+  await pane.onCollectionSelected();
+  if (!isCurrent() || mainPane(window) !== pane || mainScopeView(window) !== view) return false;
+  const settled = mainScopeSelectedIDs(window);
+  const rendered = pane.itemsView?.collectionTreeRows;
+  return (
+    settled.length === ids.length &&
+    ids.every((id) => settled.includes(id)) &&
+    rendered?.length === ids.length &&
+    ids.every((id) => rendered.some((row) => row.id === id))
+  );
 }
 
 export function mainScopeCursorDetached(window: MainWindow): boolean {
@@ -528,16 +546,6 @@ export function moveMainScopeCursor(
   if (!view?.tree?._onSelection || index < 0 || index > last) return false;
   view.tree._onSelection(index, false, false, true, shouldDebounce);
   view.ensureRowIsVisible?.(index);
-  return true;
-}
-
-export function selectOnlyMainScopeCursor(window: MainWindow, shouldDebounce = false): boolean {
-  const view = mainScopeView(window);
-  const focused = view?.selection?.focused;
-  if (focused === undefined || !view?.selection?.select) return false;
-  const selected = mainScopeSelectedRows(window);
-  if (selected.length === 1 && selected[0] === focused) return false;
-  view.selection.select(focused, shouldDebounce);
   return true;
 }
 

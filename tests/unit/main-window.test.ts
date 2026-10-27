@@ -539,76 +539,6 @@ describe('current Zotero collection APIs', () => {
     expect(focused).toBe(3);
   });
 
-  it('collapses ScopeSet to ScopeCursor before Enter moves into items', () => {
-    let focused = 4;
-    const selected = new Set([1, 2]);
-    const select = vi.fn((index: number) => {
-      selected.clear();
-      selected.add(index);
-    });
-    const collectionActive = { id: 'collection-tree-row-4' } as Element;
-    const itemActive = { id: 'item-tree-row-0' } as Element;
-    let active: Element = collectionActive;
-    const collectionTree = {
-      focus: () => {
-        active = collectionActive;
-      },
-      _onSelection: vi.fn((index: number) => {
-        focused = index;
-      }),
-    };
-    const itemTree = {
-      focus: () => {
-        active = itemActive;
-      },
-    };
-    const collectionsView = {
-      tree: collectionTree,
-      domEl: { contains: (node: unknown) => node === collectionActive } as HTMLElement,
-      rowCount: 6,
-      selection: {
-        get count() {
-          return selected.size;
-        },
-        selected,
-        get focused() {
-          return focused;
-        },
-        select,
-      },
-    } as unknown as TreeView;
-    const itemsView = {
-      tree: itemTree,
-      domEl: { contains: (node: unknown) => node === itemActive } as HTMLElement,
-      rowCount: 1,
-      selection: { focused: 0, count: 1, select: vi.fn() },
-    } as unknown as TreeView;
-    const document = {
-      get activeElement() {
-        return active;
-      },
-      getElementById: () => null,
-      querySelector: () => null,
-    } as unknown as Document;
-    const window = {
-      document,
-      ZoteroPane: { collectionsView, itemsView },
-    } as unknown as MainWindow;
-    const session = {
-      window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
-      activePanel: 'collections',
-      status: { textContent: '', style: {} },
-      cleanup: { add: vi.fn() },
-    } as unknown as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
-
-    navigation.activate(window, session);
-
-    expect(select).toHaveBeenCalledWith(4, false);
-    expect([...selected]).toEqual([4]);
-    expect(session.activePanel).toBe('items');
-  });
-
   it('moves item Cursor with one select-only native anchor', () => {
     const active = { id: 'item-tree-main-default-row-2' } as Element;
     let focused = 2;
@@ -3442,6 +3372,143 @@ describe('Main jump history integration', () => {
       },
     } as MainWindowControllerDependencies);
   }
+
+  it('starts a new tree history visit after native items/tree focus events without Neo focus commands', async () => {
+    const originalZotero = Reflect.get(globalThis, 'Zotero');
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const h = historyHost();
+    const doc = h.host.window.document;
+    const focusEvents = new EventTarget();
+    const add = doc.addEventListener.bind(doc);
+    const remove = doc.removeEventListener.bind(doc);
+    Reflect.set(doc, 'addEventListener', (type: string, listener: EventListener) => {
+      if (type === 'focusin') focusEvents.addEventListener(type, listener);
+      else add(type, listener);
+    });
+    Reflect.set(doc, 'removeEventListener', (type: string, listener: EventListener) => {
+      if (type === 'focusin') focusEvents.removeEventListener(type, listener);
+      else remove(type, listener);
+    });
+    const tree = doc.createElement('div');
+    tree.id = 'collection-tree';
+    const items = doc.createElement('div');
+    items.id = 'item-tree-main-default';
+    for (const element of [tree, items]) {
+      const focus = element.focus.bind(element);
+      Reflect.set(element, 'focus', () => {
+        focus();
+        focusEvents.dispatchEvent(new Event('focusin'));
+      });
+    }
+    const quickSearch = { value: '', searchTextbox: { value: '' } };
+    Reflect.set(doc, 'getElementById', (id: string) =>
+      id === tree.id
+        ? tree
+        : id === items.id
+          ? items
+          : id === 'zotero-tb-search'
+            ? quickSearch
+            : null,
+    );
+    const selected = new Set([0]);
+    let focused = 0;
+    const scopeRows = [{ id: 'C1' }, { id: 'C2' }, { id: 'C3' }];
+    let loadedScopeRow = scopeRows[0]!;
+    const select = (row: number): void => {
+      focused = row;
+      selected.clear();
+      selected.add(row);
+    };
+    const paper = { id: 10, libraryID: 1 } as Zotero.Item;
+    Reflect.set(globalThis, 'Zotero', {
+      Reader: { getByTabID: () => null },
+      Items: { get: () => paper },
+      initialized: false,
+      locale: 'en-US',
+    });
+    h.tabs.selectedID = 'zotero-pane';
+    Reflect.set(h.host.window, 'ZoteroPane', {
+      onCollectionSelected: async () => {
+        loadedScopeRow = scopeRows[focused]!;
+      },
+      collectionsView: {
+        rowCount: scopeRows.length,
+        tree: {
+          _topDiv: tree,
+          _onSelection: (row: number) => {
+            focused = row;
+          },
+        },
+        selection: {
+          get count() {
+            return selected.size;
+          },
+          get focused() {
+            return focused;
+          },
+          selected,
+          select,
+        },
+        getRow: (row: number) => scopeRows[row],
+        getRowIndexByID: (id: string) => scopeRows.findIndex((row) => row.id === id),
+        selectByID: async (id: string) => select(scopeRows.findIndex((row) => row.id === id)),
+        ensureRowIsVisible: () => {},
+      },
+      itemsView: {
+        get collectionTreeRows() {
+          return [loadedScopeRow];
+        },
+        rowCount: 1,
+        objectRowCount: 1,
+        tree: { _topDiv: items, _onSelection: () => {} },
+        selection: { focused: 0, select: () => {} },
+        getRow: () => ({ isObjectRow: true, ref: paper }),
+        getRowIndexByID: () => 0,
+        waitForLoad: async () => {},
+        setFilter: async () => {},
+      },
+      getSelectedItems: () => [paper],
+    });
+    const controller = historyController(logger);
+    const press = (key: string, ctrlKey = false): void => {
+      h.host.keydown({
+        key,
+        ctrlKey,
+        shiftKey: false,
+        altKey: false,
+        metaKey: false,
+        target: doc.activeElement,
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        stopImmediatePropagation: () => {},
+      } as unknown as KeyboardEvent);
+    };
+    try {
+      controller.addWindow(h.host.window);
+      tree.focus();
+      press('j');
+      expect([...selected]).toEqual([1]);
+      // These deliver native focusin events to the real controller, not Neo actions.
+      items.focus();
+      tree.focus();
+      press('j');
+      expect([...selected]).toEqual([2]);
+      press('Enter');
+      await vi.waitFor(() => expect(doc.activeElement).toBe(items));
+      press('o', true);
+      await vi.waitFor(() => {
+        expect([...selected]).toEqual([1]);
+        expect(doc.activeElement).toBe(tree);
+      });
+      press('i', true);
+      await vi.waitFor(() => expect(doc.activeElement).toBe(items));
+      expect([...selected]).toEqual([2]);
+    } finally {
+      controller.shutdown();
+      if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
+      else Reflect.set(globalThis, 'Zotero', originalZotero);
+    }
+  });
 
   it('does not let a stale attachment lookup overwrite a newer H/L tab jump', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');

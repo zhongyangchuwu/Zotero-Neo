@@ -8,7 +8,18 @@ export interface PickerPreview {
   readonly body: string;
 }
 
-export type PickerConfirm = (item: PickerItem, openInWindow: boolean) => Promise<void> | void;
+export interface PickerContinuation {
+  readonly keepOpen: true;
+  readonly source?: PickerProvider;
+  readonly query?: string;
+  readonly message?: string;
+}
+export type PickerConfirmationResult = void | PickerContinuation;
+
+export type PickerConfirm = (
+  item: PickerItem,
+  openInWindow: boolean,
+) => Promise<PickerConfirmationResult> | PickerConfirmationResult;
 export type PickerCloseReason = 'cancel' | 'confirm' | 'retire';
 
 /**
@@ -38,6 +49,8 @@ export interface PickerProvider {
     readonly provider: () => PickerProvider;
   };
   load(): Promise<PickerItem[]>;
+  /** Bounded native query; superseded results are discarded by the shell. */
+  query?(query: string): Promise<PickerItem[]>;
   rowText(item: PickerItem, index: number): string;
   preview(item: PickerItem): PickerPreview;
   /** Optional pure candidate projection/ranking for domain-shaped queries. */

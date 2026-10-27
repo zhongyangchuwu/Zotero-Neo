@@ -28,10 +28,11 @@ const ACTION_RULES: Partial<Record<ActionId, Rule>> = {
   findPrevious: (intent) =>
     isItems(intent) ? SETTLED_CHANGE : isReaderPath(intent, 'search') ? NATIVE_HARD : IGNORE,
   mainOpenPDF: (intent) => (intent.surface === 'note' || isItems(intent) ? SETTLED_CHANGE : IGNORE),
-  mainActivate: (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
+  mainActivate: (intent) => (isMain(intent) && intent.context?.mainPanel ? SETTLED_CHANGE : IGNORE),
   findAllItems: () => SETTLED_CHANGE,
   findCollectionItems: () => SETTLED_CHANGE,
   findNotes: () => SETTLED_CHANGE,
+  findCollections: (intent) => (isMain(intent) ? SETTLED_CHANGE : IGNORE),
   showInLibrary: (intent) =>
     intent.surface === 'reader' || intent.surface === 'note' ? SETTLED_CHANGE : IGNORE,
   firstPage: (intent) => (isReaderPath(intent, 'explicit-page') ? NATIVE_HARD : IGNORE),
