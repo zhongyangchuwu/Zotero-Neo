@@ -1,4 +1,4 @@
-import { cloneInto } from '../../platform/cross-compartment';
+import { cloneInto, isDeadObject } from '../../platform/cross-compartment';
 import type { FocusDirection } from '../../input/actions';
 import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from '../../reader/types';
 import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from './contracts';
@@ -420,15 +420,45 @@ export function readerFindInputFocused(document: Document): boolean {
   return active?.tagName === 'INPUT' && !!active.closest('.find-popup');
 }
 
-export function openReaderSelectionSearch(reader: ReaderRuntime): void {
+/** Opens Find for the captured pane and returns a one-shot write for that native interaction. */
+export function prepareReaderSelectionSearch(
+  reader: ReaderRuntime,
+  window: PdfWindow,
+): ((text: string) => boolean) | null {
   const native = reader as NativeReaderRuntime;
-  if (native._iframeWindow && native._internalReader?.toggleFindPopup)
-    native._internalReader.toggleFindPopup(cloneInto({ open: true }, native._iframeWindow));
-}
-
-export function setReaderSearchText(outer: Window | undefined, text: string): void {
-  const input = outer?.document.querySelector<HTMLInputElement>('.primary-view .find-popup input');
-  if (!input || !outer) return;
-  input.value = text;
-  input.dispatchEvent(new outer.Event('input', { bubbles: true }));
+  const internal = native._internalReader;
+  const outer = native._iframeWindow;
+  const primary = internal?._primaryView?._iframeWindow === window;
+  const view = primary ? internal?._primaryView : internal?._secondaryView;
+  if (!internal?.toggleFindPopup || !outer || view?._iframeWindow !== window) return null;
+  const document = outer.document;
+  const pdfDocument = window.document;
+  const field = primary ? 'primaryViewFindState' : 'secondaryViewFindState';
+  internal.toggleFindPopup(cloneInto({ primary, open: true }, outer));
+  const expected = internal._state?.[field];
+  if (!expected?.popupOpen) return null;
+  let pending = true;
+  return (text) => {
+    if (!pending) return false;
+    pending = false;
+    if (
+      isDeadObject(outer) ||
+      isDeadObject(window) ||
+      isDeadObject(view) ||
+      native._internalReader !== internal ||
+      native._iframeWindow !== outer ||
+      outer.document !== document ||
+      window.document !== pdfDocument ||
+      (primary ? internal._primaryView : internal._secondaryView) !== view ||
+      internal._state?.[field] !== expected
+    )
+      return false;
+    const input = document.querySelector<HTMLInputElement>(
+      `${primary ? '.primary-view' : '.secondary-view'} .find-popup input`,
+    );
+    if (!input || input.value !== (expected.query ?? '')) return false;
+    input.value = text;
+    input.dispatchEvent(new outer.Event('input', cloneInto({ bubbles: true }, outer)));
+    return true;
+  };
 }

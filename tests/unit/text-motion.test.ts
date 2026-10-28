@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { verticalTextPosition } from '../../src/reader/text-motion';
+import { verticalTextPosition } from '../../src/modules/reader-selection/text-motion';
 import type { PdfWindow, Pointer } from '../../src/reader/types';
 
 interface TextSpec {

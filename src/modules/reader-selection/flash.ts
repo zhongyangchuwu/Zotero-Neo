@@ -1,13 +1,13 @@
-import { pdfTextSpans } from '../toolkit/reader';
+import { CleanupFailure } from '../../core/cleanup';
+import { pdfTextSpans } from '../../toolkit/reader';
 import {
-  bindCompositionState,
   compositionOwnsKey,
   isCommittedInput,
   type CompositionState,
-} from '../input/composition';
-import { isDeadObject, nativeObjectIdentity } from '../platform/cross-compartment';
-import { HINT_ALPHABET } from './hint-labels';
-import type { PdfWindow, Pointer } from './types';
+} from '../../input/composition';
+import { isDeadObject, nativeObjectIdentity } from '../../platform/cross-compartment';
+import { HINT_ALPHABET } from '../../reader/hint-labels';
+import type { PdfWindow, Pointer } from '../../reader/types';
 
 export type FlashIntent = 'visual-start' | 'visual-end';
 
@@ -53,6 +53,8 @@ interface FlashTarget extends FlashSelectionTarget {
 }
 
 export interface ReaderFlashHost {
+  readonly isCurrent: (pdfWindow: PdfWindow) => boolean;
+  readonly captureView: (pdfWindow: PdfWindow) => () => boolean;
   readonly activate: (
     intent: FlashIntent,
     pdfWindow: PdfWindow,
@@ -222,7 +224,10 @@ function flashLabelPool(count: number, firstAlphabet: string): string[] {
  */
 export class ReaderFlash {
   readonly #host: ReaderFlashHost;
+  #generation = 0;
+  #disposed = false;
   #window: PdfWindow | null = null;
+  #viewCurrent: (() => boolean) | null = null;
   #intent: FlashIntent | null = null;
   #index: FlashTextIndex | null = null;
   #query = '';
@@ -262,29 +267,61 @@ export class ReaderFlash {
   }
 
   open(pdfWindow: PdfWindow, intent: FlashIntent): void {
+    const previousGeneration = this.#generation;
     this.cancel();
+    if (
+      this.#generation !== previousGeneration + 1 ||
+      this.#disposed ||
+      isDeadObject(pdfWindow) ||
+      !this.#host.isCurrent(pdfWindow)
+    )
+      return;
+    const generation = this.#generation;
+    const current = this.#host.captureView(pdfWindow);
     try {
-      const segments = this.#visibleSegments(pdfWindow);
-      const index = buildFlashTextIndex(segments);
+      const index = buildFlashTextIndex(this.#visibleSegments(pdfWindow));
+      if (generation !== this.#generation || !this.#host.isCurrent(pdfWindow) || !current()) return;
       if (!index.text.trim()) {
         this.#host.showStatus('No visible text', 1200);
         return;
       }
       this.#window = pdfWindow;
+      this.#viewCurrent = current;
       this.#intent = intent;
       this.#index = index;
-      this.#query = '';
-      this.#labelBuffer = '';
-      this.#matchCount = 0;
-      this.#labelCache.clear();
-      this.#prompt = this.#createPrompt(pdfWindow);
-      this.#input = this.#createInput(pdfWindow);
-      this.#input.focus();
-      this.#refreshPrompt();
+      this.#createPrompt(pdfWindow, generation);
+      if (!this.#current(pdfWindow, generation)) {
+        if (generation === this.#generation) this.cancel();
+        return;
+      }
+      this.#createInput(pdfWindow, generation);
+      if (!this.#current(pdfWindow, generation)) {
+        if (generation === this.#generation) this.cancel();
+        return;
+      }
+      this.#input?.focus();
+      if (this.#current(pdfWindow, generation)) this.#refreshPrompt();
+      else if (generation === this.#generation) this.cancel();
     } catch (error) {
-      this.cancel();
-      this.#host.debug(`reader Flash open failed: ${String(error)}`);
-      this.#host.showStatus('Flash unavailable', 1500);
+      const active =
+        generation === this.#generation &&
+        !this.#disposed &&
+        !isDeadObject(pdfWindow) &&
+        this.#host.isCurrent(pdfWindow) &&
+        current();
+      const failure = new CleanupFailure();
+      if (generation === this.#generation) failure.run(() => this.cancel());
+      if (
+        active &&
+        this.#generation === generation + 1 &&
+        current() &&
+        this.#host.isCurrent(pdfWindow)
+      ) {
+        this.#host.debug(`reader Flash open failed: ${String(error)}`);
+        if (this.#generation === generation + 1 && current() && this.#host.isCurrent(pdfWindow))
+          this.#host.showStatus('Flash unavailable', 1500);
+      }
+      failure.rethrow();
     }
   }
 
@@ -292,6 +329,10 @@ export class ReaderFlash {
   handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
     if (!this.#window) return false;
     if (pdfWindow !== this.#window) {
+      this.cancel();
+      return false;
+    }
+    if (!this.#current(pdfWindow, this.#generation)) {
       this.cancel();
       return false;
     }
@@ -307,8 +348,16 @@ export class ReaderFlash {
     };
     if (event.key === 'Escape') {
       consumeCommand();
+      const generation = this.#generation;
+      const current = this.#viewCurrent;
       this.cancel();
-      pdfWindow.focus();
+      if (
+        this.#generation === generation + 1 &&
+        !this.#disposed &&
+        current?.() &&
+        this.#host.isCurrent(pdfWindow)
+      )
+        pdfWindow.focus();
       return true;
     }
 
@@ -354,11 +403,13 @@ export class ReaderFlash {
   }
 
   dispose(): void {
+    this.#disposed = true;
     this.cancel();
   }
 
   /** Retires input ownership before DOM cleanup; dead nodes are skipped and live failures propagate. */
   cancel(): void {
+    this.#generation += 1;
     const input = this.#input;
     const prompt = this.#prompt;
     const inputCleanup = this.#inputCleanup;
@@ -367,27 +418,21 @@ export class ReaderFlash {
     this.#composition.active = false;
     this.#prompt = null;
     this.#window = null;
+    this.#viewCurrent = null;
     this.#intent = null;
     this.#index = null;
     this.#query = '';
     this.#labelBuffer = '';
     this.#matchCount = 0;
     this.#labelCache.clear();
-    try {
-      this.#clearTargets();
-    } finally {
-      try {
-        if (input && !isDeadObject(input)) {
-          try {
-            inputCleanup?.();
-          } finally {
-            input.remove();
-          }
-        }
-      } finally {
-        if (prompt && !isDeadObject(prompt)) prompt.remove();
-      }
+    const failure = new CleanupFailure();
+    failure.run(() => this.#clearTargets());
+    if (input && !isDeadObject(input)) {
+      failure.run(() => inputCleanup?.());
+      failure.run(() => input.remove());
     }
+    if (prompt && !isDeadObject(prompt)) failure.run(() => prompt.remove());
+    failure.rethrow();
   }
 
   #handleLabelKey(event: KeyboardEvent): void {
@@ -413,9 +458,20 @@ export class ReaderFlash {
   #refreshTargets(): void {
     const pdfWindow = this.#window;
     const index = this.#index;
+    const generation = this.#generation;
     this.#labelBuffer = '';
-    this.#clearTargets();
-    if (!pdfWindow || !index) return;
+    try {
+      this.#clearTargets();
+    } catch (error) {
+      const failure = new CleanupFailure();
+      failure.run(() => {
+        throw error;
+      });
+      if (generation === this.#generation) failure.run(() => this.cancel());
+      failure.rethrow();
+      return;
+    }
+    if (!pdfWindow || !index || !this.#current(pdfWindow, generation)) return;
     const query = normalizeFlashText(this.#query);
     if (!query) {
       this.#matchCount = 0;
@@ -463,9 +519,10 @@ export class ReaderFlash {
       }
 
       const labels = this.#assignLabels(candidates, firstAlphabet);
-      candidates.forEach((candidate, indexValue) => {
+      for (const [indexValue, candidate] of candidates.entries()) {
+        if (!this.#current(pdfWindow, generation)) break;
         const label = labels[indexValue];
-        if (!label) return;
+        if (!label) continue;
         const element = pdfWindow.document.createElement('span');
         element.dataset.zoteroNeoFlashHint = '1';
         element.textContent = label;
@@ -473,21 +530,42 @@ export class ReaderFlash {
           'position:fixed;z-index:100000;background:#f9e2af;color:#1e1e2e;padding:1px 3px;border:1px solid #1e1e2e;border-radius:2px;font:bold 10px monospace;line-height:1.2;pointer-events:none;';
         element.style.left = `${candidate.rect.left}px`;
         element.style.top = `${candidate.rect.top}px`;
-        pdfWindow.document.body?.appendChild(element);
-        this.#targets.push({
+        const target = {
           start: candidate.pointer,
           pointer: candidate.pointer,
           end: candidate.end,
           rect: candidate.rect,
           label,
           element,
-        });
-      });
+        };
+        this.#targets.push(target);
+        try {
+          pdfWindow.document.body?.appendChild(element);
+        } finally {
+          if (!this.#current(pdfWindow, generation) && !isDeadObject(element)) element.remove();
+        }
+      }
+      if (!this.#current(pdfWindow, generation)) {
+        if (generation === this.#generation) this.cancel();
+        return;
+      }
       this.#refreshPrompt();
     } catch (error) {
-      this.#host.debug(`reader Flash refresh failed: ${String(error)}`);
-      this.cancel();
-      this.#host.showStatus('Flash unavailable', 1500);
+      const active = this.#current(pdfWindow, generation);
+      const current = this.#viewCurrent;
+      const failure = new CleanupFailure();
+      if (generation === this.#generation) failure.run(() => this.cancel());
+      if (
+        active &&
+        this.#generation === generation + 1 &&
+        current?.() &&
+        this.#host.isCurrent(pdfWindow)
+      ) {
+        this.#host.debug(`reader Flash refresh failed: ${String(error)}`);
+        if (this.#generation === generation + 1 && current() && this.#host.isCurrent(pdfWindow))
+          this.#host.showStatus('Flash unavailable', 1500);
+      }
+      failure.rethrow();
     }
   }
 
@@ -536,19 +614,39 @@ export class ReaderFlash {
   #activate(target: FlashTarget): void {
     const pdfWindow = this.#window;
     const intent = this.#intent;
+    const current = this.#viewCurrent;
+    if (!pdfWindow || !this.#current(pdfWindow, this.#generation)) {
+      this.cancel();
+      return;
+    }
     if (
-      !pdfWindow ||
       !intent ||
+      isDeadObject(target.start.textNode) ||
+      isDeadObject(target.end.textNode) ||
       !target.start.textNode.isConnected ||
       !target.end.textNode.isConnected
     ) {
+      const generation = this.#generation;
       this.cancel();
-      this.#host.showStatus('Flash target unavailable', 1200);
+      if (
+        this.#generation === generation + 1 &&
+        !this.#disposed &&
+        current?.() &&
+        this.#host.isCurrent(pdfWindow)
+      )
+        this.#host.showStatus('Flash target unavailable', 1200);
       return;
     }
     const selectionTarget = { start: target.start, end: target.end };
+    const generation = this.#generation;
     this.cancel();
-    this.#host.activate(intent, pdfWindow, selectionTarget);
+    if (
+      this.#generation === generation + 1 &&
+      !this.#disposed &&
+      current?.() &&
+      this.#host.isCurrent(pdfWindow)
+    )
+      this.#host.activate(intent, pdfWindow, selectionTarget);
   }
 
   #promptPrefix(): string {
@@ -577,12 +675,14 @@ export class ReaderFlash {
   #clearTargets(): void {
     const targets = this.#targets;
     this.#targets = [];
+    const failure = new CleanupFailure();
     for (const target of targets) {
-      if (!isDeadObject(target.element)) target.element.remove();
+      if (!isDeadObject(target.element)) failure.run(() => target.element.remove());
     }
+    failure.rethrow();
   }
 
-  #createInput(pdfWindow: PdfWindow): HTMLInputElement {
+  #createInput(pdfWindow: PdfWindow, generation: number): void {
     const input = pdfWindow.document.createElement('input') as HTMLInputElement;
     input.dataset.zoteroNeoFlashInput = '1';
     input.type = 'text';
@@ -593,34 +693,81 @@ export class ReaderFlash {
       'position:fixed;left:12px;bottom:46px;z-index:100001;width:min(360px,calc(100vw - 24px));box-sizing:border-box;padding:6px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#0f172a;color:#ffffff;outline:none;font:13px/1.2 monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);';
     const composition: CompositionState = { active: false };
     this.#composition = composition;
-    const compositionCleanup = bindCompositionState(input, composition);
+    this.#input = input;
+    const current = (): boolean => {
+      if (this.#input !== input || this.#generation !== generation) return false;
+      if (!isDeadObject(input) && this.#current(pdfWindow, generation)) return true;
+      this.cancel();
+      return false;
+    };
+    const start = (): void => {
+      if (current()) composition.active = true;
+    };
+    const end = (): void => {
+      if (current()) composition.active = false;
+    };
     const inputHandler = (event: Event): void => {
-      if (
-        this.#input !== input ||
-        isDeadObject(pdfWindow) ||
-        isDeadObject(input) ||
-        !isCommittedInput(event, composition.active)
-      )
-        return;
+      if (!current() || isDeadObject(input) || !isCommittedInput(event, composition.active)) return;
       this.#query = input.value;
       this.#refreshTargets();
     };
-    input.addEventListener('input', inputHandler);
-    this.#inputCleanup = () => {
-      compositionCleanup();
-      input.removeEventListener('input', inputHandler);
+    const cleanup = (): void => {
+      composition.active = false;
+      const failure = new CleanupFailure();
+      failure.run(() => input.removeEventListener('compositionstart', start));
+      failure.run(() => input.removeEventListener('compositionend', end));
+      failure.run(() => input.removeEventListener('input', inputHandler));
+      failure.rethrow();
     };
-    pdfWindow.document.body?.appendChild(input);
-    return input;
+    this.#inputCleanup = cleanup;
+    try {
+      input.addEventListener('compositionstart', start);
+      if (!current()) return;
+      input.addEventListener('compositionend', end);
+      if (!current()) return;
+      input.addEventListener('input', inputHandler);
+      if (!current()) return;
+      pdfWindow.document.body?.appendChild(input);
+    } finally {
+      if (!current()) {
+        const failure = new CleanupFailure();
+        if (generation === this.#generation) failure.run(() => this.cancel());
+        if (!isDeadObject(input)) {
+          failure.run(cleanup);
+          failure.run(() => input.remove());
+        }
+        failure.rethrow();
+      }
+    }
   }
 
-  #createPrompt(pdfWindow: PdfWindow): HTMLElement {
+  #createPrompt(pdfWindow: PdfWindow, generation: number): void {
     const prompt = pdfWindow.document.createElement('div');
     prompt.dataset.zoteroNeoFlashPrompt = '1';
     prompt.style.cssText =
       'position:fixed;left:12px;bottom:12px;z-index:100001;padding:5px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#172554;color:#ffffff;font:bold 12px monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);pointer-events:none;';
-    pdfWindow.document.body?.appendChild(prompt);
-    return prompt;
+    this.#prompt = prompt;
+    try {
+      pdfWindow.document.body?.appendChild(prompt);
+    } finally {
+      if (!this.#current(pdfWindow, generation)) {
+        const failure = new CleanupFailure();
+        if (generation === this.#generation) failure.run(() => this.cancel());
+        if (!isDeadObject(prompt)) failure.run(() => prompt.remove());
+        failure.rethrow();
+      }
+    }
+  }
+
+  #current(pdfWindow: PdfWindow, generation: number): boolean {
+    return (
+      !this.#disposed &&
+      this.#generation === generation &&
+      this.#window === pdfWindow &&
+      !isDeadObject(pdfWindow) &&
+      this.#host.isCurrent(pdfWindow) &&
+      this.#viewCurrent?.() === true
+    );
   }
 
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {

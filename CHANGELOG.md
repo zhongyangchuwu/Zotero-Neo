@@ -18,6 +18,7 @@
 
 ### 调整 {#changed}
 
+- 将 Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本和 Selection Actions 接入 `reader-selection`。公共选择 API 与注册 disposer 保持原签名；应用级动作定义不随单个 Reader 释放。Capture、下划线和 Add note 仍由具名贡献提供，选择模块不拥有批注或 Note 写入，不依赖导航模块，不开放模块开关。
 - 将 Reader 页面、滚动/平移、缩放、搜索、Outline/图表/批注位置遍历、marks 和原生侧栏增强接入 `reader-navigation`。保留特殊 marks 语法、数据格式、按需结构分析和共享历史；分屏/焦点继续由基座提供。四个侧栏上下文使用真实唯一贡献；已接纳 mark 保存继续完成，但不覆盖后续交互状态。平滑滚动保留重复输入与减速，销毁视图的取消失败不再保留旧 RAF 或阻塞后续滚动。不开放模块开关。
 - 将 Reader 摘录到已有 Note 的快照、目的地确认、原生追加/保存和回执接入 `capture`，MainWindow 与 ReaderSession 各自拥有真实贡献。保留公共选择 API、现有选择动作及 Notes 候选；不借用 Main Selection，不依赖 Vim Note 编辑开关。旧确认不能写入，界面退休不撤销已接纳保存，晚到结果不恢复旧状态或焦点。
 - 将 Note 候选、打开编排及可选 Vim 编辑接入按窗口隔离的 `notes`。模式、寄存器和 caret UI 归模块；Surface 保留精确编辑器身份、原生/IME 输入、count、前缀和共享焦点。Main/Reader/Note 查找与 Capture 显式使用同一候选能力，Vim 开关不控制 Note 查找或 Capture 目的地。
@@ -59,6 +60,8 @@
 
 ### 修复 {#fixed}
 
+- 选择交互绑定原 ReaderView 和 Document，同 Window 替换不能复用旧面板、范围或输入回调；新动作接纳前先释放旧视图，后续扫描不再关闭新面板。异步动作忽略忙碌阶段的重复/IME 按键，但取消、换视图或打开 Settings 后不重画旧 UI 或抢回焦点。退出释放 DOM anchor、选择样式、主题和输入监听；视图监听部分获取失败仍排空已注册资源。
+- 从次分屏搜索所选文本时只更新对应的原生 Find；延迟写入绑定本次 Find 状态，后续输入、关闭重开或新搜索不会被旧查询覆盖。原生选择接纳后立即建立公共选择 API 的所属 Reader，隐藏或退休 Reader 不暴露旧选择。
 - Note 编辑器发现跳过隐藏、折叠、零布局及其他 MainWindow 的 iframe，避免打开 Palette 后定时扫描误绑隐藏编辑器。编辑器替换前后的旧事件、计时器及 Palette 确认不能操作新 Note；普通 Picker 焦点转移不会使命令失效。
 - 共享 Picker 关闭时先退休并清空 DOM/旧焦点引用，再分别释放绑定、输入监听、主题和界面。某项清理失败仍继续释放并诊断；旧异步完成、延迟聚焦及获取失败不能影响替换界面或已退休的 Main session。
 - 分类树 Enter 与 Find collection 的确认目的地进入现有 Back/Forward，普通树移动不记录。展开分支时保留出发点，排队 Enter 固定接纳的 Scope ID，原生 Scope 完成与焦点恢复后才接受历史位置。

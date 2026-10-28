@@ -1,3 +1,5 @@
+import { CleanupFailure } from '../../core/cleanup';
+import { isDeadObject } from '../../platform/cross-compartment';
 import type { Pointer } from '../../reader/types';
 
 export interface PdfTextRect {
@@ -40,16 +42,39 @@ export function firstPdfTextPosition(window: Window): Pointer | null {
   return text?.nodeType === 3 ? { textNode: text as Text, offset: 0 } : null;
 }
 
-/** Native text selection is transparent; this reversible decoration only colors Neo's range. */
-export function decoratePdfSelection(window: Window): void {
+/** Acquires one exact-view style lease; an old release cannot remove a replacement's marker. */
+export function decoratePdfSelection(window: Window): () => void {
   const document = window.document;
-  let style = document.querySelector<HTMLStyleElement>('style[data-zv-select-selection]');
-  if (!style) {
-    style = document.createElement('style');
+  const selector = 'style[data-zv-select-selection]';
+  const style = document.createElement('style');
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    if (isDeadObject(window) || isDeadObject(document) || isDeadObject(style)) return;
+    const failure = new CleanupFailure();
+    failure.run(() => {
+      if (document.querySelector(selector) === style)
+        document.documentElement.removeAttribute('data-zv-select-active');
+    });
+    failure.run(() => style.remove());
+    failure.rethrow();
+  };
+  try {
+    document.querySelector(selector)?.remove();
     style.dataset.zvSelectSelection = '1';
     style.textContent =
       ':root[data-zv-select-active] .textLayer ::selection { background-color: rgb(66, 133, 244); }';
     document.documentElement.appendChild(style);
+    document.documentElement.setAttribute('data-zv-select-active', '');
+    return release;
+  } catch (error) {
+    const failure = new CleanupFailure();
+    failure.run(() => {
+      throw error;
+    });
+    failure.run(release);
+    failure.rethrow();
+    throw error;
   }
-  document.documentElement.setAttribute('data-zv-select-active', '');
 }

@@ -9,7 +9,7 @@ import {
   normalizeFlashText,
   type FlashSelectionTarget,
   type FlashTextSegment,
-} from '../../src/reader/flash';
+} from '../../src/modules/reader-selection/flash';
 import type { PdfWindow } from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
@@ -269,11 +269,16 @@ function typeFlashKey(
   return event;
 }
 
-function createFlash() {
+function createFlash(
+  isCurrent: (view: PdfWindow) => boolean = () => true,
+  captureView: (view: PdfWindow) => () => boolean = () => () => true,
+) {
   const activations: { intent: string; target: FlashSelectionTarget }[] = [];
   const statuses: string[] = [];
   const debug: string[] = [];
   const flash = new ReaderFlash({
+    isCurrent,
+    captureView,
     activate: (intent, _window, target) => activations.push({ intent, target }),
     showStatus: (message) => statuses.push(message),
     debug: (message) => debug.push(message),
@@ -528,5 +533,151 @@ describe('Reader Flash lifecycle', () => {
     expect(flash.isOpen).toBe(false);
     expect(input.listeners.get('input')).toEqual([]);
     expect(created.bodyChildren).not.toContain(prompt);
+  });
+  it('ignores queued callbacks once the exact view is no longer current', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    let current = true;
+    const { flash, activations } = createFlash(() => current);
+    flash.open(created.pdfWindow, 'visual-start');
+    const input = flashInput(created.bodyChildren)!;
+    const queuedInput = input.listeners.get('input')![0]!;
+    const queuedStart = input.listeners.get('compositionstart')![0]!;
+    current = false;
+    input.value = 'target';
+    queuedStart({ target: input } as unknown as Event);
+    queuedInput({ target: input } as unknown as Event);
+    expect(flashHints(created.bodyChildren)).toHaveLength(0);
+    expect(flash.handleKey(flashKey('Enter'), created.pdfWindow)).toBe(false);
+    expect(activations).toHaveLength(0);
+    expect(created.bodyChildren).toHaveLength(0);
+  });
+
+  it('removes a prompt appended after its opening was reentrantly cancelled', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash } = createFlash();
+    const body = created.pdfWindow.document.body;
+    Reflect.set(body, 'appendChild', (element: HTMLElement) => {
+      flash.cancel();
+      created.bodyChildren.push(element);
+      return element;
+    });
+    flash.open(created.pdfWindow, 'visual-start');
+    expect(flash.isOpen).toBe(false);
+    expect(created.bodyChildren).toHaveLength(0);
+  });
+
+  it('drains all badges and input listeners while preserving the first cleanup error', () => {
+    const created = createFlashWindow([
+      { value: 'target', left: 20, top: 20 },
+      { value: 'target', left: 20, top: 50 },
+    ]);
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    setFlashQuery(created.bodyChildren, 'target');
+    const hints = flashHints(created.bodyChildren);
+    const input = flashInput(created.bodyChildren)!;
+    const first = new Error('first');
+    Reflect.set(hints[0]!, 'remove', () => {
+      throw first;
+    });
+    Reflect.set(input, 'removeEventListener', () => {
+      throw new Error('listener');
+    });
+    expect(() => flash.cancel()).toThrow(first);
+    expect(created.bodyChildren).not.toContain(hints[1]);
+    expect(created.bodyChildren).not.toContain(input);
+    expect(flash.isOpen).toBe(false);
+  });
+
+  it('cleans a partially registered input when acquisition fails', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash, statuses } = createFlash();
+    const document = created.pdfWindow.document;
+    const createElement = document.createElement.bind(document);
+    let input: HTMLInputElement | null = null;
+    const removed = vi.fn();
+    Reflect.set(document, 'createElement', (tag: string) => {
+      const element = createElement(tag);
+      if (tag === 'input') {
+        input = element as HTMLInputElement;
+        const add = input.addEventListener.bind(input);
+        const remove = input.removeEventListener.bind(input);
+        Reflect.set(input, 'removeEventListener', (type: string, listener: EventListener) => {
+          removed(type);
+          remove(type, listener);
+        });
+        Reflect.set(input, 'addEventListener', (type: string, listener: EventListener) => {
+          add(type, listener);
+          if (type === 'compositionend') throw new Error('registration failed');
+        });
+      }
+      return element;
+    });
+    flash.open(created.pdfWindow, 'visual-start');
+    expect(statuses).toContain('Flash unavailable');
+    expect(flash.isOpen).toBe(false);
+    expect(created.bodyChildren).toHaveLength(0);
+    expect(input).not.toBeNull();
+    expect(removed).toHaveBeenCalledWith('compositionstart');
+  });
+  it('rejects queued input when the native view changes on the same window', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    let view = 0;
+    const { flash, activations } = createFlash(
+      () => true,
+      () => {
+        const captured = view;
+        return () => captured === view;
+      },
+    );
+    flash.open(created.pdfWindow, 'visual-start');
+    const input = flashInput(created.bodyChildren)!;
+    const queuedInput = input.listeners.get('input')![0]!;
+    const queuedStart = input.listeners.get('compositionstart')![0]!;
+    view += 1;
+    input.value = 'target';
+    queuedStart({ target: input } as unknown as Event);
+    queuedInput({ target: input } as unknown as Event);
+    expect(flashHints(created.bodyChildren)).toHaveLength(0);
+    expect(flash.handleKey(flashKey('Enter'), created.pdfWindow)).toBe(false);
+    expect(activations).toHaveLength(0);
+    expect(created.bodyChildren).toHaveLength(0);
+  });
+
+  it('does not focus a window after Escape cleanup opens a successor', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    const input = flashInput(created.bodyChildren)!;
+    const remove = input.remove.bind(input);
+    Reflect.set(input, 'remove', () => {
+      remove();
+      flash.open(created.pdfWindow, 'visual-end');
+    });
+    flash.handleKey(flashKey('Escape'), created.pdfWindow);
+    expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    expect(flash.isOpen).toBe(true);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT END: …');
+  });
+
+  it('does not publish a failed refresh status after cleanup opens a successor', () => {
+    const created = createFlashWindow([{ value: 'target', left: 20, top: 20 }]);
+    const { flash, statuses } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    const input = flashInput(created.bodyChildren)!;
+    const remove = input.remove.bind(input);
+    Reflect.set(input, 'remove', () => {
+      remove();
+      flash.open(created.pdfWindow, 'visual-end');
+    });
+    const document = created.pdfWindow.document;
+    const create = document.createElement.bind(document);
+    Reflect.set(document, 'createElement', (tag: string) => {
+      if (tag === 'span') throw new Error('badge failed');
+      return create(tag);
+    });
+    setFlashQuery(created.bodyChildren, 'target');
+    expect(statuses).not.toContain('Flash unavailable');
+    expect(flashPrompt(created.bodyChildren)?.textContent).toBe('SELECT END: …');
   });
 });
