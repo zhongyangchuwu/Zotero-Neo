@@ -1,8 +1,9 @@
-import type { MainWindow } from '../../../core/contracts';
-import { citationKey } from '../../../platform/better-bibtex';
-import { mainSelectedCollection, mainItem } from '../../../toolkit/main';
-import type { PickerItem, PickerScope } from '../model';
-import type { PickerPreview, PickerProvider } from '../types';
+import type { MainWindow } from '../../core/contracts';
+import { citationKey } from '../../platform/better-bibtex';
+import { mainSelectedCollection, mainItem } from '../../toolkit/main';
+import { itemRowText } from '../../main/picker/item-row';
+import type { PickerItem, PickerScope } from '../../main/picker/model';
+import type { PickerPreview, PickerProvider } from '../../main/picker/types';
 
 const MAX_CHILD_PREVIEW_ITEMS = 6;
 
@@ -54,13 +55,6 @@ function preview(item: Zotero.Item, author: string, year: string, citekey: strin
 
 export function isFuzzyPickerItem(item: Zotero.Item): boolean {
   return item.isRegularItem();
-}
-
-export function itemRowText(item: PickerItem): string {
-  const metadata = `${item.title || '(untitled)'}${
-    item.author ? ` — ${item.author}${item.year ? `, ${item.year}` : ''}` : ''
-  }`;
-  return item.citekey ? `@${item.citekey}  ${metadata}` : metadata;
 }
 
 export function createItemsProvider(

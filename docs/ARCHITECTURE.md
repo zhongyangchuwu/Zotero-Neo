@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座及标签、扩展管理、分类模块接入；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座及标签、扩展管理、分类、工作集、Reader hints 和 Library 六条接入路径；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
 
 ## 分层 {#layers}
 
@@ -38,7 +38,11 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份；任一身份被替换时，先退休旧输入，再清理监听器。Note 内容仍以 Zotero 为准。
 
-`src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动。`src/modules/worksets/` 按窗口拥有 Persistent Selection、临时 Visual 范围及 Selection Panel，状态独立于原生行选择，不再预建在 Main session 中。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
+`src/main/controller.ts` 协调 Main 输入、目标和模块装配；`src/main/navigation.ts` 保留共享状态反馈、面板焦点及标签页宿主委托。`src/modules/library/` 拥有树移动、Local Find、Quick/Advanced Search、条目候选、打开、标识符录入、citekey 和最近回收批次，不持有整个 Main session。Reader 的 citekey 贡献按 ReaderSession 登记，仍使用 Reader 目标，不要求借用 Main 窗口。
+
+`src/modules/worksets/` 按窗口拥有 Persistent Selection、临时 Visual 范围及 Selection Panel，状态独立于原生行选择，不再预建在 Main session 中。`src/main/picker/` 负责共享候选交互，Library 显式提供条目来源；纯条目行展示由 Library 和 Collections 共用。确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
+
+每个 MainWindow 仍只有一份导航历史和协调器。Library 通过具名端口请求现有操作；历史恢复直接取得原生 View 能力，不依赖 Library 的业务动作。Local Find 的查询和精确界面、最近回收批次归 Library 实例，旧恢复完成不能清空后来记录的回收批次。
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 

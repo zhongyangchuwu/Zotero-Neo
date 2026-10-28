@@ -5,6 +5,7 @@ import { activeContextNoteItem } from '../../src/toolkit/main';
 import * as mainHost from '../../src/toolkit/main';
 import { MainNavigationExecutor, type LibrarySelectionOptions } from '../../src/main/jump-history';
 import { MainNavigation } from '../../src/main/navigation';
+import { LibraryNavigation } from '../../src/modules/library/navigation';
 import type { ShowInLibraryHost } from '../../src/operations/show-in-library';
 import { NavigationHistoryState } from '../../src/navigation/history';
 import type {
@@ -15,7 +16,7 @@ import type {
 } from '../../src/navigation/types';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
-import type { MainViewActions } from '../../src/main/view-actions';
+import type { MainViewOperations } from '../../src/main/jump-history';
 
 interface HistoryHarness {
   readonly window: MainWindow;
@@ -152,7 +153,15 @@ function moveTreeCursor(h: HistoryHarness, direction: -1 | 1): NavigationExecuti
       admission: 'motion',
       start: () =>
         completionFor(
-          () => navigation.navigate(h.window, h.session, direction, 1),
+          () =>
+            new LibraryNavigation({
+              window: h.window,
+              logger: { debug: vi.fn(), diagnostic: vi.fn() },
+              panel: () => navigation.panel(h.window, h.session),
+              focusPanel: (panel) => navigation.focusPanel(h.window, h.session, panel),
+              status: (message) => navigation.status(h.session, message),
+              isCurrent: () => true,
+            }).navigate(direction, 1),
           () => true,
         ),
     },
@@ -385,7 +394,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
       advancedSearch = false;
       return true;
     }),
-  } as unknown as MainViewActions;
+  } satisfies MainViewOperations;
 
   let panel: 'collections' | 'items' = 'items';
   let localOverlay = false;
@@ -718,7 +727,14 @@ describe('Main jump history', () => {
     const selectionBefore = h.selection.values();
 
     expect(moveTreeCursor(native, 1).result).toMatchObject({ kind: 'completed', recorded: false });
-    navigation.expandTree(h.window, h.session);
+    new LibraryNavigation({
+      window: h.window,
+      logger: { debug: vi.fn(), diagnostic: vi.fn() },
+      panel: () => navigation.panel(h.window, h.session),
+      focusPanel: (panel) => navigation.focusPanel(h.window, h.session, panel),
+      status: (message) => navigation.status(h.session, message),
+      isCurrent: () => true,
+    }).expandTree();
     expect(toggle).toHaveBeenCalledWith(1);
     expect(h.window.document.activeElement).toBe(tree);
     expect(moveTreeCursor(native, 1).result).toMatchObject({ kind: 'completed', recorded: false });

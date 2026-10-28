@@ -9,9 +9,7 @@ import type { InteractionAppearanceManager } from './interaction-appearance';
 import { NavigationHistoryState } from '../navigation/history';
 import type { NavigationCoordinator } from '../navigation/coordinator';
 import { MainFocusOwnership } from './focus-ownership';
-import { MainLocalFindRuntime } from './local-find-runtime';
 import { NoteSurfaceRuntime } from './note-runtime';
-import { TrashHistory } from './trash-history';
 import { ZoteroWindowRuntime } from './window-runtime';
 import type { SettingsCenter } from './settings-center';
 import type { MainItemDecorationRegistration } from './item-state-decoration';
@@ -29,11 +27,9 @@ export class MainWindowSession {
   activePanel: MainPanel = 'items';
   readonly input: InputRuntime;
   readonly prefixGuide: PrefixGuideRuntime;
-  readonly trashHistory = new TrashHistory();
   readonly jumpHistory = new NavigationHistoryState();
   navigationCoordinator: NavigationCoordinator | null = null;
   readonly picker = new PickerRuntime();
-  readonly localFind = new MainLocalFindRuntime();
   itemDecoration: MainItemDecorationRegistration | null = null;
   readonly note: NoteSurfaceRuntime;
   constructor(

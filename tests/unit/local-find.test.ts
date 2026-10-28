@@ -2,9 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
 import type { NavigationCause } from '../../src/navigation/types';
-import { MainLocalFind, findVisibleMainItemRow } from '../../src/main/local-find';
+import { MainLocalFind, findVisibleMainItemRow } from '../../src/modules/library/local-find';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
-import type { MainWindowSession } from '../../src/main/session';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -59,7 +58,30 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
   });
   const ensureRowIsVisible = vi.fn();
 
+  const elements: Array<{ value: string }> = [];
+  const overlays: Array<{ remove: () => void }> = [];
+  const previous = { isConnected: true, focus: vi.fn() };
+  const document = {
+    activeElement: previous,
+    body: { append: vi.fn() },
+    createElementNS: (_namespace: string, tag: string) => {
+      const element = {
+        value: '',
+        style: { cssText: '' },
+        append: vi.fn(),
+        remove: vi.fn(),
+        focus: vi.fn(),
+      };
+      if (tag === 'input') elements.push(element);
+      if (tag === 'div') overlays.push(element);
+      return element;
+    },
+  };
+  const themeRoot = vi.fn((_root: HTMLElement): (() => void) => vi.fn());
+  let current = true;
+
   const window = {
+    document,
     ZoteroPane: {
       itemsView: {
         get rowCount() {
@@ -83,31 +105,37 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
     if (value) selection.add({ libraryID: value.libraryID, itemID: value.id });
   }
 
-  const session = {
-    window,
-    localFind: {
-      open: false,
-      query: '',
-      overlay: null,
-      input: null,
-      previousElement: null,
-      themeCleanup: null,
-    },
-  } as unknown as MainWindowSession;
-
   const statuses: string[] = [];
   const causes: NavigationCause[] = [];
-  const find = new MainLocalFind(
-    (_session, text) => statuses.push(text),
-    (_window, _session, cause, move) => {
+  const ports = {
+    window,
+    status: (text: string) => statuses.push(text),
+    navigate: (cause: NavigationCause, move: () => boolean) => {
       causes.push(cause);
       move();
     },
-  );
+    themeRoot,
+    isCurrent: () => current,
+  };
+  const find = new MainLocalFind(ports);
+  const submit = (query: string): void => {
+    find.open();
+    elements.at(-1)!.value = query;
+    find.handleKey(key('Enter'));
+  };
 
   return {
     window,
-    session,
+    ports,
+    document,
+    elements,
+    overlays,
+    previous,
+    themeRoot,
+    setCurrent: (value: boolean) => {
+      current = value;
+    },
+    submit,
     selection,
     find,
     statuses,
@@ -162,16 +190,19 @@ describe('Main local find', () => {
     const h = harness([alpha, beta, gamma], [1, 2, 3], 0);
     const before = h.selection.values();
 
-    h.session.localFind.query = 'gamma';
-    expect(h.find.repeat(h.window, h.session, 1)).toBe(true);
+    h.submit('gamma');
+    expect(h.find.repeat(1)).toBe(true);
     expect(h.focused()).toBe(2);
     expect(h.select).toHaveBeenCalledWith(2, false);
     expect([...h.nativeSelected]).toEqual([2]);
-    expect(h.causes).toEqual([{ kind: 'action', action: 'findNext' }]);
+    expect(h.causes).toEqual([
+      { kind: 'event', event: 'main-local-find.confirm' },
+      { kind: 'action', action: 'findNext' },
+    ]);
     expect(h.selection.values()).toEqual(before);
 
-    h.session.localFind.query = 'missing';
-    expect(h.find.repeat(h.window, h.session, 1)).toBe(false);
+    h.submit('missing');
+    expect(h.find.repeat(1)).toBe(false);
     expect(h.focused()).toBe(2);
     expect(h.selection.values()).toEqual(before);
     expect(h.statuses.at(-1)).toContain('No visible match');
@@ -182,42 +213,114 @@ describe('Main local find', () => {
     const beta = item(2, 'Beta');
     const h = harness([alpha, beta], [1, 2], 0);
 
-    h.session.localFind.open = true;
-    h.session.localFind.query = 'alpha';
-    h.session.localFind.input = { value: 'beta' } as HTMLInputElement;
-    h.session.localFind.overlay = { remove: vi.fn() } as unknown as HTMLElement;
-    h.find.handleKey(key('Enter'), h.window, h.session);
+    h.submit('alpha');
+    h.find.open();
+    h.elements.at(-1)!.value = 'beta';
+    h.find.handleKey(key('Enter'));
 
-    expect(h.session.localFind.query).toBe('beta');
-    expect(h.session.localFind.open).toBe(false);
+    expect(h.find.isOpen).toBe(false);
     expect(h.focused()).toBe(1);
-    expect(h.causes).toEqual([{ kind: 'event', event: 'main-local-find.confirm' }]);
-    h.session.localFind.open = true;
-    h.session.localFind.query = 'beta';
-    h.session.localFind.input = { value: 'alpha' } as HTMLInputElement;
-    h.session.localFind.overlay = { remove: vi.fn() } as unknown as HTMLElement;
-    h.find.handleKey(key('Escape'), h.window, h.session);
+    expect(h.causes.at(-1)).toEqual({ kind: 'event', event: 'main-local-find.confirm' });
+    h.find.open();
+    h.elements.at(-1)!.value = 'alpha';
+    h.find.handleKey(key('Escape'));
 
-    expect(h.session.localFind.query).toBe('beta');
-    expect(h.session.localFind.open).toBe(false);
+    expect(h.find.isOpen).toBe(false);
+    expect(h.find.repeat(1)).toBe(true);
+    expect(h.statuses.at(-1)).toContain('/beta');
   });
 
   it('does not commit Enter while IME composition is active', () => {
     const alpha = item(1, 'Alpha');
     const h = harness([alpha], [1], 0);
-    h.session.localFind.open = true;
-    h.session.localFind.query = 'old';
-    h.session.localFind.input = { value: 'new' } as HTMLInputElement;
+    h.submit('alpha');
+    h.find.open();
+    h.elements.at(-1)!.value = 'new';
 
-    h.find.handleKey(key('Enter', true), h.window, h.session);
+    h.find.handleKey(key('Enter', true));
 
-    expect(h.session.localFind.query).toBe('old');
-    expect(h.session.localFind.open).toBe(true);
+    expect(h.find.isOpen).toBe(true);
     const edge = key('Enter');
     Reflect.set(edge, 'keyCode', 229);
-    h.find.handleKey(edge, h.window, h.session);
+    h.find.handleKey(edge);
     expect(edge.preventDefault).not.toHaveBeenCalled();
-    expect(h.session.localFind.open).toBe(true);
-    expect(h.session.localFind.query).toBe('old');
+    expect(h.find.isOpen).toBe(true);
+    h.find.close();
+    expect(h.find.repeat(1)).toBe(true);
+    expect(h.statuses.at(-1)).toContain('/alpha');
+  });
+
+  it('preserves a query across close but not across instances and does not restore focus on disposal', () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    h.submit('alpha');
+    h.previous.focus.mockClear();
+    h.find.open();
+    h.find.close(false);
+    expect(h.previous.focus).not.toHaveBeenCalled();
+    expect(h.find.repeat(-1)).toBe(true);
+    const replacement = new MainLocalFind(h.ports);
+    expect(replacement.repeat(1)).toBe(false);
+    expect(h.statuses.at(-1)).toContain('No local find query');
+  });
+
+  it('releases a late theme handle without closing or focusing over a replacement', () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    const releaseOld = vi.fn();
+    const releaseNew = vi.fn();
+    h.themeRoot
+      .mockImplementationOnce(() => {
+        h.find.close(false);
+        h.find.open();
+        return releaseOld;
+      })
+      .mockImplementationOnce(() => releaseNew);
+    h.find.open();
+    expect(releaseOld).toHaveBeenCalledOnce();
+    expect(releaseNew).not.toHaveBeenCalled();
+    expect(h.find.isOpen).toBe(true);
+    expect(h.previous.focus).not.toHaveBeenCalled();
+    h.find.close(false);
+    expect(releaseNew).toHaveBeenCalledOnce();
+  });
+
+  it('retires before cleanup and never restores focus over a replacement', () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    h.themeRoot.mockImplementationOnce(() => () => h.find.open());
+    h.find.open();
+    h.find.close();
+    expect(h.find.isOpen).toBe(true);
+    expect(h.previous.focus).not.toHaveBeenCalled();
+    h.find.close(false);
+  });
+
+  it('drains an opening on theme acquisition failure and preserves the error', () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    const error = new Error('theme failure');
+    h.themeRoot.mockImplementationOnce(() => {
+      throw error;
+    });
+    expect(() => h.find.open()).toThrow(error);
+    expect(h.find.isOpen).toBe(false);
+    expect(h.overlays[0]!.remove).toHaveBeenCalled();
+  });
+
+  it('releases DOM despite a failing cleanup and propagates the original error', () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    const error = new Error('cleanup failure');
+    h.themeRoot.mockImplementationOnce(() => () => {
+      throw error;
+    });
+    h.find.open();
+    expect(() => h.find.close(false)).toThrow(error);
+    expect(h.find.isOpen).toBe(false);
+    expect(h.overlays[0]!.remove).toHaveBeenCalled();
+  });
+
+  it('does not restore focus after the owner becomes stale', () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    h.find.open();
+    h.setCurrent(false);
+    h.find.close();
+    expect(h.previous.focus).not.toHaveBeenCalled();
   });
 });

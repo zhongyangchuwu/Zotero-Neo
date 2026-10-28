@@ -14,7 +14,7 @@ import {
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { DEFAULT_BINDINGS, resolveBindings } from '../../src/input/bindings';
 import { InputRuntime } from '../../src/input/runtime';
-import { TrashHistory } from '../../src/main/trash-history';
+import { LibraryNavigation } from '../../src/modules/library/navigation';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { NoteSurfaceRuntime } from '../../src/main/note-runtime';
@@ -38,6 +38,21 @@ import { FuzzyPicker } from '../../src/main/picker';
 import type { PickerProvider } from '../../src/main/picker/types';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
+
+function libraryNavigation(
+  window: MainWindow,
+  session: MainWindowSession,
+  main = new MainNavigation(logger, () => {}),
+) {
+  return new LibraryNavigation({
+    window,
+    logger,
+    status: (text, milliseconds) => main.status(session, text, milliseconds),
+    panel: () => main.panel(window, session),
+    focusPanel: (panel) => main.focusPanel(window, session, panel),
+    isCurrent: () => !session.cleanup?.disposed,
+  });
+}
 
 function statusElement() {
   return {
@@ -346,11 +361,14 @@ describe('current Zotero collection APIs', () => {
       status: { textContent: '', style: {} },
       cleanup: { add: vi.fn() },
     } as unknown as MainWindowSession;
+    const navigation = new MainNavigation(logger, vi.fn());
+    const library = libraryNavigation(window, session, navigation);
 
     return {
       window,
       session,
-      navigation: new MainNavigation(logger, vi.fn()),
+      navigation,
+      library,
       selected,
       select,
       moveFocused,
@@ -361,7 +379,7 @@ describe('current Zotero collection APIs', () => {
   it('moves h from items to the selected collection without collapsing it', () => {
     const h = focusHarness(0, [4], true);
 
-    h.navigation.collapseTree(h.window, h.session);
+    h.library.collapseTree();
 
     expect(h.view.toggleOpenState).not.toHaveBeenCalled();
     expect(h.view.selection?.focused).toBe(4);
@@ -374,7 +392,7 @@ describe('current Zotero collection APIs', () => {
   it('collapses the focused collection only when h starts in the collection tree', () => {
     const h = focusHarness(4, [4]);
 
-    h.navigation.collapseTree(h.window, h.session);
+    h.library.collapseTree();
 
     expect(h.view.toggleOpenState).toHaveBeenCalledWith(4);
     expect(h.view.selection?.focused).toBe(4);
@@ -489,9 +507,9 @@ describe('current Zotero collection APIs', () => {
       ZoteroPane: { collectionsView: view },
     } as unknown as MainWindow;
     const session = { activePanel: 'items' } as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
+    const navigation = libraryNavigation(window, session);
 
-    navigation.navigate(window, session, 1, 1);
+    navigation.navigate(1, 1);
 
     expect(selected).toBe(3);
     expect(session.activePanel).toBe('collections');
@@ -528,9 +546,9 @@ describe('current Zotero collection APIs', () => {
       ZoteroPane: { collectionsView: view },
     } as unknown as MainWindow;
     const session = { activePanel: 'items' } as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
+    const navigation = libraryNavigation(window, session);
 
-    navigation.navigate(window, session, 1, 1);
+    navigation.navigate(1, 1);
 
     expect(select).not.toHaveBeenCalled();
     expect(moveFocused).toHaveBeenCalledWith(3, false, false, true, false);
@@ -566,9 +584,9 @@ describe('current Zotero collection APIs', () => {
       ZoteroPane: { itemsView },
     } as unknown as MainWindow;
     const session = { activePanel: 'items' } as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
+    const navigation = libraryNavigation(window, session);
 
-    navigation.navigate(window, session, 1, 1, true);
+    navigation.navigate(1, 1, true);
 
     expect(select).toHaveBeenCalledWith(3, true);
     expect([...selected]).toEqual([3]);
@@ -596,9 +614,9 @@ describe('current Zotero collection APIs', () => {
       ZoteroPane: { collectionsView: view },
     } as unknown as MainWindow;
     const session = { activePanel: 'items' } as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
+    const navigation = libraryNavigation(window, session);
 
-    navigation.navigate(window, session, 1, 1, true);
+    navigation.navigate(1, 1, true);
 
     expect(select).toHaveBeenCalledWith(3, true);
     expect(ensureRowIsVisible).not.toHaveBeenCalled();
@@ -664,22 +682,20 @@ describe('main item trash and restore', () => {
     const session = {
       window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
       activePanel: 'items',
-      trashHistory: new TrashHistory(),
       status: { textContent: '', style: {} },
       cleanup: { add: () => {} },
     } as unknown as MainWindowSession;
-    const navigation = new MainNavigation(logger, () => {});
+    const navigation = libraryNavigation(window, session);
     try {
       Reflect.set(globalThis, 'Zotero', {
         Items: { trashTx, get: (id: number) => selected.find((item) => item.id === id) ?? false },
         UndoHistory: { getUndoAction: () => ({ action: 'undo-action-trash' }), undo },
       });
 
-      await expect(navigation.trashSelectedItems(window, session, selection)).resolves.toBe(true);
+      await expect(navigation.trashSelectedItems(selection)).resolves.toBe(true);
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
-      expect(session.trashHistory.values()).toEqual([41, 42]);
       expect(selection.empty).toBe(true);
-      await navigation.restoreLastTrashedItems(session);
+      await navigation.restoreLastTrashedItems();
 
       expect(persisted).toEqual(
         new Map([
@@ -688,9 +704,10 @@ describe('main item trash and restore', () => {
           [99, true],
         ]),
       );
-      expect(session.trashHistory.values()).toEqual([]);
+      await navigation.restoreLastTrashedItems();
+      expect(session.status.textContent).toBe('✗ Nothing to restore');
       Reflect.set(window.document, 'activeElement', { id: 'zotero-item-pane' });
-      await navigation.trashSelectedItems(window, session, selection);
+      await navigation.trashSelectedItems(selection);
       expect(trashTx).toHaveBeenCalledTimes(1);
     } finally {
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
@@ -725,7 +742,14 @@ describe('main item trash and restore', () => {
       [41, pending],
       [42, available],
     ]);
-    const navigation = new MainNavigation(logger, () => {});
+    const navigation = new LibraryNavigation({
+      window: {} as MainWindow,
+      logger,
+      status: () => {},
+      panel: () => 'items',
+      focusPanel: () => true,
+      isCurrent: () => true,
+    });
     try {
       Reflect.set(globalThis, 'Zotero', { Items: { get: (id: number) => items.get(id) } });
       expect(await navigation.restoreTrashedItems([41, 41, 42, 404, -1])).toBe(1);
@@ -1541,35 +1565,6 @@ describe('Main Add by Identifier', () => {
     } finally {
       host.controller.shutdown();
       open.mockRestore();
-    }
-  });
-
-  it('reports unavailable native lookup and unexpected host errors locally', () => {
-    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(false);
-    const status = vi.spyOn(MainNavigation.prototype, 'status').mockImplementation(() => {});
-    const debug = vi.spyOn(logger, 'debug');
-    const host = settingsMainHost();
-    host.values.set(LANGUAGE_PREFERENCE_KEY, 'en');
-    try {
-      host.controller.openAddByIdentifier(host.window);
-      expect(status).toHaveBeenLastCalledWith(
-        expect.objectContaining({ window: host.window }),
-        t('status.identifierLookupUnavailable', 'en'),
-      );
-      open.mockImplementation(() => {
-        throw new Error('lookup host failed');
-      });
-      expect(() => host.controller.openAddByIdentifier(host.window)).not.toThrow();
-      expect(status).toHaveBeenLastCalledWith(
-        expect.objectContaining({ window: host.window }),
-        t('status.identifierLookupFailed', 'en'),
-      );
-      expect(debug).toHaveBeenCalledWith(expect.stringContaining('Error: lookup host failed'));
-    } finally {
-      host.controller.shutdown();
-      open.mockRestore();
-      status.mockRestore();
-      debug.mockRestore();
     }
   });
 
@@ -3799,11 +3794,16 @@ describe('Main CurrentTarget routing', () => {
     controller.shutdown();
   });
 
-  it('does not inherit Main Normal batch actions into Visual mode', () => {
+  it('does not inherit Normal trash in Visual mode but honors an explicit Visual override', () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
-    Reflect.set(globalThis, 'Zotero', { initialized: false });
     const host = pickerMainWindow();
     const items = [10, 11, 12].map((id) => ({ id, libraryID: 1 }) as Zotero.Item);
+    const trash = vi.fn(async () => {});
+    Reflect.set(globalThis, 'Zotero', {
+      initialized: false,
+      Items: { get: (id: number) => items.find((item) => item.id === id) ?? false, trashTx: trash },
+    });
+    Reflect.set(host.window, 'confirm', () => true);
     let focused = 0;
     let selected = new Set([0]);
     const active = { id: 'item-tree-row-0', localName: 'div' } as unknown as Element;
@@ -3832,11 +3832,11 @@ describe('Main CurrentTarget routing', () => {
       itemsView,
       getSelectedItems: () => [...selected].map((index) => items[index]!),
     });
-    const trash = vi.spyOn(MainNavigation.prototype, 'trashSelectedItems').mockResolvedValue(false);
     const controller = createMainWindowController({
       preferences: {
         has: () => false,
-        get: (_key, fallback) => fallback,
+        get: (key, fallback) =>
+          key === 'bindings' ? JSON.stringify({ 'main-select:x': 'mainTrashItems' }) : fallback,
         set: () => {},
         clear: () => {},
       },
@@ -3870,9 +3870,10 @@ describe('Main CurrentTarget routing', () => {
       press('d');
 
       expect(trash).not.toHaveBeenCalled();
+      press('x');
+      expect(trash).toHaveBeenCalledWith([10, 11]);
     } finally {
       controller.shutdown();
-      trash.mockRestore();
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
     }

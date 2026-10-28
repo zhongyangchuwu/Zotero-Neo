@@ -6,17 +6,13 @@ import { MAIN_EXECUTABLE_ACTIONS } from '../../src/main/action-capabilities';
 import { READER_NORMAL_ACTIONS } from '../../src/reader/action-capabilities';
 import type { CommandPaletteContext, MainWindow } from '../../src/core/contracts';
 import type { MainWindowSession } from '../../src/main/session';
-import {
-  FuzzyPicker,
-  fuzzyMatchScore,
-  fuzzyPickerRowText,
-  isFuzzyPickerItem,
-} from '../../src/main/picker';
+import { FuzzyPicker, fuzzyMatchScore, fuzzyPickerRowText } from '../../src/main/picker';
 import { MainNavigation } from '../../src/main/navigation';
 import type { PickerOpenOptions, PickerProvider } from '../../src/main/picker/types';
 import type { PickerItem } from '../../src/main/picker/model';
 import { createTagCandidateProvider } from '../../src/main/picker/providers/tags';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
+import { createItemsProvider, isFuzzyPickerItem } from '../../src/modules/library/items-provider';
 import { citationKey } from '../../src/platform/better-bibtex';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
 import { actionGroup, groupLabel, shortcutsForAction } from '../../src/input/shortcut-catalog';
@@ -62,6 +58,18 @@ function candidateSource(items: PickerItem[], title = 'Candidates'): PickerProvi
   };
 }
 
+const alwaysCurrentTestSession = (_session: MainWindowSession): boolean => true;
+
+function createFuzzyPicker(
+  logger: ConstructorParameters<typeof FuzzyPicker>[0],
+  navigation: ConstructorParameters<typeof FuzzyPicker>[1],
+  mouseEnabled: ConstructorParameters<typeof FuzzyPicker>[2] = undefined,
+  bindings: ConstructorParameters<typeof FuzzyPicker>[3] = undefined,
+  isSessionCurrent: (session: MainWindowSession) => boolean = alwaysCurrentTestSession,
+): FuzzyPicker {
+  return new FuzzyPicker(logger, navigation, mouseEnabled, bindings, isSessionCurrent);
+}
+
 type EmittingElement = HTMLElement & { emit(type: string, event?: Partial<Event>): void };
 
 function activateSourceButton(
@@ -96,6 +104,45 @@ describe('fuzzy picker bibliographic items', () => {
     expect(isFuzzyPickerItem(item(false))).toBe(false);
   });
 
+  it.each(['all', 'collection'] as const)(
+    'requires an explicit candidate source for %s scope',
+    async (scope) => {
+      const getAll = vi.fn(async () => []);
+      const diagnostic = vi.fn();
+      vi.stubGlobal('Zotero', {
+        Items: { getAll },
+        Libraries: { userLibraryID: 1 },
+      });
+      const { window, session } = createPickerHarness();
+      const picker = createFuzzyPicker(
+        { debug: vi.fn(), diagnostic },
+        new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      );
+
+      await picker.open(window, session, scope);
+
+      expect(getAll).not.toHaveBeenCalled();
+      expect(session.picker.open).toBe(false);
+      expect(diagnostic).toHaveBeenCalledWith(
+        expect.stringContaining('requires an explicit candidate source'),
+      );
+    },
+  );
+
+  it('falls back to all personal-library items when collection scope has no collection', async () => {
+    const getAll = vi.fn(async () => []);
+    vi.stubGlobal('Zotero', {
+      Items: { getAll },
+      Libraries: { userLibraryID: 7 },
+    });
+    const { window } = createPickerHarness();
+    Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
+
+    await createItemsProvider(window, 'collection').load();
+
+    expect(getAll).toHaveBeenCalledWith(7, true, false);
+  });
+
   it('shows the title directly when an item genuinely has no citation key', () => {
     expect(
       fuzzyPickerRowText(
@@ -119,7 +166,7 @@ describe('shared fuzzy ranking', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -152,7 +199,7 @@ describe('shared fuzzy ranking', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -203,6 +250,8 @@ describe('bibliographic picker previews', () => {
       [attachment.id, attachment],
       [note.id, note],
     ]);
+    const excludedItem = { isRegularItem: () => false } as unknown as Zotero.Item;
+    const getAll = vi.fn(async () => [item, excludedItem]);
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     vi.stubGlobal('Zotero', {
       Items: {
@@ -210,18 +259,20 @@ describe('bibliographic picker previews', () => {
           Array.isArray(id)
             ? id.flatMap((value) => byID.get(value) ?? [])
             : (byID.get(id) ?? false),
-        getAll: async () => [item],
+        getAll,
       },
       Libraries: { userLibraryID: 1 },
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', { source: createItemsProvider(window, 'all') });
+    expect(getAll).toHaveBeenCalledWith(1, true, false);
+    expect(session.picker.items.map((candidate) => candidate.id)).toEqual([item.id]);
 
     expect(session.picker.preview?.textContent).toContain('Author, 2026');
     expect(session.picker.preview?.textContent).toContain('Attachments: 1');
@@ -255,16 +306,16 @@ describe('item picker target resolution', () => {
       getAttachments: () => [],
       getNotes: () => [],
     } as unknown as Zotero.Item;
-    const collection = {
-      getChildItems: () => [first, second],
-    } as unknown as Zotero.Collection;
+    const getChildItems = vi.fn(() => [first, second]);
+    const collection = { getChildItems } as unknown as Zotero.Collection;
     let nativeSelection: Zotero.Item[] = [];
     const selectItem = vi.fn(async (id: number) => {
       nativeSelection = [id === first.id ? first : second];
     });
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const getAll = vi.fn(async () => [first, second]);
     vi.stubGlobal('Zotero', {
-      Items: { getAll: async () => [first, second] },
+      Items: { getAll },
       Libraries: { userLibraryID: 1 },
     });
     const { window, session } = createPickerHarness();
@@ -275,17 +326,19 @@ describe('item picker target resolution', () => {
         collectionsView: { getSelectedCollections: () => [collection] },
       },
     });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
     const options: PickerOpenOptions = {
+      source: createItemsProvider(window, 'all'),
       confirm: async (item) => {
         await selectItem(Number(item.id));
       },
     };
 
     await picker.open(window, session, 'all', options);
+    expect(getAll).toHaveBeenCalledWith(1, true, false);
     const row = session.picker.results?.children[1] as HTMLElement & { emit(type: string): void };
     row.emit('click');
     row.emit('dblclick');
@@ -325,7 +378,11 @@ describe('item picker target resolution', () => {
     expect(selectItem).toHaveBeenCalledTimes(1);
     picker.close(session);
 
-    await picker.open(window, session, 'collection', options);
+    await picker.open(window, session, 'collection', {
+      ...options,
+      source: createItemsProvider(window, 'collection'),
+    });
+    expect(getChildItems).toHaveBeenCalledWith(false, false);
     picker.onKeyDown(pickerKey('ArrowDown', session.picker.input), window, session);
     expect(session.picker.selected).toBe(1);
     picker.onKeyDown(pickerKey('ArrowUp', session.picker.input), window, session);
@@ -360,12 +417,12 @@ describe('picker IME boundary', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    await picker.open(window, session, 'all');
+    await picker.open(window, session, 'all', { source: createItemsProvider(window, 'all') });
     const input = session.picker.input as HTMLInputElement & {
       emit(type: string, event?: Partial<Event>): void;
     };
@@ -427,13 +484,14 @@ describe('picker mouse activation', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => mouseEnabled,
     );
 
     await picker.open(window, session, 'all', {
+      source: createItemsProvider(window, 'all'),
       confirm: async (item) => {
         await selectItem(Number(item.id));
       },
@@ -547,7 +605,7 @@ describe('command palette provider', () => {
       },
     };
     const { window, session } = createPickerHarness();
-    picker = new FuzzyPicker(
+    picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
@@ -598,7 +656,7 @@ describe('command palette provider', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const execute = vi.fn<CommandPaletteContext['execute']>();
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -640,7 +698,7 @@ describe('command palette provider', () => {
   it('supports localized searches for unbound commands', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -668,7 +726,7 @@ describe('command palette provider', () => {
   it('keeps Reader and Main command catalogs context-specific', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -716,7 +774,7 @@ describe('command palette provider', () => {
   it('closes on Escape and restores the prior focus target', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -756,7 +814,7 @@ describe('command palette provider', () => {
       bindings: { 'main-normal:x': 'nextTab' },
       execute,
     };
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -790,7 +848,7 @@ describe('tab picker activation', () => {
     };
     const { window, session } = createPickerHarness();
     Object.assign(window, { Zotero_Tabs: tabs });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -827,7 +885,7 @@ describe('tab picker activation', () => {
     };
     const { window, session } = createPickerHarness();
     Object.assign(window, { Zotero_Tabs: tabs });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -883,7 +941,7 @@ describe('tab picker activation', () => {
     };
     const { window, session } = createPickerHarness();
     Object.assign(window, { Zotero_Tabs: tabs });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
@@ -977,7 +1035,7 @@ describe('unified Notes picker', () => {
       Zotero_Tabs: { selectedID: 'reader-tab' },
       ZoteroPane: { getSelectedItems: () => [] },
     });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1053,7 +1111,7 @@ describe('unified Notes picker', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem, openNote } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
@@ -1100,7 +1158,7 @@ describe('unified Notes picker', () => {
     });
     const { window, session, bodyChildren } = createPickerHarness(720);
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1140,12 +1198,14 @@ describe('picker async lifecycle', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [] } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    const opening = picker.open(window, session, 'all');
+    const opening = picker.open(window, session, 'all', {
+      source: createItemsProvider(window, 'all'),
+    });
     picker.close(session);
     resolveItems?.([
       {
@@ -1159,6 +1219,166 @@ describe('picker async lifecycle', () => {
     expect(session.picker.open).toBe(false);
     expect(session.picker.items).toEqual([]);
     expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('picker load discarded'));
+  });
+});
+
+describe('Picker owner lifetime', () => {
+  it('blocks late focus and source results after the owning session retires', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const previousElement = window.document.createElementNS(
+      'http://www.w3.org/1999/xhtml',
+      'button',
+    ) as HTMLElement & { focus(): void };
+    previousElement.focus();
+    const restoreFocus = vi.spyOn(previousElement, 'focus');
+    const diagnostic = vi.fn();
+    let ownerCurrent = true;
+    const isSessionCurrent = vi.fn(() => ownerCurrent);
+    const picker = createFuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+      undefined,
+      undefined,
+      isSessionCurrent,
+    );
+    const pending = deferred<PickerItem[]>();
+    const opening = picker.open(window, session, 'notes', {
+      source: { ...candidateSource([]), load: () => pending.promise },
+    });
+    const input = session.picker.input;
+    ownerCurrent = false;
+    const escape = pickerKey('Escape', input);
+    picker.onKeyDown(escape, window, session);
+    expect(session.picker.open).toBe(true);
+    expect(escape.preventDefault).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(30);
+    expect(window.document.activeElement).not.toBe(input);
+
+    pending.resolve([{ id: 1, title: 'Late result', search: 'late result' }]);
+    await opening;
+
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.items).toEqual([]);
+    expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining('picker load discarded'));
+    picker.close(session);
+    expect(restoreFocus).not.toHaveBeenCalled();
+  });
+
+  it('does not let a stale opening failure close a replacement picker', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const diagnostic = vi.fn();
+    const picker = createFuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const failure = new Error('old opening failed');
+    const staleSource = candidateSource([]);
+    Object.defineProperty(staleSource, 'query', {
+      get() {
+        throw failure;
+      },
+    });
+
+    const staleOpening = picker.open(window, session, 'notes', { source: staleSource });
+    picker.close(session);
+    const replacementSource = candidateSource([
+      { id: 'replacement', title: 'Replacement', search: 'replacement' },
+    ]);
+    const replacementOpening = picker.open(window, session, 'notes', {
+      source: replacementSource,
+    });
+    await Promise.all([staleOpening, replacementOpening]);
+
+    expect(session.picker.open).toBe(true);
+    expect(session.picker.provider).toBe(replacementSource);
+    expect(session.picker.filtered.map((item) => item.id)).toEqual(['replacement']);
+    expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining(failure.message));
+    picker.close(session);
+  });
+
+  it('retires and clears before draining cleanup failures and suppresses reentrant focus', async () => {
+    vi.useFakeTimers();
+    const previousWindow = { focus: vi.fn() } as unknown as Window;
+    vi.stubGlobal('Services', { focus: { focusedWindow: previousWindow } });
+    const { window, session, bodyChildren } = createPickerHarness();
+    const diagnostic = vi.fn();
+    const picker = createFuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const previousElement = window.document.createElementNS(
+      'http://www.w3.org/1999/xhtml',
+      'button',
+    ) as HTMLElement & { focus(): void };
+    previousElement.focus();
+    const restoreFocus = vi.spyOn(previousElement, 'focus');
+    const bindingFailure = new Error('binding disposal failed');
+    const inputFailure = new Error('input cleanup failed');
+    const themeFailure = new Error('theme cleanup failed');
+    let themeReleaseCount = 0;
+    const releaseTheme = vi.fn(() => {
+      themeReleaseCount += 1;
+      if (themeReleaseCount === 1) throw themeFailure;
+    });
+    session.theme.add = () => releaseTheme;
+    let replacementOpening: Promise<void> | undefined;
+    const onClose = vi.fn(() => {
+      replacementOpening = picker.open(window, session, 'notes', {
+        source: candidateSource([
+          { id: 'replacement', title: 'Replacement', search: 'replacement' },
+        ]),
+      });
+      picker.close(session, 'confirm');
+    });
+    await picker.open(window, session, 'notes', {
+      source: candidateSource([{ id: 'first', title: 'First', search: 'first' }]),
+      onClose,
+    });
+    expect(session.picker.previousElement).toBe(previousElement);
+    expect(session.picker.previousWindow).toBe(previousWindow);
+    const overlay = session.picker.overlay!;
+    const bindings = session.picker.localBindings!;
+    const dispose = bindings.dispose.bind(bindings);
+    vi.spyOn(bindings, 'dispose').mockImplementation(() => {
+      dispose();
+      throw bindingFailure;
+    });
+    const inputCleanup = session.picker.inputCleanup!;
+    const cleanupInput = vi.fn(() => {
+      inputCleanup();
+      throw inputFailure;
+    });
+    session.picker.inputCleanup = cleanupInput;
+
+    picker.close(session, 'cancel');
+    await replacementOpening;
+
+    expect(onClose).toHaveBeenCalledWith('cancel');
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(bindings.dispose).toHaveBeenCalledOnce();
+    expect(cleanupInput).toHaveBeenCalledOnce();
+    expect(releaseTheme).toHaveBeenCalledTimes(2);
+    expect(overlay.isConnected).toBe(false);
+    expect(bodyChildren.every((child) => !child.isConnected)).toBe(true);
+    expect(restoreFocus).not.toHaveBeenCalled();
+    expect(previousWindow.focus).not.toHaveBeenCalled();
+    expect(session.picker.open).toBe(false);
+    expect(session.picker.overlay).toBeNull();
+    expect(session.picker.previousElement).toBeNull();
+    expect(session.picker.previousWindow).toBeNull();
+    expect(session.picker.localBindings).toBeNull();
+    expect(session.picker.inputCleanup).toBeNull();
+    expect(session.picker.themeCleanup).toBeNull();
+    expect(session.picker.provider).toBeNull();
+    expect(session.picker.confirm).toBeNull();
+    expect(session.picker.onClose).toBeNull();
+    expect(session.picker.items).toEqual([]);
+    expect(session.picker.filtered).toEqual([]);
+    expect(diagnostic).toHaveBeenCalledWith(expect.stringContaining(bindingFailure.message));
   });
 });
 
@@ -1184,13 +1404,14 @@ describe('pointer activation lifecycle', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
     );
 
     await picker.open(window, session, 'all', {
+      source: createItemsProvider(window, 'all'),
       confirm: async (target) => {
         await selectItem(Number(target.id));
       },
@@ -1226,13 +1447,14 @@ describe('pointer activation lifecycle', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
     );
 
     await picker.open(window, session, 'all', {
+      source: createItemsProvider(window, 'all'),
       confirm: async (target) => {
         await selectItem(Number(target.id));
       },
@@ -1275,13 +1497,14 @@ describe('pointer activation lifecycle', () => {
     });
     const { window, session } = createPickerHarness();
     Object.assign(window, { ZoteroPane: { getSelectedItems: () => [], selectItem } });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
     );
 
     await picker.open(window, session, 'all', {
+      source: createItemsProvider(window, 'all'),
       confirm: async (target) => {
         await selectItem(Number(target.id));
       },
@@ -1300,7 +1523,7 @@ describe('tag candidate chooser', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1345,7 +1568,7 @@ describe('tag candidate chooser', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
     const confirm = vi.fn();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
@@ -1421,7 +1644,7 @@ describe('configurable picker contexts', () => {
       }),
     );
     const confirm = vi.fn();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => false,
@@ -1506,7 +1729,7 @@ describe('configurable picker contexts', () => {
       }),
     );
     const confirm = vi.fn();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => false,
@@ -1561,7 +1784,7 @@ describe('configurable picker contexts', () => {
     const { window, session } = createPickerHarness();
     const bindings = resolveBindings(JSON.stringify({ 'picker-list:<Enter>x': 'uiNext' }));
     const confirm = vi.fn();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
@@ -1598,7 +1821,7 @@ describe('configurable picker contexts', () => {
     const confirm = vi.fn(async () => {
       throw new Error('domain confirmation failed');
     });
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => false,
@@ -1644,7 +1867,7 @@ describe('picker configurable pane controls', () => {
         'picker-list:<F9>': 'uiPreviewUp',
       }),
     );
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => false,
@@ -1700,7 +1923,7 @@ describe('picker admitted confirmation safety', () => {
       vi.stubGlobal('Services', { focus: { focusedWindow: null } });
       const { window, session } = createPickerHarness();
       const diagnostic = vi.fn();
-      const picker = new FuzzyPicker(
+      const picker = createFuzzyPicker(
         { debug: vi.fn(), diagnostic },
         new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
         () => true,
@@ -1767,7 +1990,7 @@ describe('picker admitted confirmation safety', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1794,7 +2017,7 @@ describe('picker admitted confirmation safety', () => {
     const { window, session, cleanups } = createPickerHarness();
     const releaseTheme = vi.fn();
     session.theme.add = () => releaseTheme;
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1845,7 +2068,7 @@ describe('picker admitted confirmation safety', () => {
       vi.useFakeTimers();
       vi.stubGlobal('Services', { focus: { focusedWindow: null } });
       const { window, session } = createPickerHarness();
-      const picker = new FuzzyPicker(
+      const picker = createFuzzyPicker(
         { debug: vi.fn(), diagnostic: vi.fn() },
         new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       );
@@ -1908,7 +2131,7 @@ describe('picker committed query and explicit sources', () => {
       ...candidateSource([target]),
       alternateSource: { label: 'Current item', provider: () => current },
     };
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1930,7 +2153,7 @@ describe('picker committed query and explicit sources', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -1966,7 +2189,7 @@ describe('picker committed query and explicit sources', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
     const diagnostic = vi.fn();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => false,
@@ -2046,7 +2269,7 @@ describe('picker committed query and explicit sources', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
     let mouseEnabled = true;
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => mouseEnabled,
@@ -2104,7 +2327,7 @@ describe('picker committed query and explicit sources', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
     const diagnostic = vi.fn();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -2130,7 +2353,7 @@ describe('picker committed query and explicit sources', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -2165,7 +2388,7 @@ describe('picker owner boundaries', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       () => true,
@@ -2217,7 +2440,7 @@ describe('bounded query and continuous confirmation', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -2259,7 +2482,7 @@ describe('bounded query and continuous confirmation', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -2308,7 +2531,7 @@ describe('bounded query and continuous confirmation', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session, cleanups } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
@@ -2350,7 +2573,7 @@ describe('picker semantic handoff and completed mutation refresh', () => {
       ) as HTMLElement;
       tree.id = 'collection-tree';
       tree.focus();
-      const picker = new FuzzyPicker(
+      const picker = createFuzzyPicker(
         { debug: vi.fn(), diagnostic: vi.fn() },
         new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       );
@@ -2378,7 +2601,7 @@ describe('picker semantic handoff and completed mutation refresh', () => {
       vi.useFakeTimers();
       vi.stubGlobal('Services', { focus: { focusedWindow: null } });
       const { window, session } = createPickerHarness();
-      const picker = new FuzzyPicker(
+      const picker = createFuzzyPicker(
         { debug: vi.fn(), diagnostic: vi.fn() },
         new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
       );
@@ -2437,7 +2660,7 @@ describe('picker semantic handoff and completed mutation refresh', () => {
     vi.useFakeTimers();
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
-    const picker = new FuzzyPicker(
+    const picker = createFuzzyPicker(
       { debug: vi.fn(), diagnostic: vi.fn() },
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
