@@ -15,7 +15,6 @@ import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from './fuzzy';
 import { itemRowText } from './item-row';
-import { createTabsProvider } from './providers/tabs';
 import { createCommandsProvider } from './providers/commands';
 
 import { ACTION_LABELS, type ActionId } from '../../input/actions';
@@ -92,7 +91,7 @@ export class FuzzyPicker {
     let orphanThemeCleanup: (() => void) | null = null;
     try {
       this.trace(`picker open scope=${scope}`);
-      const provider = options.source ?? this.provider(window, scope, options.commandContext);
+      const provider = options.source ?? this.provider(scope, options.commandContext);
       session.picker.provider = provider;
       session.picker.confirm = options.confirm ?? null;
       session.picker.closeBeforeConfirm = options.closeBeforeConfirm ?? false;
@@ -884,17 +883,13 @@ export class FuzzyPicker {
         pane === 'preview' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
   }
 
-  private provider(
-    window: MainWindow,
-    scope: PickerScope,
-    commandContext?: CommandPaletteContext,
-  ): PickerProvider {
+  private provider(scope: PickerScope, commandContext?: CommandPaletteContext): PickerProvider {
     switch (scope) {
       case 'all':
       case 'collection':
         throw new Error('Item chooser requires an explicit candidate source');
       case 'tabs':
-        return createTabsProvider(window);
+        throw new Error('Tab chooser requires an explicit candidate source');
       case 'notes':
         throw new Error('Notes chooser requires an explicit candidate source');
       case 'tags':

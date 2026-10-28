@@ -1,6 +1,6 @@
-import type { MainWindow } from '../../../core/contracts';
-import { mainTabList, selectedMainTabID } from '../../../toolkit/main';
-import type { PickerProvider } from '../types';
+import type { MainWindow } from '../../core/contracts';
+import { mainTabList, selectedMainTabID } from '../../toolkit/main';
+import type { PickerProvider } from '../../main/picker/types';
 
 export function createTabsProvider(window: MainWindow): PickerProvider {
   return {
