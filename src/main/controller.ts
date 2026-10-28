@@ -20,7 +20,6 @@ import type {
 } from '../navigation/types';
 import type { ItemTargetSet } from '../core/item-target';
 import type { ShowInLibraryHost } from '../operations/show-in-library';
-import type { LibrarySelectionOptions } from './jump-history';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
@@ -58,9 +57,9 @@ import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { createTagModule, type TagModule } from '../modules/tags';
 import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
+import { createNotesModule, createNotesProvider, type NotesModule } from '../modules/notes';
 import {
   mainLibrarySelection,
-  openMainNote,
   mainItem,
   mainReaderForTab,
   selectedMainTabID,
@@ -85,7 +84,6 @@ import { MainItemStateDecoration } from './item-state-decoration';
 import { MainNavigationExecutor } from './jump-history';
 import { createCollectionsModule, type CollectionsModule } from '../modules/collections';
 import { installMainViewLifecycle } from './view-lifecycle';
-import { createNotesProvider } from './picker/providers/notes';
 import { appendReaderSelectionToNote, readerCaptureBaseItem } from './note-capture';
 import { noteOwnerKey } from '../platform/zotero-items';
 
@@ -113,6 +111,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly collections: CollectionsModule;
       readonly worksets: WorksetsModule;
       readonly library: LibraryModule;
+      readonly notes: NotesModule;
     }
   >();
   readonly #itemDecorations = new MainItemStateDecoration();
@@ -152,6 +151,8 @@ export class MainWindowController implements MainWindowControllerApi {
         },
         clear: (window, session) => this.clearKeyGuide(window, session),
       },
+      (session) => this.#modules.get(session)?.notes.editing ?? null,
+      (session) => this.#sessions.get(session.window) === session && !session.cleanup.disposed,
     );
   }
 
@@ -309,7 +310,39 @@ export class MainWindowController implements MainWindowControllerApi {
         scopeActivation: () => this.#navigationExecutor.scopeActivation(window, session),
       });
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
-      this.#modules.set(session, { host, tags, extensions, collections, worksets, library });
+      const notes = createNotesModule(host, {
+        window,
+        logger: this.#dependencies.logger,
+        status: (message, milliseconds) => this.#navigation.status(session, message, milliseconds),
+        choose: (options) => {
+          if (session.picker.open) return null;
+          const generation = session.picker.generation + 1;
+          void this.#picker.open(window, session, 'notes', options);
+          if (
+            session.picker.generation !== generation ||
+            !session.picker.open ||
+            session.picker.scope !== 'notes'
+          )
+            return null;
+          return () => {
+            if (session.picker.generation === generation && session.picker.scope === 'notes')
+              this.#picker.close(session);
+          };
+        },
+        selectNote: async (itemID, surface, isCurrent, afterSelection) => {
+          const pane = mainLibrarySelection(window);
+          if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
+          const execution = this.#navigationExecutor.execute(
+            window,
+            session,
+            { cause: { kind: 'action', action: 'findNotes' }, surface, context: { isCurrent } },
+            this.#navigationExecutor.librarySelection(itemID, pane, { afterSelection }),
+          );
+          return execution.pending ? await execution.result : execution.result;
+        },
+      });
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+      this.#modules.set(session, { host, tags, extensions, collections, worksets, library, notes });
     } catch (error) {
       const failure = new CleanupFailure();
       failure.run(() => host.dispose());
@@ -354,6 +387,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const modules = this.#modules.get(session);
     if (!modules) throw new Error('Window modules are not attached');
     return modules.library;
+  }
+
+  private notesModule(session: MainWindowSession): NotesModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.notes;
   }
 
   private cancelMainCurrentTarget(window: MainWindow, session: MainWindowSession): void {
@@ -1102,6 +1141,7 @@ export class MainWindowController implements MainWindowControllerApi {
 
     if (action === 'openCommandPalette') {
       const noteTargets = NOTE_ITEM_TARGET.resolve(window);
+      const isEditorCurrent = this.#noteEditor.captureCurrent(session);
       this.openCommandPalette(window, {
         mode: 'note',
         bindingMode,
@@ -1112,7 +1152,7 @@ export class MainWindowController implements MainWindowControllerApi {
         bindings,
         language: this.keyGuideLanguage(),
         execute: (nextAction, nextCount) => {
-          if (this.#sessions.get(window) !== session) return;
+          if (!isEditorCurrent()) return;
           const nextLocal = this.#noteEditor.executeAction(
             nextAction,
             target,
@@ -1242,9 +1282,8 @@ export class MainWindowController implements MainWindowControllerApi {
     pane: ShowInLibraryHost,
     cause: NavigationCause,
     surface: NavigationSurface,
-    options?: LibrarySelectionOptions,
   ): Promise<NavigationResult> {
-    const operation = this.#navigationExecutor.librarySelection(itemID, pane, options);
+    const operation = this.#navigationExecutor.librarySelection(itemID, pane);
     const execution = this.#navigationExecutor.execute(
       window,
       session,
@@ -1252,27 +1291,6 @@ export class MainWindowController implements MainWindowControllerApi {
       operation,
     );
     return execution.pending ? await execution.result : execution.result;
-  }
-  private async confirmLibrarySelection(
-    window: MainWindow,
-    session: MainWindowSession,
-    itemID: number,
-    pane: ShowInLibraryHost,
-    cause: NavigationCause,
-    surface: NavigationSurface,
-    options?: LibrarySelectionOptions,
-  ): Promise<void> {
-    const result = await this.executeLibrarySelection(
-      window,
-      session,
-      itemID,
-      pane,
-      cause,
-      surface,
-      options,
-    );
-    if (result.kind === 'failed') throw result.error;
-    if (result.kind === 'unavailable') throw new Error('Library selection is unavailable');
   }
 
   private async showInLibraryForSurface(
@@ -1332,27 +1350,7 @@ export class MainWindowController implements MainWindowControllerApi {
     } else {
       baseItem = mainCursorItem(window) ?? null;
     }
-    void this.#picker.open(window, session, 'notes', {
-      source: createNotesProvider(window, this.#dependencies.logger, { baseItem }),
-      confirm: async (item, openInWindow) => {
-        const pane = mainLibrarySelection(window);
-        if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
-        const id = Number(item.id);
-        await this.confirmLibrarySelection(
-          window,
-          session,
-          id,
-          pane,
-          { kind: 'action', action: 'findNotes' },
-          surface,
-          {
-            afterSelection: async () => {
-              await openMainNote(window, id, openInWindow);
-            },
-          },
-        );
-      },
-    });
+    this.notesModule(session).findNotes(baseItem, surface);
   }
 
   private openTabPickerForSurface(

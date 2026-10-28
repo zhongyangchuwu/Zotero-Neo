@@ -178,7 +178,7 @@ type ItemCursorView = {
 
 type ContextNoteEditor = {
   readonly item?: Zotero.Item;
-  readonly _iframe?: { readonly contentWindow?: Window };
+  readonly _iframe?: HTMLIFrameElement;
   contains?(node: Node | null): boolean;
 };
 
@@ -827,7 +827,7 @@ export async function applyMainTagFilter(
   return pane.itemsView.objectRowCount;
 }
 export function activeContextEditorWindow(window: MainWindow): Window | undefined {
-  return activeContextNoteEditor(window)?._iframe?.contentWindow;
+  return activeContextNoteEditor(window)?._iframe?.contentWindow ?? undefined;
 }
 
 /** Preserve first-selected semantics, not the detached Scope Cursor. */
@@ -934,13 +934,30 @@ function likelyNoteWindow(
 /** Note editor discovery is host structure; bindings and modes remain business-owned. */
 export function mainNoteEditorWindow(main: MainWindow): Window | null {
   const focused = Services.focus?.focusedWindow as unknown as Window | null;
-  if (likelyNoteWindow(focused, main)) return focused;
-  for (const frame of Array.from(main.document.querySelectorAll('browser,iframe'))) {
-    const candidate = (frame as HTMLIFrameElement).contentWindow;
-    if (likelyNoteWindow(candidate, main)) return candidate;
+  const frames = Array.from(
+    main.document.querySelectorAll('browser,iframe'),
+  ) as HTMLIFrameElement[];
+  const contextFrame = activeContextNoteEditor(main)?._iframe;
+  if (contextFrame && !frames.includes(contextFrame)) frames.push(contextFrame);
+  let first: Window | null = null;
+  for (const frame of frames) {
+    if (frame.ownerDocument !== main.document || !frame.isConnected) continue;
+    const style = main.getComputedStyle(frame);
+    if (!style) continue;
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.visibility === 'collapse'
+    )
+      continue;
+    const rect = frame.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    const candidate = frame.contentWindow;
+    if (!likelyNoteWindow(candidate, main)) continue;
+    if (candidate === focused) return candidate;
+    first ??= candidate;
   }
-  const editor = activeContextEditorWindow(main);
-  return likelyNoteWindow(editor, main) ? editor : null;
+  return first;
 }
 
 /** Captures an invocation's focus baseline without leaking the native Quick Search node. */

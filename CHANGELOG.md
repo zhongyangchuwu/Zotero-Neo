@@ -18,6 +18,7 @@
 
 ### 调整 {#changed}
 
+- 将 Note 候选、打开编排及可选 Vim 编辑接入按窗口隔离的 `notes`。模式、寄存器和 caret UI 归模块；Surface 保留精确编辑器身份、原生/IME 输入、count、前缀和共享焦点。Main/Reader/Note 查找与 Capture 显式使用同一候选能力，Vim 开关不控制 Note 查找或 Capture 目的地。
 - 将树导航、Local Find、搜索入口、条目选择器、打开、标识符录入、citekey 与最近回收批次接入 `library`。Main session 不再持有 Local Find 或回收历史；共享焦点、原生 View 能力与唯一 Back/Forward 仍独立于 Library。Reader citekey 使用本地目标；保留原按键、显式 Select 重绑定、候选范围和目标拒绝策略。
 - 将 Main Persistent Selection、Visual 与 Selection Panel 接入按窗口隔离的 `worksets` 模块，Main session 不再预建工作集状态。Cursor、原生多目标取消和共享行渲染仍由 Main 持有；目标与 Trash 只消费明确 Selection 端口，Reveal 使用既有导航历史。保留原有按键、隐藏成员拒绝和目标优先级；旧面板、计时器与导航完成不能影响替换实例，重入退休时晚到的主题/外观句柄也会释放。每次面板关闭即释放自身主题，不再由模块寿命的清理闭包持有已分离 DOM。不开放模块开关。
 
@@ -56,6 +57,7 @@
 
 ### 修复 {#fixed}
 
+- Note 编辑器发现跳过隐藏、折叠、零布局及其他 MainWindow 的 iframe，避免打开 Palette 后定时扫描误绑隐藏编辑器。编辑器替换前后的旧事件、计时器及 Palette 确认不能操作新 Note；普通 Picker 焦点转移不会使命令失效。
 - 共享 Picker 关闭时先退休并清空 DOM/旧焦点引用，再分别释放绑定、输入监听、主题和界面。某项清理失败仍继续释放并诊断；旧异步完成、延迟聚焦及获取失败不能影响替换界面或已退休的 Main session。
 - 分类树 Enter 与 Find collection 的确认目的地进入现有 Back/Forward，普通树移动不记录。展开分支时保留出发点，排队 Enter 固定接纳的 Scope ID，原生 Scope 完成与焦点恢复后才接受历史位置。
 - 分类回调绑定实际 SQL 结果；外部提交后回调失败保留已保存回执，后续 Neo 写入等待回滚恢复。失败写入不污染后续逆向缓存或抹掉后来保存的成员关系；连续添加只完整加载已确认条目。

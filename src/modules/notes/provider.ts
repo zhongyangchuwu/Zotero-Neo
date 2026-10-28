@@ -1,9 +1,9 @@
-import type { Logger } from '../../../core/logging';
-import type { MainWindow } from '../../../core/contracts';
-import { currentMainItem, mainItem } from '../../../toolkit/main';
-import { noteOwnerKey } from '../../../platform/zotero-items';
-import type { PickerItem } from '../model';
-import type { PickerProvider } from '../types';
+import type { Logger } from '../../core/logging';
+import type { MainWindow } from '../../core/contracts';
+import { currentMainItem, mainItem } from '../../toolkit/main';
+import { noteOwnerKey } from '../../platform/zotero-items';
+import type { PickerItem } from '../../main/picker/model';
+import type { PickerProvider } from '../../main/picker/types';
 
 type NotesScope = 'item' | 'library';
 

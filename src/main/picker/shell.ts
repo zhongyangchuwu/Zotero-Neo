@@ -14,7 +14,6 @@ import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from './fuzzy';
-import { createNotesProvider } from './providers/notes';
 import { itemRowText } from './item-row';
 import { createTabsProvider } from './providers/tabs';
 import { createCommandsProvider } from './providers/commands';
@@ -897,7 +896,7 @@ export class FuzzyPicker {
       case 'tabs':
         return createTabsProvider(window);
       case 'notes':
-        return createNotesProvider(window, this.#logger);
+        throw new Error('Notes chooser requires an explicit candidate source');
       case 'tags':
         throw new Error('Tag chooser requires an explicit candidate source');
       case 'collections':
