@@ -30,7 +30,15 @@ import {
   waitForMainItemView,
 } from '../toolkit/main';
 import type { MainNavigation } from './navigation';
-import type { MainViewActions } from './view-actions';
+import type { MainViewFilterState } from '../toolkit/main';
+
+/** Native View capability used by history, independent of Library business actions. */
+export interface MainViewOperations {
+  state(window: MainWindow): MainViewFilterState;
+  applyQuickSearch(window: MainWindow, text: string): Promise<boolean>;
+  applyTagFilter(window: MainWindow, tags: readonly string[]): Promise<number>;
+  closeAdvancedSearch(window: MainWindow): Promise<boolean>;
+}
 
 export interface LibrarySelectionOptions {
   readonly afterSelection?: () => void | Promise<void>;
@@ -46,7 +54,7 @@ interface RestoreResult {
 export class MainNavigationExecutor {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
-  readonly #viewActions: MainViewActions;
+  readonly #viewActions: MainViewOperations;
   readonly #reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>;
   readonly #isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean;
   readonly #hasLocalOverlay: (session: MainWindowSession) => boolean;
@@ -63,7 +71,7 @@ export class MainNavigationExecutor {
   constructor(
     logger: Logger,
     navigation: MainNavigation,
-    viewActions: MainViewActions,
+    viewActions: MainViewOperations,
     reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>,
     isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean,
     hasLocalOverlay: (session: MainWindowSession) => boolean,

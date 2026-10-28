@@ -2,7 +2,7 @@ import { citationKey } from '../../../platform/better-bibtex';
 import { queryMainCollectionItems, type MainCollectionRef } from '../../../toolkit/main';
 import type { PickerItem } from '../../../main/picker/model';
 import type { PickerProvider } from '../../../main/picker/types';
-import { itemRowText } from '../../../main/picker/providers/items';
+import { itemRowText } from '../../../main/picker/item-row';
 
 const RESULT_LIMIT = 100;
 

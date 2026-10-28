@@ -11,8 +11,7 @@ import type { PickerOpenOptions } from '../../src/main/picker/types';
 import type { MainWindowSession } from '../../src/main/session';
 import { ModuleHost } from '../../src/core/module-host';
 import { createTagModule } from '../../src/modules/tags';
-import { mainTagScope } from '../../src/toolkit/main';
-import { MainViewActions } from '../../src/main/view-actions';
+import { mainTagScope, mainViewFilterState, applyMainTagFilter } from '../../src/toolkit/main';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -129,7 +128,6 @@ function harness(options: {
   const preferences: PreferenceReader = {
     get: (_key: string, fallback: boolean | number | string) => fallback,
   } as PreferenceReader;
-  const viewActions = new MainViewActions(logger, navigation);
   const modules = new ModuleHost(logger, () => true);
   const actions = createTagModule(modules, {
     logger,
@@ -141,9 +139,9 @@ function harness(options: {
       };
     },
     status: (message) => navigation.status(session, message),
-    readFilter: () => [...viewActions.state(window).tags],
+    readFilter: () => [...mainViewFilterState(window).tags],
     captureScopeTags: () => mainTagScope(window).getTags,
-    applyFilter: (tags) => viewActions.applyTagFilter(window, tags),
+    applyFilter: (tags) => applyMainTagFilter(window, tags),
   });
 
   return {

@@ -1,14 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import { MainNavigation } from '../../src/main/navigation';
+import { LibraryNavigation } from '../../src/modules/library/navigation';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { copyCitekeys } from '../../src/operations/citekeys';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
-import { TrashHistory } from '../../src/main/trash-history';
-import type { MainWindowSession } from '../../src/main/session';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalComponents = Reflect.get(globalThis, 'Components');
@@ -24,6 +22,8 @@ function attachment(id: number, citekey = ''): Zotero.Item {
   return {
     id,
     libraryID: 1,
+    deleted: false,
+    saveTx: vi.fn(async () => {}),
     isAttachment: () => true,
     isNote: () => false,
     getField: (field: string) => (field === 'citationKey' ? citekey : ''),
@@ -89,17 +89,23 @@ function harness(
     clearTimeout: () => undefined,
   } as unknown as MainWindow;
   const selection = new SelectionStore();
-  const session = {
+  const status = vi.fn();
+  let current = true;
+  const navigation = new LibraryNavigation({
     window,
-    status: { textContent: '', style: {} },
-    cleanup: { add: vi.fn() },
-    trashHistory: new TrashHistory(),
-  } as unknown as MainWindowSession;
-  const navigation = new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => undefined);
+    logger: { debug: vi.fn(), diagnostic: vi.fn() },
+    status,
+    panel: () => 'items',
+    focusPanel: () => true,
+    isCurrent: () => current,
+  });
 
   return {
     window,
-    session,
+    status,
+    retire: () => {
+      current = false;
+    },
     selection,
     navigation,
     viewAttachment,
@@ -118,7 +124,7 @@ describe('Main action target contracts', () => {
     const cursor = attachment(11);
     const h = harness([nativeSelected, cursor], 1);
 
-    await h.navigation.openPDF(h.window, h.session, cursor);
+    await h.navigation.openPDF(cursor, () => true);
 
     expect(h.viewAttachment).toHaveBeenCalledWith(cursor.id);
     expect(h.viewAttachment).not.toHaveBeenCalledWith(nativeSelected.id);
@@ -128,14 +134,14 @@ describe('Main action target contracts', () => {
     const target = attachment(10);
     const h = harness([target], 0);
 
-    await expect(h.navigation.openPDF(h.window, h.session, target)).resolves.toBe(true);
+    await expect(h.navigation.openPDF(target, () => true)).resolves.toBe(true);
     expect(h.viewAttachment).toHaveBeenCalledWith(target.id);
 
     h.viewAttachment.mockReset();
     h.viewAttachment.mockImplementation(() => {
       throw new Error('viewer failed');
     });
-    await expect(h.navigation.openPDF(h.window, h.session, target)).resolves.toBe(false);
+    await expect(h.navigation.openPDF(target, () => true)).resolves.toBe(false);
 
     const noTarget = {
       id: 20,
@@ -146,7 +152,7 @@ describe('Main action target contracts', () => {
       getAttachments: () => [],
       getField: () => '',
     } as unknown as Zotero.Item;
-    await expect(h.navigation.openPDF(h.window, h.session, noTarget)).resolves.toBe(false);
+    await expect(h.navigation.openPDF(noTarget, () => true)).resolves.toBe(false);
   });
 
   it('trashes native multi-selection when persistent Selection is empty', async () => {
@@ -155,11 +161,13 @@ describe('Main action target contracts', () => {
     const third = attachment(12);
     const h = harness([first, second, third], 1, [0, 1, 2]);
 
-    await h.navigation.trashSelectedItems(h.window, h.session, h.selection);
+    await h.navigation.trashSelectedItems(h.selection);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id, third.id]);
     expect(h.confirm).toHaveBeenCalledOnce();
-    expect(h.session.trashHistory.values()).toEqual([first.id, second.id, third.id]);
+    for (const item of [first, second, third]) item.deleted = true;
+    await h.navigation.restoreLastTrashedItems();
+    expect([first.deleted, second.deleted, third.deleted]).toEqual([false, false, false]);
   });
 
   it('cancels a Trash confirmation without changing the resolved Selection', async () => {
@@ -169,13 +177,12 @@ describe('Main action target contracts', () => {
     h.selection.add({ libraryID: 1, itemID: first.id });
     h.confirm.mockReturnValue(false);
 
-    await expect(h.navigation.trashSelectedItems(h.window, h.session, h.selection)).resolves.toBe(
-      false,
-    );
+    await expect(h.navigation.trashSelectedItems(h.selection)).resolves.toBe(false);
 
     expect(h.confirm).toHaveBeenCalledTimes(1);
     expect(h.trashTx).not.toHaveBeenCalled();
-    expect(h.session.trashHistory.values()).toEqual([]);
+    await h.navigation.restoreLastTrashedItems();
+    expect(h.status).toHaveBeenLastCalledWith('✗ Nothing to restore', undefined);
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
   });
 
@@ -186,12 +193,11 @@ describe('Main action target contracts', () => {
     h.selection.add({ libraryID: 1, itemID: first.id });
     h.trashTx.mockRejectedValueOnce(new Error('blocked'));
 
-    await expect(h.navigation.trashSelectedItems(h.window, h.session, h.selection)).resolves.toBe(
-      false,
-    );
+    await expect(h.navigation.trashSelectedItems(h.selection)).resolves.toBe(false);
 
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
-    expect(h.session.trashHistory.values()).toEqual([]);
+    await h.navigation.restoreLastTrashedItems();
+    expect(h.status).toHaveBeenLastCalledWith('✗ Nothing to restore', undefined);
   });
 
   it('uses an explicit Visual target when Selection is empty and keeps Selection authoritative when present', async () => {
@@ -207,11 +213,11 @@ describe('Main action target contracts', () => {
       ],
     };
 
-    await h.navigation.trashSelectedItems(h.window, h.session, h.selection, visual);
+    await h.navigation.trashSelectedItems(h.selection, visual);
     expect(h.trashTx).toHaveBeenLastCalledWith([second.id, third.id]);
 
     h.selection.add({ libraryID: 1, itemID: first.id });
-    await h.navigation.trashSelectedItems(h.window, h.session, h.selection, visual);
+    await h.navigation.trashSelectedItems(h.selection, visual);
     expect(h.trashTx).toHaveBeenLastCalledWith([first.id]);
     expect(h.confirm).toHaveBeenCalledTimes(2);
   });
@@ -225,7 +231,7 @@ describe('Main action target contracts', () => {
     h.selection.add({ libraryID: 1, itemID: visible.id });
     h.selection.add({ libraryID: 1, itemID: hidden.id });
 
-    await h.navigation.trashSelectedItems(h.window, h.session, h.selection);
+    await h.navigation.trashSelectedItems(h.selection);
 
     expect(h.trashTx).not.toHaveBeenCalled();
     expect(h.confirm).not.toHaveBeenCalled();
@@ -239,10 +245,12 @@ describe('Main action target contracts', () => {
     h.selection.add({ libraryID: 1, itemID: first.id });
     h.selection.add({ libraryID: 1, itemID: second.id });
 
-    await h.navigation.trashSelectedItems(h.window, h.session, h.selection);
+    await h.navigation.trashSelectedItems(h.selection);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id]);
-    expect(h.session.trashHistory.values()).toEqual([first.id, second.id]);
+    first.deleted = second.deleted = true;
+    await h.navigation.restoreLastTrashedItems();
+    expect([first.deleted, second.deleted]).toEqual([false, false]);
     expect(h.selection.empty).toBe(true);
   });
 
@@ -255,12 +263,117 @@ describe('Main action target contracts', () => {
     h.selection.add(firstRef);
     const { promise, resolve } = Promise.withResolvers<void>();
     h.trashTx.mockImplementationOnce(() => promise);
-    const pending = h.navigation.trashSelectedItems(h.window, h.session, h.selection);
+    const pending = h.navigation.trashSelectedItems(h.selection);
     h.selection.add(secondRef);
     resolve();
     await expect(pending).resolves.toBe(true);
     expect(h.selection.values()).toEqual([secondRef]);
-    expect(h.session.trashHistory.values()).toEqual([first.id]);
+    first.deleted = second.deleted = true;
+    await h.navigation.restoreLastTrashedItems();
+    expect([first.deleted, second.deleted]).toEqual([false, true]);
+  });
+
+  it('returns the admitted trash result without changing retired Selection or UI', async () => {
+    const first = attachment(10);
+    const h = harness([first]);
+    const ref = { libraryID: 1, itemID: first.id };
+    h.selection.add(ref);
+    const { promise, resolve } = Promise.withResolvers<void>();
+    h.trashTx.mockImplementationOnce(() => promise);
+    const pending = h.navigation.trashSelectedItems(h.selection);
+    h.retire();
+    resolve();
+    await expect(pending).resolves.toBe(true);
+    expect(h.selection.values()).toEqual([ref]);
+    expect(h.status).not.toHaveBeenCalled();
+    await h.navigation.restoreLastTrashedItems();
+    expect(first.saveTx).not.toHaveBeenCalled();
+  });
+
+  it('refuses trash when Selection contains an unavailable item', async () => {
+    const first = attachment(10);
+    const h = harness([first]);
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: 999 });
+    await expect(h.navigation.trashSelectedItems(h.selection)).resolves.toBe(false);
+    expect(h.confirm).not.toHaveBeenCalled();
+    expect(h.trashTx).not.toHaveBeenCalled();
+    expect(h.selection.size).toBe(2);
+  });
+
+  it('preserves a newer trash batch when an earlier restore completes', async () => {
+    const first = attachment(10);
+    const second = attachment(11);
+    const h = harness([first, second]);
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    await h.navigation.trashSelectedItems(h.selection);
+    first.deleted = true;
+    const { promise, resolve } = Promise.withResolvers<void>();
+    Reflect.set(
+      first,
+      'saveTx',
+      vi.fn(() => promise),
+    );
+    const restoring = h.navigation.restoreLastTrashedItems();
+    h.selection.add({ libraryID: 1, itemID: second.id });
+    await h.navigation.trashSelectedItems(h.selection);
+    second.deleted = true;
+    resolve();
+    await restoring;
+    await h.navigation.restoreLastTrashedItems();
+    expect(second.deleted).toBe(false);
+    expect(second.saveTx).toHaveBeenCalledOnce();
+  });
+
+  it('stops navigation when panel resolution retires its owner', () => {
+    let current = true;
+    const getItemsView = vi.fn(() => undefined);
+    const window = {
+      ZoteroPane: {
+        get itemsView() {
+          return getItemsView();
+        },
+      },
+    } as unknown as MainWindow;
+    const navigation = new LibraryNavigation({
+      window,
+      logger: { debug: vi.fn(), diagnostic: vi.fn() },
+      status: vi.fn(),
+      panel: () => {
+        current = false;
+        return 'items';
+      },
+      focusPanel: () => true,
+      isCurrent: () => current,
+    });
+    expect(navigation.navigate(1, 1)).toBe(false);
+    expect(getItemsView).not.toHaveBeenCalled();
+  });
+
+  it('does not toggle a tree after focus retires its owner', async () => {
+    const h = harness([attachment(10)]);
+    let current = true;
+    const status = vi.fn();
+    const focusPanel = vi.fn(() => {
+      current = false;
+      return true;
+    });
+    const getCollectionView = vi.fn(() => undefined);
+    Object.defineProperty(Reflect.get(h.window, 'ZoteroPane'), 'collectionsView', {
+      get: getCollectionView,
+    });
+    const navigation = new LibraryNavigation({
+      window: h.window,
+      logger: { debug: vi.fn(), diagnostic: vi.fn() },
+      status,
+      panel: () => 'items',
+      focusPanel,
+      isCurrent: () => current,
+    });
+    await navigation.toggleTree();
+    expect(focusPanel).toHaveBeenCalledWith('collections');
+    expect(getCollectionView).toHaveBeenCalledTimes(1);
+    expect(status).not.toHaveBeenCalled();
   });
 
   it('copies citekeys from EffectiveSelection and preserves Cursor fallback behavior', () => {

@@ -38,7 +38,6 @@ import { isLeaderPrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap, type BindingContext } from '../input/bindings';
 import { t } from '../i18n';
-import { copyCitekeys } from '../operations/citekeys';
 import { deleteAnnotation as deleteReaderAnnotation } from '../operations/delete-annotation';
 import {
   READER_NORMAL_ACTIONS,
@@ -53,6 +52,7 @@ import { ReaderMarks } from './marks';
 import { ReaderNativeSidebar } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
+import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
 import {
@@ -489,6 +489,7 @@ export class ReaderSession {
   readonly #captions: ReaderCaptionTargets;
   readonly #modules: ModuleHost;
   readonly #hints: ReaderHintsModule;
+  readonly #library: ReaderLibraryModule;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #nativeInput: ReaderNativeInput;
   readonly #flash: ReaderFlash;
@@ -547,6 +548,7 @@ export class ReaderSession {
       dependencies.controller.dependencies.logger,
       () => !this.#scope.disposed,
     );
+    this.#library = createReaderLibraryModule(this.#modules, (message) => this.showStatus(message));
     this.#hints = createReaderHintsModule(this.#modules, {
       reader: dependencies.reader,
       viewForWindow: (pdfWindow) => this.readerViewForWindow(pdfWindow),
@@ -1485,7 +1487,7 @@ export class ReaderSession {
       return;
     }
     if (action === 'mainYankCitekey') {
-      this.showStatus(copyCitekeys(READER_ITEM_TARGET.resolve(this.#dependencies.reader)));
+      this.#library.yankCitekeys(READER_ITEM_TARGET.resolve(this.#dependencies.reader));
       return;
     }
     if (action === 'toggleReaderSidebarOutline') {

@@ -161,7 +161,13 @@ function workflowHarness() {
   const status = vi.fn();
   const navigation = { status, panel: () => session.activePanel } as unknown as MainNavigation;
   const logger = { debug: vi.fn(), diagnostic: vi.fn() };
-  const picker = new FuzzyPicker(logger, navigation);
+  const picker = new FuzzyPicker(
+    logger,
+    navigation,
+    undefined,
+    undefined,
+    (candidate) => candidate === session && !candidate.cleanup.disposed,
+  );
   const opened = vi.spyOn(picker, 'open');
   const navigate = vi.fn(async () => undefined);
   const host = new ModuleHost(logger, () => session.window === window);

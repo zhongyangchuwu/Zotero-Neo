@@ -1,3 +1,5 @@
+import { CleanupFailure } from '../../core/cleanup';
+
 import type { Logger } from '../../core/logging';
 import type { CommandPaletteContext, MainWindow } from '../../core/contracts';
 import { THEME_VARS } from '../../ui/theme';
@@ -13,7 +15,7 @@ import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from './fuzzy';
 import { createNotesProvider } from './providers/notes';
-import { createItemsProvider } from './providers/items';
+import { itemRowText } from './item-row';
 import { createTabsProvider } from './providers/tabs';
 import { createCommandsProvider } from './providers/commands';
 
@@ -49,10 +51,7 @@ function isPrimaryMouseEvent(event: Event): boolean {
 }
 
 export function fuzzyPickerRowText(item: PickerItem, _index: number, _scope: PickerScope): string {
-  const metadata = `${item.title || '(untitled)'}${
-    item.author ? ` — ${item.author}${item.year ? `, ${item.year}` : ''}` : ''
-  }`;
-  return item.citekey ? `@${item.citekey}  ${metadata}` : metadata;
+  return itemRowText(item);
 }
 
 export class FuzzyPicker {
@@ -60,6 +59,7 @@ export class FuzzyPicker {
   readonly #navigation: MainNavigation;
   readonly #mouseEnabled: () => boolean;
   readonly #bindings: () => BindingMap;
+  readonly #isSessionCurrent: (session: MainWindowSession) => boolean;
   readonly #sessions = new WeakSet<MainWindowSession>();
 
   constructor(
@@ -67,11 +67,13 @@ export class FuzzyPicker {
     navigation: MainNavigation,
     mouseEnabled: () => boolean = () => false,
     bindings: () => BindingMap = () => DEFAULT_BINDINGS,
+    isSessionCurrent: (session: MainWindowSession) => boolean,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#mouseEnabled = mouseEnabled;
     this.#bindings = bindings;
+    this.#isSessionCurrent = isSessionCurrent;
   }
 
   async open(
@@ -80,7 +82,7 @@ export class FuzzyPicker {
     scope: PickerScope,
     options: PickerOpenOptions = {},
   ): Promise<void> {
-    if (session.picker.open) return;
+    if (session.picker.open || !this.#isSessionCurrent(session)) return;
     this.#navigation.panel(window, session);
     const generation = ++session.picker.generation;
     if (!this.#sessions.has(session)) {
@@ -88,6 +90,7 @@ export class FuzzyPicker {
       session.cleanup.add(() => this.close(session));
     }
     let orphanOverlay: HTMLElement | null = null;
+    let orphanThemeCleanup: (() => void) | null = null;
     try {
       this.trace(`picker open scope=${scope}`);
       const provider = options.source ?? this.provider(window, scope, options.commandContext);
@@ -177,6 +180,7 @@ export class FuzzyPicker {
       overlay.append(modal);
       (doc.body ?? doc.documentElement).append(overlay);
       const themeCleanup = session.theme.add(overlay);
+      orphanThemeCleanup = themeCleanup;
       const focusedWindow = Services.focus?.focusedWindow as unknown as Window | null;
       Object.assign(session.picker, {
         open: true,
@@ -205,6 +209,8 @@ export class FuzzyPicker {
         previousWindow: focusedWindow,
         themeCleanup,
       });
+      orphanOverlay = null;
+      orphanThemeCleanup = null;
       session.picker.localBindings = new LocalBindingRuntime({
         bindings: this.#bindings,
         execute: (action, event) =>
@@ -212,7 +218,6 @@ export class FuzzyPicker {
         schedule: (callback, delay) => window.setTimeout(callback, delay),
         clearTimer: (timer) => window.clearTimeout(timer),
       });
-      orphanOverlay = null;
       this.trace(`picker mounted scope=${scope} layout=${single ? 'single' : 'dual'}`);
       this.refreshSource(session);
       const compositionCleanup = bindCompositionState(input, session.picker.composition);
@@ -310,32 +315,52 @@ export class FuzzyPicker {
       await this.loadSource(session, provider, generation, sourceRevision);
     } catch (error) {
       this.failure(`picker open scope=${scope}`, error);
-      if (session.picker.open) this.close(session);
-      else {
-        orphanOverlay?.remove();
-        session.picker.inputCleanup?.();
-        session.picker.inputCleanup = null;
-        session.picker.provider = null;
-        session.picker.confirm = null;
-        session.picker.closeBeforeConfirm = false;
-        const onClose = session.picker.onClose;
-        session.picker.onClose = null;
-        session.picker.queue = Promise.resolve();
-        try {
-          onClose?.('retire');
-        } catch (closeError) {
-          this.failure('picker onClose after open failure', closeError);
-        }
+      const ownsOpening = session.picker.generation === generation;
+      if (!ownsOpening) {
+        const cleanup = new CleanupFailure();
+        cleanup.run(() => orphanOverlay?.remove());
+        cleanup.run(() => orphanThemeCleanup?.());
+        this.reportCleanupFailure('picker stale opening cleanup', cleanup);
+        return;
       }
-      this.#navigation.status(session, `✗ Unable to open ${scope} picker`);
+      if (session.picker.open) {
+        this.close(session);
+      } else {
+        const { localBindings, inputCleanup, themeCleanup, overlay, onClose } = session.picker;
+        this.retire(session, generation + 1);
+        const cleanup = new CleanupFailure();
+        cleanup.run(() => localBindings?.dispose());
+        cleanup.run(() => inputCleanup?.());
+        cleanup.run(() => themeCleanup?.());
+        cleanup.run(() => orphanOverlay?.remove());
+        cleanup.run(() => orphanThemeCleanup?.());
+        cleanup.run(() => overlay?.remove());
+        cleanup.run(() => onClose?.('retire'));
+        this.reportCleanupFailure('picker opening cleanup', cleanup);
+      }
+      if (
+        this.#isSessionCurrent(session) &&
+        session.picker.generation === generation + 1 &&
+        !session.picker.open
+      ) {
+        this.#navigation.status(session, `✗ Unable to open ${scope} picker`);
+      }
     }
   }
   close(session: MainWindowSession, reason: PickerCloseReason = 'retire'): void {
-    if (!session.picker.open) return;
-    session.picker.localBindings?.dispose();
-    session.picker.localBindings = null;
-    this.trace(`picker close scope=${session.picker.scope}`);
-    const { overlay, previousElement, previousWindow, themeCleanup, onClose } = session.picker;
+    const picker = session.picker;
+    if (!picker.open) return;
+    const {
+      scope,
+      generation,
+      overlay,
+      previousElement,
+      previousWindow,
+      localBindings,
+      inputCleanup,
+      themeCleanup,
+      onClose,
+    } = picker;
     const activeElement = overlay?.ownerDocument.activeElement;
     let focusOwner = activeElement;
     while (focusOwner && focusOwner !== overlay) focusOwner = focusOwner.parentElement;
@@ -345,50 +370,32 @@ export class FuzzyPicker {
       activeElement === overlay?.ownerDocument.body ||
       activeElement === overlay?.ownerDocument.documentElement ||
       focusOwner === overlay;
-    session.picker.provider = null;
-    session.picker.confirm = null;
-    session.picker.closeBeforeConfirm = false;
-    session.picker.onClose = null;
-    session.picker.queue = Promise.resolve();
-    session.picker.inputCleanup?.();
-    session.picker.inputCleanup = null;
-    themeCleanup?.();
-    overlay?.remove();
-    session.picker.generation += 1;
-    session.picker.open = false;
-    session.picker.help = null;
-    session.picker.queryHelp = null;
-    session.picker.listHelp = null;
-    session.picker.input = null;
-    session.picker.composition.active = false;
-    session.picker.committedQuery = '';
-    session.picker.confirming = false;
-    session.picker.sourceTitle = null;
-    session.picker.sourceButton = null;
-    session.picker.operationStatus = null;
-    session.picker.results = null;
-    session.picker.preview = null;
-    session.picker.count = null;
-    session.picker.previewTitle = null;
-    session.picker.items = [];
-    session.picker.filtered = [];
-    session.picker.selected = 0;
-    session.picker.themeCleanup = null;
-    try {
-      if (restoreFocus) {
-        if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
-        else previousWindow?.focus();
-      }
-    } catch {}
-    try {
-      onClose?.(reason);
-    } catch (error) {
-      this.failure('picker onClose', error);
-    }
+    const retiredGeneration = generation + 1;
+    this.retire(session, retiredGeneration);
+
+    const cleanup = new CleanupFailure();
+    cleanup.run(() => localBindings?.dispose());
+    cleanup.run(() => inputCleanup?.());
+    cleanup.run(() => themeCleanup?.());
+    cleanup.run(() => overlay?.remove());
+    cleanup.run(() => onClose?.(reason));
+    cleanup.run(() => {
+      if (
+        !restoreFocus ||
+        picker.generation !== retiredGeneration ||
+        picker.open ||
+        !this.#isSessionCurrent(session)
+      )
+        return;
+      if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
+      else previousWindow?.focus();
+    });
+    cleanup.run(() => this.trace(`picker close scope=${scope}`));
+    this.reportCleanupFailure('picker close cleanup', cleanup);
   }
 
   onKeyDown(event: HandledKey, window: MainWindow, session: MainWindowSession): void {
-    if (event._zvPickerHandled || !session.picker.open) return;
+    if (event._zvPickerHandled || !this.#isSessionCurrent(session) || !session.picker.open) return;
     const picker = session.picker;
     let target = asElement(event.target);
     while (
@@ -886,7 +893,7 @@ export class FuzzyPicker {
     switch (scope) {
       case 'all':
       case 'collection':
-        return createItemsProvider(window, scope);
+        throw new Error('Item chooser requires an explicit candidate source');
       case 'tabs':
         return createTabsProvider(window);
       case 'notes':
@@ -933,7 +940,53 @@ export class FuzzyPicker {
   }
 
   private isCurrent(session: MainWindowSession, generation: number): boolean {
-    return session.picker.open && session.picker.generation === generation;
+    return (
+      this.#isSessionCurrent(session) &&
+      session.picker.open &&
+      session.picker.generation === generation
+    );
+  }
+
+  private retire(session: MainWindowSession, generation: number): void {
+    const picker = session.picker;
+    picker.generation = generation;
+    picker.open = false;
+    picker.overlay = null;
+    picker.input = null;
+    picker.composition.active = false;
+    picker.committedQuery = '';
+    picker.confirming = false;
+    picker.sourceTitle = null;
+    picker.sourceButton = null;
+    picker.operationStatus = null;
+    picker.results = null;
+    picker.preview = null;
+    picker.count = null;
+    picker.previewTitle = null;
+    picker.help = null;
+    picker.queryHelp = null;
+    picker.listHelp = null;
+    picker.items = [];
+    picker.filtered = [];
+    picker.selected = 0;
+    picker.provider = null;
+    picker.confirm = null;
+    picker.closeBeforeConfirm = false;
+    picker.onClose = null;
+    picker.queue = Promise.resolve();
+    picker.inputCleanup = null;
+    picker.localBindings = null;
+    picker.previousElement = null;
+    picker.previousWindow = null;
+    picker.themeCleanup = null;
+  }
+
+  private reportCleanupFailure(context: string, cleanup: CleanupFailure): void {
+    try {
+      cleanup.rethrow();
+    } catch (error) {
+      this.failure(context, error);
+    }
   }
 
   private shortcutReference(context: BindingContext): string {
