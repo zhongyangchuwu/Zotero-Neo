@@ -13,7 +13,7 @@ import {
   visibleMainSelectionCount,
 } from '../../src/toolkit/main';
 import { installMainViewLifecycle } from '../../src/main/view-lifecycle';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
 type NativeRowUpdateOptions = {
   readonly selection?: number;

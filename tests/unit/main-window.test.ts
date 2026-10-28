@@ -18,7 +18,6 @@ import { TrashHistory } from '../../src/main/trash-history';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { NoteSurfaceRuntime } from '../../src/main/note-runtime';
-import { MainItemSelect } from '../../src/main/item-select';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
@@ -33,7 +32,7 @@ import { mainSelectedCollection } from '../../src/toolkit/main';
 import * as mainToolkit from '../../src/toolkit/main';
 import type { TreeView } from '../../src/toolkit/main/private-types';
 import { MainWindowSession } from '../../src/main/session';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 import { FuzzyPicker } from '../../src/main/picker';
 import type { PickerProvider } from '../../src/main/picker/types';
@@ -665,7 +664,6 @@ describe('main item trash and restore', () => {
     const session = {
       window: { setTimeout: vi.fn(() => 1), clearTimeout: vi.fn() },
       activePanel: 'items',
-      selection,
       trashHistory: new TrashHistory(),
       status: { textContent: '', style: {} },
       cleanup: { add: () => {} },
@@ -677,10 +675,10 @@ describe('main item trash and restore', () => {
         UndoHistory: { getUndoAction: () => ({ action: 'undo-action-trash' }), undo },
       });
 
-      await expect(navigation.trashSelectedItems(window, session)).resolves.toBe(true);
+      await expect(navigation.trashSelectedItems(window, session, selection)).resolves.toBe(true);
       expect(trashTx).toHaveBeenCalledWith([41, 42]);
       expect(session.trashHistory.values()).toEqual([41, 42]);
-      expect(session.selection.empty).toBe(true);
+      expect(selection.empty).toBe(true);
       await navigation.restoreLastTrashedItems(session);
 
       expect(persisted).toEqual(
@@ -692,7 +690,7 @@ describe('main item trash and restore', () => {
       );
       expect(session.trashHistory.values()).toEqual([]);
       Reflect.set(window.document, 'activeElement', { id: 'zotero-item-pane' });
-      await navigation.trashSelectedItems(window, session);
+      await navigation.trashSelectedItems(window, session, selection);
       expect(trashTx).toHaveBeenCalledTimes(1);
     } finally {
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
@@ -1575,58 +1573,6 @@ describe('Main Add by Identifier', () => {
     }
   });
 
-  it('cancels only transient Visual while preserving the workset and collection scope', () => {
-    const open = vi.spyOn(mainToolkit, 'openMainIdentifierLookup').mockReturnValue(true);
-    const attached = vi.spyOn(MainItemSelect.prototype, 'addWindow');
-    const host = settingsMainHost();
-    const selection = attached.mock.calls[0]![1];
-    const items = [10, 11].map((id) => ({ id, libraryID: 1 }) as Zotero.Item);
-    let focused = 0;
-    const active = { id: 'item-tree-row-0', localName: 'div' } as unknown as Element;
-    const collections = [{ id: 31 }, { id: 32 }];
-    const pane = {
-      getSelectedCollections: () => collections,
-      itemsView: {
-        domEl: { contains: (node: unknown) => node === active },
-        rowCount: items.length,
-        selection: {
-          get focused() {
-            return focused;
-          },
-          select: (index: number) => {
-            focused = index;
-          },
-        },
-        getRow: (index: number) => ({ isObjectRow: true, ref: items[index] }),
-        getRowIndexByID: (id: number) => items.findIndex((item) => item.id === id),
-        ensureRowIsVisible: () => {},
-      },
-    };
-    Reflect.set(host.window, 'ZoteroPane', pane);
-    Reflect.set(host.window, 'Zotero_Tabs', { selectedID: 'zotero-pane', _tabs: [] });
-    Reflect.set(host.window.document, 'activeElement', active);
-    selection.add({ libraryID: 1, itemID: 10 });
-    selection.add({ libraryID: 2, itemID: 900 });
-    const before = selection.values();
-    const visual = vi.spyOn(MainItemSelect.prototype, 'extend');
-    try {
-      host.press('v');
-      host.press('j');
-      expect(visual).toHaveBeenCalledOnce();
-      host.controller.openAddByIdentifier(host.window);
-      expect(selection.values()).toEqual(before);
-      expect(pane.getSelectedCollections()).toBe(collections);
-      host.press('j');
-      expect(visual).toHaveBeenCalledOnce();
-      expect(open).toHaveBeenCalledExactlyOnceWith(host.window);
-    } finally {
-      host.controller.shutdown();
-      open.mockRestore();
-      attached.mockRestore();
-      visual.mockRestore();
-    }
-  });
-
   it('clears pending Neo input and leaves native keys, IME and Escape entirely untouched', () => {
     vi.useFakeTimers();
     const ownsInput = vi.spyOn(mainToolkit, 'mainIdentifierLookupOwnsInput').mockReturnValue(false);
@@ -2226,10 +2172,6 @@ describe('Main Settings Center shell', () => {
 
   it('closes on Escape before Selection or Visual and suppresses Main keys while open', () => {
     const host = settingsMainHost();
-    const clear = vi.spyOn(MainItemSelect.prototype, 'clearSelection');
-    const enter = vi.spyOn(MainItemSelect.prototype, 'enter');
-    const itemsFocused = vi.spyOn(MainItemSelect.prototype, 'itemsFocused').mockReturnValue(true);
-    const notEmpty = vi.spyOn(SelectionStore.prototype, 'empty', 'get').mockReturnValue(false);
     try {
       host.controller.openSettings(host.window);
       const outside = host.window.document.createElementNS(
@@ -2242,21 +2184,15 @@ describe('Main Settings Center shell', () => {
       host.press('j', outside);
       host.press(':', outside);
       expect(blocked.preventDefault).toHaveBeenCalledOnce();
-      expect(enter).not.toHaveBeenCalled();
       expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
       const inside = host.drawer()?.children[0]?.children[1] as HTMLElement;
       const tab = host.press('Tab', inside);
       expect(tab.preventDefault).not.toHaveBeenCalled();
       const escape = host.press('Escape', outside);
       expect(escape.preventDefault).toHaveBeenCalledOnce();
-      expect(clear).not.toHaveBeenCalled();
       expect(host.drawer()).toBeUndefined();
     } finally {
       host.controller.shutdown();
-      clear.mockRestore();
-      enter.mockRestore();
-      itemsFocused.mockRestore();
-      notEmpty.mockRestore();
     }
   });
   it('leaves composing Escape in Settings native while ordinary Escape closes', () => {

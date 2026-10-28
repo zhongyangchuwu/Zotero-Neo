@@ -10,7 +10,7 @@ import type { CollectionConfirmation } from '../../src/modules/collections/actio
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { setCollectionMembership } from '../../src/operations/item-collections';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 import { PickerRuntime } from '../../src/main/picker/runtime';
 
@@ -98,7 +98,7 @@ describe('collection membership targets', () => {
     h.selection.add({ libraryID: 1, itemID: 3 });
 
     const resolved = resolveCollectionMembershipTargets(
-      MAIN_ITEM_TARGET.resolve(h.window, h.session),
+      MAIN_ITEM_TARGET.resolve(h.window, h.selection),
     );
 
     expect(resolved.items.map((value) => value.id)).toEqual([1, 3]);
@@ -114,13 +114,13 @@ describe('collection membership targets', () => {
     h.selection.add({ libraryID: 2, itemID: 2 });
 
     expect(() =>
-      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.session)),
+      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.selection)),
     ).toThrow('Collection membership requires one library');
 
     h.selection.clear();
     h.selection.add({ libraryID: 1, itemID: 99 });
     expect(() =>
-      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.session)),
+      resolveCollectionMembershipTargets(MAIN_ITEM_TARGET.resolve(h.window, h.selection)),
     ).toThrow('Selection contains unavailable items');
   });
 
@@ -211,7 +211,7 @@ describe('CollectionMembershipActions', () => {
     const request = {
       source: 'main' as const,
       label: 'Selection' as const,
-      resolveTargets: () => MAIN_ITEM_TARGET.resolve(h.window, h.session),
+      resolveTargets: () => MAIN_ITEM_TARGET.resolve(h.window, h.selection),
     };
     actions.open(request, true);
     await Promise.resolve();

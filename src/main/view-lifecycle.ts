@@ -8,7 +8,7 @@ import {
   restoreMainItemCursorAnchor,
   type MainItemViewSelectionIntent,
 } from '../toolkit/main';
-import type { ItemRef } from './selection-store';
+import type { ItemRef } from '../core/item-ref';
 
 /** Keeps Neo's stable Cursor identity anchored to Zotero's current item-tree View. */
 export function installMainViewLifecycle(

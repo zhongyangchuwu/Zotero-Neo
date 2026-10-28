@@ -7,7 +7,7 @@ import type { CollectionConfirmation } from '../../src/modules/collections/actio
 import type { PickerProvider } from '../../src/main/picker/types';
 import type { MainNavigation } from '../../src/main/navigation';
 import { FuzzyPicker } from '../../src/main/picker';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
 
 afterEach(() => {
@@ -19,7 +19,7 @@ function workflowHarness() {
   vi.useFakeTimers();
   const { window, session, cleanups } = createPickerHarness();
   session.activePanel = 'items';
-  Object.assign(session, { selection: new SelectionStore() });
+  const selection = new SelectionStore();
   const library = {
     libraryID: 1,
     name: 'My library',
@@ -222,6 +222,7 @@ function workflowHarness() {
   return {
     window,
     session,
+    selection,
     cleanups,
     host,
     request,
@@ -271,7 +272,7 @@ describe('collection workflows', () => {
 
   it('continuously adds to the frozen active collection without selecting items, clearing Selection, or loading the library', async () => {
     const h = workflowHarness();
-    h.session.selection.add({ libraryID: 1, itemID: 1 });
+    h.selection.add({ libraryID: 1, itemID: 1 });
     await h.start(() => h.actions.addItems());
     expect(h.session.picker.filtered.find((candidate) => candidate.id === 1)?.meta).toContain(
       'Already',
@@ -286,7 +287,7 @@ describe('collection workflows', () => {
     expect(h.session.picker.operationStatus?.textContent).toContain(
       'Current filters remain unchanged',
     );
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: 1 }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: 1 }]);
     expect(h.selectItem).not.toHaveBeenCalled();
     expect(h.navigate).not.toHaveBeenCalled();
     expect(h.getAll).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 import type { MainWindow } from '../../core/contracts';
 import { CleanupFailure } from '../../core/cleanup';
-import type { ItemRef } from '../../main/selection-store';
+import type { ItemRef } from '../../core/item-ref';
 import { mainItemRefAtRow } from './host';
 
 export interface MainItemMarkerStyle {

@@ -18,6 +18,8 @@
 
 ### 调整 {#changed}
 
+- 将 Main Persistent Selection、Visual 与 Selection Panel 接入按窗口隔离的 `worksets` 模块，Main session 不再预建工作集状态。Cursor、原生多目标取消和共享行渲染仍由 Main 持有；目标与 Trash 只消费明确 Selection 端口，Reveal 使用既有导航历史。保留原有按键、隐藏成员拒绝和目标优先级；旧面板、计时器与导航完成不能影响替换实例，重入退休时晚到的主题/外观句柄也会释放。每次面板关闭即释放自身主题，不再由模块寿命的清理闭包持有已分离 DOM。不开放模块开关。
+
 - 将 Reader copy/link hints 接入按 ReaderSession 隔离的 `reader-hints` 模块，拥有可见目标、临时标签、链接激活与目的地 cue。保留 Normal `y` / `f`、精确分屏视图、IME/原生输入优先级及唯一导航历史；父作用域退休后旧确认、异步完成和 RAF 不再写入或重画，清理失败仍释放其他自有资源。原始业务错误与清理异常分别诊断，不再产生未处理的导航 Promise rejection。共享标签辅助继续供 Flash 使用，不开放模块开关。
 
 - 将分类工作流接入按窗口隔离的 `collections` 模块，拥有候选来源、重命名草稿和精确 Picker 释放句柄；移除 controller 的共享业务实例。保留 Main/Reader 目标、原有九个 Main 命令、查询/取消与事务回滚语义，不新增 Note 命令。修复命名对话框期间模块退休后仍弹出下一确认框的问题，旧交互不能写入或关闭替换 Picker。

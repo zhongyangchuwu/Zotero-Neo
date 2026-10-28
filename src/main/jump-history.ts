@@ -49,6 +49,7 @@ export class MainNavigationExecutor {
   readonly #viewActions: MainViewActions;
   readonly #reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>;
   readonly #isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean;
+  readonly #hasLocalOverlay: (session: MainWindowSession) => boolean;
   readonly #scopeMotionSources = new WeakMap<
     MainWindowSession,
     {
@@ -64,13 +65,15 @@ export class MainNavigationExecutor {
     navigation: MainNavigation,
     viewActions: MainViewActions,
     reader: Pick<ReaderControllerApi, 'captureJumpLocation' | 'restoreJumpLocation'>,
-    isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean = () => true,
+    isSessionCurrent: (window: MainWindow, session: MainWindowSession) => boolean,
+    hasLocalOverlay: (session: MainWindowSession) => boolean,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#viewActions = viewActions;
     this.#reader = reader;
     this.#isSessionCurrent = isSessionCurrent;
+    this.#hasLocalOverlay = hasLocalOverlay;
   }
 
   execute(
@@ -179,7 +182,7 @@ export class MainNavigationExecutor {
       cursor: currentMainItemCursorRef(window),
       panel:
         destinationPanel ??
-        (session.picker?.open || session.selectionPanel?.open
+        (this.#hasLocalOverlay(session)
           ? session.activePanel
           : this.#navigation.panel(window, session)),
     };

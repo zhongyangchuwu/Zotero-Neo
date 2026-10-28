@@ -1,24 +1,27 @@
 import type { MainWindow } from '../core/contracts';
 import type { ItemTargetSet } from '../core/item-target';
 import { normalizeTopLevelItemTargets } from '../platform/zotero-items';
-import { resolveMainEffectiveTargets, type MainCurrentTarget } from './action-targets';
-import type { MainWindowSession } from './session';
+import {
+  resolveMainEffectiveTargets,
+  type MainCurrentTarget,
+  type MainSelectionSource,
+} from './action-targets';
 
 export interface MainItemTargetResolver {
   readonly source: 'main';
   resolve(
     window: MainWindow,
-    session: MainWindowSession,
+    selection: Pick<MainSelectionSource, 'values'> | null,
     currentTarget?: MainCurrentTarget | null,
   ): ItemTargetSet<'main'>;
 }
 
 export function resolveMainItemTarget(
   window: MainWindow,
-  session: MainWindowSession,
+  selection: Pick<MainSelectionSource, 'values'> | null,
   currentTarget?: MainCurrentTarget | null,
 ): ItemTargetSet<'main'> {
-  const resolved = resolveMainEffectiveTargets(window, session, currentTarget);
+  const resolved = resolveMainEffectiveTargets(window, selection, currentTarget);
   return {
     source: 'main',
     items: normalizeTopLevelItemTargets(resolved.items),

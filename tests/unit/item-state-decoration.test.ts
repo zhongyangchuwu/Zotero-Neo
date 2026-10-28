@@ -4,8 +4,9 @@ import {
   MainItemStateDecoration,
   itemDecorationClasses,
   type MainVisualRange,
+  type MainItemDecorationRegistration,
 } from '../../src/main/item-state-decoration';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import {
   resolveInteractionAppearance,
   type InteractionAppearanceSource,
@@ -49,14 +50,21 @@ function decorationHarness(
   let currentRoot: HTMLElement;
   const body = {} as HTMLElement;
   const parent = {} as HTMLElement;
-  const style = {
-    id: '',
-    textContent: '',
-    isConnected: true,
-    remove: vi.fn((): void => {
-      Reflect.set(style, 'isConnected', false);
-    }),
-  } as unknown as HTMLStyleElement;
+  const styles: HTMLStyleElement[] = [];
+  const makeStyle = (): HTMLStyleElement => {
+    const style = {
+      id: '',
+      textContent: '',
+      isConnected: true,
+      remove: vi.fn((): void => {
+        Reflect.set(style, 'isConnected', false);
+      }),
+    } as unknown as HTMLStyleElement;
+    styles.push(style);
+    return style;
+  };
+  const style = makeStyle();
+  let firstStyle = true;
   const mutations: ObservedMutation[] = [];
   const timers = new Map<number, () => void>();
   let nextTimer = 0;
@@ -111,7 +119,13 @@ function decorationHarness(
       body,
       head: { append: vi.fn() },
       documentElement: {},
-      createElementNS: () => style,
+      createElementNS: () => {
+        if (firstStyle) {
+          firstStyle = false;
+          return style;
+        }
+        return makeStyle();
+      },
       getElementById: (id: string) => (id === 'item-tree-main-default' ? currentRoot : null),
     },
     ZoteroPane: {
@@ -175,6 +189,7 @@ function decorationHarness(
     body,
     parent,
     style,
+    styles,
     selection,
     appearance,
     decoration,
@@ -243,10 +258,97 @@ describe('Main item state decoration', () => {
     ).toEqual(['zotero-neo-selection']);
   });
 
+  it('releases an appearance observer returned after its owner is replaced', () => {
+    const host = decorationHarness([0, 1], undefined);
+    let current = true;
+    const replacement: { current?: MainItemDecorationRegistration } = {};
+    const release = vi.fn();
+    const appearance = {
+      appearance: host.appearance.appearance,
+      observe: () => {
+        current = false;
+        replacement.current = host.decoration.addWindow(
+          host.window,
+          () => ({ has: (ref) => ref.itemID === 2, visualRange: () => undefined }),
+          host.appearance,
+          () => true,
+        );
+        return release;
+      },
+    } as InteractionAppearanceSource;
+    host.decoration.addWindow(
+      host.window,
+      () => null,
+      appearance,
+      () => current,
+    );
+    host.flush();
+    expect(release).toHaveBeenCalledOnce();
+    expect(host.root().rows[1]!.classes.has('zotero-neo-selection')).toBe(true);
+    expect(host.mutations.filter((mutation) => !mutation.disconnected)).toHaveLength(2);
+    replacement.current?.dispose();
+  });
+
+  it('releases a renderer returned after replacement during native installation', () => {
+    const host = decorationHarness([0, 1], undefined);
+    let current = true;
+    const replacement: { current?: MainItemDecorationRegistration } = {};
+    const root = host.root();
+    vi.mocked(root.addEventListener).mockImplementationOnce(() => {
+      current = false;
+      replacement.current = host.decoration.addWindow(
+        host.window,
+        () => ({ has: (ref) => ref.itemID === 2, visualRange: () => undefined }),
+        host.appearance,
+        () => true,
+      );
+    });
+    host.decoration.addWindow(
+      host.window,
+      () => null,
+      host.appearance,
+      () => current,
+    );
+    host.flush();
+    expect(root.rows[1]!.classes.has('zotero-neo-selection')).toBe(true);
+    expect(root.scrollListeners.size).toBe(1);
+    expect(host.mutations.filter((mutation) => !mutation.disconnected)).toHaveLength(2);
+    expect(host.styles[0]!.isConnected).toBe(false);
+    expect(host.styles[1]!.isConnected).toBe(true);
+    replacement.current?.dispose();
+  });
+
+  it('keeps Cursor live when a projection retires', () => {
+    const host = decorationHarness([0, 1], { first: 0, last: 1, count: 2 });
+    host.selection.add({ libraryID: 1, itemID: 1 });
+    let live = true;
+    const registration = host.decoration.addWindow(
+      host.window,
+      () => (live ? { has: (ref) => host.selection.has(ref), visualRange: host.visual } : null),
+      host.appearance,
+      () => true,
+    );
+    host.flush();
+    expect(host.root().rows[0]!.classes.has('zotero-neo-selection')).toBe(true);
+    live = false;
+    host.setFocused(1);
+    host.decoration.refresh(host.window);
+    host.flush();
+    expect(host.root().rows[0]!.classes.has('zotero-neo-selection')).toBe(false);
+    expect(host.root().rows[0]!.classes.has('zotero-neo-visual')).toBe(false);
+    expect(host.root().rows[1]!.classes.has('zotero-neo-cursor')).toBe(true);
+    registration.dispose();
+  });
+
   it('keeps large Visual renders proportional to rendered rows and coalesces relevant mutations', () => {
     const host = decorationHarness([0, 4_999, 9_999], { first: 0, last: 9_999, count: 10_000 });
     host.setFocused(4_999);
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
+    host.decoration.addWindow(
+      host.window,
+      () => ({ has: (ref) => host.selection.has(ref), visualRange: host.visual }),
+      host.appearance,
+      () => true,
+    );
     host.flush();
 
     expect(host.getRow).toHaveBeenCalledTimes(4);
@@ -270,7 +372,12 @@ describe('Main item state decoration', () => {
   it('rebinds replacement roots and disconnects every observer during cleanup', () => {
     const host = decorationHarness([0, 1], { first: 0, last: 1, count: 2 });
     host.selection.add({ libraryID: 1, itemID: 1 });
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
+    const registration = host.decoration.addWindow(
+      host.window,
+      () => ({ has: (ref) => host.selection.has(ref), visualRange: host.visual }),
+      host.appearance,
+      () => true,
+    );
     host.flush();
     const previous = host.replaceRoot([1, 2]);
     const previousRows = previous.rows;
@@ -287,7 +394,7 @@ describe('Main item state decoration', () => {
     expect(host.root().addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function), true);
 
     const currentRoot = host.root();
-    host.decoration.removeWindow(host.window);
+    registration.dispose();
     expect(currentRoot.removeEventListener).toHaveBeenCalledWith(
       'scroll',
       expect.any(Function),
@@ -301,14 +408,24 @@ describe('Main item state decoration', () => {
   it('leaves current Selection rows untouched by retired renders, observers and scroll callbacks', () => {
     const host = decorationHarness([0, 1], undefined);
     host.selection.add({ libraryID: 1, itemID: 1 });
-    host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
+    const oldRegistration = host.decoration.addWindow(
+      host.window,
+      () => ({ has: (ref) => host.selection.has(ref), visualRange: host.visual }),
+      host.appearance,
+      () => true,
+    );
     const queued = [...host.timers.values()][0]!;
     const callbacks = host.mutations.map((mutation) => mutation.callback);
     const scroll = vi.mocked(host.root().addEventListener).mock.calls[0]![1] as EventListener;
-    host.decoration.removeWindow(host.window);
+    oldRegistration.dispose();
     const selection = new SelectionStore();
     selection.add({ libraryID: 1, itemID: 2 });
-    host.decoration.addWindow(host.window, selection, host.visual, host.appearance);
+    const registration = host.decoration.addWindow(
+      host.window,
+      () => ({ has: (ref) => selection.has(ref), visualRange: host.visual }),
+      host.appearance,
+      () => true,
+    );
     host.flush();
     queued();
     for (const callback of callbacks) callback([], {} as MutationObserver);
@@ -316,7 +433,7 @@ describe('Main item state decoration', () => {
     expect(host.root().rows[0]!.classes.has('zotero-neo-selection')).toBe(false);
     expect(host.root().rows[1]!.classes.has('zotero-neo-selection')).toBe(true);
     expect(host.timers.size).toBe(0);
-    host.decoration.removeWindow(host.window);
+    registration.dispose();
   });
 
   it('releases acquired resources and retires callbacks after an initial installation failure', () => {
@@ -375,7 +492,12 @@ describe('Main item state decoration', () => {
     (boundary) => {
       const host = decorationHarness([0, 1], { first: 0, last: 1, count: 2 });
       host.selection.add({ libraryID: 1, itemID: 1 });
-      host.decoration.addWindow(host.window, host.selection, host.visual, host.appearance);
+      const registration = host.decoration.addWindow(
+        host.window,
+        () => ({ has: (ref) => host.selection.has(ref), visualRange: host.visual }),
+        host.appearance,
+        () => true,
+      );
       host.flush();
       const failure = new Error('live decoration cleanup failed');
       const failing =
@@ -387,7 +509,7 @@ describe('Main item state decoration', () => {
       });
       let observed: unknown;
       try {
-        host.decoration.removeWindow(host.window);
+        registration.dispose();
       } catch (error) {
         observed = error;
       }

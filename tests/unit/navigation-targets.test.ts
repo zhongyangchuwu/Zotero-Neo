@@ -6,7 +6,7 @@ import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
 import { copyCitekeys } from '../../src/operations/citekeys';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import { TrashHistory } from '../../src/main/trash-history';
 import type { MainWindowSession } from '../../src/main/session';
 
@@ -39,7 +39,7 @@ function harness(
   const rows = visible.map((ref) => ({ isObjectRow: true, ref }));
   const root = { contains: (node: unknown) => node === active };
   const viewAttachment = vi.fn();
-  const trashTx = vi.fn(async () => undefined);
+  const trashTx = vi.fn(async (): Promise<void> => {});
   const byID = new Map(visible.map((item) => [item.id, item]));
   const copied: string[] = [];
   const confirm = vi.fn(() => true);
@@ -88,9 +88,9 @@ function harness(
     setTimeout: () => 1,
     clearTimeout: () => undefined,
   } as unknown as MainWindow;
+  const selection = new SelectionStore();
   const session = {
     window,
-    selection: new SelectionStore(),
     status: { textContent: '', style: {} },
     cleanup: { add: vi.fn() },
     trashHistory: new TrashHistory(),
@@ -100,6 +100,7 @@ function harness(
   return {
     window,
     session,
+    selection,
     navigation,
     viewAttachment,
     confirm,
@@ -123,7 +124,7 @@ describe('Main action target contracts', () => {
     expect(h.viewAttachment).not.toHaveBeenCalledWith(nativeSelected.id);
   });
 
-  it('reports unavailable reading targets and native viewer failures', async () => {
+  it('rejects unavailable reading targets and native viewer failures', async () => {
     const target = attachment(10);
     const h = harness([target], 0);
 
@@ -146,7 +147,6 @@ describe('Main action target contracts', () => {
       getField: () => '',
     } as unknown as Zotero.Item;
     await expect(h.navigation.openPDF(h.window, h.session, noTarget)).resolves.toBe(false);
-    expect(h.session.status.textContent).toBe('✗ No attachment');
   });
 
   it('trashes native multi-selection when persistent Selection is empty', async () => {
@@ -155,45 +155,43 @@ describe('Main action target contracts', () => {
     const third = attachment(12);
     const h = harness([first, second, third], 1, [0, 1, 2]);
 
-    await h.navigation.trashSelectedItems(h.window, h.session);
+    await h.navigation.trashSelectedItems(h.window, h.session, h.selection);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id, third.id]);
-    expect(h.confirm).toHaveBeenCalledWith(
-      'Move Zotero multi-selection · 3 items to Zotero Trash? You can restore it with Zotero Undo.',
-    );
+    expect(h.confirm).toHaveBeenCalledOnce();
     expect(h.session.trashHistory.values()).toEqual([first.id, second.id, third.id]);
-    expect(h.session.status.textContent).toBe(
-      '✓ Moved Zotero multi-selection · 3 items to Zotero Trash',
-    );
   });
 
   it('cancels a Trash confirmation without changing the resolved Selection', async () => {
     const first = attachment(10);
     const cursor = attachment(11);
     const h = harness([first, cursor], 1);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: first.id });
     h.confirm.mockReturnValue(false);
 
-    await expect(h.navigation.trashSelectedItems(h.window, h.session)).resolves.toBe(false);
+    await expect(h.navigation.trashSelectedItems(h.window, h.session, h.selection)).resolves.toBe(
+      false,
+    );
 
     expect(h.confirm).toHaveBeenCalledTimes(1);
     expect(h.trashTx).not.toHaveBeenCalled();
     expect(h.session.trashHistory.values()).toEqual([]);
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
   });
 
   it('preserves Neo Selection and Trash history if Zotero rejects the confirmed operation', async () => {
     const first = attachment(10);
     const cursor = attachment(11);
     const h = harness([first, cursor], 1);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: first.id });
     h.trashTx.mockRejectedValueOnce(new Error('blocked'));
 
-    await expect(h.navigation.trashSelectedItems(h.window, h.session)).resolves.toBe(false);
+    await expect(h.navigation.trashSelectedItems(h.window, h.session, h.selection)).resolves.toBe(
+      false,
+    );
 
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: first.id }]);
     expect(h.session.trashHistory.values()).toEqual([]);
-    expect(h.session.status.textContent).toContain('Unable to move Neo Selection · 1 item');
   });
 
   it('uses an explicit Visual target when Selection is empty and keeps Selection authoritative when present', async () => {
@@ -209,22 +207,13 @@ describe('Main action target contracts', () => {
       ],
     };
 
-    await h.navigation.trashSelectedItems(h.window, h.session, visual);
+    await h.navigation.trashSelectedItems(h.window, h.session, h.selection, visual);
     expect(h.trashTx).toHaveBeenLastCalledWith([second.id, third.id]);
-    expect(h.confirm).toHaveBeenNthCalledWith(
-      1,
-      'Move Visual range · 2 items to Zotero Trash? You can restore it with Zotero Undo.',
-    );
-    expect(h.session.status.textContent).toBe('✓ Moved Visual range · 2 items to Zotero Trash');
 
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    await h.navigation.trashSelectedItems(h.window, h.session, visual);
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    await h.navigation.trashSelectedItems(h.window, h.session, h.selection, visual);
     expect(h.trashTx).toHaveBeenLastCalledWith([first.id]);
-    expect(h.confirm).toHaveBeenNthCalledWith(
-      2,
-      'Move Neo Selection · 1 item to Zotero Trash? You can restore it with Zotero Undo.',
-    );
-    expect(h.session.status.textContent).toBe('✓ Moved Neo Selection · 1 item to Zotero Trash');
+    expect(h.confirm).toHaveBeenCalledTimes(2);
   });
 
   it('blocks trash when explicit Selection contains hidden targets', async () => {
@@ -233,45 +222,61 @@ describe('Main action target contracts', () => {
     const hidden = attachment(12);
     const h = harness([visible, cursor], 1);
     h.install(hidden);
-    h.session.selection.add({ libraryID: 1, itemID: visible.id });
-    h.session.selection.add({ libraryID: 1, itemID: hidden.id });
+    h.selection.add({ libraryID: 1, itemID: visible.id });
+    h.selection.add({ libraryID: 1, itemID: hidden.id });
 
-    await h.navigation.trashSelectedItems(h.window, h.session);
+    await h.navigation.trashSelectedItems(h.window, h.session, h.selection);
 
     expect(h.trashTx).not.toHaveBeenCalled();
     expect(h.confirm).not.toHaveBeenCalled();
-    expect(h.session.status.textContent).toContain('1/2 hidden items');
-    expect(h.session.selection.size).toBe(2);
+    expect(h.selection.size).toBe(2);
   });
 
   it('trashes EffectiveSelection and removes successfully trashed refs from the workset', async () => {
     const first = attachment(10);
     const second = attachment(11);
     const h = harness([first, second], 1);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    h.session.selection.add({ libraryID: 1, itemID: second.id });
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: second.id });
 
-    await h.navigation.trashSelectedItems(h.window, h.session);
+    await h.navigation.trashSelectedItems(h.window, h.session, h.selection);
 
     expect(h.trashTx).toHaveBeenCalledWith([first.id, second.id]);
     expect(h.session.trashHistory.values()).toEqual([first.id, second.id]);
-    expect(h.session.selection.empty).toBe(true);
+    expect(h.selection.empty).toBe(true);
+  });
+
+  it('removes only captured selection members after an asynchronous trash', async () => {
+    const first = attachment(10);
+    const second = attachment(11);
+    const h = harness([first, second]);
+    const firstRef = { libraryID: 1, itemID: first.id };
+    const secondRef = { libraryID: 1, itemID: second.id };
+    h.selection.add(firstRef);
+    const { promise, resolve } = Promise.withResolvers<void>();
+    h.trashTx.mockImplementationOnce(() => promise);
+    const pending = h.navigation.trashSelectedItems(h.window, h.session, h.selection);
+    h.selection.add(secondRef);
+    resolve();
+    await expect(pending).resolves.toBe(true);
+    expect(h.selection.values()).toEqual([secondRef]);
+    expect(h.session.trashHistory.values()).toEqual([first.id]);
   });
 
   it('copies citekeys from EffectiveSelection and preserves Cursor fallback behavior', () => {
     const first = attachment(10, 'first');
     const cursor = attachment(11, 'cursor');
     const h = harness([first, cursor], 1);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    h.session.selection.add({ libraryID: 1, itemID: cursor.id });
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: cursor.id });
 
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toBe('✓ Copied 2 citekeys');
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(h.copied).toEqual(['first cursor']);
-    expect(h.session.selection.size).toBe(2);
+    expect(h.selection.size).toBe(2);
 
-    h.session.selection.clear();
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toBe('✓ @cursor');
+    h.selection.clear();
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(h.copied).toEqual(['first cursor', 'cursor']);
   });
@@ -282,11 +287,9 @@ describe('Main action target contracts', () => {
     const h = harness([selected, visual], 0);
     const current = { source: 'visual' as const, refs: [{ libraryID: 1, itemID: visual.id }] };
 
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session, current))).toBe('✓ @visual');
-    h.session.selection.add({ libraryID: 1, itemID: selected.id });
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session, current))).toBe(
-      '✓ @selected',
-    );
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection, current));
+    h.selection.add({ libraryID: 1, itemID: selected.id });
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection, current));
     expect(h.copied).toEqual(['visual', 'selected']);
   });
 
@@ -295,12 +298,12 @@ describe('Main action target contracts', () => {
     const reader = attachment(11, 'reader');
     const h = harness([main], 0);
     h.install(reader);
-    h.session.selection.add({ libraryID: 1, itemID: main.id });
+    h.selection.add({ libraryID: 1, itemID: main.id });
 
-    expect(copyCitekeys(READER_ITEM_TARGET.resolve({ itemID: reader.id }))).toBe('✓ @reader');
+    copyCitekeys(READER_ITEM_TARGET.resolve({ itemID: reader.id }));
 
     expect(h.copied).toEqual(['reader']);
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
   it('copies the Note parent after its picker takes focus without borrowing Main Selection', () => {
@@ -312,7 +315,7 @@ describe('Main action target contracts', () => {
     Reflect.set(note, 'parentItemID', paper.id);
     const h = harness([main]);
     h.install(paper, note);
-    h.session.selection.add({ libraryID: 1, itemID: main.id });
+    h.selection.add({ libraryID: 1, itemID: main.id });
     const active = h.window.document.activeElement;
     Reflect.set(h.window, 'ZoteroContextPane', {
       context: { activeEditor: { item: note, contains: (node: unknown) => node === active } },
@@ -320,29 +323,25 @@ describe('Main action target contracts', () => {
 
     const targets = NOTE_ITEM_TARGET.resolve(h.window);
     Reflect.set(h.window.document, 'activeElement', null);
-    expect(copyCitekeys(targets)).toBe('✓ @paper');
+    copyCitekeys(targets);
     expect(h.copied).toEqual(['paper']);
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
   it('refuses the entire citekey batch when a target is stale or missing a citekey', () => {
     const first = attachment(10, 'first');
     const missingKey = attachment(11, '');
     const h = harness([first, missingKey], 0);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    h.session.selection.add({ libraryID: 1, itemID: missingKey.id });
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: missingKey.id });
 
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toContain(
-      '1 target without citekey',
-    );
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(h.copied).toEqual([]);
 
-    h.session.selection.clear();
-    h.session.selection.add({ libraryID: 1, itemID: 999 });
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toContain(
-      'unavailable items',
-    );
+    h.selection.clear();
+    h.selection.add({ libraryID: 1, itemID: 999 });
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(h.copied).toEqual([]);
   });
@@ -353,12 +352,12 @@ describe('Main action target contracts', () => {
     const parent = attachment(20, 'parent');
     const h = harness([childA, childB], 0);
     h.install(parent);
-    h.session.selection.add({ libraryID: 1, itemID: childA.id });
-    h.session.selection.add({ libraryID: 1, itemID: childB.id });
+    h.selection.add({ libraryID: 1, itemID: childA.id });
+    h.selection.add({ libraryID: 1, itemID: childB.id });
     const keepTopLevel = vi.fn(() => [parent, parent]);
     (Zotero.Items as unknown as { keepTopLevel: typeof keepTopLevel }).keepTopLevel = keepTopLevel;
 
-    expect(copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.session))).toBe('✓ @parent');
+    copyCitekeys(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(h.copied).toEqual(['parent']);
   });

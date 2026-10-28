@@ -13,7 +13,7 @@ import { ModuleHost } from '../../src/core/module-host';
 import { createTagModule } from '../../src/modules/tags';
 import { mainTagScope } from '../../src/toolkit/main';
 import { MainViewActions } from '../../src/main/view-actions';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -115,7 +115,6 @@ function harness(options: {
   for (const item of items) selection.add({ libraryID: item.libraryID, itemID: item.id });
   const session = {
     window,
-    selection,
     status: { textContent: '', style: {} },
     cleanup: { add: vi.fn() },
   } as unknown as MainWindowSession;
@@ -152,6 +151,7 @@ function harness(options: {
     modules,
     window,
     session,
+    selection,
     setFilter,
     tagSelector,
     activeFilters,
@@ -194,7 +194,7 @@ describe('semantic Tag actions', () => {
     installZotero([first, second], [{ tag: 'alpha' }, { tag: 'robotics' }]);
     const h = harness({ items: [first, second] });
 
-    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const add = h.open();
     expect(add.scope).toBe('tags');
     expect((await add.options.source!.load()).map((item) => item.tagName)).toEqual([
@@ -214,7 +214,7 @@ describe('semantic Tag actions', () => {
     expect(first.hasTag('robotics')).toBe(true);
     expect(second.hasTag('robotics')).toBe(true);
 
-    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const remove = h.open();
     expect((await remove.options.source!.load()).map((item) => item.tagName).sort()).toEqual([
       'alpha',
@@ -239,10 +239,10 @@ describe('semantic Tag actions', () => {
     const selected = tagItem(2);
     installZotero([nativeOnly, selected], [{ tag: 'robotics' }]);
     const h = harness({ items: [nativeOnly, selected] });
-    h.session.selection.clear();
-    h.session.selection.add({ libraryID: selected.libraryID, itemID: selected.id });
+    h.selection.clear();
+    h.selection.add({ libraryID: selected.libraryID, itemID: selected.id });
 
-    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const add = h.open();
     await add.options.confirm?.(
       {
@@ -280,7 +280,7 @@ describe('semantic Tag actions', () => {
 
     expect(main.hasTag('robotics')).toBe(false);
     expect(reader.hasTag('robotics')).toBe(true);
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
   it('adds a Note tag to its parent item without touching Main Selection', async () => {
@@ -314,16 +314,16 @@ describe('semantic Tag actions', () => {
     expect(parent.hasTag('robotics')).toBe(true);
     expect(note.hasTag('robotics')).toBe(false);
     expect(main.hasTag('robotics')).toBe(false);
-    expect(h.session.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
+    expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
   });
 
   it('refuses a partial Main tag mutation when Selection contains an unavailable item', () => {
     const selected = tagItem(2);
     installZotero([selected], [{ tag: 'robotics' }]);
     const h = harness({ items: [selected] });
-    h.session.selection.add({ libraryID: 1, itemID: 99 });
+    h.selection.add({ libraryID: 1, itemID: 99 });
 
-    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
 
     expect(() => h.open()).toThrow('Tag action did not open a chooser');
   });
@@ -535,7 +535,7 @@ describe('semantic Tag actions', () => {
     const item = tagItem(1);
     installZotero([item], [{ tag: 'robotics' }]);
     const h = harness({ items: [item] });
-    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.session);
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.selection);
     h.actions.add(targets);
     const chooser = h.open();
     const [candidate] = await chooser.options.source!.load();
@@ -560,7 +560,7 @@ describe('semantic Tag actions', () => {
       return item.id;
     });
     const h = harness({ items: [item] });
-    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.session));
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
     const chooser = h.open();
     const [candidate] = await chooser.options.source!.load();
     const pending = chooser.options.confirm!(candidate!, false);

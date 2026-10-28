@@ -1,7 +1,4 @@
-export interface ItemRef {
-  readonly libraryID: number;
-  readonly itemID: number;
-}
+import type { ItemRef } from '../../core/item-ref';
 
 function keyOf(ref: ItemRef): string {
   return `${ref.libraryID}:${ref.itemID}`;

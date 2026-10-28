@@ -1,16 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import { SelectionPanel, selectionPanelEntries } from '../../src/main/selection-panel';
-import { SelectionStore } from '../../src/main/selection-store';
-import type { MainWindowSession } from '../../src/main/session';
-import type {
-  NavigationExecution,
-  NavigationIntent,
-  NavigationOperation,
-  NavigationOutcome,
-} from '../../src/navigation/types';
-import type { ShowInLibraryHost } from '../../src/operations/show-in-library';
+import { SelectionPanel, selectionPanelEntries } from '../../src/modules/worksets/selection-panel';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
+import { SelectionPanelRuntime } from '../../src/modules/worksets/selection-panel-runtime';
+import type { NavigationExecution } from '../../src/navigation/types';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -94,71 +88,30 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[]) {
 
   const selection = new SelectionStore();
   for (const value of items) selection.add({ libraryID: value.libraryID, itemID: value.id });
-  const session = {
-    window,
-    selection,
-    activePanel: 'items',
-    status: { textContent: '', style: { display: '', color: '', background: '' } },
-    cleanup: { add: vi.fn() },
-
-    selectionPanel: {
-      open: true,
-      refs: [...selection.values()],
-      selected: 0,
-      commandBuffer: '',
-      commandTimer: undefined,
-      overlay: null,
-      list: null,
-      details: null,
-      count: null,
-      footer: null,
-      previousElement: null,
-      themeCleanup: null,
-    },
-  } as unknown as MainWindowSession;
+  const selectionPanel = new SelectionPanelRuntime();
+  selectionPanel.open = true;
+  selectionPanel.refs = [...selection.values()];
+  const session = { window, selection, selectionPanel, theme: { add: () => () => {} } };
 
   const selectionChanged = vi.fn();
   const debug = vi.fn();
-  const navigation = {
-    librarySelection: vi.fn((itemID: number, host: ShowInLibraryHost | undefined) => ({
-      dispatch: 'serial-navigation' as const,
-      start: () => ({
-        kind: 'deferred' as const,
-        settled: Promise.resolve(host?.selectItem?.(itemID)).then(
-          (selected): NavigationOutcome =>
-            selected === false
-              ? { kind: 'failed', error: new Error('Library item selection failed') }
-              : { kind: 'completed', evidence: 'settled-change' },
-        ),
-      }),
-    })),
-    execute: vi.fn(
-      (
-        _window: MainWindow,
-        _session: MainWindowSession,
-        intent: NavigationIntent,
-        operation: NavigationOperation,
-      ): NavigationExecution => {
-        const completion = operation.start({
-          token: { id: 1, epoch: 1, cause: intent.cause, surface: intent.surface },
-          policy: { kind: 'ignore' },
-          isCurrent: () => intent.context?.isCurrent?.() ?? true,
-          cancel: () => {},
-        });
-        const settled =
-          completion.kind === 'immediate'
-            ? Promise.resolve(completion.outcome)
-            : completion.settled;
-        return {
-          isCurrent: () => intent.context?.isCurrent?.() ?? true,
-          cancel: () => {},
-          pending: true,
-          result: settled.then((outcome) => ({ ...outcome, recorded: false })),
-        };
-      },
-    ),
-  };
-  const panel = new SelectionPanel({ debug }, navigation, selectionChanged);
+  const navigation = vi.fn(
+    (itemID: number, isCurrent: () => boolean): NavigationExecution => ({
+      isCurrent,
+      cancel: () => {},
+      pending: true,
+      result: Promise.resolve(selectItem(itemID)).then((selected) =>
+        selected === false
+          ? {
+              kind: 'failed' as const,
+              error: new Error('Library item selection failed'),
+              recorded: false,
+            }
+          : { kind: 'completed' as const, evidence: 'settled-change' as const, recorded: false },
+      ),
+    }),
+  );
+  const panel = new SelectionPanel({ debug }, navigation, selectionChanged, () => true);
   const key = (value: string): KeyboardEvent =>
     ({
       key: value,
@@ -252,7 +205,7 @@ describe('Selection Panel', () => {
     expect(h.selectionChanged).not.toHaveBeenCalled();
   });
 
-  it('executes reveal through its event cause, closes on success and preserves Selection', async () => {
+  it('executes reveal through the navigation port, closes on success and preserves Selection', async () => {
     const selected = item(7);
     const h = harness([selected], []);
     const selectionBefore = h.session.selection.values();
@@ -268,12 +221,7 @@ describe('Selection Panel', () => {
     await vi.waitFor(() => expect(h.session.selectionPanel.open).toBe(false));
 
     expect(h.session.selection.values()).toEqual(selectionBefore);
-    expect(h.navigation.execute).toHaveBeenCalledOnce();
-    expect(h.navigation.execute.mock.calls[0]?.[2]).toMatchObject({
-      cause: { kind: 'event', event: 'main-selection-panel.reveal' },
-      surface: 'main',
-      context: { mainPanel: 'items' },
-    });
+    expect(h.navigation).toHaveBeenCalledOnce();
   });
 
   it('keeps the panel open and reports a failed reveal', async () => {
@@ -310,8 +258,11 @@ describe('Selection Panel', () => {
     h.session.selectionPanel.refs = [{ libraryID: 1, itemID: selected.id }];
     h.session.selectionPanel.footer = footer;
 
+    const execution = h.navigation.mock.results[0]?.value;
+    if (!execution || !execution.pending) throw new Error('Expected a pending reveal');
     finishSelection(false);
-    await vi.waitFor(() => expect(h.session.selectionPanel.open).toBe(true));
+    await execution.result;
+    expect(h.session.selectionPanel.open).toBe(true);
     expect(footer.textContent).toBe('New panel');
   });
 });

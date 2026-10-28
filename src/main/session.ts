@@ -5,8 +5,6 @@ import type { PreferenceStore } from '../core/preference-store';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import { PickerRuntime } from './picker/runtime';
-import { SelectionStore } from './selection-store';
-import { SelectionPanelRuntime } from './selection-panel-runtime';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { NavigationHistoryState } from '../navigation/history';
 import type { NavigationCoordinator } from '../navigation/coordinator';
@@ -16,6 +14,7 @@ import { NoteSurfaceRuntime } from './note-runtime';
 import { TrashHistory } from './trash-history';
 import { ZoteroWindowRuntime } from './window-runtime';
 import type { SettingsCenter } from './settings-center';
+import type { MainItemDecorationRegistration } from './item-state-decoration';
 
 export type MainPanel = 'collections' | 'items';
 export type { NoteMode } from './note-runtime';
@@ -27,7 +26,6 @@ export class MainWindowSession {
   readonly status: HTMLElement;
   statusTimer: number | undefined;
   readonly focusOwnership: MainFocusOwnership;
-  readonly selection = new SelectionStore();
   activePanel: MainPanel = 'items';
   readonly input: InputRuntime;
   readonly prefixGuide: PrefixGuideRuntime;
@@ -36,7 +34,7 @@ export class MainWindowSession {
   navigationCoordinator: NavigationCoordinator | null = null;
   readonly picker = new PickerRuntime();
   readonly localFind = new MainLocalFindRuntime();
-  readonly selectionPanel = new SelectionPanelRuntime();
+  itemDecoration: MainItemDecorationRegistration | null = null;
   readonly note: NoteSurfaceRuntime;
   constructor(
     window: MainWindow,
@@ -57,10 +55,6 @@ export class MainWindowSession {
     this.cleanup.add(() => this.input.dispose());
     this.cleanup.add(() => this.note.input.dispose());
     this.cleanup.add(() => this.prefixGuide.dispose());
-    this.cleanup.add(() => {
-      this.window.clearTimeout(this.selectionPanel.commandTimer);
-      this.selectionPanel.commandTimer = undefined;
-    });
     this.cleanup.add(() => this.status.remove());
     this.cleanup.add(() => {
       const timer = this.statusTimer;
