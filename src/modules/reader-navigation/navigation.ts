@@ -1,59 +1,31 @@
-import { ReaderNavigationHost, readerWindow } from '../toolkit';
-import type { FocusDirection } from '../input/actions';
-import type { PdfWindow, ReaderRuntime } from './types';
+import { readerWindow, type ReaderNavigationHost } from '../../toolkit';
+import type { PdfWindow, ReaderRuntime } from '../../reader/types';
 import { outlineEntryKind } from './outline-presentation';
-import type { ReaderNativeOutlineEntry } from './types';
+import type { ReaderNativeOutlineEntry } from '../../reader/types';
 import {
   captionLabel,
   type ReaderCaptionTarget,
   type ReaderCaptionTargets,
 } from './caption-targets';
-import type { NavigationExecution, NavigationIntent, NavigationOutcome } from '../navigation/types';
-import type { ReaderNativeNavigation } from '../toolkit';
-
-/** Confirmation owners keep their cause and pass native work to the Reader execution adapter. */
-export type ReaderNavigationCommand = (
-  pdfWindow: PdfWindow,
-  intent: NavigationIntent,
-  perform: (navigation: ReaderNativeNavigation) => unknown,
-) => NavigationExecution | null;
+import type { ReaderNativeNavigation } from '../../toolkit';
+import type { NavigationOutcome } from '../../navigation/types';
 
 export interface ReaderNavigationDependencies {
   readonly reader: ReaderRuntime;
   readonly captions: ReaderCaptionTargets;
-  readonly activePdfWindow: () => PdfWindow;
-  readonly setActivePdfWindow: (pdfWindow: PdfWindow) => void;
-  readonly syncViews: () => void;
-  readonly scrollBoundary: (last: boolean, pdfWindow: PdfWindow) => void;
+  readonly host: ReaderNavigationHost;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
 
-/**
- * Owns navigation-oriented Zotero Reader host seams.
- *
- * Input policy, counts, selection state, smooth-scroll behavior, and annotation mutations remain
- * in ReaderSession. This adapter only delegates history/zoom/page/search/split/focus operations
- * to the current Zotero Reader and resolves the active primary/secondary PDF window.
- */
+/** Semantic traversal over the Reader's shared native navigation host. */
 export class ReaderNavigation {
   readonly #dependencies: ReaderNavigationDependencies;
   readonly #host: ReaderNavigationHost;
 
   constructor(dependencies: ReaderNavigationDependencies) {
     this.#dependencies = dependencies;
-    this.#host = new ReaderNavigationHost({
-      ...dependencies,
-      unavailable: (reason) =>
-        dependencies.showStatus(
-          reason === 'zoom'
-            ? 'Zoom unavailable'
-            : reason === 'page'
-              ? '✗ Page navigation not supported here'
-              : 'No active search — press / to search',
-          1500,
-        ),
-    });
+    this.#host = dependencies.host;
   }
 
   /** Uses authored, resolved Outline locations and the exact view's native history producer. */
@@ -198,7 +170,7 @@ export class ReaderNavigation {
         }
       }
     }
-    if (!target?.entry.location || !isCurrent() || this.activePdfWindow() !== pdfWindow)
+    if (!target?.entry.location || !isCurrent() || this.#host.activePdfWindow() !== pdfWindow)
       return false;
     await this.#host.navigatePosition(outline.view, target.entry.location);
     return isCurrent();
@@ -252,25 +224,5 @@ export class ReaderNavigation {
     navigation?: ReaderNativeNavigation,
   ): NavigationOutcome | Promise<NavigationOutcome> | void {
     return this.#host.find(next, pdfWindow, navigation);
-  }
-
-  toggleSplit(type: 'horizontal' | 'vertical'): void {
-    this.#host.toggleSplit(type);
-  }
-
-  canFocusDirection(direction: FocusDirection): boolean {
-    return this.#host.canFocusDirection(direction);
-  }
-
-  focusDirection(direction: FocusDirection): boolean {
-    return this.#host.focusDirection(direction);
-  }
-
-  activatePdfWindow(pdfWindow: PdfWindow): void {
-    this.#host.activatePdfWindow(pdfWindow);
-  }
-
-  activePdfWindow(): PdfWindow {
-    return this.#host.activePdfWindow();
   }
 }

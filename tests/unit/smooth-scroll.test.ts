@@ -1,14 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PreferenceReader } from '../../src/core/preferences';
 import {
   ReaderSmoothScroller,
   smoothScrollSpec,
   type SmoothScrollSpec,
-} from '../../src/reader/smooth-scroll';
+} from '../../src/modules/reader-navigation/smooth-scroll';
 import type { PdfWindow } from '../../src/reader/types';
 
 type FrameTask = (timestamp: number) => void;
+
+beforeEach(() => {
+  vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function keyboardEvent(key: string, modifiers: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
@@ -219,6 +227,75 @@ describe('ReaderSmoothScroller', () => {
     expect(second.cancelAnimationFrame).toHaveBeenCalledOnce();
     expect(second.pendingFrames()).toBe(0);
   });
+
+  it('settles a dead view without accessing its cancellation method and permits a successor', () => {
+    const first = fakePdfWindow();
+    const second = fakePdfWindow();
+    const { scroller } = createHarness({ 'scroll.mode': 'follow' });
+    const finished = vi.fn(() => expect(scroller.isRepeat(keyboardEvent('j'))).toBe(false));
+    const successorFinished = vi.fn();
+    scroller.start(first.pdfWindow, 'j', down, finished);
+    vi.stubGlobal('Components', {
+      utils: { isDeadWrapper: (value: object) => value === first.pdfWindow },
+    });
+    Object.defineProperty(first.pdfWindow, 'cancelAnimationFrame', {
+      get: () => {
+        throw new Error('dead wrapper accessed');
+      },
+    });
+
+    scroller.releaseView(first.pdfWindow);
+    scroller.releaseView(first.pdfWindow);
+    expect(finished).toHaveBeenCalledOnce();
+    expect(scroller.start(second.pdfWindow, 'k', right, successorFinished)).toBe(true);
+    scroller.releaseView(first.pdfWindow);
+    first.runNext(16);
+    expect(second.pendingFrames()).toBe(1);
+    expect(scroller.isRepeat(keyboardEvent('k'))).toBe(true);
+    second.runNext(16);
+    scroller.releaseView(second.pdfWindow);
+    expect(successorFinished).toHaveBeenCalledOnce();
+  });
+
+  it.each(['getter', 'call'] as const)(
+    'settles and detaches a live hold when cancellation %s throws',
+    (failurePoint) => {
+      const first = fakePdfWindow();
+      const second = fakePdfWindow();
+      const { scroller } = createHarness({ 'scroll.mode': 'follow' });
+      const cleanupError = new Error('cancellation failed');
+      const finished = vi.fn(() => {
+        expect(scroller.isRepeat(keyboardEvent('j'))).toBe(false);
+        throw new Error('completion failed');
+      });
+      const successorFinished = vi.fn();
+      scroller.start(first.pdfWindow, 'j', down, finished);
+      if (failurePoint === 'getter') {
+        Object.defineProperty(first.pdfWindow, 'cancelAnimationFrame', {
+          get: () => {
+            throw cleanupError;
+          },
+        });
+      } else {
+        first.cancelAnimationFrame.mockImplementation(() => {
+          throw cleanupError;
+        });
+      }
+
+      expect(() => scroller.releaseView(first.pdfWindow)).toThrow(cleanupError);
+      expect(finished).toHaveBeenCalledOnce();
+      scroller.releaseView(first.pdfWindow);
+      expect(scroller.start(second.pdfWindow, 'k', right, successorFinished)).toBe(true);
+      scroller.releaseView(first.pdfWindow);
+      first.runNext(16);
+      expect(second.pendingFrames()).toBe(1);
+      expect(scroller.isRepeat(keyboardEvent('k'))).toBe(true);
+      second.runNext(16);
+      scroller.releaseView(second.pdfWindow);
+      expect(successorFinished).toHaveBeenCalledOnce();
+      expect(finished).toHaveBeenCalledOnce();
+    },
+  );
 
   it('maps only continuous Reader scroll actions to geometry specs', () => {
     expect(smoothScrollSpec('scrollDown')).toEqual({ axis: 'y', direction: 1 });

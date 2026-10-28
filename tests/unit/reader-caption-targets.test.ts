@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ReaderCaptionTargets } from '../../src/reader/caption-targets';
+import { ReaderCaptionTargets } from '../../src/modules/reader-navigation/caption-targets';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 afterEach(() => {
@@ -23,11 +23,39 @@ function harness(blocks: readonly unknown[]) {
   Reflect.set(globalThis, 'Zotero', { SDT: { getReader } });
   const onChange = vi.fn();
   const debug = vi.fn();
-  const targets = new ReaderCaptionTargets(2, onChange, debug);
+  const targets = new ReaderCaptionTargets(2, onChange, debug, () => true);
   return { targets, getReader, onChange, debug };
 }
 
 describe('Reader caption targets', () => {
+  it('drops a pending native result when module ownership ends without disposal', async () => {
+    let current = true;
+    const blocks = Promise.withResolvers<readonly unknown[]>();
+    const started = Promise.withResolvers<void>();
+    Reflect.set(globalThis, 'Zotero', {
+      SDT: {
+        getReader: async () => ({
+          getTopLevelBlockCount: () => 1,
+          getBlocks: () => {
+            started.resolve();
+            return blocks.promise;
+          },
+        }),
+      },
+    });
+    const changed = vi.fn();
+    const debug = vi.fn();
+    const targets = new ReaderCaptionTargets(2, changed, debug, () => current);
+    const loading = targets.load();
+    await started.promise;
+    current = false;
+    blocks.resolve([caption('Figure 1: stale', [[0, 10, 20, 30, 40]])]);
+    await expect(loading).resolves.toEqual([]);
+    expect(targets.entries).toEqual([]);
+    expect(changed).toHaveBeenCalledOnce();
+    expect(debug).not.toHaveBeenCalled();
+  });
+
   it('corrects a previous-page bookmark to its unique genuine next-page heading', async () => {
     // Zotero 10.0.6 OpenVLA: the authored 3.2 bookmark is page 4's bottom,
     // but the actual heading is at page 5's top (zero-based indexes 3 and 4).

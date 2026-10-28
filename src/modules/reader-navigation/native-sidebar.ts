@@ -1,11 +1,10 @@
-import { readerWindow } from '../toolkit/reader';
+import { readerWindow } from '../../toolkit/reader';
 import {
   ReaderSidebarDecoration,
   readerSidebarState,
   readerPageLabels,
   setReaderSidebar,
   closeReaderSidebar,
-  readerSidebarContainsTarget,
   readerSidebarPaneForTarget,
   readerSidebarTargetHidden,
   readerOutlineContainer,
@@ -13,19 +12,30 @@ import {
   dispatchReaderSidebarKey,
   readerOutlineMutation,
   type ReaderOutlineDecoration,
-} from '../toolkit/reader';
-import { CleanupFailure } from '../core/cleanup';
-import { t } from '../i18n';
-import type { BindingMap, BindingContext } from '../input/bindings';
-import type { ActionId } from '../input/actions';
-import { compositionOwnsKey } from '../input/composition';
-import { LocalBindingRuntime } from '../input/local-binding-runtime';
-import { cloneInto, isDeadObject } from '../platform/cross-compartment';
-import { asElement, isEditableElement } from '../platform/dom';
+} from '../../toolkit/reader';
+import { CleanupFailure } from '../../core/cleanup';
+import { t } from '../../i18n';
+import type { BindingMap, BindingContext } from '../../input/bindings';
+import type { ActionId } from '../../input/actions';
+import { compositionOwnsKey } from '../../input/composition';
+import {
+  READER_OUTLINE_ACTIONS,
+  READER_MARKS_ACTIONS,
+  READER_ANNOTATIONS_ACTIONS,
+  READER_THUMBNAILS_ACTIONS,
+} from '../../reader/action-capabilities';
+import { LocalBindingRuntime } from '../../input/local-binding-runtime';
+import { cloneInto, isDeadObject } from '../../platform/cross-compartment';
+import { asElement, isEditableElement } from '../../platform/dom';
 import type { ReaderMarks } from './marks';
 import { outlineEntryKind } from './outline-presentation';
 import type { ReaderCaptionTarget, ReaderCaptionTargets } from './caption-targets';
-import type { PdfWindow, ReaderNativeOutlineEntry, ReaderRuntime, ReaderTimer } from './types';
+import type {
+  PdfWindow,
+  ReaderNativeOutlineEntry,
+  ReaderRuntime,
+  ReaderTimer,
+} from '../../reader/types';
 
 interface NativeSidebarWindow extends Window {
   readonly MutationObserver?: typeof MutationObserver;
@@ -33,11 +43,17 @@ interface NativeSidebarWindow extends Window {
 }
 
 export interface ReaderNativeSidebarHost {
+  readonly isCurrent: () => boolean;
   readonly reader: ReaderRuntime;
   readonly marks: ReaderMarks;
   readonly captions: ReaderCaptionTargets;
   readonly onCaptionTarget: (target: ReaderCaptionTarget, pdfWindow: PdfWindow) => void;
   readonly onAnnotation: (key: string | null) => void;
+  readonly bindAction: (
+    context: BindingContext,
+    action: ActionId,
+    run: (event: KeyboardEvent | null) => boolean,
+  ) => (event: KeyboardEvent | null) => boolean;
   readonly bindings: () => BindingMap;
   readonly language: () => string;
   readonly activePdfWindow: () => PdfWindow | null;
@@ -78,6 +94,10 @@ export class ReaderNativeSidebar {
   #language = '';
   #focusRequest: SidebarPane | null = null;
   readonly #local: LocalBindingRuntime;
+  readonly #invokers = new Map<
+    BindingContext,
+    Map<ActionId, (event: KeyboardEvent | null) => boolean>
+  >();
   readonly #localTimers = new Map<number, ReaderTimer>();
   #nextTimer = 0;
   #localContext: BindingContext | null = null;
@@ -85,10 +105,12 @@ export class ReaderNativeSidebar {
   #observedView: 'outline' | 'annotations' | 'thumbnails' | undefined;
   readonly #focusableFallbacks = new Set<HTMLElement>();
   readonly #onFocus = (): void => {
+    if (!this.isCurrent()) return;
     this.deactivate();
     this.#host.onInput();
   };
   readonly #onPointer = (): void => {
+    if (!this.isCurrent()) return;
     this.deactivate();
     this.#host.onInput();
   };
@@ -97,16 +119,35 @@ export class ReaderNativeSidebar {
 
   constructor(host: ReaderNativeSidebarHost) {
     this.#host = host;
+    const capabilities = [
+      ['reader-outline', READER_OUTLINE_ACTIONS],
+      ['reader-marks', READER_MARKS_ACTIONS],
+      ['reader-annotations', READER_ANNOTATIONS_ACTIONS],
+      ['reader-thumbnails', READER_THUMBNAILS_ACTIONS],
+    ] as const;
+    for (const [context, actions] of capabilities) {
+      const invokers = new Map<ActionId, (event: KeyboardEvent | null) => boolean>();
+      for (const action of actions) {
+        invokers.set(
+          action,
+          host.bindAction(context, action, (event) => this.executeLocal(context, action, event)),
+        );
+      }
+      this.#invokers.set(context, invokers);
+    }
     this.#local = new LocalBindingRuntime({
       bindings: host.bindings,
-      execute: (action, event) => this.executeLocal(action, event),
+      execute: (action, event) =>
+        this.#localContext
+          ? (this.#invokers.get(this.#localContext)?.get(action)?.(event) ?? false)
+          : false,
       schedule: (callback, delay) => {
         const id = ++this.#nextTimer;
         this.#localTimers.set(
           id,
           host.schedule(delay, () => {
             this.#localTimers.delete(id);
-            callback();
+            if (this.isCurrent()) callback();
           }),
         );
         return id;
@@ -119,48 +160,56 @@ export class ReaderNativeSidebar {
     });
   }
 
-  start(): void {
-    if (this.#disposed || this.#document) return;
-    const window = readerWindow(this.#host.reader) as NativeSidebarWindow | undefined;
-    if (!window || isDeadObject(window)) return;
-    this.#document = window.document;
-    window.document.addEventListener('focusin', this.#onFocus, true);
-    window.document.addEventListener('pointerdown', this.#onPointer, true);
-    if (window.MutationObserver && window.document.body) {
-      this.#observer = new window.MutationObserver((records) => {
-        if (this.#disposed) return;
-        if (
-          this.#language !== this.#host.language() ||
-          records.some((record) => readerOutlineMutation(record))
-        )
-          this.refresh();
-        else if (this.#pageLabels !== readerPageLabels(this.#host.reader)) this.refreshMarks();
-        this.refreshFocus();
-      });
-      this.#observer.observe(
-        window.document.body,
-        cloneInto(
-          {
-            childList: true,
-            subtree: true,
-            characterData: true,
-            attributes: true,
-            attributeFilter: ['class', 'aria-selected'],
-          },
-          window,
-        ),
-      );
-    }
-    this.refresh();
+  private isCurrent(): boolean {
+    return !this.#disposed && this.#host.isCurrent();
   }
 
-  /** Target qualification, not sidebar visibility, decides whether PDF bindings must yield. */
-  containsTarget(target: EventTarget | null): boolean {
-    return readerSidebarContainsTarget(this.#host.reader, target);
+  start(): void {
+    if (!this.isCurrent() || this.#document) return;
+    const window = readerWindow(this.#host.reader) as NativeSidebarWindow | undefined;
+    if (!window || isDeadObject(window)) return;
+    try {
+      this.#document = window.document;
+      window.document.addEventListener('focusin', this.#onFocus, true);
+      window.document.addEventListener('pointerdown', this.#onPointer, true);
+      if (window.MutationObserver && window.document.body) {
+        this.#observer = new window.MutationObserver((records) => {
+          if (!this.isCurrent()) return;
+          if (
+            this.#language !== this.#host.language() ||
+            records.some((record) => readerOutlineMutation(record))
+          )
+            this.refresh();
+          else if (this.#pageLabels !== readerPageLabels(this.#host.reader)) this.refreshMarks();
+          this.refreshFocus();
+        });
+        this.#observer.observe(
+          window.document.body,
+          cloneInto(
+            {
+              childList: true,
+              subtree: true,
+              characterData: true,
+              attributes: true,
+              attributeFilter: ['class', 'aria-selected'],
+            },
+            window,
+          ),
+        );
+      }
+      this.refresh();
+    } catch (error) {
+      const failure = new CleanupFailure();
+      failure.run(() => {
+        throw error;
+      });
+      failure.run(() => this.dispose());
+      failure.rethrow();
+    }
   }
 
   toggle(group: 'outline' | 'marks', _pdfWindow: PdfWindow): void {
-    if (this.#disposed) return;
+    if (!this.isCurrent()) return;
     this.start();
     const state = readerSidebarState(this.#host.reader);
     if (!state) return;
@@ -177,7 +226,7 @@ export class ReaderNativeSidebar {
   }
 
   focus(group: SidebarPane, _pdfWindow: PdfWindow): void {
-    if (this.#disposed) return;
+    if (!this.isCurrent()) return;
     this.start();
     this.#local.deactivate();
     setReaderSidebar(this.#host.reader, group === 'marks' ? 'outline' : group);
@@ -189,7 +238,7 @@ export class ReaderNativeSidebar {
   /** Only configurable Neo aliases are consumed; genuine host keys and editors stay native. */
   handleKey(event: KeyboardEvent): void {
     const target = asElement(event.target);
-    if (this.#disposed || this.#dispatching || !target) return;
+    if (!this.isCurrent() || this.#dispatching || !target) return;
     this.#host.onInput();
     this.#focusRequest = null;
     if (isEditableElement(target) || compositionOwnsKey(event, false)) {
@@ -221,10 +270,15 @@ export class ReaderNativeSidebar {
     return pane ? `reader-${pane}` : null;
   }
 
-  private executeLocal(action: ActionId, _event: KeyboardEvent | null): boolean {
+  private executeLocal(
+    registeredContext: BindingContext,
+    action: ActionId,
+    _event: KeyboardEvent | null,
+  ): boolean {
+    if (!this.isCurrent()) return false;
     const target = asElement(this.#document?.activeElement ?? null);
     const context = target && this.contextForTarget(target);
-    if (this.#disposed || !target || !context || isEditableElement(target)) return false;
+    if (!target || context !== registeredContext || isEditableElement(target)) return false;
     if (action === 'prevHeading' || action === 'nextHeading') {
       const pdfWindow = this.#host.activePdfWindow();
       if (!pdfWindow) return false;
@@ -345,7 +399,7 @@ export class ReaderNativeSidebar {
   /** Rebinds only Neo DOM/attributes after native React rerenders; never replaces native children. */
   refresh(): void {
     const document = this.#document;
-    if (this.#disposed || !document || isDeadObject(document)) return;
+    if (!this.isCurrent() || !document || isDeadObject(document)) return;
     const rows: ReaderOutlineDecoration[] = [];
     let renderedIndex = 0;
     const language = this.#host.language();
@@ -415,19 +469,20 @@ export class ReaderNativeSidebar {
   /** Caption groups are owned DOM; opening them is the only sidebar trigger for native extraction. */
   refreshCaptions(): void {
     const document = this.#document;
-    if (this.#disposed || !document || isDeadObject(document)) return;
+    if (!this.isCurrent() || !document || isDeadObject(document)) return;
     const wrapper = readerOutlineContainer(document);
     if (!wrapper) return;
     if (!this.#captionsRoot || this.#captionsRoot.parentElement !== wrapper) {
       this.#captionsRoot?.remove();
       const root = document.createElement('section');
+      this.#captionsRoot = root;
       root.id = 'zv-reader-captions';
       root.setAttribute('role', 'group');
       root.addEventListener(
         'toggle',
         (event) => {
           const details = event.target as HTMLDetailsElement;
-          if (details.parentElement === root && details.open && !this.#disposed)
+          if (details.parentElement === root && details.open && this.isCurrent())
             void this.#host.captions.load();
         },
         true,
@@ -435,7 +490,7 @@ export class ReaderNativeSidebar {
       root.addEventListener('click', (event) => {
         const index = asElement(event.target)?.closest<HTMLElement>('button[data-zv-caption]')
           ?.dataset.zvCaption;
-        if (index === undefined || this.#disposed) return;
+        if (index === undefined || !this.isCurrent()) return;
         const target = this.#host.captions.entries[Number(index)];
         const window = this.#host.activePdfWindow();
         if (target && window) this.#host.onCaptionTarget(target, window);
@@ -444,7 +499,6 @@ export class ReaderNativeSidebar {
         root,
         this.#marksRoot?.parentElement === wrapper ? this.#marksRoot : null,
       );
-      this.#captionsRoot = root;
       this.#captionEntries = null;
     }
     const root = this.#captionsRoot;
@@ -541,7 +595,7 @@ export class ReaderNativeSidebar {
 
   refreshMarks(): void {
     const root = this.#marksRoot;
-    if (this.#disposed || !root || isDeadObject(root)) return;
+    if (!this.isCurrent() || !root || isDeadObject(root)) return;
     const language = this.#host.language();
     const labels = readerPageLabels(this.#host.reader) ?? [];
     this.#pageLabels = readerPageLabels(this.#host.reader);
@@ -644,6 +698,8 @@ export class ReaderNativeSidebar {
     this.#focusRequest = null;
     const failure = new CleanupFailure();
     failure.run(() => this.#local.dispose());
+    for (const timer of this.#localTimers.values()) failure.run(() => this.#host.clearTimer(timer));
+    this.#localTimers.clear();
     const document = this.#document;
     failure.run(() => {
       if (document && !isDeadObject(document))
@@ -687,7 +743,7 @@ export class ReaderNativeSidebar {
   }
 
   private handleMarkClick(event: Event): void {
-    if (this.#disposed) return;
+    if (!this.isCurrent()) return;
     const target = asElement(event.target);
     const remove = target?.closest<HTMLElement>('button[data-zv-delete-mark]');
     if (remove) {
@@ -699,24 +755,25 @@ export class ReaderNativeSidebar {
   }
 
   private jumpMark(char: string): void {
+    if (!this.isCurrent()) return;
     const pdfWindow = this.#host.activePdfWindow();
-    if (this.#disposed || !pdfWindow) return;
+    if (!pdfWindow) return;
     void this.#host.marks
       .jump(this.#host.reader, pdfWindow, char, this.#host.onAnnotation)
       .catch((error: unknown) => {
-        if (!this.#disposed) this.#host.log(`reader bookmark jump failed: ${String(error)}`);
+        if (this.isCurrent()) this.#host.log(`reader bookmark jump failed: ${String(error)}`);
       });
   }
 
   private deleteMark(char: string | null): void {
-    if (char === '' || this.#disposed) return;
+    if (char === '' || !this.isCurrent()) return;
     // onChange keeps focus synchronously; persistence must never reclaim later ownership.
     const deletion =
       char === null
         ? this.#host.marks.clear(this.#host.reader)
         : this.#host.marks.delete(this.#host.reader, char);
     void deletion.catch((error: unknown) => {
-      if (!this.#disposed) this.#host.log(`reader bookmark deletion failed: ${String(error)}`);
+      if (this.isCurrent()) this.#host.log(`reader bookmark deletion failed: ${String(error)}`);
     });
   }
 
@@ -734,7 +791,7 @@ export class ReaderNativeSidebar {
   private refreshFocus(): void {
     const request = this.#focusRequest;
     const document = this.#document;
-    if (!document || this.#disposed || isDeadObject(document)) return;
+    if (!document || !this.isCurrent() || isDeadObject(document)) return;
     const state = readerSidebarState(this.#host.reader);
     const open = state?.sidebarOpen ?? false;
     if (this.#observedOpen && (!open || state?.sidebarView !== this.#observedView)) {

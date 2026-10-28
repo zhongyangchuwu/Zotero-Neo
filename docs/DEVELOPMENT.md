@@ -87,7 +87,7 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/`、`notes/` 与 `capture/`。MainWindow 组合标签、扩展、分类、工作集、Library、Notes 和 Capture；ReaderSession 组合 hints、独立 Library citekey 贡献及 Capture 选择动作。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。模块开关、通用依赖图和其余候选模块仍按[整体设计](MODULE_DESIGN.md)逐步推进，不是当前可用功能。
+当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/`、`notes/`、`capture/` 与 `reader-navigation/`。MainWindow 组合标签、扩展、分类、工作集、Library、Notes 和 Capture；ReaderSession 组合导航、hints、独立 Library citekey 贡献及 Capture 选择动作。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。模块开关、通用依赖图和其余候选模块仍按[整体设计](MODULE_DESIGN.md)逐步推进，不是当前可用功能。
 
 工作集拥有 SelectionStore、Visual 范围及 Selection Panel。Main Surface 继续初始化和取消原生 Cursor/多目标，持有共享行渲染，并向模块注入刷新、主题和现有 Reveal 导航端口。目标解析与 Library Trash 接收明确 Selection 端口；来源为空或退休后沿用当前目标，不读取旧 Selection。共享导航通过局部界面端口捕获原面板，不再读取 session 的 Selection Panel 状态。
 
@@ -98,6 +98,8 @@ Library 拥有 Local Find 查询/界面及最近回收批次，Main session 不�
 Notes 按窗口拥有候选、选择后的打开编排及可选 Vim 编辑的模式、寄存器和 caret 样式。`NoteSurfaceRuntime` 只保留精确编辑器身份、输入 runtime 和退休代次；Surface 继续决定原生/IME 输入、count、前缀及焦点。Note 普通动作和 Insert 退出登记到原上下文；候选必须显式传给 Picker，Capture 继续使用同一候选来源，不借用 Vim 开关。共享导航提供选择完成后的宿主委托，不新增 Note 历史栈。
 
 Capture 按 MainWindow 拥有冻结的 Reader 选择快照、Note 来源、确认、目的地所有权/库验证及保存回执；ReaderSession 提供原有 `neo.capture-note` 动作，不新增 ActionId 或公共 API。Main 只转发实际关联窗口，Picker 提供排队及精确代次的界面释放。取消或替换先阻止旧确认；已接纳的原生保存继续完成，退休结果仍保留真实回执，旧 Reader 不再显示成功状态或抢回焦点。
+
+Reader 导航拥有页面/滚动/缩放/搜索、语义与批注位置遍历、marks、按需 captions、原生侧栏增强及平滑滚动状态，登记 Normal 与四个侧栏上下文的实际处理器。Surface 保留输入和精确视图、CurrentTarget、共享导航历史，直接使用同一个 Toolkit 导航宿主处理分屏与焦点。marks 保存完成后重查发起交互，不能覆盖新的输入或界面状态；销毁视图时先清空 RAF/完成回调的所有权，再尝试原生取消，即使取消失败也不保留旧视图或阻塞下一次滚动。
 
 ### 宿主能力 Toolkit {#host-capability-toolkit}
 
@@ -118,7 +120,7 @@ Capture 按 MainWindow 拥有冻结的 Reader 选择快照、Note 来源、确�
 | 可见标识符文本与几何 | `src/toolkit/reader/identifier-text.ts` | 将可见 PDF.js 文本读成保留来源的同行片段，将文本范围映射成 viewport 矩形；不猜跨行拼接，不使用 OCR。 |
 | PDF 链接 overlay 与原生委托 | `src/toolkit/reader/links.ts` | 读取 Zotero overlay 映射，并委托捕获的原生视图激活链接。 |
 | Reader 目标 frame 可见性 | `src/toolkit/reader/visibility.ts` | 批注、标识符与原生链接共享窗口关闭及包含 frame 的可见性检查；Reading Mode 下隐藏的 PDF 不能成为操作目标。 |
-| 原生 Reader 侧栏 | `src/toolkit/reader/sidebar.ts` | 为 Zotero 管理的 pane/行提供可逆展示与监听机制；绑定和目标策略仍在 `src/reader/native-sidebar.ts`。 |
+| 原生 Reader 侧栏 | `src/toolkit/reader/sidebar.ts` | 为 Zotero 管理的 pane/行提供可逆展示与监听机制；绑定和目标策略在 `src/modules/reader-navigation/native-sidebar.ts`，Surface 独立使用 Toolkit 判断原生侧栏输入目标。 |
 | 批注选择、过滤与 popup | `src/toolkit/reader/annotations.ts` | 适配 Reader 私有操作；条目写入继续使用公开 Zotero API。 |
 | 可见批注模型与几何 | `src/toolkit/reader/annotation-targets.ts` | 只接纳当前过滤视图中、具有支持锚点且与 viewport 相交的原生批注；隐藏、已过滤、屏外及不支持的目标不进入候选。 |
 | marks 几何与旧存储 | `src/toolkit/reader/marks.ts` | 提供宿主存储/几何；父条目或附件的存储策略由 `ReaderMarks` 决定。 |

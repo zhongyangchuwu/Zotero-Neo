@@ -18,6 +18,7 @@
 
 ### 调整 {#changed}
 
+- 将 Reader 页面、滚动/平移、缩放、搜索、Outline/图表/批注位置遍历、marks 和原生侧栏增强接入 `reader-navigation`。保留特殊 marks 语法、数据格式、按需结构分析和共享历史；分屏/焦点继续由基座提供。四个侧栏上下文使用真实唯一贡献；已接纳 mark 保存继续完成，但不覆盖后续交互状态。平滑滚动保留重复输入与减速，销毁视图的取消失败不再保留旧 RAF 或阻塞后续滚动。不开放模块开关。
 - 将 Reader 摘录到已有 Note 的快照、目的地确认、原生追加/保存和回执接入 `capture`，MainWindow 与 ReaderSession 各自拥有真实贡献。保留公共选择 API、现有选择动作及 Notes 候选；不借用 Main Selection，不依赖 Vim Note 编辑开关。旧确认不能写入，界面退休不撤销已接纳保存，晚到结果不恢复旧状态或焦点。
 - 将 Note 候选、打开编排及可选 Vim 编辑接入按窗口隔离的 `notes`。模式、寄存器和 caret UI 归模块；Surface 保留精确编辑器身份、原生/IME 输入、count、前缀和共享焦点。Main/Reader/Note 查找与 Capture 显式使用同一候选能力，Vim 开关不控制 Note 查找或 Capture 目的地。
 - 将树导航、Local Find、搜索入口、条目选择器、打开、标识符录入、citekey 与最近回收批次接入 `library`。Main session 不再持有 Local Find 或回收历史；共享焦点、原生 View 能力与唯一 Back/Forward 仍独立于 Library。Reader citekey 使用本地目标；保留原按键、显式 Select 重绑定、候选范围和目标拒绝策略。

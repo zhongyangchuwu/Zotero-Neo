@@ -5,6 +5,7 @@ import {
   openReaderExternalLink,
   prepareReaderLinkLocation,
   navigateReaderLink,
+  type ReaderNativeNavigation,
 } from '../../toolkit/reader';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { ReaderTargetHints } from './target-hints';
@@ -18,7 +19,6 @@ import type {
   NavigationIntent,
   NavigationResult,
 } from '../../navigation/types';
-import type { ReaderNavigationCommand } from '../../reader/navigation';
 import type {
   PdfWindow,
   ReaderLinkPosition,
@@ -34,7 +34,11 @@ export interface ReaderLinkHintsHost {
   text(key: string): string;
   debug(message: string): void;
   diagnostic(message: string): void;
-  readonly executeNavigation: ReaderNavigationCommand;
+  readonly executeNavigation: (
+    pdfWindow: PdfWindow,
+    intent: NavigationIntent,
+    perform: (navigation: ReaderNativeNavigation) => unknown,
+  ) => NavigationExecution | null;
   isCurrent(): boolean;
 }
 
