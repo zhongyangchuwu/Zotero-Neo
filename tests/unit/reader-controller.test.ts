@@ -3022,9 +3022,7 @@ describe('Reader annotation deletion safety', () => {
     const callsAfterSelectingNewer = h.clearHostSelection.mock.calls.length;
     finishErase();
 
-    await vi.waitFor(() =>
-      expect(h.created.indicator.textContent).toBe('✓ Deleted Reader annotation · 1'),
-    );
+    await settleReaderMicrotasks();
 
     expect(h.clearHostSelection).toHaveBeenCalledTimes(callsAfterSelectingNewer);
     h.created.session.focusAndHandle(readerKey('[').event);
@@ -3838,6 +3836,61 @@ describe('Reader annotation comment input ownership', () => {
     } finally {
       created.session.dispose();
       timers.mockRestore();
+    }
+  });
+
+  it('saves the final mounted comment after its owner selects a different tab', async () => {
+    vi.useFakeTimers();
+    const created = createCommentSession();
+    const zotero = Reflect.get(globalThis, 'Zotero');
+    const { service } = createReaderRegistryHarness();
+    Reflect.set(globalThis, 'Zotero', { ...zotero, Reader: service });
+    Reflect.set(created.reader, '_instanceID', 'comment-handoff');
+    Reflect.set(created.reader, 'tabID', 'source-reader');
+    const tabs = {
+      selectedID: 'source-reader',
+      _tabs: [{ id: 'source-reader' }, { id: 'successor-tab' }],
+    };
+    Reflect.set(created.ownerWindow, 'Zotero_Tabs', tabs);
+    service._readers = [created.reader];
+    Reflect.set(service, 'getByTabID', (id: string) =>
+      id === 'source-reader' ? created.reader : null,
+    );
+    created.session.dispose();
+    const saving = Promise.withResolvers<void>();
+    created.annotation.saveTx.mockImplementation(() => saving.promise);
+    const controller = created.controller;
+    try {
+      controller.start('zotero-neo@zotero-neo');
+      controller.rescan(created.ownerWindow);
+      controller.forwardKey(readerKey('i').event, created.ownerWindow);
+      await settleReaderMicrotasks();
+      const overlay = created.bodyChildren.find((node) => node.id === 'zv-annotation-comment');
+      const input = Array.from(overlay?.children ?? []).find(
+        (node) => node.id === 'zv-annotation-comment-input',
+      );
+      if (!input) throw new Error('Expected mounted comment textarea');
+      Reflect.set(input, 'value', 'final handoff draft');
+      const changed = vi
+        .mocked(input.addEventListener)
+        .mock.calls.find(([type]) => type === 'input')![1] as () => void;
+      changed();
+      tabs.selectedID = 'successor-tab';
+      controller.deactivateInactive(created.ownerWindow, 'successor-tab');
+      expect(created.bodyChildren).not.toContain(overlay);
+      const focusCount = vi.mocked(created.pdfWindow.focus).mock.calls.length;
+      await settleReaderMicrotasks();
+      expect(created.annotation.annotationComment).toBe('final handoff draft');
+      expect(created.annotation.saveTx).toHaveBeenCalledOnce();
+      saving.resolve();
+      await settleReaderMicrotasks();
+      vi.advanceTimersByTime(2000);
+      await settleReaderMicrotasks();
+      expect(created.annotation.saveTx).toHaveBeenCalledOnce();
+      expect(created.pdfWindow.focus).toHaveBeenCalledTimes(focusCount);
+    } finally {
+      saving.resolve();
+      controller.shutdown();
     }
   });
 

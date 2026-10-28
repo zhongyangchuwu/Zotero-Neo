@@ -70,11 +70,15 @@ Selection Panel 通过具名端口请求现有导航协调器执行 Reveal，不
 
 `src/modules/reader-navigation/` 按 ReaderSession 拥有页面、滚动/平移、缩放、PDF 搜索、批注位置遍历、语义 Outline、按需 captions、marks 及原生侧栏增强。Normal 与四个侧栏上下文的真实动作均通过模块作用域登记；命名 marks 沿用特殊输入语法与持久化格式，不伪造 ActionId。异步 marks 保存保留实际结果，但只有发起交互仍有效时才显示状态；连续滚动跨重复输入保持有效，销毁视图时先退休 RAF 与完成回调，再释放原生资源。
 
-Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。分屏创建/关闭、焦点切换及共享滚动机制不依赖导航模块。`src/reader/comment-editor.ts`、`native-input.ts` 继续负责功能输入；功能输入所有权不新增 Reader Surface mode。
+Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。分屏创建/关闭、焦点切换及共享滚动机制不依赖导航模块。`src/reader/native-input.ts` 仍属基座；评论编辑器由批注模块持有，Surface 负责输入仲裁，不新增 Reader Surface mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。
 
 `registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。公共选择 API 门面和类型不变，选择模块退休后返回 `null`、不执行旧回调。Capture 与批注相关选择动作由组合根具名注入；可选 PDFTranslate 接口保持原义，选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
+
+`src/modules/reader-annotations/` 按 ReaderSession 拥有创建、删除、改色、颜色过滤、批注文本/评论复制及评论保存。CurrentTarget 的原生优先与最后目标后备留在 Surface；模块自己的过滤后备通过具名端口供导航读取，不把批注写入下沉到选择模块。创建仍要求完整 PDF 几何，删除仍由所属窗口确认并调用明确 Operation。
+
+评论编辑器在退休旧交互前捕获精确视图与 Document，再获取系统按键、输入/IME 监听、主题、popup guard、原生删除保护及定时器。关闭先清空所有权，再逐项释放；旧解析、输入和计时器不能作用于后继编辑器，部分获取失败仍排空已有句柄。最终草稿的保存接纳只要求原 ReaderView / Document 与模块仍存活，切换标签页或分屏不应丢弃 handoff 草稿；输入、计时器和 Escape 展示继续要求原视图激活。已接纳保存可以完成，但不恢复旧状态和焦点。
 
 `src/modules/reader-hints/` 按 ReaderSession 拥有可见复制/跟随目标、临时标签、原生链接激活和目的地 cue。模块只接收精确视图、复制、反馈与导航端口；Surface 保留输入优先级、模式、共享滚动机制和历史策略。父作用域退休后，旧确认、异步导航完成和 RAF 不能写入或重画；清理仍释放各自的标签、cue 与计时器，并保留原始失败。`src/reader/hint-labels.ts` 继续作为 Flash 与 hints 共用的纯标签辅助。
 

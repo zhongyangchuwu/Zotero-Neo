@@ -219,6 +219,8 @@ application-lifetime definitions independently of each Reader module. Surface in
 capture both ReaderView and Document, and retire replaced views before admitting new resources.
 Input policy and annotation target/save admission remain in their feature owners; Toolkit owns
 private native geometry, exact-pane Find interaction capabilities, and DOM discovery.
+`src/modules/reader-annotations/` 按 ReaderSession 拥有批注写入、过滤、复制与评论编辑，并具名提供 Select 贡献。
+Surface 保留 CurrentTarget、NativeInput 及 `i` / `zb` 的混合路由；评论资源绑定精确 ReaderView / Document，已接纳保存与界面焦点寿命分离。
 
 Main chooser ownership follows the same rule. `src/main/picker/` owns candidate search,
 ranking, rendering, preview, focus, IME, confirmation/cancellation, and stale-work containment.
@@ -264,6 +266,7 @@ capture code must not borrow Main Selection or mutate notes directly.
 | `src/toolkit/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
 | `src/modules/reader-navigation/` | Reader navigation, marks, semantic targets, scoped native sidebar and smooth-scroll behavior |
 | `src/modules/reader-selection/` | Select ranges/motions, Flash, selection actions, and the stable selection API domain |
+| `src/modules/reader-annotations/` | 批注创建/删除/改色/过滤/复制、Select 贡献及精确视图评论编辑 |
 | `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
 | `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |
 | `tools/build.mjs`                    | esbuild/XPI package pipeline                                                             |
