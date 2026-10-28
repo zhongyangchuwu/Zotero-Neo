@@ -3206,7 +3206,13 @@ describe('Reader Show in Library and owner routing', () => {
       selectItem,
     });
 
-    const readerDocument = { defaultView: null as Window | null } as unknown as Document;
+    const readerDocument = {
+      defaultView: null as Window | null,
+      getElementById: () => null,
+      querySelector: () => null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as Document;
     const pdfWindow = {
       document: readerDocument,
       focus: () => {},
