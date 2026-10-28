@@ -67,6 +67,11 @@ import {
   type ReaderAnnotationsModule,
 } from '../modules/reader-annotations';
 import { isReaderAnnotationAction } from '../modules/reader-annotations/actions';
+import {
+  createReaderWorkspaceModule,
+  type ReaderWorkspaceModule,
+} from '../modules/workspace/reader';
+import { isReaderWorkspaceAction } from '../modules/workspace/reader-actions';
 import { ReaderNativeInput } from './native-input';
 import {
   ReaderHostKeyBridge,
@@ -472,6 +477,7 @@ export class ReaderSession {
   readonly #viewLifecycle: ReaderViewLifecycle;
   readonly #navigationModule: ReaderNavigationModule;
   readonly #navigationHost: ReaderNavigationHost;
+  readonly #workspace: ReaderWorkspaceModule;
   readonly #annotationNavigation = new ReaderAnnotationNavigationState();
   readonly #marks: ReaderNavigationModule['marks'];
   readonly #sidebar: ReaderNavigationModule['sidebar'];
@@ -632,6 +638,12 @@ export class ReaderSession {
         ),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
+    this.#workspace = createReaderWorkspaceModule(this.#modules, {
+      isViewCurrent: (window) => this.readerViewCurrent(window),
+      toggleSplit: (type) => this.#navigationHost.toggleSplit(type),
+      focusDirection: (direction) => this.#navigationHost.focusDirection(direction),
+      canFocusDirection: (direction) => this.#navigationHost.canFocusDirection(direction),
+    });
     const navigationModule = createReaderNavigationModule(this.#modules, {
       reader: dependencies.reader,
       navigationHost: this.#navigationHost,
@@ -728,7 +740,7 @@ export class ReaderSession {
     this.#selection = createReaderSelectionModule(this.#modules, {
       reader: dependencies.reader,
       activeWindow: () => this.#navigationHost.activePdfWindow(),
-      isViewCurrent: (window) => this.selectionViewCurrent(window),
+      isViewCurrent: (window) => this.readerViewCurrent(window),
       capturePresentation: (window) => this.invocationCurrent(window),
       captureView: (window) => this.invocationCurrent(window, null),
       mode: () => this.#surfaceMode,
@@ -1082,7 +1094,7 @@ export class ReaderSession {
     this.#viewLifecycle.sync();
     const pdfWindow = this.#navigationHost.activePdfWindow();
     const view = this.readerViewForWindow(pdfWindow);
-    if (!this.#selection.isCurrent() || !view || !this.selectionViewCurrent(pdfWindow)) return;
+    if (!this.#selection.isCurrent() || !view || !this.readerViewCurrent(pdfWindow)) return;
     this.#interactionRevision += 1;
     this.#selectionView = view;
     this.#selectionWindow = pdfWindow;
@@ -1286,7 +1298,7 @@ export class ReaderSession {
       }
       const direction = focusDirectionForAction(decision.action);
       if (direction) {
-        if (this.#navigationHost.focusDirection(direction)) {
+        if (this.#workspace.focusDirection(direction, pdfWindow)) {
           event.preventDefault();
           event.stopImmediatePropagation();
         }
@@ -1403,7 +1415,7 @@ export class ReaderSession {
     if (transition.kind !== 'execute') return true;
     if (!isReaderActionForMode(this.#surfaceMode, transition.action)) return true;
     const direction = focusDirectionForAction(transition.action);
-    return direction ? this.#navigationHost.canFocusDirection(direction) : true;
+    return direction ? this.#workspace.canFocusDirection(direction) : true;
   }
 
   private executeAction(action: ActionId, count: number, pdfWindow: PdfWindow | null): void {
@@ -1461,6 +1473,10 @@ export class ReaderSession {
     }
     if (isReaderAnnotationAction(action)) {
       this.#annotations.executeAction(action, pdfWindow);
+      return;
+    }
+    if (isReaderWorkspaceAction(action)) {
+      this.#workspace.executeAction(action, pdfWindow);
       return;
     }
     const ownerWindow = readerOwnerWindow(this.#dependencies.reader) ?? null;
@@ -1573,24 +1589,6 @@ export class ReaderSession {
         if (annotationCommentEditorEnabled(this.#dependencies.controller.dependencies.preferences))
           void this.#annotations.openComment();
         else this.enterNativeInput();
-        break;
-      case 'toggleReaderSplitHorizontal':
-        this.#navigationHost.toggleSplit('horizontal');
-        break;
-      case 'toggleReaderSplitVertical':
-        this.#navigationHost.toggleSplit('vertical');
-        break;
-      case 'focusReaderSplitLeft':
-        this.#navigationHost.focusDirection('left');
-        break;
-      case 'focusReaderSplitDown':
-        this.#navigationHost.focusDirection('down');
-        break;
-      case 'focusReaderSplitUp':
-        this.#navigationHost.focusDirection('up');
-        break;
-      case 'focusReaderSplitRight':
-        this.#navigationHost.focusDirection('right');
         break;
       default:
         return assertNever(action);
@@ -1800,7 +1798,7 @@ export class ReaderSession {
     return readerViewForWindow(this.#dependencies.reader, pdfWindow);
   }
 
-  private selectionViewCurrent(window: PdfWindow): boolean {
+  private readerViewCurrent(window: PdfWindow): boolean {
     if (this.#scope.disposed || this.#nativeInput.ownsInput || this.#commentEditor.ownsView(window))
       return false;
     const reader = this.#dependencies.reader;

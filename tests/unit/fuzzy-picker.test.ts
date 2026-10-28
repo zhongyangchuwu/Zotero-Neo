@@ -14,6 +14,7 @@ import { createTagCandidateProvider } from '../../src/main/picker/providers/tags
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 import { createNotesProvider } from '../../src/modules/notes/provider';
 import { createItemsProvider, isFuzzyPickerItem } from '../../src/modules/library/items-provider';
+import { createTabsProvider } from '../../src/modules/workspace/tabs-provider';
 import { citationKey } from '../../src/platform/better-bibtex';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
 import { actionGroup, groupLabel, shortcutsForAction } from '../../src/input/shortcut-catalog';
@@ -602,7 +603,8 @@ describe('command palette provider', () => {
       },
       execute: (action, count) => {
         actions.push([action, count]);
-        if (action === 'findAllItems') void picker.open(window, session, 'tabs');
+        if (action === 'findAllItems')
+          void picker.open(window, session, 'tabs', { source: createTabsProvider(window) });
       },
     };
     const { window, session } = createPickerHarness();
@@ -854,6 +856,7 @@ describe('tab picker activation', () => {
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
     const options: PickerOpenOptions = {
+      source: createTabsProvider(window),
       confirm: (item) => {
         tabs.select(String(item.id));
       },
@@ -891,7 +894,7 @@ describe('tab picker activation', () => {
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    await picker.open(window, session, 'tabs');
+    await picker.open(window, session, 'tabs', { source: createTabsProvider(window) });
     const input = session.picker.input;
     picker.onKeyDown(pickerKey('j', input), window, session);
     picker.onKeyDown(pickerKey('k', input), window, session);
@@ -949,6 +952,7 @@ describe('tab picker activation', () => {
     );
 
     await picker.open(window, session, 'tabs', {
+      source: createTabsProvider(window),
       confirm: (item) => {
         tabs.select(String(item.id));
       },

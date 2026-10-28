@@ -14,11 +14,9 @@ import type {
   NavigationIntent,
   NavigationOperation,
   NavigationPort,
-  NavigationResult,
   NavigationSurface,
 } from '../navigation/types';
 import type { ItemTargetSet } from '../core/item-target';
-import type { ShowInLibraryHost } from '../operations/show-in-library';
 import { focusDirectionForAction, isActionId, type ActionId } from '../input/actions';
 import {
   MAIN_EXECUTABLE_ACTIONS,
@@ -46,7 +44,6 @@ import { isGuidePrefix } from '../input/key-guide';
 import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
-import { t } from '../i18n';
 import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
@@ -58,6 +55,7 @@ import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
 import { createNotesModule, type NotesModule } from '../modules/notes';
 import { createCaptureModule, type CaptureModule } from '../modules/capture';
+import { createWorkspaceModule, type WorkspaceModule } from '../modules/workspace';
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
@@ -112,6 +110,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly library: LibraryModule;
       readonly notes: NotesModule;
       readonly capture: CaptureModule;
+      readonly workspace: WorkspaceModule;
     }
   >();
   readonly #itemDecorations = new MainItemStateDecoration();
@@ -351,6 +350,48 @@ export class MainWindowController implements MainWindowControllerApi {
         choose: chooseNotes,
       });
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+      const workspace = createWorkspaceModule(host, {
+        window,
+        logger: this.#dependencies.logger,
+        language: () => this.keyGuideLanguage(),
+        status: (message, milliseconds) => this.#navigation.status(session, message, milliseconds),
+        choose: (options) => {
+          if (session.picker.open) return null;
+          const generation = session.picker.generation + 1;
+          void this.#picker.open(window, session, 'tabs', options);
+          if (
+            session.picker.generation !== generation ||
+            !session.picker.open ||
+            session.picker.scope !== 'tabs'
+          )
+            return null;
+          return () => {
+            if (session.picker.generation === generation && session.picker.scope === 'tabs')
+              this.#picker.close(session);
+          };
+        },
+        selectTab: (id) => this.#navigation.selectTab(window, id),
+        cycleTab: (direction) => this.#navigation.cycleTab(window, direction),
+        closeTab: () => this.#navigation.closePDF(window),
+        navigate: (cause, surface, move, isCurrent) =>
+          this.executeImmediateNavigation(window, session, cause, surface, move, { isCurrent }),
+        selectInLibrary: (itemID, surface, isCurrent) => {
+          const pane = mainLibrarySelection(window);
+          if (!pane?.selectItem) return null;
+          const execution = this.#navigationExecutor.execute(
+            window,
+            session,
+            {
+              cause: { kind: 'action', action: 'showInLibrary' },
+              surface,
+              context: { isCurrent },
+            },
+            this.#navigationExecutor.librarySelection(itemID, pane),
+          );
+          return execution.pending ? execution.result : Promise.resolve(execution.result);
+        },
+      });
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
       this.#modules.set(session, {
         host,
         tags,
@@ -360,6 +401,7 @@ export class MainWindowController implements MainWindowControllerApi {
         library,
         notes,
         capture,
+        workspace,
       });
     } catch (error) {
       const failure = new CleanupFailure();
@@ -417,6 +459,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const modules = this.#modules.get(session);
     if (!modules) throw new Error('Window modules are not attached');
     return modules.capture;
+  }
+
+  private workspaceModule(session: MainWindowSession): WorkspaceModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.workspace;
   }
 
   private cancelMainCurrentTarget(window: MainWindow, session: MainWindowSession): void {
@@ -783,14 +831,14 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   openTabPicker(ownerWindow: MainWindow | null): void {
-    this.withReaderWindow(ownerWindow, 'switchTab', (window, session) =>
-      this.openTabPickerForSurface(window, session, 'reader'),
+    this.withReaderWindow(ownerWindow, 'switchTab', (_window, session) =>
+      this.workspaceModule(session).switchTab('reader'),
     );
   }
 
   closeReaderTab(ownerWindow: MainWindow | null): void {
-    this.withReaderWindow(ownerWindow, 'closeCurrentTab', (window) =>
-      this.#navigation.closePDF(window),
+    this.withReaderWindow(ownerWindow, 'closeCurrentTab', (_window, session) =>
+      this.workspaceModule(session).closeTab('reader'),
     );
   }
 
@@ -798,20 +846,13 @@ export class MainWindowController implements MainWindowControllerApi {
     this.withReaderWindow(
       ownerWindow,
       direction < 0 ? 'previousTab' : 'nextTab',
-      (window, session) =>
-        this.executeImmediateNavigation(
-          window,
-          session,
-          { kind: 'action', action: direction < 0 ? 'previousTab' : 'nextTab' },
-          'reader',
-          () => this.#navigation.cycleTab(window, direction),
-        ),
+      (_window, session) => this.workspaceModule(session).cycleTab(direction, 'reader'),
     );
   }
 
   showReaderItemInLibrary(ownerWindow: MainWindow | null, targets: ItemTargetSet<'reader'>): void {
-    this.withReaderWindow(ownerWindow, 'showInLibrary', (window, session) => {
-      void this.showInLibraryForSurface(window, session, targets, 'reader');
+    this.withReaderWindow(ownerWindow, 'showInLibrary', (_window, session) => {
+      this.workspaceModule(session).showInLibrary(targets, 'reader');
     });
   }
 
@@ -1189,9 +1230,7 @@ export class MainWindowController implements MainWindowControllerApi {
         return true;
       }
       case 'showInLibrary':
-        void this.showInLibraryForSurface(
-          window,
-          session,
+        this.workspaceModule(session).showInLibrary(
           resolvedTargets ?? NOTE_ITEM_TARGET.resolve(window),
           'note',
         );
@@ -1236,79 +1275,17 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.focusDirection(window, session, 'right');
         return true;
       case 'switchTab':
-        this.openTabPickerForSurface(window, session, 'note');
+        this.workspaceModule(session).switchTab('note');
         return true;
       case 'closeCurrentTab':
-        this.#navigation.closePDF(window);
+        this.workspaceModule(session).closeTab('note');
         return true;
       case 'previousTab':
       case 'nextTab':
-        this.executeImmediateNavigation(window, session, { kind: 'action', action }, 'note', () =>
-          this.#navigation.cycleTab(window, action === 'previousTab' ? -1 : 1),
-        );
+        this.workspaceModule(session).cycleTab(action === 'previousTab' ? -1 : 1, 'note');
         return true;
       default:
         return false;
-    }
-  }
-
-  private async executeLibrarySelection(
-    window: MainWindow,
-    session: MainWindowSession,
-    itemID: number,
-    pane: ShowInLibraryHost,
-    cause: NavigationCause,
-    surface: NavigationSurface,
-  ): Promise<NavigationResult> {
-    const operation = this.#navigationExecutor.librarySelection(itemID, pane);
-    const execution = this.#navigationExecutor.execute(
-      window,
-      session,
-      { cause, surface },
-      operation,
-    );
-    return execution.pending ? await execution.result : execution.result;
-  }
-
-  private async showInLibraryForSurface(
-    window: MainWindow,
-    session: MainWindowSession,
-    targets: ItemTargetSet,
-    surface: NavigationSurface = 'main',
-  ): Promise<void> {
-    const language = this.keyGuideLanguage();
-    if (targets.missing || targets.total !== 1 || targets.items.length !== 1) {
-      this.#navigation.status(session, t('status.showInLibraryUnavailable', language));
-      return;
-    }
-
-    const pane = mainLibrarySelection(window);
-    if (!pane?.selectItem) {
-      this.#navigation.status(session, t('status.showInLibraryHostUnavailable', language));
-      return;
-    }
-
-    try {
-      const result = await this.executeLibrarySelection(
-        window,
-        session,
-        targets.items[0]!.id,
-        pane,
-        { kind: 'action', action: 'showInLibrary' },
-        surface,
-      );
-      if (this.#sessions.get(window) === session) {
-        if (result.kind === 'completed')
-          this.#navigation.status(session, t('status.showInLibraryComplete', language));
-        else if (result.kind === 'failed') {
-          this.#dependencies.logger.debug(`show in library failed: ${String(result.error)}`);
-          this.#navigation.status(session, t('status.showInLibraryFailed', language));
-        }
-      }
-    } catch (error) {
-      this.#dependencies.logger.debug(`show in library failed: ${String(error)}`);
-      if (this.#sessions.get(window) === session)
-        this.#navigation.status(session, t('status.showInLibraryFailed', language));
     }
   }
 
@@ -1328,24 +1305,6 @@ export class MainWindowController implements MainWindowControllerApi {
       baseItem = mainCursorItem(window) ?? null;
     }
     this.notesModule(session).findNotes(baseItem, surface);
-  }
-
-  private openTabPickerForSurface(
-    window: MainWindow,
-    session: MainWindowSession,
-    surface: NavigationSurface = 'main',
-  ): void {
-    void this.#picker.open(window, session, 'tabs', {
-      confirm: (item) => {
-        this.executeImmediateNavigation(
-          window,
-          session,
-          { kind: 'action', action: 'switchTab' },
-          surface,
-          () => this.#navigation.selectTab(window, String(item.id)),
-        );
-      },
-    });
   }
 
   private execute(
@@ -1429,7 +1388,7 @@ export class MainWindowController implements MainWindowControllerApi {
         this.collectionsModule(session).removeCollection();
         break;
       case 'switchTab':
-        this.openTabPickerForSurface(window, session);
+        this.workspaceModule(session).switchTab('main');
         break;
       case 'findNotes':
         this.openNotesPickerForSurface(window, session);
@@ -1503,13 +1462,11 @@ export class MainWindowController implements MainWindowControllerApi {
         this.libraryModule(session).activate(mainCursorItem(window) ?? null);
         break;
       case 'closeCurrentTab':
-        this.#navigation.closePDF(window);
+        this.workspaceModule(session).closeTab('main');
         break;
       case 'previousTab':
       case 'nextTab':
-        this.executeImmediateNavigation(window, session, { kind: 'action', action }, 'main', () =>
-          this.#navigation.cycleTab(window, action === 'previousTab' ? -1 : 1),
-        );
+        this.workspaceModule(session).cycleTab(action === 'previousTab' ? -1 : 1, 'main');
         break;
       case 'addTag':
       case 'removeTag': {
