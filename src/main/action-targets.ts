@@ -5,8 +5,13 @@ import {
   mainSelectedItemRefs,
   visibleMainSelectionCount,
 } from '../toolkit/main';
-import type { MainWindowSession } from './session';
-import type { ItemRef } from './selection-store';
+import type { ItemRef } from '../core/item-ref';
+
+export interface MainSelectionSource {
+  readonly size: number;
+  values(): readonly ItemRef[];
+  remove(ref: ItemRef): boolean;
+}
 
 export interface MainResolvedTargets {
   readonly refs: readonly ItemRef[];
@@ -48,10 +53,10 @@ export function resolveMainCurrentTarget(
 
 export function resolveMainEffectiveTargets(
   window: MainWindow,
-  session: MainWindowSession,
+  selection: Pick<MainSelectionSource, 'values'> | null,
   currentTarget?: MainCurrentTarget | null,
 ): MainResolvedTargets {
-  const explicit = session.selection.values();
+  const explicit = selection?.values() ?? [];
   const transient = currentTarget ?? resolveMainCurrentTarget(window);
   const refs = explicit.length ? explicit : (transient?.refs ?? []);
   const source = explicit.length ? 'selection' : (transient?.source ?? 'cursor');

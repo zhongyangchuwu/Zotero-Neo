@@ -38,7 +38,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份；任一身份被替换时，先退休旧输入，再清理监听器。Note 内容仍以 Zotero 为准。
 
-`src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动；`src/main/item-select.ts` 负责临时 Visual 范围及其可见原生树投影。Persistent Selection 属于 session，独立于原生行选择。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
+`src/main/controller.ts` 协调 Main 动作；`src/main/navigation.ts` 负责条目树/分类树移动。`src/modules/worksets/` 按窗口拥有 Persistent Selection、临时 Visual 范围及 Selection Panel，状态独立于原生行选择，不再预建在 Main session 中。`src/main/picker/` 为发起动作解析一个临时候选，确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
@@ -53,6 +53,10 @@ Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts
 `src/modules/collections/` 拥有分类成员操作、查找、连续添加条目、分类结构操作、候选展示及每个窗口的重命名草稿。Main/Reader 传入各自的目标解析器和显示标签，确认时重验证来源、库与目标签名；模块不持有整个 Main session、共享 Picker 或 MainNavigation。Main 保留现有九个分类命令，Reader 保留 Add/Remove，Note 不新增命令。
 
 组合根为分类工作流提供精确 Picker 代次、确认时的已提交查询和本次释放句柄。多步骤创建保留返回原查询与取消语义；原生命名对话框的嵌套事件循环返回后，先检查当前性，不能让退休工作流继续弹出确认框。作用域退出只释放自有 Picker，不关闭替换交互。现有分类 Operations 在事务内继续验证当前性，失效时按原有规则回滚未提交写入并恢复缓存；模块不改变 Toolkit 的提交回执或回滚屏障。
+
+工作集模块提供受作用域约束的 Selection 读取/成员移除端口和 Selection/Visual 行投影。Main 保留 Cursor 初始化、原生多目标取消、共享行渲染及视图生命周期；没有工作集投影时，Cursor 仍独立渲染。行渲染登记由确切的 Main session 持有，先退休登记身份，再释放捕获的资源；旧窗口装卸或获取失败不能清理重入创建的新实例。Main 目标解析器消费明确的可选 Selection 来源，不读取整个 session；成功 Trash 只从发起时捕获的来源移除原目标。`src/core/item-ref.ts` 为实际共享此身份的 Toolkit、导航和工作集提供稳定条目引用。
+
+Selection Panel 通过具名端口请求现有导航协调器执行 Reveal，不拥有第二份历史。面板关闭先退休精确界面身份，再释放计时器、主题和 DOM；旧确认、计时器及导航完成不能修改替换界面。主题和外观订阅返回时若模块已退休，立即释放新取得的句柄，清理失败仍尝试其余释放。
 
 #### Reader {#reader}
 

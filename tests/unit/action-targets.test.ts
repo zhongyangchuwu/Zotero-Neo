@@ -5,8 +5,7 @@ import {
   resolveMainCurrentTarget,
   resolveMainEffectiveTargets,
 } from '../../src/main/action-targets';
-import { SelectionStore } from '../../src/main/selection-store';
-import type { MainWindowSession } from '../../src/main/session';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -46,11 +45,11 @@ function harness(
       },
     },
   } as unknown as MainWindow;
-  const session = { selection: new SelectionStore() } as unknown as MainWindowSession;
+  const selection = new SelectionStore();
 
   return {
     window,
-    session,
+    selection,
     install: (...items: Zotero.Item[]) => {
       for (const value of items) all.set(value.id, value);
     },
@@ -128,7 +127,7 @@ describe('Main action targets', () => {
     const second = item(11);
     const h = harness([first, second], 1);
 
-    expect(resolveMainEffectiveTargets(h.window, h.session)).toMatchObject({
+    expect(resolveMainEffectiveTargets(h.window, h.selection)).toMatchObject({
       source: 'cursor',
       refs: [{ libraryID: 1, itemID: 11 }],
       items: [second],
@@ -139,13 +138,24 @@ describe('Main action targets', () => {
     });
   });
 
+  it('uses the ordinary live target when worksets are absent', () => {
+    const first = item(10);
+    const second = item(11);
+    const h = harness([first, second], 1, [0, 1]);
+    expect(resolveMainEffectiveTargets(h.window, null, null)).toMatchObject({
+      source: 'native-selection',
+      items: [first, second],
+      total: 2,
+    });
+  });
+
   it('uses native multi-selection as CurrentTarget when persistent Selection is empty', () => {
     const first = item(10);
     const second = item(11);
     const third = item(12);
     const h = harness([first, second, third], 1, [0, 1, 2]);
 
-    expect(resolveMainEffectiveTargets(h.window, h.session)).toMatchObject({
+    expect(resolveMainEffectiveTargets(h.window, h.selection)).toMatchObject({
       source: 'native-selection',
       refs: [
         { libraryID: 1, itemID: 10 },
@@ -173,14 +183,14 @@ describe('Main action targets', () => {
       ],
     };
 
-    expect(resolveMainEffectiveTargets(h.window, h.session, visual)).toMatchObject({
+    expect(resolveMainEffectiveTargets(h.window, h.selection, visual)).toMatchObject({
       source: 'visual',
       items: [second, third],
       total: 2,
     });
 
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    expect(resolveMainEffectiveTargets(h.window, h.session, visual)).toMatchObject({
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    expect(resolveMainEffectiveTargets(h.window, h.selection, visual)).toMatchObject({
       source: 'selection',
       items: [first],
       total: 1,
@@ -193,10 +203,10 @@ describe('Main action targets', () => {
     const hidden = item(12);
     const h = harness([first, cursor], 1);
     h.install(hidden);
-    h.session.selection.add({ libraryID: 1, itemID: first.id });
-    h.session.selection.add({ libraryID: 1, itemID: hidden.id });
+    h.selection.add({ libraryID: 1, itemID: first.id });
+    h.selection.add({ libraryID: 1, itemID: hidden.id });
 
-    expect(resolveMainEffectiveTargets(h.window, h.session)).toMatchObject({
+    expect(resolveMainEffectiveTargets(h.window, h.selection)).toMatchObject({
       source: 'selection',
       items: [first, hidden],
       total: 2,
@@ -209,10 +219,10 @@ describe('Main action targets', () => {
   it('reports stale identities without resolving an item from the wrong library', () => {
     const visible = item(10, 1);
     const h = harness([visible]);
-    h.session.selection.add({ libraryID: 2, itemID: 10 });
-    h.session.selection.add({ libraryID: 1, itemID: 99 });
+    h.selection.add({ libraryID: 2, itemID: 10 });
+    h.selection.add({ libraryID: 1, itemID: 99 });
 
-    expect(resolveMainEffectiveTargets(h.window, h.session)).toMatchObject({
+    expect(resolveMainEffectiveTargets(h.window, h.selection)).toMatchObject({
       source: 'selection',
       items: [],
       total: 2,

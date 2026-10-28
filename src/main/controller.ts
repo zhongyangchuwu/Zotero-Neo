@@ -57,7 +57,7 @@ import { FuzzyPicker } from './picker';
 import { NoteEditor, type NoteBindingMode } from './note-editor';
 import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { createTagModule, type TagModule } from '../modules/tags';
-import { MainItemSelect } from './item-select';
+import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import {
   mainLibrarySelection,
   openMainNote,
@@ -68,12 +68,17 @@ import {
   openMainIdentifierLookup,
   mainIdentifierLookupOwnsInput,
   mainTagScope,
+  currentMainItemCursorRef,
+  mainItemCursorRow,
+  mainSelectedItemRefs,
+  mainTreeFocused,
+  selectMainItemCursorAnchor,
 } from '../toolkit/main';
 import { mainCursorItem } from './action-targets';
 import { MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
 import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
-import { SelectionPanel } from './selection-panel';
+import { MainItemStateDecoration } from './item-state-decoration';
 import { MainLocalFind } from './local-find';
 import { MainViewActions } from './view-actions';
 import { MainNavigationExecutor } from './jump-history';
@@ -94,6 +99,7 @@ function assertNever(value: never): never {
 export class MainWindowController implements MainWindowControllerApi {
   readonly #dependencies: MainWindowControllerDependencies;
   readonly #sessions = new Map<MainWindow, MainWindowSession>();
+  readonly #retiredSessions = new WeakSet<MainWindowSession>();
   readonly #navigation: MainNavigation;
   readonly #picker: FuzzyPicker;
   readonly #noteEditor: NoteEditor;
@@ -104,10 +110,10 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly tags: TagModule;
       readonly extensions: ExtensionsModule;
       readonly collections: CollectionsModule;
+      readonly worksets: WorksetsModule;
     }
   >();
-  readonly #itemSelect: MainItemSelect;
-  readonly #selectionPanel: SelectionPanel;
+  readonly #itemDecorations = new MainItemStateDecoration();
   readonly #localFind: MainLocalFind;
   readonly #viewActions: MainViewActions;
   readonly #navigationExecutor: MainNavigationExecutor;
@@ -115,7 +121,6 @@ export class MainWindowController implements MainWindowControllerApi {
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
     this.#navigation = new MainNavigation(dependencies.logger, (window) => this.rescan(window));
-    this.#itemSelect = new MainItemSelect(dependencies.logger);
     this.#viewActions = new MainViewActions(dependencies.logger, this.#navigation);
     this.#navigationExecutor = new MainNavigationExecutor(
       dependencies.logger,
@@ -123,6 +128,8 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#viewActions,
       dependencies.reader,
       (window, session) => this.#sessions.get(window) === session,
+      (session) =>
+        session.picker.open || (this.#modules.get(session)?.worksets.isPanelOpen ?? false),
     );
     this.#localFind = new MainLocalFind(
       (session, text) => this.#navigation.status(session, text),
@@ -140,11 +147,6 @@ export class MainWindowController implements MainWindowControllerApi {
           mainPanel: 'items',
         });
       },
-    );
-    this.#selectionPanel = new SelectionPanel(
-      dependencies.logger,
-      this.#navigationExecutor,
-      (window, session) => this.#itemSelect.refresh(window, session.selection),
     );
     this.#picker = new FuzzyPicker(
       dependencies.logger,
@@ -168,8 +170,9 @@ export class MainWindowController implements MainWindowControllerApi {
   private attachModules(window: MainWindow, session: MainWindowSession): void {
     const host = new ModuleHost(
       this.#dependencies.logger,
-      () => this.#sessions.get(window) === session,
+      () => this.#sessions.get(window) === session && !session.cleanup.disposed,
     );
+    session.cleanup.add(() => host.dispose());
     try {
       const tags = createTagModule(host, {
         logger: this.#dependencies.logger,
@@ -190,12 +193,14 @@ export class MainWindowController implements MainWindowControllerApi {
           };
         },
       });
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
       const extensions = createExtensionsModule(host, {
         window,
         logger: this.#dependencies.logger,
         bindings: () => this.bindings(),
         themeRoot: (root) => session.theme.add(root),
       });
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
       const collections = createCollectionsModule(host, {
         window,
         logger: this.#dependencies.logger,
@@ -246,12 +251,36 @@ export class MainWindowController implements MainWindowControllerApi {
             throw new Error('Collection navigation is no longer available');
         },
       });
-      this.#modules.set(session, { host, tags, extensions, collections });
-      session.cleanup.add(() => host.dispose());
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+      const worksets = createWorksetsModule(host, {
+        window,
+        logger: this.#dependencies.logger,
+        appearance: session.interactionAppearance,
+        themeRoot: (root) => session.theme.add(root),
+        refreshItemDecorations: () => this.#itemDecorations.refresh(window),
+        prepareSelectionPanel: () => {
+          this.#navigation.panel(window, session);
+        },
+        revealItem: (itemID, isCurrent) => {
+          const pane = mainLibrarySelection(window);
+          if (!pane?.selectItem) return null;
+          return this.#navigationExecutor.execute(
+            window,
+            session,
+            {
+              cause: { kind: 'event', event: 'main-selection-panel.reveal' },
+              surface: 'main',
+              context: { mainPanel: 'items', isCurrent },
+            },
+            this.#navigationExecutor.librarySelection(itemID, pane),
+          );
+        },
+      });
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+      this.#modules.set(session, { host, tags, extensions, collections, worksets });
     } catch (error) {
       const failure = new CleanupFailure();
       failure.run(() => host.dispose());
-      failure.run(() => session.dispose());
       try {
         failure.rethrow();
       } catch (cleanupError) {
@@ -283,6 +312,24 @@ export class MainWindowController implements MainWindowControllerApi {
     return modules.collections;
   }
 
+  private worksetsModule(session: MainWindowSession): WorksetsModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.worksets;
+  }
+
+  private cancelMainCurrentTarget(window: MainWindow, session: MainWindowSession): void {
+    const worksets = this.#modules.get(session)?.worksets;
+    if (worksets?.isVisual) {
+      worksets.cancel();
+      return;
+    }
+    if (mainSelectedItemRefs(window).length <= 1) return;
+    const row = mainItemCursorRow(window);
+    if (row !== undefined && selectMainItemCursorAnchor(window, row))
+      this.#itemDecorations.refresh(window);
+  }
+
   addWindow(window: MainWindow): void {
     if (this.#sessions.has(window)) return;
     const session = new MainWindowSession(
@@ -290,90 +337,170 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.preferences,
       this.#dependencies.mayClaimInitialLibraryFocus?.() ?? false,
     );
-    this.attachModules(window, session);
     this.#sessions.set(window, session);
-    this.#itemSelect.addWindow(window, session.selection, session.interactionAppearance);
-    session.cleanup.add(
-      installMainViewLifecycle(window, this.#dependencies.logger, () => {
-        if (this.#sessions.get(window) === session)
-          this.#itemSelect.refresh(window, session.selection);
-      }),
-    );
-    session.focusOwnership.start();
-    this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
-    this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
-    let readerScanFailed = false;
-    const scan = (): void => {
-      if (this.#sessions.get(window) !== session) return;
+    const isCurrent = (): boolean =>
+      this.#sessions.get(window) === session && !session.cleanup.disposed;
+    const addListener = (
+      target: EventTarget,
+      type: string,
+      listener: EventListener,
+      capture = false,
+    ): void => {
       try {
-        this.rescan(window);
-        if (readerScanFailed) {
-          reportDiagnostic(
-            this.#dependencies.logger,
-            'Reader rescan recovered during Main window scan',
-          );
-          readerScanFailed = false;
-        }
+        target.addEventListener(type, listener, capture);
       } catch (error) {
-        if (!readerScanFailed)
-          reportDiagnosticError(
-            this.#dependencies.logger,
-            'Reader rescan failed during Main window scan',
-            error,
-          );
-        readerScanFailed = true;
+        try {
+          target.removeEventListener(type, listener, capture);
+        } catch {
+          // Keep the acquisition failure authoritative.
+        }
+        throw error;
       }
-      this.#noteEditor.sync(
+      session.cleanup.add(() => target.removeEventListener(type, listener, capture));
+    };
+    try {
+      this.attachModules(window, session);
+      if (!isCurrent()) return;
+      const decoration = this.#itemDecorations.addWindow(
         window,
-        session,
-        noteEditorEnabled(this.#dependencies.preferences),
-        (action, count, target, mode, bindings) =>
-          this.executeFromNote(action, count, target, mode, bindings, window, session),
+        () => this.#modules.get(session)?.worksets.marks ?? null,
+        session.interactionAppearance,
+        isCurrent,
       );
-      this.syncSurfaceActivation(window, session);
-    };
-    scan();
-    const interval = window.setInterval(scan, 1000);
-    session.cleanup.add(() => window.clearInterval(interval));
-    for (let count = 1; count <= 4; count += 1) {
-      const timer = window.setTimeout(scan, count * 250);
-      session.cleanup.add(() => window.clearTimeout(timer));
+      if (!isCurrent()) {
+        decoration.dispose();
+        return;
+      }
+      session.itemDecoration = decoration;
+      // Cursor anchoring belongs to Main even when worksets are absent.
+      const cursorRow = mainItemCursorRow(window);
+      if (!isCurrent()) return;
+      if (cursorRow !== undefined) {
+        const cursor = currentMainItemCursorRef(window);
+        if (!isCurrent()) return;
+        const selected = cursor ? mainSelectedItemRefs(window) : [];
+        if (!isCurrent()) return;
+        if (cursor && selected.length === 0) selectMainItemCursorAnchor(window, cursorRow);
+      }
+      if (!isCurrent()) return;
+      session.cleanup.add(
+        installMainViewLifecycle(window, this.#dependencies.logger, () => {
+          if (this.#sessions.get(window) === session) {
+            this.#modules.get(session)?.worksets.refresh();
+            this.#itemDecorations.refresh(window);
+          }
+        }),
+      );
+      if (!isCurrent()) return;
+      session.focusOwnership.start();
+      if (!isCurrent()) return;
+      this.#dependencies.logger.debug(`main window attached sessions=${this.#sessions.size}`);
+      if (!isCurrent()) return;
+      this.#dependencies.logger.diagnostic(`main window attached sessions=${this.#sessions.size}`);
+      if (!isCurrent()) return;
+      let readerScanFailed = false;
+      const scan = (): void => {
+        if (this.#sessions.get(window) !== session) return;
+        try {
+          this.rescan(window);
+          if (readerScanFailed) {
+            reportDiagnostic(
+              this.#dependencies.logger,
+              'Reader rescan recovered during Main window scan',
+            );
+            readerScanFailed = false;
+          }
+        } catch (error) {
+          if (!readerScanFailed)
+            reportDiagnosticError(
+              this.#dependencies.logger,
+              'Reader rescan failed during Main window scan',
+              error,
+            );
+          readerScanFailed = true;
+        }
+        if (!isCurrent()) return;
+        this.#noteEditor.sync(
+          window,
+          session,
+          noteEditorEnabled(this.#dependencies.preferences),
+          (action, count, target, mode, bindings) =>
+            this.executeFromNote(action, count, target, mode, bindings, window, session),
+        );
+        if (!isCurrent()) return;
+        this.syncSurfaceActivation(window, session);
+      };
+      scan();
+      if (!isCurrent()) return;
+      const interval = window.setInterval(scan, 1000);
+      session.cleanup.add(() => window.clearInterval(interval));
+      if (!isCurrent()) return;
+      for (let count = 1; count <= 4; count += 1) {
+        const timer = window.setTimeout(scan, count * 250);
+        session.cleanup.add(() => window.clearTimeout(timer));
+        if (!isCurrent()) return;
+      }
+      const keydown: EventListener = (event) =>
+        this.onKeyDown(event as KeyboardEventWithHandled, window, session);
+      const pickerKeydown: EventListener = (event) => {
+        if (
+          this.#sessions.get(window) === session &&
+          session.picker.open &&
+          !mainIdentifierLookupOwnsInput(window)
+        )
+          this.#picker.onKeyDown(event as KeyboardEventWithHandled, window, session);
+      };
+      addListener(window.document, 'keydown', keydown, true);
+      if (!isCurrent()) return;
+      addListener(window, 'keydown', pickerKeydown, true);
+      if (!isCurrent()) return;
+      addListener(window.document, 'focusin', (event) => {
+        if (this.#sessions.get(window) !== session) return;
+        this.#navigation.observeFocus(window, session);
+        if (session.settings.contains(event.target)) this.resetMainInput(window, session);
+        this.syncSurfaceActivation(window, session);
+      });
+      if (!isCurrent()) return;
+      session.cleanup.add(() => this.#noteEditor.clear(session));
+      session.cleanup.add(() => this.#localFind.close(session));
+      session.cleanup.add(() => this.#picker.close(session));
+    } catch (error) {
+      try {
+        this.removeSession(window, session);
+      } catch (cleanupError) {
+        reportDiagnosticError(
+          this.#dependencies.logger,
+          'Main attachment cleanup failed',
+          cleanupError,
+        );
+      }
+      throw error;
     }
-    const keydown: EventListener = (event) =>
-      this.onKeyDown(event as KeyboardEventWithHandled, window, session);
-    const pickerKeydown: EventListener = (event) => {
-      if (
-        this.#sessions.get(window) === session &&
-        session.picker.open &&
-        !mainIdentifierLookupOwnsInput(window)
-      )
-        this.#picker.onKeyDown(event as KeyboardEventWithHandled, window, session);
-    };
-    session.cleanup.addEventListener(window.document, 'keydown', keydown, true);
-    session.cleanup.addEventListener(window, 'keydown', pickerKeydown, true);
-    session.cleanup.addEventListener(window.document, 'focusin', (event) => {
-      if (this.#sessions.get(window) !== session) return;
-      this.#navigation.observeFocus(window, session);
-      if (session.settings.contains(event.target)) this.resetMainInput(window, session);
-      this.syncSurfaceActivation(window, session);
-    });
-    session.cleanup.add(() => this.#noteEditor.clear(session));
-    session.cleanup.add(() => this.#localFind.close(session));
-    session.cleanup.add(() => this.#selectionPanel.close(session));
-    session.cleanup.add(() => this.#picker.close(session));
   }
 
   removeWindow(window: MainWindow): void {
     const session = this.#sessions.get(window);
-    if (!session) return;
-    this.#sessions.delete(window);
-    this.#dependencies.logger.debug(`main window detached sessions=${this.#sessions.size}`);
-    this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`);
-    const failure = new CleanupFailure();
+    if (session) this.removeSession(window, session);
+  }
+
+  private removeSession(window: MainWindow, session: MainWindowSession): void {
+    if (this.#retiredSessions.has(session)) return;
+    this.#retiredSessions.add(session);
+    if (this.#sessions.get(window) === session) this.#sessions.delete(window);
     const modules = this.#modules.get(session);
     this.#modules.delete(session);
+    const decoration = session.itemDecoration;
+    session.itemDecoration = null;
+    decoration?.retire();
+    const failure = new CleanupFailure();
+    failure.run(() =>
+      this.#dependencies.logger.debug(`main window detached sessions=${this.#sessions.size}`),
+    );
+    failure.run(() =>
+      this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`),
+    );
     if (modules) failure.run(() => modules.host.dispose());
-    failure.run(() => this.#itemSelect.removeWindow(window));
+    failure.run(() => decoration?.dispose());
     failure.run(() => session.dispose());
     failure.rethrow();
   }
@@ -392,7 +519,7 @@ export class MainWindowController implements MainWindowControllerApi {
     const window = resolved.window;
     this.#picker.close(resolved);
     this.extensionsModule(resolved).close();
-    this.#selectionPanel.close(resolved);
+    this.worksetsModule(resolved).closePanel();
     this.#localFind.close(resolved);
     this.resetMainInput(window, resolved);
     try {
@@ -412,7 +539,7 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   private deactivateMainSurface(window: MainWindow, session: MainWindowSession): void {
-    if (this.#itemSelect.isVisual(window)) this.#itemSelect.leave(window, session.selection);
+    if (this.worksetsModule(session).isVisual) this.worksetsModule(session).leave();
     this.resetMainInput(window, session);
   }
 
@@ -506,7 +633,7 @@ export class MainWindowController implements MainWindowControllerApi {
   openAddByIdentifier(ownerWindow: MainWindow | null): void {
     this.withReaderWindow(ownerWindow, 'mainAddByIdentifier', (window, session) => {
       this.#picker.close(session);
-      if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+      if (this.worksetsModule(session).isVisual) this.worksetsModule(session).cancel();
       this.resetMainInput(window, session);
       try {
         if (!openMainIdentifierLookup(window))
@@ -731,7 +858,8 @@ export class MainWindowController implements MainWindowControllerApi {
   }
 
   private bindingMode(window: MainWindow): Extract<BindingContext, 'main-normal' | 'main-select'> {
-    return this.#itemSelect.isVisual(window) ? 'main-select' : 'main-normal';
+    const session = this.#sessions.get(window);
+    return session && this.#modules.get(session)?.worksets.isVisual ? 'main-select' : 'main-normal';
   }
   private rescan = (window: MainWindow): void => this.#dependencies.reader.rescan(window);
 
@@ -769,8 +897,8 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#localFind.handleKey(event, window, session);
       return;
     }
-    if (session.selectionPanel.open) {
-      this.#selectionPanel.handleKey(event, window, session);
+    if (this.worksetsModule(session).isPanelOpen) {
+      this.worksetsModule(session).handlePanelKey(event);
       return;
     }
     if (this.extensionsModule(session).isOpen) {
@@ -808,7 +936,7 @@ export class MainWindowController implements MainWindowControllerApi {
       return;
     }
     if (compositionOwnsKey(event, false)) return;
-    if (this.#itemSelect.isVisual(window) && !this.#itemSelect.itemsFocused(window)) {
+    if (this.worksetsModule(session).isVisual && !mainTreeFocused(window, 'items')) {
       this.deactivateMainSurface(window, session);
       return;
     }
@@ -837,16 +965,17 @@ export class MainWindowController implements MainWindowControllerApi {
       if (
         decision.action === 'mainCancelTarget' &&
         event.key.toLowerCase() === 'escape' &&
-        (!this.#itemSelect.itemsFocused(window) || !this.#itemSelect.hasCancelableTarget(window))
+        (!mainTreeFocused(window, 'items') ||
+          !(this.worksetsModule(session).isVisual || mainSelectedItemRefs(window).length > 1))
       ) {
         this.clearKeyGuide(window, session);
         return;
       }
-      if (decision.action === 'mainEnterSelect' && !this.#itemSelect.itemsFocused(window)) {
+      if (decision.action === 'mainEnterSelect' && !mainTreeFocused(window, 'items')) {
         this.clearKeyGuide(window, session);
         return;
       }
-      if (decision.action === 'mainToggleSelection' && !this.#itemSelect.itemsFocused(window)) {
+      if (decision.action === 'mainToggleSelection' && !mainTreeFocused(window, 'items')) {
         this.clearKeyGuide(window, session);
         return;
       }
@@ -1315,20 +1444,20 @@ export class MainWindowController implements MainWindowControllerApi {
   ): void {
     switch (action) {
       case 'openSearch':
-        if (!this.#itemSelect.itemsFocused(window)) {
+        if (!mainTreeFocused(window, 'items')) {
           this.#navigation.status(session, '✗ Focus the items list first');
           break;
         }
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+        if (this.worksetsModule(session).isVisual) this.worksetsModule(session).cancel();
         this.#localFind.open(window, session);
         break;
       case 'findNext':
       case 'findPrevious':
-        if (!this.#itemSelect.itemsFocused(window)) {
+        if (!mainTreeFocused(window, 'items')) {
           this.#navigation.status(session, '✗ Focus the items list first');
           break;
         }
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+        if (this.worksetsModule(session).isVisual) this.worksetsModule(session).cancel();
         this.#localFind.repeat(window, session, action === 'findNext' ? 1 : -1);
         break;
       case 'openCommandPalette': {
@@ -1353,12 +1482,12 @@ export class MainWindowController implements MainWindowControllerApi {
         this.openAddByIdentifier(window);
         break;
       case 'mainQuickSearch':
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+        if (this.worksetsModule(session).isVisual) this.worksetsModule(session).cancel();
         session.focusOwnership.markQuickSearchIntent();
         this.#viewActions.focusQuickSearch(window, session);
         break;
       case 'mainAdvancedSearch':
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+        if (this.worksetsModule(session).isVisual) this.worksetsModule(session).cancel();
         this.#viewActions.openAdvancedSearch(window, session);
         break;
       case 'findAllItems':
@@ -1396,25 +1525,29 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'navigateBack':
       case 'navigateForward':
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
+        if (this.worksetsModule(session).isVisual) this.worksetsModule(session).cancel();
         this.executeTraversal(window, session, action, 'main', count);
         break;
       case 'manageSelection':
-        if (this.#itemSelect.isVisual(window)) this.#itemSelect.cancel(window, session.selection);
-        this.#navigation.panel(window, session);
-        this.#selectionPanel.open(window, session);
+        this.worksetsModule(session).manageSelection();
         break;
       case 'mainTrashItems': {
-        const currentTarget = this.#itemSelect.isVisual(window)
-          ? this.#itemSelect.currentTarget(window)
+        const currentTarget = this.worksetsModule(session).isVisual
+          ? this.worksetsModule(session).currentTarget()
           : undefined;
         const visualRevision =
-          currentTarget?.source === 'visual' ? this.#itemSelect.visualRevision(window) : null;
+          currentTarget?.source === 'visual' ? this.worksetsModule(session).visualRevision : null;
         void this.#navigation
-          .trashSelectedItems(window, session, currentTarget, this.keyGuideLanguage())
+          .trashSelectedItems(
+            window,
+            session,
+            this.worksetsModule(session).selection,
+            currentTarget,
+            this.keyGuideLanguage(),
+          )
           .then((trashed) => {
             if (trashed && visualRevision !== null && this.#sessions.get(window) === session)
-              this.#itemSelect.cancelIfVisualRevision(window, visualRevision, session.selection);
+              this.worksetsModule(session).cancelIfVisualRevision(visualRevision);
           });
         break;
       }
@@ -1442,10 +1575,14 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.focusDirection(window, session, 'right');
         break;
       case 'mainYankCitekey': {
-        const visual = this.#itemSelect.isVisual(window);
-        const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
-        const targets = MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
-        if (visual) this.#itemSelect.cancel(window, session.selection);
+        const visual = this.worksetsModule(session).isVisual;
+        const currentTarget = visual ? this.worksetsModule(session).currentTarget() : undefined;
+        const targets = MAIN_ITEM_TARGET.resolve(
+          window,
+          this.worksetsModule(session).selection,
+          currentTarget,
+        );
+        if (visual) this.worksetsModule(session).cancel();
         this.#navigation.status(session, copyCitekeys(targets));
         break;
       }
@@ -1475,10 +1612,14 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'addTag':
       case 'removeTag': {
-        const visual = this.#itemSelect.isVisual(window);
-        const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
-        const targets = MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
-        if (visual) this.#itemSelect.cancel(window, session.selection);
+        const visual = this.worksetsModule(session).isVisual;
+        const currentTarget = visual ? this.worksetsModule(session).currentTarget() : undefined;
+        const targets = MAIN_ITEM_TARGET.resolve(
+          window,
+          this.worksetsModule(session).selection,
+          currentTarget,
+        );
+        if (visual) this.worksetsModule(session).cancel();
         if (action === 'addTag') this.tagModule(session).add(targets);
         else this.tagModule(session).remove(targets);
         break;
@@ -1492,13 +1633,14 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'addToCollection':
       case 'removeFromCollection':
       case 'moveToCollection': {
-        const visual = this.#itemSelect.isVisual(window);
-        const currentTarget = visual ? this.#itemSelect.currentTarget(window) : undefined;
-        if (visual) this.#itemSelect.cancel(window, session.selection);
-        const resolveTargets = () => MAIN_ITEM_TARGET.resolve(window, session, currentTarget);
+        const visual = this.worksetsModule(session).isVisual;
+        const currentTarget = visual ? this.worksetsModule(session).currentTarget() : undefined;
+        if (visual) this.worksetsModule(session).cancel();
+        const resolveTargets = () =>
+          MAIN_ITEM_TARGET.resolve(window, this.worksetsModule(session).selection, currentTarget);
         const request = {
           source: 'main',
-          label: session.selection.size ? 'Selection' : 'context item',
+          label: this.worksetsModule(session).selection.size ? 'Selection' : 'context item',
           resolveTargets,
         } as const;
         const collections = this.collectionsModule(session);
@@ -1574,37 +1716,37 @@ export class MainWindowController implements MainWindowControllerApi {
         this.#navigation.collapseAll(window, session);
         break;
       case 'mainToggleSelection':
-        this.#itemSelect.toggleCurrentTarget(window, session.selection, shouldDebounce);
+        this.worksetsModule(session).toggleCurrentTarget(shouldDebounce);
         break;
       case 'mainClearSelection':
-        this.#itemSelect.clearSelection(window, session.selection);
+        this.worksetsModule(session).clearSelection();
         break;
       case 'mainCancelTarget':
-        this.#itemSelect.cancelCurrentTarget(window, session.selection);
+        this.cancelMainCurrentTarget(window, session);
         break;
       case 'mainEnterSelect':
-        this.#itemSelect.enter(window, session.selection);
+        this.worksetsModule(session).enter();
         break;
       case 'mainSelectDown':
-        this.#itemSelect.extend(window, 1, count, session.selection, shouldDebounce);
+        this.worksetsModule(session).extend(1, count, shouldDebounce);
         break;
       case 'mainSelectUp':
-        this.#itemSelect.extend(window, -1, count, session.selection, shouldDebounce);
+        this.worksetsModule(session).extend(-1, count, shouldDebounce);
         break;
       case 'mainSelectFirst':
-        this.#itemSelect.extend(window, 'first', count, session.selection);
+        this.worksetsModule(session).extend('first', count);
         break;
       case 'mainSelectLast':
-        this.#itemSelect.extend(window, 'last', count, session.selection);
+        this.worksetsModule(session).extend('last', count);
         break;
       case 'mainSelectSwapEnds':
-        this.#itemSelect.swapEnds(window, session.selection);
+        this.worksetsModule(session).swapEnds();
         break;
       case 'mainSelectFinish':
-        this.#itemSelect.finish(window, session.selection);
+        this.worksetsModule(session).finish();
         break;
       case 'mainSelectCancel':
-        this.#itemSelect.cancel(window, session.selection);
+        this.worksetsModule(session).cancel();
         break;
       default:
         return assertNever(action);

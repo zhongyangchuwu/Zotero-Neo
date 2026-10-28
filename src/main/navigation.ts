@@ -33,6 +33,7 @@ import {
   resolveMainEffectiveTargets,
   type MainCurrentTarget,
   type MainResolvedTargets,
+  type MainSelectionSource,
 } from './action-targets';
 
 const TRASH_TARGET_LABEL_KEYS: Readonly<Record<MainResolvedTargets['source'], string>> = {
@@ -185,6 +186,7 @@ export class MainNavigation {
   async trashSelectedItems(
     window: MainWindow,
     session: MainWindowSession,
+    selection: MainSelectionSource | null,
     currentTarget?: MainCurrentTarget | null,
     language: KeyGuideLanguage = 'en',
   ): Promise<boolean> {
@@ -192,7 +194,7 @@ export class MainNavigation {
       this.status(session, '✗ Focus the items list first');
       return false;
     }
-    const targets = resolveMainEffectiveTargets(window, session, currentTarget);
+    const targets = resolveMainEffectiveTargets(window, selection, currentTarget);
     if (!targets.total || !targets.items.length) {
       this.status(session, '✗ No item target');
       return false;
@@ -228,7 +230,7 @@ export class MainNavigation {
       }
       session.trashHistory.record(ids);
       if (targets.source === 'selection') {
-        for (const ref of targets.refs) session.selection.remove(ref);
+        for (const ref of targets.refs) selection?.remove(ref);
       }
       this.status(session, `✓ ${t('status.trashComplete', language).replace('{target}', summary)}`);
       return true;

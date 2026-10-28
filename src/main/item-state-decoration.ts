@@ -6,12 +6,22 @@ import {
   type MainRenderedItemDecoration,
 } from '../toolkit/main';
 import type { InteractionAppearanceSource } from './interaction-appearance';
-import type { SelectionStore } from './selection-store';
+import type { ItemRef } from '../core/item-ref';
 
 export interface MainVisualRange {
   readonly first: number;
   readonly last: number;
   readonly count: number;
+}
+
+export interface MainItemDecorationProjection {
+  has(ref: ItemRef): boolean;
+  visualRange(): MainVisualRange | undefined;
+}
+
+export interface MainItemDecorationRegistration {
+  retire(): void;
+  dispose(): void;
 }
 
 const DECORATION_CLASSES = [
@@ -50,12 +60,14 @@ function refKey(ref: { readonly libraryID: number; readonly itemID: number } | u
 
 type WindowDecoration = {
   decoration: MainRenderedItemDecoration | null;
-  readonly selection: SelectionStore;
-  readonly visual: () => MainVisualRange | undefined;
+  readonly projection: () => MainItemDecorationProjection | null;
   readonly appearance: InteractionAppearanceSource;
-  selectionCleanup: (() => void) | null;
+  readonly ownerIsCurrent: () => boolean;
+  readonly registration: MainItemDecorationRegistration;
   appearanceCleanup: (() => void) | null;
   scheduled: number | undefined;
+  retired: boolean;
+  disposed: boolean;
 };
 
 /** Decorates only rendered virtual rows; stable item identities remain authoritative. */
@@ -64,40 +76,96 @@ export class MainItemStateDecoration {
 
   addWindow(
     window: MainWindow,
-    selection: SelectionStore,
-    visual: () => MainVisualRange | undefined,
+    projection: () => MainItemDecorationProjection | null,
     appearance: InteractionAppearanceSource,
-  ): void {
-    if (this.#windows.has(window)) return;
-    const refresh = (): void => {
-      if (this.#windows.get(window) === state) this.refresh(window);
-    };
+    ownerIsCurrent: () => boolean,
+  ): MainItemDecorationRegistration {
+    const previous = this.#windows.get(window);
+    if (previous && ownerIsCurrent() && previous.ownerIsCurrent()) return previous.registration;
+    if (previous && ownerIsCurrent()) {
+      previous.registration.retire();
+      previous.registration.dispose();
+    }
 
+    const current = (): boolean =>
+      !state.retired && this.#windows.get(window) === state && ownerIsCurrent();
+    const refresh = (): void => {
+      if (current()) this.refresh(window);
+    };
+    const registration: MainItemDecorationRegistration = {
+      retire: () => {
+        state.retired = true;
+        if (this.#windows.get(window) === state) this.#windows.delete(window);
+      },
+      dispose: () => {
+        registration.retire();
+        if (state.disposed) return;
+        state.disposed = true;
+        const scheduled = state.scheduled;
+        const appearanceCleanup = state.appearanceCleanup;
+        const decoration = state.decoration;
+        state.scheduled = undefined;
+        state.appearanceCleanup = null;
+        state.decoration = null;
+        const failure = new CleanupFailure();
+        failure.run(() => window.clearTimeout(scheduled));
+        failure.run(() => appearanceCleanup?.());
+        failure.run(() => decoration?.dispose());
+        if (this.#windows.has(window)) failure.run(() => this.refresh(window));
+        failure.rethrow();
+      },
+    };
     const state: WindowDecoration = {
       decoration: null,
-      selection,
-      visual,
+      projection,
       appearance,
-      selectionCleanup: null,
+      ownerIsCurrent,
+      registration,
       appearanceCleanup: null,
       scheduled: undefined,
+      retired: false,
+      disposed: false,
     };
+    if (!ownerIsCurrent() || this.#windows.has(window)) {
+      registration.retire();
+      return registration;
+    }
     this.#windows.set(window, state);
     try {
-      state.selectionCleanup = selection.observe(refresh);
-      state.appearanceCleanup = appearance.observe(refresh);
-      state.decoration = installMainRenderedItemDecoration(
+      const appearanceCleanup = appearance.observe(refresh);
+      if (!current()) {
+        appearanceCleanup();
+        registration.dispose();
+        return registration;
+      }
+      state.appearanceCleanup = appearanceCleanup;
+      const markerAppearance = appearance.appearance;
+      if (!current()) {
+        registration.dispose();
+        return registration;
+      }
+      const decoration = installMainRenderedItemDecoration(
         window,
-        appearance.appearance,
+        markerAppearance,
         DECORATION_CLASSES,
         refresh,
       );
+      if (!current()) {
+        const failure = new CleanupFailure();
+        failure.run(() => decoration.dispose());
+        failure.run(() => registration.dispose());
+        if (this.#windows.has(window)) failure.run(() => this.refresh(window));
+        failure.rethrow();
+        return registration;
+      }
+      state.decoration = decoration;
       this.refresh(window);
+      return registration;
     } catch (error) {
       try {
-        this.removeWindow(window);
+        registration.dispose();
       } catch {
-        // Retire subscriptions and callbacks without replacing the installation failure.
+        // Preserve the acquisition error after releasing the captured resources.
       }
       throw error;
     }
@@ -105,36 +173,26 @@ export class MainItemStateDecoration {
 
   refresh(window: MainWindow): void {
     const state = this.#windows.get(window);
-    if (!state) return;
-    window.clearTimeout(state.scheduled);
-    state.scheduled = window.setTimeout(() => {
-      if (this.#windows.get(window) !== state) return;
+    if (!state || state.retired || !state.ownerIsCurrent()) return;
+    const scheduled = state.scheduled;
+    state.scheduled = undefined;
+    window.clearTimeout(scheduled);
+    if (this.#windows.get(window) !== state || state.retired || !state.ownerIsCurrent()) return;
+    const timer = window.setTimeout(() => {
+      if (this.#windows.get(window) !== state || state.retired || !state.ownerIsCurrent()) return;
       state.scheduled = undefined;
       this.render(window, state);
     }, 0);
-  }
-
-  /** Retires the registration before releasing host resources; the first live error survives. */
-  removeWindow(window: MainWindow): void {
-    const state = this.#windows.get(window);
-    if (!state) return;
-    this.#windows.delete(window);
-    const scheduled = state.scheduled;
-    const selectionCleanup = state.selectionCleanup;
-    const appearanceCleanup = state.appearanceCleanup;
-    state.scheduled = undefined;
-    state.selectionCleanup = null;
-    state.appearanceCleanup = null;
-    const failure = new CleanupFailure();
-    failure.run(() => window.clearTimeout(scheduled));
-    failure.run(() => selectionCleanup?.());
-    failure.run(() => appearanceCleanup?.());
-    failure.run(() => state.decoration?.dispose());
-    failure.rethrow();
+    if (this.#windows.get(window) !== state || state.retired || !state.ownerIsCurrent()) {
+      window.clearTimeout(timer);
+      return;
+    }
+    state.scheduled = timer;
   }
 
   private render(window: MainWindow, state: WindowDecoration): void {
-    const visual = state.visual();
+    const projection = state.projection();
+    const visual = projection?.visualRange();
     const cursor = refKey(currentMainItemCursorRef(window));
     state.decoration?.render(state.appearance.appearance, (rowIndex, ref) => {
       const key = refKey(ref);
@@ -147,7 +205,7 @@ export class MainItemStateDecoration {
         ref
           ? itemDecorationClasses({
               cursor: key === cursor,
-              selection: state.selection.has(ref),
+              selection: projection?.has(ref) ?? false,
               visual: inVisual,
               visualFirst: inVisual && rowIndex === visual.first,
               visualLast: inVisual && rowIndex === visual.last,

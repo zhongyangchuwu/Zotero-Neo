@@ -4,8 +4,7 @@ import type { MainWindow } from '../../src/core/contracts';
 import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { NOTE_ITEM_TARGET } from '../../src/main/note-item-target';
 import { READER_ITEM_TARGET } from '../../src/reader/item-target';
-import { SelectionStore } from '../../src/main/selection-store';
-import type { MainWindowSession } from '../../src/main/session';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -44,8 +43,8 @@ function install(items: readonly Zotero.Item[]): void {
   });
 }
 
-function session(): MainWindowSession {
-  return { selection: new SelectionStore() } as unknown as MainWindowSession;
+function session() {
+  return { selection: new SelectionStore() };
 }
 
 describe('Surface-owned item target resolution', () => {
@@ -63,7 +62,7 @@ describe('Surface-owned item target resolution', () => {
       ZoteroPane: { itemsView: { rowCount: 0, selection: { focused: 0 } } },
     } as unknown as MainWindow;
 
-    expect(MAIN_ITEM_TARGET.resolve(window, s)).toMatchObject({
+    expect(MAIN_ITEM_TARGET.resolve(window, s.selection)).toMatchObject({
       source: 'main',
       items: [{ id: 1 }, { id: 3 }],
       total: 3,
@@ -88,7 +87,7 @@ describe('Surface-owned item target resolution', () => {
       missing: 0,
     });
     expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: main.id }]);
-    expect(MAIN_ITEM_TARGET.resolve(window, s)).toMatchObject({
+    expect(MAIN_ITEM_TARGET.resolve(window, s.selection)).toMatchObject({
       source: 'main',
       items: [{ id: main.id }],
       total: 1,
@@ -125,7 +124,7 @@ describe('Surface-owned item target resolution', () => {
       items: [{ id: parent.id }],
     });
     expect(s.selection.values()).toEqual([{ libraryID: 1, itemID: tabNote.id }]);
-    expect(MAIN_ITEM_TARGET.resolve(window, s)).toMatchObject({
+    expect(MAIN_ITEM_TARGET.resolve(window, s.selection)).toMatchObject({
       source: 'main',
       items: [{ id: tabNote.id }],
       total: 1,

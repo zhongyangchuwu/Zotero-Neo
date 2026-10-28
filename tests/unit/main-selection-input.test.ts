@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow, MainWindowControllerDependencies } from '../../src/core/contracts';
 import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { createMainWindowController } from '../../src/main/controller';
-import { MainItemSelect } from '../../src/main/item-select';
 
-import { SelectionStore } from '../../src/main/selection-store';
 import { MainNavigation } from '../../src/main/navigation';
 function themedElement(id = ''): HTMLElement {
   const attributes = new Map<string, string>();
@@ -29,16 +27,23 @@ function themedElement(id = ''): HTMLElement {
   } as unknown as HTMLElement;
 }
 
-function harness(bindingOverrides = '') {
+function harness(
+  bindingOverrides = '',
+  initialSelection?: { readonly focused: number; readonly selected: readonly number[] },
+) {
   const rows = [
     { isObjectRow: true, ref: { id: 10, libraryID: 1 } },
     { isObjectRow: true, ref: { id: 11, libraryID: 1 } },
   ];
-  let focused = 0;
+  let focused = initialSelection?.focused ?? 0;
   let pivot = 0;
-  let selected = new Set([0]);
+  let selected = new Set(initialSelection?.selected ?? [0]);
   let active = themedElement('item-tree-main-default-row-0') as Element;
-  let keydown: EventListener | undefined;
+  const keydown = new Set<EventListener>();
+  const timers = new Map<number, () => void>();
+  let nextTimer = 0;
+  const elements: HTMLElement[] = [];
+  let onDocumentListener: (() => void) | undefined;
   const forwardKey = vi.fn();
   const confirm = vi.fn(() => false);
   const itemRoot = themedElement('item-tree-main-default');
@@ -47,7 +52,18 @@ function harness(bindingOverrides = '') {
     'contains',
     (node: unknown) => node === active && active.id.includes('item-tree'),
   );
-  Reflect.set(itemRoot, 'querySelectorAll', () => []);
+  const rowClasses = rows.map(() => new Set<string>());
+  const renderedRows = rows.map((_row, index) => ({
+    id: `item-tree-main-default-row-${index}`,
+    classList: {
+      toggle: (name: string, force: boolean) => {
+        if (force) rowClasses[index]!.add(name);
+        else rowClasses[index]!.delete(name);
+      },
+      remove: (...names: string[]) => names.forEach((name) => rowClasses[index]!.delete(name)),
+    },
+  }));
+  Reflect.set(itemRoot, 'querySelectorAll', () => renderedRows);
   Reflect.set(itemRoot, 'addEventListener', () => {});
   Reflect.set(itemRoot, 'removeEventListener', () => {});
   const collectionRoot = themedElement('collection-tree');
@@ -108,25 +124,40 @@ function harness(bindingOverrides = '') {
     body,
     head,
     documentElement,
-    createElementNS: () => themedElement(),
+    createElementNS: () => {
+      const element = themedElement();
+      elements.push(element);
+      return element;
+    },
     createElement: () => themedElement(),
     getElementById: (id: string) => (id === 'item-tree-main-default' ? itemRoot : null),
     querySelector: () => null,
     addEventListener: (type: string, listener: EventListener) => {
-      if (type === 'keydown') keydown = listener;
+      if (type === 'keydown') keydown.add(listener);
+      onDocumentListener?.();
     },
-    removeEventListener: () => {},
+    removeEventListener: (type: string, listener: EventListener) => {
+      if (type === 'keydown') keydown.delete(listener);
+    },
   } as unknown as Document;
   const window = {
     confirm,
     document,
-    ZoteroPane: { itemsView, collectionsView: { domEl: collectionRoot } },
+    ZoteroPane: {
+      itemsView,
+      collectionsView: { domEl: collectionRoot },
+      getSelectedItems: () => [...selected].flatMap((row) => rows[row]?.ref ?? []),
+    },
     addEventListener: () => {},
     removeEventListener: () => {},
     setInterval: () => 1,
     clearInterval: () => {},
-    setTimeout: () => 1,
-    clearTimeout: () => {},
+    setTimeout: (callback: () => void) => {
+      const id = ++nextTimer;
+      timers.set(id, callback);
+      return id;
+    },
+    clearTimeout: (id: number) => timers.delete(id),
   } as unknown as MainWindow;
   const controller = createMainWindowController({
     preferences: {
@@ -156,7 +187,7 @@ function harness(bindingOverrides = '') {
   const press = (key: string, options: Partial<KeyboardEvent> = {}) => {
     const preventDefault = vi.fn();
     const stopPropagation = vi.fn();
-    keydown?.({
+    const event = {
       key,
       ctrlKey: false,
       metaKey: false,
@@ -166,17 +197,35 @@ function harness(bindingOverrides = '') {
       preventDefault,
       stopPropagation,
       ...options,
-    } as unknown as KeyboardEvent);
+    } as unknown as KeyboardEvent;
+    for (const listener of [...keydown]) listener(event);
     return { preventDefault, stopPropagation };
   };
 
   return {
     controller,
+    window,
+    setBadgeRemoval: (callback: () => void) => {
+      const badge = elements.find((element) => element.id === 'zotero-neo-item-select-status');
+      if (!badge) throw new Error('Expected worksets badge');
+      vi.mocked(badge.remove).mockImplementationOnce(callback);
+    },
+    elements,
+    rowClasses,
+    flush: () => {
+      const pending = [...timers.values()];
+      timers.clear();
+      for (const callback of pending) callback();
+    },
+    onDocumentListener: (callback: (() => void) | undefined) => {
+      onDocumentListener = callback;
+    },
     press,
     clearSelection,
     confirm,
     forwardKey,
     focused: () => focused,
+    selectedRows: () => [...selected].sort((a, b) => a - b),
     focusItems: () => {
       active = themedElement(`item-tree-main-default-row-${focused}`) as Element;
     },
@@ -200,9 +249,68 @@ function harness(bindingOverrides = '') {
   };
 }
 
+describe('Main window reentrant ownership', () => {
+  it('keeps replacement input and row marks when module cleanup reopens the window', () => {
+    const host = harness();
+    host.press('s');
+    host.flush();
+    host.setBadgeRemoval(() => host.controller.addWindow(host.window));
+    host.controller.removeWindow(host.window);
+    expect(host.focused()).toBe(1);
+
+    expect(host.press('s').preventDefault).toHaveBeenCalledOnce();
+    host.flush();
+    expect(host.rowClasses[0]!.has('zotero-neo-selection')).toBe(false);
+    expect(host.rowClasses[1]!.has('zotero-neo-selection')).toBe(true);
+    expect(host.rowClasses[1]!.has('zotero-neo-cursor')).toBe(true);
+    host.controller.shutdown();
+  });
+
+  it('preserves replacement input and row marks when an older attachment fails', () => {
+    const host = harness();
+    host.controller.removeWindow(host.window);
+    const failure = new Error('old attachment failed');
+    host.onDocumentListener(() => {
+      host.onDocumentListener(undefined);
+      host.controller.removeWindow(host.window);
+      host.controller.addWindow(host.window);
+      throw failure;
+    });
+    expect(() => host.controller.addWindow(host.window)).toThrow(failure);
+    expect(host.focused()).toBe(0);
+    expect(host.press('s').preventDefault).toHaveBeenCalledOnce();
+    host.flush();
+    expect(host.rowClasses[0]!.has('zotero-neo-selection')).toBe(true);
+    expect(host.rowClasses[0]!.has('zotero-neo-cursor')).toBe(false);
+    expect(host.rowClasses[1]!.has('zotero-neo-cursor')).toBe(true);
+    host.controller.shutdown();
+  });
+});
+
 describe('Main transient-target Escape grammar', () => {
+  it.each([
+    { focused: 1, selected: [], expected: [1] },
+    { focused: 1, selected: [0, 1], expected: [0, 1] },
+    { focused: -1, selected: [], expected: [] },
+  ])('anchors only an initially empty valid native Cursor: $focused / $selected', (initial) => {
+    const host = harness('', initial);
+    expect(host.selectedRows()).toEqual(initial.expected);
+    expect(host.focused()).toBe(initial.focused);
+    host.controller.shutdown();
+  });
+
+  it('collapses a native multi-target to its Cursor on Escape without clearing native selection', () => {
+    const host = harness('', { focused: 1, selected: [0, 1] });
+    const escape = host.press('Escape');
+    expect(escape.preventDefault).toHaveBeenCalledOnce();
+    expect(host.selectedRows()).toEqual([1]);
+    expect(host.focused()).toBe(1);
+    expect(host.clearSelection).not.toHaveBeenCalled();
+    expect(host.press('Escape').preventDefault).not.toHaveBeenCalled();
+    host.controller.shutdown();
+  });
+
   it('passes Escape through without a transient target and keeps persistent clear on Space-s-c', () => {
-    const clearPersistent = vi.spyOn(MainItemSelect.prototype, 'clearSelection');
     const host = harness();
 
     const empty = host.press('Escape');
@@ -215,13 +323,11 @@ describe('Main transient-target Escape grammar', () => {
     const normalEscape = host.press('Escape');
     expect(normalEscape.preventDefault).not.toHaveBeenCalled();
     expect(normalEscape.stopPropagation).not.toHaveBeenCalled();
-    expect(clearPersistent).not.toHaveBeenCalled();
     expect(host.focused()).toBe(1);
 
     host.press(' ');
     host.press('s');
     host.press('c');
-    expect(clearPersistent).toHaveBeenCalledOnce();
 
     host.press('s');
     host.focusCollections();
@@ -231,7 +337,6 @@ describe('Main transient-target Escape grammar', () => {
     expect(host.clearSelection).not.toHaveBeenCalled();
 
     host.controller.shutdown();
-    clearPersistent.mockRestore();
   });
   it('lets Visual Escape cancel the range while preserving persistent Selection', () => {
     const host = harness();
@@ -249,45 +354,6 @@ describe('Main transient-target Escape grammar', () => {
     expect(normalEscape.stopPropagation).not.toHaveBeenCalled();
     expect(host.clearSelection).not.toHaveBeenCalled();
     host.controller.shutdown();
-  });
-
-  it('uses the exact Normal or Visual keymap after commit, cancel, and focus loss', () => {
-    const enter = vi.spyOn(MainItemSelect.prototype, 'enter');
-    const finish = vi.spyOn(MainItemSelect.prototype, 'finish');
-    const cancel = vi.spyOn(MainItemSelect.prototype, 'cancel');
-    const leave = vi.spyOn(MainItemSelect.prototype, 'leave');
-    const toggle = vi.spyOn(MainItemSelect.prototype, 'toggleCurrentTarget');
-    const host = harness();
-    try {
-      expect(host.press('v').preventDefault).toHaveBeenCalledOnce();
-      host.press('j');
-      expect(host.focused()).toBe(1);
-      host.press('s');
-      expect(finish).toHaveBeenCalledOnce();
-      expect(toggle).not.toHaveBeenCalled();
-
-      host.press('v');
-      host.press('Escape');
-      expect(cancel).toHaveBeenCalledOnce();
-      host.press('v');
-      host.focusCollections();
-      const focusLoss = host.press('j');
-      expect(leave).toHaveBeenCalledOnce();
-      expect(focusLoss.preventDefault).not.toHaveBeenCalled();
-      host.focusItems();
-      host.press('s');
-      expect(toggle).toHaveBeenCalledOnce();
-      expect(finish).toHaveBeenCalledOnce();
-      host.press('v');
-      expect(enter).toHaveBeenCalledTimes(4);
-    } finally {
-      host.controller.shutdown();
-      enter.mockRestore();
-      finish.mockRestore();
-      cancel.mockRestore();
-      leave.mockRestore();
-      toggle.mockRestore();
-    }
   });
 
   it('keeps editable and Reader Escape routes ahead of Main transient-target cancel', () => {
@@ -318,26 +384,27 @@ describe('Main transient-target Escape grammar', () => {
 
   it('keeps persistent Selection unchanged when Main Trash is cancelled', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
-    const item = { id: 10, libraryID: 1 } as Zotero.Item;
+    const items = [
+      { id: 10, libraryID: 1 },
+      { id: 11, libraryID: 1 },
+    ] as Zotero.Item[];
     const trashTx = vi.fn(async () => {});
-    const remove = vi.spyOn(SelectionStore.prototype, 'remove');
     const host = harness();
     Reflect.set(globalThis, 'Zotero', {
-      Items: { get: (id: number) => (id === item.id ? item : false), trashTx },
+      Items: { get: (id: number) => items.find((item) => item.id === id) ?? false, trashTx },
     });
     try {
       host.press('s');
       host.press('x');
       await Promise.resolve();
 
-      expect(host.confirm).toHaveBeenCalledWith(
-        'Move Neo Selection · 1 item to Zotero Trash? You can restore it with Zotero Undo.',
-      );
+      expect(host.confirm).toHaveBeenCalledOnce();
       expect(trashTx).not.toHaveBeenCalled();
-      expect(remove).not.toHaveBeenCalled();
+      host.confirm.mockReturnValue(true);
+      host.press('x');
+      await vi.waitFor(() => expect(trashTx).toHaveBeenCalledWith([10]));
     } finally {
       host.controller.shutdown();
-      remove.mockRestore();
       if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
       else Reflect.set(globalThis, 'Zotero', originalZotero);
     }

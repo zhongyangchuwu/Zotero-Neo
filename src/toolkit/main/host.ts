@@ -2,7 +2,7 @@ import type { SelectLibraryItemResult, ShowInLibraryHost } from '../../operation
 import type { ItemOpenHost } from '../../operations/open-item';
 import type { MainWindow } from '../../core/contracts';
 import type { TreeView } from './private-types';
-import type { ItemRef } from '../../main/selection-store';
+import type { ItemRef } from '../../core/item-ref';
 import { CleanupFailure } from '../../core/cleanup';
 
 export type TagJson = _ZoteroTypes.Tags.TagJson;

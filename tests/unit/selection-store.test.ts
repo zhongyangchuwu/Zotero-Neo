@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SelectionStore, type ItemRef } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
+import type { ItemRef } from '../../src/core/item-ref';
 
 const a: ItemRef = { libraryID: 1, itemID: 10 };
 const b: ItemRef = { libraryID: 1, itemID: 11 };

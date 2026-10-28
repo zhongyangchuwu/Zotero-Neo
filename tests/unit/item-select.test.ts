@@ -1,14 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { resolveMainEffectiveTargets } from '../../src/main/action-targets';
-import type { MainWindowSession } from '../../src/main/session';
-import {
-  MainItemSelect,
-  nextItemSelectIndex,
-  selectionStatusText,
-  visualStatusText,
-} from '../../src/main/item-select';
-import { SelectionStore } from '../../src/main/selection-store';
+import { MainItemSelect, nextItemSelectIndex } from '../../src/modules/worksets/item-select';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import {
   resolveInteractionAppearance,
   type InteractionAppearanceSource,
@@ -175,55 +169,16 @@ function selectedIDs(store: SelectionStore): number[] {
     .sort((left, right) => left - right);
 }
 
-describe('Main item attach', () => {
-  const appearance = appearanceSource();
-
-  it('establishes a zero-selection focused row as the sole native Cursor anchor', () => {
-    const host = harness(2, []);
-    const feature = new MainItemSelect(logger);
-
-    feature.addWindow(host.window, new SelectionStore(), appearance);
-
-    expect(host.selection.select).toHaveBeenCalledOnce();
-    expect(host.selection.select).toHaveBeenCalledWith(2, false);
-    expect(host.selectedRows()).toEqual([2]);
-    expect(host.focusedRow()).toBe(2);
-    feature.removeWindow(host.window);
-  });
-
-  it('preserves pre-existing native multi-selection for host interoperability', () => {
-    const host = harness(2, [0, 2, 4]);
-    const feature = new MainItemSelect(logger);
-
-    feature.addWindow(host.window, new SelectionStore(), appearance);
-
-    expect(host.selection.select).not.toHaveBeenCalled();
-    expect(host.selectedRows()).toEqual([0, 2, 4]);
-    feature.removeWindow(host.window);
-  });
-
-  it('fails safely when the focused row or native select seam is unavailable', () => {
-    const missingCursor = harness(-1, []);
-    const missingCursorFeature = new MainItemSelect(logger);
-    missingCursorFeature.addWindow(missingCursor.window, new SelectionStore(), appearance);
-    expect(missingCursor.selection.select).not.toHaveBeenCalled();
-    missingCursorFeature.removeWindow(missingCursor.window);
-
-    const missingSelect = harness(1, [0, 1]);
-    Reflect.deleteProperty(missingSelect.selection, 'select');
-    const missingSelectFeature = new MainItemSelect(logger);
-    missingSelectFeature.addWindow(missingSelect.window, new SelectionStore(), appearance);
-    expect(missingSelect.selectedRows()).toEqual([0, 1]);
-    missingSelectFeature.removeWindow(missingSelect.window);
-  });
-});
-
 describe('Main Selection retirement ownership', () => {
   it('keeps persistent Selection visible when an older transient status timer is delivered', () => {
     const host = harness();
     const store = new SelectionStore();
     store.add({ libraryID: 1, itemID: 10 });
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
     feature.addWindow(host.window, store, appearanceSource());
     feature.clearSelection(host.window, store);
     const timer = vi
@@ -256,7 +211,11 @@ describe('Main Selection retirement ownership', () => {
         return () => {};
       },
     };
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
     feature.addWindow(host.window, oldSelection, appearance);
     feature.refresh(host.window, oldSelection);
     let observed: unknown;
@@ -288,50 +247,6 @@ describe('Main Visual Selection', () => {
     expect(nextItemSelectIndex(3, 10, 'last', 5)).toBe(4);
   });
 
-  it('reports persistent Selection visibility and compact Visual state', () => {
-    expect(selectionStatusText(7, 3)).toBe('SEL 7 · 3 visible · 4 hidden');
-    expect(selectionStatusText(2, 2)).toBe('SEL 2 · 2 visible');
-    expect(visualStatusText(4, 7)).toBe('VISUAL 4 · SEL 7');
-  });
-
-  it('renders structured semantic status tokens with neutral and tinted containers', () => {
-    const selectionHost = harness(1);
-    const selectionStore = new SelectionStore();
-    const neutralFeature = new MainItemSelect(logger);
-    neutralFeature.addWindow(selectionHost.window, selectionStore, appearanceSource());
-    selectionStore.add({ libraryID: 1, itemID: 11 });
-
-    expect(selectionHost.badge.textContent).toBe('SEL 1 · 1 visible');
-    expect(selectionHost.badgeChildren.map((child) => child.className)).toEqual([
-      'zotero-neo-status-selection',
-      'zotero-neo-status-detail',
-    ]);
-    expect(selectionHost.badge.style.cssText).toContain('background:#ECEFF4');
-    expect(selectionHost.badge.style.cssText).toContain('color:#3B4252');
-    neutralFeature.removeWindow(selectionHost.window);
-
-    const visualHost = harness(1);
-    const visualStore = new SelectionStore();
-    const tintedFeature = new MainItemSelect(logger);
-    tintedFeature.addWindow(
-      visualHost.window,
-      visualStore,
-      appearanceSource({ 'appearance.interaction.statusStyle': 'tinted' }),
-    );
-    expect(tintedFeature.enter(visualHost.window, visualStore)).toBe('entered');
-
-    expect(visualHost.badge.textContent).toBe('VISUAL 1 · SEL 0');
-    expect(visualHost.badgeChildren.map((child) => child.className)).toEqual([
-      'zotero-neo-status-visual',
-      'zotero-neo-status-detail',
-      'zotero-neo-status-selection',
-      'zotero-neo-status-detail',
-    ]);
-    expect(visualHost.badge.style.cssText).toContain('background:#CDDCD8');
-    expect(visualHost.badge.style.cssText).toContain('color:#3B4252');
-    tintedFeature.removeWindow(visualHost.window);
-  });
-
   it('does not toggle the item workset when the collection tree owns focus', () => {
     const host = harness(1);
     const collectionActive = { id: 'collection-tree-row-0' } as unknown as Element;
@@ -342,7 +257,11 @@ describe('Main Visual Selection', () => {
     Reflect.set(host.window.ZoteroPane, 'collectionsView', { domEl: collectionRoot });
 
     const store = new SelectionStore();
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
 
     expect(feature.toggleCurrentTarget(host.window, store)).toBe(false);
     expect(store.empty).toBe(true);
@@ -350,7 +269,11 @@ describe('Main Visual Selection', () => {
 
   it('reports Cursor, native multi, and Visual through one CurrentTarget contract', () => {
     const nativeHost = harness(2, [0, 2, 4]);
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
     const store = new SelectionStore();
 
     expect(feature.currentTarget(nativeHost.window)).toEqual({
@@ -382,7 +305,11 @@ describe('Main Visual Selection', () => {
   it('does not retarget actions to native selection when a Visual range disappears', () => {
     const host = harness(0);
     const store = new SelectionStore();
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
 
     expect(feature.enter(host.window, store)).toBe('entered');
     host.rows.shift();
@@ -391,18 +318,18 @@ describe('Main Visual Selection', () => {
     expect(feature.isVisual(host.window)).toBe(true);
     expect(feature.currentTarget(host.window)).toEqual({ source: 'visual', refs: [] });
     expect(
-      resolveMainEffectiveTargets(
-        host.window,
-        { selection: store } as MainWindowSession,
-        feature.currentTarget(host.window),
-      ),
+      resolveMainEffectiveTargets(host.window, store, feature.currentTarget(host.window)),
     ).toMatchObject({ source: 'visual', refs: [], total: 0 });
   });
 
   it('promotes a native multi-selection into persistent Selection with s semantics', () => {
     const host = harness(2, [0, 2, 4]);
     const store = new SelectionStore();
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
 
     expect(feature.toggleCurrentTarget(host.window, store)).toBe(true);
     expect(selectedIDs(store)).toEqual([10, 12, 14]);
@@ -416,23 +343,14 @@ describe('Main Visual Selection', () => {
     expect(selectedIDs(store)).toEqual([]);
   });
 
-  it('Esc-style transient cancel collapses native multi without clearing persistent Selection', () => {
-    const host = harness(2, [0, 2, 4]);
-    const store = new SelectionStore();
-    store.add({ libraryID: 1, itemID: 11 });
-    const feature = new MainItemSelect(logger);
-
-    expect(feature.hasCancelableTarget(host.window)).toBe(true);
-    expect(feature.cancelCurrentTarget(host.window, store)).toBe(true);
-    expect(host.selectedRows()).toEqual([2]);
-    expect(selectedIDs(store)).toEqual([11]);
-    expect(feature.hasCancelableTarget(host.window)).toBe(false);
-  });
-
   it('toggles Cursor items into the workset and advances without collapsing it', () => {
     const host = harness(1);
     const store = new SelectionStore();
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
 
     expect(feature.toggleCurrentTarget(host.window, store)).toBe(true);
     expect(selectedIDs(store)).toEqual([11]);
@@ -450,7 +368,11 @@ describe('Main Visual Selection', () => {
     const store = new SelectionStore();
     store.add({ libraryID: 1, itemID: 10 });
     store.add({ libraryID: 1, itemID: 12 });
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
 
     expect(feature.enter(host.window, store)).toBe('entered');
     expect(host.selectedRows()).toEqual([1]);
@@ -483,7 +405,11 @@ describe('Main Visual Selection', () => {
     for (const exit of ['cancel', 'leave'] as const) {
       const host = harness(1);
       const store = new SelectionStore();
-      const feature = new MainItemSelect(logger);
+      const feature = new MainItemSelect(
+        logger,
+        () => {},
+        () => true,
+      );
       feature.addWindow(host.window, store, appearance);
 
       expect(feature.enter(host.window, store)).toBe('entered');
@@ -503,7 +429,11 @@ describe('Main Visual Selection', () => {
       const host = harness(1);
       const store = new SelectionStore();
       store.add({ libraryID: 1, itemID: 10 });
-      const feature = new MainItemSelect(logger);
+      const feature = new MainItemSelect(
+        logger,
+        () => {},
+        () => true,
+      );
       feature.addWindow(host.window, store, appearance);
 
       expect(feature.enter(host.window, store)).toBe('entered');
@@ -520,7 +450,11 @@ describe('Main Visual Selection', () => {
     const store = new SelectionStore();
     store.add({ libraryID: 1, itemID: 10 });
     store.add({ libraryID: 1, itemID: 12 });
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
 
     expect(feature.enter(host.window, store)).toBe('entered');
     feature.extend(host.window, 1, 2, store);
@@ -542,7 +476,11 @@ describe('Main Visual Selection', () => {
     const host = harness(1);
     const store = new SelectionStore();
     store.add({ libraryID: 1, itemID: 10 });
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
     feature.addWindow(host.window, store, appearanceSource());
     expect(feature.isVisual(host.window)).toBe(false);
     expect(feature.enter(host.window, store)).toBe('entered');
@@ -571,7 +509,11 @@ describe('Main Visual Selection', () => {
     const host = harness(1);
     const store = new SelectionStore();
     store.add({ libraryID: 1, itemID: 10 });
-    const feature = new MainItemSelect(logger);
+    const feature = new MainItemSelect(
+      logger,
+      () => {},
+      () => true,
+    );
     expect(feature.enter(host.window, store)).toBe('entered');
     const view = host.window.ZoteroPane?.itemsView;
     if (!view) throw new Error('Expected items view');

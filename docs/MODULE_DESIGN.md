@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、Reader hints 模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、工作集、Reader hints 模块已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
 
 ## 范围与取舍
 
@@ -8,7 +8,7 @@
 
 本轮不设计 AI 接口或模块，不引入 Actions & Tags 的代码、运行时依赖或脚本执行机制，也不改变现有按键、默认行为、数据格式与 Zotero 兼容范围。
 
-先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签、扩展管理、分类和 Reader hints 四条真实接入路径，不批量搬目录或拆 controller，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
+先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前完成标签、扩展管理、分类、工作集和 Reader hints 五条真实接入路径，开始分离复杂 Main 工作流，不批量搬走其余功能，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
 
 需要区分三种边界：
 
@@ -25,6 +25,7 @@
 - `src/modules/extensions/`：第二条真实接入路径，拥有按窗口隔离的 Plugin Manager 状态与 UI 生命周期。复用现有基座和局部输入机制，不扩张 `ModuleHost` 接口；原生扩展适配仍由 Toolkit 提供。资源获取失败会释放部分界面，模块退休后旧 DOM 与异步完成不能重画或关闭替换界面。
 - `src/modules/collections/`：按窗口拥有分类工作流、候选来源与重命名草稿，保留 Main/Reader 的原有贡献。多步骤 Picker 和原生对话框使用精确交互当前性；复用现有 Operations 的事务重验证、回滚和真实提交回执，不把分类写入改为通用“已接纳就不可取消”。
 - `src/modules/reader-hints/`：按 ReaderSession 拥有 copy/link hints、候选与临时 UI，登记原有两个 Reader Normal 动作。精确视图路由、输入与模式策略仍由 Reader Surface 提供；异步导航意图同时检查模块作用域，不创建第二份历史。共享标签辅助保留给 Flash，读取原生批注不依赖 Neo 批注功能。
+- `src/modules/worksets/`：按 MainWindow 拥有 Persistent Selection、Visual 和 Selection Panel，登记原有 Normal/Select 贡献。Main 保留 Cursor、原生多目标取消和共享行渲染；目标解析与成功操作后的成员移除只消费明确 Selection 端口，Reveal 沿用原导航协调器。模块退休后旧端口不读取存量 Selection，外观/主题的晚到句柄立即释放。
 
 尚未实现通用静态清单/依赖图、Note 独立模块附着或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
 
@@ -51,7 +52,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | 模块 ID | 用户功能与业务状态 | 当前实现来源 | 实例范围及依赖 |
 | --- | --- | --- | --- |
 | `library` | Main 树导航、可见行查找、Quick/Advanced Search、条目选择器、打开条目、原生标识符录入、citekey、移入回收站及最近一批恢复。最近回收批次归本模块。 | `src/main/navigation.ts`、`local-find.ts`、`view-actions.ts`、`picker/providers/items.ts`、`trash-history.ts`；`src/operations/trash-items.ts`、`citekeys.ts` | 每个 MainWindow；Reader/Note 可通过命名能力调用。Better BibTeX 只作为现有可选 citekey 适配。无其他模块的硬依赖。 |
-| `worksets` | Main Persistent Selection、Visual 行范围、Selection Panel、选择增删清空及范围投影。 | `src/main/selection-store.ts`、`item-select.ts`、`selection-panel.ts` | 每个 MainWindow，维持会话内状态。提供 Main Selection 读取及成功操作后的成员移除能力；不依赖 `library` 的动作处理器。 |
+| `worksets` | Main Persistent Selection、Visual 行范围、Selection Panel、选择增删清空及范围投影。 | `src/modules/worksets/` | 已按 MainWindow 接入，维持会话内状态。提供受作用域约束的 Selection 读取和成功操作后的成员移除能力；不依赖 `library` 的动作处理器，Cursor 与共享渲染仍由 Main 持有。 |
 | `tags` | 标签选择、添加/移除、标签命名空间展示、Main 标签过滤。 | `src/modules/tags/`、`src/main/picker/providers/tags.ts`、`src/operations/item-tags.ts` | 已按 MainWindow 接入；处理三个 Surface 传入的目标。无 `worksets` 硬依赖。标签过滤归本模块，不与 `library` 重复注册。 |
 | `collections` | 分类选择、成员添加/移除/移动、分类创建/重命名/删除、连续添加条目等现有工作流。 | `src/modules/collections/`、`src/operations/item-collections.ts`、`collections.ts` | 已按 MainWindow 接入，现有 Main/Reader 入口保留，不新增 Note 命令。无 `worksets` 硬依赖；目标由发起 Surface 明确提供。 |
 | `reader-navigation` | 页面、滚动、缩放、平移、PDF 搜索、批注位置遍历、Outline、标题/图表导航、原生侧栏增强和命名 marks。marks 数据及持久化策略归本模块。 | `src/reader/navigation.ts`、`marks.ts`、`native-sidebar.ts`、`caption-targets.ts` | ReaderSession 与精确 ReaderView。结构分析仍按需进行；不在模块启动时分析全部 PDF。分屏创建与窗口焦点切换不归本模块。 |
@@ -260,7 +261,7 @@ src/
 
 ## 实施顺序与验收
 
-契约走读、标签、扩展管理、分类与 Reader hints 路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
+契约走读、标签、扩展管理、分类、Reader hints 与工作集路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
 
 1. **先评审基座与接入契约。** 确认输入/目标/资源/写入结果的负责方，区分内部模块与公共插件 API；用上表现有流程走读后，再决定模块边界是否需要调整。未通过前不创建运行时模块框架、不搬文件。
 2. **以一条现有路径验证最小基座。** 接口确认后，选一条真实功能路径接入必要的作用域与贡献机制，核对 `(BindingContext, ActionId)` 所有权与依赖注入。验证真实宿主行为，不先搭完全部机制或引入没有消费者的接口。
@@ -286,3 +287,7 @@ src/
 分类模块已在 Zotero 10.0.6 验证 Main Persistent Selection 优先级、Reader 独立目标、部分直接成员覆盖率、真实添加/移除、重载后的旧输入失效及新模块继续写入；仅使用自有测试条目/分类，验证后已清理。命名对话框期间退休、事务中退休回滚、busy/replacement Picker 隔离由行为契约覆盖，未将所有原生结构对话框宣称为实机验证。
 
 Reader hints 已在 Zotero 10.0.6 的真实 Reader DOM 命令入口验证批注 Excerpt/Comment 标签、IME 透传、Escape 取消、内部链接及目的地 cue、主次分屏提示隔离和重载释放；切换分屏焦点后旧提示被退休，重载后的旧 DOM 不影响新模块。验证后恢复原标签页、页码、滚动位置和分屏状态。未实测真实剪贴板写入或外链启动；父作用域先退休、在途导航及发现/几何失败叠加清理失败由真实模块行为契约覆盖。异常恢复继续诊断原始原因，清理异常不再产生未处理的导航 Promise rejection。
+
+工作集已在 Zotero 10.0.6 验证 Persistent Selection、Visual 扩展/取消/提交、IME 透传、隐藏成员计数、Selection Panel 的成员移除/清空，以及精确隐藏成员 Reveal。有效 Cursor 的源视图可通过同一历史 Back/Forward 恢复查询与目的地。清空工作集后普通移动、Cursor 标记及原生多目标 Escape 仍工作；开着面板重载后旧 DOM 退休，新模块保持独立状态。仅使用自有测试条目/分类，结束后删除并恢复原标签页、Scope、查询和 Cursor。重入退休期间返回的主题/外观句柄及清理失败由行为契约覆盖，未实测真实 Trash 写入或双 MainWindow。
+
+重复开关 Selection Panel 的原生弱引用检查已复现并修复主题释放闭包保留旧 DOM：修复后，在模块仍运行时强制 GC/CC，已关闭的面板可以回收。每次面板的主题句柄归本次界面，不累计登记到长期模块作用域；晚到获取仍由精确界面的当前性检查释放。

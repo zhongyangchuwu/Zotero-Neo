@@ -1,26 +1,25 @@
-import type { MainWindow } from '../core/contracts';
-import { CleanupFailure } from '../core/cleanup';
-import type { Logger } from '../core/logging';
+import type { MainWindow } from '../../core/contracts';
+import { CleanupFailure } from '../../core/cleanup';
+import type { Logger } from '../../core/logging';
 import {
   currentMainItemCursorRef,
   mainTreeFocused,
   mainItemCursorRow,
   mainItemRefAtRow,
   mainItemRowCount,
-  mainSelectedItemRefs,
   mainItemRowForRef,
   selectMainItemCursorAnchor,
   visibleMainSelectionCount,
-} from '../toolkit/main';
-import { resolveMainCurrentTarget, type MainCurrentTarget } from './action-targets';
-import type { ItemRef } from './selection-store';
+} from '../../toolkit/main';
+import { resolveMainCurrentTarget, type MainCurrentTarget } from '../../main/action-targets';
+import type { ItemRef } from '../../core/item-ref';
 import type { SelectionStore } from './selection-store';
-import { MainItemStateDecoration, type MainVisualRange } from './item-state-decoration';
+import type { MainVisualRange } from '../../main/item-state-decoration';
 import {
   interactionStatusColors,
   type InteractionAppearanceSource,
   type InteractionStatusKind,
-} from './interaction-appearance';
+} from '../../main/interaction-appearance';
 
 type ItemSelectDirection = 1 | -1 | 'first' | 'last';
 export type ItemSelectEnterResult = 'entered' | 'unavailable' | 'pass';
@@ -56,31 +55,21 @@ export function nextItemSelectIndex(
   return Math.max(0, Math.min(last, current + direction * Math.max(1, count)));
 }
 
-export function selectionStatusText(total: number, visible: number): string {
-  const hidden = Math.max(0, total - visible);
-  return `SEL ${total} · ${visible} visible${hidden ? ` · ${hidden} hidden` : ''}`;
-}
-
-export function visualStatusText(targetCount: number, selectionCount: number): string {
-  return `VISUAL ${targetCount} · SEL ${selectionCount}`;
-}
-
 /**
- * Main Library selection feature.
- *
- * Persistent Selection belongs to MainWindowSession.SelectionStore. This owner
- * keeps transient Visual anchor/head state. Zotero TreeSelection may carry a
- * transient native multi-target; persistent Selection remains independent.
+ * Persistent Selection and transient Visual state are owned by the worksets module.
  */
 export class MainItemSelect {
   readonly #logger: Logger;
   readonly #ui = new Map<MainWindow, ItemSelectUi>();
   readonly #visual = new Map<MainWindow, VisualState>();
   #nextVisualRevision = 0;
-  readonly #decoration = new MainItemStateDecoration();
+  readonly #refreshDecorations: () => void;
+  readonly #isCurrent: () => boolean;
 
-  constructor(logger: Logger) {
+  constructor(logger: Logger, refreshDecorations: () => void, isCurrent: () => boolean) {
     this.#logger = logger;
+    this.#refreshDecorations = refreshDecorations;
+    this.#isCurrent = isCurrent;
   }
 
   addWindow(
@@ -98,14 +87,9 @@ export class MainItemSelect {
       status: null,
     };
     this.#ui.set(window, ui);
-    this.#decoration.addWindow(
-      window,
-      selection,
-      () => this.#visual.get(window)?.range,
-      appearance,
-    );
     ui.selectionCleanup = selection.observe(() => {
-      if (this.#ui.get(window) !== ui) return;
+      if (!this.#isCurrent() || this.#ui.get(window) !== ui) return;
+      this.#refreshDecorations();
       const visual = this.#visual.get(window);
       if (visual) this.showMode(window, visual.range?.count ?? 0, selection);
       else
@@ -116,24 +100,12 @@ export class MainItemSelect {
         );
     });
     ui.appearanceCleanup = appearance.observe(() => {
-      if (this.#ui.get(window) !== ui) return;
+      if (!this.#isCurrent() || this.#ui.get(window) !== ui) return;
       if (ui.status) this.renderBadge(window, ui, ui.status);
     });
-
-    // MainItemSelect owns every Neo Cursor transition. Normalize the initial
-    // native host anchor here before Main view lifecycle captures its identity.
-    const cursorRow = mainItemCursorRow(window);
-    if (
-      cursorRow !== undefined &&
-      currentMainItemCursorRef(window) &&
-      mainSelectedItemRefs(window).length === 0
-    ) {
-      selectMainItemCursorAnchor(window, cursorRow);
-    }
   }
 
   refresh(window: MainWindow, selection: SelectionStore): void {
-    this.#decoration.refresh(window);
     const visual = this.#visual.get(window);
     if (visual) {
       const range = this.resolveVisualRange(window, visual.anchor, visual.head);
@@ -146,9 +118,11 @@ export class MainItemSelect {
         range,
         revision: changed ? ++this.#nextVisualRevision : visual.revision,
       });
+      this.#refreshDecorations();
       this.showMode(window, range?.count ?? 0, selection);
       return;
     }
+    this.#refreshDecorations();
     this.renderSelectionStatus(
       window,
       selection.size,
@@ -173,26 +147,13 @@ export class MainItemSelect {
   visualRevision(window: MainWindow): number | null {
     return this.#visual.get(window)?.revision ?? null;
   }
+  visualRange(window: MainWindow): MainVisualRange | undefined {
+    return this.#visual.get(window)?.range;
+  }
 
   cancelIfVisualRevision(window: MainWindow, revision: number, selection: SelectionStore): boolean {
     if (this.#visual.get(window)?.revision !== revision) return false;
     this.cancel(window, selection);
-    return true;
-  }
-
-  hasCancelableTarget(window: MainWindow): boolean {
-    return this.#visual.has(window) || mainSelectedItemRefs(window).length > 1;
-  }
-
-  cancelCurrentTarget(window: MainWindow, selection: SelectionStore): boolean {
-    if (this.#visual.has(window)) {
-      this.cancel(window, selection);
-      return true;
-    }
-    if (mainSelectedItemRefs(window).length <= 1) return false;
-    const row = mainItemCursorRow(window);
-    if (row === undefined || !selectMainItemCursorAnchor(window, row)) return false;
-    this.#decoration.refresh(window);
     return true;
   }
 
@@ -221,7 +182,7 @@ export class MainItemSelect {
     }
 
     const visible = visibleMainSelectionCount(window, selection.values());
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     this.#logger.debug(
       `main selection target toggle source=${target.source} target=${target.refs.length} result=${result} total=${selection.size} visible=${visible}`,
     );
@@ -249,7 +210,7 @@ export class MainItemSelect {
       range,
       revision: ++this.#nextVisualRevision,
     });
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     this.showMode(window, range.count, selection);
     this.#logger.debug(`main visual entered item=${cursor.itemID}`);
     return 'entered';
@@ -293,7 +254,7 @@ export class MainItemSelect {
     }
 
     this.#visual.set(window, nextState);
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     this.showMode(window, range.count, selection);
   }
 
@@ -319,7 +280,7 @@ export class MainItemSelect {
     }
 
     this.#visual.set(window, nextState);
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     this.showMode(window, range.count, selection);
   }
 
@@ -333,7 +294,7 @@ export class MainItemSelect {
     if (headRow !== undefined) selectMainItemCursorAnchor(window, headRow);
     const visible = visibleMainSelectionCount(window, selection.values());
     this.#visual.delete(window);
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
 
     this.renderSelectionStatus(window, selection.size, visible);
     this.#logger.debug(
@@ -344,12 +305,12 @@ export class MainItemSelect {
 
   cancel(window: MainWindow, selection: SelectionStore): void {
     const state = this.#visual.get(window);
-    const cursor = state?.head ?? currentMainItemCursorRef(window);
-    const cursorRow = cursor ? mainItemRowForRef(window, cursor) : undefined;
+    if (!state) return;
+    const cursorRow = mainItemRowForRef(window, state.head);
     if (cursorRow !== undefined) selectMainItemCursorAnchor(window, cursorRow);
     const visible = visibleMainSelectionCount(window, selection.values());
     this.#visual.delete(window);
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     this.renderSelectionStatus(window, selection.size, visible);
     this.#logger.debug(`main visual cancelled total=${selection.size} visible=${visible}`);
   }
@@ -359,7 +320,7 @@ export class MainItemSelect {
     const headRow = state ? mainItemRowForRef(window, state.head) : undefined;
     if (headRow !== undefined) selectMainItemCursorAnchor(window, headRow);
     this.#visual.delete(window);
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     this.renderSelectionStatus(
       window,
       selection.size,
@@ -378,13 +339,12 @@ export class MainItemSelect {
       failure.run(() => ui.appearanceCleanup?.());
       failure.run(() => ui.badge?.remove());
     }
-    failure.run(() => this.#decoration.removeWindow(window));
     failure.rethrow();
   }
 
   clearSelection(window: MainWindow, selection: SelectionStore): boolean {
     const changed = selection.clear();
-    this.#decoration.refresh(window);
+    this.#refreshDecorations();
     if (changed) this.show(window, { kind: 'message', text: 'Selection cleared' }, false);
     else this.hide(window);
     this.#logger.debug(`main selection cleared changed=${changed}`);
@@ -439,7 +399,8 @@ export class MainItemSelect {
     this.renderBadge(window, ui, status);
     if (!persistent) {
       const timer = window.setTimeout(() => {
-        if (this.#ui.get(window) === ui && ui.timer === timer) this.hide(window);
+        if (this.#isCurrent() && this.#ui.get(window) === ui && ui.timer === timer)
+          this.hide(window);
       }, 1200);
       ui.timer = timer;
     }
@@ -449,8 +410,8 @@ export class MainItemSelect {
     if (!ui.badge) {
       const badge = window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
       badge.id = 'zotero-neo-item-select-status';
-      (window.document.body ?? window.document.documentElement).append(badge);
       ui.badge = badge;
+      (window.document.body ?? window.document.documentElement).append(badge);
     }
     const badge = ui.badge;
     const kind: InteractionStatusKind = status.kind === 'message' ? 'neutral' : status.kind;

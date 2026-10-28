@@ -13,7 +13,7 @@ import type {
   NavigationIntent,
   NavigationOutcome,
 } from '../../src/navigation/types';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 import type { MainViewActions } from '../../src/main/view-actions';
 
@@ -388,6 +388,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
   } as unknown as MainViewActions;
 
   let panel: 'collections' | 'items' = 'items';
+  let localOverlay = false;
   let focusEpoch = 0;
   const status = vi.fn();
   const navigation = {
@@ -405,7 +406,6 @@ function harness(isSessionCurrent: () => boolean = () => true) {
   selection.add({ libraryID: 1, itemID: 99 });
   const session = {
     window,
-    selection,
     activePanel: 'items',
     jumpHistory: new NavigationHistoryState(),
     navigationCoordinator: null,
@@ -428,6 +428,7 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     viewActions,
     readerHost,
     () => isSessionCurrent(),
+    () => localOverlay,
   );
 
   return {
@@ -449,6 +450,9 @@ function harness(isSessionCurrent: () => boolean = () => true) {
     tags: () => tags,
     advancedSearch: () => advancedSearch,
     panel: () => panel,
+    setLocalOverlay: (open: boolean) => {
+      localOverlay = open;
+    },
     cursor: () => itemFocused,
     setTab: (id: string) => {
       tabs.selectedID = id;
@@ -684,6 +688,8 @@ describe('Main jump history', () => {
       navigation,
       h.viewActions,
       h.readerHost,
+      () => true,
+      () => false,
     );
     const tree = {
       id: 'collection-tree',
@@ -1221,7 +1227,14 @@ describe('Main jump history', () => {
     Reflect.set(items, 'focus', () => {});
     const logger = { debug: vi.fn() } as never;
     const navigation = new MainNavigation(logger, () => {});
-    const history = new MainNavigationExecutor(logger, navigation, h.viewActions, h.readerHost);
+    const history = new MainNavigationExecutor(
+      logger,
+      navigation,
+      h.viewActions,
+      h.readerHost,
+      () => true,
+      () => false,
+    );
     const focusedHarness: HistoryHarness = {
       window: h.window,
       session: h.session,
@@ -1269,29 +1282,26 @@ describe('Main jump history', () => {
     expect(h.selection.values()).toEqual(selectionBefore);
   });
 
-  it.each(['picker', 'selectionPanel'] as const)(
-    'restores the Items pane after a %s reveal despite its overlay focus',
-    async (overlay) => {
-      const h = harness();
-      h.setPanel('collections');
-      h.session.activePanel = 'items';
-      Object.assign(h.session, { [overlay]: { open: true } });
-      const selectionBefore = h.selection.values();
+  it('restores the Items pane after a reveal despite local overlay focus', async () => {
+    const h = harness();
+    h.setPanel('collections');
+    h.session.activePanel = 'items';
+    h.setLocalOverlay(true);
+    const selectionBefore = h.selection.values();
 
-      await selectLibrary(h, h.secondItem.id, {
-        selectItem: () => {
-          h.setCursor(1);
-          return true;
-        },
-      }).result;
+    await selectLibrary(h, h.secondItem.id, {
+      selectItem: () => {
+        h.setCursor(1);
+        return true;
+      },
+    }).result;
 
-      expect(h.session.jumpHistory.locations[0]).toMatchObject({ panel: 'items' });
-      await expect(traversal(h, -1)).resolves.toBe(true);
-      expect(h.panel()).toBe('items');
-      expect(h.cursor()).toBe(0);
-      expect(h.selection.values()).toEqual(selectionBefore);
-    },
-  );
+    expect(h.session.jumpHistory.locations[0]).toMatchObject({ panel: 'items' });
+    await expect(traversal(h, -1)).resolves.toBe(true);
+    expect(h.panel()).toBe('items');
+    expect(h.cursor()).toBe(0);
+    expect(h.selection.values()).toEqual(selectionBefore);
+  });
 
   it('leaves the history position unchanged for missing tabs and partial restores', async () => {
     const h = harness();

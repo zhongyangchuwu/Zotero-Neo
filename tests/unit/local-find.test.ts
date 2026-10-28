@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import type { NavigationCause } from '../../src/navigation/types';
 import { MainLocalFind, findVisibleMainItemRow } from '../../src/main/local-find';
-import { SelectionStore } from '../../src/main/selection-store';
+import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import type { MainWindowSession } from '../../src/main/session';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -85,7 +85,6 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
 
   const session = {
     window,
-    selection,
     localFind: {
       open: false,
       query: '',
@@ -109,6 +108,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
   return {
     window,
     session,
+    selection,
     find,
     statuses,
     select,
@@ -160,7 +160,7 @@ describe('Main local find', () => {
     const beta = item(2, 'Beta');
     const gamma = item(3, 'Gamma');
     const h = harness([alpha, beta, gamma], [1, 2, 3], 0);
-    const before = h.session.selection.values();
+    const before = h.selection.values();
 
     h.session.localFind.query = 'gamma';
     expect(h.find.repeat(h.window, h.session, 1)).toBe(true);
@@ -168,12 +168,12 @@ describe('Main local find', () => {
     expect(h.select).toHaveBeenCalledWith(2, false);
     expect([...h.nativeSelected]).toEqual([2]);
     expect(h.causes).toEqual([{ kind: 'action', action: 'findNext' }]);
-    expect(h.session.selection.values()).toEqual(before);
+    expect(h.selection.values()).toEqual(before);
 
     h.session.localFind.query = 'missing';
     expect(h.find.repeat(h.window, h.session, 1)).toBe(false);
     expect(h.focused()).toBe(2);
-    expect(h.session.selection.values()).toEqual(before);
+    expect(h.selection.values()).toEqual(before);
     expect(h.statuses.at(-1)).toContain('No visible match');
   });
 

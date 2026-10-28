@@ -1,6 +1,6 @@
 import type { ReaderJumpLocation } from '../core/contracts';
 import type { ActionId } from '../input/actions';
-import type { ItemRef } from '../main/selection-store';
+import type { ItemRef } from '../core/item-ref';
 
 export interface TabNavigationLocation {
   readonly kind: 'tab';

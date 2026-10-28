@@ -1,10 +1,19 @@
-import type { MainWindow } from '../core/contracts';
-import { keyString } from '../input/keys';
-import { THEME_VARS } from '../ui/theme';
-import { mainLibrarySelection, mainItem, mainItemRowForRef } from '../toolkit/main';
-import type { MainWindowSession } from './session';
-import type { ItemRef } from './selection-store';
-import type { MainNavigationExecutor } from './jump-history';
+import type { MainWindow } from '../../core/contracts';
+import { CleanupFailure, type Cleanup } from '../../core/cleanup';
+import { keyString } from '../../input/keys';
+import { THEME_VARS } from '../../ui/theme';
+import { mainItem, mainItemRowForRef } from '../../toolkit/main';
+import type { ItemRef } from '../../core/item-ref';
+import type { NavigationExecution } from '../../navigation/types';
+import type { SelectionStore } from './selection-store';
+import type { SelectionPanelRuntime } from './selection-panel-runtime';
+
+interface PanelState {
+  readonly window: MainWindow;
+  readonly selection: SelectionStore;
+  readonly selectionPanel: SelectionPanelRuntime;
+  readonly theme: { add(root: HTMLElement): Cleanup };
+}
 
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -19,7 +28,7 @@ export interface SelectionPanelEntry {
 export interface SelectionPanelLogger {
   debug(message: string): void;
 }
-export type SelectionPanelChangeListener = (window: MainWindow, session: MainWindowSession) => void;
+export type SelectionPanelChangeListener = (window: MainWindow, session: PanelState) => void;
 
 function itemForRef(ref: ItemRef): Zotero.Item | undefined {
   const item = mainItem(ref.itemID);
@@ -56,24 +65,27 @@ export function selectionPanelEntries(
  * This panel intentionally owns no batch domain actions. It can inspect the
  * workset, remove/clear membership, and explicitly reveal one member.
  */
-type SelectionNavigation = Pick<MainNavigationExecutor, 'execute' | 'librarySelection'>;
+type SelectionNavigation = (itemID: number, isCurrent: () => boolean) => NavigationExecution | null;
 
 export class SelectionPanel {
   readonly #logger: SelectionPanelLogger;
   readonly #navigation: SelectionNavigation;
+  readonly #isCurrent: () => boolean;
   readonly #onSelectionChange: SelectionPanelChangeListener;
 
   constructor(
     logger: SelectionPanelLogger,
     navigation: SelectionNavigation,
     onSelectionChange: SelectionPanelChangeListener,
+    isCurrent: () => boolean,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#onSelectionChange = onSelectionChange;
+    this.#isCurrent = isCurrent;
   }
 
-  open(window: MainWindow, session: MainWindowSession): void {
+  open(window: MainWindow, session: PanelState): void {
     const state = session.selectionPanel;
     if (state.open) {
       state.overlay?.focus();
@@ -118,8 +130,8 @@ export class SelectionPanel {
 
     panel.append(header, content, footer);
     overlay.append(panel);
-    (doc.body ?? doc.documentElement).append(overlay);
 
+    state.revision += 1;
     state.open = true;
     state.refs = [];
     state.selected = 0;
@@ -130,25 +142,56 @@ export class SelectionPanel {
     state.count = count;
     state.footer = footer;
     state.previousElement = doc.activeElement;
-    state.themeCleanup = session.theme.add(overlay);
-
-    overlay.addEventListener('mousedown', (event) => {
-      if (event.target === overlay) this.close(session);
-    });
-
-    overlay.focus();
-    this.refresh(window, session);
+    try {
+      const isOpeningCurrent = (): boolean =>
+        this.#isCurrent() && state.open && state.overlay === overlay;
+      (doc.body ?? doc.documentElement).append(overlay);
+      if (!isOpeningCurrent()) {
+        overlay.remove();
+        return;
+      }
+      const themeCleanup = session.theme.add(overlay);
+      if (!isOpeningCurrent()) {
+        themeCleanup();
+        return;
+      }
+      state.themeCleanup = themeCleanup;
+      overlay.addEventListener('mousedown', (event) => {
+        if (
+          this.#isCurrent() &&
+          state.open &&
+          state.overlay === overlay &&
+          event.target === overlay
+        )
+          this.close(session);
+      });
+      overlay.focus();
+      if (isOpeningCurrent()) this.refresh(window, session);
+    } catch (error) {
+      if (state.overlay === overlay) {
+        try {
+          this.close(session, false);
+        } catch {}
+      } else {
+        try {
+          overlay.remove();
+        } catch {}
+      }
+      throw error;
+    }
   }
 
-  close(session: MainWindowSession, restoreFocus = true): void {
+  close(session: PanelState, restoreFocus = true): void {
     const state = session.selectionPanel;
     if (!state.open) return;
-    session.window.clearTimeout(state.commandTimer);
-    state.commandTimer = undefined;
-    state.themeCleanup?.();
-    state.themeCleanup = null;
-    state.overlay?.remove();
+    const timer = state.commandTimer;
+    const themeCleanup = state.themeCleanup;
+    const overlay = state.overlay;
+    const previousElement = state.previousElement;
+    const revision = state.revision;
     state.open = false;
+    state.commandTimer = undefined;
+    state.themeCleanup = null;
     state.refs = [];
     state.selected = 0;
     state.commandBuffer = '';
@@ -157,14 +200,22 @@ export class SelectionPanel {
     state.details = null;
     state.count = null;
     state.footer = null;
-    try {
-      if (restoreFocus && state.previousElement?.isConnected)
-        (state.previousElement as HTMLElement).focus();
-    } catch {}
     state.previousElement = null;
+    const failure = new CleanupFailure();
+    failure.run(() => session.window.clearTimeout(timer));
+    failure.run(() => themeCleanup?.());
+    failure.run(() => overlay?.remove());
+    if (
+      restoreFocus &&
+      this.#isCurrent() &&
+      state.revision === revision &&
+      previousElement?.isConnected
+    )
+      failure.run(() => (previousElement as HTMLElement).focus());
+    failure.rethrow();
   }
 
-  handleKey(event: KeyboardEvent, window: MainWindow, session: MainWindowSession): void {
+  handleKey(event: KeyboardEvent, window: MainWindow, session: PanelState): void {
     const state = session.selectionPanel;
     if (!state.open) return;
 
@@ -219,7 +270,17 @@ export class SelectionPanel {
       } else {
         state.commandBuffer = 'g';
         session.window.clearTimeout(state.commandTimer);
-        state.commandTimer = session.window.setTimeout(() => this.clearCommand(session), 700);
+        const overlay = state.overlay;
+        const timer = session.window.setTimeout(() => {
+          if (
+            this.#isCurrent() &&
+            state.open &&
+            state.overlay === overlay &&
+            state.commandTimer === timer
+          )
+            this.clearCommand(session);
+        }, 700);
+        state.commandTimer = timer;
         this.renderFooter(session, 'g … (gg top)');
       }
       return;
@@ -243,14 +304,14 @@ export class SelectionPanel {
     event.stopPropagation();
   }
 
-  refresh(window: MainWindow, session: MainWindowSession): void {
+  refresh(window: MainWindow, session: PanelState): void {
     const state = session.selectionPanel;
     state.refs = [...session.selection.values()];
     state.selected = Math.max(0, Math.min(state.selected, Math.max(0, state.refs.length - 1)));
     this.render(window, session);
   }
 
-  private clearCommand(session: MainWindowSession): void {
+  private clearCommand(session: PanelState): void {
     const state = session.selectionPanel;
     session.window.clearTimeout(state.commandTimer);
     state.commandTimer = undefined;
@@ -258,7 +319,7 @@ export class SelectionPanel {
     this.renderFooter(session);
   }
 
-  private select(session: MainWindowSession, index: number): void {
+  private select(session: PanelState, index: number): void {
     const state = session.selectionPanel;
     if (!state.refs.length) {
       state.selected = 0;
@@ -268,7 +329,7 @@ export class SelectionPanel {
     this.render(session.window, session);
   }
 
-  private removeCurrent(session: MainWindowSession): void {
+  private removeCurrent(session: PanelState): void {
     const state = session.selectionPanel;
     const ref = state.refs[state.selected];
     if (!ref || !session.selection.remove(ref)) return;
@@ -276,13 +337,13 @@ export class SelectionPanel {
     this.#onSelectionChange(session.window, session);
   }
 
-  private clear(session: MainWindowSession): void {
+  private clear(session: PanelState): void {
     if (!session.selection.clear()) return;
     this.refresh(session.window, session);
     this.#onSelectionChange(session.window, session);
   }
 
-  private reveal(window: MainWindow, session: MainWindowSession): void {
+  private reveal(window: MainWindow, session: PanelState): void {
     const ref = session.selectionPanel.refs[session.selectionPanel.selected];
     if (!ref) return;
     const item = itemForRef(ref);
@@ -290,26 +351,17 @@ export class SelectionPanel {
       this.renderFooter(session, 'Unavailable item cannot be revealed');
       return;
     }
-    const pane = mainLibrarySelection(window);
-    if (!pane?.selectItem) {
-      this.renderFooter(session, 'Reveal is unavailable in this Zotero view');
-      return;
-    }
-
     const invocationOverlay = session.selectionPanel.overlay;
     const isInvocationCurrent = (): boolean =>
-      session.selectionPanel.open && session.selectionPanel.overlay === invocationOverlay;
+      this.#isCurrent() &&
+      session.selectionPanel.open &&
+      session.selectionPanel.overlay === invocationOverlay;
     try {
-      const execution = this.#navigation.execute(
-        window,
-        session,
-        {
-          cause: { kind: 'event', event: 'main-selection-panel.reveal' },
-          surface: 'main',
-          context: { mainPanel: 'items', isCurrent: isInvocationCurrent },
-        },
-        this.#navigation.librarySelection(item.id, pane),
-      );
+      const execution = this.#navigation(item.id, isInvocationCurrent);
+      if (!execution) {
+        this.renderFooter(session, 'Reveal is unavailable in this Zotero view');
+        return;
+      }
       const result = execution.pending ? execution.result : Promise.resolve(execution.result);
       void result
         .then((outcome) => {
@@ -335,7 +387,7 @@ export class SelectionPanel {
     }
   }
 
-  private render(window: MainWindow, session: MainWindowSession): void {
+  private render(window: MainWindow, session: PanelState): void {
     const state = session.selectionPanel;
     const entries = selectionPanelEntries(window, state.refs);
     const visible = entries.filter((entry) => entry.state === 'visible').length;
@@ -378,7 +430,7 @@ export class SelectionPanel {
     this.renderFooter(session);
   }
 
-  private renderFooter(session: MainWindowSession, override?: string): void {
+  private renderFooter(session: PanelState, override?: string): void {
     const footer = session.selectionPanel.footer;
     if (!footer) return;
     footer.textContent =
