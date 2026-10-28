@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { selectionClipboardText } from '../../src/reader/selection-text';
+import { selectionClipboardText } from '../../src/modules/reader-selection/selection-text';
 
 describe('selectionClipboardText', () => {
   it('turns PDF layout line breaks and other whitespace into ordinary spaces', () => {

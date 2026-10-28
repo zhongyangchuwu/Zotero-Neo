@@ -17,6 +17,12 @@ export type NativeReaderRuntime = ReaderRuntime & {
   readonly _initPromise?: Promise<unknown>;
 };
 
+interface NativeReaderFindState {
+  readonly active?: boolean;
+  readonly popupOpen?: boolean;
+  readonly query?: string;
+}
+
 export interface InternalReaderRuntime {
   readonly _primaryView?: NativeReaderViewRuntime;
   readonly _secondaryView?: NativeReaderViewRuntime;
@@ -29,8 +35,8 @@ export interface InternalReaderRuntime {
     readonly primaryReadingModeEnabled?: boolean;
     readonly secondaryReadingModeEnabled?: boolean;
     readonly selectedAnnotationIDs?: readonly string[];
-    readonly primaryViewFindState?: { readonly active?: boolean };
-    readonly secondaryViewFindState?: { readonly active?: boolean };
+    readonly primaryViewFindState?: NativeReaderFindState;
+    readonly secondaryViewFindState?: NativeReaderFindState;
     readonly primary?: boolean;
     readonly sidebarOpen?: boolean;
     readonly sidebarView?: 'outline' | 'annotations' | 'thumbnails';
@@ -56,7 +62,7 @@ export interface InternalReaderRuntime {
     options?: { readonly skipHistory?: boolean },
   ): void | Promise<void>;
   setSelectedAnnotations?(keys: readonly string[]): void;
-  toggleFindPopup?(options: { readonly open: boolean }): void;
+  toggleFindPopup?(options: { readonly primary?: boolean; readonly open: boolean }): void;
   findNext?(): void;
   findPrevious?(): void;
   setFilter?(filter: { readonly colors: readonly string[] }): void;

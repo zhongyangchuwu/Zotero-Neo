@@ -1,5 +1,5 @@
-import { pdfTextSpans } from '../toolkit/reader';
-import type { PdfWindow, Pointer } from './types';
+import { pdfTextSpans } from '../../toolkit/reader';
+import type { PdfWindow, Pointer } from '../../reader/types';
 
 interface RectLike {
   readonly left: number;

@@ -212,10 +212,13 @@ PDF-window discovery, the rescan timer, view-local DOM listeners, and detached-v
 release. `ReaderNavigation` in `src/modules/reader-navigation/navigation.ts` owns semantic traversal and
 user feedback; `ReaderNavigationHost` in `src/toolkit/reader/navigation.ts` owns native
 zoom/page/search/split/focus delegation and active-view resolution.
-`ReaderSelectionRange` in `src/reader/selection-range.ts` owns the temporary DOM Select
-anchor/preferred-X state, range motions, endpoint swaps, and Select view markers.
-Input policy, annotation target/save admission, and smooth-scroll behavior remain in
-their feature owners; Toolkit owns private native geometry and DOM discovery.
+`ReaderSelectionRange` in `src/modules/reader-selection/selection-range.ts` owns the temporary DOM Select
+anchor/preferred-X state, range motions, endpoint swaps, and reversible Select styling.
+`src/modules/reader-selection/` also owns Flash and Selection Actions; its DOM-free registry retains
+application-lifetime definitions independently of each Reader module. Surface invocation guards
+capture both ReaderView and Document, and retire replaced views before admitting new resources.
+Input policy and annotation target/save admission remain in their feature owners; Toolkit owns
+private native geometry, exact-pane Find interaction capabilities, and DOM discovery.
 
 Main chooser ownership follows the same rule. `src/main/picker/` owns candidate search,
 ranking, rendering, preview, focus, IME, confirmation/cancellation, and stale-work containment.
@@ -260,7 +263,7 @@ capture code must not borrow Main Selection or mutate notes directly.
 | `src/toolkit/reader/input-bridge.ts` | Private PdfView key/focus patch lifecycle |
 | `src/toolkit/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
 | `src/modules/reader-navigation/` | Reader navigation, marks, semantic targets, scoped native sidebar and smooth-scroll behavior |
-| `src/reader/selection-range.ts`      | Temporary DOM Select range state, motions, and view markers                              |
+| `src/modules/reader-selection/` | Select ranges/motions, Flash, selection actions, and the stable selection API domain |
 | `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
 | `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |
 | `tools/build.mjs`                    | esbuild/XPI package pipeline                                                             |

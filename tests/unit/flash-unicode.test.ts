@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFlashTextIndex, flashMatches } from '../../src/reader/flash';
+import { buildFlashTextIndex, flashMatches } from '../../src/modules/reader-selection/flash';
 
 function text(value: string): Text {
   return {

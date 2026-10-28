@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、工作集、Reader hints、Library、Notes、Capture 和 Reader 导航已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、工作集、Reader hints、Library、Notes、Capture、Reader 导航和 Reader 选择已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
 
 ## 范围与取舍
 
@@ -8,7 +8,7 @@
 
 本轮不设计 AI 接口或模块，不引入 Actions & Tags 的代码、运行时依赖或脚本执行机制，也不改变现有按键、默认行为、数据格式与 Zotero 兼容范围。
 
-先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前已完成九条真实接入路径，继续分离复杂工作流，不批量搬走其余功能，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
+先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前已完成十条真实接入路径，继续分离复杂工作流，不批量搬走其余功能，也不实现没有消费者的空框架。下文的 12 个模块仍是候选，不是已经冻结的最终目录。
 
 需要区分三种边界：
 
@@ -30,6 +30,7 @@
 - `src/modules/notes/`：按 MainWindow 拥有 Note 候选、打开编排、可选 Vim 编辑模式/寄存器及 caret UI。Surface 保留精确编辑器身份、输入 runtime、原生/IME 仲裁及共享焦点；Palette 和计时器绑定实际编辑器身份。Vim 关闭不影响 Note 查找或 Capture 目的地，候选 provider 不负责导航或写入。
 - `src/modules/capture/`：MainWindow 拥有冻结的 Reader 源快照、Note 候选确认、目的地重验证、原生追加保存及真实回执；ReaderSession 贡献原有 `neo.capture-note` 选择动作。Picker 保留排队与界面机制，Notes provider 仍只提供候选。退休先拒绝旧确认，已接纳保存完成后返回真实结果，不复活旧 Reader 状态或焦点。
 - `src/modules/reader-navigation/`：按 ReaderSession 拥有导航动作、平滑滚动、marks、按需结构分析及原生侧栏增强；Normal 和四个侧栏上下文登记真实贡献。Surface 继续拥有精确视图、输入与唯一历史策略；分屏/焦点直接使用共享 Toolkit。已接纳 marks 保存继续完成，过期交互不再覆盖新状态；退出排空旧 RAF 与完成回调，不阻塞新视图。
+- `src/modules/reader-selection/`：按 ReaderSession 拥有 Select/DOM 范围与 motions、Flash、复制/搜索和选择动作面板；外部注册定义保持应用级寿命。交互绑定原 ReaderView/Document，作用域与原生 Find 状态共同阻止旧输入或延迟查询覆盖后继界面。Surface 保留模式、输入、精确视图、共享滚动和历史；Note/批注写入仍由具名贡献负责。
 
 尚未实现通用静态清单/依赖图、其余候选模块或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
 
@@ -60,7 +61,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `tags` | 标签选择、添加/移除、标签命名空间展示、Main 标签过滤。 | `src/modules/tags/`、`src/main/picker/providers/tags.ts`、`src/operations/item-tags.ts` | 已按 MainWindow 接入；处理三个 Surface 传入的目标。无 `worksets` 硬依赖。标签过滤归本模块，不与 `library` 重复注册。 |
 | `collections` | 分类选择、成员添加/移除/移动、分类创建/重命名/删除、连续添加条目等现有工作流。 | `src/modules/collections/`、`src/operations/item-collections.ts`、`collections.ts` | 已按 MainWindow 接入，现有 Main/Reader 入口保留，不新增 Note 命令。无 `worksets` 硬依赖；目标由发起 Surface 明确提供。 |
 | `reader-navigation` | 页面、滚动、缩放、平移、PDF 搜索、批注位置遍历、Outline、标题/图表导航、原生侧栏增强和命名 marks。marks 数据及持久化策略归本模块。 | `src/modules/reader-navigation/` | 已按 ReaderSession 接入，调用与异步结果绑定精确 ReaderView。结构分析仍按需进行，不在启动时分析全部 PDF；输入、CurrentTarget、共享历史及分屏/焦点继续留在 Surface/基座。 |
-| `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/reader/selection-range.ts`、`flash.ts`、`selection-actions.ts`、`controller.ts` 中选择流程 | ReaderSession / ReaderView / 单次交互。保留已有可选 PDFTranslate 动作对接；不扩展成新服务设计。 |
+| `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/modules/reader-selection/` | 已按 ReaderSession 接入；范围和界面绑定精确 ReaderView/Document，外部定义由应用级注册表保留。可选 PDFTranslate 对接不变，复制/搜索不依赖导航或批注模块。 |
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/reader/controller.ts` 中批注流程、`comment-editor.ts`、`src/operations/delete-annotation.ts` | ReaderSession / ReaderView；注入 Select 的动作要求 `reader-selection` 可用，原生批注操作本身不要求它启用。 |
 | `reader-hints` | 批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/modules/notes/`；Surface 输入与身份保留在 `src/main/note-editor.ts`、`note-runtime.ts` | 已按 MainWindow 接入，附着到精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找或捕获目的地。 |
@@ -251,7 +252,7 @@ src/
 
 ## 用现有功能走读接口
 
-这些场景用于检查契约能否表达已有行为，不代表已经运行新的模块系统。依据是现有 `src/core/contracts.ts`、Surface 目标解析器、Picker/捕获流程与 `src/reader/selection-actions.ts`；不通过空实现或模拟模块证明设计可用。
+这些场景用于检查契约能否表达已有行为，不代表已经运行完整模块系统。依据是现有 `src/core/contracts.ts`、Surface 目标解析器、Picker/捕获流程与 `src/modules/reader-selection/selection-actions.ts`；不通过空实现或模拟模块证明设计可用。
 
 | 场景 | 契约如何组合 | 必须保留的边界 |
 | --- | --- | --- |
@@ -301,3 +302,5 @@ Library 已在 Zotero 10.0.6 验证树移动、Local Find 的匹配/循环/IME�
 Notes 已在 Zotero 10.0.6 验证 Main/Reader/Note 的查找及原生 Note 标签页打开，Note 默认来源不借用不同的 Main Cursor，切换 Library 来源保留查询。Vim 关闭时 Main/Reader 查找仍可用，原生 `j` 不被吞键；开启后 `i`/Escape 切换模式，`3l` 移动三字符，`x`/`P` 使用模块内寄存器删除并恢复自有文本，换 Note 后空寄存器不插入。实机复现并修复 Palette 焦点转移后扫描隐藏 iframe 的问题；经过下一次扫描，确认仍作用于可见编辑器。重载释放旧 caret 样式，替换模块运行时旧样式节点经 GC/CC 后弱引用失效。仅使用自有两条书目与三条 Note，结束后删除全部数据、关闭自有 Note 标签页，恢复原标签页、Scope、查询、Cursor、原生行选择及 Vim 偏好，测试进程已关闭。未实测系统剪贴板写入、Vim 修改后的持久化回读或双 MainWindow；IME、部分附着/清理失败、预扫描替换及其他窗口焦点隔离由行为契约覆盖。
 
 Reader 导航已在 Zotero 10.0.6 的可见自有 Reader 验证 counted page、Back/Forward、缩放、原生搜索 next/previous、Outline 的 Figure/Table/标题、批注循环与颜色过滤、持久化 marks 回读、侧栏局部动作、平滑滚动重复与松键减速，以及分屏焦点/精确视图隔离。截图只包含自有四页 PDF、Outline 与 Bookmarks；先前最小化窗口导致的帧完成停滞，经恢复可见并对比合并前 XPI 后排除。待保存 mark 在真实 Settings 界面打开后继续落库，未改写旧 Reader 状态或抢回焦点；重载前后的两组三个旧侧栏节点经 GC/CC 后均已回收。自有书目、PDF、两条批注及分类全部删除，原标签页、Scope、Cursor、原生选择、查询、偏好和最小化状态恢复，测试进程与临时文件已清理。未实测双 MainWindow、独立 Reader、真正派生的 caption 目标或原生取消 RAF 失败；后者及异步失败/部分清理由行为契约覆盖，不将 Comment 状态标签视为编辑器已挂载的证据。
+
+Reader 选择已在 Zotero 10.0.6 的可见自有双页 PDF 验证范围扩展/端点交换、Flash 起止定位、公共选择快照、重绑定及第三方动作结果。关闭重开 Reader 后注册定义仍在，旧 disposer 不删除同 ID 后继定义。次分屏所选文本进入自己的原生 Find，实际查询和两处匹配均已确认，主视图查询保持不变；延迟期间输入的新查询未被覆盖，原生去抖未完成时的中间状态不作为失败证据。忙碌面板中的重复及带 IME 标记的按键不丢结果，真实 Settings 取得焦点后旧结果不重画或抢回焦点。重载后的最终运行时复测 Select、Flash、动作与搜索；四个旧 Flash/样式/面板节点经可见帧和 GC/CC 后均回收。自有书目、PDF、分类及临时文件全部删除，原标签页、Scope、Cursor、原生行选择、查询、23 项偏好和窗口状态恢复，测试进程与 RDP 已关闭。未实测系统剪贴板、PDFTranslate、真实输入法/鼠标选词、双 MainWindow 或独立 Reader；同 Window 的 ReaderView/Document 替换、旧退休保护后继及部分监听获取/重入清理由行为契约覆盖。

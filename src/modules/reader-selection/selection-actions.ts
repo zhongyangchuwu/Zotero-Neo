@@ -1,17 +1,22 @@
-import { compositionOwnsKey } from '../input/composition';
-import { isDeadObject } from '../platform/cross-compartment';
+import { CleanupFailure } from '../../core/cleanup';
+import { compositionOwnsKey } from '../../input/composition';
+import { isDeadObject } from '../../platform/cross-compartment';
 import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionActionOutcome,
   ReaderSelectionContext,
-} from '../core/contracts';
-import { THEME_VARS } from '../ui/theme';
-import type { PdfWindow } from './types';
+} from '../../core/contracts';
+import { THEME_VARS } from '../../ui/theme';
+import type { PdfWindow } from '../../reader/types';
 
 export interface ReaderSelectionActionHost {
+  readonly isCurrent: (pdfWindow: PdfWindow) => boolean;
+  readonly captureView: (pdfWindow: PdfWindow) => () => boolean;
+  readonly capturePresentation: (pdfWindow: PdfWindow) => () => boolean;
   readonly actions: (
     context: ReaderSelectionContext,
     pdfWindow: PdfWindow,
+    isCurrent: () => boolean,
   ) => readonly ReaderSelectionActionDefinition[];
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly copyText: (text: string) => void;
@@ -19,50 +24,16 @@ export interface ReaderSelectionActionHost {
   readonly debug: (message: string) => void;
 }
 
-/** Shared registry behind the public selection-action extension seam. */
-export class ReaderSelectionActionRegistry {
-  readonly #actions = new Map<string, ReaderSelectionActionDefinition>();
-
-  register(action: ReaderSelectionActionDefinition): () => void {
-    const id = action.id.trim();
-    const label = action.label.trim();
-    if (!id || !label || typeof action.run !== 'function')
-      throw new Error('Selection action requires id, label, and run');
-    if (this.#actions.has(id)) throw new Error(`Selection action already registered: ${id}`);
-    const stored = { ...action, id, label };
-    this.#actions.set(id, stored);
-    return () => {
-      if (this.#actions.get(id) === stored) this.#actions.delete(id);
-    };
-  }
-
-  available(context: ReaderSelectionContext): ReaderSelectionActionDefinition[] {
-    const result: ReaderSelectionActionDefinition[] = [];
-    for (const action of this.#actions.values()) {
-      try {
-        if (action.isAvailable && !action.isAvailable(context)) continue;
-        result.push(action);
-      } catch {
-        // A third-party availability predicate must not break the selection workflow.
-      }
-    }
-    return result;
-  }
-
-  clear(): void {
-    this.#actions.clear();
-  }
-}
-
 type PaletteStage = 'menu' | 'busy' | 'result';
 
 /**
- * Small Reader-local action surface for an existing Visual selection. It intentionally owns only
- * transient menu/result DOM and keyboard state; selection semantics remain in ReaderSession.
+ * Small Reader-local action surface for an existing Visual selection. It owns transient
+ * menu/result DOM and keyboard state; the selection module owns selection semantics.
  */
 export class ReaderSelectionActions {
   readonly #host: ReaderSelectionActionHost;
   #window: PdfWindow | null = null;
+  #viewCurrent: (() => boolean) | null = null;
   #context: ReaderSelectionContext | null = null;
   #actions: readonly ReaderSelectionActionDefinition[] = [];
   #selected = 0;
@@ -85,27 +56,51 @@ export class ReaderSelectionActions {
   }
 
   open(pdfWindow: PdfWindow, context: ReaderSelectionContext): boolean {
+    const priorGeneration = this.#generation;
     this.close();
+    if (this.#generation !== priorGeneration + 1) return false;
+    const generation = this.#generation;
+    const capturedView = this.#host.captureView(pdfWindow);
+    const viewCurrent = () =>
+      !isDeadObject(pdfWindow) && this.#host.isCurrent(pdfWindow) && capturedView();
+    const isCurrent = () =>
+      generation === this.#generation && viewCurrent() && generation === this.#generation;
+    if (!isCurrent()) return false;
     const snapshot = Object.freeze({ ...context });
-    const actions = this.#host.actions(snapshot, pdfWindow);
+    const actions = this.#host.actions(snapshot, pdfWindow, isCurrent);
+    if (!isCurrent()) return false;
     if (!actions.length) {
       this.#host.showStatus('No actions for selection', 1500);
       return false;
     }
     this.#window = pdfWindow;
+    this.#viewCurrent = viewCurrent;
     this.#context = snapshot;
     this.#actions = actions;
     this.#selected = 0;
     this.#stage = 'menu';
     this.#resultText = '';
-    this.#mount(pdfWindow);
-    this.#render();
-    return true;
+    try {
+      this.#mount(pdfWindow, generation);
+      if (!this.#canComplete(generation, pdfWindow)) return false;
+      this.#render();
+      return true;
+    } catch (error) {
+      const failure = new CleanupFailure();
+      failure.run(() => {
+        throw error;
+      });
+      if (generation === this.#generation) failure.run(() => this.close());
+      failure.rethrow();
+      return false;
+    }
   }
 
   /** Ordinary outside-view input cancels and yields; IME input does not change the owner. */
   handleKey(event: KeyboardEvent, pdfWindow: PdfWindow): boolean {
     if (!this.#overlay || !this.#window) return false;
+    if (!this.#canComplete(this.#generation, this.#window)) return false;
+    const viewCurrent = this.#viewCurrent!;
     if (compositionOwnsKey(event, false)) return this.ownsView(pdfWindow);
     if (pdfWindow !== this.#window) {
       this.close();
@@ -115,8 +110,15 @@ export class ReaderSelectionActions {
     event.stopImmediatePropagation();
 
     if (event.key === 'Escape') {
+      const generation = this.#generation;
       this.close();
-      pdfWindow.focus();
+      if (
+        this.#generation === generation + 1 &&
+        this.#host.isCurrent(pdfWindow) &&
+        viewCurrent() &&
+        !isDeadObject(pdfWindow)
+      )
+        pdfWindow.focus();
       return true;
     }
     if (this.#stage === 'busy') return true;
@@ -124,8 +126,15 @@ export class ReaderSelectionActions {
       if (event.key.toLowerCase() === 'y' && this.#resultText) {
         this.#host.copyText(this.#resultText);
       } else if (event.key === 'Enter' || event.key === 'Return') {
+        const generation = this.#generation;
         this.close();
-        pdfWindow.focus();
+        if (
+          this.#generation === generation + 1 &&
+          this.#host.isCurrent(pdfWindow) &&
+          viewCurrent() &&
+          !isDeadObject(pdfWindow)
+        )
+          pdfWindow.focus();
       }
       return true;
     }
@@ -177,16 +186,18 @@ export class ReaderSelectionActions {
     this.#overlay = null;
     this.#themeCleanup = null;
     this.#window = null;
+    this.#viewCurrent = null;
     this.#context = null;
     this.#actions = [];
     this.#selected = 0;
     this.#stage = 'menu';
     this.#resultText = '';
-    try {
+    const failure = new CleanupFailure();
+    failure.run(() => {
       if (overlay && !isDeadObject(overlay)) overlay.remove();
-    } finally {
-      themeCleanup?.();
-    }
+    });
+    failure.run(() => themeCleanup?.());
+    failure.rethrow();
   }
 
   async #execute(index: number): Promise<void> {
@@ -194,21 +205,41 @@ export class ReaderSelectionActions {
     const context = this.#context;
     const pdfWindow = this.#window;
     if (!action || !context || !pdfWindow || !this.#overlay) return;
+    const viewCurrent = this.#viewCurrent!;
+    if (!this.#canComplete(this.#generation, pdfWindow)) return;
     const generation = ++this.#generation;
+    const isPresentationCurrent = this.#host.capturePresentation(pdfWindow);
+    if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
     this.#stage = 'busy';
     this.#selected = index;
     this.#render(`Running ${action.label}…`);
+    if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
     try {
       const outcome = await action.run(context);
-      if (!this.#canComplete(generation, pdfWindow)) return;
+      if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
       if (outcome && typeof outcome === 'object' && 'retired' in outcome) {
         this.close();
         return;
       }
       if (outcome && typeof outcome === 'object' && 'status' in outcome) {
         this.close();
+        if (
+          this.#generation !== generation + 1 ||
+          isDeadObject(pdfWindow) ||
+          !this.#host.isCurrent(pdfWindow) ||
+          !viewCurrent() ||
+          !isPresentationCurrent()
+        )
+          return;
         this.#host.showStatus(outcome.status, 1500);
-        pdfWindow.focus();
+        if (
+          this.#generation === generation + 1 &&
+          !isDeadObject(pdfWindow) &&
+          this.#host.isCurrent(pdfWindow) &&
+          viewCurrent() &&
+          isPresentationCurrent()
+        )
+          pdfWindow.focus();
         return;
       }
       if (outcome && typeof outcome === 'object' && 'body' in outcome && outcome.body) {
@@ -218,35 +249,68 @@ export class ReaderSelectionActions {
         return;
       }
       this.close();
-      pdfWindow.focus();
+      if (
+        this.#generation === generation + 1 &&
+        !isDeadObject(pdfWindow) &&
+        this.#host.isCurrent(pdfWindow) &&
+        viewCurrent() &&
+        isPresentationCurrent()
+      )
+        pdfWindow.focus();
     } catch (error) {
-      if (!this.#canComplete(generation, pdfWindow)) return;
+      if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
       this.#host.debug(`selection action ${action.id} failed: ${String(error)}`);
+      if (!this.#canComplete(generation, pdfWindow, isPresentationCurrent)) return;
       this.close();
+      if (
+        this.#generation !== generation + 1 ||
+        isDeadObject(pdfWindow) ||
+        !this.#host.isCurrent(pdfWindow) ||
+        !viewCurrent() ||
+        !isPresentationCurrent()
+      )
+        return;
       this.#host.showStatus(`✗ ${action.label} failed`, 2500);
-      pdfWindow.focus();
+      if (
+        this.#generation === generation + 1 &&
+        !isDeadObject(pdfWindow) &&
+        this.#host.isCurrent(pdfWindow) &&
+        viewCurrent() &&
+        isPresentationCurrent()
+      )
+        pdfWindow.focus();
     }
   }
 
   /** Retires dead content before an async result can touch it, even before view discovery. */
-  #canComplete(generation: number, pdfWindow: PdfWindow): boolean {
+  #canComplete(generation: number, pdfWindow: PdfWindow, presentation?: () => boolean): boolean {
     if (generation !== this.#generation || this.#window !== pdfWindow || !this.#overlay)
       return false;
-    if (isDeadObject(pdfWindow) || isDeadObject(this.#overlay)) {
+    const current =
+      !isDeadObject(pdfWindow) &&
+      !isDeadObject(this.#overlay) &&
+      !!this.#viewCurrent?.() &&
+      (!presentation || presentation());
+    if (generation !== this.#generation || this.#window !== pdfWindow || !this.#overlay)
+      return false;
+    if (!current) {
       this.close();
       return false;
     }
     return true;
   }
 
-  #mount(pdfWindow: PdfWindow): void {
+  #mount(pdfWindow: PdfWindow, generation: number): void {
     const overlay = pdfWindow.document.createElement('div');
+    this.#overlay = overlay;
     overlay.id = 'zv-selection-actions';
     overlay.dataset.zoteroNeoSelectionActions = '1';
     overlay.style.cssText = `position:fixed;right:16px;bottom:52px;z-index:100002;width:min(430px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;padding:10px;border:1px solid ${THEME_VARS.border};border-radius:8px;background:${THEME_VARS.surface};color:${THEME_VARS.text};box-shadow:0 12px 36px ${THEME_VARS.shadow};font:12px/1.4 system-ui,sans-serif;pointer-events:none;`;
     pdfWindow.document.body?.appendChild(overlay);
-    this.#overlay = overlay;
-    this.#themeCleanup = this.#host.themeRoot(overlay);
+    if (!this.#canComplete(generation, pdfWindow)) return;
+    const cleanup = this.#host.themeRoot(overlay);
+    if (generation !== this.#generation || this.#overlay !== overlay) cleanup();
+    else this.#themeCleanup = cleanup;
   }
 
   #render(message?: string): void {
