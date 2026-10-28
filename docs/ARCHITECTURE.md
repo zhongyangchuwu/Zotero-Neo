@@ -78,7 +78,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/modules/reader-annotations/` 按 ReaderSession 拥有创建、删除、改色、颜色过滤、批注文本/评论复制及评论保存。CurrentTarget 的原生优先与最后目标后备留在 Surface；模块自己的过滤后备通过具名端口供导航读取，不把批注写入下沉到选择模块。创建仍要求完整 PDF 几何，删除仍由所属窗口确认并调用明确 Operation。
 
-评论编辑器在退休旧交互前捕获精确视图与 Document，再获取系统按键、输入/IME 监听、主题、popup guard、原生删除保护及定时器。关闭先清空所有权，再逐项释放；旧解析、输入和计时器不能作用于后继编辑器，部分获取失败仍排空已有句柄。Escape / handoff 接纳的最终草稿可以继续保存，但原视图或交互失效后不恢复旧状态和焦点。
+评论编辑器在退休旧交互前捕获精确视图与 Document，再获取系统按键、输入/IME 监听、主题、popup guard、原生删除保护及定时器。关闭先清空所有权，再逐项释放；旧解析、输入和计时器不能作用于后继编辑器，部分获取失败仍排空已有句柄。最终草稿的保存接纳只要求原 ReaderView / Document 与模块仍存活，切换标签页或分屏不应丢弃 handoff 草稿；输入、计时器和 Escape 展示继续要求原视图激活。已接纳保存可以完成，但不恢复旧状态和焦点。
 
 `src/modules/reader-hints/` 按 ReaderSession 拥有可见复制/跟随目标、临时标签、原生链接激活和目的地 cue。模块只接收精确视图、复制、反馈与导航端口；Surface 保留输入优先级、模式、共享滚动机制和历史策略。父作用域退休后，旧确认、异步导航完成和 RAF 不能写入或重画；清理仍释放各自的标签、cue 与计时器，并保留原始失败。`src/reader/hint-labels.ts` 继续作为 Flash 与 hints 共用的纯标签辅助。
 

@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、工作集、Reader hints、Library、Notes、Capture、Reader 导航和 Reader 选择已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：整体设计与渐进接入记录。最小基座及标签、扩展管理、分类、工作集、Reader hints、Library、Notes、Capture、Reader 导航、Reader 选择和 Reader 批注已经实现，其余候选模块与用户开关仍是设计；当前运行时所有权以[架构](ARCHITECTURE.md)为准。
 
 ## 范围与取舍
 
@@ -305,3 +305,5 @@ Notes 已在 Zotero 10.0.6 验证 Main/Reader/Note 的查找及原生 Note 标�
 Reader 导航已在 Zotero 10.0.6 的可见自有 Reader 验证 counted page、Back/Forward、缩放、原生搜索 next/previous、Outline 的 Figure/Table/标题、批注循环与颜色过滤、持久化 marks 回读、侧栏局部动作、平滑滚动重复与松键减速，以及分屏焦点/精确视图隔离。截图只包含自有四页 PDF、Outline 与 Bookmarks；先前最小化窗口导致的帧完成停滞，经恢复可见并对比合并前 XPI 后排除。待保存 mark 在真实 Settings 界面打开后继续落库，未改写旧 Reader 状态或抢回焦点；重载前后的两组三个旧侧栏节点经 GC/CC 后均已回收。自有书目、PDF、两条批注及分类全部删除，原标签页、Scope、Cursor、原生选择、查询、偏好和最小化状态恢复，测试进程与临时文件已清理。未实测双 MainWindow、独立 Reader、真正派生的 caption 目标或原生取消 RAF 失败；后者及异步失败/部分清理由行为契约覆盖，不将 Comment 状态标签视为编辑器已挂载的证据。
 
 Reader 选择已在 Zotero 10.0.6 的可见自有双页 PDF 验证范围扩展/端点交换、Flash 起止定位、公共选择快照、重绑定及第三方动作结果。关闭重开 Reader 后注册定义仍在，旧 disposer 不删除同 ID 后继定义。次分屏所选文本进入自己的原生 Find，实际查询和两处匹配均已确认，主视图查询保持不变；延迟期间输入的新查询未被覆盖，原生去抖未完成时的中间状态不作为失败证据。忙碌面板中的重复及带 IME 标记的按键不丢结果，真实 Settings 取得焦点后旧结果不重画或抢回焦点。重载后的最终运行时复测 Select、Flash、动作与搜索；四个旧 Flash/样式/面板节点经可见帧和 GC/CC 后均回收。自有书目、PDF、分类及临时文件全部删除，原标签页、Scope、Cursor、原生行选择、查询、23 项偏好和窗口状态恢复，测试进程与 RDP 已关闭。未实测系统剪贴板、PDFTranslate、真实输入法/鼠标选词、双 MainWindow 或独立 Reader；同 Window 的 ReaderView/Document 替换、旧退休保护后继及部分监听获取/重入清理由行为契约覆盖。
+
+Reader 批注已在 Zotero 10.0.6 的自有双页 PDF 验证 Select 高亮、下划线与 Add note、Normal 改色、颜色过滤、删除确认，以及 `i` / `zb` 的原生输入与页面滚动分支。评论实际挂载并聚焦，Escape 与自动保存均回读数据库；旧输入/IME/Escape 不影响后继编辑器，晚到保存不抢回 Settings 焦点。实机另复现并修复换标签页先使输入失活、随后交接却丢弃最终草稿的问题：保存接纳改用精确视图寿命，先切到另一个 Reader，再接纳交接并暂缓真实保存；释放原保存后数据库已更新，后继焦点不变。两轮自有数据、分类与源文件全部删除，原标签页、Scope、Cursor、原生行选择、查询、23 项偏好与窗口状态恢复，测试进程和 RDP 已关闭。未实测系统剪贴板、真实输入法/鼠标选词、双 MainWindow 或独立 Reader；同 Window 视图/Document 替换及部分获取/重入清理由行为契约覆盖。

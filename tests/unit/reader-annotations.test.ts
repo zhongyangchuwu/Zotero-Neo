@@ -57,6 +57,7 @@ function annotationFixture() {
       return () => captured === revision;
     },
     captureView: () => () => true,
+    captureViewLifetime: () => () => true,
     selectionParams: () => null,
     itemForReader: () => item,
     selectedAnnotationKey: () => selected,

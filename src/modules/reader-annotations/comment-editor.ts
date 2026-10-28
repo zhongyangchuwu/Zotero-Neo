@@ -28,6 +28,7 @@ export interface ReaderCommentEditorHost {
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly activePdfWindow: () => PdfWindow | null;
   readonly captureView: (window: PdfWindow) => () => boolean;
+  readonly captureViewLifetime: (window: PdfWindow) => () => boolean;
   readonly resolveAnnotation: (key: string) => Promise<AnnotationRuntime | null>;
   readonly annotationForSave: (
     target: AnnotationCommentTarget,
@@ -51,6 +52,7 @@ export class ReaderCommentEditor {
   #disposed = false;
   #ownerWindow: PdfWindow | null = null;
   #viewValid: (() => boolean) | null = null;
+  #viewLifetimeValid: (() => boolean) | null = null;
   #overlay: HTMLElement | null = null;
   #input: HTMLTextAreaElement | null = null;
   #inputCleanup: (() => void) | null = null;
@@ -141,14 +143,24 @@ export class ReaderCommentEditor {
     const previousGeneration = this.#generation;
     const document = pdfWindow?.document;
     const capturedView = pdfWindow ? this.#host.captureView(pdfWindow) : null;
+    const capturedLifetime = pdfWindow ? this.#host.captureViewLifetime(pdfWindow) : null;
     if (this.#disposed || previousGeneration !== this.#generation) return;
     const generation = previousGeneration + 1;
     this.#release();
-    if (!pdfWindow || !capturedView || this.#disposed || generation !== this.#generation) return;
+    if (
+      !pdfWindow ||
+      !capturedView ||
+      !capturedLifetime ||
+      this.#disposed ||
+      generation !== this.#generation
+    )
+      return;
     const viewValid = (): boolean => capturedView() && pdfWindow.document === document;
-    if (!viewValid()) return;
+    const lifetimeValid = (): boolean => capturedLifetime() && pdfWindow.document === document;
+    if (!viewValid() || !lifetimeValid()) return;
     this.#ownerWindow = pdfWindow;
     this.#viewValid = viewValid;
+    this.#viewLifetimeValid = lifetimeValid;
     try {
       // Zotero's earlier normal-group handler can swallow real textarea Esc. Restore the
       // native target's Xray wrapper so Gecko honors the privileged system-group option.
@@ -234,7 +246,7 @@ export class ReaderCommentEditor {
 
   /** Captures the final draft, then releases every ownership resource before awaiting persistence. */
   async exit(): Promise<boolean> {
-    const admitted = !!this.#viewValid?.();
+    const admitted = !!this.#viewLifetimeValid?.();
     const text = admitted ? (this.#input?.value ?? null) : null;
     const target = admitted ? this.#target : null;
     this.#release();
@@ -370,6 +382,7 @@ export class ReaderCommentEditor {
     const override = this.#deletionOverride;
     this.#ownerWindow = null;
     this.#viewValid = null;
+    this.#viewLifetimeValid = null;
     this.#systemKeyListener = null;
     this.#systemKeyOptions = null;
     this.#focusTimer = null;

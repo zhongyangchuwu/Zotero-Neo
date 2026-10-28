@@ -31,6 +31,7 @@ export interface ReaderAnnotationsModulePorts {
   readonly activeWindow: () => PdfWindow | null;
   readonly capturePresentation: (window: PdfWindow) => () => boolean;
   readonly captureView: (window: PdfWindow) => () => boolean;
+  readonly captureViewLifetime: (window: PdfWindow) => () => boolean;
   readonly selectionParams: (window: PdfWindow) => AnnotationSelectionParams | null;
   readonly itemForReader: () => ItemRuntime | null;
   readonly selectedAnnotationKey: () => string | null;
@@ -161,6 +162,10 @@ export function createReaderAnnotationsModule(
       },
       clearTimer,
       captureView,
+      captureViewLifetime: (window) => {
+        const current = ports.captureViewLifetime(window);
+        return () => scope.isCurrent() && current();
+      },
       themeRoot: ports.themeRoot,
       activePdfWindow: ports.activeWindow,
       resolveAnnotation,

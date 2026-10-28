@@ -536,6 +536,7 @@ export class ReaderSession {
       activeWindow: () => this.#navigationHost.activePdfWindow(),
       capturePresentation: (window) => this.invocationCurrent(window),
       captureView: (window) => this.invocationCurrent(window, null),
+      captureViewLifetime: (window) => this.captureViewLifetime(window),
       selectionParams: (window) =>
         this.#selectionWindow === window && this.#selectionView === this.readerViewForWindow(window)
           ? this.state.selectionParams
@@ -1811,6 +1812,22 @@ export class ReaderSession {
       this.#navigationHost.activePdfWindow() === window &&
       (!reader.tabID || !ownerWindow || readerSelectedTabID(ownerWindow) === reader.tabID)
     );
+  }
+
+  /** Final comment handoff may save a live original view after another tab or pane activates. */
+  private captureViewLifetime(pdfWindow: PdfWindow): () => boolean {
+    const reader = this.#dependencies.reader;
+    const view = this.readerViewForWindow(pdfWindow);
+    const document = isDeadObject(pdfWindow) ? null : pdfWindow.document;
+    return () =>
+      !this.#scope.disposed &&
+      !!view &&
+      !isDeadObject(pdfWindow) &&
+      !isDeadObject(view) &&
+      !!document &&
+      !isDeadObject(document) &&
+      pdfWindow.document === document &&
+      readerViewIsLive(reader, view, pdfWindow);
   }
 
   /** Continuous holds ignore input revisions but still retire with their exact view and owner. */

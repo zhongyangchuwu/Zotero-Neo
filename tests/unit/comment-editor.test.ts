@@ -175,6 +175,10 @@ function createHarness() {
       const captured = viewGeneration;
       return () => captured === viewGeneration;
     },
+    captureViewLifetime: () => {
+      const captured = viewGeneration;
+      return () => captured === viewGeneration;
+    },
     resolveAnnotation,
     annotationForSave,
     nativeEditableFocused: () => nativeEditableFocused,
