@@ -28,8 +28,9 @@
 - `src/modules/worksets/`：按 MainWindow 拥有 Persistent Selection、Visual 和 Selection Panel，登记原有 Normal/Select 贡献。Main 保留 Cursor、原生多目标取消和共享行渲染；目标解析与成功操作后的成员移除只消费明确 Selection 端口，Reveal 沿用原导航协调器。模块退休后旧端口不读取存量 Selection，外观/主题的晚到句柄立即释放。
 - `src/modules/library/`：按 MainWindow 拥有树导航、Local Find、搜索入口、条目候选、打开、标识符录入及最近回收批次；Reader citekey 贡献按 ReaderSession 登记。共享焦点、原生 View 端口、Picker 和唯一历史留在基座，Library 不成为工作集 Reveal、标签过滤或 Workspace 的硬依赖。
 - `src/modules/notes/`：按 MainWindow 拥有 Note 候选、打开编排、可选 Vim 编辑模式/寄存器及 caret UI。Surface 保留精确编辑器身份、输入 runtime、原生/IME 仲裁及共享焦点；Palette 和计时器绑定实际编辑器身份。Vim 关闭不影响 Note 查找或 Capture 目的地，候选 provider 不负责导航或写入。
+- `src/modules/capture/`：MainWindow 拥有冻结的 Reader 源快照、Note 候选确认、目的地重验证、原生追加保存及真实回执；ReaderSession 贡献原有 `neo.capture-note` 选择动作。Picker 保留排队与界面机制，Notes provider 仍只提供候选。退休先拒绝旧确认，已接纳保存完成后返回真实结果，不复活旧 Reader 状态或焦点。
 
-尚未实现通用静态清单/依赖图、Capture 等其余候选模块或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
+尚未实现通用静态清单/依赖图、其余候选模块或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的整体设计当作这些能力已可用的说明。
 
 ## Actions & Tags 提供了什么
 
@@ -62,7 +63,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/reader/controller.ts` 中批注流程、`comment-editor.ts`、`src/operations/delete-annotation.ts` | ReaderSession / ReaderView；注入 Select 的动作要求 `reader-selection` 可用，原生批注操作本身不要求它启用。 |
 | `reader-hints` | 批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/modules/notes/`；Surface 输入与身份保留在 `src/main/note-editor.ts`、`note-runtime.ts` | 已按 MainWindow 接入，附着到精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找或捕获目的地。 |
-| `capture` | Reader 所选文本追加到已有 Note，拥有源快照、目的地重验证、排队保存及保存回执流程。 | `src/main/note-capture.ts`、`controller.ts` 中捕获编排、Reader Selection Actions 入口 | 一次跨 Surface 交互及已接纳的保存操作；硬依赖 `reader-selection` 与 `notes`，不依赖 Vim Note 编辑开关。 |
+| `capture` | Reader 所选文本追加到已有 Note，拥有源快照、目的地重验证、排队保存及保存回执流程。 | `src/modules/capture/`；Main/Reader 保留具名桥接与选择界面 | 已按 MainWindow / ReaderSession 接入，拥有单次跨 Surface 交互及已接纳的保存操作；整体设计中的硬依赖为 `reader-selection` 与 `notes`，不依赖 Vim Note 编辑开关，通用依赖图仍未开放。 |
 | `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、show in library 等跨窗口/Surface 定位。 | `src/main/navigation.ts`、`picker/providers/tabs.ts`、`src/reader/navigation.ts` 中相应动作、现有命名桥接 | MainWindow、关联 ReaderSession / ReaderView；使用基座导航端口，不拥有第二份 Back/Forward 历史。 |
 | `extensions` | 已安装 Zotero 扩展的 Plugin Manager：筛选、详情、刷新、允许的启停、设置及链接。 | `src/modules/extensions/`；`src/toolkit/main/plugins.ts` | 已按 MainWindow 接入，Main/Reader/Note 进入实际所属窗口的独立面板。不负责 Neo 内部模块管理，也不新增安装、更新或卸载功能。 |
 

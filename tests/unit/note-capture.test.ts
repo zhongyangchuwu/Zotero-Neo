@@ -5,7 +5,7 @@ import {
   appendReaderSelectionToNote,
   readerCaptureBaseItem,
   readerSelectionNoteFragment,
-} from '../../src/main/note-capture';
+} from '../../src/modules/capture/note';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 

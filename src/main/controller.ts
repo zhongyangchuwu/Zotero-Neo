@@ -4,10 +4,9 @@ import type {
   MainWindowControllerDependencies,
   MainWindow,
   ReaderSelectionContext,
-  ReaderNoteCaptureReceipt,
   ReaderNoteCaptureResult,
 } from '../core/contracts';
-import { CleanupFailure } from '../core/cleanup';
+import { CleanupFailure, type Cleanup } from '../core/cleanup';
 import { ModuleHost } from '../core/module-host';
 import { reportDiagnostic, reportDiagnosticError } from '../core/logging';
 import type {
@@ -57,7 +56,9 @@ import { NOTE_COMMAND_PALETTE_ACTIONS } from './note-action-capabilities';
 import { createTagModule, type TagModule } from '../modules/tags';
 import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
-import { createNotesModule, createNotesProvider, type NotesModule } from '../modules/notes';
+import { createNotesModule, type NotesModule } from '../modules/notes';
+import { createCaptureModule, type CaptureModule } from '../modules/capture';
+import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
   mainItem,
@@ -84,8 +85,6 @@ import { MainItemStateDecoration } from './item-state-decoration';
 import { MainNavigationExecutor } from './jump-history';
 import { createCollectionsModule, type CollectionsModule } from '../modules/collections';
 import { installMainViewLifecycle } from './view-lifecycle';
-import { appendReaderSelectionToNote, readerCaptureBaseItem } from './note-capture';
-import { noteOwnerKey } from '../platform/zotero-items';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -112,6 +111,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly worksets: WorksetsModule;
       readonly library: LibraryModule;
       readonly notes: NotesModule;
+      readonly capture: CaptureModule;
     }
   >();
   readonly #itemDecorations = new MainItemStateDecoration();
@@ -310,25 +310,26 @@ export class MainWindowController implements MainWindowControllerApi {
         scopeActivation: () => this.#navigationExecutor.scopeActivation(window, session),
       });
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+      const chooseNotes = (options: PickerOpenOptions): Cleanup | null => {
+        if (session.picker.open) return null;
+        const generation = session.picker.generation + 1;
+        void this.#picker.open(window, session, 'notes', options);
+        if (
+          session.picker.generation !== generation ||
+          !session.picker.open ||
+          session.picker.scope !== 'notes'
+        )
+          return null;
+        return () => {
+          if (session.picker.generation === generation && session.picker.scope === 'notes')
+            this.#picker.close(session);
+        };
+      };
       const notes = createNotesModule(host, {
         window,
         logger: this.#dependencies.logger,
         status: (message, milliseconds) => this.#navigation.status(session, message, milliseconds),
-        choose: (options) => {
-          if (session.picker.open) return null;
-          const generation = session.picker.generation + 1;
-          void this.#picker.open(window, session, 'notes', options);
-          if (
-            session.picker.generation !== generation ||
-            !session.picker.open ||
-            session.picker.scope !== 'notes'
-          )
-            return null;
-          return () => {
-            if (session.picker.generation === generation && session.picker.scope === 'notes')
-              this.#picker.close(session);
-          };
-        },
+        choose: chooseNotes,
         selectNote: async (itemID, surface, isCurrent, afterSelection) => {
           const pane = mainLibrarySelection(window);
           if (!pane?.selectItem) throw new Error('Library item selection is unavailable');
@@ -342,7 +343,24 @@ export class MainWindowController implements MainWindowControllerApi {
         },
       });
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
-      this.#modules.set(session, { host, tags, extensions, collections, worksets, library, notes });
+      const capture = createCaptureModule(host, {
+        window,
+        logger: this.#dependencies.logger,
+        pickerBusy: () => session.picker.open,
+        status: (message) => this.#navigation.status(session, message),
+        choose: chooseNotes,
+      });
+      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+      this.#modules.set(session, {
+        host,
+        tags,
+        extensions,
+        collections,
+        worksets,
+        library,
+        notes,
+        capture,
+      });
     } catch (error) {
       const failure = new CleanupFailure();
       failure.run(() => host.dispose());
@@ -393,6 +411,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const modules = this.#modules.get(session);
     if (!modules) throw new Error('Window modules are not attached');
     return modules.notes;
+  }
+
+  private captureModule(session: MainWindowSession): CaptureModule {
+    const modules = this.#modules.get(session);
+    if (!modules) throw new Error('Window modules are not attached');
+    return modules.capture;
   }
 
   private cancelMainCurrentTarget(window: MainWindow, session: MainWindowSession): void {
@@ -833,54 +857,7 @@ export class MainWindowController implements MainWindowControllerApi {
       this.#dependencies.logger.debug('ignored Reader note capture: owner window detached');
       return null;
     }
-    if (session.picker.open) {
-      this.#navigation.status(session, '✗ Close the current picker before capturing');
-      return null;
-    }
-
-    const snapshot: ReaderSelectionContext = Object.freeze({ ...context });
-    const base = readerCaptureBaseItem(snapshot);
-    if (!base || !Number.isInteger(base.libraryID) || base.libraryID <= 0) {
-      this.#navigation.status(session, '✗ Reader item is unavailable');
-      return null;
-    }
-    const libraryID = base.libraryID;
-    let receipt: ReaderNoteCaptureReceipt | null = null;
-    let saving = false;
-    let closed = false;
-    let retired = false;
-
-    return await new Promise<ReaderNoteCaptureResult>((resolve) => {
-      const settle = (): void => resolve(retired ? { retired: true, receipt } : receipt);
-      void this.#picker.open(ownerWindow, session, 'notes', {
-        source: createNotesProvider(ownerWindow, this.#dependencies.logger, {
-          baseItem: base,
-          libraryID,
-        }),
-        // Teardown cannot undo an admitted native save; settle with its actual outcome.
-        onClose: (reason) => {
-          closed = true;
-          retired = reason === 'retire';
-          if (!saving) settle();
-        },
-        confirm: async (candidate) => {
-          saving = true;
-          try {
-            const note = Zotero.Items.get(Number(candidate.id));
-            if (!note) throw new Error('Note target is unavailable');
-            if (noteOwnerKey(note) !== candidate.group)
-              throw new Error('Note source changed. Refresh the Notes source before confirming.');
-            const noteTitle =
-              note.getDisplayTitle?.().trim() || note.getNoteTitle?.().trim() || candidate.title;
-            await appendReaderSelectionToNote(note, snapshot, libraryID);
-            receipt = { noteID: note.id, noteTitle };
-          } finally {
-            saving = false;
-            if (closed) settle();
-          }
-        },
-      });
-    });
+    return await this.captureModule(session).capture(context);
   }
 
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void {

@@ -53,6 +53,7 @@ import { ReaderNativeSidebar } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
+import { createReaderCaptureModule, type ReaderCaptureModule } from '../modules/capture/reader';
 import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
 import { ReaderNativeInput } from './native-input';
 import {
@@ -488,8 +489,9 @@ export class ReaderSession {
   readonly #sidebar: ReaderNativeSidebar;
   readonly #captions: ReaderCaptionTargets;
   readonly #modules: ModuleHost;
-  readonly #hints: ReaderHintsModule;
   readonly #library: ReaderLibraryModule;
+  readonly #capture: ReaderCaptureModule;
+  readonly #hints: ReaderHintsModule;
   readonly #commentEditor: ReaderCommentEditor;
   readonly #nativeInput: ReaderNativeInput;
   readonly #flash: ReaderFlash;
@@ -549,6 +551,12 @@ export class ReaderSession {
       () => !this.#scope.disposed,
     );
     this.#library = createReaderLibraryModule(this.#modules, (message) => this.showStatus(message));
+    this.#capture = createReaderCaptureModule(this.#modules, (selection) =>
+      this.#dependencies.controller.dependencies.main.captureReaderSelectionToNote(
+        selection,
+        readerOwnerWindow(this.#dependencies.reader) ?? null,
+      ),
+    );
     this.#hints = createReaderHintsModule(this.#modules, {
       reader: dependencies.reader,
       viewForWindow: (pdfWindow) => this.readerViewForWindow(pdfWindow),
@@ -2318,27 +2326,7 @@ export class ReaderSession {
         run: () => this.executeAction(action, 1, pdfWindow),
       });
     };
-    actions.push({
-      id: 'neo.capture-note',
-      label: language === 'zh-CN' ? '捕获到笔记' : 'Capture to note',
-      isAvailable: (selection) => selection.itemID !== null && !!selection.text.trim(),
-      run: async (selection) => {
-        const receipt =
-          await this.#dependencies.controller.dependencies.main.captureReaderSelectionToNote(
-            selection,
-            readerOwnerWindow(this.#dependencies.reader) ?? null,
-          );
-        if (receipt && 'retired' in receipt) return { retired: true };
-        if (receipt) {
-          return {
-            status:
-              language === 'zh-CN'
-                ? `✓ 已保存到「${receipt.noteTitle}」`
-                : `✓ Saved to “${receipt.noteTitle}”`,
-          };
-        }
-      },
-    });
+    actions.push(this.#capture.selectionAction(language));
     addBuiltIn('neo.underline', 'underlineSelection');
     addBuiltIn('neo.add-note', 'addNote');
     actions.push(...(this.#dependencies.selection?.registered(context) ?? []));

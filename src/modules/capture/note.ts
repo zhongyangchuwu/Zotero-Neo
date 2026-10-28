@@ -1,5 +1,5 @@
-import type { ReaderSelectionContext } from '../core/contracts';
-import { normalizeTopLevelItemTargets } from '../platform/zotero-items';
+import type { ReaderSelectionContext } from '../../core/contracts';
+import { normalizeTopLevelItemTargets } from '../../platform/zotero-items';
 
 export function readerCaptureBaseItem(context: ReaderSelectionContext): Zotero.Item | null {
   if (context.itemID === null) return null;
