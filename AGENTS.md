@@ -209,7 +209,7 @@ callback and the `_textAnnotationFocused` seam; `ReaderSession.readerConsumesKey
 remains the policy source.
 `ReaderViewLifecycle` in `src/toolkit/reader/view-lifecycle.ts` owns primary/secondary
 PDF-window discovery, the rescan timer, view-local DOM listeners, and detached-view
-release. `ReaderNavigation` in `src/reader/navigation.ts` owns semantic traversal and
+release. `ReaderNavigation` in `src/modules/reader-navigation/navigation.ts` owns semantic traversal and
 user feedback; `ReaderNavigationHost` in `src/toolkit/reader/navigation.ts` owns native
 zoom/page/search/split/focus delegation and active-view resolution.
 `ReaderSelectionRange` in `src/reader/selection-range.ts` owns the temporary DOM Select
@@ -259,7 +259,7 @@ capture code must not borrow Main Selection or mutate notes directly.
 | `src/toolkit/reader/index.ts` | Public Reader host capabilities |
 | `src/toolkit/reader/input-bridge.ts` | Private PdfView key/focus patch lifecycle |
 | `src/toolkit/reader/view-lifecycle.ts` | Primary/secondary PDF-view discovery, listeners, and release |
-| `src/reader/navigation.ts` | Semantic Reader traversal and feedback over Toolkit navigation capabilities |
+| `src/modules/reader-navigation/` | Reader navigation, marks, semantic targets, scoped native sidebar and smooth-scroll behavior |
 | `src/reader/selection-range.ts`      | Temporary DOM Select range state, motions, and view markers                              |
 | `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
 | `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |

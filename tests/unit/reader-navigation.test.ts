@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ReaderNavigation } from '../../src/reader/navigation';
-import { ReaderCaptionTargets } from '../../src/reader/caption-targets';
+import { ReaderNavigation } from '../../src/modules/reader-navigation/navigation';
+import { ReaderCaptionTargets } from '../../src/modules/reader-navigation/caption-targets';
+import { ReaderNavigationHost } from '../../src/toolkit';
 import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
 import type { ReaderNativeOutlineEntry, ReaderLinkPosition } from '../../src/reader/types';
 
@@ -85,22 +86,42 @@ function harness(itemID = 42) {
   const scrollBoundary = vi.fn();
   const showStatus = vi.fn();
   const debug = vi.fn();
-  const captions = new ReaderCaptionTargets(reader.itemID, () => {}, debug);
-  const navigation = new ReaderNavigation({
+  const captions = new ReaderCaptionTargets(
+    reader.itemID,
+    () => {},
+    debug,
+    () => true,
+  );
+  const host = new ReaderNavigationHost({
     reader,
-    captions,
     activePdfWindow: () => active,
     setActivePdfWindow: (pdfWindow) => {
       active = pdfWindow;
     },
     syncViews,
     scrollBoundary,
+    unavailable: (reason) =>
+      showStatus(
+        reason === 'zoom'
+          ? 'Zoom unavailable'
+          : reason === 'search'
+            ? 'No active search — press / to search'
+            : 'Page navigation unavailable',
+        1500,
+      ),
+    debug,
+  });
+  const navigation = new ReaderNavigation({
+    reader,
+    captions,
+    host,
     showStatus,
     debug,
   });
 
   return {
     cloneInto,
+    host,
     navigation,
     reader,
     captions,
@@ -194,60 +215,28 @@ describe('ReaderNavigation', () => {
     },
   );
 
-  it('delegates zoom, page, search, and split operations to the current Reader host', () => {
-    const test = harness();
-
-    test.navigation.zoom('in', 2);
-    test.navigation.zoom('out', 3);
-    test.navigation.zoom('reset', 4);
-    test.navigation.navigatePage(-2);
-    test.navigation.navigatePage(3);
-    test.navigation.openSearch(test.primary);
-    test.navigation.clearSearch();
-    test.navigation.find(true);
-    test.navigation.find(false);
-    test.navigation.toggleSplit('horizontal');
-    test.navigation.toggleSplit('vertical');
-
-    expect(test.zoomIn).toHaveBeenCalledTimes(2);
-    expect(test.zoomOut).toHaveBeenCalledTimes(3);
-    expect(test.zoomReset).toHaveBeenCalledOnce();
-    expect(test.navigateToPreviousPage).toHaveBeenCalledTimes(2);
-    expect(test.navigateToNextPage).toHaveBeenCalledTimes(3);
-    expect(test.toggleFindPopup).toHaveBeenNthCalledWith(1, { open: true });
-    expect(test.toggleFindPopup).toHaveBeenNthCalledWith(2, { open: false });
-    expect(test.findNext).toHaveBeenCalledOnce();
-    expect(test.findPrevious).toHaveBeenCalledOnce();
-    expect(test.toggleHorizontalSplit).toHaveBeenCalledOnce();
-    expect(test.toggleVerticalSplit).toHaveBeenCalledOnce();
-    expect(test.syncViews).toHaveBeenCalledTimes(2);
-    expect(test.scrollBoundary).not.toHaveBeenCalled();
-    expect(test.showStatus).not.toHaveBeenCalled();
-    expect(test.debug).not.toHaveBeenCalled();
-  });
-
   it('owns active split resolution and directional focus without taking input policy', () => {
     const test = harness();
 
-    expect(test.navigation.canFocusDirection('right')).toBe(true);
-    expect(test.navigation.focusDirection('right')).toBe(true);
+    expect(test.host.canFocusDirection('right')).toBe(true);
+    expect(test.host.focusDirection('right')).toBe(true);
     expect(test.focusView).toHaveBeenLastCalledWith(false);
     expect(test.active()).toBe(test.secondary);
 
     Reflect.set(test.reader._internalReader ?? {}, '_lastViewPrimary', true);
-    expect(test.navigation.activePdfWindow()).toBe(test.primary);
+    expect(test.host.activePdfWindow()).toBe(test.primary);
     Reflect.set(test.reader._internalReader ?? {}, '_lastViewPrimary', false);
-    expect(test.navigation.activePdfWindow()).toBe(test.secondary);
+    expect(test.host.activePdfWindow()).toBe(test.secondary);
 
-    test.navigation.activatePdfWindow(test.primary);
+    test.host.activatePdfWindow(test.primary);
     expect(test.focusView).toHaveBeenLastCalledWith(true);
     expect(test.active()).toBe(test.primary);
 
     Reflect.set(test.reader._internalReader ?? {}, '_secondaryView', undefined);
     Reflect.set(test.reader._internalReader ?? {}, 'splitType', null);
-    expect(test.navigation.canFocusDirection('left')).toBe(false);
-    expect(test.navigation.canFocusDirection('right')).toBe(true);
-    expect(test.navigation.focusDirection('right')).toBe(true);
+    expect(test.host.canFocusDirection('left')).toBe(false);
+    expect(test.host.canFocusDirection('right')).toBe(true);
+    expect(test.host.focusDirection('right')).toBe(true);
     expect(test.focusContext).toHaveBeenCalledOnce();
   });
 

@@ -1,11 +1,13 @@
+import { CleanupFailure } from '../../core/cleanup';
 import {
   smoothScrollConfig,
   type PreferenceReader,
   type ScrollMode,
   type SmoothScrollConfig,
-} from '../core/preferences';
-import type { ActionId } from '../input/actions';
-import type { PdfWindow } from './types';
+} from '../../core/preferences';
+import type { ActionId } from '../../input/actions';
+import { isDeadObject } from '../../platform/cross-compartment';
+import type { PdfWindow } from '../../reader/types';
 
 type SmoothScrollAction = Extract<
   ActionId,
@@ -60,6 +62,8 @@ export class ReaderSmoothScroller {
     onFinished: null,
   };
   #pdfWindow: PdfWindow | null = null;
+  #isCurrent: (() => boolean) | null = null;
+  #generation = 0;
 
   constructor(host: ReaderSmoothScrollerHost) {
     this.#host = host;
@@ -84,6 +88,7 @@ export class ReaderSmoothScroller {
     key: string,
     spec: SmoothScrollSpec,
     onFinished?: () => void,
+    isCurrent?: () => boolean,
   ): boolean {
     const config = this.#config();
     if (config.mode === 'step') return false;
@@ -98,9 +103,13 @@ export class ReaderSmoothScroller {
     this.#hold.speed = config.mode === 'follow' ? config.followSpeed : config.initialSpeed;
     this.#hold.lastTimestamp = 0;
     this.#hold.onFinished = onFinished ?? null;
+    this.#isCurrent = isCurrent ?? null;
 
     this.#scrollBySpeed(pdfWindow, 1 / 120);
-    this.#hold.rafId = pdfWindow.requestAnimationFrame((timestamp) => this.#tick(timestamp));
+    const generation = this.#generation;
+    this.#hold.rafId = pdfWindow.requestAnimationFrame((timestamp) =>
+      this.#tick(timestamp, generation),
+    );
     return true;
   }
 
@@ -118,6 +127,14 @@ export class ReaderSmoothScroller {
       this.#hold.key = null;
       return;
     }
+    this.#generation += 1;
+    const pdfWindow = this.#pdfWindow;
+    const rafId = this.#hold.rafId;
+    const onFinished = this.#hold.onFinished;
+    this.#pdfWindow = null;
+    this.#isCurrent = null;
+    this.#hold.rafId = null;
+    this.#hold.onFinished = null;
     this.#hold.active = false;
     this.#hold.releasing = false;
     this.#hold.key = null;
@@ -125,10 +142,13 @@ export class ReaderSmoothScroller {
     this.#hold.direction = 0;
     this.#hold.speed = 0;
     this.#hold.lastTimestamp = 0;
-    this.#clearFrame();
-    const onFinished = this.#hold.onFinished;
-    this.#hold.onFinished = null;
-    onFinished?.();
+    const failure = new CleanupFailure();
+    failure.run(() => {
+      if (pdfWindow && rafId !== null && !isDeadObject(pdfWindow))
+        pdfWindow.cancelAnimationFrame(rafId);
+    });
+    failure.run(() => onFinished?.());
+    failure.rethrow();
   }
 
   releaseView(pdfWindow: PdfWindow): void {
@@ -139,10 +159,12 @@ export class ReaderSmoothScroller {
     this.stop(true);
   }
 
-  #tick(timestamp: number): void {
+  #tick(timestamp: number, generation: number): void {
+    if (generation !== this.#generation) return;
     const pdfWindow = this.#pdfWindow;
     if (
       !pdfWindow ||
+      (this.#isCurrent !== null && !this.#isCurrent()) ||
       (!this.#hold.active && !this.#hold.releasing) ||
       !this.#hold.axis ||
       !this.#hold.direction
@@ -171,7 +193,7 @@ export class ReaderSmoothScroller {
     }
 
     this.#scrollBySpeed(pdfWindow, seconds);
-    this.#hold.rafId = pdfWindow.requestAnimationFrame((next) => this.#tick(next));
+    this.#hold.rafId = pdfWindow.requestAnimationFrame((next) => this.#tick(next, generation));
   }
 
   #scrollBySpeed(pdfWindow: PdfWindow, seconds: number): void {
@@ -181,14 +203,6 @@ export class ReaderSmoothScroller {
       this.#hold.axis === 'x' ? delta : 0,
       this.#hold.axis === 'y' ? delta : 0,
     );
-  }
-
-  #clearFrame(): void {
-    if (this.#hold.rafId !== null && this.#pdfWindow) {
-      this.#pdfWindow.cancelAnimationFrame(this.#hold.rafId);
-    }
-    this.#hold.rafId = null;
-    this.#pdfWindow = null;
   }
 
   #config(): SmoothScrollConfig {

@@ -5,13 +5,15 @@ import {
   setReaderMarkPage,
   readerMarkExtra,
   setReaderMarkExtra,
-} from '../toolkit/reader';
-import type { PreferenceStore } from '../core/preference-store';
-import { readerMarksPersist } from '../core/preferences';
-import { zoteroItem } from '../platform/zotero-items';
-import type { ItemRuntime, Mark, MarksPayload, PdfWindow, ReaderRuntime } from './types';
+} from '../../toolkit/reader';
+import type { PreferenceStore } from '../../core/preference-store';
+import { readerMarksPersist } from '../../core/preferences';
+import { zoteroItem } from '../../platform/zotero-items';
+import type { ItemRuntime, Mark, MarksPayload, PdfWindow, ReaderRuntime } from '../../reader/types';
 
 export interface MarksHost {
+  readonly isCurrent: () => boolean;
+  readonly capturePresentation: () => () => boolean;
   readonly preferences: PreferenceStore;
   readonly itemForReader: (reader: ReaderRuntime) => ItemRuntime | null;
   readonly schedule: (delay: number, task: () => void) => void;
@@ -81,17 +83,28 @@ function normalizeMark(value: Omit<Mark, 'ts'>): Mark {
     ts: 0,
   };
 }
+const EMPTY_MARKS: Readonly<Record<string, Mark>> = Object.freeze({});
 
 export class ReaderMarks {
   readonly #host: MarksHost;
   readonly #marks: Record<string, Mark> = {};
+  #disposed = false;
 
   constructor(host: MarksHost) {
     this.#host = host;
   }
 
+  private isCurrent(): boolean {
+    return !this.#disposed && this.#host.isCurrent();
+  }
+
+  dispose(): void {
+    this.#disposed = true;
+    for (const char of Object.keys(this.#marks)) delete this.#marks[char];
+  }
+
   values(): Readonly<Record<string, Mark>> {
-    return this.#marks;
+    return this.isCurrent() ? this.#marks : EMPTY_MARKS;
   }
 
   position(pdfWindow: PdfWindow): { pageIndex: number | null; ratio: number } {
@@ -104,11 +117,15 @@ export class ReaderMarks {
     char: string,
     annotationKey: string | null,
   ): Promise<void> {
+    if (!this.isCurrent()) return;
     const position = this.position(pdfWindow);
     this.#marks[char] = { ...position, key: annotationKey, ts: Date.now() };
     this.#host.onChange?.();
+    const presentationCurrent = this.#host.capturePresentation();
     let persisted = '';
-    if (readerMarksPersist(this.#host.preferences)) persisted = await this.save(reader);
+    if (readerMarksPersist(this.#host.preferences))
+      persisted = await this.save(reader, presentationCurrent);
+    if (!this.isCurrent() || !presentationCurrent()) return;
     const page = position.pageIndex === null ? '' : `  p.${position.pageIndex + 1}`;
     this.#host.showStatus(
       `✓ mark ${char} set${page}${persisted ? ` · saved (${persisted})` : ''}`,
@@ -122,6 +139,7 @@ export class ReaderMarks {
     char: string,
     selectAnnotation: (key: string | null) => void,
   ): Promise<boolean> {
+    if (!this.isCurrent()) return false;
     const mark = this.#marks[char];
     if (!mark) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
@@ -129,11 +147,18 @@ export class ReaderMarks {
     }
     let annotationExists = true;
     const moved = await this.#host.onJump(pdfWindow, (isCurrent) =>
-      this.jumpMark(reader, pdfWindow, mark, selectAnnotation, isCurrent, () => {
-        annotationExists = false;
-      }),
+      this.jumpMark(
+        reader,
+        pdfWindow,
+        mark,
+        selectAnnotation,
+        () => this.isCurrent() && isCurrent(),
+        () => {
+          annotationExists = false;
+        },
+      ),
     );
-    if (!moved) return false;
+    if (!moved || !this.isCurrent()) return false;
     this.#host.showStatus(`→ mark ${char}${annotationExists ? '' : ' · annotation gone'}`, 1200);
     return true;
   }
@@ -145,6 +170,7 @@ export class ReaderMarks {
     direction: -1 | 1,
     selectAnnotation: (key: string | null) => void,
   ): Promise<boolean> {
+    if (!this.isCurrent()) return false;
     const entries = Object.entries(this.#marks);
     if (!entries.length) {
       this.#host.showStatus('✗ no bookmarks', 2000);
@@ -152,7 +178,9 @@ export class ReaderMarks {
     }
     let char = '';
     let annotationExists = true;
-    const moved = await this.#host.onJump(pdfWindow, async (isCurrent) => {
+    const moved = await this.#host.onJump(pdfWindow, async (invocationCurrent) => {
+      const isCurrent = () => this.isCurrent() && invocationCurrent();
+      if (!isCurrent()) return false;
       const pages = readerPageCount(pdfWindow);
       const annotations = this.#host.itemForReader(reader)?.getAnnotations?.() ?? [];
       const ordered: { char: string; mark: Mark; position: number }[] = [];
@@ -199,6 +227,7 @@ export class ReaderMarks {
         annotationExists = false;
       });
     });
+    if (!this.isCurrent()) return false;
     if (moved)
       this.#host.showStatus(`→ mark ${char}${annotationExists ? '' : ' · annotation gone'}`, 1200);
     return moved;
@@ -236,34 +265,45 @@ export class ReaderMarks {
       if (!isCurrent()) return false;
       if (pageIndex !== null && this.#host.pageNavigationSupported(reader, pdfWindow)) {
         setReaderMarkPage(pdfWindow, pageIndex);
-        return this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
+        const moved = await this.#host.scrollToPageRatio(pdfWindow, pageIndex, ratio, isCurrent);
+        return isCurrent() && moved;
       }
       return this.#host.scrollDocumentToRatio(pdfWindow, ratio, isCurrent);
     } catch (error) {
-      this.#host.log(`mark jump failed: ${String(error)}`);
+      if (this.isCurrent()) this.#host.log(`mark jump failed: ${String(error)}`);
       return false;
     }
   }
 
   async delete(reader: ReaderRuntime, char: string): Promise<void> {
+    if (!this.isCurrent()) return;
     if (!this.#marks[char]) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
       return;
     }
     delete this.#marks[char];
     this.#host.onChange?.();
-    if (readerMarksPersist(this.#host.preferences)) await this.save(reader);
+    const presentationCurrent = this.#host.capturePresentation();
+    if (readerMarksPersist(this.#host.preferences)) await this.save(reader, presentationCurrent);
+    if (!this.isCurrent() || !presentationCurrent()) return;
     this.#host.showStatus(`✓ mark ${char} deleted`, 1200);
   }
 
   async clear(reader: ReaderRuntime): Promise<void> {
+    if (!this.isCurrent()) return;
     for (const char of Object.keys(this.#marks)) delete this.#marks[char];
     this.#host.onChange?.();
-    if (readerMarksPersist(this.#host.preferences)) await this.save(reader);
+    const presentationCurrent = this.#host.capturePresentation();
+    if (readerMarksPersist(this.#host.preferences)) await this.save(reader, presentationCurrent);
+    if (!this.isCurrent() || !presentationCurrent()) return;
     this.#host.showStatus('✓ all marks deleted', 1200);
   }
 
-  async save(reader: ReaderRuntime): Promise<'extra' | 'local' | ''> {
+  async save(
+    reader: ReaderRuntime,
+    presentationCurrent = this.#host.capturePresentation(),
+  ): Promise<'extra' | 'local' | ''> {
+    if (!this.isCurrent()) return '';
     const attachment = this.#host.itemForReader(reader);
     if (!attachment) return '';
     const payload: MarksPayload = {
@@ -289,7 +329,7 @@ export class ReaderMarks {
       this.clearPreference(reader);
       return 'extra';
     } catch (error) {
-      this.#host.log(`mark extra persistence failed: ${String(error)}`);
+      if (this.isCurrent()) this.#host.log(`mark extra persistence failed: ${String(error)}`);
     }
     try {
       if (hasMarks)
@@ -297,14 +337,16 @@ export class ReaderMarks {
       else this.clearPreference(reader);
       return 'local';
     } catch (error) {
-      this.#host.log(`mark preference persistence failed: ${String(error)}`);
-      this.#host.showStatus('✗ persist failed', 4000);
+      if (this.isCurrent()) {
+        this.#host.log(`mark preference persistence failed: ${String(error)}`);
+        if (presentationCurrent()) this.#host.showStatus('✗ persist failed', 4000);
+      }
       return '';
     }
   }
 
   load(reader: ReaderRuntime, retry = 0): void {
-    if (!readerMarksPersist(this.#host.preferences)) return;
+    if (!this.isCurrent() || !readerMarksPersist(this.#host.preferences)) return;
     const attachment = this.#host.itemForReader(reader);
     if (!attachment) {
       if (retry < 20) this.#host.schedule(500, () => this.load(reader, retry + 1));

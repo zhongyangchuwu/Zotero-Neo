@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ReaderMarks, type MarksHost } from '../../src/reader/marks';
+import { ReaderMarks, type MarksHost } from '../../src/modules/reader-navigation/marks';
 import type { ItemRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
 
 function harness() {
@@ -23,6 +23,9 @@ function harness() {
   const sourceLocations: Array<{ pageNumber: number; scrollTop: number }> = [];
   const successfulJumps: string[] = [];
   let current = true;
+  let moduleCurrent = true;
+  let presentationRevision = 0;
+  let refreshPresentation = false;
   let resolveAnnotationPageRatio: MarksHost['annotationPageRatio'] = async () => ({
     pageIndex: 4,
     ratio: 0.7,
@@ -41,6 +44,14 @@ function harness() {
   });
   const preferenceValues = new Map<string, boolean | number | string>();
   const host: MarksHost = {
+    isCurrent: () => moduleCurrent,
+    capturePresentation: () => {
+      const revision = presentationRevision;
+      return () => presentationRevision === revision;
+    },
+    onChange: () => {
+      if (refreshPresentation) presentationRevision += 1;
+    },
     preferences: {
       get: <T extends boolean | number | string>(key: string, fallback: T): T =>
         (preferenceValues.get(key) ?? fallback) as T,
@@ -92,6 +103,15 @@ function harness() {
     setCurrent: (value: boolean) => {
       current = value;
     },
+    supersedePresentation: () => {
+      presentationRevision += 1;
+    },
+    setRefreshPresentation: (value: boolean) => {
+      refreshPresentation = value;
+    },
+    setModuleCurrent: (value: boolean) => {
+      moduleCurrent = value;
+    },
     setAnnotationPageRatio: (resolve: MarksHost['annotationPageRatio']) => {
       resolveAnnotationPageRatio = resolve;
     },
@@ -104,7 +124,169 @@ function harness() {
   };
 }
 
+describe('ReaderMarks persistence presentation', () => {
+  it.each(['set', 'delete', 'clear'] as const)(
+    'persists %s after a successor interaction without replacing its status',
+    async (operation) => {
+      const test = harness();
+      await test.marks.set(test.reader, test.pdfWindow, 'a', null);
+      test.host.preferences.set('marks.persist', true);
+      const pending = Promise.withResolvers<void>();
+      let storedExtra = '';
+      const attachment: ItemRuntime & { extra: string } = {
+        key: 'attachment',
+        extra: 'zv-marks-attachment: {"v":1,"marks":{"a":{"pageIndex":1,"ratio":0.15,"key":null}}}',
+        saveTx: async () => {
+          await pending.promise;
+          storedExtra = attachment.extra;
+        },
+      } as ItemRuntime & { extra: string };
+      vi.spyOn(test.host, 'itemForReader').mockReturnValue(attachment);
+      const status = vi.spyOn(test.host, 'showStatus');
+      test.setRefreshPresentation(true);
+      const mutation =
+        operation === 'set'
+          ? test.marks.set(test.reader, test.pdfWindow, 'b', null)
+          : operation === 'delete'
+            ? test.marks.delete(test.reader, 'a')
+            : test.marks.clear(test.reader);
+      test.supersedePresentation();
+      test.host.showStatus('successor status');
+      pending.resolve();
+      await mutation;
+      expect(status.mock.calls.map(([message]) => message)).toEqual(['successor status']);
+      if (operation === 'set') {
+        expect(JSON.parse(storedExtra.split('zv-marks-attachment: ')[1]).marks).toHaveProperty('b');
+      } else {
+        expect(storedExtra).toBe('');
+      }
+    },
+  );
+
+  it('keeps the refreshed presentation current until another interaction supersedes it', async () => {
+    const test = harness();
+    test.host.preferences.set('marks.persist', true);
+    const pending = Promise.withResolvers<void>();
+    vi.spyOn(test.host, 'itemForReader').mockReturnValue({
+      key: 'attachment',
+      saveTx: () => pending.promise,
+    } as ItemRuntime);
+    test.setRefreshPresentation(true);
+    const status = vi.spyOn(test.host, 'showStatus');
+    const mutation = test.marks.set(test.reader, test.pdfWindow, 'a', null);
+    pending.resolve();
+    await mutation;
+    expect(status).toHaveBeenCalledWith(expect.stringContaining('mark a set'), 1200);
+  });
+
+  it('completes local fallback after an obsolete delayed extra failure', async () => {
+    const test = harness();
+    test.host.preferences.set('marks.persist', true);
+    const pending = Promise.withResolvers<void>();
+    vi.spyOn(test.host, 'itemForReader').mockReturnValue({
+      key: 'attachment',
+      saveTx: () => pending.promise,
+    } as ItemRuntime);
+    const status = vi.spyOn(test.host, 'showStatus');
+    const mutation = test.marks.set(test.reader, test.pdfWindow, 'a', null);
+    test.supersedePresentation();
+    test.host.showStatus('successor status');
+    pending.reject(new Error('extra unavailable'));
+    await mutation;
+    expect(JSON.parse(test.host.preferences.get('marks.data.10', '')).marks).toHaveProperty('a');
+    expect(status.mock.calls.map(([message]) => message)).toEqual(['successor status']);
+  });
+
+  it('suppresses terminal failure and mutation status after a newer interaction', async () => {
+    const test = harness();
+    test.host.preferences.set('marks.persist', true);
+    const pending = Promise.withResolvers<void>();
+    vi.spyOn(test.host, 'itemForReader').mockReturnValue({
+      key: 'attachment',
+      saveTx: () => pending.promise,
+    } as ItemRuntime);
+    vi.spyOn(test.host.preferences, 'set').mockImplementation(() => {
+      throw new Error('preference unavailable');
+    });
+    const status = vi.spyOn(test.host, 'showStatus');
+    const mutation = test.marks.set(test.reader, test.pdfWindow, 'a', null);
+    test.supersedePresentation();
+    test.host.showStatus('successor status');
+    pending.reject(new Error('extra unavailable'));
+    await mutation;
+    expect(test.marks.values()).toHaveProperty('a');
+    expect(status.mock.calls.map(([message]) => message)).toEqual(['successor status']);
+  });
+
+  it('does not present terminal persistence failure after a standalone save is superseded', async () => {
+    const test = harness();
+    await test.marks.set(test.reader, test.pdfWindow, 'a', null);
+    const pending = Promise.withResolvers<void>();
+    vi.spyOn(test.host, 'itemForReader').mockReturnValue({
+      key: 'attachment',
+      saveTx: () => pending.promise,
+    } as ItemRuntime);
+    vi.spyOn(test.host.preferences, 'set').mockImplementation(() => {
+      throw new Error('preference unavailable');
+    });
+    const status = vi.spyOn(test.host, 'showStatus');
+    const saving = test.marks.save(test.reader);
+    test.supersedePresentation();
+    test.host.showStatus('successor status');
+    pending.reject(new Error('extra unavailable'));
+    await expect(saving).resolves.toBe('');
+    expect(status.mock.calls.map(([message]) => message)).toEqual(['successor status']);
+  });
+});
+
 describe('ReaderMarks jump behavior', () => {
+  it('retires a pending traversal when the module becomes stale even if the jump remains current', async () => {
+    const test = harness();
+    test.annotations.push({ key: 'legacy', saveTx: vi.fn() });
+    Reflect.deleteProperty(test.pdfWindow, 'PDFViewerApplication');
+    await test.marks.set(test.reader, test.pdfWindow, 'a', 'legacy');
+    Reflect.set(test.pdfWindow, 'PDFViewerApplication', { pdfViewer: test.viewer });
+    const pending = Promise.withResolvers<{ pageIndex: number; ratio: number }>();
+    test.setAnnotationPageRatio(() => pending.promise);
+    const select = vi.fn();
+    const traversal = test.marks.traverse(test.reader, test.pdfWindow, 1, select);
+    test.setModuleCurrent(false);
+    pending.resolve({ pageIndex: 4, ratio: 0.7 });
+    await expect(traversal).resolves.toBe(false);
+    expect(select).not.toHaveBeenCalled();
+    expect(test.scrollToPageRatio).not.toHaveBeenCalled();
+  });
+
+  it('finishes an admitted save and fallback after disposal without restoring in-memory marks', async () => {
+    const test = harness();
+    await test.marks.set(test.reader, test.pdfWindow, 'a', null);
+    const pending = Promise.withResolvers<void>();
+    const attachment = { key: 'attachment', saveTx: () => pending.promise } as ItemRuntime;
+    vi.spyOn(test.host, 'itemForReader').mockReturnValue(attachment);
+    const saving = test.marks.save(test.reader);
+    test.marks.dispose();
+    pending.reject(new Error('extra unavailable'));
+    await expect(saving).resolves.toBe('local');
+    expect(JSON.parse(test.host.preferences.get('marks.data.10', ''))).toMatchObject({
+      v: 1,
+      marks: { a: { pageIndex: 1, key: null } },
+    });
+    expect(test.marks.values()).toEqual({});
+  });
+
+  it('does not execute a scheduled load retry after disposal', () => {
+    const test = harness();
+    test.host.preferences.set('marks.persist', true);
+    const itemForReader = vi.spyOn(test.host, 'itemForReader').mockReturnValue(null);
+    const schedule = vi.spyOn(test.host, 'schedule');
+    test.marks.load(test.reader);
+    const retry = schedule.mock.calls[0][1];
+    test.marks.dispose();
+    retry();
+    expect(itemForReader).toHaveBeenCalledOnce();
+    expect(test.marks.values()).toEqual({});
+  });
+
   it('jumps from a visible page-and-ratio mark to its actual simulated viewport', async () => {
     const test = harness();
     await test.marks.set(test.reader, test.pdfWindow, 'a', null);

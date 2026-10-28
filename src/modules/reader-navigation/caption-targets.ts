@@ -1,6 +1,6 @@
-import { structuredDocumentBlocks } from '../toolkit/reader';
+import { structuredDocumentBlocks } from '../../toolkit/reader';
 import { outlineEntryKind } from './outline-presentation';
-import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from './types';
+import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from '../../reader/types';
 
 export interface ReaderCaptionTarget extends ReaderNativeOutlineEntry {
   readonly kind: 'figure' | 'table';
@@ -168,23 +168,30 @@ export class ReaderCaptionTargets {
   readonly #itemID: number | undefined;
   readonly #onChange: () => void;
   readonly #debug: (message: string) => void;
+  readonly #isCurrent: () => boolean;
   #state: CaptionState = 'idle';
   #entries: readonly ReaderCaptionTarget[] = [];
   #headings: readonly { readonly title: string; readonly position: ReaderLinkPosition }[] = [];
   #promise: Promise<readonly ReaderCaptionTarget[]> | null = null;
   #disposed = false;
 
-  constructor(itemID: number | undefined, onChange: () => void, debug: (message: string) => void) {
+  constructor(
+    itemID: number | undefined,
+    onChange: () => void,
+    debug: (message: string) => void,
+    isCurrent: () => boolean,
+  ) {
     this.#itemID = itemID;
     this.#onChange = onChange;
     this.#debug = debug;
+    this.#isCurrent = isCurrent;
   }
 
   get state(): CaptionState {
     return this.#state;
   }
   get entries(): readonly ReaderCaptionTarget[] {
-    return this.#entries;
+    return !this.#disposed && this.#isCurrent() ? this.#entries : [];
   }
 
   /**
@@ -194,7 +201,7 @@ export class ReaderCaptionTargets {
    */
   headingPosition(entry: ReaderNativeOutlineEntry): ReaderLinkPosition | null {
     const authored = entry.location?.position;
-    if (this.#disposed || !authored) return null;
+    if (this.#disposed || !this.#isCurrent() || !authored) return null;
     const title = headingText(entry.title);
     if (!title) return null;
     let found: ReaderLinkPosition | null = null;
@@ -213,7 +220,7 @@ export class ReaderCaptionTargets {
   }
 
   load(): Promise<readonly ReaderCaptionTarget[]> {
-    if (this.#disposed) return Promise.resolve([]);
+    if (this.#disposed || !this.#isCurrent()) return Promise.resolve([]);
     if (this.#promise) return this.#promise;
     this.#state = 'loading';
     this.#promise = Promise.resolve().then(() => this.read());
@@ -228,10 +235,13 @@ export class ReaderCaptionTargets {
   }
 
   private async read(): Promise<readonly ReaderCaptionTarget[]> {
-    if (this.#disposed) return [];
+    if (this.#disposed || !this.#isCurrent()) return [];
     try {
-      const blocks = await structuredDocumentBlocks(this.#itemID, () => !this.#disposed);
-      if (this.#disposed) return [];
+      const blocks = await structuredDocumentBlocks(
+        this.#itemID,
+        () => !this.#disposed && this.#isCurrent(),
+      );
+      if (this.#disposed || !this.#isCurrent()) return [];
       if (!blocks) return this.finish([], false);
       const entries: ReaderCaptionTarget[] = [];
       const headings: { title: string; position: ReaderLinkPosition }[] = [];
@@ -260,7 +270,8 @@ export class ReaderCaptionTargets {
       this.#headings = headings;
       return this.finish(entries, true);
     } catch (error) {
-      if (!this.#disposed) this.#debug(`reader caption loading failed: ${String(error)}`);
+      if (!this.#disposed && this.#isCurrent())
+        this.#debug(`reader caption loading failed: ${String(error)}`);
       return this.finish([], false);
     }
   }
@@ -269,7 +280,7 @@ export class ReaderCaptionTargets {
     entries: readonly ReaderCaptionTarget[],
     available: boolean,
   ): readonly ReaderCaptionTarget[] {
-    if (this.#disposed) return [];
+    if (this.#disposed || !this.#isCurrent()) return [];
     this.#entries = entries;
     this.#state = available ? 'ready' : 'unavailable';
     this.#onChange();

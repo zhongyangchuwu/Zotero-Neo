@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReaderNativeSidebar } from '../../src/reader/native-sidebar';
-import { ReaderMarks } from '../../src/reader/marks';
-import { ReaderCaptionTargets } from '../../src/reader/caption-targets';
+import { ReaderNativeSidebar } from '../../src/modules/reader-navigation/native-sidebar';
+import { ReaderMarks } from '../../src/modules/reader-navigation/marks';
+import { ReaderCaptionTargets } from '../../src/modules/reader-navigation/caption-targets';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
+import { ModuleHost } from '../../src/core/module-host';
 import type { PdfWindow, ReaderNativeOutlineEntry, ReaderRuntime } from '../../src/reader/types';
 
 const originalComponents = Reflect.get(globalThis, 'Components');
@@ -254,6 +255,7 @@ function harness(
   };
   const pdf = { focus: vi.fn() } as unknown as PdfWindow;
   let currentPdfWindow: PdfWindow | null = pdf;
+  let current = true;
   const reader = {
     _iframeWindow: window,
     _internalReader: {
@@ -272,6 +274,8 @@ function harness(
     utils: { cloneInto: <T>(value: T) => value, isDeadWrapper: () => false },
   });
   const marks = new ReaderMarks({
+    isCurrent: () => current,
+    capturePresentation: () => () => current,
     preferences: {
       get: <T extends boolean | number | string>(_key: string, fallback: T): T => fallback,
       has: () => false,
@@ -289,25 +293,42 @@ function harness(
     onJump: async () => false,
   });
   let currentBindings = bindings;
-  const sidebar = new ReaderNativeSidebar({
-    reader,
-    marks,
-    captions: new ReaderCaptionTargets(
-      reader.itemID,
-      () => {},
-      () => {},
-    ),
-    onCaptionTarget: () => {},
-    bindings: () => currentBindings,
-    language: () => 'en-US',
-    activePdfWindow: () => currentPdfWindow,
-    onDocumentAction: options.onDocumentAction ?? (() => false),
-    onAnnotation: () => {},
-    onInput: () => {},
-    schedule: (delay, callback) => setTimeout(callback, delay),
-    clearTimer: (timer) => clearTimeout(timer ?? undefined),
-    log: () => {},
-  });
+  const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => current);
+  const sidebar = host.activate(
+    'sidebar-test',
+    (scope) =>
+      new ReaderNativeSidebar({
+        bindAction: (context, action, run) => {
+          let result = false;
+          const invoke = host.bind<KeyboardEvent | null>(scope, context, action, (event) => {
+            result = run(event);
+          });
+          return (event) => {
+            result = false;
+            return invoke(event) && result;
+          };
+        },
+        isCurrent: () => current,
+        reader,
+        marks,
+        captions: new ReaderCaptionTargets(
+          reader.itemID,
+          () => {},
+          () => {},
+          () => current,
+        ),
+        onCaptionTarget: () => {},
+        bindings: () => currentBindings,
+        language: () => 'en-US',
+        activePdfWindow: () => currentPdfWindow,
+        onDocumentAction: options.onDocumentAction ?? (() => false),
+        onAnnotation: () => {},
+        onInput: () => {},
+        schedule: (delay, callback) => setTimeout(callback, delay),
+        clearTimer: (timer) => clearTimeout(timer ?? undefined),
+        log: () => {},
+      }),
+  );
   const key = (name: string, extra: Partial<KeyboardEvent> = {}) => {
     const event = {
       key: name,
@@ -325,12 +346,14 @@ function harness(
   };
   return {
     sidebar,
+    host,
     state,
     pdf,
     outline,
     annotation,
     thumbnailList,
     document,
+    listeners,
     nativeNavigate,
     key,
     mutate: () => mutation(),
@@ -345,6 +368,9 @@ function harness(
     setActivePdfWindow: (next: PdfWindow | null) => {
       currentPdfWindow = next;
     },
+    setCurrent: (value: boolean) => {
+      current = value;
+    },
     setBindings: (next: BindingMap) => {
       currentBindings = next;
     },
@@ -352,6 +378,19 @@ function harness(
 }
 
 describe('native Reader sidebar consumers', () => {
+  it('releases listeners acquired before a sidebar startup failure', () => {
+    const test = harness();
+    const add = test.document.addEventListener;
+    vi.spyOn(test.document, 'addEventListener').mockImplementation((name, callback) => {
+      if (name === 'pointerdown') throw new Error('listener acquisition failed');
+      return add(name, callback);
+    });
+    expect(() => test.sidebar.start()).toThrow('listener acquisition failed');
+    expect(test.listeners.focusin).toEqual([]);
+    expect(test.styleCount()).toBe(0);
+    test.sidebar.dispose();
+  });
+
   it('focuses exact native panes, repeats without closing and switches directly from focused sidebar contexts', () => {
     const test = harness();
     try {
@@ -393,6 +432,28 @@ describe('native Reader sidebar consumers', () => {
       expect(test.nativeNavigate).toHaveBeenCalledOnce();
     } finally {
       test.sidebar.dispose();
+    }
+  });
+
+  it('executes an initially unbound Outline action after rebinding and retires its invoker', () => {
+    const test = harness();
+    try {
+      test.sidebar.focus('outline', test.pdf);
+      expect(test.key('q').preventDefault).not.toHaveBeenCalled();
+      test.setBindings(resolveBindings(JSON.stringify({ 'reader-outline:q': 'uiConfirm' })));
+      expect(test.key('q').preventDefault).toHaveBeenCalledOnce();
+      expect(test.outline.dispatchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'Enter' }),
+      );
+      test.setBindings(resolveBindings(JSON.stringify({ 'reader-outline:q': 'uiNext' })));
+      expect(test.key('q').preventDefault).toHaveBeenCalledOnce();
+      expect(test.nativeNavigate).toHaveBeenCalledOnce();
+      test.host.dispose();
+      expect(test.key('q').preventDefault).not.toHaveBeenCalled();
+      expect(test.nativeNavigate).toHaveBeenCalledOnce();
+    } finally {
+      test.sidebar.dispose();
+      test.host.dispose();
     }
   });
 
@@ -443,28 +504,32 @@ describe('native Reader sidebar consumers', () => {
     },
   );
 
-  it.each(['pane change', 'deactivation', 'close and reopen', 'teardown'] as const)(
-    'retires delayed local input on %s',
-    (change) => {
-      const test = harness(
-        resolveBindings(
-          JSON.stringify({ 'reader-outline:z': 'uiNext', 'reader-outline:zz': 'uiPrevious' }),
-        ),
-      );
+  it.each([
+    'pane change',
+    'deactivation',
+    'close and reopen',
+    'teardown',
+    'module retirement',
+  ] as const)('retires delayed local input on %s', (change) => {
+    const test = harness(
+      resolveBindings(
+        JSON.stringify({ 'reader-outline:z': 'uiNext', 'reader-outline:zz': 'uiPrevious' }),
+      ),
+    );
+    test.sidebar.focus('outline', test.pdf);
+    test.key('z');
+    if (change === 'pane change') test.sidebar.focus('thumbnails', test.pdf);
+    else if (change === 'deactivation') test.sidebar.deactivate();
+    else if (change === 'close and reopen') {
+      test.state.sidebarOpen = false;
+      test.mutate();
       test.sidebar.focus('outline', test.pdf);
-      test.key('z');
-      if (change === 'pane change') test.sidebar.focus('thumbnails', test.pdf);
-      else if (change === 'deactivation') test.sidebar.deactivate();
-      else if (change === 'close and reopen') {
-        test.state.sidebarOpen = false;
-        test.mutate();
-        test.sidebar.focus('outline', test.pdf);
-      } else test.sidebar.dispose();
-      vi.runAllTimers();
-      expect(test.nativeNavigate).not.toHaveBeenCalled();
-      test.sidebar.dispose();
-    },
-  );
+    } else if (change === 'module retirement') test.setCurrent(false);
+    else test.sidebar.dispose();
+    vi.runAllTimers();
+    expect(test.nativeNavigate).not.toHaveBeenCalled();
+    test.sidebar.dispose();
+  });
 
   it('retires deferred focus when native pane changes or the Reader deactivates, and permits a fresh reopened request', () => {
     const test = harness();

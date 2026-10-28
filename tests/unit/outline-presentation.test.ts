@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { outlineEntryKind } from '../../src/reader/outline-presentation';
+import { outlineEntryKind } from '../../src/modules/reader-navigation/outline-presentation';
 
 describe('outlineEntryKind', () => {
   it('does not mistake ordinary titles for numbered Figure or Table targets', () => {
