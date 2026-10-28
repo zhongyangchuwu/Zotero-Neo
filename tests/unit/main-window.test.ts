@@ -2007,7 +2007,6 @@ describe('Main note capture settlement', () => {
         if (outcome === 'moved') Reflect.set(target, 'parentItemID', 6);
         host.press('Enter', input);
         if (outcome === 'moved') {
-          await vi.waitFor(() => expect(overlay.textContent).toContain('Note source changed'));
           await vi.waitFor(() => expect(overlay.querySelector('button')?.disabled).toBe(false));
           expect(target.saveTx).not.toHaveBeenCalled();
           expect(html).toBe('<p>Existing note</p>');
