@@ -1,25 +1,15 @@
 import { selectedAnnotationIDs } from '../toolkit/reader';
-import type { AnnotationColor, ReaderRuntime } from './types';
+import type { ReaderRuntime } from './types';
 
 /**
- * Reader-local fallback state for annotation navigation.
+ * Reader Surface CurrentTarget fallback for native annotation navigation.
  *
  * Zotero remains authoritative for the currently selected annotation. Neo keeps
  * only the last navigation target for host seams that temporarily expose no
- * selected annotation id, plus the color filter because Zotero currently
- * exposes a write-only setFilter seam here.
+ * selected annotation id. Feature-specific filtering belongs to reader-annotations.
  */
 export class ReaderAnnotationNavigationState {
-  #filterColor: AnnotationColor | null = null;
   #lastAnnotationKey: string | null = null;
-
-  filterColor(): AnnotationColor | null {
-    return this.#filterColor;
-  }
-
-  setFilterColor(color: AnnotationColor | null): void {
-    this.#filterColor = color;
-  }
 
   rememberAnnotation(key: string | null): void {
     this.#lastAnnotationKey = key;

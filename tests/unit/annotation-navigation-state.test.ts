@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ReaderAnnotationNavigationState } from '../../src/reader/annotation-navigation-state';
-import { COLORS, type ReaderRuntime } from '../../src/reader/types';
+import type { ReaderRuntime } from '../../src/reader/types';
 
 describe('ReaderAnnotationNavigationState', () => {
   it('prefers Zotero selected annotation state over the Neo fallback key', () => {
@@ -27,15 +27,5 @@ describe('ReaderAnnotationNavigationState', () => {
 
     state.clearAnnotation();
     expect(state.selectedAnnotationKey(reader)).toBeNull();
-  });
-
-  it('keeps filter color as a local compatibility cache for the write-only host seam', () => {
-    const state = new ReaderAnnotationNavigationState();
-
-    expect(state.filterColor()).toBeNull();
-    state.setFilterColor(COLORS.red);
-    expect(state.filterColor()).toBe(COLORS.red);
-    state.setFilterColor(null);
-    expect(state.filterColor()).toBeNull();
   });
 });

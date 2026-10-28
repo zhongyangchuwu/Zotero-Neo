@@ -3022,9 +3022,7 @@ describe('Reader annotation deletion safety', () => {
     const callsAfterSelectingNewer = h.clearHostSelection.mock.calls.length;
     finishErase();
 
-    await vi.waitFor(() =>
-      expect(h.created.indicator.textContent).toBe('✓ Deleted Reader annotation · 1'),
-    );
+    await settleReaderMicrotasks();
 
     expect(h.clearHostSelection).toHaveBeenCalledTimes(callsAfterSelectingNewer);
     h.created.session.focusAndHandle(readerKey('[').event);

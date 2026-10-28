@@ -39,7 +39,6 @@ import { isLeaderPrefix } from '../input/key-guide';
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap, type BindingContext } from '../input/bindings';
 import { t } from '../i18n';
-import { deleteAnnotation as deleteReaderAnnotation } from '../operations/delete-annotation';
 import {
   READER_NORMAL_ACTIONS,
   isReaderActionForMode,
@@ -63,7 +62,11 @@ import {
 } from '../modules/reader-selection';
 import { isReaderSelectionAction } from '../modules/reader-selection/actions';
 import { ReaderSelectionActionRegistry } from '../modules/reader-selection/registry';
-import { ReaderCommentEditor, type AnnotationCommentTarget } from './comment-editor';
+import {
+  createReaderAnnotationsModule,
+  type ReaderAnnotationsModule,
+} from '../modules/reader-annotations';
+import { isReaderAnnotationAction } from '../modules/reader-annotations/actions';
 import { ReaderNativeInput } from './native-input';
 import {
   ReaderHostKeyBridge,
@@ -85,11 +88,8 @@ import {
   readerSelectedTabID,
   registerReaderEvent,
   unregisterReaderEvent,
-  computeSelectionPosition,
   readerScrollContainer,
   readerPagePositionTop,
-  clearAnnotationSelection,
-  setAnnotationColorFilter,
   readerFindInputFocused,
   type ReaderEventListener,
   type ReaderNativeNavigation,
@@ -101,8 +101,6 @@ import { smoothScrollSpec } from '../modules/reader-navigation/smooth-scroll';
 import {
   COLORS,
   type AnnotationColor,
-  type AnnotationDraft,
-  type AnnotationRuntime,
   type AnnotationSelectionParams,
   type ItemRuntime,
   type Mark,
@@ -118,13 +116,7 @@ import {
 interface ZoteroRuntime {
   readonly Items: {
     get(id: number): ItemRuntime | null | false;
-    getByLibraryAndKey?(libraryID: number, key: string): AnnotationRuntime | null | false;
-    getByLibraryAndKeyAsync?(
-      libraryID: number,
-      key: string,
-    ): Promise<AnnotationRuntime | null | false>;
   };
-  readonly Item: new (itemType: 'annotation') => AnnotationDraft;
   readonly locale?: string;
 }
 
@@ -487,7 +479,8 @@ export class ReaderSession {
   readonly #library: ReaderLibraryModule;
   readonly #capture: ReaderCaptureModule;
   readonly #hints: ReaderHintsModule;
-  readonly #commentEditor: ReaderCommentEditor;
+  readonly #annotations: ReaderAnnotationsModule;
+  readonly #commentEditor: ReaderAnnotationsModule['commentEditor'];
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule;
   readonly #flash: ReaderSelectionModule['flash'];
@@ -538,14 +531,34 @@ export class ReaderSession {
       this.setMode('normal');
       pdfWindow.focus();
     });
-    this.#commentEditor = new ReaderCommentEditor({
+    this.#annotations = createReaderAnnotationsModule(this.#modules, {
       reader: dependencies.reader,
-      schedule: (delay, task) => this.schedule(delay, task),
-      clearTimer: (timer) => this.clearTimer(timer),
+      activeWindow: () => this.#navigationHost.activePdfWindow(),
+      capturePresentation: (window) => this.invocationCurrent(window),
+      captureView: (window) => this.invocationCurrent(window, null),
+      selectionParams: (window) =>
+        this.#selectionWindow === window && this.#selectionView === this.readerViewForWindow(window)
+          ? this.state.selectionParams
+          : null,
+      itemForReader: () => this.itemForReader(dependencies.reader),
+      selectedAnnotationKey: () =>
+        this.#annotationNavigation.selectedAnnotationKey(dependencies.reader),
+      rememberAnnotation: (key) => this.#annotationNavigation.rememberAnnotation(key),
+      clearAnnotation: (key) => this.#annotationNavigation.clearAnnotation(key),
+      clearNativeSelection: () => this.clearNativeSelection(),
+      setModeNormal: () => this.setMode('normal'),
+      releaseNativeInput: () => this.#nativeInput.release(),
+      defaultHighlightColor: () => this.defaultHighlightColor(),
+      commentEnabled: () =>
+        annotationCommentEditorEnabled(dependencies.controller.dependencies.preferences),
+      beginSelectionAction: () => {
+        this.#interactionRevision += 1;
+        this.#markJumpRevision += 1;
+      },
       themeRoot: (root) => this.themeRoot(root),
-      activePdfWindow: () => this.#navigationHost.activePdfWindow(),
-      resolveAnnotation: (key) => this.resolveAnnotation(key),
-      annotationForSave: (target) => this.annotationForSave(target),
+      copyText: (text) => this.copyText(text),
+      showStatus: (message, duration) => this.showStatus(message, duration),
+      language: () => this.keyGuideLanguage(),
       nativeEditableFocused: () => this.nativeEditableFocused(),
       onNativeEditorFocus: () => {
         void this.handOverNativeEditor();
@@ -560,7 +573,7 @@ export class ReaderSession {
         this.#smoothScroller.stop(true);
         this.updateIndicator();
       },
-      onExit: (saved, pdfWindow) => {
+      onCommentExit: (saved, pdfWindow) => {
         if (
           this.#nativeInput.ownsInput ||
           this.#commentEditor.ownsInput ||
@@ -577,6 +590,7 @@ export class ReaderSession {
       },
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
     });
+    this.#commentEditor = this.#annotations.commentEditor;
     this.#hostKeyBridge = new ReaderHostKeyBridge({
       reader: dependencies.reader,
       nativeEditableFocused: () => this.nativeEditableFocused(),
@@ -695,7 +709,7 @@ export class ReaderSession {
         itemForReader: () => this.itemForReader(dependencies.reader),
         selectedAnnotationKey: () =>
           this.#annotationNavigation.selectedAnnotationKey(dependencies.reader),
-        filterColor: () => this.#annotationNavigation.filterColor(),
+        filterColor: () => this.#annotations.filterColor(),
         rememberAnnotation: (key) => this.#annotationNavigation.rememberAnnotation(key),
         invocationCurrent: (window) => this.invocationCurrent(window),
         captionsLoading: () =>
@@ -733,24 +747,7 @@ export class ReaderSession {
         this.#dependencies.selection?.registered(context, isCurrent) ?? [],
       contributedActions: (window, language) => [
         this.#capture.selectionAction(language),
-        {
-          id: 'neo.underline',
-          label: ACTION_LABELS.underlineSelection[language],
-          run: () => {
-            this.#interactionRevision += 1;
-            this.#markJumpRevision += 1;
-            void this.highlight(window, this.defaultHighlightColor(), false, 'underline');
-          },
-        },
-        {
-          id: 'neo.add-note',
-          label: ACTION_LABELS.addNote[language],
-          run: () => {
-            this.#interactionRevision += 1;
-            this.#markJumpRevision += 1;
-            void this.highlight(window, this.defaultHighlightColor(), true);
-          },
-        },
+        ...this.#annotations.selectionActions(window, language),
       ],
       showStatus: (message, duration) => this.showStatus(message, duration),
       debug: (message) => dependencies.controller.dependencies.logger.debug(message),
@@ -1060,7 +1057,6 @@ export class ReaderSession {
     this.clearNativeSelection();
     const failure = new CleanupFailure();
     failure.run(() => this.#nativeInput.release());
-    failure.run(() => this.#commentEditor.dispose());
     failure.run(() => this.#viewLifecycle.dispose());
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
@@ -1462,6 +1458,10 @@ export class ReaderSession {
       this.#selection.executeAction(action, pdfWindow);
       return;
     }
+    if (isReaderAnnotationAction(action)) {
+      this.#annotations.executeAction(action, pdfWindow);
+      return;
+    }
     const ownerWindow = readerOwnerWindow(this.#dependencies.reader) ?? null;
     const main = this.#dependencies.controller.dependencies.main;
     const number = Math.max(1, count || 1);
@@ -1554,25 +1554,9 @@ export class ReaderSession {
         if (action === 'copyTarget') this.#hints.copyTarget(pdfWindow);
         else this.#hints.followLink(pdfWindow);
         break;
-      case 'editAnnotation':
-        if (annotationCommentEditorEnabled(this.#dependencies.controller.dependencies.preferences))
-          void this.openAnnotationComment();
-        break;
-      case 'deleteAnnotation':
-        void this.deleteAnnotation();
-        break;
-      case 'recolorYellow':
-        void this.recolorAnnotation(COLORS.yellow);
-        break;
-      case 'recolorRed':
-        void this.recolorAnnotation(COLORS.red);
-        break;
-      case 'recolorGreen':
-        void this.recolorAnnotation(COLORS.green);
-        break;
       case 'recolorBlue': {
         if (this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader)) {
-          void this.recolorAnnotation(COLORS.blue);
+          void this.#annotations.recolor(pdfWindow, COLORS.blue);
           break;
         }
         const scroll = (): boolean => this.scrollToPagePosition(pdfWindow, 'bottom');
@@ -1584,58 +1568,10 @@ export class ReaderSession {
         );
         break;
       }
-      case 'recolorPurple':
-        void this.recolorAnnotation(COLORS.purple);
-        break;
-      case 'filterYellow':
-        this.filterByColor(COLORS.yellow);
-        break;
-      case 'filterRed':
-        this.filterByColor(COLORS.red);
-        break;
-      case 'filterGreen':
-        this.filterByColor(COLORS.green);
-        break;
-      case 'filterBlue':
-        this.filterByColor(COLORS.blue);
-        break;
-      case 'filterPurple':
-        this.filterByColor(COLORS.purple);
-        break;
-      case 'filterClear':
-        this.filterByColor(null);
-        break;
-      case 'yankAnnotation':
-        this.yankAnnotation(false);
-        break;
-      case 'yankAnnotationComment':
-        this.yankAnnotation(true);
-        break;
       case 'enterInsert':
         if (annotationCommentEditorEnabled(this.#dependencies.controller.dependencies.preferences))
-          void this.openAnnotationComment();
+          void this.#annotations.openComment();
         else this.enterNativeInput();
-        break;
-      case 'highlightYellow':
-        void this.highlight(pdfWindow, COLORS.yellow);
-        break;
-      case 'highlightRed':
-        void this.highlight(pdfWindow, COLORS.red);
-        break;
-      case 'highlightGreen':
-        void this.highlight(pdfWindow, COLORS.green);
-        break;
-      case 'highlightBlue':
-        void this.highlight(pdfWindow, COLORS.blue);
-        break;
-      case 'highlightPurple':
-        void this.highlight(pdfWindow, COLORS.purple);
-        break;
-      case 'underlineSelection':
-        void this.highlight(pdfWindow, this.defaultHighlightColor(), false, 'underline');
-        break;
-      case 'addNote':
-        void this.highlight(pdfWindow, this.defaultHighlightColor(), true);
         break;
       case 'toggleReaderSplitHorizontal':
         this.#navigationHost.toggleSplit('horizontal');
@@ -1907,188 +1843,8 @@ export class ReaderSession {
     };
   }
 
-  private async highlight(
-    pdfWindow: PdfWindow,
-    color: AnnotationColor,
-    focusComment = false,
-    annotationType: 'highlight' | 'underline' = 'highlight',
-  ): Promise<void> {
-    const isCurrent = this.invocationCurrent(pdfWindow);
-    if (!isCurrent()) return;
-    const params =
-      this.#selectionWindow === pdfWindow &&
-      this.#selectionView === this.readerViewForWindow(pdfWindow)
-        ? this.state.selectionParams
-        : null;
-    const selection = pdfWindow.getSelection();
-    const hasDomSelection = selection && !selection.isCollapsed;
-    const computed = hasDomSelection ? computeSelectionPosition(pdfWindow, selection) : null;
-    if (hasDomSelection && (!computed || computed.position === null)) {
-      this.showStatus(
-        computed?.failure === 'unsupported-page-span'
-          ? '✗ unsupported page span: select one page or two adjacent pages'
-          : '✗ no complete PDF selection rects',
-        2000,
-      );
-      return;
-    }
-    const useNativeParams =
-      params?.annotation &&
-      (!hasDomSelection ||
-        annotationText(params.annotation.text ?? '') === annotationText(selection.toString()));
-    let text: string;
-    let position: unknown;
-    let sortIndex: string | undefined;
-    let pageLabel: string | undefined;
-    if (useNativeParams) {
-      ({ text = '', position, sortIndex, pageLabel } = params.annotation);
-    } else {
-      if (!selection || !computed || computed.position === null) {
-        this.showStatus('✗ no selection', 1500);
-        return;
-      }
-      text = selection.toString();
-      ({ position, sortIndex, pageLabel } = computed);
-    }
-    const key = await this.createAnnotation(
-      text,
-      position,
-      sortIndex,
-      pageLabel,
-      color,
-      annotationType,
-      isCurrent,
-    );
-    // An admitted native save survives retirement; only its presentation is conditional.
-    if (!key || !isCurrent()) return;
-    this.clearNativeSelection();
-    this.#annotationNavigation.rememberAnnotation(key);
-    if (!useNativeParams) {
-      selection?.removeAllRanges();
-      if (!focusComment) this.setMode('normal');
-    }
-    this.showStatus('✓ annotated', 1200);
-    if (focusComment) {
-      if (!isCurrent()) return;
-      this.#nativeInput.release();
-      this.setMode('normal');
-      // open() captures the active window synchronously; never resolve the host selection anew.
-      if (this.#navigationHost.activePdfWindow() === pdfWindow) await this.#commentEditor.open(key);
-    }
-  }
-
-  private async createAnnotation(
-    text: string,
-    position: unknown,
-    sortIndex: string | undefined,
-    pageLabel: string | undefined,
-    color: AnnotationColor,
-    annotationType: 'highlight' | 'underline',
-    isCurrent: () => boolean,
-  ): Promise<string | null> {
-    const attachment = this.itemForReader(this.#dependencies.reader);
-    if (!attachment?.id || attachment.libraryID === undefined) {
-      this.showStatus('✗ no attachment', 2000);
-      return null;
-    }
-    try {
-      const item = new (zoteroRuntime().Item)('annotation');
-      item.libraryID = attachment.libraryID;
-      item.parentID = attachment.id;
-      item.annotationType = annotationType;
-      item.annotationColor = color;
-      item.annotationText = annotationText(text);
-      item.annotationComment = '';
-      item.annotationIsExternal = false;
-      if (sortIndex) item.annotationSortIndex = sortIndex;
-      if (pageLabel) item.annotationPageLabel = pageLabel;
-      if (position)
-        item.annotationPosition =
-          typeof position === 'string' ? position : JSON.stringify(position);
-      await item.saveTx();
-      return item.key;
-    } catch (error) {
-      if (isCurrent()) this.showStatus(`✗ ${String(error).slice(0, 40)}`, 4000);
-      return null;
-    }
-  }
-
   selectionContext(): ReaderSelectionContext | null {
     return this.#selection.context();
-  }
-
-  private async deleteAnnotation(): Promise<void> {
-    const language = this.keyGuideLanguage();
-    const target = this.selectedAnnotation();
-    if (!target?.eraseTx) {
-      this.showStatus('✗ select an annotation first', 2000);
-      return;
-    }
-    const window = readerOwnerWindow(this.#dependencies.reader);
-    if (!window) {
-      this.showStatus(`✗ ${t('status.readerAnnotationDeleteUnconfirmable', language)}`, 2000);
-      return;
-    }
-    const summary = t('target.readerAnnotation', language);
-    try {
-      const prompt = t('confirm.readerAnnotationDelete', language).replace('{target}', summary);
-      if (!window.confirm(prompt)) {
-        this.showStatus(
-          `→ ${t('status.destructiveCancelled', language).replace('{target}', summary)}`,
-          2000,
-        );
-        return;
-      }
-      await deleteReaderAnnotation(target);
-      const reader = this.#dependencies.reader;
-      try {
-        if (this.#annotationNavigation.selectedAnnotationKey(reader) === target.key) {
-          clearAnnotationSelection(reader);
-        }
-      } catch {
-        // The permanent erase succeeded; host selection cleanup is best-effort.
-      }
-      this.#annotationNavigation.clearAnnotation(target.key);
-      this.showStatus(
-        `✓ ${t('status.readerAnnotationDeleteComplete', language).replace('{target}', summary)}`,
-        1500,
-      );
-    } catch (error) {
-      this.#dependencies.controller.dependencies.logger.debug(
-        `delete Reader annotation failed: ${String(error)}`,
-      );
-      this.showStatus(
-        `✗ ${t('status.readerAnnotationDeleteFailed', language).replace('{target}', summary)}`,
-        2000,
-      );
-    }
-  }
-
-  private async recolorAnnotation(color: AnnotationColor): Promise<void> {
-    const target = this.selectedAnnotation();
-    if (!target) {
-      this.showStatus('✗ select an annotation first', 2000);
-      return;
-    }
-    target.annotationColor = color;
-    await target.saveTx();
-    this.showStatus('✓ recolored', 1200);
-  }
-
-  private filterByColor(color: AnnotationColor | null): void {
-    setAnnotationColorFilter(this.#dependencies.reader, color ? [color] : []);
-    this.#annotationNavigation.setFilterColor(color);
-    this.showStatus(color ? '✓ filter set' : '✓ filter cleared', 1200);
-  }
-
-  private yankAnnotation(comment: boolean): void {
-    const annotation = this.selectedAnnotation();
-    const text = comment ? annotation?.annotationComment : annotation?.annotationText;
-    if (!text) {
-      this.showStatus(comment ? '✗ annotation has no comment' : '✗ annotation has no text', 2000);
-      return;
-    }
-    this.copyText(annotationText(text));
   }
 
   private copyText(text: string): void {
@@ -2100,16 +1856,6 @@ export class ReaderSession {
     }
   }
 
-  private selectedAnnotation(): AnnotationRuntime | null {
-    const key = this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader);
-    if (!key) return null;
-    return (
-      this.itemForReader(this.#dependencies.reader)
-        ?.getAnnotations?.()
-        .find((annotation) => annotation.key === key) ?? null
-    );
-  }
-
   private enterNativeInput(): void {
     if (this.#commentEditor.ownsInput) void this.handOverNativeEditor();
     this.setMode('normal');
@@ -2117,29 +1863,6 @@ export class ReaderSession {
     this.#sidebar.deactivate();
     this.#smoothScroller.stop(true);
     this.updateIndicator();
-  }
-
-  private async openAnnotationComment(): Promise<void> {
-    const key = this.#annotationNavigation.selectedAnnotationKey(this.#dependencies.reader);
-    if (!key) {
-      this.showStatus('✗ select an annotation first', 2000);
-      return;
-    }
-    this.#nativeInput.release();
-    this.setMode('normal');
-    this.#annotationNavigation.rememberAnnotation(key);
-    await this.#commentEditor.open(key);
-  }
-
-  private async resolveAnnotation(key: string): Promise<AnnotationRuntime | null> {
-    const attachment = this.itemForReader(this.#dependencies.reader);
-    if (!attachment) return null;
-    let annotation =
-      attachment.getAnnotations?.().find((candidate) => candidate.key === key) ?? null;
-    if (!annotation && attachment.libraryID !== undefined)
-      annotation = zoteroRuntime().Items.getByLibraryAndKey?.(attachment.libraryID, key) || null;
-    if (annotation?.loadDataType) await annotation.loadDataType('annotation');
-    return annotation;
   }
 
   private async handOverNativeEditor(): Promise<void> {
@@ -2151,27 +1874,6 @@ export class ReaderSession {
         `comment editor handoff failed: ${String(error)}`,
       );
     }
-  }
-
-  private async annotationForSave(
-    target: AnnotationCommentTarget,
-  ): Promise<AnnotationRuntime | null> {
-    const items = zoteroRuntime().Items;
-    let annotation: AnnotationRuntime | null = null;
-    if (target.itemID !== null) {
-      const cached = items.get(target.itemID);
-      if (cached) annotation = cached;
-    }
-    if (!annotation && target.libraryID !== null) {
-      const indexed = items.getByLibraryAndKey?.(target.libraryID, target.key) ?? null;
-      if (indexed) annotation = indexed;
-    }
-    if (!annotation && target.libraryID !== null && items.getByLibraryAndKeyAsync) {
-      const fetched = await items.getByLibraryAndKeyAsync(target.libraryID, target.key);
-      if (fetched) annotation = fetched;
-    }
-    if (annotation?.loadDataType) await annotation.loadDataType('annotation');
-    return annotation;
   }
 
   /**

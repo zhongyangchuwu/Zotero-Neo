@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
-import { ReaderCommentEditor, type AnnotationCommentTarget } from '../../src/reader/comment-editor';
+import {
+  ReaderCommentEditor,
+  type AnnotationCommentTarget,
+} from '../../src/modules/reader-annotations/comment-editor';
 import type {
   AnnotationRuntime,
   PdfWindow,
@@ -128,6 +131,7 @@ function createHarness() {
   const secondary = createView();
   let activeWindow: PdfWindow | null = primary.pdfWindow;
   let nativeEditableFocused = false;
+  let viewGeneration = 0;
   const annotation: AnnotationRuntime = {
     id: 7,
     key: 'ANN',
@@ -152,6 +156,7 @@ function createHarness() {
       target.key === 'ANN' ? annotation : other,
   );
   const cleanupTheme = vi.fn();
+  const themeRoot = vi.fn(() => cleanupTheme);
   const onInputOwnerChanged = vi.fn();
   const onNativeEditorFocus = vi.fn();
   const onExit = vi.fn();
@@ -164,8 +169,12 @@ function createHarness() {
       return setTimeout(task, delay) as ReaderTimer;
     },
     clearTimer: (timer) => clearTimeout(timer ?? undefined),
-    themeRoot: () => cleanupTheme,
+    themeRoot,
     activePdfWindow: () => activeWindow,
+    captureView: () => {
+      const captured = viewGeneration;
+      return () => captured === viewGeneration;
+    },
     resolveAnnotation,
     annotationForSave,
     nativeEditableFocused: () => nativeEditableFocused,
@@ -189,6 +198,7 @@ function createHarness() {
     resolveAnnotation,
     annotationForSave,
     cleanupTheme,
+    themeRoot,
     onInputOwnerChanged,
     onNativeEditorFocus,
     onExit,
@@ -196,6 +206,9 @@ function createHarness() {
     scheduled,
     setActiveWindow: (window: PdfWindow | null) => {
       activeWindow = window;
+    },
+    retireCapturedViews: () => {
+      viewGeneration += 1;
     },
     setNativeEditableFocused: (value: boolean) => {
       nativeEditableFocused = value;
@@ -508,6 +521,115 @@ describe('ReaderCommentEditor native input and persistence', () => {
 });
 
 describe('ReaderCommentEditor stale work containment', () => {
+  it('drains a pending owner when its document is replaced before lookup resolves', async () => {
+    const h = createHarness();
+    const pending = Promise.withResolvers<AnnotationRuntime>();
+    h.resolveAnnotation.mockReturnValueOnce(pending.promise);
+    const opening = h.editor.open('ANN');
+    Reflect.set(h.primary.pdfWindow, 'document', h.secondary.document);
+    pending.resolve(h.annotation);
+    await opening;
+    expect(h.primary.systemKeys.size).toBe(0);
+    expect(h.primary.mounted).toHaveLength(0);
+    expect(h.secondary.mounted).toHaveLength(0);
+    expect(h.editor.ownsInput).toBe(false);
+    expect(h.navigate).not.toHaveBeenCalled();
+  });
+
+  it('does not adopt a replacement document installed during retirement', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    h.resolveAnnotation.mockClear();
+    h.navigate.mockClear();
+    h.onInputOwnerChanged.mockImplementationOnce(() => {
+      Reflect.set(h.primary.pdfWindow, 'document', h.secondary.document);
+    });
+    await h.editor.open('OTHER');
+    expect(h.editor.ownsInput).toBe(false);
+    expect(h.primary.systemKeys.size).toBe(0);
+    expect(h.primary.mounted).toHaveLength(0);
+    expect(h.secondary.mounted).toHaveLength(0);
+    expect(h.resolveAnnotation).not.toHaveBeenCalled();
+    expect(h.navigate).not.toHaveBeenCalled();
+    expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+  });
+
+  it('rejects events and timers from an invalid view while still draining its resources', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    const input = h.primary.input();
+    input.value = 'unadmitted draft';
+    input.emit('input');
+    h.retireCapturedViews();
+    const escape = keyboard('Escape', input);
+    h.primary.dispatchSystemKey(escape);
+    vi.advanceTimersByTime(3000);
+    expect(escape.preventDefault).not.toHaveBeenCalled();
+    expect(input.focus).not.toHaveBeenCalled();
+    expect(h.annotationForSave).not.toHaveBeenCalled();
+    h.editor.releaseView(h.primary.pdfWindow);
+    expect(h.primary.systemKeys.size).toBe(0);
+    expect(h.primary.mounted).toHaveLength(0);
+    expect(h.cleanupTheme).toHaveBeenCalledOnce();
+    expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+  });
+
+  it('does not notify exit after the captured view retires while final persistence completes', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    const input = h.primary.input();
+    input.value = 'final draft';
+    const pending = Promise.withResolvers<AnnotationRuntime>();
+    h.annotationForSave.mockReturnValueOnce(pending.promise);
+    h.editor.handleKey(keyboard('Escape', input), h.primary.pdfWindow);
+    h.retireCapturedViews();
+    pending.resolve(h.annotation);
+    await settleJobs();
+    expect(h.annotation.annotationComment).toBe('final draft');
+    expect(h.annotation.saveTx).toHaveBeenCalledOnce();
+    expect(h.onExit).not.toHaveBeenCalled();
+  });
+
+  it('ignores a retained system listener after reopening in the same view', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    const stale = [...h.primary.systemKeys][0]!;
+    await h.editor.open('OTHER');
+    const input = h.primary.input();
+    const event = keyboard('Escape', input);
+    stale(event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(h.editor.ownsInput).toBe(true);
+    expect(input.value).toBe('other draft');
+    h.editor.dispose();
+  });
+
+  it('does not overwrite an editor opened reentrantly during retirement', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    h.onInputOwnerChanged.mockImplementationOnce(() => {
+      void h.editor.open('OTHER');
+    });
+    await h.editor.open('ANN');
+    await settleJobs();
+    expect(h.primary.input().value).toBe('other draft');
+    expect(h.primary.mounted).toHaveLength(1);
+    h.editor.dispose();
+  });
+
+  it('cleans a theme lease returned after reentrant disposal', async () => {
+    const h = createHarness();
+    h.themeRoot.mockImplementationOnce(() => {
+      h.editor.dispose();
+      return h.cleanupTheme;
+    });
+    await h.editor.open('ANN');
+    expect(h.cleanupTheme).toHaveBeenCalledOnce();
+    expect(h.primary.mounted).toHaveLength(0);
+    expect(h.primary.systemKeys.size).toBe(0);
+    expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+  });
+
   it.each(['release', 'dispose', 'reopen'] as const)(
     'ignores an autosave lookup that resolves after %s',
     async (action) => {
@@ -689,6 +811,35 @@ describe('ReaderCommentEditor stale work containment', () => {
 });
 
 describe('ReaderCommentEditor failure-safe retirement', () => {
+  it('removes already installed input listeners when a later listener acquisition fails', async () => {
+    const h = createHarness();
+    const createElement = h.primary.document.createElement;
+    let input: FakeElement | undefined;
+    vi.spyOn(h.primary.document, 'createElement').mockImplementation((tag) => {
+      const element = createElement(tag);
+      if (tag === 'textarea') {
+        input = element;
+        const add = element.addEventListener.bind(element);
+        vi.spyOn(element, 'addEventListener').mockImplementation((type, listener, options) => {
+          if (type === 'compositionend') throw new Error('listener acquisition failed');
+          add(type, listener, options);
+        });
+        vi.spyOn(element, 'removeEventListener');
+      }
+      return element;
+    });
+    await h.editor.open('ANN');
+    expect(input?.removeEventListener).toHaveBeenCalledWith(
+      'compositionstart',
+      expect.any(Function),
+    );
+    expect(h.editor.ownsInput).toBe(false);
+    expect(h.primary.systemKeys.size).toBe(0);
+    expect(h.primary.mounted).toHaveLength(0);
+    expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
+    expect(h.debug).toHaveBeenCalledWith(expect.stringContaining('listener acquisition failed'));
+  });
+
   it.each(['view', 'input'] as const)(
     'retires a destroyed comment %s without touching dead wrappers or reviving focus and autosave',
     async (destroyedOwner) => {
