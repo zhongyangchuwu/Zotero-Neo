@@ -15,7 +15,6 @@ import type { SettingsCenter } from './settings-center';
 import type { MainItemDecorationRegistration } from './item-state-decoration';
 
 export type MainPanel = 'collections' | 'items';
-export type { NoteMode } from './note-runtime';
 
 /** Main Surface composition hosted by one ZoteroWindowRuntime. */
 export class MainWindowSession {

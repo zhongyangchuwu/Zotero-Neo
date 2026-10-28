@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座及标签、扩展管理、分类、工作集、Reader hints 和 Library 六条接入路径；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座及标签、扩展管理、分类、工作集、Reader hints、Library 和 Notes 七条接入路径；其余模块、依赖图和启用配置仍是设计，下文维护实际运行时所有权。
 
 ## 分层 {#layers}
 
@@ -36,7 +36,9 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/main/window-runtime.ts` 为一个物理 Zotero MainWindow 提供服务。`src/main/session.ts` 将宿主 runtime 与 Main、各功能状态组合；`src/main/active-surface.ts` 根据 Zotero 焦点、标签页和编辑器状态推导当前 Main、Reader 或 Note 交互。
 
-Note 是由 MainWindow 承载的独立交互处理方。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份；任一身份被替换时，先退休旧输入，再清理监听器。Note 内容仍以 Zotero 为准。
+Note 是由 MainWindow 承载的独立 Surface。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份，保留输入、IME、共享焦点及 Guide；任一身份被替换时，先退休旧输入，再清理监听器。`src/modules/notes/` 按窗口拥有 Note 候选、打开编排、可选 Vim 编辑模式、寄存器及 caret UI，不取得整个 Main session。`noteEditor.enabled` 仅控制 Vim 编辑，不控制 Note 查找或 Capture 目的地；Note 内容仍以 Zotero 为准。
+
+Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note iframe 发现编辑器。打开 Picker 后普通焦点转移不改绑到隐藏的 Library Note 编辑器；旧事件、计时器及 Palette 回调仍受精确身份保护。
 
 `src/main/controller.ts` 协调 Main 输入、目标和模块装配；`src/main/navigation.ts` 保留共享状态反馈、面板焦点及标签页宿主委托。`src/modules/library/` 拥有树移动、Local Find、Quick/Advanced Search、条目候选、打开、标识符录入、citekey 和最近回收批次，不持有整个 Main session。Reader 的 citekey 贡献按 ReaderSession 登记，仍使用 Reader 目标，不要求借用 Main 窗口。
 

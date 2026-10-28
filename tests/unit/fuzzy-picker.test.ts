@@ -12,6 +12,7 @@ import type { PickerOpenOptions, PickerProvider } from '../../src/main/picker/ty
 import type { PickerItem } from '../../src/main/picker/model';
 import { createTagCandidateProvider } from '../../src/main/picker/providers/tags';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
+import { createNotesProvider } from '../../src/modules/notes/provider';
 import { createItemsProvider, isFuzzyPickerItem } from '../../src/modules/library/items-provider';
 import { citationKey } from '../../src/platform/better-bibtex';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
@@ -968,6 +969,22 @@ describe('tab picker activation', () => {
 });
 
 describe('unified Notes picker', () => {
+  it('requires an explicit source for Notes scope', async () => {
+    const { window, session } = createPickerHarness();
+    const diagnostic = vi.fn();
+    const picker = createFuzzyPicker(
+      { debug: vi.fn(), diagnostic },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+
+    await picker.open(window, session, 'notes');
+
+    expect(session.picker.open).toBe(false);
+    expect(diagnostic).toHaveBeenCalledWith(
+      expect.stringContaining('Notes chooser requires an explicit candidate source'),
+    );
+  });
+
   it('searches and previews notes while leaving domain mutation keys unclaimed', async () => {
     vi.useFakeTimers();
     const current = {
@@ -1040,7 +1057,9 @@ describe('unified Notes picker', () => {
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    await picker.open(window, session, 'notes');
+    await picker.open(window, session, 'notes', {
+      source: createNotesProvider(window, { debug: vi.fn() } as never),
+    });
     vi.advanceTimersByTime(30);
     expect(session.picker.preview?.textContent).toContain('Current preview body');
     expect(session.picker.filtered.map((item) => item.id)).toEqual([current.id]);
@@ -1118,6 +1137,7 @@ describe('unified Notes picker', () => {
     );
 
     await picker.open(window, session, 'notes', {
+      source: createNotesProvider(window, { debug: vi.fn() } as never),
       confirm: async (item, openInWindow) => {
         const id = Number(item.id);
         await selectItem(id);
@@ -1163,7 +1183,9 @@ describe('unified Notes picker', () => {
       new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
     );
 
-    await picker.open(window, session, 'notes');
+    await picker.open(window, session, 'notes', {
+      source: createNotesProvider(window, { debug: vi.fn() } as never),
+    });
     vi.advanceTimersByTime(30);
 
     expect(session.picker.layout).toBe('single');

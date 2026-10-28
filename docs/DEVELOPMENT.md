@@ -87,13 +87,15 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/` 与 `library/`。MainWindow 组合标签、扩展、分类、工作集和 Library；ReaderSession 组合 hints 及独立的 Library citekey 贡献。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。模块开关、通用依赖图和其余候选模块仍按[整体设计](MODULE_DESIGN.md)逐步推进，不是当前可用功能。
+当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/` 与 `notes/`。MainWindow 组合标签、扩展、分类、工作集、Library 和 Notes；ReaderSession 组合 hints 及独立的 Library citekey 贡献。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。模块开关、通用依赖图和其余候选模块仍按[整体设计](MODULE_DESIGN.md)逐步推进，不是当前可用功能。
 
 工作集拥有 SelectionStore、Visual 范围及 Selection Panel。Main Surface 继续初始化和取消原生 Cursor/多目标，持有共享行渲染，并向模块注入刷新、主题和现有 Reveal 导航端口。目标解析与 Library Trash 接收明确 Selection 端口；来源为空或退休后沿用当前目标，不读取旧 Selection。共享导航通过局部界面端口捕获原面板，不再读取 session 的 Selection Panel 状态。
 
 Library 拥有 Local Find 查询/界面及最近回收批次，Main session 不再预建这些状态。可见行查找不修改原生 View；条目选择器显式注入 Library 候选，范围与个人库回退保持原义。Main 保留目标策略、焦点和唯一历史；历史通过 `MainViewOperations` 使用原生查询/标签过滤能力，Workspace 和工作集 Reveal 不依赖 Library 动作。Reader citekey 仍可直接处理当前 Reader 条目。
 
 共享 Picker 使用实际 Main session 的当前性端口；关闭先退休并清空运行时引用，再逐项释放资源。清理重入、异常或晚到的获取只能处理本次界面，不能关闭替换 Picker 或恢复旧焦点。Local Find 的主题句柄归单次界面，长期模块作用域不累计保留已关闭 DOM。
+
+Notes 按窗口拥有候选、选择后的打开编排及可选 Vim 编辑的模式、寄存器和 caret 样式。`NoteSurfaceRuntime` 只保留精确编辑器身份、输入 runtime 和退休代次；Surface 继续决定原生/IME 输入、count、前缀及焦点。Note 普通动作和 Insert 退出登记到原上下文；候选必须显式传给 Picker，Capture 继续使用同一候选来源，不借用 Vim 开关。共享导航提供选择完成后的宿主委托，不新增 Note 历史栈。
 
 ### 宿主能力 Toolkit {#host-capability-toolkit}
 

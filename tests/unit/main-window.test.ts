@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActionId } from '../../src/input/actions';
 import { t } from '../../src/i18n';
@@ -18,6 +18,7 @@ import { LibraryNavigation } from '../../src/modules/library/navigation';
 
 import { NoteEditor } from '../../src/main/note-editor';
 import { NoteSurfaceRuntime } from '../../src/main/note-runtime';
+import { NoteEditing } from '../../src/modules/notes/editor';
 import { createMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
@@ -863,6 +864,8 @@ describe('directional pane focus', () => {
         refresh: () => {},
         clear: () => {},
       },
+      () => null,
+      () => true,
     );
     const target = {
       tagName: 'DIV',
@@ -909,6 +912,22 @@ describe('directional pane focus', () => {
 });
 
 describe('NoteEditor shared binding input', () => {
+  let originalComponents: unknown;
+  let originalServices: unknown;
+  beforeEach(() => {
+    originalComponents = Reflect.get(globalThis, 'Components');
+    originalServices = Reflect.get(globalThis, 'Services');
+    Reflect.set(globalThis, 'Services', { focus: { focusedWindow: null } });
+    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
+  });
+  afterEach(() => {
+    if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
+    else Reflect.set(globalThis, 'Components', originalComponents);
+    if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+    else Reflect.set(globalThis, 'Services', originalServices);
+    vi.useRealTimers();
+  });
+
   function harness(overrides: Readonly<Record<string, ActionId | null>> = {}) {
     vi.useFakeTimers();
     const main = {
@@ -918,15 +937,32 @@ describe('NoteEditor shared binding input', () => {
         activeElement: null,
         querySelector: () => null,
         getElementById: () => null,
+        querySelectorAll: () => [frame],
       },
     } as unknown as MainWindow;
+    Reflect.set(main, 'getComputedStyle', () => ({ display: 'block', visibility: 'visible' }));
     const document = {
+      body: { isContentEditable: true },
+      designMode: 'off',
+      addEventListener: () => {},
+      removeEventListener: () => {},
       getSelection: () => null,
       getElementById: () => null,
-      createElement: () => ({ id: '', textContent: '' }),
+      createElement: () => ({ id: '', textContent: '', remove: () => {} }),
       head: { append: () => {} },
-      documentElement: { append: () => {}, classList: { toggle: () => {} } },
+      documentElement: { append: () => {}, classList: { toggle: () => {}, remove: () => {} } },
     } as unknown as Document;
+    const editorWindow = {
+      document,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    } as unknown as Window;
+    const frame = {
+      contentWindow: editorWindow,
+      ownerDocument: main.document,
+      isConnected: true,
+      getBoundingClientRect: () => ({ width: 400, height: 300 }),
+    };
     const target = {
       tagName: 'DIV',
       localName: 'div',
@@ -940,6 +976,7 @@ describe('NoteEditor shared binding input', () => {
       cleanup: { add: () => {} },
       note: new NoteSurfaceRuntime(main),
     } as unknown as MainWindowSession;
+    const editing = new NoteEditing({ isCurrent: () => true, status: () => {} });
     const bindings = resolveBindings(JSON.stringify(overrides));
     const guide = { refresh: vi.fn(), clear: vi.fn() };
     const editor = new NoteEditor(
@@ -947,7 +984,11 @@ describe('NoteEditor shared binding input', () => {
       new MainNavigation(logger, () => {}),
       () => bindings,
       guide,
+      () => editing,
+      () => true,
     );
+    const sync = () => editor.sync(main, session, true);
+    sync();
     const actions: [ActionId, number][] = [];
     const press = (key: string, modifiers: Partial<KeyboardEvent> = {}) => {
       const preventDefault = vi.fn();
@@ -973,7 +1014,7 @@ describe('NoteEditor shared binding input', () => {
       );
       return { preventDefault, stopPropagation };
     };
-    return { editor, session, target, main, actions, press, guide };
+    return { editor, editing, session, target, main, actions, press, guide, sync };
   }
 
   it('resolves Note-scoped ambiguous leader remaps on continuation or timeout', () => {
@@ -1060,6 +1101,7 @@ describe('NoteEditor shared binding input', () => {
     expect(test.session.note.input.keyBuffer).toBe('');
     expect(test.session.note.input.countBuffer).toBe('');
 
+    test.sync();
     test.press(' ');
     test.press('f');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
@@ -1101,14 +1143,14 @@ describe('NoteEditor shared binding input', () => {
     const test = harness();
 
     test.press('i');
-    expect(test.session.note.mode).toBe('insert');
+    expect(test.editing.mode).toBe('insert');
 
     const native = test.press('f');
     expect(native.preventDefault).not.toHaveBeenCalled();
     expect(native.stopPropagation).not.toHaveBeenCalled();
 
     const escape = test.press('Escape');
-    expect(test.session.note.mode).toBe('normal');
+    expect(test.editing.mode).toBe('normal');
     expect(escape.preventDefault).toHaveBeenCalledOnce();
     vi.useRealTimers();
   });
@@ -1117,15 +1159,15 @@ describe('NoteEditor shared binding input', () => {
     const test = harness();
 
     test.press('i');
-    expect(test.session.note.mode).toBe('insert');
+    expect(test.editing.mode).toBe('insert');
 
     const composingEscape = test.press('Escape', { isComposing: true });
-    expect(test.session.note.mode).toBe('insert');
+    expect(test.editing.mode).toBe('insert');
     expect(composingEscape.preventDefault).not.toHaveBeenCalled();
     expect(composingEscape.stopPropagation).not.toHaveBeenCalled();
 
     const process = test.press('Process', { keyCode: 229 });
-    expect(test.session.note.mode).toBe('insert');
+    expect(test.editing.mode).toBe('insert');
     expect(process.preventDefault).not.toHaveBeenCalled();
     expect(process.stopPropagation).not.toHaveBeenCalled();
     vi.useRealTimers();
@@ -1172,6 +1214,13 @@ describe('Note contextual Open', () => {
     const originalServices = Reflect.get(globalThis, 'Services');
     const originalComponents = Reflect.get(globalThis, 'Components');
     const host = pickerMainWindow();
+    let scanNote: () => void = () => {
+      throw new Error('Expected Note lifecycle scan');
+    };
+    Reflect.set(host.window, 'setInterval', (callback: () => void) => {
+      scanNote = callback;
+      return 0;
+    });
     const pdf = {
       id: 24,
       libraryID: 1,
@@ -1201,9 +1250,9 @@ describe('Note contextual Open', () => {
       body: { isContentEditable: true },
       designMode: 'off',
       head: { append: () => {} },
-      documentElement: { classList: { toggle: () => {} } },
+      documentElement: { classList: { toggle: () => {}, remove: () => {} } },
       getElementById: () => null,
-      createElement: () => ({ id: '', textContent: '' }),
+      createElement: () => ({ id: '', textContent: '', remove: () => {} }),
       addEventListener: () => {},
       removeEventListener: () => {},
     } as unknown as Document;
@@ -1215,6 +1264,16 @@ describe('Note contextual Open', () => {
       },
       removeEventListener: () => {},
     } as unknown as Window;
+    const frame = {
+      contentWindow: editorWindow,
+      ownerDocument: host.window.document,
+      isConnected: true,
+      getBoundingClientRect: () => ({ width: 400, height: 300 }),
+    };
+    Reflect.set(host.window, 'getComputedStyle', () => ({
+      display: 'block',
+      visibility: 'visible',
+    }));
     const target = {
       nodeType: 1,
       tagName: 'DIV',
@@ -1226,11 +1285,11 @@ describe('Note contextual Open', () => {
     const noteEditor: {
       item?: Zotero.Item;
       contains(node: unknown): boolean;
-      _iframe: { contentWindow: Window };
+      _iframe: typeof frame;
     } = {
       item: note,
       contains: (node) => node === target,
-      _iframe: { contentWindow: editorWindow },
+      _iframe: frame,
     };
     Reflect.set(host.window.document, 'activeElement', target);
     Reflect.set(host.window, 'ZoteroContextPane', { context: { activeEditor: noteEditor } });
@@ -1349,6 +1408,7 @@ describe('Note contextual Open', () => {
       Reflect.set(host.window.document, 'activeElement', target);
       noteEditor.item = undefined;
       Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
+      scanNote();
       pressNote(':');
       await vi.waitFor(() =>
         expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),

@@ -1,16 +1,15 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
 import { CleanupFailure } from '../core/cleanup';
-import type { MainWindowSession, NoteMode } from './session';
+import type { MainWindowSession } from './session';
+import type { NoteEditingPort, NoteMode } from '../modules/notes/editor';
 import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
-import { NOTE_COMMAND_BY_ACTION, isNoteActionId } from '../input/note-actions';
 import { bindingsForMode, type BindingMap, type BindingContext } from '../input/bindings';
 import { isLeaderPrefix } from '../input/key-guide';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { MainNavigation } from './navigation';
-import { copyToClipboard } from '../platform/clipboard';
 import { isDeadObject } from '../platform/cross-compartment';
 import { asElement } from '../platform/dom';
 import {
@@ -66,17 +65,23 @@ export class NoteEditor {
   readonly #navigation: MainNavigation;
   readonly #bindings: () => BindingMap;
   readonly #leaderGuide: LeaderGuideHost;
+  readonly #editing: (session: MainWindowSession) => NoteEditingPort | null;
+  readonly #isOwner: (session: MainWindowSession) => boolean;
 
   constructor(
     logger: Logger,
     navigation: MainNavigation,
     bindings: () => BindingMap,
     leaderGuide: LeaderGuideHost,
+    editing: (session: MainWindowSession) => NoteEditingPort | null,
+    isOwner: (session: MainWindowSession) => boolean,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#bindings = bindings;
     this.#leaderGuide = leaderGuide;
+    this.#editing = editing;
+    this.#isOwner = isOwner;
   }
 
   isStandalone(window: MainWindow): boolean {
@@ -113,29 +118,46 @@ export class NoteEditor {
     )
       return;
     this.clear(session);
+    if (session.note.editorWindow || session.note.handler) return;
     if (!candidate || !document) return;
+    session.note.revision += 1;
     const handler: EventListener = (event) => {
-      if (
-        session.note.handler !== handler ||
-        session.note.editorWindow !== candidate ||
-        session.note.editorDocument !== document ||
-        isDeadObject(candidate) ||
-        candidate.document !== document
-      )
-        return;
+      if (!current()) return;
       this.onKeyDown(event as KeyboardEvent, main, session, execute);
     };
     session.note.editorWindow = candidate;
     session.note.editorDocument = document;
     session.note.handler = handler;
     session.note.itemID = itemID;
+    const current = this.captureCurrent(session);
     try {
       candidate.addEventListener('keydown', handler, true);
+      if (!current()) {
+        if (session.note.handler === handler) this.clear(session);
+        else candidate.removeEventListener('keydown', handler, true);
+        return;
+      }
       document.addEventListener('keydown', handler, true);
-      this.style(document, session.note.mode);
+      if (!current()) {
+        if (session.note.handler === handler) this.clear(session);
+        else {
+          const failure = new CleanupFailure();
+          failure.run(() => candidate.removeEventListener('keydown', handler, true));
+          failure.run(() => document.removeEventListener('keydown', handler, true));
+          failure.rethrow();
+        }
+        return;
+      }
+      this.#editing(session)?.style(document);
     } catch (error) {
       try {
-        this.clear(session);
+        if (session.note.handler === handler) this.clear(session);
+        else {
+          const failure = new CleanupFailure();
+          failure.run(() => candidate.removeEventListener('keydown', handler, true));
+          failure.run(() => document.removeEventListener('keydown', handler, true));
+          failure.rethrow();
+        }
       } catch {
         /* Preserve the original attachment failure. */
       }
@@ -143,40 +165,59 @@ export class NoteEditor {
     }
   }
 
+  captureCurrent(session: MainWindowSession): () => boolean {
+    const { editorWindow, editorDocument, handler, itemID, revision } = session.note;
+    return () =>
+      !!editorWindow &&
+      !!editorDocument &&
+      !!handler &&
+      this.#isOwner(session) &&
+      session.note.revision === revision &&
+      session.note.editorWindow === editorWindow &&
+      session.note.editorDocument === editorDocument &&
+      session.note.handler === handler &&
+      session.note.itemID === itemID &&
+      !isDeadObject(editorWindow) &&
+      editorWindow.document === editorDocument &&
+      mainNoteItemID(session.window, editorWindow) === itemID &&
+      mainNoteEditorWindow(session.window) === editorWindow;
+  }
+
   clear(session: MainWindowSession): void {
     const { editorWindow, editorDocument, handler } = session.note;
-    const mode = session.note.mode;
-    // Retire before host removal so a queued/reentrant old key cannot enter newer Note state.
+    const editing = this.#editing(session);
+    session.note.revision += 1;
+    const revision = session.note.revision;
     session.note.editorWindow = null;
     session.note.editorDocument = null;
     session.note.handler = null;
     const failure = new CleanupFailure();
     failure.run(() => session.note.resetInteraction());
+    if (editing && session.note.revision === revision) failure.run(() => editing.clear());
     if (editorWindow && handler && !isDeadObject(editorWindow))
       failure.run(() => editorWindow.removeEventListener('keydown', handler, true));
-    if (editorDocument && !isDeadObject(editorDocument)) {
-      if (handler) failure.run(() => editorDocument.removeEventListener('keydown', handler, true));
-      if (mode !== 'normal') failure.run(() => this.style(editorDocument, 'normal'));
-    }
-    failure.run(() => this.#leaderGuide.clear(session.window, session));
+    if (editorDocument && handler && !isDeadObject(editorDocument))
+      failure.run(() => editorDocument.removeEventListener('keydown', handler, true));
+    if (session.note.revision === revision)
+      failure.run(() => this.#leaderGuide.clear(session.window, session));
     failure.rethrow();
   }
 
   deactivateInteraction(main: MainWindow, session: MainWindowSession): void {
-    const editorDocument = session.note.editorDocument;
-    const mode = session.note.mode;
     const hasPendingInput =
       session.note.input.keyBuffer !== '' || session.note.input.countBuffer !== '';
-    session.note.deactivateInteraction();
-    if (editorDocument && mode !== 'normal') this.style(editorDocument, 'normal');
-    if (hasPendingInput) this.#leaderGuide.clear(main, session);
+    const failure = new CleanupFailure();
+    failure.run(() => session.note.deactivateInteraction());
+    failure.run(() => this.#editing(session)?.deactivate());
+    if (hasPendingInput) failure.run(() => this.#leaderGuide.clear(main, session));
+    failure.rethrow();
   }
 
   activeBindings(session: MainWindowSession): {
     mode: NoteBindingMode;
     bindings: BindingMap;
   } {
-    const mode = bindingMode(session.note.mode);
+    const mode = bindingMode(this.#editing(session)?.mode ?? 'normal');
     return { mode, bindings: bindingsForMode(this.#bindings(), mode) };
   }
 
@@ -239,7 +280,9 @@ export class NoteEditor {
       ? KEY_GUIDE_CONFIG.idleTimeoutMs
       : decision.timeoutMs;
     if (timeoutMs !== null) {
+      const current = this.captureCurrent(session);
       input.schedule(decision, timeoutMs, (resolved) => {
+        if (!current()) return;
         this.#leaderGuide.clear(main, session);
         if (resolved.kind !== 'execute') return;
         const count = resolved.action === 'openCommandPalette' ? 0 : resolved.count;
@@ -264,35 +307,12 @@ export class NoteEditor {
       );
     }
 
-    if (action === 'exitMode') {
-      const changed = session.note.mode !== 'normal';
-      session.note.mode = 'normal';
+    const editing = this.#editing(session);
+    if (!editing) return null;
+    const result = editing.executeAction(action, el, count);
+    if (result !== null && (action === 'exitMode' || action === 'enterInsert'))
       this.resetInput(main, session);
-      this.style(el.ownerDocument, 'normal');
-      if (changed) this.#navigation.status(session, '-- NOTE NORMAL --', 900);
-      return true;
-    }
-
-    if (action === 'enterInsert') {
-      session.note.mode = 'insert';
-      this.resetInput(main, session);
-      this.style(el.ownerDocument, 'insert');
-      this.#navigation.status(session, '-- NOTE INSERT --', 900);
-      return true;
-    }
-
-    if (!isNoteActionId(action)) return null;
-
-    if (action === 'noteUndo' || action === 'noteRedo') {
-      const handled = el.ownerDocument.execCommand(action === 'noteUndo' ? 'undo' : 'redo');
-      if (handled) this.style(el.ownerDocument, session.note.mode);
-      // These Note commands own their keys even when the editor has no history.
-      return true;
-    }
-
-    const handled = this.command(el, NOTE_COMMAND_BY_ACTION[action], count || 1, session);
-    if (handled) this.style(el.ownerDocument, session.note.mode);
-    return handled;
+    return result;
   }
 
   private resetInput(main: MainWindow, session: MainWindowSession): void {
@@ -303,162 +323,6 @@ export class NoteEditor {
   private refreshGuide(main: MainWindow, session: MainWindowSession): void {
     if (isLeaderPrefix(session.note.input.keyBuffer)) this.#leaderGuide.refresh(main, session);
     else this.#leaderGuide.clear(main, session);
-  }
-
-  private command(
-    el: HTMLElement,
-    command: string,
-    count: number,
-    session: MainWindowSession,
-  ): boolean {
-    const doc = el.ownerDocument;
-    const selection = doc.getSelection();
-    if (!selection) return false;
-    const move: Record<string, [SelectionModifyAlteration, SelectionModifyDirection]> = {
-      h: ['move', 'backward'],
-      l: ['move', 'forward'],
-      j: ['move', 'forward'],
-      k: ['move', 'backward'],
-      w: ['move', 'forward'],
-      b: ['move', 'backward'],
-      '0': ['move', 'backward'],
-      $: ['move', 'forward'],
-    };
-    if (command in move) {
-      for (let i = 0; i < count; i += 1)
-        selection.modify(
-          move[command][0],
-          move[command][1],
-          ['j', 'k'].includes(command)
-            ? 'line'
-            : ['0', '$'].includes(command)
-              ? 'lineboundary'
-              : command === 'w' || command === 'b'
-                ? 'word'
-                : 'character',
-        );
-      return true;
-    }
-    if (command === 'gg') {
-      selection.selectAllChildren(el);
-      selection.collapseToStart();
-      return true;
-    }
-    if (command === 'G') {
-      selection.selectAllChildren(el);
-      selection.collapseToEnd();
-      return true;
-    }
-    if (command === 'x') {
-      for (let i = 0; i < count; i += 1) selection.modify('extend', 'forward', 'character');
-      const text = selection.toString();
-      if (text) {
-        session.note.yank = text;
-        selection.deleteFromDocument();
-      }
-      return !!text;
-    }
-    if (command === 'a' || command === 'A' || command === 'I') {
-      selection.modify(
-        'move',
-        command === 'I' ? 'backward' : 'forward',
-        command === 'a' ? 'character' : 'lineboundary',
-      );
-      session.note.mode = 'insert';
-      return true;
-    }
-    if (command === 'o' || command === 'O') {
-      const input = textControl(el);
-      if (input) {
-        const start = input.selectionStart ?? 0;
-        const position =
-          command === 'O'
-            ? input.value.lastIndexOf('\n', Math.max(0, start - 1)) + 1
-            : input.value.indexOf('\n', start);
-        const at = position < 0 ? input.value.length : position;
-        input.value = input.value.slice(0, at) + '\n' + input.value.slice(at);
-        input.selectionStart = input.selectionEnd = command === 'O' ? at : at + 1;
-      } else doc.execCommand('insertParagraph');
-      session.note.mode = 'insert';
-      return true;
-    }
-    if (command === 'p' || command === 'P')
-      return this.insert(el, session.note.yank, command === 'P');
-    if (command === 'dd' || command === 'yy') {
-      selection.modify('move', 'backward', 'lineboundary');
-      selection.modify('extend', 'forward', 'lineboundary');
-      const text = selection.toString();
-      if (!text) return false;
-      session.note.yank = text;
-      if (command === 'yy') {
-        copyToClipboard(text);
-        selection.collapseToStart();
-      } else selection.deleteFromDocument();
-      return true;
-    }
-    const operation = /^([dyc])(iw|[hjklwb0$])$/.exec(command);
-    if (operation) {
-      const [, operator, motion] = operation;
-      if (motion === 'iw') {
-        selection.modify('move', 'backward', 'word');
-        selection.modify('extend', 'forward', 'word');
-      } else
-        selection.modify(
-          'extend',
-          motion === 'h' || motion === 'k' || motion === 'b' || motion === '0'
-            ? 'backward'
-            : 'forward',
-          motion === 'j' || motion === 'k'
-            ? 'line'
-            : motion === 'w' || motion === 'b'
-              ? 'word'
-              : motion === '0' || motion === '$'
-                ? 'lineboundary'
-                : 'character',
-        );
-      const text = selection.toString();
-      if (!text) return false;
-      session.note.yank = text;
-      if (operator === 'y') {
-        copyToClipboard(text);
-        selection.collapseToStart();
-      } else {
-        selection.deleteFromDocument();
-        if (operator === 'c') session.note.mode = 'insert';
-      }
-      return true;
-    }
-    return false;
-  }
-
-  private insert(el: HTMLElement, text: string, before: boolean): boolean {
-    if (!text) return false;
-    const input = textControl(el);
-    if (input) {
-      const at = (before ? input.selectionStart : input.selectionEnd) ?? 0;
-      input.value = input.value.slice(0, at) + text + input.value.slice(at);
-      input.selectionStart = input.selectionEnd = at + text.length;
-      return true;
-    }
-    const selection = el.ownerDocument.getSelection();
-    if (!selection?.rangeCount) return false;
-    const range = selection.getRangeAt(0);
-    range.insertNode(el.ownerDocument.createTextNode(text));
-    return true;
-  }
-
-  private style(doc: Document, mode: NoteMode): void {
-    let style = doc.getElementById('zv-note-caret-style');
-    if (!style) {
-      style = doc.createElement('style');
-      style.id = 'zv-note-caret-style';
-      (doc.head ?? doc.documentElement).append(style);
-    }
-    style.textContent =
-      'html.zv-note-normal-mode [contenteditable="true"],html.zv-note-normal-mode textarea,html.zv-note-normal-mode input{caret-color:rgb(96,150,255)!important}' +
-      'html.zv-note-insert-mode [contenteditable="true"],html.zv-note-insert-mode textarea,html.zv-note-insert-mode input{caret-color:rgb(255,148,77)!important}';
-    doc.documentElement.classList.toggle('zv-note-normal-mode', mode === 'normal');
-    doc.documentElement.classList.toggle('zv-note-insert-mode', mode === 'insert');
   }
 
   private focusReader(main: MainWindow): boolean {

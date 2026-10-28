@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
-import { createNotesProvider } from '../../src/main/picker/providers/notes';
+import { createNotesProvider } from '../../src/modules/notes/provider';
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
