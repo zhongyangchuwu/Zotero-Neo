@@ -37,8 +37,11 @@ import {
 } from '../input/bindings';
 import { compositionOwnsKey } from '../input/composition';
 import { actionsForBindingMode } from '../input/binding-capabilities';
-import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
-import { isGuidePrefix } from '../input/key-guide';
+import {
+  KEY_GUIDE_CONFIG,
+  keyGuideTimeout,
+  type KeyGuideLanguage,
+} from '../input/key-guide-config';
 import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
@@ -1028,6 +1031,11 @@ export class MainWindowController implements MainWindowControllerApi {
       event.preventDefault();
       event.stopPropagation();
       this.refreshKeyGuide(window, session);
+      if (session.input.keyBuffer) {
+        session.input.scheduleReset(KEY_GUIDE_CONFIG.idleTimeoutMs, () =>
+          this.clearKeyGuide(window, session),
+        );
+      }
       return;
     }
     const decision = session.input.advance(mode, bindings, key, true);
@@ -1076,11 +1084,10 @@ export class MainWindowController implements MainWindowControllerApi {
     event.preventDefault();
     event.stopPropagation();
     this.refreshKeyGuide(window, session);
-    const timeoutMs = isGuidePrefix(bindings, mode, decision.state.keyBuffer)
-      ? KEY_GUIDE_CONFIG.idleTimeoutMs
-      : decision.timeoutMs;
+    const timeoutMs = keyGuideTimeout(decision);
     if (timeoutMs !== null) {
       session.input.schedule(decision, timeoutMs, (resolved) => {
+        this.clearKeyGuide(window, session);
         if (resolved.kind !== 'execute') return;
         if (!isMainExecutableAction(resolved.action)) return;
         const direction = focusDirectionForAction(resolved.action);
@@ -1118,7 +1125,7 @@ export class MainWindowController implements MainWindowControllerApi {
         enabled:
           config.enabled &&
           (fromNote
-            ? noteEditorEnabled(this.#dependencies.preferences)
+            ? noteEditorEnabled(this.#dependencies.preferences) && active.mode === 'note-normal'
             : !this.#noteEditor.isStandalone(window)),
         language: this.keyGuideLanguage(),
         delayMs: config.delayMs,

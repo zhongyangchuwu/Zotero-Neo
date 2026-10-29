@@ -3,10 +3,9 @@ import type { MainWindow } from '../core/contracts';
 import { CleanupFailure } from '../core/cleanup';
 import type { MainWindowSession } from './session';
 import type { NoteEditingPort, NoteMode } from '../modules/notes/editor';
-import { KEY_GUIDE_CONFIG } from '../input/key-guide-config';
+import { KEY_GUIDE_CONFIG, keyGuideTimeout } from '../input/key-guide-config';
 import { focusDirectionForAction, type ActionId } from '../input/actions';
 import { bindingsForMode, type BindingMap, type BindingContext } from '../input/bindings';
-import { isLeaderPrefix } from '../input/key-guide';
 import { compositionOwnsKey } from '../input/composition';
 import { keyString } from '../input/keys';
 import { MainNavigation } from './navigation';
@@ -29,7 +28,7 @@ export type NoteExternalExecute = (
   bindings: BindingMap,
 ) => boolean | void;
 
-interface LeaderGuideHost {
+interface PrefixGuideHost {
   refresh(window: MainWindow, session: MainWindowSession): void;
   clear(window: MainWindow, session: MainWindowSession): void;
 }
@@ -64,7 +63,7 @@ export class NoteEditor {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
   readonly #bindings: (session: MainWindowSession) => BindingMap;
-  readonly #leaderGuide: LeaderGuideHost;
+  readonly #prefixGuide: PrefixGuideHost;
   readonly #editing: (session: MainWindowSession) => NoteEditingPort | null;
   readonly #isOwner: (session: MainWindowSession) => boolean;
 
@@ -72,14 +71,14 @@ export class NoteEditor {
     logger: Logger,
     navigation: MainNavigation,
     bindings: (session: MainWindowSession) => BindingMap,
-    leaderGuide: LeaderGuideHost,
+    leaderGuide: PrefixGuideHost,
     editing: (session: MainWindowSession) => NoteEditingPort | null,
     isOwner: (session: MainWindowSession) => boolean,
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#bindings = bindings;
-    this.#leaderGuide = leaderGuide;
+    this.#prefixGuide = leaderGuide;
     this.#editing = editing;
     this.#isOwner = isOwner;
   }
@@ -199,7 +198,7 @@ export class NoteEditor {
     if (editorDocument && handler && !isDeadObject(editorDocument))
       failure.run(() => editorDocument.removeEventListener('keydown', handler, true));
     if (session.note.revision === revision)
-      failure.run(() => this.#leaderGuide.clear(session.window, session));
+      failure.run(() => this.#prefixGuide.clear(session.window, session));
     failure.rethrow();
   }
 
@@ -209,7 +208,7 @@ export class NoteEditor {
     const failure = new CleanupFailure();
     failure.run(() => session.note.deactivateInteraction());
     failure.run(() => this.#editing(session)?.deactivate());
-    if (hasPendingInput) failure.run(() => this.#leaderGuide.clear(main, session));
+    if (hasPendingInput) failure.run(() => this.#prefixGuide.clear(main, session));
     failure.rethrow();
   }
 
@@ -234,15 +233,20 @@ export class NoteEditor {
 
     const active = this.activeBindings(session);
     const input = session.note.input;
-    if (key === 'escape' && isLeaderPrefix(input.keyBuffer) && input.cancel(active.mode)) {
-      this.#leaderGuide.clear(main, session);
+    if (key === 'escape' && input.cancel(active.mode)) {
+      this.#prefixGuide.clear(main, session);
       event.preventDefault();
       event.stopPropagation();
       return;
     }
 
-    if (key === 'backspace' && isLeaderPrefix(input.keyBuffer) && input.backspace(active.mode)) {
+    if (key === 'backspace' && input.backspace(active.mode)) {
       this.refreshGuide(main, session);
+      if (input.keyBuffer) {
+        input.scheduleReset(KEY_GUIDE_CONFIG.idleTimeoutMs, () =>
+          this.#prefixGuide.clear(main, session),
+        );
+      }
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -276,14 +280,12 @@ export class NoteEditor {
     event.preventDefault();
     event.stopPropagation();
     this.refreshGuide(main, session);
-    const timeoutMs = isLeaderPrefix(decision.state.keyBuffer)
-      ? KEY_GUIDE_CONFIG.idleTimeoutMs
-      : decision.timeoutMs;
+    const timeoutMs = keyGuideTimeout(decision);
     if (timeoutMs !== null) {
       const current = this.captureCurrent(session);
       input.schedule(decision, timeoutMs, (resolved) => {
         if (!current()) return;
-        this.#leaderGuide.clear(main, session);
+        this.#prefixGuide.clear(main, session);
         if (resolved.kind !== 'execute') return;
         const count = resolved.action === 'openCommandPalette' ? 0 : resolved.count;
         const local = this.executeAction(resolved.action, el, main, session, count);
@@ -317,12 +319,11 @@ export class NoteEditor {
 
   private resetInput(main: MainWindow, session: MainWindowSession): void {
     session.note.input.reset();
-    this.#leaderGuide.clear(main, session);
+    this.#prefixGuide.clear(main, session);
   }
 
   private refreshGuide(main: MainWindow, session: MainWindowSession): void {
-    if (isLeaderPrefix(session.note.input.keyBuffer)) this.#leaderGuide.refresh(main, session);
-    else this.#leaderGuide.clear(main, session);
+    this.#prefixGuide.refresh(main, session);
   }
 
   private focusReader(main: MainWindow): boolean {

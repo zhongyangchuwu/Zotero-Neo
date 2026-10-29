@@ -103,6 +103,8 @@ Library 拥有 Local Find 查询/界面及最近回收批次，Main session 不�
 
 Notes 按窗口拥有候选、选择后的打开编排及可选 Vim 编辑的模式、寄存器和 caret 样式。`NoteSurfaceRuntime` 只保留精确编辑器身份、输入 runtime 和退休代次；Surface 继续决定原生/IME 输入、count、前缀及焦点。Note 普通动作和 Insert 退出登记到原上下文；候选必须显式传给 Picker。共享导航提供选择完成后的宿主委托，不新增 Note 历史栈。
 
+输入缓冲和计时器由 `InputRuntime` 管理，Surface 负责原生输入／IME 仲裁与状态反馈；`PrefixGuideRuntime` 根据精确上下文和当前有效绑定投影后续键，不再由 Surface 限制为 Space 前缀。`keyGuideTimeout()` 只为不带独立动作的命令前缀提供 5 秒阅读时间，歧义短动作继续使用 matcher 超时，数字计数不引入新解析器或指南延迟。Escape 清除整条待完成输入，退格保留尚未删去的计数，并使被取消的动作计时器失效。
+
 
 Reader 导航拥有页面/滚动/缩放/搜索、语义与批注位置遍历、marks、按需 captions、原生侧栏增强及平滑滚动状态，登记 Normal 与四个侧栏上下文的实际处理器。Surface 保留输入和精确视图、CurrentTarget、共享导航历史与 Toolkit 导航宿主；Workspace 复用该宿主处理分屏与方向焦点。marks 保存完成后重查发起交互，不能覆盖新的输入或界面状态；销毁视图时先清空 RAF/完成回调的所有权，再尝试原生取消，即使取消失败也不保留旧视图或阻塞下一次滚动。
 

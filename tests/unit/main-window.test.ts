@@ -1064,41 +1064,6 @@ describe('NoteEditor shared binding input', () => {
     vi.useRealTimers();
   });
 
-  it('keeps d/y/c as pending Note Normal operators without stealing native Backspace', () => {
-    for (const operator of ['d', 'y', 'c']) {
-      const test = harness();
-      test.press('2');
-      test.press(operator);
-      expect(test.session.note.input.keyBuffer).toBe(operator);
-      expect(test.session.note.input.countBuffer).toBe('2');
-      const backspace = test.press('Backspace');
-      expect(backspace.preventDefault).not.toHaveBeenCalled();
-      expect(test.session.note.input.keyBuffer).toBe('');
-      expect(test.session.note.input.countBuffer).toBe('');
-      vi.useRealTimers();
-    }
-  });
-
-  it('backs up and cancels a counted Space prefix without losing its count', () => {
-    const test = harness();
-    test.press('3');
-    test.press(' ');
-    test.press('f');
-    const backspace = test.press('Backspace');
-    expect(backspace.preventDefault).toHaveBeenCalledOnce();
-    expect(test.session.note.input.keyBuffer).toBe(' ');
-    expect(test.session.note.input.countBuffer).toBe('3');
-    const escape = test.press('Escape');
-    expect(escape.preventDefault).toHaveBeenCalledOnce();
-    expect(test.session.note.input.keyBuffer).toBe('');
-    expect(test.session.note.input.countBuffer).toBe('3');
-    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
-    expect(test.actions).toEqual([]);
-    test.press('H');
-    expect(test.actions).toEqual([['previousTab', 3]]);
-    vi.useRealTimers();
-  });
-
   it('invalidates an ambiguous timeout on close and starts later input clean', () => {
     const test = harness({ 'note-normal:<Space>f': 'nextTab' });
     test.press('2');

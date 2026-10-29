@@ -613,7 +613,7 @@ describe('input matcher', () => {
     expect(cancelLeaderInput(normalState({ keyBuffer: 'g' }))).toBeNull();
 
     const direct = normalState({ keyBuffer: 'ff', countBuffer: '2' });
-    expect(cancelPendingInput(direct)).toEqual(normalState({ countBuffer: '2' }));
+    expect(cancelPendingInput(direct)).toEqual(normalState());
     expect(backspacePendingInput(direct)).toEqual(
       normalState({ keyBuffer: 'f', countBuffer: '2' }),
     );

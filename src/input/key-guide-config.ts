@@ -1,3 +1,5 @@
+import type { InputDecision } from './engine';
+
 export type KeyGuideLanguage = 'en' | 'zh-CN';
 
 export function keyGuideLanguage(configured: string, hostLocale: string): KeyGuideLanguage {
@@ -14,3 +16,12 @@ export const KEY_GUIDE_CONFIG = {
   minFontSizePx: 12,
   maxFontSizePx: 24,
 } as const;
+
+/** Pure namespaces allow time to read the guide; ambiguous actions keep matcher timing. */
+export function keyGuideTimeout(
+  pending: Extract<InputDecision, { readonly kind: 'pending' }>,
+): number | null {
+  return pending.timeoutAction === null && pending.state.keyBuffer
+    ? KEY_GUIDE_CONFIG.idleTimeoutMs
+    : pending.timeoutMs;
+}
