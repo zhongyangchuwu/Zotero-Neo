@@ -4,7 +4,8 @@
 
 ### 新增 {#added}
 
-- 增加模块基座和首条标签模块接入：按 MainWindow 隔离作用域，登记唯一上下文/动作贡献，退休回调后清理资源，激活失败时回滚部分资源并保留原始错误。Main、Reader、Note 的标签目标、原生事务与默认绑定不变；尚不开放模块开关。
+- 在现有 Neo 设置中开放十二个内置模块的启动配置，默认全部开启。草稿依赖预览、已保存请求与已应用值分开展示，标明启用、停用、阻止、失败、等待宿主及等待重启；保存不自动切换依赖，只有真正重启 Zotero 才应用，Neo 重载沿用本进程启用图。原生偏好页与公共设置入口始终保留。
+- 增加模块基座和标签模块接入：按 MainWindow 隔离作用域，登记唯一上下文/动作贡献，退休回调后清理资源，激活失败时回滚部分资源并保留原始错误。Main、Reader、Note 的标签目标、原生事务与默认绑定不变。
 - 增加七个默认无绑定的 Main 分类命令，支持查找分类、连续添加已有条目、移动条目/分类，以及通过原生对话框创建、重命名、删除。复用现有 Palette 和 Picker，不新增控件；保留原生分类编辑、拖放、`<Space>fc` 与 Persistent Selection。
 - 在 Main 和 Reader Normal 增加 **Add Item by Identifier**，默认 `<Space>ai`，支持重绑定和 Command Palette 发现。复用 Zotero 原生输入、批量查找、保存与错误处理，保留草稿和原生 IME/Enter/Escape 所有权。Reader 标签页与独立窗口返回实际关联 Library，不借用条目 Selection；拒绝歧义或只读库 Scope。
 - Reader Normal `y` 绑定 `copyTarget`，分别提示批注 Excerpt/Comment、DOI、arXiv、HTTP(S) 与原生外链复制目标；`followLink`（`f`）同时支持识别出的文本标识符和原生链接。Select `y` 与 Normal `Y` 不变，直接 `yankAnnotation` 默认无绑定。schema 19 将 `copyIdentifier` / `followIdentifier` 迁移为新 ID，保留自定义位置、显式 null 和自定义 `reader-normal:y` → `yankAnnotation`，不新增 `<Space>ya`。
@@ -18,20 +19,21 @@
 
 ### 调整 {#changed}
 
-- 将标签页候选、切换/循环/关闭、Reader/Note 的 Show in Library 与 Reader 分屏/方向焦点接入 `workspace`。Picker 取得显式标签页来源，Surface 传入自己的目标；普通按键与 Palette 共用真实实现，方向焦点实际成功才消费按键。唯一历史、原生标签页重扫、NativeInput 及 Main/Note 通用面板焦点仍由基座负责，不依赖 Library 或 Reader 导航模块；不新增动作、绑定或模块开关。
-- 将批注创建、删除、改色、过滤、复制及评论编辑接入 `reader-annotations`。Select 下划线与 Add note 使用模块的具名贡献；Surface 保留 CurrentTarget、NativeInput、`i` 和 `zb` 的混合路由。评论交互绑定精确视图与 Document，部分获取和重入退出释放自有资源；已接纳保存继续完成，但旧状态和焦点不复活。不新增动作、绑定、依赖或模块开关。
-- 将 Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本和 Selection Actions 接入 `reader-selection`。公共选择 API 与注册 disposer 保持原签名；应用级动作定义不随单个 Reader 释放。Capture、下划线和 Add note 仍由具名贡献提供，选择模块不拥有批注或 Note 写入，不依赖导航模块，不开放模块开关。
-- 将 Reader 页面、滚动/平移、缩放、搜索、Outline/图表/批注位置遍历、marks 和原生侧栏增强接入 `reader-navigation`。保留特殊 marks 语法、数据格式、按需结构分析和共享历史；分屏/焦点继续由基座提供。四个侧栏上下文使用真实唯一贡献；已接纳 mark 保存继续完成，但不覆盖后续交互状态。平滑滚动保留重复输入与减速，销毁视图的取消失败不再保留旧 RAF 或阻塞后续滚动。不开放模块开关。
+- 按静态清单、精确上下文及实际宿主实例过滤模块能力，在按键匹配、count/前缀、Guide 与 Palette 前排除不可用贡献，保留动作元数据和用户绑定。Capture 等待实际 Notes/Selection 依赖，不要求 Main 启动时先有 Reader；停用 Worksets 后标签/分类仍使用当前目标。Reader Select、原生批注、hints 与 Workspace 按独立能力退化，旧行为开关保持原义。
+- 将标签页候选、切换/循环/关闭、Reader/Note 的 Show in Library 与 Reader 分屏/方向焦点接入 `workspace`。Picker 取得显式标签页来源，Surface 传入自己的目标；普通按键与 Palette 共用真实实现，方向焦点实际成功才消费按键。唯一历史、原生标签页重扫、NativeInput 及 Main/Note 通用面板焦点仍由基座负责，不依赖 Library 或 Reader 导航模块；不新增动作或绑定。
+- 将批注创建、删除、改色、过滤、复制及评论编辑接入 `reader-annotations`。Select 下划线与 Add note 使用模块的具名贡献；Surface 保留 CurrentTarget、NativeInput、`i` 和 `zb` 的混合路由。评论交互绑定精确视图与 Document，部分获取和重入退出释放自有资源；已接纳保存继续完成，但旧状态和焦点不复活。不新增动作、绑定或运行时依赖。
+- 将 Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本和 Selection Actions 接入 `reader-selection`。公共选择 API 与注册 disposer 保持原签名；应用级动作定义不随单个 Reader 释放。Capture、下划线和 Add note 仍由具名贡献提供，选择模块不拥有批注或 Note 写入，不依赖导航模块。
+- 将 Reader 页面、滚动/平移、缩放、搜索、Outline/图表/批注位置遍历、marks 和原生侧栏增强接入 `reader-navigation`。保留特殊 marks 语法、数据格式、按需结构分析和共享历史；分屏/焦点由 Workspace 复用基座宿主能力。四个侧栏上下文使用真实唯一贡献；已接纳 mark 保存继续完成，但不覆盖后续交互状态。平滑滚动保留重复输入与减速，销毁视图的取消失败不再保留旧 RAF 或阻塞后续滚动。
 - 将 Reader 摘录到已有 Note 的快照、目的地确认、原生追加/保存和回执接入 `capture`，MainWindow 与 ReaderSession 各自拥有真实贡献。保留公共选择 API、现有选择动作及 Notes 候选；不借用 Main Selection，不依赖 Vim Note 编辑开关。旧确认不能写入，界面退休不撤销已接纳保存，晚到结果不恢复旧状态或焦点。
 - 将 Note 候选、打开编排及可选 Vim 编辑接入按窗口隔离的 `notes`。模式、寄存器和 caret UI 归模块；Surface 保留精确编辑器身份、原生/IME 输入、count、前缀和共享焦点。Main/Reader/Note 查找与 Capture 显式使用同一候选能力，Vim 开关不控制 Note 查找或 Capture 目的地。
 - 将树导航、Local Find、搜索入口、条目选择器、打开、标识符录入、citekey 与最近回收批次接入 `library`。Main session 不再持有 Local Find 或回收历史；共享焦点、原生 View 能力与唯一 Back/Forward 仍独立于 Library。Reader citekey 使用本地目标；保留原按键、显式 Select 重绑定、候选范围和目标拒绝策略。
-- 将 Main Persistent Selection、Visual 与 Selection Panel 接入按窗口隔离的 `worksets` 模块，Main session 不再预建工作集状态。Cursor、原生多目标取消和共享行渲染仍由 Main 持有；目标与 Trash 只消费明确 Selection 端口，Reveal 使用既有导航历史。保留原有按键、隐藏成员拒绝和目标优先级；旧面板、计时器与导航完成不能影响替换实例，重入退休时晚到的主题/外观句柄也会释放。每次面板关闭即释放自身主题，不再由模块寿命的清理闭包持有已分离 DOM。不开放模块开关。
+- 将 Main Persistent Selection、Visual 与 Selection Panel 接入按窗口隔离的 `worksets` 模块，Main session 不再预建工作集状态。Cursor、原生多目标取消和共享行渲染仍由 Main 持有；目标与 Trash 只消费明确 Selection 端口，Reveal 使用既有导航历史。保留原有按键、隐藏成员拒绝和目标优先级；旧面板、计时器与导航完成不能影响替换实例，重入退休时晚到的主题/外观句柄也会释放。每次面板关闭即释放自身主题，不再由模块寿命的清理闭包持有已分离 DOM。
 
-- 将 Reader copy/link hints 接入按 ReaderSession 隔离的 `reader-hints` 模块，拥有可见目标、临时标签、链接激活与目的地 cue。保留 Normal `y` / `f`、精确分屏视图、IME/原生输入优先级及唯一导航历史；父作用域退休后旧确认、异步完成和 RAF 不再写入或重画，清理失败仍释放其他自有资源。原始业务错误与清理异常分别诊断，不再产生未处理的导航 Promise rejection。共享标签辅助继续供 Flash 使用，不开放模块开关。
+- 将 Reader copy/link hints 接入按 ReaderSession 隔离的 `reader-hints` 模块，拥有可见目标、临时标签、链接激活与目的地 cue。保留 Normal `y` / `f`、精确分屏视图、IME/原生输入优先级及唯一导航历史；父作用域退休后旧确认、异步完成和 RAF 不再写入或重画，清理失败仍释放其他自有资源。原始业务错误与清理异常分别诊断，不再产生未处理的导航 Promise rejection。共享标签辅助继续供 Flash 使用。
 
 - 将分类工作流接入按窗口隔离的 `collections` 模块，拥有候选来源、重命名草稿和精确 Picker 释放句柄；移除 controller 的共享业务实例。保留 Main/Reader 目标、原有九个 Main 命令、查询/取消与事务回滚语义，不新增 Note 命令。修复命名对话框期间模块退休后仍弹出下一确认框的问题，旧交互不能写入或关闭替换 Picker。
 
-- 将已安装扩展管理接入 `extensions` 模块，按 MainWindow 拥有面板状态与清理，Main session 不再预建该功能状态。保留 Main/Reader/Note 的 `<Space>pp`、筛选、权限与自保护、重绑定/IME、设置及链接；模块退休后旧 DOM 和异步完成不再改变 UI。主题清理失败仍释放剩余资源，界面获取失败时回滚并保留原始错误。不增加内部模块开关或扩展安装/更新/卸载功能。
+- 将已安装扩展管理接入 `extensions` 模块，按 MainWindow 拥有面板状态与清理，Main session 不再预建该功能状态。保留 Main/Reader/Note 的 `<Space>pp`、筛选、权限与自保护、重绑定/IME、设置及链接；模块退休后旧 DOM 和异步完成不再改变 UI。主题清理失败仍释放剩余资源，界面获取失败时回滚并保留原始错误。不新增扩展安装、更新或卸载功能。
 
 - 项目文档默认只维护中文；现有英文按需原位翻译，保留 URL/必要锚点，不建立双语副本。文档站导航和搜索界面改为中文，技术标识与许可证原文不变。
 - `<Space>ca` / `<Space>cr` 显示直接成员覆盖率，只添加缺失成员；创建并添加支持明确父分类/名称确认并原子执行。条目移动要求单一普通直接来源，并保留其他成员关系；删除分类保留全部条目。
@@ -62,6 +64,7 @@
 
 ### 修复 {#fixed}
 
+- Reader Navigation 的 marks/原生侧栏获取纳入模块激活事务，局部失败退休全部贡献但保留独立功能；Base 启动失败完整释放未完成 session，不由重扫循环重试。模块清理异常不再被通用清理层吞掉，剩余负责方继续释放。独立 Reader 的标识符可用性与实际 Main opener 一致，opener 关闭后缓存绑定及时失效。
 - 评论交接区分原视图寿命与激活状态：切换标签页后仍保存活视图中的最终草稿，不等两秒自动保存；旧输入、视图替换及晚到保存的焦点保护不放宽。
 - 选择交互绑定原 ReaderView 和 Document，同 Window 替换不能复用旧面板、范围或输入回调；新动作接纳前先释放旧视图，后续扫描不再关闭新面板。异步动作忽略忙碌阶段的重复/IME 按键，但取消、换视图或打开 Settings 后不重画旧 UI 或抢回焦点。退出释放 DOM anchor、选择样式、主题和输入监听；视图监听部分获取失败仍排空已注册资源。
 - 从次分屏搜索所选文本时只更新对应的原生 Find；延迟写入绑定本次 Find 状态，后续输入、关闭重开或新搜索不会被旧查询覆盖。原生选择接纳后立即建立公共选择 API 的所属 Reader，隐藏或退休 Reader 不暴露旧选择。

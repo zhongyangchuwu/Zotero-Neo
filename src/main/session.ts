@@ -2,6 +2,7 @@ import { CleanupScope } from '../core/cleanup';
 import { InputRuntime } from '../input/runtime';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
+import type { BuiltinModuleRuntime } from '../core/module-runtime';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
 import { PickerRuntime } from './picker/runtime';
@@ -34,9 +35,10 @@ export class MainWindowSession {
   constructor(
     window: MainWindow,
     preferences: PreferenceStore,
+    modules: BuiltinModuleRuntime,
     mayClaimInitialLibraryFocus = false,
   ) {
-    this.host = new ZoteroWindowRuntime(window, preferences);
+    this.host = new ZoteroWindowRuntime(window, preferences, modules);
     this.input = new InputRuntime(window);
     this.prefixGuide = new PrefixGuideRuntime(window);
     this.note = new NoteSurfaceRuntime(window);

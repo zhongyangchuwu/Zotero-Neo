@@ -30,3 +30,26 @@ export function settingsToggleLabels(language: SettingsLanguage): {
     off: settingsText(language, 'Off'),
   };
 }
+
+const SCOPE_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
+  'Main window': 'Main window',
+  'Reader session': 'Reader session',
+  'Tag picker': 'Tag picker',
+  'Collection picker': 'Collection picker',
+  'Reader view': 'Reader view',
+  'Native sidebar': 'Native sidebar',
+  'Selection action': 'Selection action',
+  'Comment editor': 'Comment editor',
+  'Hint overlay': 'Hint overlay',
+  'Note editor': 'Note editor',
+  'Note picker': 'Note picker',
+  'Capture chooser': 'Capture chooser',
+  'Tab picker': 'Tab picker',
+  'Plugin manager': 'Plugin manager',
+};
+
+/** Translates static module-scope labels while preserving unknown future labels. */
+export function settingsScopeText(language: SettingsLanguage, scope: string): string {
+  const message = SCOPE_MESSAGES[scope];
+  return message ? settingsText(language, message) : scope;
+}

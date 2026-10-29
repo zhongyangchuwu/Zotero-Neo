@@ -63,7 +63,7 @@ function bindingMode(mode: NoteMode): NoteBindingMode {
 export class NoteEditor {
   readonly #logger: Logger;
   readonly #navigation: MainNavigation;
-  readonly #bindings: () => BindingMap;
+  readonly #bindings: (session: MainWindowSession) => BindingMap;
   readonly #leaderGuide: LeaderGuideHost;
   readonly #editing: (session: MainWindowSession) => NoteEditingPort | null;
   readonly #isOwner: (session: MainWindowSession) => boolean;
@@ -71,7 +71,7 @@ export class NoteEditor {
   constructor(
     logger: Logger,
     navigation: MainNavigation,
-    bindings: () => BindingMap,
+    bindings: (session: MainWindowSession) => BindingMap,
     leaderGuide: LeaderGuideHost,
     editing: (session: MainWindowSession) => NoteEditingPort | null,
     isOwner: (session: MainWindowSession) => boolean,
@@ -218,7 +218,7 @@ export class NoteEditor {
     bindings: BindingMap;
   } {
     const mode = bindingMode(this.#editing(session)?.mode ?? 'normal');
-    return { mode, bindings: bindingsForMode(this.#bindings(), mode) };
+    return { mode, bindings: bindingsForMode(this.#bindings(session), mode) };
   }
 
   onKeyDown(

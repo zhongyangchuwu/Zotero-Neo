@@ -1,3 +1,4 @@
+import type { BuiltinModuleRuntime } from '../core/module-runtime';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { LANGUAGE_PREFERENCE_KEY } from '../core/preferences';
@@ -8,11 +9,19 @@ import { SettingsAppearance, type SettingsAppearanceState } from './settings-app
 import { SettingsInteraction } from './settings-interaction';
 import { settingsLanguage, settingsText, type SettingsLanguage } from './settings-i18n';
 import { SettingsKeybindings, type SettingsKeybindingsState } from './settings-keybindings';
+import { SettingsModules } from './settings-modules';
 import { SettingsReader } from './settings-reader';
 import { settingsButton, setSettingsPressed } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const SECTIONS = ['Appearance', 'Interaction', 'Reader', 'Keybindings', 'Advanced'] as const;
+const SECTIONS = [
+  'Appearance',
+  'Interaction',
+  'Reader',
+  'Keybindings',
+  'Modules',
+  'Advanced',
+] as const;
 type SettingsSection = (typeof SECTIONS)[number];
 
 interface SettingsPage {
@@ -25,6 +34,7 @@ export class SettingsCenter {
   readonly #theme: ThemeManager;
   readonly #appearance: InteractionAppearanceManager;
   readonly #preferences: PreferenceStore;
+  readonly #modules: BuiltinModuleRuntime;
   #panel: HTMLElement | null = null;
   #backdrop: HTMLElement | null = null;
   #heading: HTMLElement | null = null;
@@ -50,11 +60,13 @@ export class SettingsCenter {
     theme: ThemeManager,
     appearance: InteractionAppearanceManager,
     preferences: PreferenceStore,
+    modules: BuiltinModuleRuntime,
   ) {
     this.#window = window;
     this.#theme = theme;
     this.#appearance = appearance;
     this.#preferences = preferences;
+    this.#modules = modules;
   }
 
   get open(): boolean {
@@ -109,7 +121,7 @@ export class SettingsCenter {
 
     const navigation = create('nav');
     navigation.setAttribute('aria-label', 'Settings sections');
-    navigation.style.cssText = `display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid ${THEME_VARS.border}`;
+    navigation.style.cssText = `display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid ${THEME_VARS.border}`;
     for (const section of SECTIONS) {
       const button = settingsButton(
         doc,
@@ -237,6 +249,16 @@ export class SettingsCenter {
         content,
         this.#preferences,
         this.#keybindingsState,
+        language,
+      );
+      return;
+    }
+    if (this.#section === 'Modules') {
+      this.#activePage = new SettingsModules(
+        this.#window,
+        content,
+        this.#preferences,
+        this.#modules,
         language,
       );
       return;

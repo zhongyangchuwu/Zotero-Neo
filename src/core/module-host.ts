@@ -133,6 +133,22 @@ export class ModuleHost {
     };
   }
 
+  /** Reports a live exact-context contribution without constructing command metadata. */
+  hasAction(context: BindingContext, action: ActionId): boolean {
+    return (
+      !this.#disposed && this.#ownerIsCurrent() && this.#actions.get(context)?.has(action) === true
+    );
+  }
+
+  /** Base lifecycle retirement when an owning host dependency disappears. */
+  release(id: string): void {
+    const scope = this.#modules.get(id);
+    if (!scope) return;
+    scope.retire();
+    this.#modules.delete(id);
+    scope.dispose();
+  }
+
   /** Retires every callback before any module cleanup can re-enter another contribution. */
   dispose(): void {
     if (this.#disposed) return;

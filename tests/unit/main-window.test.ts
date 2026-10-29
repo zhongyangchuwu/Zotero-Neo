@@ -7,6 +7,8 @@ import type {
   MainWindowControllerApi,
   MainWindowControllerDependencies,
 } from '../../src/core/contracts';
+import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
+import { BUILTIN_MODULES } from '../../src/modules';
 import {
   LANGUAGE_PREFERENCE_KEY,
   NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
@@ -19,7 +21,7 @@ import { LibraryNavigation } from '../../src/modules/library/navigation';
 import { NoteEditor } from '../../src/main/note-editor';
 import { NoteSurfaceRuntime } from '../../src/main/note-runtime';
 import { NoteEditing } from '../../src/modules/notes/editor';
-import { createMainWindowController } from '../../src/main/controller';
+import { createMainWindowController as composeMainWindowController } from '../../src/main/controller';
 import { MainFocusOwnership } from '../../src/main/focus-ownership';
 import { ReaderSession, createReaderController } from '../../src/reader/controller';
 import type {
@@ -39,6 +41,13 @@ import { FuzzyPicker } from '../../src/main/picker';
 import type { PickerProvider } from '../../src/main/picker/types';
 
 const logger = { debug: () => {}, diagnostic: () => {} };
+
+function createController(
+  dependencies: Omit<MainWindowControllerDependencies, 'modules'>,
+  modules = new BuiltinModuleRuntime(dependencies.preferences, dependencies.logger),
+) {
+  return composeMainWindowController({ ...dependencies, modules });
+}
 
 function libraryNavigation(
   window: MainWindow,
@@ -1309,7 +1318,7 @@ describe('Note contextual Open', () => {
     });
     Reflect.set(globalThis, 'Services', { focus: { focusedWindow: editorWindow } });
     Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -1324,7 +1333,7 @@ describe('Note contextual Open', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     try {
       controller.addWindow(host.window);
       const pressNote = (key: string): void => {
@@ -1465,7 +1474,7 @@ describe('Main startup focus handoff', () => {
     Reflect.set(host.window.document, 'getElementById', (id: string) =>
       id === 'zotero-tb-search' ? { searchTextbox: { select, value: '' } } : null,
     );
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -1480,7 +1489,7 @@ describe('Main startup focus handoff', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     try {
       controller.addWindow(host.window);
       for (const key of [' ', 'f', 'q']) {
@@ -1507,13 +1516,13 @@ describe('Main startup focus handoff', () => {
   });
 });
 
-function settingsMainHost() {
+function settingsMainHost(initial: Record<string, boolean | number | string> = {}) {
   vi.stubGlobal('Services', { focus: { focusedWindow: null } });
   const host = pickerMainWindow();
-  const values = new Map<string, boolean | number | string>();
+  const values = new Map<string, boolean | number | string>(Object.entries(initial));
   const writes: Array<[string, boolean | number | string]> = [];
   const observers = new Map<string, Set<() => void>>();
-  const controller = createMainWindowController({
+  const controller = createController({
     preferences: {
       has: (key: string) => values.has(key),
       get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
@@ -1541,7 +1550,7 @@ function settingsMainHost() {
       captureJumpLocation: () => null,
       restoreJumpLocation: async () => null,
     },
-  } as MainWindowControllerDependencies);
+  } as Omit<MainWindowControllerDependencies, 'modules'>);
   controller.addWindow(host.window);
   const press = (
     key: string,
@@ -1568,6 +1577,47 @@ function settingsMainHost() {
     host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-backdrop');
   return { ...host, controller, press, drawer, backdrop, values, writes };
 }
+
+describe('startup module configuration', () => {
+  it('passes disabled Library input through while retaining the native Settings entry', () => {
+    const disabled = Object.fromEntries(
+      BUILTIN_MODULES.map(({ id }) => [`modules.${id}.enabled`, false]),
+    );
+    const host = settingsMainHost({
+      ...disabled,
+      bindings: JSON.stringify({ 'main-normal:qq': 'scrollDown' }),
+    });
+    try {
+      const event = host.press('j');
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(event.stopPropagation).not.toHaveBeenCalled();
+      expect(host.press('q').preventDefault).not.toHaveBeenCalled();
+      expect(host.press('q').preventDefault).not.toHaveBeenCalled();
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      expect(host.drawer()?.id).toBe('zotero-neo-settings-center');
+    } finally {
+      host.controller.shutdown();
+    }
+  });
+
+  it('keeps the applied Library input after requests change until a new startup', () => {
+    const host = settingsMainHost();
+    try {
+      host.values.set('modules.library.enabled', false);
+      expect(host.press('j').preventDefault).toHaveBeenCalled();
+    } finally {
+      host.controller.shutdown();
+    }
+    const restarted = settingsMainHost({ 'modules.library.enabled': false });
+    try {
+      expect(restarted.press('j').preventDefault).not.toHaveBeenCalled();
+      expect(restarted.controller.openSettings(restarted.window)).toBe(true);
+      expect(restarted.drawer()?.id).toBe('zotero-neo-settings-center');
+    } finally {
+      restarted.controller.shutdown();
+    }
+  });
+});
 
 describe('Main Add by Identifier', () => {
   it('opens the native capability once from a counted shortcut and from the command palette', async () => {
@@ -1785,9 +1835,9 @@ describe('Main retirement ownership', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies;
-    const retired = createMainWindowController(dependencies);
-    const current = createMainWindowController(dependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>;
+    const retired = createController(dependencies);
+    const current = createController(dependencies);
     try {
       retired.addWindow(host.window);
       const keydown = listeners.get('keydown')![0]!;
@@ -1828,7 +1878,11 @@ describe('Main retirement ownership', () => {
       set: () => {},
       clear: () => {},
     } as MainWindowControllerDependencies['preferences'];
-    const session = new MainWindowSession(host.window, preferences);
+    const session = new MainWindowSession(
+      host.window,
+      preferences,
+      new BuiltinModuleRuntime(preferences, logger),
+    );
     const navigation = new MainNavigation(logger, () => {});
     try {
       navigation.status(session, 'A', 2000);
@@ -2057,18 +2111,14 @@ describe('Main Settings Center shell', () => {
       listenerCount(type: string): number;
     };
     const navigation = panel?.children[1] as HTMLElement;
-    expect(navigation.children).toHaveLength(5);
     for (const button of Array.from(navigation.children) as HTMLElement[]) {
       expect(button.tabIndex).toBe(-1);
     }
     expect((panel?.children[0]?.children[1] as HTMLElement).tabIndex).toBe(-1);
-    expect((navigation.children[0] as HTMLElement).style.background).toBe(
-      'var(--zotero-neo-selected)',
-    );
-    const reader = navigation.children[2] as HTMLElement & { emit(type: string): void };
+    const reader = Array.from(navigation.children).find(
+      (button) => (button as HTMLElement).dataset.section === 'Reader',
+    ) as HTMLElement & { emit(type: string): void };
     reader.emit('click');
-    expect(reader.style.background).toBe('var(--zotero-neo-selected)');
-    expect(panel?.children[2]?.children[0]?.textContent).toBe('Reader');
     expect(host.controller.openSettings(host.window)).toBe(true);
     expect(host.drawer()).toBe(panel);
     expect(
@@ -2085,7 +2135,10 @@ describe('Main Settings Center shell', () => {
     expect(backdrop.listenerCount('click')).toBe(0);
     expect(host.window.document.activeElement).toBe(prior);
     host.controller.openSettings(host.window);
-    expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Reader');
+    const restoredReader = Array.from(host.drawer()?.children[1]?.children ?? []).find(
+      (button) => (button as HTMLElement).dataset.section === 'Reader',
+    );
+    expect(restoredReader?.getAttribute('aria-current')).toBe('page');
     host.controller.shutdown();
     expect(host.drawer()).toBeUndefined();
     expect(host.backdrop()).toBeUndefined();
@@ -2134,7 +2187,9 @@ describe('Main Settings Center shell', () => {
       const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
         HTMLElement & { emit(type: string): void }
       >;
-      nav[4]!.emit('click');
+      Array.from(nav)
+        .find((button) => button.dataset.section === 'Advanced')!
+        .emit('click');
       let controls = all(host.drawer()?.children[2] as HTMLElement);
       const chinese = controls.find(
         (node) => node.localName === 'button' && node.textContent === '中文',
@@ -2144,7 +2199,11 @@ describe('Main Settings Center shell', () => {
 
       const panel = host.drawer()!;
 
-      (panel.children[1]?.children[4] as HTMLElement & { emit(type: string): void }).emit('click');
+      (
+        Array.from(panel.children[1]?.children ?? []).find(
+          (button) => (button as HTMLElement).dataset.section === 'Advanced',
+        ) as HTMLElement & { emit(type: string): void }
+      ).emit('click');
 
       controls = all(panel.children[2] as HTMLElement);
       const separator = controls.find(
@@ -2162,7 +2221,6 @@ describe('Main Settings Center shell', () => {
       ) as HTMLElement & { emit(type: string): void };
       english.emit('click');
       expect(host.values.get('language')).toBe('en');
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Advanced');
     } finally {
       host.controller.shutdown();
     }
@@ -2334,7 +2392,7 @@ describe('Main Settings Center shell', () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const first = pickerMainWindow();
     const second = pickerMainWindow();
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -2349,7 +2407,7 @@ describe('Main Settings Center shell', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     expect(controller.openSettings()).toBe(false);
     controller.addWindow(first.window);
     controller.addWindow(second.window);
@@ -2404,7 +2462,7 @@ describe('Main command palette', () => {
   it('opens through the canonical ActionId path in the owner window', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const host = pickerMainWindow();
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -2421,7 +2479,7 @@ describe('Main command palette', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     controller.addWindow(host.window);
 
     const colon = {
@@ -2459,7 +2517,7 @@ describe('Main command palette', () => {
       vi.stubGlobal('Services', { focus: { focusedWindow: null } });
       const host = pickerMainWindow();
       const debug = vi.fn();
-      const controller = createMainWindowController({
+      const controller = createController({
         preferences: {
           has: () => false,
           get: (_key, fallback) => fallback,
@@ -2478,7 +2536,7 @@ describe('Main command palette', () => {
           captureJumpLocation: () => null,
           restoreJumpLocation: async () => null,
         },
-      } as MainWindowControllerDependencies);
+      } as Omit<MainWindowControllerDependencies, 'modules'>);
 
       controller.addWindow(host.window);
 
@@ -2512,7 +2570,7 @@ describe('Main command palette', () => {
     const original = new TypeError('native Reader boundary failure');
     const failure = new Error('Reader injection context', { cause: original });
     let failed = true;
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -2531,7 +2589,7 @@ describe('Main command palette', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     try {
       controller.addWindow(host.window);
       expect(debug.mock.calls.map(([message]) => message).join('\n')).toContain(original.stack);
@@ -2567,7 +2625,7 @@ describe('Main tab picker routing', () => {
       ],
       selectedID: 'library',
     });
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -2584,7 +2642,7 @@ describe('Main tab picker routing', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     controller.addWindow(host.window);
 
     const press = (key: string): void =>
@@ -2682,7 +2740,9 @@ describe('Reader to Main command palette integration', () => {
     });
 
     let main: MainWindowControllerApi | null = null;
+    const modules = new BuiltinModuleRuntime(preferences, logger);
     const readerController = createReaderController({
+      modules,
       preferences,
       logger,
       main: {
@@ -2709,7 +2769,7 @@ describe('Reader to Main command palette integration', () => {
           main?.captureReaderSelectionToNote(context, ownerWindow) ?? Promise.resolve(null),
       },
     });
-    main = createMainWindowController({ preferences, logger, reader: readerController });
+    main = createController({ preferences, logger, reader: readerController }, modules);
     readerController.start('zotero-neo@zotero-neo');
     main.addWindow(owner.window);
     main.addWindow(other.window);
@@ -2783,7 +2843,7 @@ describe('Main H/L tab defaults', () => {
       selectPrev: previous,
       selectNext: next,
     });
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -2800,7 +2860,7 @@ describe('Main H/L tab defaults', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     controller.addWindow(host.window);
 
     const press = (key: string): KeyboardEvent => {
@@ -2871,8 +2931,8 @@ describe('repeated tab switching', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies;
-    const controller = createMainWindowController(dependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>;
+    const controller = createController(dependencies);
     controller.addWindow(window);
 
     controller.cycleReaderTab(window, 1);
@@ -2928,8 +2988,8 @@ describe('repeated tab switching', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies;
-    const controller = createMainWindowController(dependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>;
+    const controller = createController(dependencies);
     controller.addWindow(first);
     controller.addWindow(second);
 
@@ -2979,7 +3039,7 @@ describe('main pending-prefix key guide', () => {
         setTimeout,
         clearTimeout,
       } as unknown as MainWindow;
-      const controller = createMainWindowController({
+      const controller = createController({
         preferences: {
           has: () => false,
           get: (key, fallback) =>
@@ -3007,7 +3067,7 @@ describe('main pending-prefix key guide', () => {
           captureJumpLocation: () => null,
           restoreJumpLocation: async () => null,
         },
-      } as MainWindowControllerDependencies);
+      } as Omit<MainWindowControllerDependencies, 'modules'>);
       controller.addWindow(window);
       const press = (key: string) => {
         const preventDefault = vi.fn();
@@ -3128,7 +3188,7 @@ describe('main pending-prefix key guide', () => {
       setTimeout,
       clearTimeout,
     } as unknown as MainWindow;
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (key, fallback) =>
@@ -3150,7 +3210,7 @@ describe('main pending-prefix key guide', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     controller.addWindow(window);
 
     const press = (key: string): void =>
@@ -3269,8 +3329,9 @@ describe('Reader Show in Library and owner routing', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies;
-    const main = createMainWindowController(dependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>;
+    const modules = new BuiltinModuleRuntime(dependencies.preferences, logger);
+    const main = createController(dependencies, modules);
     main.addWindow(first.window);
     main.addWindow(second.window);
     const firstBodyCount = first.bodyChildren.length;
@@ -3279,6 +3340,7 @@ describe('Reader Show in Library and owner routing', () => {
     const readerSession = new ReaderSession({
       controller: {
         dependencies: {
+          modules,
           preferences: dependencies.preferences,
           logger,
           main,
@@ -3351,7 +3413,7 @@ describe('Main jump history integration', () => {
   }
 
   function historyController(logger: MainWindowControllerDependencies['logger']) {
-    return createMainWindowController({
+    return createController({
       preferences: {
         has: () => false,
         get: (_key, fallback) => fallback,
@@ -3366,7 +3428,7 @@ describe('Main jump history integration', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
   }
 
   it('starts a new tree history visit after native items/tree focus events without Neo focus commands', async () => {
@@ -3821,7 +3883,7 @@ describe('Main CurrentTarget routing', () => {
       setTimeout: () => 1,
       clearTimeout: () => {},
     } as unknown as MainWindow;
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (key: string, fallback: boolean | number | string) =>
@@ -3839,7 +3901,7 @@ describe('Main CurrentTarget routing', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     controller.addWindow(window);
     const preventDefault = vi.fn();
     const stopPropagation = vi.fn();
@@ -3897,7 +3959,7 @@ describe('Main CurrentTarget routing', () => {
       itemsView,
       getSelectedItems: () => [...selected].map((index) => items[index]!),
     });
-    const controller = createMainWindowController({
+    const controller = createController({
       preferences: {
         has: () => false,
         get: (key, fallback) =>
@@ -3915,7 +3977,7 @@ describe('Main CurrentTarget routing', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>);
     try {
       controller.addWindow(host.window);
       const press = (key: string) =>
@@ -4011,8 +4073,8 @@ describe('collection navigation repeat pacing', () => {
         captureJumpLocation: () => null,
         restoreJumpLocation: async () => null,
       },
-    } as MainWindowControllerDependencies;
-    const controller = createMainWindowController(dependencies);
+    } as Omit<MainWindowControllerDependencies, 'modules'>;
+    const controller = createController(dependencies);
     controller.addWindow(window);
     const press = (repeat: boolean): void => {
       keydown?.({

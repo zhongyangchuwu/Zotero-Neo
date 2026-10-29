@@ -1,62 +1,78 @@
-# Make Neo fit the way you work
+# 按工作方式调整 Neo {#make-neo-fit-the-way-you-work}
 
-Open Settings with `<Space>ps` from Main, Reader, or Note Normal. Most preference changes save as soon as you make them; keybinding edits stay staged until **Apply**.
+在 Main、Reader 或 Note Normal 按 `<Space>ps` 打开设置。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**，模块请求需点击**保存模块请求**，并在下次重启 Zotero 后应用。
 
-## Try it
+## 修改一个快捷键 {#try-it}
 
-1. Press and release `Space`, then `p`, then `s` to open Neo Settings.
-2. Choose **Keybindings**, select the context where you want the command, and search for its action or key. For example, next-page navigation belongs to Reader, not Main or Note.
-3. Choose **Record** to replace a binding or **Add** to keep the current binding and add another. Press the desired key or sequence, then choose **Done** to add it to the draft. Choose **Cancel** during recording to discard the captured keys.
-4. Review the validation message and choose **Apply** to save. Before Apply, the change is only a draft; after saving, the non-default binding is marked **Custom**.
+1. 依次按 `Space`、`p`、`s` 打开 Neo 设置。
+2. 进入**快捷键**，选择命令所属上下文，再按动作或按键搜索。例如，翻页属于 Reader，不属于 Main 或 Note。
+3. 用**录制**替换绑定，或用**添加**保留原绑定并增加另一组按键。输入按键或序列后，点击**完成**加入草稿；录制时点击**取消**放弃捕获的按键。
+4. 检查校验消息，再点击**应用绑定**。应用前只是草稿；保存后的非默认绑定标为**自定义**。
 
-During recording, `Enter` and `Escape` are key tokens, not recorder controls. Use the visible **Done** and **Cancel** buttons.
+录制时，`Enter` 和 `Escape` 是要记录的按键，不是录制器控制。请使用界面上的**完成**和**取消**按钮。
 
-## Find a command before changing it
+## 先找到命令，再修改绑定 {#find-a-command-before-changing-it}
 
-The **Prefix Guide** shows valid next keys after you start a multi-key command. `<Space>` is the default command prefix in Main, Reader, and Note Normal. Use `:` to open the Command Palette and search actions available in the current context, including supported actions with no key assigned.
-To adjust it, expand **Prefix Guide** under **Keybindings**. Turn **Show Prefix Guide** on or off, or change **Display delay (ms)** and **Font size (px)**.
+输入多键命令的前缀后，**前缀提示**列出可用的后续按键。Main、Reader 和 Note Normal 默认使用 `<Space>` 作为命令前缀。按 `:` 打开 Command Palette，搜索当前上下文可用的动作，包括支持但尚未绑定的动作。
 
-In **Keybindings**, search matches action names, Action IDs, current and default keys, groups, and contexts. Results show **Default**, **Custom**, or **Unbound**. An **Unbound** action can be assigned a key if it is supported in the selected context; an action missing from that context cannot be added there. Open **All groups** to inspect Zotero's native shortcuts; those rows are read-only, and changing a Neo key does not change Zotero's shortcut.
+在**快捷键**中展开**前缀提示**，可以开关提示，调整**显示延迟（ms）**和**字号（px）**。
 
-## Resolve binding messages
+快捷键搜索覆盖动作名称、ActionId、当前与默认按键、分组和上下文，结果标明默认、自定义或未绑定。未绑定动作只可加入其支持的上下文。选择所有分组可查看 Zotero 原生快捷键；这些条目只读，修改 Neo 绑定不会改变原生快捷键。
 
-- An exact duplicate, unsupported action/context pair, or key reserved by Zotero or text editing blocks **Apply**. Choose another sequence or remove the conflicting row.
-- If one sequence starts with another, Settings warns that the shorter command may wait for the longer sequence. The pair is allowed; use a different sequence if you want the shorter command immediately.
-- An existing incompatible binding may be **Delete**-only. Remove it before assigning a replacement.
-- If saving fails, the staged draft remains available and Settings reports the failure.
+停用模块的动作及用户绑定仍保留在设置中，但不参与当前按键匹配、前缀提示或 Command Palette；重新启用模块不需要重建绑定。
 
-## Adjust appearance and language
+## 处理绑定提示 {#resolve-binding-messages}
 
-In **Appearance**, choose a built-in interaction theme—**Zotero**, **Catppuccin**, **Tokyo Night**, or **Gruvbox**—or create and edit a custom theme. These colors style Neo's interaction markers and status indicators. **Marker width (px)** adjusts the Main item marker; **Status style** switches between **Neutral** and **Tinted**.
+- 完全重复的绑定、不支持的动作/上下文组合，以及 Zotero 或文本编辑保留的按键会阻止应用。请更换序列或删除冲突条目。
+- 一个序列是另一序列的前缀时，较短命令可能等待后续按键。这种组合允许保存；需要立即执行时，请换用不同序列。
+- 已有的不兼容绑定可能只允许删除。先删除旧条目，再分配替代绑定。
+- 保存失败时，草稿保留，设置会报告失败。
 
-In **Advanced**, set **Language** to **Follow Zotero**, **English**, or **中文**. This changes the Settings interface and localized command labels in the Prefix Guide, Command Palette, and Keybindings. Follow Zotero uses the host locale.
+## 调整外观和语言 {#adjust-appearance-and-language}
 
-## Tune Reader controls
+在**外观**中选择 Zotero、Catppuccin、Tokyo Night、Gruvbox 或自定义主题。颜色用于 Neo 的交互标记和状态提示；**标记宽度（px）**调整 Main 条目标记，**状态样式**可选中性或着色。
 
-In **Reader**, choose **Scrolling mode** to match how you read:
+在**高级**中，将**语言**设为跟随 Zotero、English 或中文。它控制设置界面，以及前缀提示、Command Palette 和快捷键中的本地化动作标签；跟随 Zotero 使用宿主语言。
 
-- **Step** moves a set distance for each `j`, `k`, `zh`, or `zl` press. Adjust **Scroll step (px)**.
-- **Constant** scrolls at a steady speed while you hold a scroll key. Adjust **Scroll speed (px/s)**.
-- **Accelerating** changes speed while a key is held. Adjust **Initial speed**, **Max speed**, **Acceleration**, and **Deceleration**; turn on **Stop immediately on key release** to stop instead of decelerating.
+## 调整 Reader 控制 {#tune-reader-controls}
 
-Only controls for the selected mode are shown. Enable **Persist marks** to save reading positions across restarts; see [storage and synchronization](SETTINGS_REFERENCE.md) for how marks are stored. **Default color** applies when creating an annotation without choosing an explicit color.
+在**阅读器**中选择**滚动模式**：
 
-**Text Select mode** controls whether `v` and an existing Zotero text selection can enter Reader Select. **Annotation comment editing** controls whether Reader Normal `i` or `Enter` opens the selected annotation's comment editor. Turning it off does not disable Zotero's own comment fields or Select's separate **Add note** action.
+- **步进**：每次 `j`、`k`、`zh` 或 `zl` 移动固定距离，通过**滚动步长（px）**调整。
+- **恒速**：按住滚动键时保持固定速度，通过**滚动速度（px/s）**调整。
+- **加速**：按住时改变速度，可调整初始速度、最大速度、加速度和减速度。开启**松开按键时立即停止**后，不再逐渐减速。
 
-## Choose note and picker behavior
+界面只显示当前模式的参数。开启**持久化标记**可跨重启保存 marks；存储和同步规则见[设置参考](SETTINGS_REFERENCE.md)。**默认颜色**用于没有明确指定颜色的下划线和 Add note。
 
-Under **Interaction**, **Vim-style note editing** enables Vim-style controls in context-pane and standalone Note editors. Turn it off to leave ordinary editing to Zotero.
+**文本选择模式**控制 `v` 和原生 Zotero 文本选择能否进入 Reader Select。**批注评论编辑**控制 Reader Normal 的 `i` / `Enter` 是否打开选中批注的评论编辑器；关闭后不影响 Zotero 原生评论字段或 Select 中独立的 Add note 动作。
 
-The **Mouse row selection and double-click confirmation** option applies to shared pickers. When enabled, one click selects a result and a double-click confirms it; hovering never selects a row.
+## 调整笔记和选择器行为 {#choose-note-and-picker-behavior}
 
-## Use tag namespaces
+在**交互**中，**Vim 风格笔记编辑**控制上下文面板和独立 Note 标签页中的 Vim 操作。关闭后交给 Zotero 普通编辑，不关闭 Note 查找或摘录目的地选择。
 
-Under **Advanced**, **Namespace separator** controls how tag pickers present flat Zotero tag strings as virtual paths. The default `/` enables path matching; an empty separator keeps matching flat. Stored tag names stay unchanged.
+**鼠标单击选择、双击确认**用于共享选择器。开启后，单击选择结果，双击确认；悬停不改变选择。
 
-## Manage installed plugins and integrations
+## 启用或停用内置模块 {#modules}
 
-Press `<Space>pp` from Main, Reader, or Note Normal to open the Plugin Manager. It shows installed plugins and their state; where Zotero permits, you can enable or disable a plugin, open its registered settings or homepage, and follow available repository links. The manager does not install, update, remove, or discover plugins. Use Zotero's **Plugins** screen for those tasks and to disable Neo.
+1. 打开**模块**，勾选下次需要启用的功能。所有模块默认开启；这不是安装或卸载独立插件。
+2. 查看**草稿依赖影响**。例如，关闭笔记或阅读选区会阻止摘录；Neo 不会自动切换其他开关，缺少依赖的请求仍可保存。
+3. 点击**保存模块请求**。每行分别显示已应用值、已保存的请求状态、草稿请求和运行状态；有差异时显示**等待重启**。
+4. 完全退出并重新启动 Zotero。只关闭设置、重新打开 Reader，或重载/停用后启用 Neo，都不会应用新的模块请求。
 
-**Translate** appears in Reader Select's Selection Actions when **Translate for Zotero** is installed. **Better BibTeX** provides citekeys for `<Space>yy`; the target must have an available citekey. If a target cannot resolve or any citekey is missing, Neo refuses the copy and leaves the clipboard unchanged.
+状态含义及模块 ID 见[模块设置参考](SETTINGS_REFERENCE.md#modules)。失败属于实际窗口或 Reader 实例，不会把另一个健康实例一并停用。
 
-See the [Settings reference](SETTINGS_REFERENCE.md) for the control defaults and the [Command Reference](COMMAND_REFERENCE.md) for command contexts and bindings.
+**恢复默认模块请求**清除十二个模块偏好，恢复默认全开请求；仍需重启 Zotero 才改变当前启用图。它不清除快捷键、marks、外观、行为偏好或 Zotero 数据。
+
+所有模块关闭后，仍可在 Zotero 原生偏好页的 Zotero Neo 分区点击 **Open Neo Settings** 恢复配置；公共入口 `Zotero.Neo.openSettings` 也保留。原生扩展管理负责安装、升级和禁用整个 Neo。
+
+## 使用标签命名空间 {#use-tag-namespaces}
+
+在**高级**中，**命名空间分隔符**将扁平 Zotero 标签显示为虚拟路径。默认 `/` 支持路径匹配；留空则按平面标签匹配。存储的标签名称不变。
+
+## 管理已安装扩展与集成 {#manage-installed-plugins-and-integrations}
+
+启用扩展模块时，在 Main、Reader 或 Note Normal 按 `<Space>pp` 打开 Plugin Manager。它显示已安装扩展及状态，并在 Zotero 允许时提供启停、已注册设置、主页或仓库链接。不安装、更新、移除或发现扩展；这些操作及停用整个 Neo 请使用 Zotero 原生扩展管理。
+
+安装 Translate for Zotero 后，Reader Select 的 Selection Actions 可提供 Translate。Better BibTeX 为 `<Space>yy` 提供 citekey；目标无法解析或任一 citekey 缺失时，Neo 拒绝复制并保留剪贴板。
+
+控件默认值见[设置参考](SETTINGS_REFERENCE.md)，动作上下文和完整绑定见[命令参考](COMMAND_REFERENCE.md)。

@@ -84,7 +84,7 @@ export interface LibraryModule {
   yankCitekeys(targets: ItemTargetSet<'main'> | ItemTargetSet<'note'>): boolean;
   openItem(item: Zotero.Item | null, surface: 'main' | 'note'): boolean;
   activate(item: Zotero.Item | null): boolean;
-  trash(request: LibraryTrashRequest): boolean;
+  trash(request: LibraryTrashRequest, context: 'main-normal' | 'main-select'): boolean;
   restoreLastTrashed(): boolean;
   navigate(direction: MotionDirection, count: number, shouldDebounce?: boolean): boolean;
   tree(action: TreeAction): boolean;
@@ -287,13 +287,17 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
         );
       else open(item, 'main', 'mainActivate');
     });
-    const trash = bind<LibraryTrashRequest>('mainTrashItems', (request) => {
+    const trash = (request: LibraryTrashRequest): void => {
       void navigation
         .trashSelectedItems(request.selection, request.currentTarget, ports.language())
         .then((trashed) => {
           if (trashed && scope.isCurrent()) request.afterTrash?.();
         });
-    });
+    };
+    const trashBindings = {
+      'main-normal': host.bind(scope, 'main-normal', 'mainTrashItems', trash),
+      'main-select': host.bind(scope, 'main-select', 'mainTrashItems', trash),
+    };
     const restore = bind<void>('mainRestoreTrashedItems', () => {
       void navigation.restoreLastTrashedItems();
     });
@@ -357,7 +361,7 @@ export function createLibraryModule(host: ModuleHost, ports: LibraryModuleHost):
       yankCitekeys: (targets) => yank[targets.source](targets),
       openItem: (item, surface) => openItems[surface](item),
       activate,
-      trash,
+      trash: (request, context) => trashBindings[context](request),
       restoreLastTrashed: () => restore(),
       navigate: (direction, count, shouldDebounce) => motions[direction]({ count, shouldDebounce }),
       tree: (action) => trees[action](),

@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-状态：整体设计与渐进接入记录。最小基座及表中十二个功能模块已经逐项接入；静态清单、依赖图和用户开关仍是设计。当前运行时所有权以[架构](ARCHITECTURE.md)为准。
+状态：已实现的模块边界与渐进接入记录。十二个功能模块、静态清单、启动依赖图和用户开关均已接入。当前运行时所有权以[架构](ARCHITECTURE.md)为准；实际配置见[模块设置](SETTINGS_GUIDE.md#modules)。
 
 ## 范围与取舍
 
@@ -8,7 +8,7 @@
 
 本轮不设计 AI 接口或模块，不引入 Actions & Tags 的代码、运行时依赖或脚本执行机制，也不改变现有按键、默认行为、数据格式与 Zotero 兼容范围。
 
-先明确基座与插件接入契约，再通过现有功能验证契约，最后逐步拆分和组合。当前十二条真实接入路径已完成，下一步实现启动启用图与模块设置，不实现没有消费者的空框架。模块数量不作为冻结的架构约束。
+实现按基座契约、真实功能迁移、启动启用图与模块设置的顺序推进，各条路径逐项验证，不建立没有消费者的空框架。模块数量不作为冻结的架构约束。
 
 需要区分三种边界：
 
@@ -34,7 +34,7 @@
 - `src/modules/reader-annotations/`：按 ReaderSession 拥有批注创建、删除、改色、过滤、复制及精确视图的评论编辑器，并向 Select 注入下划线和 Add note。Surface 保留 CurrentTarget、NativeInput 与 `i` / `zb` 的混合仲裁；已接纳保存继续完成，旧交互不恢复状态、选择或焦点。
 - `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
 
-尚未实现通用静态清单/依赖图或模块开关。现有所有功能、绑定、偏好与公共插件接口保持原样；不能将本文后续的配置设计当作已可用能力。
+`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。`src/platform/module-startup.ts` 保留本次 Zotero 进程的纯 JSON 启用快照；`src/main/settings-modules.ts` 在原设置中区分草稿、已保存请求和已应用值。默认全开，现有绑定、行为偏好与公共插件接口保持原义。
 
 ## Actions & Tags 提供了什么
 
@@ -54,7 +54,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 
 ## 模块目录与所有权
 
-建议划分以下 12 个内置模块。表中的路径是**当前实现来源**，不是已经完成的目录迁移。每个模块引用现有命令标识，不重新命名动作。
+当前包含以下 12 个内置模块。表中的路径是实际实现来源；每个模块引用现有命令标识，不重新命名动作。
 
 | 模块 ID | 用户功能与业务状态 | 当前实现来源 | 实例范围及依赖 |
 | --- | --- | --- | --- |
@@ -67,7 +67,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/modules/reader-annotations/`、`src/operations/delete-annotation.ts` | 已按 ReaderSession 接入，评论交互绑定精确 ReaderView / Document；Select 贡献具名注入，原生批注操作本身不依赖选择模块。CurrentTarget 与 NativeInput 始终由 Surface 提供。 |
 | `reader-hints` | 批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/modules/notes/`；Surface 输入与身份保留在 `src/main/note-editor.ts`、`note-runtime.ts` | 已按 MainWindow 接入，附着到精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找或捕获目的地。 |
-| `capture` | Reader 所选文本追加到已有 Note，拥有源快照、目的地重验证、排队保存及保存回执流程。 | `src/modules/capture/`；Main/Reader 保留具名桥接与选择界面 | 已按 MainWindow / ReaderSession 接入，拥有单次跨 Surface 交互及已接纳的保存操作；整体设计中的硬依赖为 `reader-selection` 与 `notes`，不依赖 Vim Note 编辑开关，通用依赖图仍未开放。 |
+| `capture` | Reader 所选文本追加到已有 Note，拥有源快照、目的地重验证、排队保存及保存回执流程。 | `src/modules/capture/`；Main/Reader 保留具名桥接与选择界面 | 按 MainWindow / ReaderSession 接入；硬依赖为 `reader-selection` 与 `notes`，不依赖 Vim 编辑。Main 只需本窗口 Notes 可用，无须先有 Reader；Reader 需自身 Selection 与实际关联 Main 的 Notes/Capture 就绪。 |
 | `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、Show in Library 等跨 Surface 定位。 | `src/modules/workspace/` | 已按 MainWindow / ReaderSession 接入，使用基座导航端口与唯一 Back/Forward 历史；不依赖 Library 或 Reader 导航模块。Main/Note 通用面板焦点含 Note Insert 仍由基座负责。 |
 | `extensions` | 已安装 Zotero 扩展的 Plugin Manager：筛选、详情、刷新、允许的启停、设置及链接。 | `src/modules/extensions/`；`src/toolkit/main/plugins.ts` | 已按 MainWindow 接入，Main/Reader/Note 进入实际所属窗口的独立面板。不负责 Neo 内部模块管理，也不新增安装、更新或卸载功能。 |
 
@@ -104,7 +104,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 
 这里的“插件接入”首先指单 XPI 内的功能模块接入，不要求单独安装。它与其他 Zotero 插件使用的公共 API 分开设计；二者不能共享一个能访问所有内部服务的总对象。
 
-下表定义拟议的接口形状与约束，尚不是运行时导出。实现时复用现有类型，只有已存在的调用需要新契约时才增加类型。
+下表记录各现有类型、静态描述、具名端口和模块作用域共同实现的约束，不是一个统一的公共 SDK 导出。只有真实调用需要新契约时才增加类型。
 
 | 接口组成 | 必须表达的内容 | 约束 |
 | --- | --- | --- |
@@ -201,9 +201,9 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 
 ## 开关与设置语义
 
-初次引入模块开关时，采用**下次重启 Zotero 生效**，不同时建设运行中模块热卸载。窗口关闭、Reader 视图替换和整个扩展卸载仍必须正常清理；“需要重启”不能成为资源泄漏的理由。
+模块请求采用**下次重启 Zotero 生效**，不支持运行中模块热卸载；Neo 热重载或重新启用沿用本进程已应用图。窗口关闭、Reader 视图替换和整个扩展卸载仍正常清理，不依赖进程退出回收。
 
-新增偏好建议为 `modules.<module-id>.enabled`，继续使用 `extensions.zotero-neo` 命名空间。所有模块默认开启，现有配置继续按原义生效。以下是新模块设置的状态设计，不是已经可用的偏好说明。
+模块偏好为 `extensions.zotero-neo.modules.<module-id>.enabled`。所有模块默认开启，现有配置继续按原义生效。用户控件、默认值及恢复步骤由[设置参考](SETTINGS_REFERENCE.md#modules)维护；下表说明运行时语义。
 
 | 状态 | Settings 展示 | 当前会话行为 |
 | --- | --- | --- |
@@ -211,7 +211,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | 已关闭且未运行 | Disabled | 不实例化功能；其绑定不参与匹配或前缀等待。 |
 | 用户修改开关，尚未重启 | 当前状态 + Pending restart；分别显示请求值与已应用值 | 继续使用当前启动时的启用图，不提前删除处理器或假装已经停止。 |
 | 用户请求开启，但硬依赖关闭/失败 | Blocked，并列出依赖原因 | 不运行该模块；不自动改变依赖模块开关。 |
-| 激活失败 | Failed，显示可读原因并记录详细日志 | 清理部分资源；下次重启重新尝试，当前会话不循环重启。 |
+| 激活失败 | Failed，显示可读原因并记录详细日志 | 退休入口并清理部分资源；该实例不循环重试，新宿主实例或重启 Zotero 可重新激活。 |
 
 修改模块配置先做依赖校验。用户仍可保存有缺失依赖的配置，但必须看见哪些功能在重启后被阻止；不会悄悄连带启用或停用其他模块。
 
@@ -254,7 +254,7 @@ src/
 
 ## 用现有功能走读接口
 
-这些场景用于检查契约能否表达已有行为，不代表已经运行完整模块系统。依据是现有 `src/core/contracts.ts`、Surface 目标解析器、Picker/捕获流程与 `src/modules/reader-selection/selection-actions.ts`；不通过空实现或模拟模块证明设计可用。
+这些场景用于核对现有实现的输入、输出与资源边界。依据是 `src/core/contracts.ts`、Surface 目标解析器、Picker/捕获流程与 `src/modules/reader-selection/selection-actions.ts`；不通过空实现或模拟模块证明能力可用。
 
 | 场景 | 契约如何组合 | 必须保留的边界 |
 | --- | --- | --- |
@@ -268,7 +268,7 @@ src/
 
 ## 实施顺序与验收
 
-契约走读、标签、扩展管理、分类、Reader hints、工作集、Library 与 Notes 路径已经完成接入；后续按以下门槛逐步推进，不批量拆解其余候选。每个阶段维持默认全开下的当前行为，不同时改按键或补新功能。
+以下五步已按顺序完成，逐条接入十二个真实模块，最后开放启动配置。各阶段维持默认全开下的当前行为，不同时改按键或补新功能。
 
 1. **先评审基座与接入契约。** 确认输入/目标/资源/写入结果的负责方，区分内部模块与公共插件 API；用上表现有流程走读后，再决定模块边界是否需要调整。未通过前不创建运行时模块框架、不搬文件。
 2. **以一条现有路径验证最小基座。** 接口确认后，选一条真实功能路径接入必要的作用域与贡献机制，核对 `(BindingContext, ActionId)` 所有权与依赖注入。验证真实宿主行为，不先搭完全部机制或引入没有消费者的接口。
@@ -289,7 +289,7 @@ src/
 - 所有可选模块关闭时，仍能从 Zotero 原生偏好页进入 Neo Settings。原生 Zotero 数据与扩展管理不受影响。
 - 现有 `getSelection()` / `registerSelectionAction()` 消费方无需改调用签名；选择功能停用时不执行旧选择回调，恢复后不重复注册。
 
-标签路径已通过契约测试及 Zotero 10.0.6 的 Main、Reader、Note、原生过滤和重载场景验证。扩展管理已通过筛选、权限、重绑定/IME、异步退休、部分获取/释放失败和双窗口隔离契约，并在 Zotero 10.0.6 实测 Main/Reader 入口、筛选、刷新、关闭/重开与重载释放；实机未启停无关扩展。其余拆分及模块开关仍需在各自实施时验证，文档构建不代表整体模块系统完成。
+标签路径已通过契约测试及 Zotero 10.0.6 的 Main、Reader、Note、原生过滤和重载场景验证。扩展管理已通过筛选、权限、重绑定/IME、异步退休、部分获取/释放失败和双窗口隔离契约，并在 Zotero 10.0.6 实测 Main/Reader 入口、筛选、刷新、关闭/重开与重载释放；实机未启停无关扩展。后续各条迁移及启动配置的验证边界如下，文档构建不替代真实宿主证据。
 
 分类模块已在 Zotero 10.0.6 验证 Main Persistent Selection 优先级、Reader 独立目标、部分直接成员覆盖率、真实添加/移除、重载后的旧输入失效及新模块继续写入；仅使用自有测试条目/分类，验证后已清理。命名对话框期间退休、事务中退休回滚、busy/replacement Picker 隔离由行为契约覆盖，未将所有原生结构对话框宣称为实机验证。
 
@@ -310,3 +310,7 @@ Reader 选择已在 Zotero 10.0.6 的可见自有双页 PDF 验证范围扩展/�
 Reader 批注已在 Zotero 10.0.6 的自有双页 PDF 验证 Select 高亮、下划线与 Add note、Normal 改色、颜色过滤、删除确认，以及 `i` / `zb` 的原生输入与页面滚动分支。评论实际挂载并聚焦，Escape 与自动保存均回读数据库；旧输入/IME/Escape 不影响后继编辑器，晚到保存不抢回 Settings 焦点。实机另复现并修复换标签页先使输入失活、随后交接却丢弃最终草稿的问题：保存接纳改用精确视图寿命，先切到另一个 Reader，再接纳交接并暂缓真实保存；释放原保存后数据库已更新，后继焦点不变。两轮自有数据、分类与源文件全部删除，原标签页、Scope、Cursor、原生行选择、查询、23 项偏好与窗口状态恢复，测试进程和 RDP 已关闭。未实测系统剪贴板、真实输入法/鼠标选词、双 MainWindow 或独立 Reader；同 Window 视图/Document 替换及部分获取/重入清理由行为契约覆盖。
 
 Workspace 已在 Zotero 10.0.6 验证 Main/Reader/Note 标签页选择、循环与自有 Reader/Note 关闭，水平/垂直分屏创建和关闭，以及四向实际焦点切换。不可用方向透传到后续监听，成功方向被消费；Reader Palette 使用同一分屏实现。Reader 和 Note 的 Show in Library 均从不同的 Main 原生行选择定位到自己的所属条目。共享 Back/Forward 恢复标签页，已关闭的自有 Reader 重开后继续注入；Main 通用面板焦点及 Note Insert/Normal 切换保留。分屏截图只包含自有 PDF；六条自有数据、分类、源文件与截图全部删除，原标签页、Scope、Cursor、原生选择、查询、23 项偏好和窗口状态恢复，测试进程及 RDP 已关闭。未实测双 MainWindow、独立 Reader、系统输入法或剪贴板；旧确认、异步反馈、替换界面与精确视图退休由行为契约及独立复审覆盖。
+
+启动配置已在 Zotero 10.0.6 验证默认全开、保存前依赖预览、请求保存后当前能力不变、Neo 重载沿用进程快照，以及真正退出/重启后应用新图。关闭 Navigation、Annotations、Notes 后，Select 的公共快照、外部动作与原生搜索、原生批注 Excerpt/Comment hints、Workspace 分屏/焦点仍工作；关闭 Worksets 后，标签和分类只修改当前目标，来源切换时旧分类确认被拒绝。关闭 Select 后公共快照为 null、外部回调不执行，Capture 显示缺少依赖，原生批注导航及改色仍工作。Vim Note 关闭时可查找并打开原生 Note，评论快捷键关闭时 Select Add note 仍创建真实批注，marks 不持久化时会话跳转仍可用且 Extra 不变。
+
+对一个自有新 Reader 注入一次 Navigation 获取失败后，Settings 同时显示健康与失败实例；失败 Reader 的导航键透传，独立 Select 与 Capture/批注选择动作仍可用。恢复原方法并关闭重开该 Reader 后，新实例激活成功。全关并真实重启后，Guide 不列停用贡献，Palette 仅保留基座动作，`i` 与 `zb` 的 Core 分支仍可用；原生偏好页的 Open Neo Settings 按钮和公共设置入口均能恢复配置。恢复默认清除十二个模块偏好，下一次真实启动全部启用。自有七条数据、两个分类、唯一标签及三个源/存储文件全部删除，40 项偏好的存在性与值、原五个标签页的顺序和加载状态、Main Scope、Cursor、原生行选择、查询及窗口状态均已恢复，测试进程与 RDP 已关闭。未实测系统剪贴板写入、真实输入法、双 MainWindow 或独立 Reader；后两者的宿主隔离与标识符接收方、构造/释放失败由行为契约和独立复审覆盖。

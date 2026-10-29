@@ -1,6 +1,7 @@
 import { CleanupScope } from '../core/cleanup';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
+import type { BuiltinModuleRuntime } from '../core/module-runtime';
 import { ThemeManager } from '../ui/theme';
 import { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsCenter } from './settings-center';
@@ -13,11 +14,17 @@ export class ZoteroWindowRuntime {
   readonly interactionAppearance: InteractionAppearanceManager;
   readonly settings: SettingsCenter;
 
-  constructor(window: MainWindow, preferences: PreferenceStore) {
+  constructor(window: MainWindow, preferences: PreferenceStore, modules: BuiltinModuleRuntime) {
     this.window = window;
     this.theme = new ThemeManager(window, preferences);
     this.interactionAppearance = new InteractionAppearanceManager(preferences, this.theme);
-    this.settings = new SettingsCenter(window, this.theme, this.interactionAppearance, preferences);
+    this.settings = new SettingsCenter(
+      window,
+      this.theme,
+      this.interactionAppearance,
+      preferences,
+      modules,
+    );
     this.cleanup.add(() => this.settings.close());
     this.cleanup.add(() => this.interactionAppearance.dispose());
     this.cleanup.add(() => this.theme.dispose());

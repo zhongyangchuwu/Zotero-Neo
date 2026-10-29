@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MainWindow, MainWindowControllerDependencies } from '../../src/core/contracts';
 import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
-import { createMainWindowController } from '../../src/main/controller';
+import { createMainWindowController as composeMainWindowController } from '../../src/main/controller';
+import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
+
+function createController(dependencies: Omit<MainWindowControllerDependencies, 'modules'>) {
+  return composeMainWindowController({
+    ...dependencies,
+    modules: new BuiltinModuleRuntime(dependencies.preferences, dependencies.logger),
+  });
+}
 
 import { MainNavigation } from '../../src/main/navigation';
 function themedElement(id = ''): HTMLElement {
@@ -159,7 +167,7 @@ function harness(
     },
     clearTimeout: (id: number) => timers.delete(id),
   } as unknown as MainWindow;
-  const controller = createMainWindowController({
+  const controller = createController({
     preferences: {
       has: () => false,
       get: (key, fallback) =>
@@ -181,7 +189,7 @@ function harness(
       captureJumpLocation: () => null,
       restoreJumpLocation: async () => null,
     },
-  } as MainWindowControllerDependencies);
+  } as Omit<MainWindowControllerDependencies, 'modules'>);
   controller.addWindow(window);
 
   const press = (key: string, options: Partial<KeyboardEvent> = {}) => {
