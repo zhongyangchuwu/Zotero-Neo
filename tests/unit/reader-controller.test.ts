@@ -5,6 +5,14 @@ import type {
   ReaderControllerDependencies,
   ReaderMainOperations,
 } from '../../src/core/contracts';
+import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
+import { createLibraryModule } from '../../src/modules/library';
+import { createNotesModule } from '../../src/modules/notes';
+import { createCaptureModule } from '../../src/modules/capture';
+import { createTagModule } from '../../src/modules/tags';
+import { createCollectionsModule } from '../../src/modules/collections';
+import { createExtensionsModule } from '../../src/modules/extensions';
+import { createWorkspaceModule } from '../../src/modules/workspace';
 import { NavigationCoordinator } from '../../src/navigation/coordinator';
 import { NavigationHistoryState } from '../../src/navigation/history';
 import type { NavigationIntent, NavigationPort } from '../../src/navigation/types';
@@ -110,11 +118,14 @@ function createReaderRegistryHarness() {
     },
   };
   Reflect.set(globalThis, 'Zotero', { Reader: service });
-  const dependencies = {
-    preferences: readerPreferences(),
-    logger: { debug: () => {}, diagnostic: () => {} },
+  const preferences = readerPreferences();
+  const logger = { debug: () => {}, diagnostic: () => {} };
+  const dependencies: ReaderControllerDependencies = {
+    preferences,
+    logger,
+    modules: new BuiltinModuleRuntime(preferences, logger),
     main: noopReaderMainOperations,
-  } as ReaderControllerDependencies;
+  };
   return { service, dependencies };
 }
 
@@ -360,7 +371,7 @@ describe('Reader event lifecycle', () => {
     'keeps native keys unclaimed by a %s PDF listener after removal fails',
     (retirement) => {
       vi.useFakeTimers();
-      const created = createHistorySession();
+      const created = createUnstartedHistorySession();
       const replacement = createHistorySession();
       attachNativeReaderHistory(created);
       const listeners: EventListener[] = [];
@@ -529,11 +540,14 @@ describe('Reader event lifecycle', () => {
       getByTabID: () => null,
     };
     Reflect.set(globalThis, 'Zotero', { Reader: readerService });
-    const dependencies = {
-      preferences: readerPreferences(),
-      logger: { debug: () => {}, diagnostic: () => {} },
+    const preferences = readerPreferences();
+    const logger = { debug: () => {}, diagnostic: () => {} };
+    const dependencies: ReaderControllerDependencies = {
+      preferences,
+      logger,
+      modules: new BuiltinModuleRuntime(preferences, logger),
       main: noopReaderMainOperations,
-    } as ReaderControllerDependencies;
+    };
     const controller = createReaderController(dependencies);
     const window = { Zotero_Tabs: { _tabs: [] } } as unknown as _ZoteroTypes.MainWindow;
 
@@ -637,11 +651,14 @@ describe('Reader event lifecycle', () => {
       getByTabID: (tabID: string) => (tabID === 'reader-b-tab' ? second : null),
     };
     Reflect.set(globalThis, 'Zotero', { Reader: readerService });
-    const dependencies = {
-      preferences: readerPreferences(),
-      logger: { debug: () => {}, diagnostic: () => {} },
+    const preferences = readerPreferences();
+    const logger = { debug: () => {}, diagnostic: () => {} };
+    const dependencies: ReaderControllerDependencies = {
+      preferences,
+      logger,
+      modules: new BuiltinModuleRuntime(preferences, logger),
       main: noopReaderMainOperations,
-    } as ReaderControllerDependencies;
+    };
     const controller = createReaderController(dependencies);
     const deactivate = vi.spyOn(ReaderSession.prototype, 'deactivateInteraction');
 
@@ -672,6 +689,7 @@ function createHistorySession(
     null,
   openReaderTagPicker: ReaderMainOperations['openReaderTagPicker'] = () => {},
   openReaderCollectionPicker: ReaderMainOperations['openReaderCollectionPicker'] = () => {},
+  start = true,
 ) {
   const debug: string[] = [];
   const diagnostics: string[] = [];
@@ -807,12 +825,98 @@ function createHistorySession(
     },
   } as ReaderRuntime;
   const preferences = readerPreferences(preferenceValues);
+  const logger = {
+    debug: (message: string) => debug.push(message),
+    diagnostic: (message: string) => diagnostics.push(message),
+  };
+  const modules = new BuiltinModuleRuntime(preferences, logger);
+  const mainScope = modules.createScope('main', ownerWindow, () => true);
+  const unavailable = (): never => {
+    throw new Error('Unexpected Main fixture operation');
+  };
+  mainScope.activate('library', () =>
+    createLibraryModule(mainScope.host, {
+      window: ownerWindow,
+      logger,
+      status: () => {},
+      language: () => 'en',
+      panel: () => 'items',
+      focusPanel: () => false,
+      themeRoot: () => () => {},
+      leaveVisual: () => {},
+      prepareQuickSearch: () => {},
+      prepareIdentifierLookup: () => {},
+      choose: () => null,
+      selectItem: unavailable,
+      executeNavigation: unavailable,
+      scopeActivation: unavailable,
+    }),
+  );
+  mainScope.activate('notes', () =>
+    createNotesModule(mainScope.host, {
+      window: ownerWindow,
+      logger,
+      status: () => {},
+      choose: () => null,
+      selectNote: unavailable,
+    }),
+  );
+  mainScope.activate('capture', () =>
+    createCaptureModule(mainScope.host, {
+      window: ownerWindow,
+      logger,
+      pickerBusy: () => false,
+      status: () => {},
+      choose: () => null,
+    }),
+  );
+  mainScope.activate('tags', () =>
+    createTagModule(mainScope.host, {
+      logger,
+      preferences,
+      choose: () => null,
+      status: () => {},
+      readFilter: () => [],
+      captureScopeTags: () => async () => [],
+      applyFilter: async () => 0,
+    }),
+  );
+  mainScope.activate('collections', () =>
+    createCollectionsModule(mainScope.host, {
+      window: ownerWindow,
+      logger,
+      status: () => {},
+      navigate: async () => {},
+      choose: () => null,
+      captureCurrent: () => () => true,
+    }),
+  );
+  mainScope.activate('extensions', () =>
+    createExtensionsModule(mainScope.host, {
+      window: ownerWindow,
+      logger,
+      bindings: () => bindings,
+      themeRoot: () => () => {},
+    }),
+  );
+  mainScope.activate('workspace', () =>
+    createWorkspaceModule(mainScope.host, {
+      window: ownerWindow,
+      logger,
+      language: () => 'en',
+      status: () => {},
+      choose: () => null,
+      selectTab: () => false,
+      cycleTab: () => false,
+      closeTab: () => {},
+      navigate: () => {},
+      selectInLibrary: () => null,
+    }),
+  );
   const controller = new ReaderController({
     preferences,
-    logger: {
-      debug: (message: string) => debug.push(message),
-      diagnostic: (message: string) => diagnostics.push(message),
-    },
+    logger,
+    modules,
     main: {
       ...noopReaderMainOperations,
       ...mainOperations,
@@ -830,6 +934,12 @@ function createHistorySession(
     release: () => {},
     jumpHost: new ReaderJumpHostAdapter(),
   } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
+  if (start) {
+    session.start();
+    session.state.indicator?.remove();
+    debug.length = 0;
+    diagnostics.length = 0;
+  }
   const indicator = {
     style: { display: '', color: '', background: '' },
     textContent: '',
@@ -850,9 +960,25 @@ function createHistorySession(
     cloneInto,
     bodyChildren,
     controller,
+    modules,
+    mainScope,
     animationFrameTasks,
     intervalTasks,
   };
+}
+
+function createUnstartedHistorySession(...args: Parameters<typeof createHistorySession>) {
+  return createHistorySession(
+    args[0],
+    args[1],
+    args[2],
+    args[3],
+    args[4],
+    args[5],
+    args[6],
+    args[7],
+    false,
+  );
 }
 
 function configureAnnotationPersistence(
@@ -1629,7 +1755,7 @@ describe('Reader native Find Enter ownership', () => {
     { name: 'committed Enter', isComposing: false, keyCode: 13 },
   ])('defers $name to native input and hands off only committed Enter', (options) => {
     vi.useFakeTimers();
-    const created = createHistorySession({ _lastViewPrimary: true });
+    const created = createUnstartedHistorySession({ _lastViewPrimary: true });
     const emit = recordReaderDocumentEvents(created.readerWindow.document);
     const input = {
       tagName: 'INPUT',
@@ -1655,7 +1781,7 @@ describe('Reader native Find Enter ownership', () => {
     'does not blur Find or refocus a PDF when committed Enter is followed by %s',
     (change) => {
       vi.useFakeTimers();
-      const created = createHistorySession({ _lastViewPrimary: true });
+      const created = createUnstartedHistorySession({ _lastViewPrimary: true });
       const secondary = createHistorySession();
       const emit = recordReaderDocumentEvents(created.readerWindow.document);
       const input = {
@@ -1694,7 +1820,7 @@ describe('Reader native Find Enter ownership', () => {
 
   it('does not reclaim PDF focus when Find blur transfers ownership to another pane', () => {
     vi.useFakeTimers();
-    const created = createHistorySession({ _lastViewPrimary: true });
+    const created = createUnstartedHistorySession({ _lastViewPrimary: true });
     const secondary = createHistorySession();
     const emit = recordReaderDocumentEvents(created.readerWindow.document);
     Reflect.set(created.reader._internalReader!, '_secondaryView', {
@@ -1727,7 +1853,7 @@ describe('Reader per-view owner retirement', () => {
     const history = navigationHistoryPort();
     const execute = vi.spyOn(history.port, 'execute');
     const pending = Promise.withResolvers<void>();
-    const created = createHistorySession({}, { navigationForReader: () => history.port });
+    const created = createUnstartedHistorySession({}, { navigationForReader: () => history.port });
     attachNativeReaderHistory(created);
     configureAnnotationPersistence([created]);
     const { selection } = configureAnnotationSelection(created);
@@ -2035,6 +2161,287 @@ function destinationCueElement(
   return created.bodyChildren.find((node) => node.dataset.zoteroNeoDestinationCue === '1') ?? null;
 }
 
+describe('Reader module configuration', () => {
+  it('rolls back a Navigation acquisition failure without retiring independent Reader features', () => {
+    const palettes: CommandPaletteContext[] = [];
+    const created = createUnstartedHistorySession({}, {}, DEFAULT_BINDINGS, (_window, context) =>
+      palettes.push(context),
+    );
+    created.session.dispose();
+    const { service } = createReaderRegistryHarness();
+    Reflect.set(created.reader, '_instanceID', 'navigation-acquisition-failure');
+    Reflect.set(created.reader, 'tabID', 'navigation-acquisition-tab');
+    Reflect.set(created.ownerWindow, 'Zotero_Tabs', { selectedID: 'navigation-acquisition-tab' });
+    Reflect.set(service, 'getByTabID', () => created.reader);
+    service._readers = [created.reader];
+    const acquire = vi
+      .spyOn(created.readerWindow.document, 'addEventListener')
+      .mockImplementation((type) => {
+        if (type === 'pointerdown') throw new Error('native sidebar acquisition failed');
+      });
+    const controller = created.controller;
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      controller.rescan(created.ownerWindow);
+      const navigation = created.modules
+        .inspect(created.ownerWindow)
+        .find(({ id }) => id === 'reader-navigation');
+      expect(navigation?.status).toBe('failed');
+      expect(navigation?.instances[0]?.failure).toContain('native sidebar acquisition failed');
+      expect(
+        created.modules.inspect(created.ownerWindow).find(({ id }) => id === 'reader-selection')
+          ?.status,
+      ).toBe('enabled');
+      const native = readerKey('j');
+      controller.forwardKey(native.event, created.ownerWindow);
+      expect(native.preventDefault).not.toHaveBeenCalled();
+      controller.forwardKey(readerKey(':').event, created.ownerWindow);
+      expect(palettes[0]?.actions).not.toContain('zoomIn');
+      expect(palettes[0]?.actions).toContain('followLink');
+      expect(palettes[0]?.actions).toContain('toggleReaderSplitVertical');
+      const attempts = acquire.mock.calls.filter(([type]) => type === 'pointerdown').length;
+      controller.rescan(created.ownerWindow);
+      expect(acquire.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(attempts);
+      const insert = readerKey('i');
+      controller.forwardKey(insert.event, created.ownerWindow);
+      expect(insert.preventDefault).toHaveBeenCalledOnce();
+    } finally {
+      controller.shutdown();
+      acquire.mockRestore();
+    }
+  });
+
+  it('removes a provisional Reader after Base startup fails and permits a fresh native handle', () => {
+    const created = createUnstartedHistorySession();
+    created.session.dispose();
+    const { service } = createReaderRegistryHarness();
+    Reflect.set(created.reader, '_instanceID', 'base-acquisition-failure');
+    service._readers = [created.reader];
+    const original = new Error('native PDF acquisition failed');
+    const acquire = vi.spyOn(created.pdfWindow, 'addEventListener').mockImplementationOnce(() => {
+      throw original;
+    });
+    const controller = created.controller;
+    controller.start('zotero-neo@zotero-neo');
+    try {
+      expect(() => controller.rescan(created.ownerWindow)).toThrow(/Reader rescan/);
+      expect(
+        created.modules.inspect(created.ownerWindow).find(({ id }) => id === 'reader-selection')
+          ?.instances,
+      ).toEqual([]);
+      expect(
+        created.bodyChildren.find((node) => node.id === 'zotero-vim-mode-indicator'),
+      ).toBeUndefined();
+      const attempts = acquire.mock.calls.length;
+      controller.rescan(created.ownerWindow);
+      expect(acquire).toHaveBeenCalledTimes(attempts);
+      service._readers = [{ ...created.reader }];
+      controller.rescan(created.ownerWindow);
+      expect(
+        created.modules.inspect(created.ownerWindow).find(({ id }) => id === 'reader-selection')
+          ?.status,
+      ).toBe('enabled');
+    } finally {
+      controller.shutdown();
+      acquire.mockRestore();
+    }
+  });
+
+  it('uses only a standalone Reader identifier action actual Main opener', () => {
+    const openAddByIdentifier = vi.fn();
+    const openAllItemsPicker = vi.fn();
+    const created = createHistorySession(
+      {},
+      { openAddByIdentifier, openAllItemsPicker },
+      {
+        'reader-normal:x': 'mainAddByIdentifier',
+        'reader-normal:xy': 'findAllItems',
+      },
+    );
+    Reflect.set(created.reader, '_window', {
+      location: { href: 'chrome://zotero/content/reader.xhtml' },
+      opener: created.ownerWindow,
+    });
+    const key = readerKey('x');
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).toHaveBeenCalledOnce();
+    expect(openAddByIdentifier).toHaveBeenCalledExactlyOnceWith(created.ownerWindow);
+    expect(openAllItemsPicker).not.toHaveBeenCalled();
+    expect(created.session.input.keyBuffer).toBe('');
+    Reflect.set(created.ownerWindow, 'closed', true);
+    const closed = readerKey('x');
+    created.session.focusAndHandle(closed.event);
+    expect(closed.preventDefault).not.toHaveBeenCalled();
+    expect(openAddByIdentifier).toHaveBeenCalledOnce();
+    created.session.dispose();
+  });
+
+  it('propagates module cleanup failure while retiring the remaining Reader owners exactly once', () => {
+    const created = createUnstartedHistorySession();
+    const { view } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
+    const native = vi.fn();
+    view._onKeyDown = native;
+    created.session.start();
+    created.session.focusAndHandle(readerKey('f').event);
+    const badge = linkHintElements(created)[0]!;
+    const original = new Error('live module cleanup failed');
+    vi.mocked(badge.remove).mockImplementationOnce(() => {
+      throw original;
+    });
+    expect(() => created.session.dispose()).toThrow(original);
+    expect(view._onKeyDown).toBe(native);
+    expect(
+      created.modules.inspect(created.ownerWindow).find(({ id }) => id === 'reader-hints')
+        ?.instances,
+    ).toEqual([]);
+    const key = readerKey('j');
+    created.session.focusAndHandle(key.event);
+    expect(key.preventDefault).not.toHaveBeenCalled();
+    created.session.dispose();
+    badge.remove();
+  });
+
+  it('keeps native input and the selection registry safe when Reader modules are disabled', () => {
+    const disabled = Object.fromEntries(
+      [
+        'library',
+        'reader-navigation',
+        'reader-selection',
+        'reader-annotations',
+        'reader-hints',
+        'workspace',
+        'capture',
+      ].map((id) => [`modules.${id}.enabled`, false]),
+    );
+    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, disabled);
+    const available = vi.fn(() => true);
+    const run = vi.fn();
+    const unregister = created.controller.registerSelectionAction({
+      id: 'test.disabled',
+      label: 'Disabled',
+      isAvailable: available,
+      run,
+    });
+    created.session.acceptSelectionParams({ annotation: { text: 'text' } });
+    expect(created.controller.getSelection()).toBeNull();
+    expect(created.session.mode).toBe('normal');
+    expect(available).not.toHaveBeenCalled();
+    const navigation = readerKey('j');
+    created.session.focusAndHandle(navigation.event);
+    expect(navigation.preventDefault).not.toHaveBeenCalled();
+    const insert = readerKey('i');
+    created.session.focusAndHandle(insert.event);
+    expect(insert.preventDefault).toHaveBeenCalledOnce();
+    expect(created.indicator.textContent).toBe('-- NATIVE --');
+    unregister();
+    unregister();
+    expect(run).not.toHaveBeenCalled();
+    created.session.dispose();
+  });
+
+  it('filters unavailable longer bindings before resolving an enabled exact action', () => {
+    const zoomIn = vi.fn();
+    const created = createHistorySession(
+      { zoomIn },
+      {},
+      { 'reader-normal:x': 'zoomIn', 'reader-normal:xy': 'followLink' },
+      () => {},
+      { 'modules.reader-hints.enabled': false },
+    );
+    const key = readerKey('x');
+    created.session.focusAndHandle(key.event);
+    expect(zoomIn).toHaveBeenCalledOnce();
+    expect(created.session.input.keyBuffer).toBe('');
+    created.session.dispose();
+  });
+
+  it('allows Select without annotations and annotations without Select', () => {
+    const select = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+      'modules.reader-annotations.enabled': false,
+    });
+    select.session.acceptSelectionParams({ annotation: { text: 'text' } });
+    expect(select.session.mode).toBe('visual');
+    select.session.dispose();
+
+    const annotation = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+      'modules.reader-selection.enabled': false,
+    });
+    annotation.session.acceptSelectionParams({ annotation: { text: 'text' } });
+    expect(annotation.session.mode).toBe('normal');
+    expect(annotation.session.state.selectionParams?.annotation.text).toBe('text');
+    expect(annotation.session.selectionContext()).toBeNull();
+    annotation.session.dispose();
+  });
+  it('activates Reader Capture only when its actual Main owner becomes ready', () => {
+    const created = createHistorySession();
+    created.session.dispose();
+    created.mainScope.dispose();
+    const session = new ReaderSession({
+      controller: created.controller,
+      reader: created.reader,
+      firstPdfWindow: created.pdfWindow,
+      bindings: () => DEFAULT_BINDINGS,
+      release: () => {},
+      jumpHost: new ReaderJumpHostAdapter(),
+    } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
+    const captureState = () =>
+      created.modules
+        .inspect(created.ownerWindow)
+        .find((row) => row.id === 'capture')!
+        .instances.find((instance) => instance.host === 'reader');
+    expect(captureState()?.status).toBe('blocked');
+    const logger = { debug: () => {}, diagnostic: () => {} };
+    const unrelated = created.modules.createScope('main', {}, () => true);
+    unrelated.activate('notes', () =>
+      createNotesModule(unrelated.host, {
+        window: created.ownerWindow,
+        logger,
+        status: () => {},
+        choose: () => null,
+        selectNote: () => {
+          throw new Error('Unexpected Main fixture operation');
+        },
+      }),
+    );
+    unrelated.activate('capture', () =>
+      createCaptureModule(unrelated.host, {
+        window: created.ownerWindow,
+        logger,
+        pickerBusy: () => false,
+        status: () => {},
+        choose: () => null,
+      }),
+    );
+    expect(captureState()?.status).toBe('blocked');
+    const main = created.modules.createScope('main', created.ownerWindow, () => true);
+    main.activate('notes', () =>
+      createNotesModule(main.host, {
+        window: created.ownerWindow,
+        logger,
+        status: () => {},
+        choose: () => null,
+        selectNote: () => {
+          throw new Error('Unexpected Main fixture operation');
+        },
+      }),
+    );
+    main.activate('capture', () =>
+      createCaptureModule(main.host, {
+        window: created.ownerWindow,
+        logger,
+        pickerBusy: () => false,
+        status: () => {},
+        choose: () => null,
+      }),
+    );
+    expect(captureState()?.status).toBe('enabled');
+    main.dispose();
+    expect(captureState()?.status).toBe('blocked');
+    session.dispose();
+    unrelated.dispose();
+  });
+});
+
 describe('Reader global history actions', () => {
   it('routes counted Ctrl-o and Ctrl-i to Main with the Reader owner window', () => {
     const navigateBackFromReader = vi.fn();
@@ -2080,7 +2487,7 @@ describe('Reader global history actions', () => {
 
   it('suppresses Zotero key forwarding only for bound Reader commands', () => {
     const originalKeyDown = vi.fn();
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected a primary reader view');
     view._onKeyDown = originalKeyDown;
@@ -2104,7 +2511,7 @@ describe('Reader global history actions', () => {
 
   it('forwards composing keys rather than claiming bound Reader shortcuts', () => {
     const originalKeyDown = vi.fn();
-    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+    const created = createUnstartedHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
       [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     const view = created.reader._internalReader?._primaryView;
@@ -2124,7 +2531,7 @@ describe('reader keymap forwarding', () => {
   it('consumes new tab and pan chords while forwarding retired J/K keys', () => {
     const originalKeyDown = vi.fn();
     const cycleReaderTab = vi.fn();
-    const created = createHistorySession({}, { cycleReaderTab });
+    const created = createUnstartedHistorySession({}, { cycleReaderTab });
     const container = { scrollBy: vi.fn() } as unknown as HTMLElement;
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', { pdfViewer: { container } });
     const view = created.reader._internalReader?._primaryView;
@@ -2365,7 +2772,7 @@ describe('Reader Selection Actions capture', () => {
   });
   it('claims popup input only in its captured view when Zotero forwards split keys', () => {
     vi.stubGlobal('Zotero', {});
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const primary = created.reader._internalReader?._primaryView;
     if (!primary) throw new Error('Expected primary Reader PDF view');
     const primaryHost = vi.fn();
@@ -2412,7 +2819,7 @@ describe('Reader Selection Actions capture', () => {
 });
 
 function createFlashSession() {
-  const created = createHistorySession();
+  const created = createUnstartedHistorySession();
   const text = {
     nodeType: 3,
     data: 'target text',
@@ -2646,7 +3053,11 @@ describe('reader zoom shortcuts', () => {
       const toggleSidebar = vi.fn((open?: boolean) => {
         state.sidebarOpen = open ?? !state.sidebarOpen;
       });
-      const created = createHistorySession({ _state: state, setSidebarView, toggleSidebar });
+      const created = createUnstartedHistorySession({
+        _state: state,
+        setSidebarView,
+        toggleSidebar,
+      });
       try {
         created.session.start();
         for (let repeat = 0; repeat < 2; repeat += 1) {
@@ -2669,7 +3080,7 @@ describe('reader zoom shortcuts', () => {
     const zoomIn = vi.fn();
     const zoomOut = vi.fn();
     const zoomReset = vi.fn();
-    const created = createHistorySession({ zoomIn, zoomOut, zoomReset });
+    const created = createUnstartedHistorySession({ zoomIn, zoomOut, zoomReset });
     Reflect.set(created.reader._internalReader!, '_state', {
       sidebarOpen: true,
       sidebarView: 'outline',
@@ -2697,7 +3108,7 @@ describe('reader zoom shortcuts', () => {
     const zoomIn = vi.fn();
     const zoomOut = vi.fn();
     const zoomReset = vi.fn();
-    const created = createHistorySession({ zoomIn, zoomOut, zoomReset });
+    const created = createUnstartedHistorySession({ zoomIn, zoomOut, zoomReset });
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected a primary reader view');
     view._onKeyDown = originalKeyDown;
@@ -2733,7 +3144,7 @@ describe('reader zoom shortcuts', () => {
     const bindings = Object.fromEntries(
       Object.entries(DEFAULT_BINDINGS).filter(([key]) => key !== 'reader-normal::'),
     ) as BindingMap;
-    const created = createHistorySession({}, {}, bindings);
+    const created = createUnstartedHistorySession({}, {}, bindings);
     const view = created.reader._internalReader?._primaryView;
     if (!view) throw new Error('Expected a primary reader view');
     view._onKeyDown = originalKeyDown;
@@ -3262,7 +3673,7 @@ describe('Reader leader timer guards', () => {
 
   it('keeps bare passthrough native and Escape releases input back to Surface commands', async () => {
     const originalKeyDown = vi.fn();
-    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+    const created = createUnstartedHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
       [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     const view = created.reader._internalReader?._primaryView;
@@ -3382,7 +3793,10 @@ describe('Reader native passthrough ownership', () => {
     'traverses document headings from live PDF position in $pane (secondary=$secondary), preserving native hard history',
     async ({ pane, secondary }) => {
       const execution = navigationHistoryPort();
-      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const created = createUnstartedHistorySession(
+        {},
+        { navigationForReader: () => execution.port },
+      );
       const primary = attachNativeReaderHistory(created);
       const primaryNavigate = vi.fn();
       Reflect.set(primary.view, 'navigate', primaryNavigate);
@@ -3480,7 +3894,10 @@ describe('Reader native passthrough ownership', () => {
     'leaves document heading chords with the native %s owner and produces no history',
     async (owner) => {
       const execution = navigationHistoryPort();
-      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const created = createUnstartedHistorySession(
+        {},
+        { navigationForReader: () => execution.port },
+      );
       const native = attachNativeReaderHistory(created);
       const navigate = vi.fn();
       Reflect.set(native.view, 'navigate', navigate);
@@ -3522,7 +3939,7 @@ describe('Reader native passthrough ownership', () => {
     (handoff) => {
       vi.useFakeTimers();
       const zoomIn = vi.fn();
-      const created = createHistorySession(
+      const created = createUnstartedHistorySession(
         { zoomIn },
         {},
         {
@@ -3557,7 +3974,7 @@ describe('Reader native passthrough ownership', () => {
     { name: 'Thumbnails', sidebarView: 'thumbnails' },
     { name: 'sidebar chrome', sidebarView: 'outline' },
   ])('yields native $name keys instead of executing PDF commands', ({ sidebarView }) => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const scrollBy = vi.fn();
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
       pdfViewer: { container: { scrollBy } },
@@ -3602,7 +4019,7 @@ describe('Reader native passthrough ownership', () => {
   });
 
   it('leaves native sidebar editable and composing keys unconsumed', () => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const scrollBy = vi.fn();
     Reflect.set(created.pdfWindow, 'PDFViewerApplication', {
       pdfViewer: { container: { scrollBy } },
@@ -3678,7 +4095,7 @@ describe('Reader native passthrough ownership', () => {
 
   it('owns both split views but not another Reader and releases through Escape in either view', () => {
     const sibling = createHistorySession();
-    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+    const created = createUnstartedHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
       [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     const primary = created.reader._internalReader?._primaryView;
@@ -3741,7 +4158,7 @@ describe('Reader native passthrough ownership', () => {
   it.each(['deactivate', 'dispose'] as const)(
     'releases native ownership on %s without registering extra listeners or leaving host patches',
     (operation) => {
-      const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+      const created = createUnstartedHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
         [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
       });
       const addListener = vi.fn();
@@ -4470,7 +4887,7 @@ describe('Reader category history execution', () => {
       execution.port.observeNative(receipt),
     );
     const port: NavigationPort = { ...execution.port, observeNative };
-    const created = createHistorySession({}, { navigationForReader: () => port });
+    const created = createUnstartedHistorySession({}, { navigationForReader: () => port });
     const native = attachNativeReaderHistory(created);
     const state = {
       sidebarOpen: false,
@@ -4511,7 +4928,10 @@ describe('Reader category history execution', () => {
     'does not fabricate a navigation or history point for %s',
     async (failure) => {
       const execution = navigationHistoryPort();
-      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const created = createUnstartedHistorySession(
+        {},
+        { navigationForReader: () => execution.port },
+      );
       const native = attachNativeReaderHistory(created);
       const navigate = vi.fn();
       Reflect.set(native.view, 'navigate', navigate);
@@ -4543,7 +4963,7 @@ describe('Reader category history execution', () => {
   it.each(['new key', 'deactivation', 'pointer input', 'focus loss'] as const)(
     'cannot jump after delayed native Outline loading and %s',
     async (input) => {
-      const created = createHistorySession();
+      const created = createUnstartedHistorySession();
       attachNativeReaderHistory(created);
       const internal = created.reader._internalReader!;
       const state = { outline: null as ReaderNativeOutlineEntry[] | null };
@@ -4589,7 +5009,10 @@ describe('Reader category history execution', () => {
 describe('Reader mark history execution', () => {
   it('records one managed-final location for the completed scroll excursion', async () => {
     const execution = navigationHistoryPort();
-    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const created = createUnstartedHistorySession(
+      {},
+      { navigationForReader: () => execution.port },
+    );
     const native = attachNativeReaderHistory(created);
     created.session.start();
     created.session.focusAndHandle(readerKey('m').event);
@@ -4624,7 +5047,10 @@ describe('Reader mark history execution', () => {
     'retires a pending annotation mark after ordinary/prefix input %j',
     async (key) => {
       const execution = navigationHistoryPort();
-      const created = createHistorySession({}, { navigationForReader: () => execution.port });
+      const created = createUnstartedHistorySession(
+        {},
+        { navigationForReader: () => execution.port },
+      );
       const native = attachNativeReaderHistory(created);
       const annotation = {
         key: 'ANN-1',
@@ -4732,7 +5158,7 @@ describe('PDF follow-link hints', () => {
   });
 
   it("claims only its captured pane and never activates that pane's badge in another view", () => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const primary = configureLinkView(created, [internalLink([10, 10, 80, 30], 7)]);
     const primaryHost = vi.fn();
     const secondaryHost = vi.fn();
@@ -4775,7 +5201,7 @@ describe('PDF follow-link hints', () => {
   });
 
   it('retires hint ownership even when a live badge cannot be removed', () => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const { view } = configureLinkView(created, [
       internalLink([10, 10, 80, 30]),
       internalLink([100, 10, 180, 30]),
@@ -4804,7 +5230,7 @@ describe('PDF follow-link hints', () => {
   });
 
   it('releases a destroyed view without touching its dead badges, cue or RAF boundary', () => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const { view } = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
     const originalKey = vi.fn();
     view._onKeyDown = originalKey;
@@ -4886,7 +5312,7 @@ describe('PDF follow-link hints', () => {
   });
 
   it('retires an activated link when its view is released after its badges were removed', async () => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     const configured = configureLinkView(created, [internalLink([10, 10, 80, 30])]);
     const pending = Promise.withResolvers<void>();
     configured.navigate.mockReturnValue(pending.promise);
@@ -4992,7 +5418,10 @@ describe('PDF follow-link hints', () => {
 
   it('records confirmed internal links under followLink origin and leaves external links unrecorded', async () => {
     const execution = navigationHistoryPort();
-    const created = createHistorySession({}, { navigationForReader: () => execution.port });
+    const created = createUnstartedHistorySession(
+      {},
+      { navigationForReader: () => execution.port },
+    );
     const native = attachNativeReaderHistory(created);
     const internal = internalLink([20, 30, 80, 50], 4);
     const external = externalLink([100, 120, 180, 140], 'https://example.com');
@@ -5137,7 +5566,7 @@ describe('PDF follow-link hints', () => {
     expect(escape.preventDefault).toHaveBeenCalledOnce();
   });
   it('removes link hints when Zotero replaces their PDF view', () => {
-    const created = createHistorySession();
+    const created = createUnstartedHistorySession();
     configureLinkView(created, [internalLink([10, 10, 80, 30])]);
     Reflect.set(created.reader, '_iframeWindow', undefined);
     created.session.start();
@@ -5157,7 +5586,10 @@ describe('PDF follow-link hints', () => {
     async (kind) => {
       const history = navigationHistoryPort();
       const execute = vi.spyOn(history.port, 'execute');
-      const created = createHistorySession({}, { navigationForReader: () => history.port });
+      const created = createUnstartedHistorySession(
+        {},
+        { navigationForReader: () => history.port },
+      );
       attachNativeReaderHistory(created);
       const original = new Error(`${kind} native failure`);
       const configured = configureLinkView(created, [
@@ -5196,7 +5628,10 @@ describe('PDF follow-link hints', () => {
     async (kind) => {
       const history = navigationHistoryPort();
       const execute = vi.spyOn(history.port, 'execute');
-      const created = createHistorySession({}, { navigationForReader: () => history.port });
+      const created = createUnstartedHistorySession(
+        {},
+        { navigationForReader: () => history.port },
+      );
       const native = attachNativeReaderHistory(created);
       const configured = configureLinkView(created, []);
       const original = new Error('native discovery failure');

@@ -8,46 +8,7 @@ import type { ReaderMarks } from './marks';
 import type { ReaderNativeSidebar } from './native-sidebar';
 import type { ReaderCaptionTargets } from './caption-targets';
 
-export const READER_NAVIGATION_ACTIONS = [
-  'scrollDown',
-  'scrollUp',
-  'scrollLeft',
-  'scrollRight',
-  'halfPageDown',
-  'halfPageUp',
-  'fullPageDown',
-  'fullPageUp',
-  'scrollTop',
-  'scrollCenter',
-  'scrollBottom',
-  'prevPage',
-  'nextPage',
-  'firstPage',
-  'lastPage',
-  'zoomIn',
-  'zoomOut',
-  'zoomReset',
-  'openSearch',
-  'clearSearch',
-  'findNext',
-  'findPrevious',
-  'prevAnnotation',
-  'nextAnnotation',
-  'prevHeading',
-  'nextHeading',
-  'prevFigure',
-  'nextFigure',
-  'prevTable',
-  'nextTable',
-  'prevBookmark',
-  'nextBookmark',
-  'toggleReaderSidebarOutline',
-  'toggleMarksExplorer',
-  'focusReaderOutline',
-  'focusReaderMarks',
-  'focusReaderAnnotations',
-  'focusReaderThumbnails',
-] as const satisfies readonly ActionId[];
+import { READER_NAVIGATION_ACTIONS } from './capabilities';
 export type ReaderNavigationAction = (typeof READER_NAVIGATION_ACTIONS)[number];
 export function isReaderNavigationAction(action: ActionId): action is ReaderNavigationAction {
   return (READER_NAVIGATION_ACTIONS as readonly ActionId[]).includes(action);

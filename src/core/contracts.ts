@@ -3,6 +3,7 @@ import type { BindingMap, BindingContext } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
 import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
+import type { BuiltinModuleRuntime } from './module-runtime';
 import type { NavigationPort } from '../navigation/types';
 
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
@@ -128,12 +129,14 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 }
 
 export interface ReaderControllerDependencies {
+  readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
   readonly main: ReaderMainOperations;
 }
 
 export interface MainWindowControllerDependencies {
+  readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
   readonly reader: Pick<

@@ -23,7 +23,7 @@ Zotero Neo 为 Zotero 文献库、PDF Reader 和笔记编辑器提供键盘操�
 ## 开发与项目信息
 
 - [开发指南](docs/DEVELOPMENT.md)：构建、调试、测试与文档站维护。
-- [架构](docs/ARCHITECTURE.md)、[交互模型](docs/INTERACTION_MODEL.md)与[模块拆分及基座设计提案](docs/MODULE_DESIGN.md)。
+- [架构](docs/ARCHITECTURE.md)、[交互模型](docs/INTERACTION_MODEL.md)与[模块拆分及基座设计](docs/MODULE_DESIGN.md)。
 - [文档编写规范](docs/DOCUMENTATION_AUTHORING.md)：默认只维护中文，现有英文按需迁移，不保留双语副本。
 - [验收规范](docs/V0_2_ACCEPTANCE.md)与[录制指南](docs/RECORDING_GUIDE.md)。
 - [更新记录](CHANGELOG.md)、[路线图](docs/ROADMAP.md)与[问题追踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues)。

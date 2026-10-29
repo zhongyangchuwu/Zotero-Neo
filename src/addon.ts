@@ -9,9 +9,11 @@ import type {
 import { CleanupFailure } from './core/cleanup';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
+import { BuiltinModuleRuntime } from './core/module-runtime';
 import { migrateBindingPreferences, migrateReaderPreferences } from './core/preferences';
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
+import { moduleStartupFlags } from './platform/module-startup';
 
 export interface AddonContext {
   readonly id: string;
@@ -40,6 +42,11 @@ type ZoteroWithNeo = typeof Zotero & {
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
   readonly #preferences = new ZoteroPreferenceStore();
+  readonly #modules = new BuiltinModuleRuntime(
+    this.#preferences,
+    this.#logger,
+    moduleStartupFlags(this.#preferences),
+  );
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -49,6 +56,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   constructor() {
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
+      modules: this.#modules,
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
@@ -78,6 +86,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
       },
     });
     this.#main = createMainWindowController({
+      modules: this.#modules,
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,

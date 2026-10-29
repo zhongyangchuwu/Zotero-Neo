@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)描述整体边界与迁移约束。当前已实现最小基座及标签、扩展管理、分类、工作集、Reader hints、Library、Notes、Capture、Reader 导航、Reader 选择、Reader 批注和 Workspace；依赖图和启用配置仍是设计，下文维护实际运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十二个内置模块的边界与迁移约束。静态清单、启动启用图、实际宿主依赖及 Settings 模块配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#modules)，下文维护运行时所有权。
 
 ## 分层 {#layers}
 
@@ -25,6 +25,8 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 ### 2. 语义动作与能力 {#_2-semantic-actions-and-capabilities}
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
+
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。停用模块的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
@@ -50,6 +52,10 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
+`BuiltinModuleRuntime` 分开保存当前已应用图与重新读取的偏好请求。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存不可变布尔图的 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，真正重启 Zotero 后才应用新请求。Settings 显示当前窗口相关实例、依赖、失败与待重启状态，恢复默认只清除模块请求。
+
+Capture 的静态依赖为 Notes 与 Reader Selection；Main 的激活不要求先存在 Reader，只要求本窗口 Notes 可用。Reader Capture 等待自身 Selection 和实际关联 Main 的 Notes/Capture 就绪，依赖退休时先移除旧贡献再通知观察者。一个宿主失败不污染其他窗口或 Reader。
+
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
 标签模块不持有 Main session、原生 pane 或 Reader 对象。Picker 端口返回仅能关闭本次调用的释放句柄；视图或窗口退休后不能确认旧选择、重画状态或关闭后来替换的界面。已接纳的保存继续按原生事务结果完成，不因模块退休而伪装成取消。
@@ -71,6 +77,8 @@ Selection Panel 通过具名端口请求现有导航协调器执行 Reveal，不
 `src/reader/controller.ts` 按 Zotero `instanceID` 管理 Reader session。主、次 PDF 视图共享一个 Reader Surface，但输入、几何与导航始终保留精确视图身份。
 
 `src/modules/reader-navigation/` 按 ReaderSession 拥有页面、滚动/平移、缩放、PDF 搜索、批注位置遍历、语义 Outline、按需 captions、marks 及原生侧栏增强。Normal 与四个侧栏上下文的真实动作均通过模块作用域登记；命名 marks 沿用特殊输入语法与持久化格式，不伪造 ActionId。异步 marks 保存保留实际结果，但只有发起交互仍有效时才显示状态；连续滚动跨重复输入保持有效，销毁视图时先退休 RAF 与完成回调，再释放原生资源。
+
+Reader Base 先建立视图和外层输入监听，再在 Navigation 激活事务内加载 marks、启动原生侧栏；失败时退休该模块全部贡献，不关闭独立 Select、批注、hints 或 Workspace。Base 启动失败则释放未完成的 Reader session，原生对象在本次运行中不循环重试，新原生对象可重新附着。正常退出由显式清理收集器继续释放所有负责方，并向调用方保留首个清理失败。
 
 Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。Workspace 的 Reader 实例通过同一宿主处理分屏创建/关闭与方向焦点，普通按键、延迟绑定和 Palette 使用相同实现；原始方向键只在实际成功时消费。Main/Note 通用面板焦点（含 Note Insert）、共享滚动与 `src/reader/native-input.ts` 仍属基座，不依赖 Reader 导航或 Workspace 的业务实现。评论编辑器由批注模块持有，Surface 负责输入仲裁，不新增 Reader Surface mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
 
