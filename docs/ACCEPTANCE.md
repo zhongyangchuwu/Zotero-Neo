@@ -1,18 +1,17 @@
-# v0.2 候选验收指南
+# main 分支验收指南
 
-本指南是 v0.2.0 候选的 U1–U9 执行协议。每轮候选提交、版本与 XPI SHA-256 以 [`updates.candidate.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/updates.candidate.json) 和 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142) 为准；不在此固定本轮包身份。将实际验收结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 和 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)：未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
+本指南用于验证 `main` 分支实际构建的 XPI，包含 U1–U9 场景。每轮在对应变更的 PR 或独立验收记录中保存提交、包身份与实际结果；不沿用其他提交的通过结论。未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
 
-## 1. 固定候选与边界
+## 1. 固定 main 构建与边界
 
-每轮记录候选完整提交 SHA、XPI SHA-256、Neo 与 Zotero 完整版本、操作系统、键盘布局、输入法、profile 和数据目录，以及是否为持久安装。目标范围是当前最新稳定 Zotero；不承诺旧 major 或 Beta。
+每轮记录 `main` 完整提交 SHA、XPI SHA-256、Neo 与 Zotero 完整版本、操作系统、键盘布局、输入法、profile 和数据目录，以及是否为持久安装。目标范围是当前最新稳定 Zotero；包兼容范围以同一提交的 `manifest.json` 为准。
 
-从包含 v0.2.0 候选元数据的插件源码构建并检查：
+从要验证的 `main` 提交构建并检查：
 
 ```bash
+git rev-parse HEAD
 npm ci
-npm run build
-node tools/check-package.mjs
-node tools/check-release.mjs v0.2.0
+npm run verify
 sha256sum zotero-neo.xpi
 ```
 
@@ -23,18 +22,16 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 Get-FileHash zotero-neo.xpi -Algorithm SHA256
 ```
 
-这些检查验证构建、包成员和版本／候选更新元数据，不代替人工验收。`updates.candidate.json` 是候选元数据，`updates.json` 是公开更新 feed；在已验证的 v0.2.0 资产存在且获准 promotion 前，公开 feed 只保留官方 v0.1.0 entry。两份 feed 都不打包进 XPI。
+`npm run verify` 检查格式、类型、契约、构建和 XPI 成员，不代替人工验收。也可以从同一 `main` 提交的成功 CI 运行取得构建附件，获取方式见[安装与入门](GETTING_STARTED.md#get-main-build)。
 
-从该确切源码提交的 CI 构建附件或同一源码的本地构建取得候选 XPI。冻结发布候选后，将其 SHA-256 写入候选 entry 的 `update_hash`，格式为 `sha256:<digest>`；发布器会核对包内 manifest、提交／tag 和哈希，并下载核对 XPI 与 `.sha256` 校验文件。同 tag 的既有资产必须逐字节一致；缺失、冲突或不完整 Draft 不自动修补。发布期间必须保持单一写入者：GitHub 没有原子的“仅 Draft 可上传”条件，预先读取并检查不能锁定外部写入者。
-
-安装／升级结果只适用于记录的那个包身份。包字节变化后，为新候选重新固定身份并执行受影响的包验收；旧包的结果不能转记为新包的 PASS。
+安装和更新结果只适用于记录的那个包身份。包字节变化后，记录新的提交与哈希并执行受影响的包验收；其他构建的结果不能转记为当前包的 PASS。
 
 ## 2. 建立安全的验收环境
 
 使用新的 profile 和独立数据目录，不使用日常库、同步账户或共享数据库。官方说明：[多 profile](https://www.zotero.org/support/kb/multiple_profiles)、[数据目录](https://www.zotero.org/support/zotero_data)。
 
 1. 关闭正在使用的 Zotero。通过实际 Zotero 可执行文件加 `-P` 打开 Profile Manager，创建具名验收 profile。例如 Linux 使用 `zotero -P`，macOS 使用 `/Applications/Zotero.app/Contents/MacOS/zotero -P`；Windows 对实际安装的 `zotero.exe` 使用 `-P`。不要把安装路径误当作 profile 路径。
-2. 创建两个分别用于“干净安装”和“旧版升级”的新 profile，名称应带本轮日期／唯一后缀，不复用旧临时名称。
+2. 创建两个分别用于“干净安装”和“main 构建更新”的新 profile，名称应带本轮日期／唯一后缀，不复用临时名称。
 3. 在每个验收 profile 中，通过 Zotero Settings → Advanced → Files and Folders 选择新的空数据目录，并重启。使用 **Show Data Directory** 核实实际路径。新 profile 不保证一定自动获得独立数据目录。
 4. 若首次打开已显示真实资料库，立即停止操作并关闭实例，先按官方流程完成数据隔离；不导入、删除、改名或同步真实资料。
 5. 不登录同步账户。只导入有授权／公有领域的 PDF，或者自己制作的测试文档。不把私人 PDF、笔记、窗口标题或剪贴板内容录进视频。
@@ -56,10 +53,10 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 ## 3. 安装和升级
 
-### U1：干净安装 v0.2.0
+### U1：干净安装 main 构建
 
-1. 在干净验收 profile 中打开 Tools → Plugins／Add-ons，通过 gear 菜单选择 Install Plugin From File，安装候选 XPI；按提示重启。
-2. 在插件列表核实 Neo 版本为 `0.2.0`，不是仅修改了文件名的旧包。
+1. 在干净验收 profile 中打开 Tools → Plugins／Add-ons，通过 gear 菜单选择 Install Plugin From File，安装记录过身份的 `main` XPI；按提示重启。
+2. 核实插件列表中的 Neo 版本与本轮源码及包内 manifest 一致，并记录完整提交和包哈希；版本字符串相同不代表两个构建的字节相同。
 3. 在主窗口条目列表的 Normal 状态下，按 `:` 打开 Command Palette；只有一个面板，输入查询和取消正常。
 4. 用 `<Space>ps` 打开 Settings，查看阅读器、主窗口、笔记编辑器和本地控件对应的实际上下文；Reader 不出现 Insert，Note Insert 保留。
 5. 在配置编辑器记录 `extensions.zotero-neo.bindings.schemaVersion`，核实它与本轮确切源码 `src/core/preferences.ts` 的 `BINDING_SCHEMA_VERSION` 一致。不手动修改 schema 数值制造升级结果。
@@ -67,37 +64,17 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 
 **通过标准**：持久版本正确、默认功能入口可用、配置上下文正确、重启后只有一个当前输入处理方。单凭“插件列表显示启用”不算功能通过。
 
-### U2：官方 v0.1.0 → 候选 v0.2.0
+### U2：更新 main 构建并保留设置
 
-在升级 profile 中先安装[官方 v0.1.0 包](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)并重启；不能用把当前源码改成旧版本号后构建的包替代官方发行版。
+在独立更新验收 profile 中先完成 U1，并使用当前设置界面建立以下对照：
 
-官方 v0.1.0 的[偏好源码](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/src/core/preferences.ts)使用 binding schema `11`；候选目标值以其确切源码中的 `BINDING_SCHEMA_VERSION` 为准，不在协议里固定。记录实际安装后的观察值，不手动改写 schema 数值。
+1. 在 Reader Normal 为 `scrollDown` 添加大小写敏感的 `Q`，并显式取消默认 `j`。应用绑定，核实 `Q` 可执行、`j` 不再触发 Neo 滚动；保存实际 `extensions.zotero-neo.bindings` 值。
+2. 修改一项普通行为偏好，例如关闭 Vim 风格笔记编辑，并记录其实际值；不要重置其他偏好或修改 binding schema 来制造更新结果。
+3. 关闭 Reader，使用 Zotero 原生插件管理器安装本轮记录的 `main` XPI，按现场提示重启。验证重复安装当前包，或更新到另一个明确记录的 `main` 构建；两者须分别说明，不把重装称为跨版本迁移。
+4. 核实提交对应的包身份、源码 schema、自定义 `Q`、`j` 的明确取消和普通行为偏好均正确；已有测试笔记、标签和分类不丢失。
+5. 再次退出并重启，重复入口与配置检查，确认没有第二次重置或重复输入处理。完成后恢复本轮修改的绑定和行为偏好。
 
-在**仅属于升级验收的 profile**里保存现有 `extensions.zotero-neo.bindings` 原值，再通过旧版配置／高级配置编辑器加入以下测试配置，确保不覆盖其他已有 override：
-
-```json
-{
-  "reader-normal:Q": "scrollDown",
-  "reader-normal:j": null,
-  "reader-insert:x": null
-}
-```
-
-- `Q` 是大小写敏感的独立可打印键，测试有效的自定义 Reader Normal 映射。
-- `j: null` 是明确取消默认，不是缺失值。先在旧版核实自定义 `Q` 可执行、已取消的 `j` 不再触发 Neo 滚动。
-- `reader-insert:x` 是要退休的保存数据；升级后应按已批准的迁移删除，不把它视为候选的有效模式。
-- 在旧版阅读器的 Insert／批注评论入口设置或高级配置中将 `extensions.zotero-neo.mode.insert.enabled` 设为 `false`，记录原值。使用任一无关验收偏好或一个已存在的语言／滚动设置作为保持不变的对照。
-
-然后执行：
-
-1. 先关闭旧版阅读器；在同一个仍运行的升级 profile 中，用原生插件管理器安装候选 0.2.0 包，按安装结果要求退出／重启 Zotero。不要先退出整个程序后再要求在已关闭的窗口里安装。
-2. 核实插件版本 0.2.0、schema 与本轮确切源码一致、自定义 `Q` 的行为和 `j` 的明确取消均保留；原保存的无关设置未丢失。
-3. 核实旧 Reader Insert 行消失，其他上下文映射／取消仍在；不是把全部配置重置为默认。
-4. 核实新的 `extensions.zotero-neo.annotationCommentEditor.enabled` 为 `false`，旧 `mode.insert.enabled` 清除；在 Reader Normal 中，`i` 将输入交给 Zotero 原生输入处理，按 `Escape` 退出该输入状态，不出现 Reader Insert 模式。
-5. 再重启，重复版本／映射／取消／开关检查，确认第二次迁移不改变结果。
-6. 另一组独立升级测试配置可验证“旧键为 `false`、现行设置键已为 `true`”：候选应保留现行设置键的 `true` 值，再清除旧键。这只是预先设置的键值冲突，不表示官方旧版提供了新的设置开关。
-
-**通过标准**：原生升级真实发生，数据和用户意图保留，退休范围仅删除已批准的数据，现行设置键的优先级正确，重启后仍一致。失败时记录修改前后的实际偏好值，不先 Reset 掩盖问题。
+**通过标准**：安装的包身份可追溯，当前配置与用户意图保留，重启后仍一致。失败时记录修改前后的实际值，不先 Reset 掩盖问题。
 
 ## 4. 每个交互界面和视图的一次动作
 
@@ -156,9 +133,9 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 **通过标准**：每个指定目标的实际 focus、IME 阶段、候选确认和原生结果可见。脚本发送 composition/keyCode229、可信 Gecko 事件或调用生产 API，都不能替代这一组人工 PASS。
 
-## 6. 发布工作流回归
+## 6. 核心工作流回归
 
-这些场景同时可供 S1–S6 [录屏脚本](RECORDING_GUIDE.md)引用；发布验收应记录真实结果，宣传片不自动成为证据。
+这些场景也供 S1–S6 [录屏脚本](RECORDING_GUIDE.md)引用；每次验收记录真实结果，宣传片不自动成为验收证据。
 
 
 ### U8：查询、历史和 native Sidebars
@@ -183,20 +160,20 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 每条 U1–U9 记录以下字段，内容由实际观察填写，不预填成功：
 
-- 候选提交、包 SHA256、Neo/Zotero 版本、OS/输入法、持久安装来源、profile/data identity。
+- `main` 提交、包 SHA256、Neo/Zotero 版本、OS/输入法、持久安装来源、profile/data identity。
 - 用例 ID、开始 Surface/mode/focus、实际键序列、native input/IME 阶段、期望和实际可见结果。
 - `PASS` / `FAIL` / `NOT PERFORMED`；仅可选且确实缺少条件的场景使用 `NOT APPLICABLE`。
 - 未剪掉失败的截图／录像位置和原始诊断；剪辑版宣传片另外标明，不覆盖原始证据。
 - 记录与用例相关的笔记、Neo 选择集、目标条目和偏好值在变更前后的状态；不要公开真实资料或凭空增加动作日志。
 
-发生失败：停止该用例，保留原始状态，在独立缺陷 Issue 写明复现和已观察后果。修复后只复验受影响的行为，并记录新候选身份；不要为了清空列表伪造 PASS 或重启覆盖证据。
+发生失败：停止该用例，保留原始状态，在独立缺陷 Issue 写明复现和已观察后果。修复后只复验受影响的行为，并记录新的构建身份；不要为了清空列表伪造 PASS 或重启覆盖证据。
 
 完成后退出本轮自己启动的 profile，释放它的调试连接和录屏进程。只清理可确认属于本轮的测试数据和目录，Zotero 关闭后才处理其数据库文件，不触碰日常库或其他进程。
 
-## 8. 发布门禁
+## 8. 交付与发布边界
 
-1. U1/U2 的干净安装和官方 v0.1.0 升级／重启都须针对拟发布的确切 XPI 记录身份与结果；包更换后只复验受影响的包验收，不沿用其他包的结果。
-2. 最终版本、包、兼容范围、候选更新 entry、release notes、安装入口和校验资产必须一致；XPI 包含项目和第三方许可，Release 提供同 tag 源码入口。最后改源码或版本后重新固定候选身份并检查包。
-3. 当前 CI 在 Ubuntu 验证；不要把历史 Windows job 或本地包检查写成 Windows/macOS GUI 验收。
-4. 源码可以在统一验收前合入 `main`，但合并不代表验收或发布。所有必需结果须在 #137/#98 记录并由相应负责人确认；未满足前不打 tag、不提升公开 feed、不发布。发布仍须明确授权。
-5. 正式网站下载链接和“已发布”文案只在真实发布资产可用后切换。
+1. U1/U2 的安装、配置保留和重启检查绑定确切的 `main` XPI；包更换后只复验受影响的包验收，不沿用其他包的结果。
+2. 构建版本、包兼容范围与同一提交的 manifest 保持一致。XPI 包含项目和第三方许可；分发时提供对应源码提交。
+3. 当前 CI 在 Ubuntu 验证；CI 或本地包检查不等于 Windows/macOS GUI 验收。
+4. 合入 `main` 不等于正式发布。发布仍需明确授权，并按当前仓库发布工作流核对标签、候选元数据、包哈希、发布说明和源码身份。
+5. 本文和文档站描述当前 `main`，不以历史发行包替代本轮构建，也不因修改文档而提升更新 feed 或创建发布。

@@ -2,19 +2,19 @@
 
 Neo 为 Zotero 文献库、PDF 阅读器和笔记增加键盘操作。安装后仍使用 Zotero 原有的文献、附件和笔记，不需要导入另一套资料库。
 
-## 选择安装版本 {#choose-a-version}
+## 获取 main 构建 {#get-main-build}
 
-**当前网站说明尚未正式发布的 v0.2.0。公开下载仍是 v0.1.0，不能用旧包体验这里介绍的全部功能。**
+本文及其余指南只描述 `main` 分支。使用相应提交构建的 `zotero-neo.xpi`，可通过以下任一方式获取：
 
-- 使用公开发行版：下载[官方 v0.1.0 XPI](https://github.com/zhongyangchuwu/Zotero-Neo/releases/download/v0.1.0/zotero-neo.xpi)，操作说明请对照[该版本的用户指南](https://github.com/zhongyangchuwu/Zotero-Neo/blob/v0.1.0/docs/USER_GUIDE.md)。
-- 使用 v0.2 开发构建：安装你已取得的当前源码构建 XPI。需要自行构建时，见[开发指南](DEVELOPMENT.md#build)；它不是已发布的 v0.2 安装包。
+- **下载 CI 构建附件：** 打开 [main 分支的构建记录](https://github.com/zhongyangchuwu/Zotero-Neo/actions/workflows/build.yml?query=branch%3Amain)，选择成功完成的运行并核对提交。在 Artifacts 中下载 `zotero-neo-linux`，解压后取得 `zotero-neo.xpi`。下载附件通常需要登录 GitHub；附件过期时改用源码构建。
+- **从源码构建：** 获取 `main`，在仓库根目录按[开发指南](DEVELOPMENT.md#build)安装依赖并运行构建。验证通过后，根目录生成 `zotero-neo.xpi`。
 
-Neo 面向最新稳定 Zotero，具体包允许安装的版本范围由它的 manifest 决定。
+CI 附件名来自构建任务；XPI 包内是生成的 JavaScript 和静态资源。Neo 面向最新稳定 Zotero，具体兼容范围由同一提交的 `manifest.json` 决定。
 
-## 安装 XPI {#install-the-public-release}
+## 安装 XPI {#install-xpi}
 
 1. 在 Zotero 打开 **Tools → Plugins**（工具 → 插件），点击齿轮菜单。
-2. 选择 **Install Plugin From File…**，打开所选版本的 `zotero-neo.xpi`。
+2. 选择 **Install Plugin From File…**，打开取得的 `zotero-neo.xpi`。
 3. 按 Zotero 提示重启。安装后的 Neo 版本可在插件列表中查看。
 
 安装、升级、禁用或移除整个 Neo 都由 Zotero 原生插件管理负责。内部十一项功能分区中，九个核心模块固定启用；只有链接与复制提示（`reader-hints`）和扩展管理面板（`extensions`）可在[模块设置](SETTINGS_GUIDE.md#modules)中关闭。
