@@ -8,10 +8,10 @@ Zotero Neo 为 Zotero 文献库、PDF Reader 和笔记编辑器提供键盘操�
 
 ## 开始使用
 
-- [安装 Neo 并体验已发布的 v0.1.0](docs/GETTING_STARTED.md)：安装步骤与首次使用检查。
+- [安装 Neo 并开始使用](docs/GETTING_STARTED.md)：区分公开发行版与当前开发构建，选择对应的安装包和指南。
 - [功能介绍](docs/FEATURES.md)：文本选择、笔记摘录、阅读清单与 PDF 导航。
 - [使用指南](docs/USER_GUIDE.md)：串联文献库、Reader 和笔记的任务工作流。
-- [基本概念](docs/CONCEPTS.md)：焦点、模式、Cursor 与 Selection。
+- [基本概念](docs/CONCEPTS.md)：焦点、模式、条目游标、Neo 选择集与文本选区。
 
 ## 帮助与参考
 

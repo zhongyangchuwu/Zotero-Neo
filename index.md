@@ -37,7 +37,7 @@ features:
 
 查找与整理论文、阅读与批注 PDF、将段落收集到笔记，并返回之前的工作。[使用指南](./docs/USER_GUIDE.md)按任务串联这些操作。
 
-先[安装 Neo](./docs/GETTING_STARTED.md)，浏览[功能介绍](./docs/FEATURES.md)，或直接跟随工作流：
+先[安装 Neo](./docs/GETTING_STARTED.md)，浏览[功能介绍](./docs/FEATURES.md)，或按当前任务选择指南：
 
 - [阅读论文并持续记录笔记](./docs/USER_GUIDE.md#read-a-paper-and-keep-a-running-note)。
 - [审阅与整理论文](./docs/USER_GUIDE.md#review-and-organize-papers)。
@@ -50,6 +50,6 @@ features:
 - [故障排查](./docs/TROUBLESHOOTING.md)。
 - [基本概念](./docs/CONCEPTS.md)。
 
-已发布版本为 [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)。
+当前网站说明尚未正式发布的 v0.2.0。公开发行版仍是 [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)，安装包与对应指南的选择见[安装与入门](./docs/GETTING_STARTED.md#choose-a-version)。
 
 [更新记录](./CHANGELOG.md) · [路线图](./docs/ROADMAP.md) · [GitHub](https://github.com/zhongyangchuwu/Zotero-Neo)

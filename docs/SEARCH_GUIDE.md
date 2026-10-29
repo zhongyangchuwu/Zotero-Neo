@@ -1,82 +1,82 @@
-# Find items, narrow views, and navigate
+# 查找条目、缩小视图并返回 {#find-items-narrow-views-and-navigate}
 
-Use a chooser to find a paper or note, Quick or Advanced Search to narrow the Library view, local find to move among visible rows, and Reader search to look inside a PDF. Tabs, Back/Forward history, and Reader marks give you different ways to return to that work.
+要定位一篇论文或笔记，可使用选择器；要改变主窗口显示范围，可用快速或高级搜索；要在当前可见行中跳转，可用本地查找；要查 PDF 正文，则使用阅读器搜索。标签筛选、标签页、共享历史和阅读器标记分别适合不同的筛选与返回方式。
 
-## Try it
+## 开始查找与导航 {#try-it}
 
-1. In Main, choose a library or collection, then use `<Space>ff` to find an item in the library or `<Space>fc` to find one in the current collection. Check the preview and confirm the result.
-2. To search only the rows currently shown in Main, focus the item list, press `/`, type a title or creator query, and press `Enter`. Use `n` / `N` to move through later or earlier matches.
-3. Open the item at Main's Cursor with `Enter` or `o`. In Reader, press `/` to find text within the current PDF; use `<C-o>` / `<C-i>` in Normal mode to revisit eligible destinations.
+1. 在主窗口选择文库或分类，按 `<Space>ff` 查找当前文库中的条目，或按 `<Space>fc` 查找当前分类中的条目。查看预览并确认结果。
+2. 要只查找主窗口当前显示的行，聚焦条目列表后按 `/`，输入标题或作者查询并按 `Enter`。用 `n` / `N` 跳到后一个或前一个匹配项。
+3. 按 `Enter` 或 `o` 打开主窗口条目游标所在的条目。在阅读器中按 `/` 查找当前 PDF 的文字；在 Normal 模式按 `<C-o>` / `<C-i>` 返回符合条件的历史位置。
 
-## Choose a search for the task
+## 按任务选择查找方式 {#choose-a-search-for-the-task}
 
-| What you want | Method | Where it searches or what it changes |
+| 目标 | 方法 | 查找范围或效果 |
 | --- | --- | --- |
-| Locate an item in the current library | `<Space>ff` | Shared item chooser for the current library; confirm a result to go to it. |
-| Locate an item in the current collection | `<Space>fc` | Shared item chooser scoped to the current collection. |
-| Find a collection | `:` → **Find and enter a collection** (**Unbound**) | Search collection names or full paths in one library; confirming enters the result and a changed destination can be revisited with shared history. |
-| Find a note | `<Space>fn` | Starts with notes belonging to the invoking item; choose **Browse library** to search notes across that library. |
-| Narrow the Main item list with Zotero's search | `<Space>fq` or `<Space>fa` | Focuses Quick Search or opens Advanced Search; the visible Main view changes. |
-| Jump among the rows already visible in Main | `/`, then `Enter`; `n` / `N` | Searches only current item rows, including the active collection, Quick/Advanced Search, and tag filters. |
-| Find words in the open PDF | Reader `/`, then `n` / `N` | Uses Zotero's PDF text-search bar and its result navigation. |
-| Return to a prior destination | `<C-o>` / `<C-i>` | Traverses Neo's shared Back/Forward history; it is not another search. |
+| 在当前文库中定位条目 | `<Space>ff` | 打开共享条目选择器；确认结果后前往该条目。 |
+| 在当前分类中定位条目 | `<Space>fc` | 打开限定于当前分类的共享条目选择器。 |
+| 查找分类 | `:` → **查找并进入分类**（未绑定） | 在一个文库中查找分类名称或完整路径；确认后进入分类，目的地发生变化时可用共享历史返回。 |
+| 查找笔记 | `<Space>fn` | 从当前条目的笔记开始；选 **Browse library** 可扩大到同一文库中的笔记。 |
+| 用 Zotero 搜索缩小主窗口条目列表 | `<Space>fq` 或 `<Space>fa` | 聚焦快速搜索或打开高级搜索，并改变主窗口视图。 |
+| 在主窗口当前可见行中跳转 | `/` 后按 `Enter`；再按 `n` / `N` | 只搜索当前条目行，包含当前分类、快速/高级搜索及标签筛选的结果。 |
+| 在打开的 PDF 中查找文字 | 阅读器中的 `/`，再按 `n` / `N` | 使用 Zotero PDF 文本搜索栏和结果导航。 |
+| 返回较早的目的地 | `<C-o>` / `<C-i>` | 遍历 Neo 共享后退/前进历史，不会启动另一种搜索。 |
 
-Use [Library workflows](MAIN_GUIDE.md) for tree navigation and opening the Main Cursor item. Use [Tags](TAGS.md#filter-the-main-item-list) to narrow Main with tag filters; those filters change the view, not Zotero tags.
+分类树浏览和打开主窗口条目游标所在条目的方法见[文库工作流](MAIN_GUIDE.md)。标签筛选会改变主窗口视图，不会更改 Zotero 标签；详见[标签筛选主窗口条目列表](TAGS.md#filter-the-main-item-list)。
 
-## Find and confirm a destination
+## 查找并确认目的地 {#find-and-confirm-a-destination}
 
-Open `<Space>ff`, `<Space>fc`, or `<Space>fn` and type a query. Inspect the highlighted result and its preview, then press `Enter` to open it or `Escape` to cancel. Arrow keys or `Ctrl+j` / `Ctrl+k` move between results; `Ctrl+d` / `Ctrl+u` scroll the preview.
+打开 `<Space>ff`、`<Space>fc` 或 `<Space>fn` 并输入查询。查看高亮结果和预览，再按 `Enter` 或 `Shift+Enter` 打开；按 `Escape` 取消。可用方向键或 `<C-j>` / `<C-k>` 在结果间移动，用 `<C-d>` / `<C-u>` 滚动预览。
 
-`<Space>ff` looks across the current library; `<Space>fc` uses the current collection. The chooser helps resolve an item, while opening the item at Main's Cursor is a separate action: in the item list, `Enter` or `o` opens that one item, not every item in persistent Selection. For Notes, `<Space>fn` starts with the invoking item's notes. In its chooser, **Browse library** expands the search to the same library, and **Current item** returns to the original note scope without losing the query. See the [Notes guide](NOTE_GUIDE.md) for note results and previews.
+`<Space>ff` 查找当前文库中的条目，`<Space>fc` 使用当前分类范围。选择器用于定位目标；打开主窗口条目游标所在条目是另一项操作：在条目列表中按 `Enter` 或 `o` 只打开该条目，不会打开 Neo 选择集里的每一项。`<Space>fn` 从调用它的当前条目开始查找笔记；选择 **Browse library** 可扩展到同一文库，选择 **Current item** 则返回原范围并保留查询。笔记预览和目标范围见[笔记指南](NOTE_GUIDE.md)。
 
-## Find a collection
+## 查找分类 {#find-a-collection}
 
-In Main Normal, press `:` and choose **Find and enter a collection**. This Palette action is unbound; `<Space>fc` keeps its existing meaning of finding items in the current collection.
+在主窗口普通模式按 `:`，搜索 **查找并进入分类**。该操作没有默认快捷键；`<Space>fc` 仍用于查找当前分类中的条目。
 
-The chooser searches names and full paths within one library. It uses the tree Cursor's library when the collection tree is focused; otherwise it requires one active library or collection scope. Full paths distinguish same-name collections. Browsing candidates or pressing `Escape` leaves Main's collection scope and tree expansion unchanged. Press `Enter` to enter the chosen collection. If Zotero's collection-tree filter is active, Neo clears it to reveal the target. A changed confirmed destination is added to shared history; use `<C-o>` / `<C-i>` to return Back or Forward.
+选择器会在一个文库内按分类名称或完整路径查找。聚焦分类树时，以树游标所在文库为范围；否则要求当前只有一个文库或分类范围。完整路径可以区分同名分类。浏览候选项或按 `Escape` 取消，不会改变主窗口分类范围或树的展开状态。按 `Enter` 进入所选分类；若 Zotero 的分类树筛选器正在使用，Neo 会先清除它以显示目标。确认后若目的地发生变化，会记入共享历史，可用 `<C-o>` / `<C-i>` 后退或前进。
 
-For collection membership and structure workflows, see [Library workflows](MAIN_GUIDE.md#find-and-organize-collections).
+分类成员关系和结构操作见[文库工作流](MAIN_GUIDE.md#find-and-organize-collections)。
 
-## Narrow Main's view
+## 缩小主窗口视图 {#narrow-main-s-view}
 
-Choose a library or collection in the tree. Use `<Space>fq` for Quick Search or `<Space>fa` for Advanced Search, which can use existing Quick Search text. Add tag filters with `<Space>tf` or clear them with `<Space>tc`. See [Tags](TAGS.md#filter-the-main-item-list) for combined filters and [Library](MAIN_GUIDE.md) for batch worksets.
+先在分类树中选择文库或分类。按 `<Space>fq` 使用快速搜索，按 `<Space>fa` 打开高级搜索；高级搜索可以使用已有的快速搜索文字。按 `<Space>tf` 添加或切换标签筛选器，按 `<Space>tc` 清除所有标签筛选器。组合筛选的方式见[标签指南](TAGS.md#filter-the-main-item-list)，批量工作集见[文库指南](MAIN_GUIDE.md)。
 
-Narrow the view when you want to review a set of papers; use an item chooser when you want a particular destination. Once you have a useful view, `/` finds rows inside it without changing its filters. Review the [Selection Panel](MAIN_GUIDE.md#review-the-selection-panel) before a batch operation, because your workset can include papers outside the current view.
+要浏览一组论文时，缩小主窗口视图；要直接定位某篇论文时，使用条目选择器。在有用的视图中按 `/` 可查找其中的行，不会改动筛选条件。批量操作前查看[Neo 选择集面板](MAIN_GUIDE.md#review-the-selection-panel)，因为工作集可能包含当前视图以外的条目。
 
-## Find within the visible Main rows
+## 在主窗口可见行中查找 {#find-within-the-visible-main-rows}
 
-With Main's item list focused, press `/` to open Neo's local-find prompt. Type one or more terms and press `Enter`: a nonempty query is committed and Neo moves the Cursor to the next visible match. Search is case-insensitive across compact item metadata: display/title, first creator, year, and citekey when available. Multiple query terms may match different parts of that metadata.
+聚焦主窗口条目列表后按 `/` 打开 Neo 本地查找提示。输入一个或多个词并按 `Enter`；非空查询会提交，条目游标移到下一个可见匹配项。搜索不区分大小写，检查紧凑条目元数据：显示名称或标题、第一作者、年份，以及可用时的 citekey。多个查询词可以分别匹配不同字段。
 
-Press `n` for the next match or `N` for the previous match. Each repeats one step, wraps through the visible rows, and ignores counts. The search does not change Quick Search, Advanced Search, tag filters, or collection scope. It searches the rows those view choices currently expose.
+按 `n` 查找下一个匹配项，按 `N` 查找上一个。每次只移动一步，在可见行间循环，并忽略数字计数。搜索不会改变快速搜索、高级搜索、标签筛选器或分类范围；它只查找这些视图条件当前显示的条目。
 
-Press `Escape` to close the prompt and keep the previous query. If a new query has no match, the Cursor stays in place and you can revise the query with `/`. Use `n` / `N` to repeat the most recently committed search.
+按 `Escape` 关闭提示并保留先前查询。如果新查询没有匹配项，条目游标保持原位，可再按 `/` 修改查询。按 `n` / `N` 重复最近一次已提交的搜索。
 
-## Search text in a PDF
+## 在 PDF 中查找文字 {#search-text-in-a-pdf}
 
-In Reader Normal, `/` opens Zotero's PDF text-search bar and `n` / `N` move between results. This searches the document's text, while Main local find searches the metadata of visible Library rows. Continue with the [Reader guide](READER_GUIDE.md) to combine text search, headings, figures, and bookmarks.
+在阅读器 Normal 模式按 `/` 打开 Zotero PDF 文本搜索栏，按 `n` / `N` 移动到不同结果。它查找文档正文；主窗口本地查找查的是当前可见文库行的元数据。更多 PDF 导航方式见[阅读器指南](READER_GUIDE.md)。
 
-## Discover commands
+## 查找命令 {#discover-commands}
 
-Press `:` in Main, Reader, or Note Normal to open the Command Palette. Search for an action, select it, and press `Enter`. Results show actions available where you are working, including actions with no assigned key.
+在主窗口、阅读器或笔记编辑器的 Normal 模式按 `:` 打开命令面板。搜索操作名称、选中结果并按 `Enter` 执行。列表会显示当前上下文可用的操作，包括没有默认快捷键的操作。
 
-Pause after `<Space>` or another command prefix to see the Prefix Guide's next keys. The guide follows your saved bindings. Use [Shortcuts and settings](SETTINGS_GUIDE.md) to give a frequently used action its own key; use [Command Reference](COMMAND_REFERENCE.md) for the complete lookup.
+按下 `<Space>` 或其他命令前缀后稍停，可查看前缀提示中的后续按键；提示会反映已保存的绑定。若命令未出现在当前列表，先检查焦点和模式，再检查[模块设置](SETTINGS_GUIDE.md#modules)。要为常用操作分配快捷键，可查看[快捷键与设置](SETTINGS_GUIDE.md)；完整清单见[命令参考](COMMAND_REFERENCE.md)。
 
-## Switch open tabs
+## 切换已打开的标签页 {#switch-open-tabs}
 
-Use `<Space>,` to choose an open Zotero tab, or `H` / `L` to move to the previous or next tab, including the Library. Close a Reader or Note tab with `<Space>q`. Tab switching is useful when you want a particular open document rather than your previous navigation destination.
+按 `<Space>,` 选择已打开的 Zotero 标签页，或按 `H` / `L` 切换到前一个或后一个标签页，包括文库。按 `<Space>q` 关闭当前阅读器或笔记标签页。要转到另一个已打开的文档时，切换标签页比返回上一个导航目的地更直接。
 
-## Shared Back and Forward history
+## 共享后退与前进历史 {#shared-back-and-forward-history}
 
-Press `Ctrl+o` to return through Neo's recorded destinations and `Ctrl+i` to move Forward. History connects Library item and note results, Selection Panel reveals, tab changes made with Neo, and Reader jumps that provide a restorable PDF position. Ordinary scrolling, zooming, filter edits, and typing do not add a stop for every key press.
+按 `<C-o>` 回到 Neo 记录的较早目的地，按 `<C-i>` 前进。历史会连接主窗口的条目和笔记结果、选择集面板的条目显示、通过 Neo 切换的标签页，以及能恢复 PDF 位置的阅读器跳转。普通滚动、缩放、筛选条件修改和文字输入不会把每次按键都记为一个位置。
 
-Back can reopen a closed PDF attachment while the file is still readable. A Reader search or annotation move may not add a stop when Zotero does not provide a restorable position; use a Reader mark for a passage you deliberately want to revisit. History belongs to the current Main window. Turn on **Persist marks** in Settings for named reading positions you want to keep after restarting Zotero.
+如果 PDF 文件仍可读取，后退可以重新打开已关闭的 PDF 附件。若 Zotero 没有提供可恢复的位置，阅读器搜索结果或批注跳转可能不会记入历史；想专门返回某处时，可保存阅读器标记。历史属于当前主窗口。要在 Zotero 重启后保留命名标记，可在设置中启用[持久化标记](SETTINGS_GUIDE.md#tune-reader-controls)。
 
-Your Main Selection stays unchanged as you go Back or Forward. See the [navigation reference](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist) for the full recording and restoration rules.
+后退或前进不会改变主窗口的 Neo 选择集。完整的位置记录和恢复规则见[导航参考](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)。
 
-## Research and revisit workflow
+## 研究时查找并返回 {#research-and-revisit-workflow}
 
-Start in Main by choosing a library or collection. Use Quick Search, Advanced Search, or tag filters to narrow the rows when you want to change the view. Use `<Space>ff` or `<Space>fc` when you want to locate a specific item directly; check its preview before confirming. If the item is already among the visible rows, use `/` and then `n` / `N` to move the Cursor to the relevant record. Open the Cursor item with `Enter` or `o`.
+先在主窗口选择文库或分类。若要改变显示范围，使用快速搜索、高级搜索或标签筛选器；若要直接定位条目，按 `<Space>ff` 或 `<Space>fc` 并在确认前检查预览。若目标已经在可见行中，按 `/` 后再用 `n` / `N` 将条目游标移到它。按 `Enter` 或 `o` 打开游标所在条目。
 
-In Reader, use `/` to find a phrase in the PDF and `n` / `N` to move between its results. Use Neo's Back/Forward shortcuts to revisit eligible Reader or Main destinations. If you need the Reader item's library row, open `:` and choose **Show current item in Library**; this action is available in Reader and Note palettes, is unbound by default, and uses the active Reader or Note item rather than Main Selection. See [Reader and capture workflows](READER_GUIDE.md) and [Capture to notes](CAPTURE_GUIDE.md) for continuing from selected PDF text.
+在阅读器中按 `/` 查找 PDF 文字，再按 `n` / `N` 浏览结果。用 Neo 后退/前进快捷键返回符合条件的阅读器或主窗口位置。若要在文库中显示当前阅读器条目，按 `:` 并搜索 **在文库中显示当前条目**；该操作在阅读器和笔记编辑器的命令面板中可用，没有默认快捷键，并使用当前阅读器或笔记上下文，而不是主窗口 Neo 选择集。之后可参阅[阅读器与摘录工作流](READER_GUIDE.md)和[摘录到笔记](CAPTURE_GUIDE.md)。
 
-When you want a different open tab rather than the prior navigation destination, use `<Space>,` or `H` / `L`. To find a note, use `<Space>fn`; start from the current item's notes and choose **Browse library** when you want to expand to library-wide notes. See the [Notes guide](NOTE_GUIDE.md) for opening and working with notes.
+要切换到另一个已打开的标签页而不是返回历史目的地，按 `<Space>,` 或 `H` / `L`。要查找笔记，按 `<Space>fn`；默认从当前条目的笔记开始，需要扩大到同一文库时选择 **Browse library**。打开和编辑笔记的方法见[笔记指南](NOTE_GUIDE.md)。

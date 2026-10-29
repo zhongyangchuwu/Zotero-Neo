@@ -1,74 +1,91 @@
-# Work with items in the Zotero Library
+# 在 Zotero 文库中管理条目 {#work-with-items-in-the-zotero-library}
 
-Use the Library to choose a collection, browse papers, and open the item at the Cursor. Build a separate Selection when you want to organize a group of papers together.
+在主窗口中切换分类、浏览条目并打开条目游标所在的条目。需要把多篇论文作为一组处理时，使用独立的 Neo 选择集；选择集不会改变当前打开的条目。
 
-## Try it
+若主窗口中找不到所需操作，按 `:` 搜索当前可用命令；模块开关位置见[模块设置](SETTINGS_GUIDE.md#modules)。
 
-1. In Main Normal, press `e` to focus the collection tree. Use `j` / `k` to choose a library or collection, then press `Enter` to show its items.
-2. Press `ww` to focus the item list. Move the Cursor with `j` / `k` and press `Enter` or `o` to open that item.
-3. Press `<Space>ff` to find an item in the current library, or `<Space>fc` to find one in the current collection. Choose a result and confirm it.
+## 开始浏览文库 {#try-it}
 
-## Add items by identifier
+1. 在主窗口普通模式按 `e` 聚焦分类树，用 `j` / `k` 选择文库或分类，再按 `Enter` 显示其中的条目。
+2. 按 `ww` 聚焦中间的条目列表，用 `j` / `k` 移动条目游标；按 `Enter` 或 `o` 打开游标所在条目。
+3. 按 `<Space>ff` 查找当前文库中的条目，或按 `<Space>fc` 查找当前分类中的条目。查看结果预览，再确认要打开的条目。
 
-In Main Normal, press `<Space>ai`, or choose **Add Item by Identifier** in the Command Palette. Neo opens Zotero's native input; it does not read the clipboard or submit a lookup automatically.
+## 按标识符添加条目 {#add-items-by-identifier}
 
-1. Select one writable library or collections within that library. Cross-library and read-only scopes cannot open this action.
-2. Enter ISBNs, DOIs, PubMed IDs, arXiv IDs, or ADS Bibcodes. For a batch, use one identifier type per submission and put each entry on its own line.
-3. In a single-line entry, press Enter to submit or Shift+Enter to add a line. In multiline entry, Enter adds a line and Shift+Enter submits. These are Zotero's native controls.
-4. Escape closes entry without submitting its draft. Closing after submission does not undo items already saved. Zotero owns lookup progress, failures, attachment preferences, and post-import selection.
+在主窗口普通模式按 `<Space>ai`，或按 `:` 并搜索 **通过标识符添加条目**。这会打开 Zotero 原生的标识符输入框；它不会读取剪贴板，也不会自动提交查询。
 
-Zotero's native parser chooses an identifier family for each submission; a mixed DOI/ISBN/arXiv batch is not a request to import every family. Submit mixed references in separate batches instead of relying on that parser priority.
+1. 选择一个可写文库，或该文库中的一个或多个分类。只读文库和跨文库范围不能打开此操作。
+2. 输入 ISBN、DOI、PubMed ID、arXiv ID 或 ADS Bibcode。批量提交时，每行放一个标识符，并且一次只提交一种标识符类型。
+3. 单行输入时，按 `Enter` 提交，按 `Shift+Enter` 添加一行；多行输入时，按 `Enter` 换行，按 `Shift+Enter` 提交。这些是 Zotero 原生输入框的按键规则。
+4. 按 `Escape` 关闭输入框会丢弃尚未提交的草稿；提交后再关闭不会撤销已经保存的条目。查询进度、失败、附件偏好和导入后的选择都由 Zotero 处理。
 
-The destination is the current native library and selected collections, not the Cursor item or Neo Selection. Multiple selected collections in one library are passed to Zotero together. Opening the action leaves persistent Selection unchanged; refocusing an already open input preserves its draft and caret.
+Zotero 的原生解析器会为每次提交选择一种标识符类型；把 DOI、ISBN 和 arXiv ID 混在同一批里，并不表示要导入所有类型。混合类型时请分开提交，不要依赖解析器的优先顺序。
 
-The same `<Space>ai` action is available in Reader Normal. It brings the associated Library window forward and opens entry in its Library tab, retaining that window's current collection scope rather than using the Reader item's collections. A standalone Reader uses its own opener, not another Main window.
+目标是当前原生文库和选中的分类，不是条目游标或 Neo 选择集。同一文库中选中的多个分类会一并交给 Zotero。打开此操作不会改动 Neo 选择集；重新聚焦已打开的输入框会保留草稿和文本光标。
 
-## Browse a library and its collections
+阅读器普通模式也有相同的 `<Space>ai` 操作：它会调出关联的文库窗口，并在该窗口的文库标签页打开输入框，沿用该窗口当前的分类范围，而不是阅读器条目的分类。独立阅读器只使用打开它的实际主窗口，不借用其他主窗口；该窗口已关闭或不可用时，入口不会出现在可执行命令中。
 
-The collection tree sets the scope for Main's item list. Focus it with `e`; `j` / `k` move between rows, and `Enter` activates the selected library or collection. `h` collapses an open collection or moves to its parent. `l` expands a closed collection; on an open collection or a leaf, it focuses the item list. Use `ww` to focus the middle item list, `wh` for the left pane, and `wl` for the right detail pane.
+## 浏览文库与分类 {#browse-a-library-and-its-collections}
 
-In the item list, `j` / `k` move the Cursor. `gg` and `G` move to the first and last row; a positive count with `G` chooses that one-based row. `Enter` or `o` opens the Cursor item.
+分类树决定主窗口条目列表显示的范围。按 `e` 聚焦分类树；`j` / `k` 在行之间移动，按 `Enter` 激活选中的文库或分类。`h` 折叠已展开的分类，或移到其父级；`l` 展开已折叠的分类。分类已展开或没有子项时，`l` 会聚焦条目列表。用 `ww` 聚焦中间的条目列表，`wh` 聚焦左侧窗格，`wl` 聚焦右侧详情窗格。
 
-Use the collection tree when you want to change which rows Main shows. Use [Search and navigation](SEARCH_GUIDE.md) when you need to locate an item without browsing the current rows, narrow Main's view, search within visible rows, or find text in a PDF.
+在条目列表中，`j` / `k` 移动条目游标；`gg` 和 `G` 分别移到首行和末行。给 `G` 一个正数会按从 1 开始的行号定位。按 `Enter` 或 `o` 打开游标所在条目。
 
-## Find and organize collections
+需要改变主窗口显示的条目时，使用分类树；要在当前行之外定位条目、缩小主窗口视图或查找 PDF 文本，请参阅[搜索与导航](SEARCH_GUIDE.md)。
 
-In Main Normal, press `:` and choose **Find and enter a collection** to search collection names or full paths in the current library. Full paths distinguish collections with the same name. Browsing or pressing `Escape` leaves Main's scope and tree expansion unchanged; confirming a result enters that collection and records a changed destination in shared history, so use `<C-o>` / `<C-i>` to go Back or Forward.
+## 查找并整理分类 {#find-and-organize-collections}
 
-The same Palette offers **Add existing items to the current collection**, **Move current item target(s) to another collection**, **Move the current collection**, **Create a collection**, **Rename the current collection**, and **Delete the current collection (keep items)**. All seven collection actions are unbound. Finding works in a read-only library; membership and structure edits require a writable library and otherwise report `This library is read-only or unavailable`. Existing `e`, `j` / `k`, `h` / `l`, `<Space>ca`, `<Space>cr`, and `<Space>fc` keep their current meanings; Zotero's native tree, context-menu, and drag editing remain available. See [Search and navigation](SEARCH_GUIDE.md#find-a-collection) for collection search and the [Command Reference](COMMAND_REFERENCE.md#main-window) for action targets.
+在主窗口普通模式按 `:` 打开命令面板。以下七项分类操作没有默认快捷键；按当前界面显示的名称搜索即可：
 
-When the collection tree is focused, Move, Rename, and Delete require its Cursor to be an ordinary collection and use that collection even if Zotero has multiple collection scopes selected. When the tree is not focused, they require one active ordinary collection; multiple selected scopes or a library root are refused rather than guessed. Create uses the tree Cursor's library when the tree is focused, or one active library/collection scope otherwise, then asks you to choose a parent collection or the library root explicitly. Moving a collection carries its descendants and excludes itself and those descendants as destinations. Create and rename use Zotero's native name prompt; creation also requires native confirmation. Deleting a collection and its descendants keeps all items in the library; `u` restores an item-trash batch, not collection structure.
+- **查找并进入分类**：按分类名称或完整路径查找当前文库中的分类。只读文库也可以查找；确认结果后才会进入分类并将发生变化的目的地记入共享历史。
+- **向当前分类添加已有条目**：逐个查找同一文库中的条目并添加到当前分类。
+- **将当前条目目标移到其他分类**：把当前条目目标从一个源分类移到同一文库中的另一分类。
+- **移动当前分类**：移动当前分类及其后代分类。
+- **新建分类**：在所选父分类或文库根目录下创建分类。
+- **重命名当前分类**：重命名当前分类。
+- **删除当前分类（保留条目）**：删除分类及其后代分类，但保留文库中的条目。
 
-To add existing items one at a time, choose **Add existing items to the current collection** from `:`. It freezes the single active ordinary collection and searches for up to 100 same-library matches per query. Each `Enter` saves one addition and keeps the picker open; `Escape` ends the workflow without undoing earlier additions. Main filters and persistent Selection stay unchanged.
+除查找外，其他分类操作都会修改数据；目标文库必须可写。只读或不可用的文库不能进行成员关系或分类结构编辑。
 
-## Keep opening and batch selection separate
+完整路径可区分同名分类。浏览候选项或按 `Escape` 取消查找，不会改变主窗口范围或分类树展开状态；确认结果后，若目的地发生变化，则会记入共享历史，可用 `<C-o>` / `<C-i>` 后退或前进。
 
-Main has two different ways to gather items:
+聚焦分类树时，“移动当前分类”“重命名当前分类”和“删除当前分类（保留条目）”以分类树游标所在的普通分类为目标，即使 Zotero 选中了多个分类范围也一样。未聚焦分类树时，这些操作要求当前只有一个普通分类范围；如果选中了多个范围或文库根目录，Neo 会拒绝操作，而不会猜测目标。
 
-- **Persistent Selection:** in the item list, press `s` to add or remove the current target. Neo moves the Cursor to the next row, so you can keep browsing while the workset remains selected. `<Space>sc` clears it.
-- **Visual:** press `v` to start a temporary row range, move its endpoint with `j` / `k`, and press `o` to swap the ends. Press `s` to commit the range to persistent Selection. If every row in the range was already selected, the commit removes that range; otherwise it adds the range. Press `Escape` or `v` to cancel Visual without changing persistent Selection.
+聚焦分类树时，“新建分类”使用树游标所在的文库；未聚焦时，要求只有一个文库或分类范围。随后明确选择父分类或文库根目录。移动分类时，其后代分类会一起移动，不能把自身或后代分类选作目标。新建和重命名使用 Zotero 原生名称输入框；新建还需要在原生确认框中确认。删除操作会移除分类及其后代结构，但不删除条目；`u` 只恢复条目回收批次，不能撤销分类删除。
 
-Opening stays independent: `Enter` or `o` opens the Cursor item, not the persistent Selection. For Main batch actions, a nonempty persistent Selection takes priority. Otherwise, the action uses its applicable current target: Visual range, Zotero native multi-selection, or Cursor. The collection tree never adds a library or collection to item Selection.
+“向当前分类添加已有条目”要求当前范围是一个普通分类。此操作会固定该分类，并按查询查找同一文库中最多 100 个匹配条目。每次按 `Enter` 添加一个条目，选择器继续打开；按 `Escape` 结束流程，但不会撤销先前已添加的条目。主窗口筛选器和 Neo 选择集保持不变。
 
-### Review the Selection Panel
+## 区分打开条目与批量选择 {#keep-opening-and-batch-selection-separate}
 
-Press `<Space>ss` to inspect the persistent Selection. The panel marks each entry **visible** when it appears in the current Main rows, **hidden** when it is outside the current view, and **unavailable** when Zotero can no longer resolve it. `j` / `k` move through entries; `Enter` reveals the selected item in Main. An unavailable item cannot be revealed. Use `x` to remove the current entry from Selection, `c` to clear the workset, `r` to refresh the panel, and `Escape` or `q` to close it.
+主窗口中的条目游标、Zotero 原生多选、临时可视范围和 Neo 选择集是不同状态：条目游标定位当前行，原生多选由 Zotero 列表维护，可视范围临时圈定连续行，Neo 选择集则是独立的批量工作集。它们都不是阅读器中的文本选区。
 
-## Change collection membership
+- **Neo 选择集**：在条目列表中按 `s`，将当前目标加入或移出选择集；条目游标会尽可能移到下一行。这样可以继续浏览，而保留工作集。按 `<Space>sc` 清空选择集。
+- **可视范围（Visual）**：按 `v` 开始临时选择行范围，用 `j` / `k` 移动端点，按 `o` 交换范围两端。按 `s` 将范围提交到 Neo 选择集。如果范围中的每一行原本都已选中，提交会移除整个范围；否则会加入整个范围。按 `Escape` 或 `v` 取消，不会改动 Neo 选择集。
+- **Zotero 原生多选**：仍由 Zotero 的列表操作维护，不会变成 Neo 选择集。只在支持原生多选来源的主窗口批量操作中使用。
 
-Use a collection to keep a reading list or project together:
+Neo 选择集只保留在当前主窗口会话中，不跨重启保存。想长期保留这组文献时，可以将它们加入 Zotero 分类或添加标签。
 
-1. Mark the papers with `s` and review the group in `<Space>ss`.
-2. Press `<Space>ca` to add the effective item target(s) to a collection in the same library. Candidates show how many targets are directly assigned (`n/N`); already assigned items stay put, and only missing memberships are added. Choose **New collection…** to select a parent or library root, enter a name in Zotero's native prompt, and confirm. Creating the collection and adding the items is atomic; cancelling does not create an empty collection.
-3. Press `<Space>cr` to remove membership. The picker lists the union of collections directly assigned to at least one target and shows the `n/N` coverage. Confirming removes only that collection membership from the items that have it; items and their other collection memberships remain. If none of the targets has a direct membership, the picker shows an empty state.
-4. To move targets, open `:` and choose **Move current item target(s) to another collection**. This requires one active ordinary source collection and every target must be directly assigned to it. Choose a destination in the same library; Neo adds the destination and removes the source atomically, preserving other memberships. A library root, saved search, mixed source, or recursive-only visibility is not a source; use `<Space>ca` to add without removing.
+在主窗口普通模式按 `Enter` 或 `o`，打开的始终是条目游标所在条目，不会批量打开 Neo 选择集中的条目；在可视范围中，`o` 用于交换范围端点。批量操作优先使用非空的 Neo 选择集；没有选择集时，按具体操作支持的来源使用可视范围、Zotero 原生多选或条目游标。聚焦分类树时选择的是文库范围，不会把文库或分类加入条目选择集。
 
-Membership counts describe direct assignment, not items merely visible under a parent. Batch actions use a nonempty persistent Selection first; otherwise they use the applicable Visual range, Zotero native multi-selection, or Cursor. Keep batches within one library. Adding, removing, or moving collection membership leaves persistent Selection available for the next operation.
+### 查看 Neo 选择集 {#review-the-selection-panel}
 
-## Trash and restore items
+按 `<Space>ss` 打开选择集面板。条目标为**可见**，表示它出现在当前主窗口行中；标为**隐藏**，表示它在当前视图之外；标为**不可用**，表示 Zotero 已无法解析它。用 `j` / `k` 浏览条目，按 `Enter` 在主窗口中显示所选条目。不可用条目无法显示。按 `x` 从选择集中移除当前条目，按 `c` 清空工作集，按 `r` 刷新面板；按 `Escape` 或 `q` 关闭面板。
 
-In Main Normal, `dd` or `x` asks Zotero to trash the effective target after confirmation. A nonempty persistent Selection takes priority; otherwise the target is Visual, native multi-selection, or Cursor. Read the confirmation, which identifies the target source and item count. If any Selection member is hidden or unavailable, Neo refuses the operation instead of applying it to a partial set. Cancelling confirmation leaves the items and persistent Selection unchanged; after a successful trash, Neo removes those items from persistent Selection.
+## 更改条目的分类成员关系 {#change-collection-membership}
 
-Press `u` to restore the last batch trashed by Neo in this Main window. Each later successful Neo trash replaces that remembered batch; `u` is not a general undo for unrelated changes in Zotero's Trash.
+可以把论文加入阅读清单或项目分类：
 
-For complete defaults, remapping support, and action-specific target rules, see the [Command Reference](COMMAND_REFERENCE.md#main-window).
+1. 按 `s` 标记条目，再用 `<Space>ss` 检查工作集。
+2. 按 `<Space>ca`，将当前有效条目目标加入同一文库中的分类。候选项会显示有多少目标已直接属于该分类（`n/N`）；已属于分类的条目保持不变，只补上缺少的成员关系。选择 **New collection…** 可选择父分类或文库根目录，然后在 Zotero 原生输入框中填写名称并确认。新建分类和添加条目是一个整体；取消不会留下空分类。
+3. 按 `<Space>cr` 移除成员关系。选择器列出至少有一个目标直接属于的分类，并显示 `n/N` 覆盖数。确认后，只移除该分类与已属于它的条目之间的成员关系；条目本身及其他分类成员关系不变。若没有目标直接属于任何分类，列表会显示空状态。
+4. 要移动目标，按 `:` 搜索 **将当前条目目标移到其他分类**。必须有一个明确的普通源分类，且每个目标都直接属于它。选择同一文库中的目标分类后，Neo 会以原子操作添加新成员关系并移除源成员关系，其他成员关系保持不变。文库根目录、已保存搜索、多个源分类或仅因父分类递归显示的可见性都不能作为源；如果只想添加而不移除，请用 `<Space>ca`。
+
+`n/N` 统计的是直接成员关系，不包括仅因父分类而可见的条目。分类成员关系操作要求所有目标都在同一文库。Neo 选择集非空时优先使用它；否则按操作支持的来源使用可视范围、Zotero 原生多选或条目游标。添加、移除或移动成员关系不会清空 Neo 选择集，可继续用于下一次操作。
+
+## 将条目移入回收站并恢复 {#trash-and-restore-items}
+
+在主窗口普通模式按 `dd` 或 `x`，确认后将有效目标移入 Zotero 回收站。非空的 Neo 选择集优先；否则目标是可视范围、Zotero 原生多选或条目游标。确认框会列出目标来源和条目数量。只要选择集中有条目隐藏在当前视图之外或已不可用，Neo 就会拒绝整项操作，不会只处理可见部分。取消确认不会改动条目或 Neo 选择集；移入回收站成功后，Neo 会从选择集中移除这些条目。
+
+按 `u` 可在当前主窗口中恢复 Neo 最近一次移入回收站的批次。之后每次成功的 Neo 回收操作都会替换这份记录。`u` 不是 Zotero 回收站中其他更改的通用撤销，也不能恢复已删除的分类结构。
+
+完整默认快捷键、重映射方式和各操作的目标规则见[命令参考：主窗口](COMMAND_REFERENCE.md#main-window)。

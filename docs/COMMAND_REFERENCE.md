@@ -1,561 +1,561 @@
-# Command Reference
+# 命令参考 {#command-reference}
 
-Find a command's default binding, execution context, count behavior, and target conditions here. For workflows, see the [User Guide](USER_GUIDE.md); for tag actions and filters, see [Selection and Tag Actions](TAGS.md); for text entry and IME, see [Input methods](INPUT_METHODS.md).
+在此查找命令的默认绑定、执行上下文、计数行为和目标条件。表中 Reader、Main 和 Note 分别指阅读器、主窗口和笔记编辑器。日常用法见[用户指南](USER_GUIDE.md)；标签操作与筛选见[标签指南](TAGS.md)；文字输入和输入法见[输入与输入法](INPUT_METHODS.md)。
 
-## Contents
+## 目录 {#contents}
 
-- [Reading this reference](#reading-this-reference)
-- [Modes, focus, and capabilities](#modes-focus-and-capabilities)
-- [Key notation and input grammar](#key-notation-and-input-grammar)
-- [Command Palette, remapping, and unbound actions](#command-palette-remapping-and-unbound-actions)
-- [Navigation and the shared jumplist](#navigation-and-the-shared-jumplist)
-- [Reader Normal](#reader-normal)
-- [Reader Select and annotation actions](#reader-select-and-annotation-actions)
-- [Main window](#main-window)
-- [Note editor](#note-editor)
-- [Temporary surfaces and chooser grammars](#temporary-surfaces-and-chooser-grammars)
-- [Action ID index](#action-id-index)
-- [Default binding index](#default-binding-index)
-- [Count examples](#count-examples)
+- [如何阅读此参考](#reading-this-reference)
+- [模式、焦点与功能可用性](#modes-focus-and-capabilities)
+- [按键记法与输入规则](#key-notation-and-input-grammar)
+- [命令面板、重映射与未绑定操作](#command-palette-remapping-and-unbound-actions)
+- [导航与共享跳转历史](#navigation-and-the-shared-jumplist)
+- [Reader 普通模式](#reader-normal)
+- [Reader Select 与批注操作](#reader-select-and-annotation-actions)
+- [主窗口](#main-window)
+- [Note 编辑器](#note-editor)
+- [临时界面与选择器操作规则](#temporary-surfaces-and-chooser-grammars)
+- [Action ID 索引](#action-id-index)
+- [默认按键索引](#default-binding-index)
+- [计数示例](#count-examples)
 
-## Reading this reference
+## 如何阅读此参考 {#reading-this-reference}
 
-Each command row gives its `ActionId`, shipped default binding(s), and the contexts where it is available. The same key can do different things in different contexts. Saved preferences can add or remove bindings; a command still requires a valid target to run.
+每行命令列出其 `ActionId`、随 Neo 提供的默认绑定及可用上下文。同一个按键在不同上下文中可能执行不同操作。已保存的偏好设置可以添加或移除绑定；执行命令仍须有有效目标。
 
-“History” means Neo's shared Back/Forward list. A completed action adds a location only when it reaches a different restorable destination; scrolling and other view changes are not jumps. See [Navigation and the shared jumplist](#navigation-and-the-shared-jumplist) for the destinations and restoration limits.
+“历史记录”指 Neo 共享的后退/前进列表。只有操作完成后到达另一个可恢复的位置，才会添加记录；滚动等视图变化不算跳转。可恢复的位置及限制见[导航与共享跳转历史](#navigation-and-the-shared-jumplist)。
 
-## Modes, focus, and capabilities
+## 模式、焦点与功能可用性 {#modes-focus-and-capabilities}
 
-Main, Reader, Note, sidebars, pickers, and the Plugin Manager use the binding contexts listed below. Focus determines which local commands are available.
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令。命令是否可用还取决于对应内置模块是否启用；模块状态及应用时机见[模块设置指南](SETTINGS_GUIDE.md#modules)。
 
-| Owner | BindingContext | Capability |
+| 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |
-| Reader | `reader-normal` | Reading, page/view and category navigation, annotations, tabs, shared actions, and Normal command palette. |
-| Reader | `reader-select` | Active PDF text-range refinement and selection actions. |
-| Main | `main-normal` | Zotero library tree/items, search, Selection workset, commands and palette. |
-| Main | `main-select` | Temporary Visual range in the visible Main item rows. |
-| Note | `note-normal` | Note motions/operators and supported shared actions. |
-| Note | `note-insert` | Native note-editor text input plus the explicit directional pane-focus bindings. |
-| Reader Outline | `reader-outline` | Four panel-focus actions and global heading traversal; local next/previous, parent/child and cancel; `uiConfirm` is supported but default-unbound. Caption controls reuse this context. |
-| Reader Bookmarks | `reader-marks` | Four panel-focus actions and global heading traversal; local next/previous/first/last/confirm/cancel/delete/clear. |
-| Reader Annotations | `reader-annotations` | Four panel-focus actions and global heading traversal; local next/previous/cancel. |
-| Reader Thumbnails | `reader-thumbnails` | Four panel-focus actions and global heading traversal; local next/previous/cancel. |
-| Picker query field | `picker-input` | Local next/previous/confirm/cancel, preview movement, and next/previous pane actions. Query text and IME remain native. |
-| Picker results | `picker-list` | Picker-input actions plus local query focus. |
-| Plugin Manager filter | `plugins-input` | Only `uiFocusList`; its default `Escape` returns focus to the results. |
-| Plugin Manager results | `plugins-list` | Local next/previous/first/last/page movement, search, cancel, and Plugin Manager operations. |
+| 阅读器 | `reader-normal` | 阅读、页面/视图与分类导航、批注、标签页、共享操作及普通模式命令面板。 |
+| 阅读器 | `reader-select` | 对有效 PDF 文本选区进行微调和执行选区操作。 |
+| 主窗口 | `main-normal` | Zotero 文库树和条目、搜索、Neo 选择集、命令及命令面板。 |
+| 主窗口 | `main-select` | 主窗口可视条目行中的临时可视范围。 |
+| 笔记 | `note-normal` | Note 光标移动、操作符及受支持的共享操作。 |
+| 笔记 | `note-insert` | Note 编辑器原生文字输入及明确绑定的方向窗格焦点操作。 |
+| Reader Outline | `reader-outline` | 四种面板焦点操作和全局标题导航；面板内支持上/下项、父级/子级与取消；支持 `uiConfirm`，但默认未绑定。标题、图注和表格标题导航也使用此上下文。 |
+| Reader Bookmarks | `reader-marks` | 四种面板焦点操作和全局标题导航；面板内支持上/下项、首项/末项、确认、取消、删除和清除。 |
+| Reader Annotations | `reader-annotations` | 四种面板焦点操作和全局标题导航；面板内支持上/下项与取消。 |
+| Reader Thumbnails | `reader-thumbnails` | 四种面板焦点操作和全局标题导航；面板内支持上/下项与取消。 |
+| 选择器查询框 | `picker-input` | 本地上/下项、确认、取消、预览移动和上/下窗格操作。查询文字和输入法仍由原生控件处理。 |
+| 选择器结果 | `picker-list` | 支持查询框中的操作，另可在本地聚焦查询框。 |
+| Plugin Manager 筛选框 | `plugins-input` | 仅支持 `uiFocusList`；其默认按键 `Escape` 会将焦点返回结果列表。 |
+| Plugin Manager 结果 | `plugins-list` | 本地上/下项、首项/末项、翻页、搜索、取消及 Plugin Manager 操作。 |
 
-Reader Select operates on an eligible PDF text selection; Main Select is a temporary range over visible item rows. Note Insert is the Note editor's text-entry context. Comment editing and native passthrough are input behaviors, not Reader modes. Text fields and active IME composition keep their native editing keys.
+Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范围内条目行的临时选区。Note Insert 是 Note 编辑器的输入上下文。批注评论编辑和原生输入转交属于输入行为，不是 Reader 模式。文本框和正在进行的输入法组合保留原生编辑按键。
 
-In Reader, `v` enters Select when **Text Select mode** is enabled. `i` / Enter opens an eligible selected annotation's comment editor when **Annotation comment editing** is enabled; the editor shows `COMMENT`, not a Reader Insert mode. If comment editing is off, `i` gives native inputs keyboard ownership until Escape. In Main, `v` starts a temporary item-row range. In Note, `i` enters Insert when **Vim-style note editing** is enabled; Escape returns to Normal.
+在 Reader 中，启用**文本选择模式**后按 `v` 进入 Select。启用**批注评论编辑**后，按 `i` / Enter 可打开符合条件的已选批注评论编辑器；其中显示 `COMMENT`，并非 Reader Insert 模式。若关闭批注评论编辑，按 `i` 会将键盘控制权交给原生输入，直到按 Escape。在 Main 中，`v` 开始选择临时条目行范围。在 Note 中，启用**Vim 风格笔记编辑**后按 `i` 进入 Insert；按 Escape 返回 Normal。
 
-## Key notation and input grammar
+## 按键记法与输入规则 {#key-notation-and-input-grammar}
 
-- Printable keys are literal and case-sensitive: `g` differs from `G`; `gg` is two `g` presses. `<Space>` is the Space key, while `:` is a literal colon key. Symbolic keys use angle-bracket notation such as `<C-o>`, `<Enter>`, `<Return>`, `<Esc>`, and `<BS>`. `<Enter>` and `<Return>` are aliases where both appear in the table.
-- Ctrl and Meta are normalized as Ctrl; `Ctrl`, `Alt`, and `Shift` modifiers combine with a key. For example `<C-d>` is Ctrl+d. Printable shifted symbols use their produced character (for example `+`); named keys can retain explicit Shift.
-- A leading decimal count is accepted in contexts that support counts. `0` starts a count only after another count digit; otherwise it is a command, such as Reader Select line-start. Each action defines whether a count repeats it, selects a numbered position, or has no effect.
-- When a binding is also the start of a longer sequence, Neo waits briefly for the next key; a matching continuation selects the longer binding, while a timeout runs the shorter one. An unmatched key starts a new command.
-- `Escape` cancels a pending sequence or exits the current temporary interaction. `Backspace` removes a pending sequence key where Neo owns the sequence; in a query or editor it edits text.
-- Browser/Gecko owns actual text entry and IME composition. While composition is active, or a native editable control has focus, Neo does not reinterpret composition keystrokes as commands. `Dead`, unidentified, and modifier-only key events are not commands. See [Input methods](INPUT_METHODS.md).
-- The tables show shipped defaults. A key that Neo does not use remains available to Zotero or the browser; native text entry and IME are described in [Input methods](INPUT_METHODS.md).
+- 可打印按键按原样区分大小写：`g` 与 `G` 不同；`gg` 表示连续按两次 `g`。`<Space>` 表示空格键，`:` 表示冒号键。符号按键使用尖括号记法，例如 `<C-o>`、`<Enter>`、`<Return>`、`<Esc>` 和 `<BS>`。表格中同时列出的 `<Enter>` 与 `<Return>` 是同一按键的别名。
+- Ctrl 与 Meta 会统一按 Ctrl 处理；`Ctrl`、`Alt`、`Shift` 可与其他按键组合。例如 `<C-d>` 表示 Ctrl+d。可打印的 Shift 符号按实际字符表示（例如 `+`）；命名按键可以显式保留 Shift。
+- 支持计数的上下文可在命令前输入十进制数字。只有在已输入其他计数数字后，`0` 才会继续组成计数；否则它本身是命令，例如 Reader Select 的行首动作。每个动作分别规定计数是重复执行、选择指定位置，还是不起作用。
+- 如果一个绑定同时也是更长序列的开头，Neo 会短暂等待后续按键；匹配到后续按键时执行较长绑定，超时则执行较短绑定。未匹配的按键会开始新命令。
+- `Escape` 会取消等待中的序列或退出当前临时交互。只有在 Neo 接管序列时，`Backspace` 才会删除序列中的末尾按键；在查询框或编辑器中，它用于编辑文字。
+- 实际文字输入和输入法组合由浏览器/Gecko 处理。组合进行中或原生可编辑控件有焦点时，Neo 不会把组合按键重新解释为命令。`Dead`、无法识别的按键及仅修饰键事件不是命令。详见[输入与输入法](INPUT_METHODS.md)。
+- 表格列出随 Neo 提供的默认绑定。Neo 未使用的按键仍可供 Zotero 或浏览器使用；原生文字输入和输入法规则见[输入与输入法](INPUT_METHODS.md)。
 
-The Prefix Guide shows valid continuations for the active context and saved bindings.
+前缀提示会列出当前上下文和已保存绑定的有效后续按键。
 
-## Command Palette, remapping, and unbound actions
+## 命令面板、重映射与未绑定操作 {#command-palette-remapping-and-unbound-actions}
 
-In Reader Normal, Main Normal, or Note Normal, `:` opens the Command Palette. Search available actions, move with `↑` / `↓`, `j` / `k` when results have focus, or `Ctrl+j` / `Ctrl+k`, then press Enter to run or Escape to close. The palette includes available actions without a key binding, accepts no command arguments or counts, and runs the selected action once.
+在 Reader Normal、Main Normal 或 Note Normal 中按 `:` 打开命令面板。搜索可用操作，用 `↑` / `↓` 移动；结果列表获得焦点时也可按 `j` / `k`，或按 `Ctrl+j` / `Ctrl+k` 移动。按 Enter 执行，按 Escape 关闭。面板包含当前可用但没有按键绑定的操作；不接受命令参数或计数，选中的操作只执行一次。
 
-In Settings → Keybindings, filter by action group or context and search by localized label, ActionId, current key, or default key. Results identify **Default**, **Custom**, or **Unbound** actions, including supported actions without a shortcut.
+在“设置 → 快捷键”中，可按操作组或上下文筛选，并按本地化名称、ActionId、当前按键或默认按键搜索。结果会标明**默认**、**自定义**或**未绑定**，包括受支持但没有快捷键的操作。
 
-Select an action and context to add, record, unbind, or reset its bindings. **Add** and **Record** are explicit controls; recorded `Enter` and `Escape` are key tokens, so use **Done** or **Cancel** to finish. Edits remain staged until **Apply**. Duplicate bindings, unsupported action/context pairs, and reserved native keys prevent applying changes; strict-prefix pairs are allowed with a warning.
+选择操作和上下文后，可添加、录制、解除绑定或重置其绑定。**添加**和**录制**是明确的控件；录制到的 `Enter` 与 `Escape` 会作为按键记录，因此要用**完成**或**取消**结束录制。修改在点击**应用绑定**前仍是草稿。重复绑定、不受支持的操作/上下文组合及原生保留按键都会阻止应用；严格前缀组合可以保存，但会显示警告。
 
-Native shortcuts appear separately as read-only entries when **All groups** is selected. Reserved keys cannot be assigned to Neo, including when they occur within a sequence. Outline `Enter` / `Return` remains Zotero-owned; `uiConfirm` is supported there but unbound by default. Native text entry and IME remain available.
+选择**所有分组**时，原生快捷键会作为单独的只读条目显示。原生保留按键不能分配给 Neo，即使它只出现在某条序列中也不行。Outline 中的 `Enter` / `Return` 仍由 Zotero 处理；该上下文支持 `uiConfirm`，但默认未绑定。原生文字输入和输入法仍可正常使用。
 
-**Default** means the key ships with Neo; **Custom** means a saved preference changes the binding; **Unbound** means an available action has no key. An action unavailable in the current context cannot be made available by assigning it a key.
+**默认**表示该按键随 Neo 提供；**自定义**表示已保存的偏好设置改变了绑定；**未绑定**表示该可用操作没有按键。当前上下文不支持的操作不能通过分配按键变为可用。
 
-## Navigation and the shared jumplist
+## 导航与共享跳转历史 {#navigation-and-the-shared-jumplist}
 
-### Commands and count behavior
+### 命令与计数行为 {#commands-and-count-behavior}
 
-`navigateBack` and `navigateForward` work in Main Normal, Reader Normal, and Note Normal; their defaults are `<C-o>` and `<C-i>`. A positive shortcut count traverses that many locations, as in `2<C-o>`. The Command Palette action is uncounted. Back and Forward stop at either end.
+`navigateBack` 和 `navigateForward` 可在 Main Normal、Reader Normal 和 Note Normal 中使用；默认绑定为 `<C-o>` 和 `<C-i>`。快捷键前的正数计数会遍历相应数量的位置，例如 `2<C-o>`。命令面板中的操作不接受计数。到达列表任一端时，后退或前进都会停止。
 
-Each Main window has one list of up to 100 locations. Counts stop at the available end; traversal does not wrap. A new jump after Back replaces the old Forward branch, and consecutive equivalent destinations are combined. Back/Forward does not change persistent Main Selection.
+每个 Main 窗口各有一份最多包含 100 个位置的列表。计数到达可用位置的末端时停止，不会循环。后退后发生新跳转会取代原来的前进分支；连续到达等效位置时会合并记录。后退/前进不会改变 Neo 选择集。
 
-### Recording and exclusions
+### 记录条件与排除项 {#recording-and-exclusions}
 
-A location is added only when an action completes at a different restorable destination. No-op, failed, or cancelled actions do not add one.
+只有操作完成并到达另一个可恢复的位置时，才会添加记录。无效果、失败或取消的操作不会添加记录。
 
-| Surface/action | History behavior |
+| 界面/操作 | 历史记录行为 |
 | --- | --- |
-| Main item-row `gg` / `G` | A changed item Cursor can add a location. Main `j` / `k` and collection-tree movement do not. Positive `G` selects the one-based row; bare `G` selects the last row and `gg` the first. |
-| Main local-find `n` / `N` | A committed search that moves the Cursor can add a location. A miss, unchanged Cursor, or cancelled prompt does not. |
-| Main item open, item/note chooser, or Library reveal | A successful move to a different item, note, or tab can add a location. Activating a collection scope, opening or browsing a chooser, and native tab-bar clicks do not. |
-| `H` / `L` or confirmed tab chooser | A change to another open tab can add a location. Each `H` / `L` press cycles once; counts are ignored. Selecting the current tab does not add one. |
-| Reader PDF page destination | With Zotero page navigation available, `ngg` / `nG` targets one-based page `n`; bare `gg` goes to the first-page start and bare `G` to the document bottom. Without that API, `gg` / `G` scroll to the document boundaries and ignore counts. Ordinary scrolling and adjacent `h` / `l` page turns do not add locations. |
-| Reader marks, Outline, annotation navigation, PDF search results, and internal/citation links | A completed move to a different Reader location can add one. Selecting or highlighting without a location change does not. |
-| External PDF link | Opens through Zotero; it is not a Neo Reader history location. |
-| Scroll, zoom, split layout, selection/caret movement, filters, and collection edits | These change view or selection state, not the history location. |
-| Failed action, unchanged destination, cancelled chooser, or unavailable target | No new location is added. |
+| Main 条目行 `gg` / `G` | 条目游标发生变化时可添加记录。Main `j` / `k` 和分类树移动不会添加记录。正数 `G` 选择从 1 开始计数的行；单独按 `G` 选择末行，`gg` 选择首行。 |
+| Main 内部查找 `n` / `N` | 已提交的搜索移动条目游标时可添加记录。未命中、游标未变化或取消提示框都不会添加记录。 |
+| Main 打开条目、条目/笔记选择器或在文库中显示 | 成功转到其他条目、笔记或标签页时可添加记录。切换分类范围、打开或浏览选择器、点击原生标签栏都不会添加记录。 |
+| `H` / `L` 或确认标签页选择器 | 切换到另一打开的标签页时可添加记录。每次按 `H` / `L` 只切换一个标签页，忽略计数。选择当前标签页不会添加记录。 |
+| Reader PDF 页面目标 | Zotero 支持页码导航时，`ngg` / `nG` 转到从 1 开始计数的第 `n` 页；请求页码是否有效由 Zotero 决定。不带计数时，`gg` 转到第一页起点，`G` 转到文档末尾。如果宿主不支持该 API，`gg` / `G` 会滚动到文档两端并忽略计数。普通滚动及相邻的 `h` / `l` 翻页不会添加记录。 |
+| Reader 标记、Outline、批注导航、PDF 搜索结果及内部/引文链接 | 完成并转到另一个 Reader 位置时可添加记录。选择或高亮内容但位置未变时不会添加记录。 |
+| 外部 PDF 链接 | 由 Zotero 打开，不属于 Neo Reader 历史记录。 |
+| 滚动、缩放、分屏布局、选区/光标移动、筛选器及分类编辑 | 这些操作改变视图或选区状态，不改变历史位置。 |
+| 操作失败、目标未变、选择器取消或目标不可用 | 不会添加新位置。 |
 
-### Snapshots and restoration
+### 状态快照与恢复 {#snapshots-and-restoration}
 
-- **Main:** Back/Forward restores the available library or collection view, Quick Search, tag and Advanced Search filters, Cursor, and focus. Persistent Neo Selection remains unchanged.
-- **Reader PDF:** restores the same item and available page/viewport position in each PDF pane. Zoom and split layout stay as they are. If its Reader tab was closed, Neo can reopen the same attachment when it is still readable.
-- **Other Reader tabs and ordinary tabs:** return to an open tab and its Zotero-retained position. A closed ordinary tab cannot be reopened through PDF attachment history.
-- **Note:** a standalone Note returns to its tab and native retained position; a Note context pane restores the underlying Main view, not the Note caret or editor focus.
-- **Unavailable destination:** if an attachment is missing, unreadable, or cannot be restored, the history position does not advance. A partial restore may leave an already-restored tab or view changed.
+- **Main：**后退/前进会恢复可用的文库或分类视图、Quick Search、标签和 Advanced Search 筛选器、条目游标及焦点。Neo 选择集保持不变。
+- **Reader PDF：**恢复同一条目以及各 PDF 窗格中可恢复的页码/视口位置。缩放和分屏布局保持原样。若 Reader 标签页已关闭，只要附件仍可读取，Neo 就能重新打开它。
+- **其他 Reader 标签页和普通标签页：**返回仍打开的标签页及 Zotero 保留的位置。PDF 附件历史记录无法重新打开已关闭的普通标签页。
+- **Note：**独立 Note 会返回其标签页和原生保留的位置；上下文 Note 面板会恢复底层 Main 视图，但不会恢复 Note 光标或编辑器焦点。
+- **目标不可用：**如果附件缺失、不可读或无法恢复，历史位置不会前移。部分恢复可能已改变先恢复成功的标签页或视图。
 
-Before Back or Forward, Neo updates the departure location so movement since the previous jump can be the return point. Closing a Reader or Note tab does not erase history; closing its Main window clears that window's list. A newly opened Reader may need to finish loading before its commands are active.
+执行后退或前进前，Neo 会先更新离开位置，使上次跳转后的移动可作为返回点。关闭 Reader 或 Note 标签页不会清除历史；关闭 Main 窗口会清除该窗口的列表。新打开的 Reader 可能需要等加载完成后才能使用其命令。
 
-### Mixed navigation examples
+### 混合导航示例 {#mixed-navigation-examples}
 
-- In a PDF with numeric page navigation, `5gg` goes to page 5 and bare `gg` to its first-page start. Without that host support, `gg` scrolls to the document boundary instead.
-- Open Reader A, press `L` to Reader B, then jump to a mark. Back visits the mark's departure and then the tab change; Forward returns through them.
-- If a Reader tab in history has been closed, Back can reopen its readable attachment. An unreadable or unavailable target leaves the history position unchanged.
-- After going Back, a new completed jump replaces the former Forward branch; scrolling or a cancelled chooser does not create that branch.
+- 在支持数字页码导航的 PDF 中，`5gg` 转到第 5 页，单独按 `gg` 转到第一页起点。如果宿主不支持该功能，`gg` 会滚动到文档边界。
+- 打开 Reader A，按 `L` 切换到 Reader B，再跳到一个标记。后退先返回标记跳转前的位置，再返回标签页切换前的位置；前进则按相反顺序恢复。
+- 如果历史记录中的 Reader 标签页已关闭，后退可重新打开仍可读取的附件。目标不可读或不可用时，历史位置不变。
+- 后退后发生新的已完成跳转时，会取代原来的前进分支；滚动或取消选择器不会建立新分支。
 
-## Reader Normal
+## Reader 普通模式 {#reader-normal}
 
-| ActionId | Default binding(s) | Meaning / count / history |
+| ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
-| `scrollDown` / `scrollUp` | `j` / `k` | Scroll by the configured step; counts multiply the step. Continuous movement, not history. |
-| `scrollLeft` / `scrollRight` | `zh` / `zl` | Pan horizontally by the configured step; counts multiply the step. |
-| `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | Move half a viewport per step; counts repeat. |
-| `fullPageDown` / `fullPageUp` | `<C-f>` / `<C-b>` | Move a full viewport per step; counts repeat. |
-| `prevPage` / `nextPage` | `h` / `l` | Repeat Zotero's previous/next-page step `max(1,count)` times; these adjacent page turns do not add history locations. |
-| `firstPage` / `lastPage` | `gg` / `G` | When Zotero supports page navigation, a positive count (`ngg` or `nG`) targets that one-based page start; Zotero determines whether the requested page is valid. Without a count, `gg` goes to the first-page start and `G` to the document bottom. If page navigation is unavailable, both scroll to document boundaries and ignore counts. |
-| `zoomIn` / `zoomOut` | `+`, `zI` / `-`, `zO` | One Reader zoom step; counts repeat. |
-| `zoomReset` | `=`, `z0` | Reset/Fit page width once; count does not repeat. |
-| `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / unbound | Place the current page at the top, center, or bottom of the viewport. `scrollBottom` has no default binding. |
-| `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`, `n`, `N`, `<Esc>` | Open Reader's PDF find bar; `n` / `N` ask Zotero for one next/previous result regardless of count. A result that moves to a different Reader location can add history. |
-| `followLink` | `f` | Show hints for visible native internal, citation, or external links and recognized DOI/arXiv/HTTP(S) text in the active PDF view. Type a hint to follow; Backspace edits and Escape cancels. Native links keep Zotero's behavior; bare DOI/arXiv text uses its resolver. Internal/citation destinations can add history; external links do not. Count is ignored. |
-| `copyTarget` | `y` | Show hints for visible DOI/arXiv/HTTP(S) text, native external links, and annotation Excerpt/Comment targets in the active PDF view. No preselection is required. A confirmed hint copies its value; Escape or no candidates leaves the clipboard unchanged. Count is ignored. |
-| `prevHeading` / `nextHeading` | `[s` / `]s` | Traverse headings in the native Outline, including Sections and Subsections, in document order with wrap. Available from Reader Normal and each Reader sidebar, independent of collapsed branches or the selected row. |
-| `prevFigure` / `nextFigure` | `[f` / `]f` | Move between explicit Figure targets and recognized captions. Land on an associated image when available, otherwise on the caption. First use may require local PDF processing. |
-| `prevTable` / `nextTable` | `[t` / `]t` | Move between explicit Table targets and recognized captions. First use may require local PDF processing. |
-| `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | Select the previous/next annotation, wrapping at either end; count is ignored. Moving to a different Reader location can add history. |
-| `prevBookmark` / `nextBookmark` | `[m` / `]m` | Move between Reader marks in document order, wrapping at either end. A mark jump can add a history location. |
-| `editAnnotation` | `<Enter>`, `<Return>` | Open/focus the selected annotation's comment editor. Its input indicator is `COMMENT`; Enter inserts a newline and Escape saves and closes. |
-| `deleteAnnotation` | `dd` | Delete the selected annotation after confirmation. Cancellation leaves it unchanged. |
-| `yankAnnotation` | **Unbound** | Directly copy the current annotation target's excerpt from the Command Palette. No valid annotation target means no copy. |
-| `yankAnnotationComment` | `Y` | Directly copy the current annotation target's comment. No valid annotation target means no copy. |
-| `recolorYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | Recolor the selected annotation. No selected annotation means no effect. |
-| `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | Filter or clear the annotation sidebar's color filter. |
-| `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>` in owned contexts | Enter Select, open an eligible annotation comment, or exit the current interaction. **Text Select mode** and **Annotation comment editing** control those Reader actions; `exitMode` has no Reader Normal binding. |
-| `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus the nearest eligible pane in that direction; movement does not wrap and does not create a pane. |
-| `focusReaderOutline` / `focusReaderMarks` / `focusReaderAnnotations` / `focusReaderThumbnails` | `<Space>ro` / `<Space>rm` / `<Space>ra` / `<Space>rt` | Open or focus Outline, Bookmarks, Annotations, or Thumbnails. Repeating a command leaves that surface focused. |
-| `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | Toggle Reader split layout. Back/Forward does not restore the split layout. |
-| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Open an item/note chooser. Confirm a result to open it; browsing or cancelling does not add a history location. |
-| `mainAddByIdentifier` | `<Space>ai` | Bring the associated Library window forward and open native identifier entry without changing its collection scope. Uses that Main context, not the Reader item's collections; count is ignored. See [identifier entry](MAIN_GUIDE.md#add-items-by-identifier). |
-| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Choose an open tab, cycle to the previous/next tab, or close the current tab. A tab change can add history; `H` / `L` each cycle once regardless of count. Closing a tab does not erase older locations. |
-| `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Traverse shared history; shortcut counts are accepted, while Command Palette actions run once. |
-| `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | Open the Command Palette, Settings, or persistent Plugin Manager. |
-| `addTag` / `removeTag` / `addToCollection` / `removeFromCollection` | `<Space>ta` / `<Space>tr` / `<Space>ca` / `<Space>cr` | Apply tag or collection actions to the active Reader item. Tag candidates, target rules, and filters are described in [Selection and Tag Actions](TAGS.md). |
-| `mainYankCitekey` | `<Space>yy` | Copy the active Reader item's citekey; Main Selection is not used. |
-| `showInLibrary` | **Unbound** | From the Reader palette, show the active Reader item in Main Library. A successful change of location can add history. |
-| `toggleReaderSidebarOutline` | **Unbound** | Toggle Zotero's native Reader Outline sidebar. No default binding is shipped. |
-| `toggleMarksExplorer` | **Unbound** | Toggle the Bookmarks view. No default binding is shipped. |
+| `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
+| `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
+| `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | 每步移动半个视口；计数会重复执行。 |
+| `fullPageDown` / `fullPageUp` | `<C-f>` / `<C-b>` | 每步移动一个视口；计数会重复执行。 |
+| `prevPage` / `nextPage` | `h` / `l` | 按 Zotero 的上/下一页步进执行 `max(1,count)` 次；相邻翻页不会添加历史位置。 |
+| `firstPage` / `lastPage` | `gg` / `G` | Zotero 支持页码导航时，正数计数（`ngg` 或 `nG`）会定位到从 1 开始计数的页首；页码是否有效由 Zotero 决定。不带计数时，`gg` 转到第一页起点，`G` 转到文档末尾。若无页码导航功能，两者滚动到文档边界并忽略计数。 |
+| `zoomIn` / `zoomOut` | `+`、`zI` / `-`、`zO` | 放大或缩小一个 Reader 缩放步长；计数会重复执行。 |
+| `zoomReset` | `=`、`z0` | 重置缩放/适合页面宽度，只执行一次；计数不会重复执行。 |
+| `scrollTop` / `scrollCenter` / `scrollBottom` | `zt` / `zz` / 未绑定 | 将当前页面放在视口顶部、中央或底部。`scrollBottom` 默认没有绑定。 |
+| `openSearch` / `findNext` / `findPrevious` / `clearSearch` | `/`、`n`、`N`、`<Esc>` | 打开 Reader 的 PDF 查找栏；`n` / `N` 每次分别向后/向前请求一个 Zotero 搜索结果，不受计数影响。结果若转到另一个 Reader 位置，可添加历史记录。 |
+| `followLink` | `f` | 为当前 PDF 视图中可见的原生内部链接、引文链接、外部链接及可识别的 DOI/arXiv/HTTP(S) 文本显示提示。输入提示以打开目标；按 Backspace 编辑，按 Escape 取消。原生链接仍使用 Zotero 行为；裸 DOI/arXiv 文本使用对应解析器。内部/引文目标可记入历史，外部链接不会。忽略计数。 |
+| `copyTarget` | `y` | 为当前 PDF 视图中可见的 DOI/arXiv/HTTP(S) 文本、原生外部链接及批注摘录/评论目标显示提示。无需预先选择目标。确认提示后复制其内容；按 Escape 或无候选项时剪贴板保持不变。忽略计数。 |
+| `prevHeading` / `nextHeading` | `[s` / `]s` | 按文档顺序在原生 Outline 的标题间导航，包括 Section 和 Subsection，并循环。无论分支是否折叠或当前选中了哪一行，都可从 Reader 普通模式及各 Reader 侧栏调用。 |
+| `prevFigure` / `nextFigure` | `[f` / `]f` | 在明确标出的 Figure 目标及可识别的图注间移动。有相关图像时定位到图像，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
+| `prevTable` / `nextTable` | `[t` / `]t` | 在明确标出的 Table 目标及可识别的表格标题间移动。首次使用可能需要在本地处理 PDF。 |
+| `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | 选择上一条/下一条批注，到达任一端时循环；忽略计数。转到其他 Reader 位置时可添加历史记录。 |
+| `prevBookmark` / `nextBookmark` | `[m` / `]m` | 按文档顺序在 Reader 标记间移动，到达任一端时循环。跳到标记可添加历史位置。 |
+| `editAnnotation` | `<Enter>`、`<Return>` | 打开或聚焦选中批注的评论编辑器。输入指示为 `COMMENT`；Enter 插入换行，Escape 保存并关闭。 |
+| `deleteAnnotation` | `dd` | 确认后删除选中的批注。取消确认则保留批注。 |
+| `yankAnnotation` | **未绑定** | 从命令面板直接复制当前批注目标的摘录。没有有效批注目标时不会复制。 |
+| `yankAnnotationComment` | `Y` | 直接复制当前批注目标的评论。没有有效批注目标时不会复制。 |
+| `recolorYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | 更改选中批注的颜色。没有选中的批注时不起作用。 |
+| `filterYellow/Red/Green/Blue/Purple` / `filterClear` | `Zy` / `Zr` / `Zg` / `Zb` / `Zp` / `Za` | 设置颜色筛选器，或清除批注侧栏的颜色筛选。 |
+| `enterVisual` / `enterInsert` / `exitMode` | `v` / `i` / `<Esc>`（仅在 Neo 接管的上下文中） | 分别进入 Select、打开符合条件的批注评论，或退出当前交互。Reader 的这些操作受**文本选择模式**和**批注评论编辑**设置控制；`exitMode` 在 Reader Normal 中没有绑定。 |
+| `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | 将焦点移到该方向最近的可用窗格；不会循环，也不会创建窗格。 |
+| `focusReaderOutline` / `focusReaderMarks` / `focusReaderAnnotations` / `focusReaderThumbnails` | `<Space>ro` / `<Space>rm` / `<Space>ra` / `<Space>rt` | 打开或聚焦 Outline、Bookmarks、Annotations 或 Thumbnails。重复执行时仍停留在该面板。 |
+| `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | 切换 Reader 分屏布局。后退/前进不会恢复分屏布局。 |
+| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开条目/笔记选择器。确认结果以打开它；浏览或取消不会添加历史位置。 |
+| `mainAddByIdentifier` | `<Space>ai` | 将关联的 Library 窗口置前并打开原生标识符录入，不改变该窗口的分类范围。使用该主窗口上下文，而不是 Reader 条目的分类；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#add-items-by-identifier)。
+| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 选择已打开的标签页、切换到上一个/下一个标签页，或关闭当前标签页。切换可添加历史记录；每次 `H` / `L` 只切换一个，不受计数影响。关闭标签页不会清除较早的记录。 |
+| `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | 遍历共享历史记录；快捷键支持计数，命令面板中的操作每次只执行一次。 |
+| `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | 打开命令面板、设置或常驻 Plugin Manager。 |
+| `addTag` / `removeTag` / `addToCollection` / `removeFromCollection` | `<Space>ta` / `<Space>tr` / `<Space>ca` / `<Space>cr` | 对当前 Reader 条目执行标签或分类操作。候选项、目标规则和筛选条件见[标签操作与筛选](TAGS.md)。 |
+| `mainYankCitekey` | `<Space>yy` | 复制当前 Reader 条目的 citekey；不会使用 Main 选择集。 |
+| `showInLibrary` | **未绑定** | 在 Reader Palette 中将当前 Reader 条目显示在 Main 文库中。成功改变位置时可添加历史记录。 |
+| `toggleReaderSidebarOutline` | **未绑定** | 切换 Zotero 原生 Reader Outline 侧栏；默认不提供绑定。 |
+| `toggleMarksExplorer` | **未绑定** | 切换 Bookmarks 视图；默认不提供绑定。
 
-Reader Select actions are listed in [Reader Select](#reader-select-and-annotation-actions). Directional focus moves to an existing pane, which can include the Note pane.
-Reader Normal counts are action-specific: step scroll, half/full viewport, `h/l` page turns, zoom in/out, and history traverse/repeat as their rows state; numeric `gg/G` is a single page target when supported. Search, annotation, tab-cycle, pane/layout, chooser, and other Reader Normal actions run once. Reader Select ignores counts for all its binding actions.
+Reader Select 操作见[Reader Select 与批注操作](#reader-select-and-annotation-actions)。方向焦点操作只移到现有窗格，其中可能包括 Note 窗格。
+Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移动、`h` / `l` 翻页、缩放和历史导航会按所在行所述重复或遍历；支持页码导航时，数字 `gg` / `G` 是单次页码目标。搜索、批注、标签页切换、窗格/布局、选择器及其他 Reader Normal 操作都只执行一次。Reader Select 的绑定操作均忽略计数。
 
-## Reader Select and annotation actions
+## Reader Select 与批注操作 {#reader-select-and-annotation-actions}
 
-Reader `v` enters Select and uses Flash to choose a text range (or adopts an existing native selection when available). Select action defaults:
+在 Reader 中按 `v` 进入 Select，然后使用 Flash 选择一段文本范围；如果当前已有原生选区且可用，也可直接沿用该选区。Select 默认操作如下：
 
-| ActionId | Default binding(s) | Meaning |
+| ActionId | 默认绑定 | 含义 |
 | --- | --- | --- |
-| `flashText` | `s` | Flash to choose the other endpoint while preserving the current anchor. Literal Unicode/IME query; Enter picks nearest labelled target, Escape cancels the Flash stage. |
-| `extendDown` / `extendUp` | `j` / `k` | Extend active endpoint by a line. |
-| `extendLeft` / `extendRight` | `h` / `l` | Extend by a character. |
-| `extendWordForward` / `extendWordBackward` | `w` / `b` | Extend to next/previous word boundary. |
-| `extendLineStart` / `extendLineEnd` | `0` / `$` | Extend to current line boundary. |
-| `extendSentenceForward` / `extendSentenceBackward` | `)` / `(` | Extend by sentence boundary. |
-| `extendParagraphForward` / `extendParagraphBackward` | `}` / `{` | Extend by paragraph boundary. |
-| `swapVisualEnds` | `o` | Swap anchor and active endpoint. |
-| `openSelectionActions` | `a`, `<Enter>`, `<Return>` | Open the Selection Actions temporary palette; cancelling preserves selection. |
-| `highlightYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | Create a colored annotation from current range. |
-| `addNote` | `za`, `i` | Create an annotation and open its comment editor. This is distinct from Capture to note. |
-| `copySelection` | `y` | Copy the selected PDF text, with line breaks and whitespace normalized. |
-| `searchSelection` | `#` | Open Reader search for selected text. |
-| `exitMode` | `v`, `<Esc>` | Cancel Reader Select and return to Normal. |
-| `underlineSelection` | **Unbound** | Supported Select action via Selection Actions when its built-in action is available; no default key. |
+| `flashText` | `s` | 使用 Flash 选择另一端，同时保留当前锚点。查询支持 Unicode 和输入法；按 Enter 选择最近的带标签目标，按 Escape 取消本次 Flash 操作。 |
+| `extendDown` / `extendUp` | `j` / `k` | 按行扩展活动端。 |
+| `extendLeft` / `extendRight` | `h` / `l` | 按字符扩展。 |
+| `extendWordForward` / `extendWordBackward` | `w` / `b` | 扩展到下一个/上一个词边界。 |
+| `extendLineStart` / `extendLineEnd` | `0` / `$` | 扩展到当前行边界。 |
+| `extendSentenceForward` / `extendSentenceBackward` | `)` / `(` | 按句子边界扩展。 |
+| `extendParagraphForward` / `extendParagraphBackward` | `}` / `{` | 按段落边界扩展。 |
+| `swapVisualEnds` | `o` | 交换锚点和活动端。 |
+| `openSelectionActions` | `a`、`<Enter>`、`<Return>` | 打开选区操作临时面板；取消不会清除选区。 |
+| `highlightYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | 根据当前范围创建相应颜色的批注。 |
+| `addNote` | `za`、`i` | 创建批注并打开其评论编辑器。此操作不同于“摘录到笔记”。 |
+| `copySelection` | `y` | 复制已选 PDF 文本，并规范化换行和空白。 |
+| `searchSelection` | `#` | 在 Reader 中搜索选中文字。 |
+| `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
+| `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash accepts visible text, including Unicode and IME input. Choose a displayed hint or press Enter for the nearest match; narrow broad queries to show labels. Escape cancels Flash and keeps the current selection. Selection Actions includes Capture to note, Underline, and Add note; **Translate** appears only when the Zotero Translate integration is available. See [Input methods](INPUT_METHODS.md) and the [Selection and annotation guide](SELECTION_GUIDE.md#try-it).
-Reader Select ignores counts: each motion and selection action runs once. Comment-editor controls and save behavior are listed under [Annotation comment editor](#annotation-comment-editor).
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。选择显示的提示，或按 Enter 选择最近的匹配项；查询范围过宽时，可缩小查询以显示提示。按 Escape 取消 Flash 并保留当前选区。选区操作提供“捕获到笔记”“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#try-it)。
+Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#annotation-comment-editor)。
 
-## Main window
+## 主窗口 {#main-window}
 
-Main Normal commands depend on focus in the collection tree, item list, Quick Search, another editable field, or a Neo panel. The item Cursor, native multi-selection, temporary Visual range, and persistent Neo Selection are distinct targets. Some actions refuse hidden or unavailable targets rather than apply to a different item.
+Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick Search、其他可编辑字段或 Neo 面板。条目游标、Zotero 原生多选、临时 Visual 范围和 Neo 选择集是不同目标。部分操作遇到隐藏或不可用目标时会拒绝执行，不会改为操作其他条目。Neo 选择集只保留在当前主窗口会话中，不跨重启保存。
 
-### Main actions
+### Main 操作 {#main-actions}
 
-| ActionId | Default binding(s) | Meaning / count / history |
+| ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
-| `mainNavDown` / `mainNavUp` | `j` / `k` | Move Cursor down/up in tree or items; counts multiply row movement and clamp at visible list bounds. Continuous, excluded from history. |
-| `mainNavFirst` / `mainNavLast` | `gg` / `G` | In the item list or collection tree, `gg` goes to the first row and `G` to the last; a positive count with `G` selects that one-based row. Only a changed item Cursor can add history; tree movement does not. |
-| `mainActivate` | `<Enter>`, `<Return>` | In the collection tree, activate its scope. In the item list, open the Cursor item/PDF; a changed destination can add history. |
-| `mainTreeCollapse` / `mainTreeExpand` | `h` / `l` | `h` while Items owns focus switches to Collections; otherwise it collapses the selected open collection or selects its parent. `l` expands a selected nonempty closed collection; if it is open or a leaf, it focuses Items. No history entry. |
-| `mainTreeToggle` / `mainTreeOpenOnly` / `mainTreeCloseOnly` | `za` / `zo` / `zc` | Toggle, expand only, or collapse only selected collection row. |
-| `mainTreeExpandAll` / `mainTreeCollapseAll` | `R` / `M` | Expand/collapse all collections in current library tree. |
-| `mainTreeParent` | `<BS>` | Move to the parent collection. |
-| `mainFocusTree` / `mainFocusLeft` / `mainFocusRight` / `mainFocusItems` | `e` / `wh` / `wl` / `ww` | Focus collection tree, left pane, right detail pane, or middle item list. Focus action is not location history. |
-| `mainEnterSelect` | `v` | Begin transient Visual range in item rows. |
-| `mainToggleSelection` | `s` | Toggle the current item target in/out of persistent Neo Selection, then advance the Cursor one row when possible. In the collection tree, it does not redefine native scope selection. |
-| `mainClearSelection` | `<Space>sc` | Explicitly clear persistent Selection. |
-| `mainCancelTarget` | `<Esc>` | Cancel a temporary Visual range or native multi-selection without clearing persistent Neo Selection. |
-| `mainSelectDown` / `mainSelectUp` | `j` / `k` in Main Select | Extend transient range by the count's row distance, clamped to visible list bounds. |
-| `mainSelectFirst` / `mainSelectLast` | `gg` / `G` in Main Select | `gg` extends to first row regardless of count; `G` extends to last row or the positive count's one-based row. |
-| `mainSelectSwapEnds` | `o` in Main Select | Swap range anchor and active end. |
-| `mainSelectFinish` / `mainSelectCancel` | `s` / `v`, `<Esc>` in Main Select | Commit or cancel temporary range; cancellation does not clear persistent Selection. |
-| `mainTrashItems` | `dd`, `x` | Trash persistent Selection when it is non-empty; otherwise trash the current temporary target or Cursor. Confirmation is required. Hidden Selection members prevent the operation; cancellation preserves Selection. |
-| `mainRestoreTrashedItems` | `u` | Restore the last item batch trashed by Neo; unavailable batch is a no-op/failure. |
-| `mainOpenPDF` | `o` | Open Cursor item/PDF only; does not batch-open persistent Selection/native multi-selection. |
-| `mainYankCitekey` | `<Space>yy` | Copy citekeys for Main's effective item target. If any target is unavailable or has no citekey, the clipboard is left unchanged. |
-| `openSearch` | `/` | Main Normal requires Items focus; it cancels a transient Visual range and opens Neo's local-find prompt over visible item rows. It is not Zotero Quick Search; use `mainQuickSearch` (`<Space>fq`) for that. |
-| `findNext` / `findPrevious` | `n` / `N` | With the item list focused, repeat the committed local-find query once forward/backward; count is ignored. No query, a miss, or unchanged Cursor leaves location unchanged. A changed Cursor can add history. |
-| `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | Focus native Quick Search or open Advanced Search; `fa` can convert existing Quick Search text. These alter Main View scope, not Reader page location. |
-| `mainAddByIdentifier` | `<Space>ai` | Open native identifier entry for one writable library and its selected collections, not an item target or Neo Selection. Cross-library/read-only scopes are unavailable; count is ignored. See [identifier entry](MAIN_GUIDE.md#add-items-by-identifier). |
-| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | Open the shared item/note chooser. Confirming a result can add a history location; browsing or cancelling does not. |
-| `findCollections` | **Unbound** | Main Normal: search collection names or full paths in one library scope. Without a library scope, reports `Choose one library scope to find collections`. Browsing or cancellation leaves scope unchanged; confirming enters the collection and a changed destination can add shared history. |
-| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | Open-tab chooser, previous/next open tab, close active tab. Successful chooser/H/L changes record; H/L ignore counts. Closing alone is not recorded and does not delete older entries.
-| `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | Shared counted history traversal. |
-| `addTag` / `removeTag` | `<Space>ta` / `<Space>tr` | Apply to Main's current tag-action targets. See [Selection and Tag Actions](TAGS.md) for selection precedence, same-library limits, and candidates. |
-| `toggleTagFilter` / `clearTagFilters` | `<Space>tf` / `<Space>tc` | Main-only native AND tag filter toggle / clear all. Not jumplist entries. |
-| `addToCollection` / `removeFromCollection` | `<Space>ca` / `<Space>cr` | In Main, use same-library effective item targets. Add shows direct-membership coverage and adds only missing memberships; Remove lists collections directly assigned to at least one target and removes only selected direct memberships. Other memberships and items remain. Reader still applies to its active item. |
-| `addItemsToCurrentCollection` | **Unbound** | Requires one active ordinary collection; otherwise reports `Choose one active ordinary collection to add items`. It freezes that collection, then searches same-library items (up to 100 matches per query). Each Enter saves one addition and keeps the picker open; Escape ends the workflow without undoing saved additions. Main filters and persistent Selection remain unchanged, so an added item may stay hidden. |
-| `moveToCollection` | **Unbound** | Use Main's effective item target(s) only with one active ordinary collection as explicit source and every target directly assigned to it. Otherwise Neo refuses with `Move requires one active ordinary source collection; use Add to collection instead` or `Move requires unchanged targets directly assigned to the active source; use Add to collection instead`. Choose a same-library destination; adding it and removing the source are atomic, and all other memberships remain. |
-| `moveCollection` | **Unbound** | When the tree is focused, use its ordinary collection Cursor even if Zotero has multiple collection scopes selected; otherwise require one active ordinary collection. Without an eligible target, Neo reports `Choose one ordinary collection; multiple selections are not supported`. Choose a same-library parent or root; the collection and its descendants move together, and neither it nor its descendants can be destinations. |
-| `createCollection` | **Unbound** | Use the tree Cursor's library when the tree is focused, or require one active library/collection scope otherwise; without one, Neo reports `Choose one library scope to create a collection`. Choose a parent collection or library root explicitly, enter a name in Zotero's native prompt, and confirm. |
-| `renameCollection` | **Unbound** | Rename the tree Cursor's ordinary collection when the tree is focused; otherwise require one active ordinary collection. With no eligible target, Neo reports `Choose one ordinary collection; multiple selections are not supported`. Uses Zotero's native name prompt. |
-| `deleteCollection` | **Unbound** | Delete the tree Cursor's ordinary collection when the tree is focused; otherwise require one active ordinary collection. With no eligible target, Neo reports `Choose one ordinary collection; multiple selections are not supported`. Zotero's native **Delete collection — keep items** confirmation covers the subtree; all items stay in the library, and `u` does not undo collection-structure changes. |
-| `openCommandPalette` / `managePlugins` / `openNeoSettings` | `:` / `<Space>pp` / `<Space>ps` | Command Palette, persistent Plugin Manager, or Settings. |
-| `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | Focus nearest eligible pane in direction; no wrap at boundaries. |
-| `showInLibrary` | **Not supported** | Main Normal has no such capability. Reader Normal and Note Normal expose the action unbound in their Command Palettes; it resolves the active Reader or Note context item, never Main Selection. |
+| `mainNavDown` / `mainNavUp` | `j` / `k` | 在分类树或条目列表中向下/上移动条目游标；计数按行数累加，并限制在可见列表范围内。连续移动，不记入历史。 |
+| `mainNavFirst` / `mainNavLast` | `gg` / `G` | 在条目列表或分类树中，`gg` 跳到首行，`G` 跳到末行；正数计数配合 `G` 会选择从 1 开始计数的行。只有条目游标变化时才可添加历史记录；分类树移动不会添加。 |
+| `mainActivate` | `<Enter>`、`<Return>` | 在分类树中激活该范围；在条目列表中打开条目游标所在的条目/PDF。目标变化时可添加历史记录。 |
+| `mainTreeCollapse` / `mainTreeExpand` | `h` / `l` | Items 获得焦点时，`h` 切换到 Collections；否则折叠已展开的分类，或选择其父级。选中非空且已折叠的分类时，`l` 展开它；若已展开或为空，则将焦点移到 Items。不记入历史。 |
+| `mainTreeToggle` / `mainTreeOpenOnly` / `mainTreeCloseOnly` | `za` / `zo` / `zc` | 切换、仅展开或仅折叠选中的分类行。 |
+| `mainTreeExpandAll` / `mainTreeCollapseAll` | `R` / `M` | 展开/折叠当前文库树中的所有分类。 |
+| `mainTreeParent` | `<BS>` | 移到父级分类。 |
+| `mainFocusTree` / `mainFocusLeft` / `mainFocusRight` / `mainFocusItems` | `e` / `wh` / `wl` / `ww` | 将焦点移到分类树、左侧窗格、右侧详情窗格或中间条目列表。焦点变化不记入历史位置。 |
+| `mainEnterSelect` | `v` | 在条目行中开始临时 Visual 范围。 |
+| `mainToggleSelection` | `s` | 将当前条目目标加入 Neo 选择集，或从中移除；若可能，再将条目游标移到下一行。在分类树中不会改变 Zotero 原生范围选择。 |
+| `mainClearSelection` | `<Space>sc` | 明确清空 Neo 选择集。 |
+| `mainCancelTarget` | `<Esc>` | 取消临时 Visual 范围或 Zotero 原生多选，不会清空 Neo 选择集。 |
+| `mainSelectDown` / `mainSelectUp` | Main Select 中的 `j` / `k` | 按计数指定的行数扩展临时范围，并限制在可见列表范围内。 |
+| `mainSelectFirst` / `mainSelectLast` | Main Select 中的 `gg` / `G` | `gg` 无论计数如何都扩展到首行；`G` 扩展到末行，或扩展到正数计数指定的行（从 1 开始计数）。 |
+| `mainSelectSwapEnds` | Main Select 中的 `o` | 交换范围锚点和活动端。 |
+| `mainSelectFinish` / `mainSelectCancel` | Main Select 中的 `s` / `v`、`<Esc>` | 提交或取消临时范围；取消不会清空 Neo 选择集。 |
+| `mainTrashItems` | `dd`、`x` | Neo 选择集非空时将其中条目移入回收站；否则处理当前临时目标或条目游标所在条目。需要确认。隐藏的选择集成员会阻止操作；取消确认会保留选择集。 |
+| `mainRestoreTrashedItems` | `u` | 恢复 Neo 最近一次移入回收站的条目批次；该批次不可用时操作无效果/失败。 |
+| `mainOpenPDF` | `o` | 仅打开条目游标所在的条目/PDF；不会批量打开 Neo 选择集或 Zotero 原生多选中的条目。 |
+| `mainYankCitekey` | `<Space>yy` | 复制 Main 当前有效条目目标的 citekey。任何目标不可用或缺少 citekey 时，剪贴板保持不变。 |
+| `openSearch` | `/` | Main Normal 中要求 Items 获得焦点；会取消临时 Visual 范围，并打开 Neo 内部查找提示框，在可见条目行中搜索。它不是 Zotero Quick Search；后者使用 `mainQuickSearch`（`<Space>fq`）。 |
+| `findNext` / `findPrevious` | `n` / `N` | 条目列表获得焦点时，按已提交的内部查找查询向前/后重复搜索一次；忽略计数。没有查询、未命中或游标未改变时，位置不变。游标改变时可添加历史记录。 |
+| `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | 聚焦原生 Quick Search 或打开 Advanced Search；`fa` 可将现有 Quick Search 文字转换过去。这些操作改变 Main 视图范围，不改变 Reader 页码位置。 |
+| `mainAddByIdentifier` | `<Space>ai` | 为一个可写文库及其当前所选分类打开原生标识符录入；不使用条目目标或 Neo 选择集。跨文库或只读范围不可用；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#add-items-by-identifier)。
+| `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开共享的条目/笔记选择器。确认结果时可添加历史位置；浏览或取消不会添加。 |
+| `findCollections` | **未绑定** | Main Normal：在一个文库范围内按名称或完整路径搜索分类。未选定文库范围时，提示 `Choose one library scope to find collections`。浏览或取消不会改变范围；确认后进入该分类，目标变化时可添加共享历史位置。 |
+| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 打开标签页选择器、切换到上一个/下一个打开的标签页，或关闭当前标签页。选择器确认、`H` / `L` 成功切换时会记录位置；`H` / `L` 忽略计数。单独关闭标签页不会记入历史，也不会删除旧记录。 |
+| `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | 按计数遍历共享历史记录。 |
+| `addTag` / `removeTag` | `<Space>ta` / `<Space>tr` | 对 Main 当前标签操作目标执行操作。目标优先级、同一文库限制和候选项见[标签操作与筛选](TAGS.md)。 |
+| `toggleTagFilter` / `clearTagFilters` | `<Space>tf` / `<Space>tc` | 仅限 Main：切换 Zotero 原生 AND 标签筛选，或清除全部标签筛选。不会记入跳转历史。 |
+| `addToCollection` / `removeFromCollection` | `<Space>ca` / `<Space>cr` | 在 Main 中使用同一文库的有效条目目标。添加会显示直接成员关系覆盖情况，只补入尚未包含的条目；移除会列出至少分配给一个目标的分类，只移除选中的直接成员关系。其他成员关系和条目不变。Reader 仍只对当前条目执行操作。 |
+| `addItemsToCurrentCollection` | **未绑定** | 需要一个当前有效的普通分类；否则提示 `Choose one active ordinary collection to add items`。操作开始后固定该分类，再搜索同一文库中的条目（每次查询最多 100 个结果）。每次按 Enter 保存一项并保持选择器打开；按 Escape 结束流程，但不会撤销已保存的添加。Main 筛选器和 Neo 选择集保持不变，因此新添加的条目可能仍不可见。 |
+| `moveToCollection` | **未绑定** | 仅当一个有效普通分类作为明确来源且每个目标都直接属于该分类时，才能处理 Main 的有效条目目标。否则提示 `Move requires one active ordinary source collection; use Add to collection instead` 或 `Move requires unchanged targets directly assigned to the active source; use Add to collection instead` 并拒绝操作。选择同一文库中的目标分类；添加目标成员关系和移除来源成员关系会原子执行，其他成员关系保持不变。 |
+| `moveCollection` | **未绑定** | 分类树获得焦点时使用树中条目游标所在的普通分类，即使 Zotero 同时选中了多个分类范围也不受影响；否则要求只有一个当前有效的普通分类。没有符合条件的目标时，提示 `Choose one ordinary collection; multiple selections are not supported`。可选择同一文库中的父分类或根目录；该分类及其后代一并移动，不能把它或后代选作目标。 |
+| `createCollection` | **未绑定** | 分类树获得焦点时使用树中条目游标所属的文库；否则要求一个当前有效的文库/分类范围。没有范围时，提示 `Choose one library scope to create a collection`。明确选择父分类或文库根目录，在 Zotero 原生提示框中输入名称并确认。 |
+| `renameCollection` | **未绑定** | 分类树获得焦点时重命名树中条目游标所在的普通分类；否则要求一个当前有效的普通分类。没有符合条件的目标时，提示 `Choose one ordinary collection; multiple selections are not supported`。使用 Zotero 原生名称提示框。 |
+| `deleteCollection` | **未绑定** | 分类树获得焦点时删除树中条目游标所在的普通分类；否则要求一个当前有效的普通分类。没有符合条件的目标时，提示 `Choose one ordinary collection; multiple selections are not supported`。Zotero 原生 **Delete collection — keep items** 确认适用于整个子树；所有条目仍留在文库中，`u` 不能撤销分类结构的变更。 |
+| `openCommandPalette` / `managePlugins` / `openNeoSettings` | `:` / `<Space>pp` / `<Space>ps` | 打开命令面板、常驻 Plugin Manager 或设置。 |
+| `focusReaderSplitLeft/Down/Up/Right` | `<C-h>` / `<C-j>` / `<C-k>` / `<C-l>` | 将焦点移到该方向最近的可用窗格；到达边界时不循环。 |
+| `showInLibrary` | **不支持** | Main Normal 不支持此功能。Reader Normal 和 Note Normal 的命令面板提供未绑定的操作；目标取自当前 Reader 或 Note 上下文条目，不会使用 Main 选择集。 |
 
-Main item actions use persistent Neo Selection when it is non-empty; otherwise they use the current target, such as a Visual range, native multi-selection, or Cursor, according to the action. Collection-tree scope selection is separate from item Selection. See [Selection and Tag Actions](TAGS.md) for tag targeting.
+Main 条目操作优先使用非空的 Neo 选择集；否则会按操作使用当前目标，例如 Visual 范围、Zotero 原生多选或条目游标。分类树范围选择与条目选择集相互独立。标签目标规则见[标签操作与筛选](TAGS.md)。
 
-Main counts repeat `mainNavDown/Up`, `mainNavLast`, `mainSelectDown/Up`, `mainSelectLast`, and `navigateBack/Forward`. `mainNavFirst` and `mainSelectFirst` always choose the first row. Other actions run once; local-find `n` / `N` each run one search step regardless of count.
+Main 中，`mainNavDown/Up`、`mainNavLast`、`mainSelectDown/Up`、`mainSelectLast` 和 `navigateBack/Forward` 会按计数重复。`mainNavFirst` 与 `mainSelectFirst` 始终选择首行。其他操作只执行一次；内部查找 `n` / `N` 每次只搜索一步，不受计数影响。
 
-### Main-only local find
+### Main 内部查找 {#main-only-local-find}
 
-With item-list focus, `/` opens a prompt; Enter commits a non-empty query and moves Cursor to the next visible match. Escape cancels without replacing the previous query. `n` / `N` each search one step, wrapping once through visible rows. Matching is case-insensitive over item display/title, first creator, year, and citekey when available. No query, a miss, or unavailable Cursor movement leaves the location unchanged. Local find differs from `ff` / `fc` chooser search and native `fq` / `fa` Quick/Advanced Search.
+条目列表获得焦点时，按 `/` 打开提示框；按 Enter 提交非空查询，并将条目游标移到下一个可见匹配项。按 Escape 取消，不会替换上一个查询。`n` / `N` 每次搜索一步，并在可见行中循环一次。匹配不区分大小写，范围包括条目显示名称/标题、首位创建者、年份及可用时的 citekey。没有查询、未命中或游标不可移动时，历史位置不变。内部查找不同于 `ff` / `fc` 选择器搜索和原生 `fq` / `fa` Quick/Advanced Search。
 
-## Note editor
+## Note 编辑器 {#note-editor}
 
-When **Vim-style note editing** is enabled, Note editors use Normal motions and editing commands; the setting is on by default. `i` enters Insert, where typing and IME go to Zotero/browser; `Escape` returns to Note Normal. With the setting off, typing stays in Zotero's editor.
+启用**Vim 风格笔记编辑**后，Note 编辑器可使用 Normal 光标移动和编辑命令；此设置默认开启。按 `i` 进入 Insert，文字和输入法会交给 Zotero/浏览器；按 `Escape` 返回 Note Normal。关闭此设置时，文字输入仍由 Zotero 编辑器处理。
 
-| ActionId | Default | Effect |
+| ActionId | 默认绑定 | 操作效果 |
 | --- | --- | --- |
-| `noteMoveLeft` / `noteMoveDown` / `noteMoveUp` / `noteMoveRight` | `h` / `j` / `k` / `l` | Move caret by character/line. |
-| `noteMoveWordForward` / `noteMoveWordBackward` | `w` / `b` | Move by word. |
-| `noteMoveLineStart` / `noteMoveLineEnd` | `0` / `$` | Move within line. |
-| `noteMoveDocumentStart` / `noteMoveDocumentEnd` | `gg` / `G` | Move to document boundary. |
-| `noteDeleteChar` | `x` | Delete character at caret. |
-| `noteAppendAfter` / `noteAppendLineEnd` / `noteInsertLineStart` | `a` / `A` / `I` | Enter Insert after caret, at line end, or line start. |
-| `noteOpenLineBelow` / `noteOpenLineAbove` | `o` / `O` | Open line below/above and enter Insert. |
-| `noteUndo` / `noteRedo` | `u` / `<C-r>` | Undo or redo a Note editor change. |
-| `notePutAfter` / `notePutBefore` | `p` / `P` | Put Neo's internal Note register after/before caret. |
-| `noteDeleteLine` / `noteYankLine` | `dd` / `yy` | Delete/yank current line. |
-| `noteDeleteLeft/Down/Up/Right` | `dh` / `dj` / `dk` / `dl` | Delete through the corresponding motion. |
-| `noteDeleteWordForward/Backward` | `dw` / `db` | Delete through word motion. |
-| `noteDeleteToLineStart/End` | `d0` / `d$` | Delete through line boundary. |
-| `noteDeleteInnerWord` | `diw` | Delete current inner word. |
-| `noteYankLeft/Down/Up/Right` | `yh` / `yj` / `yk` / `yl` | Yank through corresponding motion to internal register. |
-| `noteYankWordForward/Backward` | `yw` / `yb` | Yank through word motion. |
-| `noteYankToLineStart/End` | `y0` / `y$` | Yank through line boundary. |
-| `noteYankInnerWord` | `yiw` | Yank current inner word. |
-| `noteChangeLeft/Down/Up/Right` | `ch` / `cj` / `ck` / `cl` | Delete through corresponding motion and enter Insert. |
-| `noteChangeWordForward/Backward` | `cw` / `cb` | Change through word motion and enter Insert. |
-| `noteChangeToLineStart/End` | `c0` / `c$` | Change through line boundary and enter Insert. |
-| `noteChangeInnerWord` | `ciw` | Change current inner word and enter Insert. |
+| `noteMoveLeft` / `noteMoveDown` / `noteMoveUp` / `noteMoveRight` | `h` / `j` / `k` / `l` | 按字符/行移动光标。 |
+| `noteMoveWordForward` / `noteMoveWordBackward` | `w` / `b` | 按词移动。 |
+| `noteMoveLineStart` / `noteMoveLineEnd` | `0` / `$` | 在当前行内移动。 |
+| `noteMoveDocumentStart` / `noteMoveDocumentEnd` | `gg` / `G` | 移到文档边界。 |
+| `noteDeleteChar` | `x` | 删除光标所在字符。 |
+| `noteAppendAfter` / `noteAppendLineEnd` / `noteInsertLineStart` | `a` / `A` / `I` | 分别在光标后、行尾或行首进入 Insert。 |
+| `noteOpenLineBelow` / `noteOpenLineAbove` | `o` / `O` | 在下方/上方新建一行并进入 Insert。 |
+| `noteUndo` / `noteRedo` | `u` / `<C-r>` | 撤销或重做一项 Note 编辑更改。 |
+| `notePutAfter` / `notePutBefore` | `p` / `P` | 将 Neo 的 Note 内部寄存器内容粘贴到光标后/前。 |
+| `noteDeleteLine` / `noteYankLine` | `dd` / `yy` | 删除/复制当前行。 |
+| `noteDeleteLeft/Down/Up/Right` | `dh` / `dj` / `dk` / `dl` | 按相应方向的移动操作删除文本。 |
+| `noteDeleteWordForward/Backward` | `dw` / `db` | 按词移动操作删除文本。 |
+| `noteDeleteToLineStart/End` | `d0` / `d$` | 删除至行边界。 |
+| `noteDeleteInnerWord` | `diw` | 删除当前内部词。 |
+| `noteYankLeft/Down/Up/Right` | `yh` / `yj` / `yk` / `yl` | 按相应方向的移动操作复制到内部寄存器。 |
+| `noteYankWordForward/Backward` | `yw` / `yb` | 按词移动操作复制文本。 |
+| `noteYankToLineStart/End` | `y0` / `y$` | 复制至行边界。 |
+| `noteYankInnerWord` | `yiw` | 复制当前内部词。 |
+| `noteChangeLeft/Down/Up/Right` | `ch` / `cj` / `ck` / `cl` | 按相应方向的移动操作删除文本并进入 Insert。 |
+| `noteChangeWordForward/Backward` | `cw` / `cb` | 按词移动操作替换文本并进入 Insert。 |
+| `noteChangeToLineStart/End` | `c0` / `c$` | 替换到行边界并进入 Insert。 |
+| `noteChangeInnerWord` | `ciw` | 替换当前内部词并进入 Insert。 |
 
-Note Normal also offers shared history, the Command Palette, tab switches, item/note choosers, tag actions, Settings, Plugin Manager, and citekey copying. Note has no collection-membership or Main tag-filter commands. In Note Normal, `<Space>o` opens the Note-context item, not Main Selection. See the default binding index for their shortcuts.
+Note Normal 还支持共享历史、命令面板、切换标签页、条目/笔记选择器、标签操作、设置、Plugin Manager 和复制 citekey。Note 不提供分类成员关系或 Main 标签筛选命令。在 Note Normal 中按 `<Space>o` 会打开 Note 上下文条目，而不是 Main 选择集。其他快捷键见默认按键索引。
 
-Note counts repeat `h` / `l` / `j` / `k` / `w` / `b` / `0` / `$` motions and `x` character deletion. `gg` / `G`, Insert commands, `p` / `P`, undo/redo, and each `d` / `y` / `c` operator run once regardless of count. `y` updates the Note register and system clipboard; delete/change update the Note register, and `p` / `P` paste it.
+Note 中，计数会重复 `h/l` / `j` / `k` / `w` / `b` / `0` / `$` 移动及 `x` 删除字符。`gg/G`、Insert 命令、`p` / `P`、撤销/重做以及每个 `d` / `y` / `c` 操作符都只执行一次，不受计数影响。`y` 会更新 Note 寄存器和系统剪贴板；删除/替换会更新 Note 寄存器，`p` / `P` 会粘贴其中内容。
 
-## Temporary surfaces and chooser grammars
+## 临时界面与选择器操作规则 {#temporary-surfaces-and-chooser-grammars}
 
-### Shared chooser
+### 共享选择器 {#shared-chooser}
 
-Item, note, tab, tag, and collection choosers share the same query and result controls. The query and results use `picker-input` and `picker-list` contexts, which can be remapped separately. Defaults include Up/Down, `Ctrl+j` / `Ctrl+n` and `Ctrl+k` / `Ctrl+p` to move, `Ctrl+d` / `Ctrl+u` to scroll the preview, Enter or Shift+Enter to confirm, and Escape to cancel. In the results list, `j` / `k` move and `/` focuses the query. `uiNextPane` and `uiPreviousPane` are supported in `picker-input` but unbound by default. Query typing and IME use native text input. A preference enables mouse row selection and double-click confirmation; hover alone does not select.
+条目、笔记、标签页、标签和分类选择器共用查询框和结果控制。查询框与结果列表分别使用 `picker-input` 和 `picker-list` 上下文，可单独重映射。默认按键包括：Up/Down、`Ctrl+j` / `Ctrl+n` 和 `Ctrl+k` / `Ctrl+p` 移动；`Ctrl+d` / `Ctrl+u` 滚动预览；Enter 或 Shift+Enter 确认；Escape 取消。在结果列表中，`j` / `k` 可移动，`/` 聚焦查询框。`uiNextPane` 和 `uiPreviousPane` 在 `picker-input` 中受支持，但默认未绑定。查询文字和输入法由原生控件处理。可通过偏好设置启用鼠标选择行和双击确认；悬停不会选中结果。
 
-Notes (`fn`) start with notes for the current item. **Browse library** searches other existing notes in that library; **Current item** returns to the starting item. The preview shows the note's owner and body. Confirming a result from `fn` opens that note.
+笔记选择器（`fn`）默认显示当前条目的笔记。**Browse library**（浏览文库）可查找该文库中的其他现有笔记；**Current item**（当前条目）返回起始条目。预览会显示笔记所属条目和正文。确认 `fn` 的结果会打开该笔记。
 
-**Capture to note** is a separate Selection Actions workflow: it appends the selected text to an existing note in the same library. Before confirmation, Escape cancels without writing. After the save is admitted, closing the chooser or pressing Escape does not undo it. An unavailable or changed note target is refused; a save failure is shown.
+**摘录到笔记**是独立的选区操作流程：将已选文字追加到同一文库中的现有笔记。确认前按 Escape 会取消且不写入；保存获准开始后，关闭选择器或按 Escape 都不会撤销保存。目标笔记不可用或已变化时会拒绝操作；保存失败时会显示提示。完整操作步骤见[摘录到笔记指南](CAPTURE_GUIDE.md#try-it)。
 
-Add Tag may offer an explicit create candidate; Remove Tag lists tags assigned to at least one target. A virtual namespace candidate refines the query and is not itself a tag action. Main `tf` toggles a tag filter from the current view and active filters; `tc` clears all filters without a chooser. See [Selection and Tag Actions](TAGS.md) for tag targets, same-library mutation limits, and flat tag storage. In Main, `ca` and `cr` use same-library targets and direct-membership counts, not recursive visibility: Add changes only missing links, and Remove lists the union of collections directly assigned to at least one target and removes only selected links. The seven collection actions are unbound in Main Normal and open from the existing Palette; workflows reuse the existing Picker or Zotero's native name/confirmation dialogs. **Add existing items to the current collection** saves each Enter separately and stays open; Escape only ends that workflow and does not undo saved additions. See [Library workflows](MAIN_GUIDE.md#change-collection-membership) for details.
+添加标签时可能会提供明确的创建候选项；移除标签会列出至少分配给一个目标的标签。虚拟命名空间候选项仅用于缩小查询范围，本身不执行标签操作。Main `tf` 会根据当前视图和现有筛选器切换标签筛选；`tc` 不打开选择器，直接清除全部筛选。标签目标、同一文库范围内的修改限制和平面标签存储方式见[标签操作与筛选](TAGS.md)。Main 中，`ca` 和 `cr` 使用同一文库中的目标及直接成员关系计数，而不是递归显示范围：添加只补入缺少的成员关系；移除会列出至少分配给一个目标的分类，并只删除选中的成员关系。Main Normal 中七个分类操作默认未绑定，可从现有 Palette 打开；流程会复用现有选择器或 Zotero 原生名称/确认对话框。**向当前分类添加已有条目**会在每次按 Enter 时单独保存一项，并保持选择器打开；按 Escape 只结束流程，不会撤销已保存的添加。详情见[文库工作流](MAIN_GUIDE.md#change-collection-membership)。
 
-### Flash and link hints
+### Flash 与链接提示 {#flash-and-link-hints}
 
-Reader Select `v` starts Flash for the selection start; Select `s` uses it for the other endpoint. Type visible text, including Unicode through IME, then choose a displayed hint or press Enter for the nearest match. Escape cancels and keeps the existing selection; Backspace edits the query or label according to focus.
+在 Reader Select 中按 `v` 会启动 Flash，以选择范围起点；按 `s` 则选择另一端。输入可见文字（包括通过输入法输入的 Unicode），再选择显示的提示，或按 Enter 选择最近的匹配项。Escape 会取消并保留现有选区；Backspace 根据焦点编辑查询文字或提示标签。
 
-Reader Normal `f` shows hints for visible internal, citation, and external links in the active PDF view. Type a hint to follow it, Backspace to edit it, or Escape to cancel. External links use Zotero's normal handler; off-screen links are not included.
+Reader Normal 中按 `f` 会为当前 PDF 视图内可见的内部、引文和外部链接显示提示。输入提示以跟随链接，按 Backspace 编辑，或按 Escape 取消。外部链接使用 Zotero 的常规处理方式；屏幕外的链接不会列出。
 
-### Native Reader Outline and Bookmarks
+### Zotero 原生 Reader Outline 与 Bookmarks {#native-reader-outline-and-bookmarks}
 
-Reader Normal `<Space>ro`, `<Space>rm`, `<Space>ra`, and `<Space>rt` open or focus Outline, Bookmarks, Annotations, and Thumbnails. Repeating a command leaves that panel focused. The same panel-focus commands are available from each Reader sidebar.
+Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可打开或聚焦 Outline、Bookmarks、Annotations 和 Thumbnails。重复执行会继续聚焦同一面板。每个 Reader 侧栏中也可使用这些面板焦点操作。
 
-In `reader-outline`, `j` / `k` move through rows and `h` / `l` move to parent/child; Escape cancels. Zotero's arrows, Tab/Shift+Tab, and Enter/Return remain native. `uiConfirm` is supported but unbound by default. In `reader-marks`, defaults are `j` / `k`, `gg` / `G`, Enter, Escape, `d`, and `x`. In `reader-annotations` and `reader-thumbnails`, defaults are `j` / `k` and Escape. These local controls can be remapped in their respective contexts.
+在 `reader-outline` 中，按 `j` / `k` 移动行，按 `h` / `l` 移到父级/子级；按 Escape 取消。Zotero 的方向键、Tab/Shift+Tab 和 Enter/Return 仍由原生界面处理。该上下文支持 `uiConfirm`，但默认未绑定。在 `reader-marks` 中，默认按键为 `j` / `k`、`gg` / `G`、Enter、Escape、`d` 和 `x`。在 `reader-annotations` 与 `reader-thumbnails` 中，默认按键为 `j` / `k` 和 Escape。可分别在这些上下文中重映射本地控制。
 
-`[s` / `]s` traverse headings across the Outline from Reader Normal and each sidebar, regardless of collapsed branches or the selected row. `[f` / `]f` and `[t` / `]t` move through Figures and Tables with usable PDF targets; associated figure images are used when available, otherwise navigation lands on the caption. The first explicit structural-navigation request may require local PDF processing. PDFs without recognizable targets cannot provide those destinations.
+从 Reader Normal 和各侧栏按 `[s` / `]s` 可跨 Outline 按顺序遍历标题，无论分支是否折叠或当前选中了哪一行。按 `[f` / `]f` 和 `[t` / `]t` 可在 PDF 中有可用目标的 Figure 与 Table 之间移动；若有相关图像则定位到图像，否则定位到标题。首次明确请求结构导航可能需要在本地处理 PDF。无法识别目标的 PDF 不会提供这些位置。
 
-### Marks and Bookmarks group
+### Marks 与 Bookmarks 分组 {#marks-and-bookmarks-group}
 
-Press `m` followed by a lowercase letter or digit to set a Reader mark; press backtick followed by that label to return. `dm` followed by a label deletes one mark, and `dM` deletes all marks. Reader Normal `[m` / `]m` moves between marks in document order with wrap. `<Space>rm` opens or focuses Bookmarks.
+按 `m` 后接一个小写字母或数字，可设置 Reader 标记；按反引号再按该标签可返回该位置。按 `dm` 后接标签可删除一个标记，`dM` 删除所有标记。Reader Normal 中的 `[m` / `]m` 按文档顺序在标记间移动，并会循环。按 `<Space>rm` 打开或聚焦 Bookmarks。
 
-In the Bookmark list, `j` / `k` move, `gg` / `G` go to the first/last mark, Enter jumps, `d` deletes the selected mark, and `x` clears marks. Mark labels are lowercase letters or digits; `j`, `k`, `g`, `d`, and `x` are list controls. These are Reader position marks, not PDF annotations. Persistence follows the **Persist marks** preference.
+在 Bookmarks 列表中，`j` / `k` 移动，`gg` / `G` 跳到首个/末个标记，Enter 跳转，`d` 删除所选标记，`x` 清除标记。标记标签只能是小写字母或数字；在列表中 `j`、`k`、`g`、`d` 和 `x` 是列表控制键。这些是 Reader 位置标记，不是 PDF 批注。是否持久保存由**持久化标记**偏好设置控制。
 
-### Annotation comment editor
+### 批注评论编辑器 {#annotation-comment-editor}
 
-When **Annotation comment editing** is enabled, Reader Normal `i` / Enter opens the selected annotation's comment editor. Select `i` opens it for the new annotation. The editor displays `COMMENT`; typing and IME edit the comment, Enter inserts a newline, and Escape saves and closes. Changes also autosave after two seconds. Escape is not cancel or undo; an active IME composition handles its own Escape. The editor remains associated with the annotation it opened, and an unavailable annotation cannot be saved. Closing Reader does not perform another save; only saved text is guaranteed on reopen.
+启用**批注评论编辑**后，Reader Normal 中按 `i` / Enter 会打开选中批注的评论编辑器；Select 中按 `i` 会为新建批注打开编辑器。编辑器显示 `COMMENT`；输入文字或使用输入法编辑评论，按 Enter 插入换行，按 Escape 保存并关闭。更改还会在两秒后自动保存。Escape 不是取消或撤销；输入法组合进行时，Escape 由输入法自行处理。编辑器始终关联最初打开的批注；批注目标不可用时无法保存。关闭 Reader 不会再触发一次保存；重新打开时只能保证已保存的文字存在。
 
-When the setting is off, Reader Normal `i` gives native inputs keyboard ownership until Escape; Enter does not open Neo's editor. Zotero's own comment fields remain available, and Select **Add note** still opens the new annotation's editor.
+关闭该设置后，Reader Normal 中按 `i` 会将键盘控制权交给原生输入，直到按 Escape；Enter 不会打开 Neo 编辑器。Zotero 自带的评论字段仍可使用，Select 中独立的“添加批注评论”操作也仍会打开新批注的编辑器。
 
-### Selection Actions, Plugin Manager, Settings, and Selection Panel
+### 选区操作、Plugin Manager、设置与 Neo 选择集面板 {#selection-actions-plugin-manager-settings-and-selection-panel}
 
-Selection Actions opens with `a` / Enter in Reader Select. Use arrows or `j` / `k` to move, `Home` / `g` for the first result, `End` / `G` for the last, and `1`–`9` or Enter to run a result. Escape closes the palette and preserves the selection. **Capture to note**, **Underline**, and **Add note** are available; **Translate** appears when Zotero Translate is installed. A result can be copied with `y`.
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“捕获到笔记”“为选区添加下划线”和“添加批注评论”；安装 Zotero Translate 后还会显示“翻译”。按 `y` 可复制结果。
 
-Plugin Manager (`<Space>pp`) stays open while you browse. In `plugins-list`, defaults are `j` / Down and `k` / Up, `gg` / Home and `G` / End, `Ctrl+d` / `Ctrl+u` for page movement, `/` to filter, and Escape / `q` to close. `r` reloads the list; `e` / `d` enable or disable only when Zotero permits; `p` opens registered settings; `o` opens the homepage; `R` opens a mapped GitHub README; and `L` opens its commit history. Escape in `plugins-input` returns to the results. Zotero AddonManager determines which lifecycle actions are available; Neo cannot disable itself from its own panel.
+按 `<Space>pp` 打开常驻 Plugin Manager，并在其中浏览扩展。在 `plugins-list` 中，默认按 `j` / Down、`k` / Up 移动，按 `gg` / Home 和 `G` / End 跳到首项/末项，按 `Ctrl+d` / `Ctrl+u` 翻页，按 `/` 筛选，按 Escape / `q` 关闭。按 `r` 刷新列表；Zotero 允许时可按 `e` / `d` 启用或停用扩展；按 `p` 打开已注册设置，按 `o` 打开主页，按 `R` 打开关联的 GitHub README，按 `L` 打开其提交历史。在 `plugins-input` 中按 Escape 返回结果。哪些生命周期操作可用由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 
-Settings opens with `<Space>ps`; keybinding edits remain staged until Apply. Main Selection Panel opens with `<Space>ss`: `j` / `k` move, `Home` / `gg` and `End` / `G` go to the first/last entry, Enter reveals an item, `x` removes it from persistent Selection, `c` clears Selection, `r` refreshes, and Escape / `q` closes. An unavailable item cannot be revealed; a failed reveal leaves the panel open.
+按 `<Space>ps` 打开设置；快捷键修改在点击**应用绑定**前仍是草稿。按 `<Space>ss` 打开 Main 选择集面板：按 `j` / `k` 移动，按 `Home` / `gg` 或 `End` / `G` 跳到首项/末项，按 Enter 在文库中显示条目，按 `x` 将条目从 Neo 选择集中移除，按 `c` 清空选择集，按 `r` 刷新，按 Escape / `q` 关闭。条目不可用时无法显示；显示失败时面板会保持打开。
 
-## Action ID index
+## Action ID 索引 {#action-id-index}
 
-The index lists each ActionId with its shipped default binding and available contexts. **Unbound** means the action is available without a shipped key; a command still needs a valid target to run.
+此索引列出每个 `ActionId`、随 Neo 提供的默认绑定及可用上下文。**未绑定**表示该操作可用但没有随 Neo 提供的快捷键；执行操作仍需要有效目标。
 
-| ActionId | Default binding(s) | Capability / principal effect |
+| ActionId | 默认绑定 | 可用功能／主要效果 |
 | --- | --- | --- |
-| `scrollDown` | Reader Normal `j` | Reader Normal scroll |
-| `scrollUp` | Reader Normal `k` | Reader Normal scroll |
-| `scrollLeft` | Reader Normal `zh` | Reader Normal horizontal pan |
-| `scrollRight` | Reader Normal `zl` | Reader Normal horizontal pan |
-| `prevPage` | Reader Normal `h` | Reader Normal page turn |
-| `nextPage` | Reader Normal `l` | Reader Normal page turn |
-| `followLink` | Reader Normal `f` | Reader Normal follow hints for visible native links and recognized DOI/arXiv/HTTP(S) text |
-| `copyTarget` | Reader Normal `y` | Reader Normal copy hints for visible annotation and identifier targets |
-| `flashText` | Reader Select `s` | Reader Select endpoint targeting |
-| `firstPage` | Reader Normal `gg` | Reader Normal first/count page jump |
-| `lastPage` | Reader Normal `G` | Reader Normal document-end/count page jump |
-| `halfPageDown` | Reader Normal `<C-d>` | Reader Normal half viewport |
-| `halfPageUp` | Reader Normal `<C-u>` | Reader Normal half viewport |
-| `fullPageDown` | Reader Normal `<C-f>` | Reader Normal full viewport |
-| `fullPageUp` | Reader Normal `<C-b>` | Reader Normal full viewport |
-| `zoomIn` | Reader Normal `+`, `zI` | Reader Normal zoom |
-| `zoomOut` | Reader Normal `-`, `zO` | Reader Normal zoom |
-| `zoomReset` | Reader Normal `=`, `z0` | Reader Normal zoom reset |
-| `scrollTop` | Reader Normal `zt` | Reader Normal viewport positioning |
-| `scrollCenter` | Reader Normal `zz` | Reader Normal viewport positioning |
-| `scrollBottom` | **unbound** | Reader-local viewport positioning capability |
-| `openSearch` | Reader/Main Normal `/` | Reader search; Main native search/local-find dispatcher |
-| `findNext` | Reader/Main Normal `n` | Reader/Main search result or Main local find |
-| `findPrevious` | Reader/Main Normal `N` | Reader/Main search result or Main local find |
-| `prevAnnotation` | Reader Normal `[a` | Reader annotation navigation |
-| `nextAnnotation` | Reader Normal `]a` | Reader annotation navigation |
-| `prevHeading` | Reader Normal and four sidebar contexts `[s` | Previous Section/Subsection in the whole native Outline; active PDF position, document order and wrap |
-| `nextHeading` | Reader Normal and four sidebar contexts `]s` | Next Section/Subsection in the whole native Outline; active PDF position, document order and wrap |
-| `prevFigure` | Reader Normal `[f` | Previous Figure target or recognized caption; lands on associated image when available, otherwise the caption. First use may require local PDF processing. |
-| `nextFigure` | Reader Normal `]f` | Next Figure target or recognized caption; lands on associated image when available, otherwise the caption. First use may require local PDF processing. |
-| `prevTable` | Reader Normal `[t` | Previous explicit Table target or recognized caption; first use may require local PDF processing. |
-| `nextTable` | Reader Normal `]t` | Next explicit Table target or recognized caption; first use may require local PDF processing. |
-| `prevBookmark` | Reader Normal `[m` | Previous Reader mark in document order, wrapping at the beginning. |
-| `nextBookmark` | Reader Normal `]m` | Next Reader mark in document order, wrapping at the end. |
-| `clearSearch` | Reader Normal `<Esc>` | Reader search clear/close |
-| `enterVisual` | Reader Normal `v` | Reader Select entry |
-| `openSelectionActions` | Reader Select `a`, `<Enter>`, `<Return>` | Selection Actions |
-| `enterInsert` | Reader Normal `i`; Note Normal `i` | Reader feature/native input ownership; Note editor Insert transition |
-| `exitMode` | Reader Select `<Esc>`/`v`; Note Normal `<Esc>`; Note Insert `<Esc>` | Surface mode exit; Reader feature Escape is fixed input-owner control, Main Select uses dedicated cancel |
-| `extendDown` | Reader Select `j` | Reader Select range motion |
-| `extendUp` | Reader Select `k` | Reader Select range motion |
-| `extendLeft` | Reader Select `h` | Reader Select range motion |
-| `extendRight` | Reader Select `l` | Reader Select range motion |
-| `extendSentenceForward` | Reader Select `)` | Reader Select range motion |
-| `extendSentenceBackward` | Reader Select `(` | Reader Select range motion |
-| `extendParagraphForward` | Reader Select `}` | Reader Select range motion |
-| `extendParagraphBackward` | Reader Select `{` | Reader Select range motion |
-| `extendWordForward` | Reader Select `w` | Reader Select range motion |
-| `extendWordBackward` | Reader Select `b` | Reader Select range motion |
-| `extendLineStart` | Reader Select `0` | Reader Select range motion |
-| `extendLineEnd` | Reader Select `$` | Reader Select range motion |
-| `highlightYellow` | Reader Select `zy` | Reader Select annotation create |
-| `highlightRed` | Reader Select `zr` | Reader Select annotation create |
-| `highlightGreen` | Reader Select `zg` | Reader Select annotation create |
-| `highlightBlue` | Reader Select `zb` | Reader Select annotation create |
-| `highlightPurple` | Reader Select `zp` | Reader Select annotation create |
-| `underlineSelection` | **unbound** | Reader Select Selection Actions capability |
-| `addNote` | Reader Select `za`, `i` | Create annotation and comment editor |
-| `copySelection` | Reader Select `y` | Copy selected text |
-| `searchSelection` | Reader Select `#` | Search selected text |
-| `swapVisualEnds` | Reader Select `o`; Main Select `o` maps to `mainSelectSwapEnds` | Reader Select endpoint swap |
-| `editAnnotation` | Reader Normal `<Enter>`, `<Return>` | Annotation comment editor |
-| `deleteAnnotation` | Reader Normal `dd` | Confirmed annotation deletion |
-| `filterYellow` | Reader Normal `Zy` | Annotation color filter |
-| `filterRed` | Reader Normal `Zr` | Annotation color filter |
-| `filterGreen` | Reader Normal `Zg` | Annotation color filter |
-| `filterBlue` | Reader Normal `Zb` | Annotation color filter |
-| `filterPurple` | Reader Normal `Zp` | Annotation color filter |
-| `filterClear` | Reader Normal `Za` | Clear annotation filter |
-| `recolorYellow` | Reader Normal `zy` | Recolor annotation |
-| `recolorRed` | Reader Normal `zr` | Recolor annotation |
-| `recolorGreen` | Reader Normal `zg` | Recolor annotation |
-| `recolorBlue` | Reader Normal `zb` | Recolor annotation |
-| `recolorPurple` | Reader Normal `zp` | Recolor annotation |
-| `yankAnnotation` | **Unbound** | Direct copy of the current annotation target's excerpt from the Command Palette |
-| `yankAnnotationComment` | Reader Normal `Y` | Direct copy of the current annotation target's comment |
-| `openCommandPalette` | Reader/Main/Note Normal `:` | Context command palette |
-| `openNeoSettings` | Reader/Main/Note Normal `<Space>ps` | Settings surface |
-| `findAllItems` | Reader/Main/Note Normal `<Space>ff` | Shared library item chooser |
-| `findCollectionItems` | Reader/Main/Note Normal `<Space>fc` | Shared collection item chooser |
-| `findNotes` | Reader/Main/Note Normal `<Space>fn` | Shared Note chooser |
-| `findCollections` | **Unbound** | Main Normal collection search by name or full path |
-| `mainQuickSearch` | Main Normal `<Space>fq` | Native Quick Search focus |
-| `mainAdvancedSearch` | Main Normal `<Space>fa` | Native Advanced Search |
-| `managePlugins` | Reader/Main/Note Normal `<Space>pp` | Plugin Manager panel |
-| `manageSelection` | Main Normal `<Space>ss` | Main Selection Panel |
-| `navigateBack` | Reader/Main/Note Normal `<C-o>` | Shared jumplist Back |
-| `navigateForward` | Reader/Main/Note Normal `<C-i>` | Shared jumplist Forward |
-| `showInLibrary` | **unbound** | Reader Normal and Note Normal palette capability; unavailable in Main Normal. |
-| `mainTrashItems` | Main Normal `dd`, `x` | Confirmed Main trash |
-| `mainRestoreTrashedItems` | Main Normal `u` | Restore Neo's last trash batch |
-| `mainFocusTree` | Main Normal `e`; Note Normal `<Space>e` | Focus Main collection tree |
-| `mainFocusLeft` | Main Normal `wh` | Focus left pane |
-| `mainFocusRight` | Main Normal `wl` | Focus detail pane |
-| `mainFocusItems` | Main Normal `ww` | Focus item list |
-| `mainYankCitekey` | Reader/Main/Note Normal `<Space>yy` | Copy context-sensitive citekeys |
-| `mainAddByIdentifier` | Reader/Main Normal `<Space>ai` | Native Add Item by Identifier in the associated Library window; does not use item Selection |
-| `mainOpenPDF` | Main Normal `o`; Note Normal `<Space>o` | Open Main Cursor / Note context item |
-| `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | Close active tab |
-| `addTag` | Reader/Main/Note Normal `<Space>ta` | Add tag to eligible target(s) |
-| `removeTag` | Reader/Main/Note Normal `<Space>tr` | Remove tag from eligible target(s) |
-| `toggleTagFilter` | Main Normal `<Space>tf` | Main native tag filter |
-| `clearTagFilters` | Main Normal `<Space>tc` | Clear Main tag filters |
-| `addToCollection` | Reader/Main Normal `<Space>ca` | Add item(s) to collection |
-| `removeFromCollection` | Reader/Main Normal `<Space>cr` | Remove item(s) from collection |
-| `addItemsToCurrentCollection` | **Unbound** | Main Normal same-library item search; Enter saves one item and keeps the picker open |
-| `moveToCollection` | **Unbound** | Main Normal atomic move from one explicit directly assigned source collection |
-| `moveCollection` | **Unbound** | Main Normal reparent the current collection |
-| `createCollection` | **Unbound** | Main Normal create under an explicit collection or library root |
-| `renameCollection` | **Unbound** | Main Normal rename the current collection |
-| `deleteCollection` | **Unbound** | Main Normal delete a collection subtree while keeping items |
-| `mainEnterSelect` | Main Normal `v` | Begin Main item Visual range |
-| `mainToggleSelection` | Main Normal `s` | Toggle persistent Neo Selection |
-| `mainClearSelection` | Main Normal `<Space>sc` | Clear persistent Selection |
-| `mainCancelTarget` | Main Normal `<Esc>` | Cancel transient target only |
-| `mainSelectDown` | Main Select `j` | Extend Main Visual range |
-| `mainSelectUp` | Main Select `k` | Extend Main Visual range |
-| `mainSelectFirst` | Main Select `gg` | Extend to first item |
-| `mainSelectLast` | Main Select `G` | Extend to last item |
-| `mainSelectSwapEnds` | Main Select `o` | Swap range ends |
-| `mainSelectFinish` | Main Select `s` | Commit Main Visual range |
-| `mainSelectCancel` | Main Select `v`, `<Esc>` | Cancel Main Visual range |
-| `mainNavDown` | Main Normal `j` | Move Main Cursor |
-| `mainNavUp` | Main Normal `k` | Move Main Cursor |
-| `mainNavFirst` | Main Normal `gg` | First Main row |
-| `mainNavLast` | Main Normal `G` | Last Main row |
-| `mainActivate` | Main Normal `<Enter>`, `<Return>` | Activate scope/open item |
-| `switchTab` | Reader/Main/Note Normal `<Space>,` | Open-tab chooser |
-| `previousTab` | Reader/Main/Note Normal `H` | Previous open tab |
-| `nextTab` | Reader/Main/Note Normal `L` | Next open tab |
-| `mainTreeToggle` | Main Normal `za` | Toggle collection row |
-| `mainTreeOpenOnly` | Main Normal `zo` | Expand collection row |
-| `mainTreeCloseOnly` | Main Normal `zc` | Collapse collection row |
-| `mainTreeExpand` | Main Normal `l` | Expand/focus items |
-| `mainTreeCollapse` | Main Normal `h` | Collapse/parent/focus tree |
-| `mainTreeParent` | Main Normal `<BS>` | Parent collection |
-| `mainTreeExpandAll` | Main Normal `R` | Expand all collections |
-| `mainTreeCollapseAll` | Main Normal `M` | Collapse all collections |
-| `focusReaderSplitLeft` | Reader/Note/Main Normal and Note Insert `<C-h>` | Directional pane focus |
-| `focusReaderSplitDown` | Reader/Note/Main Normal and Note Insert `<C-j>` | Directional pane focus |
-| `focusReaderSplitUp` | Reader/Note/Main Normal and Note Insert `<C-k>` | Directional pane focus |
-| `focusReaderSplitRight` | Reader/Note/Main Normal and Note Insert `<C-l>` | Directional pane focus |
-| `toggleReaderSplitHorizontal` | Reader Normal `<Space>-` | Toggle horizontal split |
-| `toggleReaderSplitVertical` | Reader Normal <code>&lt;Space&gt;&#124;</code> | Toggle vertical split |
-| `toggleReaderSidebarOutline` | **Unbound** | Explicit Reader Outline sidebar toggle; no shipped shortcut. |
-| `focusReaderOutline` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ro` | Open or focus Outline; repeating leaves it focused. |
-| `toggleMarksExplorer` | **Unbound** | Explicit Bookmarks-view toggle; no shipped shortcut. |
-| `focusReaderMarks` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rm` | Open or focus Bookmarks; repeating leaves it focused. |
-| `focusReaderAnnotations` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ra` | Open or focus Annotations; repeating leaves it focused. |
-| `focusReaderThumbnails` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rt` | Open or focus Thumbnails; repeating leaves it focused. |
-| `uiNext` | Reader Outline / Marks / Annotations / Thumbnails `j`; Picker Input `<C-j>`, `<C-n>`, `<Down>`; Picker List those plus `j`; Plugins List `j`, `<Down>` | Configurable next-item action in the listed contexts only. |
-| `uiPrevious` | Reader Outline / Marks / Annotations / Thumbnails `k`; Picker Input `<C-k>`, `<C-p>`, `<Up>`; Picker List those plus `k`; Plugins List `k`, `<Up>` | Configurable previous-item action in the listed contexts only. |
-| `uiFirst` | Reader Marks `gg`; Plugins List `gg`, `<Home>` | Configurable first-item action in the listed contexts only. |
-| `uiLast` | Reader Marks `G`; Plugins List `G`, `<End>` | Configurable last-item action in the listed contexts only. |
-| `uiParent` | Reader Outline `h` | Move to the parent in `reader-outline`. |
-| `uiChild` | Reader Outline `l` | Move to the child in `reader-outline`. |
-| `uiConfirm` | Reader Marks `<Enter>`; Picker Input/List `<Enter>`, `<S-Enter>`; Reader Outline **unbound** | Confirm in supported local contexts; Outline has no default because Enter/Return is host-owned. |
-| `uiCancel` | Reader Outline/Marks/Annotations/Thumbnails `<Esc>`; Picker Input/List `<Esc>`; Plugins List `<Esc>`, `q` | Cancel or return in these local contexts; not supported in `plugins-input`. |
-| `uiDelete` | Reader Marks `d` | Delete the selected bookmark in `reader-marks`. |
-| `uiClear` | Reader Marks `x` | Clear bookmarks in `reader-marks`. |
-| `uiSearch` | Picker List `/`; Plugins List `/` | Focus the query/filter from the results context. |
-| `uiFocusList` | Plugins Input `<Esc>` | Return from the filter field to results; the only `plugins-input` ActionId. |
-| `uiPreviewDown` | Picker Input/List `<C-d>` | Scroll the chooser preview down. |
-| `uiPreviewUp` | Picker Input/List `<C-u>` | Scroll the chooser preview up. |
-| `uiNextPane` | **Unbound** | Supported in `picker-input`; no default shortcut. |
-| `uiPreviousPane` | **Unbound** | Supported in `picker-input`; no default shortcut. |
-| `uiPageDown` | Plugins List `<C-d>` | Page down in the Plugin Manager results. |
-| `uiPageUp` | Plugins List `<C-u>` | Page up in the Plugin Manager results. |
-| `pluginsRefresh` | Plugins List `r` | Refresh Plugin Manager state. |
-| `pluginsEnable` | Plugins List `e` | Enable when AddonManager permits. |
-| `pluginsDisable` | Plugins List `d` | Disable when AddonManager permits. |
-| `pluginsPreferences` | Plugins List `p` | Open registered plugin preferences. |
-| `pluginsHomepage` | Plugins List `o` | Open the plugin homepage. |
-| `pluginsReadme` | Plugins List `R` | Open the mapped GitHub README. |
-| `pluginsGitLog` | Plugins List `L` | Open the mapped GitHub commit history. |
-| `noteMoveLeft` | Note Normal `h` | Note caret motion |
-| `noteMoveDown` | Note Normal `j` | Note caret motion |
-| `noteMoveUp` | Note Normal `k` | Note caret motion |
-| `noteMoveRight` | Note Normal `l` | Note caret motion |
-| `noteMoveWordForward` | Note Normal `w` | Note caret motion |
-| `noteMoveWordBackward` | Note Normal `b` | Note caret motion |
-| `noteMoveLineStart` | Note Normal `0` | Note caret motion |
-| `noteMoveLineEnd` | Note Normal `$` | Note caret motion |
-| `noteMoveDocumentStart` | Note Normal `gg` | Note caret motion |
-| `noteMoveDocumentEnd` | Note Normal `G` | Note caret motion |
-| `noteDeleteChar` | Note Normal `x` | Note edit |
-| `noteAppendAfter` | Note Normal `a` | Enter Insert after caret |
-| `noteAppendLineEnd` | Note Normal `A` | Enter Insert at line end |
-| `noteInsertLineStart` | Note Normal `I` | Enter Insert at line start |
-| `noteOpenLineBelow` | Note Normal `o` | Open line / Insert |
-| `noteOpenLineAbove` | Note Normal `O` | Open line / Insert |
-| `noteUndo` | Note Normal `u` | Undo a Note editor change |
-| `noteRedo` | Note Normal `<C-r>` | Redo a Note editor change |
-| `notePutAfter` | Note Normal `p` | Put internal register after |
-| `notePutBefore` | Note Normal `P` | Put internal register before |
-| `noteDeleteLine` | Note Normal `dd` | Delete line |
-| `noteYankLine` | Note Normal `yy` | Yank line |
-| `noteDeleteLeft` | Note Normal `dh` | Delete by motion |
-| `noteDeleteDown` | Note Normal `dj` | Delete by motion |
-| `noteDeleteUp` | Note Normal `dk` | Delete by motion |
-| `noteDeleteRight` | Note Normal `dl` | Delete by motion |
-| `noteDeleteWordForward` | Note Normal `dw` | Delete by motion |
-| `noteDeleteWordBackward` | Note Normal `db` | Delete by motion |
-| `noteDeleteToLineStart` | Note Normal `d0` | Delete by motion |
-| `noteDeleteToLineEnd` | Note Normal `d$` | Delete by motion |
-| `noteDeleteInnerWord` | Note Normal `diw` | Delete inner word |
-| `noteYankLeft` | Note Normal `yh` | Yank by motion |
-| `noteYankDown` | Note Normal `yj` | Yank by motion |
-| `noteYankUp` | Note Normal `yk` | Yank by motion |
-| `noteYankRight` | Note Normal `yl` | Yank by motion |
-| `noteYankWordForward` | Note Normal `yw` | Yank by motion |
-| `noteYankWordBackward` | Note Normal `yb` | Yank by motion |
-| `noteYankToLineStart` | Note Normal `y0` | Yank by motion |
-| `noteYankToLineEnd` | Note Normal `y$` | Yank by motion |
-| `noteYankInnerWord` | Note Normal `yiw` | Yank inner word |
-| `noteChangeLeft` | Note Normal `ch` | Change by motion / Insert |
-| `noteChangeDown` | Note Normal `cj` | Change by motion / Insert |
-| `noteChangeUp` | Note Normal `ck` | Change by motion / Insert |
-| `noteChangeRight` | Note Normal `cl` | Change by motion / Insert |
-| `noteChangeWordForward` | Note Normal `cw` | Change by motion / Insert |
-| `noteChangeWordBackward` | Note Normal `cb` | Change by motion / Insert |
-| `noteChangeToLineStart` | Note Normal `c0` | Change by motion / Insert |
-| `noteChangeToLineEnd` | Note Normal `c$` | Change by motion / Insert |
-| `noteChangeInnerWord` | Note Normal `ciw` | Change inner word / Insert |
+| `scrollDown` | Reader Normal `j` | 阅读器向下滚动 |
+| `scrollUp` | Reader Normal `k` | 阅读器向上滚动 |
+| `scrollLeft` | Reader Normal `zh` | 阅读器水平向左平移 |
+| `scrollRight` | Reader Normal `zl` | 阅读器水平向右平移 |
+| `prevPage` | Reader Normal `h` | 阅读器翻到上一页 |
+| `nextPage` | Reader Normal `l` | 阅读器翻到下一页 |
+| `followLink` | Reader Normal `f` | 在 Reader 普通模式中为可见原生链接及可识别的 DOI/arXiv/HTTP(S) 文本显示跟随提示 |
+| `copyTarget` | Reader Normal `y` | 在 Reader 普通模式中为可见批注和标识符目标显示复制提示 |
+| `flashText` | Reader Select `s` | 在 Reader Select 中选择范围端点 |
+| `firstPage` | Reader Normal `gg` | Reader 普通模式跳到首页或计数指定页 |
+| `lastPage` | Reader Normal `G` | Reader 普通模式跳到文档末尾或计数指定页 |
+| `halfPageDown` | Reader Normal `<C-d>` | Reader 普通模式向下移动半个视口 |
+| `halfPageUp` | Reader Normal `<C-u>` | Reader 普通模式向上移动半个视口 |
+| `fullPageDown` | Reader Normal `<C-f>` | Reader 普通模式向下移动一个视口 |
+| `fullPageUp` | Reader Normal `<C-b>` | Reader 普通模式向上移动一个视口 |
+| `zoomIn` | Reader Normal `+`、`zI` | Reader 普通模式放大 |
+| `zoomOut` | Reader Normal `-`、`zO` | Reader 普通模式缩小 |
+| `zoomReset` | Reader Normal `=`、`z0` | Reader 普通模式重置缩放 |
+| `scrollTop` | Reader Normal `zt` | 将视口定位到当前页面顶部 |
+| `scrollCenter` | Reader Normal `zz` | 将视口定位到当前页面中央 |
+| `scrollBottom` | **未绑定** | Reader 局部的视口定位功能 |
+| `openSearch` | Reader/Main Normal `/` | Reader 搜索；Main 的原生搜索/内部查找分派 |
+| `findNext` | Reader/Main Normal `n` | Reader/Main 搜索结果或 Main 内部查找 |
+| `findPrevious` | Reader/Main Normal `N` | Reader/Main 搜索结果或 Main 内部查找 |
+| `prevAnnotation` | Reader Normal `[a` | Reader 批注导航 |
+| `nextAnnotation` | Reader Normal `]a` | Reader 批注导航 |
+| `prevHeading` | Reader Normal 和四个侧栏上下文 `[s` | 在整个原生 Outline 中前往上一个 Section/Subsection；按当前 PDF 位置、文档顺序导航，到达边界时循环 |
+| `nextHeading` | Reader Normal 和四个侧栏上下文 `]s` | 在整个原生 Outline 中前往下一个 Section/Subsection；按当前 PDF 位置、文档顺序导航，到达边界时循环 |
+| `prevFigure` | Reader Normal `[f` | 前往上一个 Figure 目标或可识别的图注；有相关图像时定位到图像，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
+| `nextFigure` | Reader Normal `]f` | 前往下一个 Figure 目标或可识别的图注；有相关图像时定位到图像，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
+| `prevTable` | Reader Normal `[t` | 前往上一个明确标出的 Table 目标或可识别的表格标题；首次使用可能需要在本地处理 PDF。 |
+| `nextTable` | Reader Normal `]t` | 前往下一个明确标出的 Table 目标或可识别的表格标题；首次使用可能需要在本地处理 PDF。 |
+| `prevBookmark` | Reader Normal `[m` | 按文档顺序前往上一个 Reader 标记，到达开头时循环。 |
+| `nextBookmark` | Reader Normal `]m` | 按文档顺序前往下一个 Reader 标记，到达末尾时循环。 |
+| `clearSearch` | Reader Normal `<Esc>` | 清除/关闭 Reader 搜索 |
+| `enterVisual` | Reader Normal `v` | 进入 Reader Select |
+| `openSelectionActions` | Reader Select `a`、`<Enter>`、`<Return>` | 打开选区操作 |
+| `enterInsert` | Reader Normal `i`；Note Normal `i` | Reader 功能/原生输入控制；Note 编辑器切换到 Insert |
+| `exitMode` | Reader Select `<Esc>`/`v`；Note Normal `<Esc>`；Note Insert `<Esc>` | 退出当前界面模式；Reader 的 Escape 是固定的输入控制键，Main Select 使用专用取消操作 |
+| `extendDown` | Reader Select `j` | Reader Select 中移动选区范围 |
+| `extendUp` | Reader Select `k` | Reader Select 中移动选区范围 |
+| `extendLeft` | Reader Select `h` | Reader Select 中移动选区范围 |
+| `extendRight` | Reader Select `l` | Reader Select 中移动选区范围 |
+| `extendSentenceForward` | Reader Select `)` | Reader Select 中移动选区范围 |
+| `extendSentenceBackward` | Reader Select `(` | Reader Select 中移动选区范围 |
+| `extendParagraphForward` | Reader Select `}` | Reader Select 中移动选区范围 |
+| `extendParagraphBackward` | Reader Select `{` | Reader Select 中移动选区范围 |
+| `extendWordForward` | Reader Select `w` | Reader Select 中移动选区范围 |
+| `extendWordBackward` | Reader Select `b` | Reader Select 中移动选区范围 |
+| `extendLineStart` | Reader Select `0` | Reader Select 中移动选区范围 |
+| `extendLineEnd` | Reader Select `$` | Reader Select 中移动选区范围 |
+| `highlightYellow` | Reader Select `zy` | 在 Reader Select 中创建批注 |
+| `highlightRed` | Reader Select `zr` | 在 Reader Select 中创建批注 |
+| `highlightGreen` | Reader Select `zg` | 在 Reader Select 中创建批注 |
+| `highlightBlue` | Reader Select `zb` | 在 Reader Select 中创建批注 |
+| `highlightPurple` | Reader Select `zp` | 在 Reader Select 中创建批注 |
+| `underlineSelection` | **未绑定** | Reader Select 可通过选区操作使用此操作 |
+| `addNote` | Reader Select `za`、`i` | 创建批注并打开评论编辑器 |
+| `copySelection` | Reader Select `y` | 复制已选文字 |
+| `searchSelection` | Reader Select `#` | 搜索已选文字 |
+| `swapVisualEnds` | Reader Select `o`; Main Select `o` maps to `mainSelectSwapEnds` | Reader Select 交换选区端点；Main Select 的 `o` 映射到 `mainSelectSwapEnds` |
+| `editAnnotation` | Reader Normal `<Enter>`、`<Return>` | 打开批注评论编辑器 |
+| `deleteAnnotation` | Reader Normal `dd` | 确认后删除批注 |
+| `filterYellow` | Reader Normal `Zy` | 按批注颜色筛选 |
+| `filterRed` | Reader Normal `Zr` | 按批注颜色筛选 |
+| `filterGreen` | Reader Normal `Zg` | 按批注颜色筛选 |
+| `filterBlue` | Reader Normal `Zb` | 按批注颜色筛选 |
+| `filterPurple` | Reader Normal `Zp` | 按批注颜色筛选 |
+| `filterClear` | Reader Normal `Za` | 清除批注筛选 |
+| `recolorYellow` | Reader Normal `zy` | 更改批注颜色 |
+| `recolorRed` | Reader Normal `zr` | 更改批注颜色 |
+| `recolorGreen` | Reader Normal `zg` | 更改批注颜色 |
+| `recolorBlue` | Reader Normal `zb` | 更改批注颜色 |
+| `recolorPurple` | Reader Normal `zp` | 更改批注颜色 |
+| `yankAnnotation` | **未绑定** | 从命令面板直接复制当前批注目标的摘录 |
+| `yankAnnotationComment` | Reader Normal `Y` | 直接复制当前批注目标的评论 |
+| `openCommandPalette` | Reader/Main/Note Normal `:` | 打开当前上下文的命令面板 |
+| `openNeoSettings` | Reader/Main/Note Normal `<Space>ps` | 打开设置界面 |
+| `findAllItems` | Reader/Main/Note Normal `<Space>ff` | 打开共享文库条目选择器 |
+| `findCollectionItems` | Reader/Main/Note Normal `<Space>fc` | 打开共享分类条目选择器 |
+| `findNotes` | Reader/Main/Note Normal `<Space>fn` | 打开共享 Note 选择器 |
+| `findCollections` | **未绑定** | 在 Main Normal 中按名称或完整路径搜索分类 |
+| `mainQuickSearch` | Main Normal `<Space>fq` | 聚焦 Zotero 原生 Quick Search |
+| `mainAdvancedSearch` | Main Normal `<Space>fa` | 打开 Zotero 原生 Advanced Search |
+| `managePlugins` | Reader/Main/Note Normal `<Space>pp` | 打开 Plugin Manager 面板 |
+| `manageSelection` | Main Normal `<Space>ss` | 打开 Main 选择集面板 |
+| `navigateBack` | Reader/Main/Note Normal `<C-o>` | 在共享跳转历史中后退 |
+| `navigateForward` | Reader/Main/Note Normal `<C-i>` | 在共享跳转历史中前进 |
+| `showInLibrary` | **未绑定** | Reader Normal 和 Note Normal 的命令面板提供此操作；Main Normal 不可用。 |
+| `mainTrashItems` | Main Normal `dd`、`x` | 确认后将 Main 条目移入回收站 |
+| `mainRestoreTrashedItems` | Main Normal `u` | 恢复 Neo 最近一次移入回收站的条目批次 |
+| `mainFocusTree` | Main Normal `e`；Note Normal `<Space>e` | 将焦点移到 Main 分类树 |
+| `mainFocusLeft` | Main Normal `wh` | 将焦点移到左侧窗格 |
+| `mainFocusRight` | Main Normal `wl` | 将焦点移到详情窗格 |
+| `mainFocusItems` | Main Normal `ww` | 将焦点移到条目列表 |
+| `mainYankCitekey` | Reader/Main/Note Normal `<Space>yy` | 根据当前上下文复制 citekey |
+| `mainAddByIdentifier` | Reader/Main Normal `<Space>ai` | 在关联的 Library 窗口中打开 Zotero 原生“通过标识符添加条目”；不使用条目选择集 |
+| `mainOpenPDF` | Main Normal `o`；Note Normal `<Space>o` | 打开 Main 条目游标所在的条目，或 Note 上下文条目 |
+| `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | 关闭当前标签页 |
+| `addTag` | Reader/Main/Note Normal `<Space>ta` | 为符合条件的目标添加标签 |
+| `removeTag` | Reader/Main/Note Normal `<Space>tr` | 从符合条件的目标移除标签 |
+| `toggleTagFilter` | Main Normal `<Space>tf` | 切换 Main 的 Zotero 原生标签筛选 |
+| `clearTagFilters` | Main Normal `<Space>tc` | 清除 Main 标签筛选 |
+| `addToCollection` | Reader/Main Normal `<Space>ca` | 将条目添加到分类 |
+| `removeFromCollection` | Reader/Main Normal `<Space>cr` | 从分类移除条目 |
+| `addItemsToCurrentCollection` | **未绑定** | 在 Main Normal 中搜索同一文库的条目；每次按 Enter 保存一项并保持选择器打开 |
+| `moveToCollection` | **未绑定** | 在 Main Normal 中，将条目从一个明确指定且直接包含这些条目的来源分类原子移动到目标分类 |
+| `moveCollection` | **未绑定** | 在 Main Normal 中将当前分类移到另一个父级 |
+| `createCollection` | **未绑定** | 在 Main Normal 中于明确指定的分类或文库根目录下创建分类 |
+| `renameCollection` | **未绑定** | 在 Main Normal 中重命名当前分类 |
+| `deleteCollection` | **未绑定** | 在 Main Normal 中删除分类子树，但保留条目 |
+| `mainEnterSelect` | Main Normal `v` | 在 Main 条目行中开始 Visual 范围 |
+| `mainToggleSelection` | Main Normal `s` | 切换条目是否属于 Neo 选择集 |
+| `mainClearSelection` | Main Normal `<Space>sc` | 清空 Neo 选择集 |
+| `mainCancelTarget` | Main Normal `<Esc>` | 仅取消临时目标 |
+| `mainSelectDown` | Main Select `j` | 扩展 Main Visual 范围 |
+| `mainSelectUp` | Main Select `k` | 扩展 Main Visual 范围 |
+| `mainSelectFirst` | Main Select `gg` | 将范围扩展到首项 |
+| `mainSelectLast` | Main Select `G` | 将范围扩展到末项 |
+| `mainSelectSwapEnds` | Main Select `o` | 交换范围两端 |
+| `mainSelectFinish` | Main Select `s` | 提交 Main Visual 范围 |
+| `mainSelectCancel` | Main Select `v`、`<Esc>` | 取消 Main Visual 范围 |
+| `mainNavDown` | Main Normal `j` | 移动 Main 条目游标 |
+| `mainNavUp` | Main Normal `k` | 移动 Main 条目游标 |
+| `mainNavFirst` | Main Normal `gg` | 移到 Main 首行 |
+| `mainNavLast` | Main Normal `G` | 移到 Main 末行 |
+| `mainActivate` | Main Normal `<Enter>`、`<Return>` | 激活当前范围或打开条目 |
+| `switchTab` | Reader/Main/Note Normal `<Space>,` | 打开标签页选择器 |
+| `previousTab` | Reader/Main/Note Normal `H` | 切换到上一个打开的标签页 |
+| `nextTab` | Reader/Main/Note Normal `L` | 切换到下一个打开的标签页 |
+| `mainTreeToggle` | Main Normal `za` | 切换分类行的展开状态 |
+| `mainTreeOpenOnly` | Main Normal `zo` | 展开分类行 |
+| `mainTreeCloseOnly` | Main Normal `zc` | 折叠分类行 |
+| `mainTreeExpand` | Main Normal `l` | 展开分类或聚焦条目列表 |
+| `mainTreeCollapse` | Main Normal `h` | 折叠分类、移到父级或聚焦分类树 |
+| `mainTreeParent` | Main Normal `<BS>` | 移到父级分类 |
+| `mainTreeExpandAll` | Main Normal `R` | 展开所有分类 |
+| `mainTreeCollapseAll` | Main Normal `M` | 折叠所有分类 |
+| `focusReaderSplitLeft` | Reader/Note/Main Normal 和 Note Insert `<C-h>` | 朝指定方向切换窗格焦点 |
+| `focusReaderSplitDown` | Reader/Note/Main Normal 和 Note Insert `<C-j>` | 朝指定方向切换窗格焦点 |
+| `focusReaderSplitUp` | Reader/Note/Main Normal 和 Note Insert `<C-k>` | 朝指定方向切换窗格焦点 |
+| `focusReaderSplitRight` | Reader/Note/Main Normal 和 Note Insert `<C-l>` | 朝指定方向切换窗格焦点 |
+| `toggleReaderSplitHorizontal` | Reader Normal `<Space>-` | 切换水平分屏 |
+| `toggleReaderSplitVertical` | Reader Normal <code>&lt;Space&gt;&#124;</code> | 切换垂直分屏 |
+| `toggleReaderSidebarOutline` | **未绑定** | 明确切换 Reader Outline 侧栏；默认没有快捷键。 |
+| `focusReaderOutline` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ro` | 打开或聚焦 Outline；重复执行后仍停留在该面板。 |
+| `toggleMarksExplorer` | **未绑定** | 明确切换 Bookmarks 视图；默认没有快捷键。 |
+| `focusReaderMarks` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rm` | 打开或聚焦 Bookmarks；重复执行后仍停留在该面板。 |
+| `focusReaderAnnotations` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ra` | 打开或聚焦 Annotations；重复执行后仍停留在该面板。 |
+| `focusReaderThumbnails` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rt` | 打开或聚焦 Thumbnails；重复执行后仍停留在该面板。 |
+| `uiNext` | Reader Outline / Marks / Annotations / Thumbnails `j`；Picker Input `<C-j>`、`<C-n>`、`<Down>`；Picker List 再加 `j`；Plugins List `j`、`<Down>` | 仅在所列上下文中可配置的下一项操作。 |
+| `uiPrevious` | Reader Outline / Marks / Annotations / Thumbnails `k`；Picker Input `<C-k>`、`<C-p>`、`<Up>`；Picker List 再加 `k`；Plugins List `k`、`<Up>` | 仅在所列上下文中可配置的上一项操作。 |
+| `uiFirst` | Reader Marks `gg`；Plugins List `gg`、`<Home>` | 仅在所列上下文中可配置的首项操作。 |
+| `uiLast` | Reader Marks `G`；Plugins List `G`、`<End>` | 仅在所列上下文中可配置的末项操作。 |
+| `uiParent` | Reader Outline `h` | 在 `reader-outline` 中移到父级。 |
+| `uiChild` | Reader Outline `l` | 在 `reader-outline` 中移到子级。 |
+| `uiConfirm` | Reader Marks `<Enter>`；Picker Input/List `<Enter>`、`<S-Enter>`；Reader Outline **未绑定** | 在受支持的本地上下文中确认；Outline 没有默认绑定，因为 Enter/Return 由宿主处理。 |
+| `uiCancel` | Reader Outline/Marks/Annotations/Thumbnails `<Esc>`；Picker Input/List `<Esc>`；Plugins List `<Esc>`、`q` | 在这些本地上下文中取消或返回；`plugins-input` 不支持此操作。 |
+| `uiDelete` | Reader Marks `d` | 在 `reader-marks` 中删除选中的书签。 |
+| `uiClear` | Reader Marks `x` | 在 `reader-marks` 中清除书签。 |
+| `uiSearch` | Picker List `/`；Plugins List `/` | 从结果列表上下文聚焦查询/筛选框。 |
+| `uiFocusList` | Plugins Input `<Esc>` | 从筛选框返回结果列表；这是 `plugins-input` 唯一的 `ActionId`。 |
+| `uiPreviewDown` | Picker Input/List `<C-d>` | 向下滚动选择器预览。 |
+| `uiPreviewUp` | Picker Input/List `<C-u>` | 向上滚动选择器预览。 |
+| `uiNextPane` | **未绑定** | 在 `picker-input` 中受支持；默认没有快捷键。 |
+| `uiPreviousPane` | **未绑定** | 在 `picker-input` 中受支持；默认没有快捷键。 |
+| `uiPageDown` | Plugins List `<C-d>` | 在 Plugin Manager 结果中向下翻页。 |
+| `uiPageUp` | Plugins List `<C-u>` | 在 Plugin Manager 结果中向上翻页。 |
+| `pluginsRefresh` | Plugins List `r` | 刷新 Plugin Manager 状态。 |
+| `pluginsEnable` | Plugins List `e` | Zotero AddonManager 允许时启用扩展。 |
+| `pluginsDisable` | Plugins List `d` | Zotero AddonManager 允许时停用扩展。 |
+| `pluginsPreferences` | Plugins List `p` | 打开扩展已注册的设置。 |
+| `pluginsHomepage` | Plugins List `o` | 打开扩展主页。 |
+| `pluginsReadme` | Plugins List `R` | 打开映射到的 GitHub README。 |
+| `pluginsGitLog` | Plugins List `L` | 打开映射到的 GitHub 提交历史。 |
+| `noteMoveLeft` | Note Normal `h` | Note 光标移动 |
+| `noteMoveDown` | Note Normal `j` | Note 光标移动 |
+| `noteMoveUp` | Note Normal `k` | Note 光标移动 |
+| `noteMoveRight` | Note Normal `l` | Note 光标移动 |
+| `noteMoveWordForward` | Note Normal `w` | Note 光标移动 |
+| `noteMoveWordBackward` | Note Normal `b` | Note 光标移动 |
+| `noteMoveLineStart` | Note Normal `0` | Note 光标移动 |
+| `noteMoveLineEnd` | Note Normal `$` | Note 光标移动 |
+| `noteMoveDocumentStart` | Note Normal `gg` | Note 光标移动 |
+| `noteMoveDocumentEnd` | Note Normal `G` | Note 光标移动 |
+| `noteDeleteChar` | Note Normal `x` | 编辑 Note |
+| `noteAppendAfter` | Note Normal `a` | 在光标后进入 Insert |
+| `noteAppendLineEnd` | Note Normal `A` | 在行尾进入 Insert |
+| `noteInsertLineStart` | Note Normal `I` | 在行首进入 Insert |
+| `noteOpenLineBelow` | Note Normal `o` | 新建一行并进入 Insert |
+| `noteOpenLineAbove` | Note Normal `O` | 新建一行并进入 Insert |
+| `noteUndo` | Note Normal `u` | 撤销一项 Note 编辑更改 |
+| `noteRedo` | Note Normal `<C-r>` | 重做一项 Note 编辑更改 |
+| `notePutAfter` | Note Normal `p` | 将内部寄存器内容粘贴到光标后 |
+| `notePutBefore` | Note Normal `P` | 将内部寄存器内容粘贴到光标前 |
+| `noteDeleteLine` | Note Normal `dd` | 删除当前行 |
+| `noteYankLine` | Note Normal `yy` | 复制当前行 |
+| `noteDeleteLeft` | Note Normal `dh` | 按移动操作删除 |
+| `noteDeleteDown` | Note Normal `dj` | 按移动操作删除 |
+| `noteDeleteUp` | Note Normal `dk` | 按移动操作删除 |
+| `noteDeleteRight` | Note Normal `dl` | 按移动操作删除 |
+| `noteDeleteWordForward` | Note Normal `dw` | 按移动操作删除 |
+| `noteDeleteWordBackward` | Note Normal `db` | 按移动操作删除 |
+| `noteDeleteToLineStart` | Note Normal `d0` | 按移动操作删除 |
+| `noteDeleteToLineEnd` | Note Normal `d$` | 按移动操作删除 |
+| `noteDeleteInnerWord` | Note Normal `diw` | 删除内部词 |
+| `noteYankLeft` | Note Normal `yh` | 按移动操作复制 |
+| `noteYankDown` | Note Normal `yj` | 按移动操作复制 |
+| `noteYankUp` | Note Normal `yk` | 按移动操作复制 |
+| `noteYankRight` | Note Normal `yl` | 按移动操作复制 |
+| `noteYankWordForward` | Note Normal `yw` | 按移动操作复制 |
+| `noteYankWordBackward` | Note Normal `yb` | 按移动操作复制 |
+| `noteYankToLineStart` | Note Normal `y0` | 按移动操作复制 |
+| `noteYankToLineEnd` | Note Normal `y$` | 按移动操作复制 |
+| `noteYankInnerWord` | Note Normal `yiw` | 复制内部词 |
+| `noteChangeLeft` | Note Normal `ch` | 按移动操作替换并进入 Insert |
+| `noteChangeDown` | Note Normal `cj` | 按移动操作替换并进入 Insert |
+| `noteChangeUp` | Note Normal `ck` | 按移动操作替换并进入 Insert |
+| `noteChangeRight` | Note Normal `cl` | 按移动操作替换并进入 Insert |
+| `noteChangeWordForward` | Note Normal `cw` | 按移动操作替换并进入 Insert |
+| `noteChangeWordBackward` | Note Normal `cb` | 按移动操作替换并进入 Insert |
+| `noteChangeToLineStart` | Note Normal `c0` | 按移动操作替换并进入 Insert |
+| `noteChangeToLineEnd` | Note Normal `c$` | 按移动操作替换并进入 Insert |
+| `noteChangeInnerWord` | Note Normal `ciw` | 替换内部词并进入 Insert |
 
-## Default binding index
+## 默认按键索引 {#default-binding-index}
 
-Use this table to find the ActionId for a shipped `BindingContext:sequence`. Saved custom bindings can replace a default.
+用此表查找随 Neo 提供的 `BindingContext:sequence` 对应的 `ActionId`。已保存的自定义绑定可以替换默认绑定。
 
-| Canonical `BindingContext:sequence` | ActionId |
+| 规范 `BindingContext:sequence` | ActionId |
 | --- | --- |
 | `reader-normal:j` | `scrollDown` |
 | `reader-normal:k` | `scrollUp` |
@@ -897,13 +897,13 @@ Use this table to find the ActionId for a shipped `BindingContext:sequence`. Sav
 | `plugins-list:R` | `pluginsReadme` |
 | `plugins-list:L` | `pluginsGitLog` |
 
-## Count examples
+## 计数示例 {#count-examples}
 
-- Reader `3j` scrolls three configured steps; `3l` requests three adjacent page turns.
-- Reader `3gg` / `3G` targets page three when Zotero supports numeric page navigation. Bare `gg` / `G` goes to the first-page start / document bottom; without page navigation they scroll to the document boundaries.
-- Main `3j` moves the Cursor three rows. `gg` / `G` goes to the first/last row; a positive count with `G` selects that one-based row.
-- Note `3j` moves three lines and `3x` deletes three characters. An operator such as `3dw` runs once; the count does not multiply Note operators.
-- Reader `2<C-o>` traverses two history locations. `2:` opens the Command Palette; the selected action runs once.
-- Reader `L` followed by a mark jump, then `<C-o>`, goes Back through the mark and then the earlier tab change.
+- Reader `3j` 按设置的滚动步长移动三次；`3l` 请求连续向后翻三页。
+- Zotero 支持数字页码导航时，Reader `3gg` / `3G` 转到第 3 页。单独按 `gg` / `G` 会分别转到第一页起点/文档末尾；不支持页码导航时，两者改为滚动到文档边界。
+- Main `3j` 将条目游标向下移动三行。`gg` / `G` 移到首行/末行；`G` 前的正数计数会选择从 1 开始计数的对应行。
+- Note `3j` 向下移动三行，`3x` 删除三个字符。`3dw` 这样的操作符命令只执行一次；计数不会重复 Note 操作符。
+- Reader `2<C-o>` 遍历两处历史位置。`2:` 打开命令面板；选中的操作只执行一次。
+- Reader 中按 `L` 切换标签页，再跳到一个标记，随后按 `<C-o>`，会先后退到标记跳转前的位置，再回到此前的标签页切换。
 
-If a key does not run a command, check the focused context and mode, feature setting, and saved binding in Settings. An action also needs a valid target, such as a selected annotation or current item.
+如果按键没有执行命令，请检查焦点所在的上下文和模式、相关功能设置及设置中保存的绑定。操作还需要有效目标，例如选中的批注或当前条目。

@@ -1,49 +1,49 @@
-# Select text and annotate a PDF
+# 选择 PDF 文字并添加批注 {#select-text-and-annotate-a-pdf}
 
-Use Reader Select to find a passage, adjust its endpoints, then copy, search, or mark it in the PDF. Click the page text before starting so the PDF—not a search field, comment, or sidebar—owns the keyboard.
+使用文本选择模式查找一段文字、调整选区端点，再复制、搜索或在 PDF 中标记它。开始前先点击页面正文，让 PDF 而不是搜索框、批注评论编辑器或侧栏接收键盘输入。文本选择由“阅读选区”模块提供；添加和编辑批注需要“阅读批注”模块。模块配置见[设置 → 模块](SETTINGS_GUIDE.md#modules)。
 
-## Try it
+## 从一段文字开始 {#try-it}
 
-1. Open a PDF in Zotero and click its page text. Press `v`, type a word or phrase visible on the page, then choose its hint. `Enter` chooses the nearest match.
-2. With the text selected, press `z` and then `y` (`zy`) to create a yellow highlight.
+1. 在 Zotero 中打开 PDF，点击页面文字。按 `v`，输入页面上可见的一个词或短语，再选择对应提示。按 `Enter` 会选择最近的匹配项。
+2. 文字选中后，按 `z` 再按 `y`（`zy`），为它添加黄色高亮。
 
-## What you should see
+## 选区与高亮 {#what-you-should-see}
 
-The matching PDF text becomes the active selection. After `zy`, Zotero shows a yellow highlight annotation on that text. Press `Escape` during Flash to cancel without replacing the current selection.
+匹配到的 PDF 文字会成为当前选区。按 `zy` 后，Zotero 会在该文字上显示黄色高亮批注。在 Flash 选择提示阶段按 `Escape`，会取消这次查找而不替换当前选区。
 
-## Find a passage and refine its range
+## 查找文字并调整选区范围 {#find-a-passage-and-refine-its-range}
 
-In Reader Normal, press `v` to enter Select and use Flash to find text. If a native PDF text selection is already active, Neo can adopt it when available. Type a literal phrase from the document, then choose a letter hint; `Enter` chooses the nearest match. If Flash finds no match, try a shorter phrase that appears on the page. `Escape` cancels the Flash stage and preserves the active selection.
+在 Reader Normal 模式中按 `v` 进入文本选择模式，用 Flash 查找文字。若 Zotero 原生 PDF 文本选区仍可用，Neo 可以接管它。输入文档中的原文短语，再选择一个字母提示；按 `Enter` 选择最近的匹配项。如果没有匹配项，试试页面上更短、确实可见的短语。按 `Escape` 取消 Flash 阶段并保留当前选区。
 
-Once the text is selected, adjust the moving endpoint with `h` / `l` by character, `j` / `k` by line, `w` / `b` by word, and `0` / `$` to a line boundary. Use `)` / `(` for sentence boundaries and `}` / `{` for paragraph boundaries. Press `o` to swap which endpoint moves. To reach a distant endpoint, press `s`, search for another phrase, and choose its hint; the first endpoint stays in place.
+选中文字后，用 `h` / `l` 按字符移动活动端点，用 `j` / `k` 按行移动，用 `w` / `b` 按词移动，用 `0` / `$` 移到行首或行尾。用 `)` / `(` 移到句子边界，用 `}` / `{` 移到段落边界。按 `o` 交换移动端点。要定位远处的另一端，按 `s` 搜索另一段文字并选择提示；起始端点会保持不动。
 
-## Use the selected text
+## 使用当前选区 {#use-the-selected-text}
 
-- Press `y` to copy the selected text, with PDF line breaks and whitespace normalized. Press `#` to search for that text in the PDF.
-- Press `zy`, `zr`, `zg`, `zb`, or `zp` to create a yellow, red, green, blue, or purple highlight.
-- Press `a` or `Enter` to open Selection Actions. Choose **Underline** to underline the range or **Add note** to create an annotation and open its comment editor.
-- Choose **Capture to note** to append the passage to an existing Zotero note. This is different from **Add note**, which creates an annotation comment. See [Capture a passage in an existing note](CAPTURE_GUIDE.md#try-it).
+- 按 `y` 复制选中文字；复制时会规范化 PDF 的换行和空白。按 `#` 在 PDF 中查找该文字。
+- 按 `zy`、`zr`、`zg`、`zb` 或 `zp`，添加黄色、红色、绿色、蓝色或紫色高亮。
+- 按 `a` 或 `Enter` 打开选区操作。选择**为选区添加下划线**（Underline）可加下划线；选择**添加批注评论**（Add note）会创建 PDF 批注并打开评论编辑器。
+- 选择**捕获到笔记**（Capture to note）可将这段文字追加到已有 Zotero 笔记。该入口依赖主窗口侧的笔记选择器，请在主窗口中的 Reader 标签页使用；独立阅读器可能不提供这项操作。它不同于**添加批注评论**，后者创建的是 PDF 批注评论。详见[将 PDF 摘录到已有笔记](CAPTURE_GUIDE.md#try-it)。
 
-## Find and manage existing annotations
+## 查找和管理已有批注 {#find-and-manage-existing-annotations}
 
-In Reader Normal, press `[a` / `]a` to select the previous or next annotation. Open the native Annotations panel with `<Space>ra` to browse its rows. `Y` directly copies the current annotation target's comment. For content elsewhere on the visible page, use [Normal `y` copy hints](READER_GUIDE.md#copy-or-follow-visible-targets) without selecting an annotation first. The direct excerpt action `yankAnnotation` remains available in the Command Palette without a default key. Use `Zy`, `Zr`, `Zg`, `Zb`, or `Zp` to filter annotations by color, and `Za` to clear the filter.
+在阅读器 Normal 模式中按 `[a` / `]a` 选中上一个或下一个批注，也可按 `<Space>ra` 打开 Zotero 原生批注侧栏并浏览其中的条目。`Y` 直接复制当前批注的评论。要复制当前可见页面上的其他内容，无需先选中批注，可使用[Normal 模式的 `y` 复制提示](READER_GUIDE.md#copy-or-follow-visible-targets)。在命令面板搜索**复制批注高亮文本**（`yankAnnotation`）可直接复制摘录；此操作没有默认快捷键。按 `Zy`、`Zr`、`Zg`、`Zb` 或 `Zp` 按颜色筛选批注，按 `Za` 清除筛选。
 
-Give colors a consistent purpose in your reading: for example, yellow for main claims, blue for methods, and purple for questions to follow up. To change an existing annotation, select it and use `zy`, `zr`, `zg`, `zb`, or `zp` to recolor it. Later, filter the Annotations panel to one color to review the same kind of evidence across the paper, then clear the filter with `Za`.
+可以为颜色指定固定用途，例如黄色标记主要论点、蓝色标记方法、紫色标记待跟进的问题。选中已有批注后，按 `zy`、`zr`、`zg`、`zb` 或 `zp` 可更改颜色。之后可在批注侧栏按颜色筛选，查看同类证据；按 `Za` 清除筛选。
 
-To permanently delete the selected annotation, press `dd` and confirm. **Deletion cannot be undone.** Press `Escape` at the confirmation to leave the annotation in place.
+**`dd` 会永久删除选中的批注，且无法撤销。** 核对目标后按 `dd` 并确认删除；在确认提示中按 `Escape` 可取消，批注会保留。
 
-## Edit an annotation comment
+## 编辑批注评论 {#edit-an-annotation-comment}
 
-With an annotation selected, press `i` or `Enter` to open its comment editor when **Annotation comment editing** is enabled in [Settings](SETTINGS_GUIDE.md#try-it). Ordinary typing and IME input enter the comment; `Enter` inserts a newline. During an active IME composition, the IME handles `Escape` first.
+选中批注后，若在[阅读器设置](SETTINGS_GUIDE.md#tune-reader-controls)中启用了**批注评论编辑**，按 `i` 或 `Enter` 打开评论编辑器。普通键入和输入法输入都会写入评论；按 `Enter` 插入换行。输入法正在组合文字时，`Escape` 会先交由输入法处理。
 
-Edits autosave two seconds after the last input while the editor stays open. `Escape` saves the final draft and closes the editor. Neo also saves and closes it when Reader interaction is deactivated or input is handed to a native editor.
+编辑器保持打开时，停止输入两秒后会自动保存。按 `Escape` 会保存最后的草稿并关闭编辑器。阅读器交互停用或输入权交给原生编辑器时，Neo 也会保存并关闭评论编辑器。
 
-Press `Escape` to save before closing a view or Reader. Disposal itself does not save pending text or cancel an already-started native save.
+关闭视图或阅读器前先按 `Escape` 保存。仅关闭或销毁编辑器本身不会保存尚未提交的文字，也不会取消已经开始的 Zotero 保存。
 
-`za` / `i` in Reader Select creates an annotation and opens its comment editor. It does not capture text into an existing Zotero note.
+**批注评论编辑**设置只控制 Reader Normal 模式中的 `i` / `Enter`；它不会关闭文本选择模式下独立的**添加批注评论**动作。按 `za` / `i` 可在文本选择模式中创建批注并打开评论编辑器；这不会把文字追加到已有 Zotero 笔记。
 
-## When an annotation cannot be placed
+## 无法为选区添加批注时 {#when-an-annotation-cannot-be-placed}
 
-Neo can position an annotation only when it can map the selected range to one page or two adjacent pages. A longer, non-adjacent, or incomplete PDF range cannot create a partial annotation. The selected text remains available after that rejection: narrow the range to one page or two neighboring pages and retry the highlight, underline, or annotation. If you only need the passage as text, use `y`, `#`, or [Capture to note](CAPTURE_GUIDE.md#try-it).
+只有当 Neo 能将选区映射到一页或两页相邻页面时，才能定位批注。跨越更多页面、页面不相邻或 PDF 选区不完整时，Neo 不会只为其中一部分创建批注。被拒绝后，选中文字仍然保留；将范围缩小到一页或相邻的两页，再试着添加高亮、下划线或批注。如果只需要保存文字，可按 `y` 复制、按 `#` 查找，或使用[捕获到笔记](CAPTURE_GUIDE.md#try-it)。
 
-For Reader navigation and panels, see [Read and navigate a PDF](READER_GUIDE.md#try-it). The [Command Reference: Reader Select](COMMAND_REFERENCE.md#reader-select-and-annotation-actions) lists all current selection and annotation actions.
+阅读器导航和侧栏操作见[阅读和导航 PDF](READER_GUIDE.md#try-it)。[命令参考：Reader Select](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)列出当前所有选区与批注操作。

@@ -1,45 +1,45 @@
-# Find and edit Zotero notes
+# 查找并编辑 Zotero 笔记 {#find-and-edit-zotero-notes}
 
-Open a paper's existing notes from its Library item, or browse the same library for a note attached to another paper or a standalone note. Neo opens the note in Zotero's editor; changes use Zotero's normal note-saving behavior.
+从当前条目的文库记录打开已有笔记，也可以在同一文库中查找其他论文的笔记或独立笔记。Neo 会在 Zotero 编辑器中打开笔记，内容按 Zotero 的常规方式保存。
 
-## Try it
+## 开始查找并编辑笔记 {#try-it}
 
-1. Click a paper in Zotero's Library item list. Press and release `Space`, then `f`, then `n` to open the note chooser for that paper.
-2. Choose an existing note with the arrow keys and press `Enter`. To look beyond this paper's notes, choose **Browse library** and select another existing note.
-3. Click inside the note editor. If **Vim-style note editing** is enabled, press `i` to type and `Escape` when you want the navigation keys again. If the setting is off, type as usual in Zotero's editor.
+1. 在 Zotero 主窗口的条目列表中选中一篇论文，按 `<Space>fn` 打开笔记选择器。
+2. 用方向键选择已有笔记并按 `Enter` 打开。要查找其他论文的笔记或独立笔记，选择 **Browse library**，再选中目标笔记。
+3. 在笔记编辑器中单击正文。若已启用**Vim 风格笔记编辑**，按 `i` 输入，按 `Escape` 返回笔记 Normal 模式；若未启用，直接使用 Zotero 编辑器输入。
 
-## What you should see
+## 打开后的笔记内容 {#what-you-should-see}
 
-The chosen note opens with its existing contents. Its preview identifies the parent paper or standalone note and shows the body. To start a new note, create it in Zotero and then open it from the chooser.
+打开后会显示笔记原有内容。预览会标明所属论文或独立笔记，并显示正文。要新建笔记，请先在 Zotero 中创建，再从选择器打开。
 
-## Find the right note
+## 找到需要的笔记 {#find-the-right-note}
 
-Use `<Space>fn` for the current paper's notes. Choose **Browse library** for other papers' notes and standalone notes in the same library, or **Current item** to return. Check the preview's parent item and contents when titles are similar.
+在主窗口、阅读器或笔记编辑器的 Normal 模式按 `<Space>fn`。选择器默认查找当前条目的笔记：主窗口使用条目游标所在条目，阅读器使用当前 PDF 所属条目，笔记编辑器使用当前笔记的所属条目；独立笔记以自身为范围。Neo 选择集不会改变阅读器或笔记编辑器的当前上下文。
 
-After [capturing a PDF passage](CAPTURE_GUIDE.md#try-it), open the selected destination note from the Library or use the note chooser to find it. If it belongs to another item, use **Browse library**. The quote and available page label are appended to the existing note; the earlier contents remain.
+选择 **Browse library** 可查找同一文库中其他论文的笔记和独立笔记；选择 **Current item** 返回原来的条目范围，且保留查询。标题相似时，查看预览中的所属条目和正文再确认。
 
-## Move and edit in Normal mode
+使用[阅读器摘录到笔记](CAPTURE_GUIDE.md#try-it)时，目标必须是来源条目同一文库中已有且可写的笔记。选择器先显示当前条目的笔记；要选其他笔记时，用 **Browse library** 查找同库笔记。摘录以引用块追加到原有内容，并附带可用的页码标签；不会自动新建目标笔记。按 `Escape` 在确认前取消不会写入；开始保存后，关闭选择器不能撤销，保存完成时会显示回执。详细步骤见[摘录到笔记指南](CAPTURE_GUIDE.md)。
 
-Enable **Vim-style note editing** in [Settings](SETTINGS_GUIDE.md#try-it) to navigate and edit with Note Normal commands. Enter Insert to type with Zotero's editor and IME. With the setting off, use Zotero's normal editing shortcuts directly.
+## 在 Normal 模式中移动和编辑 {#move-and-edit-in-normal-mode}
 
-Move with `h` / `j` / `k` / `l`; use `w` / `b` to move by word, `0` / `$` to reach a line boundary, and `gg` / `G` to move to the start or end of the note. Press `i` to type at the caret, `a` to type after it, or `A` / `I` to insert at the line end or start. Press `o` / `O` to open a line below or above and begin typing there. `Escape` returns to Note Normal.
+在[设置 → 交互](SETTINGS_GUIDE.md#choose-note-and-picker-behavior)中启用**Vim 风格笔记编辑**，即可在笔记编辑器中使用 Vim 操作。此设置只控制笔记编辑，不会关闭 `<Space>fn` 笔记查找或阅读器的摘录目标选择。Insert 模式中的文字输入和 IME 由 Zotero 编辑器处理；关闭该设置时，直接使用 Zotero 的常规编辑快捷键。
 
-For a small correction, `x` deletes the character at the caret; `dd` deletes a line and `dw` deletes through a word motion. To replace the current word, use `ciw`, type the replacement, then press `Escape`. Use `u` / `Ctrl+r` for this note editor's undo and redo history; they do not undo unrelated Zotero actions.
+按 `h` / `j` / `k` / `l` 移动文本光标；`w` / `b` 按词移动，`0` / `$` 移到行首或行尾，`gg` / `G` 移到笔记开头或结尾。按 `i` 在光标处输入，按 `a` 在光标后输入，按 `A` / `I` 在行尾或行首输入。按 `o` / `O` 在下方或上方新建一行并开始输入。按 `Escape` 返回 Normal 模式。
 
-Yank with `yy` for a line, `yw` for a word, or `yiw` for the current word. A yank copies to both the system clipboard and Neo's Note register. `p` / `P` put the Note register after or before the caret; delete and change commands also replace that register. To bring text from another application or paste into a different note, enter Insert with `i` and use Zotero's normal paste shortcut (`Ctrl+V`, or `Command+V` on macOS).
+小幅修改可以按 `x` 删除光标处字符，按 `dd` 删除一行，按 `dw` 从光标处按词向前删除。按 `ciw` 替换当前词，输入新文字后按 `Escape`。按 `u` / `<C-r>` 撤销或重做此笔记编辑器中的更改；它们不会撤销 Zotero 中的其他操作。
 
-Zotero's note editor handles saving. The [Command Reference: Note editor](COMMAND_REFERENCE.md#note-editor) lists all supported Note motions and editing actions.
+按 `yy` 复制一行，按 `yw` 复制一个词，按 `yiw` 复制当前词。这些复制操作会同时更新 Neo 的 Note 寄存器和系统剪贴板。`p` / `P` 只使用当前编辑器的 Note 寄存器，在光标后或前放入其中的文字；删除和修改命令也会更新该寄存器。切换笔记后，不会沿用另一编辑器的寄存器。要跨笔记粘贴或把其他应用的文字粘贴进笔记，按 `i` 进入 Insert，再用 Zotero 的原生粘贴快捷键（Windows/Linux 为 `Ctrl+V`，macOS 为 `Command+V`）。
 
-## Develop a note as you read
+笔记由 Zotero 编辑器按其常规行为保存。完整的移动和编辑命令见[命令参考：笔记编辑器](COMMAND_REFERENCE.md#note-editor)。
 
-Use a paper's own note for a running summary: capture a passage, write what it means in your own words, and add questions for the next reading pass. Put the caret after a quote, press `o` to open a new line, and type your explanation. Return to Normal with `Escape` when you want to move or revise the text.
+## 边读边整理笔记 {#develop-a-note-as-you-read}
 
-For a synthesis across papers, create a topic note in the same library and find it with **Browse library**. Collect related excerpts with [Capture to note](CAPTURE_GUIDE.md#use-capture-to-note-for-literature-review), then organize your comparisons into arguments, agreements, and open questions. Use the quote's page label to check its context in the PDF.
+可以在论文自己的笔记中持续写摘要：先摘录一段，再用自己的话解释它，并补上下一轮阅读要回答的问题。把文本光标放在引用后，按 `o` 新建一行并写下说明；按 `Escape` 后可继续移动或修改文本。
 
-When reorganizing a paragraph, yank or delete a line and put it at the new position with `p` / `P`. For a wording change, use `ciw` on the current word; use the note editor's `u` / `Ctrl+r` to revise the edit.
+需要跨论文综合时，可在同一文库中创建主题笔记，再用 **Browse library** 找到它。将相关摘录收集到笔记后，按论点整理比较、共识和待解问题；可用引用旁的页码标签回到 PDF 核对上下文。整理段落时，可复制或删除整行，再用 `p` / `P` 放到新位置；若只需改一个词，用 `ciw`，并以 `u` / `<C-r>` 撤销或重做。
 
-## Continue from the note to its paper
+## 从笔记返回所属论文 {#continue-from-the-note-to-its-paper}
 
-For a note attached to a paper, press `<Space>o` in Note Normal to open that item's PDF. If the note belongs to another item, the same command uses that note's item context. A standalone note has no paper attachment to open; return to the Library to choose a paper instead.
+笔记有所属论文时，在笔记 Normal 模式按 `<Space>o` 打开该条目的 PDF；如果当前笔记属于另一条目，命令会使用笔记自己的上下文。独立笔记没有可打开的论文附件，请回到主窗口选择论文。
 
-When a note has a parent item, `<Space>ta` / `<Space>tr` start adding or removing tags for that item, and `<Space>yy` copies its citekey when available. `Ctrl+o` / `Ctrl+i` also move Back and Forward through supported Neo history locations; see [Shared Back and Forward history](SEARCH_GUIDE.md#shared-back-and-forward-history) for how that history works across surfaces.
+笔记有所属条目时，`<Space>ta` / `<Space>tr` 为该条目添加或移除标签；独立笔记的标签操作作用于笔记本身，而不是主窗口的 Neo 选择集。按 `<Space>yy` 可在有 citekey 时复制所属条目的 citekey。`<C-o>` / `<C-i>` 也可在支持的 Neo 历史位置间后退和前进；详见[共享后退与前进历史](SEARCH_GUIDE.md#shared-back-and-forward-history)。

@@ -43,6 +43,7 @@ const userSidebar = [
     items: [
       { text: '概览与工作流', link: '/docs/USER_GUIDE' },
       { text: '基本概念', link: '/docs/CONCEPTS' },
+      { text: '文本输入与输入法', link: '/docs/INPUT_METHODS' },
       { text: '文献库与阅读清单', link: '/docs/MAIN_GUIDE' },
       { text: '阅读与导航 PDF', link: '/docs/READER_GUIDE' },
       { text: '文本选择与批注', link: '/docs/SELECTION_GUIDE' },
@@ -80,7 +81,6 @@ const developerSidebar = [
       { text: '架构', link: '/docs/ARCHITECTURE' },
       { text: '模块拆分与基座设计', link: '/docs/MODULE_DESIGN' },
       { text: '交互模型', link: '/docs/INTERACTION_MODEL' },
-      { text: '输入法与文本输入', link: '/docs/INPUT_METHODS' },
       { text: '导航历史设计', link: '/docs/NAVIGATION_HISTORY_DESIGN' },
     ],
   },
@@ -155,7 +155,6 @@ export default defineConfig({
       '/docs/ARCHITECTURE': developerSidebar,
       '/docs/MODULE_DESIGN': developerSidebar,
       '/docs/INTERACTION_MODEL': developerSidebar,
-      '/docs/INPUT_METHODS': developerSidebar,
       '/docs/NAVIGATION_HISTORY_DESIGN': developerSidebar,
       '/docs/V0_2_ACCEPTANCE': developerSidebar,
       '/docs/RECORDING_GUIDE': developerSidebar,

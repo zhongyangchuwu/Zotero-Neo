@@ -1,47 +1,47 @@
-# Features
+# 功能介绍 {#features}
 
-Use keyboard commands to find papers, select PDF text, append passages to existing notes, and organize a reading list in Zotero.
+用键盘在 Zotero 中查找论文、选择 PDF 文字、把段落追加到已有笔记，并整理正在阅读的一组文献。以下功能使用默认配置；不需要的能力可以在[模块设置](SETTINGS_GUIDE.md#modules)中停用。
 
-## Select PDF text by typing what you see
+## 输入眼前的文字来选择 PDF 段落 {#select-pdf-text-by-typing-what-you-see}
 
-Press `v`, type a word or phrase on the page, and choose its hint. Extend the selection by word or line, then highlight, copy, or comment on the passage.
+在 PDF 页面按 `v`，输入可见的词句，再选择匹配位置的提示。选中后，可按字符、单词或行调整范围，再复制、添加高亮或写批注评论。Flash 还可以定位另一端的词句，把选区扩展到更远的位置。
 
-This is useful when you want to collect several passages without repeatedly dragging across PDF text. Flash also lets you choose a second phrase as the far end of a longer selection.
+这适合连续收集多段证据，不必反复用鼠标拖选。PDF 需要有可选取的文字层；Neo 不通过 OCR 识别扫描页。
 
-[Try text selection](SELECTION_GUIDE.md#try-it) · [Selection and annotation workflows](SELECTION_GUIDE.md)
+[开始选择文字](SELECTION_GUIDE.md#try-it) · [文本选择与批注指南](SELECTION_GUIDE.md)
 
-## Keep excerpts in the note you are writing
+## 将摘录收集到正在写的笔记 {#keep-excerpts-in-the-note-you-are-writing}
 
-Select a passage and choose **Capture to note**. Preview the destination note, confirm it, and append the quote alongside what you have already written. Start with the paper's notes or browse other notes in the same library.
+选中一段 PDF 文字后，选择**捕获到笔记**。在选择器中查看已有笔记的标题、所属条目和正文，确认后把引用追加到原有内容之后。初始范围是当前论文的笔记，也可以显式浏览同文库的其他笔记。
 
-Use one running note for a paper, or collect passages from several papers into an existing topic note. The destination preview keeps the note's title, parent item, and contents in view while you choose.
+你可以为一篇论文维护持续更新的阅读笔记，也可以把不同论文的段落汇总到一条已有主题笔记。它与“添加批注评论”不同：前者写入已有 Zotero 笔记，后者在 PDF 中创建批注。
 
-[Try capture to note](CAPTURE_GUIDE.md#try-it) · [Build a reading-to-notes workflow](USER_GUIDE.md#read-a-paper-and-keep-a-running-note)
+[将段落摘录到笔记](CAPTURE_GUIDE.md#try-it) · [阅读并持续记录笔记](USER_GUIDE.md#read-a-paper-and-keep-a-running-note)
 
-## Build a reading list while you browse
+## 边浏览边建立阅读清单 {#build-a-reading-list-while-you-browse}
 
-Mark papers with `s` and continue moving through the Library. Your marked Selection stays separate from the row you are browsing, so you can open a paper, change the view, and return to the group you are organizing.
+在条目列表用 `s` 将文献加入 Neo 选择集，继续移动条目游标浏览其他论文。选择集与正在浏览的行分开，因此可以打开论文、改变视图，再回来整理已经收集的文献。
 
-Review the group in the Selection Panel, then apply tags or collection membership to the marked papers together. Temporary row ranges help you collect a run of related items into the same workset.
+打开选择集面板查看整组成员，然后批量添加标签或调整分类。需要一并收集连续条目时，可以先建立临时可视范围，再加入选择集。Neo 选择集属于当前窗口会话，不是跨重启保存的文献清单；需要长期保留分组时，可使用 Zotero 分类或标签。
 
-[Work with a reading list](MAIN_GUIDE.md) · [Organize papers with tags](TAGS.md)
+[管理阅读清单](MAIN_GUIDE.md) · [用标签整理条目](TAGS.md)
 
-## Copy references and annotation content by label
+## 按提示复制参考信息和批注内容 {#copy-references-and-annotation-content-by-label}
 
-In Reader Normal, press `y` to choose a visible DOI, arXiv ID, URL, annotation excerpt, or comment without selecting it first. Excerpt and Comment labels stay together but copy separate contents; an identifier inside an excerpt remains its own choice. Press `f` to follow recognized references and native PDF links.
+在阅读器 Normal 按 `y`，选择可见的 DOI、arXiv ID、URL、批注摘录或评论，不需要先选中文字。摘录和评论分别提供标签；摘录里的标识符也可以作为独立目标。按 `f` 则跟随识别出的参考链接或原生 PDF 链接。
 
-When a paper is not in your Library, Add Item by Identifier opens Zotero's native lookup. Copying or following a target does not import it automatically.
+想把一篇新论文加入文库时，使用“通过标识符添加条目”打开 Zotero 原生录入框。复制或跟随链接本身不会自动导入条目。
 
-[Try copy/follow hints](READER_GUIDE.md#copy-or-follow-visible-targets) · [Add papers by identifier](MAIN_GUIDE.md#add-items-by-identifier)
+[复制／跟随可见目标](READER_GUIDE.md#copy-or-follow-visible-targets) · [按标识符添加文献](MAIN_GUIDE.md#add-items-by-identifier)
 
-## Follow the structure of a paper
+## 沿论文结构阅读并返回 {#follow-the-structure-of-a-paper}
 
-Move between headings, figures, tables, annotations, and your own bookmarks. Use letter hints to follow a visible citation or PDF link, and open a second view when you need the methods and results side by side.
+在标题、图、表、已有批注和自己的 marks 之间跳转。结构导航使用 PDF 的原生 Outline 或可用结构信息；没有可用目标时，仍可翻页或搜索文字。需要对照方法和结果时，可以打开第二个 PDF 视图，让两侧保持不同阅读位置。
 
-Set a Reader mark before following a reference, or use Back/Forward to return through recorded destinations.
+跟随参考链接前设置一个 mark，或使用共享后退／前进回到可恢复的位置。marks 和导航历史用途不同，也不会替代文献库中的 Neo 选择集。
 
-[Explore Reader workflows](READER_GUIDE.md) · [Search and return to your work](SEARCH_GUIDE.md)
+[阅读器使用指南](READER_GUIDE.md) · [搜索与返回之前的位置](SEARCH_GUIDE.md)
 
-## Explore the complete workflow
+## 按自己的工作方式组合这些功能 {#explore-the-complete-workflow}
 
-The [User guide](USER_GUIDE.md) covers Library worksets, reading, annotations, notes, organization, navigation, and customization. [Get started](GETTING_STARTED.md) to install Neo and try your first PDF.
+[使用指南](USER_GUIDE.md)串联文献库、阅读、批注、笔记、整理与导航，你可以从正在处理的任务开始。需要安装时看[安装与入门](GETTING_STARTED.md)，需要准确按键或调整选项时看[命令参考](COMMAND_REFERENCE.md)和[设置指南](SETTINGS_GUIDE.md)。

@@ -1,37 +1,40 @@
-# Capture a PDF passage in an existing note
+# 将 PDF 摘录到已有笔记 {#capture-a-pdf-passage-in-an-existing-note}
 
-Append a selected PDF passage to an existing Zotero note while keeping its earlier contents. Prepare a note in the same library, then select the text you want to collect.
+将当前 PDF 的选中文字追加到已有 Zotero 笔记，同时保留笔记原有内容。目标必须是同一 Zotero 文库中可写的现有笔记；先准备笔记，再选择要收集的文字。
 
-## Try it
+摘录由“摘录”模块提供，并依赖“阅读选区”和“笔记”模块；模块配置见[设置 → 模块](SETTINGS_GUIDE.md#modules)。
+摘录需要主窗口侧的笔记选择器，因此请在主窗口中的 Reader 标签页使用。独立阅读器可能没有“捕获到笔记”入口；即使其他命令可以打开文库窗口，也不代表该选择器可用。
 
-1. Open a PDF in Reader, click in the page text, press `v`, type a phrase, then choose its hint or press `Enter` to select the nearest match.
-2. Press `a` or `Enter` and choose **Capture to note** from Selection Actions.
-3. Choose a note and inspect its preview. The first list contains notes for the current paper; choose **Browse library** to find another existing note in the same library.
-4. Press `Enter` to confirm the destination.
+## 从 PDF 摘录一段文字 {#try-it}
 
-## What you should see
+1. 在阅读器中打开 PDF，点击页面文字，按 `v` 并输入短语，再选择提示；也可按 `Enter` 选择最近的匹配项。
+2. 按 `a` 或 `Enter` 打开选区操作，再选择**捕获到笔记**（Capture to note）。
+3. 选择一条笔记并查看预览。列表最先显示当前 PDF 所属条目的笔记；选择 **Browse library** 可查找同一文库中的其他已有笔记。
+4. 确认目标后按 `Enter`。
 
-The selected passage is appended to the note as a blockquote, with a PDF page label when available. The note's earlier content stays in place. After the save completes, open the destination note to review the appended passage.
+## 摘录写入笔记后的内容 {#what-you-should-see}
 
-## Choose the destination deliberately
+选中文字会作为块引用追加到笔记中；若 PDF 提供页码标签，引用中还会附上 `Page <页码标签>`。笔记的原有内容保持不变。保存完成后，Neo 会显示保存目标；打开目标笔记即可检查新增摘录。此操作不会自动创建新笔记，也不会自动插入指向来源 PDF 的链接。
 
-The chooser starts with the current paper's notes. Select **Browse library** to find existing notes elsewhere in the same library, or **Current item** to return to the paper's notes. To use a new destination, create a note in Zotero first.
+## 谨慎选择目标笔记 {#choose-the-destination-deliberately}
 
-The preview shows the note's parent item and body. Check it before confirming, especially when several notes have the same title.
+选择器先显示当前 PDF 所属条目下的笔记。选择 **Browse library** 可查找同一文库中其他位置的已有笔记；选择 **Current item** 可返回当前条目的笔记。不能选择其他文库中的笔记。若要把摘录放进一条新笔记，请先在 Zotero 中创建笔记，并确保它位于同一文库且可写。
 
-## Confirm, save, and review
+预览会显示笔记的所属条目和正文。若有多条同名笔记，请在确认前核对预览。
 
-Before confirmation, `Escape` closes the chooser without writing. After confirmation, wait for the save result before retrying; closing the chooser does not cancel the save. Open the destination note to verify an append if you left Reader before the result appeared. If the destination was deleted or reparented, choose it again.
+## 确认、保存并检查结果 {#confirm-save-and-review}
 
-## Use Capture to note for literature review
+确认目标前按 `Escape` 会关闭选择器，不会写入笔记。确认后保存随即开始；关闭选择器不能取消已经开始的保存。等待 Neo 显示保存结果后再进行下一次摘录。若在结果出现前离开阅读器，可打开目标笔记检查是否已追加；目标笔记若已删除或更换所属条目，请重新选择。
 
-Keep a running note under one paper for its arguments, methods, and results. For a topic review, create a standalone note in Zotero and collect passages from several papers in the same library:
+## 用摘录整理文献阅读 {#use-capture-to-note-for-literature-review}
 
-1. Select a passage in the first PDF and choose **Capture to note**.
-2. Choose **Browse library**, find the topic note, and check its preview before confirming.
-3. Open another paper and capture its relevant passage into the same note.
-4. Open the note to compare the quotes, add your interpretation, and record questions to follow up. Page labels, when available, help you check each quote against its PDF.
+可以在一条论文笔记中持续收集该论文的论点、方法和结果；也可以先在 Zotero 中建立一条主题笔记，再把同一文库里多篇论文的摘录汇集到其中：
 
-Continue with [Find and edit Zotero notes](NOTE_GUIDE.md#try-it).
+1. 在第一篇论文的 PDF 中选择文字，按**捕获到笔记**。
+2. 选择 **Browse library**，找到主题笔记；确认前查看预览。
+3. 打开另一篇论文，把相关段落也捕获到同一条笔记。
+4. 打开笔记，对照摘录、补充自己的解释并记录待跟进的问题。可用页码标签时，可据此回到 PDF 核对原文。
 
-Capture to note appends to an existing Zotero note. It is different from `za` / `i` (**Add note**), which creates a PDF annotation and opens its comment editor. For selecting or refining the passage, see [Select text and annotate a PDF](SELECTION_GUIDE.md#try-it). The [Command Reference: Reader Select](COMMAND_REFERENCE.md#reader-select-and-annotation-actions) lists Selection Actions.
+后续可阅读[查找和编辑 Zotero 笔记](NOTE_GUIDE.md#try-it)。
+
+**添加批注评论**（Add note）会在 PDF 上创建批注并打开评论编辑器；**捕获到笔记**（Capture to note）则把选中文字追加到一条已有笔记。这两项操作互不替代。选择或调整文字的方法见[选择 PDF 文字并添加批注](SELECTION_GUIDE.md#try-it)。[命令参考：Reader Select](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)列出选区操作。
