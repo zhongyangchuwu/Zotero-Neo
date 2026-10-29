@@ -2,49 +2,44 @@
 layout: home
 hero:
   name: Zotero Neo
-  text: 在 Zotero 中阅读与整理。
-  tagline: 通过键盘操作文献库、PDF 和笔记。
+  text: 用键盘操作 Zotero。
+  tagline: 浏览文献、阅读 PDF、做批注和查找笔记，少在鼠标和键盘之间来回切换。
   actions:
     - theme: brand
-      text: 功能介绍
+      text: 安装 Neo
+      link: /docs/GETTING_STARTED
+    - theme: alt
+      text: 看看能做什么
       link: /docs/FEATURES
     - theme: alt
       text: 使用指南
       link: /docs/USER_GUIDE
-    - theme: alt
-      text: 安装 Neo
-      link: /docs/GETTING_STARTED
 features:
-  - title: 不用拖拽也能选择文本
-    details: 输入 PDF 中可见的短语，按提示选择位置，再为这段文字添加高亮。
+  - title: 用键盘选中 PDF 文字
+    details: 按 v，输入页面上看到的词句来定位文字，再调整选区、复制或高亮。
     link: /docs/SELECTION_GUIDE#try-it
-    linkText: 体验文本选择
-  - title: 边浏览边建立阅读清单
-    details: 标记论文而不受当前行限制，再通过标签和分类整理整组文献。
+    linkText: 试试文本选择
+  - title: 随手标记要看的论文
+    details: 浏览文献时按 s 记下条目，之后一起添加标签或整理到分类中。
     link: /docs/MAIN_GUIDE
-    linkText: 管理阅读清单
-  - title: 沿论文结构阅读
-    details: 在标题、图和表之间跳转，按提示跟随 PDF 链接，并返回之前的阅读位置。
+    linkText: 整理文献
+  - title: 在论文里快速跳转
+    details: 跳到标题、图表和批注；需要对照两处内容时，可以分屏阅读。
     link: /docs/READER_GUIDE
-    linkText: 查看 Reader 工作流
+    linkText: 阅读 PDF
 ---
 
-## 使用指南
+## 从哪里开始
 
-查找与整理论文、阅读与批注 PDF、查找和编辑笔记，并返回之前的工作。[使用指南](./docs/USER_GUIDE.md)按任务串联这些操作。
+第一次使用，先看[安装与入门](./docs/GETTING_STARTED.md)。安装好后，打开一篇 PDF，点击页面，试试按 `j` / `k` 滚动；在文献列表中，同样的按键用来切换条目。
 
-先[安装 Neo](./docs/GETTING_STARTED.md)，浏览[功能介绍](./docs/FEATURES.md)，或按当前任务选择指南：
+如果想按任务学习，可以从[使用指南](./docs/USER_GUIDE.md)开始。它会带你找到文献库、PDF、批注和笔记对应的操作。
 
-- [审阅与整理论文](./docs/USER_GUIDE.md#review-and-organize-papers)。
-- [在线索涉及的论文与笔记之间跳转](./docs/USER_GUIDE.md#follow-a-thread-across-papers-and-notes)。
+## 查快捷键和解决问题
 
-## 查找答案
-
-- [命令与快捷键](./docs/COMMAND_REFERENCE.md)。
-- [设置参考](./docs/SETTINGS_REFERENCE.md)。
-- [故障排查](./docs/TROUBLESHOOTING.md)。
-- [基本概念](./docs/CONCEPTS.md)。
-
-本站与 `main` 分支同步，只介绍当前源码中的功能和设置。获取对应构建并安装的方法见[安装与入门](./docs/GETTING_STARTED.md#get-main-build)。
+- [功能介绍](./docs/FEATURES.md)：Neo 可以帮你做哪些事。
+- [命令与快捷键](./docs/COMMAND_REFERENCE.md)：完整按键和适用位置。
+- [设置参考](./docs/SETTINGS_REFERENCE.md)：各项设置的含义与默认值。
+- [故障排查](./docs/TROUBLESHOOTING.md)：按键没反应、找不到命令等问题。
 
 [更新记录](./CHANGELOG.md) · [路线图](./docs/ROADMAP.md) · [GitHub](https://github.com/zhongyangchuwu/Zotero-Neo)
