@@ -47,7 +47,6 @@ const userSidebar = [
       { text: '文献库与阅读清单', link: '/docs/MAIN_GUIDE' },
       { text: '阅读与导航 PDF', link: '/docs/READER_GUIDE' },
       { text: '文本选择与批注', link: '/docs/SELECTION_GUIDE' },
-      { text: '摘录到笔记', link: '/docs/CAPTURE_GUIDE' },
       { text: '查找与编辑笔记', link: '/docs/NOTE_GUIDE' },
       { text: '标签整理', link: '/docs/TAGS' },
       { text: '搜索与导航', link: '/docs/SEARCH_GUIDE' },

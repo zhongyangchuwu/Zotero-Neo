@@ -127,7 +127,7 @@ export class BuiltinModuleRuntime {
     };
   }
 
-  /** Dependency retirement precedes consumers observing changed availability. */
+  /** Notifies observers after current host availability changes. */
   changed(): void {
     this.#revision += 1;
     this.#changed = true;
@@ -136,7 +136,6 @@ export class BuiltinModuleRuntime {
     try {
       while (this.#changed) {
         this.#changed = false;
-        for (const scope of this.#scopes) scope.retireUnavailableDependencies();
         for (const listener of [...this.#listeners]) {
           if (!this.#listeners.has(listener)) continue;
           try {
@@ -230,27 +229,13 @@ export class BuiltinModuleScope {
     return BUILTIN_MODULES.find((entry) => entry.id === id)!.hosts.includes(this.kind);
   }
 
-  #dependencies(id: BuiltinModuleId): BuiltinModuleId[] {
-    const missing = this.#runtime.blocked(id);
-    if (id !== 'capture') return missing;
-    if (this.kind === 'main') {
-      if (!this.enabled('notes')) missing.push('notes');
-    } else {
-      if (!this.enabled('reader-selection')) missing.push('reader-selection');
-      const main = this.#runtime.mainScope(this.mainOwner());
-      if (!main?.enabled('notes')) missing.push('notes');
-      if (!main?.enabled('capture')) missing.push('capture');
-    }
-    return [...new Set(missing)];
-  }
-
   state(id: BuiltinModuleId): ModuleInstanceState {
     const activation = this.#activations.get(id);
     if (!this.#runtime.applied[id])
       return { host: this.kind, status: 'disabled', dependencyIds: [], failure: null };
     if (activation?.status === 'failed')
       return { host: this.kind, status: 'failed', dependencyIds: [], failure: activation.failure };
-    const dependencyIds = this.#dependencies(id);
+    const dependencyIds = this.#runtime.blocked(id);
     return {
       host: this.kind,
       status: dependencyIds.length ? 'blocked' : (activation?.status ?? 'pending'),
@@ -269,7 +254,7 @@ export class BuiltinModuleScope {
       this.supports(id) &&
       this.#runtime.applied[id] &&
       !this.#activations.get(id)?.attempted &&
-      this.#dependencies(id).length === 0
+      this.#runtime.blocked(id).length === 0
     );
   }
 
@@ -358,23 +343,6 @@ export class BuiltinModuleScope {
     const result = Object.freeze(filtered);
     this.#bindingCache = { source: bindings, revision, filtered: result, receivers };
     return result;
-  }
-
-  retireUnavailableDependencies(): void {
-    const activation = this.#activations.get('capture');
-    if (activation?.status !== 'enabled' || this.#dependencies('capture').length === 0) return;
-    activation.status = 'blocked';
-    try {
-      this.host.release('capture');
-    } catch (error) {
-      activation.status = 'failed';
-      try {
-        activation.failure = String(error);
-      } catch {
-        activation.failure = 'Cleanup failed';
-      }
-      reportDiagnosticError(this.#runtime.logger, 'Capture dependency retirement failed', error);
-    }
   }
 
   dispose(): void {

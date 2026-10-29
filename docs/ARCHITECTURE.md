@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十二个内置模块的边界与迁移约束。静态清单、启动启用图、实际宿主依赖及 Settings 模块配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#modules)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十一个内置模块的边界与迁移约束。静态清单、启动启用图、实际宿主依赖及 Settings 模块配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#modules)，下文维护运行时所有权。
 
 ## 分层 {#layers}
 
@@ -38,7 +38,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/main/window-runtime.ts` 为一个物理 Zotero MainWindow 提供服务。`src/main/session.ts` 将宿主 runtime 与 Main、各功能状态组合；`src/main/active-surface.ts` 根据 Zotero 焦点、标签页和编辑器状态推导当前 Main、Reader 或 Note 交互。
 
-Note 是由 MainWindow 承载的独立 Surface。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份，保留输入、IME、共享焦点及 Guide；任一身份被替换时，先退休旧输入，再清理监听器。`src/modules/notes/` 按窗口拥有 Note 候选、打开编排、可选 Vim 编辑模式、寄存器及 caret UI，不取得整个 Main session。`noteEditor.enabled` 仅控制 Vim 编辑，不控制 Note 查找或 Capture 目的地；Note 内容仍以 Zotero 为准。
+Note 是由 MainWindow 承载的独立 Surface。`src/main/note-editor.ts` 通过 editor Window、Document 和 Note 条目 ID 识别附着身份，保留输入、IME、共享焦点及 Guide；任一身份被替换时，先退休旧输入，再清理监听器。`src/modules/notes/` 按窗口拥有 Note 候选、打开编排、可选 Vim 编辑模式、寄存器及 caret UI，不取得整个 Main session。`noteEditor.enabled` 仅控制 Vim 编辑，不控制 Note 查找；Note 内容仍以 Zotero 为准。
 
 Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note iframe 发现编辑器。打开 Picker 后普通焦点转移不改绑到隐藏的 Library Note 编辑器；旧事件、计时器及 Palette 回调仍受精确身份保护。
 
@@ -54,7 +54,6 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `BuiltinModuleRuntime` 分开保存当前已应用图与重新读取的偏好请求。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存不可变布尔图的 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，真正重启 Zotero 后才应用新请求。Settings 显示当前窗口相关实例、依赖、失败与待重启状态，恢复默认只清除模块请求。
 
-Capture 的静态依赖为 Notes 与 Reader Selection；Main 的激活不要求先存在 Reader，只要求本窗口 Notes 可用。Reader Capture 等待自身 Selection 和实际关联 Main 的 Notes/Capture 就绪，依赖退休时先移除旧贡献再通知观察者。一个宿主失败不污染其他窗口或 Reader。
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
@@ -84,7 +83,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。
 
-`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。公共选择 API 门面和类型不变，选择模块退休后返回 `null`、不执行旧回调。Capture 与批注相关选择动作由组合根具名注入；可选 PDFTranslate 接口保持原义，选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
+`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。公共选择 API 门面和类型不变，选择模块退休后返回 `null`、不执行旧回调。批注相关选择动作由组合根具名注入；可选 PDFTranslate 接口保持原义，选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
 
 `src/modules/reader-annotations/` 按 ReaderSession 拥有创建、删除、改色、颜色过滤、批注文本/评论复制及评论保存。CurrentTarget 的原生优先与最后目标后备留在 Surface；模块自己的过滤后备通过具名端口供导航读取，不把批注写入下沉到选择模块。创建仍要求完整 PDF 几何，删除仍由所属窗口确认并调用明确 Operation。
 

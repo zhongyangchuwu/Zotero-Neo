@@ -35,7 +35,6 @@ Neo 面向最新稳定 Zotero，具体包允许安装的版本范围由它的 ma
 - [文献库与阅读清单](MAIN_GUIDE.md#try-it)：浏览、打开和整理条目。
 - [阅读与导航 PDF](READER_GUIDE.md#try-it)：滚动、结构导航与分屏。
 - [文本选择与批注](SELECTION_GUIDE.md#try-it)：选中文字、调整范围和添加批注。
-- [摘录到笔记](CAPTURE_GUIDE.md#try-it)：把段落追加到已有 Note。
 - [查找与编辑笔记](NOTE_GUIDE.md#try-it)：选择笔记并继续写作。
 - [标签整理](TAGS.md)与[搜索与导航](SEARCH_GUIDE.md)：组织条目和返回之前的位置。
 - [快捷键与设置](SETTINGS_GUIDE.md)：调整 Neo 的外观与操作方式。

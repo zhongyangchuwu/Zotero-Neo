@@ -8,7 +8,6 @@ import type {
 import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
 import { createLibraryModule } from '../../src/modules/library';
 import { createNotesModule } from '../../src/modules/notes';
-import { createCaptureModule } from '../../src/modules/capture';
 import { createTagModule } from '../../src/modules/tags';
 import { createCollectionsModule } from '../../src/modules/collections';
 import { createExtensionsModule } from '../../src/modules/extensions';
@@ -60,7 +59,6 @@ const noopReaderMainOperations: ReaderMainOperations = {
   openReaderTagPicker: () => {},
   openReaderCollectionPicker: () => {},
   openCommandPalette: () => {},
-  captureReaderSelectionToNote: async () => null,
 };
 
 beforeEach(() => {
@@ -685,8 +683,6 @@ function createHistorySession(
   bindings: BindingMap = DEFAULT_BINDINGS,
   openCommandPalette: ReaderMainOperations['openCommandPalette'] = () => {},
   preferenceValues: Readonly<Record<string, boolean | number | string>> = {},
-  captureReaderSelectionToNote: ReaderMainOperations['captureReaderSelectionToNote'] = async () =>
-    null,
   openReaderTagPicker: ReaderMainOperations['openReaderTagPicker'] = () => {},
   openReaderCollectionPicker: ReaderMainOperations['openReaderCollectionPicker'] = () => {},
   start = true,
@@ -861,15 +857,6 @@ function createHistorySession(
       selectNote: unavailable,
     }),
   );
-  mainScope.activate('capture', () =>
-    createCaptureModule(mainScope.host, {
-      window: ownerWindow,
-      logger,
-      pickerBusy: () => false,
-      status: () => {},
-      choose: () => null,
-    }),
-  );
   mainScope.activate('tags', () =>
     createTagModule(mainScope.host, {
       logger,
@@ -923,7 +910,6 @@ function createHistorySession(
       openReaderTagPicker,
       openReaderCollectionPicker,
       openCommandPalette,
-      captureReaderSelectionToNote,
     },
   });
   const session = new ReaderSession({
@@ -968,17 +954,7 @@ function createHistorySession(
 }
 
 function createUnstartedHistorySession(...args: Parameters<typeof createHistorySession>) {
-  return createHistorySession(
-    args[0],
-    args[1],
-    args[2],
-    args[3],
-    args[4],
-    args[5],
-    args[6],
-    args[7],
-    false,
-  );
+  return createHistorySession(args[0], args[1], args[2], args[3], args[4], args[5], args[6], false);
 }
 
 function configureAnnotationPersistence(
@@ -2310,7 +2286,6 @@ describe('Reader module configuration', () => {
         'reader-annotations',
         'reader-hints',
         'workspace',
-        'capture',
       ].map((id) => [`modules.${id}.enabled`, false]),
     );
     const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, disabled);
@@ -2371,74 +2346,6 @@ describe('Reader module configuration', () => {
     expect(annotation.session.state.selectionParams?.annotation.text).toBe('text');
     expect(annotation.session.selectionContext()).toBeNull();
     annotation.session.dispose();
-  });
-  it('activates Reader Capture only when its actual Main owner becomes ready', () => {
-    const created = createHistorySession();
-    created.session.dispose();
-    created.mainScope.dispose();
-    const session = new ReaderSession({
-      controller: created.controller,
-      reader: created.reader,
-      firstPdfWindow: created.pdfWindow,
-      bindings: () => DEFAULT_BINDINGS,
-      release: () => {},
-      jumpHost: new ReaderJumpHostAdapter(),
-    } as unknown as ConstructorParameters<typeof ReaderSession>[0]);
-    const captureState = () =>
-      created.modules
-        .inspect(created.ownerWindow)
-        .find((row) => row.id === 'capture')!
-        .instances.find((instance) => instance.host === 'reader');
-    expect(captureState()?.status).toBe('blocked');
-    const logger = { debug: () => {}, diagnostic: () => {} };
-    const unrelated = created.modules.createScope('main', {}, () => true);
-    unrelated.activate('notes', () =>
-      createNotesModule(unrelated.host, {
-        window: created.ownerWindow,
-        logger,
-        status: () => {},
-        choose: () => null,
-        selectNote: () => {
-          throw new Error('Unexpected Main fixture operation');
-        },
-      }),
-    );
-    unrelated.activate('capture', () =>
-      createCaptureModule(unrelated.host, {
-        window: created.ownerWindow,
-        logger,
-        pickerBusy: () => false,
-        status: () => {},
-        choose: () => null,
-      }),
-    );
-    expect(captureState()?.status).toBe('blocked');
-    const main = created.modules.createScope('main', created.ownerWindow, () => true);
-    main.activate('notes', () =>
-      createNotesModule(main.host, {
-        window: created.ownerWindow,
-        logger,
-        status: () => {},
-        choose: () => null,
-        selectNote: () => {
-          throw new Error('Unexpected Main fixture operation');
-        },
-      }),
-    );
-    main.activate('capture', () =>
-      createCaptureModule(main.host, {
-        window: created.ownerWindow,
-        logger,
-        pickerBusy: () => false,
-        status: () => {},
-        choose: () => null,
-      }),
-    );
-    expect(captureState()?.status).toBe('enabled');
-    main.dispose();
-    expect(captureState()?.status).toBe('blocked');
-    session.dispose();
-    unrelated.dispose();
   });
 });
 
@@ -3200,15 +3107,7 @@ describe('Reader item-tag operation', () => {
     } as Zotero.Item;
     vi.stubGlobal('Zotero', { Items: { get: (id: number) => (id === item.id ? item : false) } });
     const openTag = vi.fn<ReaderMainOperations['openReaderTagPicker']>();
-    const created = createHistorySession(
-      {},
-      {},
-      DEFAULT_BINDINGS,
-      () => {},
-      {},
-      async () => null,
-      openTag,
-    );
+    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {}, openTag);
     Reflect.set(created.reader, 'itemID', item.id);
 
     for (const key of [' ', 't', 'a', ' ', 't', 'r'])
@@ -3232,7 +3131,6 @@ describe('Reader collection membership operation', () => {
       DEFAULT_BINDINGS,
       () => {},
       {},
-      async () => null,
       () => {},
       openCollection,
     );

@@ -33,7 +33,6 @@ export type BuiltinModuleId =
   | 'reader-annotations'
   | 'reader-hints'
   | 'notes'
-  | 'capture'
   | 'workspace'
   | 'extensions';
 export type ModuleHostKind = 'main' | 'reader';
@@ -183,7 +182,7 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     hosts: ['reader'],
     scopes: ['Reader session', 'Reader view', 'Selection action'],
     requires: [],
-    optional: ['reader-annotations', 'capture'],
+    optional: ['reader-annotations'],
     contributions: [
       { host: 'reader', context: 'reader-normal', actions: READER_SELECTION_NORMAL_ACTIONS },
       { host: 'reader', context: 'reader-select', actions: READER_SELECTION_SELECT_ACTIONS },
@@ -235,17 +234,6 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ],
     selectionActions: [],
     ui: ['Note editor', 'Note picker'],
-  },
-  {
-    id: 'capture',
-    names: { en: 'Capture', 'zh-CN': '摘录' },
-    hosts: ['main', 'reader'],
-    scopes: ['Main window', 'Reader session', 'Capture chooser'],
-    requires: ['notes', 'reader-selection'],
-    optional: [],
-    contributions: [],
-    selectionActions: ['neo.capture-note'],
-    ui: ['Capture chooser'],
   },
   {
     id: 'workspace',

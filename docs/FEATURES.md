@@ -1,6 +1,6 @@
 # 功能介绍 {#features}
 
-用键盘在 Zotero 中查找论文、选择 PDF 文字、把段落追加到已有笔记，并整理正在阅读的一组文献。以下功能使用默认配置；不需要的能力可以在[模块设置](SETTINGS_GUIDE.md#modules)中停用。
+用键盘在 Zotero 中查找论文、选择 PDF 文字并添加批注，整理正在阅读的一组文献。以下功能使用默认配置；不需要的能力可以在[模块设置](SETTINGS_GUIDE.md#modules)中停用。
 
 ## 输入眼前的文字来选择 PDF 段落 {#select-pdf-text-by-typing-what-you-see}
 
@@ -10,13 +10,6 @@
 
 [开始选择文字](SELECTION_GUIDE.md#try-it) · [文本选择与批注指南](SELECTION_GUIDE.md)
 
-## 将摘录收集到正在写的笔记 {#keep-excerpts-in-the-note-you-are-writing}
-
-选中一段 PDF 文字后，选择**捕获到笔记**。在选择器中查看已有笔记的标题、所属条目和正文，确认后把引用追加到原有内容之后。初始范围是当前论文的笔记，也可以显式浏览同文库的其他笔记。
-
-你可以为一篇论文维护持续更新的阅读笔记，也可以把不同论文的段落汇总到一条已有主题笔记。它与“添加批注评论”不同：前者写入已有 Zotero 笔记，后者在 PDF 中创建批注。
-
-[将段落摘录到笔记](CAPTURE_GUIDE.md#try-it) · [阅读并持续记录笔记](USER_GUIDE.md#read-a-paper-and-keep-a-running-note)
 
 ## 边浏览边建立阅读清单 {#build-a-reading-list-while-you-browse}
 

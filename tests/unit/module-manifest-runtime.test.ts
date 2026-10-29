@@ -1,19 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MainWindow } from '../../src/core/contracts';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
 import type { PreferenceReader } from '../../src/core/preferences';
 import { validateBuiltinModules, type BuiltinModuleDescriptor } from '../../src/modules';
-import { createCaptureModule } from '../../src/modules/capture';
-import {
-  createReaderCaptureModule,
-  type ReaderCaptureModule,
-} from '../../src/modules/capture/reader';
-import { createNotesModule } from '../../src/modules/notes';
-import {
-  createReaderSelectionModule,
-  type ReaderSelectionModulePorts,
-} from '../../src/modules/reader-selection';
-import type { ReaderRuntime } from '../../src/reader/types';
 
 function setup(initial: Record<string, boolean> = {}) {
   const values = new Map(Object.entries(initial));
@@ -45,7 +33,7 @@ describe('static module ownership', () => {
   it('rejects duplicate modules, missing hard and optional references, cycles and exact-context conflicts', () => {
     const library = descriptor('library');
     expect(() => validateBuiltinModules([library, library])).toThrow(/duplicate/i);
-    expect(() => validateBuiltinModules([descriptor('capture', ['notes'])])).toThrow(/missing/i);
+    expect(() => validateBuiltinModules([descriptor('library', ['notes'])])).toThrow(/missing/i);
     expect(() => validateBuiltinModules([{ ...library, optional: ['notes'] }])).toThrow(/missing/i);
     expect(() =>
       validateBuiltinModules([descriptor('library', ['notes']), descriptor('notes', ['library'])]),
@@ -71,14 +59,12 @@ describe('static module ownership', () => {
 });
 
 describe('module runtime lifecycle', () => {
-  it('never calls disabled or blocked factories and freezes applied flags', () => {
+  it('does not call disabled factories and freezes applied flags', () => {
     const { runtime, values } = setup({ [modulePreferenceKey('notes')]: false });
     const main = runtime.createScope('main', {}, () => true);
     const factory = vi.fn();
     expect(main.activate('notes', factory)).toBeNull();
-    expect(main.activate('capture', factory)).toBeNull();
     expect(factory).not.toHaveBeenCalled();
-    expect(runtime.blocked('capture')).toContain('notes');
     values.set(modulePreferenceKey('notes'), true);
     expect(runtime.requested().notes).toBe(true);
     expect(runtime.applied.notes).toBe(false);
@@ -146,88 +132,5 @@ describe('module runtime lifecycle', () => {
     expect(reader.available('reader-normal', 'findAllItems')).toBe(false);
     reader.dispose();
     other.dispose();
-  });
-
-  it('waits for the actual Main dependencies before activating real Reader capture and retires it with Main', async () => {
-    const { runtime, logger } = setup();
-    const owner = {};
-    const reader = runtime.createScope(
-      'reader',
-      {},
-      () => true,
-      () => owner,
-    );
-    const selectionPorts: ReaderSelectionModulePorts = {
-      reader: {} as ReaderRuntime,
-      activeWindow: () => null,
-      isViewCurrent: () => true,
-      capturePresentation: () => () => true,
-      captureView: () => () => true,
-      mode: () => 'normal',
-      setMode: () => {},
-      enabled: () => true,
-      invalidateNativeSelection: () => {},
-      noteOwner: () => {},
-      clearOwner: () => {},
-      updateIndicator: () => {},
-      scrollContainer: () => ({}) as HTMLElement,
-      scrollBy: () => {},
-      copyText: () => {},
-      themeRoot: () => () => {},
-      language: () => 'en',
-      pluginID: () => null,
-      contributedActions: () => [],
-      registeredActions: () => [],
-      showStatus: () => {},
-      debug: () => {},
-    };
-    expect(
-      reader.activate('reader-selection', () =>
-        createReaderSelectionModule(reader.host, selectionPorts),
-      ),
-    ).not.toBeNull();
-    const invokeCapture = vi.fn(async () => ({ noteID: 1, noteTitle: 'Note' }));
-    const create = vi.fn(() => createReaderCaptureModule(reader.host, invokeCapture));
-    let capture: ReaderCaptureModule | null = null;
-    const unsubscribe = runtime.subscribe(() => {
-      if (reader.canActivate('capture')) capture = reader.activate('capture', create);
-    });
-    expect(reader.activate('capture', create)).toBeNull();
-    expect(create).not.toHaveBeenCalled();
-    const main = runtime.createScope('main', owner, () => true);
-    expect(
-      main.activate('notes', () =>
-        createNotesModule(main.host, {
-          window: {} as MainWindow,
-          logger,
-          status: () => {},
-          choose: () => null,
-          selectNote: async () => ({ kind: 'unavailable', recorded: false }),
-        }),
-      ),
-    ).not.toBeNull();
-    expect(create).not.toHaveBeenCalled();
-    expect(
-      main.activate('capture', () =>
-        createCaptureModule(main.host, {
-          window: {} as MainWindow,
-          logger,
-          pickerBusy: () => false,
-          status: () => {},
-          choose: () => null,
-        }),
-      ),
-    ).not.toBeNull();
-    expect(create).toHaveBeenCalledOnce();
-    const action = capture!.selectionAction('en');
-    const selected = { text: 'text', itemID: 42, pageLabel: null, position: null };
-    expect(action.isAvailable?.(selected)).toBe(true);
-    main.dispose();
-    expect(reader.state('capture').status).toBe('blocked');
-    expect(action.isAvailable?.(selected)).toBe(false);
-    expect(await action.run(selected)).toEqual({ retired: true });
-    expect(invokeCapture).not.toHaveBeenCalled();
-    unsubscribe();
-    reader.dispose();
   });
 });

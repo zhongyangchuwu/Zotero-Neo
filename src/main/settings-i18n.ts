@@ -43,7 +43,6 @@ const SCOPE_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
   'Hint overlay': 'Hint overlay',
   'Note editor': 'Note editor',
   'Note picker': 'Note picker',
-  'Capture chooser': 'Capture chooser',
   'Tab picker': 'Tab picker',
   'Plugin manager': 'Plugin manager',
 };

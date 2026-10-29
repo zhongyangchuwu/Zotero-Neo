@@ -19,10 +19,6 @@ features:
     details: 输入 PDF 中可见的短语，按提示选择位置，再为这段文字添加高亮。
     link: /docs/SELECTION_GUIDE#try-it
     linkText: 体验文本选择
-  - title: 将摘录收集到笔记
-    details: 预览已有笔记，将选中的段落追加到原有内容之后。
-    link: /docs/CAPTURE_GUIDE#try-it
-    linkText: 体验摘录到笔记
   - title: 边浏览边建立阅读清单
     details: 标记论文而不受当前行限制，再通过标签和分类整理整组文献。
     link: /docs/MAIN_GUIDE
@@ -35,11 +31,10 @@ features:
 
 ## 使用指南
 
-查找与整理论文、阅读与批注 PDF、将段落收集到笔记，并返回之前的工作。[使用指南](./docs/USER_GUIDE.md)按任务串联这些操作。
+查找与整理论文、阅读与批注 PDF、查找和编辑笔记，并返回之前的工作。[使用指南](./docs/USER_GUIDE.md)按任务串联这些操作。
 
 先[安装 Neo](./docs/GETTING_STARTED.md)，浏览[功能介绍](./docs/FEATURES.md)，或按当前任务选择指南：
 
-- [阅读论文并持续记录笔记](./docs/USER_GUIDE.md#read-a-paper-and-keep-a-running-note)。
 - [审阅与整理论文](./docs/USER_GUIDE.md#review-and-organize-papers)。
 - [在线索涉及的论文与笔记之间跳转](./docs/USER_GUIDE.md#follow-a-thread-across-papers-and-notes)。
 
