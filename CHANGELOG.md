@@ -19,6 +19,7 @@
 
 ### 调整 {#changed}
 
+- 用户总览、功能与日常工作流指南、命令参考及输入法说明统一为中文，保留原 URL、标题锚点和技术标识。补齐模块状态排错，明确公开发行版与当前开发构建的区别；使用说明与项目验收协议分开维护。
 - 按静态清单、精确上下文及实际宿主实例过滤模块能力，在按键匹配、count/前缀、Guide 与 Palette 前排除不可用贡献，保留动作元数据和用户绑定。Capture 等待实际 Notes/Selection 依赖，不要求 Main 启动时先有 Reader；停用 Worksets 后标签/分类仍使用当前目标。Reader Select、原生批注、hints 与 Workspace 按独立能力退化，旧行为开关保持原义。
 - 将标签页候选、切换/循环/关闭、Reader/Note 的 Show in Library 与 Reader 分屏/方向焦点接入 `workspace`。Picker 取得显式标签页来源，Surface 传入自己的目标；普通按键与 Palette 共用真实实现，方向焦点实际成功才消费按键。唯一历史、原生标签页重扫、NativeInput 及 Main/Note 通用面板焦点仍由基座负责，不依赖 Library 或 Reader 导航模块；不新增动作或绑定。
 - 将批注创建、删除、改色、过滤、复制及评论编辑接入 `reader-annotations`。Select 下划线与 Add note 使用模块的具名贡献；Surface 保留 CurrentTarget、NativeInput、`i` 和 `zb` 的混合路由。评论交互绑定精确视图与 Document，部分获取和重入退出释放自有资源；已接纳保存继续完成，但旧状态和焦点不复活。不新增动作、绑定或运行时依赖。

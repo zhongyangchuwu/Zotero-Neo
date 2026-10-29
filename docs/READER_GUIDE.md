@@ -1,87 +1,89 @@
-# Read and navigate a PDF
+# 阅读和导航 PDF {#read-and-navigate-a-pdf}
 
-Open an attachment in Zotero's Reader and click the PDF page before using Reader commands. That puts keyboard focus on the document instead of a search box, comment editor, or sidebar.
+在 Zotero 阅读器中打开 PDF 后，先点击页面，再使用阅读器命令。这样键盘焦点会留在文档上，而不是搜索框、批注评论编辑器或侧栏。阅读导航由“阅读导航”模块提供，复制和跟随提示由“阅读提示”模块提供；模块配置见[设置 → 模块](SETTINGS_GUIDE.md#modules)。
 
-## Try it
+## 开始分屏阅读 {#try-it}
 
-1. Open a PDF in Reader and click its page area.
-2. Press and release `Space`, then `-` to split the Reader horizontally into top and bottom panes.
-3. Click the top pane and press `Ctrl+j` to focus the bottom pane. Use `j` / `k` to move that view; click the bottom pane and press `Ctrl+k` to return focus to the top, then move it separately.
+1. 在阅读器中打开 PDF，点击页面区域。
+2. 按下并松开 `Space`，再按 `-`，将阅读器横向分成上下两个窗格。
+3. 点击上方窗格，按 `Ctrl+j` 将焦点移到下方窗格，再用 `j` / `k` 移动下方视图。点击下方窗格后按 `Ctrl+k` 回到上方窗格，分别移动两处内容。
 
-## What you should see
+## 分屏后的阅读位置 {#what-you-should-see}
 
-Both panes show the PDF at separate reading positions. `Ctrl+j` / `Ctrl+k` changes which pane receives Reader commands; moving one view does not move the other.
+两个窗格显示同一 PDF 的不同阅读位置。`Ctrl+j` / `Ctrl+k` 改变接收阅读器命令的窗格；移动其中一个视图不会带动另一个。
 
-## Move through a paper
+## 在论文中移动 {#move-through-a-paper}
 
-Use `j` / `k` to scroll and `h` / `l` to turn to the previous or next PDF page. `Ctrl+d` / `Ctrl+u` move by half a view; `Ctrl+f` / `Ctrl+b` move by a full view. Counts repeat supported steps, so `3j` scrolls three configured steps and `3l` repeats the next-page action.
+用 `j` / `k` 滚动，用 `h` / `l` 翻到上一页或下一页。`Ctrl+d` / `Ctrl+u` 每次移动半个视图，`Ctrl+f` / `Ctrl+b` 每次移动一个完整视图。计数会重复对应动作：例如 `3j` 按当前滚动步长移动三次，`3l` 连续翻到后续页面。
 
-Use `gg` to go to the document's first-page start and uncounted `G` to move to the bottom. A positive count with `gg` or `G` targets that one-based page when Zotero supports direct page navigation—for example, `5G` targets page 5. If direct page navigation is unavailable, these commands scroll to the top or bottom instead.
+按 `gg` 回到第一页的开头，不带计数的 `G` 滚到文档底部。若 Zotero 支持直接跳页，`gg` 或 `G` 前加正整数会跳到从 1 开始计数的页码，例如 `5G` 跳到第 5 页；不支持直接跳页时，则分别滚到顶部或底部。
 
-Adjust the view with `+` / `zI` to zoom in and `-` / `zO` to zoom out. Press `=` / `z0` to reset to fit page width. Scrolling and zooming change the view, not Reader's shared Back/Forward history.
+按 `+` / `zI` 放大，按 `-` / `zO` 缩小；按 `=` / `z0` 恢复到适合页面宽度。滚动和缩放只改变视图，不会改变阅读器共享的后退/前进历史。
 
-For a wide figure or table, zoom in and use `zh` / `zl` to pan left or right without changing zoom. Choose Step, Constant, or Accelerating scrolling in [Settings](SETTINGS_GUIDE.md) to match the way you move through dense text or large pages.
+查看宽图或表格时，可先放大，再用 `zh` / `zl` 左右平移而不改变缩放比例。在[阅读器设置](SETTINGS_GUIDE.md#tune-reader-controls)中选择步进、恒速或加速滚动，以适应密集正文或大页面。
 
-## Find a passage and inspect document structure
+## 查找段落和查看文档结构 {#find-a-passage-and-inspect-document-structure}
 
-Press `/` to open Zotero's PDF search, enter a phrase, then use `n` / `N` for the next or previous result. `Escape` clears or closes the search. For a paper's structure, open or focus the native Outline with `<Space>ro`; use Zotero's Outline rows to browse its headings. `j` / `k` move through a focused Reader panel, and `Escape` leaves its local interaction. Repeating a panel-focus command keeps that panel focused rather than closing it.
+按 `/` 打开 Zotero 的 PDF 查找，输入短语后用 `n` / `N` 跳到下一个或上一个结果。`Escape` 清除或关闭查找。要浏览论文结构，按 `<Space>ro` 打开或聚焦 Zotero 原生的大纲（Outline）侧栏，再用其中的条目浏览标题。聚焦阅读器侧栏时，`j` / `k` 移动条目，`Escape` 退出该侧栏的局部交互；再次按侧栏聚焦命令会保持焦点，不会关闭侧栏。
 
-Use `[s` / `]s` for the previous or next heading, `[f` / `]f` for a figure, and `[t` / `]t` for a table. Headings come from the PDF Outline; figure and table navigation uses available document structure and captions. The first request can take time while Zotero analyses the document. If the PDF has no usable structural targets, use page navigation or text search.
+用 `[s` / `]s` 跳到上一个或下一个标题，用 `[f` / `]f` 跳到上一幅或下一幅图，用 `[t` / `]t` 跳到上一张或下一张表。标题来自 PDF 大纲；图表导航使用文档中可用的结构信息和图注。Zotero 首次分析文档时，第一次查找可能需要等待。如果 PDF 没有可用的结构目标，可改用页码导航或文本查找。
 
-Other native Reader panels are available with `<Space>rm` for Bookmarks, `<Space>ra` for Annotations, and `<Space>rt` for Thumbnails. Each command opens or focuses its panel; use `j` / `k` to move among panel rows.
+按 `<Space>rm`、`<Space>ra` 或 `<Space>rt` 打开或聚焦 Zotero 原生的书签（Bookmarks）、批注（Annotations）或缩略图（Thumbnails）侧栏。各侧栏中的原生标签名称可能随 Zotero 界面语言而异；聚焦侧栏后用 `j` / `k` 移动条目。
 
-## Copy or follow visible targets
+## 复制或跟随可见目标 {#copy-or-follow-visible-targets}
 
-In Reader Normal, use `y` to copy a visible target or `f` to follow a link. Neither action requires a text selection or a selected annotation. If a text selection has put Reader in Select, press Escape to return to Normal first; Select `y` continues to copy that selection.
+在阅读器 Normal 模式中，按 `y` 复制可见目标，按 `f` 跟随链接。这两种操作都不要求先选择文字或选中批注。若文字选区已使阅读器进入 Select，先按 `Escape` 回到 Normal；在 Select 中按 `y` 仍会复制选中文字。
 
-1. Click the PDF pane you want to use, keeping the target visible, then press `y` or `f`.
-2. Read the letter sequence beside the target. For example, `A Excerpt` and `S Comment` beside one highlight are two separate choices. Type only the letters, in either case—not the caption. Letters are assigned for each invocation and may be longer on a crowded page.
-3. Confirmation acts immediately and closes the hints; no Enter is needed. Even a single target needs confirmation. Escape cancels without copying or opening anything.
+1. 点击要操作的 PDF 窗格并保持目标可见，再按 `y` 或 `f`。
+2. 查看目标旁的字母提示。例如，高亮旁可能同时显示 `A 摘录`（`Excerpt`）和 `S 评论`（`Comment`），它们是两个不同目标。只输入对应字母（大小写均可），不要输入说明文字。每次操作都会重新分配字母；页面拥挤时，提示可能由多个字母组成。
+3. 输入完整字母后立即执行并关闭提示，不需要按 Enter。即使只有一个目标也必须确认。按 `Escape` 取消，不会复制内容或打开链接。
 
-For copy hints, the caption identifies the payload:
+复制提示的说明文字表示复制内容：
 
-| Target caption | Copied value |
+| 目标提示 | 复制内容 |
 | --- | --- |
-| `Excerpt` | The annotation's excerpt text. |
-| `Comment` | The annotation's comment, without first opening its editor. |
-| `DOI` / `arXiv` | The bare identifier; arXiv versions such as `v2` are retained. |
-| `URL` | The full HTTP(S) URL. |
-| `Link` | A native external-link destination that is not recognized as an identifier or HTTP(S) URL. |
+| `摘录`（`Excerpt`） | 批注引用的摘录文字。 |
+| `评论`（`Comment`） | 批注评论；无需先打开评论编辑器。 |
+| `DOI` / `arXiv` | 纯标识符；arXiv 的 `v2` 等版本号会保留。 |
+| `网址`（`URL`） | 完整的 HTTP(S) URL。 |
+| `链接`（`Link`） | 未被识别为标识符或 HTTP(S) URL 的 Zotero 原生外部链接目标。 |
 
-An annotation with both an excerpt and a comment gets adjacent labels in one group; an empty role is omitted. A DOI in an excerpt remains a separate target, so you can copy either the whole excerpt or just the DOI. Neo does not combine excerpt and comment text.
+同一批注同时有摘录和评论时，它们会以相邻提示分组显示；某一项为空时会省略该项。摘录中的 DOI 仍是独立目标，因此可以复制整段摘录，也可以只复制 DOI。Neo 不会把摘录和评论合并。
 
-The prompt distinguishes copying from following. Backspace edits the typed label prefix; an invalid prefix resets it without acting. Repeated letter-key events cannot confirm a target. Clicking or changing focus retires Neo's hints while native clicks and text controls retain their normal behavior. Text input and IME keep ownership in editors.
+提示会区分复制和跟随。按 Backspace 可修改已输入的字母前缀；无效前缀会重置，不会触发操作。按键自动重复不会确认目标。点击页面或改变焦点会使 Neo 提示失效，但原生点击和文本控件仍按原有方式工作；文本输入和输入法组合输入继续由编辑器接收。
 
-Following a bare DOI or arXiv identifier opens its resolver URL. An existing HTTP(S) URL keeps its path, query, fragment, and letter case; native PDF links retain Zotero's internal, citation, or external-link behavior. `f` does not include ordinary annotation excerpts or comments, and neither action adds an item to the Library.
+跟随纯 DOI 或 arXiv 标识符时会打开对应的解析器 URL。已有 HTTP(S) URL 会保留其路径、查询参数、片段和字母大小写；PDF 原生链接仍由 Zotero 按内部链接、引文或外部链接的原有方式处理。`f` 不会跟随普通批注摘录或评论；复制和跟随都不会向文库添加条目。
 
-### Visibility and recovery
+### 可见范围与恢复方法 {#visibility-and-recovery}
 
-- Candidates belong to the active PDF view, including in split or standalone Reader. Annotation candidates respect Zotero's visibility and filter state and need a visible anchor; their comment editor can remain closed.
-- Only supported rectangle-based annotation geometry is used. Ink and rotated free-text anchors are omitted rather than guessed. Text matching uses visible same-line PDF text; it does not guess ambiguous cross-line joins or use OCR. A scanned PDF can still offer native links or positioned annotations even when it has no text matches.
-- Hidden containing PDF frames are not targets, including the base PDF retained by Zotero's Reading Mode. Hiding a view after hints open also invalidates its copy/follow confirmations; Neo does not discover targets from Reading Mode's replacement content.
-- Changed annotation content, position, filter, or view invalidates its old labels. If a target disappears, reopen hints rather than trying to confirm its old label. No candidate or cancellation leaves the clipboard unchanged.
-- If a very small or crowded pane cannot fit the labels safely, the whole hint interaction is cancelled. Enlarge the pane or zoom in to reduce visible targets, then reopen hints.
+- 候选目标只来自当前活动 PDF 视图，包括分屏或独立阅读器。批注候选遵循 Zotero 当前的可见性和筛选状态，并且必须有可见锚点；评论编辑器可以保持关闭。
+- 只使用受支持的矩形批注几何位置；墨迹和旋转的自由文本锚点会被省略，不会猜测位置。文本匹配只查找 PDF 当前可见的同一行文字，不猜测有歧义的跨行拼接，也不使用 OCR。扫描版 PDF 即使没有文本匹配，仍可能提供原生链接或带位置的批注。
+- 隐藏的 PDF 外层框架不是目标，包括 Zotero 阅读模式（Reading Mode）保留的基础 PDF。提示打开后若隐藏视图，复制/跟随确认也会失效；Neo 不会从阅读模式的替换内容中寻找目标。
+- 批注内容、位置、筛选条件或视图变化后，旧提示会失效。若目标消失，请重新打开提示，不要再确认旧字母。没有候选目标或取消操作时，剪贴板保持不变。
+- 窗格过小或目标过于密集、无法安全放置提示时，整个提示操作会取消。放大窗格，或放大页面以减少可见目标，然后重新打开提示。
 
-Normal `Y` still directly copies the current annotation's comment. The direct excerpt action `yankAnnotation` is available in the Command Palette without a default key. Custom bindings—including an explicitly unbound `y`—take precedence over the new default; inspect Settings → Keybindings if your keys behave differently.
+Normal 模式下，`Y` 仍会直接复制当前批注的评论。在命令面板搜索**复制批注高亮文本**（`yankAnnotation`），可直接复制当前批注的摘录；此操作没有默认快捷键。自定义绑定（包括显式解除 `y` 绑定）优先于默认按键；若按键行为不同，请查看设置中的**快捷键**。
 
-## Add a referenced paper
+## 通过标识符添加论文 {#add-a-referenced-paper}
 
-To add a referenced paper by DOI or another identifier, press `<Space>ai` in Reader Normal or choose **Add Item by Identifier** in its Command Palette. Neo brings the associated Library window forward, keeps its current collection scope, and focuses Zotero's native entry. See [Add items by identifier](MAIN_GUIDE.md#add-items-by-identifier) for batch input, submission keys, and writable-library requirements.
+在阅读器 Normal 模式中按 `<Space>ai`，或从命令面板选择**通过标识符添加条目**。此操作打开 Zotero 原生的标识符录入界面，由 Zotero 负责查找并添加条目；Neo 不会直接从当前 PDF 导入条目，也不会自动读取剪贴板或替你提交查询。
 
-## Compare two places in split Reader
+在与主窗口关联的阅读器中，Neo 会将对应的文库窗口带到前台，并保留该窗口当前的分类范围。独立阅读器只使用打开它的实际主窗口，不借用其他主窗口；该窗口已关闭或不可用时，不提供此操作。批量输入、提交按键和可写文库要求见[通过标识符添加条目](MAIN_GUIDE.md#add-items-by-identifier)。
 
-Press `Space`, then `-` for a horizontal split or `Space`, then `|` for a vertical split. Each pane can show a different PDF position. Use `Ctrl+h` / `Ctrl+l` to focus the nearest pane to the left or right, and `Ctrl+j` / `Ctrl+k` for down or up. Then navigate the focused view independently. Focus commands move to an existing supported pane; use the split command to create the comparison layout.
+## 在分屏阅读器中对照两处内容 {#compare-two-places-in-split-reader}
 
-Back/Forward restores available PDF positions while leaving the current zoom and split layout unchanged.
+按 `Space` 后按 `-` 可水平分屏，按 `Space` 后按 `|` 可垂直分屏；每个窗格都能显示 PDF 的不同位置。用 `Ctrl+h` / `Ctrl+l` 聚焦左侧或右侧相邻窗格，用 `Ctrl+j` / `Ctrl+k` 聚焦下方或上方窗格，然后分别移动当前视图。聚焦命令只能切换到已存在且受支持的窗格；要创建对照布局，请使用分屏命令。
 
-## Mark a place and return to it
+后退/前进会恢复可用的 PDF 阅读位置，但保持当前缩放比例和分屏布局不变。
 
-Set a Reader mark with `m` followed by a lowercase letter or digit; press backtick followed by that label to return. `[m` / `]m` visits marks in document order and `<Space>rm` opens Bookmarks. Use `dm` followed by a label to remove a mark, or `dM` to clear them. Turn on **Persist marks** in [Settings](SETTINGS_GUIDE.md) to keep marks after restarting Zotero.
+## 标记位置并返回 {#mark-a-place-and-return-to-it}
 
-Use `Ctrl+o` and `Ctrl+i` to move through recorded destinations. [Shared history](SEARCH_GUIDE.md#shared-back-and-forward-history) explains how Reader jumps connect to Library and Note navigation.
+按 `m` 后接小写字母或数字，为当前位置设置阅读器标记；按反引号后接该标签可返回。用 `[m` / `]m` 按文档顺序浏览标记，或按 `<Space>rm` 打开书签侧栏。按 `dm` 后接标签可删除一个标记，按 `dM` 清除全部标记。
 
-## A practical reading loop
+在[阅读器设置](SETTINGS_GUIDE.md#tune-reader-controls)中开启**持久化标记**，可让标记在重启 Zotero 后保留；未开启时，标记仍可在当前会话中使用。用 `Ctrl+o` / `Ctrl+i` 浏览已记录的位置。[共享历史](SEARCH_GUIDE.md#shared-back-and-forward-history)说明阅读器跳转如何与文库及笔记导航衔接。
 
-Start at fit width, skim pages with `h` / `l` or browse the Outline, then use `/` or heading, figure, and table navigation to return to evidence. Mark an important passage before moving on. When comparing sections, split the Reader and move each pane independently; use the mark or shared history to return to a previous place. To preserve a passage, continue with [Select text and annotate](SELECTION_GUIDE.md#try-it), then [Capture to a note](CAPTURE_GUIDE.md#try-it).
+## 日常阅读流程 {#a-practical-reading-loop}
 
-The [Command Reference](COMMAND_REFERENCE.md#reader-normal) lists Reader bindings and their exact behavior.
+可以先将页面调整到适合宽度，用 `h` / `l` 快速浏览，或通过大纲查看章节；再用 `/`、标题、图和表格导航回到需要核对的证据处。离开重要段落前先设置标记。需要比较两个章节时，将阅读器分屏并分别移动视图；之后用标记或共享历史返回先前位置。要保留一段文字，可继续阅读[选择文字并为 PDF 添加批注](SELECTION_GUIDE.md#try-it)，再[将 PDF 摘录到笔记](CAPTURE_GUIDE.md#try-it)。
+
+[命令参考：阅读器 Normal](COMMAND_REFERENCE.md#reader-normal)列出阅读器按键及其准确行为。

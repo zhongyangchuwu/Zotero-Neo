@@ -1,35 +1,35 @@
-# Tag items and filter the Main view
+# 给条目添加标签并筛选主窗口 {#tag-items-and-filter-the-main-view}
 
-Tag actions change Zotero tags on items; tag filters change which items Main displays. Mutation targets and filter candidates follow different rules.
+标签操作会更改 Zotero 条目上的标签；标签筛选器则改变主窗口显示哪些条目。两者使用不同的操作目标和候选范围。
 
-## Add or remove tags
+## 添加或移除标签 {#add-or-remove-tags}
 
-In Main, Reader, or Note Normal, press `<Space>ta` to add a tag or `<Space>tr` to remove one. Choose a tag in the chooser; the same chooser has different candidates for each action:
+在主窗口、阅读器或笔记编辑器的 Normal 模式，按 `<Space>ta` 添加标签，或按 `<Space>tr` 移除标签。选择器的候选项会随操作变化：
 
-- **Add** searches tags in the target item's library and tags already assigned to the targets. If the query is not an existing tag, an explicit **+ Create** candidate can create it.
-- **Remove** offers tags assigned to at least one target. If a tag is assigned to some but not all targets, the chooser can show that mixed state.
-- Add ensures the chosen tag is present on every target; Remove ensures it is absent from every target. Items already in the requested state are not changed or saved.
+- **添加**：查找目标条目所属文库中的标签，也包括目标条目已有的标签。若输入的查询不是现有标签，可选择明确显示的 **+ Create** 候选项来新建标签。
+- **移除**：列出至少已分配给一个目标的标签。标签只分配给部分目标时，候选项会显示这种混合状态。
+- 添加会确保每个目标都有所选标签；移除会确保每个目标都不再有该标签。已经处于所需状态的条目不会被更改或保存。
 
-A mutation needs at least one target, and every target must be available. Neo refuses the whole mutation if any target is missing rather than changing only the available items. All targets must belong to one library; a batch across libraries is refused.
+操作至少需要一个目标，并且所有目标都必须可用。若任何目标缺失或已不可用，Neo 会拒绝整批操作，不会只修改其中可用的条目。所有目标还必须属于同一文库；跨文库批量操作会被拒绝。
 
-### Which items are changed?
+### 标签会作用于哪些条目？ {#which-items-are-changed}
 
-- **Main:** a non-empty persistent Neo Selection takes precedence. Otherwise, the current target is the temporary Visual range, Zotero native multi-selection, or item Cursor.
-- **Reader:** the active Reader item's parent bibliographic item when it has one. Main Selection is not used.
-- **Note:** the active note-context item's parent bibliographic item when it has one; otherwise the standalone note itself.
+- **主窗口**：非空的 Neo 选择集优先；没有选择集时，按具体操作支持的来源使用可视范围、Zotero 原生多选或条目游标。
+- **阅读器**：使用阅读器当前条目；若它有父项，则作用于该父书目条目。不会使用主窗口的 Neo 选择集。
+- **笔记编辑器**：使用当前笔记上下文；笔记有所属条目时，作用于其父书目条目，否则作用于独立笔记本身。不会使用主窗口的 Neo 选择集。
 
-Before a batch tag change, review the effective target. In particular, a Main Selection can include items outside the current filtered rows; see [Library worksets and the Selection Panel](MAIN_GUIDE.md#keep-opening-and-batch-selection-separate).
+主窗口的 Neo 选择集可以包含当前筛选视图中隐藏的条目；批量改标签前，用[选择集面板](MAIN_GUIDE.md#review-the-selection-panel)检查有效目标。隐藏条目仍可能属于选择集，不能只按当前可见行判断批次范围。
 
-## Filter the Main item list
+## 筛选主窗口条目列表 {#filter-the-main-item-list}
 
-From Main Normal, `<Space>tf` opens the tag chooser and toggles one tag filter. Candidates come from the current library or collection view plus active filters, not from the mutation target Selection. Confirming a tag changes the Main view and closes the chooser. Zotero combines active tag filters with **AND** semantics.
+在主窗口普通模式按 `<Space>tf` 打开标签选择器并切换一个标签筛选器。候选标签来自当前文库或分类视图及已有筛选器，不来自用于修改标签的 Neo 选择集。确认标签后，主窗口视图会改变，选择器关闭。Zotero 以 **AND** 方式组合多个标签筛选器。
 
-`<Space>tc` clears all Main tag filters without opening a chooser. With no filters active, it leaves the view unchanged. Reader and Note do not offer these filter commands. See [Search and navigation](SEARCH_GUIDE.md) for how tag filters combine with other Main view scopes.
+按 `<Space>tc` 可直接清除主窗口的所有标签筛选器，不会打开选择器。没有筛选器时，此操作不改变视图。阅读器和笔记编辑器没有这些筛选命令。标签筛选与其他主窗口范围如何组合，见[搜索与导航](SEARCH_GUIDE.md)。
 
-## Virtual tag paths
+## 虚拟标签路径 {#virtual-tag-paths}
 
-Zotero tags remain flat strings. In a tag chooser, Neo can present matching prefixes as virtual folders to narrow the search. For example, with the default `/` separator, `method/diffusion-transformer` and `method/flow-matching` can offer `method/` as a namespace candidate. Choose one to narrow the query. A namespace candidate only refines the query; it never adds, removes, or filters a tag.
+Zotero 中的标签仍是扁平字符串。标签选择器可以把匹配的前缀显示为虚拟文件夹，帮助缩小搜索范围。例如，默认分隔符为 `/` 时，`method/diffusion-transformer` 和 `method/flow-matching` 可显示共同的 `method/` 命名空间候选项。选择命名空间只会缩小查询范围，不会添加、移除或筛选标签。
 
-For Add Tag, choose a terminal existing tag or an explicit **+ Create** candidate. Remove Tag and Main filters use existing tags. The separator is configured in **Neo Settings → Advanced → Tag namespaces** and defaults to `/`; an empty value uses flat tag matching. Changing the separator changes how candidates are grouped, not stored tag names, and does not create parent tags. See [Tag namespace settings](SETTINGS_GUIDE.md#use-tag-namespaces).
+添加标签时，选择末级现有标签或明确的 **+ Create** 候选项；移除标签和主窗口筛选器只使用现有标签。分隔符可在**设置 → 高级 → 命名空间分隔符**中配置，默认是 `/`；留空时按扁平标签匹配。更改分隔符只会改变候选项分组，不会改动已存储的标签名，也不会创建父标签。详见[标签命名空间设置](SETTINGS_GUIDE.md#use-tag-namespaces)。
 
-For complete bindings and target-resolution behavior, see the [Command Reference: Main window](COMMAND_REFERENCE.md#main-window).
+完整快捷键和目标解析规则见[命令参考：主窗口](COMMAND_REFERENCE.md#main-window)。标签操作未出现在当前界面时，可先检查所属[模块设置](SETTINGS_GUIDE.md#modules)。

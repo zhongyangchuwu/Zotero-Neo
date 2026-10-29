@@ -1,6 +1,6 @@
 # 按工作方式调整 Neo {#make-neo-fit-the-way-you-work}
 
-在 Main、Reader 或 Note Normal 按 `<Space>ps` 打开设置。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**，模块请求需点击**保存模块请求**，并在下次重启 Zotero 后应用。
+在主窗口、阅读器或笔记 Normal 按 `<Space>ps` 打开设置。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**，模块请求需点击**保存模块请求**，并在下次重启 Zotero 后应用。
 
 ## 修改一个快捷键 {#try-it}
 
@@ -13,13 +13,13 @@
 
 ## 先找到命令，再修改绑定 {#find-a-command-before-changing-it}
 
-输入多键命令的前缀后，**前缀提示**列出可用的后续按键。Main、Reader 和 Note Normal 默认使用 `<Space>` 作为命令前缀。按 `:` 打开 Command Palette，搜索当前上下文可用的动作，包括支持但尚未绑定的动作。
+输入多键命令的前缀后，**前缀提示**列出可用的后续按键。主窗口、阅读器和笔记 Normal 默认使用 `<Space>` 作为命令前缀。按 `:` 打开命令面板，搜索当前上下文可用的动作，包括支持但尚未绑定的动作。
 
 在**快捷键**中展开**前缀提示**，可以开关提示，调整**显示延迟（ms）**和**字号（px）**。
 
 快捷键搜索覆盖动作名称、ActionId、当前与默认按键、分组和上下文，结果标明默认、自定义或未绑定。未绑定动作只可加入其支持的上下文。选择所有分组可查看 Zotero 原生快捷键；这些条目只读，修改 Neo 绑定不会改变原生快捷键。
 
-停用模块的动作及用户绑定仍保留在设置中，但不参与当前按键匹配、前缀提示或 Command Palette；重新启用模块不需要重建绑定。
+停用模块的动作及用户绑定仍保留在设置中，但不参与当前按键匹配、前缀提示或命令面板；重新启用模块不需要重建绑定。
 
 ## 处理绑定提示 {#resolve-binding-messages}
 
@@ -32,9 +32,9 @@
 
 在**外观**中选择 Zotero、Catppuccin、Tokyo Night、Gruvbox 或自定义主题。颜色用于 Neo 的交互标记和状态提示；**标记宽度（px）**调整 Main 条目标记，**状态样式**可选中性或着色。
 
-在**高级**中，将**语言**设为跟随 Zotero、English 或中文。它控制设置界面，以及前缀提示、Command Palette 和快捷键中的本地化动作标签；跟随 Zotero 使用宿主语言。
+在**高级**中，将**语言**设为跟随 Zotero、English 或中文。它控制设置界面，以及前缀提示、命令面板和快捷键中的本地化动作标签；跟随 Zotero 使用宿主语言。
 
-## 调整 Reader 控制 {#tune-reader-controls}
+## 调整阅读器控制 {#tune-reader-controls}
 
 在**阅读器**中选择**滚动模式**：
 
@@ -42,13 +42,13 @@
 - **恒速**：按住滚动键时保持固定速度，通过**滚动速度（px/s）**调整。
 - **加速**：按住时改变速度，可调整初始速度、最大速度、加速度和减速度。开启**松开按键时立即停止**后，不再逐渐减速。
 
-界面只显示当前模式的参数。开启**持久化标记**可跨重启保存 marks；存储和同步规则见[设置参考](SETTINGS_REFERENCE.md)。**默认颜色**用于没有明确指定颜色的下划线和 Add note。
+界面只显示当前模式的参数。开启**持久化标记**可跨重启保存 marks；存储和同步规则见[设置参考](SETTINGS_REFERENCE.md)。**默认颜色**用于没有明确指定颜色的下划线和添加批注评论。
 
-**文本选择模式**控制 `v` 和原生 Zotero 文本选择能否进入 Reader Select。**批注评论编辑**控制 Reader Normal 的 `i` / `Enter` 是否打开选中批注的评论编辑器；关闭后不影响 Zotero 原生评论字段或 Select 中独立的 Add note 动作。
+**文本选择模式**控制 `v` 和原生 Zotero 文本选择能否进入 Reader Select。**批注评论编辑**控制阅读器 Normal 的 `i` / `Enter` 是否打开选中批注的评论编辑器；关闭后不影响 Zotero 原生评论字段或 Select 中独立的“添加批注评论”动作。
 
 ## 调整笔记和选择器行为 {#choose-note-and-picker-behavior}
 
-在**交互**中，**Vim 风格笔记编辑**控制上下文面板和独立 Note 标签页中的 Vim 操作。关闭后交给 Zotero 普通编辑，不关闭 Note 查找或摘录目的地选择。
+在**交互**中，**Vim 风格笔记编辑**控制上下文面板和独立笔记标签页中的 Vim 操作。关闭后交给 Zotero 普通编辑，不关闭笔记查找或摘录目的地选择。
 
 **鼠标单击选择、双击确认**用于共享选择器。开启后，单击选择结果，双击确认；悬停不改变选择。
 
@@ -71,8 +71,8 @@
 
 ## 管理已安装扩展与集成 {#manage-installed-plugins-and-integrations}
 
-启用扩展模块时，在 Main、Reader 或 Note Normal 按 `<Space>pp` 打开 Plugin Manager。它显示已安装扩展及状态，并在 Zotero 允许时提供启停、已注册设置、主页或仓库链接。不安装、更新、移除或发现扩展；这些操作及停用整个 Neo 请使用 Zotero 原生扩展管理。
+启用扩展模块时，在主窗口、阅读器或笔记 Normal 按 `<Space>pp` 打开插件管理器（Plugin Manager）。它显示已安装扩展及状态，并在 Zotero 允许时提供启停、已注册设置、主页或仓库链接。不安装、更新、移除或发现扩展；这些操作及停用整个 Neo 请使用 Zotero 原生插件管理。
 
-安装 Translate for Zotero 后，Reader Select 的 Selection Actions 可提供 Translate。Better BibTeX 为 `<Space>yy` 提供 citekey；目标无法解析或任一 citekey 缺失时，Neo 拒绝复制并保留剪贴板。
+安装 Translate for Zotero 后，Reader Select 的所选文本操作可提供翻译。Better BibTeX 为 `<Space>yy` 提供 citekey；目标无法解析或任一 citekey 缺失时，Neo 拒绝复制并保留剪贴板。
 
 控件默认值见[设置参考](SETTINGS_REFERENCE.md)，动作上下文和完整绑定见[命令参考](COMMAND_REFERENCE.md)。

@@ -1,55 +1,27 @@
-# Text input and IME ownership
+# 输入与输入法 {#text-input-and-ime-ownership}
 
-## Text-entry controls
+在选择器、Plugin Manager、Reader Flash 和批注评论编辑器中，焦点决定按键用途：编辑文字时，输入内容、文本光标移动、复制粘贴、撤销和输入法组合由 Zotero/浏览器及输入法处理；选择器明确支持的结果导航、预览、确认等操作仍按当前上下文处理。Note 正文始终由 Zotero 原生编辑器接收。
 
-Queries in Picker/tag-candidate inputs, Plugin Manager, and Reader Flash use real
-`<input>` controls. The annotation-comment editor uses a `<textarea>`, and Note
-text remains in Zotero's native editor. Settings shortcut recording qualifies
-keys rather than treating them as query text.
+## 查询、输入法与原生输入 {#text-entry-controls}
 
-For query controls, Neo reads committed input values for matching/completion:
+选择器查询框、标签候选查询框、Plugin Manager 筛选框和 Reader Flash 查询框都可直接输入文字。输入法组合期间，候选移动、确认、`Escape` 和 `Backspace` 交由浏览器与输入法处理；尚未提交的组合内容不会触发 Neo 命令。提交后，Neo 使用查询文字匹配结果。批注评论编辑器中的文字也由原生输入控件处理；`Enter` 插入换行。
 
-```text
-OS / IME -> browser input -> committed value -> Neo query or completion
-```
+Note 编辑器中的普通文字与输入法输入由 Zotero 原生编辑器处理。开启 **Vim 风格笔记编辑** 时，只有 Note Normal 下的命令由 Neo 处理；进入 Insert 后，文字和输入法仍交给原生编辑器。
 
-`src/input/composition.ts` tracks composition and provides shared guards.
-`compositionOwnsKey()` yields while local composition is active,
-`KeyboardEvent.isComposing` is true, `event.key` is `Process`, or `keyCode` is
-229. `isCommittedInput()` excludes active or event-level composition. Use these
-boundaries before dispatching Neo commands; while composing, candidate navigation,
-confirmation, Escape, and Backspace belong to the browser/IME.
+## 本机按键与 Neo 快捷键 {#native-and-local-shortcut-ownership}
 
-The shared guard is used by the Picker, Plugin Manager, Reader Flash and
-annotation-comment input, Note input guards, and Settings shortcut recording.
-Remove its listeners with the owning control's lifecycle.
+焦点位于查询框或编辑器时，文字编辑、文本光标移动、已提交的查询内容，以及原生复制、粘贴和撤销仍由控件处理。选择器明确支持的结果导航、确认和取消等按键则由 Neo 按上下文处理；输入法组合期间这些按键仍交给输入法。解除某个 Neo 绑定也不会禁用 Zotero 的原生快捷键。
 
-## Native and local shortcut ownership
+Zotero 或文本编辑保留的按键不能绑定给 Neo。多键序列中只要有一个按键属于原生保留按键，Neo 就会取消该待执行序列；序列中的每个按键都必须能由 Neo 执行。焦点或指针切换到原生界面时，待执行的 Neo 按键序列也会结束。
 
-Local shortcuts are not a second text-input system. Each host qualifies its
-focused target, native/editable ownership, composition state, and exact context
-before matching. A native-reserved token cancels the pending local sequence;
-every token in a multi-key sequence must remain executable by Neo. Focus or
-pointer transfer to a native surface retires pending local matches.
+Reader Outline 中的方向键、`Tab`、`Shift+Tab`、`Enter`、`Return`（包括带修饰键的 `Enter`）仍由 Zotero 处理。Reader 的 Annotations、Bookmarks 和 Thumbnails 面板也保留原生方向键与 `Tab` 行为。Outline 的确认操作因此没有默认绑定；其余可绑定操作见[命令参考](COMMAND_REFERENCE.md#modes-focus-and-capabilities)。
 
-Query-input and list contexts are separate owners. Text editing, caret movement,
-committed query text, native copy/paste/undo, and IME composition stay with the
-actual input and Gecko. A Neo unbinding does not disable a Zotero-native shortcut.
-In the Reader Outline, native arrows, Tab, and Enter/Return—including modified
-Enter—remain Zotero-owned; native Annotation, Bookmarks, and Thumbnail panels
-also keep their arrow and Tab behavior.
+Zotero 原生“通过标识符添加条目”窗口在显示、打开或关闭期间始终接收输入。文字、粘贴、输入法、`Enter`、`Shift+Enter`、`Escape` 和弹窗菜单按键都交给 Zotero；这里的 `Escape` 不会触发 Neo 对普通可编辑字段的通用取消行为。该窗口不是 Neo 模式，也不新增绑定上下文。
 
-The native **Add Item by Identifier** popup owns input while showing, open, or closing. Neo retires its pending Main sequence and leaves text, paste, IME, Enter/Shift+Enter, Escape, and popup-menu keys to Zotero instead of applying the generic editable-field Escape behavior. This is native text entry, not a new Neo mode or binding context.
+## Reader Flash {#reader-flash}
 
-## Reader Flash
+Flash 使用有焦点的查询框接收文字。文字编辑、`Backspace` 和输入法组合由浏览器处理；Neo 使用已提交的查询文字寻找当前 PDF 可见区域中的内容，再由提示标签确定目标。可输入 Unicode，也可使用输入法；候选文字必须能在当前阅读器视图中找到。Flash 不会对 PDF 做 OCR，不支持转写或模糊匹配；较宽泛的查询可缩小后再选择提示。按提示标签选择，或按 `Enter` 跳到最近的匹配项；按 `Escape` 取消 Flash 并保留现有选区。详见[命令参考中的 Reader Select](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)。
 
-Flash takes its query from a focused real input. Normal text editing, Backspace,
-and composition remain browser-owned; Neo consumes committed query values, Flash
-commands, and unambiguous hint labels. The matcher is limited to visible text in
-the active PDF view; it does not add OCR, transliteration, or fuzzy query matching.
+## 输入法兼容性 {#compatibility}
 
-## Compatibility
-
-The physical OS-IME candidate window and native keyboard/focus behavior remain
-separate host-acceptance work; see
-[#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137).
+操作系统负责显示输入法候选窗及处理输入法自身的按键。组合输入尚未提交时，输入法继续接收候选导航和确认等按键；提交文字后，再使用 Neo 支持的命令。

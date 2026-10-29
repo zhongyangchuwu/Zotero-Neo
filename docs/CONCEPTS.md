@@ -1,33 +1,39 @@
-# How Neo works
+# 基本概念 {#how-neo-works}
 
-Neo chooses a command from the Zotero area that has focus. The same key can therefore do different things in the Library, PDF Reader, and note editor.
+Neo 根据当前取得键盘焦点的 Zotero 区域解释按键。因此，同一个键在文献库、PDF 阅读器和笔记编辑器中可以有不同用途。
 
-## The same key can have different jobs
+## 同一个键，在不同位置有不同用途 {#the-same-key-can-have-different-jobs}
 
-For example, `j` moves through Main item rows, scrolls a Reader PDF, or moves within a Note when Vim-style note editing is on. A search box, comment field, or other text input receives ordinary typing instead of Neo commands.
+例如，`j` 在主窗口移动条目游标，在 PDF 中滚动，在启用 Vim 风格编辑的笔记中移动文本光标。搜索框、批注评论和其他文本输入控件则接收普通文字，不把这些文字当作浏览命令。
 
-## Main, Reader, and Note
+指南中的按键均指默认绑定。自己改过按键时，可以在**设置 → 快捷键**查当前值；停用了某项功能时，相关入口可能不再出现，见[模块设置](SETTINGS_GUIDE.md#modules)。
 
-- **Main** is Zotero's Library window. Its View is the current library or collection and any active search or filters; that scope determines which items appear. In the item list, `j` and `k` move the Cursor. `v` starts a temporary range across visible item rows, not collections.
-- **Reader** is for PDFs, text selection, and annotations. Select works on an eligible PDF text selection. An annotation's comment editor is a text field, separate from Reader navigation.
-- **Note** is a Zotero note editor. With **Vim-style note editing** enabled, Normal keys move and edit; `i` enters Insert. Text entry and IME composition remain native to the editor.
+## 主窗口、阅读器和笔记编辑器 {#main-reader-and-note}
 
-For a guided task, continue with the [Library](MAIN_GUIDE.md#try-it), [PDF Reader](READER_GUIDE.md#try-it), or [Notes](NOTE_GUIDE.md#try-it) workflow.
+- **主窗口（Main）**：Zotero 文献库窗口。当前文库、分类、搜索和筛选决定列表显示哪些条目；在条目列表中用 `j` / `k` 移动条目游标。`v` 建立可见条目行的临时可视范围，不选择分类。
+- **阅读器（Reader）**：操作 PDF、文本选区和批注。Select 是文本选择模式；批注评论编辑器是独立的文字输入区，不是额外的 Reader Insert 模式。
+- **笔记编辑器（Note）**：Zotero 原生笔记编辑器。启用**Vim 风格笔记编辑**时，Normal 按键负责移动和编辑，`i` 进入 Insert 输入文字；普通文字与输入法仍交给原生编辑器。
 
-## Moving from commands to text entry
+具体操作分别见[文献库](MAIN_GUIDE.md#try-it)、[PDF 阅读器](READER_GUIDE.md#try-it)和[笔记](NOTE_GUIDE.md#try-it)。
 
-Click the area you want to use: the item list for Main commands, the PDF page for Reader commands, or the note editor for Note commands. Click a search field or text editor to type there. Finish or cancel an IME composition before using a command key again.
+## 在命令与文字输入之间切换 {#moving-from-commands-to-text-entry}
 
-On startup with Main active, Neo focuses the item list and places the Cursor on the first visible item in the current View. An empty View receives list focus without selecting an item. This does not override deliberate search or text input, and returning from Reader does not reset the Cursor.
+点击要操作的区域：主窗口命令需要条目列表或分类树的焦点，阅读器命令需要 PDF 页面的焦点，笔记命令需要笔记编辑器的焦点。要输入文字时，点击搜索字段或进入相应编辑状态；输入法组字期间，先完成或取消候选，再使用命令键。
 
-In Reader Normal, `i` or `Enter` opens the selected annotation's comment editor when **Annotation comment editing** is on; Reader Select's **Add note** is a separate action. Enter inserts a line there; ordinary Escape saves and closes it. In Note, `i` enters Insert and Escape returns to Normal when Vim-style note editing is on.
+启动时若主窗口处于活动状态，Neo 会把焦点放到条目列表，并将条目游标放到当前视图的第一项。空视图只取得列表焦点，不选择条目。主动搜索或文字输入不会因此被覆盖，从阅读器返回也不会把游标重置到第一行。
 
-## Cursor and Selection are different
+在 Reader Normal，选中批注后按 `i` 或 `Enter` 可打开其评论编辑器，前提是开启了**批注评论编辑**。评论中 `Enter` 换行，普通 `Escape` 保存并关闭；输入法组字时则先由输入法处理。关闭该偏好后，`i` 把输入交给原生控件，直到 `Escape` 退出；Select 中“添加批注评论”是另一个动作。
 
-In Main, the **Cursor** is the item row in focus. Moving it does not change the persistent **Selection**, the workset used for group operations. `v` builds a temporary row range; `s` adds or removes its items from the workset. Open the Selection Panel with `<Space>ss` to review the group. See [Library worksets](MAIN_GUIDE.md).
+在启用 Vim 风格编辑的 Note 中，`i` 进入 Insert，`Escape` 返回 Normal。关闭 Vim 风格编辑后，按 Zotero 原生方式输入即可。输入细节见[文本输入与输入法](INPUT_METHODS.md)。
 
-Changing a collection, search, or tag filter changes the **View**, not the workset. Check the Selection before a batch operation so items outside the current view do not surprise you. Reader and Note item actions use their own paper or note context.
+## 条目游标、Neo 选择集与文本选区 {#cursor-and-selection-are-different}
 
-Reader marks save PDF positions. They help you return to a passage while Main Selection helps you organize a group of items.
+主窗口的**条目游标**表示当前浏览的一行。移动游标不会改变 **Neo 选择集**；后者保存要一起处理的一组条目。`v` 建立临时可视范围，`s` 将对应目标加入或移出选择集，`<Space>ss` 打开选择集面板。具体目标优先级见[文献库指南](MAIN_GUIDE.md#keep-opening-and-batch-selection-separate)。
 
-For the shared English and Chinese names, see [Project terminology](INTERACTION_MODEL.md#terminology).
+改变分类、搜索或标签筛选会改变**视图**，不会自动清空 Neo 选择集。选择集可能包含当前看不到的条目，批量修改前可以在面板中查看。它只属于当前主窗口会话，不是跨重启保存的分组；长期分组仍用 Zotero 分类或标签。
+
+阅读器的**文本选区**是一段 PDF 文字，不是主窗口的条目选择集。Reader 和 Note 的条目操作使用各自论文或笔记上下文，不借用主窗口已经标记的文献。
+
+Reader 的 **marks** 保存 PDF 阅读位置，便于返回某个段落；它与收集文献的 Neo 选择集也不同。开启**持久化标记**后，marks 才会跨重启保存。
+
+完整术语对照见[交互术语](INTERACTION_MODEL.md#terminology)，精确按键与动作见[命令参考](COMMAND_REFERENCE.md)。
