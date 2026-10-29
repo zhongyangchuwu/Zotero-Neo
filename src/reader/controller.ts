@@ -1411,7 +1411,6 @@ export class ReaderSession {
       return false;
     const consume = (): void => {
       this.clearKeyGuide();
-      this.updateIndicator();
       event.preventDefault();
       event.stopImmediatePropagation();
     };
