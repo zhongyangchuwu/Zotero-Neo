@@ -34,8 +34,11 @@ import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
 import { compositionOwnsKey } from '../input/composition';
 import { advanceInput, inputWouldConsume } from '../input/engine';
 import { InputRuntime, type InputTimerHost } from '../input/runtime';
-import { KEY_GUIDE_CONFIG, type KeyGuideLanguage } from '../input/key-guide-config';
-import { isLeaderPrefix } from '../input/key-guide';
+import {
+  KEY_GUIDE_CONFIG,
+  keyGuideTimeout,
+  type KeyGuideLanguage,
+} from '../input/key-guide-config';
 import { keyString } from '../input/keys';
 import { resolveBindings, type BindingMap, type BindingContext } from '../input/bindings';
 import { t } from '../i18n';
@@ -1316,30 +1319,29 @@ export class ReaderSession {
     if (isEditableElement(asElement(event.target))) {
       this.input.reset();
       this.clearKeyGuide();
+      this.updateIndicator();
       return;
     }
     if (compositionOwnsKey(event, false)) return;
     const mode = readerBindingMode(this.#surfaceMode);
-    if (
-      event.key.toLowerCase() === 'escape' &&
-      isLeaderPrefix(this.input.keyBuffer) &&
-      this.input.cancel(mode)
-    ) {
+    if (event.key.toLowerCase() === 'escape' && this.input.cancel(mode)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       this.clearKeyGuide();
       this.updateIndicator();
       return;
     }
-    if (
-      event.key.toLowerCase() === 'backspace' &&
-      isLeaderPrefix(this.input.keyBuffer) &&
-      this.input.backspace(mode)
-    ) {
+    if (event.key.toLowerCase() === 'backspace' && this.input.backspace(mode)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       this.refreshKeyGuide();
       this.updateIndicator();
+      if (this.input.keyBuffer) {
+        this.input.scheduleReset(KEY_GUIDE_CONFIG.idleTimeoutMs, () => {
+          this.clearKeyGuide();
+          this.updateIndicator();
+        });
+      }
       return;
     }
     const key = keyString(event);
@@ -1381,9 +1383,8 @@ export class ReaderSession {
     event.preventDefault();
     event.stopImmediatePropagation();
     this.refreshKeyGuide();
-    const timeoutMs = isLeaderPrefix(decision.state.keyBuffer)
-      ? KEY_GUIDE_CONFIG.idleTimeoutMs
-      : decision.timeoutMs;
+    this.updateIndicator();
+    const timeoutMs = keyGuideTimeout(decision);
     if (timeoutMs !== null) {
       this.input.schedule(decision, timeoutMs, (resolved) => {
         if (this.#scope.disposed) return;
@@ -1409,6 +1410,7 @@ export class ReaderSession {
     )
       return false;
     const consume = (): void => {
+      this.clearKeyGuide();
       event.preventDefault();
       event.stopImmediatePropagation();
     };
@@ -1467,6 +1469,11 @@ export class ReaderSession {
     if (this.#hints?.links.hasHints && pdfWindow && this.#hints?.links.ownsView(pdfWindow))
       return true;
     if (this.#hints?.copy.hasHints && pdfWindow && this.#hints?.copy.ownsView(pdfWindow))
+      return true;
+    if (
+      (this.input.keyBuffer || this.input.countBuffer) &&
+      (key === 'escape' || key === 'backspace')
+    )
       return true;
     if (
       this.input.keyBuffer === 'm' ||
@@ -1731,9 +1738,7 @@ export class ReaderSession {
         enabled:
           config.enabled &&
           !this.#nativeInput.ownsInput &&
-          !(pdfWindow && this.#commentEditor?.ownsView(pdfWindow)) &&
-          this.mode === 'normal' &&
-          isLeaderPrefix(this.input.keyBuffer),
+          !(pdfWindow && this.#commentEditor?.ownsView(pdfWindow)),
         language: this.keyGuideLanguage(),
         delayMs: config.delayMs,
         fontSizePx: config.fontSizePx,

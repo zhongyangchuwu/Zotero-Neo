@@ -175,12 +175,14 @@ export function inputWouldConsume(context: InputContext, key: string): boolean {
 }
 
 export function cancelPendingInput(state: InputState): InputState | null {
-  if (!state.keyBuffer) return null;
-  return { ...state, keyBuffer: '' };
+  if (!state.keyBuffer && !state.countBuffer) return null;
+  return resetState(state);
 }
 
 export function backspacePendingInput(state: InputState): InputState | null {
-  if (!state.keyBuffer) return null;
+  if (!state.keyBuffer) {
+    return state.countBuffer ? { ...state, countBuffer: state.countBuffer.slice(0, -1) } : null;
+  }
   return { ...state, keyBuffer: popInputKey(state.keyBuffer) };
 }
 

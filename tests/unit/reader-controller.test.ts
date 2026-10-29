@@ -3466,7 +3466,7 @@ describe('Reader leader timer guards', () => {
     press('Backspace');
     press('Escape');
     expect(created.session.input.keyBuffer).toBe('');
-    expect(created.session.input.countBuffer).toBe('3');
+    expect(created.session.input.countBuffer).toBe('');
     press('L');
     expect(cycleReaderTab).toHaveBeenCalledWith(created.reader._window, 1);
 
