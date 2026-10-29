@@ -1,6 +1,6 @@
 # 功能介绍 {#features}
 
-用键盘在 Zotero 中查找论文、选择 PDF 文字并添加批注，整理正在阅读的一组文献。以下功能使用默认配置；不需要的能力可以在[模块设置](SETTINGS_GUIDE.md#modules)中停用。
+用键盘在 Zotero 中查找论文、选择 PDF 文字并添加批注，整理正在阅读的一组文献。核心工作流固定启用；只有链接与复制提示和扩展管理面板是可选增强，配置见[模块设置](SETTINGS_GUIDE.md#modules)。
 
 ## 输入眼前的文字来选择 PDF 段落 {#select-pdf-text-by-typing-what-you-see}
 

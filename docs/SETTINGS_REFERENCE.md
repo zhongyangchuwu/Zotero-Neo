@@ -1,6 +1,6 @@
 # 设置参考 {#settings-reference}
 
-本页维护控件和默认值。修改绑定、保存与选择设置的方法见[设置指南](SETTINGS_GUIDE.md)。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**，模块请求需单独保存并重启 Zotero。
+本页维护控件和默认值。修改绑定、保存与选择设置的方法见[设置指南](SETTINGS_GUIDE.md)。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**；只有两个可选增强的模块请求需单独保存并重启 Zotero。
 
 | 控件 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -31,33 +31,33 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 模块 {#modules}
 
-模块偏好为 `extensions.zotero-neo.modules.<id>.enabled`，类型为布尔值，全部默认 `true`。设置中的**请求启用**编辑草稿，**保存模块请求**写入偏好；当前已应用图只在下一次重启 Zotero 时改变，Neo 重载不会提前应用。
+项目有 11 个内部功能分区，但这不表示有 11 个可选开关。`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 九个核心分区固定启用；只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）可配置，模块偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled` 与 `extensions.zotero-neo.modules.extensions.enabled`，布尔值默认均为 `true`。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
 | `library` | 文库 | 树导航、条目查找、搜索入口、打开、标识符录入、citekey 和最近回收批次。 |
-| `worksets` | 工作集 | Neo 选择集、临时可视范围和选择集面板；停用后主窗口标签/分类操作仍使用当前目标，不读取旧选择集。 |
+| `worksets` | 工作集 | Main Persistent Selection、Visual 行范围和 Selection Panel；Main Visual 由此核心分区提供。 |
 | `tags` | 标签 | 添加/移除标签及 Main 标签过滤。 |
 | `collections` | 分类 | 分类查找、成员关系及结构工作流。 |
 | `reader-navigation` | 阅读导航 | 页面、滚动、缩放、搜索、位置遍历、marks 与原生侧栏增强。 |
 | `reader-selection` | 阅读选区 | Select、范围动作、Flash、复制/搜索所选文本和所选文本操作面板。 |
 | `reader-annotations` | 阅读批注 | 批注创建、删除、改色、过滤、复制和评论编辑。 |
-| `reader-hints` | 阅读提示 | 复制／跟随提示；读取 Zotero 原生批注不依赖阅读批注模块。 |
+| `reader-hints` | 链接与复制提示 | 可选增强：复制／跟随提示；读取 Zotero 原生批注不依赖阅读批注模块。 |
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点；不依赖 `library` 或 `reader-navigation`。 |
-| `extensions` | 扩展 | 已安装 Zotero 扩展的插件管理器；不管理 Neo 内部模块。 |
+| `extensions` | 扩展管理面板 | 可选增强：已安装 Zotero 扩展的 Plugin Manager；不管理 Neo 内部模块。 |
 
 | 运行状态 | 含义 |
 | --- | --- |
 | 已启用（Enabled） | 当前宿主中的模块激活成功。 |
-| 已停用（Disabled） | 当前已应用请求关闭；不创建功能实例，贡献不参与按键、前缀提示或命令面板。 |
+| 已停用（Disabled） | 仅适用于 `reader-hints` 或 `extensions`；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
 | 已阻止（Blocked） | 当前启用图或实际宿主缺少必需依赖；界面列出依赖，不自动修改开关。 |
 | 失败（Failed） | 当前宿主实例激活失败，已退休其入口并尝试清理部分资源；显示失败原因，详细日志保留原错误。该实例不自动重试，新宿主实例或重启 Zotero 可重新激活。 |
 | 等待主机（Pending host） | 尚未在支持的宿主激活，例如还没有打开 Reader。 |
 | 等待重启（Pending restart） | 保存请求与已应用值不同，附加在当前状态后；当前能力不提前变化。 |
 
-草稿、已保存请求与已应用值分别显示。**草稿依赖影响**仅预览下次启用图，不阻止保存，也不自动切换其他模块。**恢复默认模块请求**只清除十一个模块偏好；恢复后仍需重启 Zotero。
+草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**只清除 `reader-hints` 与 `extensions` 两项可选偏好并恢复默认启用请求；恢复后仍需重启 Zotero。保存与恢复默认都不改动核心模块偏好或其他行为设置。
 
-旧开关不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks。停用模块不清除绑定、marks、主题、行为偏好或原生数据。
+行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
-设置、共享焦点与后退／前进属于基座，不随可选模块停用。全部关闭后，仍可从 Zotero 原生偏好页的 **Open Neo Settings** 或 `Zotero.Neo.openSettings` 恢复配置，操作步骤见[模块设置指南](SETTINGS_GUIDE.md#modules)。
+设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。关闭 `reader-hints` 和 `extensions` 时，其余九个核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#modules)。

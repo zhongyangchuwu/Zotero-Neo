@@ -17,9 +17,9 @@ Neo 在 Zotero 的文献库、PDF 阅读器和笔记编辑器中提供键盘操�
 | 添加或移除标签，用标签筛选文献库 | [标签整理](TAGS.md) |
 | 查找条目或笔记、缩小视图范围、切换标签页、返回之前的位置 | [搜索与导航](SEARCH_GUIDE.md) |
 | 修改快捷键、外观、语言、滚动和笔记编辑行为 | [快捷键与设置](SETTINGS_GUIDE.md) |
-| 选择要启用的内置功能 | [模块设置](SETTINGS_GUIDE.md#modules) |
+| 启用或关闭链接与复制提示、扩展管理面板 | [模块设置](SETTINGS_GUIDE.md#modules) |
 
-模块默认全部开启。停用模块后，对应命令不再参与按键匹配、前缀提示或命令面板；保存的绑定仍保留。模块请求需要完全重启 Zotero 后才生效，旧的编辑和滚动偏好不会因此被重置。若入口没有出现，先看[故障排查](TROUBLESHOOTING.md#a-key-does-nothing)。
+内部十一项功能分区中，九个核心模块固定启用；只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）可关闭。关闭可选增强后，其动作不参与当前按键匹配、前缀提示或命令面板，保存的绑定仍保留；新请求需完全重启 Zotero 才应用。`modules.<core>.enabled=false` 旧值不会关闭核心功能，行为偏好仍保持原义。若入口没有出现，先看[故障排查](TROUBLESHOOTING.md#a-key-does-nothing)。
 
 
 ## 审阅与整理论文 {#review-and-organize-papers}

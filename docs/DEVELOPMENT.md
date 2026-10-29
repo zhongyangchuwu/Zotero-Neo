@@ -87,13 +87,13 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/`、`notes/`、`reader-navigation/`、`reader-selection/`、`reader-annotations/` 与 `workspace/`。MainWindow 组合标签、扩展、分类、工作集、Library、Notes 和 Workspace；ReaderSession 组合导航、选择、批注、hints、独立 Library citekey 贡献及 Workspace 分屏/焦点。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。
+当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/`、`notes/`、`reader-navigation/`、`reader-selection/`、`reader-annotations/` 与 `workspace/`。九个核心分区固定启用；只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）是可选增强。MainWindow 组合标签、扩展、分类、工作集、Library、Notes 和 Workspace；ReaderSession 组合导航、选择、批注、hints、独立 Library citekey 贡献及 Workspace 分屏/焦点。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖、环和精确上下文贡献冲突。`src/core/module-runtime.ts` 只激活已应用图允许且实际宿主依赖就绪的工厂；`src/platform/module-startup.ts` 在 Zotero 应用对象上保留纯 JSON 快照，`npm run dev` 热重载不会应用新模块请求。调整模块启用图时必须完全退出并重新启动专用 profile；普通代码迭代继续使用热重载。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖、环和精确上下文贡献冲突。`src/core/module-runtime.ts` 固定启用九个核心分区，只根据 `reader-hints` 与 `extensions` 请求应用可选增强；`src/platform/module-startup.ts` 在 Zotero 应用对象上仅保留两项请求的纯 JSON 快照，`npm run dev` 热重载不会应用新的请求。改变可选增强请求时必须完全退出并重新启动专用 profile；普通代码迭代继续使用热重载。旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭功能。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 
-模块配置实机验证使用自有条目、PDF、Note 与分类，覆盖默认全开、代表性关闭组合、旧行为开关、保存请求后 Neo 重载与真实进程重启的区别，以及全部模块关闭后的原生偏好按钮恢复。局部故障只注入本次自有宿主，随后恢复原方法并验证新宿主可重新激活。结束后核对自有数据库记录、文件、偏好存在性与值、原标签页及原生 Main 状态；进程退出另从操作系统确认。完整依赖与用户状态说明见[设置参考](SETTINGS_REFERENCE.md#modules)。
+实机验证模块配置时使用自有条目、PDF、Note 与分类，覆盖两项可选增强的保存请求、Neo 重载与真实进程重启差异，并确认两项关闭后九个核心模块仍可工作。检查旧核心关闭值被忽略，保存和恢复默认不改核心偏好或行为偏好（包括 `noteEditor.enabled`）；不再把“全部模块关闭”作为当前配置。局部故障只注入本次自有宿主，随后恢复原方法并验证新宿主可重新激活。结束后核对自有数据库记录、文件、偏好存在性与值、原标签页及原生 Main 状态；进程退出另从操作系统确认。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#modules)。
 
 工作集拥有 SelectionStore、Visual 范围及 Selection Panel。Main Surface 继续初始化和取消原生 Cursor/多目标，持有共享行渲染，并向模块注入刷新、主题和现有 Reveal 导航端口。目标解析与 Library Trash 接收明确 Selection 端口；来源为空或退休后沿用当前目标，不读取旧 Selection。共享导航通过局部界面端口捕获原面板，不再读取 session 的 Selection Panel 状态。
 

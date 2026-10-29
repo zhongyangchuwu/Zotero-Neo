@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
 import type { PreferenceReader } from '../../src/core/preferences';
-import { validateBuiltinModules, type BuiltinModuleDescriptor } from '../../src/modules';
+import {
+  BUILTIN_MODULES,
+  isOptionalModule,
+  validateBuiltinModules,
+  type BuiltinModuleDescriptor,
+} from '../../src/modules';
 
 function setup(initial: Record<string, boolean> = {}) {
   const values = new Map(Object.entries(initial));
@@ -59,17 +64,57 @@ describe('static module ownership', () => {
 });
 
 describe('module runtime lifecycle', () => {
-  it('does not call disabled factories and freezes applied flags', () => {
-    const { runtime, values } = setup({ [modulePreferenceKey('notes')]: false });
-    const main = runtime.createScope('main', {}, () => true);
+  it('does not call disabled optional factories, even after a preference edit', () => {
+    const { runtime, values } = setup({ [modulePreferenceKey('extensions')]: false });
+    const owner = {};
+    const main = runtime.createScope('main', owner, () => true);
     const factory = vi.fn();
-    expect(main.activate('notes', factory)).toBeNull();
+    expect(main.activate('extensions', factory)).toBeNull();
+    expect(main.state('extensions').status).toBe('disabled');
+    values.set(modulePreferenceKey('extensions'), true);
+    expect(runtime.requested().extensions).toBe(true);
+    expect(runtime.applied.extensions).toBe(false);
+    expect(main.activate('extensions', factory)).toBeNull();
     expect(factory).not.toHaveBeenCalled();
-    values.set(modulePreferenceKey('notes'), true);
-    expect(runtime.requested().notes).toBe(true);
-    expect(runtime.applied.notes).toBe(false);
-    expect(main.canActivate('notes')).toBe(false);
+    expect(runtime.inspect(owner).find((state) => state.id === 'extensions')?.pendingRestart).toBe(
+      true,
+    );
     main.dispose();
+  });
+
+  it('activates core modules despite legacy disabled preferences and reports real lifecycle state', () => {
+    const core = BUILTIN_MODULES.filter(({ id }) => !isOptionalModule(id));
+    const { runtime } = setup(
+      Object.fromEntries(core.map(({ id }) => [`modules.${id}.enabled`, false])),
+    );
+    const owner = {};
+    const main = runtime.createScope('main', owner, () => true);
+    const reader = runtime.createScope(
+      'reader',
+      {},
+      () => true,
+      () => owner,
+    );
+    for (const { id, hosts } of core) {
+      for (const host of hosts) {
+        const scope = host === 'main' ? main : reader;
+        expect(scope.state(id).status).toBe('pending');
+        const factory = vi.fn(() => ({}));
+        expect(scope.activate(id, factory)).not.toBeNull();
+        expect(factory).toHaveBeenCalledOnce();
+        expect(scope.state(id).status).toBe('enabled');
+      }
+    }
+    for (const state of runtime.inspect(owner).filter(({ id }) => !isOptionalModule(id))) {
+      expect(state).toMatchObject({
+        applied: true,
+        requested: true,
+        pendingRestart: false,
+        status: 'enabled',
+      });
+    }
+    main.dispose();
+    reader.dispose();
   });
 
   it('isolates failures, rolls back real host resources and never retries a failed factory', () => {

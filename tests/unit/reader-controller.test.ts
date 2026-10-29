@@ -2277,7 +2277,7 @@ describe('Reader module configuration', () => {
     badge.remove();
   });
 
-  it('keeps native input and the selection registry safe when Reader modules are disabled', () => {
+  it('keeps core Reader selection, navigation and native input with legacy module requests off', () => {
     const disabled = Object.fromEntries(
       [
         'library',
@@ -2288,29 +2288,22 @@ describe('Reader module configuration', () => {
         'workspace',
       ].map((id) => [`modules.${id}.enabled`, false]),
     );
-    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, disabled);
-    const available = vi.fn(() => true);
-    const run = vi.fn();
-    const unregister = created.controller.registerSelectionAction({
-      id: 'test.disabled',
-      label: 'Disabled',
-      isAvailable: available,
-      run,
+    const created = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
+      ...disabled,
+      [ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY]: false,
     });
     created.session.acceptSelectionParams({ annotation: { text: 'text' } });
-    expect(created.controller.getSelection()).toBeNull();
+    expect(created.session.mode).toBe('visual');
+    expect(created.session.state.selectionParams?.annotation.text).toBe('text');
+    created.session.focusAndHandle(readerKey('Escape').event);
     expect(created.session.mode).toBe('normal');
-    expect(available).not.toHaveBeenCalled();
     const navigation = readerKey('j');
     created.session.focusAndHandle(navigation.event);
-    expect(navigation.preventDefault).not.toHaveBeenCalled();
+    expect(navigation.preventDefault).toHaveBeenCalled();
     const insert = readerKey('i');
     created.session.focusAndHandle(insert.event);
-    expect(insert.preventDefault).toHaveBeenCalledOnce();
+    expect(insert.preventDefault).toHaveBeenCalled();
     expect(created.indicator.textContent).toBe('-- NATIVE --');
-    unregister();
-    unregister();
-    expect(run).not.toHaveBeenCalled();
     created.session.dispose();
   });
 
@@ -2328,24 +2321,6 @@ describe('Reader module configuration', () => {
     expect(zoomIn).toHaveBeenCalledOnce();
     expect(created.session.input.keyBuffer).toBe('');
     created.session.dispose();
-  });
-
-  it('allows Select without annotations and annotations without Select', () => {
-    const select = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
-      'modules.reader-annotations.enabled': false,
-    });
-    select.session.acceptSelectionParams({ annotation: { text: 'text' } });
-    expect(select.session.mode).toBe('visual');
-    select.session.dispose();
-
-    const annotation = createHistorySession({}, {}, DEFAULT_BINDINGS, () => {}, {
-      'modules.reader-selection.enabled': false,
-    });
-    annotation.session.acceptSelectionParams({ annotation: { text: 'text' } });
-    expect(annotation.session.mode).toBe('normal');
-    expect(annotation.session.state.selectionParams?.annotation.text).toBe('text');
-    expect(annotation.session.selectionContext()).toBeNull();
-    annotation.session.dispose();
   });
 });
 

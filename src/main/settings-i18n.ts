@@ -34,16 +34,8 @@ export function settingsToggleLabels(language: SettingsLanguage): {
 const SCOPE_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
   'Main window': 'Main window',
   'Reader session': 'Reader session',
-  'Tag picker': 'Tag picker',
-  'Collection picker': 'Collection picker',
   'Reader view': 'Reader view',
-  'Native sidebar': 'Native sidebar',
-  'Selection action': 'Selection action',
-  'Comment editor': 'Comment editor',
   'Hint overlay': 'Hint overlay',
-  'Note editor': 'Note editor',
-  'Note picker': 'Note picker',
-  'Tab picker': 'Tab picker',
   'Plugin manager': 'Plugin manager',
 };
 

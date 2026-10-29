@@ -3,17 +3,20 @@ import { parseBindingKey, type BindingContext, type BindingMap } from '../input/
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import {
   BUILTIN_MODULES,
+  OPTIONAL_MODULE_IDS,
+  isOptionalModule,
   actionContribution,
   validateBuiltinModules,
   type BuiltinModuleId,
   type ModuleHostKind,
+  type OptionalModuleId,
 } from '../modules';
 import type { Cleanup } from './cleanup';
 import { reportDiagnosticError, type Logger } from './logging';
 import { ModuleHost } from './module-host';
 import type { PreferenceReader } from './preferences';
 
-export type ModuleFlags = Readonly<Record<BuiltinModuleId, boolean>>;
+export type ModuleFlags = Readonly<Record<OptionalModuleId, boolean>>;
 export type ModuleStatus = 'enabled' | 'disabled' | 'blocked' | 'failed' | 'pending';
 export interface ModuleInstanceState {
   readonly host: ModuleHostKind;
@@ -35,7 +38,7 @@ interface Activation {
   status: ModuleStatus;
   failure: string | null;
 }
-export function modulePreferenceKey(id: BuiltinModuleId): string {
+export function modulePreferenceKey(id: OptionalModuleId): string {
   return `modules.${id}.enabled`;
 }
 
@@ -58,16 +61,20 @@ export class BuiltinModuleRuntime {
     validateBuiltinModules(BUILTIN_MODULES);
     this.#preferences = preferences;
     this.logger = logger;
-    this.applied = Object.freeze(applied ?? this.requested());
+    const flags = applied ?? this.requested();
+    this.applied = Object.freeze({
+      'reader-hints': flags['reader-hints'],
+      extensions: flags.extensions,
+    });
   }
 
   requested(): ModuleFlags {
     return Object.fromEntries(
-      BUILTIN_MODULES.map(({ id }) => [
+      OPTIONAL_MODULE_IDS.map((id) => [
         id,
         this.#preferences.get(modulePreferenceKey(id), true) === true,
       ]),
-    ) as Record<BuiltinModuleId, boolean>;
+    ) as Record<OptionalModuleId, boolean>;
   }
 
   /** Includes transitive disabled dependencies without changing any persisted request. */
@@ -76,7 +83,7 @@ export class BuiltinModuleRuntime {
     const visit = (current: BuiltinModuleId): void => {
       const description = BUILTIN_MODULES.find((entry) => entry.id === current)!;
       for (const dependency of description.requires) {
-        if (!flags[dependency]) missing.add(dependency);
+        if (isOptionalModule(dependency) && !flags[dependency]) missing.add(dependency);
         visit(dependency);
       }
     };
@@ -153,6 +160,8 @@ export class BuiltinModuleRuntime {
   inspect(owner: object): ModuleSettingsState[] {
     const requested = this.requested();
     return BUILTIN_MODULES.map(({ id }) => {
+      const applied = isOptionalModule(id) ? this.applied[id] : true;
+      const requestedFlag = isOptionalModule(id) ? requested[id] : true;
       const instances = [...this.#scopes]
         .filter(
           (scope) =>
@@ -162,7 +171,7 @@ export class BuiltinModuleRuntime {
         .filter((scope) => scope.supports(id))
         .map((scope) => scope.state(id));
       const dependencyIds = this.blocked(id);
-      const status: ModuleStatus = !this.applied[id]
+      const status: ModuleStatus = !applied
         ? 'disabled'
         : dependencyIds.length
           ? 'blocked'
@@ -175,9 +184,9 @@ export class BuiltinModuleRuntime {
                 : 'pending';
       return {
         id,
-        applied: this.applied[id],
-        requested: requested[id],
-        pendingRestart: this.applied[id] !== requested[id],
+        applied,
+        requested: requestedFlag,
+        pendingRestart: applied !== requestedFlag,
         status,
         dependencyIds: [
           ...new Set([...dependencyIds, ...instances.flatMap((entry) => entry.dependencyIds)]),
@@ -231,7 +240,7 @@ export class BuiltinModuleScope {
 
   state(id: BuiltinModuleId): ModuleInstanceState {
     const activation = this.#activations.get(id);
-    if (!this.#runtime.applied[id])
+    if (isOptionalModule(id) && !this.#runtime.applied[id])
       return { host: this.kind, status: 'disabled', dependencyIds: [], failure: null };
     if (activation?.status === 'failed')
       return { host: this.kind, status: 'failed', dependencyIds: [], failure: activation.failure };
@@ -252,7 +261,7 @@ export class BuiltinModuleScope {
     return (
       this.isCurrent() &&
       this.supports(id) &&
-      this.#runtime.applied[id] &&
+      (!isOptionalModule(id) || this.#runtime.applied[id]) &&
       !this.#activations.get(id)?.attempted &&
       this.#runtime.blocked(id).length === 0
     );

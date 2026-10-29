@@ -1,6 +1,6 @@
 import { modulePreferenceKey, type ModuleFlags } from '../core/module-runtime';
 import type { PreferenceReader } from '../core/preferences';
-import { BUILTIN_MODULES } from '../modules';
+import { OPTIONAL_MODULE_IDS } from '../modules';
 
 const STARTUP_FLAGS = Symbol.for('zotero-neo.startup-module-flags');
 type ModuleStartupHost = typeof Zotero & { readonly [STARTUP_FLAGS]?: string };
@@ -12,10 +12,16 @@ type ModuleStartupHost = typeof Zotero & { readonly [STARTUP_FLAGS]?: string };
 export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
   const host = Zotero as ModuleStartupHost;
   const saved = host[STARTUP_FLAGS];
-  if (saved !== undefined) return Object.freeze(JSON.parse(saved) as ModuleFlags);
+  if (saved !== undefined) {
+    const previous = JSON.parse(saved) as ModuleFlags;
+    return Object.freeze({
+      'reader-hints': previous['reader-hints'],
+      extensions: previous.extensions,
+    });
+  }
   const flags = Object.freeze(
     Object.fromEntries(
-      BUILTIN_MODULES.map(({ id }) => [
+      OPTIONAL_MODULE_IDS.map((id) => [
         id,
         preferences.get(modulePreferenceKey(id), true) === true,
       ]),
