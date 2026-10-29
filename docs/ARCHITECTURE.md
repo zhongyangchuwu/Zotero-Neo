@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十一个内置模块的边界与迁移约束。静态清单、启动启用图、实际宿主依赖及 Settings 模块配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#modules)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十一项内部模块分区及其迁移约束：九个核心分区固定启用，只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）是可选增强。静态清单、实际宿主依赖及两项增强的启动配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#modules)，下文维护运行时所有权。
 
 ## 分层 {#layers}
 
@@ -26,7 +26,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。停用模块的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。九个核心分区固定启用；只有 `reader-hints` 与 `extensions` 可按已应用请求关闭。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
@@ -52,7 +52,7 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
-`BuiltinModuleRuntime` 分开保存当前已应用图与重新读取的偏好请求。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存不可变布尔图的 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，真正重启 Zotero 后才应用新请求。Settings 显示当前窗口相关实例、依赖、失败与待重启状态，恢复默认只清除模块请求。
+`BuiltinModuleRuntime` 对两项可选增强分别保存已应用值与偏好请求；九个核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存不可变布尔图的 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，真正重启 Zotero 后才应用可选项的新请求。Settings 显示可选增强的请求、已应用值、当前宿主状态与待重启状态；恢复默认只清除这两项请求。
 
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。

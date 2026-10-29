@@ -35,6 +35,16 @@ export type BuiltinModuleId =
   | 'notes'
   | 'workspace'
   | 'extensions';
+
+export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions'] as const;
+export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
+const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
+
+/** Internal ownership is not a user switch; only independent enhancements are optional. */
+export function isOptionalModule(id: BuiltinModuleId): id is OptionalModuleId {
+  return OPTIONAL_MODULE_ID_SET.has(id);
+}
+
 export type ModuleHostKind = 'main' | 'reader';
 export interface BuiltinModuleDescriptor {
   readonly id: BuiltinModuleId;
@@ -206,7 +216,7 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
   },
   {
     id: 'reader-hints',
-    names: { en: 'Reader Hints', 'zh-CN': '阅读提示' },
+    names: { en: 'Link and Copy Hints', 'zh-CN': '链接与复制提示' },
     hosts: ['reader'],
     scopes: ['Reader session', 'Reader view', 'Hint overlay'],
     requires: [],
@@ -253,7 +263,7 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
   },
   {
     id: 'extensions',
-    names: { en: 'Extensions', 'zh-CN': '扩展' },
+    names: { en: 'Plugin Manager', 'zh-CN': '扩展管理面板' },
     hosts: ['main'],
     scopes: ['Main window', 'Plugin manager'],
     requires: [],
@@ -267,6 +277,15 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ui: ['Plugin manager'],
   },
 ];
+
+export type OptionalModuleDescriptor = BuiltinModuleDescriptor & {
+  readonly id: OptionalModuleId;
+};
+
+/** Settings and persisted startup requests contain enhancements, never core controls. */
+export const OPTIONAL_MODULES: readonly OptionalModuleDescriptor[] = BUILTIN_MODULES.filter(
+  (descriptor): descriptor is OptionalModuleDescriptor => isOptionalModule(descriptor.id),
+);
 
 /** Reject ambiguous ownership and invalid dependency graphs before any factory runs. */
 export function validateBuiltinModules(descriptions: readonly BuiltinModuleDescriptor[]): void {

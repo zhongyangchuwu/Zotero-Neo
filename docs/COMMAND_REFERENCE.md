@@ -26,7 +26,7 @@
 
 ## 模式、焦点与功能可用性 {#modes-focus-and-capabilities}
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令。命令是否可用还取决于对应内置模块是否启用；模块状态及应用时机见[模块设置指南](SETTINGS_GUIDE.md#modules)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用，只有链接与复制提示（`reader-hints`）和扩展管理面板（`extensions`）可关闭，设置见[模块设置指南](SETTINGS_GUIDE.md#modules)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |

@@ -1579,7 +1579,7 @@ function settingsMainHost(initial: Record<string, boolean | number | string> = {
 }
 
 describe('startup module configuration', () => {
-  it('passes disabled Library input through while retaining the native Settings entry', () => {
+  it('keeps core Main input and Settings available with every legacy module request off', () => {
     const disabled = Object.fromEntries(
       BUILTIN_MODULES.map(({ id }) => [`modules.${id}.enabled`, false]),
     );
@@ -1589,32 +1589,13 @@ describe('startup module configuration', () => {
     });
     try {
       const event = host.press('j');
-      expect(event.preventDefault).not.toHaveBeenCalled();
-      expect(event.stopPropagation).not.toHaveBeenCalled();
+      expect(event.preventDefault).toHaveBeenCalled();
       expect(host.press('q').preventDefault).not.toHaveBeenCalled();
       expect(host.press('q').preventDefault).not.toHaveBeenCalled();
       expect(host.controller.openSettings(host.window)).toBe(true);
       expect(host.drawer()?.id).toBe('zotero-neo-settings-center');
     } finally {
       host.controller.shutdown();
-    }
-  });
-
-  it('keeps the applied Library input after requests change until a new startup', () => {
-    const host = settingsMainHost();
-    try {
-      host.values.set('modules.library.enabled', false);
-      expect(host.press('j').preventDefault).toHaveBeenCalled();
-    } finally {
-      host.controller.shutdown();
-    }
-    const restarted = settingsMainHost({ 'modules.library.enabled': false });
-    try {
-      expect(restarted.press('j').preventDefault).not.toHaveBeenCalled();
-      expect(restarted.controller.openSettings(restarted.window)).toBe(true);
-      expect(restarted.drawer()?.id).toBe('zotero-neo-settings-center');
-    } finally {
-      restarted.controller.shutdown();
     }
   });
 });

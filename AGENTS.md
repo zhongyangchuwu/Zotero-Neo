@@ -128,7 +128,7 @@ src/
   i18n/                    shared app localization and locale catalogs
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and matcher
-  main/                    main-window controller and UI features
+  modules/                 eleven internal partitions; nine core; optional Link and Copy Hints (`reader-hints`) and Plugin Manager (`extensions`)
   reader/                  reader lifecycle and features
   toolkit/                 internal Main (including Note-pane) and Reader host capabilities
   platform/                narrow host-boundary adapters

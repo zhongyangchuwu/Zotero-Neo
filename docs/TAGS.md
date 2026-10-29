@@ -32,4 +32,4 @@ Zotero 中的标签仍是扁平字符串。标签选择器可以把匹配的前�
 
 添加标签时，选择末级现有标签或明确的 **+ Create** 候选项；移除标签和主窗口筛选器只使用现有标签。分隔符可在**设置 → 高级 → 命名空间分隔符**中配置，默认是 `/`；留空时按扁平标签匹配。更改分隔符只会改变候选项分组，不会改动已存储的标签名，也不会创建父标签。详见[标签命名空间设置](SETTINGS_GUIDE.md#use-tag-namespaces)。
 
-完整快捷键和目标解析规则见[命令参考：主窗口](COMMAND_REFERENCE.md#main-window)。标签操作未出现在当前界面时，可先检查所属[模块设置](SETTINGS_GUIDE.md#modules)。
+完整快捷键和目标解析规则见[命令参考：主窗口](COMMAND_REFERENCE.md#main-window)。标签操作属于固定启用的核心功能；入口缺失时先检查焦点和[当前绑定](SETTINGS_GUIDE.md#try-it)。

@@ -8,7 +8,7 @@
 
 ### 新增 {#added}
 
-- 在现有 Neo 设置中开放十二个内置模块的启动配置，默认全部开启。草稿依赖预览、已保存请求与已应用值分开展示，标明启用、停用、阻止、失败、等待宿主及等待重启；保存不自动切换依赖，只有真正重启 Zotero 才应用，Neo 重载沿用本进程启用图。原生偏好页与公共设置入口始终保留。
+- 此前曾开放十二个内置模块的启动配置；当前保留十一项内部功能分区，但只开放 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）两项可选增强。九个核心分区固定启用，旧核心关闭值忽略；两项增强沿用原偏好键及重启后应用、Neo 重载沿用进程快照的语义。
 - 增加模块基座和标签模块接入：按 MainWindow 隔离作用域，登记唯一上下文/动作贡献，退休回调后清理资源，激活失败时回滚部分资源并保留原始错误。Main、Reader、Note 的标签目标、原生事务与默认绑定不变。
 - 增加七个默认无绑定的 Main 分类命令，支持查找分类、连续添加已有条目、移动条目/分类，以及通过原生对话框创建、重命名、删除。复用现有 Palette 和 Picker，不新增控件；保留原生分类编辑、拖放、`<Space>fc` 与 Persistent Selection。
 - 在 Main 和 Reader Normal 增加 **Add Item by Identifier**，默认 `<Space>ai`，支持重绑定和 Command Palette 发现。复用 Zotero 原生输入、批量查找、保存与错误处理，保留草稿和原生 IME/Enter/Escape 所有权。Reader 标签页与独立窗口返回实际关联 Library，不借用条目 Selection；拒绝歧义或只读库 Scope。
@@ -24,7 +24,7 @@
 ### 调整 {#changed}
 
 - 用户总览、功能与日常工作流指南、命令参考及输入法说明统一为中文，保留原 URL、标题锚点和技术标识。补齐模块状态排错，明确公开发行版与当前开发构建的区别；使用说明与项目验收协议分开维护。
-- 按静态清单、精确上下文及实际宿主实例过滤模块能力，在按键匹配、count/前缀、Guide 与 Palette 前排除不可用贡献，保留动作元数据和用户绑定。Capture 等待实际 Notes/Selection 依赖，不要求 Main 启动时先有 Reader；停用 Worksets 后标签/分类仍使用当前目标。Reader Select、原生批注、hints 与 Workspace 按独立能力退化，旧行为开关保持原义。
+- 按静态清单、精确上下文及实际宿主实例过滤模块能力，在按键匹配、count/前缀、Guide 与 Palette 前排除不可用贡献，保留动作元数据和用户绑定。Capture 等历史迁移记录保留原有 Notes/Selection 依赖；此前可关闭模块的版本中，停用 Worksets 后标签/分类仍使用当前目标。当前 Worksets 属于固定启用核心；Reader Select、原生批注、链接与复制提示、Workspace 的故障隔离不由用户开关控制，旧行为偏好保持原义。
 - 将标签页候选、切换/循环/关闭、Reader/Note 的 Show in Library 与 Reader 分屏/方向焦点接入 `workspace`。Picker 取得显式标签页来源，Surface 传入自己的目标；普通按键与 Palette 共用真实实现，方向焦点实际成功才消费按键。唯一历史、原生标签页重扫、NativeInput 及 Main/Note 通用面板焦点仍由基座负责，不依赖 Library 或 Reader 导航模块；不新增动作或绑定。
 - 将批注创建、删除、改色、过滤、复制及评论编辑接入 `reader-annotations`。Select 下划线与 Add note 使用模块的具名贡献；Surface 保留 CurrentTarget、NativeInput、`i` 和 `zb` 的混合路由。评论交互绑定精确视图与 Document，部分获取和重入退出释放自有资源；已接纳保存继续完成，但旧状态和焦点不复活。不新增动作、绑定或运行时依赖。
 - 将 Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本和 Selection Actions 接入 `reader-selection`。公共选择 API 与注册 disposer 保持原签名；应用级动作定义不随单个 Reader 释放。Capture、下划线和 Add note 仍由具名贡献提供，选择模块不拥有批注或 Note 写入，不依赖导航模块。

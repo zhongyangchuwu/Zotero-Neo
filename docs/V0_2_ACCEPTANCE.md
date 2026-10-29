@@ -171,6 +171,9 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 ### U9：变更与可选集成
 
+- 模块边界：在一次性 profile 中，将 `library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 各自对应的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）。保存请求前后、Neo 重载后确认当前能力不变；真正重启 Zotero 后确认只关闭两项增强，九个核心仍提供 Main、Reader、Note 与 Workspace 工作流，包括 Main Visual、选择/批注、导航、笔记查找和标签/分类操作。
+- 恢复默认模块请求，只恢复 `reader-hints` 与 `extensions` 两项默认启用值；对照确认九个核心旧值及 `noteEditor.enabled` 等行为偏好未被改写。模块保存与恢复默认都不得改变快捷键、行为偏好或 Zotero 数据。
+
 - 标签／集合操作在主窗口以 Neo 选择集为优先目标，在阅读器／笔记编辑器中使用各自上下文，操作目标和数量应清楚可解释。主窗口清除视图筛选不等于清除 Neo 选择集。
 - 对一次性测试条目执行 Trash 取消，再执行确认／`u` 恢复；应能观察到对隐藏 Neo 选择集成员的拒绝，以及取消后的保存结果。阅读器中的批注删除是永久操作，仅使用一次性测试批注并检查确认。
 - 只有实际安装并工作的 Better BibTeX 才验收 citekey；只有实际 Translate provider 才录制翻译结果。未具备条件的可选场景写 `NOT APPLICABLE` 并说明条件，不能替代任何必需场景。

@@ -7,13 +7,19 @@ import {
   type ModuleSettingsState,
   type ModuleStatus,
 } from '../core/module-runtime';
-import { BUILTIN_MODULES, type BuiltinModuleId, type BuiltinModuleDescriptor } from '../modules';
+import {
+  BUILTIN_MODULES,
+  OPTIONAL_MODULES,
+  type BuiltinModuleId,
+  type OptionalModuleDescriptor,
+  type OptionalModuleId,
+} from '../modules';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
 import { settingsButton, settingsStatus } from './settings-ui';
 
 const H = 'http://www.w3.org/1999/xhtml';
 
-type ModuleFlags = Record<BuiltinModuleId, boolean>;
+type ModuleFlags = Record<OptionalModuleId, boolean>;
 
 interface ModuleRow {
   readonly checkbox: HTMLInputElement;
@@ -24,17 +30,15 @@ interface ModuleRow {
 /** Shows startup-applied module state separately from editable persisted requests. */
 export class SettingsModules {
   readonly #root: HTMLElement;
-  readonly #document: Document;
   readonly #owner: object;
   readonly #preferences: PreferenceStore;
   readonly #modules: BuiltinModuleRuntime;
   readonly #language: SettingsLanguage;
   readonly #saved: ModuleFlags;
   readonly #draft: ModuleFlags;
-  readonly #rows = new Map<BuiltinModuleId, ModuleRow>();
+  readonly #rows = new Map<OptionalModuleId, ModuleRow>();
   readonly #cleanups: Array<() => void> = [];
   readonly #status: HTMLElement;
-  readonly #impactList: HTMLElement;
   readonly #saveButton: HTMLButtonElement;
 
   constructor(
@@ -45,7 +49,6 @@ export class SettingsModules {
     language: SettingsLanguage,
   ) {
     this.#root = root;
-    this.#document = window.document;
     this.#owner = window;
     this.#preferences = preferences;
     this.#modules = modules;
@@ -58,13 +61,13 @@ export class SettingsModules {
     root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
 
     const title = doc.createElementNS(H, 'h2');
-    title.textContent = settingsText(language, 'Module requests');
+    title.textContent = settingsText(language, 'Optional enhancements');
     title.style.cssText = 'margin:0 0 0.35em;font-size:1.55em';
 
     const description = doc.createElementNS(H, 'p');
     description.textContent = settingsText(
       language,
-      'Choose which built-in modules Neo requests after restart.',
+      'Choose which optional enhancements to request after restarting Zotero. Core library, worksets, tags, collections, reader navigation, selection, annotations, notes, and workspace remain available and are not affected.',
     );
     description.style.cssText = 'margin:0 0 0.8em';
 
@@ -91,29 +94,14 @@ export class SettingsModules {
 
     this.#status = settingsStatus(doc);
 
-    const impact = doc.createElementNS(H, 'section');
-    impact.style.cssText =
-      'margin:0 0 1em;padding:0.7em;border:1px solid var(--zotero-neo-border);border-radius:5px';
-    const impactTitle = doc.createElementNS(H, 'h3');
-    impactTitle.textContent = settingsText(language, 'Draft dependency impact');
-    impactTitle.style.cssText = 'margin:0 0 0.35em;font-size:1.05em';
-    const impactDescription = doc.createElementNS(H, 'p');
-    impactDescription.textContent = settingsText(
-      language,
-      'These warnings do not prevent saving; dependencies are never toggled automatically.',
-    );
-    impactDescription.style.cssText = 'margin:0 0 0.4em';
-    this.#impactList = doc.createElementNS(H, 'div');
-    impact.append(impactTitle, impactDescription, this.#impactList);
-
     const rows = doc.createElementNS(H, 'div');
     rows.style.cssText = 'display:grid;gap:8px';
-    for (const descriptor of BUILTIN_MODULES) rows.append(this.#createRow(doc, descriptor));
+    for (const descriptor of OPTIONAL_MODULES) rows.append(this.#createRow(doc, descriptor));
 
-    root.append(title, description, actions, this.#status, impact, rows);
+    root.append(title, description, actions, this.#status, rows);
 
     try {
-      for (const { id } of BUILTIN_MODULES) {
+      for (const { id } of OPTIONAL_MODULES) {
         const cleanup = preferences.observe?.(modulePreferenceKey(id), () =>
           this.#syncRequestedPreferences(),
         );
@@ -127,7 +115,7 @@ export class SettingsModules {
     }
   }
 
-  #createRow(doc: Document, descriptor: BuiltinModuleDescriptor): HTMLElement {
+  #createRow(doc: Document, descriptor: OptionalModuleDescriptor): HTMLElement {
     const row = doc.createElementNS(H, 'article');
     row.setAttribute('data-module-id', descriptor.id);
     row.style.cssText = 'padding:0.7em;border:1px solid var(--zotero-neo-border);border-radius:5px';
@@ -176,7 +164,7 @@ export class SettingsModules {
 
   #save(): void {
     try {
-      for (const { id } of BUILTIN_MODULES) {
+      for (const { id } of OPTIONAL_MODULES) {
         if (this.#draft[id] !== this.#saved[id])
           this.#preferences.set(modulePreferenceKey(id), this.#draft[id]);
       }
@@ -192,10 +180,10 @@ export class SettingsModules {
   }
 
   #restoreDefaults(): void {
-    for (const { id } of BUILTIN_MODULES) this.#draft[id] = true;
+    for (const { id } of OPTIONAL_MODULES) this.#draft[id] = true;
     this.#refresh();
     try {
-      for (const { id } of BUILTIN_MODULES) this.#preferences.clear(modulePreferenceKey(id));
+      for (const { id } of OPTIONAL_MODULES) this.#preferences.clear(modulePreferenceKey(id));
       this.#syncRequestedPreferences();
       this.#status.textContent = '';
     } catch {
@@ -209,7 +197,7 @@ export class SettingsModules {
 
   #syncRequestedPreferences(): void {
     const requested = this.#modules.requested();
-    for (const { id } of BUILTIN_MODULES) {
+    for (const { id } of OPTIONAL_MODULES) {
       if (this.#draft[id] === this.#saved[id]) this.#draft[id] = requested[id];
       this.#saved[id] = requested[id];
     }
@@ -220,7 +208,7 @@ export class SettingsModules {
     const states = new Map(
       this.#modules.inspect(this.#owner).map((state) => [state.id, state] as const),
     );
-    for (const descriptor of BUILTIN_MODULES) {
+    for (const descriptor of OPTIONAL_MODULES) {
       const state = states.get(descriptor.id);
       const row = this.#rows.get(descriptor.id);
       if (!state || !row) continue;
@@ -244,10 +232,9 @@ export class SettingsModules {
       row.summary.textContent = summary.join(' · ');
       row.details.textContent = this.#runtimeDetails(descriptor, state);
     }
-    this.#saveButton.disabled = BUILTIN_MODULES.every(
+    this.#saveButton.disabled = OPTIONAL_MODULES.every(
       ({ id }) => this.#draft[id] === this.#saved[id],
     );
-    this.#renderImpactPreview();
   }
 
   #statusText(status: ModuleStatus): string {
@@ -265,7 +252,7 @@ export class SettingsModules {
     }
   }
 
-  #runtimeDetails(descriptor: BuiltinModuleDescriptor, state: ModuleSettingsState): string {
+  #runtimeDetails(descriptor: OptionalModuleDescriptor, state: ModuleSettingsState): string {
     const details = state.instances.map((instance) => {
       const host = settingsScopeText(
         this.#language,
@@ -303,38 +290,6 @@ export class SettingsModules {
 
   #moduleName(id: BuiltinModuleId): string {
     return BUILTIN_MODULES.find((descriptor) => descriptor.id === id)?.names[this.#language] ?? id;
-  }
-
-  #renderImpactPreview(): void {
-    const doc = this.#document;
-    const impacts = BUILTIN_MODULES.flatMap((descriptor) => {
-      if (!this.#draft[descriptor.id]) return [];
-      const missing = this.#modules.blocked(descriptor.id, this.#draft);
-      return missing.length
-        ? [
-            `${descriptor.names[this.#language]} — ${settingsText(
-              this.#language,
-              'Missing required dependencies:',
-            )} ${missing.map((id) => this.#moduleName(id)).join(', ')}`,
-          ]
-        : [];
-    });
-    this.#impactList.replaceChildren();
-    const message = doc.createElementNS(H, impacts.length ? 'ul' : 'p');
-    message.style.cssText = 'margin:0';
-    if (impacts.length) {
-      for (const impact of impacts) {
-        const item = doc.createElementNS(H, 'li');
-        item.textContent = impact;
-        message.append(item);
-      }
-    } else {
-      message.textContent = settingsText(
-        this.#language,
-        'No required dependencies are missing from these draft requests.',
-      );
-    }
-    this.#impactList.append(message);
   }
 
   dispose(): void {
