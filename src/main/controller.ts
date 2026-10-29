@@ -3,8 +3,6 @@ import type {
   MainWindowControllerApi,
   MainWindowControllerDependencies,
   MainWindow,
-  ReaderSelectionContext,
-  ReaderNoteCaptureResult,
 } from '../core/contracts';
 import { CleanupFailure, type Cleanup } from '../core/cleanup';
 import type { BuiltinModuleScope } from '../core/module-runtime';
@@ -54,7 +52,6 @@ import { createTagModule, type TagModule } from '../modules/tags';
 import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
 import { createNotesModule, type NotesModule } from '../modules/notes';
-import { createCaptureModule, type CaptureModule } from '../modules/capture';
 import { createWorkspaceModule, type WorkspaceModule } from '../modules/workspace';
 import type { PickerOpenOptions } from './picker/types';
 import {
@@ -109,7 +106,6 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly worksets: WorksetsModule | null;
       readonly library: LibraryModule | null;
       readonly notes: NotesModule | null;
-      readonly capture: CaptureModule | null;
       readonly workspace: WorkspaceModule | null;
     }
   >();
@@ -361,16 +357,6 @@ export class MainWindowController implements MainWindowControllerApi {
         }),
       );
       if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
-      const capture = scope.activate('capture', () =>
-        createCaptureModule(host, {
-          window,
-          logger: this.#dependencies.logger,
-          pickerBusy: () => session.picker.open,
-          status: (message) => this.#navigation.status(session, message),
-          choose: chooseNotes,
-        }),
-      );
-      if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
       const workspace = scope.activate('workspace', () =>
         createWorkspaceModule(host, {
           window,
@@ -424,7 +410,6 @@ export class MainWindowController implements MainWindowControllerApi {
         worksets,
         library,
         notes,
-        capture,
         workspace,
       });
     } catch (error) {
@@ -465,10 +450,6 @@ export class MainWindowController implements MainWindowControllerApi {
 
   private notesModule(session: MainWindowSession): NotesModule | null {
     return this.#modules.get(session)?.notes ?? null;
-  }
-
-  private captureModule(session: MainWindowSession): CaptureModule | null {
-    return this.#modules.get(session)?.capture ?? null;
   }
 
   private workspaceModule(session: MainWindowSession): WorkspaceModule | null {
@@ -892,22 +873,6 @@ export class MainWindowController implements MainWindowControllerApi {
     const request = { source: 'reader', label: 'context item', resolveTargets } as const;
     if (present) this.collectionsModule(session)?.add(request);
     else this.collectionsModule(session)?.remove(request);
-  }
-
-  async captureReaderSelectionToNote(
-    context: ReaderSelectionContext,
-    ownerWindow: MainWindow | null,
-  ): Promise<ReaderNoteCaptureResult> {
-    if (!ownerWindow) {
-      this.#dependencies.logger.debug('ignored Reader note capture: no owner window');
-      return null;
-    }
-    const session = this.#sessions.get(ownerWindow);
-    if (!session) {
-      this.#dependencies.logger.debug('ignored Reader note capture: owner window detached');
-      return null;
-    }
-    return (await this.captureModule(session)?.capture(context)) ?? null;
   }
 
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void {

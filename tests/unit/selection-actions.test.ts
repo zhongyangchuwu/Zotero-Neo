@@ -195,7 +195,7 @@ describe('ReaderSelectionActions', () => {
     const run = vi.fn();
     const mutable = { ...context };
     const palette = createPalette({
-      actions: () => [{ id: 'capture', label: 'Capture', run }],
+      actions: () => [{ id: 'example', label: 'Example', run }],
       themeRoot: () => () => {},
       copyText: () => {},
       showStatus: () => {},
@@ -287,7 +287,7 @@ describe('ReaderSelectionActions', () => {
     const showStatus = vi.fn();
     let pending = Promise.withResolvers<{ status: string }>();
     const palette = createPalette({
-      actions: () => [{ id: 'capture', label: 'Capture', run: () => pending.promise }],
+      actions: () => [{ id: 'example', label: 'Example', run: () => pending.promise }],
       themeRoot: () => () => {},
       copyText: () => {},
       showStatus,
@@ -314,12 +314,12 @@ describe('ReaderSelectionActions', () => {
     palette.close();
   });
 
-  it('retires completed capture presentation without stealing replacement workspace focus', async () => {
+  it('retires completed action presentation without stealing replacement workspace focus', async () => {
     const created = createWindow();
     const showStatus = vi.fn();
     const pending = Promise.withResolvers<{ retired: true }>();
     const palette = createPalette({
-      actions: () => [{ id: 'capture', label: 'Capture', run: () => pending.promise }],
+      actions: () => [{ id: 'example', label: 'Example', run: () => pending.promise }],
       themeRoot: () => () => {},
       copyText: () => {},
       showStatus,

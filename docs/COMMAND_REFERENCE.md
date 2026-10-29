@@ -175,13 +175,13 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `swapVisualEnds` | `o` | 交换锚点和活动端。 |
 | `openSelectionActions` | `a`、`<Enter>`、`<Return>` | 打开选区操作临时面板；取消不会清除选区。 |
 | `highlightYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | 根据当前范围创建相应颜色的批注。 |
-| `addNote` | `za`、`i` | 创建批注并打开其评论编辑器。此操作不同于“摘录到笔记”。 |
+| `addNote` | `za`、`i` | 在 PDF 中创建批注并打开其评论编辑器。 |
 | `copySelection` | `y` | 复制已选 PDF 文本，并规范化换行和空白。 |
 | `searchSelection` | `#` | 在 Reader 中搜索选中文字。 |
 | `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
 | `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。选择显示的提示，或按 Enter 选择最近的匹配项；查询范围过宽时，可缩小查询以显示提示。按 Escape 取消 Flash 并保留当前选区。选区操作提供“捕获到笔记”“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#try-it)。
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。选择显示的提示，或按 Enter 选择最近的匹配项；查询范围过宽时，可缩小查询以显示提示。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#try-it)。
 Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#annotation-comment-editor)。
 
 ## 主窗口 {#main-window}
@@ -282,7 +282,6 @@ Note 中，计数会重复 `h/l` / `j` / `k` / `w` / `b` / `0` / `$` 移动及 `
 
 笔记选择器（`fn`）默认显示当前条目的笔记。**Browse library**（浏览文库）可查找该文库中的其他现有笔记；**Current item**（当前条目）返回起始条目。预览会显示笔记所属条目和正文。确认 `fn` 的结果会打开该笔记。
 
-**摘录到笔记**是独立的选区操作流程：将已选文字追加到同一文库中的现有笔记。确认前按 Escape 会取消且不写入；保存获准开始后，关闭选择器或按 Escape 都不会撤销保存。目标笔记不可用或已变化时会拒绝操作；保存失败时会显示提示。完整操作步骤见[摘录到笔记指南](CAPTURE_GUIDE.md#try-it)。
 
 添加标签时可能会提供明确的创建候选项；移除标签会列出至少分配给一个目标的标签。虚拟命名空间候选项仅用于缩小查询范围，本身不执行标签操作。Main `tf` 会根据当前视图和现有筛选器切换标签筛选；`tc` 不打开选择器，直接清除全部筛选。标签目标、同一文库范围内的修改限制和平面标签存储方式见[标签操作与筛选](TAGS.md)。Main 中，`ca` 和 `cr` 使用同一文库中的目标及直接成员关系计数，而不是递归显示范围：添加只补入缺少的成员关系；移除会列出至少分配给一个目标的分类，并只删除选中的成员关系。Main Normal 中七个分类操作默认未绑定，可从现有 Palette 打开；流程会复用现有选择器或 Zotero 原生名称/确认对话框。**向当前分类添加已有条目**会在每次按 Enter 时单独保存一项，并保持选择器打开；按 Escape 只结束流程，不会撤销已保存的添加。详情见[文库工作流](MAIN_GUIDE.md#change-collection-membership)。
 
@@ -314,7 +313,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 ### 选区操作、Plugin Manager、设置与 Neo 选择集面板 {#selection-actions-plugin-manager-settings-and-selection-panel}
 
-在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“捕获到笔记”“为选区添加下划线”和“添加批注评论”；安装 Zotero Translate 后还会显示“翻译”。按 `y` 可复制结果。
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；安装 Zotero Translate 后还会显示“翻译”。按 `y` 可复制结果。
 
 按 `<Space>pp` 打开常驻 Plugin Manager，并在其中浏览扩展。在 `plugins-list` 中，默认按 `j` / Down、`k` / Up 移动，按 `gg` / Home 和 `G` / End 跳到首项/末项，按 `Ctrl+d` / `Ctrl+u` 翻页，按 `/` 筛选，按 Escape / `q` 关闭。按 `r` 刷新列表；Zotero 允许时可按 `e` / `d` 启用或停用扩展；按 `p` 打开已注册设置，按 `o` 打开主页，按 `R` 打开关联的 GitHub README，按 `L` 打开其提交历史。在 `plugins-input` 中按 Escape 返回结果。哪些生命周期操作可用由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 

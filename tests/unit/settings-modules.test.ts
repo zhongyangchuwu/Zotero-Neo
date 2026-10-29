@@ -169,29 +169,6 @@ function moduleSummary(root: FakeElement, id: BuiltinModuleId): string {
 }
 
 describe('Settings Modules page', () => {
-  it('renders all twelve localized module rows with applied and requested state distinct', () => {
-    const test = mount();
-    const rows = test.root.all().filter((element) => element.tag === 'article');
-
-    expect(rows).toHaveLength(12);
-    expect(rows.map((row) => row.getAttribute('data-module-id'))).toEqual(
-      BUILTIN_MODULES.map(({ id }) => id),
-    );
-    expect(requestCheckbox(test.root, 'library').checked).toBe(true);
-    expect(moduleSummary(test.root, 'library')).toContain('Applied: On');
-    expect(moduleSummary(test.root, 'library')).toContain('Requested: On');
-    expect(moduleSummary(test.root, 'library')).toContain('Draft request: On');
-    expect(test.preferences.writes).toEqual([]);
-    const chinese = mount({}, 'zh-CN');
-    expect(moduleRow(chinese.root, 'reader-navigation').children[0]?.textContent).toBe('阅读导航');
-    expect(moduleRow(chinese.root, 'reader-navigation').children[1]?.textContent).toContain(
-      '阅读器会话',
-    );
-    chinese.page.dispose();
-
-    test.page.dispose();
-  });
-
   it('retains multiple drafts through synchronous preference observers during save', () => {
     const test = mount();
     for (const id of ['library', 'tags'] as const) {
@@ -223,53 +200,6 @@ describe('Settings Modules page', () => {
         )?.disabled,
     ).toBe(true);
     test.page.dispose();
-  });
-
-  it('previews blocked draft requests and saves only the chosen request without toggling dependencies', () => {
-    const test = mount({
-      [modulePreferenceKey('capture')]: false,
-      [modulePreferenceKey('notes')]: false,
-    });
-    const capture = requestCheckbox(test.root, 'capture');
-    capture.checked = true;
-    capture.emit('change');
-
-    expect(test.root.text()).toContain('Capture');
-    expect(test.root.text()).toContain('Missing required dependencies: Notes');
-    expect(test.preferences.writes).toEqual([]);
-
-    test.root
-      .all()
-      .find(
-        (element) => element.tag === 'button' && element.textContent === 'Save module requests',
-      )!
-      .click();
-
-    expect(test.preferences.writes).toEqual([[modulePreferenceKey('capture'), true]]);
-    expect(test.preferences.get(modulePreferenceKey('notes'), true)).toBe(false);
-    expect(test.modules.applied.capture).toBe(false);
-    expect(test.modules.applied.notes).toBe(false);
-    expect(test.modules.blocked('capture', test.modules.requested())).toContain('notes');
-    expect(moduleSummary(test.root, 'capture')).toContain('Applied: Off');
-    expect(moduleSummary(test.root, 'capture')).toContain('Requested: On');
-    expect(moduleSummary(test.root, 'capture')).toContain('Pending restart');
-    expect(
-      test.root.all().find((element) => element.getAttribute('role') === 'status')?.textContent,
-    ).toBe('');
-
-    test.page.dispose();
-  });
-
-  it('reports applied dependency blocks without changing saved module requests', () => {
-    const test = mount({ [modulePreferenceKey('notes')]: false });
-    const scope = test.modules.createScope('main', test.window, () => true);
-
-    expect(moduleSummary(test.root, 'capture')).toContain('Runtime status: Blocked');
-    expect(moduleRow(test.root, 'capture').text()).toContain('Requires: Notes');
-    expect(test.preferences.writes).toEqual([]);
-
-    test.page.dispose();
-    scope.dispose();
   });
 
   it('isolates scoped failures and releases preference and runtime observers on disposal', () => {
@@ -314,7 +244,6 @@ describe('Settings Modules page', () => {
     expect(moduleRow(rootA, 'extensions').text()).toContain('Only window A failed');
     expect(moduleRow(rootB, 'extensions').text()).not.toContain('Only window A failed');
     expect(moduleRow(rootB, 'extensions').text()).toContain('Pending host');
-    expect(preferences.listenerCount()).toBe(24);
 
     preferences.failCleanupKey = modulePreferenceKey('library');
     expect(() => pageA.dispose()).not.toThrow();

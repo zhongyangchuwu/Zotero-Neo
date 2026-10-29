@@ -49,18 +49,6 @@ export type ReaderSelectionActionOutcome =
   | { readonly status: string }
   | { readonly retired: true };
 
-/** Receipt for a completed native note save, not merely a chosen target. */
-export interface ReaderNoteCaptureReceipt {
-  readonly noteID: number;
-  readonly noteTitle: string;
-}
-
-/** Forced chooser replacement keeps the save outcome but retires Reader status/focus. */
-export type ReaderNoteCaptureResult =
-  | ReaderNoteCaptureReceipt
-  | { readonly retired: true; readonly receipt: ReaderNoteCaptureReceipt | null }
-  | null;
-
 export interface ReaderSelectionActionDefinition {
   readonly id: string;
   readonly label: string;
@@ -101,10 +89,6 @@ export interface ReaderMainOperations {
     resolveTargets: () => ItemTargetSet<'reader'>,
   ): void;
   openCommandPalette(window: MainWindow, context: CommandPaletteContext): void;
-  captureReaderSelectionToNote(
-    context: ReaderSelectionContext,
-    ownerWindow: MainWindow | null,
-  ): Promise<ReaderNoteCaptureResult>;
 }
 
 export interface ReaderControllerApi extends ReaderSelectionApi {

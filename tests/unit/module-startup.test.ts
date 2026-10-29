@@ -19,7 +19,6 @@ describe('application module startup flags', () => {
     expect(first.applied.notes).toBe(true);
     expect(reloaded.applied.notes).toBe(true);
     expect(reloaded.requested().notes).toBe(false);
-    expect(reloaded.blocked('capture')).toEqual([]);
     vi.stubGlobal('Zotero', {});
     const restarted = new BuiltinModuleRuntime(
       preferences,
@@ -27,6 +26,5 @@ describe('application module startup flags', () => {
       moduleStartupFlags(preferences),
     );
     expect(restarted.applied.notes).toBe(false);
-    expect(restarted.blocked('capture')).toEqual(['notes']);
   });
 });

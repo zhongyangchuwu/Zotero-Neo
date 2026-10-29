@@ -1,6 +1,6 @@
 # v0.2 候选验收指南
 
-本指南是 v0.2.0 候选的 U1–U10 执行协议。每轮候选提交、版本与 XPI SHA-256 以 [`updates.candidate.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/updates.candidate.json) 和 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142) 为准；不在此固定本轮包身份。将实际验收结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 和 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)：未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
+本指南是 v0.2.0 候选的 U1–U9 执行协议。每轮候选提交、版本与 XPI SHA-256 以 [`updates.candidate.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/updates.candidate.json) 和 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142) 为准；不在此固定本轮包身份。将实际验收结果记录到 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 和 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)：未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
 
 ## 1. 固定候选与边界
 
@@ -52,7 +52,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 - 文献 C，无子笔记；一条独立笔记；两个测试集合；两个可删除的测试条目。
 - 可选：已安装且可正常工作的 Better BibTeX／Translate，或一个可安全停用且有注册设置入口的测试插件。未安装时记录条件缺失，不把该项记为通过。
 
-建立数据可以使用 Zotero 原生界面。它是测试准备，不是“Capture 自动创建笔记”功能。
+建立数据可以使用 Zotero 原生界面。
 
 ## 3. 安装和升级
 
@@ -158,20 +158,10 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 ## 6. 发布工作流回归
 
-这些场景同时可供 S1–S7 [录屏脚本](RECORDING_GUIDE.md)引用；发布验收应记录真实结果，宣传片不自动成为证据。
+这些场景同时可供 S1–S6 [录屏脚本](RECORDING_GUIDE.md)引用；发布验收应记录真实结果，宣传片不自动成为证据。
 
-### U8：当前文献笔记与 Capture
 
-1. 在阅读器 A 创建／采用一段真实的文本选区，`a` 或 Enter 打开 Selection Actions，选择 **Capture to note**（中文界面：**捕获到笔记**）。
-2. 初始只列 A 的已有笔记；显式 **Browse library** 后才列同库其他已有笔记。保留查询，同名 A/B 笔记的 Preview 显示所属条目和分段正文。
-3. 取消确认前的 chooser，检查笔记无新增正文、阅读器恢复焦点。
-4. 明确确认 A 的目标，观察保存结果指明目标；原笔记 HTML/文字不丢失，只有一段捕获引用及可用页码。快速重复确认不能把另一个 Preview 写成目标。
-5. 对 C 的无笔记情形，当前范围是诚实空列表，不能自动切 Library、创建笔记或写 backlink；显式 Library 浏览后可选择已有同库目标。
-6. 将一个尚未确认的笔记在原生界面改为属于其他条目后，再确认旧候选；应拒绝过期候选，不能写入错误条目。刷新来源后才能主动重新选择。
-
-正常界面验收不要求人为制造底层保存失败。若出现保存失败，记录实际提示和笔记内容修改前后的状态；不要把测试注入的失败写成日常手动验收结果。
-
-### U9：查询、历史和 native Sidebars
+### U8：查询、历史和 native Sidebars
 
 - 按主窗口 `/` 在可见列表中查找；`<Space>fq` / `<Space>fa` 是原生 Quick/Advanced Search，二者不混淆。
 - 单集合、多个集合以及宿主支持的集合／Saved Search／Library 混合选择，都能打开 Toggle Tag Filter。候选来自当前完整视图，排除范围外标签；Quick／Advanced Search 不被清除，零结果时仍可取消当前 active tag。
@@ -179,7 +169,7 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 - `<Space>ro/rm/ra/rt` 直接打开／聚焦 Outline、Bookmarks、Annotations、Thumbnails，重复操作不把目标侧栏关闭。
 - `[s` / `]s` 从 PDF 和四种侧栏上下文按实际位置遍历原生完整 heading tree；Figure/Table 只在存在真实 native 数据时验收，不通过标题正则编造目标。冷 SDT 处理可有等待，不能把等待宣传为零成本。
 
-### U10：变更与可选集成
+### U9：变更与可选集成
 
 - 标签／集合操作在主窗口以 Neo 选择集为优先目标，在阅读器／笔记编辑器中使用各自上下文，操作目标和数量应清楚可解释。主窗口清除视图筛选不等于清除 Neo 选择集。
 - 对一次性测试条目执行 Trash 取消，再执行确认／`u` 恢复；应能观察到对隐藏 Neo 选择集成员的拒绝，以及取消后的保存结果。阅读器中的批注删除是永久操作，仅使用一次性测试批注并检查确认。
@@ -188,7 +178,7 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 ## 7. 结果记录与收束
 
-每条 U1–U10 记录以下字段，内容由实际观察填写，不预填成功：
+每条 U1–U9 记录以下字段，内容由实际观察填写，不预填成功：
 
 - 候选提交、包 SHA256、Neo/Zotero 版本、OS/输入法、持久安装来源、profile/data identity。
 - 用例 ID、开始 Surface/mode/focus、实际键序列、native input/IME 阶段、期望和实际可见结果。

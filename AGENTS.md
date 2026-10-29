@@ -242,13 +242,6 @@ consume explicit resolved items or IDs. Reader and Note never borrow Main
 Selection. Consumers import the typed Surface resolver directly; no shared
 compatibility dispatcher/re-export remains.
 
-Cross-surface capture passes an immutable, DOM-free `ReaderSelectionContext`
-snapshot from Reader to Main. Main owns the existing-Note chooser, source/owner
-revalidation, append/save, and post-save receipt. Confirmation binds candidate
-identity and source/generation before queueing; a reparented target is rejected
-before mutation. A forced chooser replacement preserves the actual save receipt
-but retires Reader status/focus. Picker providers remain candidate-only; Reader
-capture code must not borrow Main Selection or mutate notes directly.
 
 ## Key Files
 

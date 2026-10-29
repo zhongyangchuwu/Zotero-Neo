@@ -1,6 +1,6 @@
 # 录屏与键盘操作拍摄指南
 
-> 本指南按 S0–S7 说明如何准备并拍摄完整工作流。候选包身份见 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)，实际验收结果记在 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 与 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)；录屏只支持其实际显示的操作与结果，不替代验收记录。按[候选验收协议](V0_2_ACCEPTANCE.md)准备安装与输入条件；产品工作流见[用户指南](USER_GUIDE.md)和[命令参考](COMMAND_REFERENCE.md)。
+> 本指南按 S0–S6 说明如何准备并拍摄完整工作流。候选包身份见 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)，实际验收结果记在 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 与 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)；录屏只支持其实际显示的操作与结果，不替代验收记录。按[候选验收协议](V0_2_ACCEPTANCE.md)准备安装与输入条件；产品工作流见[用户指南](USER_GUIDE.md)和[命令参考](COMMAND_REFERENCE.md)。
 
 ## 共同拍摄规则
 
@@ -74,19 +74,8 @@
 - **重置／不录条件：** 丢弃本次一次性配置。若 Select／`COMMENT` 指示、提示、目标或批注缺失，或批注评论重开后的内容不一致，不录成成功。翻译或 OCR 内容不属于本场操作结果。
 - **依据：** [阅读器 Select/Flash、范围操作与添加批注评论](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[评论输入的 Enter/Escape/两秒自动保存](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[原生输入法所有权](INPUT_METHODS.md#text-entry-controls)、[批注评论输入与视图范围](SELECTION_GUIDE.md#edit-an-annotation-comment)。
 
-## S4 — Reader 文本选区 → 已有笔记：空状态、切换来源与保存回执
 
-**单一任务：** 从阅读器文本选区捕获文字；先确认 Current item 列表为空，再明确切换到同一文库内查找，将文字写入已有笔记。
-
-- **拍前准备：** 在一次性测试数据中准备一份含可选文本的 PDF，其当前条目没有笔记；同一文库内另有一条属于其他条目的现有笔记。该笔记有可辨认的标题、父条目和基线正文，用于核对追加而非覆盖。记录目标标题和所属条目。
-- **起始界面／模式／焦点：** 阅读器 Normal 模式，源 PDF 面板已聚焦；Neo 选择集不参与此目标解析。
-- **操作：** 按 `v`，输入实际文本查询并选择屏幕显示的提示，以建立阅读器 Select 文本选区；按 `a`（或 `<Enter>`）打开 Selection Actions，在菜单中用 `j`／`k` 移到 **Capture to note**（中文界面：**捕获到笔记**），再按 `Enter`。笔记选择器初始来源为 **Current item**；先确认当前项为空。
-- **明确切换及写入：** 用原生 `Tab`／`Shift+Tab` 移动，直到可见焦点落在 **Browse library** 按钮；按原生 `Enter` 或 Space 激活。选择器切至同一文库，保留本次查询和捕获内容。选中现有笔记；结果行显示笔记标题，Preview 显示其所属条目与正文。按 `Enter` 确认一次，等待保存完成，并拍到列出所选笔记标题的成功回执。核对最终正文时，从阅读器 Normal 模式按 `<Space>fn`，在新的笔记选择器中再次显式激活 **Browse library**；搜索并确认相同标题和所属条目，打开笔记，检查原正文保留且已追加引文和可用的 PDF 页码标签。
-- **可见结果／持久变化：** 空的 **Current item** 结果不会悄悄扩展；只有显式激活 **Browse library** 后，其他所属条目的现有笔记才会出现。写入的是 Preview／确认时锁定的现有 `Note ID`，回执标题与笔记所属条目一致。笔记选择器不会自动新建笔记或添加阅读器反向链接。
-- **重置／不录条件：** 只在本次一次性配置中操作。若 **Browse library** 按钮或焦点、所属条目、锁定目标、回执标题或正文追加结果无法辨认，立即取消；确认一次后等待保存结果，不要重复按 `Enter` 或双击。已受理的保存不能用 `Escape` 取消；不能把取消尝试或另一轮写入剪进来当作成功证据。
-- **依据：** [阅读器文本选区与 Capture to note](CAPTURE_GUIDE.md#try-it)、[笔记选择器的 Current item、Browse library、标题与 Preview](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[目标锁定、所属条目核对与单次原生保存](INTERACTION_MODEL.md#knowledge-capture)。阅读器和笔记编辑器不借用主窗口的 Neo 选择集。
-
-## S5 — Settings：暂存快捷键修改与原生输入
+## S4 — Settings：暂存快捷键修改与原生输入
 
 **单一任务：** 录制一次主窗口快捷键重映射从暂存到 Apply 的完整流程，并展示 Neo 在真实选择器和 Outline 中不接管原生文本输入、系统输入法、剪贴板和 Outline Enter。
 
@@ -101,11 +90,11 @@
 - **重置／不录条件：** 拍后销毁本次配置文件。若输入法组合／提交、录制器按键标记、Done、Apply 前后绑定、原生剪贴板往返或 Outline 结果不符，先修正条件再重拍。
 - **依据：** [Settings 键位录制、Done/Cancel/Apply](SETTINGS_GUIDE.md#try-it)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[Outline Enter 原生所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[U6/U7 验收步骤](V0_2_ACCEPTANCE.md)。
 
-## S6 — Note：Vim 开关与 Normal/Insert（两条独立短片）
+## S5 — Note：Vim 开关与 Normal/Insert（两条独立短片）
 
 **单一任务：** 展示同一笔记身份的基础编辑，并比较 **Vim-style note editing** 开启与关闭时的行为；两种状态分开拍。
 
-### S6-on — Vim 风格笔记编辑开启
+### S5-on — Vim 风格笔记编辑开启
 
 - **拍前准备：** 在 Neo Settings 中启用 **Vim-style note editing**（中文界面：**Vim 风格笔记编辑**）。主窗口当前条目有一条现存的一次性测试笔记，并能辨认其标题和所属条目。
 - **起始界面／模式／焦点：** 主窗口 Normal 模式，项目列表焦点在包含该笔记的测试条目上。
@@ -114,16 +103,16 @@
 - **重置／不录条件：** 销毁本次配置文件。若设置未启用、焦点或笔记身份不明，或 `i` 未进入笔记编辑器 Insert 模式，修正配置后重拍。
 - **依据：** [笔记编辑器开启条件、Insert/Normal 与默认移动](COMMAND_REFERENCE.md#note-editor)、[Current Item 笔记选择器](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[设置页开关名称](SETTINGS_REFERENCE.md)。
 
-### S6-off — Vim 风格笔记编辑关闭
+### S5-off — Vim 风格笔记编辑关闭
 
-- **拍前准备：** 本片使用与 S6-on 独立的配置文件和测试笔记；在 Neo Settings 中关闭 **Vim-style note editing**（中文界面：**Vim 风格笔记编辑**）。
+- **拍前准备：** 本片使用与 S5-on 独立的配置文件和测试笔记；在 Neo Settings 中关闭 **Vim-style note editing**（中文界面：**Vim 风格笔记编辑**）。
 - **起始界面／模式／焦点：** Zotero 中同类型的笔记编辑器获得原生编辑焦点；旁白明确说明“Vim 风格笔记编辑已关闭，原生编辑器接收键盘输入”，不称其为笔记 Insert 模式。
 - **操作：** 在正文中物理输入一个包含字母 `i` 的测试短语，并如实保留按键和文字；不要先进入 Neo 模式，也不要在 `i` 后接指令序列，让这些字符写入笔记。
 - **可见结果／持久变化：** 普通字符进入原生笔记正文，不执行 `noteInsert` 或其他 Neo Normal 操作；画面可辨认仍是同一笔记。文字只写入一次性测试笔记。
 - **重置／不录条件：** 销毁本次配置文件。若设置未关闭、按 `i` 触发 Neo 命令／模式，或输入没有落到笔记正文，停止并修正拍摄配置，不用字幕代替。
 - **依据：** [笔记编辑器开关](COMMAND_REFERENCE.md#note-editor)、[Vim-style note editing 设置](SETTINGS_REFERENCE.md)。开启和关闭是设置开关；本片不假定同一编辑器中的设置变更会即时生效。
 
-## S7 — Plugin Manager：真实 AddonManager 状态与自我保护
+## S6 — Plugin Manager：真实 AddonManager 状态与自我保护
 
 **单一任务：** 从 Zotero AddonManager 的已安装列表检查插件信息和状态，核对 Neo 不能从自身的 Plugin Manager 禁用，然后安全退出。
 
@@ -135,9 +124,9 @@
 - **镜头／不录条件：** 若 Zotero Neo 不在当前列表、状态或版本无法读取、禁用操作仍可用，或无法判断焦点在筛选框还是结果列表，不录成“自我保护成功”。
 - **依据：** [Plugin Manager 生命周期和自我保护](SETTINGS_GUIDE.md#manage-installed-plugins-and-integrations)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#modes-focus-and-capabilities)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#selection-actions-plugin-manager-settings-and-selection-panel)。Zotero AddonManager 是生命周期状态权威；此面板不提供任意软件包安装、更新、卸载或远端插件发现。
 
-## 可选第三方集成（与 S0–S7 核心片分开）
+## 可选第三方集成（与 S0–S6 核心片分开）
 
-第三方集成只录独立的可选片，不并入核心 S0–S7；只有当前已安装、启用的集成在界面提供相应操作时才拍，条件不符便跳过。
+第三方集成只录独立的可选片，不并入核心 S0–S6；只有当前已安装、启用的集成在界面提供相应操作时才拍，条件不符便跳过。
 
 - **Better BibTeX：** 仅当当前 Zotero 已安装并启用 Better BibTeX，且一次性测试条目确有 citekey（引文键）时，才单独拍主窗口 Normal 模式下按 `<Space>yy` 为有效目标复制 citekey。按目标名称确认目标是主窗口当前条目或 Neo 选择集；若目标没有可用 citekey，不录成成功。
 - **Translate for Zotero：** 仅当已安装的 Translate 集成使 Selection Actions 中出现 **Translate** 时，才从阅读器 Select 模式的文本选区打开该项并录下实际翻译结果。字幕标明实际插件／集成名称。可用性的依据见 [Selection Actions 与可选 Translate](SELECTION_GUIDE.md#use-the-selected-text)。

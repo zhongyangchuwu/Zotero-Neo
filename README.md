@@ -2,14 +2,14 @@
 
 # Zotero Neo
 
-Zotero Neo 为 Zotero 文献库、PDF Reader 和笔记编辑器提供键盘操作。用它查找论文、选择 PDF 文本、添加批注，并将摘录收集到已有笔记中。
+Zotero Neo 为 Zotero 文献库、PDF Reader 和笔记编辑器提供键盘操作。用它查找论文、选择 PDF 文本、添加批注，并查找和编辑笔记。
 
 已发布版本为 [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)。当前源码构建的是尚未发布的 v0.2.0。Neo 支持 macOS、Linux 和 Windows 上最新的 Zotero 稳定版；具体包兼容范围以发布版本的 manifest 为准。
 
 ## 开始使用
 
 - [安装 Neo 并开始使用](docs/GETTING_STARTED.md)：区分公开发行版与当前开发构建，选择对应的安装包和指南。
-- [功能介绍](docs/FEATURES.md)：文本选择、笔记摘录、阅读清单与 PDF 导航。
+- [功能介绍](docs/FEATURES.md)：文本选择与批注、阅读清单与 PDF 导航。
 - [使用指南](docs/USER_GUIDE.md)：串联文献库、Reader 和笔记的任务工作流。
 - [基本概念](docs/CONCEPTS.md)：焦点、模式、条目游标、Neo 选择集与文本选区。
 

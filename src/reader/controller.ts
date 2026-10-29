@@ -55,7 +55,6 @@ import {
 import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
-import { createReaderCaptureModule, type ReaderCaptureModule } from '../modules/capture/reader';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -510,7 +509,6 @@ export class ReaderSession {
   #sidebar: ReaderNavigationModule['sidebar'] | null = null;
   readonly #modules: BuiltinModuleScope;
   readonly #library: ReaderLibraryModule | null;
-  #capture: ReaderCaptureModule | null = null;
   readonly #hints: ReaderHintsModule | null;
   readonly #annotations: ReaderAnnotationsModule | null;
   readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
@@ -814,12 +812,8 @@ export class ReaderSession {
           pluginID: () => this.#dependencies.selection?.pluginID() ?? null,
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
-          contributedActions: (window, language) => [
-            ...(this.#modules.enabled('capture') && this.#capture
-              ? [this.#capture.selectionAction(language)]
-              : []),
-            ...(this.#annotations?.selectionActions(window, language) ?? []),
-          ],
+          contributedActions: (window, language) =>
+            this.#annotations?.selectionActions(window, language) ?? [],
           showStatus: (message, duration) => this.showStatus(message, duration),
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
@@ -882,19 +876,6 @@ export class ReaderSession {
           this.#jumpHistoryBridge.sync();
         },
       });
-      const reconcileCapture = (): void => {
-        if (!this.#modules.canActivate('capture')) return;
-        this.#capture = this.#modules.activate('capture', () =>
-          createReaderCaptureModule(this.#modules.host, (selection) =>
-            dependencies.controller.dependencies.main.captureReaderSelectionToNote(
-              selection,
-              readerOwnerWindow(dependencies.reader) ?? null,
-            ),
-          ),
-        );
-      };
-      this.#scope.add(dependencies.controller.dependencies.modules.subscribe(reconcileCapture));
-      reconcileCapture();
       this.#scope.add(() => this.input.dispose());
       this.#scope.addTimeout(() => {
         const failure = new CleanupFailure();
