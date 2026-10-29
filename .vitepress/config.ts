@@ -86,7 +86,7 @@ const developerSidebar = [
   {
     text: '项目资料',
     items: [
-      { text: 'v0.2 候选版本验收', link: '/docs/V0_2_ACCEPTANCE' },
+      { text: 'main 分支验收', link: '/docs/ACCEPTANCE' },
       { text: '录制指南', link: '/docs/RECORDING_GUIDE' },
     ],
   },
@@ -155,7 +155,7 @@ export default defineConfig({
       '/docs/MODULE_DESIGN': developerSidebar,
       '/docs/INTERACTION_MODEL': developerSidebar,
       '/docs/NAVIGATION_HISTORY_DESIGN': developerSidebar,
-      '/docs/V0_2_ACCEPTANCE': developerSidebar,
+      '/docs/ACCEPTANCE': developerSidebar,
       '/docs/RECORDING_GUIDE': developerSidebar,
     },
     outline: {

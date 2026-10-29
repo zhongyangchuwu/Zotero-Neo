@@ -45,6 +45,6 @@ features:
 - [故障排查](./docs/TROUBLESHOOTING.md)。
 - [基本概念](./docs/CONCEPTS.md)。
 
-当前网站说明尚未正式发布的 v0.2.0。公开发行版仍是 [v0.1.0](https://github.com/zhongyangchuwu/Zotero-Neo/releases/tag/v0.1.0)，安装包与对应指南的选择见[安装与入门](./docs/GETTING_STARTED.md#choose-a-version)。
+本站与 `main` 分支同步，只介绍当前源码中的功能和设置。获取对应构建并安装的方法见[安装与入门](./docs/GETTING_STARTED.md#get-main-build)。
 
 [更新记录](./CHANGELOG.md) · [路线图](./docs/ROADMAP.md) · [GitHub](https://github.com/zhongyangchuwu/Zotero-Neo)

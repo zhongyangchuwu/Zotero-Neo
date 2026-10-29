@@ -1,6 +1,6 @@
 # 录屏与键盘操作拍摄指南
 
-> 本指南按 S0–S6 说明如何准备并拍摄完整工作流。候选包身份见 [#142 发布跟踪](https://github.com/zhongyangchuwu/Zotero-Neo/issues/142)，实际验收结果记在 [#137](https://github.com/zhongyangchuwu/Zotero-Neo/issues/137) 与 [#98](https://github.com/zhongyangchuwu/Zotero-Neo/issues/98)；录屏只支持其实际显示的操作与结果，不替代验收记录。按[候选验收协议](V0_2_ACCEPTANCE.md)准备安装与输入条件；产品工作流见[用户指南](USER_GUIDE.md)和[命令参考](COMMAND_REFERENCE.md)。
+> 本指南按 S0–S6 说明如何拍摄当前 `main` 的工作流。按[main 验收规范](ACCEPTANCE.md)准备构建、数据和输入条件，在素材记录中注明实际提交、XPI 哈希和结果；录屏不替代未展示的验收。产品工作流见[用户指南](USER_GUIDE.md)和[命令参考](COMMAND_REFERENCE.md)。
 
 ## 共同拍摄规则
 
@@ -8,7 +8,7 @@
 
 - 每条素材均使用新建、未登录、未同步的 Zotero 用户配置文件和独立空数据目录；在 Settings → Advanced → Files and Folders 选择目录，再用 Show Data Directory 核实。若启动后显示真实资料库，立即关闭并重新隔离。只导入公有领域／获准 PDF 或自制测试文档，不录私人资料、个人路径、身份信息或私人剪贴板内容。
 - 删除（包括永久删除）、批注、笔记、标签、集合和插件状态变更，只在一次性测试数据中操作。确认前核对目标、所属条目和数量；拍后销毁本轮配置文件或从干净副本重建，不依赖 Undo 保护数据。
-- v0.2.0 场景使用 #142 记录的获准候选 XPI 并持久安装，按屏幕核实版本；不以 v0.1.0 或开发 RDP 加载替代候选行为。安装／升级镜头分别按 S0 和验收 U1/U2 准备。
+- 使用明确记录提交和 SHA-256 的 `main` XPI 并持久安装，按屏幕核实包版本；开发 RDP 临时加载不能替代安装镜头的证据。安装和构建更新分别按 S0 与验收 U1/U2 准备。
 
 ### 实际输入、清晰画面与无障碍
 
@@ -24,15 +24,15 @@
 
 ## S0 — 安装与第一次交互
 
-**单一任务：** 在隔离的用户配置文件中安装获准候选包，并从主窗口打开一份测试 PDF，确认阅读器接管后的界面。
+**单一任务：** 在隔离的用户配置文件中安装当前 `main` 构建，并从主窗口打开一份测试 PDF，确认阅读器接管后的界面。
 
-- **拍前准备：** 在本次测试数据中准备一份公有领域／获准 PDF 及对应书目记录；使用 #142 所列候选 XPI，安装后按屏幕核实版本。
-- **起始界面／模式／焦点：** Zotero 原生插件管理器的安装界面。通过 Tools → Plugins/Add-ons → gear → Install Plugin From File 选择该候选 XPI，并遵循现场重启提示。安装后回到主窗口 Normal 模式，焦点落在包含该测试条目的项目列表，条目游标对准该条目；等待 Neo 阅读器交互就绪后再继续。
+- **拍前准备：** 在本次测试数据中准备一份公有领域／获准 PDF 及对应书目记录；使用已记录提交和哈希的 `main` XPI，安装后按屏幕核实版本。
+- **起始界面／模式／焦点：** Zotero 原生插件管理器的安装界面。通过 Tools → Plugins/Add-ons → gear → Install Plugin From File 选择该 XPI，并遵循现场重启提示。安装后回到主窗口 Normal 模式，焦点落在包含该测试条目的项目列表，条目游标对准该条目；等待 Neo 阅读器交互就绪后再继续。
 - **操作：** 录下安装确认；返回主窗口后旁白说明 Normal 模式与项目列表焦点，按 `<Enter>` 打开条目游标当前条目。不要据此声称打开了 Neo 选择集中的多个条目。
 - **可见结果：** Zotero 窗口中出现对应阅读器/PDF，显示软件版本与 PDF 内容；旁白指出阅读器 Normal 模式（其指示器可隐藏），等待阅读器交互就绪后再继续。字幕只写入屏幕显示的安装和版本状态。
 - **持久变化／重置：** 安装仅发生在本次一次性用户配置文件中；关闭后用新配置文件重做。PDF 仅用本次测试数据，不打开个人资料库。
 - **镜头／不录条件：** 保留安装界面、PDF 与版本；安装失败、版本不明、阅读器未就绪或目标无法解析时，修正条件后重拍。
-- **依据：** [主窗口打开与条目游标目标](COMMAND_REFERENCE.md#main-window)、[阅读器加载就绪边界](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)、[v0.2.0 干净安装步骤](V0_2_ACCEPTANCE.md)。
+- **依据：** [主窗口打开与条目游标目标](COMMAND_REFERENCE.md#main-window)、[阅读器加载就绪边界](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)、[main 干净安装步骤](ACCEPTANCE.md)。
 
 ## S1 — Main：Neo 选择集批处理与条目游标打开
 
@@ -88,7 +88,7 @@
 - **剪贴板接收与原生 Outline Enter：** 按 `<Space>ff` 打开选择器；查询框获得焦点后按 `<S-Insert>`，确认此前从 Settings 字段复制的同一公开标题通过原生粘贴进入查询框并显示匹配行。按 `Enter` 打开对应 PDF。阅读器 Normal 模式下按 `<Space>ro` 聚焦 Outline，在一条真实行上物理按 `Enter`，观察 Zotero 原生 Outline 跳到目标；不要把此 `Enter` 标成 Neo `uiConfirm`。
 - **可见结果／持久变化：** 同一设备拍到 Settings 搜索中的输入法组合与提交、录制器不误收组合／候选按键、显式 **Done**、未按 **Apply** 前旧 `j` 有效、应用后 `]j` 与 `j` 都有效；`<C-Insert>` 复制的标题通过 `<S-Insert>` 原生粘贴到选择器，Outline Enter 仍由 Zotero 处理。重映射只保存在本次配置文件中。
 - **重置／不录条件：** 拍后销毁本次配置文件。若输入法组合／提交、录制器按键标记、Done、Apply 前后绑定、原生剪贴板往返或 Outline 结果不符，先修正条件再重拍。
-- **依据：** [Settings 键位录制、Done/Cancel/Apply](SETTINGS_GUIDE.md#try-it)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[Outline Enter 原生所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[U6/U7 验收步骤](V0_2_ACCEPTANCE.md)。
+- **依据：** [Settings 键位录制、Done/Cancel/Apply](SETTINGS_GUIDE.md#try-it)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[Outline Enter 原生所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[U6/U7 验收步骤](ACCEPTANCE.md)。
 
 ## S5 — Note：Vim 开关与 Normal/Insert（两条独立短片）
 
