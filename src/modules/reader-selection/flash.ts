@@ -166,7 +166,7 @@ export function flashTokenMatches(index: FlashTextIndex, rawQuery: string): Flas
   for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
     const covered = tokenRangeCovering(tokens, start, end);
     if (!covered) continue;
-    const key = \`\${covered.start}:\${covered.end}\`;
+    const key = `${covered.start}:${covered.end}`;
     if (seen.has(key)) continue;
     const range = mappedTextRange(index, covered.start, covered.end);
     if (!range) continue;

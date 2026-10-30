@@ -313,6 +313,38 @@ describe('Reader Flash lifecycle', () => {
     expect(flash.isOpen).toBe(false);
   });
 
+  it('deduplicates overlapping substrings before drawing the Flash labels', () => {
+    const created = createFlashWindow([{ value: 'banana banana', left: 20, top: 20 }]);
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    setFlashQuery(created.bodyChildren, 'ana');
+
+    expect(flashHints(created.bodyChildren)).toHaveLength(2);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('ana (2)');
+    flash.handleKey(flashKey('Enter'), created.pdfWindow);
+    expect(activations).toHaveLength(1);
+    expect(activations[0]?.target).toEqual({
+      start: { textNode: created.spans[0]?.node, offset: 0 },
+      end: { textNode: created.spans[0]?.node, offset: 6 },
+    });
+  });
+
+  it('enforces the Flash candidate limit after token deduplication', () => {
+    const created = createFlashWindow(
+      Array.from({ length: 30 }, (_, index) => ({
+        value: 'banana',
+        left: 20 + (index % 6) * 90,
+        top: 20 + Math.floor(index / 6) * 24,
+      })),
+    );
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-start');
+    setFlashQuery(created.bodyChildren, 'ana');
+
+    expect(flashHints(created.bodyChildren)).toHaveLength(30);
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('ana (30)');
+  });
+
   it('keeps continuation letters for the query and reserves other letters for labels', () => {
     const created = createFlashWindow([
       { value: 'taste', left: 20, top: 20 },
