@@ -181,7 +181,7 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
 | `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。选择显示的提示，或按 Enter 选择最近的匹配项；查询范围过宽时，可缩小查询以显示提示。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
 Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#批注评论编辑器)。
 
 ## 主窗口

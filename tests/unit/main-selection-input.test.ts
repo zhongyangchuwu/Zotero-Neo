@@ -390,6 +390,24 @@ describe('Main transient-target Escape grammar', () => {
     readerHost.controller.shutdown();
   });
 
+  it('leaves embedded Reader input Escape to its exact view without blurring or forwarding twice', () => {
+    const host = harness();
+    host.focusReader();
+    const input = themedElement('reader-flash-query');
+    Reflect.set(input, 'localName', 'input');
+    Reflect.set(input, 'tagName', 'INPUT');
+    Reflect.set(input, 'ownerDocument', {});
+    const blur = vi.fn();
+    Reflect.set(input, 'blur', blur);
+
+    const escape = host.press('Escape', { target: input });
+    expect(blur).not.toHaveBeenCalled();
+    expect(host.forwardKey).not.toHaveBeenCalled();
+    expect(escape.preventDefault).not.toHaveBeenCalled();
+    expect(escape.stopPropagation).not.toHaveBeenCalled();
+    host.controller.shutdown();
+  });
+
   it('keeps persistent Selection unchanged when Main Trash is cancelled', async () => {
     const originalZotero = Reflect.get(globalThis, 'Zotero');
     const items = [
