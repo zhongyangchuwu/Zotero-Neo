@@ -1,42 +1,45 @@
 # 使用指南 {#user-guide}
 
-Neo 在 Zotero 的文献库、PDF 阅读器和笔记编辑器中提供键盘操作。你可以边浏览边整理一组文献，在 PDF 中选择和批注文字，也可以查找并编辑已有笔记。
+Neo 的快捷键会随当前位置变化：在文献列表中，`j` / `k` 用来移动条目；在 PDF 中，它们用来滚动。开始操作前，先点击要控制的区域。
 
-首次安装见[安装与入门](GETTING_STARTED.md)。下文使用默认快捷键；如果你改过绑定，以**设置 → 快捷键**中的当前值为准。同一个键在不同区域可能有不同用途，[基本概念](CONCEPTS.md)解释了焦点、模式、条目游标与 Neo 选择集的区别。
+如果还没安装，先看[安装与入门](GETTING_STARTED.md)。下文使用默认快捷键；改过按键的话，以 **Neo 设置 → 快捷键** 中显示的为准。
 
-## 按当前任务查找用法 {#get-started}
+## 找到你想做的事 {#get-started}
 
-### 功能入口 {#explore-the-modules}
+### 按任务查指南 {#explore-the-modules}
 
-| 想做什么 | 阅读哪篇指南 |
+| 想做什么 | 看这里 |
 | --- | --- |
-| 按标识符添加文献、浏览条目、建立阅读清单或整理分类 | [文献库与阅读清单](MAIN_GUIDE.md) |
-| 翻页、搜索 PDF、沿标题或图表跳转、使用分屏比较位置 | [阅读与导航 PDF](READER_GUIDE.md) |
-| 用键盘选择文字、调整选区、复制或添加批注 | [文本选择与批注](SELECTION_GUIDE.md) |
-| 查找笔记、使用原生输入或 Vim 风格编辑 | [查找与编辑笔记](NOTE_GUIDE.md) |
-| 添加或移除标签，用标签筛选文献库 | [标签整理](TAGS.md) |
-| 查找条目或笔记、缩小视图范围、切换标签页、返回之前的位置 | [搜索与导航](SEARCH_GUIDE.md) |
-| 修改快捷键、外观、语言、滚动和笔记编辑行为 | [快捷键与设置](SETTINGS_GUIDE.md) |
-| 启用或关闭链接与复制提示、扩展管理面板 | [模块设置](SETTINGS_GUIDE.md#modules) |
+| 查找论文、浏览分类、批量整理条目 | [文献库与阅读清单](MAIN_GUIDE.md) |
+| 翻页、搜索 PDF、跳转标题和图表、分屏 | [阅读和导航 PDF](READER_GUIDE.md) |
+| 选择文字、复制、高亮、编辑批注 | [文本选择与批注](SELECTION_GUIDE.md) |
+| 查找和编辑 Zotero 笔记 | [笔记指南](NOTE_GUIDE.md) |
+| 给论文加标签，或按标签筛选 | [标签指南](TAGS.md) |
+| 搜索条目、切换标签页、返回之前的位置 | [搜索与导航](SEARCH_GUIDE.md) |
+| 修改快捷键、主题和操作方式 | [设置指南](SETTINGS_GUIDE.md) |
 
-内部十一项功能分区中，九个核心模块固定启用；只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）可关闭。关闭可选增强后，其动作不参与当前按键匹配、前缀提示或命令面板，保存的绑定仍保留；新请求需完全重启 Zotero 才应用。`modules.<core>.enabled=false` 旧值不会关闭核心功能，行为偏好仍保持原义。若入口没有出现，先看[故障排查](TROUBLESHOOTING.md#a-key-does-nothing)。
+不确定某个按键的用途，可以先按 `:` 打开命令面板，搜索操作名称。完整按键和可用位置见[命令参考](COMMAND_REFERENCE.md)。
 
+## 把几篇论文整理成一组 {#review-and-organize-papers}
 
-## 审阅与整理论文 {#review-and-organize-papers}
+比如，你想先挑出几篇论文，之后统一加上“待读”标签：
 
-用[搜索与导航](SEARCH_GUIDE.md)缩小主窗口视图，或直接找到某个条目。浏览时可把文献加入 **Neo 选择集**，然后在选择集面板中检查整组成员，再通过[标签](TAGS.md)或[分类](MAIN_GUIDE.md#change-collection-membership)整理它们。
+1. 在主窗口的条目列表中用 `j` / `k` 浏览，看到需要的论文就按 `s` 标记。
+2. 按 `<Space>ss` 打开 Neo 选择集，核对已经标记的条目。
+3. 回到主窗口，按 `<Space>ta`，选择要添加的标签。
 
-条目游标只是当前浏览的位置，Neo 选择集才是批量操作的一组目标；改变搜索或分类不会自动清空它。选择集中可能有当前视图之外的文献，批量修改前可以打开 `<Space>ss` 查看。临时可视范围、原生多选与 Neo 选择集的关系见[文献库指南](MAIN_GUIDE.md#keep-opening-and-batch-selection-separate)。
+切换分类或搜索条件不会清空 Neo 选择集。因此，批量修改前最好打开选择集面板检查，避免把当前列表之外的论文也改了。
 
-## 在线索涉及的论文与笔记之间跳转 {#follow-a-thread-across-papers-and-notes}
+这个选择集不会跨重启保存。要长期保存一组论文，可以使用 Zotero 分类；分类操作见[文献库指南](MAIN_GUIDE.md#change-collection-membership)。
 
-在阅读器中先设置一个阅读器标记，或利用共享后退／前进返回之前的位置。用[复制／跟随提示](READER_GUIDE.md#copy-or-follow-visible-targets)复制页面上的标识符、批注内容或跟随链接；需要把新论文加入 Zotero 时，再使用[按标识符添加文献](MAIN_GUIDE.md#add-items-by-identifier)。复制或打开链接不会自动导入条目。
+## 从论文跳到笔记，再返回 {#follow-a-thread-across-papers-and-notes}
 
-[搜索与导航](SEARCH_GUIDE.md)介绍条目查找、标签页切换和共享历史。找到相关材料后，可在[笔记编辑器](NOTE_GUIDE.md)中查找并编辑已有笔记。
+读 PDF 时，可以先用 `m` 加一个字母给当前位置做标记，再用 `<Space>fn` 查找这篇论文的笔记。如果要搜索同一文库中的其他笔记，在选择器中切换到 **Browse library**。
 
-## 查找准确按键或解决问题 {#find-help}
+需要返回之前的阅读位置，可以使用你设置的标记，或者按 `Ctrl+o` / `Ctrl+i` 浏览 Neo 记录的后退和前进位置。不是每次滚动都会记入历史，所以想准确回到某一段，先做标记比较稳妥。
 
-- 想知道某个动作的默认按键、适用上下文、计数行为或目标规则：查[命令参考](COMMAND_REFERENCE.md)。
-- 想知道控件默认值和模块状态：查[设置参考](SETTINGS_REFERENCE.md)。
-- 输入文字、使用中文输入法或原生快捷键时遇到疑问：查[文本输入与输入法](INPUT_METHODS.md)。
-- 按键、选择器或设置没有按预期工作：从[故障排查](TROUBLESHOOTING.md)按症状查找。
+PDF 中的 DOI 和链接也可以通过字母提示复制或打开；具体见[阅读器指南](READER_GUIDE.md#copy-or-follow-visible-targets)。
+
+## 查快捷键、排查问题 {#find-help}
+
+按键和适用位置查[命令参考](COMMAND_REFERENCE.md)，配置项查[设置参考](SETTINGS_REFERENCE.md)。按键没反应、输入法抢按键或插件没有按预期运行时，从[故障排查](TROUBLESHOOTING.md)开始。弄不清焦点、模式和选择集的区别，可看[基本概念](CONCEPTS.md)。
