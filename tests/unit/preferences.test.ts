@@ -829,6 +829,57 @@ describe('note editor preferences', () => {
 });
 
 describe('binding schema migrations', () => {
+  it('preserves schema-19 custom Select actions and carries explicit character unbindings to H/L', () => {
+    const raw = JSON.stringify({
+      'reader-select:h': null,
+      'reader-select:l': null,
+      'reader-select:L': 'copySelection',
+      'reader-select:j': 'extendDown',
+      'reader-select:q': 'extendRight',
+      future: { untouched: true },
+    });
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 19, bindings: raw });
+    migrateBindingPreferences(preferences);
+    const saved = JSON.parse(preferences.get('bindings', ''));
+    expect(saved).toEqual({ ...JSON.parse(raw), 'reader-select:H': null });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+    const writes = preferences.writes.length;
+    migrateBindingPreferences(preferences);
+    expect(preferences.writes).toHaveLength(writes);
+  });
+
+  it('leaves explicit character overrides and unchanged raw binding bytes intact at schema 20', () => {
+    const raw = ' { "reader-select:h": "extendLeft", "reader-select:l": "extendRight" } ';
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 19, bindings: raw });
+    migrateBindingPreferences(preferences);
+    expect(preferences.get('bindings', '')).toBe(raw);
+    expect(preferences.writes).toEqual([['bindings.schemaVersion', BINDING_SCHEMA_VERSION]]);
+  });
+
+  it('preserves accepted legacy context aliases and explicit fallback overrides during migration', () => {
+    const raw = JSON.stringify({ 'visual:h': null, 'visual:l': null, 'visual:H': 'copySelection' });
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 19, bindings: raw });
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      ...JSON.parse(raw),
+      'reader-select:L': null,
+    });
+  });
+
+  it('does not advance the token schema when persisting the fallback unbinding fails', () => {
+    const raw = '{"reader-select:l":null}';
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': 19, bindings: raw });
+    preferences.failKey = 'bindings';
+    expect(() => migrateBindingPreferences(preferences)).toThrow();
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    preferences.failKey = null;
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'reader-select:l': null,
+      'reader-select:L': null,
+    });
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+  });
   it('moves explicit unbindings without overwriting destinations or moving deliberate custom keys', () => {
     const preferences = new TestPreferences({
       'bindings.schemaVersion': 17,
@@ -900,7 +951,7 @@ describe('binding schema migrations', () => {
     expect(preferences.get('bindings', '')).toBe(raw);
     preferences.failKey = null;
     migrateBindingPreferences(preferences);
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
       'reader-normal:<Space>ro': null,
       'reader-normal:]a': null,
@@ -919,7 +970,7 @@ describe('binding schema migrations', () => {
     preferences.failKey = null;
     migrateBindingPreferences(preferences);
     expect(preferences.get('bindings', '')).toBe(persisted);
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
   it('rewrites schema-18 action IDs in place while preserving custom bindings and tombstones', () => {
@@ -946,7 +997,7 @@ describe('binding schema migrations', () => {
       'reader-normal:f': null,
       'reader-normal:<C-y>': null,
     });
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     const bindings = bindingsFromPreferences(preferences);
     expect(bindings['reader-normal:y']).toBe('yankAnnotation');
     expect(bindings['reader-normal:Y']).toBe('yankAnnotationComment');
@@ -972,7 +1023,7 @@ describe('binding schema migrations', () => {
       'reader-normal:gf': 'followLink',
       'reader-normal:f': null,
     });
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
     const persisted = preferences.get('bindings', '');
     const writes = preferences.writes.length;
     migrateBindingPreferences(preferences);
@@ -998,6 +1049,6 @@ describe('binding schema migrations', () => {
     expect(bindings['reader-normal:gf']).toBe('followLink');
     expect(bindings['reader-normal:y']).toBe('yankAnnotation');
     expect(bindings['reader-normal:f']).toBeUndefined();
-    expect(preferences.get('bindings.schemaVersion', 0)).toBe(19);
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 });

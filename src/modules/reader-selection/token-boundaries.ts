@@ -5,11 +5,27 @@ export interface SourceTextSegment {
   readonly text: string;
 }
 
+export interface TokenTextRect {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly height: number;
+}
+
+export interface TokenTextSegment extends SourceTextSegment {
+  readonly rect?: TokenTextRect;
+}
+
 /** Source endpoints are kept per normalized UTF-16 unit, not inferred from matched text length. */
 export interface MappedTextIndex {
   readonly text: string;
   readonly pointers: readonly Pointer[];
   readonly ends: readonly Pointer[];
+}
+
+export interface TokenTextIndex extends MappedTextIndex {
+  readonly tokenBreaks?: readonly number[];
 }
 
 export interface TokenBoundary {
@@ -126,6 +142,52 @@ export function tokenBoundaries(text: string): TokenBoundary[] {
     }
   }
   return boundaries;
+}
+
+/** Visual gaps separate PDF words without inserting characters into the literal search index. */
+function separatePdfSpans(previous: TokenTextRect, next: TokenTextRect): boolean {
+  const overlap = Math.max(
+    0,
+    Math.min(previous.bottom, next.bottom) - Math.max(previous.top, next.top),
+  );
+  const height = Math.max(1, Math.min(previous.height, next.height));
+  if (overlap < height * 0.35) return true;
+  if (next.left - previous.right > Math.max(2, height * 0.25)) return true;
+  return next.left < previous.left - Math.max(2, height * 0.3);
+}
+
+/** Builds an ephemeral source map shared by Flash and local token motions. */
+export function buildTokenTextIndex(segments: readonly TokenTextSegment[]): TokenTextIndex {
+  const index = buildMappedTextIndex(segments);
+  const firstOffsets = new Map<Text, number>();
+  index.pointers.forEach((pointer, offset) => {
+    if (!firstOffsets.has(pointer.textNode)) firstOffsets.set(pointer.textNode, offset);
+  });
+  const tokenBreaks: number[] = [];
+  for (let position = 1; position < segments.length; position += 1) {
+    const previous = segments[position - 1]!;
+    const current = segments[position]!;
+    if (!previous.rect || !current.rect || !separatePdfSpans(previous.rect, current.rect)) continue;
+    const boundary = firstOffsets.get(current.textNode);
+    if (boundary !== undefined && boundary > 0 && boundary < index.text.length)
+      tokenBreaks.push(boundary);
+  }
+  return tokenBreaks.length ? { ...index, tokenBreaks } : index;
+}
+
+/** Splits linguistic tokens at genuine visual PDF span boundaries. */
+export function indexedTokenBoundaries(index: TokenTextIndex): TokenBoundary[] {
+  return tokenBoundaries(index.text).flatMap((token) => {
+    const parts: TokenBoundary[] = [];
+    let start = token.start;
+    for (const boundary of index.tokenBreaks ?? []) {
+      if (boundary <= start || boundary >= token.end) continue;
+      parts.push({ ...token, start, end: boundary });
+      start = boundary;
+    }
+    parts.push({ ...token, start, end: token.end });
+    return parts;
+  });
 }
 
 /** Expands a partial literal match or phrase to every intersecting complete token. */

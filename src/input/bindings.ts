@@ -140,10 +140,12 @@ export const DEFAULT_BINDINGS = {
   'reader-select:a': 'openSelectionActions',
   'reader-select:<Enter>': 'openSelectionActions',
   'reader-select:<Return>': 'openSelectionActions',
-  'reader-select:j': 'extendDown',
-  'reader-select:k': 'extendUp',
-  'reader-select:h': 'extendLeft',
-  'reader-select:l': 'extendRight',
+  'reader-select:j': 'extendTokenDown',
+  'reader-select:k': 'extendTokenUp',
+  'reader-select:h': 'extendTokenBackward',
+  'reader-select:l': 'extendTokenForward',
+  'reader-select:H': 'extendLeft',
+  'reader-select:L': 'extendRight',
   'reader-select:)': 'extendSentenceForward',
   'reader-select:(': 'extendSentenceBackward',
   'reader-select:}': 'extendParagraphForward',
@@ -549,6 +551,10 @@ export function parseCustomBindings(raw: unknown): Record<string, ActionId> {
 }
 
 const RETIRED_DEFAULT_BINDINGS = {
+  'reader-select:h': 'extendLeft',
+  'reader-select:l': 'extendRight',
+  'reader-select:j': 'extendDown',
+  'reader-select:k': 'extendUp',
   'reader-normal:gr': 'mainReturnContext',
   'main-normal:gr': 'mainReturnContext',
   'reader-normal:s': 'flashText',
@@ -593,6 +599,34 @@ function stringifyBindingOverrides(overrides: BindingOverrides): string {
     Object.entries(overrides).sort(([left], [right]) => left.localeCompare(right)),
   );
   return Object.keys(sorted).length ? JSON.stringify(sorted) : '';
+}
+
+/** Preserve explicit old character-motion unbindings when adding their H/L fallback defaults. */
+export function migrateTokenSelectionOverrides(raw: string): string {
+  let overrides: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return raw;
+    overrides = parsed as Record<string, unknown>;
+  } catch {
+    return raw;
+  }
+  const canonical = new Map(
+    Object.entries(overrides).map(([key, value]) => {
+      const binding = parseBindingKey(key);
+      const sequence = binding && canonicalBindingSequence(binding.sequence);
+      return [binding && sequence ? `${binding.mode}:${sequence}` : key, value];
+    }),
+  );
+  let changed = false;
+  for (const key of ['h', 'l']) {
+    const fallback = `reader-select:${key.toUpperCase()}`;
+    if (canonical.get(`reader-select:${key}`) === null && !canonical.has(fallback)) {
+      overrides[fallback] = null;
+      changed = true;
+    }
+  }
+  return changed ? JSON.stringify(overrides) : raw;
 }
 
 /** Converts the legacy full binding table into compact overrides without inferring deletions. */

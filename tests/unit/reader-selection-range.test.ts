@@ -150,7 +150,131 @@ function harness(
   };
 }
 
+function tokenHarness() {
+  const test = harness();
+  const value = 'flow matching, next';
+  Reflect.set(test.node, 'data', value);
+  Reflect.set(test.node, 'length', value.length);
+  Reflect.set(test.selection, 'anchorOffset', 0);
+  Reflect.set(test.selection, 'focusOffset', 4);
+  test.setBaseAndExtent.mockImplementation(
+    (anchor: Text, anchorOffset: number, focus: Text, focusOffset: number) => {
+      for (const [key, value] of Object.entries({
+        anchorNode: anchor,
+        anchorOffset,
+        focusNode: focus,
+        focusOffset,
+      }))
+        Reflect.set(test.selection, key, value);
+    },
+  );
+  const document = test.pdfWindow.document;
+  const markers: HTMLElement[] = [];
+  const span = {
+    firstChild: test.node,
+    getBoundingClientRect: () => ({
+      left: 0,
+      right: value.length * 8,
+      top: 100,
+      bottom: 116,
+      width: value.length * 8,
+      height: 16,
+    }),
+  };
+  const query = document.querySelectorAll.bind(document);
+  Reflect.set(document, 'querySelectorAll', (selector: string) =>
+    selector === '.textLayer span'
+      ? [span]
+      : selector === '[data-zv-cursor]'
+        ? [...markers]
+        : query(selector),
+  );
+  const create = document.createElement.bind(document);
+  Reflect.set(document, 'createElement', (tag: string) => {
+    if (tag === 'style') return create(tag);
+    const marker = {
+      dataset: {},
+      style: {},
+      setAttribute: vi.fn(),
+      remove: vi.fn(() => {
+        const index = markers.indexOf(marker);
+        if (index >= 0) markers.splice(index, 1);
+      }),
+    } as unknown as HTMLElement;
+    return marker;
+  });
+  Reflect.set(document, 'body', { appendChild: (marker: HTMLElement) => markers.push(marker) });
+  Reflect.set(document, 'createRange', () => {
+    let start = 0;
+    let end = 0;
+    const rect = () => ({
+      left: start * 8,
+      right: end * 8,
+      top: 100,
+      bottom: 116,
+      width: (end - start) * 8,
+      height: 16,
+    });
+    return {
+      setStart: (_: Text, offset: number) => {
+        start = offset;
+      },
+      setEnd: (_: Text, offset: number) => {
+        end = offset;
+      },
+      collapse: () => {
+        end = start;
+      },
+      getBoundingClientRect: rect,
+      getClientRects: () => [rect()],
+    };
+  });
+  return { ...test, markers };
+}
+
 describe('ReaderSelectionRange', () => {
+  it('commits complete-token endpoints and owns only the active token outline', () => {
+    const test = tokenHarness();
+    test.owner.extendByToken(test.pdfWindow, 1);
+    expect(test.setBaseAndExtent).toHaveBeenLastCalledWith(test.node, 0, test.node, 13);
+    expect(test.markers).toHaveLength(1);
+    expect(test.markers[0]?.style.left).toBe('40px');
+    expect(test.markers[0]?.style.width).toBe('64px');
+    test.owner.extendByToken(test.pdfWindow, -1);
+    expect(test.markers).toHaveLength(1);
+    test.owner.leave();
+    expect(test.markers).toHaveLength(0);
+  });
+
+  it('removes an old outline without removing a successor created during style cleanup', () => {
+    const test = tokenHarness();
+    test.owner.extendByToken(test.pdfWindow, 1);
+    const old = test.markers[0]!;
+    test.styleRemove.mockImplementationOnce(() => test.owner.refresh(test.pdfWindow, false));
+    test.owner.leave();
+    expect(test.markers).toHaveLength(1);
+    expect(test.markers[0]).not.toBe(old);
+    test.owner.dispose();
+    expect(test.markers).toHaveLength(0);
+  });
+
+  it('does not commit a token movement after native-selection invalidation retires the range', () => {
+    const test = tokenHarness();
+    test.invalidateNativeSelection.mockImplementationOnce(() => test.owner.leave());
+    test.owner.extendByToken(test.pdfWindow, 1);
+    expect(test.setBaseAndExtent).not.toHaveBeenCalled();
+    expect(test.markers).toHaveLength(0);
+  });
+
+  it('revalidates source nodes after a native boundary detaches them in the same document', () => {
+    const test = tokenHarness();
+    test.invalidateNativeSelection.mockImplementationOnce(() =>
+      Reflect.set(test.node, 'isConnected', false),
+    );
+    test.owner.extendByToken(test.pdfWindow, 1);
+    expect(test.setBaseAndExtent).not.toHaveBeenCalled();
+    expect(test.markers).toHaveLength(0);
+  });
   it('owns the Select anchor while local motions invalidate stale native popup geometry', () => {
     const test = harness();
 

@@ -77,6 +77,30 @@ function createGeometryWindow(specs: readonly TextSpec[]) {
 }
 
 describe('PDF text vertical motion', () => {
+  it('chooses only complete-token endpoints while preserving the unsnapped preferred column', () => {
+    const created = createGeometryWindow([
+      { id: 'first', value: 'abc', top: 10, bottom: 20, xs: [10, 20, 33, 45] },
+      { id: 'second', value: 'abcd ef', top: 30, bottom: 40, xs: [10, 20, 30, 40, 50, 60, 70, 80] },
+    ]);
+    const result = verticalTextPosition(created.pdfWindow, created.pointer('first', 2), 1, null, [
+      created.pointer('second', 4),
+      created.pointer('second', 7),
+    ]);
+    expect(result?.pointer).toEqual(created.pointer('second', 4));
+    expect(result?.preferredX).toBe(33);
+  });
+
+  it('skips whitespace-only lines when there are no selectable token stops', () => {
+    const created = createGeometryWindow([
+      { id: 'first', value: 'a', top: 10, bottom: 20, xs: [10, 20] },
+      { id: 'blank', value: ' ', top: 30, bottom: 40, xs: [10, 20] },
+      { id: 'last', value: 'b', top: 50, bottom: 60, xs: [10, 20] },
+    ]);
+    const result = verticalTextPosition(created.pdfWindow, created.pointer('first', 1), 1, null, [
+      created.pointer('last', 1),
+    ]);
+    expect(result?.pointer).toEqual(created.pointer('last', 1));
+  });
   it('moves by adjacent visual lines rather than browser line granularity', () => {
     const created = createGeometryWindow([
       { id: 'line-1', value: 'abc', top: 10, bottom: 20, xs: [10, 20, 30, 40] },

@@ -73,6 +73,45 @@ describe('keyString', () => {
 });
 
 describe('binding parsing and overrides', () => {
+  it('executes token defaults while keeping separate character fallback actions', () => {
+    const bindings = resolveBindings('');
+    for (const [key, action] of [
+      ['h', 'extendTokenBackward'],
+      ['l', 'extendTokenForward'],
+      ['j', 'extendTokenDown'],
+      ['k', 'extendTokenUp'],
+      ['H', 'extendLeft'],
+      ['L', 'extendRight'],
+    ]) {
+      expect(
+        advanceInput(
+          {
+            mode: 'reader-select',
+            keyBuffer: '',
+            countBuffer: '',
+            bindings,
+            allowCountPrefix: false,
+          },
+          key!,
+        ),
+      ).toMatchObject({ kind: 'execute', action });
+    }
+  });
+
+  it('does not freeze retired Select defaults when migrating full legacy tables', () => {
+    const migrated = migrateLegacyBindingOverrides(
+      JSON.stringify({
+        'visual:h': 'extendLeft',
+        'visual:l': 'extendRight',
+        'visual:j': 'extendDown',
+        'visual:k': 'extendUp',
+        'visual:q': 'extendLeft',
+      }),
+    );
+    expect(JSON.parse(migrated)).toEqual({ 'reader-select:q': 'extendLeft' });
+    expect(resolveBindings(migrated)['reader-select:h']).toBe('extendTokenBackward');
+    expect(resolveBindings(migrated)['reader-select:q']).toBe('extendLeft');
+  });
   it('parses known modes and retains complete key sequences', () => {
     expect(parseBindingKey('reader-normal:<C-d>')).toEqual({
       mode: 'reader-normal',

@@ -18,12 +18,13 @@ import {
   migrateRetiredReaderInsertOverrides,
   migrateShortcutSystemOverrides,
   migrateRetiredShortcutActions,
+  migrateTokenSelectionOverrides,
   resolveBindings,
   type BindingMap,
 } from '../input/bindings';
 
 export const PREFERENCE_PREFIX = 'extensions.zotero-neo' as const;
-export const BINDING_SCHEMA_VERSION = 19;
+export const BINDING_SCHEMA_VERSION = 20;
 export const BINDINGS_PREFERENCE_KEY = 'bindings' as const;
 export const LANGUAGE_PREFERENCE_KEY = 'language' as const;
 export const TAG_SEPARATOR_PREFERENCE_KEY = 'tags.separator' as const;
@@ -253,6 +254,7 @@ export function migrateBindingPreferences(preferences: PreferenceWriter): void {
   if (version < 16) migrated = migrateMainSelectionCommandOverrides(migrated);
   if (version < 17) migrated = migrateRetiredReaderInsertOverrides(migrated);
   if (version < 18) migrated = migrateShortcutSystemOverrides(migrated);
+  if (version < 20) migrated = migrateTokenSelectionOverrides(migrated);
   if (migrated !== raw) preferences.set(BINDINGS_PREFERENCE_KEY, migrated);
   preferences.set('bindings.schemaVersion', BINDING_SCHEMA_VERSION);
 }

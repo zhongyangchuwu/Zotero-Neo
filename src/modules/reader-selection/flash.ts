@@ -9,12 +9,11 @@ import { isDeadObject, nativeObjectIdentity } from '../../platform/cross-compart
 import { HINT_ALPHABET } from '../../reader/hint-labels';
 import type { PdfWindow, Pointer } from '../../reader/types';
 import {
-  buildMappedTextIndex,
+  buildTokenTextIndex,
   mappedTextRange,
-  tokenBoundaries,
+  indexedTokenBoundaries,
   tokenRangeCovering,
-  type TokenBoundary,
-  type MappedTextIndex,
+  type TokenTextIndex,
 } from './token-boundaries';
 
 export type FlashIntent = 'visual-start' | 'visual-end';
@@ -25,9 +24,7 @@ export interface FlashTextSegment {
   readonly rect?: FlashRect;
 }
 
-export interface FlashTextIndex extends MappedTextIndex {
-  readonly tokenBreaks?: readonly number[];
-}
+export interface FlashTextIndex extends TokenTextIndex {}
 
 export interface FlashMatch {
   readonly index: number;
@@ -97,35 +94,9 @@ export function normalizeFlashText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim();
 }
 
-/** A large visual gap or new line separates tokens even without a PDF text-layer space. */
-function separatePdfSpans(previous: FlashRect, next: FlashRect): boolean {
-  const overlap = Math.max(
-    0,
-    Math.min(previous.bottom, next.bottom) - Math.max(previous.top, next.top),
-  );
-  const height = Math.max(1, Math.min(previous.height, next.height));
-  if (overlap < height * 0.35) return true;
-  if (next.left - previous.right > Math.max(2, height * 0.25)) return true;
-  return next.left < previous.left - Math.max(2, height * 0.3);
-}
-
 /** Builds a normalized search index while retaining exact DOM source endpoints. */
 export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): FlashTextIndex {
-  const index = buildMappedTextIndex(segments);
-  const firstOffsets = new Map<Text, number>();
-  index.pointers.forEach((pointer, offset) => {
-    if (!firstOffsets.has(pointer.textNode)) firstOffsets.set(pointer.textNode, offset);
-  });
-  const tokenBreaks: number[] = [];
-  for (let indexValue = 1; indexValue < segments.length; indexValue += 1) {
-    const previous = segments[indexValue - 1]!;
-    const current = segments[indexValue]!;
-    if (!previous.rect || !current.rect || !separatePdfSpans(previous.rect, current.rect)) continue;
-    const boundary = firstOffsets.get(current.textNode);
-    if (boundary !== undefined && boundary > 0 && boundary < index.text.length)
-      tokenBreaks.push(boundary);
-  }
-  return tokenBreaks.length ? { ...index, tokenBreaks } : index;
+  return buildTokenTextIndex(segments);
 }
 
 interface FlashLiteralRange {
@@ -195,17 +166,7 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
 
 /** Deduplicates partial matches that target the same complete token or token phrase. */
 export function flashTokenMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
-  const tokens: TokenBoundary[] = tokenBoundaries(index.text).flatMap((token) => {
-    const parts: TokenBoundary[] = [];
-    let start = token.start;
-    for (const boundary of index.tokenBreaks ?? []) {
-      if (boundary <= start || boundary >= token.end) continue;
-      parts.push({ ...token, start, end: boundary });
-      start = boundary;
-    }
-    parts.push({ ...token, start, end: token.end });
-    return parts;
-  });
+  const tokens = indexedTokenBoundaries(index);
   const seen = new Set<string>();
   const matches: FlashMatch[] = [];
   for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
@@ -675,6 +636,7 @@ export class ReaderFlash {
     const pdfWindow = this.#window;
     const intent = this.#intent;
     const current = this.#viewCurrent;
+    const snapshot = this.#selectionBeforeInput;
     if (!pdfWindow || !this.#current(pdfWindow, this.#generation)) {
       this.cancel();
       return;
@@ -705,8 +667,16 @@ export class ReaderFlash {
       !this.#disposed &&
       current?.() &&
       this.#host.isCurrent(pdfWindow)
-    )
-      this.#host.activate(intent, pdfWindow, selectionTarget);
+    ) {
+      if (snapshot) this.#restoreSelection(pdfWindow, snapshot);
+      if (
+        this.#generation === generation + 1 &&
+        !this.#disposed &&
+        current?.() &&
+        this.#host.isCurrent(pdfWindow)
+      )
+        this.#host.activate(intent, pdfWindow, selectionTarget);
+    }
   }
 
   #promptPrefix(): string {
@@ -852,7 +822,7 @@ export class ReaderFlash {
     };
   }
 
-  /** Restore direction only on explicit cancellation, without replacing a newer selection. */
+  /** Restore input-displaced selection before returning control, without replacing a newer range. */
   #restoreSelection(pdfWindow: PdfWindow, snapshot: FlashSelectionSnapshot): void {
     const selection = pdfWindow.getSelection();
     if (!selection?.isCollapsed) return;

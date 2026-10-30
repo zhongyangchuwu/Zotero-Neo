@@ -191,6 +191,18 @@ export function createReaderSelectionModule(
         case 'extendDown':
           range.extendByLine(window, 1);
           return;
+        case 'extendTokenDown':
+          range.extendByTokenLine(window, 1);
+          return;
+        case 'extendTokenUp':
+          range.extendByTokenLine(window, -1);
+          return;
+        case 'extendTokenBackward':
+          range.extendByToken(window, -1);
+          return;
+        case 'extendTokenForward':
+          range.extendByToken(window, 1);
+          return;
         case 'extendUp':
           range.extendByLine(window, -1);
           return;

@@ -191,7 +191,9 @@ Zotero 10.0.6 的标识符工具提供 DOI/arXiv 匹配与清理基线，不决�
 
 原生 Reader 按页、按矩形转换批注几何，并将载荷克隆进所属 realm。跨屏外片段的总包围盒不代表存在可见锚点。确认前重新验证原生模型身份、字段/过滤/视图快照；有界布局无法放下不重叠标签时，退休该交互，不提供被遮挡但仍能选择的目标。
 
-绑定 schema 19 在解析前将持久化 `copyIdentifier` / `followIdentifier` 迁移为 `copyTarget` / `followLink`，保留自定义按键、显式 null 与自定义 `reader-normal:y` → `yankAnnotation`。旧 ID 不作为运行时别名。
+绑定 schema 20 将 Select 的 `h/l/j/k` 默认映射到独立的词元动作，`H/L` 提供字符级退路。旧字符与行动作的 ID 和自定义绑定语义保留；显式取消 `h/l` 时，也取消尚未自定义的 `H/L` 退路，不重新启用已取消的动作。迁移写入失败不前进 schema，可安全重试。此前的 `copyIdentifier` / `followIdentifier` 仍在解析前迁移为 `copyTarget` / `followLink`，旧 ID 不作为运行时别名。
+
+词元动作按需读取精确 PDF 视图已存在的文本层，复用 Flash 的来源映射与视觉 span 边界；不持有常驻全文索引。DOM Selection 的半开端点投影为锚词与活动词，跨锚点时改变端点所用边缘并保留锚词，接管的原生半词锚点保持精确。视觉行移动只考察可选的词元端点，保留吸附前的水平偏好；活动词元轮廓随选择样式、视图和模块清理，不改变原生批注几何安全校验。
 
 Bootstrap chrome 与 Zotero content 之间传递对象时，必须克隆到接收窗口。`src/platform/cross-compartment.ts` 统一处理 `Components.utils.cloneInto`、wrapper 身份及 dead-wrapper；PDF 视图句柄保留原生身份，不在每个事件中分配包装器。
 
