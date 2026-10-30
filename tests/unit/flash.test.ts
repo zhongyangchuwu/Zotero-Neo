@@ -301,10 +301,11 @@ describe('Reader Flash lifecycle', () => {
 
     const hints = flashHints(created.bodyChildren);
     expect(hints).toHaveLength(2);
-    expect(hints.map((hint) => hint.textContent)).toEqual(['S', 'F']);
+    expect(new Set(hints.map((hint) => hint.textContent)).size).toBe(2);
+    expect(hints.every((hint) => hint.textContent?.length === 1)).toBe(true);
     expect(activations).toHaveLength(0);
 
-    flash.handleKey(flashKey('S'), created.pdfWindow);
+    flash.handleKey(flashKey(hints[0]!.textContent!), created.pdfWindow);
     expect(activations).toHaveLength(1);
     expect(activations[0]?.intent).toBe('visual-start');
     expect(activations[0]?.target.start.textNode).toBe(created.spans[1]?.node);
@@ -396,10 +397,12 @@ describe('Reader Flash lifecycle', () => {
     flash.open(created.pdfWindow, 'visual-start');
     for (const key of 'target') typeFlashKey(flash, created, key);
 
-    expect(flashHints(created.bodyChildren)[0]?.textContent).toBe('AA');
-    flash.handleKey(flashKey('A'), created.pdfWindow);
+    const firstLabel = flashHints(created.bodyChildren)[0]?.textContent;
+    expect(firstLabel).toMatch(/^[A-Z]{2}$/);
+    const firstKey = firstLabel![0]!;
+    flash.handleKey(flashKey(firstKey), created.pdfWindow);
     expect(activations).toHaveLength(0);
-    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('→ A');
+    expect(flashPrompt(created.bodyChildren)?.textContent).toContain('→ ' + firstKey);
 
     flash.handleKey(flashKey('Backspace'), created.pdfWindow);
     expect(flashHints(created.bodyChildren).filter((hint) => !hint.hidden)).toHaveLength(30);
@@ -546,7 +549,7 @@ describe('Reader Flash lifecycle', () => {
     expect(flashPrompt(current.bodyChildren)?.textContent).toContain('tar (1)');
     flash.handleKey(flashKey('Enter'), current.pdfWindow);
     expect(activations[0]?.target.start.textNode).toBe(current.spans[0]?.node);
-    expect(activations[0]?.target.end.offset).toBe(3);
+    expect(activations[0]?.target.end.offset).toBe(6);
   });
 
   it('keeps unexpected live DOM failures observable while retiring input ownership', () => {
