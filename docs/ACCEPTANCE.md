@@ -37,7 +37,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 5. 不登录同步账户。只导入有授权／公有领域的 PDF，或者自己制作的测试文档。不把私人 PDF、笔记、窗口标题或剪贴板内容录进视频。
 6. 使用原生 Add-on Manager 持久安装 XPI。此轮不运行 `npm run dev:start` / `npm run dev`，不混用同 ID 的临时 RDP 加载和持久包；临时加载不能证明安装／升级。
 
-`npm run dev:setup -- --profile ...` 只为已注册且已存在的开发 profile 配置 RDP，当前工具不提供 `--data-dir` 或 `--port` 参数，也不替代上面的数据隔离和持久包验收。技术排查需要 RDP 时，另建开发 profile，遵守[开发指南](DEVELOPMENT.md#wsl-下的本地-gui-迭代)。
+`npm run dev:setup -- --profile ...` 为已存在的开发 profile 配置 RDP，也支持未注册到 `profiles.ini` 的独立目录。工具不提供 `--data-dir` 或 `--port` 参数，也不替代上面的数据隔离和持久包验收。技术排查需要 RDP 时，另建开发 profile，遵守[开发指南](DEVELOPMENT.md#本地-zotero-gui-迭代)。
 
 ### 最小数据集
 

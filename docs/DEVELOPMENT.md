@@ -44,15 +44,45 @@ npm run docs:preview
 
 仓库管理员需要将 Pages 构建来源设为 GitHub Actions。PR 只构建和检查站点，不发布；部署仅允许 `main`。文档站输出独立于 XPI 和插件运行时。
 
-### WSL 下的本地 GUI 迭代
+### 本地 Zotero GUI 迭代
 
 使用专用 Zotero 开发 profile，并将其数据目录与个人文献库分开。开发工具只选择 profile，不会自动隔离数据目录。
+
+#### Linux
+
+可以直接使用未注册到 `profiles.ini` 的独立 profile。例如，先创建一次性测试目录：
+
+```bash
+mkdir -p /tmp/zotero-neo-dev/profile /tmp/zotero-neo-dev/data
+```
+
+在 `/tmp/zotero-neo-dev/profile/user.js` 中写入下面两行，确保测试实例使用自己的数据库：
+
+```js
+user_pref('extensions.zotero.dataDir', '/tmp/zotero-neo-dev/data');
+user_pref('extensions.zotero.useDataDir', true);
+```
+
+指定实际安装目录中的 `zotero` 启动程序，完成一次配置：
+
+```bash
+ZOTERO_NEO_ZOTERO_EXE=/path/to/Zotero_linux-x86_64/zotero \
+  npm run dev:setup -- --profile /tmp/zotero-neo-dev/profile
+```
+
+可执行文件路径会写入本地配置，后续命令无需重复设置环境变量。`/tmp` 只适合一次性测试；长期开发时，把 profile、data 及上述路径一起换到自己的持久目录。
+
+#### WSL 与 Windows Zotero
 
 关闭该开发 profile 的 Zotero 后，只需配置一次：
 
 ```bash
 npm run dev:setup -- --profile /mnt/c/Users/YOU/AppData/Roaming/Zotero/Zotero/Profiles/DEV.default
 ```
+
+工具会把 WSL 的 `/mnt/<drive>/...` 转为 Windows 路径；Linux 原生 Zotero 则直接使用本地路径。
+
+#### 启动、重载与检查
 
 setup 开启本地远程调试，将 profile 和 Zotero 可执行文件路径记录到被 Git 忽略的 `.zotero-neo-dev.json`，并将 `build/addon/` 镜像到 profile 下的 `zotero-neo-rdp`。配置完成后，先关闭仍使用该 profile 的 Zotero，再启动开发实例：
 
