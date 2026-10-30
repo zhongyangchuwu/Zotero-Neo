@@ -28,4 +28,4 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 项目最初使用了 [Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus) 的代码，后者包含来自 [zotero-vim](https://codeberg.org/finktank/zotero-vim) 的工作。历史版权声明按项目许可证保留。
 
-许可证：[AGPL-3.0](LICENSE)。XPI 的 `LICENSE` 包含项目许可证，`licenses/fuzzysort-LICENSE` 包含所捆绑 fuzzysort 的 MIT 声明。构建包与生成它的源码提交对应；正式发布的二进制文件还应提供同一标签下的源码。
+许可证：[AGPL-3.0](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/LICENSE)。XPI 的 `LICENSE` 包含项目许可证，`licenses/fuzzysort-LICENSE` 包含所捆绑 fuzzysort 的 MIT 声明。构建包与生成它的源码提交对应；正式发布的二进制文件还应提供同一标签下的源码。
