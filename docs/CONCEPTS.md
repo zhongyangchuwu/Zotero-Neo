@@ -1,12 +1,12 @@
 # 基本概念 {#how-neo-works}
 
-Neo 根据当前取得键盘焦点的 Zotero 区域解释按键。因此，同一个键在文献库、PDF 阅读器和笔记编辑器中可以有不同用途。
+Neo 会根据你正在操作的区域决定按键的用途。同样是 `j`，在文献列表中是下一篇论文，在 PDF 中是向下滚动。
 
-## 同一个键，在不同位置有不同用途 {#the-same-key-can-have-different-jobs}
+## 同一个键为什么会做不同的事 {#the-same-key-can-have-different-jobs}
 
 例如，`j` 在主窗口移动条目游标，在 PDF 中滚动，在启用 Vim 风格编辑的笔记中移动文本光标。搜索框、批注评论和其他文本输入控件则接收普通文字，不把这些文字当作浏览命令。
 
-指南中的按键均指默认绑定。自己改过按键时，可以在**设置 → 快捷键**查当前值；关闭链接与复制提示或扩展管理面板这两项可选增强时，其相关入口会消失。其余九个核心模块固定启用；设置见[模块设置](SETTINGS_GUIDE.md#modules)。
+指南里写的是默认快捷键。改过按键的话，以**设置 → 快捷键**为准。链接与复制提示、扩展管理面板也可以单独关闭；见[模块设置](SETTINGS_GUIDE.md#modules)。
 
 ## 主窗口、阅读器和笔记编辑器 {#main-reader-and-note}
 
@@ -16,7 +16,7 @@ Neo 根据当前取得键盘焦点的 Zotero 区域解释按键。因此，同�
 
 具体操作分别见[文献库](MAIN_GUIDE.md#try-it)、[PDF 阅读器](READER_GUIDE.md#try-it)和[笔记](NOTE_GUIDE.md#try-it)。
 
-## 在命令与文字输入之间切换 {#moving-from-commands-to-text-entry}
+## 为什么有时按键不执行命令 {#moving-from-commands-to-text-entry}
 
 点击要操作的区域：主窗口命令需要条目列表或分类树的焦点，阅读器命令需要 PDF 页面的焦点，笔记命令需要笔记编辑器的焦点。要输入文字时，点击搜索字段或进入相应编辑状态；输入法组字期间，先完成或取消候选，再使用命令键。
 
@@ -26,7 +26,7 @@ Neo 根据当前取得键盘焦点的 Zotero 区域解释按键。因此，同�
 
 在启用 Vim 风格编辑的 Note 中，`i` 进入 Insert，`Escape` 返回 Normal。关闭 Vim 风格编辑后，按 Zotero 原生方式输入即可。输入细节见[文本输入与输入法](INPUT_METHODS.md)。
 
-## 条目游标、Neo 选择集与文本选区 {#cursor-and-selection-are-different}
+## 当前论文、批量选择和 PDF 选区 {#cursor-and-selection-are-different}
 
 主窗口的**条目游标**表示当前浏览的一行。移动游标不会改变 **Neo 选择集**；后者保存要一起处理的一组条目。`v` 建立临时可视范围，`s` 将对应目标加入或移出选择集，`<Space>ss` 打开选择集面板。具体目标优先级见[文献库指南](MAIN_GUIDE.md#keep-opening-and-batch-selection-separate)。
 
