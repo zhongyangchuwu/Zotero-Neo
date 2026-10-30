@@ -1,40 +1,41 @@
-# 功能介绍 {#features}
+# Neo 能做什么 {#features}
 
-用键盘在 Zotero 中查找论文、选择 PDF 文字并添加批注，整理正在阅读的一组文献。核心工作流固定启用；只有链接与复制提示和扩展管理面板是可选增强，配置见[模块设置](SETTINGS_GUIDE.md#modules)。
+Neo 可以用键盘浏览文献、阅读 PDF、选中文字和添加批注，也能整理标签与笔记。这里挑几个常用操作介绍；所有快捷键见[命令参考](COMMAND_REFERENCE.md)。
 
-## 输入眼前的文字来选择 PDF 段落 {#select-pdf-text-by-typing-what-you-see}
+## 输入页面上的词句，选中 PDF 文字 {#select-pdf-text-by-typing-what-you-see}
 
-在 PDF 页面按 `v`，输入可见的词句，再选择匹配位置的提示。选中后，可按字符、单词或行调整范围，再复制、添加高亮或写批注评论。Flash 还可以定位另一端的词句，把选区扩展到更远的位置。
+在 PDF 中按 `v`，输入页面上看到的词或短语。Neo 会在匹配的位置显示字母提示，按对应字母就能选中那段文字。
 
-这适合连续收集多段证据，不必反复用鼠标拖选。PDF 需要有可选取的文字层；Neo 不通过 OCR 识别扫描页。
+选中后，可以用 `h` / `l` 调整范围，按 `y` 复制，或者按 `zy` 添加黄色高亮。要选很长的一段，也可以查找另一端的位置，不必用鼠标从头拖到尾。
 
-[开始选择文字](SELECTION_GUIDE.md#try-it) · [文本选择与批注指南](SELECTION_GUIDE.md)
+这项功能需要 PDF 自带可选取的文字。扫描版没有文字层时，Neo 不提供 OCR。
 
+[试试文本选择](SELECTION_GUIDE.md#try-it)
 
-## 边浏览边建立阅读清单 {#build-a-reading-list-while-you-browse}
+## 浏览论文时先做标记，之后一起整理 {#build-a-reading-list-while-you-browse}
 
-在条目列表用 `s` 将文献加入 Neo 选择集，继续移动条目游标浏览其他论文。选择集与正在浏览的行分开，因此可以打开论文、改变视图，再回来整理已经收集的文献。
+在 Zotero 的条目列表中按 `s`，就能把当前论文加入 Neo 选择集。你可以接着浏览、切换分类，之后按 `<Space>ss` 查看已标记的论文，一起添加标签或整理到分类中。
 
-打开选择集面板查看整组成员，然后批量添加标签或调整分类。需要一并收集连续条目时，可以先建立临时可视范围，再加入选择集。Neo 选择集属于当前窗口会话，不是跨重启保存的文献清单；需要长期保留分组时，可使用 Zotero 分类或标签。
+这个选择集只在当前窗口会话中有效，重启 Zotero 后不会保留。想长期保存阅读清单，请使用 Zotero 的分类或标签。
 
-[管理阅读清单](MAIN_GUIDE.md) · [用标签整理条目](TAGS.md)
+[管理文献](MAIN_GUIDE.md) · [整理标签](TAGS.md)
 
-## 按提示复制参考信息和批注内容 {#copy-references-and-annotation-content-by-label}
+## 不选文字，直接复制 DOI、链接和批注 {#copy-references-and-annotation-content-by-label}
 
-在阅读器 Normal 按 `y`，选择可见的 DOI、arXiv ID、URL、批注摘录或评论，不需要先选中文字。摘录和评论分别提供标签；摘录里的标识符也可以作为独立目标。按 `f` 则跟随识别出的参考链接或原生 PDF 链接。
+阅读 PDF 时，在普通模式下按 `y`，页面上能复制的 DOI、arXiv ID、网址、批注摘录和评论旁会显示字母提示。输入对应字母即可复制。按 `f` 可以打开支持的链接。
 
-想把一篇新论文加入文库时，使用“通过标识符添加条目”打开 Zotero 原生录入框。复制或跟随链接本身不会自动导入条目。
+复制标识符或打开链接不会将论文导入文库。需要添加论文时，可以使用 Zotero 的“通过标识符添加条目”。
 
-[复制／跟随可见目标](READER_GUIDE.md#copy-or-follow-visible-targets) · [按标识符添加文献](MAIN_GUIDE.md#add-items-by-identifier)
+[复制或打开页面上的内容](READER_GUIDE.md#copy-or-follow-visible-targets) · [通过标识符添加文献](MAIN_GUIDE.md#add-items-by-identifier)
 
-## 沿论文结构阅读并返回 {#follow-the-structure-of-a-paper}
+## 在标题、图表和阅读位置之间跳转 {#follow-the-structure-of-a-paper}
 
-在标题、图、表、已有批注和自己的 marks 之间跳转。结构导航使用 PDF 的原生 Outline 或可用结构信息；没有可用目标时，仍可翻页或搜索文字。需要对照方法和结果时，可以打开第二个 PDF 视图，让两侧保持不同阅读位置。
+Neo 可以跳到上一节或下一节标题、图表和批注，也能给重要位置设置标记。要对照方法和实验结果，可以把同一份 PDF 分成两个窗格。
 
-跟随参考链接前设置一个 mark，或使用共享后退／前进回到可恢复的位置。marks 和导航历史用途不同，也不会替代文献库中的 Neo 选择集。
+标题和图表跳转依赖 PDF 中可用的结构信息；没有这些信息时，仍可按页码导航或搜索文字。
 
-[阅读器使用指南](READER_GUIDE.md) · [搜索与返回之前的位置](SEARCH_GUIDE.md)
+[阅读器操作](READER_GUIDE.md) · [搜索和返回](SEARCH_GUIDE.md)
 
-## 按自己的工作方式组合这些功能 {#explore-the-complete-workflow}
+## 更多操作 {#explore-the-complete-workflow}
 
-[使用指南](USER_GUIDE.md)串联文献库、阅读、批注、笔记、整理与导航，你可以从正在处理的任务开始。需要安装时看[安装与入门](GETTING_STARTED.md)，需要准确按键或调整选项时看[命令参考](COMMAND_REFERENCE.md)和[设置指南](SETTINGS_GUIDE.md)。
+[使用指南](USER_GUIDE.md)按任务介绍文献库、PDF 和笔记的操作。初次使用看[安装与入门](GETTING_STARTED.md)；想改快捷键、滚动方式或主题，看[设置指南](SETTINGS_GUIDE.md)。
