@@ -40,6 +40,11 @@ export interface FlashSelectionTarget {
   readonly end: Pointer;
 }
 
+interface FlashSelectionSnapshot {
+  readonly anchor: Pointer;
+  readonly focus: Pointer;
+}
+
 interface FlashRect {
   readonly left: number;
   readonly right: number;
@@ -138,18 +143,18 @@ function flashLiteralRanges(index: FlashTextIndex, rawQuery: string): FlashLiter
   const foldedStarts: number[] = [];
   const foldedEnds: number[] = [];
   if (!caseSensitive) {
-    const parts: string[] = [];
     let sourceOffset = 0;
     for (const character of index.text) {
       const folded = character.toLocaleLowerCase('en-US');
-      parts.push(folded);
       for (let unit = 0; unit < folded.length; unit += 1) {
         foldedStarts.push(sourceOffset);
         foldedEnds.push(sourceOffset + character.length);
       }
       sourceOffset += character.length;
     }
-    haystack = parts.join('');
+    // en-US contextual lowercasing changes Sigma's value, not its UTF-16 width.
+    // Keep the per-code-point width map, but preserve whole-string casing context.
+    haystack = index.text.toLocaleLowerCase('en-US');
     needle = query.toLocaleLowerCase('en-US');
   }
 
@@ -282,6 +287,7 @@ export class ReaderFlash {
   #input: HTMLInputElement | null = null;
   #inputCleanup: (() => void) | null = null;
   #composition: CompositionState = { active: false };
+  #selectionBeforeInput: FlashSelectionSnapshot | null = null;
   #matchCount = 0;
   #labelCache = new Map<Text, Map<number, string>>();
 
@@ -334,6 +340,7 @@ export class ReaderFlash {
       this.#viewCurrent = current;
       this.#intent = intent;
       this.#index = index;
+      this.#selectionBeforeInput = this.#captureSelection(pdfWindow);
       this.#createPrompt(pdfWindow, generation);
       if (!this.#current(pdfWindow, generation)) {
         if (generation === this.#generation) this.cancel();
@@ -395,14 +402,20 @@ export class ReaderFlash {
       consumeCommand();
       const generation = this.#generation;
       const current = this.#viewCurrent;
+      const document = pdfWindow.document;
+      const snapshot = this.#selectionBeforeInput;
       this.cancel();
-      if (
+      const canRestore = (): boolean =>
         this.#generation === generation + 1 &&
         !this.#disposed &&
-        current?.() &&
-        this.#host.isCurrent(pdfWindow)
-      )
+        !isDeadObject(pdfWindow) &&
+        current?.() === true &&
+        this.#host.isCurrent(pdfWindow) &&
+        pdfWindow.document === document;
+      if (canRestore()) {
         pdfWindow.focus();
+        if (canRestore() && snapshot) this.#restoreSelection(pdfWindow, snapshot);
+      }
       return true;
     }
 
@@ -466,6 +479,7 @@ export class ReaderFlash {
     this.#viewCurrent = null;
     this.#intent = null;
     this.#index = null;
+    this.#selectionBeforeInput = null;
     this.#query = '';
     this.#labelBuffer = '';
     this.#matchCount = 0;
@@ -814,6 +828,45 @@ export class ReaderFlash {
       this.#host.isCurrent(pdfWindow) &&
       this.#viewCurrent?.() === true
     );
+  }
+
+  /** Gecko may clear the PDF's DOM selection when the Flash input receives focus. */
+  #captureSelection(pdfWindow: PdfWindow): FlashSelectionSnapshot | null {
+    const selection = pdfWindow.getSelection();
+    if (!selection || selection.isCollapsed) return null;
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+    if (
+      !isTextNode(anchorNode) ||
+      !isTextNode(focusNode) ||
+      isDeadObject(anchorNode) ||
+      isDeadObject(focusNode) ||
+      !anchorNode.isConnected ||
+      !focusNode.isConnected ||
+      anchorNode.ownerDocument !== pdfWindow.document ||
+      focusNode.ownerDocument !== pdfWindow.document
+    )
+      return null;
+    return {
+      anchor: { textNode: anchorNode, offset: anchorOffset },
+      focus: { textNode: focusNode, offset: focusOffset },
+    };
+  }
+
+  /** Restore direction only on explicit cancellation, without replacing a newer selection. */
+  #restoreSelection(pdfWindow: PdfWindow, snapshot: FlashSelectionSnapshot): void {
+    const selection = pdfWindow.getSelection();
+    if (!selection?.isCollapsed) return;
+    const { anchor, focus } = snapshot;
+    for (const pointer of [anchor, focus]) {
+      if (
+        isDeadObject(pointer.textNode) ||
+        !pointer.textNode.isConnected ||
+        pointer.textNode.ownerDocument !== pdfWindow.document ||
+        pointer.offset > pointer.textNode.length
+      )
+        return;
+    }
+    selection.setBaseAndExtent(anchor.textNode, anchor.offset, focus.textNode, focus.offset);
   }
 
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {

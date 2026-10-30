@@ -86,6 +86,26 @@ describe('Flash complete-token targeting', () => {
     expect(dotted.targets[0]?.end.offset).toBe(8);
   });
 
+  it('preserves contextual Greek lowercasing alongside length-changing mappings', () => {
+    const example = matches('İx ΟΣ ος ΟΣΑ', 'ος');
+    expect(example.raw.map((match) => [match.pointer.offset, match.end.offset])).toEqual([
+      [3, 5],
+      [6, 8],
+    ]);
+    expect(example.targets.map((match) => [match.pointer.offset, match.end.offset])).toEqual([
+      [3, 5],
+      [6, 8],
+    ]);
+
+    const uppercase = matches('ΟΣ', 'ΟΣ');
+    expect(uppercase.raw).toHaveLength(1);
+    expect(uppercase.targets).toHaveLength(1);
+
+    const medial = matches('ΟΣΑ', 'οσα');
+    expect(medial.targets).toHaveLength(1);
+    expect(medial.targets[0]?.end.offset).toBe(3);
+  });
+
   it('selects an expanded NFKC ligature as one complete source word', () => {
     const example = matches('ﬂow matching', 'fl');
     expect(example.index.text).toBe('flow matching');

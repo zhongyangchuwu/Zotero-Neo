@@ -286,7 +286,91 @@ function createFlash(
   return { flash, activations, statuses, debug };
 }
 
+function createSelectedFlashWindow() {
+  const created = createFlashWindow([{ value: 'target next', left: 20, top: 20 }]);
+  const node = created.spans[0]!.node;
+  Reflect.set(node, 'ownerDocument', created.pdfWindow.document);
+  const selection = {
+    isCollapsed: false,
+    anchorNode: node as Text | null,
+    anchorOffset: 6,
+    focusNode: node as Text | null,
+    focusOffset: 0,
+    setBaseAndExtent: vi.fn(),
+  };
+  Reflect.set(created.pdfWindow, 'getSelection', () => selection);
+  const create = created.pdfWindow.document.createElement.bind(created.pdfWindow.document);
+  Reflect.set(created.pdfWindow.document, 'createElement', (tag: string) => {
+    const element = create(tag);
+    if (tag === 'input')
+      Reflect.set(element, 'focus', () => {
+        selection.isCollapsed = true;
+        selection.anchorNode = null;
+        selection.focusNode = null;
+      });
+    return element;
+  });
+  return { ...created, node, selection };
+}
+
 describe('Reader Flash lifecycle', () => {
+  it('restores the directed PDF selection on Escape after Gecko input focus clears it', () => {
+    const created = createSelectedFlashWindow();
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-end');
+    expect(created.selection.isCollapsed).toBe(true);
+    flash.handleKey(flashKey('Escape'), created.pdfWindow);
+    expect(created.selection.setBaseAndExtent).toHaveBeenCalledWith(
+      created.node,
+      6,
+      created.node,
+      0,
+    );
+  });
+
+  it('does not replace a newer PDF selection while cancelling Flash', () => {
+    const created = createSelectedFlashWindow();
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-end');
+    created.selection.isCollapsed = false;
+    created.selection.anchorNode = created.node;
+    created.selection.focusNode = created.node;
+    created.selection.focusOffset = 11;
+    flash.handleKey(flashKey('Escape'), created.pdfWindow);
+    expect(created.selection.setBaseAndExtent).not.toHaveBeenCalled();
+  });
+
+  it('does not restore a selection into a replaced document or detached source node', () => {
+    for (const replaceDocument of [false, true]) {
+      const created = createSelectedFlashWindow();
+      const { flash } = createFlash();
+      flash.open(created.pdfWindow, 'visual-end');
+      if (replaceDocument) Reflect.set(created.pdfWindow, 'document', {});
+      else Reflect.set(created.node, 'isConnected', false);
+      flash.handleKey(flashKey('Escape'), created.pdfWindow);
+      expect(created.selection.setBaseAndExtent).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not restore a selection after focus opens a successor Flash', () => {
+    const created = createSelectedFlashWindow();
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-end');
+    Reflect.set(created.pdfWindow, 'focus', () => flash.open(created.pdfWindow, 'visual-end'));
+    flash.handleKey(flashKey('Escape'), created.pdfWindow);
+    expect(created.selection.setBaseAndExtent).not.toHaveBeenCalled();
+    expect(flash.isOpen).toBe(true);
+  });
+
+  it('drops the saved selection when the view is released', () => {
+    const created = createSelectedFlashWindow();
+    const { flash } = createFlash();
+    flash.open(created.pdfWindow, 'visual-end');
+    flash.releaseView(created.pdfWindow);
+    expect(flash.handleKey(flashKey('Escape'), created.pdfWindow)).toBe(false);
+    expect(created.selection.setBaseAndExtent).not.toHaveBeenCalled();
+  });
+
   it('renders distance-ordered labels and returns the whole selected match', () => {
     const created = createFlashWindow(
       [

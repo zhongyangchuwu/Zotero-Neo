@@ -997,6 +997,14 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     const active = window.document.activeElement;
     const target = asElement(event.target);
+    // Embedded Reader events still reach their view listener. Blurring its Flash input here
+    // would cancel the interaction before the Reader can handle Escape or composition.
+    if (
+      active?.localName === 'browser' &&
+      target?.ownerDocument &&
+      target.ownerDocument !== window.document
+    )
+      return;
     const editable = isEditableElement(active) ? active : isEditableElement(target) ? target : null;
     if (editable) {
       this.clearKeyGuide(window, session);
