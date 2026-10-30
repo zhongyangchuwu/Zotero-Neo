@@ -1,4 +1,4 @@
-# 设置参考 {#settings-reference}
+# 设置参考
 
 本页维护控件和默认值。修改绑定、保存与选择设置的方法见[设置指南](SETTINGS_GUIDE.md)。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**；只有两个可选增强的模块请求需单独保存并重启 Zotero。
 
@@ -27,9 +27,9 @@
 | 语言 | 跟随 Zotero | 本地化设置与命令标签，也可固定为 English 或中文。 |
 | 命名空间分隔符 | `/` | 将扁平标签显示为虚拟路径；留空则按平面标签匹配。 |
 
-Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操作见[修改快捷键](SETTINGS_GUIDE.md#try-it)。
+Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操作见[修改快捷键](SETTINGS_GUIDE.md#修改一个快捷键)。
 
-## 模块 {#modules}
+## 模块
 
 项目有 11 个内部功能分区，但这不表示有 11 个可选开关。`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 九个核心分区固定启用；只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）可配置，模块偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled` 与 `extensions.zotero-neo.modules.extensions.enabled`，布尔值默认均为 `true`。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
 
@@ -60,4 +60,4 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
-设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。关闭 `reader-hints` 和 `extensions` 时，其余九个核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#modules)。
+设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。关闭 `reader-hints` 和 `extensions` 时，其余九个核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关两项可选功能)。
