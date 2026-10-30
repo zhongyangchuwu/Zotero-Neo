@@ -91,8 +91,7 @@ export function mappedTextRange(
   start: number,
   end: number,
 ): { readonly start: Pointer; readonly end: Pointer } | null {
-  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start)
-    return null;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) return null;
   const first = index.pointers[start];
   const last = index.ends[end - 1];
   return first && last ? { start: first, end: last } : null;
@@ -105,7 +104,11 @@ export function tokenBoundaries(text: string): TokenBoundary[] {
     // Without the host segmenter, preserve every grapheme without guessing word boundaries.
     for (const part of graphemes(text)) {
       if (!/^\s+$/u.test(part.segment))
-        boundaries.push({ start: part.index, end: part.index + part.segment.length, kind: 'symbol' });
+        boundaries.push({
+          start: part.index,
+          end: part.index + part.segment.length,
+          kind: 'symbol',
+        });
     }
     return boundaries;
   }

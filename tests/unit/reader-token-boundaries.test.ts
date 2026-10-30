@@ -33,8 +33,9 @@ describe('local PDF token boundaries and source mapping', () => {
       expect(input.slice(token.start, token.end)).not.toMatch(/^\s+$/u);
       expect(token.end).toBeLessThanOrEqual(input.length);
     }
-    expect(tokens.map((token) => input.slice(token.start, token.end)).join(''))
-      .toBe(input.replace(/\s+/gu, ''));
+    expect(tokens.map((token) => input.slice(token.start, token.end)).join('')).toBe(
+      input.replace(/\s+/gu, ''),
+    );
     expect(tokens.some((token) => input.slice(token.start, token.end) === '-')).toBe(true);
   });
 
