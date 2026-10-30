@@ -1,32 +1,32 @@
-# 命令参考 {#command-reference}
+# 命令参考
 
 在此查找命令的默认绑定、执行上下文、计数行为和目标条件。表中 Reader、Main 和 Note 分别指阅读器、主窗口和笔记编辑器。日常用法见[用户指南](USER_GUIDE.md)；标签操作与筛选见[标签指南](TAGS.md)；文字输入和输入法见[输入与输入法](INPUT_METHODS.md)。
 
-## 目录 {#contents}
+## 目录
 
-- [如何阅读此参考](#reading-this-reference)
-- [模式、焦点与功能可用性](#modes-focus-and-capabilities)
-- [按键记法与输入规则](#key-notation-and-input-grammar)
-- [命令面板、重映射与未绑定操作](#command-palette-remapping-and-unbound-actions)
-- [导航与共享跳转历史](#navigation-and-the-shared-jumplist)
-- [Reader 普通模式](#reader-normal)
-- [Reader Select 与批注操作](#reader-select-and-annotation-actions)
-- [主窗口](#main-window)
-- [Note 编辑器](#note-editor)
-- [临时界面与选择器操作规则](#temporary-surfaces-and-chooser-grammars)
-- [Action ID 索引](#action-id-index)
-- [默认按键索引](#default-binding-index)
-- [计数示例](#count-examples)
+- [如何阅读此参考](#如何阅读此参考)
+- [模式、焦点与功能可用性](#模式、焦点与功能可用性)
+- [按键记法与输入规则](#按键记法与输入规则)
+- [命令面板、重映射与未绑定操作](#命令面板、重映射与未绑定操作)
+- [导航与共享跳转历史](#导航与共享跳转历史)
+- [Reader 普通模式](#reader-普通模式)
+- [Reader Select 与批注操作](#reader-select-与批注操作)
+- [主窗口](#主窗口)
+- [Note 编辑器](#note-编辑器)
+- [临时界面与选择器操作规则](#临时界面与选择器操作规则)
+- [Action ID 索引](#action-id-索引)
+- [默认按键索引](#默认按键索引)
+- [计数示例](#计数示例)
 
-## 如何阅读此参考 {#reading-this-reference}
+## 如何阅读此参考
 
 每行命令列出其 `ActionId`、随 Neo 提供的默认绑定及可用上下文。同一个按键在不同上下文中可能执行不同操作。已保存的偏好设置可以添加或移除绑定；执行命令仍须有有效目标。
 
-“历史记录”指 Neo 共享的后退/前进列表。只有操作完成后到达另一个可恢复的位置，才会添加记录；滚动等视图变化不算跳转。可恢复的位置及限制见[导航与共享跳转历史](#navigation-and-the-shared-jumplist)。
+“历史记录”指 Neo 共享的后退/前进列表。只有操作完成后到达另一个可恢复的位置，才会添加记录；滚动等视图变化不算跳转。可恢复的位置及限制见[导航与共享跳转历史](#导航与共享跳转历史)。
 
-## 模式、焦点与功能可用性 {#modes-focus-and-capabilities}
+## 模式、焦点与功能可用性
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用，只有链接与复制提示（`reader-hints`）和扩展管理面板（`extensions`）可关闭，设置见[模块设置指南](SETTINGS_GUIDE.md#modules)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用，只有链接与复制提示（`reader-hints`）和扩展管理面板（`extensions`）可关闭，设置见[模块设置指南](SETTINGS_GUIDE.md#开关两项可选功能)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 
 在 Reader 中，启用**文本选择模式**后按 `v` 进入 Select。启用**批注评论编辑**后，按 `i` / Enter 可打开符合条件的已选批注评论编辑器；其中显示 `COMMENT`，并非 Reader Insert 模式。若关闭批注评论编辑，按 `i` 会将键盘控制权交给原生输入，直到按 Escape。在 Main 中，`v` 开始选择临时条目行范围。在 Note 中，启用**Vim 风格笔记编辑**后按 `i` 进入 Insert；按 Escape 返回 Normal。
 
-## 按键记法与输入规则 {#key-notation-and-input-grammar}
+## 按键记法与输入规则
 
 - 可打印按键按原样区分大小写：`g` 与 `G` 不同；`gg` 表示连续按两次 `g`。`<Space>` 表示空格键，`:` 表示冒号键。符号按键使用尖括号记法，例如 `<C-o>`、`<Enter>`、`<Return>`、`<Esc>` 和 `<BS>`。表格中同时列出的 `<Enter>` 与 `<Return>` 是同一按键的别名。
 - Ctrl 与 Meta 会统一按 Ctrl 处理；`Ctrl`、`Alt`、`Shift` 可与其他按键组合。例如 `<C-d>` 表示 Ctrl+d。可打印的 Shift 符号按实际字符表示（例如 `+`）；命名按键可以显式保留 Shift。
@@ -61,7 +61,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 
 前缀提示会列出当前上下文和已保存绑定的有效后续按键。
 
-## 命令面板、重映射与未绑定操作 {#command-palette-remapping-and-unbound-actions}
+## 命令面板、重映射与未绑定操作
 
 在 Reader Normal、Main Normal 或 Note Normal 中按 `:` 打开命令面板。搜索可用操作，用 `↑` / `↓` 移动；结果列表获得焦点时也可按 `j` / `k`，或按 `Ctrl+j` / `Ctrl+k` 移动。按 Enter 执行，按 Escape 关闭。面板包含当前可用但没有按键绑定的操作；不接受命令参数或计数，选中的操作只执行一次。
 
@@ -73,15 +73,15 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 
 **默认**表示该按键随 Neo 提供；**自定义**表示已保存的偏好设置改变了绑定；**未绑定**表示该可用操作没有按键。当前上下文不支持的操作不能通过分配按键变为可用。
 
-## 导航与共享跳转历史 {#navigation-and-the-shared-jumplist}
+## 导航与共享跳转历史
 
-### 命令与计数行为 {#commands-and-count-behavior}
+### 命令与计数行为
 
 `navigateBack` 和 `navigateForward` 可在 Main Normal、Reader Normal 和 Note Normal 中使用；默认绑定为 `<C-o>` 和 `<C-i>`。快捷键前的正数计数会遍历相应数量的位置，例如 `2<C-o>`。命令面板中的操作不接受计数。到达列表任一端时，后退或前进都会停止。
 
 每个 Main 窗口各有一份最多包含 100 个位置的列表。计数到达可用位置的末端时停止，不会循环。后退后发生新跳转会取代原来的前进分支；连续到达等效位置时会合并记录。后退/前进不会改变 Neo 选择集。
 
-### 记录条件与排除项 {#recording-and-exclusions}
+### 记录条件与排除项
 
 只有操作完成并到达另一个可恢复的位置时，才会添加记录。无效果、失败或取消的操作不会添加记录。
 
@@ -97,7 +97,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | 滚动、缩放、分屏布局、选区/光标移动、筛选器及分类编辑 | 这些操作改变视图或选区状态，不改变历史位置。 |
 | 操作失败、目标未变、选择器取消或目标不可用 | 不会添加新位置。 |
 
-### 状态快照与恢复 {#snapshots-and-restoration}
+### 状态快照与恢复
 
 - **Main：**后退/前进会恢复可用的文库或分类视图、Quick Search、标签和 Advanced Search 筛选器、条目游标及焦点。Neo 选择集保持不变。
 - **Reader PDF：**恢复同一条目以及各 PDF 窗格中可恢复的页码/视口位置。缩放和分屏布局保持原样。若 Reader 标签页已关闭，只要附件仍可读取，Neo 就能重新打开它。
@@ -107,14 +107,14 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 
 执行后退或前进前，Neo 会先更新离开位置，使上次跳转后的移动可作为返回点。关闭 Reader 或 Note 标签页不会清除历史；关闭 Main 窗口会清除该窗口的列表。新打开的 Reader 可能需要等加载完成后才能使用其命令。
 
-### 混合导航示例 {#mixed-navigation-examples}
+### 混合导航示例
 
 - 在支持数字页码导航的 PDF 中，`5gg` 转到第 5 页，单独按 `gg` 转到第一页起点。如果宿主不支持该功能，`gg` 会滚动到文档边界。
 - 打开 Reader A，按 `L` 切换到 Reader B，再跳到一个标记。后退先返回标记跳转前的位置，再返回标签页切换前的位置；前进则按相反顺序恢复。
 - 如果历史记录中的 Reader 标签页已关闭，后退可重新打开仍可读取的附件。目标不可读或不可用时，历史位置不变。
 - 后退后发生新的已完成跳转时，会取代原来的前进分支；滚动或取消选择器不会建立新分支。
 
-## Reader 普通模式 {#reader-normal}
+## Reader 普通模式
 
 | ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `focusReaderOutline` / `focusReaderMarks` / `focusReaderAnnotations` / `focusReaderThumbnails` | `<Space>ro` / `<Space>rm` / `<Space>ra` / `<Space>rt` | 打开或聚焦 Outline、Bookmarks、Annotations 或 Thumbnails。重复执行时仍停留在该面板。 |
 | `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | 切换 Reader 分屏布局。后退/前进不会恢复分屏布局。 |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开条目/笔记选择器。确认结果以打开它；浏览或取消不会添加历史位置。 |
-| `mainAddByIdentifier` | `<Space>ai` | 将关联的 Library 窗口置前并打开原生标识符录入，不改变该窗口的分类范围。使用该主窗口上下文，而不是 Reader 条目的分类；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#add-items-by-identifier)。
+| `mainAddByIdentifier` | `<Space>ai` | 将关联的 Library 窗口置前并打开原生标识符录入，不改变该窗口的分类范围。使用该主窗口上下文，而不是 Reader 条目的分类；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)。
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 选择已打开的标签页、切换到上一个/下一个标签页，或关闭当前标签页。切换可添加历史记录；每次 `H` / `L` 只切换一个，不受计数影响。关闭标签页不会清除较早的记录。 |
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | 遍历共享历史记录；快捷键支持计数，命令面板中的操作每次只执行一次。 |
 | `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | 打开命令面板、设置或常驻 Plugin Manager。 |
@@ -156,10 +156,10 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `toggleReaderSidebarOutline` | **未绑定** | 切换 Zotero 原生 Reader Outline 侧栏；默认不提供绑定。 |
 | `toggleMarksExplorer` | **未绑定** | 切换 Bookmarks 视图；默认不提供绑定。
 
-Reader Select 操作见[Reader Select 与批注操作](#reader-select-and-annotation-actions)。方向焦点操作只移到现有窗格，其中可能包括 Note 窗格。
+Reader Select 操作见[Reader Select 与批注操作](#reader-select-与批注操作)。方向焦点操作只移到现有窗格，其中可能包括 Note 窗格。
 Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移动、`h` / `l` 翻页、缩放和历史导航会按所在行所述重复或遍历；支持页码导航时，数字 `gg` / `G` 是单次页码目标。搜索、批注、标签页切换、窗格/布局、选择器及其他 Reader Normal 操作都只执行一次。Reader Select 的绑定操作均忽略计数。
 
-## Reader Select 与批注操作 {#reader-select-and-annotation-actions}
+## Reader Select 与批注操作
 
 在 Reader 中按 `v` 进入 Select，然后使用 Flash 选择一段文本范围；如果当前已有原生选区且可用，也可直接沿用该选区。Select 默认操作如下：
 
@@ -181,14 +181,14 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
 | `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。选择显示的提示，或按 Enter 选择最近的匹配项；查询范围过宽时，可缩小查询以显示提示。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#try-it)。
-Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#annotation-comment-editor)。
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。选择显示的提示，或按 Enter 选择最近的匹配项；查询范围过宽时，可缩小查询以显示提示。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
+Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#批注评论编辑器)。
 
-## 主窗口 {#main-window}
+## 主窗口
 
 Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick Search、其他可编辑字段或 Neo 面板。条目游标、Zotero 原生多选、临时 Visual 范围和 Neo 选择集是不同目标。部分操作遇到隐藏或不可用目标时会拒绝执行，不会改为操作其他条目。Neo 选择集只保留在当前主窗口会话中，不跨重启保存。
 
-### Main 操作 {#main-actions}
+### Main 操作
 
 | ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
@@ -215,7 +215,7 @@ Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick
 | `openSearch` | `/` | Main Normal 中要求 Items 获得焦点；会取消临时 Visual 范围，并打开 Neo 内部查找提示框，在可见条目行中搜索。它不是 Zotero Quick Search；后者使用 `mainQuickSearch`（`<Space>fq`）。 |
 | `findNext` / `findPrevious` | `n` / `N` | 条目列表获得焦点时，按已提交的内部查找查询向前/后重复搜索一次；忽略计数。没有查询、未命中或游标未改变时，位置不变。游标改变时可添加历史记录。 |
 | `mainQuickSearch` / `mainAdvancedSearch` | `<Space>fq` / `<Space>fa` | 聚焦原生 Quick Search 或打开 Advanced Search；`fa` 可将现有 Quick Search 文字转换过去。这些操作改变 Main 视图范围，不改变 Reader 页码位置。 |
-| `mainAddByIdentifier` | `<Space>ai` | 为一个可写文库及其当前所选分类打开原生标识符录入；不使用条目目标或 Neo 选择集。跨文库或只读范围不可用；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#add-items-by-identifier)。
+| `mainAddByIdentifier` | `<Space>ai` | 为一个可写文库及其当前所选分类打开原生标识符录入；不使用条目目标或 Neo 选择集。跨文库或只读范围不可用；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)。
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开共享的条目/笔记选择器。确认结果时可添加历史位置；浏览或取消不会添加。 |
 | `findCollections` | **未绑定** | Main Normal：在一个文库范围内按名称或完整路径搜索分类。未选定文库范围时，提示 `Choose one library scope to find collections`。浏览或取消不会改变范围；确认后进入该分类，目标变化时可添加共享历史位置。 |
 | `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 打开标签页选择器、切换到上一个/下一个打开的标签页，或关闭当前标签页。选择器确认、`H` / `L` 成功切换时会记录位置；`H` / `L` 忽略计数。单独关闭标签页不会记入历史，也不会删除旧记录。 |
@@ -237,11 +237,11 @@ Main 条目操作优先使用非空的 Neo 选择集；否则会按操作使用�
 
 Main 中，`mainNavDown/Up`、`mainNavLast`、`mainSelectDown/Up`、`mainSelectLast` 和 `navigateBack/Forward` 会按计数重复。`mainNavFirst` 与 `mainSelectFirst` 始终选择首行。其他操作只执行一次；内部查找 `n` / `N` 每次只搜索一步，不受计数影响。
 
-### Main 内部查找 {#main-only-local-find}
+### Main 内部查找
 
 条目列表获得焦点时，按 `/` 打开提示框；按 Enter 提交非空查询，并将条目游标移到下一个可见匹配项。按 Escape 取消，不会替换上一个查询。`n` / `N` 每次搜索一步，并在可见行中循环一次。匹配不区分大小写，范围包括条目显示名称/标题、首位创建者、年份及可用时的 citekey。没有查询、未命中或游标不可移动时，历史位置不变。内部查找不同于 `ff` / `fc` 选择器搜索和原生 `fq` / `fa` Quick/Advanced Search。
 
-## Note 编辑器 {#note-editor}
+## Note 编辑器
 
 启用**Vim 风格笔记编辑**后，Note 编辑器可使用 Normal 光标移动和编辑命令；此设置默认开启。按 `i` 进入 Insert，文字和输入法会交给 Zotero/浏览器；按 `Escape` 返回 Note Normal。关闭此设置时，文字输入仍由 Zotero 编辑器处理。
 
@@ -274,24 +274,24 @@ Note Normal 还支持共享历史、命令面板、切换标签页、条目/笔�
 
 Note 中，计数会重复 `h/l` / `j` / `k` / `w` / `b` / `0` / `$` 移动及 `x` 删除字符。`gg/G`、Insert 命令、`p` / `P`、撤销/重做以及每个 `d` / `y` / `c` 操作符都只执行一次，不受计数影响。`y` 会更新 Note 寄存器和系统剪贴板；删除/替换会更新 Note 寄存器，`p` / `P` 会粘贴其中内容。
 
-## 临时界面与选择器操作规则 {#temporary-surfaces-and-chooser-grammars}
+## 临时界面与选择器操作规则
 
-### 共享选择器 {#shared-chooser}
+### 共享选择器
 
 条目、笔记、标签页、标签和分类选择器共用查询框和结果控制。查询框与结果列表分别使用 `picker-input` 和 `picker-list` 上下文，可单独重映射。默认按键包括：Up/Down、`Ctrl+j` / `Ctrl+n` 和 `Ctrl+k` / `Ctrl+p` 移动；`Ctrl+d` / `Ctrl+u` 滚动预览；Enter 或 Shift+Enter 确认；Escape 取消。在结果列表中，`j` / `k` 可移动，`/` 聚焦查询框。`uiNextPane` 和 `uiPreviousPane` 在 `picker-input` 中受支持，但默认未绑定。查询文字和输入法由原生控件处理。可通过偏好设置启用鼠标选择行和双击确认；悬停不会选中结果。
 
 笔记选择器（`fn`）默认显示当前条目的笔记。**Browse library**（浏览文库）可查找该文库中的其他现有笔记；**Current item**（当前条目）返回起始条目。预览会显示笔记所属条目和正文。确认 `fn` 的结果会打开该笔记。
 
 
-添加标签时可能会提供明确的创建候选项；移除标签会列出至少分配给一个目标的标签。虚拟命名空间候选项仅用于缩小查询范围，本身不执行标签操作。Main `tf` 会根据当前视图和现有筛选器切换标签筛选；`tc` 不打开选择器，直接清除全部筛选。标签目标、同一文库范围内的修改限制和平面标签存储方式见[标签操作与筛选](TAGS.md)。Main 中，`ca` 和 `cr` 使用同一文库中的目标及直接成员关系计数，而不是递归显示范围：添加只补入缺少的成员关系；移除会列出至少分配给一个目标的分类，并只删除选中的成员关系。Main Normal 中七个分类操作默认未绑定，可从现有 Palette 打开；流程会复用现有选择器或 Zotero 原生名称/确认对话框。**向当前分类添加已有条目**会在每次按 Enter 时单独保存一项，并保持选择器打开；按 Escape 只结束流程，不会撤销已保存的添加。详情见[文库工作流](MAIN_GUIDE.md#change-collection-membership)。
+添加标签时可能会提供明确的创建候选项；移除标签会列出至少分配给一个目标的标签。虚拟命名空间候选项仅用于缩小查询范围，本身不执行标签操作。Main `tf` 会根据当前视图和现有筛选器切换标签筛选；`tc` 不打开选择器，直接清除全部筛选。标签目标、同一文库范围内的修改限制和平面标签存储方式见[标签操作与筛选](TAGS.md)。Main 中，`ca` 和 `cr` 使用同一文库中的目标及直接成员关系计数，而不是递归显示范围：添加只补入缺少的成员关系；移除会列出至少分配给一个目标的分类，并只删除选中的成员关系。Main Normal 中七个分类操作默认未绑定，可从现有 Palette 打开；流程会复用现有选择器或 Zotero 原生名称/确认对话框。**向当前分类添加已有条目**会在每次按 Enter 时单独保存一项，并保持选择器打开；按 Escape 只结束流程，不会撤销已保存的添加。详情见[文库工作流](MAIN_GUIDE.md#把论文添加到分类或移出分类)。
 
-### Flash 与链接提示 {#flash-and-link-hints}
+### Flash 与链接提示
 
 在 Reader Select 中按 `v` 会启动 Flash，以选择范围起点；按 `s` 则选择另一端。输入可见文字（包括通过输入法输入的 Unicode），再选择显示的提示，或按 Enter 选择最近的匹配项。Escape 会取消并保留现有选区；Backspace 根据焦点编辑查询文字或提示标签。
 
 Reader Normal 中按 `f` 会为当前 PDF 视图内可见的内部、引文和外部链接显示提示。输入提示以跟随链接，按 Backspace 编辑，或按 Escape 取消。外部链接使用 Zotero 的常规处理方式；屏幕外的链接不会列出。
 
-### Zotero 原生 Reader Outline 与 Bookmarks {#native-reader-outline-and-bookmarks}
+### Zotero 原生 Reader Outline 与 Bookmarks
 
 Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可打开或聚焦 Outline、Bookmarks、Annotations 和 Thumbnails。重复执行会继续聚焦同一面板。每个 Reader 侧栏中也可使用这些面板焦点操作。
 
@@ -299,19 +299,19 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 从 Reader Normal 和各侧栏按 `[s` / `]s` 可跨 Outline 按顺序遍历标题，无论分支是否折叠或当前选中了哪一行。按 `[f` / `]f` 和 `[t` / `]t` 可在 PDF 中有可用目标的 Figure 与 Table 之间移动；若有相关图像则定位到图像，否则定位到标题。首次明确请求结构导航可能需要在本地处理 PDF。无法识别目标的 PDF 不会提供这些位置。
 
-### Marks 与 Bookmarks 分组 {#marks-and-bookmarks-group}
+### Marks 与 Bookmarks 分组
 
 按 `m` 后接一个小写字母或数字，可设置 Reader 标记；按反引号再按该标签可返回该位置。按 `dm` 后接标签可删除一个标记，`dM` 删除所有标记。Reader Normal 中的 `[m` / `]m` 按文档顺序在标记间移动，并会循环。按 `<Space>rm` 打开或聚焦 Bookmarks。
 
 在 Bookmarks 列表中，`j` / `k` 移动，`gg` / `G` 跳到首个/末个标记，Enter 跳转，`d` 删除所选标记，`x` 清除标记。标记标签只能是小写字母或数字；在列表中 `j`、`k`、`g`、`d` 和 `x` 是列表控制键。这些是 Reader 位置标记，不是 PDF 批注。是否持久保存由**持久化标记**偏好设置控制。
 
-### 批注评论编辑器 {#annotation-comment-editor}
+### 批注评论编辑器
 
 启用**批注评论编辑**后，Reader Normal 中按 `i` / Enter 会打开选中批注的评论编辑器；Select 中按 `i` 会为新建批注打开编辑器。编辑器显示 `COMMENT`；输入文字或使用输入法编辑评论，按 Enter 插入换行，按 Escape 保存并关闭。更改还会在两秒后自动保存。Escape 不是取消或撤销；输入法组合进行时，Escape 由输入法自行处理。编辑器始终关联最初打开的批注；批注目标不可用时无法保存。关闭 Reader 不会再触发一次保存；重新打开时只能保证已保存的文字存在。
 
 关闭该设置后，Reader Normal 中按 `i` 会将键盘控制权交给原生输入，直到按 Escape；Enter 不会打开 Neo 编辑器。Zotero 自带的评论字段仍可使用，Select 中独立的“添加批注评论”操作也仍会打开新批注的编辑器。
 
-### 选区操作、Plugin Manager、设置与 Neo 选择集面板 {#selection-actions-plugin-manager-settings-and-selection-panel}
+### 选区操作、Plugin Manager、设置与 Neo 选择集面板
 
 在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；安装 Zotero Translate 后还会显示“翻译”。按 `y` 可复制结果。
 
@@ -319,7 +319,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 按 `<Space>ps` 打开设置；快捷键修改在点击**应用绑定**前仍是草稿。按 `<Space>ss` 打开 Main 选择集面板：按 `j` / `k` 移动，按 `Home` / `gg` 或 `End` / `G` 跳到首项/末项，按 Enter 在文库中显示条目，按 `x` 将条目从 Neo 选择集中移除，按 `c` 清空选择集，按 `r` 刷新，按 Escape / `q` 关闭。条目不可用时无法显示；显示失败时面板会保持打开。
 
-## Action ID 索引 {#action-id-index}
+## Action ID 索引
 
 此索引列出每个 `ActionId`、随 Neo 提供的默认绑定及可用上下文。**未绑定**表示该操作可用但没有随 Neo 提供的快捷键；执行操作仍需要有效目标。
 
@@ -550,7 +550,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `noteChangeToLineEnd` | Note Normal `c$` | 按移动操作替换并进入 Insert |
 | `noteChangeInnerWord` | Note Normal `ciw` | 替换内部词并进入 Insert |
 
-## 默认按键索引 {#default-binding-index}
+## 默认按键索引
 
 用此表查找随 Neo 提供的 `BindingContext:sequence` 对应的 `ActionId`。已保存的自定义绑定可以替换默认绑定。
 
@@ -896,7 +896,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `plugins-list:R` | `pluginsReadme` |
 | `plugins-list:L` | `pluginsGitLog` |
 
-## 计数示例 {#count-examples}
+## 计数示例
 
 - Reader `3j` 按设置的滚动步长移动三次；`3l` 请求连续向后翻三页。
 - Zotero 支持数字页码导航时，Reader `3gg` / `3G` 转到第 3 页。单独按 `gg` / `G` 会分别转到第一页起点/文档末尾；不支持页码导航时，两者改为滚动到文档边界。

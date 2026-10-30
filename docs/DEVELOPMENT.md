@@ -1,6 +1,6 @@
-# 开发指南 {#development-guide}
+# 开发指南
 
-## 兼容范围与验证 {#compatibility-and-verification}
+## 兼容范围与验证
 
 当前 `manifest.json` 支持 Zotero `10.0.*`（`strict_min_version: 10.0`、`strict_max_version: 10.0.*`）。修改宿主接缝时，既要运行仓库验证，也要在 Zotero 中操作受影响的工作流。
 
@@ -14,7 +14,7 @@ npm ci
 
 两种 XPI 构建入口都会调用 `npm run verify`，依次检查 Prettier、严格 TypeScript、Vitest、包构建与 XPI 成员。
 
-## 构建 {#build}
+## 构建
 
 在仓库根目录运行：
 
@@ -28,7 +28,7 @@ Windows 可使用：
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
-### 文档站 {#documentation-site}
+### 文档站
 
 仓库根目录也是 VitePress 文档站根目录，配置位于 `.vitepress/config.ts`。Markdown 来源包括根页面和 `docs/*.md`，静态构建输出到 `.vitepress/dist/`。文档默认只维护中文；现有英文按需迁移，不建立双语副本，具体要求见[文档编写规范](DOCUMENTATION_AUTHORING.md)。
 
@@ -44,7 +44,7 @@ npm run docs:preview
 
 仓库管理员需要将 Pages 构建来源设为 GitHub Actions。PR 只构建和检查站点，不发布；部署仅允许 `main`。文档站输出独立于 XPI 和插件运行时。
 
-### WSL 下的本地 GUI 迭代 {#local-gui-iteration-from-wsl}
+### WSL 下的本地 GUI 迭代
 
 使用专用 Zotero 开发 profile，并将其数据目录与个人文献库分开。开发工具只选择 profile，不会自动隔离数据目录。
 
@@ -71,11 +71,11 @@ npm run dev:status
 
 `dev` 重建并重载临时扩展；`dev:status` 报告 profile、RDP 连接、镜像和启动日志位置。卸载 Neo 不会清除 `extensions.zotero-neo.*` 偏好或条目标签、持久化 marks 等 Zotero 数据，因此重装不等于干净偏好测试。原生验证只创建并清理明确归本次测试所有的数据，不修改个人条目。
 
-## 品牌与资源 {#branding-assets}
+## 品牌与资源
 
 `assets/branding/` 保存仓库 artwork，`assets/package/` 提供静态 XPI 骨架、运行时图标和偏好页。偏好页定义在 `assets/package/content/preferences/pane.xhtml`，行为由 `src/preferences/index.ts` 生成。品牌原始图不复制进 XPI；包内路径保持 `icons/*` 与 `content/preferences/*`。
 
-## 运行时架构 {#runtime-architecture}
+## 运行时架构
 
 交互模型与当前功能所有权见[架构](ARCHITECTURE.md)。Neo 使用严格 TypeScript，通过打包生成 Gecko Bootstrap 运行时；内部 Toolkit 不新增运行时依赖。
 
@@ -93,7 +93,7 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 
-实机验证模块配置时使用自有条目、PDF、Note 与分类，覆盖两项可选增强的保存请求、Neo 重载与真实进程重启差异，并确认两项关闭后九个核心模块仍可工作。检查旧核心关闭值被忽略，保存和恢复默认不改核心偏好或行为偏好（包括 `noteEditor.enabled`）；不再把“全部模块关闭”作为当前配置。局部故障只注入本次自有宿主，随后恢复原方法并验证新宿主可重新激活。结束后核对自有数据库记录、文件、偏好存在性与值、原标签页及原生 Main 状态；进程退出另从操作系统确认。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#modules)。
+实机验证模块配置时使用自有条目、PDF、Note 与分类，覆盖两项可选增强的保存请求、Neo 重载与真实进程重启差异，并确认两项关闭后九个核心模块仍可工作。检查旧核心关闭值被忽略，保存和恢复默认不改核心偏好或行为偏好（包括 `noteEditor.enabled`）；不再把“全部模块关闭”作为当前配置。局部故障只注入本次自有宿主，随后恢复原方法并验证新宿主可重新激活。结束后核对自有数据库记录、文件、偏好存在性与值、原标签页及原生 Main 状态；进程退出另从操作系统确认。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
 
 工作集拥有 SelectionStore、Visual 范围及 Selection Panel。Main Surface 继续初始化和取消原生 Cursor/多目标，持有共享行渲染，并向模块注入刷新、主题和现有 Reveal 导航端口。目标解析与 Library Trash 接收明确 Selection 端口；来源为空或退休后沿用当前目标，不读取旧 Selection。共享导航通过局部界面端口捕获原面板，不再读取 session 的 Selection Panel 状态。
 
@@ -114,7 +114,7 @@ Reader 批注模块拥有创建/删除/改色/过滤/复制及评论编辑，Sur
 
 Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show in Library，ReaderSession 拥有分屏切换和方向焦点。基座保留唯一历史、原生标签页重扫、精确视图发现、NativeInput 以及 Main/Note 通用面板焦点（含 Note Insert）。实机需确认三个 Surface 的标签页选择、关闭后的历史重开、主次分屏实际焦点及 Palette 路由；按键只有实际完成方向焦点移动才消费。Picker 应等待输入框实际聚焦后再发送 Enter；验证独立 Main 行选择时从 `itemsView.getSelectedItems(true)` 回读，`ZoteroPane.getSelectedItems(true)` 在 Reader 活跃时可能投影 Reader 条目，不能据此认定底层行选择相同。
 
-### 宿主能力 Toolkit {#host-capability-toolkit}
+### 宿主能力 Toolkit
 
 | 能力 | Toolkit 负责方 | 边界与原因 |
 | --- | --- | --- |
@@ -165,12 +165,12 @@ Bootstrap chrome 与 Zotero content 之间传递对象时，必须克隆到接�
 
 异步宿主工作在应用结果前检查捕获的 Reader/session/view 身份和 generation。退出先退休回调，再移除监听器；只在 wrapper 仍自有时恢复被 patch 的方法，并防护已销毁 Gecko wrapper。活宿主上的失败必须可观测。
 
-标签过滤读取当前渲染 Scope 的完整行结果，包括原生多行选择，不扩大到全库。分类动作目标与确认见[交互模型](INTERACTION_MODEL.md#action-target-contracts)。
+标签过滤读取当前渲染 Scope 的完整行结果，包括原生多行选择，不扩大到全库。分类动作目标与确认见[交互模型](INTERACTION_MODEL.md#动作目标契约)。
 
-## 诊断 {#diagnostics}
+## 诊断
 
 Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Zotero.debug()` 报告运行时消息。`npm run dev:status` 显示日志路径。
 
-## Reader 选择 API {#reader-selection-api}
+## Reader 选择 API
 
 `Zotero.Neo.reader.getSelection()` 返回当前 `ReaderSelectionContext` 或 `null`；`Zotero.Neo.reader.registerSelectionAction(action)` 注册扩展动作并返回 disposer。API 由 `src/addon.ts` 公开、`src/core/contracts.ts` 定义类型；`src/modules/reader-selection/` 负责选择上下文和动作运行时，`registry.ts` 的定义随应用存活，不因关闭一个 Reader 清空。旧 disposer 不删除同 ID 的后继注册；选择模块退休后不暴露旧上下文或执行旧回调。集成方继续使用原接口，不直接访问 Reader session 或 PDF.js 私有对象。
