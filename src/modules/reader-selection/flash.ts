@@ -8,16 +8,26 @@ import {
 import { isDeadObject, nativeObjectIdentity } from '../../platform/cross-compartment';
 import { HINT_ALPHABET } from '../../reader/hint-labels';
 import type { PdfWindow, Pointer } from '../../reader/types';
-import { buildMappedTextIndex, type MappedTextIndex } from './token-boundaries';
+import {
+  buildMappedTextIndex,
+  mappedTextRange,
+  tokenBoundaries,
+  tokenRangeCovering,
+  type TokenBoundary,
+  type MappedTextIndex,
+} from './token-boundaries';
 
 export type FlashIntent = 'visual-start' | 'visual-end';
 
 export interface FlashTextSegment {
   readonly textNode: Text;
   readonly text: string;
+  readonly rect?: FlashRect;
 }
 
-export interface FlashTextIndex extends MappedTextIndex {}
+export interface FlashTextIndex extends MappedTextIndex {
+  readonly tokenBreaks?: readonly number[];
+}
 
 export interface FlashMatch {
   readonly index: number;
@@ -28,6 +38,11 @@ export interface FlashMatch {
 export interface FlashSelectionTarget {
   readonly start: Pointer;
   readonly end: Pointer;
+}
+
+interface FlashSelectionSnapshot {
+  readonly anchor: Pointer;
+  readonly focus: Pointer;
 }
 
 interface FlashRect {
@@ -82,28 +97,77 @@ export function normalizeFlashText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim();
 }
 
-/** Builds a normalized search index while retaining exact DOM source endpoints. */
-export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): FlashTextIndex {
-  return buildMappedTextIndex(segments);
+/** A large visual gap or new line separates tokens even without a PDF text-layer space. */
+function separatePdfSpans(previous: FlashRect, next: FlashRect): boolean {
+  const overlap = Math.max(
+    0,
+    Math.min(previous.bottom, next.bottom) - Math.max(previous.top, next.top),
+  );
+  const height = Math.max(1, Math.min(previous.height, next.height));
+  if (overlap < height * 0.35) return true;
+  if (next.left - previous.right > Math.max(2, height * 0.25)) return true;
+  return next.left < previous.left - Math.max(2, height * 0.3);
 }
 
-/** Literal overlapping matches with Vim-style smartcase for ASCII/Latin query input. */
-export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
+/** Builds a normalized search index while retaining exact DOM source endpoints. */
+export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): FlashTextIndex {
+  const index = buildMappedTextIndex(segments);
+  const firstOffsets = new Map<Text, number>();
+  index.pointers.forEach((pointer, offset) => {
+    if (!firstOffsets.has(pointer.textNode)) firstOffsets.set(pointer.textNode, offset);
+  });
+  const tokenBreaks: number[] = [];
+  for (let indexValue = 1; indexValue < segments.length; indexValue += 1) {
+    const previous = segments[indexValue - 1]!;
+    const current = segments[indexValue]!;
+    if (!previous.rect || !current.rect || !separatePdfSpans(previous.rect, current.rect)) continue;
+    const boundary = firstOffsets.get(current.textNode);
+    if (boundary !== undefined && boundary > 0 && boundary < index.text.length)
+      tokenBreaks.push(boundary);
+  }
+  return tokenBreaks.length ? { ...index, tokenBreaks } : index;
+}
+
+interface FlashLiteralRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Return exact offsets in the normalized index even when Unicode case folding changes length. */
+function flashLiteralRanges(index: FlashTextIndex, rawQuery: string): FlashLiteralRange[] {
   const query = normalizeFlashText(rawQuery);
   if (!query) return [];
   const caseSensitive = /[A-Z]/.test(query);
-  const haystack = caseSensitive ? index.text : index.text.toLocaleLowerCase('en-US');
-  const needle = caseSensitive ? query : query.toLocaleLowerCase('en-US');
-  const matches: FlashMatch[] = [];
-  const seen = new Map<Text, Set<number>>();
+  let haystack = index.text;
+  let needle = query;
+  const foldedStarts: number[] = [];
+  const foldedEnds: number[] = [];
+  if (!caseSensitive) {
+    let sourceOffset = 0;
+    for (const character of index.text) {
+      const folded = character.toLocaleLowerCase('en-US');
+      for (let unit = 0; unit < folded.length; unit += 1) {
+        foldedStarts.push(sourceOffset);
+        foldedEnds.push(sourceOffset + character.length);
+      }
+      sourceOffset += character.length;
+    }
+    // en-US contextual lowercasing changes Sigma's value, not its UTF-16 width.
+    // Keep the per-code-point width map, but preserve whole-string casing context.
+    haystack = index.text.toLocaleLowerCase('en-US');
+    needle = query.toLocaleLowerCase('en-US');
+  }
 
+  const matches: FlashLiteralRange[] = [];
+  const seen = new Map<Text, Set<number>>();
   let from = 0;
   while (from <= haystack.length - needle.length) {
     const found = haystack.indexOf(needle, from);
     if (found < 0) break;
-    const pointer = index.pointers[found];
-    const last = index.ends[found + needle.length - 1];
-    if (pointer && last) {
+    const start = caseSensitive ? found : foldedStarts[found];
+    const end = caseSensitive ? found + needle.length : foldedEnds[found + needle.length - 1];
+    const pointer = start === undefined ? undefined : index.pointers[start];
+    if (start !== undefined && end !== undefined && end > start && pointer) {
       let offsets = seen.get(pointer.textNode);
       if (!offsets) {
         offsets = new Set<number>();
@@ -111,14 +175,48 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
       }
       if (!offsets.has(pointer.offset)) {
         offsets.add(pointer.offset);
-        matches.push({
-          index: found,
-          pointer,
-          end: last,
-        });
+        matches.push({ start, end });
       }
     }
     from = found + 1;
+  }
+  return matches;
+}
+
+/** Literal substring matches used by Flash query continuation and compatibility callers. */
+export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
+  const matches: FlashMatch[] = [];
+  for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
+    const range = mappedTextRange(index, start, end);
+    if (range) matches.push({ index: start, pointer: range.start, end: range.end });
+  }
+  return matches;
+}
+
+/** Deduplicates partial matches that target the same complete token or token phrase. */
+export function flashTokenMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
+  const tokens: TokenBoundary[] = tokenBoundaries(index.text).flatMap((token) => {
+    const parts: TokenBoundary[] = [];
+    let start = token.start;
+    for (const boundary of index.tokenBreaks ?? []) {
+      if (boundary <= start || boundary >= token.end) continue;
+      parts.push({ ...token, start, end: boundary });
+      start = boundary;
+    }
+    parts.push({ ...token, start, end: token.end });
+    return parts;
+  });
+  const seen = new Set<string>();
+  const matches: FlashMatch[] = [];
+  for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
+    const covered = tokenRangeCovering(tokens, start, end);
+    if (!covered) continue;
+    const key = `${covered.start}:${covered.end}`;
+    if (seen.has(key)) continue;
+    const range = mappedTextRange(index, covered.start, covered.end);
+    if (!range) continue;
+    seen.add(key);
+    matches.push({ index: covered.start, pointer: range.start, end: range.end });
   }
   return matches;
 }
@@ -135,8 +233,9 @@ export function flashContinuationLabels(
   const query = normalizeFlashText(rawQuery);
   const excluded = new Set<string>();
   if (!query) return excluded;
+  const ends = new Map(flashLiteralRanges(index, rawQuery).map(({ start, end }) => [start, end]));
   for (const match of matches) {
-    const position = match.index + query.length;
+    const position = ends.get(match.index) ?? match.index + query.length;
     const codePoint = index.text.codePointAt(position);
     if (codePoint === undefined) continue;
     const character = String.fromCodePoint(codePoint);
@@ -188,6 +287,7 @@ export class ReaderFlash {
   #input: HTMLInputElement | null = null;
   #inputCleanup: (() => void) | null = null;
   #composition: CompositionState = { active: false };
+  #selectionBeforeInput: FlashSelectionSnapshot | null = null;
   #matchCount = 0;
   #labelCache = new Map<Text, Map<number, string>>();
 
@@ -240,6 +340,7 @@ export class ReaderFlash {
       this.#viewCurrent = current;
       this.#intent = intent;
       this.#index = index;
+      this.#selectionBeforeInput = this.#captureSelection(pdfWindow);
       this.#createPrompt(pdfWindow, generation);
       if (!this.#current(pdfWindow, generation)) {
         if (generation === this.#generation) this.cancel();
@@ -301,14 +402,20 @@ export class ReaderFlash {
       consumeCommand();
       const generation = this.#generation;
       const current = this.#viewCurrent;
+      const document = pdfWindow.document;
+      const snapshot = this.#selectionBeforeInput;
       this.cancel();
-      if (
+      const canRestore = (): boolean =>
         this.#generation === generation + 1 &&
         !this.#disposed &&
-        current?.() &&
-        this.#host.isCurrent(pdfWindow)
-      )
+        !isDeadObject(pdfWindow) &&
+        current?.() === true &&
+        this.#host.isCurrent(pdfWindow) &&
+        pdfWindow.document === document;
+      if (canRestore()) {
         pdfWindow.focus();
+        if (canRestore() && snapshot) this.#restoreSelection(pdfWindow, snapshot);
+      }
       return true;
     }
 
@@ -372,6 +479,7 @@ export class ReaderFlash {
     this.#viewCurrent = null;
     this.#intent = null;
     this.#index = null;
+    this.#selectionBeforeInput = null;
     this.#query = '';
     this.#labelBuffer = '';
     this.#matchCount = 0;
@@ -431,7 +539,8 @@ export class ReaderFlash {
     }
 
     try {
-      const matches = flashMatches(index, this.#query);
+      const rawMatches = flashMatches(index, this.#query);
+      const matches = flashTokenMatches(index, this.#query);
       this.#matchCount = matches.length;
       if (!matches.length) {
         this.#refreshPrompt();
@@ -442,7 +551,7 @@ export class ReaderFlash {
         return;
       }
 
-      const excluded = flashContinuationLabels(index, this.#query, matches);
+      const excluded = flashContinuationLabels(index, this.#query, rawMatches);
       const firstAlphabet = Array.from(HINT_ALPHABET)
         .filter((letter) => !excluded.has(letter))
         .join('');
@@ -721,10 +830,49 @@ export class ReaderFlash {
     );
   }
 
+  /** Gecko may clear the PDF's DOM selection when the Flash input receives focus. */
+  #captureSelection(pdfWindow: PdfWindow): FlashSelectionSnapshot | null {
+    const selection = pdfWindow.getSelection();
+    if (!selection || selection.isCollapsed) return null;
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
+    if (
+      !isTextNode(anchorNode) ||
+      !isTextNode(focusNode) ||
+      isDeadObject(anchorNode) ||
+      isDeadObject(focusNode) ||
+      !anchorNode.isConnected ||
+      !focusNode.isConnected ||
+      anchorNode.ownerDocument !== pdfWindow.document ||
+      focusNode.ownerDocument !== pdfWindow.document
+    )
+      return null;
+    return {
+      anchor: { textNode: anchorNode, offset: anchorOffset },
+      focus: { textNode: focusNode, offset: focusOffset },
+    };
+  }
+
+  /** Restore direction only on explicit cancellation, without replacing a newer selection. */
+  #restoreSelection(pdfWindow: PdfWindow, snapshot: FlashSelectionSnapshot): void {
+    const selection = pdfWindow.getSelection();
+    if (!selection?.isCollapsed) return;
+    const { anchor, focus } = snapshot;
+    for (const pointer of [anchor, focus]) {
+      if (
+        isDeadObject(pointer.textNode) ||
+        !pointer.textNode.isConnected ||
+        pointer.textNode.ownerDocument !== pdfWindow.document ||
+        pointer.offset > pointer.textNode.length
+      )
+        return;
+    }
+    selection.setBaseAndExtent(anchor.textNode, anchor.offset, focus.textNode, focus.offset);
+  }
+
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {
     const segments: FlashTextSegment[] = [];
     for (const { textNode, text, rect } of pdfTextSpans(pdfWindow)) {
-      if (this.#rectVisible(pdfWindow, rect)) segments.push({ textNode, text });
+      if (this.#rectVisible(pdfWindow, rect)) segments.push({ textNode, text, rect });
     }
     return segments;
   }
