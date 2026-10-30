@@ -8,7 +8,13 @@ import {
 import { isDeadObject, nativeObjectIdentity } from '../../platform/cross-compartment';
 import { HINT_ALPHABET } from '../../reader/hint-labels';
 import type { PdfWindow, Pointer } from '../../reader/types';
-import { buildMappedTextIndex, type MappedTextIndex } from './token-boundaries';
+import {
+  buildMappedTextIndex,
+  mappedTextRange,
+  tokenBoundaries,
+  tokenRangeCovering,
+  type MappedTextIndex,
+} from './token-boundaries';
 
 export type FlashIntent = 'visual-start' | 'visual-end';
 
@@ -87,23 +93,46 @@ export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): Flas
   return buildMappedTextIndex(segments);
 }
 
-/** Literal overlapping matches with Vim-style smartcase for ASCII/Latin query input. */
-export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
+interface FlashLiteralRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Return exact offsets in the normalized index even when Unicode case folding changes length. */
+function flashLiteralRanges(index: FlashTextIndex, rawQuery: string): FlashLiteralRange[] {
   const query = normalizeFlashText(rawQuery);
   if (!query) return [];
   const caseSensitive = /[A-Z]/.test(query);
-  const haystack = caseSensitive ? index.text : index.text.toLocaleLowerCase('en-US');
-  const needle = caseSensitive ? query : query.toLocaleLowerCase('en-US');
-  const matches: FlashMatch[] = [];
-  const seen = new Map<Text, Set<number>>();
+  let haystack = index.text;
+  let needle = query;
+  const foldedStarts: number[] = [];
+  const foldedEnds: number[] = [];
+  if (!caseSensitive) {
+    const parts: string[] = [];
+    let sourceOffset = 0;
+    for (const character of index.text) {
+      const folded = character.toLocaleLowerCase('en-US');
+      parts.push(folded);
+      for (let unit = 0; unit < folded.length; unit += 1) {
+        foldedStarts.push(sourceOffset);
+        foldedEnds.push(sourceOffset + character.length);
+      }
+      sourceOffset += character.length;
+    }
+    haystack = parts.join('');
+    needle = query.toLocaleLowerCase('en-US');
+  }
 
+  const matches: FlashLiteralRange[] = [];
+  const seen = new Map<Text, Set<number>>();
   let from = 0;
   while (from <= haystack.length - needle.length) {
     const found = haystack.indexOf(needle, from);
     if (found < 0) break;
-    const pointer = index.pointers[found];
-    const last = index.ends[found + needle.length - 1];
-    if (pointer && last) {
+    const start = caseSensitive ? found : foldedStarts[found];
+    const end = caseSensitive ? found + needle.length : foldedEnds[found + needle.length - 1];
+    const pointer = start === undefined ? undefined : index.pointers[start];
+    if (start !== undefined && end !== undefined && end > start && pointer) {
       let offsets = seen.get(pointer.textNode);
       if (!offsets) {
         offsets = new Set<number>();
@@ -111,14 +140,38 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
       }
       if (!offsets.has(pointer.offset)) {
         offsets.add(pointer.offset);
-        matches.push({
-          index: found,
-          pointer,
-          end: last,
-        });
+        matches.push({ start, end });
       }
     }
     from = found + 1;
+  }
+  return matches;
+}
+
+/** Literal substring matches used by Flash query continuation and compatibility callers. */
+export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
+  const matches: FlashMatch[] = [];
+  for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
+    const range = mappedTextRange(index, start, end);
+    if (range) matches.push({ index: start, pointer: range.start, end: range.end });
+  }
+  return matches;
+}
+
+/** Deduplicates partial matches that target the same complete token or token phrase. */
+export function flashTokenMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
+  const tokens = tokenBoundaries(index.text);
+  const seen = new Set<string>();
+  const matches: FlashMatch[] = [];
+  for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
+    const covered = tokenRangeCovering(tokens, start, end);
+    if (!covered) continue;
+    const key = \`\${covered.start}:\${covered.end}\`;
+    if (seen.has(key)) continue;
+    const range = mappedTextRange(index, covered.start, covered.end);
+    if (!range) continue;
+    seen.add(key);
+    matches.push({ index: covered.start, pointer: range.start, end: range.end });
   }
   return matches;
 }
@@ -135,8 +188,9 @@ export function flashContinuationLabels(
   const query = normalizeFlashText(rawQuery);
   const excluded = new Set<string>();
   if (!query) return excluded;
+  const ends = new Map(flashLiteralRanges(index, rawQuery).map(({ start, end }) => [start, end]));
   for (const match of matches) {
-    const position = match.index + query.length;
+    const position = ends.get(match.index) ?? match.index + query.length;
     const codePoint = index.text.codePointAt(position);
     if (codePoint === undefined) continue;
     const character = String.fromCodePoint(codePoint);
@@ -431,7 +485,8 @@ export class ReaderFlash {
     }
 
     try {
-      const matches = flashMatches(index, this.#query);
+      const rawMatches = flashMatches(index, this.#query);
+      const matches = flashTokenMatches(index, this.#query);
       this.#matchCount = matches.length;
       if (!matches.length) {
         this.#refreshPrompt();
@@ -442,7 +497,7 @@ export class ReaderFlash {
         return;
       }
 
-      const excluded = flashContinuationLabels(index, this.#query, matches);
+      const excluded = flashContinuationLabels(index, this.#query, rawMatches);
       const firstAlphabet = Array.from(HINT_ALPHABET)
         .filter((letter) => !excluded.has(letter))
         .join('');
