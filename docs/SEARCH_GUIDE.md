@@ -1,14 +1,14 @@
-# 查找条目、缩小视图并返回 {#find-items-narrow-views-and-navigate}
+# 查找论文、搜索正文和返回 {#find-items-narrow-views-and-navigate}
 
-要定位一篇论文或笔记，可使用选择器；要改变主窗口显示范围，可用快速或高级搜索；要在当前可见行中跳转，可用本地查找；要查 PDF 正文，则使用阅读器搜索。标签筛选、标签页、共享历史和阅读器标记分别适合不同的筛选与返回方式。
+找论文和搜索 PDF 正文用的是不同的命令。主窗口的 `<Space>ff` 查当前文库里的论文；条目列表中的 `/` 只查当前显示的行；PDF 阅读器中的 `/` 则查正文。
 
-## 开始查找与导航 {#try-it}
+## 先试一次查找 {#try-it}
 
 1. 在主窗口选择文库或分类，按 `<Space>ff` 查找当前文库中的条目，或按 `<Space>fc` 查找当前分类中的条目。查看预览并确认结果。
 2. 要只查找主窗口当前显示的行，聚焦条目列表后按 `/`，输入标题或作者查询并按 `Enter`。用 `n` / `N` 跳到后一个或前一个匹配项。
 3. 按 `Enter` 或 `o` 打开主窗口条目游标所在的条目。在阅读器中按 `/` 查找当前 PDF 的文字；在 Normal 模式按 `<C-o>` / `<C-i>` 返回符合条件的历史位置。
 
-## 按任务选择查找方式 {#choose-a-search-for-the-task}
+## 几种查找方式有什么区别 {#choose-a-search-for-the-task}
 
 | 目标 | 方法 | 查找范围或效果 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@
 
 分类树浏览和打开主窗口条目游标所在条目的方法见[文库工作流](MAIN_GUIDE.md)。标签筛选会改变主窗口视图，不会更改 Zotero 标签；详见[标签筛选主窗口条目列表](TAGS.md#filter-the-main-item-list)。
 
-## 查找并确认目的地 {#find-and-confirm-a-destination}
+## 用选择器找论文和笔记 {#find-and-confirm-a-destination}
 
 打开 `<Space>ff`、`<Space>fc` 或 `<Space>fn` 并输入查询。查看高亮结果和预览，再按 `Enter` 或 `Shift+Enter` 打开；按 `Escape` 取消。可用方向键或 `<C-j>` / `<C-k>` 在结果间移动，用 `<C-d>` / `<C-u>` 滚动预览。
 
@@ -37,13 +37,13 @@
 
 分类成员关系和结构操作见[文库工作流](MAIN_GUIDE.md#find-and-organize-collections)。
 
-## 缩小主窗口视图 {#narrow-main-s-view}
+## 只显示想看的论文 {#narrow-main-s-view}
 
 先在分类树中选择文库或分类。按 `<Space>fq` 使用快速搜索，按 `<Space>fa` 打开高级搜索；高级搜索可以使用已有的快速搜索文字。按 `<Space>tf` 添加或切换标签筛选器，按 `<Space>tc` 清除所有标签筛选器。组合筛选的方式见[标签指南](TAGS.md#filter-the-main-item-list)，批量工作集见[文库指南](MAIN_GUIDE.md)。
 
 要浏览一组论文时，缩小主窗口视图；要直接定位某篇论文时，使用条目选择器。在有用的视图中按 `/` 可查找其中的行，不会改动筛选条件。批量操作前查看[Neo 选择集面板](MAIN_GUIDE.md#review-the-selection-panel)，因为工作集可能包含当前视图以外的条目。
 
-## 在主窗口可见行中查找 {#find-within-the-visible-main-rows}
+## 在当前列表中搜索 {#find-within-the-visible-main-rows}
 
 聚焦主窗口条目列表后按 `/` 打开 Neo 本地查找提示。输入一个或多个词并按 `Enter`；非空查询会提交，条目游标移到下一个可见匹配项。搜索不区分大小写，检查紧凑条目元数据：显示名称或标题、第一作者、年份，以及可用时的 citekey。多个查询词可以分别匹配不同字段。
 
@@ -51,7 +51,7 @@
 
 按 `Escape` 关闭提示并保留先前查询。如果新查询没有匹配项，条目游标保持原位，可再按 `/` 修改查询。按 `n` / `N` 重复最近一次已提交的搜索。
 
-## 在 PDF 中查找文字 {#search-text-in-a-pdf}
+## 在 PDF 正文中搜索 {#search-text-in-a-pdf}
 
 在阅读器 Normal 模式按 `/` 打开 Zotero PDF 文本搜索栏，按 `n` / `N` 移动到不同结果。它查找文档正文；主窗口本地查找查的是当前可见文库行的元数据。更多 PDF 导航方式见[阅读器指南](READER_GUIDE.md)。
 
@@ -73,10 +73,10 @@
 
 后退或前进不会改变主窗口的 Neo 选择集。完整的位置记录和恢复规则见[导航参考](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)。
 
-## 研究时查找并返回 {#research-and-revisit-workflow}
+## 从 PDF 回到文库 {#research-and-revisit-workflow}
 
-先在主窗口选择文库或分类。若要改变显示范围，使用快速搜索、高级搜索或标签筛选器；若要直接定位条目，按 `<Space>ff` 或 `<Space>fc` 并在确认前检查预览。若目标已经在可见行中，按 `/` 后再用 `n` / `N` 将条目游标移到它。按 `Enter` 或 `o` 打开游标所在条目。
+读 PDF 时，如果想在文献列表中找到这篇论文，可以按 `:` 打开命令面板，搜索**在文库中显示当前条目**。这个命令没有默认快捷键，在阅读器和笔记编辑器中都能使用。
 
-在阅读器中按 `/` 查找 PDF 文字，再按 `n` / `N` 浏览结果。用 Neo 后退/前进快捷键返回符合条件的阅读器或主窗口位置。若要在文库中显示当前阅读器条目，按 `:` 并搜索 **在文库中显示当前条目**；该操作在阅读器和笔记编辑器的命令面板中可用，没有默认快捷键，并使用当前阅读器或笔记上下文，而不是主窗口 Neo 选择集。之后可参阅[阅读和导航 PDF](READER_GUIDE.md)和[选择 PDF 文字并添加批注](SELECTION_GUIDE.md)。
+按 `<C-o>` / `<C-i>` 可以返回 Neo 记录过的上一处或下一处位置。不过普通滚动不会留下历史记录；如果想准确回到某个段落，最好先用 `m` 设置一个[阅读位置标记](READER_GUIDE.md#mark-a-place-and-return-to-it)。
 
-要切换到另一个已打开的标签页而不是返回历史目的地，按 `<Space>,` 或 `H` / `L`。要查找笔记，按 `<Space>fn`；默认从当前条目的笔记开始，需要扩大到同一文库时选择 **Browse library**。打开和编辑笔记的方法见[笔记指南](NOTE_GUIDE.md)。
+要在几个已经打开的 PDF 之间切换，按 `<Space>,` 或 `H` / `L`。找笔记按 `<Space>fn`；笔记选择器的用法见[笔记指南](NOTE_GUIDE.md)。
