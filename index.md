@@ -17,7 +17,7 @@ hero:
 features:
   - title: 用键盘选中 PDF 文字
     details: 按 v，输入页面上看到的词句来定位文字，再调整选区、复制或高亮。
-    link: /docs/SELECTION_GUIDE#try-it
+    link: /docs/SELECTION_GUIDE#从一段文字开始
     linkText: 试试文本选择
   - title: 随手标记要看的论文
     details: 浏览文献时按 s 记下条目，之后一起添加标签或整理到分类中。

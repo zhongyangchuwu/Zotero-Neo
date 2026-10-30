@@ -1,8 +1,8 @@
-# Neo 能做什么 {#features}
+# Neo 能做什么
 
 Neo 可以用键盘浏览文献、阅读 PDF、选中文字和添加批注，也能整理标签与笔记。这里挑几个常用操作介绍；所有快捷键见[命令参考](COMMAND_REFERENCE.md)。
 
-## 输入页面上的词句，选中 PDF 文字 {#select-pdf-text-by-typing-what-you-see}
+## 输入页面上的词句，选中 PDF 文字
 
 在 PDF 中按 `v`，输入页面上看到的词或短语。Neo 会在匹配的位置显示字母提示，按对应字母就能选中那段文字。
 
@@ -10,9 +10,9 @@ Neo 可以用键盘浏览文献、阅读 PDF、选中文字和添加批注，也
 
 这项功能需要 PDF 自带可选取的文字。扫描版没有文字层时，Neo 不提供 OCR。
 
-[试试文本选择](SELECTION_GUIDE.md#try-it)
+[试试文本选择](SELECTION_GUIDE.md#从一段文字开始)
 
-## 浏览论文时先做标记，之后一起整理 {#build-a-reading-list-while-you-browse}
+## 浏览论文时先做标记，之后一起整理
 
 在 Zotero 的条目列表中按 `s`，就能把当前论文加入 Neo 选择集。你可以接着浏览、切换分类，之后按 `<Space>ss` 查看已标记的论文，一起添加标签或整理到分类中。
 
@@ -20,15 +20,15 @@ Neo 可以用键盘浏览文献、阅读 PDF、选中文字和添加批注，也
 
 [管理文献](MAIN_GUIDE.md) · [整理标签](TAGS.md)
 
-## 不选文字，直接复制 DOI、链接和批注 {#copy-references-and-annotation-content-by-label}
+## 不选文字，直接复制 DOI、链接和批注
 
 阅读 PDF 时，在普通模式下按 `y`，页面上能复制的 DOI、arXiv ID、网址、批注摘录和评论旁会显示字母提示。输入对应字母即可复制。按 `f` 可以打开支持的链接。
 
 复制标识符或打开链接不会将论文导入文库。需要添加论文时，可以使用 Zotero 的“通过标识符添加条目”。
 
-[复制或打开页面上的内容](READER_GUIDE.md#copy-or-follow-visible-targets) · [通过标识符添加文献](MAIN_GUIDE.md#add-items-by-identifier)
+[复制或打开页面上的内容](READER_GUIDE.md#复制-doi、批注-或打开链接) · [通过标识符添加文献](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)
 
-## 在标题、图表和阅读位置之间跳转 {#follow-the-structure-of-a-paper}
+## 在标题、图表和阅读位置之间跳转
 
 Neo 可以跳到上一节或下一节标题、图表和批注，也能给重要位置设置标记。要对照方法和实验结果，可以把同一份 PDF 分成两个窗格。
 
@@ -36,6 +36,6 @@ Neo 可以跳到上一节或下一节标题、图表和批注，也能给重要�
 
 [阅读器操作](READER_GUIDE.md) · [搜索和返回](SEARCH_GUIDE.md)
 
-## 更多操作 {#explore-the-complete-workflow}
+## 更多操作
 
 [使用指南](USER_GUIDE.md)按任务介绍文献库、PDF 和笔记的操作。初次使用看[安装与入门](GETTING_STARTED.md)；想改快捷键、滚动方式或主题，看[设置指南](SETTINGS_GUIDE.md)。
