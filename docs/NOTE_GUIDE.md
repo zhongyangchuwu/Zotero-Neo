@@ -1,6 +1,6 @@
 # 查找并编辑 Zotero 笔记 {#find-and-edit-zotero-notes}
 
-从当前条目的文库记录打开已有笔记，也可以在同一文库中查找其他论文的笔记或独立笔记。Neo 会在 Zotero 编辑器中打开笔记，内容按 Zotero 的常规方式保存。
+Neo 可以从当前论文找到它的笔记，也可以查找同一文库中的其他笔记。打开后仍使用 Zotero 自带的编辑器，保存方式不变。
 
 ## 开始查找并编辑笔记 {#try-it}
 
@@ -8,11 +8,11 @@
 2. 用方向键选择已有笔记并按 `Enter` 打开。要查找其他论文的笔记或独立笔记，选择 **Browse library**，再选中目标笔记。
 3. 在笔记编辑器中单击正文。若已启用**Vim 风格笔记编辑**，按 `i` 输入，按 `Escape` 返回笔记 Normal 模式；若未启用，直接使用 Zotero 编辑器输入。
 
-## 打开后的笔记内容 {#what-you-should-see}
+## 打开后会看到什么 {#what-you-should-see}
 
-打开后会显示笔记原有内容。预览会标明所属论文或独立笔记，并显示正文。要新建笔记，请先在 Zotero 中创建，再从选择器打开。
+选择器里会预览笔记正文，并显示它属于哪篇论文。Neo 目前用于查找和打开已有笔记；要新建笔记，先使用 Zotero 自带的功能。
 
-## 找到需要的笔记 {#find-the-right-note}
+## 查找当前论文以外的笔记 {#find-the-right-note}
 
 在主窗口、阅读器或笔记编辑器的 Normal 模式按 `<Space>fn`。选择器默认查找当前条目的笔记：主窗口使用条目游标所在条目，阅读器使用当前 PDF 所属条目，笔记编辑器使用当前笔记的所属条目；独立笔记以自身为范围。Neo 选择集不会改变阅读器或笔记编辑器的当前上下文。
 
@@ -21,7 +21,7 @@
 
 ## 在 Normal 模式中移动和编辑 {#move-and-edit-in-normal-mode}
 
-在[设置 → 交互](SETTINGS_GUIDE.md#choose-note-and-picker-behavior)中启用**Vim 风格笔记编辑**，即可在笔记编辑器中使用 Vim 操作。此设置只控制笔记编辑，不会关闭 `<Space>fn` 笔记查找。Insert 模式中的文字输入和 IME 由 Zotero 编辑器处理；关闭该设置时，直接使用 Zotero 的常规编辑快捷键。
+在[设置 → 交互](SETTINGS_GUIDE.md#choose-note-and-picker-behavior)中打开**Vim 风格笔记编辑**，就能用 Vim 快捷键移动和修改笔记。按 `i` 进入 Insert 后，文字和中文输入法仍由 Zotero 编辑器处理。不想用 Vim 按键，关闭这项设置即可；笔记查找功能不受影响。
 
 按 `h` / `j` / `k` / `l` 移动文本光标；`w` / `b` 按词移动，`0` / `$` 移到行首或行尾，`gg` / `G` 移到笔记开头或结尾。按 `i` 在光标处输入，按 `a` 在光标后输入，按 `A` / `I` 在行尾或行首输入。按 `o` / `O` 在下方或上方新建一行并开始输入。按 `Escape` 返回 Normal 模式。
 
@@ -32,7 +32,7 @@
 笔记由 Zotero 编辑器按其常规行为保存。完整的移动和编辑命令见[命令参考：笔记编辑器](COMMAND_REFERENCE.md#note-editor)。
 
 
-## 从笔记返回所属论文 {#continue-from-the-note-to-its-paper}
+## 从笔记打开所属论文 {#continue-from-the-note-to-its-paper}
 
 笔记有所属论文时，在笔记 Normal 模式按 `<Space>o` 打开该条目的 PDF；如果当前笔记属于另一条目，命令会使用笔记自己的上下文。独立笔记没有可打开的论文附件，请回到主窗口选择论文。
 
