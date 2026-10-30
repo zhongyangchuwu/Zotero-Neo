@@ -8,7 +8,7 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 ## 安装
 
-目前文档对应 `main` 分支的实现。Neo 面向 macOS、Linux 和 Windows 上最新的 Zotero 稳定版；具体兼容版本请以 [`manifest.json`](manifest.json) 为准。
+目前文档对应 `main` 分支的实现。Neo 面向 macOS、Linux 和 Windows 上最新的 Zotero 稳定版；具体兼容版本请以 [`manifest.json`](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/manifest.json) 为准。
 
 按照[安装指南](docs/GETTING_STARTED.md)下载或构建 `zotero-neo.xpi`，再通过 Zotero 的插件管理器安装。指南里也有安装后的第一步操作。
 

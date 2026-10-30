@@ -9,7 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { connectRDP, findAddon, installTemporaryAddon, reloadAddon } from './dev-rdp-client.mjs';
 
@@ -78,7 +78,7 @@ function parseProfilesIni(source) {
 function profileName(profilePath) {
   const profilesIni = resolve(profilePath, '..', '..', 'profiles.ini');
   if (!existsSync(profilesIni)) {
-    fail(`Cannot find profiles.ini for ${profilePath}`);
+    return basename(profilePath);
   }
   const base = dirname(profilesIni);
   const match = parseProfilesIni(readFileSync(profilesIni, 'utf8')).find((profile) => {
@@ -87,15 +87,14 @@ function profileName(profilePath) {
     const candidate = profile.values.IsRelative === '0' ? resolve(raw) : resolve(base, raw);
     return candidate === resolve(profilePath);
   });
-  if (!match?.values.Name) fail(`Cannot resolve Zotero profile name for ${profilePath}`);
-  return match.values.Name;
+  return match?.values.Name ?? basename(profilePath);
 }
 
 function resolveProfile(explicitProfile, config) {
   const raw = explicitProfile ?? process.env.ZOTERO_NEO_DEV_PROFILE ?? config.profile ?? null;
   if (!raw) {
     fail(
-      'No development profile configured. Run: npm run dev:setup -- --profile /mnt/c/.../Profiles/<dev-profile>',
+      'No development profile configured. Run: npm run dev:setup -- --profile /path/to/dev-profile',
     );
   }
   const profile = resolve(raw);
@@ -112,6 +111,13 @@ function wslPathToWindows(path) {
   const drive = match[1].toUpperCase();
   const rest = (match[2] ?? '').split('/').filter(Boolean).join('\\');
   return rest ? `${drive}:\\${rest}` : `${drive}:\\`;
+}
+
+/** Convert host paths only when WSL launches a Windows Zotero executable. */
+function zoteroPath(path, config) {
+  return process.platform !== 'win32' && config.zoteroExecutable.toLowerCase().endsWith('.exe')
+    ? wslPathToWindows(path)
+    : resolve(path);
 }
 
 function upsertPrefs(profile) {
@@ -196,8 +202,8 @@ async function start() {
 
   const args = [
     '-no-remote',
-    '-p',
-    config.profileName,
+    '-profile',
+    zoteroPath(config.profile, config),
     '-purgecaches',
     '-start-debugger-server',
     String(config.debugPort),
@@ -211,7 +217,7 @@ async function start() {
 
   const client = await connectRDP(config.debugPort);
   try {
-    const addon = await installTemporaryAddon(client, wslPathToWindows(mirror));
+    const addon = await installTemporaryAddon(client, zoteroPath(mirror, config));
     console.log(
       `[dev-gui] Zotero started with temporary ${addon?.id ?? ADDON_ID} on RDP port ${config.debugPort}`,
     );
@@ -230,7 +236,7 @@ async function reload() {
   try {
     const addon = await findAddon(client, ADDON_ID);
     if (!addon?.temporarilyInstalled) {
-      await installTemporaryAddon(client, wslPathToWindows(mirror));
+      await installTemporaryAddon(client, zoteroPath(mirror, config));
       console.log(`[dev-gui] installed temporary ${ADDON_ID}`);
     } else {
       await reloadAddon(client, ADDON_ID);
