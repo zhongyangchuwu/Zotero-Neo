@@ -1,6 +1,6 @@
 # 模块拆分与基座能力设计
 
-本文说明 `main` 的当前模块边界。代码分为十一个内部功能区；`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 九个核心区固定启用，只有 `reader-hints`（链接与复制提示）与 `extensions`（扩展管理面板）是可选增强。运行时所有权见[架构](ARCHITECTURE.md)；可选项配置见[模块设置](SETTINGS_GUIDE.md#modules)。
+本文说明 `main` 的当前模块边界。代码分为十一个内部功能区；`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 九个核心区固定启用，只有 `reader-hints`（链接与复制提示）与 `extensions`（扩展管理面板）是可选增强。运行时所有权见[架构](ARCHITECTURE.md)；可选项配置见[模块设置](SETTINGS_GUIDE.md#开关两项可选功能)。
 
 ## 范围与取舍
 
