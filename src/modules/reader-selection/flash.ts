@@ -13,6 +13,7 @@ import {
   mappedTextRange,
   tokenBoundaries,
   tokenRangeCovering,
+  type TokenBoundary,
   type MappedTextIndex,
 } from './token-boundaries';
 
@@ -21,9 +22,12 @@ export type FlashIntent = 'visual-start' | 'visual-end';
 export interface FlashTextSegment {
   readonly textNode: Text;
   readonly text: string;
+  readonly rect?: FlashRect;
 }
 
-export interface FlashTextIndex extends MappedTextIndex {}
+export interface FlashTextIndex extends MappedTextIndex {
+  readonly tokenBreaks?: readonly number[];
+}
 
 export interface FlashMatch {
   readonly index: number;
@@ -88,9 +92,36 @@ export function normalizeFlashText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim();
 }
 
+/** A large visual gap or new line separates tokens even without a PDF text-layer space. */
+function separatePdfSpans(previous: FlashRect, next: FlashRect): boolean {
+  const overlap = Math.max(
+    0,
+    Math.min(previous.bottom, next.bottom) - Math.max(previous.top, next.top),
+  );
+  const height = Math.max(1, Math.min(previous.height, next.height));
+  if (overlap < height * 0.35) return true;
+  if (next.left - previous.right > Math.max(2, height * 0.25)) return true;
+  return next.left < previous.left - Math.max(2, height * 0.3);
+}
+
 /** Builds a normalized search index while retaining exact DOM source endpoints. */
 export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): FlashTextIndex {
-  return buildMappedTextIndex(segments);
+  const index = buildMappedTextIndex(segments);
+  const firstOffsets = new Map<Text, number>();
+  index.pointers.forEach((pointer, offset) => {
+    if (!firstOffsets.has(pointer.textNode)) firstOffsets.set(pointer.textNode, offset);
+  });
+  const tokenBreaks: number[] = [];
+  for (let indexValue = 1; indexValue < segments.length; indexValue += 1) {
+    const previous = segments[indexValue - 1]!;
+    const current = segments[indexValue]!;
+    if (!previous.rect || !current.rect || !separatePdfSpans(previous.rect, current.rect))
+      continue;
+    const boundary = firstOffsets.get(current.textNode);
+    if (boundary !== undefined && boundary > 0 && boundary < index.text.length)
+      tokenBreaks.push(boundary);
+  }
+  return tokenBreaks.length ? { ...index, tokenBreaks } : index;
 }
 
 interface FlashLiteralRange {
@@ -160,7 +191,17 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
 
 /** Deduplicates partial matches that target the same complete token or token phrase. */
 export function flashTokenMatches(index: FlashTextIndex, rawQuery: string): FlashMatch[] {
-  const tokens = tokenBoundaries(index.text);
+  const tokens: TokenBoundary[] = tokenBoundaries(index.text).flatMap((token) => {
+    const parts: TokenBoundary[] = [];
+    let start = token.start;
+    for (const boundary of index.tokenBreaks ?? []) {
+      if (boundary <= start || boundary >= token.end) continue;
+      parts.push({ ...token, start, end: boundary });
+      start = boundary;
+    }
+    parts.push({ ...token, start, end: token.end });
+    return parts;
+  });
   const seen = new Set<string>();
   const matches: FlashMatch[] = [];
   for (const { start, end } of flashLiteralRanges(index, rawQuery)) {
@@ -779,7 +820,7 @@ export class ReaderFlash {
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {
     const segments: FlashTextSegment[] = [];
     for (const { textNode, text, rect } of pdfTextSpans(pdfWindow)) {
-      if (this.#rectVisible(pdfWindow, rect)) segments.push({ textNode, text });
+      if (this.#rectVisible(pdfWindow, rect)) segments.push({ textNode, text, rect });
     }
     return segments;
   }

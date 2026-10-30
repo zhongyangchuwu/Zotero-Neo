@@ -77,7 +77,7 @@ describe('Flash complete-token targeting', () => {
   it('does not mistake Unicode case fold lengths for original source offsets', () => {
     const example = matches('İx İx', 'x');
     expect(example.raw.map((match) => match.pointer.offset)).toEqual([1, 4]);
-    expect(example.targets.map((match) => match.pointer.offset)).toEqual([1, 4]);
+    expect(example.targets.map((match) => match.pointer.offset)).toEqual([0, 3]);
     expect(example.targets.map((match) => match.end.offset)).toEqual([2, 5]);
 
     const dotted = matches('İstanbul', 'i');
@@ -94,6 +94,63 @@ describe('Flash complete-token targeting', () => {
         index: 0,
         pointer: { textNode: example.node, offset: 0 },
         end: { textNode: example.node, offset: 3 },
+      },
+    ]);
+  });
+
+  it('uses visible span gaps to separate words without injecting synthetic search spaces', () => {
+    const first = text('target');
+    const second = text('target');
+    const index = buildFlashTextIndex([
+      {
+        textNode: first,
+        text: first.data,
+        rect: { left: 10, right: 50, top: 10, bottom: 20, width: 40, height: 10 },
+      },
+      {
+        textNode: second,
+        text: second.data,
+        rect: { left: 200, right: 240, top: 10, bottom: 20, width: 40, height: 10 },
+      },
+    ]);
+    expect(index.text).toBe('targettarget');
+    expect(index.tokenBreaks).toEqual([6]);
+    expect(flashTokenMatches(index, 'target')).toEqual([
+      {
+        index: 0,
+        pointer: { textNode: first, offset: 0 },
+        end: { textNode: first, offset: 6 },
+      },
+      {
+        index: 6,
+        pointer: { textNode: second, offset: 0 },
+        end: { textNode: second, offset: 6 },
+      },
+    ]);
+  });
+
+  it('still joins adjacent spans within one visually continuous word', () => {
+    const first = text('hel');
+    const second = text('lo');
+    const index = buildFlashTextIndex([
+      {
+        textNode: first,
+        text: first.data,
+        rect: { left: 10, right: 34, top: 10, bottom: 20, width: 24, height: 10 },
+      },
+      {
+        textNode: second,
+        text: second.data,
+        rect: { left: 34, right: 50, top: 10, bottom: 20, width: 16, height: 10 },
+      },
+    ]);
+    expect(index.text).toBe('hello');
+    expect(index.tokenBreaks).toBeUndefined();
+    expect(flashTokenMatches(index, 'llo')).toEqual([
+      {
+        index: 0,
+        pointer: { textNode: first, offset: 0 },
+        end: { textNode: second, offset: 2 },
       },
     ]);
   });
