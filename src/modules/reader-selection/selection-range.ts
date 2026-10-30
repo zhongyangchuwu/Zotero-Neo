@@ -553,16 +553,8 @@ export class ReaderSelectionRange {
     lease?.markers.clear();
     if (isDeadObject(pdfWindow)) return;
     const failure = new CleanupFailure();
-    failure.run(() => {
-      const current = this.#styledViews.get(pdfWindow);
-      // Retire legacy markers only while no successor owns the view. New markers are removed
-      // by their exact lease, even when DOM/style cleanup synchronously opens a replacement.
-      if (!markers.length && (!current || current === lease)) {
-        markers.push(
-          ...(Array.from(pdfWindow.document.querySelectorAll('[data-zv-cursor]')) as HTMLElement[]),
-        );
-      }
-    });
+    // Never discover cleanup targets from shared DOM: even an empty retired lease may share
+    // its Document with a successor owned by another module instance.
     for (const marker of markers) if (!isDeadObject(marker)) failure.run(() => marker.remove());
     failure.rethrow();
   }

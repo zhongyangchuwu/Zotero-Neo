@@ -36,7 +36,6 @@ function rangeWindow() {
   const appendChild = vi.fn((element: HTMLStyleElement) => {
     style = element;
   });
-  const cursorRemove = vi.fn();
   const styleRemove = vi.fn();
   const selection = {
     anchorNode: node,
@@ -59,8 +58,7 @@ function rangeWindow() {
       if (selector === 'style[data-zv-select-selection]') return style;
       return null;
     },
-    querySelectorAll: (selector: string) =>
-      selector === '[data-zv-cursor]' ? [{ remove: cursorRemove }] : [],
+    querySelectorAll: () => [],
     createElement: (tag: string) => {
       if (tag !== 'style') throw new Error(`Unexpected tag: ${tag}`);
       const element = {
@@ -103,7 +101,6 @@ function rangeWindow() {
     setAttribute,
     removeAttribute,
     appendChild,
-    cursorRemove,
     styleRemove,
   };
 }
@@ -122,24 +119,27 @@ function harness(
   const scrollBy = vi.fn();
   const openFlash = vi.fn();
   const container = { clientHeight: 600 } as HTMLElement;
-  const owner = new ReaderSelectionRange({
-    isCurrent,
-    captureView,
-    mode: () => mode,
-    setModeVisual: () => {
-      mode = 'visual';
-    },
-    invalidateNativeSelection,
-    noteOwner,
-    updateIndicator,
-    showStatus,
-    scrollContainer: () => container,
-    scrollBy,
-    openFlash,
-  });
+  const createOwner = () =>
+    new ReaderSelectionRange({
+      isCurrent,
+      captureView,
+      mode: () => mode,
+      setModeVisual: () => {
+        mode = 'visual';
+      },
+      invalidateNativeSelection,
+      noteOwner,
+      updateIndicator,
+      showStatus,
+      scrollContainer: () => container,
+      scrollBy,
+      openFlash,
+    });
+  const owner = createOwner();
   return {
     ...view,
     owner,
+    createOwner,
     mode: () => mode,
     invalidateNativeSelection,
     noteOwner,
@@ -258,6 +258,28 @@ describe('ReaderSelectionRange', () => {
     expect(test.markers).toHaveLength(0);
   });
 
+  it('does not scan a successor instance for markers when the old lease owns no outline', () => {
+    const test = tokenHarness();
+    const document = test.pdfWindow.document;
+    const create = document.createRange.bind(document);
+    Reflect.set(document, 'createRange', () => {
+      const range = create();
+      Reflect.set(range, 'getClientRects', () => []);
+      return range;
+    });
+    test.owner.refresh(test.pdfWindow, false);
+    expect(test.markers).toHaveLength(0);
+    Reflect.set(document, 'createRange', create);
+    const successor = test.createOwner();
+    successor.refresh(test.pdfWindow, false);
+    expect(test.markers).toHaveLength(1);
+    const marker = test.markers[0];
+    test.owner.dispose();
+    expect(test.markers).toEqual([marker]);
+    successor.dispose();
+    expect(test.markers).toHaveLength(0);
+  });
+
   it('does not commit a token movement after native-selection invalidation retires the range', () => {
     const test = tokenHarness();
     test.invalidateNativeSelection.mockImplementationOnce(() => test.owner.leave());
@@ -331,7 +353,7 @@ describe('ReaderSelectionRange', () => {
 
     expect(deadDocument).not.toHaveBeenCalled();
     expect(surviving.removeAttribute).toHaveBeenCalledWith('data-zv-select-active');
-    expect(surviving.cursorRemove).toHaveBeenCalled();
+    expect(surviving.styleRemove).toHaveBeenCalledOnce();
   });
 
   it('starts Flash when Select has no existing native range', () => {
@@ -376,7 +398,7 @@ describe('ReaderSelectionRange', () => {
     });
     expect(test.setBaseAndExtent).not.toHaveBeenCalled();
     expect(() => test.owner.dispose()).toThrow(failure);
-    expect(test.cursorRemove).toHaveBeenCalled();
+    expect(test.styleRemove).toHaveBeenCalledOnce();
     expect(other.removeAttribute).toHaveBeenCalled();
     current = true;
     test.owner.modify(test.pdfWindow, 'forward', 'character');
