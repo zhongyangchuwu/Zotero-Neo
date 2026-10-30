@@ -1,6 +1,6 @@
-# 按工作方式调整 Neo {#make-neo-fit-the-way-you-work}
+# 修改 Neo 设置 {#make-neo-fit-the-way-you-work}
 
-在主窗口、阅读器或笔记 Normal 按 `<Space>ps` 打开设置。普通偏好通常立即保存；快捷键编辑需点击**应用绑定**。只有两个可选增强的请求需点击**保存模块请求**，并在下次重启 Zotero 后应用。
+在主窗口、阅读器或笔记的普通模式下，按 `<Space>ps` 打开 Neo 设置。主题、滚动等设置通常会立即保存；修改快捷键后要点击**应用绑定**。关闭或开启可选功能后，还需要点击**保存模块请求**并重启 Zotero。
 
 ## 修改一个快捷键 {#try-it}
 
@@ -11,7 +11,7 @@
 
 录制时，`Enter` 和 `Escape` 是要记录的按键，不是录制器控制。请使用界面上的**完成**和**取消**按钮。
 
-## 先找到命令，再修改绑定 {#find-a-command-before-changing-it}
+## 找到命令和当前快捷键 {#find-a-command-before-changing-it}
 
 输入多键命令的前缀后，**前缀提示**列出可用的后续按键。主窗口、阅读器和笔记 Normal 默认使用 `<Space>` 作为命令前缀。按 `:` 打开命令面板，搜索当前上下文可用的动作，包括支持但尚未绑定的动作。
 
@@ -21,7 +21,7 @@
 
 关闭 `reader-hints`（**链接与复制提示**）或 `extensions`（**扩展管理面板**）后，其对应动作及用户绑定仍保留在设置中，但不参与当前按键匹配、前缀提示或命令面板；重新启用不需要重建绑定。九个核心模块没有关闭开关。
 
-## 处理绑定提示 {#resolve-binding-messages}
+## 遇到快捷键冲突 {#resolve-binding-messages}
 
 - 完全重复的绑定、不支持的动作/上下文组合，以及 Zotero 或文本编辑保留的按键会阻止应用。请更换序列或删除冲突条目。
 - 一个序列是另一序列的前缀时，较短命令可能等待后续按键。这种组合允许保存；需要立即执行时，请换用不同序列。
@@ -46,31 +46,29 @@
 
 **文本选择模式**控制 `v` 和原生 Zotero 文本选择能否进入 Reader Select。**批注评论编辑**控制阅读器 Normal 的 `i` / `Enter` 是否打开选中批注的评论编辑器；关闭后不影响 Zotero 原生评论字段或 Select 中独立的“添加批注评论”动作。
 
-## 调整笔记和选择器行为 {#choose-note-and-picker-behavior}
+## 调整笔记和选择器 {#choose-note-and-picker-behavior}
 
-在**交互**中，**Vim 风格笔记编辑**控制上下文面板和独立笔记标签页中的 Vim 操作。这是行为偏好，不是模块开关；关闭后交给 Zotero 普通编辑，不关闭笔记查找。`noteEditor.enabled` 保持原有语义。
+在**交互**中，可以关闭**Vim 风格笔记编辑**，改用 Zotero 原来的编辑方式。关闭后仍能用 Neo 查找和打开笔记。
 
 **鼠标单击选择、双击确认**用于共享选择器。开启后，单击选择结果，双击确认；悬停不改变选择。
 
-## 配置可选增强 {#modules}
+## 开关两项可选功能 {#modules}
 
-模块页只提供两个可选增强：`reader-hints`（**链接与复制提示**）和 `extensions`（**扩展管理面板**），默认均启用。其余九个内部模块是核心分区，固定启用，不提供关闭开关。
+在**模块**页面，可以开关**链接与复制提示**和**扩展管理面板**。这两项默认开启，其他功能不需要在这里逐项启用。
 
 1. 在**模块**中调整这两项增强的请求状态。
 2. 点击**保存模块请求**。设置显示已应用值、已保存请求、草稿状态和运行状态；请求与已应用值不同时显示**等待重启**。
 3. 完全退出并重新启动 Zotero。关闭设置、重新打开 Reader 或重载/停用后启用 Neo，都不会应用新的可选增强请求。
 
-已有 `extensions.zotero-neo.modules.<core>.enabled=false` 偏好不会关闭核心功能；保存请求和**恢复默认模块请求**都只改动 `reader-hints`、`extensions` 两项模块偏好，不改核心配置或行为偏好。恢复默认后两项增强请求均为启用，仍需重启 Zotero 才改变当前应用图。`mode.visual.enabled`、`noteEditor.enabled`、`annotationCommentEditor.enabled` 与 `marks.persist` 等行为或存储偏好继续保持原义。
+点击**恢复默认模块请求**会重新启用这两项可选功能，重启 Zotero 后生效。它不会重置快捷键、主题或其他设置。
 
-关闭两项可选增强不会关闭核心键盘工作流。Zotero 原生偏好页中的 **Open Neo Settings** 与公共入口 `Zotero.Neo.openSettings` 始终保留；原生插件管理负责安装、升级和禁用整个 Neo。
-
-状态含义与模块 ID 见[模块设置参考](SETTINGS_REFERENCE.md#modules)。失败属于实际窗口或 Reader 实例，不会把另一个健康实例一并停用。
+如果快捷键打不开设置，可以在 Zotero 的插件偏好页点击 **Open Neo Settings**。安装、更新和禁用 Neo 仍在 Zotero 插件管理器中操作。模块 ID 和详细状态见[设置参考](SETTINGS_REFERENCE.md#modules)。
 
 ## 使用标签命名空间 {#use-tag-namespaces}
 
 在**高级**中，**命名空间分隔符**将扁平 Zotero 标签显示为虚拟路径。默认 `/` 支持路径匹配；留空则按平面标签匹配。存储的标签名称不变。
 
-## 使用扩展管理面板与集成 {#manage-installed-plugins-and-integrations}
+## 查看已安装的插件 {#manage-installed-plugins-and-integrations}
 
 启用 `extensions`（**扩展管理面板**）后，在主窗口、阅读器或笔记 Normal 按 `<Space>pp` 打开 Plugin Manager。它显示已安装 Zotero 扩展及状态，并在 Zotero 允许时提供启停、已注册设置、主页或仓库链接。不安装、更新、移除或发现扩展；这些操作及停用整个 Neo 请使用 Zotero 原生插件管理。
 
