@@ -115,8 +115,7 @@ export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): Flas
   for (let indexValue = 1; indexValue < segments.length; indexValue += 1) {
     const previous = segments[indexValue - 1]!;
     const current = segments[indexValue]!;
-    if (!previous.rect || !current.rect || !separatePdfSpans(previous.rect, current.rect))
-      continue;
+    if (!previous.rect || !current.rect || !separatePdfSpans(previous.rect, current.rect)) continue;
     const boundary = firstOffsets.get(current.textNode);
     if (boundary !== undefined && boundary > 0 && boundary < index.text.length)
       tokenBreaks.push(boundary);
