@@ -3,6 +3,17 @@ import { decoratePdfSelection, firstPdfTextPosition } from '../../toolkit/reader
 import { isDeadObject } from '../../platform/cross-compartment';
 import type { FlashIntent, FlashSelectionTarget } from './flash';
 import { verticalTextPosition } from './text-motion';
+import {
+  pdfTokens,
+  tokenAtPointer,
+  selectionToToken,
+  tokenSelectionChoices,
+  horizontalTokenSelection,
+  sameTextPointer,
+  compareTextPointers,
+  type DirectedTokenSelection,
+  type SourceToken,
+} from './token-motion';
 import type { PdfWindow, Pointer, ReaderMode } from '../../reader/types';
 
 export interface ReaderSelectionRangeHost {
@@ -23,6 +34,12 @@ function isTextNode(node: Node | null): node is Text {
   return node?.nodeType === 3;
 }
 
+interface SelectionStyleLease {
+  dispose: (() => void) | null;
+  readonly current: () => boolean;
+  readonly markers: Set<HTMLElement>;
+}
+
 /**
  * Owns Neo's temporary DOM Selection compatibility range for Reader Select mode.
  *
@@ -38,10 +55,7 @@ export class ReaderSelectionRange {
   #disposed = false;
   #revision = 0;
   #preferredX: number | null = null;
-  readonly #styledViews = new Map<
-    PdfWindow,
-    { dispose: (() => void) | null; current: () => boolean }
-  >();
+  readonly #styledViews = new Map<PdfWindow, SelectionStyleLease>();
 
   constructor(host: ReaderSelectionRangeHost) {
     this.#host = host;
@@ -127,16 +141,79 @@ export class ReaderSelectionRange {
     this.#ensureAnchor(pdfWindow);
     const anchor = this.#anchor;
     if (!anchor?.textNode.isConnected) return;
-    const focus = this.#comparePointers(target.end, anchor) <= 0 ? target.start : target.end;
-    selection.setBaseAndExtent(anchor.textNode, anchor.offset, focus.textNode, focus.offset);
+    const forward =
+      !isTextNode(selection.focusNode) ||
+      this.#comparePointers(anchor, {
+        textNode: selection.focusNode,
+        offset: selection.focusOffset,
+      }) <= 0;
+    const before = this.#comparePointers(target.end, anchor) <= 0;
+    const overlapsAnchor = this.#comparePointers(target.start, anchor) < 0;
+    const useStart = before || (overlapsAnchor && !forward);
+    const focus = useStart ? target.start : target.end;
+    const tokens = pdfTokens(pdfWindow);
+    const targetIndex = tokenAtPointer(tokens, focus, useStart ? 'start' : 'end');
+    const previousFocus = isTextNode(selection.focusNode)
+      ? { textNode: selection.focusNode, offset: selection.focusOffset }
+      : anchor;
+    const directed =
+      targetIndex === null ? null : selectionToToken(tokens, anchor, previousFocus, targetIndex);
+    if (!this.#current(pdfWindow) || !current() || this.#revision !== revision) return;
+    const nextAnchor = directed?.anchor ?? anchor;
+    const nextFocus = directed?.focus ?? focus;
+    this.#anchor = nextAnchor;
+    selection.setBaseAndExtent(
+      nextAnchor.textNode,
+      nextAnchor.offset,
+      nextFocus.textNode,
+      nextFocus.offset,
+    );
     this.refresh(pdfWindow, true);
     if (
       this.#current(pdfWindow) &&
       current() &&
       this.#revision === revision &&
-      this.#anchor === anchor
+      this.#anchor === nextAnchor
     )
       this.#host.showStatus('✓ selection updated', 650);
+  }
+
+  /** Moves the active token while retaining the whole anchor token when crossing it. */
+  extendByToken(pdfWindow: PdfWindow, direction: -1 | 1): void {
+    if (!this.#current(pdfWindow)) return;
+    const current = this.#host.captureView(pdfWindow);
+    this.#ensureAnchor(pdfWindow);
+    const selection = pdfWindow.getSelection();
+    if (!selection || !this.#anchor || !isTextNode(selection.focusNode)) return;
+    const next = horizontalTokenSelection(
+      pdfTokens(pdfWindow),
+      this.#anchor,
+      { textNode: selection.focusNode, offset: selection.focusOffset },
+      direction,
+    );
+    if (next) this.#applyTokenSelection(pdfWindow, next, null, current);
+  }
+
+  /** Chooses the nearest complete-token endpoint on the next visual line. */
+  extendByTokenLine(pdfWindow: PdfWindow, direction: -1 | 1): void {
+    if (!this.#current(pdfWindow)) return;
+    const current = this.#host.captureView(pdfWindow);
+    this.#ensureAnchor(pdfWindow);
+    const selection = pdfWindow.getSelection();
+    const anchor = this.#anchor;
+    if (!selection || !anchor || !isTextNode(selection.focusNode)) return;
+    const focus = { textNode: selection.focusNode, offset: selection.focusOffset };
+    const tokens = pdfTokens(pdfWindow);
+    const choices = tokenSelectionChoices(tokens, anchor, focus);
+    const target = verticalTextPosition(
+      pdfWindow,
+      focus,
+      direction,
+      this.#preferredX,
+      choices.map((choice) => choice.focus),
+    );
+    const next = target && choices.find((choice) => sameTextPointer(choice.focus, target.pointer));
+    if (next) this.#applyTokenSelection(pdfWindow, next, target.preferredX, current);
   }
 
   modify(
@@ -235,7 +312,7 @@ export class ReaderSelectionRange {
       lease = this.#styledViews.get(pdfWindow);
     }
     if (!lease) {
-      lease = { dispose: null, current };
+      lease = { dispose: null, current, markers: new Set() };
       this.#styledViews.set(pdfWindow, lease);
       try {
         const dispose = decoratePdfSelection(pdfWindow);
@@ -268,6 +345,17 @@ export class ReaderSelectionRange {
     const rect = range.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
 
+    const tokens = pdfTokens(pdfWindow);
+    const forward = !anchor || compareTextPointers(anchor, { textNode: node, offset }) <= 0;
+    const tokenIndex = tokenAtPointer(
+      tokens,
+      { textNode: node, offset },
+      forward ? 'end' : 'start',
+    );
+    if (tokenIndex !== null) {
+      this.#showActiveToken(pdfWindow, tokens[tokenIndex]!, current, lease);
+    }
+
     this.#host.noteOwner();
     if (!this.#current(pdfWindow) || !lease.current() || this.#styledViews.get(pdfWindow) !== lease)
       return;
@@ -299,7 +387,7 @@ export class ReaderSelectionRange {
     const failure = new CleanupFailure();
     for (const [pdfWindow, lease] of views) {
       if (lease.dispose) failure.run(lease.dispose);
-      failure.run(() => this.#removeViewMarker(pdfWindow));
+      failure.run(() => this.#removeViewMarker(pdfWindow, lease));
     }
     failure.rethrow();
   }
@@ -321,12 +409,103 @@ export class ReaderSelectionRange {
     this.#styledViews.delete(pdfWindow);
     const failure = new CleanupFailure();
     if (lease.dispose) failure.run(lease.dispose);
-    failure.run(() => this.#removeViewMarker(pdfWindow));
+    failure.run(() => this.#removeViewMarker(pdfWindow, lease));
     failure.rethrow();
   }
 
   #current(pdfWindow: PdfWindow): boolean {
     return !this.#disposed && !isDeadObject(pdfWindow) && this.#host.isCurrent(pdfWindow);
+  }
+
+  /** Commits only to the captured live view; cleanup/reentry cannot mutate its replacement. */
+  #applyTokenSelection(
+    pdfWindow: PdfWindow,
+    next: DirectedTokenSelection,
+    preferredX: number | null,
+    current: () => boolean,
+  ): void {
+    if (!this.#current(pdfWindow) || !current()) return;
+    const revision = this.#revision;
+    const anchor = this.#anchor;
+    const pointersCurrent = (): boolean =>
+      [next.anchor, next.focus].every(
+        (pointer) =>
+          !isDeadObject(pointer.textNode) &&
+          pointer.textNode.isConnected &&
+          pointer.textNode.ownerDocument === pdfWindow.document &&
+          pointer.offset >= 0 &&
+          pointer.offset <= pointer.textNode.length,
+      );
+    if (!pointersCurrent()) return;
+    this.#host.invalidateNativeSelection();
+    if (
+      !this.#current(pdfWindow) ||
+      !current() ||
+      this.#revision !== revision ||
+      this.#anchor !== anchor ||
+      !pointersCurrent()
+    )
+      return;
+    this.#anchor = next.anchor;
+    this.#anchorWindow = pdfWindow;
+    this.#anchorCurrent = current;
+    this.#preferredX = preferredX;
+    pdfWindow
+      .getSelection()
+      ?.setBaseAndExtent(
+        next.anchor.textNode,
+        next.anchor.offset,
+        next.focus.textNode,
+        next.focus.offset,
+      );
+    if (this.#current(pdfWindow) && current()) this.refresh(pdfWindow, true);
+  }
+
+  /** Draws view-local, noninteractive outlines around the active token's actual glyph rectangles. */
+  #showActiveToken(
+    pdfWindow: PdfWindow,
+    token: SourceToken,
+    current: () => boolean,
+    lease: SelectionStyleLease,
+  ): void {
+    if (!this.#current(pdfWindow) || !current()) return;
+    const document = pdfWindow.document;
+    if (
+      token.start.textNode.ownerDocument !== document ||
+      token.end.textNode.ownerDocument !== document
+    )
+      return;
+    const range = document.createRange();
+    range.setStart(token.start.textNode, token.start.offset);
+    range.setEnd(token.end.textNode, token.end.offset);
+    for (const rect of Array.from(range.getClientRects() ?? [])) {
+      if (!this.#current(pdfWindow) || !current() || this.#styledViews.get(pdfWindow) !== lease)
+        return;
+      if (
+        ![rect.left, rect.top, rect.width, rect.height].every(Number.isFinite) ||
+        rect.width <= 0 ||
+        rect.height <= 0
+      )
+        continue;
+      const marker = document.createElement('span');
+      marker.dataset.zvCursor = 'token';
+      marker.setAttribute('aria-hidden', 'true');
+      marker.style.cssText =
+        'position:fixed;z-index:9998;pointer-events:none;outline:2px solid Highlight;outline-offset:1px;background:color-mix(in srgb,Highlight 16%,transparent);border-radius:2px;';
+      marker.style.left = `${rect.left}px`;
+      marker.style.top = `${rect.top}px`;
+      marker.style.width = `${rect.width}px`;
+      marker.style.height = `${rect.height}px`;
+      lease.markers.add(marker);
+      try {
+        document.body?.appendChild(marker);
+      } finally {
+        if (!this.#current(pdfWindow) || !current() || this.#styledViews.get(pdfWindow) !== lease) {
+          lease.markers.delete(marker);
+          if (!isDeadObject(marker)) marker.remove();
+        }
+      }
+    }
   }
 
   #ensureAnchor(pdfWindow: PdfWindow): void {
@@ -369,16 +548,14 @@ export class ReaderSelectionRange {
     return 0;
   }
 
-  #removeViewMarker(pdfWindow: PdfWindow): void {
+  #removeViewMarker(pdfWindow: PdfWindow, lease = this.#styledViews.get(pdfWindow)): void {
+    const markers = [...(lease?.markers ?? [])];
+    lease?.markers.clear();
     if (isDeadObject(pdfWindow)) return;
     const failure = new CleanupFailure();
-    failure.run(() => {
-      // Gecko's NodeList iterator loses the element type supplied by this selector.
-      const cursors = Array.from(
-        pdfWindow.document.querySelectorAll('[data-zv-cursor]'),
-      ) as HTMLElement[];
-      for (const cursor of cursors) failure.run(() => cursor.remove());
-    });
+    // Never discover cleanup targets from shared DOM: even an empty retired lease may share
+    // its Document with a successor owned by another module instance.
+    for (const marker of markers) if (!isDeadObject(marker)) failure.run(() => marker.remove());
     failure.rethrow();
   }
 }

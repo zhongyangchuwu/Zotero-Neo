@@ -166,8 +166,10 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | ActionId | 默认绑定 | 含义 |
 | --- | --- | --- |
 | `flashText` | `s` | 使用 Flash 选择另一端，同时保留当前锚点。查询支持 Unicode 和输入法；按 Enter 选择最近的带标签目标，按 Escape 取消本次 Flash 操作。 |
-| `extendDown` / `extendUp` | `j` / `k` | 按行扩展活动端。 |
-| `extendLeft` / `extendRight` | `h` / `l` | 按字符扩展。 |
+| `extendTokenDown` / `extendTokenUp` | `j` / `k` | 按视觉行移动，保留水平位置并吸附完整词元。 |
+| `extendTokenBackward` / `extendTokenForward` | `h` / `l` | 向前/向后调整一个词元；跨锚点时保留锚词，标点独立选择。 |
+| `extendLeft` / `extendRight` | `H` / `L` | 按字符精细调整。 |
+| `extendDown` / `extendUp` | — | 保留原始视觉行端点移动，可自定义绑定。 |
 | `extendWordForward` / `extendWordBackward` | `w` / `b` | 扩展到下一个/上一个词边界。 |
 | `extendLineStart` / `extendLineEnd` | `0` / `$` | 扩展到当前行边界。 |
 | `extendSentenceForward` / `extendSentenceBackward` | `)` / `(` | 按句子边界扩展。 |
@@ -364,10 +366,14 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `openSelectionActions` | Reader Select `a`、`<Enter>`、`<Return>` | 打开选区操作 |
 | `enterInsert` | Reader Normal `i`；Note Normal `i` | Reader 功能/原生输入控制；Note 编辑器切换到 Insert |
 | `exitMode` | Reader Select `<Esc>`/`v`；Note Normal `<Esc>`；Note Insert `<Esc>` | 退出当前界面模式；Reader 的 Escape 是固定的输入控制键，Main Select 使用专用取消操作 |
-| `extendDown` | Reader Select `j` | Reader Select 中移动选区范围 |
-| `extendUp` | Reader Select `k` | Reader Select 中移动选区范围 |
-| `extendLeft` | Reader Select `h` | Reader Select 中移动选区范围 |
-| `extendRight` | Reader Select `l` | Reader Select 中移动选区范围 |
+| `extendTokenDown` | Reader Select `j` | 移到下一视觉行并吸附词元 |
+| `extendTokenUp` | Reader Select `k` | 移到上一视觉行并吸附词元 |
+| `extendTokenBackward` | Reader Select `h` | 活动端后退一个词元 |
+| `extendTokenForward` | Reader Select `l` | 活动端前进一个词元 |
+| `extendDown` | 无默认绑定 | 保留原始视觉行移动，可自定义 |
+| `extendUp` | 无默认绑定 | 保留原始视觉行移动，可自定义 |
+| `extendLeft` | Reader Select `H` | 按字符向左精细调整 |
+| `extendRight` | Reader Select `L` | 按字符向右精细调整 |
 | `extendSentenceForward` | Reader Select `)` | Reader Select 中移动选区范围 |
 | `extendSentenceBackward` | Reader Select `(` | Reader Select 中移动选区范围 |
 | `extendParagraphForward` | Reader Select `}` | Reader Select 中移动选区范围 |
@@ -641,10 +647,12 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `reader-select:a` | `openSelectionActions` |
 | `reader-select:<Enter>` | `openSelectionActions` |
 | `reader-select:<Return>` | `openSelectionActions` |
-| `reader-select:j` | `extendDown` |
-| `reader-select:k` | `extendUp` |
-| `reader-select:h` | `extendLeft` |
-| `reader-select:l` | `extendRight` |
+| `reader-select:j` | `extendTokenDown` |
+| `reader-select:k` | `extendTokenUp` |
+| `reader-select:h` | `extendTokenBackward` |
+| `reader-select:l` | `extendTokenForward` |
+| `reader-select:H` | `extendLeft` |
+| `reader-select:L` | `extendRight` |
 | `reader-select:)` | `extendSentenceForward` |
 | `reader-select:(` | `extendSentenceBackward` |
 | `reader-select:}` | `extendParagraphForward` |

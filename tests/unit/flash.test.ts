@@ -340,6 +340,35 @@ describe('Reader Flash lifecycle', () => {
     expect(created.selection.setBaseAndExtent).not.toHaveBeenCalled();
   });
 
+  it('restores the directed source selection before confirming another endpoint', () => {
+    const created = createSelectedFlashWindow();
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'visual-end');
+    setFlashQuery(created.bodyChildren, 'target');
+    flash.handleKey(flashKey('Enter'), created.pdfWindow);
+    expect(created.selection.setBaseAndExtent).toHaveBeenCalledWith(
+      created.node,
+      6,
+      created.node,
+      0,
+    );
+    expect(activations).toHaveLength(1);
+    expect(activations[0]?.target.end.offset).toBe(6);
+  });
+
+  it('does not confirm an old endpoint if restoring its source range opens a successor', () => {
+    const created = createSelectedFlashWindow();
+    const { flash, activations } = createFlash();
+    flash.open(created.pdfWindow, 'visual-end');
+    setFlashQuery(created.bodyChildren, 'target');
+    created.selection.setBaseAndExtent.mockImplementationOnce(() =>
+      flash.open(created.pdfWindow, 'visual-end'),
+    );
+    flash.handleKey(flashKey('Enter'), created.pdfWindow);
+    expect(activations).toHaveLength(0);
+    expect(flash.isOpen).toBe(true);
+  });
+
   it('does not restore a selection into a replaced document or detached source node', () => {
     for (const replaceDocument of [false, true]) {
       const created = createSelectedFlashWindow();

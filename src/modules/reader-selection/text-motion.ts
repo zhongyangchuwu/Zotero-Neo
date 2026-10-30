@@ -96,10 +96,14 @@ function nearestCaret(
   pdfWindow: PdfWindow,
   line: TextLineGeometry,
   preferredX: number,
+  stops?: ReadonlyMap<Text, readonly number[]>,
 ): Pointer | null {
   let best: { readonly pointer: Pointer; readonly distance: number } | null = null;
   for (const span of line.spans) {
-    for (let offset = 0; offset <= span.pointer.textNode.length; offset += 1) {
+    const offsets = stops
+      ? (stops.get(span.pointer.textNode) ?? [])
+      : Array.from({ length: span.pointer.textNode.length + 1 }, (_, offset) => offset);
+    for (const offset of offsets) {
       const pointer = { textNode: span.pointer.textNode, offset };
       const rect = caretRect(pdfWindow, pointer);
       if (!rect) continue;
@@ -119,6 +123,7 @@ export function verticalTextPosition(
   pointer: Pointer,
   direction: -1 | 1,
   preferredX: number | null,
+  allowedStops?: readonly Pointer[],
 ): VerticalTextMotion | null {
   const lines = textLines(pdfWindow);
   const lineIndex = lines.findIndex((line) =>
@@ -126,16 +131,27 @@ export function verticalTextPosition(
   );
   if (lineIndex < 0) return null;
   const currentLine = lines[lineIndex]!;
-  const targetLine = lines[lineIndex + direction];
-  if (!targetLine) return null;
-
   const currentSpan = currentLine.spans.find(
     (entry) => entry.pointer.textNode === pointer.textNode,
   );
   const currentRect = caretRect(pdfWindow, pointer) ?? currentSpan?.rect ?? null;
   if (!currentRect) return null;
   const sourceX = preferredX ?? currentRect.left;
-  const targetX = targetPreferredX(currentLine, targetLine, sourceX);
-  const target = nearestCaret(pdfWindow, targetLine, targetX);
-  return target ? { pointer: target, preferredX: targetX } : null;
+  let stops: Map<Text, number[]> | undefined;
+  if (allowedStops) {
+    stops = new Map();
+    for (const pointer of allowedStops) {
+      const offsets = stops.get(pointer.textNode) ?? [];
+      offsets.push(pointer.offset);
+      stops.set(pointer.textNode, offsets);
+    }
+  }
+  for (let index = lineIndex + direction; index >= 0 && index < lines.length; index += direction) {
+    const targetLine = lines[index]!;
+    const targetX = targetPreferredX(currentLine, targetLine, sourceX);
+    const target = nearestCaret(pdfWindow, targetLine, targetX, stops);
+    if (target) return { pointer: target, preferredX: targetX };
+    if (!stops) return null;
+  }
+  return null;
 }
