@@ -32,7 +32,7 @@
 - **可见结果：** Zotero 窗口中出现对应阅读器/PDF，显示软件版本与 PDF 内容；旁白指出阅读器 Normal 模式（其指示器可隐藏），等待阅读器交互就绪后再继续。字幕只写入屏幕显示的安装和版本状态。
 - **持久变化／重置：** 安装仅发生在本次一次性用户配置文件中；关闭后用新配置文件重做。PDF 仅用本次测试数据，不打开个人资料库。
 - **镜头／不录条件：** 保留安装界面、PDF 与版本；安装失败、版本不明、阅读器未就绪或目标无法解析时，修正条件后重拍。
-- **依据：** [主窗口打开与条目游标目标](COMMAND_REFERENCE.md#main-window)、[阅读器加载就绪边界](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)、[main 干净安装步骤](ACCEPTANCE.md)。
+- **依据：** [主窗口打开与条目游标目标](COMMAND_REFERENCE.md#主窗口)、[阅读器加载就绪边界](COMMAND_REFERENCE.md#导航与共享跳转历史)、[main 干净安装步骤](ACCEPTANCE.md)。
 
 ## S1 — Main：Neo 选择集批处理与条目游标打开
 
@@ -44,7 +44,7 @@
 - **可见结果：** 阅读器首先打开条目游标所在的第 3 条，而不是前两条；确认框显示 **Neo Selection** 的 2 个目标；废纸篓只发生该批次对应的变化，按 `u` 后三条测试数据均可见。不要口述界面未显示的内部状态。
 - **持久变化／重置：** `dd` 会更改 Zotero 废纸篓和 Neo 选择集状态；`u` 只恢复 Neo 最近一次废纸篓批次，不是私人数据保护机制。仅在本次一次性配置中执行，结束后销毁该配置。
 - **镜头／不录条件：** 保持三条名称、画面中的 **Selection** 标记、条目游标行、打开后的阅读器标题和确认目标清晰可读。选择集数量不是 2、条目游标不在第 3 条、出现隐藏成员、确认目标不明或目标不符时，立即取消；不能按下确认后再用字幕解释目标正确。
-- **依据：** [主窗口 Normal/Select 默认键位](COMMAND_REFERENCE.md#main-window)、[主窗口条目游标、Neo 选择集与 EffectiveSelection](INTERACTION_MODEL.md#effectiveselection)、[主窗口 Open 仅以条目游标为目标](INTERACTION_MODEL.md#action-target-contracts)、[废纸篓确认与目标可见性](INTERACTION_MODEL.md#hidden-selection-safety)。`s` 前移条目游标、`dd` 确认、`u` 恢复及 `o` 不批量打开，均按这些当前契约拍摄。
+- **依据：** [主窗口 Normal/Select 默认键位](COMMAND_REFERENCE.md#主窗口)、[主窗口条目游标、Neo 选择集与 EffectiveSelection](INTERACTION_MODEL.md#有效选择集)、[主窗口 Open 仅以条目游标为目标](INTERACTION_MODEL.md#动作目标契约)、[废纸篓确认与目标可见性](INTERACTION_MODEL.md#隐藏-selection-安全性)。`s` 前移条目游标、`dd` 确认、`u` 恢复及 `o` 不批量打开，均按这些当前契约拍摄。
 
 ## S2 — Reader：原生面板、类别导航与历史
 
@@ -57,7 +57,7 @@
 - **可见结果：** 画面显示四种阅读器原生面板及其内容、类别命令实际到达的 PDF 位置，以及标记跳转前后的两个位置。Neo 阅读器标记与 PDF 批注应明确区分。
 - **持久变化／重置：** 标记保存在阅读器会话内；面板与页面状态由 Zotero 管理。预置批注及文档均属于一次性测试数据，拍后重建；不写入用户条目的 Extra。
 - **镜头／不录条件：** 画面同时包含 PDF、当前焦点面板和侧栏；若 Outline、批注、书签或历史目标缺失，改用具备这些原生内容的授权测试文档。
-- **依据：** [阅读器 Normal 模式、类别、页导航与面板快捷键](COMMAND_REFERENCE.md#reader-normal)、[阅读器标记与侧栏局部控制](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[历史记录边界与恢复限制](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)、[原生 Outline、Bookmarks 与批注面板](READER_GUIDE.md#find-a-passage-and-inspect-document-structure)。
+- **依据：** [阅读器 Normal 模式、类别、页导航与面板快捷键](COMMAND_REFERENCE.md#reader-普通模式)、[阅读器标记与侧栏局部控制](COMMAND_REFERENCE.md#临时界面与选择器操作规则)、[历史记录边界与恢复限制](COMMAND_REFERENCE.md#导航与共享跳转历史)、[原生 Outline、Bookmarks 与批注面板](READER_GUIDE.md#搜索正文-跳到标题和图表)。
 
 ## S3 — Reader：Flash、范围修整与批注评论
 
@@ -72,7 +72,7 @@
 - **每个活动视图的输入归属（仅在实际分屏上录）：** 左侧 PDF 视图打开批注评论后，用鼠标将焦点移到右侧 PDF 视图，按 `j`。预期只有右侧 PDF 位置移动，左侧批注评论草稿／编辑器仍属于原 PDF 视图；回到左侧批注评论输入框，再按 `Escape` 保存并关闭。两侧视图、焦点交接和各自结果须同框可见。
 - **可见结果／持久变化：** Flash 文本范围与端点可见，`za` 创建真实批注；`COMMENT` 显示换行内容，按 `Escape` 后重开可见已保存批注评论。只修改本次测试 PDF。
 - **重置／不录条件：** 丢弃本次一次性配置。若 Select／`COMMENT` 指示、提示、目标或批注缺失，或批注评论重开后的内容不一致，不录成成功。翻译或 OCR 内容不属于本场操作结果。
-- **依据：** [阅读器 Select/Flash、范围操作与添加批注评论](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[评论输入的 Enter/Escape/两秒自动保存](COMMAND_REFERENCE.md#reader-select-and-annotation-actions)、[原生输入法所有权](INPUT_METHODS.md#text-entry-controls)、[批注评论输入与视图范围](SELECTION_GUIDE.md#edit-an-annotation-comment)。
+- **依据：** [阅读器 Select/Flash、范围操作与添加批注评论](COMMAND_REFERENCE.md#reader-select-与批注操作)、[评论输入的 Enter/Escape/两秒自动保存](COMMAND_REFERENCE.md#reader-select-与批注操作)、[原生输入法所有权](INPUT_METHODS.md#在搜索框中输入中文)、[批注评论输入与视图范围](SELECTION_GUIDE.md#编辑批注评论)。
 
 
 ## S4 — Settings：暂存快捷键修改与原生输入
@@ -88,7 +88,7 @@
 - **剪贴板接收与原生 Outline Enter：** 按 `<Space>ff` 打开选择器；查询框获得焦点后按 `<S-Insert>`，确认此前从 Settings 字段复制的同一公开标题通过原生粘贴进入查询框并显示匹配行。按 `Enter` 打开对应 PDF。阅读器 Normal 模式下按 `<Space>ro` 聚焦 Outline，在一条真实行上物理按 `Enter`，观察 Zotero 原生 Outline 跳到目标；不要把此 `Enter` 标成 Neo `uiConfirm`。
 - **可见结果／持久变化：** 同一设备拍到 Settings 搜索中的输入法组合与提交、录制器不误收组合／候选按键、显式 **Done**、未按 **Apply** 前旧 `j` 有效、应用后 `]j` 与 `j` 都有效；`<C-Insert>` 复制的标题通过 `<S-Insert>` 原生粘贴到选择器，Outline Enter 仍由 Zotero 处理。重映射只保存在本次配置文件中。
 - **重置／不录条件：** 拍后销毁本次配置文件。若输入法组合／提交、录制器按键标记、Done、Apply 前后绑定、原生剪贴板往返或 Outline 结果不符，先修正条件再重拍。
-- **依据：** [Settings 键位录制、Done/Cancel/Apply](SETTINGS_GUIDE.md#try-it)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[Outline Enter 原生所有权](INPUT_METHODS.md#native-and-local-shortcut-ownership)、[U6/U7 验收步骤](ACCEPTANCE.md)。
+- **依据：** [Settings 键位录制、Done/Cancel/Apply](SETTINGS_GUIDE.md#修改一个快捷键)、[选择器与输入法／原生剪贴板所有权](INPUT_METHODS.md#哪些按键由-zotero-处理)、[Outline Enter 原生所有权](INPUT_METHODS.md#哪些按键由-zotero-处理)、[U6/U7 验收步骤](ACCEPTANCE.md)。
 
 ## S5 — Note：Vim 开关与 Normal/Insert（两条独立短片）
 
@@ -101,7 +101,7 @@
 - **操作：** 按 `<Space>fn`，在笔记选择器中选该笔记；根据结果行标题确认目标，Preview 核对所属条目和正文，再按 `Enter` 打开。焦点转到笔记编辑器，旁白说明 `note-normal`。按 `gg` 到文首，按 `w` 执行一次笔记 Normal 移动，按 `i` 进入笔记 Insert 模式，输入一小段无敏感内容，再按 `<Esc>` 返回笔记 Normal 模式。
 - **可见结果／持久变化：** 笔记正文显示新文字；当前笔记标签页／编辑器显示的标题和所属条目始终对应。Insert 中的文字由原生编辑器接收，不作为 Neo 命令；修改只写入一次性测试笔记。
 - **重置／不录条件：** 销毁本次配置文件。若设置未启用、焦点或笔记身份不明，或 `i` 未进入笔记编辑器 Insert 模式，修正配置后重拍。
-- **依据：** [笔记编辑器开启条件、Insert/Normal 与默认移动](COMMAND_REFERENCE.md#note-editor)、[Current Item 笔记选择器](COMMAND_REFERENCE.md#temporary-surfaces-and-chooser-grammars)、[设置页开关名称](SETTINGS_REFERENCE.md)。
+- **依据：** [笔记编辑器开启条件、Insert/Normal 与默认移动](COMMAND_REFERENCE.md#note-编辑器)、[Current Item 笔记选择器](COMMAND_REFERENCE.md#临时界面与选择器操作规则)、[设置页开关名称](SETTINGS_REFERENCE.md)。
 
 ### S5-off — Vim 风格笔记编辑关闭
 
@@ -110,7 +110,7 @@
 - **操作：** 在正文中物理输入一个包含字母 `i` 的测试短语，并如实保留按键和文字；不要先进入 Neo 模式，也不要在 `i` 后接指令序列，让这些字符写入笔记。
 - **可见结果／持久变化：** 普通字符进入原生笔记正文，不执行 `noteInsert` 或其他 Neo Normal 操作；画面可辨认仍是同一笔记。文字只写入一次性测试笔记。
 - **重置／不录条件：** 销毁本次配置文件。若设置未关闭、按 `i` 触发 Neo 命令／模式，或输入没有落到笔记正文，停止并修正拍摄配置，不用字幕代替。
-- **依据：** [笔记编辑器开关](COMMAND_REFERENCE.md#note-editor)、[Vim-style note editing 设置](SETTINGS_REFERENCE.md)。开启和关闭是设置开关；本片不假定同一编辑器中的设置变更会即时生效。
+- **依据：** [笔记编辑器开关](COMMAND_REFERENCE.md#note-编辑器)、[Vim-style note editing 设置](SETTINGS_REFERENCE.md)。开启和关闭是设置开关；本片不假定同一编辑器中的设置变更会即时生效。
 
 ## S6 — Plugin Manager：真实 AddonManager 状态与自我保护
 
@@ -122,14 +122,14 @@
 - **可见结果：** Plugin Manager 保持面板形态而非选择器；重载后显示 AddonManager 状态。Neo 不能在自身面板内禁用，须通过 Zotero 原生 Plugins 界面管理。插件信息和可用操作与当前列表一致。
 - **持久变化／重置：** 本流程只读取或重载状态，不切换其他插件；关闭后按共同规则处理本次配置文件。如另行获准演示 `e/d`，须使用专用的一次性配置文件，确认目标插件、依赖和预期恢复方法，并拍下操作前后的 AddonManager 状态；不得在本场混入未经授权的停用。
 - **镜头／不录条件：** 若 Zotero Neo 不在当前列表、状态或版本无法读取、禁用操作仍可用，或无法判断焦点在筛选框还是结果列表，不录成“自我保护成功”。
-- **依据：** [Plugin Manager 生命周期和自我保护](SETTINGS_GUIDE.md#manage-installed-plugins-and-integrations)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#modes-focus-and-capabilities)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#selection-actions-plugin-manager-settings-and-selection-panel)。Zotero AddonManager 是生命周期状态权威；此面板不提供任意软件包安装、更新、卸载或远端插件发现。
+- **依据：** [Plugin Manager 生命周期和自我保护](SETTINGS_GUIDE.md#查看已安装的插件)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#模式、焦点与功能可用性)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#选区操作、plugin-manager、设置与-neo-选择集面板)。Zotero AddonManager 是生命周期状态权威；此面板不提供任意软件包安装、更新、卸载或远端插件发现。
 
 ## 可选第三方集成（与 S0–S6 核心片分开）
 
 第三方集成只录独立的可选片，不并入核心 S0–S6；只有当前已安装、启用的集成在界面提供相应操作时才拍，条件不符便跳过。
 
 - **Better BibTeX：** 仅当当前 Zotero 已安装并启用 Better BibTeX，且一次性测试条目确有 citekey（引文键）时，才单独拍主窗口 Normal 模式下按 `<Space>yy` 为有效目标复制 citekey。按目标名称确认目标是主窗口当前条目或 Neo 选择集；若目标没有可用 citekey，不录成成功。
-- **Translate for Zotero：** 仅当已安装的 Translate 集成使 Selection Actions 中出现 **Translate** 时，才从阅读器 Select 模式的文本选区打开该项并录下实际翻译结果。字幕标明实际插件／集成名称。可用性的依据见 [Selection Actions 与可选 Translate](SELECTION_GUIDE.md#use-the-selected-text)。
+- **Translate for Zotero：** 仅当已安装的 Translate 集成使 Selection Actions 中出现 **Translate** 时，才从阅读器 Select 模式的文本选区打开该项并录下实际翻译结果。字幕标明实际插件／集成名称。可用性的依据见 [Selection Actions 与可选 Translate](SELECTION_GUIDE.md#使用当前选区)。
 
 ## 参考边界
 

@@ -1,21 +1,21 @@
-# 统一导航执行与历史策略 {#unified-navigation-execution-and-history-policy}
+# 统一导航执行与历史策略
 
-Neo 为每个 Main 窗口维护一个有界导航历史。`NavigationHistoryState` 拥有位置和遍历索引；`NavigationCoordinator` 应用类型化策略，并负责接纳、分发、完成和提交。Neo 发起的操作使用 `NavigationPort.execute()`；已经运行的 Reader 原生导航通过 `observeNative()` 观察，而不是再次分发。命令行为见[导航与共享跳转历史](COMMAND_REFERENCE.md#navigation-and-the-shared-jumplist)，Reader 私有传输约束见[开发指南](DEVELOPMENT.md#runtime-architecture)。
+Neo 为每个 Main 窗口维护一个有界导航历史。`NavigationHistoryState` 拥有位置和遍历索引；`NavigationCoordinator` 应用类型化策略，并负责接纳、分发、完成和提交。Neo 发起的操作使用 `NavigationPort.execute()`；已经运行的 Reader 原生导航通过 `observeNative()` 观察，而不是再次分发。命令行为见[导航与共享跳转历史](COMMAND_REFERENCE.md#导航与共享跳转历史)，Reader 私有传输约束见[开发指南](DEVELOPMENT.md#运行时架构)。
 
-## 目录 {#contents}
+## 目录
 
-- [意图与决策](#intent-and-decisions)
-- [负责方与依赖方向](#ownership-and-dependency-direction)
-- [统一执行契约](#one-execution-contract)
-- [单一历史策略源](#one-history-policy-source)
-- [接纳、调度与完成](#admission-scheduling-and-completion)
-- [Reader 来源与原生完成](#reader-provenance-and-native-completion)
-- [位置与恢复契约](#location-and-restoration-contract)
-- [生命周期与性能](#lifecycle-and-performance)
-- [验收矩阵](#acceptance-matrix)
-- [设计权衡](#design-tradeoffs)
+- [意图与决策](#意图与决策)
+- [负责方与依赖方向](#负责方与依赖方向)
+- [统一执行契约](#统一执行契约)
+- [单一历史策略源](#单一历史策略源)
+- [接纳、调度与完成](#接纳、调度与完成)
+- [Reader 来源与原生完成](#reader-来源与原生完成)
+- [位置与恢复契约](#位置与恢复契约)
+- [生命周期与性能](#生命周期与性能)
+- [验收矩阵](#验收矩阵)
+- [设计权衡](#设计权衡)
 
-## 意图与决策 {#intent-and-decisions}
+## 意图与决策
 
 本设计集中处理 Neo 的导航历史决策，但不改变宿主导航语义：动作和语义事件使用同一策略，操作通过同一协调器路径，适配器提供其执行路径所支持的完成证据。同步与延迟执行共用一个接口。
 
@@ -29,7 +29,7 @@ Neo 为每个 Main 窗口维护一个有界导航历史。`NavigationHistoryStat
 
 **范围：** 集中管理策略、导航执行／完成、来源追踪、取消及调用方迁移。**不在范围内：** 新绑定／计数语义、记录每次原生标签页点击、持久化历史、缩放／布局／Note 文本光标快照、完整 UI 回滚或外部插件 API。
 
-## 负责方与依赖方向 {#ownership-and-dependency-direction}
+## 负责方与依赖方向
 
 ```text
 输入 / 能力 / 语义负责方
@@ -66,7 +66,7 @@ Coordinator -> NavigationHistoryState
 
 Reader 功能负责方选择语义目标、遍历方式和记录上下文。Reader 私有生产者传输位于 `src/toolkit/reader/history-bridge.ts`，PDF 宿主执行与恢复位于 `src/toolkit/reader/jump-host.ts`，Main 树／标签页／筛选能力位于 `src/toolkit/main/`。Toolkit 适配器暴露不透明的视图身份和宿主结果，而不是原始 SDK 对象。
 
-## 统一执行契约 {#one-execution-contract}
+## 统一执行契约
 
 以下是 `src/navigation/types.ts` 中代表性的执行和结果声明：
 
@@ -133,14 +133,14 @@ export interface NavigationPort {
 
 立即完成时，协调器会同步捕获目的地。延迟结果只有在适配器报告真实完成后才结算。两种情况的调用方都收到相同形状的 `NavigationExecution`；异步 UI 调用方可以等待 pending 结果，按键分发则无需为立即导航创建 Promise。
 
-### H/L 与选择器使用相同接口 {#h-l-and-chooser-use-the-same-interface}
+### H/L 与选择器使用相同接口
 
 - `H/L`：解析相对标签页操作并立即调用 `execute()`。
 - 选择器：打开／查询／浏览不会调用 `execute()`；语义确认会提供选中的标签页操作和原始 Surface。
 - 两者使用相同的标签页适配器和切换后的维护流程。适配器同步检查实际选中的 ID，并负责相对或绝对选择后的 Reader 重扫／焦点维护。
 - 历史在执行时捕获来源，而不是在选择器打开时捕获。候选 provider 只提供数据。
 
-## 单一历史策略源 {#one-history-policy-source}
+## 单一历史策略源
 
 `history-policy.ts` 包含类型化动作规则、事件规则和具名谓词。策略决策为 Record、Ignore 或 Traverse。Record 规则还声明所需完成证据：`settled-change`、`native-hard` 或 `managed-final`。源位置捕获前先通过原因／上下文／路径进行低成本资格检查；完成后，内部提交会按证据要求检查回执。Traverse 是语义角色，不能通过一个 flag 转换成追加。
 
@@ -181,7 +181,7 @@ Reader 默认使用硬点证据，并不表示表中每条命令都会产生硬�
 
 规则控制的是**转移**，不是某个位置是否可能出现在历史中。被忽略的移动可以确定之后一次已记录跳转的实际离开位置；该位置可以成为后续跳转的来源。
 
-### 仅修改策略时的要求 {#what-a-policy-only-edit-must-do}
+### 仅修改策略时的要求
 
 关闭 Record 时：
 
@@ -196,7 +196,7 @@ Reader 默认使用硬点证据，并不表示表中每条命令都会产生硬�
 
 不受支持的 `gg/G` 使用现有滚动回退。默认页面规则要求走显式页面路径，因此回退不会因此获得硬点记录或跳转接纳围栏。count 和宿主目标验证保持不变。
 
-## 接纳、调度与完成 {#admission-scheduling-and-completion}
+## 接纳、调度与完成
 
 需要区分四项决策：
 
@@ -207,29 +207,29 @@ Reader 默认使用硬点证据，并不表示表中每条命令都会产生硬�
 
 延迟结果不代表必须排队。Reader 页面导航可以立即开始，之后再完成。H/L 和确认标签页选择是立即且同步的。Main 打开条目／在文库中显示条目则通过串行通道延迟执行。适配器必须在调用 thunk 前声明分发通道；执行 thunk 后再看它是否返回 Promise，已来不及决定如何调度。
 
-### 立即执行路径 {#immediate-path}
+### 立即执行路径
 
 评估规则和低成本上下文检查；仅在需要时捕获来源；执行操作；验证当前性；返回前捕获／提交目的地。此路径不会无条件 `await`。
 
 对于同步的 `A -> B -> C`，第一次执行必须在第二次将标签页改为 C 前捕获 B。普遍 await 会允许 `A -> C`，从而丢失中间目的地。
 
-### Main 串行路径 {#serial-main-path}
+### Main 串行路径
 
 排队前接纳请求并分配版本，但只能在请求轮到执行时捕获其离开位置并调用 thunk。等待中的请求若被取代，就不会执行。已经运行的过期宿主调用仍须排空，然后才能开始下一项串行宿主操作；其实际部分 UI 效果会成为下一项操作的离开位置。被拒绝的结果不能污染队列尾部。
 
 取消不等于回滚，也不能证明原生工作已停止。过期或已取消的根不能提交；在串行正确性需要时，仍要跟踪宿主操作实际排空。
 
-### Reader 启动与遍历围栏：有意采用统一规则 {#reader-launch-and-traversal-fences-deliberate-normalization}
+### Reader 启动与遍历围栏：有意采用统一规则
 
 已接纳的显式 Neo Reader 跳转会在启动时建立窗口 epoch，与 Main 跳转相同。即使新动作关闭了历史记录，也会取代较早的显式工作。Reader 宿主调用仍立即分发；延迟完成会为后续 Back/Forward 登记围栏，但不会排队等待跳转本身。Back/Forward 等待该操作的真实结果，再根据更新后的历史计算目标。这将启动时的取代规则与记录策略及排队宿主分发区分开。
 
 普通的默认 Ignore 移动仍走不建立 epoch 的快速路径。除此之外，现有 Reader 输入切换必须在任何普通／未绑定／前缀按键时退休正在执行的 mark。执行所有权取消与历史 epoch 推进不是同一件事。
 
-### 遍历 {#traversal}
+### 遍历
 
 连续 Back/Forward 请求共用已接纳的 epoch，并按串行方式执行。在实际执行时刷新离开位置并计算目标索引。新的显式导航会使该批请求失效。只有当前且完全成功的恢复才会移动索引；遍历及其原生回声都不会追加历史。
 
-### 根状态与至多一次提交 {#root-state-and-at-most-once-commit}
+### 根状态与至多一次提交
 
 ```text
 admitted -> waiting -> running -> settling -> completed / unchanged / failed
@@ -244,7 +244,7 @@ completed/retired ownership is never reclassified as native
 
 原生观察在完成时接纳窗口工作：生产者 ticket 在调用时捕获来源、视图和原生原因，但只有符合条件、已变化且仍当前的完成才能接纳原生历史根并取代窗口工作。拥有 ticket 的操作即使原 epoch 已结束也不会变成这样的根。后台／冷启动观察只更新基线。原生观察与显式 Neo Reader 跳转调度分开，但共用内部提交路径。
 
-## Reader 来源与原生完成 {#reader-provenance-and-native-completion}
+## Reader 来源与原生完成
 
 延迟的原生保存不会标明是哪一个 Neo 动作引发它，因此 Reader 传输需要跟踪生产者和回调所有权。本文引用的私有方法固定基于 Zotero 稳定版 **10.0.5** 和 Reader 子模块 `9d821fa2c1941bdfdd7bee3199936401b45be852`：[PDF 视图源码](https://github.com/zotero/reader/blob/9d821fa2c1941bdfdd7bee3199936401b45be852/src/pdf/pdf-view.js)和[查找控制器源码](https://github.com/zotero/reader/blob/9d821fa2c1941bdfdd7bee3199936401b45be852/src/pdf/pdf-find-controller.js)。这只标识被检查的源码版本，不代表已经通过当前宿主验收；每次支持的宿主更新都要重新验证私有假设。该版本中，PDF `navigate()` 会调用 `_pushHistoryPoint()`，但不等待其完成。该生产者等待滚动稳定，读取真实 PDF XYZ 几何，再保存原生历史；因此 `await navigate()` 不能作为目的地已稳定的证据。搜索使用 `_findController`，而不是上游 master 的较新分组导航／搜索 API；bridge 会将硬点保存关联到精确生产者的终结完成，而不是根据 `navigate()` 或全局保存队列推断。
 
@@ -260,7 +260,7 @@ completed/retired ownership is never reclassified as native
 
 主、次视图都会被观察。原生资格要求所属 Reader 标签页处于选中状态，不要求具体分屏视图当前获得焦点。后台标签页的原生保存仍照常发生，但不会追加历史或取代活动窗口工作。
 
-### 固定路径与完成矩阵 {#pinned-route-and-completion-matrix}
+### 固定路径与完成矩阵
 
 | Zotero 10.0.5 检查源码中的路径 | 源码行为 | 适配器所有权／完成边界 | 默认记录证据 |
 | --- | --- | --- | --- |
@@ -280,7 +280,7 @@ bridge 包装精确的原生生产者，并保留原 receiver、参数、返回�
 
 默认忽略的普通翻页或 Neo 平滑滚动若被提升为 Record，会使用移动负责方的真实完成信号和精确视图稳定／捕获。平滑按住操作在滚动器的停止回调中完成。不要伪造原生硬点保存；原生硬点观察必须独立于记录策略。
 
-## 位置与恢复契约 {#location-and-restoration-contract}
+## 位置与恢复契约
 
 复用现有无 DOM 位置：
 
@@ -302,7 +302,7 @@ Main ScopeSet 非空时，范围选择与恢复会等待面板的规范 `onColle
 - Reader 恢复时的几何验证和最终焦点使用相同的精确视图／窗口身份。视图被替换时应返回 Stale/Unavailable，而不是成功移动索引。
 - 选择器回调保留发起 Surface 和目标上下文，即使焦点后来移到查询框也不改变。
 
-## 生命周期与性能 {#lifecycle-and-performance}
+## 生命周期与性能
 
 - 每个 Main 窗口只有一个导航 session；Reader 或协调器不另建 session 注册表。窗口释放会使 epoch 失效并丢弃历史。
 - Reader 视图替换会退休绑定该视图的工作，只恢复 Neo 自己拥有的 patch。不能覆盖其他组件后来设置的 patch。
@@ -311,7 +311,7 @@ Main ScopeSet 非空时，范围选择与恢复会等待面板的规范 `onColle
 - 默认忽略的移动只做低成本策略／路径检查，并使用现有执行器；不会为每次普通动作额外创建完整文库／PDF 快照、历史数组副本、Promise 或专用完成观察器。复用已安装的视图观察，不要每按一次键就安装监听器。关闭记录时，拥有的原生工作仍需来源追踪；只在执行所有权需要时分配延迟回执／token，不为每次普通移动创建完整历史快照／完成流水线。
 - Operation 与生产者元数据只在工作待完成期间存在，并在完成、取消或释放时清理。
 
-## 验收矩阵 {#acceptance-matrix}
+## 验收矩阵
 
 | 场景 | 必须观察到的结果 |
 | --- | --- |
@@ -345,7 +345,7 @@ Main ScopeSet 非空时，范围选择与恢复会等待面板的规范 `onColle
 
 永久测试应检查位置／顺序／目标／当前性结果以及真实适配器／观察器组合，而不是源码字符串或对包装函数的调用。切换策略的测试必须同时断言导航效果保留且历史行为改变。
 
-## 设计权衡 {#design-tradeoffs}
+## 设计权衡
 
 共享操作和证据契约避免了几种看似方便但有风险的做法：
 

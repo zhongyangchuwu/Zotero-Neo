@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1
 Get-FileHash zotero-neo.xpi -Algorithm SHA256
 ```
 
-`npm run verify` 检查格式、类型、契约、构建和 XPI 成员，不代替人工验收。也可以从同一 `main` 提交的成功 CI 运行取得构建附件，获取方式见[安装与入门](GETTING_STARTED.md#get-main-build)。
+`npm run verify` 检查格式、类型、契约、构建和 XPI 成员，不代替人工验收。也可以从同一 `main` 提交的成功 CI 运行取得构建附件，获取方式见[安装与入门](GETTING_STARTED.md#获取-xpi-安装包)。
 
 安装和更新结果只适用于记录的那个包身份。包字节变化后，记录新的提交与哈希并执行受影响的包验收；其他构建的结果不能转记为当前包的 PASS。
 
@@ -37,7 +37,7 @@ Get-FileHash zotero-neo.xpi -Algorithm SHA256
 5. 不登录同步账户。只导入有授权／公有领域的 PDF，或者自己制作的测试文档。不把私人 PDF、笔记、窗口标题或剪贴板内容录进视频。
 6. 使用原生 Add-on Manager 持久安装 XPI。此轮不运行 `npm run dev:start` / `npm run dev`，不混用同 ID 的临时 RDP 加载和持久包；临时加载不能证明安装／升级。
 
-`npm run dev:setup -- --profile ...` 只为已注册且已存在的开发 profile 配置 RDP，当前工具不提供 `--data-dir` 或 `--port` 参数，也不替代上面的数据隔离和持久包验收。技术排查需要 RDP 时，另建开发 profile，遵守[开发指南](DEVELOPMENT.md#local-gui-iteration-from-wsl)。
+`npm run dev:setup -- --profile ...` 只为已注册且已存在的开发 profile 配置 RDP，当前工具不提供 `--data-dir` 或 `--port` 参数，也不替代上面的数据隔离和持久包验收。技术排查需要 RDP 时，另建开发 profile，遵守[开发指南](DEVELOPMENT.md#wsl-下的本地-gui-迭代)。
 
 ### 最小数据集
 

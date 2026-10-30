@@ -1,4 +1,4 @@
-# main 更新摘要 {#changelog}
+# main 更新摘要
 
 本页汇总 `main` 的当前实现，不维护历史发行版说明或版本对照。具体变更过程见 [Git 提交记录](https://github.com/zhongyangchuwu/Zotero-Neo/commits/main/)；操作步骤和准确按键分别由[使用指南](docs/USER_GUIDE.md)与[命令参考](docs/COMMAND_REFERENCE.md)维护。
 

@@ -1,8 +1,8 @@
-# 文库交互模型 {#library-interaction-model}
+# 文库交互模型
 
 本文定义文库及其 Main、Reader、Note 交互界面的操作契约。[命令参考](COMMAND_REFERENCE.md)维护准确快捷键；[导航设计](NAVIGATION_HISTORY_DESIGN.md)维护历史记录与恢复规则；[架构](ARCHITECTURE.md)描述运行时所有权。
 
-## 术语 {#terminology}
+## 术语
 
 文档和中文 UI 标签使用下列名称。下文定义交互契约；准确按键和动作可用性由[命令参考](COMMAND_REFERENCE.md)维护。
 
@@ -13,11 +13,11 @@
 | Note surface | 笔记编辑器 |
 | Zotero note | 笔记 |
 | Surface | 交互界面 |
-| [View](#view) | 视图 |
-| [Main Scope / ScopeSet](#filter) | 文库范围／范围选择 |
-| [Cursor](#cursor) | 条目游标 |
-| [Selection](#selection) | Neo 选择集 |
-| [Main Visual range / `VisualTarget`](#visualtarget) | 可视范围 |
+| [View](#视图) | 视图 |
+| [Main Scope / ScopeSet](#筛选) | 文库范围／范围选择 |
+| [Cursor](#条目游标) | 条目游标 |
+| [Selection](#选择集) | Neo 选择集 |
+| [Main Visual range / `VisualTarget`](#可视目标) | 可视范围 |
 | Reader Select / text selection | 文本选择模式／文本选区 |
 | Note caret | 文本光标 |
 | Annotation / annotation comment | 批注／批注评论 |
@@ -26,7 +26,7 @@ Main Selection 是仅在会话期间存在的工作集，不是 Reader 文本选
 
 UI 说明使用所选语言界面中显示的标签。代码标识符、绑定上下文、命令和配置键保持原样。
 
-## 核心模型 {#core-model}
+## 核心模型
 
 ```text
 View = Query + Sort
@@ -46,15 +46,15 @@ View = Query + Sort
 
 这些概念彼此相关，但不能混为一谈。
 
-### 视图 {#view}
+### 视图
 
 View 是 Zotero 在当前原生 Scope 中维护的结果集及排序。条目树、原生搜索／筛选／排序状态和底层 Item 数据均由 Zotero 负责。Neo 调用宿主机制，不另行维护查询 AST 或重复的文库状态。
 
-Quick Search、标签条件、高级搜索、结果选项和排序都会影响 View。Scope 是另一个独立的原生集合树选择状态，见[筛选](#filter)。
+Quick Search、标签条件、高级搜索、结果选项和排序都会影响 View。Scope 是另一个独立的原生集合树选择状态，见[筛选](#筛选)。
 
 更改 View 可能会使之前选中的条目不可见，但不能因此重新定义 Neo 持久化的 Selection。
 
-### 条目游标 {#cursor}
+### 条目游标
 
 Cursor 是当前可见有序 View 中获得焦点的条目。
 
@@ -70,7 +70,7 @@ Cursor：
 
 如果 Zotero 只提供私有的“仅移动焦点”接口，Neo 应将其隔离在具名宿主适配器之后。
 
-### 选择集 {#selection}
+### 选择集
 
 Selection 是 Neo 拥有的临时工作集，由稳定的条目标识组成。
 
@@ -93,7 +93,7 @@ Neo 仍以 Zotero 的数据模型为准：
 
 Main 显示 Selection 标记及其总数和可见数；若有隐藏成员，也会显示隐藏数。可见行装饰只是兼容宿主／UI 的投影；由 Main 拥有的 Selection 身份才是完整事实来源。
 
-### 有效选择集 {#effectiveselection}
+### 有效选择集
 
 Main 的工作集类 Operation 按下列规则解析目标：
 
@@ -110,7 +110,7 @@ CurrentTarget =
 
 这将持久工作集语义与临时目标区分开，同时仍可组合 Zotero 原生多选。并非所有动作都会使用 EffectiveSelection；目标归属取决于具体动作，见下文的**动作目标契约**。
 
-### 可视目标 {#visualtarget}
+### 可视目标
 
 Visual 是以 Main Cursor 为基础的临时连续范围。进入 Visual 后会建立 anchor/head 范围；准确按键序列见命令参考。
 
@@ -124,7 +124,7 @@ Visual 期间：
 
 必要时，Visual 会按稳定条目标识跟踪范围。它不会反复调用 `shiftSelect(..., augment=true)` 来编辑可变范围，因为缩小这类范围时旧的尾部仍会留在选择中。
 
-## Selection 操作 {#selection-operations}
+## Selection 操作
 
 Selection 操作的目标是 CurrentTarget，不是隐含的持久集合模式：
 
@@ -147,7 +147,7 @@ else:
 
 提交 Visual 范围不需要另设一个独立的“结束选择模式”概念。
 
-## Selection 没有模式 {#no-selection-mode}
+## Selection 没有模式
 
 Selection 自身没有模式。
 
@@ -155,11 +155,11 @@ Selection 自身没有模式。
 
 持久 Selection 自身也没有模式。Main 的 Selection 操作按上述规则作用于 CurrentTarget 或 VisualTarget；不存在脱离这些目标单独编辑已存工作集的模式。
 
-## 局部查找与筛选 {#local-find-versus-filter}
+## 局部查找与筛选
 
 Find 和 Filter 是不同的操作。
 
-### 局部查找 {#local-find}
+### 局部查找
 
 局部查找：
 
@@ -171,7 +171,7 @@ Find 和 Filter 是不同的操作。
 
 局部 Find 通过 Main Normal 绑定以及在当前 View 中确认的重复操作打开；它只移动 Cursor。准确按键见[命令参考](COMMAND_REFERENCE.md)。
 
-### 筛选 {#filter}
+### 筛选
 
 Quick Search、高级搜索和标签条件会改变 View。
 
@@ -181,7 +181,7 @@ Quick Search、高级搜索和标签条件会改变 View。
 
 条目 `Selection` 与 ScopeSet 不同。分类树输入仍由 Zotero 原生处理；Neo 没有 ScopeSet 修改语法或分类选择模式。Scope 的成员关系与含义仍以 Zotero 为准。
 
-## 动作目标契约 {#action-target-contracts}
+## 动作目标契约
 
 Neo 按 Surface 解析条目目标；共享 Operation 不代表共享目标解析器。Main View 动作和 Reader 本地 PDF 动作不使用条目目标。
 
@@ -213,7 +213,7 @@ Main Open/Activate 是普通 Main 条目 Operation 的一个特例，只以 Curs
 
 一旦 Cursor 可以独立于 Selection，`getSelectedItems()[0]` 这类代码模式就不构成有效的隐式目标契约。
 
-### Main 批量操作细节 {#main-batch-operation-details}
+### Main 批量操作细节
 
 Main citekey 复制使用 MainItemTarget，通过 Zotero 的 `Items.keepTopLevel()` 归一化并去重；若目标已过期或有 citekey 缺失，则拒绝操作。生成的 Better BibTeX 原始 key 以空格分隔。Reader 和 Note 的复制仍由各自上下文中的单目标 Operation 处理。
 
@@ -221,13 +221,13 @@ Main 分类成员关系操作从 Main `EffectiveSelection` 解析 MainItemTarget
 
 `moveToCollection` 还要求一个当前普通来源分类，且每个目标都直接属于该分类。Main 会重新验证来源和目标身份；Operation 接收明确的条目对象及来源／目标分类 ID，在保留其他分类关系的同时原子移动成员关系。候选覆盖范围仅限直接成员。确认不会改变 Main Selection。
 
-### 分类结构目标 {#collection-structure-targets}
+### 分类结构目标
 
 `moveCollection`、`renameCollection` 和 `deleteCollection` 的目标必须是一个普通分类：分类面板聚焦时使用树游标，否则要求恰好选中一个有效分类。树焦点可独立于多个已选范围定位游标；离开该面板后，选中多个范围时拒绝操作。文库根、不可用游标或行都不是目标，也不会替换成第一条选中行。这些动作不借用条目 `Selection`。
 
 `createCollection` 需要一个文库上下文。树聚焦时使用游标所在文库，否则要求恰好选中一个文库／范围。现有选择器会询问父分类（包括文库根）。当前分类可以预选为父项，但条目 Selection 和原生条目多选都不能选择父分类。Main 解析稳定分类 ID；Operation 在修改前重新检查分类和文库。
 
-## 隐藏 Selection 安全性 {#hidden-selection-safety}
+## 隐藏 Selection 安全性
 
 持久工作集会有意引入隐藏目标。
 
@@ -247,21 +247,21 @@ Selection Panel 是工作集的检查／管理界面，可以：
 
 它不是操作控制台。
 
-## 在文库中显示 {#show-in-library}
+## 在文库中显示
 
 Reader 和 Note 从各自当前 Surface 解析条目，不借用 Main Selection。Selection Panel Reveal 使用面板中选中的精确 `ItemRef`。二者使用相同的单条 Zotero Operation，也都不会捕获或恢复 Main Selection。历史记录见导航设计。
 
-## 导航跳转历史 {#navigation-jump-history}
+## 导航跳转历史
 
 每个 Main 窗口拥有一个由 Main、Reader 和 Note 共用的内存历史栈。持久 Main Selection 不属于历史位置。[导航设计](NAVIGATION_HISTORY_DESIGN.md)说明哪些宿主操作会记录、完成／当前性要求及恢复行为；准确用户按键见[命令参考](COMMAND_REFERENCE.md)。
 
-## 键位图方向 {#keymap-direction}
+## 键位图方向
 
 Main 和 Reader 具有 Normal/Visual 交互；Note 具有 Normal/Insert。`BindingContext` 标识负责方及其能力集合，不是单独的 Surface 模式或领域状态。准确上下文和绑定见[命令参考](COMMAND_REFERENCE.md)；模式不会继承其他模式或全局后备绑定。
 
 功能输入负责方只在各自定义的目标和生命周期内优先处理输入。批注评论编辑器拥有其捕获的 PDF 视图。设置 → Reader → **批注评论编辑**偏好控制能否进入编辑器；关闭后，`i` 会使用 Reader 范围的原生输入透传，直到按 Escape 或交互停用。Enter 插入原生换行。Escape 或输入交接会保存最终草稿并关闭编辑器；停止输入两秒后也会自动保存。Reader／视图销毁只释放编辑器和定时器，不会另行启动保存；已开始的保存不受销毁影响。这不是 Reader Insert 模式。Note Insert 会将普通文字交给 Zotero 原生编辑器。输入法组合输入的所有权见[输入法说明](INPUT_METHODS.md)。
 
-## 运行时身份与激活 {#runtime-identity-and-activation}
+## 运行时身份与激活
 
 当前 Surface 根据 Zotero 焦点／标签状态推导，顺序为：获得焦点的上下文面板 Note、选中的独立 Note 标签页、选中的 Reader 标签页，否则为 Main。Neo 不维护可变的全局 `currentSurface`。切换活动分屏 PDF 视图不会改变 Reader Surface 身份。
 

@@ -1,4 +1,4 @@
-# 架构 {#architecture}
+# 架构
 
 Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选择或数据模型。通常的调用路径为：
 
@@ -10,11 +10,11 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十一项内部模块分区及其迁移约束：九个核心分区固定启用，只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）是可选增强。静态清单、实际宿主依赖及两项增强的启动配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#modules)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十一项内部模块分区及其迁移约束：九个核心分区固定启用，只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）是可选增强。静态清单、实际宿主依赖及两项增强的启动配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#开关两项可选功能)，下文维护运行时所有权。
 
-## 分层 {#layers}
+## 分层
 
-### 1. 输入与交互作用域 {#_1-input-and-interaction-scope}
+### 1. 输入与交互作用域
 
 `src/input/` 负责按键归一化、语义 token、序列/count 匹配、已解析绑定，以及 `src/input/engine.ts` 中的纯 reducer。`src/input/runtime.ts` 为每个输入处理方维护待完成序列、count 和定时器。`src/ui/key-guide-runtime.ts` 单独负责按键指引展示；局部控件使用 `src/input/local-binding-runtime.ts`。
 
@@ -22,7 +22,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 持久化绑定迁移位于 `src/core/preferences.ts`，不创建运行时别名或继承 keymap。
 
-### 2. 语义动作与能力 {#_2-semantic-actions-and-capabilities}
+### 2. 语义动作与能力
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
@@ -32,9 +32,9 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 具体领域操作位于 `src/operations/`，接收显式条目或 ID。Surface 负责目标选择、基数、确认、导航与状态反馈。跨 Surface 协作使用命名能力或共享 Operation，不重新分发另一 Surface 的 `ActionId`。
 
-### 3. 功能所有权 {#_3-feature-owners}
+### 3. 功能所有权
 
-#### Main {#main}
+#### Main
 
 `src/main/window-runtime.ts` 为一个物理 Zotero MainWindow 提供服务。`src/main/session.ts` 将宿主 runtime 与 Main、各功能状态组合；`src/main/active-surface.ts` 根据 Zotero 焦点、标签页和编辑器状态推导当前 Main、Reader 或 Note 交互。
 
@@ -71,7 +71,7 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 Selection Panel 通过具名端口请求现有导航协调器执行 Reveal，不拥有第二份历史。面板关闭先退休精确界面身份，再释放计时器、主题和 DOM；旧确认、计时器及导航完成不能修改替换界面。主题和外观订阅返回时若模块已退休，立即释放新取得的句柄，清理失败仍尝试其余释放。
 
-#### Reader {#reader}
+#### Reader
 
 `src/reader/controller.ts` 按 Zotero `instanceID` 管理 Reader session。主、次 PDF 视图共享一个 Reader Surface，但输入、几何与导航始终保留精确视图身份。
 
@@ -91,20 +91,20 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/modules/reader-hints/` 按 ReaderSession 拥有可见复制/跟随目标、临时标签、原生链接激活和目的地 cue。模块只接收精确视图、复制、反馈与导航端口；Surface 保留输入优先级、模式、共享滚动机制和历史策略。父作用域退休后，旧确认、异步导航完成和 RAF 不能写入或重画；清理仍释放各自的标签、cue 与计时器，并保留原始失败。`src/reader/hint-labels.ts` 继续作为 Flash 与 hints 共用的纯标签辅助。
 
-宿主能力位于 `src/toolkit/reader/`；具体路径和私有接缝见[开发指南](DEVELOPMENT.md#host-capability-toolkit)。Reader 生命周期工作仅对活跃 session 及精确 PDF 视图有效。同 Window 的 ReaderView 或 Document 替换也会退休旧注册；部分监听获取失败或获取期间重入退出时，先封住回调，再排空已取得的句柄。原生事件回调在注销前先按身份退休；只有权威 Reader 清单才能据此退休缺失 session。退出时防护已销毁的 Gecko wrapper，同时保持活对象上的失败可观测。
+宿主能力位于 `src/toolkit/reader/`；具体路径和私有接缝见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。Reader 生命周期工作仅对活跃 session 及精确 PDF 视图有效。同 Window 的 ReaderView 或 Document 替换也会退休旧注册；部分监听获取失败或获取期间重入退出时，先封住回调，再排空已取得的句柄。原生事件回调在注销前先按身份退休；只有权威 Reader 清单才能据此退休缺失 session。退出时防护已销毁的 Gecko wrapper，同时保持活对象上的失败可观测。
 
-#### 共享导航历史 {#shared-navigation-history}
+#### 共享导航历史
 
 `src/navigation/history.ts` 维护每个 MainWindow 唯一的历史栈；`src/navigation/history-policy.ts` 定义记录资格与证据；`src/navigation/coordinator.ts` 负责接纳、当前性、完成与提交。`NavigationPort` 是记录入口，Main 与 Reader 宿主适配器提供原生操作。记录、恢复与传输细节由[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)维护。
 
-### 4. 宿主能力 Toolkit {#_4-host-capability-toolkit}
+### 4. 宿主能力 Toolkit
 
 Zotero 拥有领域数据和原生视图。Neo 只在宿主无法表达对应契约时维护交互状态：Main Persistent Selection 保存稳定条目身份而非渲染行号；Reader 键盘 Select 使用临时 DOM range，因为目前没有受支持的宿主 API 能更新 Zotero 私有 PDF 选择模型。
 
 `src/toolkit/index.ts`、`src/toolkit/main/index.ts`、`src/toolkit/reader/index.ts` 是宿主能力入口。Main 包含 Note-pane 能力，没有独立 Note Toolkit。Toolkit 负责原生结构类型、宿主查找、回调 patch、DOM 集成与资源退休。跨 chrome/content compartment 的载荷通过 `Components.utils.cloneInto` 克隆到接收窗口，统一由 `src/platform/cross-compartment.ts` 处理。目标、模式、绑定、历史记录资格、确认与反馈由功能负责，不由 Toolkit 决定。公开条目 API 和 `src/platform/zotero-items.ts` 满足契约时可以直接使用。
 
-文档化 API 无法提供相同行为时，保留必要的私有能力，并放在命名契约后；包装私有调用不代表依赖已变成公开 API。[开发指南](DEVELOPMENT.md#host-capability-toolkit)列出当前负责方，以及单数/复数 Scope 的前置条件。
+文档化 API 无法提供相同行为时，保留必要的私有能力，并放在命名契约后；包装私有调用不代表依赖已变成公开 API。[开发指南](DEVELOPMENT.md#宿主能力-toolkit)列出当前负责方，以及单数/复数 Scope 的前置条件。
 
-## 共享原语，而非通用框架 {#shared-primitives-not-generic-frameworks}
+## 共享原语，而非通用框架
 
 共享原语应已被具体功能使用：输入 reducer 与各处理方 runtime、语义 `ActionId`/能力投影、输入法组合防护、类型化条目目标及 Zotero 归一化辅助、`fuzzyMatchScore()` 适配器、主题管理器和具体 Operations。Picker、Plugin Manager、Reader overlay 与各 Surface 目标解析器保留自己的生命周期和领域策略；共享原语不意味着合并它们的契约。
