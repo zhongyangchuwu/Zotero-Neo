@@ -8,6 +8,7 @@ import {
 import { isDeadObject, nativeObjectIdentity } from '../../platform/cross-compartment';
 import { HINT_ALPHABET } from '../../reader/hint-labels';
 import type { PdfWindow, Pointer } from '../../reader/types';
+import { buildMappedTextIndex, type MappedTextIndex } from './token-boundaries';
 
 export type FlashIntent = 'visual-start' | 'visual-end';
 
@@ -16,10 +17,7 @@ export interface FlashTextSegment {
   readonly text: string;
 }
 
-export interface FlashTextIndex {
-  readonly text: string;
-  readonly pointers: readonly Pointer[];
-}
+export interface FlashTextIndex extends MappedTextIndex {}
 
 export interface FlashMatch {
   readonly index: number;
@@ -79,61 +77,14 @@ function validRect(rect: FlashRect): boolean {
   );
 }
 
-function appendMappedCharacter(
-  output: string[],
-  pointers: Pointer[],
-  value: string,
-  pointer: Pointer,
-  whitespaceState: { pending: boolean },
-): void {
-  for (const character of value) {
-    if (/\s/u.test(character)) {
-      whitespaceState.pending = output.length > 0;
-      continue;
-    }
-    if (whitespaceState.pending) {
-      output.push(' ');
-      pointers.push(pointer);
-      whitespaceState.pending = false;
-    }
-    output.push(character);
-    for (let index = 0; index < character.length; index += 1) pointers.push(pointer);
-  }
-}
-
-function pointerAfterSourceCharacter(pointer: Pointer): Pointer {
-  const codePoint = pointer.textNode.data.codePointAt(pointer.offset);
-  const width = codePoint === undefined ? 1 : String.fromCodePoint(codePoint).length;
-  return {
-    textNode: pointer.textNode,
-    offset: Math.min(pointer.textNode.length, pointer.offset + width),
-  };
-}
-
 /** NFKC + collapsed whitespace normalization used by Flash query matching. */
 export function normalizeFlashText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/gu, ' ').trim();
 }
 
-/** Builds a normalized search string while retaining a source caret pointer per UTF-16 unit. */
+/** Builds a normalized search index while retaining exact DOM source endpoints. */
 export function buildFlashTextIndex(segments: readonly FlashTextSegment[]): FlashTextIndex {
-  const output: string[] = [];
-  const pointers: Pointer[] = [];
-  const whitespaceState = { pending: false };
-
-  for (const segment of segments) {
-    const value = segment.text;
-    for (let offset = 0; offset < value.length; ) {
-      const codePoint = value.codePointAt(offset);
-      if (codePoint === undefined) break;
-      const source = String.fromCodePoint(codePoint);
-      const pointer = { textNode: segment.textNode, offset };
-      appendMappedCharacter(output, pointers, source.normalize('NFKC'), pointer, whitespaceState);
-      offset += source.length;
-    }
-  }
-
-  return { text: output.join(''), pointers };
+  return buildMappedTextIndex(segments);
 }
 
 /** Literal overlapping matches with Vim-style smartcase for ASCII/Latin query input. */
@@ -151,7 +102,7 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
     const found = haystack.indexOf(needle, from);
     if (found < 0) break;
     const pointer = index.pointers[found];
-    const last = index.pointers[found + needle.length - 1];
+    const last = index.ends[found + needle.length - 1];
     if (pointer && last) {
       let offsets = seen.get(pointer.textNode);
       if (!offsets) {
@@ -163,7 +114,7 @@ export function flashMatches(index: FlashTextIndex, rawQuery: string): FlashMatc
         matches.push({
           index: found,
           pointer,
-          end: pointerAfterSourceCharacter(last),
+          end: last,
         });
       }
     }
