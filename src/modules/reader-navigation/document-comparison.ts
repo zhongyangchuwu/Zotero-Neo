@@ -17,9 +17,11 @@ import type {
 } from '../../document-analysis/contracts';
 import { nativeDocumentPages, nativeDocumentParser } from '../../document-analysis/native';
 import { oxrDocumentParser } from '../../document-analysis/oxr';
+import { mineruDocumentParser } from '../../document-analysis/mineru';
 import {
   analysisPDF,
   requestDocumentJSON,
+  documentServiceTransport,
   type AnalysisPDF,
 } from '../../platform/document-analysis';
 import { documentMarkupText } from '../../platform/document-markup';
@@ -35,6 +37,7 @@ import { THEME_VARS } from '../../ui/theme';
 const H = 'http://www.w3.org/1999/xhtml';
 const ENDPOINT_KEY = 'documentAnalysis.oxr.endpoint';
 const DEFAULT_ENDPOINT = 'https://free-oxr.somark.ai/api/v1';
+const PROVIDER_KEY = 'documentAnalysis.provider';
 
 function comparisonButton(doc: Document, text: string): HTMLButtonElement {
   const button = doc.createElementNS(H, 'button') as HTMLButtonElement;
@@ -84,6 +87,7 @@ interface ComparisonView {
   readonly cloudButton: HTMLButtonElement;
   readonly refreshButton: HTMLButtonElement;
   readonly endpoint: HTMLInputElement;
+  readonly provider: HTMLSelectElement;
   readonly key: HTMLInputElement;
   readonly abort: AbortController;
   readonly untheme: () => void;
@@ -154,19 +158,32 @@ export class ReaderDocumentComparison {
     endpoint.value = this.#host.preferences.get(ENDPOINT_KEY, DEFAULT_ENDPOINT);
     endpoint.setAttribute('aria-label', this.#text('endpoint'));
     endpoint.style.width = 'min(420px,80%)';
+    const provider = element('select');
+    provider.setAttribute('aria-label', this.#text('provider'));
+    for (const [value, label] of [
+      ['mineru', 'MinerU'],
+      ['oxr', 'OXR'],
+    ]) {
+      const option = element('option', label);
+      option.value = value;
+      provider.append(option);
+    }
+    provider.value =
+      this.#host.preferences.get(PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
+    endpoint.hidden = provider.value === 'mineru';
     const key = element('input');
     key.type = 'password';
     key.autocomplete = 'off';
     key.placeholder = this.#text('key');
     key.setAttribute('aria-label', this.#text('key'));
-    key.value = 'dummy';
+    key.value = provider.value === 'oxr' ? 'dummy' : '';
     const cloudButton = comparisonButton(doc, this.#text('parseCloud'));
     cloudButton.disabled = true;
     const refreshButton = comparisonButton(doc, this.#text('refreshCloud'));
     refreshButton.disabled = true;
     const copy = comparisonButton(doc, this.#text('copyReport'));
     const close = comparisonButton(doc, this.#text('close'));
-    controls.append(endpoint, key, cloudButton, refreshButton, copy, close);
+    controls.append(provider, endpoint, key, cloudButton, refreshButton, copy, close);
     const status = element('p', this.#text('preparing'));
     status.setAttribute('role', 'status');
     const results = element('div');
@@ -181,6 +198,7 @@ export class ReaderDocumentComparison {
       status,
       results,
       endpoint,
+      provider,
       key,
       cloudButton,
       refreshButton,
@@ -203,6 +221,12 @@ export class ReaderDocumentComparison {
       void this.#cloud(view, true);
     });
     endpoint.addEventListener('change', () => {
+      void this.#restoreCloud(view);
+    });
+    provider.addEventListener('change', () => {
+      endpoint.hidden = provider.value === 'mineru';
+      key.value = provider.value === 'oxr' ? 'dummy' : '';
+      this.#host.preferences.set(PROVIDER_KEY, provider.value);
       void this.#restoreCloud(view);
     });
     copy.addEventListener('click', () => {
@@ -240,7 +264,9 @@ export class ReaderDocumentComparison {
     }
     if (event.key === 'Tab') {
       const controls = (
-        Array.from(view.root.querySelectorAll('input,button,summary,[tabindex]')) as HTMLElement[]
+        Array.from(
+          view.root.querySelectorAll('input,select,button,summary,[tabindex]'),
+        ) as HTMLElement[]
       ).filter(
         (control) =>
           !(control as HTMLButtonElement).disabled && control.getClientRects().length > 0,
@@ -328,10 +354,22 @@ export class ReaderDocumentComparison {
   #busy(view: ComparisonView, busy: boolean): void {
     view.cloudPending = busy;
     view.cloudButton.disabled = view.refreshButton.disabled = busy || !view.prepared;
-    view.endpoint.disabled = view.key.disabled = busy;
+    view.endpoint.disabled = view.key.disabled = view.provider.disabled = busy;
   }
 
   #parser(view: ComparisonView): DocumentParser {
+    if (view.provider.value === 'mineru')
+      return mineruDocumentParser({
+        apiKey: view.key.value,
+        readPDF: () => view.prepared!.pdf.read(),
+        transport: documentServiceTransport,
+        onProgress: (state, completed, total) => {
+          if (!this.#current(view) || !view.cloudPending) return;
+          const progress =
+            completed !== undefined && total !== undefined ? ` ${completed}/${total}` : '';
+          view.status.textContent = this.#text(`progress.${state}`) + progress;
+        },
+      });
     return oxrDocumentParser({
       baseURL: view.endpoint.value.trim(),
       apiKey: view.key.value,
@@ -416,7 +454,7 @@ export class ReaderDocumentComparison {
       if (!this.#cloudCurrent(view, revision)) return;
       if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#cloudCurrent(view, revision)) return;
-      this.#host.preferences.set(ENDPOINT_KEY, endpoint);
+      if (view.provider.value === 'oxr') this.#host.preferences.set(ENDPOINT_KEY, endpoint);
       view.cloud = result;
       view.cloudState = 'unsaved';
       view.cloudSavedAt = undefined;
@@ -457,7 +495,7 @@ export class ReaderDocumentComparison {
     view.results.replaceChildren();
     for (const [label, result, error] of [
       [this.#text('native'), view.native, view.nativeError],
-      ['OXR', view.cloud, undefined],
+      [view.provider.value === 'mineru' ? 'MinerU' : 'OXR', view.cloud, undefined],
     ] as const) {
       const section = doc.createElementNS(H, 'section');
       const title = doc.createElementNS(H, 'h3');
@@ -480,14 +518,18 @@ export class ReaderDocumentComparison {
           section.append(cache);
         }
         for (const group of result.objectGroups.slice(0, 500)) {
+          const location = documentObjectLocation(result.regions, group);
+          const name =
+            group.title.slice(0, 140) ||
+            `${this.#text(`kind.${group.kind === 'figure' ? 'image' : 'table'}`)} · ${location.pageIndex + 1}`;
           section.append(
             comparisonTarget(
               doc,
-              `${this.#text('objectGroup')} · ${group.title.slice(0, 140)} · ${this.#text(`association.${group.association}`)}`,
+              `${this.#text('objectGroup')} · ${name} · ${this.#text(`association.${group.association}`)}`,
               `${group.title}\n${this.#text('members')}: ${group.memberRegionIds.length}`,
               this.#text('locateGroup'),
               () => {
-                void this.#locate(view, documentObjectLocation(result.regions, group));
+                void this.#locate(view, location);
               },
             ),
           );

@@ -31,6 +31,8 @@ export interface DocumentRegion {
   readonly id: string;
   /** Several page rectangles may belong to one backend block; order retains gaps from unusable blocks. */
   readonly sourceBlock?: { readonly id: string; readonly order: number };
+  /** Explicit provider membership; captions are optional and never determine object existence. */
+  readonly sourceObject?: { readonly id: string; readonly kind: 'figure' | 'table' };
   readonly kind: DocumentRegionKind;
   readonly pageIndex: number;
   readonly rect: DocumentRect;
@@ -48,8 +50,8 @@ export interface DocumentObjectGroup {
   readonly title: string;
   readonly captionRegionIds: readonly string[];
   readonly memberRegionIds: readonly string[];
-  /** Geometry is a conservative association, not a model-provided semantic guarantee. */
-  readonly association: 'geometry' | 'caption-only' | 'ambiguous';
+  /** Distinguish explicit provider membership from conservative geometric association and fallbacks. */
+  readonly association: 'backend' | 'geometry' | 'caption-only' | 'ambiguous';
 }
 
 export interface DocumentLocation {
