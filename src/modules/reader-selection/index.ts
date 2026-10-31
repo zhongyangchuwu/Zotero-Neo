@@ -3,7 +3,7 @@ import type { ReaderSelectionActionDefinition, ReaderSelectionContext } from '..
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import type { PreferenceStore } from '../../core/preference-store';
-import { readReaderDocumentCache } from '../../reader/document-cache';
+import { readReaderDocumentCache, readReaderDocument } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
 import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
 import type { PdfWindow, ReaderMode, ReaderRuntime } from '../../reader/types';
@@ -16,6 +16,7 @@ import {
 } from '../../toolkit';
 import { t } from '../../i18n';
 import { ReaderBodySelection } from './body-selection';
+import { ReaderStructuredText } from './structured-text';
 import { ReaderFlash } from './flash';
 import { ReaderSelectionRange } from './selection-range';
 import { ReaderSelectionActions } from './selection-actions';
@@ -120,10 +121,18 @@ export function createReaderSelectionModule(
       onChange: ports.updateIndicator,
     });
     scope.add(() => body.dispose());
+    const structured = new ReaderStructuredText(() =>
+      readReaderDocument(ports.reader, ports.preferences, () => scope.isCurrent()),
+    );
+    scope.add(() => structured.invalidate());
+    const invalidateStructure = (): void => {
+      body.invalidate();
+      structured.invalidate();
+    };
     if (ports.reader.itemID)
-      scope.add(observeAttachmentDocumentCache(ports.reader.itemID, () => body.invalidate()));
+      scope.add(observeAttachmentDocumentCache(ports.reader.itemID, invalidateStructure));
     for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
-      const stop = ports.preferences.observe?.(key, () => body.invalidate());
+      const stop = ports.preferences.observe?.(key, invalidateStructure);
       if (stop) scope.add(stop);
     }
     const flash = new ReaderFlash({
@@ -148,6 +157,36 @@ export function createReaderSelectionModule(
       openFlash: (window, intent) => flash.open(window, intent),
     });
     scope.add(() => range.dispose());
+    const extendStructure = (
+      window: PdfWindow,
+      direction: 'forward' | 'backward',
+      granularity: 'sentence' | 'paragraph',
+    ): void => {
+      const current = ports.capturePresentation(window),
+        selection = window.getSelection();
+      if (!selection?.anchorNode || selection.focusNode?.nodeType !== 3) return;
+      const anchor = selection.anchorNode,
+        anchorOffset = selection.anchorOffset;
+      const focus = selection.focusNode as Text,
+        offset = selection.focusOffset;
+      const stillSelected = (): boolean =>
+        scope.isCurrent() &&
+        current() &&
+        ports.mode() === 'visual' &&
+        selection.anchorNode === anchor &&
+        selection.anchorOffset === anchorOffset &&
+        selection.focusNode === focus &&
+        selection.focusOffset === offset;
+      void structured
+        .paragraphs(window, { textNode: focus, offset }, stillSelected)
+        .then((paragraphs) => {
+          if (stillSelected()) range.modify(window, direction, granularity, paragraphs);
+        })
+        .catch((error: unknown) => {
+          if (stillSelected()) showStatus(t('bodySelection.changed', ports.language()));
+          ports.debug(`Reader structural selection unavailable: ${String(error)}`);
+        });
+    };
     const context = (): ReaderSelectionContext | null => {
       if (!scope.isCurrent() || ports.mode() !== 'visual') return null;
       const window = ports.activeWindow();
@@ -262,16 +301,16 @@ export function createReaderSelectionModule(
           range.modify(window, 'backward', 'word');
           return;
         case 'extendSentenceForward':
-          range.modify(window, 'forward', 'sentence');
+          extendStructure(window, 'forward', 'sentence');
           return;
         case 'extendSentenceBackward':
-          range.modify(window, 'backward', 'sentence');
+          extendStructure(window, 'backward', 'sentence');
           return;
         case 'extendParagraphForward':
-          range.modify(window, 'forward', 'paragraph');
+          extendStructure(window, 'forward', 'paragraph');
           return;
         case 'extendParagraphBackward':
-          range.modify(window, 'backward', 'paragraph');
+          extendStructure(window, 'backward', 'paragraph');
           return;
         case 'extendLineStart':
           range.extendLineBoundary(window, false);

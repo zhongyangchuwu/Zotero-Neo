@@ -54,6 +54,7 @@ export function sourceTokens(segments: readonly TokenTextSegment[]): SourceToken
 export function tokenTextNeighborhood(
   spans: readonly ReaderTextSpan[],
   relevant: readonly Pointer[],
+  radius = 1,
 ): readonly ReaderTextSpan[] {
   if (!relevant.length || spans.some((span) => !span.paragraph)) return spans;
   const paragraphs = [
@@ -64,7 +65,11 @@ export function tokenTextNeighborhood(
     const paragraph = spans.find((span) => span.textNode === pointer.textNode)?.paragraph;
     const index = paragraphs.indexOf(paragraph);
     if (index < 0) return spans;
-    for (let at = Math.max(0, index - 1); at <= Math.min(paragraphs.length - 1, index + 1); at++)
+    for (
+      let at = Math.max(0, index - radius);
+      at <= Math.min(paragraphs.length - 1, index + radius);
+      at++
+    )
       selected.add(paragraphs[at]);
   }
   return spans.filter((span) => selected.has(span.paragraph));

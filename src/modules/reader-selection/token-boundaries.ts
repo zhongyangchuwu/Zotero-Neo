@@ -24,6 +24,12 @@ export interface MappedTextIndex {
   readonly ends: readonly Pointer[];
 }
 
+export function mappedTextContains(index: MappedTextIndex, pointer: Pointer): boolean {
+  const first = index.pointers.find((p) => p.textNode === pointer.textNode);
+  const last = index.ends.findLast((p) => p.textNode === pointer.textNode);
+  return !!first && !!last && pointer.offset >= first.offset && pointer.offset <= last.offset;
+}
+
 export interface TokenTextIndex extends MappedTextIndex {
   readonly tokenBreaks?: readonly number[];
 }

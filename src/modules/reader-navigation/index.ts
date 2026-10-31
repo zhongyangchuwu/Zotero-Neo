@@ -1,3 +1,4 @@
+import { ReaderChapterSearch } from './chapter-search';
 import { ReaderFigurePicker } from './figure-picker';
 import { readerRegionPreview } from '../../toolkit/reader';
 import { ReaderDocumentComparison, type DocumentComparisonHost } from './document-comparison';
@@ -49,7 +50,7 @@ export interface ReaderNavigationModulePorts {
   readonly captureView?: (window: PdfWindow) => () => boolean;
   readonly actions: Omit<
     ReaderNavigationActionPorts,
-    'openDocumentComparison' | 'openFigurePicker'
+    'openDocumentComparison' | 'openFigurePicker' | 'openChapterSearch'
   >;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
@@ -136,8 +137,10 @@ export function createReaderNavigationModule(
     );
     scope.add(() => captions.dispose());
     let picker: ReaderFigurePicker | null = null;
+    let chapter: ReaderChapterSearch | null = null;
     const refreshAnalysis = (): void => {
       picker?.close(false);
+      chapter?.close();
       const loaded = captions.state !== 'idle';
       captions.invalidate();
       if (loaded) void captions.load();
@@ -220,6 +223,18 @@ export function createReaderNavigationModule(
         debug: ports.debug,
       });
       scope.add(() => picker?.close(false));
+      chapter = new ReaderChapterSearch({
+        reader: ports.reader,
+        preferences: ports.documentComparison.preferences,
+        captureView: ports.captureView,
+        isCurrent: () => scope.isCurrent(),
+        themeRoot: ports.documentComparison.themeRoot,
+        text: (key) => t(`reader.chapter.${key}`, ports.documentComparison!.language()),
+        navigate: (result, window) =>
+          ports.navigationHost.navigateToRegion(window, { position: result.location }),
+        debug: ports.debug,
+      });
+      scope.add(() => chapter?.close());
     }
     const executeAction = bindReaderNavigationActions(
       host,
@@ -231,10 +246,17 @@ export function createReaderNavigationModule(
       {
         ...ports.actions,
         openDocumentComparison: () => {
+          chapter?.close();
           picker?.close(false);
           comparison?.open();
         },
+        openChapterSearch: (window) => {
+          picker?.close(false);
+          comparison?.close();
+          chapter?.open(window);
+        },
         openFigurePicker: (window) => {
+          chapter?.close();
           comparison?.close();
           picker?.open(window);
         },
@@ -269,9 +291,19 @@ export function createReaderNavigationModule(
       );
     };
     return {
-      handleKey: (event) => picker?.handleKey(event) || comparison?.handleKey(event) || false,
-      releaseView: (window) => picker?.releaseView(window),
-      deactivate: () => picker?.close(false),
+      handleKey: (event) =>
+        chapter?.handleKey(event) ||
+        picker?.handleKey(event) ||
+        comparison?.handleKey(event) ||
+        false,
+      releaseView: (window) => {
+        picker?.releaseView(window);
+        chapter?.releaseView(window);
+      },
+      deactivate: () => {
+        picker?.close(false);
+        chapter?.close();
+      },
       smooth,
       marks,
       sidebar,

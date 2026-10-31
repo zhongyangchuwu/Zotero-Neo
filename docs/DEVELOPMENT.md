@@ -215,6 +215,10 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `src/toolkit/reader/text-source.ts` 返回两种呈现的真实 Text 节点。词元、Flash、选择范围和视觉行移动共用业务实现；重排文本的视觉行来自 Range 客户矩形，段落来自原生 HTML 结构。词元快照仅覆盖锚点、活动端和相邻段落，并可在同一同步动作中复用于提示；远端锚点保持完整，不常驻全文索引。`selection-geometry.ts` 将重排选区交给原生 SDT 映射，保留 Zotero 的 sortIndex、pageLabel 和 PDF 几何。图像裁图区不被冒充为可选文字。
 
+`reader/document-cache.ts` 的 `readReaderDocument()` 为句段、章节和后续笔记提供相同的缓存优先来源契约，原生退路统一归一化与哈希验证。`reader-selection/structured-text.ts` 只缓存区域快照；`paragraph-mapping.ts` 在一次动作中对原文字符建立临时映射，必须唯一、完整、无替字且起点源页一致；同一段落的完整原文可证实邻页续段端点，不能借用其他页面的独立出现。Reading Mode 限制在焦点附近段落，映射不常驻。`text-boundary-motion.ts` 共享句段端点与常见缩写处理；PDF 不再调用 Gecko 的句段粒度，缺映射使用词元退路。异步准备后必须复查原选区端点和精确视图，不能覆盖后续输入。
+
+`document-analysis/sections.ts` 只确定编号章节范围与字面匹配；`reader-navigation/chapter-search.ts` 拥有范围选择与跳转，`ui/search-dialog.ts` 只提供可复用的查询／候选界面、IME 和生命周期。该流程不改写原生 Find，不创建第二套导航历史。区域结果只定位段落，不能直接保存为字符高亮。
+
 `reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；布局优先复用当前服务的有效附件缓存，原生退路保持 `DocumentRegion` 归一化及来源哈希校验；缓存键由 `document-analysis/settings.ts` 统一确定。PDF 缓存命中不请求 SDT，Reading Mode 按需读取原生块并验证同一来源。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 负责将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。后续布局后端可复用相同区域契约，不各自实现键盘选择。
 
 正文选择排除 `excluded` 和非公式的 `auxiliary` 区域，未知来源保留可选。PDF 按文字 Range 的中心落入排除区域且水平覆盖至少 90% 分类（旋转 90° 的页边标签短轴允许字体行距，覆盖至少 70%），边缘容差 0.5 点；原生非图表文字优先采用 textMap 行墨迹框，避免粗框吞掉正文。明确正文覆盖优先于冲突排除，不扩大到对象分组包围框；不用含字体行距的 span 框作另一套判断。Reading Mode 按原生块身份判断；云端仅在完整原生块的所有已知来源片段均被排除时接纳，部分或未知映射保留。复制和批注前由 `validateReaderSelection()` 重查精确租约、选区端点和文件身份，旧缓存／服务通知同步退休过滤。`user-select:none` 只在 Neo Select 样式租约内生效，普通鼠标选区仍由宿主维护；Gecko 的 `Selection.toString()` 遵守该样式而 `Range.toString()` 不遵守，因此复制保留布局序列化，批注另按接纳文字拆分连续 Range。所有片段必须完整映射，不能仅过滤文本却保存包含图表的矩形。原生字符移动留下元素端点时规范化到接纳文字边界，避免后续词元移动失效。

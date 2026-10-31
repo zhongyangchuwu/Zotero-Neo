@@ -17,6 +17,7 @@ export interface ReaderTextSpan {
   readonly text: string;
   readonly rect: ReaderTextRect;
   readonly paragraph?: object;
+  readonly sourcePageIndex?: number;
 }
 
 /** Reads displayed source text in DOM order, retaining exact source node identity for both presentations. */
@@ -61,7 +62,14 @@ export function readerTextSpans(window: Window): readonly ReaderTextSpan[] {
       rect.height <= 0
     )
       continue;
-    result.push({ textNode: textNode as Text, text: (textNode as Text).data, rect });
+    const pageIndex =
+      Number(span.closest?.<HTMLElement>('.page[data-page-number]')?.dataset.pageNumber) - 1;
+    result.push({
+      textNode: textNode as Text,
+      text: (textNode as Text).data,
+      rect,
+      ...(Number.isInteger(pageIndex) && pageIndex >= 0 ? { sourcePageIndex: pageIndex } : {}),
+    });
   }
   return result;
 }

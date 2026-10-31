@@ -615,5 +615,15 @@
   "documentAnalysis.elapsed": "处理记录用时（含等待／暂停）",
   "documentCredentials.temporaryToken": "API Token（仅本次使用）",
   "bodySelection.cached": "✓ 正文选择已启用（已存布局）：排除图表、题注与页边文字",
-  "bodySelection.changed": "✗ 选区或文档来源已变化，请重新选择；<Space>rb 可重新准备正文过滤"
+  "bodySelection.changed": "✗ 选区或文档来源已变化，请重新选择；<Space>rb 可重新准备正文过滤",
+  "action.openChapterSearch": "阅读器：章节内查找",
+  "reader.chapter.title": "章节内查找",
+  "reader.chapter.search": "输入要查找的原文",
+  "reader.chapter.help": "限定所选章节（含子章节），按段落显示字面匹配。↑/↓ 选择，Enter 回到原文段落，Escape 取消。结果为区域定位，不是字符高亮；不改变原生查找。",
+  "reader.chapter.loading": "正在读取文档结构…",
+  "reader.chapter.unavailable": "文档结构或来源已变化，请重新打开",
+  "reader.chapter.close": "关闭",
+  "reader.chapter.empty": "没有匹配的段落",
+  "reader.chapter.document": "整篇文档（无标题结构）",
+  "reader.chapter.page": "页"
 }
