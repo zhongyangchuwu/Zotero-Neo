@@ -37,6 +37,11 @@ export class DialogElement {
       this.children.push(n);
     }
   }
+  insertBefore(node: DialogElement, before: DialogElement) {
+    const index = this.children.indexOf(before);
+    node.parent = this;
+    this.children.splice(index < 0 ? this.children.length : index, 0, node);
+  }
   replaceChildren(...nodes: DialogElement[]) {
     for (const c of this.children) c.parent = null;
     this.children = [];

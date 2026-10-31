@@ -27,6 +27,18 @@ export interface SearchDialogOptions<T> {
   readonly confirm: (item: T) => Promise<boolean>;
   readonly debug: (error: unknown) => void;
   readonly onClose?: () => void;
+  readonly preview?: (
+    item: T,
+    signal: AbortSignal,
+  ) => Promise<{
+    readonly text?: string;
+    readonly images?: readonly { readonly dataURL: string; readonly alt: string }[];
+  }>;
+  readonly actions?: readonly {
+    readonly label: string;
+    readonly run: (item: T) => Promise<boolean>;
+    readonly available?: (item: T) => boolean;
+  }[];
 }
 interface SearchView<T> {
   readonly options: SearchDialogOptions<T>;
@@ -37,11 +49,15 @@ interface SearchView<T> {
   readonly results: HTMLElement;
   readonly status: HTMLElement;
   readonly composition: { active: boolean };
+  readonly preview: HTMLElement;
+  readonly actions: readonly HTMLButtonElement[];
   readonly dispose: () => void;
   items: readonly T[];
   filtered: readonly T[];
   selected: number;
   pending: boolean;
+  previewRevision: number;
+  previewAbort?: AbortController;
 }
 
 /** Small shared query/list surface. Callers own scope, matching, source validation and all mutations. */
@@ -92,6 +108,12 @@ export class SearchDialog<T> {
     const close = node('button', options.close);
     close.type = 'button';
     controls.append(scopes, input, close);
+    const buttons = (options.actions ?? []).map((action) => {
+      const button = node('button', action.label);
+      button.type = 'button';
+      controls.insertBefore(button, close);
+      return button;
+    });
     const help = node('p', options.help);
     help.style.margin = '0';
     const status = node('p', options.loading);
@@ -101,7 +123,15 @@ export class SearchDialog<T> {
     results.setAttribute('role', 'listbox');
     results.tabIndex = 0;
     results.style.cssText = 'flex:1;overflow:auto;min-height:80px';
-    root.append(title, controls, help, status, results);
+    const content = node('div');
+    content.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;flex:1;min-height:0';
+    const preview = node('div');
+    preview.tabIndex = 0;
+    preview.hidden = !options.preview;
+    preview.style.cssText = 'flex:2 1 300px;overflow:auto;min-height:100px';
+    results.style.flex = '1 1 250px';
+    content.append(results, preview);
+    root.append(title, controls, help, status, content);
     const composition = { active: false },
       unbind = bindCompositionState(input, composition),
       untheme = options.themeRoot(backdrop);
@@ -114,14 +144,20 @@ export class SearchDialog<T> {
       results,
       status,
       composition,
+      preview,
+      actions: buttons,
       items: [],
       filtered: [],
       selected: 0,
       pending: false,
+      previewRevision: 0,
       dispose: () => {
         const cleanup = new CleanupFailure();
         cleanup.run(unbind);
         cleanup.run(untheme);
+        cleanup.run(() => {
+          if (view.previewAbort && !isDeadObject(view.previewAbort)) view.previewAbort.abort();
+        });
         if (!isDeadObject(backdrop)) cleanup.run(() => backdrop.remove());
         cleanup.rethrow();
       },
@@ -133,6 +169,11 @@ export class SearchDialog<T> {
       if (event.target === backdrop) this.close(true);
     });
     close.addEventListener('click', () => this.close(true));
+    buttons.forEach((button, i) =>
+      button.addEventListener('click', () => {
+        if (!button.disabled) void this.#confirm(view, options.actions![i]!.run);
+      }),
+    );
     input.addEventListener('input', (event) => {
       if (isCommittedInput(event, composition.active)) this.#filter(view);
     });
@@ -198,14 +239,61 @@ export class SearchDialog<T> {
       view.results.removeAttribute('aria-activedescendant');
       view.results.textContent = view.options.empty;
     }
+    const selected = view.filtered[view.selected];
+    view.actions.forEach((button, i) => {
+      button.disabled =
+        selected === undefined || view.options.actions?.[i]?.available?.(selected) === false;
+    });
+    void this.#preview(view, selected);
   }
-  async #confirm(view: SearchView<T>): Promise<void> {
+  async #preview(view: SearchView<T>, item: T | undefined): Promise<void> {
+    view.previewAbort?.abort();
+    const revision = ++view.previewRevision;
+    view.preview.replaceChildren();
+    if (item === undefined || !view.options.preview) return;
+    const abort = new (view.options.owner as Window & typeof globalThis).AbortController();
+    view.previewAbort = abort;
+    view.preview.textContent = view.options.loading;
+    try {
+      const result = await view.options.preview(item, abort.signal);
+      if (!this.#current(view) || revision !== view.previewRevision || abort.signal.aborted) return;
+      view.preview.replaceChildren();
+      for (const image of result.images ?? []) {
+        const node = view.root.ownerDocument.createElementNS(
+          'http://www.w3.org/1999/xhtml',
+          'img',
+        ) as HTMLImageElement;
+        node.src = image.dataURL;
+        node.alt = image.alt;
+        node.style.cssText = 'display:block;width:100%;height:auto';
+        view.preview.append(node);
+      }
+      if (result.text) {
+        const node = view.root.ownerDocument.createElementNS(
+          'http://www.w3.org/1999/xhtml',
+          'pre',
+        ) as HTMLElement;
+        node.textContent = result.text;
+        node.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere';
+        view.preview.append(node);
+      }
+    } catch (error) {
+      if (this.#current(view) && revision === view.previewRevision && !abort.signal.aborted) {
+        view.preview.textContent = view.options.unavailable;
+        view.options.debug(error);
+      }
+    }
+  }
+  async #confirm(view: SearchView<T>, run = view.options.confirm): Promise<void> {
     const item = view.filtered[view.selected];
     if (!this.#current(view) || view.pending || item === undefined) return;
     view.pending = true;
+    view.actions.forEach((button) => {
+      button.disabled = true;
+    });
     view.input.disabled = view.scopes.disabled = true;
     try {
-      if (await view.options.confirm(item)) {
+      if (await run(item)) {
         if (this.#current(view)) this.close(true);
       } else if (this.#current(view)) view.status.textContent = view.options.unavailable;
     } catch (error) {
@@ -217,6 +305,9 @@ export class SearchDialog<T> {
       if (this.#current(view)) {
         view.pending = false;
         view.input.disabled = view.scopes.disabled = false;
+        view.actions.forEach((button, i) => {
+          button.disabled = view.options.actions?.[i]?.available?.(item) === false;
+        });
       }
     }
   }
@@ -235,7 +326,12 @@ export class SearchDialog<T> {
     ) {
       event.preventDefault();
       this.#select(view, view.selected + (key === 'arrowdown' || key === 'ctrl+n' ? 1 : -1));
-    } else if (key === 'enter' && (event.target === view.input || event.target === view.results)) {
+    } else if (
+      key === 'enter' &&
+      (event.target === view.input ||
+        event.target === view.results ||
+        view.preview.contains(event.target as Node))
+    ) {
       event.preventDefault();
       if (!event.repeat) void this.#confirm(view);
     } else if (key === 'tab' || key === 'shift+tab') {

@@ -122,6 +122,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `toggleBodySelection` | `<Space>rb` | 在当前 Reader 会话切换正文／全部文字选择。首次开启优先读取所选后端的有效缓存，缺失时显式准备原生结构；PDF 与 Reading Mode 的键盘选择排除图表、图注和页边文字；再次按下关闭。 |
 | `openFigurePicker` | `<Space>rf` | 搜索已有解析中的图表，预览原 PDF 裁图。支持整组／独立主体、类型筛选及 `p:6` 页码查询；Enter 定位，Escape 取消。预览不改变阅读位置，确认沿用原生导航历史。 |
 | `openChapterSearch` | `<Space>rs` | 在选择的章节及子章节中查找字面原文，按段落显示区域定位；Enter 确认，Escape 取消，不改变原生 Find。 |
+| `openObjectExcerpts` | `<Space>re` | 预览、复制整组图表／公式与来源，可复制原图、结构文本或显式保存为新笔记；不恢复通用文字 Capture。 |
 | `prepareDocuments` | `<Space>ru`（Main／Reader） | 打开增强阅读准备：Main 固定 EffectiveSelection 对应 PDF，Reader 只取当前附件；优先读缓存，显式上传缺失项，显示逐文件进度、回执，支持停止本地等待和继续／重试。 |
 | `compareDocumentParsing` | `<Space>rd` | 打开原生／云端解析对照（默认 MinerU）并读取匹配的本地缓存；普通解析按钮优先复用，缓存未命中时上传 PDF，“重新解析并上传 PDF”明确刷新结果。支持区域／整组定位及报告复制。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
