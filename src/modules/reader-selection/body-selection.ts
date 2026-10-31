@@ -1,16 +1,12 @@
-import { analysisPDF } from '../../platform/document-analysis';
 import {
-  nativeDocumentPages,
-  nativeParsedDocument,
-  nativeDocumentTextRegions,
-} from '../../document-analysis/native';
-import type { DocumentRegion, NativeDocumentData } from '../../document-analysis/contracts';
-import type { ReaderCachedDocument } from '../../reader/document-cache';
+  readNativeReaderDocument,
+  type ReaderCachedDocument,
+  type ReaderDocumentSnapshot,
+} from '../../reader/document-cache';
 import {
   leaseReaderTextAdmission,
   readerReadingMode,
   readerTextSpans,
-  structuredDocumentData,
   type ReaderRuntime,
   type ReaderTextSourceLocation,
 } from '../../toolkit/reader';
@@ -41,7 +37,7 @@ export class ReaderBodySelection {
   readonly #views = new Map<Window, { current: () => boolean; dispose: () => void }>();
   readonly #layouts = new Map<boolean, BodyLayout>();
   readonly #loading = new Map<boolean, Promise<BodyLayout>>();
-  #native: Promise<NativeDocumentData | null> | null = null;
+  #native: Promise<ReaderDocumentSnapshot | null> | null = null;
   #enabled = false;
   #pending = false;
   #disposed = false;
@@ -176,38 +172,22 @@ export class ReaderBodySelection {
       if (!current()) throw new Error('Body selection retired');
       // Reading Mode exposes native ref paths, not cloud IDs. Map only complete
       // native source fragments; never interpret an OCR region as a character anchor.
-      const pdf = cached ? null : await analysisPDF(this.#host.reader.itemID);
-      if (!current()) throw new Error('Body selection retired');
-      let native: readonly DocumentRegion[] = [];
+      let native: ReaderDocumentSnapshot | null = null;
       if (reading || !cached) {
-        this.#native ??= structuredDocumentData(this.#host.reader.itemID, current);
-        const data = await this.#native;
-        if (!current() || !data) throw new Error('Native layout unavailable');
-        if (pdf)
-          nativeParsedDocument(
-            {
-              fingerprint: pdf.fingerprint,
-              fileName: pdf.fileName,
-              pages: nativeDocumentPages(data.catalog),
-            },
-            data,
-          );
-        else if (cached)
-          nativeParsedDocument(
-            {
-              fingerprint: cached.parsed.sourceFingerprint,
-              fileName: '',
-              pages: cached.parsed.pages,
-            },
-            data,
-          );
-        native = nativeDocumentTextRegions(data);
+        this.#native ??= readNativeReaderDocument(this.#host.reader, current);
+        native = await this.#native;
+        if (!current() || !native) throw new Error('Native layout unavailable');
+        if (cached && cached.parsed.sourceFingerprint !== native.parsed.sourceFingerprint)
+          throw new Error('Native layout belongs to another PDF revision');
       }
-      const isCurrent = cached?.isCurrent ?? pdf!.isCurrent;
+      const isCurrent = cached?.isCurrent ?? native!.isCurrent;
       const layout: BodyLayout = {
         isCurrent,
         cached: !!cached,
-        accepts: bodyTextAdmission(cached?.parsed.regions ?? native, native),
+        accepts: bodyTextAdmission(
+          cached?.parsed.regions ?? native!.textRegions,
+          native?.textRegions ?? [],
+        ),
       };
       if (!current()) throw new Error('Body selection retired');
       this.#layouts.set(reading, layout);

@@ -615,5 +615,15 @@
   "documentAnalysis.elapsed": "Recorded elapsed (including waits / pauses)",
   "documentCredentials.temporaryToken": "API token (temporary)",
   "bodySelection.cached": "✓ Body selection enabled (saved layout): excluding figures, tables, captions and margins",
-  "bodySelection.changed": "✗ Selection or document source changed; select again and use <Space>rb to prepare body filtering"
+  "bodySelection.changed": "✗ Selection or document source changed; select again and use <Space>rb to prepare body filtering",
+  "action.openChapterSearch": "Reader: search within a chapter",
+  "reader.chapter.title": "Search within a chapter",
+  "reader.chapter.search": "Find literal source text",
+  "reader.chapter.help": "Search the selected section and its subsections. ↑/↓ selects; Enter opens the source paragraph; Escape cancels. Results locate regions, not exact character highlights. Native Find remains unchanged.",
+  "reader.chapter.loading": "Reading document structure…",
+  "reader.chapter.unavailable": "Document structure or source changed; reopen the dialog",
+  "reader.chapter.close": "Close",
+  "reader.chapter.empty": "No matching paragraphs",
+  "reader.chapter.document": "Whole document (no headings)",
+  "reader.chapter.page": "Page"
 }

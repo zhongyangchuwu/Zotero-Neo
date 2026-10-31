@@ -19,6 +19,7 @@ export const READER_NAVIGATION_ACTIONS = [
   'toggleReadingMode',
   'compareDocumentParsing',
   'openFigurePicker',
+  'openChapterSearch',
   'zoomIn',
   'zoomOut',
   'zoomReset',

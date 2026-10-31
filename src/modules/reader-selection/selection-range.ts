@@ -7,7 +7,8 @@ import {
   readerSelectionIsFiltered,
   readerTextBoundaryPosition,
 } from '../../toolkit/reader';
-import { structuralTextPosition } from './text-boundary-motion';
+import { indexedStructuralTextPosition } from './text-boundary-motion';
+import { buildMappedTextIndex, mappedTextContains, type MappedTextIndex } from './token-boundaries';
 import { isDeadObject } from '../../platform/cross-compartment';
 import type { FlashIntent, FlashSelectionTarget } from './flash';
 import { verticalTextPosition } from './text-motion';
@@ -233,6 +234,7 @@ export class ReaderSelectionRange {
     pdfWindow: PdfWindow,
     direction: 'forward' | 'backward',
     granularity: 'character' | 'word' | 'sentence' | 'paragraph',
+    prepared?: readonly MappedTextIndex[] | null,
   ): void {
     if (!this.#current(pdfWindow)) return;
     const current = this.#host.captureView(pdfWindow);
@@ -250,9 +252,10 @@ export class ReaderSelectionRange {
       return;
     const selection = pdfWindow.getSelection();
     const paragraphs =
-      granularity === 'sentence' || granularity === 'paragraph'
-        ? readerTextParagraphs(pdfWindow)
-        : null;
+      prepared ??
+      (granularity === 'sentence' || granularity === 'paragraph'
+        ? readerTextParagraphs(pdfWindow)?.map(buildMappedTextIndex)
+        : null);
     if (
       paragraphs &&
       selection &&
@@ -260,14 +263,17 @@ export class ReaderSelectionRange {
       isTextNode(selection.focusNode) &&
       (granularity === 'sentence' || granularity === 'paragraph')
     ) {
-      const target = structuralTextPosition(
-        paragraphs,
-        { textNode: selection.focusNode, offset: selection.focusOffset },
-        direction,
-        granularity,
-      );
+      const focus = { textNode: selection.focusNode, offset: selection.focusOffset };
+      if (!paragraphs.some((index) => mappedTextContains(index, focus))) {
+        this.extendByToken(pdfWindow, direction === 'forward' ? 1 : -1);
+        return;
+      }
+      const target = indexedStructuralTextPosition(paragraphs, focus, direction, granularity);
       if (target)
         selection.setBaseAndExtent(anchor.textNode, anchor.offset, target.textNode, target.offset);
+    } else if (granularity === 'sentence' || granularity === 'paragraph') {
+      this.extendByToken(pdfWindow, direction === 'forward' ? 1 : -1);
+      return;
     } else selection?.modify('extend', direction, granularity);
     this.refresh(pdfWindow, true);
   }
