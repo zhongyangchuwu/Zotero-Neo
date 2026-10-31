@@ -1,5 +1,6 @@
 import type { ComputedAnnotationPosition, PdfWindow } from './contracts';
 import type { NativePdfWindow } from './private-types';
+import { currentReaderPresentation, readerReadingMode } from './presentation';
 
 /** Converts only selected text-node fragments; canvas/page boxes are not annotation text. */
 export function computeSelectionPosition(
@@ -7,6 +8,19 @@ export function computeSelectionPosition(
   selection: Selection,
 ): ComputedAnnotationPosition | null {
   if (!selection.rangeCount) return null;
+  if (readerReadingMode(pdfWindow)) {
+    const annotation = currentReaderPresentation(pdfWindow)?.getAnnotationFromRange?.(
+      selection.getRangeAt(0),
+      'highlight',
+    );
+    return annotation
+      ? {
+          position: JSON.stringify(annotation.position),
+          sortIndex: annotation.sortIndex,
+          pageLabel: annotation.pageLabel,
+        }
+      : null;
+  }
   const viewer = (pdfWindow as NativePdfWindow).PDFViewerApplication?.pdfViewer;
   if (!viewer) return null;
   const range = selection.getRangeAt(0);

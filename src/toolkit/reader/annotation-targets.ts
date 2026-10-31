@@ -1,6 +1,7 @@
 import { cloneInto } from '../../platform/cross-compartment';
 import { readerWindow } from './host';
 import { visibleElement, visibleWindow } from './visibility';
+import { readerPresentationView, readerReadingMode } from './presentation';
 import type { ReaderRuntime, ReaderViewRuntime } from './contracts';
 import type {
   NativeReaderAnnotationRuntime,
@@ -67,6 +68,22 @@ function firstVisibleRect(
   ownerWindow: Window,
   annotation: NativeReaderAnnotationRuntime,
 ): readonly number[] | null {
+  if (readerReadingMode(window)) {
+    if (
+      !visibleWindow(window) ||
+      !supportedPosition(annotation) ||
+      !['highlight', 'underline', 'note'].includes(annotation.type ?? '')
+    )
+      return null;
+    const range = view.toDisplayedRange?.(cloneInto(annotation.position!, ownerWindow));
+    if (!range) return null;
+    const viewport = [0, 0, window.innerWidth, window.innerHeight];
+    for (const rect of Array.from(range.getClientRects() ?? [])) {
+      const visible = intersect([rect.left, rect.top, rect.right, rect.bottom], viewport);
+      if (visible) return visible;
+    }
+    return null;
+  }
   if (
     !supportedPosition(annotation) ||
     !visibleWindow(window) ||
@@ -128,8 +145,8 @@ export function readerVisibleAnnotations(
     const internal = reader._internalReader;
     const ownerWindow = readerWindow(readerHandle);
     if (!internal || !ownerWindow) return [];
-    const primary = internal._primaryView === view;
-    if (!primary && internal._secondaryView !== view) return [];
+    const primary = readerPresentationView(reader, true) === view;
+    if (!primary && readerPresentationView(reader, false) !== view) return [];
     const state = internal._state;
     if (!state || !Array.isArray(state.annotations) || !Array.isArray(view._annotations)) return [];
     const filter = state.filter;
@@ -140,10 +157,9 @@ export function readerVisibleAnnotations(
         reader._isTabClosed !== true &&
         reader._internalReader === internal &&
         readerWindow(readerHandle) === ownerWindow &&
-        (primary ? internal._primaryView : internal._secondaryView) === view &&
+        readerPresentationView(reader, primary) === view &&
         view._iframeWindow === window &&
         current?.showAnnotations !== false &&
-        !(primary ? current?.primaryReadingModeEnabled : current?.secondaryReadingModeEnabled) &&
         current?.filter === filter &&
         JSON.stringify(current?.filter) === filterSnapshot
       );

@@ -1,6 +1,7 @@
 import { CleanupFailure } from '../../core/cleanup';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { asKeyboardEvent } from '../../platform/dom';
+import { leaseReaderPresentation, readerPresentationViews } from './presentation';
 import type { PdfWindow, ReaderRuntime } from './contracts';
 import type { NativeReaderRuntime, NativeReaderViewRuntime } from './private-types';
 
@@ -31,9 +32,9 @@ function asPdfWindow(window: Window | undefined): PdfWindow | null {
 }
 
 /**
- * Owns discovery and DOM-listener lifecycle for the Reader's primary/secondary PDF views.
+ * Owns discovery and DOM-listener lifecycle for each split's displayed PDF or Reading Mode view.
  *
- * Feature semantics remain in ReaderSession. This owner only discovers current PDF windows,
+ * Feature semantics remain in ReaderSession. This owner only discovers current presentation windows,
  * attaches view-local events, releases detached views, and drives the periodic host-view rescan.
  */
 export class ReaderViewLifecycle {
@@ -68,9 +69,8 @@ export class ReaderViewLifecycle {
 
   sync(): void {
     if (this.#disposed) return;
-    const internal = this.#reader._internalReader;
     const wanted = new Map<PdfWindow, { view: NativeReaderViewRuntime; document: Document }>();
-    for (const view of [internal?._primaryView, internal?._secondaryView]) {
+    for (const view of readerPresentationViews(this.#reader)) {
       const pdfWindow = asPdfWindow(view?._iframeWindow);
       if (!view || !pdfWindow || isDeadObject(pdfWindow)) continue;
       wanted.set(pdfWindow, { view, document: pdfWindow.document });
@@ -94,12 +94,11 @@ export class ReaderViewLifecycle {
 
     for (const [pdfWindow, target] of wanted) {
       if (this.#handlers.has(pdfWindow)) continue;
-      const current = this.#reader._internalReader;
       if (
         this.#disposed ||
         isDeadObject(pdfWindow) ||
         isDeadObject(target.view) ||
-        (current?._primaryView !== target.view && current?._secondaryView !== target.view) ||
+        !readerPresentationViews(this.#reader).includes(target.view) ||
         target.view._iframeWindow !== pdfWindow ||
         pdfWindow.document !== target.document
       )
@@ -156,7 +155,9 @@ export class ReaderViewLifecycle {
       this.#dependencies.onResize(pdfWindow);
     }) as EventListener;
     const scrollElement =
-      document.getElementById('viewerContainer') ?? document.querySelector('.pdfViewer');
+      document.getElementById('viewerContainer') ??
+      document.querySelector('.pdfViewer') ??
+      document.scrollingElement;
     const handlers: ViewHandlers = {
       view,
       document,
@@ -200,6 +201,9 @@ export class ReaderViewLifecycle {
         },
       );
     try {
+      handlers.cleanups.push(
+        leaseReaderPresentation(pdfWindow, view, () => this.#handlerCurrent(pdfWindow, handlers)),
+      );
       if (!windowListener('keydown', keyDown, true)) return;
       if (!windowListener('keyup', keyUp, true)) return;
       if (!windowListener('pointerdown', pointerDown, true)) return;
@@ -248,9 +252,8 @@ export class ReaderViewLifecycle {
       isDeadObject(handlers.document)
     )
       return false;
-    const internal = this.#reader._internalReader;
     return (
-      (internal?._primaryView === handlers.view || internal?._secondaryView === handlers.view) &&
+      readerPresentationViews(this.#reader).includes(handlers.view) &&
       handlers.view._iframeWindow === pdfWindow &&
       pdfWindow.document === handlers.document
     );

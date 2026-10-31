@@ -21,6 +21,8 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'halfPageUp',
   'fullPageDown',
   'fullPageUp',
+  'toggleReadingMode',
+  'compareDocumentParsing',
   'zoomIn',
   'zoomOut',
   'zoomReset',

@@ -161,7 +161,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | PDF 视图监听与发现 | `src/toolkit/reader/view-lifecycle.ts` | 管理主/次 PDF 视图的附着与释放；注册绑定 ReaderView、Window 与 Document，复用 Window 不复活旧监听，部分获取失败仍释放先前句柄。 |
 | Reader 原生导航、搜索、缩放、分屏与焦点 | `src/toolkit/reader/navigation.ts` | 在当前原生视图执行操作，并将载荷克隆进其 realm。`prepareReaderSelectionSearch()` 返回精确 pane/原生 Find 状态的一次写入能力，不覆盖后续输入或重开的 Find；语义与历史仍由业务负责。 |
 | 跳转捕获、重开与完成桥接 | `src/toolkit/reader/jump-host.ts`、`history-bridge.ts` | 在宿主边界保留视图/历史身份与完成来源；共享历史策略属于 `src/navigation/`。 |
-| PDF 文本与选择几何 | `src/toolkit/reader/pdf-text.ts`、`selection-geometry.ts` | 读取文本层和 viewport 几何；不完整几何拒绝保存，不生成部分批注。 |
+| PDF 文本与选择几何 | `src/toolkit/reader/text-source.ts`、`selection-geometry.ts` | 读取文本层和 viewport 几何；不完整几何拒绝保存，不生成部分批注。 |
 | 可见标识符文本与几何 | `src/toolkit/reader/identifier-text.ts` | 将可见 PDF.js 文本读成保留来源的同行片段，将文本范围映射成 viewport 矩形；不猜跨行拼接，不使用 OCR。 |
 | PDF 链接 overlay 与原生委托 | `src/toolkit/reader/links.ts` | 读取 Zotero overlay 映射，并委托捕获的原生视图激活链接。 |
 | Reader 目标 frame 可见性 | `src/toolkit/reader/visibility.ts` | 批注、标识符与原生链接共享窗口关闭及包含 frame 的可见性检查；Reading Mode 下隐藏的 PDF 不能成为操作目标。 |
@@ -208,3 +208,17 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 ## Reader 选择 API
 
 `Zotero.Neo.reader.getSelection()` 返回当前 `ReaderSelectionContext` 或 `null`；`Zotero.Neo.reader.registerSelectionAction(action)` 注册扩展动作并返回 disposer。API 由 `src/addon.ts` 公开、`src/core/contracts.ts` 定义类型；`src/modules/reader-selection/` 负责选择上下文和动作运行时，`registry.ts` 的定义随应用存活，不因关闭一个 Reader 清空。旧 disposer 不删除同 ID 的后继注册；选择模块退休后不暴露旧上下文或执行旧回调。集成方继续使用原接口，不直接访问 Reader session 或 PDF.js 私有对象。
+
+## 原生阅读视图与文档解析接口
+
+`src/toolkit/reader/presentation.ts` 是当前显示视图的唯一解析入口：每个分屏优先使用 SDT Reading Mode 覆盖视图；原 PDF 隐藏后不能继续接受操作。`ReaderViewLifecycle` 在两种呈现间统一附着和释放监听器，并为精确 Window / Document 安装来源映射能力租约。旧租约释放不能删除后继租约。Reading Mode 不新增 `ReaderMode` 或绑定上下文，仍使用 Normal／Select。
+
+`src/toolkit/reader/text-source.ts` 返回两种呈现的真实 Text 节点。词元、Flash、选择范围和视觉行移动共用业务实现；重排文本的视觉行来自 Range 客户矩形，段落来自原生 HTML 结构。词元快照仅覆盖锚点、活动端和相邻段落，并可在同一同步动作中复用于提示；远端锚点保持完整，不常驻全文索引。`selection-geometry.ts` 将重排选区交给原生 SDT 映射，保留 Zotero 的 sortIndex、pageLabel 和 PDF 几何。图像裁图区不被冒充为可选文字。
+
+`src/document-analysis/contracts.ts` 定义完整解析后端的 `DocumentParser`、输入来源和版本化区域结果。`native.ts`、`oxr.ts` 负责各自协议归一化；后端可一次完成布局、识别、阅读顺序和表格，不强迫拆开其内部模型。`DocumentRegion` 保留内容格式、正文归属与区域级锚点精度；区域框不提供字符级批注保证。
+
+`document-source.ts` 单独读取 PDF 页面几何，使云端后端不依赖 SDT 成功。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过原生 `_pageInfo` 适配。OXR 像素框按原 PDF CropBox 与旋转转换，缺页、重复页、非法尺寸和越界矩形使该结果失败，不静默裁剪。来源文件版本变更不能继续应用原结果。
+
+`src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；请求体、凭据不进入日志或结果。导航模块中的 `ReaderDocumentComparison` 拥有显式处理、对照界面和迟到结果隔离。原生与云端结果独立，取消本地请求不承诺远端停止计算；SDK 原生提取不可取消。API 密钥只存在于本次界面。表格 HTML 使用宿主纯文本转换器展示，不插入后端 HTML 或加载其中资源。
+
+后续阶段后端应继续消费这些显式产物及来源坐标；不通过修改全局 SDT 缓存或伪造 textMap 接入原生 Reading Mode。当前尚未实现外部结构替换、跨后端阶段编排和完整多子图分组。

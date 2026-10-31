@@ -178,7 +178,11 @@ export class ReaderNavigation {
 
   /** A caption choice uses the exact active view's native position/history producer. */
   async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<void> {
-    await this.#host.navigateCaption(pdfWindow, target.location);
+    await this.#host.navigateToRegion(pdfWindow, target.location);
+  }
+
+  toggleReadingMode(window: PdfWindow): Promise<void> {
+    return this.#host.toggleReadingMode(window);
   }
 
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {

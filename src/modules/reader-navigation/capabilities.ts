@@ -16,6 +16,8 @@ export const READER_NAVIGATION_ACTIONS = [
   'nextPage',
   'firstPage',
   'lastPage',
+  'toggleReadingMode',
+  'compareDocumentParsing',
   'zoomIn',
   'zoomOut',
   'zoomReset',

@@ -24,6 +24,8 @@ interface NativeReaderFindState {
 }
 
 export interface InternalReaderRuntime {
+  readonly _primarySDTView?: NativeReaderViewRuntime;
+  readonly _secondarySDTView?: NativeReaderViewRuntime;
   readonly _primaryView?: NativeReaderViewRuntime;
   readonly _secondaryView?: NativeReaderViewRuntime;
   readonly _lastView?: NativeReaderViewRuntime;
@@ -71,6 +73,7 @@ export interface InternalReaderRuntime {
   toggleHorizontalSplit?(enable?: boolean): void;
   toggleVerticalSplit?(enable?: boolean): void;
   focusView?(primary?: boolean): void;
+  _setReadingMode?(primary: boolean, enabled: boolean): Promise<void>;
 }
 
 export interface ReaderFindControllerRuntime {
@@ -98,6 +101,15 @@ export interface NativeReaderAnnotationRuntime {
 }
 
 export interface NativeReaderViewRuntime {
+  toDisplayedRange?(position: object): Range | null;
+  getAnnotationFromRange?(
+    range: Range,
+    type: 'highlight',
+  ): {
+    readonly position: ReaderLinkPosition;
+    readonly sortIndex: string;
+    readonly pageLabel: string;
+  } | null;
   readonly _iframeWindow?: Window;
   /** AnnotationManager's already-filtered list passed to this exact view. */
   readonly _annotations?: readonly NativeReaderAnnotationRuntime[];
@@ -176,9 +188,13 @@ export interface PdfPageViewRuntime {
 }
 
 export interface PdfDocumentRuntime {
+  readonly numPages?: number;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
   getPage?(page: number): Promise<{
+    readonly view?: readonly number[];
+    readonly rotate?: number;
+    readonly _pageInfo?: { readonly view: readonly number[]; readonly rotate?: number };
     getViewport(options: { readonly scale: number }): {
       readonly width: number;
       readonly height: number;

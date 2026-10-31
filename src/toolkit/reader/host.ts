@@ -3,6 +3,7 @@ import type { ReaderEventRuntime } from '../../reader/types';
 import type { ReaderRuntime, ReaderViewRuntime } from './contracts';
 import type { NativeReaderRuntime, NativeReaderViewRuntime } from './private-types';
 import { isDeadObject } from '../../platform/cross-compartment';
+import { readerPresentationViews } from './presentation';
 
 export type ReaderEventName = 'renderToolbar' | 'renderTextSelectionPopup';
 export type ReaderEventListener = (event: ReaderEventRuntime) => void;
@@ -129,12 +130,7 @@ export function readerViewForWindow(
   reader: ReaderRuntime,
   window: Window,
 ): ReaderViewRuntime | null {
-  const native = reader as NativeReaderRuntime;
-  const internal = native._internalReader;
-  if (internal?._primaryView?._iframeWindow === window) return internal._primaryView;
-  if (internal?._secondaryView?._iframeWindow === window) return internal._secondaryView;
-  if (internal?._lastView?._iframeWindow === window) return internal._lastView;
-  return null;
+  return readerPresentationViews(reader).find((view) => view._iframeWindow === window) ?? null;
 }
 
 export function readerViewIsLive(
@@ -142,11 +138,9 @@ export function readerViewIsLive(
   view: ReaderViewRuntime,
   window?: Window,
 ): boolean {
-  const native = reader as NativeReaderRuntime;
   const nativeView = view as NativeReaderViewRuntime;
-  const internal = native._internalReader;
   return (
-    (internal?._primaryView === view || internal?._secondaryView === view) &&
+    readerPresentationViews(reader).includes(nativeView) &&
     (window === undefined || nativeView._iframeWindow === window)
   );
 }

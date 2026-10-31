@@ -77,6 +77,50 @@ function fakePdfWindow() {
 }
 
 describe('ReaderViewLifecycle', () => {
+  it('retires hidden PDF callbacks immediately and leases only the displayed Reading Mode view', () => {
+    Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
+    const pdf = fakePdfWindow(),
+      reading = fakePdfWindow();
+    const base = { _iframeWindow: pdf.pdfWindow };
+    const overlay = { _iframeWindow: reading.pdfWindow };
+    const internal = {
+      _primaryView: base,
+      _primarySDTView: undefined as typeof overlay | undefined,
+    };
+    const onKeyDown = vi.fn(),
+      releaseView = vi.fn();
+    const lifecycle = new ReaderViewLifecycle({
+      reader: { _internalReader: internal } as ReaderRuntime,
+      timerWindow: pdf.pdfWindow,
+      onKeyDown,
+      releaseView,
+      onKeyUp: vi.fn(),
+      onPointerDown: vi.fn(),
+      onBlur: vi.fn(),
+      onSelectionChange: vi.fn(),
+      onScroll: vi.fn(),
+      onResize: vi.fn(),
+      syncHostBridge: vi.fn(),
+    });
+    lifecycle.start();
+    pdf.emitWindow('keydown', { key: 'j' } as KeyboardEvent);
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    internal._primarySDTView = overlay;
+    // The old callback must become inert even before the periodic rescan.
+    pdf.emitWindow('keydown', { key: 'j' } as KeyboardEvent);
+    expect(onKeyDown).toHaveBeenCalledTimes(1);
+    lifecycle.sync();
+    expect(releaseView).toHaveBeenCalledWith(pdf.pdfWindow);
+    reading.emitWindow('keydown', { key: 'j' } as KeyboardEvent);
+    expect(onKeyDown).toHaveBeenLastCalledWith(expect.anything(), reading.pdfWindow);
+    internal._primarySDTView = undefined;
+    reading.emitWindow('keydown', { key: 'j' } as KeyboardEvent);
+    expect(onKeyDown).toHaveBeenCalledTimes(2);
+    lifecycle.sync();
+    expect(releaseView).toHaveBeenCalledWith(reading.pdfWindow);
+    lifecycle.dispose();
+  });
+
   it('owns primary/secondary listener attachment, replacement, release, and active-view fallback', () => {
     Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
     const primary = fakePdfWindow();

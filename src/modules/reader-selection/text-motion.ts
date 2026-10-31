@@ -1,4 +1,4 @@
-import { pdfTextSpans } from '../../toolkit/reader';
+import { readerReadingMode, readerTextSpans } from '../../toolkit/reader';
 import type { PdfWindow, Pointer } from '../../reader/types';
 
 interface RectLike {
@@ -59,12 +59,20 @@ function caretRect(pdfWindow: PdfWindow, pointer: Pointer): RectLike | null {
 
 function textLines(pdfWindow: PdfWindow): TextLineGeometry[] {
   const lines: TextLineGeometry[] = [];
-  for (const { textNode, rect } of pdfTextSpans(pdfWindow)) {
-    const geometry: TextSpanGeometry = { pointer: { textNode, offset: 0 }, rect };
-    const current = lines.at(-1);
-    if (current?.spans.some((entry) => sameVisualLine(entry.rect, rect)))
-      current.spans.push(geometry);
-    else lines.push({ spans: [geometry] });
+  for (const { textNode, rect } of readerTextSpans(pdfWindow)) {
+    let rectangles: readonly RectLike[] = [rect];
+    if (readerReadingMode(pdfWindow)) {
+      const range = pdfWindow.document.createRange();
+      range.selectNodeContents(textNode);
+      rectangles = Array.from(range.getClientRects() ?? []).filter(validRect);
+    }
+    for (const rectangle of rectangles) {
+      const geometry: TextSpanGeometry = { pointer: { textNode, offset: 0 }, rect: rectangle };
+      const current = lines.at(-1);
+      if (current?.spans.some((entry) => sameVisualLine(entry.rect, rectangle)))
+        current.spans.push(geometry);
+      else lines.push({ spans: [geometry] });
+    }
   }
   return lines;
 }
@@ -106,7 +114,7 @@ function nearestCaret(
     for (const offset of offsets) {
       const pointer = { textNode: span.pointer.textNode, offset };
       const rect = caretRect(pdfWindow, pointer);
-      if (!rect) continue;
+      if (!rect || !sameVisualLine(rect, span.rect)) continue;
       const distance = Math.abs(rect.left - preferredX);
       if (!best || distance < best.distance) best = { pointer, distance };
     }
@@ -115,8 +123,8 @@ function nearestCaret(
 }
 
 /**
- * Resolves one vertical caret step from PDF.js text-layer geometry while preserving
- * the text layer's DOM reading order across columns and pages.
+ * Resolves one vertical caret step from source geometry while preserving DOM reading order.
+ * Reflow Text nodes can contribute several visual lines without becoming separate source nodes.
  */
 export function verticalTextPosition(
   pdfWindow: PdfWindow,
@@ -126,8 +134,13 @@ export function verticalTextPosition(
   allowedStops?: readonly Pointer[],
 ): VerticalTextMotion | null {
   const lines = textLines(pdfWindow);
+  const pointerRect = caretRect(pdfWindow, pointer);
   const lineIndex = lines.findIndex((line) =>
-    line.spans.some((entry) => entry.pointer.textNode === pointer.textNode),
+    line.spans.some(
+      (entry) =>
+        entry.pointer.textNode === pointer.textNode &&
+        (!pointerRect || sameVisualLine(entry.rect, pointerRect)),
+    ),
   );
   if (lineIndex < 0) return null;
   const currentLine = lines[lineIndex]!;
