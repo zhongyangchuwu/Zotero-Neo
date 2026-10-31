@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReaderDocumentComparison } from '../../src/modules/reader-navigation/document-comparison';
 import { oxrParsedDocument } from '../../src/document-analysis/oxr';
+import { mineruParsedDocument } from '../../src/document-analysis/mineru';
 import type { DocumentSource } from '../../src/document-analysis/contracts';
 import type { ReaderRuntime } from '../../src/toolkit/reader';
 import type { PreferenceStore } from '../../src/core/preference-store';
@@ -22,6 +23,7 @@ vi.mock('../../src/platform/document-analysis', () => ({
     isCurrent: host.isCurrent,
   }),
   requestDocumentJSON: host.request,
+  documentServiceTransport: { requestJSON: host.request },
 }));
 vi.mock('../../src/platform/document-analysis-cache', () => ({
   attachmentDocumentCache: () => ({ read: host.readCache, write: host.writeCache }),
@@ -157,7 +159,8 @@ beforeEach(() => {
   comparison = new ReaderDocumentComparison({
     reader: { itemID: 1 } as ReaderRuntime,
     preferences: {
-      get: (_key: string, fallback: unknown) => fallback,
+      get: (key: string, fallback: unknown) =>
+        key === 'documentAnalysis.provider' ? 'oxr' : fallback,
       set: vi.fn(),
     } as unknown as PreferenceStore,
     language: () => 'en',
@@ -174,6 +177,38 @@ const ready = async () => {
 };
 
 describe('document comparison cache workflow', () => {
+  it('switches provider cache identities without uploading and clears credentials at the provider boundary', async () => {
+    const mineru = mineruParsedDocument(source, {
+      pdf_info: [
+        {
+          page_idx: 0,
+          page_size: [600, 800],
+          discarded_blocks: [],
+          para_blocks: [{ type: 'table', bbox: [10, 10, 100, 100] }],
+        },
+      ],
+    });
+    host.readCache.mockImplementation(async (_source, key) =>
+      key.backend === 'mineru' ? { savedAt: 2000, parsed: mineru } : cached,
+    );
+    comparison.open();
+    await vi.waitFor(() => expect(document.status()).toContain('cacheReady'));
+    const provider = document.nodes.find((n) => n.isConnected && n.tag === 'select')!;
+    const key = document.nodes.find(
+      (n) => n.isConnected && n.tag === 'input' && n.type === 'password',
+    )!;
+    key.value = 'private OXR credential';
+    provider.value = 'mineru';
+    provider.emit('change');
+    await vi.waitFor(() =>
+      expect(document.documentElement.textContent).toContain('association.backend'),
+    );
+    expect(key.value).toBe('');
+    expect(document.documentElement.textContent).not.toContain('Fresh result');
+    expect(host.request).not.toHaveBeenCalled();
+    expect(host.readPDF).not.toHaveBeenCalled();
+    comparison.close();
+  });
   it('restores external results even when native SDT is unavailable', async () => {
     host.native.mockRejectedValue(new Error('SDT unavailable'));
     host.readCache.mockResolvedValue(cached);

@@ -80,6 +80,15 @@ function cachedRegion(value: unknown, source: DocumentSource): DocumentRegion | 
   )
     return null;
   const block = record(region.sourceBlock);
+  const object = record(region.sourceObject);
+  if (
+    region.sourceObject !== undefined &&
+    (!object ||
+      typeof object.id !== 'string' ||
+      !object.id ||
+      !['figure', 'table'].includes(String(object.kind)))
+  )
+    return null;
   if (
     region.sourceBlock !== undefined &&
     (!block ||
@@ -100,6 +109,9 @@ function cachedRegion(value: unknown, source: DocumentSource): DocumentRegion | 
     flow: region.flow as DocumentRegion['flow'],
     anchorPrecision: 'region',
     ...(block ? { sourceBlock: { id: block.id as string, order: block.order as number } } : {}),
+    ...(object
+      ? { sourceObject: { id: object.id as string, kind: object.kind as 'figure' | 'table' } }
+      : {}),
   };
 }
 

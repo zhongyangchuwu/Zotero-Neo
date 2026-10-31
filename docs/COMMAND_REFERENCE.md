@@ -120,7 +120,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | --- | --- | --- |
 | `toggleReadingMode` | `<Space>rr` | 切换当前分屏的 Zotero 原生 Reading Mode，使用同一 Reader Normal／Select 按键。 |
 | `toggleBodySelection` | `<Space>rb` | 在当前 Reader 会话切换正文／全部文字选择。首次开启显式准备原生结构，供 PDF 与 Reading Mode 的键盘选择排除图表、图注和页边文字；再次按下关闭。 |
-| `compareDocumentParsing` | `<Space>rd` | 打开原生／OXR 对照并读取匹配的本地缓存；普通解析按钮优先复用，缓存未命中时上传 PDF，“重新解析并上传 PDF”明确刷新结果。支持区域／整组定位及报告复制。 |
+| `compareDocumentParsing` | `<Space>rd` | 打开原生／云端解析对照（默认 MinerU）并读取匹配的本地缓存；普通解析按钮优先复用，缓存未命中时上传 PDF，“重新解析并上传 PDF”明确刷新结果。支持区域／整组定位及报告复制。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
 | `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | 每步移动半个视口；计数会重复执行。 |

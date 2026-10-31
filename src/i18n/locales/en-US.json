@@ -482,10 +482,10 @@
   "action.toggleReadingMode": "Reader: toggle Reading Mode",
   "action.compareDocumentParsing": "Reader: compare document parsing",
   "documentAnalysis.title": "Document parsing comparison",
-  "documentAnalysis.description": "Compare native structure with OXR. Cloud parsing uploads this PDF to the configured service. Region results support navigation; text annotations require source alignment.",
+  "documentAnalysis.description": "Compare Zotero structure with cloud parsing. Cloud parsing uploads this PDF and caches results locally. Regions support navigation; text annotations still require source alignment.",
   "documentAnalysis.endpoint": "OXR API base URL",
   "documentAnalysis.key": "API key (this dialog only)",
-  "documentAnalysis.parseCloud": "Load cache or parse with OXR cloud",
+  "documentAnalysis.parseCloud": "Use cache or parse in cloud",
   "documentAnalysis.refreshCloud": "Parse again and upload PDF",
   "documentAnalysis.cacheReady": "Loaded local analysis cache; PDF was not uploaded.",
   "documentAnalysis.cacheMiss": "No matching cache. Cloud parsing uploads the PDF only when requested.",
@@ -534,5 +534,13 @@
   "bodySelection.preparing": "→ Identifying body and auxiliary regions…",
   "bodySelection.body": "✓ Body selection enabled: v / Flash exclude figures, tables, captions and margins",
   "bodySelection.all": "✓ All text selection restored",
-  "bodySelection.unavailable": "✗ Body layout unavailable; all text remains selectable"
+  "bodySelection.unavailable": "✗ Body layout unavailable; all text remains selectable",
+  "documentAnalysis.provider": "Cloud parsing service",
+  "documentAnalysis.association.backend": "Parser-provided group",
+  "documentAnalysis.progress.uploading": "Uploading PDF…",
+  "documentAnalysis.progress.waiting-file": "Waiting for upload processing…",
+  "documentAnalysis.progress.pending": "Queued in cloud…",
+  "documentAnalysis.progress.running": "Parsing in cloud…",
+  "documentAnalysis.progress.converting": "Preparing results…",
+  "documentAnalysis.progress.downloading": "Downloading results…"
 }

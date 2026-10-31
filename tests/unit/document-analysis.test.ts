@@ -10,8 +10,8 @@ import {
   oxrDocumentParser,
   oxrMultipart,
   oxrParsedDocument,
-  rasterPDFRect,
 } from '../../src/document-analysis/oxr';
+import { rasterPDFRect } from '../../src/document-analysis/geometry';
 
 const page: DocumentPage = { pageIndex: 0, viewBox: [10, 20, 210, 120], rotation: 0 };
 const source: DocumentSource = { fingerprint: 'original', fileName: 'owned.pdf', pages: [page] };

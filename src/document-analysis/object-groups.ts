@@ -139,13 +139,45 @@ function unobstructed(
 }
 
 /**
- * Associate one labeled caption with spatially connected panels on the same page.
- * Tables support captions above or below. Conflicting claims are retired together,
- * so iteration order cannot assign a shared visual to an arbitrary caption.
+ * Preserve explicit provider objects even without captions; other regions use
+ * conservative same-page caption association. Never extend explicit objects by proximity.
  */
 export function documentObjectGroups(
   regions: readonly DocumentRegion[],
 ): readonly DocumentObjectGroup[] {
+  const explicit = new Map<string, DocumentRegion[]>();
+  for (const region of regions) {
+    if (!region.sourceObject) continue;
+    const members = explicit.get(region.sourceObject.id) ?? [];
+    members.push(region);
+    explicit.set(region.sourceObject.id, members);
+  }
+  const groups: DocumentObjectGroup[] = [];
+  for (const [id, members] of explicit) {
+    const kind = members[0]!.sourceObject!.kind;
+    if (members.some((r) => r.sourceObject!.kind !== kind || r.pageIndex !== members[0]!.pageIndex))
+      throw new Error('Incompatible explicit document object membership');
+    const captions = members.filter((r) => r.kind === 'caption');
+    const identity = members
+      .map((r) => documentCaptionIdentity(r.text))
+      .find((v) => v?.kind === kind);
+    groups.push({
+      id: `object:${id}`,
+      kind,
+      label: identity?.label ?? '',
+      title:
+        captions.map((r) => r.text).join('\n') ||
+        members.find((r) => documentCaptionIdentity(r.text)?.kind === kind)?.text ||
+        '',
+      captionRegionIds: captions.map((r) => r.id),
+      memberRegionIds: members.map((r) => r.id),
+      association: 'backend',
+    });
+  }
+  return [...groups, ...geometricObjectGroups(regions.filter((r) => !r.sourceObject))];
+}
+
+function geometricObjectGroups(regions: readonly DocumentRegion[]): readonly DocumentObjectGroup[] {
   const captions = new Map<string, DocumentRegion[]>();
   const identities = new Map<string, NonNullable<ReturnType<typeof documentCaptionIdentity>>>();
   const regionBlocks = blocks(regions);

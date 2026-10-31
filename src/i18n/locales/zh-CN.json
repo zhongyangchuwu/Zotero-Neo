@@ -482,10 +482,10 @@
   "action.toggleReadingMode": "阅读器：切换阅读模式",
   "action.compareDocumentParsing": "阅读器：文档解析对照",
   "documentAnalysis.title": "文档解析对照",
-  "documentAnalysis.description": "对照原生结构与 OXR。云端解析会上传此 PDF 至所配置服务。区域结果支持定位；文字批注仍需来源对齐。",
+  "documentAnalysis.description": "对照 Zotero 原生结构与云端解析。云端解析会上传此 PDF；分析结果保存在本地，区域支持定位，文字批注仍需来源对齐。",
   "documentAnalysis.endpoint": "OXR API 地址",
   "documentAnalysis.key": "API 密钥（仅本次对话框）",
-  "documentAnalysis.parseCloud": "读取缓存或使用 OXR 云端解析",
+  "documentAnalysis.parseCloud": "读取缓存或使用云端解析",
   "documentAnalysis.refreshCloud": "重新解析并上传 PDF",
   "documentAnalysis.cacheReady": "已读取本地解析缓存，未上传 PDF。",
   "documentAnalysis.cacheMiss": "暂无匹配缓存；点击云端解析后才会上传 PDF。",
@@ -534,5 +534,13 @@
   "bodySelection.preparing": "→ 正在识别正文与图表区域…",
   "bodySelection.body": "✓ 正文选择已启用：v / Flash 将排除图表、题注与页边文字",
   "bodySelection.all": "✓ 已恢复全部文字选择",
-  "bodySelection.unavailable": "✗ 正文区域暂不可用，保留全部文字选择"
+  "bodySelection.unavailable": "✗ 正文区域暂不可用，保留全部文字选择",
+  "documentAnalysis.provider": "云端解析服务",
+  "documentAnalysis.association.backend": "解析器提供的整组关系",
+  "documentAnalysis.progress.uploading": "正在上传 PDF…",
+  "documentAnalysis.progress.waiting-file": "等待云端接收文件…",
+  "documentAnalysis.progress.pending": "正在云端排队…",
+  "documentAnalysis.progress.running": "正在云端解析…",
+  "documentAnalysis.progress.converting": "正在生成解析结果…",
+  "documentAnalysis.progress.downloading": "正在下载解析结果…"
 }

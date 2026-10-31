@@ -219,21 +219,25 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 正文选择排除 `excluded` 和非公式的 `auxiliary` 区域，未知来源保留可选。PDF 按文字 Range 的中心落入排除区域且水平覆盖至少 90% 分类，边缘容差 0.5 点；不用含字体行距的 span 框作另一套判断。Reading Mode 按原生块身份判断。`user-select:none` 只在 Neo Select 样式租约内生效，普通鼠标选区仍由宿主维护；Gecko 的 `Selection.toString()` 遵守该样式而 `Range.toString()` 不遵守，因此复制保留布局序列化，批注另按接纳文字拆分连续 Range。所有片段必须完整映射，不能仅过滤文本却保存包含图表的矩形。原生字符移动留下元素端点时规范化到接纳文字边界，避免后续词元移动失效。
 
-`src/document-analysis/contracts.ts` 定义完整解析后端的 `DocumentParser`、输入来源和版本化区域结果。`native.ts`、`oxr.ts` 负责各自协议归一化；后端可一次完成布局、识别、阅读顺序和表格，不强迫拆开其内部模型。`DocumentRegion` 保留内容格式、正文归属与区域级锚点精度；区域框不提供字符级批注保证。
+`src/document-analysis/contracts.ts` 定义完整解析后端的 `DocumentParser`、输入来源和版本化区域结果。`native.ts`、`oxr.ts`、`mineru.ts` 负责各自协议归一化；后端可一次完成布局、识别、阅读顺序和表格，不强迫拆开其内部模型。`DocumentRegion` 保留内容格式、正文归属与区域级锚点精度；区域框不提供字符级批注保证。
 
-`document-source.ts` 单独读取 PDF 页面几何，使云端后端不依赖 SDT 成功。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过原生 `_pageInfo` 适配。OXR 像素框按原 PDF CropBox 与旋转转换，缺页、重复页、非法尺寸和越界矩形使该结果失败，不静默裁剪。来源文件版本变更不能继续应用原结果。
+`document-source.ts` 单独读取 PDF 页面几何，使云端后端不依赖 SDT 成功。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过原生 `_pageInfo` 适配。共享 `geometry.ts` 将 OXR / MinerU 页面坐标按原 PDF CropBox 与旋转转换，缺页、重复页、非法尺寸和越界矩形使该结果失败，不静默裁剪。来源文件版本变更不能继续应用原结果。
 
 `src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；请求体、凭据不进入日志或结果。导航模块中的 `ReaderDocumentComparison` 拥有显式处理、对照界面和迟到结果隔离。原生与云端结果独立，取消本地请求不承诺远端停止计算；SDK 原生提取不可取消。API 密钥只存在于本次界面。表格 HTML 使用宿主纯文本转换器展示，不插入后端 HTML 或加载其中资源。
 
 `document-analysis/cache.ts` 定义外部解析缓存契约、明确的非秘密配置身份及完整数据校验；`platform/document-analysis-cache.ts` 使用 Zotero 公共文件 API 读写、Gecko `IOUtils.move` 精确提交隐藏文件名，在附件存储目录保存 `.zotero-neo-analysis-<配置摘要>.json`，链接 PDF 也使用 Zotero 的附件目录，不写外部源文件旁。每项配置仅保留最后一次成功提交的结果，包含来源文件哈希、页面几何、后端、适配器版本、已知模型版本和保存时间。缓存格式版本、区域种类、唯一身份与完整坐标均校验；32 MiB 文件上限与 100000 区域上限避免无界载入。损坏或不匹配的缓存视为未命中，打开面板不会因此自动上传。
 
-写入按目标文件串行，先写唯一暂存文件，再次检查精确调用寿命及 PDF 来源，最后原子替换；取消、失效或写入失败保留旧结果。临时文件由写入调用清理，已开始的最终替换不因后续界面关闭而撤销。仅投影保存 `ParsedDocument` 的已知字段，不保存凭据、原始响应或派生 `objectGroups`；读取后复用 `analyzeParsedDocument()` 按当前算法关联图表。原生 SDT 缓存仍由 Zotero 单独管理，不重复保存或改写其来源元数据。当前外部缓存使用 OXR，MinerU 尚未接入插件；PDF 内嵌缓存和跨设备同步不在本实现范围。
+写入按目标文件串行，先写唯一暂存文件，再次检查精确调用寿命及 PDF 来源，最后原子替换；取消、失效或写入失败保留旧结果。临时文件由写入调用清理，已开始的最终替换不因后续界面关闭而撤销。仅投影保存 `ParsedDocument` 的已知字段，不保存凭据、原始响应或派生 `objectGroups`；读取后复用 `analyzeParsedDocument()` 按当前算法关联图表。原生 SDT 缓存仍由 Zotero 单独管理，不重复保存或改写其来源元数据。当前外部缓存覆盖 OXR 与 MinerU 官方云端，`sourceObject` 显式成员关系随区域保留；PDF 内嵌缓存和跨设备同步不在本实现范围。
 
 后续阶段后端应继续消费这些显式产物及来源坐标；不通过修改全局 SDT 缓存或伪造 textMap 接入原生 Reading Mode。当前尚未实现外部结构替换、跨后端布局／识别阶段编排和跨页图表关联。
 
 
-`analyze.ts` 在完整解析后执行共享图表关联；协议适配器不各自复制分组算法。`object-groups.ts` 只消费 `DocumentRegion`，产出 caption 身份、成员 ID 和 `geometry`／`caption-only`／`ambiguous` 状态。`sourceBlock` 保留一个原生块的多个矩形及源顺序；无效原生块留下的顺序缺口不能被跨越。轻量侧栏与结构跳转通过 `nativeDocumentRegions()` 使用同一归一化和关联步骤，不额外读取完整解析元数据。
+`analyze.ts` 在完整解析后执行共享图表关联；协议适配器不各自复制分组算法。`object-groups.ts` 只消费 `DocumentRegion`，产出 caption 身份、成员 ID 和 `backend`／`geometry`／`caption-only`／`ambiguous` 状态。`sourceBlock` 保留一个原生块的多个矩形及源顺序；无效原生块留下的顺序缺口不能被跨越。轻量侧栏与结构跳转通过 `nativeDocumentRegions()` 使用同一归一化和关联步骤，不额外读取完整解析元数据。
 
 几何关联使用 PDF 用户坐标：候选限于同页、同列的连通图片或表格，图片在图注上方，表格支持 caption 在上或在下；caption 间距上限 72 点，纵向子图连接间距上限 24 点，同列要求较窄水平区间至少 90% 重叠，比较容差 0.01 点。正文、其他纵向 caption 和不完整原生块阻断关联；图片内部已分类为辅助／排除的文字可成为成员。多个 caption 争用同一视觉区域时一起回退，避免遍历顺序决定归属。此规则不承诺模型级语义正确性。
 
 定位使用成员的真实矩形集合，不制造覆盖空白、正文或双栏内容的联合锚点；相同几何只在传给宿主时去重。对照界面的区域与整组条目共享展示和定位入口，定位前沿用来源版本校验、精确视图接纳和跨 compartment 克隆。匹配的整组可以替换同顶部的原生 Table 书签，避免表格本体再次丢失。
+
+MinerU 官方云端适配器通过 `DocumentParser` 接入相同对照、缓存和定位链路。它使用 v4 本地文件批量上传协议提交单篇 PDF，随后轮询并下载 ZIP；`transport.ts` 只定义 JSON 请求、原始上传、下载、归档 JSON 读取和等待能力，Gecko 实现在平台层。API Bearer Token 仅发送给官方 API，不转发到签名存储地址；Zotero.HTTP 会自动补 Content-Type，签名上传因此单独使用原始 XHR 发送二进制。归档只读取有界的 `layout.json`，不解压其他路径，临时文件在成功、失败和取消后清理。当前明确支持官方云端已验证的 `pdf_info` 布局协议，协议变化时拒绝结果，不把新版自部署 `docvortex.middle` 当成相同格式。生产者版本不是模型版本，因此 `modelRevision` 保留 null。
+
+MinerU 的 table/image/chart 父对象归一化为成员区域上的 `sourceObject`，公共图表关联先保留该显式关系，不要求 caption 或编号成功，也不再按距离扩大它。显式关系保留模型原意，不代表语义已验证；密集表格中仍可能错配题注，因此独立区域定位始终保留。其他无显式对象的区域继续使用原几何关联。当前覆盖单篇 Reader 显式解析、状态进度、缓存复用和对照面板定位；批量选择／任务恢复、云端结果替换原生侧栏或正文过滤、外部 Reading Mode 与跨后端阶段编排均不在此链路范围。
