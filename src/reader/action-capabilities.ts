@@ -27,6 +27,7 @@ export const READER_LOCAL_NORMAL_ACTIONS = Object.freeze([
   'openFigurePicker',
   'openChapterSearch',
   'openObjectExcerpts',
+  'organizeChapterNotes',
   'zoomIn',
   'zoomOut',
   'zoomReset',

@@ -22,6 +22,7 @@ const BASE_ACTION_IDS = [
   'openFigurePicker',
   'openChapterSearch',
   'openObjectExcerpts',
+  'organizeChapterNotes',
   'zoomIn',
   'zoomOut',
   'zoomReset',

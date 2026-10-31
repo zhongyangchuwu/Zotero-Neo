@@ -122,6 +122,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>rf': 'openFigurePicker',
   'reader-normal:<Space>rs': 'openChapterSearch',
   'reader-normal:<Space>re': 'openObjectExcerpts',
+  'reader-normal:<Space>rn': 'organizeChapterNotes',
   'reader-normal:<Space>rr': 'toggleReadingMode',
   'reader-normal:<Space>rb': 'toggleBodySelection',
   'reader-normal:<Space>ro': 'focusReaderOutline',

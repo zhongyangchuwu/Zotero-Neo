@@ -58,6 +58,7 @@ import {
 import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
+import { createReaderNotesModule, type ReaderNotesModule } from '../modules/notes/reader';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -522,6 +523,7 @@ export class ReaderSession {
   readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
+  readonly #notes: ReaderNotesModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
   readonly #selectionRange: ReaderSelectionModule['range'] | null;
   readonly #selectionActions: ReaderSelectionModule['actions'] | null;
@@ -835,6 +837,20 @@ export class ReaderSession {
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );
+      this.#notes = this.#modules.activate('notes', () =>
+        createReaderNotesModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences: dependencies.controller.dependencies.preferences,
+          target: () => resolveReaderSourceNoteTarget(dependencies.reader),
+          captureView: (window) => this.invocationCurrent(window, null),
+          themeRoot: (root) => this.themeRoot(root),
+          text: (key) => t(`reader.chapterNotes.${key}`, this.keyGuideLanguage()),
+          showStatus: (message) => this.showStatus(message),
+          navigate: (window, position) =>
+            this.#navigationHost.navigateToRegion(window, { position }),
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
       this.#flash = this.#selection?.flash ?? null;
       this.#selectionRange = this.#selection?.range ?? null;
       this.#selectionActions = this.#selection?.actions ?? null;
@@ -882,6 +898,7 @@ export class ReaderSession {
           const failure = new CleanupFailure();
           failure.run(() => this.#navigationModule?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
+          failure.run(() => this.#notes?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
           failure.run(() => this.#hints?.copy.releaseView(pdfWindow));
           failure.run(() => this.#selectionActions?.releaseView(pdfWindow));
@@ -1204,6 +1221,7 @@ export class ReaderSession {
   deactivateInteraction(): void {
     this.#navigationModule?.deactivate();
     this.#selection?.deactivate();
+    this.#notes?.close();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
     this.#sidebar?.deactivate();
@@ -1316,6 +1334,7 @@ export class ReaderSession {
     if (this.#scope.disposed) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#selection?.handleKey(event)) return;
+    if (this.#notes?.handleKey(event)) return;
     if (this.#navigationModule?.handleKey(event)) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
       this.input.reset();
@@ -1569,6 +1588,10 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
+    if (action === 'organizeChapterNotes') {
+      this.#notes?.open(pdfWindow);
+      return;
+    }
     if (isReaderNavigationAction(action)) {
       this.#navigationModule?.executeAction(action, pdfWindow, count);
       return;
