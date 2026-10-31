@@ -22,7 +22,10 @@ import {
 } from '../../src/document-analysis/cache';
 import type { DocumentSource, ParsedDocument } from '../../src/document-analysis/contracts';
 import { oxrDocumentParser } from '../../src/document-analysis/oxr';
-import { attachmentDocumentCache } from '../../src/platform/document-analysis-cache';
+import {
+  attachmentDocumentCache,
+  observeAttachmentDocumentCache,
+} from '../../src/platform/document-analysis-cache';
 
 const source: DocumentSource = {
   fingerprint: 'original',
@@ -210,6 +213,30 @@ afterEach(() => {
 });
 
 describe('attachment-owned cache files', () => {
+  it('notifies only live observers for the committed attachment, without turning UI failure into save failure', async () => {
+    const saved = vi.fn(),
+      other = vi.fn();
+    const stop = observeAttachmentDocumentCache(7, saved),
+      stopOther = observeAttachmentDocumentCache(8, other);
+    const stopBroken = observeAttachmentDocumentCache(7, () => {
+      throw new Error('retired UI');
+    });
+    try {
+      const cache = attachmentDocumentCache(7);
+      expect(await cache.write(source, key, parsed, async () => false)).toBe(false);
+      expect(saved).not.toHaveBeenCalled();
+      expect(await cache.write(source, key, parsed, async () => true)).toBe(true);
+      expect(saved).toHaveBeenCalledOnce();
+      expect(other).not.toHaveBeenCalled();
+      stop();
+      await cache.write(source, key, parsed, async () => true);
+      expect(saved).toHaveBeenCalledOnce();
+    } finally {
+      stop();
+      stopOther();
+      stopBroken();
+    }
+  });
   it('survives a fresh cache instance and keeps backend configurations separate', async () => {
     const cache = attachmentDocumentCache(7);
     expect(await cache.read(source, key)).toBeNull();

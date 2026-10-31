@@ -88,6 +88,7 @@ const BASE_ACTION_IDS = [
   'yankAnnotationComment',
   'openCommandPalette',
   'openNeoSettings',
+  'prepareDocuments',
   'findAllItems',
   'findCollectionItems',
   'findNotes',

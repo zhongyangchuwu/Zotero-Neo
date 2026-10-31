@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mineruDocumentParser, mineruParsedDocument } from '../../src/document-analysis/mineru';
+import { mineruClient } from '../../src/document-analysis/mineru-client';
 import { analyzeParsedDocument } from '../../src/document-analysis/analyze';
 import { documentObjectLocation } from '../../src/document-analysis/object-groups';
 import { documentCacheRecord, readDocumentCacheRecord } from '../../src/document-analysis/cache';
@@ -76,6 +77,29 @@ function transport() {
 }
 
 describe('MinerU official cloud path', () => {
+  it('submits distinct anonymous filenames and enforces the endpoint-specific batch limit', async () => {
+    const http = transport();
+    http.requestJSON.mockReset().mockResolvedValue(
+      receipt({
+        batch_id: 'batch',
+        file_urls: ['https://storage.example/one', 'https://storage.example/two'],
+      }),
+    );
+    await mineruClient('secret', http).submit(['alpha', 'beta'], new AbortController().signal);
+    const body = JSON.parse(http.requestJSON.mock.calls[0]![0].body as string);
+    expect(body.files).toEqual([
+      { name: 'document.pdf', data_id: 'alpha' },
+      { name: 'document-2.pdf', data_id: 'beta' },
+    ]);
+    http.requestJSON.mockClear();
+    await expect(
+      mineruClient('secret', http).submit(
+        Array.from({ length: 51 }, (_, i) => String(i)),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('Invalid MinerU batch');
+    expect(http.requestJSON).not.toHaveBeenCalled();
+  });
   it('uses the batch upload protocol, isolates authorization and polls before consuming the archive', async () => {
     const http = transport(),
       progress = vi.fn();

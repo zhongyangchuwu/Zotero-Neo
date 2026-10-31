@@ -1,3 +1,5 @@
+import { documentAttachments } from '../operations/document-attachments';
+import type { DocumentAttachment } from '../document-analysis/preparation';
 import type { MainWindow } from '../core/contracts';
 import type { ItemTargetSet } from '../core/item-target';
 import { normalizeTopLevelItemTargets } from '../platform/zotero-items';
@@ -34,3 +36,15 @@ export const MAIN_ITEM_TARGET: MainItemTargetResolver = Object.freeze({
   source: 'main',
   resolve: resolveMainItemTarget,
 });
+
+/** Document preparation preserves explicitly selected attachments instead of normalizing them to their parents. */
+export function resolveMainDocumentAttachments(
+  window: MainWindow,
+  selection: Pick<MainSelectionSource, 'values'> | null,
+  currentTarget?: MainCurrentTarget | null,
+): readonly DocumentAttachment[] {
+  return documentAttachments(
+    resolveMainEffectiveTargets(window, selection, currentTarget).items,
+    true,
+  );
+}

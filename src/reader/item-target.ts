@@ -1,3 +1,5 @@
+import { documentAttachments } from '../operations/document-attachments';
+import type { DocumentAttachment } from '../document-analysis/preparation';
 import type { ItemTargetSet } from '../core/item-target';
 import { normalizeTopLevelItemTargets, zoteroItem } from '../platform/zotero-items';
 
@@ -28,3 +30,11 @@ export const READER_ITEM_TARGET: ReaderItemTargetResolver = Object.freeze({
   source: 'reader',
   resolve: resolveReaderItemTarget,
 });
+
+/** Reader preparation always captures this exact attachment, including when its parent owns several PDFs. */
+export function resolveReaderDocumentAttachments(
+  reader: ReaderItemTargetContext | null,
+): readonly DocumentAttachment[] {
+  const item = reader?.itemID ? zoteroItem(reader.itemID) : undefined;
+  return documentAttachments(item ? [item] : [], false);
+}

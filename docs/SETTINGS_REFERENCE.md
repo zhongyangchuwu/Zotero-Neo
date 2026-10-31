@@ -64,8 +64,10 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 文档解析对照
 
-Reader Normal 中按 `<Space>rd` 打开对照界面。默认服务是 MinerU 官方云端；服务选择保存为 `extensions.zotero-neo.documentAnalysis.provider`（`mineru` / `oxr`）。MinerU 使用官方 v4 API，需填写官网 Token。OXR API 地址在一次成功解析后保存为 `extensions.zotero-neo.documentAnalysis.oxr.endpoint`；密钥只用于本次对话框，不写入偏好或复制报告。默认 OXR 免费接口使用 `dummy`，部署自己的兼容服务时可填写对应地址和密钥。
+Reader Normal 中按 `<Space>rd` 打开对照界面。默认服务是 MinerU 官方云端；服务选择保存为 `extensions.zotero-neo.documentAnalysis.provider`（`mineru` / `oxr`）。MinerU 使用官方 v4 API，需填写官网 Token。OXR API 地址在一次成功解析后保存为 `extensions.zotero-neo.documentAnalysis.oxr.endpoint`；MinerU Token 可在 Neo 设置 → Reader 或解析面板中保存至 Zotero 本机密码管理器，单篇与批量准备共用；支持清除。未保存的输入和 OXR 密钥只用于本次对话框。密钥不写入普通偏好、任务记录、解析缓存或复制报告。默认 OXR 免费接口使用 `dummy`，部署自己的兼容服务时可填写对应地址和密钥。
 
 当前实现包含原生 SDT、MinerU 官方云端和 OXR 完整解析后端。云端解析由界面按钮显式发起；打开论文不会自动上传。接口返回的区域坐标会转换为原 PDF 用户坐标；原生文字批注继续要求精确的来源映射。
 
 当前选定服务的有效缓存会同时用于常规图表导航和原生侧栏增强，不需要 API Token，也不触发上传；更换服务或保存新的分析会退休原有图表目标。对照界面在每个后端的区域列表前列出可识别的图表组。展开后按“定位整组”，使用关联图片、表格和 caption 的真实矩形。报告中的 `objectGroups` 保留成员 ID 和关联状态。MinerU 的显式对象成员关系优先保留，即使题注缺失或被标为脚注，表格仍可定位。其他结果的几何分组依赖后端把 caption 标为图注；普通正文中的 “Figure 2” 引用不会被自动提升为图注。几何关联属于启发式判断，遇到歧义会显示回退状态；跨页对象目前只定位 caption 的第一页，不推断跨页图片关系。
+
+Main／Reader Normal 的 `<Space>ru` 打开增强阅读准备面板。批量范围、进度与任务恢复见[批量准备论文](SELECTION_GUIDE.md#批量准备论文)。

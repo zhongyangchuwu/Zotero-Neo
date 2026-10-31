@@ -1,3 +1,4 @@
+import { mineruCredentialField } from '../ui/mineru-credentials';
 import type { MainWindow } from '../core/contracts';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
@@ -240,6 +241,9 @@ export class SettingsReader {
     root.append(title, inputGroup, scrolling, marks, annotations, this.#status);
     this.#refresh();
 
+    const credentials = mineruCredentialField(doc, () => language);
+    root.append(credentials.root);
+    this.#cleanups.push(() => credentials.dispose());
     const keys = [
       READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
       ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
