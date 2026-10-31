@@ -1,5 +1,5 @@
 import { CleanupFailure } from '../../core/cleanup';
-import { pdfTextSpans } from '../../toolkit/reader';
+import { readerTextSpans } from '../../toolkit/reader';
 import {
   compositionOwnsKey,
   isCommittedInput,
@@ -841,7 +841,7 @@ export class ReaderFlash {
 
   #visibleSegments(pdfWindow: PdfWindow): FlashTextSegment[] {
     const segments: FlashTextSegment[] = [];
-    for (const { textNode, text, rect } of pdfTextSpans(pdfWindow)) {
+    for (const { textNode, text, rect } of readerTextSpans(pdfWindow)) {
       if (this.#rectVisible(pdfWindow, rect)) segments.push({ textNode, text, rect });
     }
     return segments;

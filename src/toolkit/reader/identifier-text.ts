@@ -1,16 +1,16 @@
-import type { PdfTextRect } from './pdf-text';
+import type { ReaderTextRect } from './text-source';
 import { visibleWindow } from './visibility';
 
 export interface PdfIdentifierTextChunk {
   readonly text: string;
-  rects(start: number, end: number): readonly PdfTextRect[];
+  rects(start: number, end: number): readonly ReaderTextRect[];
 }
 
 interface TextSpan {
   readonly element: HTMLElement;
   readonly textNode: Text;
   readonly text: string;
-  readonly rect: PdfTextRect;
+  readonly rect: ReaderTextRect;
   readonly container: Element;
   readonly textLayer: Element;
   readonly page: Element | null;
@@ -93,11 +93,11 @@ function readSpan(window: Window, element: HTMLElement): TextSpan | null {
   }
 }
 
-function verticalOverlap(left: PdfTextRect, right: PdfTextRect): number {
+function verticalOverlap(left: ReaderTextRect, right: ReaderTextRect): number {
   return Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
 }
 
-function sameLine(left: PdfTextRect, right: PdfTextRect): boolean {
+function sameLine(left: ReaderTextRect, right: ReaderTextRect): boolean {
   const minimumHeight = Math.min(left.height, right.height);
   const overlap = verticalOverlap(left, right);
   if (overlap >= minimumHeight * 0.3) return true;
@@ -106,7 +106,7 @@ function sameLine(left: PdfTextRect, right: PdfTextRect): boolean {
   return Math.abs(leftCenter - rightCenter) <= Math.max(2, minimumHeight * 0.25);
 }
 
-function horizontalGap(left: PdfTextRect, right: PdfTextRect): number {
+function horizontalGap(left: ReaderTextRect, right: ReaderTextRect): number {
   if (right.left >= left.right) return right.left - left.right;
   if (left.left >= right.right) return left.left - right.right;
   return 0;
@@ -172,7 +172,7 @@ function createChunk(window: Window, spans: readonly TextSpan[]): PdfIdentifierT
 
   return {
     text,
-    rects(start: number, end: number): readonly PdfTextRect[] {
+    rects(start: number, end: number): readonly ReaderTextRect[] {
       if (
         !visibleWindow(window) ||
         !Number.isInteger(start) ||
@@ -202,7 +202,7 @@ function createChunk(window: Window, spans: readonly TextSpan[]): PdfIdentifierT
       }
       if (!selected.length) return [];
 
-      const result: PdfTextRect[] = [];
+      const result: ReaderTextRect[] = [];
       try {
         for (const part of selected) {
           const range = window.document.createRange();

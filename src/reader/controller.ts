@@ -689,6 +689,12 @@ export class ReaderSession {
           const module = createReaderNavigationModule(this.#modules.host, {
             reader: dependencies.reader,
             navigationHost: this.#navigationHost,
+            documentComparison: {
+              preferences: dependencies.controller.dependencies.preferences,
+              language: () => this.keyGuideLanguage(),
+              themeRoot: (root) => this.themeRoot(root),
+              copyText: (text) => this.copyText(text),
+            },
             smooth: {
               preferences: dependencies.controller.dependencies.preferences,
               scrollBy: (pdfWindow, x, y) => this.scrollContainer(pdfWindow).scrollBy(x, y),
@@ -1292,6 +1298,7 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
+    if (this.#navigationModule?.handleKey(event)) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
       this.input.reset();
       this.clearKeyGuide();

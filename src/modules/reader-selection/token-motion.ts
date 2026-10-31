@@ -1,5 +1,5 @@
 import type { Pointer, PdfWindow } from '../../reader/types';
-import { pdfTextSpans } from '../../toolkit/reader';
+import { readerTextSpans, type ReaderTextSpan } from '../../toolkit/reader';
 import {
   buildTokenTextIndex,
   indexedTokenBoundaries,
@@ -50,9 +50,43 @@ export function sourceTokens(segments: readonly TokenTextSegment[]): SourceToken
   return tokens;
 }
 
-/** Reads only the exact view's existing text layer; the snapshot is never retained across actions. */
-export function pdfTokens(window: PdfWindow): SourceToken[] {
-  return sourceTokens(pdfTextSpans(window));
+/** Keep both endpoints and their adjacent semantic paragraphs, retaining DOM order across a distant anchor. */
+export function tokenTextNeighborhood(
+  spans: readonly ReaderTextSpan[],
+  relevant: readonly Pointer[],
+): readonly ReaderTextSpan[] {
+  if (!relevant.length || spans.some((span) => !span.paragraph)) return spans;
+  const paragraphs = [
+    ...new Set(spans.filter((span) => span.text.trim()).map((span) => span.paragraph)),
+  ];
+  const selected = new Set<object | undefined>();
+  for (const pointer of relevant) {
+    const paragraph = spans.find((span) => span.textNode === pointer.textNode)?.paragraph;
+    const index = paragraphs.indexOf(paragraph);
+    if (index < 0) return spans;
+    for (let at = Math.max(0, index - 1); at <= Math.min(paragraphs.length - 1, index + 1); at++)
+      selected.add(paragraphs[at]);
+  }
+  return spans.filter((span) => selected.has(span.paragraph));
+}
+
+/** Snapshot existing source nodes only; Reading Mode never tokenizes the whole document for a local motion. */
+export function readerTokens(window: PdfWindow, relevant: readonly Pointer[] = []): SourceToken[] {
+  const spans = tokenTextNeighborhood(readerTextSpans(window), relevant);
+  if (!spans.length || spans.some((span) => !span.paragraph)) return sourceTokens(spans);
+  const tokens: SourceToken[] = [];
+  let paragraph: object | undefined;
+  let parts: ReaderTextSpan[] = [];
+  for (const span of spans) {
+    if (parts.length && span.paragraph !== paragraph) {
+      tokens.push(...sourceTokens(parts));
+      parts = [];
+    }
+    parts.push(span);
+    paragraph = span.paragraph;
+  }
+  tokens.push(...sourceTokens(parts));
+  return tokens;
 }
 
 /** Half-open endpoints choose the selected token, and whitespace never becomes its own stop. */

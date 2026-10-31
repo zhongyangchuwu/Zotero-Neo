@@ -1,10 +1,15 @@
 import { CleanupFailure } from '../../core/cleanup';
-import { decoratePdfSelection, firstPdfTextPosition } from '../../toolkit/reader';
+import {
+  decorateReaderSelection,
+  firstReaderTextPosition,
+  readerTextParagraphs,
+} from '../../toolkit/reader';
+import { structuralTextPosition } from './text-boundary-motion';
 import { isDeadObject } from '../../platform/cross-compartment';
 import type { FlashIntent, FlashSelectionTarget } from './flash';
 import { verticalTextPosition } from './text-motion';
 import {
-  pdfTokens,
+  readerTokens,
   tokenAtPointer,
   selectionToToken,
   tokenSelectionChoices,
@@ -151,7 +156,7 @@ export class ReaderSelectionRange {
     const overlapsAnchor = this.#comparePointers(target.start, anchor) < 0;
     const useStart = before || (overlapsAnchor && !forward);
     const focus = useStart ? target.start : target.end;
-    const tokens = pdfTokens(pdfWindow);
+    const tokens = readerTokens(pdfWindow, [anchor, focus]);
     const targetIndex = tokenAtPointer(tokens, focus, useStart ? 'start' : 'end');
     const previousFocus = isTextNode(selection.focusNode)
       ? { textNode: selection.focusNode, offset: selection.focusOffset }
@@ -185,13 +190,17 @@ export class ReaderSelectionRange {
     this.#ensureAnchor(pdfWindow);
     const selection = pdfWindow.getSelection();
     if (!selection || !this.#anchor || !isTextNode(selection.focusNode)) return;
+    const tokens = readerTokens(pdfWindow, [
+      this.#anchor,
+      { textNode: selection.focusNode, offset: selection.focusOffset },
+    ]);
     const next = horizontalTokenSelection(
-      pdfTokens(pdfWindow),
+      tokens,
       this.#anchor,
       { textNode: selection.focusNode, offset: selection.focusOffset },
       direction,
     );
-    if (next) this.#applyTokenSelection(pdfWindow, next, null, current);
+    if (next) this.#applyTokenSelection(pdfWindow, next, null, current, tokens);
   }
 
   /** Chooses the nearest complete-token endpoint on the next visual line. */
@@ -203,7 +212,7 @@ export class ReaderSelectionRange {
     const anchor = this.#anchor;
     if (!selection || !anchor || !isTextNode(selection.focusNode)) return;
     const focus = { textNode: selection.focusNode, offset: selection.focusOffset };
-    const tokens = pdfTokens(pdfWindow);
+    const tokens = readerTokens(pdfWindow, [anchor, focus]);
     const choices = tokenSelectionChoices(tokens, anchor, focus);
     const target = verticalTextPosition(
       pdfWindow,
@@ -213,7 +222,7 @@ export class ReaderSelectionRange {
       choices.map((choice) => choice.focus),
     );
     const next = target && choices.find((choice) => sameTextPointer(choice.focus, target.pointer));
-    if (next) this.#applyTokenSelection(pdfWindow, next, target.preferredX, current);
+    if (next) this.#applyTokenSelection(pdfWindow, next, target.preferredX, current, tokens);
   }
 
   modify(
@@ -235,7 +244,27 @@ export class ReaderSelectionRange {
       this.#anchor !== anchor
     )
       return;
-    pdfWindow.getSelection()?.modify('extend', direction, granularity);
+    const selection = pdfWindow.getSelection();
+    const paragraphs =
+      granularity === 'sentence' || granularity === 'paragraph'
+        ? readerTextParagraphs(pdfWindow)
+        : null;
+    if (
+      paragraphs &&
+      selection &&
+      anchor &&
+      isTextNode(selection.focusNode) &&
+      (granularity === 'sentence' || granularity === 'paragraph')
+    ) {
+      const target = structuralTextPosition(
+        paragraphs,
+        { textNode: selection.focusNode, offset: selection.focusOffset },
+        direction,
+        granularity,
+      );
+      if (target)
+        selection.setBaseAndExtent(anchor.textNode, anchor.offset, target.textNode, target.offset);
+    } else selection?.modify('extend', direction, granularity);
     this.refresh(pdfWindow, true);
   }
 
@@ -297,7 +326,8 @@ export class ReaderSelectionRange {
     this.refresh(pdfWindow, true);
   }
 
-  refresh(pdfWindow: PdfWindow, autoPan: boolean): void {
+  /** Reuse tokens only inside the same synchronous action; never retain a full-document index. */
+  refresh(pdfWindow: PdfWindow, autoPan: boolean, actionTokens?: readonly SourceToken[]): void {
     if (!this.#current(pdfWindow)) return;
     const current = this.#host.captureView(pdfWindow);
     this.#removeViewMarker(pdfWindow);
@@ -315,7 +345,7 @@ export class ReaderSelectionRange {
       lease = { dispose: null, current, markers: new Set() };
       this.#styledViews.set(pdfWindow, lease);
       try {
-        const dispose = decoratePdfSelection(pdfWindow);
+        const dispose = decorateReaderSelection(pdfWindow);
         if (
           this.#styledViews.get(pdfWindow) !== lease ||
           !this.#current(pdfWindow) ||
@@ -345,7 +375,9 @@ export class ReaderSelectionRange {
     const rect = range.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
 
-    const tokens = pdfTokens(pdfWindow);
+    const tokens =
+      actionTokens ??
+      readerTokens(pdfWindow, [{ textNode: node, offset }, ...(anchor ? [anchor] : [])]);
     const forward = !anchor || compareTextPointers(anchor, { textNode: node, offset }) <= 0;
     const tokenIndex = tokenAtPointer(
       tokens,
@@ -423,6 +455,7 @@ export class ReaderSelectionRange {
     next: DirectedTokenSelection,
     preferredX: number | null,
     current: () => boolean,
+    actionTokens: readonly SourceToken[],
   ): void {
     if (!this.#current(pdfWindow) || !current()) return;
     const revision = this.#revision;
@@ -458,7 +491,7 @@ export class ReaderSelectionRange {
         next.focus.textNode,
         next.focus.offset,
       );
-    if (this.#current(pdfWindow) && current()) this.refresh(pdfWindow, true);
+    if (this.#current(pdfWindow) && current()) this.refresh(pdfWindow, true, actionTokens);
   }
 
   /** Draws view-local, noninteractive outlines around the active token's actual glyph rectangles. */
@@ -532,7 +565,7 @@ export class ReaderSelectionRange {
       anchor.ownerDocument === pdfWindow.document
     )
       this.#anchor = { textNode: anchor, offset: selection?.anchorOffset ?? 0 };
-    else this.#anchor = firstPdfTextPosition(pdfWindow);
+    else this.#anchor = firstReaderTextPosition(pdfWindow);
     if (!current()) this.#anchor = null;
     if (this.#anchor) {
       this.#anchorWindow = pdfWindow;

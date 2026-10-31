@@ -15,6 +15,7 @@ export function isReaderNavigationAction(action: ActionId): action is ReaderNavi
 }
 
 export interface ReaderNavigationActionPorts {
+  readonly openDocumentComparison: () => void;
   readonly executeNavigation: (
     window: PdfWindow,
     intent: NavigationIntent,
@@ -73,6 +74,14 @@ export function bindReaderNavigationActions(
           });
         };
         switch (action) {
+          case 'compareDocumentParsing':
+            ports.openDocumentComparison();
+            break;
+          case 'toggleReadingMode':
+            void navigation
+              .toggleReadingMode(window)
+              .catch((error: unknown) => ports.showStatus(String(error), 3000));
+            break;
           case 'scrollDown':
           case 'scrollUp':
           case 'scrollLeft':

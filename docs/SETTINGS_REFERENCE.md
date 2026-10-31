@@ -61,3 +61,9 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
 设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。关闭 `reader-hints` 和 `extensions` 时，其余九个核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关两项可选功能)。
+
+## 文档解析对照
+
+Reader Normal 中按 `<Space>rd` 打开对照界面。API 地址在一次成功解析后保存为 `extensions.zotero-neo.documentAnalysis.oxr.endpoint`；密钥只用于本次对话框，不写入偏好或复制报告。默认 OXR 免费接口使用 `dummy`，部署自己的兼容服务时可填写对应地址和密钥。
+
+当前实现包含原生 SDT 和 OXR 完整解析两个后端。云端解析由界面按钮显式发起；打开论文不会自动上传。接口返回的区域坐标会转换为原 PDF 用户坐标；原生文字批注继续要求精确的来源映射。

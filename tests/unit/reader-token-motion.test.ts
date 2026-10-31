@@ -4,7 +4,9 @@ import {
   selectionToToken,
   sourceTokens,
   tokenAtPointer,
+  tokenTextNeighborhood,
 } from '../../src/modules/reader-selection/token-motion';
+import type { ReaderTextSpan } from '../../src/toolkit/reader';
 import type { Pointer } from '../../src/reader/types';
 
 function fixture(value: string) {
@@ -19,6 +21,30 @@ function fixture(value: string) {
 }
 
 describe('whole-token selection motions', () => {
+  it('keeps distant anchors and endpoint neighbors without indexing the intervening document', () => {
+    const spans = Array.from({ length: 12 }, (_, index) => ({
+      textNode: { data: `word${index}` } as Text,
+      text: `word${index}`,
+      paragraph: {},
+      rect: { left: 0, right: 10, top: index * 20, bottom: index * 20 + 10, width: 10, height: 10 },
+    })) satisfies ReaderTextSpan[];
+    const chosen = tokenTextNeighborhood(spans, [
+      { textNode: spans[1]!.textNode, offset: 0 },
+      { textNode: spans[10]!.textNode, offset: 5 },
+    ]);
+    expect(chosen.map((span) => span.text)).toEqual([
+      'word0',
+      'word1',
+      'word2',
+      'word9',
+      'word10',
+      'word11',
+    ]);
+    expect(tokenTextNeighborhood(spans, [{ textNode: {} as Text, offset: 0 }])).toBe(spans);
+    const pdf = spans.map(({ paragraph: _paragraph, ...span }) => span);
+    expect(tokenTextNeighborhood(pdf, [{ textNode: pdf[0]!.textNode, offset: 0 }])).toBe(pdf);
+  });
+
   it('grows, shrinks, crosses the anchor and never stops at outer spaces or an empty range', () => {
     const f = fixture('We use flow   matching, next');
     let anchor = f.point(7);

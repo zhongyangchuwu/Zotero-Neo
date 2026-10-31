@@ -3,6 +3,7 @@ import { compositionOwnsKey } from '../../input/composition';
 import { keyString } from '../../input/keys';
 import { isDeadObject } from '../../platform/cross-compartment';
 import type { PdfWindow, ReaderRuntime } from './contracts';
+import { readerPresentationViews } from './presentation';
 import type {
   NativeReaderRuntime,
   NativeReaderViewRuntime as ReaderViewRuntime,
@@ -23,10 +24,10 @@ interface HostKeyPatch<Callback> {
 }
 
 /**
- * Owns the two private PdfView key seams Neo must patch.
+ * Owns the private native-view key seams Neo must patch.
  *
  * ReaderSession decides which keys Neo consumes for the exact PDF view. This bridge only
- * installs/restores host callbacks as Zotero creates or replaces primary/secondary PdfViews.
+ * installs/restores host callbacks as Zotero creates or replaces primary/secondary displayed views.
  */
 export class ReaderHostKeyBridge {
   readonly #dependencies: ReaderHostKeyBridgeDependencies;
@@ -83,9 +84,7 @@ export class ReaderHostKeyBridge {
   }
 
   #views(): readonly ReaderViewRuntime[] {
-    const primary = this.#reader._internalReader?._primaryView;
-    const secondary = this.#reader._internalReader?._secondaryView;
-    return [primary, secondary].filter((view): view is ReaderViewRuntime => view != null);
+    return readerPresentationViews(this.#reader);
   }
 
   #patchKeyForwarding(view: ReaderViewRuntime): void {

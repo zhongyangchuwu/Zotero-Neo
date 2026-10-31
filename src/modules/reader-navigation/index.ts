@@ -1,3 +1,4 @@
+import { ReaderDocumentComparison, type DocumentComparisonHost } from './document-comparison';
 import type { ModuleHost } from '../../core/module-host';
 import {
   readerAnnotationPageRatio,
@@ -21,6 +22,10 @@ import type { ActionId } from '../../input/actions';
 import type { SmoothScrollSpec } from './smooth-scroll';
 
 export interface ReaderNavigationModulePorts {
+  readonly documentComparison?: Pick<
+    DocumentComparisonHost,
+    'preferences' | 'language' | 'themeRoot' | 'copyText'
+  >;
   readonly reader: ReaderRuntime;
   readonly navigationHost: ReaderNavigationHost;
   readonly smooth: ReaderSmoothScrollerHost;
@@ -35,12 +40,13 @@ export interface ReaderNavigationModulePorts {
     'isCurrent' | 'reader' | 'marks' | 'captions' | 'onCaptionTarget' | 'bindAction'
   >;
   readonly beginCaptionJump: (window: PdfWindow) => (() => boolean) | null;
-  readonly actions: ReaderNavigationActionPorts;
+  readonly actions: Omit<ReaderNavigationActionPorts, 'openDocumentComparison'>;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
 
 export interface ReaderNavigationModule {
+  handleKey(event: KeyboardEvent): boolean;
   readonly smooth: ReaderSmoothScroller;
   readonly marks: ReaderMarks;
   readonly sidebar: ReaderNativeSidebar;
@@ -143,6 +149,26 @@ export function createReaderNavigationModule(
       showStatus: ports.showStatus,
       debug: ports.debug,
     });
+    const comparison = ports.documentComparison
+      ? new ReaderDocumentComparison({
+          ...ports.documentComparison,
+          reader: ports.reader,
+          isCurrent: () => scope.isCurrent(),
+          focusReader: () => {
+            const window = ports.navigationHost.activePdfWindow();
+            if (ports.markViewCurrent(window)) window.focus();
+          },
+          navigate: (region) => {
+            const window = ports.navigationHost.activePdfWindow();
+            const current = ports.beginCaptionJump(window);
+            if (current?.())
+              return ports.navigationHost.navigateToRegion(window, {
+                position: { pageIndex: region.pageIndex, rects: [region.rect] },
+              });
+          },
+        })
+      : null;
+    if (comparison) scope.add(() => comparison.close());
     const executeAction = bindReaderNavigationActions(
       host,
       scope,
@@ -150,7 +176,7 @@ export function createReaderNavigationModule(
       marks,
       sidebar,
       captions,
-      ports.actions,
+      { ...ports.actions, openDocumentComparison: () => comparison?.open() },
     );
     const startSmooth: ReaderNavigationModule['startSmooth'] = (
       window,
@@ -181,6 +207,7 @@ export function createReaderNavigationModule(
       );
     };
     return {
+      handleKey: (event) => comparison?.handleKey(event) ?? false,
       smooth,
       marks,
       sidebar,

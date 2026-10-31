@@ -1,3 +1,4 @@
+import { readerPresentationViews } from './presentation';
 import type { ReaderJumpLocation, ReaderJumpPosition } from '../../core/contracts';
 import type {
   HistoryDecision,
@@ -211,14 +212,11 @@ export class ReaderJumpHistoryBridge {
 
   sync(): void {
     if (this.#disposed) return;
-    const internal = this.#reader._internalReader;
-    const primary = internal?._primaryView;
-    const secondary = internal?._secondaryView;
+    const views = readerPresentationViews(this.#reader);
     for (const view of this.#patches.keys()) {
-      if (view !== primary && view !== secondary) this.#restore(view);
+      if (!views.includes(view)) this.#restore(view);
     }
-    if (primary) this.#patch(primary);
-    if (secondary && secondary !== primary) this.#patch(secondary);
+    for (const view of views) this.#patch(view);
   }
 
   /** Runs an owned adapter and waits only for the native/managed children it actually starts. */

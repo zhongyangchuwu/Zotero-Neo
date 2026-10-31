@@ -1,3 +1,5 @@
+import { readerPresentationView, readerPresentationViews } from './presentation';
+import { readerTabIsActive } from './host';
 import { cloneInto, isDeadObject } from '../../platform/cross-compartment';
 import type { FocusDirection } from '../../input/actions';
 import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from '../../reader/types';
@@ -29,6 +31,8 @@ export interface ReaderOutlineAccess {
 
 /** Exact-view host delegation; action choice, traversal order and history policy stay in Reader. */
 export class ReaderNavigationHost {
+  readonly #readingModeRequests = new Map<boolean, { readonly enabled: boolean }>();
+  readonly #readingModeTransitions = new Map<boolean, Promise<void>>();
   readonly #dependencies: ReaderNavigationHostDependencies;
   readonly #reader: NativeReaderRuntime;
   #outlineLoading: {
@@ -42,12 +46,9 @@ export class ReaderNavigationHost {
   }
 
   #view(window: PdfWindow): NativeReaderViewRuntime | null {
-    const internal = this.#reader._internalReader;
-    return internal?._primaryView?._iframeWindow === window
-      ? internal._primaryView
-      : internal?._secondaryView?._iframeWindow === window
-        ? internal._secondaryView
-        : null;
+    return (
+      readerPresentationViews(this.#reader).find((view) => view._iframeWindow === window) ?? null
+    );
   }
 
   /** Loads native Outline without opening the Sidebar, then fences both view identities. */
@@ -60,7 +61,7 @@ export class ReaderNavigationHost {
     if (!view?.navigate) return null;
     if (view.initializedPromise) await view.initializedPromise;
     if (!isCurrent() || this.activePdfWindow() !== window) return null;
-    const primary = internal?._primaryView;
+    const primary = readerPresentationView(this.#reader, true);
     if (internal?._state?.outline == null && typeof primary?.setSidebarView === 'function') {
       let loading = this.#outlineLoading;
       if (!loading || loading.view !== primary) {
@@ -77,8 +78,8 @@ export class ReaderNavigationHost {
       isCurrent() &&
       this.activePdfWindow() === window &&
       this.#reader._internalReader === internal &&
-      internal?._primaryView === primary &&
-      (view === internal?._primaryView || view === internal?._secondaryView);
+      readerPresentationView(this.#reader, true) === primary &&
+      readerPresentationViews(this.#reader).includes(view);
     return current()
       ? { view, outline: internal?._state?.outline ?? [], isCurrent: current }
       : null;
@@ -156,13 +157,60 @@ export class ReaderNavigationHost {
     return typeof this.#view(window)?.navigate === 'function';
   }
 
-  navigateCaption(
+  navigateToRegion(
     window: PdfWindow,
     location: { readonly position: ReaderLinkPosition },
   ): void | Promise<void> {
     const view = this.#view(window);
     if (!view || this.activePdfWindow() !== window) return;
     return this.navigatePosition(view, location);
+  }
+
+  /** Switch only the initiating split; native Reader owns location transfer and overlay creation. */
+  async toggleReadingMode(window: PdfWindow): Promise<void> {
+    const internal = this.#reader._internalReader;
+    const primary = readerPresentationView(this.#reader, true)?._iframeWindow === window;
+    if (!this.#view(window) || !internal?._setReadingMode) return;
+    const previous =
+      this.#readingModeRequests.get(primary)?.enabled ??
+      !!(primary ? internal._primarySDTView : internal._secondarySDTView);
+    const request = { enabled: !previous };
+    this.#readingModeRequests.set(primary, request);
+    const preceding = this.#readingModeTransitions.get(primary) ?? Promise.resolve();
+    const transition = preceding
+      .catch(() => undefined)
+      .then(async () => {
+        if (this.#reader._internalReader !== internal || this.#reader._isTabClosed) return;
+        // The SDK serializes toggles but returns before SDTView initializes its DOM.
+        // Destroying that view before initializedPromise resolves breaks native teardown.
+        const existing = primary ? internal._primarySDTView : internal._secondarySDTView;
+        if (!request.enabled) await existing?.initializedPromise;
+        if (this.#reader._internalReader !== internal || this.#reader._isTabClosed) return;
+        await internal._setReadingMode!(primary, request.enabled);
+        if (request.enabled)
+          await (primary ? internal._primarySDTView : internal._secondarySDTView)
+            ?.initializedPromise;
+      });
+    this.#readingModeTransitions.set(primary, transition);
+    try {
+      await transition;
+      if (
+        this.#readingModeRequests.get(primary) !== request ||
+        this.#reader._internalReader !== internal ||
+        this.#reader._isTabClosed
+      )
+        return;
+    } finally {
+      if (this.#readingModeRequests.get(primary) === request)
+        this.#readingModeRequests.delete(primary);
+      if (this.#readingModeTransitions.get(primary) === transition)
+        this.#readingModeTransitions.delete(primary);
+    }
+    this.#dependencies.syncViews();
+    if (this.#reader.tabID && !readerTabIsActive(this.#reader)) return;
+    const hostPrimary = internal._lastViewPrimary ?? internal._state?.primary;
+    if (hostPrimary !== undefined && hostPrimary !== primary) return;
+    readerPresentationView(this.#reader, primary)?.focus?.();
   }
 
   zoom(direction: 'in' | 'out' | 'reset', steps: number): void {
@@ -188,8 +236,8 @@ export class ReaderNavigationHost {
 
   pageNavigationSupported(window?: PdfWindow): boolean {
     const internal = this.#reader._internalReader;
-    const primary = internal?._primaryView;
-    const secondary = internal?._secondaryView;
+    const primary = readerPresentationView(this.#reader, true);
+    const secondary = readerPresentationView(this.#reader, false);
     const last = internal?._lastView;
     const view = window
       ? primary?._iframeWindow === window
@@ -292,8 +340,8 @@ export class ReaderNavigationHost {
     navigation?: ReaderNativeNavigation,
   ): NavigationOutcome | Promise<NavigationOutcome> | void {
     const internal = this.#reader._internalReader;
-    const primary = internal?._primaryView;
-    const secondary = internal?._secondaryView;
+    const primary = readerPresentationView(this.#reader, true);
+    const secondary = readerPresentationView(this.#reader, false);
     const view = window ? this.#view(window) : null;
     const active = window
       ? view
@@ -363,7 +411,7 @@ export class ReaderNavigationHost {
 
   activatePdfWindow(window: PdfWindow): void {
     const internal = this.#reader._internalReader;
-    const secondary = internal?._secondaryView?._iframeWindow;
+    const secondary = readerPresentationView(this.#reader, false)?._iframeWindow;
     if (secondary) {
       const primary = window !== secondary;
       const hostPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
@@ -374,8 +422,8 @@ export class ReaderNavigationHost {
 
   activePdfWindow(): PdfWindow {
     const internal = this.#reader._internalReader;
-    const primary = internal?._primaryView?._iframeWindow;
-    const secondary = internal?._secondaryView?._iframeWindow;
+    const primary = readerPresentationView(this.#reader, true)?._iframeWindow;
+    const secondary = readerPresentationView(this.#reader, false)?._iframeWindow;
     const hostPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
     if (secondary && hostPrimary === false) return secondary;
     if (primary && hostPrimary === true) return primary;
@@ -392,8 +440,8 @@ export class ReaderNavigationHost {
     direction: FocusDirection,
   ): { readonly primary: boolean; readonly window: PdfWindow } | null {
     const internal = this.#reader._internalReader;
-    const primary = internal?._primaryView?._iframeWindow;
-    const secondary = internal?._secondaryView?._iframeWindow;
+    const primary = readerPresentationView(this.#reader, true)?._iframeWindow;
+    const secondary = readerPresentationView(this.#reader, false)?._iframeWindow;
     if (!primary || !secondary || !internal?.splitType) return null;
     const activePrimary = this.#dependencies.activePdfWindow() !== secondary;
     const targetPrimary =
@@ -428,8 +476,8 @@ export function prepareReaderSelectionSearch(
   const native = reader as NativeReaderRuntime;
   const internal = native._internalReader;
   const outer = native._iframeWindow;
-  const primary = internal?._primaryView?._iframeWindow === window;
-  const view = primary ? internal?._primaryView : internal?._secondaryView;
+  const primary = readerPresentationView(reader, true)?._iframeWindow === window;
+  const view = readerPresentationView(reader, primary);
   if (!internal?.toggleFindPopup || !outer || view?._iframeWindow !== window) return null;
   const document = outer.document;
   const pdfDocument = window.document;
@@ -449,7 +497,7 @@ export function prepareReaderSelectionSearch(
       native._iframeWindow !== outer ||
       outer.document !== document ||
       window.document !== pdfDocument ||
-      (primary ? internal._primaryView : internal._secondaryView) !== view ||
+      readerPresentationView(reader, primary) !== view ||
       internal._state?.[field] !== expected
     )
       return false;

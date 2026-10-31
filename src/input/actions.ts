@@ -17,6 +17,8 @@ const BASE_ACTION_IDS = [
   'halfPageUp',
   'fullPageDown',
   'fullPageUp',
+  'toggleReadingMode',
+  'compareDocumentParsing',
   'zoomIn',
   'zoomOut',
   'zoomReset',

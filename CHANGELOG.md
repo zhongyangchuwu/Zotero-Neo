@@ -18,6 +18,9 @@
 
 ## PDF 阅读与批注
 
+- `<Space>rr` 切换原生 Reading Mode；PDF 与重排视图共享输入、Flash、词元选择和视觉行移动，重排选区可映射回原 PDF 保存文字批注。Reading Mode 的句子和段落扩展使用结构化文本边界。
+- `<Space>rd` 提供原生 SDT／OXR 完整解析对照、区域定位和报告复制。云端请求显式发起，文件版本、页面几何与取消后的结果寿命分别校验；区域结果不冒充精确文字批注。
+
 - Reader 提供滚动、翻页、缩放、平移、PDF 搜索、原生侧栏与结构导航、会话或持久化 marks，以及标签页和分屏操作。
 - Reader 的界面模式为 Normal 和 Select；批注评论编辑与原生输入透传是输入处理状态，不增加 Reader Insert 模式。
 - Flash、DOM 选区移动、端点交换、复制/搜索及批注操作绑定精确 ReaderView/Document。无法完整定位的选区不会生成部分批注。

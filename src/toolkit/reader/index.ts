@@ -19,8 +19,11 @@ export * from './navigation';
 export * from './annotations';
 export * from './links';
 export * from './marks';
-export * from './pdf-text';
+export * from './text-source';
 export * from './identifier-text';
 export * from './annotation-targets';
 export * from './sidebar';
 export * from './structured-document';
+export * from './document-source';
+
+export { readerReadingMode } from './presentation';

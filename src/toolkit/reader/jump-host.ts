@@ -1,3 +1,4 @@
+import { readerPresentationView } from './presentation';
 import type { MainWindow, ReaderJumpLocation, ReaderJumpPosition } from '../../core/contracts';
 import { cloneInto } from '../../platform/cross-compartment';
 import type { ItemRuntime, ReaderTimer } from '../../reader/types';
@@ -408,9 +409,7 @@ export class ReaderJumpHostAdapter {
   }
 
   #viewIsCurrent(reader: ReaderRuntime, view: ReaderViewRuntime, primary: boolean): boolean {
-    const currentView = primary
-      ? reader._internalReader?._primaryView
-      : reader._internalReader?._secondaryView;
+    const currentView = readerPresentationView(reader, primary);
     return currentView === view;
   }
 
@@ -458,8 +457,8 @@ export class ReaderJumpHostAdapter {
 
   #activeView(reader: ReaderRuntime): ReaderViewRuntime | null {
     const internal = reader._internalReader;
-    const primary = internal?._primaryView;
-    const secondary = internal?._secondaryView;
+    const primary = readerPresentationView(reader, true);
+    const secondary = readerPresentationView(reader, false);
     if (internal?._lastView === primary && primary) return primary;
     if (internal?._lastView === secondary && secondary) return secondary;
     const isPrimary = internal?._lastViewPrimary ?? internal?._state?.primary;
@@ -469,8 +468,8 @@ export class ReaderJumpHostAdapter {
   }
 
   #viewPrimary(reader: ReaderRuntime, view: ReaderViewRuntime): boolean | null {
-    if (reader._internalReader?._primaryView === view) return true;
-    if (reader._internalReader?._secondaryView === view) return false;
+    if (readerPresentationView(reader, true) === view) return true;
+    if (readerPresentationView(reader, false) === view) return false;
     return null;
   }
 
@@ -592,12 +591,14 @@ export class ReaderJumpHostAdapter {
     current: () => boolean,
     deadline: number,
   ): Promise<ReaderViewRuntime | null> {
+    const presentation = readerPresentationView(reader, primary)?._iframeWindow as
+      | PdfWindow
+      | undefined;
+    if (presentation && !presentation.PDFViewerApplication) return null;
     return this.#waitUntil(
       current,
       () => {
-        const view = primary
-          ? reader._internalReader?._primaryView
-          : reader._internalReader?._secondaryView;
+        const view = readerPresentationView(reader, primary);
         const pdfWindow = view?._iframeWindow as PdfWindow | undefined;
         return view &&
           pdfWindow?.PDFViewerApplication?.pdfViewer &&

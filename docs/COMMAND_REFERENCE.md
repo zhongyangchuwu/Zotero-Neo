@@ -118,6 +118,8 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 
 | ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
+| `toggleReadingMode` | `<Space>rr` | 切换当前分屏的 Zotero 原生 Reading Mode，使用同一 Reader Normal／Select 按键。 |
+| `compareDocumentParsing` | `<Space>rd` | 打开当前 PDF 的原生／OXR 解析对照；点击云端解析后上传文档，可展开、定位区域并复制报告。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
 | `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | 每步移动半个视口；计数会重复执行。 |
@@ -172,8 +174,8 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `extendDown` / `extendUp` | — | 保留原始视觉行端点移动，可自定义绑定。 |
 | `extendWordForward` / `extendWordBackward` | `w` / `b` | 扩展到下一个/上一个词边界。 |
 | `extendLineStart` / `extendLineEnd` | `0` / `$` | 扩展到当前行边界。 |
-| `extendSentenceForward` / `extendSentenceBackward` | `)` / `(` | 按句子边界扩展。 |
-| `extendParagraphForward` / `extendParagraphBackward` | `}` / `{` | 按段落边界扩展。 |
+| `extendSentenceForward` / `extendSentenceBackward` | `)` / `(` | Reading Mode 中按结构化文本的句界扩展；PDF 视图仍受 Gecko 支持限制。 |
+| `extendParagraphForward` / `extendParagraphBackward` | `}` / `{` | Reading Mode 中按真实段落边界扩展；PDF 视图仍受 Gecko 支持限制。 |
 | `swapVisualEnds` | `o` | 交换锚点和活动端。 |
 | `openSelectionActions` | `a`、`<Enter>`、`<Return>` | 打开选区操作临时面板；取消不会清除选区。 |
 | `highlightYellow/Red/Green/Blue/Purple` | `zy` / `zr` / `zg` / `zb` / `zp` | 根据当前范围创建相应颜色的批注。 |
