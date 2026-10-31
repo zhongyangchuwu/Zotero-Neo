@@ -75,6 +75,7 @@ import {
 } from '../modules/workspace/reader';
 import { isReaderWorkspaceAction } from '../modules/workspace/reader-actions';
 import { ReaderNativeInput } from './native-input';
+import { readerSelectionIsFiltered } from '../toolkit/reader';
 import {
   ReaderHostKeyBridge,
   ReaderJumpHostAdapter,
@@ -872,7 +873,7 @@ export class ReaderSession {
           this.#interactionRevision += 1;
           if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
           const failure = new CleanupFailure();
-          failure.run(() => this.#selectionRange?.releaseView(pdfWindow));
+          failure.run(() => this.#selection?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
           failure.run(() => this.#hints?.copy.releaseView(pdfWindow));
           failure.run(() => this.#selectionActions?.releaseView(pdfWindow));
@@ -1788,7 +1789,8 @@ export class ReaderSession {
         this.#navigationHost.activePdfWindow()?.getSelection()?.toString() ?? '',
       );
       const pending = this.input.countBuffer || this.input.keyBuffer;
-      indicator.textContent = `SELECT · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
+      const body = readerSelectionIsFiltered(this.#navigationHost.activePdfWindow()) ? ' BODY' : '';
+      indicator.textContent = `SELECT${body} · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
       indicator.style.color = THEME_VARS.modeVisualText;
       indicator.style.background = THEME_VARS.modeVisual;
       return;

@@ -9,6 +9,8 @@ import {
   clearAnnotationSelection,
   computeSelectionPosition,
   readerOwnerWindow,
+  readerSelectionIsFiltered,
+  readerSelectionText,
   setAnnotationColorFilter,
 } from '../../toolkit';
 import {
@@ -200,9 +202,11 @@ export function createReaderAnnotationsModule(
         return;
       }
       const useNativeParams =
+        !readerSelectionIsFiltered(window) &&
         params?.annotation &&
         (!hasDomSelection ||
-          annotationText(params.annotation.text ?? '') === annotationText(selection.toString()));
+          annotationText(params.annotation.text ?? '') ===
+            annotationText(readerSelectionText(window, selection)));
       let text: string;
       let position: unknown;
       let sortIndex: string | undefined;
@@ -213,7 +217,7 @@ export function createReaderAnnotationsModule(
           ports.showStatus('✗ no selection', 1500);
           return;
         }
-        text = selection.toString();
+        text = readerSelectionText(window, selection);
         ({ position, sortIndex, pageLabel } = computed);
       }
       const attachment = ports.itemForReader();

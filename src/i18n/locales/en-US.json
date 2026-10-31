@@ -523,5 +523,10 @@
   "documentAnalysis.locateGroup": "Locate group",
   "documentAnalysis.association.geometry": "Geometry association",
   "documentAnalysis.association.caption-only": "Caption only",
-  "documentAnalysis.association.ambiguous": "Ambiguous; caption only"
+  "documentAnalysis.association.ambiguous": "Ambiguous; caption only",
+  "action.toggleBodySelection": "Reader: Toggle Body Text Selection",
+  "bodySelection.preparing": "→ Identifying body and auxiliary regions…",
+  "bodySelection.body": "✓ Body selection enabled: v / Flash exclude figures, tables, captions and margins",
+  "bodySelection.all": "✓ All text selection restored",
+  "bodySelection.unavailable": "✗ Body layout unavailable; all text remains selectable"
 }

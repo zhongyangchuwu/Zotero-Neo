@@ -215,6 +215,10 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `src/toolkit/reader/text-source.ts` 返回两种呈现的真实 Text 节点。词元、Flash、选择范围和视觉行移动共用业务实现；重排文本的视觉行来自 Range 客户矩形，段落来自原生 HTML 结构。词元快照仅覆盖锚点、活动端和相邻段落，并可在同一同步动作中复用于提示；远端锚点保持完整，不常驻全文索引。`selection-geometry.ts` 将重排选区交给原生 SDT 映射，保留 Zotero 的 sortIndex、pageLabel 和 PDF 几何。图像裁图区不被冒充为可选文字。
 
+`reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；原生布局复用 `DocumentRegion` 归一化及来源哈希校验。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 负责将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。后续布局后端可复用相同区域契约，不各自实现键盘选择。
+
+正文选择排除 `excluded` 和非公式的 `auxiliary` 区域，未知来源保留可选。PDF 按文字 Range 的中心落入排除区域且水平覆盖至少 90% 分类，边缘容差 0.5 点；不用含字体行距的 span 框作另一套判断。Reading Mode 按原生块身份判断。`user-select:none` 只在 Neo Select 样式租约内生效，普通鼠标选区仍由宿主维护；Gecko 的 `Selection.toString()` 遵守该样式而 `Range.toString()` 不遵守，因此复制保留布局序列化，批注另按接纳文字拆分连续 Range。所有片段必须完整映射，不能仅过滤文本却保存包含图表的矩形。原生字符移动留下元素端点时规范化到接纳文字边界，避免后续词元移动失效。
+
 `src/document-analysis/contracts.ts` 定义完整解析后端的 `DocumentParser`、输入来源和版本化区域结果。`native.ts`、`oxr.ts` 负责各自协议归一化；后端可一次完成布局、识别、阅读顺序和表格，不强迫拆开其内部模型。`DocumentRegion` 保留内容格式、正文归属与区域级锚点精度；区域框不提供字符级批注保证。
 
 `document-source.ts` 单独读取 PDF 页面几何，使云端后端不依赖 SDT 成功。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过原生 `_pageInfo` 适配。OXR 像素框按原 PDF CropBox 与旋转转换，缺页、重复页、非法尺寸和越界矩形使该结果失败，不静默裁剪。来源文件版本变更不能继续应用原结果。

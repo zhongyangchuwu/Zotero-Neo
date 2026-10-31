@@ -1,6 +1,7 @@
 import type { ComputedAnnotationPosition, PdfWindow } from './contracts';
 import type { NativePdfWindow } from './private-types';
 import { currentReaderPresentation, readerReadingMode } from './presentation';
+import { readerSelectedTextRanges, readerSelectionIsFiltered } from './text-admission';
 
 /** Converts only selected text-node fragments; canvas/page boxes are not annotation text. */
 export function computeSelectionPosition(
@@ -9,6 +10,42 @@ export function computeSelectionPosition(
 ): ComputedAnnotationPosition | null {
   if (!selection.rangeCount) return null;
   if (readerReadingMode(pdfWindow)) {
+    if (readerSelectionIsFiltered(pdfWindow)) {
+      const view = currentReaderPresentation(pdfWindow);
+      const fragments = readerSelectedTextRanges(pdfWindow, selection);
+      if (!fragments.length) return null;
+      const pages = new Map<number, (readonly number[])[]>();
+      let first: { sortIndex: string; pageLabel: string } | null = null;
+      for (const fragment of fragments) {
+        const annotation = view?.getAnnotationFromRange?.(fragment, 'highlight');
+        if (!annotation?.position.rects.length)
+          return { position: null, pageLabel: first?.pageLabel ?? '', failure: 'invalid-geometry' };
+        if (!first || annotation.sortIndex < first.sortIndex) first = annotation;
+        for (const [index, rects] of [
+          [annotation.position.pageIndex, annotation.position.rects],
+          [annotation.position.pageIndex + 1, annotation.position.nextPageRects ?? []],
+        ] as const) {
+          if (!rects.length) continue;
+          const group = pages.get(index) ?? [];
+          group.push(...rects);
+          pages.set(index, group);
+        }
+      }
+      const ordered = [...pages].sort(([a], [b]) => a - b);
+      const a = ordered[0]!,
+        b = ordered[1];
+      if (ordered.length > 2 || (b && b[0] !== a[0] + 1))
+        return { position: null, pageLabel: first!.pageLabel, failure: 'unsupported-page-span' };
+      return {
+        position: JSON.stringify({
+          pageIndex: a[0],
+          rects: a[1],
+          ...(b ? { nextPageRects: b[1] } : {}),
+        }),
+        sortIndex: first!.sortIndex,
+        pageLabel: first!.pageLabel,
+      };
+    }
     const annotation = currentReaderPresentation(pdfWindow)?.getAnnotationFromRange?.(
       selection.getRangeAt(0),
       'highlight',
@@ -23,7 +60,6 @@ export function computeSelectionPosition(
   }
   const viewer = (pdfWindow as NativePdfWindow).PDFViewerApplication?.pdfViewer;
   if (!viewer) return null;
-  const range = selection.getRangeAt(0);
   const rectangles: DOMRect[] = [];
   let incomplete = false;
   const collect = (fragment: Range) => {
@@ -36,20 +72,22 @@ export function computeSelectionPosition(
       if (rectangle.width > 1 && rectangle.height > 1) rectangles.push(rectangle);
     }
   };
-  if (range.commonAncestorContainer.nodeType === 3) {
-    collect(range);
-  } else {
-    const walker = pdfWindow.document.createTreeWalker(range.commonAncestorContainer, 4);
-    walker.currentNode = range.startContainer;
-    let node = range.startContainer.nodeType === 3 ? range.startContainer : walker.nextNode();
-    for (; node; node = walker.nextNode()) {
-      if (range.comparePoint(node, 0) > 0) break;
-      if (!range.intersectsNode(node)) continue;
-      const fragment = pdfWindow.document.createRange();
-      fragment.selectNodeContents(node);
-      if (node === range.startContainer) fragment.setStart(node, range.startOffset);
-      if (node === range.endContainer) fragment.setEnd(node, range.endOffset);
-      collect(fragment);
+  for (const range of readerSelectedTextRanges(pdfWindow, selection)) {
+    if (range.commonAncestorContainer.nodeType === 3) {
+      collect(range);
+    } else {
+      const walker = pdfWindow.document.createTreeWalker(range.commonAncestorContainer, 4);
+      walker.currentNode = range.startContainer;
+      let node = range.startContainer.nodeType === 3 ? range.startContainer : walker.nextNode();
+      for (; node; node = walker.nextNode()) {
+        if (range.comparePoint(node, 0) > 0) break;
+        if (!range.intersectsNode(node)) continue;
+        const fragment = pdfWindow.document.createRange();
+        fragment.selectNodeContents(node);
+        if (node === range.startContainer) fragment.setStart(node, range.startOffset);
+        if (node === range.endContainer) fragment.setEnd(node, range.endOffset);
+        collect(fragment);
+      }
     }
   }
   const pages = Array.from(

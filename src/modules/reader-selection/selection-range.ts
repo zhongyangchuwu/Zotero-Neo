@@ -3,6 +3,9 @@ import {
   decorateReaderSelection,
   firstReaderTextPosition,
   readerTextParagraphs,
+  readerTextNodeAllowed,
+  readerSelectionIsFiltered,
+  readerTextBoundaryPosition,
 } from '../../toolkit/reader';
 import { structuralTextPosition } from './text-boundary-motion';
 import { isDeadObject } from '../../platform/cross-compartment';
@@ -80,7 +83,8 @@ export class ReaderSelectionRange {
       isTextNode(selection.anchorNode) &&
       !isDeadObject(selection.anchorNode) &&
       selection.anchorNode.isConnected &&
-      selection.anchorNode.ownerDocument === pdfWindow.document
+      selection.anchorNode.ownerDocument === pdfWindow.document &&
+      readerTextNodeAllowed(pdfWindow, selection.anchorNode)
     ) {
       this.#anchor = { textNode: selection.anchorNode, offset: selection.anchorOffset };
       this.#anchorWindow = pdfWindow;
@@ -362,6 +366,7 @@ export class ReaderSelectionRange {
       }
     } else if (!lease.dispose) return;
 
+    this.#normalizeFocus(pdfWindow);
     const selection = pdfWindow.getSelection();
     const focus = selection?.focusNode ?? null;
     const anchor =
@@ -549,8 +554,10 @@ export class ReaderSelectionRange {
       !isDeadObject(this.#anchor.textNode) &&
       this.#anchor.textNode.isConnected &&
       this.#anchor.textNode.ownerDocument === pdfWindow.document
-    )
+    ) {
+      this.#normalizeFocus(pdfWindow);
       return;
+    }
     this.#anchor = null;
     this.#anchorWindow = null;
     this.#anchorCurrent = null;
@@ -571,6 +578,39 @@ export class ReaderSelectionRange {
       this.#anchorWindow = pdfWindow;
       this.#anchorCurrent = current;
     }
+  }
+
+  #normalizeFocus(window: PdfWindow): void {
+    if (
+      !readerSelectionIsFiltered(window) ||
+      this.#anchorWindow !== window ||
+      !this.#anchorCurrent?.() ||
+      !this.#anchor ||
+      isDeadObject(this.#anchor.textNode) ||
+      !this.#anchor.textNode.isConnected ||
+      this.#anchor.textNode.ownerDocument !== window.document
+    )
+      return;
+    const selection = window.getSelection();
+    const focus = selection?.focusNode;
+    if (!selection || !focus || (isTextNode(focus) && readerTextNodeAllowed(window, focus))) return;
+    const boundary = window.document.createRange();
+    boundary.setStart(focus, selection.focusOffset);
+    boundary.collapse(true);
+    const reverse = boundary.comparePoint(this.#anchor.textNode, this.#anchor.offset) > 0;
+    const pointer = readerTextBoundaryPosition(
+      window,
+      focus,
+      selection.focusOffset,
+      reverse ? 'backward' : 'forward',
+    );
+    if (pointer)
+      selection.setBaseAndExtent(
+        this.#anchor.textNode,
+        this.#anchor.offset,
+        pointer.textNode,
+        pointer.offset,
+      );
   }
 
   #comparePointers(left: Pointer, right: Pointer): number {

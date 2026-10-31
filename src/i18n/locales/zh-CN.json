@@ -523,5 +523,10 @@
   "documentAnalysis.locateGroup": "定位整组",
   "documentAnalysis.association.geometry": "按几何关联",
   "documentAnalysis.association.caption-only": "仅 caption",
-  "documentAnalysis.association.ambiguous": "关联有歧义，仅定位 caption"
+  "documentAnalysis.association.ambiguous": "关联有歧义，仅定位 caption",
+  "action.toggleBodySelection": "阅读器：切换正文选择",
+  "bodySelection.preparing": "→ 正在识别正文与图表区域…",
+  "bodySelection.body": "✓ 正文选择已启用：v / Flash 将排除图表、题注与页边文字",
+  "bodySelection.all": "✓ 已恢复全部文字选择",
+  "bodySelection.unavailable": "✗ 正文区域暂不可用，保留全部文字选择"
 }

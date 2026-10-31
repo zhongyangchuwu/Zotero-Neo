@@ -20,6 +20,13 @@ export * from './annotations';
 export * from './links';
 export * from './marks';
 export * from './text-source';
+export {
+  leaseReaderTextAdmission,
+  readerTextNodeAllowed,
+  readerSelectionIsFiltered,
+  readerSelectionText,
+} from './text-admission';
+export type { ReaderTextSourceLocation } from './text-admission';
 export * from './identifier-text';
 export * from './annotation-targets';
 export * from './sidebar';

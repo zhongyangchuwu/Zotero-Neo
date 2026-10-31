@@ -119,6 +119,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
 | `toggleReadingMode` | `<Space>rr` | 切换当前分屏的 Zotero 原生 Reading Mode，使用同一 Reader Normal／Select 按键。 |
+| `toggleBodySelection` | `<Space>rb` | 在当前 Reader 会话切换正文／全部文字选择。首次开启显式准备原生结构，供 PDF 与 Reading Mode 的键盘选择排除图表、图注和页边文字；再次按下关闭。 |
 | `compareDocumentParsing` | `<Space>rd` | 打开当前 PDF 的原生／OXR 解析对照；点击云端解析后上传文档，可展开区域与图表组、定位整组并复制报告。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
 | `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
@@ -365,6 +366,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `nextBookmark` | Reader Normal `]m` | 按文档顺序前往下一个 Reader 标记，到达末尾时循环。 |
 | `clearSearch` | Reader Normal `<Esc>` | 清除/关闭 Reader 搜索 |
 | `enterVisual` | Reader Normal `v` | 进入 Reader Select |
+| `toggleBodySelection` | Reader Normal `<Space>rb` | 切换当前 Reader 会话的正文选择 |
 | `openSelectionActions` | Reader Select `a`、`<Enter>`、`<Return>` | 打开选区操作 |
 | `enterInsert` | Reader Normal `i`；Note Normal `i` | Reader 功能/原生输入控制；Note 编辑器切换到 Insert |
 | `exitMode` | Reader Select `<Esc>`/`v`；Note Normal `<Esc>`；Note Insert `<Esc>` | 退出当前界面模式；Reader 的 Escape 是固定的输入控制键，Main Select 使用专用取消操作 |

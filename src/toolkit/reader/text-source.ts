@@ -2,6 +2,7 @@ import { CleanupFailure } from '../../core/cleanup';
 import { readerReadingMode } from './presentation';
 import { isDeadObject } from '../../platform/cross-compartment';
 import type { Pointer } from '../../reader/types';
+import { readerTextNodeAllowed } from './text-admission';
 
 export interface ReaderTextRect {
   readonly left: number;
@@ -30,6 +31,7 @@ export function readerTextSpans(window: Window): readonly ReaderTextSpan[] {
       const range = window.document.createRange();
       range.selectNodeContents(textNode);
       const rect = range.getBoundingClientRect();
+      if (!readerTextNodeAllowed(window, textNode, rect)) continue;
       if (rect.height > 0 && [rect.left, rect.right, rect.top, rect.bottom].every(Number.isFinite))
         result.push({
           textNode,
@@ -49,6 +51,9 @@ export function readerTextSpans(window: Window): readonly ReaderTextSpan[] {
     const textNode = span.firstChild;
     if (textNode?.nodeType !== 3 || !(textNode as Text).length || !textNode.isConnected) continue;
     const rect = span.getBoundingClientRect();
+    // PDF.js span line boxes include font leading; classify the text Range so
+    // motion, copying and annotation use the same source geometry.
+    if (!readerTextNodeAllowed(window, textNode as Text)) continue;
     if (
       ![rect.left, rect.right, rect.top, rect.bottom, rect.width, rect.height].every(
         Number.isFinite,
@@ -78,12 +83,37 @@ export function readerTextParagraphs(
 }
 
 export function firstReaderTextPosition(window: Window): Pointer | null {
-  if (readerReadingMode(window)) {
-    const first = readerTextSpans(window)[0];
-    return first ? { textNode: first.textNode, offset: 0 } : null;
+  const first = readerTextSpans(window)[0];
+  return first ? { textNode: first.textNode, offset: 0 } : null;
+}
+
+/** Gecko can leave a caret at an Element boundary after skipping user-select:none content. */
+export function readerTextBoundaryPosition(
+  window: Window,
+  node: Node,
+  offset: number,
+  direction: 'forward' | 'backward',
+): Pointer | null {
+  const boundary = window.document.createRange();
+  boundary.setStart(node, offset);
+  boundary.collapse(true);
+  const spans = [...readerTextSpans(window)];
+  if (direction === 'backward') spans.reverse();
+  for (const span of spans) {
+    if (span.textNode === node)
+      return { textNode: span.textNode, offset: Math.min(offset, span.textNode.length) };
+    const start = boundary.comparePoint(span.textNode, 0);
+    const end = boundary.comparePoint(span.textNode, span.textNode.length);
+    if (direction === 'forward') {
+      if (start >= 0) return { textNode: span.textNode, offset: 0 };
+    } else {
+      if (end <= 0) return { textNode: span.textNode, offset: span.textNode.length };
+    }
   }
-  const text = window.document.querySelector('.textLayer span')?.firstChild;
-  return text?.nodeType === 3 ? { textNode: text as Text, offset: 0 } : null;
+  const edge = spans.at(-1);
+  return edge
+    ? { textNode: edge.textNode, offset: direction === 'forward' ? edge.textNode.length : 0 }
+    : null;
 }
 
 /** Acquires one exact-view style lease; an old release cannot remove a replacement's marker. */
@@ -108,7 +138,8 @@ export function decorateReaderSelection(window: Window): () => void {
     document.querySelector(selector)?.remove();
     style.dataset.zvSelectSelection = '1';
     style.textContent =
-      ':root[data-zv-select-active] :is(.textLayer, #sdt-content) ::selection { background-color: rgb(66, 133, 244); }';
+      ':root[data-zv-select-active] :is(.textLayer, #sdt-content) ::selection { background-color: rgb(66, 133, 244); }' +
+      ':root[data-zv-select-active] :is(.textLayer, #sdt-content) [data-zv-text-excluded] { user-select:none !important; }';
     document.documentElement.appendChild(style);
     document.documentElement.setAttribute('data-zv-select-active', '');
     return release;
