@@ -517,5 +517,11 @@
   "documentAnalysis.kind.code": "Code",
   "documentAnalysis.kind.footnote": "Footnote",
   "documentAnalysis.kind.references": "References",
-  "documentAnalysis.vocabulary": "Vocabulary differences"
+  "documentAnalysis.vocabulary": "Vocabulary differences",
+  "documentAnalysis.objectGroup": "Figure / table group",
+  "documentAnalysis.members": "Member regions",
+  "documentAnalysis.locateGroup": "Locate group",
+  "documentAnalysis.association.geometry": "Geometry association",
+  "documentAnalysis.association.caption-only": "Caption only",
+  "documentAnalysis.association.ambiguous": "Ambiguous; caption only"
 }

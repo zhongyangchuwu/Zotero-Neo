@@ -29,6 +29,8 @@ export interface DocumentSource {
 
 export interface DocumentRegion {
   readonly id: string;
+  /** Several page rectangles may belong to one backend block; order retains gaps from unusable blocks. */
+  readonly sourceBlock?: { readonly id: string; readonly order: number };
   readonly kind: DocumentRegionKind;
   readonly pageIndex: number;
   readonly rect: DocumentRect;
@@ -37,6 +39,22 @@ export interface DocumentRegion {
   readonly flow: 'body' | 'auxiliary' | 'excluded';
   /** A region box permits navigation, not character-accurate text annotation. */
   readonly anchorPrecision: 'region';
+}
+
+export interface DocumentObjectGroup {
+  readonly id: string;
+  readonly kind: 'figure' | 'table';
+  readonly label: string;
+  readonly title: string;
+  readonly captionRegionIds: readonly string[];
+  readonly memberRegionIds: readonly string[];
+  /** Geometry is a conservative association, not a model-provided semantic guarantee. */
+  readonly association: 'geometry' | 'caption-only' | 'ambiguous';
+}
+
+export interface DocumentLocation {
+  readonly pageIndex: number;
+  readonly rects: readonly DocumentRect[];
 }
 
 export interface ParsedDocument {

@@ -759,6 +759,33 @@ describe('ReaderNavigation', () => {
     expect(nativeRect(region)[1] - container.scrollTop).toBe(0);
   });
 
+  it('replaces a table bookmark with the whole group even when its caption has the same top', async () => {
+    const test = harness();
+    const internal = test.reader._internalReader!;
+    const position = { pageIndex: 1, rects: [[50, 740, 545, 770]] };
+    const group = { pageIndex: 1, rects: [...position.rects, [50, 400, 545, 730]] };
+    Reflect.set(internal, '_state', {
+      outline: [{ title: 'Table 1: Results', location: { position } }],
+    });
+    vi.spyOn(test.captions, 'load').mockResolvedValue([
+      {
+        title: 'Table 1: Results',
+        kind: 'table',
+        label: '1',
+        association: 'geometry',
+        location: { position: group },
+      },
+    ]);
+    Reflect.set(test.primary, 'PDFViewerApplication', {
+      pdfViewer: { _location: { pageNumber: 1, top: 800, left: 0 } },
+    });
+    const navigate = vi.fn();
+    Reflect.set(internal._primaryView!, 'navigate', navigate);
+    await test.navigation.traverseOutline('table', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith({ position: group }, { block: 'start' });
+    expect(test.cloneInto).toHaveBeenCalledWith({ position: group }, test.reader._iframeWindow);
+  });
+
   it('does not navigate when focus ownership retires during native caption processing', async () => {
     const test = harness();
     const pending = Promise.withResolvers<unknown>();

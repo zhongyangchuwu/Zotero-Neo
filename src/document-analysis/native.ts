@@ -47,28 +47,36 @@ export function nativeDocumentPages(catalog: unknown): readonly DocumentPage[] {
   });
 }
 
-export function nativeParsedDocument(
-  source: DocumentSource,
-  data: NativeDocumentData,
-  durationMs = 0,
-): ParsedDocument {
-  const hash = record(record(data.metadata)?.source)?.hash;
-  if (hash !== source.fingerprint)
-    throw new Error('Native analysis belongs to a different PDF revision');
+/** Normalize native blocks once for both lightweight caption navigation and full analysis. */
+export function nativeDocumentRegions(blocks: readonly unknown[]): readonly DocumentRegion[] {
   const regions: DocumentRegion[] = [];
-  data.blocks.forEach((value, blockIndex) => {
+  blocks.forEach((value, blockIndex) => {
     const block = record(value);
     const anchors = record(block?.anchor)?.pageRects;
-    if (!block || !Array.isArray(anchors)) return;
+    if (
+      !block ||
+      !Array.isArray(anchors) ||
+      anchors.some(
+        (anchor) =>
+          !Array.isArray(anchor) ||
+          anchor.length !== 5 ||
+          !Number.isInteger(anchor[0]) ||
+          anchor[0] < 0 ||
+          !documentRect(anchor.slice(1)),
+      )
+    )
+      return;
     for (const [part, anchor] of anchors.entries()) {
       if (!Array.isArray(anchor) || anchor.length !== 5) continue;
       const pageIndex: unknown = anchor[0];
       const rect = documentRect(anchor.slice(1));
-      if (!Number.isInteger(pageIndex) || !source.pages[pageIndex as number] || !rect) continue;
+      if (!Number.isInteger(pageIndex) || typeof pageIndex !== 'number' || pageIndex < 0 || !rect)
+        continue;
       const kind =
         block.reference === true ? 'references' : (NATIVE_KINDS[String(block.type)] ?? 'other');
       regions.push({
         id: `native:${blockIndex}:${part}`,
+        sourceBlock: { id: `native:${blockIndex}`, order: blockIndex },
         kind,
         pageIndex: pageIndex as number,
         rect,
@@ -82,6 +90,20 @@ export function nativeParsedDocument(
       });
     }
   });
+  return regions;
+}
+
+export function nativeParsedDocument(
+  source: DocumentSource,
+  data: NativeDocumentData,
+  durationMs = 0,
+): ParsedDocument {
+  const hash = record(record(data.metadata)?.source)?.hash;
+  if (hash !== source.fingerprint)
+    throw new Error('Native analysis belongs to a different PDF revision');
+  const regions = nativeDocumentRegions(data.blocks).filter(
+    (region) => source.pages[region.pageIndex],
+  );
   return {
     schemaVersion: 1,
     sourceFingerprint: source.fingerprint,

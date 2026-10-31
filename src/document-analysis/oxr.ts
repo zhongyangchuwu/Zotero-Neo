@@ -120,6 +120,7 @@ export function oxrParsedDocument(
           : 'text';
       regions.push({
         id: `oxr:${pageIndex}:${index}`,
+        sourceBlock: { id: `oxr:${pageIndex}:${index}`, order: regions.length },
         kind,
         pageIndex,
         rect: rasterPDFRect(rect, size.w, size.h, source.pages[pageIndex]!),
