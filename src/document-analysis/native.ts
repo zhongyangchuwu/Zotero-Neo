@@ -115,6 +115,50 @@ export function nativeParsedDocument(
   };
 }
 
+/**
+ * Native text maps carry line ink bounds even when a top-level block has an oversized box.
+ * Keep graph bodies intact; missing or malformed text maps leave the ordinary region as a fallback.
+ * Block identities are preserved for exact Reading Mode admission, never used as cloud identities.
+ */
+export function nativeDocumentTextRegions(data: NativeDocumentData): readonly DocumentRegion[] {
+  const lines = new Map<number, { pageIndex: number; rect: DocumentRegion['rect'] }[]>();
+  const visit = (
+    value: unknown,
+    result: { pageIndex: number; rect: DocumentRegion['rect'] }[],
+  ): void => {
+    const node = record(value);
+    if (!node) return;
+    if (typeof node.text === 'string') {
+      const textMap = record(node.anchor)?.textMap;
+      try {
+        const runs: unknown = typeof textMap === 'string' ? JSON.parse(textMap) : null;
+        if (Array.isArray(runs))
+          for (const run of runs) {
+            if (!Array.isArray(run) || !Number.isInteger(run[1]) || run[1] < 0) continue;
+            const rect = documentRect(run.slice(2, 6));
+            if (rect) result.push({ pageIndex: run[1] as number, rect });
+          }
+      } catch {
+        // Unknown native text-map versions cannot supply tighter geometry.
+      }
+    } else if (Array.isArray(node.content)) for (const child of node.content) visit(child, result);
+  };
+  data.blocks.forEach((block, index) => {
+    const result: { pageIndex: number; rect: DocumentRegion['rect'] }[] = [];
+    visit(block, result);
+    lines.set(index, result);
+  });
+  return nativeDocumentRegions(data.blocks).flatMap((region) => {
+    if (region.kind === 'image' || region.kind === 'table') return [region];
+    const ink = lines
+      .get(region.sourceBlock!.order)
+      ?.filter((line) => line.pageIndex === region.pageIndex);
+    return ink?.length
+      ? ink.map((line, index) => ({ ...region, id: `${region.id}:ink:${index}`, rect: line.rect }))
+      : [region];
+  });
+}
+
 export function nativeDocumentParser(
   extract: (signal: AbortSignal) => Promise<NativeDocumentData>,
 ): DocumentParser {

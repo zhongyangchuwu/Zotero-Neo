@@ -7,7 +7,10 @@ import {
   readerSelectionIsFiltered,
   readerSelectionText,
   readerTextNodeAllowed,
+  validateReaderSelection,
 } from '../../src/toolkit/reader/text-admission';
+import { nativeDocumentTextRegions } from '../../src/document-analysis/native';
+import type { ReaderCachedDocument } from '../../src/reader/document-cache';
 import { leaseReaderPresentation } from '../../src/toolkit/reader/presentation';
 import { computeSelectionPosition } from '../../src/toolkit/reader/selection-geometry';
 import { readerTextBoundaryPosition, readerTextSpans } from '../../src/toolkit/reader/text-source';
@@ -38,6 +41,188 @@ const chart: DocumentRegion = {
 };
 
 describe('body text admission', () => {
+  it('keeps body text in overlapping exclusion boxes and never expands a mask to an object group', () => {
+    const accepts = bodyTextAdmission([
+      {
+        ...chart,
+        id: 'table',
+        kind: 'table',
+        rect: [90, 740, 160, 790],
+        sourceObject: { id: 'table:1', kind: 'table' },
+      },
+      {
+        ...chart,
+        id: 'caption',
+        kind: 'caption',
+        rect: [90, 700, 160, 720],
+        sourceObject: { id: 'table:1', kind: 'table' },
+      },
+      { ...chart, id: 'body', kind: 'text', flow: 'body', rect: [95, 750, 155, 760] },
+    ]);
+    expect(accepts({ pageIndex: 0, rect: [100, 751, 150, 759], sourceBlockId: null })).toBe(true);
+    expect(accepts({ pageIndex: 0, rect: [100, 725, 150, 735], sourceBlockId: null })).toBe(true);
+    expect(accepts({ pageIndex: 0, rect: [100, 770, 150, 780], sourceBlockId: null })).toBe(false);
+  });
+
+  it('uses native ink instead of the PaddleOCR arXiv block box while retaining exact Reading Mode identity', () => {
+    const regions = nativeDocumentTextRegions({
+      metadata: {},
+      catalog: {},
+      blocks: [
+        {
+          type: 'paragraph',
+          flowClass: 'excluded',
+          anchor: { pageRects: [[0, 17, 124.29, 537.4226, 596.5814]] },
+          content: [
+            {
+              text: 'arXiv:2601.21957v1',
+              anchor: { textMap: '[[0,0,17,248,37,257],[0,0,17,257,37,263.7]]' },
+            },
+          ],
+        },
+      ],
+    });
+    const accepts = bodyTextAdmission(regions);
+    expect(regions.map((r) => r.rect)).toEqual([
+      [17, 248, 37, 257],
+      [17, 257, 37, 263.7],
+    ]);
+    expect(accepts({ pageIndex: 0, rect: [70, 430, 520, 440], sourceBlockId: null })).toBe(true);
+    expect(accepts({ pageIndex: 0, rect: [17, 248, 37, 257], sourceBlockId: null })).toBe(false);
+    const cloudMargin = bodyTextAdmission([
+      { ...chart, flow: 'excluded', rect: [14, 249, 36, 598] },
+    ]);
+    expect(
+      cloudMargin({
+        pageIndex: 0,
+        rect: [12.56, 248.28, 40.04, 592.33],
+        sourceBlockId: null,
+        vertical: true,
+      }),
+    ).toBe(false);
+    expect(accepts({ pageIndex: null, rect: null, sourceBlockId: 'native:0' })).toBe(false);
+  });
+
+  it('maps a cloud exclusion to a complete native block and preserves partial or unknown mappings', () => {
+    const native = [
+      {
+        ...chart,
+        kind: 'text' as const,
+        flow: 'body' as const,
+        sourceBlock: { id: 'native:3', order: 3 },
+      },
+      {
+        ...chart,
+        kind: 'text' as const,
+        flow: 'body' as const,
+        sourceBlock: { id: 'native:4', order: 4 },
+      },
+      {
+        ...chart,
+        kind: 'text' as const,
+        flow: 'body' as const,
+        rect: [10, 100, 50, 110] as const,
+        sourceBlock: { id: 'native:4', order: 4 },
+      },
+    ];
+    const accepts = bodyTextAdmission(
+      [{ ...chart, sourceBlock: { id: 'mineru:0', order: 0 } }],
+      native,
+    );
+    expect(accepts({ pageIndex: null, rect: null, sourceBlockId: 'native:3' })).toBe(false);
+    expect(accepts({ pageIndex: null, rect: null, sourceBlockId: 'native:4' })).toBe(true);
+    expect(accepts({ pageIndex: null, rect: null, sourceBlockId: 'native:0' })).toBe(true);
+  });
+
+  it('refuses a filtered snapshot after source change, lease replacement, selection change or view retirement', async () => {
+    const t = textAdmissionFixture();
+    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    const pending = Promise.withResolvers<boolean>();
+    const release = leaseReaderTextAdmission(
+      t.window,
+      bodyTextAdmission([chart]),
+      () => true,
+      () => pending.promise,
+    );
+    const checking = validateReaderSelection(t.window);
+    const successor = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => true);
+    pending.resolve(true);
+    expect(await checking).toBe(false);
+    expect(readerSelectionIsFiltered(t.window)).toBe(true);
+    release();
+    successor();
+    const failed = leaseReaderTextAdmission(
+      t.window,
+      bodyTextAdmission([chart]),
+      () => true,
+      async () => false,
+    );
+    expect(await validateReaderSelection(t.window)).toBe(false);
+    expect(readerSelectionIsFiltered(t.window)).toBe(false);
+    failed();
+    let current = true;
+    const retired = leaseReaderTextAdmission(
+      t.window,
+      bodyTextAdmission([chart]),
+      () => current,
+      async () => {
+        current = false;
+        return true;
+      },
+    );
+    expect(await validateReaderSelection(t.window)).toBe(false);
+    retired();
+    const changed = leaseReaderTextAdmission(
+      t.window,
+      bodyTextAdmission([chart]),
+      () => true,
+      async () => {
+        Reflect.set(t.selection, 'focusOffset', 1);
+        return true;
+      },
+    );
+    expect(await validateReaderSelection(t.window)).toBe(false);
+    changed();
+  });
+
+  it('uses saved cloud layout without invoking native extraction and retires it before a changed-source write', async () => {
+    const t = textAdmissionFixture();
+    let sourceCurrent = true;
+    const native = vi.fn(() => {
+      throw new Error('must not analyze');
+    });
+    Reflect.set(globalThis, 'Zotero', { SDT: { getReader: native } });
+    const owner = new ReaderBodySelection({
+      reader: { itemID: 1 },
+      readCache: async () =>
+        ({
+          parsed: {
+            schemaVersion: 1,
+            sourceFingerprint: 'source',
+            backend: 'mineru',
+            modelRevision: null,
+            durationMs: 0,
+            pages: [],
+            regions: [chart],
+          },
+          isCurrent: async () => sourceCurrent,
+        }) as ReaderCachedDocument,
+      isCurrent: () => true,
+      capturePresentation: () => () => true,
+      captureView: () => () => true,
+      showStatus: vi.fn(),
+      text: (key) => key,
+      debug: vi.fn(),
+    });
+    await owner.toggle(t.window);
+    t.document.documentElement.setAttribute('data-zv-select-active', '');
+    expect(native).not.toHaveBeenCalled();
+    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(false);
+    sourceCurrent = false;
+    expect(await validateReaderSelection(t.window)).toBe(false);
+    expect(readerTextNodeAllowed(t.window, t.nodes[1]!)).toBe(true);
+    owner.dispose();
+  });
   it('resolves an element caret across excluded text to the next or previous admitted edge', () => {
     const t = textAdmissionFixture();
     const release = leaseReaderTextAdmission(t.window, bodyTextAdmission([chart]), () => true);

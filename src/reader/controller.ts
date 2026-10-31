@@ -804,6 +804,7 @@ export class ReaderSession {
       this.#selection = this.#modules.activate('reader-selection', () =>
         createReaderSelectionModule(this.#modules.host, {
           reader: dependencies.reader,
+          preferences: dependencies.controller.dependencies.preferences,
           activeWindow: () => this.#navigationHost.activePdfWindow(),
           isViewCurrent: (window) => this.readerViewCurrent(window),
           capturePresentation: (window) => this.invocationCurrent(window),

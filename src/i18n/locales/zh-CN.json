@@ -613,5 +613,7 @@
   "documentCredentials.cleared": "已清除保存的 Token。",
   "documentCredentials.unavailable": "无法读取或保存 Token，请检查本机密码存储，或临时填写后使用。",
   "documentAnalysis.elapsed": "处理记录用时（含等待／暂停）",
-  "documentCredentials.temporaryToken": "API Token（仅本次使用）"
+  "documentCredentials.temporaryToken": "API Token（仅本次使用）",
+  "bodySelection.cached": "✓ 正文选择已启用（已存布局）：排除图表、题注与页边文字",
+  "bodySelection.changed": "✗ 选区或文档来源已变化，请重新选择；<Space>rb 可重新准备正文过滤"
 }

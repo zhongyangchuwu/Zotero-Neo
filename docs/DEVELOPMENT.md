@@ -215,9 +215,9 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `src/toolkit/reader/text-source.ts` 返回两种呈现的真实 Text 节点。词元、Flash、选择范围和视觉行移动共用业务实现；重排文本的视觉行来自 Range 客户矩形，段落来自原生 HTML 结构。词元快照仅覆盖锚点、活动端和相邻段落，并可在同一同步动作中复用于提示；远端锚点保持完整，不常驻全文索引。`selection-geometry.ts` 将重排选区交给原生 SDT 映射，保留 Zotero 的 sortIndex、pageLabel 和 PDF 几何。图像裁图区不被冒充为可选文字。
 
-`reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；原生布局复用 `DocumentRegion` 归一化及来源哈希校验。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 负责将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。后续布局后端可复用相同区域契约，不各自实现键盘选择。
+`reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；布局优先复用当前服务的有效附件缓存，原生退路保持 `DocumentRegion` 归一化及来源哈希校验；缓存键由 `document-analysis/settings.ts` 统一确定。PDF 缓存命中不请求 SDT，Reading Mode 按需读取原生块并验证同一来源。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 负责将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。后续布局后端可复用相同区域契约，不各自实现键盘选择。
 
-正文选择排除 `excluded` 和非公式的 `auxiliary` 区域，未知来源保留可选。PDF 按文字 Range 的中心落入排除区域且水平覆盖至少 90% 分类，边缘容差 0.5 点；不用含字体行距的 span 框作另一套判断。Reading Mode 按原生块身份判断。`user-select:none` 只在 Neo Select 样式租约内生效，普通鼠标选区仍由宿主维护；Gecko 的 `Selection.toString()` 遵守该样式而 `Range.toString()` 不遵守，因此复制保留布局序列化，批注另按接纳文字拆分连续 Range。所有片段必须完整映射，不能仅过滤文本却保存包含图表的矩形。原生字符移动留下元素端点时规范化到接纳文字边界，避免后续词元移动失效。
+正文选择排除 `excluded` 和非公式的 `auxiliary` 区域，未知来源保留可选。PDF 按文字 Range 的中心落入排除区域且水平覆盖至少 90% 分类（旋转 90° 的页边标签短轴允许字体行距，覆盖至少 70%），边缘容差 0.5 点；原生非图表文字优先采用 textMap 行墨迹框，避免粗框吞掉正文。明确正文覆盖优先于冲突排除，不扩大到对象分组包围框；不用含字体行距的 span 框作另一套判断。Reading Mode 按原生块身份判断；云端仅在完整原生块的所有已知来源片段均被排除时接纳，部分或未知映射保留。复制和批注前由 `validateReaderSelection()` 重查精确租约、选区端点和文件身份，旧缓存／服务通知同步退休过滤。`user-select:none` 只在 Neo Select 样式租约内生效，普通鼠标选区仍由宿主维护；Gecko 的 `Selection.toString()` 遵守该样式而 `Range.toString()` 不遵守，因此复制保留布局序列化，批注另按接纳文字拆分连续 Range。所有片段必须完整映射，不能仅过滤文本却保存包含图表的矩形。原生字符移动留下元素端点时规范化到接纳文字边界，避免后续词元移动失效。
 
 `src/document-analysis/contracts.ts` 定义完整解析后端的 `DocumentParser`、输入来源和版本化区域结果。`native.ts`、`oxr.ts`、`mineru.ts` 负责各自协议归一化；后端可一次完成布局、识别、阅读顺序和表格，不强迫拆开其内部模型。`DocumentRegion` 保留内容格式、正文归属与区域级锚点精度；区域框不提供字符级批注保证。
 
@@ -242,6 +242,6 @@ MinerU 官方云端适配器通过 `DocumentParser` 接入相同对照、缓存�
 
 MinerU 的 table/image/chart 父对象归一化为成员区域上的 `sourceObject`，公共图表关联先保留该显式关系，不要求 caption 或编号成功，也不再按距离扩大它。显式关系保留模型原意，不代表语义已验证；密集表格中仍可能错配题注，因此独立区域定位始终保留。其他无显式对象的区域继续使用原几何关联。当前覆盖单篇 Reader 显式解析、状态进度、缓存复用、对照面板定位及常规图表导航／侧栏增强；批量选择／任务恢复、云端正文过滤、外部 Reading Mode 与跨后端阶段编排均不在此链路范围。
 
-`reader-navigation/document-cache.ts` 在显式图表请求时读取当前服务的附件缓存，复用后端独立导出的非秘密缓存键与 PDF 来源几何；它不构造网络解析器，也不运行原生 SDT。`ReaderCaptionTargets` 优先投影有效缓存的图表对象，缺失或不可用时才使用既有原生路径。图表目标携带稳定对象身份、显式类型和来源，编号缺失时不按标题猜类型或合并同页对象。原生标题通过单独的 `loadHeadings()` 准备，保留原有大纲与标题校正，不必为缓存图表等待原生全文分析。
+`reader/document-cache.ts` 供导航与选择在显式请求时读取当前服务的附件缓存，复用后端独立导出的非秘密缓存键与 PDF 来源几何；它不构造网络解析器，也不运行原生 SDT。`ReaderCaptionTargets` 优先投影有效缓存的图表对象，缺失或不可用时才使用既有原生路径。图表目标携带稳定对象身份、显式类型和来源，编号缺失时不按标题猜类型或合并同页对象。原生标题通过单独的 `loadHeadings()` 准备，保留原有大纲与标题校正，不必为缓存图表等待原生全文分析。
 
 缓存导航在使用前重查 PDF 版本、服务配置和 Reader 所有权；旧侧栏选择在目标被替换后不能继续导航。当前 Reader 的分析成功提交以及服务偏好变化会退休并按需重载已准备的图表目标。所有缓存和原生目标继续通过同一原生位置／导航历史能力跳转，不直接操作 PDF.js 滚动位置。

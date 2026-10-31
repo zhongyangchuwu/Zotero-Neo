@@ -135,6 +135,10 @@ export function textAdmissionFixture(reading = false) {
   }
   const selected = range(nodes[0], 0, nodes[2], 5);
   const selection = {
+    anchorNode: nodes[0],
+    anchorOffset: 0,
+    focusNode: nodes[2],
+    focusOffset: 5,
     rangeCount: 1,
     getRangeAt: () => selected,
     toString: () =>
@@ -147,6 +151,7 @@ export function textAdmissionFixture(reading = false) {
   } as unknown as Selection;
   const window = {
     document,
+    getSelection: () => selection,
     PDFViewerApplication: {
       pdfViewer: {
         _pages: [

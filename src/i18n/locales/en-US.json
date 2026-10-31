@@ -613,5 +613,7 @@
   "documentCredentials.cleared": "Saved token removed.",
   "documentCredentials.unavailable": "Token storage unavailable. Check the local password store or enter a temporary token.",
   "documentAnalysis.elapsed": "Recorded elapsed (including waits / pauses)",
-  "documentCredentials.temporaryToken": "API token (temporary)"
+  "documentCredentials.temporaryToken": "API token (temporary)",
+  "bodySelection.cached": "✓ Body selection enabled (saved layout): excluding figures, tables, captions and margins",
+  "bodySelection.changed": "✗ Selection or document source changed; select again and use <Space>rb to prepare body filtering"
 }

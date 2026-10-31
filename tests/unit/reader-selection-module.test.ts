@@ -55,6 +55,9 @@ function selectionModule() {
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
   const ports: ReaderSelectionModulePorts = {
     reader,
+    preferences: {
+      get: (_key: string, fallback: unknown) => fallback,
+    } as ReaderSelectionModulePorts['preferences'],
     activeWindow: () => window,
     isViewCurrent: () => current,
     capturePresentation: () => () => current,
