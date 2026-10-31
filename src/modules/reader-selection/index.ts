@@ -3,12 +3,22 @@ import type { ReaderSelectionActionDefinition, ReaderSelectionContext } from '..
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import type { PdfWindow, ReaderMode, ReaderRuntime } from '../../reader/types';
-import { computeSelectionPosition, prepareReaderSelectionSearch } from '../../toolkit';
+import {
+  computeSelectionPosition,
+  prepareReaderSelectionSearch,
+  readerSelectionText,
+} from '../../toolkit';
+import { t } from '../../i18n';
+import { ReaderBodySelection } from './body-selection';
 import { ReaderFlash } from './flash';
 import { ReaderSelectionRange } from './selection-range';
 import { ReaderSelectionActions } from './selection-actions';
 import { selectionClipboardText } from './selection-text';
-import { bindReaderSelectionActions, type ReaderSelectionAction } from './actions';
+import {
+  bindReaderSelectionActions,
+  READER_SELECTION_NORMAL_ACTIONS,
+  type ReaderSelectionAction,
+} from './actions';
 
 export interface ReaderSelectionModulePorts {
   readonly reader: ReaderRuntime;
@@ -48,6 +58,7 @@ export interface ReaderSelectionModule {
   isCurrent(): boolean;
   context(): ReaderSelectionContext | null;
   executeAction(action: ReaderSelectionAction, window: PdfWindow): boolean;
+  releaseView(window: PdfWindow): void;
 }
 
 function selectionText(value: string): string {
@@ -89,6 +100,16 @@ export function createReaderSelectionModule(
       failure.rethrow();
     });
     scope.add(ports.clearOwner);
+    const body = new ReaderBodySelection({
+      reader: ports.reader,
+      isCurrent: () => scope.isCurrent(),
+      capturePresentation: ports.capturePresentation,
+      captureView: ports.captureView,
+      showStatus,
+      text: (key) => t(`bodySelection.${key}`, ports.language()),
+      debug: ports.debug,
+    });
+    scope.add(() => body.dispose());
     const flash = new ReaderFlash({
       isCurrent,
       captureView: ports.captureView,
@@ -117,7 +138,7 @@ export function createReaderSelectionModule(
       if (!window || !isCurrent(window)) return null;
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) return null;
-      const text = selectionText(selection.toString());
+      const text = selectionText(readerSelectionText(window, selection));
       if (!text) return null;
       const computed = computeSelectionPosition(window, selection);
       return Object.freeze({
@@ -167,7 +188,13 @@ export function createReaderSelectionModule(
     scope.add(() => actions.dispose());
     const execute = bindReaderSelectionActions(host, scope, (action, window) => {
       if (!isCurrent(window)) return;
+      body.bind(window);
       switch (action) {
+        case 'toggleBodySelection':
+          void body.toggle(window).catch((error: unknown) => {
+            ports.debug(`body selection cleanup failed: ${String(error)}`);
+          });
+          return;
         case 'enterVisual':
           if (ports.enabled()) range.enter(window);
           return;
@@ -242,7 +269,7 @@ export function createReaderSelectionModule(
         case 'copySelection': {
           const selection = window.getSelection();
           if (selection && !selection.isCollapsed)
-            ports.copyText(selectionClipboardText(selection.toString()));
+            ports.copyText(selectionClipboardText(readerSelectionText(window, selection)));
           if (!isCurrent(window)) return;
           ports.setMode('normal');
           selection?.removeAllRanges();
@@ -252,7 +279,7 @@ export function createReaderSelectionModule(
         case 'searchSelection': {
           const selection = window.getSelection();
           if (!selection || selection.isCollapsed) return;
-          const text = selectionText(selection.toString());
+          const text = selectionText(readerSelectionText(window, selection));
           if (!text) return;
           const viewCurrent = ports.captureView(window);
           const search = prepareReaderSelectionSearch(ports.reader, window);
@@ -275,9 +302,17 @@ export function createReaderSelectionModule(
       actions,
       isCurrent: () => scope.isCurrent(),
       context,
+      releaseView: (window) => {
+        const failure = new CleanupFailure();
+        failure.run(() => range.releaseView(window));
+        failure.run(() => body.releaseView(window));
+        failure.rethrow();
+      },
       executeAction: (action, window) => {
-        if (!isCurrent(window) || ports.mode() !== (action === 'enterVisual' ? 'normal' : 'visual'))
-          return false;
+        const normal = (
+          READER_SELECTION_NORMAL_ACTIONS as readonly ReaderSelectionAction[]
+        ).includes(action);
+        if (!isCurrent(window) || ports.mode() !== (normal ? 'normal' : 'visual')) return false;
         return execute(action, window);
       },
     };

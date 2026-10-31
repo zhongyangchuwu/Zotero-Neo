@@ -119,6 +119,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Esc>': 'clearSearch',
   'reader-normal:<Space>rd': 'compareDocumentParsing',
   'reader-normal:<Space>rr': 'toggleReadingMode',
+  'reader-normal:<Space>rb': 'toggleBodySelection',
   'reader-normal:<Space>ro': 'focusReaderOutline',
   'reader-normal:<Space>rm': 'focusReaderMarks',
   'reader-normal:<Space>ra': 'focusReaderAnnotations',
