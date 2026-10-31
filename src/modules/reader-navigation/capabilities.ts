@@ -18,6 +18,7 @@ export const READER_NAVIGATION_ACTIONS = [
   'lastPage',
   'toggleReadingMode',
   'compareDocumentParsing',
+  'openFigurePicker',
   'zoomIn',
   'zoomOut',
   'zoomReset',

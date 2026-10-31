@@ -2,6 +2,7 @@ import { structuredDocumentBlocks } from '../../toolkit/reader';
 import { nativeDocumentRegions } from '../../document-analysis/native';
 import type { DocumentObjectGroup, DocumentRegion } from '../../document-analysis/contracts';
 import type { ReaderCachedDocument } from './document-cache';
+import { documentVisualBodies } from '../../document-analysis/visual-bodies';
 import {
   documentObjectGroups,
   documentObjectLocation,
@@ -11,6 +12,7 @@ import type { ReaderLinkPosition, ReaderNativeOutlineEntry } from '../../reader/
 export interface ReaderCaptionTarget extends ReaderNativeOutlineEntry {
   readonly id?: string;
   readonly source?: 'cache' | 'native';
+  readonly part?: 'body';
   readonly kind: 'figure' | 'table';
   readonly label: string;
   readonly association?: DocumentObjectGroup['association'];
@@ -23,6 +25,10 @@ export interface ReaderCaptionCache {
 }
 
 type CaptionState = 'idle' | 'loading' | 'ready' | 'unavailable';
+interface NativeTargets {
+  readonly entries: readonly ReaderCaptionTarget[];
+  readonly bodies: readonly ReaderCaptionTarget[];
+}
 function headingText(title: string): string {
   return title
     .normalize('NFKC')
@@ -42,9 +48,10 @@ export class ReaderCaptionTargets {
   readonly #cache: ReaderCaptionCache | undefined;
   #state: CaptionState = 'idle';
   #entries: readonly ReaderCaptionTarget[] = [];
+  #bodies: readonly ReaderCaptionTarget[] = [];
   #headings: readonly { readonly title: string; readonly position: ReaderLinkPosition }[] = [];
   #promise: Promise<readonly ReaderCaptionTarget[]> | null = null;
-  #nativePromise: Promise<readonly ReaderCaptionTarget[] | null> | null = null;
+  #nativePromise: Promise<NativeTargets | null> | null = null;
   #cacheCurrent: (() => Promise<boolean>) | null = null;
   #settled = false;
   #revision = 0;
@@ -69,6 +76,9 @@ export class ReaderCaptionTargets {
   }
   get entries(): readonly ReaderCaptionTarget[] {
     return !this.#disposed && this.#isCurrent() ? this.#entries : [];
+  }
+  get bodies(): readonly ReaderCaptionTarget[] {
+    return !this.#disposed && this.#isCurrent() ? this.#bodies : [];
   }
 
   /**
@@ -118,6 +128,7 @@ export class ReaderCaptionTargets {
     this.#disposed = true;
     this.#revision++;
     this.#entries = [];
+    this.#bodies = [];
     this.#headings = [];
     this.#cacheCurrent = null;
   }
@@ -130,6 +141,7 @@ export class ReaderCaptionTargets {
     this.#settled = false;
     this.#cacheCurrent = null;
     this.#entries = [];
+    this.#bodies = [];
     this.#state = 'idle';
     this.#onChange();
   }
@@ -141,7 +153,8 @@ export class ReaderCaptionTargets {
   /** Revalidate at use time, including sidebar choices made after a PDF or service change. */
   async sourceCurrent(target?: ReaderCaptionTarget): Promise<boolean> {
     if (this.#disposed || !this.#isCurrent()) return false;
-    if (target?.source === 'cache' && !this.#entries.includes(target)) return false;
+    if (target?.source && !this.#entries.includes(target) && !this.#bodies.includes(target))
+      return false;
     const guard = this.#cacheCurrent;
     if (!guard) return target?.source !== 'cache';
     let valid = false;
@@ -156,7 +169,27 @@ export class ReaderCaptionTargets {
       this.#headings = [];
       this.invalidate();
     }
-    return valid && (!target || target.source !== 'cache' || this.#entries.includes(target));
+    return (
+      valid &&
+      (!target || !target.source || this.#entries.includes(target) || this.#bodies.includes(target))
+    );
+  }
+
+  private bodyTargets(
+    regions: readonly DocumentRegion[],
+    source: 'cache' | 'native',
+  ): readonly ReaderCaptionTarget[] {
+    return documentVisualBodies(regions).map((body) => ({
+      id: body.id,
+      source,
+      part: 'body',
+      kind: body.kind,
+      label: '',
+      title:
+        this.#cache?.unnamedTitle(body.kind, body.location.pageIndex) ||
+        `${body.kind} · ${body.location.pageIndex + 1}`,
+      location: { position: body.location },
+    }));
   }
 
   private targets(
@@ -189,9 +222,10 @@ export class ReaderCaptionTargets {
       if (!current()) return [];
       if (cached) {
         const targets = this.targets(cached.parsed.regions, 'cache');
-        if (targets.length) {
+        const bodies = this.bodyTargets(cached.parsed.regions, 'cache');
+        if (targets.length || bodies.length) {
           this.#cacheCurrent = cached.isCurrent;
-          return this.finish(targets, true);
+          return this.finish(targets, bodies, true);
         }
       }
     } catch {
@@ -200,14 +234,14 @@ export class ReaderCaptionTargets {
     if (!current()) return [];
     const native = await this.native();
     if (!current()) return [];
-    return this.finish(native ?? [], native !== null);
+    return this.finish(native?.entries ?? [], native?.bodies ?? [], native !== null);
   }
 
-  private native(): Promise<readonly ReaderCaptionTarget[] | null> {
+  private native(): Promise<NativeTargets | null> {
     return (this.#nativePromise ??= this.readNative());
   }
 
-  private async readNative(): Promise<readonly ReaderCaptionTarget[] | null> {
+  private async readNative(): Promise<NativeTargets | null> {
     if (this.#disposed || !this.#isCurrent()) return null;
     try {
       const blocks = await structuredDocumentBlocks(
@@ -236,7 +270,7 @@ export class ReaderCaptionTargets {
         });
       }
       this.#headings = headings;
-      return entries;
+      return { entries, bodies: this.bodyTargets(regions, 'native') };
     } catch (error) {
       if (!this.#disposed && this.#isCurrent())
         this.#debug(`reader caption loading failed: ${String(error)}`);
@@ -246,10 +280,12 @@ export class ReaderCaptionTargets {
 
   private finish(
     entries: readonly ReaderCaptionTarget[],
+    bodies: readonly ReaderCaptionTarget[],
     available: boolean,
   ): readonly ReaderCaptionTarget[] {
     if (this.#disposed || !this.#isCurrent()) return [];
     this.#entries = entries;
+    this.#bodies = bodies;
     this.#state = available ? 'ready' : 'unavailable';
     this.#onChange();
     return entries;

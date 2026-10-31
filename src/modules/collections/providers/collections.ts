@@ -1,5 +1,5 @@
 import { mainCollectionRefs } from '../../../toolkit/main';
-import { fuzzyMatchScore } from '../../../main/picker/fuzzy';
+import { fuzzyMatchScore } from '../../../ui/fuzzy';
 import type { PickerItem } from '../../../main/picker/model';
 import type { PickerProvider } from '../../../main/picker/types';
 

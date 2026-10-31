@@ -1,3 +1,5 @@
+import { ReaderFigurePicker } from './figure-picker';
+import { readerRegionPreview } from '../../toolkit/reader';
 import { ReaderDocumentComparison, type DocumentComparisonHost } from './document-comparison';
 import type { ModuleHost } from '../../core/module-host';
 import {
@@ -43,13 +45,19 @@ export interface ReaderNavigationModulePorts {
     'isCurrent' | 'reader' | 'marks' | 'captions' | 'onCaptionTarget' | 'bindAction'
   >;
   readonly beginCaptionJump: (window: PdfWindow) => (() => boolean) | null;
-  readonly actions: Omit<ReaderNavigationActionPorts, 'openDocumentComparison'>;
+  readonly captureView?: (window: PdfWindow) => () => boolean;
+  readonly actions: Omit<
+    ReaderNavigationActionPorts,
+    'openDocumentComparison' | 'openFigurePicker'
+  >;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
 
 export interface ReaderNavigationModule {
   handleKey(event: KeyboardEvent): boolean;
+  releaseView(window: PdfWindow): void;
+  deactivate(): void;
   readonly smooth: ReaderSmoothScroller;
   readonly marks: ReaderMarks;
   readonly sidebar: ReaderNativeSidebar;
@@ -126,7 +134,9 @@ export function createReaderNavigationModule(
         : undefined,
     );
     scope.add(() => captions.dispose());
+    let picker: ReaderFigurePicker | null = null;
     const refreshAnalysis = (): void => {
+      picker?.close(false);
       const loaded = captions.state !== 'idle';
       captions.invalidate();
       if (loaded) void captions.load();
@@ -194,6 +204,21 @@ export function createReaderNavigationModule(
         })
       : null;
     if (comparison) scope.add(() => comparison.close());
+    if (ports.documentComparison && ports.captureView) {
+      picker = new ReaderFigurePicker({
+        reader: ports.reader,
+        captions,
+        text: (key) => t(`reader.figures.${key}`, ports.documentComparison!.language()),
+        themeRoot: ports.documentComparison.themeRoot,
+        captureView: ports.captureView,
+        isCurrent: () => scope.isCurrent(),
+        render: (target, signal) =>
+          readerRegionPreview(ports.reader, target.location.position, signal),
+        navigate: (target, window) => navigation.navigateCaption(target, window),
+        debug: ports.debug,
+      });
+      scope.add(() => picker?.close(false));
+    }
     const executeAction = bindReaderNavigationActions(
       host,
       scope,
@@ -201,7 +226,17 @@ export function createReaderNavigationModule(
       marks,
       sidebar,
       captions,
-      { ...ports.actions, openDocumentComparison: () => comparison?.open() },
+      {
+        ...ports.actions,
+        openDocumentComparison: () => {
+          picker?.close(false);
+          comparison?.open();
+        },
+        openFigurePicker: (window) => {
+          comparison?.close();
+          picker?.open(window);
+        },
+      },
     );
     const startSmooth: ReaderNavigationModule['startSmooth'] = (
       window,
@@ -232,7 +267,9 @@ export function createReaderNavigationModule(
       );
     };
     return {
-      handleKey: (event) => comparison?.handleKey(event) ?? false,
+      handleKey: (event) => picker?.handleKey(event) || comparison?.handleKey(event) || false,
+      releaseView: (window) => picker?.releaseView(window),
+      deactivate: () => picker?.close(false),
       smooth,
       marks,
       sidebar,

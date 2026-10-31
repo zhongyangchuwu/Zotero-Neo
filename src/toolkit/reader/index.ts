@@ -32,5 +32,7 @@ export * from './annotation-targets';
 export * from './sidebar';
 export * from './structured-document';
 export * from './document-source';
+export { readerRegionPreview } from './region-preview';
+export type { ReaderRegionPreview } from './region-preview';
 
 export { readerReadingMode } from './presentation';

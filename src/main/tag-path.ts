@@ -1,4 +1,4 @@
-import { fuzzyMatchScore } from './picker/fuzzy';
+import { fuzzyMatchScore } from '../ui/fuzzy';
 
 export type TagPathSuggestionKind = 'namespace' | 'tag';
 

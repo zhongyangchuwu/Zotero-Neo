@@ -187,6 +187,17 @@ export interface PdfPageViewRuntime {
   };
 }
 
+export interface PdfViewportRuntime {
+  readonly width: number;
+  readonly height: number;
+  convertToViewportRectangle?(rect: readonly number[]): readonly number[];
+}
+
+export interface PdfRenderTaskRuntime {
+  readonly promise: Promise<void>;
+  cancel(): void;
+}
+
 export interface PdfDocumentRuntime {
   readonly numPages?: number;
   getDestination?(destination: string): Promise<unknown>;
@@ -195,10 +206,13 @@ export interface PdfDocumentRuntime {
     readonly view?: readonly number[];
     readonly rotate?: number;
     readonly _pageInfo?: { readonly view: readonly number[]; readonly rotate?: number };
-    getViewport(options: { readonly scale: number }): {
-      readonly width: number;
-      readonly height: number;
-    };
+    getViewport(options: { readonly scale: number }): PdfViewportRuntime;
+    render?(options: {
+      readonly viewport: PdfViewportRuntime;
+      readonly canvasContext: CanvasRenderingContext2D;
+      readonly transform: readonly number[];
+      readonly annotationMode: number;
+    }): PdfRenderTaskRuntime;
   }>;
 }
 
