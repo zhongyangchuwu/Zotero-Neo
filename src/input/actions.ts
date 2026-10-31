@@ -21,6 +21,7 @@ const BASE_ACTION_IDS = [
   'compareDocumentParsing',
   'openFigurePicker',
   'openChapterSearch',
+  'openObjectExcerpts',
   'zoomIn',
   'zoomOut',
   'zoomReset',

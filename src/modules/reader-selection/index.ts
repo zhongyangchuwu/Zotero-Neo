@@ -3,6 +3,7 @@ import type { ReaderSelectionActionDefinition, ReaderSelectionContext } from '..
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import type { PreferenceStore } from '../../core/preference-store';
+import type { SourceNoteTarget } from '../../core/source-note';
 import { readReaderDocumentCache, readReaderDocument } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
 import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
@@ -16,6 +17,7 @@ import {
 } from '../../toolkit';
 import { t } from '../../i18n';
 import { ReaderBodySelection } from './body-selection';
+import { ReaderObjectExcerpts } from './object-excerpts';
 import { ReaderStructuredText } from './structured-text';
 import { ReaderFlash } from './flash';
 import { ReaderSelectionRange } from './selection-range';
@@ -30,6 +32,7 @@ import {
 export interface ReaderSelectionModulePorts {
   readonly reader: ReaderRuntime;
   readonly preferences: PreferenceStore;
+  readonly noteTarget: () => SourceNoteTarget | null;
   readonly activeWindow: () => PdfWindow | null;
   readonly isViewCurrent: (window: PdfWindow) => boolean;
   readonly capturePresentation: (window: PdfWindow) => () => boolean;
@@ -60,6 +63,8 @@ export interface ReaderSelectionModulePorts {
 }
 
 export interface ReaderSelectionModule {
+  handleKey(event: KeyboardEvent): boolean;
+  deactivate(): void;
   readonly flash: ReaderFlash;
   readonly range: ReaderSelectionRange;
   readonly actions: ReaderSelectionActions;
@@ -121,6 +126,18 @@ export function createReaderSelectionModule(
       onChange: ports.updateIndicator,
     });
     scope.add(() => body.dispose());
+    const excerpts = new ReaderObjectExcerpts({
+      reader: ports.reader,
+      preferences: ports.preferences,
+      target: ports.noteTarget,
+      captureView: ports.captureView,
+      isCurrent: () => scope.isCurrent(),
+      themeRoot: ports.themeRoot,
+      text: (key) => t(`reader.excerpts.${key}`, ports.language()),
+      showStatus,
+      debug: ports.debug,
+    });
+    scope.add(() => excerpts.close());
     const structured = new ReaderStructuredText(() =>
       readReaderDocument(ports.reader, ports.preferences, () => scope.isCurrent()),
     );
@@ -128,6 +145,7 @@ export function createReaderSelectionModule(
     const invalidateStructure = (): void => {
       body.invalidate();
       structured.invalidate();
+      excerpts.close();
     };
     if (ports.reader.itemID)
       scope.add(observeAttachmentDocumentCache(ports.reader.itemID, invalidateStructure));
@@ -245,6 +263,9 @@ export function createReaderSelectionModule(
       if (!isCurrent(window)) return;
       body.bind(window);
       switch (action) {
+        case 'openObjectExcerpts':
+          excerpts.open(window);
+          return;
         case 'toggleBodySelection':
           void body.toggle(window).catch((error: unknown) => {
             ports.debug(`body selection cleanup failed: ${String(error)}`);
@@ -371,6 +392,8 @@ export function createReaderSelectionModule(
         );
     });
     return {
+      handleKey: (event) => excerpts.handleKey(event),
+      deactivate: () => excerpts.close(),
       flash,
       range,
       actions,
@@ -380,6 +403,7 @@ export function createReaderSelectionModule(
         const failure = new CleanupFailure();
         failure.run(() => range.releaseView(window));
         failure.run(() => body.releaseView(window));
+        failure.run(() => excerpts.releaseView(window));
         failure.rethrow();
       },
       executeAction: (action, window) => {

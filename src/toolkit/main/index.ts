@@ -102,3 +102,4 @@ export {
   type MainCollectionLibrary,
 } from './collections';
 export { executeCollectionTransaction } from './collection-transactions';
+export { sourceNoteImageMarkup, sourcePDFLink } from './source-notes';

@@ -104,7 +104,11 @@ import {
   type ReaderOwnedCompletion,
   type ReaderOwnedNavigation,
 } from '../toolkit';
-import { resolveReaderDocumentAttachments, READER_ITEM_TARGET } from './item-target';
+import {
+  resolveReaderDocumentAttachments,
+  resolveReaderSourceNoteTarget,
+  READER_ITEM_TARGET,
+} from './item-target';
 import { smoothScrollSpec } from '../modules/reader-navigation/smooth-scroll';
 import {
   COLORS,
@@ -805,6 +809,7 @@ export class ReaderSession {
         createReaderSelectionModule(this.#modules.host, {
           reader: dependencies.reader,
           preferences: dependencies.controller.dependencies.preferences,
+          noteTarget: () => resolveReaderSourceNoteTarget(dependencies.reader),
           activeWindow: () => this.#navigationHost.activePdfWindow(),
           isViewCurrent: (window) => this.readerViewCurrent(window),
           capturePresentation: (window) => this.invocationCurrent(window),
@@ -1198,6 +1203,7 @@ export class ReaderSession {
 
   deactivateInteraction(): void {
     this.#navigationModule?.deactivate();
+    this.#selection?.deactivate();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
     this.#sidebar?.deactivate();
@@ -1309,6 +1315,7 @@ export class ReaderSession {
   ): void {
     if (this.#scope.disposed) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
+    if (this.#selection?.handleKey(event)) return;
     if (this.#navigationModule?.handleKey(event)) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
       this.input.reset();

@@ -40,6 +40,55 @@ function harness() {
   return { doc, dialog, current, confirm, restoreFocus, untheme, options, key };
 }
 describe('query dialog lifetime', () => {
+  it('cancels a superseded preview and does not let its late image replace the current object', async () => {
+    const t = harness(),
+      first = Promise.withResolvers<{ images: { dataURL: string; alt: string }[] }>();
+    const signals: AbortSignal[] = [];
+    t.options = {
+      ...t.options,
+      owner: { document: t.doc, AbortController } as unknown as Window,
+      preview: (item, signal) => {
+        signals.push(signal);
+        return item === 'alpha'
+          ? first.promise
+          : Promise.resolve({ images: [{ dataURL: 'current', alt: 'beta' }] });
+      },
+    };
+    t.dialog.open(t.options);
+    await Promise.resolve();
+    t.key('ArrowDown');
+    await Promise.resolve();
+    expect(signals[0]!.aborted).toBe(true);
+    expect(t.doc.find('img').src).toBe('current');
+    first.resolve({ images: [{ dataURL: 'stale', alt: 'alpha' }] });
+    await Promise.resolve();
+    expect(t.doc.find('img').src).toBe('current');
+    t.dialog.close();
+    expect(signals[1]!.aborted).toBe(true);
+  });
+
+  it('offers explicit caller actions without letting a disabled action write', async () => {
+    const t = harness(),
+      action = vi.fn(async () => true);
+    t.options = {
+      ...t.options,
+      actions: [{ label: 'Save', available: (item) => item === 'beta', run: action }],
+    };
+    t.dialog.open(t.options);
+    await Promise.resolve();
+    const button = t.doc.nodes.find(
+      (node) => node.tagName === 'button' && node.textContent === 'Save',
+    )!;
+    expect(button.disabled).toBe(true);
+    button.emit('click');
+    expect(action).not.toHaveBeenCalled();
+    t.key('ArrowDown');
+    expect(button.disabled).toBe(false);
+    button.emit('click');
+    await Promise.resolve();
+    expect(action).toHaveBeenCalledExactlyOnceWith('beta');
+    expect(t.doc.find('section')).toBeUndefined();
+  });
   it('contains a late source load after cancellation without navigation', async () => {
     const t = harness(),
       pending = Promise.withResolvers<{ items: string[] }>();
