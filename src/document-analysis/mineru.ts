@@ -4,6 +4,7 @@ import {
   documentRegionFlow,
   record,
   type DocumentParser,
+  type DocumentCacheKey,
   type DocumentRegion,
   type DocumentRegionKind,
   type DocumentSource,
@@ -175,16 +176,21 @@ function serviceData(payload: unknown): Readonly<Record<string, unknown>> {
   return data;
 }
 
+/** Non-secret identity is shared by cache consumers without constructing a network parser. */
+export function mineruDocumentCacheKey(): DocumentCacheKey {
+  return {
+    backend: 'mineru',
+    adapterVersion: 1,
+    configuration: JSON.stringify({ endpoint: API, ...SETTINGS }),
+  };
+}
+
 /** One PDF uses the batch upload protocol, so upload/task/normalization do not need a second implementation. */
 export function mineruDocumentParser(options: MinerUParserOptions): DocumentParser {
   const { transport } = options;
   return {
     id: 'mineru',
-    cacheKey: {
-      backend: 'mineru',
-      adapterVersion: 1,
-      configuration: JSON.stringify({ endpoint: API, ...SETTINGS }),
-    },
+    cacheKey: mineruDocumentCacheKey(),
     capabilities: ['layout', 'text', 'reading-order', 'tables'],
     async parse(source, { signal }) {
       checkParseCurrent(signal);

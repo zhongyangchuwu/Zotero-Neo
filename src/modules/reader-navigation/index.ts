@@ -12,6 +12,9 @@ import { ReaderSmoothScroller, type ReaderSmoothScrollerHost } from './smooth-sc
 import { ReaderMarks, type MarksHost } from './marks';
 import { ReaderNativeSidebar, type ReaderNativeSidebarHost } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
+import { readReaderDocumentCache } from './document-cache';
+import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from './document-settings';
+import { t } from '../../i18n';
 import {
   bindReaderNavigationActions,
   type ReaderNavigationAction,
@@ -111,8 +114,28 @@ export function createReaderNavigationModule(
       () => sidebar?.refreshCaptions(),
       ports.debug,
       () => scope.isCurrent(),
+      ports.documentComparison
+        ? {
+            read: () =>
+              readReaderDocumentCache(ports.reader, ports.documentComparison!.preferences, () =>
+                scope.isCurrent(),
+              ),
+            unnamedTitle: (kind, pageIndex) =>
+              `${t(`reader.sidebar.${kind}`, ports.sidebar.language())} · ${pageIndex + 1}`,
+          }
+        : undefined,
     );
     scope.add(() => captions.dispose());
+    const refreshAnalysis = (): void => {
+      const loaded = captions.state !== 'idle';
+      captions.invalidate();
+      if (loaded) void captions.load();
+    };
+    const preferences = ports.documentComparison?.preferences;
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+      const stop = preferences?.observe?.(key, refreshAnalysis);
+      if (stop) scope.add(stop);
+    }
     sidebar = new ReaderNativeSidebar({
       ...ports.sidebar,
       bindAction: (context, action, run) => {
@@ -155,6 +178,7 @@ export function createReaderNavigationModule(
           debug: ports.debug,
           reader: ports.reader,
           isCurrent: () => scope.isCurrent(),
+          onCacheSaved: refreshAnalysis,
           focusReader: () => {
             const window = ports.navigationHost.activePdfWindow();
             if (ports.markViewCurrent(window)) window.focus();

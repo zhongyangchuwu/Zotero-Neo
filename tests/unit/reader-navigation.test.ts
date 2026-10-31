@@ -369,7 +369,7 @@ describe('ReaderNavigation', () => {
     async ({ secondary, direction, heights, scale }) => {
       const test = harness();
       const internal = test.reader._internalReader!;
-      const loadCaptions = vi.spyOn(test.captions, 'load');
+      const loadHeadings = vi.spyOn(test.captions, 'loadHeadings');
       const active = secondary ? test.secondary : test.primary;
       const view = secondary ? internal._secondaryView! : internal._primaryView!;
       const other = secondary ? internal._primaryView! : internal._secondaryView!;
@@ -470,7 +470,7 @@ describe('ReaderNavigation', () => {
       expect(viewer.currentPageNumber).toBe(2);
       expect(heights[1] - (container.scrollTop - offsets[1]) / scale).toBeCloseTo(targetTop);
       expect(otherNavigate).not.toHaveBeenCalled();
-      expect(loadCaptions).toHaveBeenCalledTimes(1);
+      expect(loadHeadings).toHaveBeenCalledTimes(1);
       expect(getReader).toHaveBeenCalledTimes(1);
       expect(getBlocks).toHaveBeenCalledTimes(1);
       expect(test.cloneInto).toHaveBeenCalledWith(target, test.reader._iframeWindow);
@@ -759,31 +759,58 @@ describe('ReaderNavigation', () => {
     expect(nativeRect(region)[1] - container.scrollTop).toBe(0);
   });
 
-  it('replaces a table bookmark with the whole group even when its caption has the same top', async () => {
+  it.each(['geometry', 'backend'] as const)(
+    'replaces a table bookmark with a %s group even when its caption has the same top',
+    async (association) => {
+      const test = harness();
+      const internal = test.reader._internalReader!;
+      const position = { pageIndex: 1, rects: [[50, 740, 545, 770]] };
+      const group = { pageIndex: 1, rects: [...position.rects, [50, 400, 545, 730]] };
+      Reflect.set(internal, '_state', {
+        outline: [{ title: 'Table 1: Results', location: { position } }],
+      });
+      vi.spyOn(test.captions, 'load').mockResolvedValue([
+        {
+          title: 'Table 1: Results',
+          kind: 'table',
+          label: '1',
+          association,
+          location: { position: group },
+        },
+      ]);
+      Reflect.set(test.primary, 'PDFViewerApplication', {
+        pdfViewer: { _location: { pageNumber: 1, top: 800, left: 0 } },
+      });
+      const navigate = vi.fn();
+      Reflect.set(internal._primaryView!, 'navigate', navigate);
+      await test.navigation.traverseOutline('table', 1, test.primary, () => true);
+      expect(navigate).toHaveBeenLastCalledWith({ position: group }, { block: 'start' });
+      expect(test.cloneInto).toHaveBeenCalledWith({ position: group }, test.reader._iframeWindow);
+    },
+  );
+
+  it('navigates distinct unnumbered tables by typed identity rather than their display titles', async () => {
     const test = harness();
     const internal = test.reader._internalReader!;
-    const position = { pageIndex: 1, rects: [[50, 740, 545, 770]] };
-    const group = { pageIndex: 1, rects: [...position.rects, [50, 400, 545, 730]] };
-    Reflect.set(internal, '_state', {
-      outline: [{ title: 'Table 1: Results', location: { position } }],
-    });
+    Reflect.set(internal, '_state', { outline: [] });
+    const a = { pageIndex: 0, rects: [[50, 650, 500, 700]] };
+    const b = { pageIndex: 0, rects: [[50, 450, 500, 500]] };
     vi.spyOn(test.captions, 'load').mockResolvedValue([
-      {
-        title: 'Table 1: Results',
-        kind: 'table',
-        label: '1',
-        association: 'geometry',
-        location: { position: group },
-      },
+      { id: 'a', title: '未编号结果 A', kind: 'table', label: '', location: { position: a } },
+      { id: 'b', title: '未编号结果 B', kind: 'table', label: '', location: { position: b } },
     ]);
-    Reflect.set(test.primary, 'PDFViewerApplication', {
-      pdfViewer: { _location: { pageNumber: 1, top: 800, left: 0 } },
-    });
+    const location = { pageNumber: 1, top: 800, left: 0 };
+    Reflect.set(test.primary, 'PDFViewerApplication', { pdfViewer: { _location: location } });
     const navigate = vi.fn();
     Reflect.set(internal._primaryView!, 'navigate', navigate);
     await test.navigation.traverseOutline('table', 1, test.primary, () => true);
-    expect(navigate).toHaveBeenLastCalledWith({ position: group }, { block: 'start' });
-    expect(test.cloneInto).toHaveBeenCalledWith({ position: group }, test.reader._iframeWindow);
+    expect(navigate).toHaveBeenLastCalledWith({ position: a }, { block: 'start' });
+    location.top = 600;
+    await test.navigation.traverseOutline('table', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenLastCalledWith({ position: b }, { block: 'start' });
+    vi.spyOn(test.captions, 'sourceCurrent').mockResolvedValue(false);
+    await test.navigation.traverseOutline('table', 1, test.primary, () => true);
+    expect(navigate).toHaveBeenCalledTimes(2);
   });
 
   it('does not navigate when focus ownership retires during native caption processing', async () => {

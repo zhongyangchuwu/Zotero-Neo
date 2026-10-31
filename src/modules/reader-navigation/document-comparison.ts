@@ -33,11 +33,9 @@ import {
   type ReaderRuntime,
 } from '../../toolkit/reader';
 import { THEME_VARS } from '../../ui/theme';
+import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT } from './document-settings';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const ENDPOINT_KEY = 'documentAnalysis.oxr.endpoint';
-const DEFAULT_ENDPOINT = 'https://free-oxr.somark.ai/api/v1';
-const PROVIDER_KEY = 'documentAnalysis.provider';
 
 function comparisonButton(doc: Document, text: string): HTMLButtonElement {
   const button = doc.createElementNS(H, 'button') as HTMLButtonElement;
@@ -77,6 +75,7 @@ export interface DocumentComparisonHost {
   readonly focusReader: () => void;
   readonly isCurrent: () => boolean;
   readonly debug: (message: string) => void;
+  readonly onCacheSaved?: () => void;
 }
 
 interface ComparisonView {
@@ -155,7 +154,7 @@ export class ReaderDocumentComparison {
     controls.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;align-items:center';
     const endpoint = element('input');
     endpoint.type = 'url';
-    endpoint.value = this.#host.preferences.get(ENDPOINT_KEY, DEFAULT_ENDPOINT);
+    endpoint.value = this.#host.preferences.get(OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT);
     endpoint.setAttribute('aria-label', this.#text('endpoint'));
     endpoint.style.width = 'min(420px,80%)';
     const provider = element('select');
@@ -169,7 +168,7 @@ export class ReaderDocumentComparison {
       provider.append(option);
     }
     provider.value =
-      this.#host.preferences.get(PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
+      this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
     endpoint.hidden = provider.value === 'mineru';
     const key = element('input');
     key.type = 'password';
@@ -226,7 +225,7 @@ export class ReaderDocumentComparison {
     provider.addEventListener('change', () => {
       endpoint.hidden = provider.value === 'mineru';
       key.value = provider.value === 'oxr' ? 'dummy' : '';
-      this.#host.preferences.set(PROVIDER_KEY, provider.value);
+      this.#host.preferences.set(DOCUMENT_PROVIDER_KEY, provider.value);
       void this.#restoreCloud(view);
     });
     copy.addEventListener('click', () => {
@@ -454,7 +453,7 @@ export class ReaderDocumentComparison {
       if (!this.#cloudCurrent(view, revision)) return;
       if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#cloudCurrent(view, revision)) return;
-      if (view.provider.value === 'oxr') this.#host.preferences.set(ENDPOINT_KEY, endpoint);
+      if (view.provider.value === 'oxr') this.#host.preferences.set(OXR_ENDPOINT_KEY, endpoint);
       view.cloud = result;
       view.cloudState = 'unsaved';
       view.cloudSavedAt = undefined;
@@ -472,6 +471,7 @@ export class ReaderDocumentComparison {
           );
           if (!this.#cloudCurrent(view, revision)) return;
           view.cloudState = saved ? 'saved' : 'unsaved';
+          if (saved) this.#host.onCacheSaved?.();
         } catch {
           this.#host.debug('Document analysis cache write unavailable');
         }
