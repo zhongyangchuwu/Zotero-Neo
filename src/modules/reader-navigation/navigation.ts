@@ -38,8 +38,9 @@ export class ReaderNavigation {
     }
     const outline = await this.#host.prepareOutline(pdfWindow, isCurrent);
     if (!outline) return false;
-    // Load native semantic anchors only on an explicit structural navigation request.
-    const captions = await this.#dependencies.captions.load();
+    // Heading correction stays native; graph navigation can use cloud cache without cold SDT work.
+    if (category === 'heading') await this.#dependencies.captions.loadHeadings();
+    const captions = category === 'heading' ? [] : await this.#dependencies.captions.load();
     if (!outline.isCurrent()) return false;
     const entries: {
       entry: ReaderNativeOutlineEntry;
@@ -105,7 +106,9 @@ export class ReaderNavigation {
       );
       for (const caption of captions) {
         if (caption.kind !== category) continue;
-        const key = `${caption.location.position.pageIndex}:${caption.label}`;
+        const key = caption.label
+          ? `${caption.location.position.pageIndex}:${caption.label}`
+          : `object:${caption.id ?? order}`;
         const existing = seen.get(key);
         if (existing) {
           // A resolved group retains all panels and its caption, including tables
@@ -121,7 +124,9 @@ export class ReaderNavigation {
             }
             if (
               Number.isFinite(top) &&
-              (caption.association === 'geometry' || top > existing.top)
+              (caption.association === 'geometry' ||
+                caption.association === 'backend' ||
+                top > existing.top)
             ) {
               existing.entry = caption;
               existing.top = top;
@@ -130,9 +135,19 @@ export class ReaderNavigation {
           }
           continue;
         }
-        visit([caption], 0, true);
-        const added = entries[entries.length - 1];
-        if (added && added.entry === caption) seen.set(key, added);
+        const top = Math.max(
+          ...caption.location.position.rects.map((rect) => Math.max(rect[1], rect[3])),
+        );
+        if (!Number.isFinite(top)) continue;
+        const added = {
+          entry: caption,
+          page: caption.location.position.pageIndex,
+          top,
+          order: order++,
+          clonePosition: true,
+        };
+        entries.push(added);
+        seen.set(key, added);
       }
     }
     if (!entries.length) {
@@ -175,12 +190,24 @@ export class ReaderNavigation {
     }
     if (!target?.entry.location || !isCurrent() || this.#host.activePdfWindow() !== pdfWindow)
       return false;
+    if (
+      category !== 'heading' &&
+      !(await this.#dependencies.captions.sourceCurrent(target.entry as ReaderCaptionTarget))
+    )
+      return false;
+    if (!outline.isCurrent() || !isCurrent() || this.#host.activePdfWindow() !== pdfWindow)
+      return false;
     await this.#host.navigatePosition(outline.view, target.entry.location);
     return isCurrent();
   }
 
   /** A caption choice uses the exact active view's native position/history producer. */
   async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<void> {
+    if (
+      !(await this.#dependencies.captions.sourceCurrent(target)) ||
+      this.#host.activePdfWindow() !== pdfWindow
+    )
+      return;
     await this.#host.navigateToRegion(pdfWindow, target.location);
   }
 

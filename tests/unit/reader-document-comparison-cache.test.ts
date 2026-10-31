@@ -14,6 +14,7 @@ const host = vi.hoisted(() => ({
   readCache: vi.fn(),
   writeCache: vi.fn(),
   native: vi.fn(),
+  analysisChanged: vi.fn(),
 }));
 vi.mock('../../src/platform/document-analysis', () => ({
   analysisPDF: async () => ({
@@ -170,6 +171,7 @@ beforeEach(() => {
     focusReader: vi.fn(),
     isCurrent: () => true,
     debug: vi.fn(),
+    onCacheSaved: host.analysisChanged,
   });
 });
 const ready = async () => {
@@ -204,6 +206,7 @@ describe('document comparison cache workflow', () => {
       expect(document.documentElement.textContent).toContain('association.backend'),
     );
     expect(key.value).toBe('');
+    expect(host.analysisChanged).not.toHaveBeenCalled();
     expect(document.documentElement.textContent).not.toContain('Fresh result');
     expect(host.request).not.toHaveBeenCalled();
     expect(host.readPDF).not.toHaveBeenCalled();
@@ -256,6 +259,7 @@ describe('document comparison cache workflow', () => {
     await vi.waitFor(() => expect(document.status()).toContain('saved'));
     expect(host.request).toHaveBeenCalledTimes(1);
     expect(await host.writeCache.mock.calls[0]![3]()).toBe(true);
+    expect(host.analysisChanged).toHaveBeenCalledTimes(1);
     comparison.close();
   });
 
@@ -269,6 +273,7 @@ describe('document comparison cache workflow', () => {
     await vi.waitFor(() => expect(document.status()).toContain('notSaved'));
     expect(host.request).toHaveBeenCalledTimes(1);
     expect(document.documentElement.textContent).toContain('Fresh result');
+    expect(host.analysisChanged).not.toHaveBeenCalled();
     comparison.close();
   });
 

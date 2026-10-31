@@ -4,6 +4,7 @@ import {
   record,
   documentRegionFlow,
   type DocumentParser,
+  type DocumentCacheKey,
   type DocumentRegion,
   type DocumentRegionKind,
   type DocumentSource,
@@ -132,15 +133,23 @@ function oxrEndpoint(baseURL: string): string {
   return url.href.replace(/\/$/u, '');
 }
 
+export function oxrDocumentCacheKey(baseURL: string): DocumentCacheKey {
+  return {
+    backend: 'oxr',
+    adapterVersion: 1,
+    configuration: JSON.stringify({
+      endpoint: oxrEndpoint(baseURL),
+      outputFormats: ['json'],
+      keepHeaderFooter: true,
+    }),
+  };
+}
+
 export function oxrDocumentParser(options: OXRParserOptions): DocumentParser {
   const endpoint = oxrEndpoint(options.baseURL);
   return {
     id: 'oxr',
-    cacheKey: {
-      backend: 'oxr',
-      adapterVersion: 1,
-      configuration: JSON.stringify({ endpoint, outputFormats: ['json'], keepHeaderFooter: true }),
-    },
+    cacheKey: oxrDocumentCacheKey(options.baseURL),
     capabilities: ['layout', 'text', 'reading-order', 'tables'],
     async parse(source, { signal }) {
       checkParseCurrent(signal);

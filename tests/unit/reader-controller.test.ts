@@ -4786,7 +4786,7 @@ describe('Reader category history execution', () => {
     try {
       created.session.start();
       for (const key of [']', 'f']) created.session.focusAndHandle(readerKey(key).event);
-      await settleReaderMicrotasks();
+      await vi.waitFor(() => expect(observeNative).toHaveBeenCalledOnce());
       expect(navigate).toHaveBeenCalledExactlyOnceWith({ position }, { block: 'start' });
       expect(state.sidebarOpen).toBe(false);
       expect(state.sidebarView).toBe('annotations');
