@@ -14,6 +14,7 @@ vi.mock('../../src/platform/document-analysis-cache', () => ({
 vi.mock('../../src/operations/source-note', () => ({ createSourceNote: io.save }));
 vi.mock('../../src/platform/note-relations', () => ({
   sourceNoteIdentity: (value: string) => value,
+  SOURCE_NOTE_IDENTITY_PREFIX: 'urn:zotero-neo:chapter-note:v1:',
 }));
 beforeEach(() => {
   vi.resetAllMocks();
