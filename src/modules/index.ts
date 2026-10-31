@@ -228,13 +228,14 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
   {
     id: 'notes',
     names: { en: 'Notes', 'zh-CN': '笔记' },
-    hosts: ['main'],
-    scopes: ['Main window', 'Note editor', 'Note picker'],
+    hosts: ['main', 'reader'],
+    scopes: ['Main window', 'Note editor', 'Note picker', 'Reader notes preview'],
     requires: [],
     optional: [],
     contributions: [
       { host: 'main', context: 'main-normal', actions: ['findNotes'] },
       { host: 'main', context: 'reader-normal', actions: ['findNotes'] },
+      { host: 'reader', context: 'reader-normal', actions: ['organizeChapterNotes'] },
       {
         host: 'main',
         context: 'note-normal',

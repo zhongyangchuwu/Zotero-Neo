@@ -219,6 +219,8 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `document-analysis/sections.ts` 只确定编号章节范围与字面匹配；`reader-navigation/chapter-search.ts` 拥有范围选择与跳转，`ui/search-dialog.ts` 只提供可复用的查询／候选界面、IME 和生命周期。该流程不改写原生 Find，不创建第二套导航历史。区域结果只定位段落，不能直接保存为字符高亮。
 
+`modules/notes/reader.ts` 为 Reader 的 `notes` 实例，拥有章节整理、筛选、预览与显式保存。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。`chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容标识 `dc:relation` 串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
+
 `reader-selection/object-excerpts.ts` 拥有显式图表／公式摘录与预览接纳，复用共享文档快照、对象成员和原 PDF 渲染，不恢复一般文字 Capture。`ui/search-dialog.ts` 只负责可取消预览与显式动作；操作前重查来源和精确视图。Reader 解析固定 `SourceNoteTarget`，`operations/source-note.ts` 负责可编辑性、来源哈希、嵌图保存及失败时清理自有半成品；已接纳写入独立于 Reader 界面寿命。Toolkit 使用 Zotero 原生序列化保留区域来源，平台层负责安全表格 HTML、PNG 与多格式剪贴板。新笔记保留指向 PDF 的 `dc:relation`，不创建伪批注或修改既有笔记。
 
 `reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；布局优先复用当前服务的有效附件缓存，原生退路保持 `DocumentRegion` 归一化及来源哈希校验；缓存键由 `document-analysis/settings.ts` 统一确定。PDF 缓存命中不请求 SDT，Reading Mode 按需读取原生块并验证同一来源。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 负责将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。后续布局后端可复用相同区域契约，不各自实现键盘选择。
@@ -246,7 +248,7 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 MinerU 官方云端适配器通过 `DocumentParser` 接入相同对照、缓存和定位链路。它使用 v4 本地文件批量上传协议提交单篇 PDF，随后轮询并下载 ZIP；`transport.ts` 只定义 JSON 请求、原始上传、下载、归档 JSON 读取和等待能力，Gecko 实现在平台层。API Bearer Token 仅发送给官方 API，不转发到签名存储地址；Zotero.HTTP 会自动补 Content-Type，签名上传因此单独使用原始 XHR 发送二进制。归档只读取有界的 `layout.json`，不解压其他路径，临时文件在成功、失败和取消后清理。当前明确支持官方云端已验证的 `pdf_info` 布局协议，协议变化时拒绝结果，不把新版自部署 `docvortex.middle` 当成相同格式。生产者版本不是模型版本，因此 `modelRevision` 保留 null。
 
-MinerU 的 table/image/chart 父对象归一化为成员区域上的 `sourceObject`，公共图表关联先保留该显式关系，不要求 caption 或编号成功，也不再按距离扩大它。显式关系保留模型原意，不代表语义已验证；密集表格中仍可能错配题注，因此独立区域定位始终保留。其他无显式对象的区域继续使用原几何关联。当前覆盖单篇 Reader 显式解析、状态进度、缓存复用、对照面板定位及常规图表导航／侧栏增强；批量选择／任务恢复、云端正文过滤、外部 Reading Mode 与跨后端阶段编排均不在此链路范围。
+MinerU 的 table/image/chart 父对象归一化为成员区域上的 `sourceObject`，公共图表关联先保留该显式关系，不要求 caption 或编号成功，也不再按距离扩大它。显式关系保留模型原意，不代表语义已验证；密集表格中仍可能错配题注，因此独立区域定位始终保留。其他无显式对象的区域继续使用原几何关联。当前覆盖单篇 Reader 显式解析、状态进度、缓存复用、对照面板定位及常规图表导航／侧栏增强；批量准备／恢复由共享 Document Preparation 负责，正文过滤由 Reader Selection 消费缓存；外部 Reading Mode 与跨后端阶段编排仍不在此链路范围。
 
 `reader/document-cache.ts` 供导航与选择在显式请求时读取当前服务的附件缓存，复用后端独立导出的非秘密缓存键与 PDF 来源几何；它不构造网络解析器，也不运行原生 SDT。`ReaderCaptionTargets` 优先投影有效缓存的图表对象，缺失或不可用时才使用既有原生路径。图表目标携带稳定对象身份、显式类型和来源，编号缺失时不按标题猜类型或合并同页对象。原生标题通过单独的 `loadHeadings()` 准备，保留原有大纲与标题校正，不必为缓存图表等待原生全文分析。
 

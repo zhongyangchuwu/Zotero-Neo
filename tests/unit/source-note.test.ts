@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSourceNote } from '../../src/operations/source-note';
 import type { SourceNoteTarget } from '../../src/core/source-note';
-const io = vi.hoisted(() => ({ pdf: vi.fn(), blob: vi.fn() }));
+const io = vi.hoisted(() => ({ pdf: vi.fn(), blob: vi.fn(), related: vi.fn() }));
 vi.mock('../../src/platform/document-analysis', () => ({ analysisPDF: io.pdf }));
 vi.mock('../../src/platform/image-data', () => ({ pngBlob: io.blob }));
+vi.mock('../../src/platform/note-relations', () => ({
+  relatedSourceNotes: io.related,
+  SOURCE_NOTE_IDENTITY_PREFIX: 'urn:zotero-neo:chapter-note:v1:',
+}));
 afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => vi.resetAllMocks());
 function fixture() {
+  io.related.mockResolvedValue([]);
   const source = {
     id: 4,
     key: 'PDFKEY',
@@ -60,6 +65,65 @@ function fixture() {
   return { target, draft, source, parent, library, saved, erased, imported, current };
 }
 describe('explicit source note writes', () => {
+  it('reuses a generated note without overwriting manual edits or reimporting images', async () => {
+    const f = fixture();
+    io.related.mockResolvedValue([
+      {
+        id: 44,
+        key: 'EDITED',
+        libraryID: 1,
+        parentID: 3,
+        deleted: false,
+        isNote: () => true,
+        getRelationsByPredicate: () => ['http://zotero.org/users/local/TEST/items/PDFKEY'],
+        getNote: () => 'handwritten edits',
+      },
+    ]);
+    const draft = { ...f.draft, identity: 'urn:zotero-neo:chapter-note:v1:' + 'a'.repeat(32) };
+    expect(await createSourceNote(f.target, draft)).toEqual({
+      itemID: 44,
+      key: 'EDITED',
+      reused: true,
+    });
+    expect(f.saved).toEqual([]);
+    expect(f.imported).not.toHaveBeenCalled();
+  });
+  it('serializes concurrent generation for one source identity and rechecks each destination', async () => {
+    const f = fixture(),
+      first = Promise.withResolvers<void>();
+    io.related.mockImplementation(async () => {
+      if (f.saved.length)
+        return [
+          {
+            id: 10,
+            key: 'NOTEKEY',
+            libraryID: 1,
+            parentID: 3,
+            deleted: false,
+            isNote: () => true,
+            getRelationsByPredicate: () => ['http://zotero.org/users/local/TEST/items/PDFKEY'],
+          },
+        ];
+      await first.promise;
+      return [];
+    });
+    const draft = {
+      ...f.draft,
+      identity: 'urn:zotero-neo:chapter-note:v1:' + 'b'.repeat(32),
+      schemaVersion: 10 as const,
+    };
+    const a = createSourceNote(f.target, draft),
+      b = createSourceNote(f.target, draft),
+      c = createSourceNote(f.target, draft);
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(io.related).toHaveBeenCalledOnce();
+    first.resolve();
+    const receipts = await Promise.all([a, b, c]);
+    expect(io.related).toHaveBeenCalledTimes(3);
+    expect(receipts.map((r) => r.reused)).toEqual([false, true, true]);
+    expect(f.imported).toHaveBeenCalledOnce();
+    expect((f.saved[0] as { html: string }).html).toContain('data-schema-version="10"');
+  });
   it('creates only the captured paper destination and commits an embedded image before returning a receipt', async () => {
     const f = fixture();
     expect(await createSourceNote(f.target, f.draft)).toEqual({
