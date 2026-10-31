@@ -152,6 +152,7 @@ export function createReaderNavigationModule(
     const comparison = ports.documentComparison
       ? new ReaderDocumentComparison({
           ...ports.documentComparison,
+          debug: ports.debug,
           reader: ports.reader,
           isCurrent: () => scope.isCurrent(),
           focusReader: () => {

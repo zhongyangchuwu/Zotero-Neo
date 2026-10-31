@@ -71,9 +71,17 @@ export interface ParseContext {
   readonly signal: AbortSignal;
 }
 
+/** Only explicit, non-secret parser settings identify reusable results; never serialize provider options wholesale. */
+export interface DocumentCacheKey {
+  readonly backend: string;
+  readonly adapterVersion: number;
+  readonly configuration: string;
+}
+
 /** Complete parsers can satisfy several stages together; protocol adapters own their HTTP details. */
 export interface DocumentParser {
   readonly id: string;
+  readonly cacheKey?: DocumentCacheKey;
   readonly capabilities: readonly ('layout' | 'text' | 'reading-order' | 'tables')[];
   parse(source: DocumentSource, context: ParseContext): Promise<ParsedDocument>;
 }

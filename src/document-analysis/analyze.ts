@@ -21,6 +21,14 @@ export async function analyzeDocument(
   checkParseCurrent(context.signal);
   const parsed = await parser.parse(source, context);
   checkParseCurrent(context.signal);
+  return analyzeParsedDocument(parsed, source);
+}
+
+/** Recompute derived relationships from saved regions so grouping improvements do not require another upload. */
+export function analyzeParsedDocument(
+  parsed: ParsedDocument,
+  source: DocumentSource,
+): AnalyzedDocument {
   if (parsed.sourceFingerprint !== source.fingerprint)
     throw new Error('Parser returned a different PDF revision');
   return { ...parsed, objectGroups: documentObjectGroups(parsed.regions) };
