@@ -119,7 +119,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | ActionId | 默认绑定 | 含义／计数／历史记录 |
 | --- | --- | --- |
 | `toggleReadingMode` | `<Space>rr` | 切换当前分屏的 Zotero 原生 Reading Mode，使用同一 Reader Normal／Select 按键。 |
-| `compareDocumentParsing` | `<Space>rd` | 打开当前 PDF 的原生／OXR 解析对照；点击云端解析后上传文档，可展开、定位区域并复制报告。 |
+| `compareDocumentParsing` | `<Space>rd` | 打开当前 PDF 的原生／OXR 解析对照；点击云端解析后上传文档，可展开区域与图表组、定位整组并复制报告。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
 | `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | 每步移动半个视口；计数会重复执行。 |
@@ -133,8 +133,8 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `followLink` | `f` | 为当前 PDF 视图中可见的原生内部链接、引文链接、外部链接及可识别的 DOI/arXiv/HTTP(S) 文本显示提示。输入提示以打开目标；按 Backspace 编辑，按 Escape 取消。原生链接仍使用 Zotero 行为；裸 DOI/arXiv 文本使用对应解析器。内部/引文目标可记入历史，外部链接不会。忽略计数。 |
 | `copyTarget` | `y` | 为当前 PDF 视图中可见的 DOI/arXiv/HTTP(S) 文本、原生外部链接及批注摘录/评论目标显示提示。无需预先选择目标。确认提示后复制其内容；按 Escape 或无候选项时剪贴板保持不变。忽略计数。 |
 | `prevHeading` / `nextHeading` | `[s` / `]s` | 按文档顺序在原生 Outline 的标题间导航，包括 Section 和 Subsection，并循环。无论分支是否折叠或当前选中了哪一行，都可从 Reader 普通模式及各 Reader 侧栏调用。 |
-| `prevFigure` / `nextFigure` | `[f` / `]f` | 在明确标出的 Figure 目标及可识别的图注间移动。有相关图像时定位到图像，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
-| `prevTable` / `nextTable` | `[t` / `]t` | 在明确标出的 Table 目标及可识别的表格标题间移动。首次使用可能需要在本地处理 PDF。 |
+| `prevFigure` / `nextFigure` | `[f` / `]f` | 在明确标出的 Figure 目标及可识别的图注间移动。能关联时定位包含子图与 caption 的整组，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
+| `prevTable` / `nextTable` | `[t` / `]t` | 在明确标出的 Table 目标及可识别的表格标题间移动；能关联时包含表格本体和 caption。首次使用可能需要在本地处理 PDF。 |
 | `prevAnnotation` / `nextAnnotation` | `[a` / `]a` | 选择上一条/下一条批注，到达任一端时循环；忽略计数。转到其他 Reader 位置时可添加历史记录。 |
 | `prevBookmark` / `nextBookmark` | `[m` / `]m` | 按文档顺序在 Reader 标记间移动，到达任一端时循环。跳到标记可添加历史位置。 |
 | `editAnnotation` | `<Enter>`、`<Return>` | 打开或聚焦选中批注的评论编辑器。输入指示为 `COMMENT`；Enter 插入换行，Escape 保存并关闭。 |
@@ -301,7 +301,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 在 `reader-outline` 中，按 `j` / `k` 移动行，按 `h` / `l` 移到父级/子级；按 Escape 取消。Zotero 的方向键、Tab/Shift+Tab 和 Enter/Return 仍由原生界面处理。该上下文支持 `uiConfirm`，但默认未绑定。在 `reader-marks` 中，默认按键为 `j` / `k`、`gg` / `G`、Enter、Escape、`d` 和 `x`。在 `reader-annotations` 与 `reader-thumbnails` 中，默认按键为 `j` / `k` 和 Escape。可分别在这些上下文中重映射本地控制。
 
-从 Reader Normal 和各侧栏按 `[s` / `]s` 可跨 Outline 按顺序遍历标题，无论分支是否折叠或当前选中了哪一行。按 `[f` / `]f` 和 `[t` / `]t` 可在 PDF 中有可用目标的 Figure 与 Table 之间移动；若有相关图像则定位到图像，否则定位到标题。首次明确请求结构导航可能需要在本地处理 PDF。无法识别目标的 PDF 不会提供这些位置。
+从 Reader Normal 和各侧栏按 `[s` / `]s` 可跨 Outline 按顺序遍历标题，无论分支是否折叠或当前选中了哪一行。按 `[f` / `]f` 和 `[t` / `]t` 可在 PDF 中有可用目标的 Figure 与 Table 之间移动；能关联时以子图或表格本体与 caption 的全部真实矩形定位，无法明确关联时保留 caption。首次明确请求结构导航可能需要在本地处理 PDF。无法识别目标的 PDF 不会提供这些位置。
 
 ### Marks 与 Bookmarks 分组
 
@@ -357,8 +357,8 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `nextAnnotation` | Reader Normal `]a` | Reader 批注导航 |
 | `prevHeading` | Reader Normal 和四个侧栏上下文 `[s` | 在整个原生 Outline 中前往上一个 Section/Subsection；按当前 PDF 位置、文档顺序导航，到达边界时循环 |
 | `nextHeading` | Reader Normal 和四个侧栏上下文 `]s` | 在整个原生 Outline 中前往下一个 Section/Subsection；按当前 PDF 位置、文档顺序导航，到达边界时循环 |
-| `prevFigure` | Reader Normal `[f` | 前往上一个 Figure 目标或可识别的图注；有相关图像时定位到图像，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
-| `nextFigure` | Reader Normal `]f` | 前往下一个 Figure 目标或可识别的图注；有相关图像时定位到图像，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
+| `prevFigure` | Reader Normal `[f` | 前往上一个 Figure 目标或可识别的图注；能关联时定位包含子图与 caption 的整组，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
+| `nextFigure` | Reader Normal `]f` | 前往下一个 Figure 目标或可识别的图注；能关联时定位包含子图与 caption 的整组，否则定位到图注。首次使用可能需要在本地处理 PDF。 |
 | `prevTable` | Reader Normal `[t` | 前往上一个明确标出的 Table 目标或可识别的表格标题；首次使用可能需要在本地处理 PDF。 |
 | `nextTable` | Reader Normal `]t` | 前往下一个明确标出的 Table 目标或可识别的表格标题；首次使用可能需要在本地处理 PDF。 |
 | `prevBookmark` | Reader Normal `[m` | 按文档顺序前往上一个 Reader 标记，到达开头时循环。 |

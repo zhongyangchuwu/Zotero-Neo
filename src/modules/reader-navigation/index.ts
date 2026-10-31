@@ -158,12 +158,12 @@ export function createReaderNavigationModule(
             const window = ports.navigationHost.activePdfWindow();
             if (ports.markViewCurrent(window)) window.focus();
           },
-          navigate: (region) => {
+          navigate: (position) => {
             const window = ports.navigationHost.activePdfWindow();
             const current = ports.beginCaptionJump(window);
             if (current?.())
               return ports.navigationHost.navigateToRegion(window, {
-                position: { pageIndex: region.pageIndex, rects: [region.rect] },
+                position,
               });
           },
         })

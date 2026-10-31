@@ -1,12 +1,9 @@
+import { documentCaptionIdentity } from '../../document-analysis/caption-identity';
 import { readerWindow, type ReaderNavigationHost } from '../../toolkit';
 import type { PdfWindow, ReaderRuntime } from '../../reader/types';
 import { outlineEntryKind } from './outline-presentation';
 import type { ReaderNativeOutlineEntry } from '../../reader/types';
-import {
-  captionLabel,
-  type ReaderCaptionTarget,
-  type ReaderCaptionTargets,
-} from './caption-targets';
+import { type ReaderCaptionTarget, type ReaderCaptionTargets } from './caption-targets';
 import type { ReaderNativeNavigation } from '../../toolkit';
 import type { NavigationOutcome } from '../../navigation/types';
 
@@ -101,16 +98,19 @@ export class ReaderNavigation {
     visit(outline.outline, 0);
     if (category !== 'heading') {
       const seen = new Map(
-        entries.map((entry) => [`${entry.page}:${captionLabel(entry.entry.title)}`, entry]),
+        entries.map((entry) => [
+          `${entry.page}:${documentCaptionIdentity(entry.entry.title)?.label}`,
+          entry,
+        ]),
       );
       for (const caption of captions) {
         if (caption.kind !== category) continue;
         const key = `${caption.location.position.pageIndex}:${caption.label}`;
         const existing = seen.get(key);
         if (existing) {
-          // A genuine Figure projection may start at its image, above the authored bookmark.
-          // Keep the native identity/order unless the supplied region starts earlier.
-          if (category === 'figure') {
+          // A resolved group retains all panels and its caption, including tables
+          // whose caption already starts at the authored bookmark's top.
+          if (category === 'figure' || category === 'table') {
             let top = -Infinity;
             for (const rect of caption.location.position.rects) {
               if (!Array.isArray(rect) || rect.length < 4 || !rect.every(Number.isFinite)) {
@@ -119,7 +119,10 @@ export class ReaderNavigation {
               }
               top = Math.max(top, rect[1], rect[3]);
             }
-            if (Number.isFinite(top) && top > existing.top) {
+            if (
+              Number.isFinite(top) &&
+              (caption.association === 'geometry' || top > existing.top)
+            ) {
               existing.entry = caption;
               existing.top = top;
               existing.clonePosition = true;

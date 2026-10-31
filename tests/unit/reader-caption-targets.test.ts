@@ -166,7 +166,7 @@ describe('Reader caption targets', () => {
     const second = test.targets.load();
     expect(test.targets.state).toBe('loading');
     expect(await second).toEqual(await first);
-    expect(test.targets.entries).toEqual([
+    expect(test.targets.entries).toMatchObject([
       {
         title: figure.content[0].text,
         kind: 'figure',
@@ -191,18 +191,27 @@ describe('Reader caption targets', () => {
     expect(test.getReader).toHaveBeenCalledOnce();
   });
 
-  it('lands above the caption on the genuine image while keeping caption-derived identity', async () => {
+  it('retains image and all caption fragments while keeping caption-derived identity', async () => {
     const test = harness([
       image([[0, 100, 400, 500, 700]]),
       caption('Figure 1: Overview', [[0, 110, 340, 490, 390]]),
       caption('Figure 1: Repeated caption fragment', [[0, 110, 330, 490, 335]]),
     ]);
-    expect(await test.targets.load()).toEqual([
+    expect(await test.targets.load()).toMatchObject([
       {
         title: 'Figure 1: Overview',
         kind: 'figure',
         label: '1',
-        location: { position: { pageIndex: 0, rects: [[100, 400, 500, 700]] } },
+        location: {
+          position: {
+            pageIndex: 0,
+            rects: [
+              [100, 400, 500, 700],
+              [110, 340, 490, 390],
+              [110, 330, 490, 335],
+            ],
+          },
+        },
       },
     ]);
   });
@@ -215,7 +224,10 @@ describe('Reader caption targets', () => {
     ]);
     expect((await test.targets.load())[0].location.position).toEqual({
       pageIndex: 3,
-      rects: [[107.99993669400001, 573.0210949589999, 503.99390690999996, 720.0012940109999]],
+      rects: [
+        [107.99993669400001, 573.0210949589999, 503.99390690999996, 720.0012940109999],
+        [108, 527.25, 504, 565.26],
+      ],
     });
   });
 
@@ -235,11 +247,15 @@ describe('Reader caption targets', () => {
     ]);
     expect((await test.targets.load())[0].location.position).toEqual({
       pageIndex: 28,
-      rects: [[147.599, 158.675, 464.409, 597.335]],
+      rects: [
+        [147.599, 158.675, 464.409, 597.335],
+        [158.78, 217.49, 165.56, 528.75],
+        [107.72, 73.05, 505.57, 150.91],
+      ],
     });
   });
 
-  it('keeps adjacent figures attached to their own image and leaves Table positions unchanged', async () => {
+  it('keeps adjacent figures separate and includes rasterized tables with their caption', async () => {
     const test = harness([
       image([[3, 50, 500, 290, 700]]),
       caption('Figure 2: Left graphic', [[3, 55, 450, 285, 490]]),
@@ -250,9 +266,39 @@ describe('Reader caption targets', () => {
     ]);
     const entries = await test.targets.load();
     expect(entries.map((entry) => [entry.kind, entry.label, entry.location.position])).toEqual([
-      ['figure', '2', { pageIndex: 3, rects: [[50, 500, 290, 700]] }],
-      ['figure', '3', { pageIndex: 3, rects: [[320, 500, 560, 700]] }],
-      ['table', '1', { pageIndex: 4, rects: [[55, 250, 555, 290]] }],
+      [
+        'figure',
+        '2',
+        {
+          pageIndex: 3,
+          rects: [
+            [50, 500, 290, 700],
+            [55, 450, 285, 490],
+          ],
+        },
+      ],
+      [
+        'figure',
+        '3',
+        {
+          pageIndex: 3,
+          rects: [
+            [320, 500, 560, 700],
+            [325, 450, 555, 490],
+          ],
+        },
+      ],
+      [
+        'table',
+        '1',
+        {
+          pageIndex: 4,
+          rects: [
+            [50, 300, 560, 650],
+            [55, 250, 555, 290],
+          ],
+        },
+      ],
     ]);
   });
 
@@ -269,6 +315,7 @@ describe('Reader caption targets', () => {
       rects: [
         [60, 400, 280, 680],
         [300, 410, 520, 690],
+        [55, 350, 525, 390],
       ],
     });
   });
@@ -292,28 +339,6 @@ describe('Reader caption targets', () => {
     ['unanchored image', [{ type: 'image' }]],
     ['intervening body block', [image([[0, 50, 400, 290, 700]]), { type: 'paragraph' }]],
     [
-      'excluded text outside the image',
-      [
-        image([[0, 50, 400, 290, 700]]),
-        {
-          type: 'paragraph',
-          flowClass: 'excluded',
-          anchor: { pageRects: [[0, 320, 450, 330, 650]] },
-        },
-      ],
-    ],
-    [
-      'excluded text from another page',
-      [
-        image([[0, 50, 400, 290, 700]]),
-        {
-          type: 'paragraph',
-          flowClass: 'excluded',
-          anchor: { pageRects: [[1, 60, 450, 70, 650]] },
-        },
-      ],
-    ],
-    [
       'unanchored excluded text',
       [
         image([[0, 50, 400, 290, 700]]),
@@ -333,11 +358,7 @@ describe('Reader caption targets', () => {
         },
       ],
     ],
-    ['column mismatch larger than native precision', [image([[0, 54.98, 400, 284.98, 700]])]],
-    [
-      'ambiguous adjacent images',
-      [image([[0, 50, 550, 290, 700]]), image([[0, 50, 400, 290, 540]])],
-    ],
+    ['low column overlap', [image([[0, 10, 400, 200, 700]])]],
   ])('retains the caption rather than guessing from %s', async (_name, preceding) => {
     const test = harness([
       ...(preceding as readonly unknown[]),
@@ -360,7 +381,7 @@ describe('Reader caption targets', () => {
       caption('An unlabeled illustration', [[1, 55, 450, 285, 490]]),
       image([[2, 50, 500, 290, 700]]),
     ]);
-    expect(await test.targets.load()).toEqual([
+    expect(await test.targets.load()).toMatchObject([
       {
         title: 'Figure 6: Continued caption',
         kind: 'figure',
@@ -379,7 +400,13 @@ describe('Reader caption targets', () => {
     ]);
     const entries = await test.targets.load();
     expect(entries.map((entry) => entry.location.position)).toEqual([
-      { pageIndex: 0, rects: [[50, 500, 290, 700]] },
+      {
+        pageIndex: 0,
+        rects: [
+          [50, 500, 290, 700],
+          [55, 450, 285, 490],
+        ],
+      },
       { pageIndex: 0, rects: [[55, 350, 285, 390]] },
     ]);
   });

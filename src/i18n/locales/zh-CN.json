@@ -517,5 +517,11 @@
   "documentAnalysis.kind.code": "代码",
   "documentAnalysis.kind.footnote": "脚注",
   "documentAnalysis.kind.references": "参考文献",
-  "documentAnalysis.vocabulary": "词汇差异"
+  "documentAnalysis.vocabulary": "词汇差异",
+  "documentAnalysis.objectGroup": "图表组",
+  "documentAnalysis.members": "成员区域",
+  "documentAnalysis.locateGroup": "定位整组",
+  "documentAnalysis.association.geometry": "按几何关联",
+  "documentAnalysis.association.caption-only": "仅 caption",
+  "documentAnalysis.association.ambiguous": "关联有歧义，仅定位 caption"
 }

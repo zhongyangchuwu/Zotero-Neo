@@ -3,11 +3,9 @@ import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { t } from '../../i18n';
 import { compareDocuments } from '../../document-analysis/compare';
-import type {
-  DocumentSource,
-  ParsedDocument,
-  DocumentRegion,
-} from '../../document-analysis/contracts';
+import { analyzeDocument, type AnalyzedDocument } from '../../document-analysis/analyze';
+import { documentObjectLocation } from '../../document-analysis/object-groups';
+import type { DocumentSource, DocumentLocation } from '../../document-analysis/contracts';
 import { nativeDocumentPages, nativeDocumentParser } from '../../document-analysis/native';
 import { oxrDocumentParser } from '../../document-analysis/oxr';
 import {
@@ -36,13 +34,33 @@ function comparisonButton(doc: Document, text: string): HTMLButtonElement {
   return button;
 }
 
+function comparisonTarget(
+  doc: Document,
+  title: string,
+  text: string,
+  action: string,
+  run: () => void,
+): HTMLDetailsElement {
+  const details = doc.createElementNS(H, 'details') as HTMLDetailsElement;
+  details.style.cssText = `padding:6px 0;border-bottom:1px solid ${THEME_VARS.border}`;
+  const heading = doc.createElementNS(H, 'summary');
+  heading.textContent = title;
+  const content = doc.createElementNS(H, 'p');
+  content.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere';
+  content.textContent = text;
+  const jump = comparisonButton(doc, action);
+  jump.addEventListener('click', run);
+  details.append(heading, content, jump);
+  return details;
+}
+
 export interface DocumentComparisonHost {
   readonly reader: ReaderRuntime;
   readonly preferences: PreferenceStore;
   readonly language: () => KeyGuideLanguage;
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly copyText: (text: string) => void;
-  readonly navigate: (region: DocumentRegion) => void | Promise<void>;
+  readonly navigate: (location: DocumentLocation) => void | Promise<void>;
   readonly focusReader: () => void;
   readonly isCurrent: () => boolean;
 }
@@ -59,9 +77,9 @@ interface ComparisonView {
   readonly untheme: () => void;
   prepared?: { readonly source: DocumentSource; readonly pdf: AnalysisPDF };
   cloudPending?: boolean;
-  native?: ParsedDocument;
+  native?: AnalyzedDocument;
   nativeError?: string;
-  cloud?: ParsedDocument;
+  cloud?: AnalyzedDocument;
 }
 
 /** One explicit comparison owns preparation, network cancellation, presentation and stale-result fencing. */
@@ -235,14 +253,18 @@ export class ReaderDocumentComparison {
       };
       view.prepared = { source, pdf };
       view.cloudButton.disabled = false;
-      const native = await nativeDocumentParser(async (signal) => {
-        const data = await structuredDocumentData(
-          this.#host.reader.itemID,
-          () => this.#current(view) && !signal.aborted,
-        );
-        if (!data) throw new Error('Native document structure unavailable');
-        return data;
-      }).parse(source, { signal: view.abort.signal });
+      const native = await analyzeDocument(
+        nativeDocumentParser(async (signal) => {
+          const data = await structuredDocumentData(
+            this.#host.reader.itemID,
+            () => this.#current(view) && !signal.aborted,
+          );
+          if (!data) throw new Error('Native document structure unavailable');
+          return data;
+        }),
+        source,
+        { signal: view.abort.signal },
+      );
       if (!this.#current(view)) return;
       if (!(await pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#current(view)) return;
@@ -272,7 +294,7 @@ export class ReaderDocumentComparison {
         readPDF: () => prepared.pdf.read(),
         request: requestDocumentJSON,
       });
-      const result = await parser.parse(prepared.source, { signal: view.abort.signal });
+      const result = await analyzeDocument(parser, prepared.source, { signal: view.abort.signal });
       if (!this.#current(view)) return;
       if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#current(view)) return;
@@ -308,23 +330,34 @@ export class ReaderDocumentComparison {
         const summary = doc.createElementNS(H, 'p');
         summary.textContent = `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${(result.durationMs / 1000).toFixed(1)}s`;
         section.append(summary);
+        for (const group of result.objectGroups.slice(0, 500)) {
+          section.append(
+            comparisonTarget(
+              doc,
+              `${this.#text('objectGroup')} · ${group.title.slice(0, 140)} · ${this.#text(`association.${group.association}`)}`,
+              `${group.title}\n${this.#text('members')}: ${group.memberRegionIds.length}`,
+              this.#text('locateGroup'),
+              () => {
+                void this.#locate(view, documentObjectLocation(result.regions, group));
+              },
+            ),
+          );
+        }
         for (const region of result.regions.slice(0, 500)) {
           const text = region.format === 'html' ? documentMarkupText(region.text) : region.text;
-          const details = doc.createElementNS(H, 'details');
-          details.style.cssText = `padding:6px 0;border-bottom:1px solid ${THEME_VARS.border}`;
-          const heading = doc.createElementNS(H, 'summary');
-          heading.textContent = `${region.pageIndex + 1} · ${this.#text(`kind.${region.kind}`)} · ${this.#text(`flow.${region.flow}`)} · ${text.slice(0, 100)}`;
-          const content = doc.createElementNS(H, 'p');
-          content.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere';
-          content.textContent = text;
-          const jump = comparisonButton(doc, this.#text('locate'));
-          jump.addEventListener('click', () => {
-            void this.#locate(view, region);
-          });
-          details.append(heading, content, jump);
-          section.append(details);
+          section.append(
+            comparisonTarget(
+              doc,
+              `${region.pageIndex + 1} · ${this.#text(`kind.${region.kind}`)} · ${this.#text(`flow.${region.flow}`)} · ${text.slice(0, 100)}`,
+              text,
+              this.#text('locate'),
+              () => {
+                void this.#locate(view, { pageIndex: region.pageIndex, rects: [region.rect] });
+              },
+            ),
+          );
         }
-        if (result.regions.length > 500) {
+        if (result.regions.length > 500 || result.objectGroups.length > 500) {
           const note = doc.createElementNS(H, 'p');
           note.textContent = this.#text('truncated');
           section.append(note);
@@ -347,13 +380,13 @@ export class ReaderDocumentComparison {
   }
 
   /** Recheck the source version at use time; an earlier successful parse is not current-file admission. */
-  async #locate(view: ComparisonView, region: DocumentRegion): Promise<void> {
+  async #locate(view: ComparisonView, location: DocumentLocation): Promise<void> {
     try {
       if (!this.#current(view) || !view.prepared) return;
       const current = await view.prepared.pdf.isCurrent();
       if (!this.#current(view)) return;
       if (!current) throw new Error('PDF changed; reopen the comparison');
-      await this.#host.navigate(region);
+      await this.#host.navigate(location);
       if (this.#current(view)) this.close(true);
     } catch (error) {
       if (this.#current(view)) view.status.textContent = String(error);
