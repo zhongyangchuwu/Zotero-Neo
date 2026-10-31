@@ -1,11 +1,11 @@
-import type { PreferenceStore } from '../../core/preference-store';
-import type { ParsedDocument } from '../../document-analysis/contracts';
-import { documentCacheSlot } from '../../document-analysis/cache';
-import { nativeDocumentPages } from '../../document-analysis/native';
-import { analysisPDF } from '../../platform/document-analysis';
-import { attachmentDocumentCache } from '../../platform/document-analysis-cache';
-import { readerDocumentPageGeometry, type ReaderRuntime } from '../../toolkit/reader';
-import { selectedDocumentCacheKey } from './document-settings';
+import type { PreferenceStore } from '../core/preference-store';
+import type { ParsedDocument } from '../document-analysis/contracts';
+import { documentCacheSlot } from '../document-analysis/cache';
+import { nativeDocumentPages } from '../document-analysis/native';
+import { analysisPDF } from '../platform/document-analysis';
+import { attachmentDocumentCache } from '../platform/document-analysis-cache';
+import { readerDocumentPageGeometry, type ReaderRuntime } from '../toolkit/reader';
+import { selectedDocumentCacheKey } from '../document-analysis/settings';
 
 export interface ReaderCachedDocument {
   readonly parsed: ParsedDocument;
@@ -13,7 +13,7 @@ export interface ReaderCachedDocument {
   isCurrent(): Promise<boolean>;
 }
 
-/** Explicit navigation reads the selected service's validated cache; this path never uploads or runs SDT. */
+/** Reader features share the selected service's validated cache; this path never uploads or runs SDT. */
 export async function readReaderDocumentCache(
   reader: ReaderRuntime,
   preferences: PreferenceStore,

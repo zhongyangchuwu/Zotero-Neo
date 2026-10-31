@@ -11,6 +11,7 @@ import {
   readerOwnerWindow,
   readerSelectionIsFiltered,
   readerSelectionText,
+  validateReaderSelection,
   setAnnotationColorFilter,
 } from '../../toolkit';
 import {
@@ -224,6 +225,14 @@ export function createReaderAnnotationsModule(
       if (!attachment?.id || attachment.libraryID === undefined) {
         if (current()) ports.showStatus('✗ no attachment', 2000);
         return;
+      }
+      if (readerSelectionIsFiltered(window)) {
+        const valid = await validateReaderSelection(window);
+        if (!current()) return;
+        if (!valid) {
+          ports.showStatus(t('bodySelection.changed', ports.language()), 2000);
+          return;
+        }
       }
       let key: string;
       try {

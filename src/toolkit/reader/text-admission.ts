@@ -7,6 +7,8 @@ export interface ReaderTextSourceLocation {
   readonly pageIndex: number | null;
   readonly rect: readonly number[] | null;
   readonly sourceBlockId: string | null;
+  /** PDF.js rotated text has font leading across its short axis, as on arXiv margin labels. */
+  readonly vertical?: boolean;
 }
 
 interface Admission {
@@ -14,6 +16,7 @@ interface Admission {
   readonly document: Document;
   readonly accepts: (location: ReaderTextSourceLocation) => boolean;
   readonly current: () => boolean;
+  readonly validate: () => Promise<boolean>;
   readonly marked: Map<HTMLElement, string | null>;
   readonly dispose: () => void;
   visits: number;
@@ -33,6 +36,7 @@ export function leaseReaderTextAdmission(
   window: Window,
   accepts: Admission['accepts'],
   current: () => boolean,
+  validate: () => Promise<boolean> = async () => true,
 ): () => void {
   admissions.get(window)?.dispose();
   const document = window.document;
@@ -43,6 +47,7 @@ export function leaseReaderTextAdmission(
     id,
     document,
     accepts,
+    validate,
     marked,
     visits: 0,
     current: () => !disposed && current() && !isDeadObject(window) && window.document === document,
@@ -59,6 +64,39 @@ export function leaseReaderTextAdmission(
   };
   admissions.set(window, admission);
   return admission.dispose;
+}
+
+/** Recheck source ownership before copying or saving a filtered snapshot; never accept a replacement lease. */
+export async function validateReaderSelection(window: Window): Promise<boolean> {
+  if (!readerSelectionIsFiltered(window)) return true;
+  const admission = admissions.get(window)!;
+  const selection = window.getSelection();
+  const endpoints = selection && [
+    selection.anchorNode,
+    selection.anchorOffset,
+    selection.focusNode,
+    selection.focusOffset,
+  ];
+  let valid = false;
+  try {
+    valid = await admission.validate();
+  } catch {
+    // Missing or changed source geometry cannot authorize a filtered write.
+  }
+  valid = valid && admissions.get(window) === admission && admission.current();
+  if (!valid) {
+    admission.dispose();
+    return false;
+  }
+  const latest = window.getSelection();
+  return (
+    !!endpoints &&
+    !!latest &&
+    endpoints[0] === latest.anchorNode &&
+    endpoints[1] === latest.anchorOffset &&
+    endpoints[2] === latest.focusNode &&
+    endpoints[3] === latest.focusOffset
+  );
 }
 
 export function readerTextAdmissionActive(window: Window): boolean {
@@ -106,7 +144,15 @@ function sourceLocation(window: Window, text: Text, bounds?: DOMRect): ReaderTex
     Math.max(a[0], b[0]),
     Math.max(a[1], b[1]),
   ];
-  return { pageIndex, rect: rect.every(Number.isFinite) ? rect : null, sourceBlockId: null };
+  const rotation = Number.parseFloat(
+    text.parentElement?.style?.getPropertyValue('--rotate') ?? '0',
+  );
+  return {
+    pageIndex,
+    rect: rect.every(Number.isFinite) ? rect : null,
+    sourceBlockId: null,
+    vertical: Number.isFinite(rotation) && Math.abs(rotation % 180) === 90,
+  };
 }
 
 /** Unknown geometry remains selectable; only the feature's explicit, current policy excludes text. */

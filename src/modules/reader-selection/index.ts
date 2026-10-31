@@ -2,11 +2,17 @@ import type { ModuleHost } from '../../core/module-host';
 import type { ReaderSelectionActionDefinition, ReaderSelectionContext } from '../../core/contracts';
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
+import type { PreferenceStore } from '../../core/preference-store';
+import { readReaderDocumentCache } from '../../reader/document-cache';
+import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
+import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
 import type { PdfWindow, ReaderMode, ReaderRuntime } from '../../reader/types';
 import {
   computeSelectionPosition,
   prepareReaderSelectionSearch,
   readerSelectionText,
+  readerSelectionIsFiltered,
+  validateReaderSelection,
 } from '../../toolkit';
 import { t } from '../../i18n';
 import { ReaderBodySelection } from './body-selection';
@@ -22,6 +28,7 @@ import {
 
 export interface ReaderSelectionModulePorts {
   readonly reader: ReaderRuntime;
+  readonly preferences: PreferenceStore;
   readonly activeWindow: () => PdfWindow | null;
   readonly isViewCurrent: (window: PdfWindow) => boolean;
   readonly capturePresentation: (window: PdfWindow) => () => boolean;
@@ -102,14 +109,23 @@ export function createReaderSelectionModule(
     scope.add(ports.clearOwner);
     const body = new ReaderBodySelection({
       reader: ports.reader,
+      readCache: () =>
+        readReaderDocumentCache(ports.reader, ports.preferences, () => scope.isCurrent()),
       isCurrent: () => scope.isCurrent(),
       capturePresentation: ports.capturePresentation,
       captureView: ports.captureView,
       showStatus,
       text: (key) => t(`bodySelection.${key}`, ports.language()),
       debug: ports.debug,
+      onChange: ports.updateIndicator,
     });
     scope.add(() => body.dispose());
+    if (ports.reader.itemID)
+      scope.add(observeAttachmentDocumentCache(ports.reader.itemID, () => body.invalidate()));
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+      const stop = ports.preferences.observe?.(key, () => body.invalidate());
+      if (stop) scope.add(stop);
+    }
     const flash = new ReaderFlash({
       isCurrent,
       captureView: ports.captureView,
@@ -186,7 +202,7 @@ export function createReaderSelectionModule(
       debug: ports.debug,
     });
     scope.add(() => actions.dispose());
-    const execute = bindReaderSelectionActions(host, scope, (action, window) => {
+    const run = (action: ReaderSelectionAction, window: PdfWindow): void => {
       if (!isCurrent(window)) return;
       body.bind(window);
       switch (action) {
@@ -295,6 +311,25 @@ export function createReaderSelectionModule(
           return;
         }
       }
+    };
+    const execute = bindReaderSelectionActions(host, scope, (action, window) => {
+      if (
+        !readerSelectionIsFiltered(window) ||
+        !['copySelection', 'searchSelection', 'openSelectionActions'].includes(action)
+      ) {
+        run(action, window);
+        return;
+      }
+      const current = ports.capturePresentation(window);
+      void validateReaderSelection(window)
+        .then((valid) => {
+          if (!scope.isCurrent() || !current()) return;
+          if (valid) run(action, window);
+          else showStatus(t('bodySelection.changed', ports.language()));
+        })
+        .catch((error: unknown) =>
+          ports.debug(`Reader selection source check failed: ${String(error)}`),
+        );
     });
     return {
       flash,

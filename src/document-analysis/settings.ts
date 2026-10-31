@@ -1,7 +1,7 @@
-import type { PreferenceStore } from '../../core/preference-store';
-import { mineruDocumentCacheKey } from '../../document-analysis/mineru';
-import { oxrDocumentCacheKey } from '../../document-analysis/oxr';
-import type { DocumentCacheKey } from '../../document-analysis/contracts';
+import type { PreferenceStore } from '../core/preference-store';
+import { mineruDocumentCacheKey } from './mineru';
+import { oxrDocumentCacheKey } from './oxr';
+import type { DocumentCacheKey } from './contracts';
 
 export const DOCUMENT_PROVIDER_KEY = 'documentAnalysis.provider';
 export const OXR_ENDPOINT_KEY = 'documentAnalysis.oxr.endpoint';

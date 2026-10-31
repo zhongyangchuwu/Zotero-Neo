@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readReaderDocumentCache } from '../../src/modules/reader-navigation/document-cache';
-import { selectedDocumentCacheKey } from '../../src/modules/reader-navigation/document-settings';
+import { readReaderDocumentCache } from '../../src/reader/document-cache';
+import { selectedDocumentCacheKey } from '../../src/document-analysis/settings';
 import { mineruDocumentCacheKey } from '../../src/document-analysis/mineru';
 import { oxrDocumentCacheKey } from '../../src/document-analysis/oxr';
 import type { PreferenceStore } from '../../src/core/preference-store';

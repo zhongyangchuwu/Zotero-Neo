@@ -25,6 +25,7 @@ export {
   readerTextNodeAllowed,
   readerSelectionIsFiltered,
   readerSelectionText,
+  validateReaderSelection,
 } from './text-admission';
 export type { ReaderTextSourceLocation } from './text-admission';
 export * from './identifier-text';

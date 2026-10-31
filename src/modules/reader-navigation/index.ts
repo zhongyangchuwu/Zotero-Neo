@@ -14,9 +14,9 @@ import { ReaderSmoothScroller, type ReaderSmoothScrollerHost } from './smooth-sc
 import { ReaderMarks, type MarksHost } from './marks';
 import { ReaderNativeSidebar, type ReaderNativeSidebarHost } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
-import { readReaderDocumentCache } from './document-cache';
+import { readReaderDocumentCache } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from './document-settings';
+import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
 import { t } from '../../i18n';
 import {
   bindReaderNavigationActions,

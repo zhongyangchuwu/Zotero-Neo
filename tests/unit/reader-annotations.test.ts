@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { textAdmissionFixture } from '../fixtures/reader-text-admission';
+import { leaseReaderTextAdmission } from '../../src/toolkit/reader/text-admission';
+import { bodyTextAdmission } from '../../src/modules/reader-selection/body-text';
+
+afterEach(() => vi.unstubAllGlobals());
 import { ModuleHost } from '../../src/core/module-host';
 import {
   createReaderAnnotationsModule,
@@ -88,6 +93,7 @@ function annotationFixture() {
     status,
     clearAnnotation,
     module: createReaderAnnotationsModule(host, ports),
+    ports,
     selectNewer: () => {
       selected = 'second';
       revision += 1;
@@ -101,6 +107,60 @@ function annotationFixture() {
 }
 
 describe('Reader annotation operation retirement', () => {
+  it.each(['valid', 'source-changed', 'view-retired'] as const)(
+    'revalidates a filtered native text/geometry snapshot before save: %s',
+    async (outcome) => {
+      vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
+      const t = textAdmissionFixture();
+      const f = annotationFixture();
+      Object.assign(f.window, t.window);
+      Reflect.set(t.selection, 'removeAllRanges', vi.fn());
+      Reflect.set(f.ports, 'itemForReader', () => ({ id: 7, libraryID: 1 }));
+      const saves: { annotationText: string; annotationPosition: string }[] = [];
+      vi.stubGlobal('Zotero', {
+        Item: class {
+          key = 'saved';
+          async saveTx() {
+            saves.push(this as unknown as (typeof saves)[number]);
+          }
+        },
+      });
+      t.document.documentElement.setAttribute('data-zv-select-active', '');
+      const pending = Promise.withResolvers<boolean>();
+      const release = leaseReaderTextAdmission(
+        f.window,
+        bodyTextAdmission([
+          {
+            id: 'chart',
+            kind: 'image',
+            pageIndex: 0,
+            rect: [95, 765, 155, 785],
+            text: '',
+            format: 'text',
+            flow: 'auxiliary',
+            anchorPrecision: 'region',
+          },
+        ]),
+        () => true,
+        () => pending.promise,
+      );
+      const saving = f.module.highlight(f.window, COLORS.yellow);
+      expect(saves).toEqual([]);
+      if (outcome === 'view-retired') f.selectNewer();
+      pending.resolve(outcome !== 'source-changed');
+      await saving;
+      if (outcome === 'valid') {
+        expect(saves).toHaveLength(1);
+        expect(saves[0]!.annotationText).toBe('alpha omega');
+        expect(JSON.parse(saves[0]!.annotationPosition).rects).toEqual([
+          [10, 780, 50, 790],
+          [10, 760, 50, 770],
+        ]);
+      } else expect(saves).toEqual([]);
+      release();
+      f.host.dispose();
+    },
+  );
   it('saves the original recolor without replacing a newer interaction status', async () => {
     const f = annotationFixture();
     const saving = f.module.recolor(f.window, COLORS.red);

@@ -34,7 +34,11 @@ import {
   type ReaderRuntime,
 } from '../../toolkit/reader';
 import { THEME_VARS } from '../../ui/theme';
-import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT } from './document-settings';
+import {
+  DOCUMENT_PROVIDER_KEY,
+  OXR_ENDPOINT_KEY,
+  DEFAULT_OXR_ENDPOINT,
+} from '../../document-analysis/settings';
 
 const H = 'http://www.w3.org/1999/xhtml';
 

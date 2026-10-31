@@ -1,7 +1,7 @@
 import { structuredDocumentBlocks } from '../../toolkit/reader';
 import { nativeDocumentRegions } from '../../document-analysis/native';
 import type { DocumentObjectGroup, DocumentRegion } from '../../document-analysis/contracts';
-import type { ReaderCachedDocument } from './document-cache';
+import type { ReaderCachedDocument } from '../../reader/document-cache';
 import { documentVisualBodies } from '../../document-analysis/visual-bodies';
 import {
   documentObjectGroups,

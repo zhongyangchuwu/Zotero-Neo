@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReaderCaptionTargets } from '../../src/modules/reader-navigation/caption-targets';
-import type { ReaderCachedDocument } from '../../src/modules/reader-navigation/document-cache';
+import type { ReaderCachedDocument } from '../../src/reader/document-cache';
 import type { ParsedDocument } from '../../src/document-analysis/contracts';
 
 const parsed: ParsedDocument = {
