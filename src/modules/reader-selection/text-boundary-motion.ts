@@ -16,17 +16,21 @@ export function structuralTextPosition(
   for (let block = current; block >= 0 && block < paragraphs.length; block += step) {
     const parts = paragraphs[block]!,
       index = buildMappedTextIndex(parts);
-    if (!index.text.length) continue;
+    if (!index.text.trim()) continue;
     const candidates =
       granularity === 'paragraph'
         ? [direction === 'forward' ? index.ends.at(-1)! : index.pointers[0]!]
         : Array.from(
             new Intl.Segmenter(undefined, { granularity: 'sentence' }).segment(index.text),
-            (sentence) =>
+          ).flatMap((sentence) => {
+            const length = sentence.segment.trimEnd().length;
+            if (!length) return [];
+            return [
               direction === 'forward'
-                ? index.ends[sentence.index + sentence.segment.trimEnd().length - 1]!
+                ? index.ends[sentence.index + length - 1]!
                 : index.pointers[sentence.index]!,
-          );
+            ];
+          });
     if (direction === 'backward') candidates.reverse();
     for (const target of candidates) {
       if (block !== current) return target;

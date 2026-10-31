@@ -37,4 +37,24 @@ describe('structured selection boundaries', () => {
       structuralTextPosition(source, { textNode, offset: 0 }, 'backward', 'sentence'),
     ).toBeNull();
   });
+
+  it('skips whitespace-only blocks and sentence segments without inventing a source endpoint', () => {
+    const blank = {} as Text;
+    const source = [
+      [{ textNode, text: 'First.' }],
+      [{ textNode: blank, text: ' \n ' }],
+      [{ textNode: next, text: '\nNext.' }],
+    ];
+    for (const granularity of ['sentence', 'paragraph'] as const) {
+      expect(
+        structuralTextPosition(source, { textNode, offset: 6 }, 'forward', granularity),
+      ).toEqual({ textNode: next, offset: 6 });
+      expect(
+        structuralTextPosition(source, { textNode: next, offset: 0 }, 'backward', granularity),
+      ).toEqual({ textNode, offset: 0 });
+    }
+    expect(
+      structuralTextPosition(source, { textNode: next, offset: 0 }, 'forward', 'sentence'),
+    ).toEqual({ textNode: next, offset: 6 });
+  });
 });
