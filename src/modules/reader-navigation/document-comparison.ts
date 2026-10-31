@@ -3,9 +3,18 @@ import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
 import { t } from '../../i18n';
 import { compareDocuments } from '../../document-analysis/compare';
-import { analyzeDocument, type AnalyzedDocument } from '../../document-analysis/analyze';
+import {
+  analyzeDocument,
+  analyzeParsedDocument,
+  type AnalyzedDocument,
+} from '../../document-analysis/analyze';
+import type { DocumentResultCache } from '../../document-analysis/cache';
 import { documentObjectLocation } from '../../document-analysis/object-groups';
-import type { DocumentSource, DocumentLocation } from '../../document-analysis/contracts';
+import type {
+  DocumentSource,
+  DocumentLocation,
+  DocumentParser,
+} from '../../document-analysis/contracts';
 import { nativeDocumentPages, nativeDocumentParser } from '../../document-analysis/native';
 import { oxrDocumentParser } from '../../document-analysis/oxr';
 import {
@@ -14,6 +23,7 @@ import {
   type AnalysisPDF,
 } from '../../platform/document-analysis';
 import { documentMarkupText } from '../../platform/document-markup';
+import { attachmentDocumentCache } from '../../platform/document-analysis-cache';
 import {
   readerWindow,
   readerDocumentPageGeometry,
@@ -63,6 +73,7 @@ export interface DocumentComparisonHost {
   readonly navigate: (location: DocumentLocation) => void | Promise<void>;
   readonly focusReader: () => void;
   readonly isCurrent: () => boolean;
+  readonly debug: (message: string) => void;
 }
 
 interface ComparisonView {
@@ -71,11 +82,20 @@ interface ComparisonView {
   readonly status: HTMLElement;
   readonly results: HTMLElement;
   readonly cloudButton: HTMLButtonElement;
+  readonly refreshButton: HTMLButtonElement;
   readonly endpoint: HTMLInputElement;
   readonly key: HTMLInputElement;
   readonly abort: AbortController;
   readonly untheme: () => void;
-  prepared?: { readonly source: DocumentSource; readonly pdf: AnalysisPDF };
+  prepared?: {
+    readonly source: DocumentSource;
+    readonly pdf: AnalysisPDF;
+    readonly cache: DocumentResultCache;
+  };
+  cloudRevision: number;
+  cloudState?: 'cached' | 'saved' | 'unsaved';
+  cloudSavedAt?: number;
+  cloudNotice?: string;
   cloudPending?: boolean;
   native?: AnalyzedDocument;
   nativeError?: string;
@@ -142,9 +162,11 @@ export class ReaderDocumentComparison {
     key.value = 'dummy';
     const cloudButton = comparisonButton(doc, this.#text('parseCloud'));
     cloudButton.disabled = true;
+    const refreshButton = comparisonButton(doc, this.#text('refreshCloud'));
+    refreshButton.disabled = true;
     const copy = comparisonButton(doc, this.#text('copyReport'));
     const close = comparisonButton(doc, this.#text('close'));
-    controls.append(endpoint, key, cloudButton, copy, close);
+    controls.append(endpoint, key, cloudButton, refreshButton, copy, close);
     const status = element('p', this.#text('preparing'));
     status.setAttribute('role', 'status');
     const results = element('div');
@@ -161,6 +183,8 @@ export class ReaderDocumentComparison {
       endpoint,
       key,
       cloudButton,
+      refreshButton,
+      cloudRevision: 0,
       abort,
       untheme: this.#host.themeRoot(backdrop),
     };
@@ -175,6 +199,12 @@ export class ReaderDocumentComparison {
     cloudButton.addEventListener('click', () => {
       void this.#cloud(view);
     });
+    refreshButton.addEventListener('click', () => {
+      void this.#cloud(view, true);
+    });
+    endpoint.addEventListener('change', () => {
+      void this.#restoreCloud(view);
+    });
     copy.addEventListener('click', () => {
       if (!this.#current(view)) return;
       this.#host.copyText(
@@ -184,6 +214,7 @@ export class ReaderDocumentComparison {
             source: view.prepared?.source ?? null,
             native: view.native ?? null,
             cloud: view.cloud ?? null,
+            cloudCache: { state: view.cloudState ?? null, savedAt: view.cloudSavedAt ?? null },
             comparison:
               view.native && view.cloud ? compareDocuments(view.native, view.cloud) : null,
           },
@@ -251,8 +282,8 @@ export class ReaderDocumentComparison {
         fileName: pdf.fileName,
         pages: nativeDocumentPages({ pages }),
       };
-      view.prepared = { source, pdf };
-      view.cloudButton.disabled = false;
+      view.prepared = { source, pdf, cache: attachmentDocumentCache(this.#host.reader.itemID!) };
+      void this.#restoreCloud(view);
       const native = await analyzeDocument(
         nativeDocumentParser(async (signal) => {
           const data = await structuredDocumentData(
@@ -269,44 +300,155 @@ export class ReaderDocumentComparison {
       if (!(await pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#current(view)) return;
       view.native = native;
-      if (!view.cloudPending) view.status.textContent = this.#text('nativeReady');
+      if (!view.cloudPending) view.status.textContent = this.#readyText(view);
       this.#render(view);
     } catch (error) {
       if (this.#current(view)) {
         view.nativeError = String(error);
-        if (!view.cloudPending) view.status.textContent = view.nativeError;
+        if (!view.cloudPending)
+          view.status.textContent =
+            view.cloud || view.cloudNotice ? this.#readyText(view) : view.nativeError;
         this.#render(view);
       }
     }
   }
 
-  async #cloud(view: ComparisonView): Promise<void> {
+  #readyText(view: ComparisonView): string {
+    if (view.cloudNotice) return view.cloudNotice;
+    if (!view.cloud) return this.#text('nativeReady');
+    return this.#text(
+      view.cloudState === 'cached'
+        ? 'cacheReady'
+        : view.cloudState === 'saved'
+          ? 'saved'
+          : 'notSaved',
+    );
+  }
+
+  #busy(view: ComparisonView, busy: boolean): void {
+    view.cloudPending = busy;
+    view.cloudButton.disabled = view.refreshButton.disabled = busy || !view.prepared;
+    view.endpoint.disabled = view.key.disabled = busy;
+  }
+
+  #parser(view: ComparisonView): DocumentParser {
+    return oxrDocumentParser({
+      baseURL: view.endpoint.value.trim(),
+      apiKey: view.key.value,
+      readPDF: () => view.prepared!.pdf.read(),
+      request: requestDocumentJSON,
+    });
+  }
+
+  #cloudCurrent(view: ComparisonView, revision: number): boolean {
+    return this.#current(view) && view.cloudRevision === revision;
+  }
+
+  /** Cache lookup never initiates a network request, including invalid or unavailable cache files. */
+  async #restoreCloud(view: ComparisonView): Promise<void> {
+    if (!view.prepared || !this.#current(view) || view.cloudPending) return;
+    const revision = ++view.cloudRevision;
+    // A local lookup must not swallow the click that committed an edited endpoint.
+    // An explicit parse may supersede it; the revision fences its late result.
+    this.#busy(view, false);
+    view.cloud = undefined;
+    view.cloudState = undefined;
+    view.cloudSavedAt = undefined;
+    view.cloudNotice = undefined;
+    this.#render(view);
+    try {
+      if (
+        !(await this.#readCloud(view, this.#parser(view), revision)) &&
+        this.#cloudCurrent(view, revision)
+      ) {
+        view.cloudNotice = this.#text('cacheMiss');
+        view.status.textContent = view.cloudNotice;
+      }
+    } catch {
+      if (this.#cloudCurrent(view, revision)) {
+        this.#host.debug('Document analysis cache lookup unavailable');
+        view.cloudNotice = this.#text('cacheUnavailable');
+        view.status.textContent = view.cloudNotice;
+      }
+    }
+  }
+
+  async #readCloud(
+    view: ComparisonView,
+    parser: DocumentParser,
+    revision: number,
+  ): Promise<boolean> {
+    const prepared = view.prepared!;
+    if (!parser.cacheKey) return false;
+    const cached = await prepared.cache.read(prepared.source, parser.cacheKey);
+    if (!this.#cloudCurrent(view, revision)) return true;
+    if (!cached) return false;
+    if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
+    if (!this.#cloudCurrent(view, revision)) return true;
+    view.cloud = analyzeParsedDocument(cached.parsed, prepared.source);
+    view.cloudState = 'cached';
+    view.cloudSavedAt = cached.savedAt;
+    view.cloudNotice = undefined;
+    view.status.textContent = this.#readyText(view);
+    this.#render(view);
+    return true;
+  }
+
+  async #cloud(view: ComparisonView, refresh = false): Promise<void> {
     const prepared = view.prepared;
     if (!prepared || !this.#current(view) || view.cloudButton.disabled) return;
-    view.cloudPending = true;
-    view.cloudButton.disabled = true;
+    const revision = ++view.cloudRevision;
+    this.#busy(view, true);
+    view.cloudNotice = undefined;
     view.status.textContent = this.#text('processing');
     try {
       const endpoint = view.endpoint.value.trim();
-      const parser = oxrDocumentParser({
-        baseURL: endpoint,
-        apiKey: view.key.value,
-        readPDF: () => prepared.pdf.read(),
-        request: requestDocumentJSON,
-      });
+      const parser = this.#parser(view);
+      if (!refresh) {
+        try {
+          if (await this.#readCloud(view, parser, revision)) return;
+        } catch {
+          this.#host.debug('Document analysis cache lookup unavailable');
+        }
+      }
+      if (!this.#cloudCurrent(view, revision)) return;
       const result = await analyzeDocument(parser, prepared.source, { signal: view.abort.signal });
-      if (!this.#current(view)) return;
+      if (!this.#cloudCurrent(view, revision)) return;
       if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
-      if (!this.#current(view)) return;
+      if (!this.#cloudCurrent(view, revision)) return;
       this.#host.preferences.set(ENDPOINT_KEY, endpoint);
       view.cloud = result;
+      view.cloudState = 'unsaved';
+      view.cloudSavedAt = undefined;
       this.#render(view);
-      view.status.textContent = this.#text('ready');
+      if (parser.cacheKey) {
+        try {
+          const saved = await prepared.cache.write(
+            prepared.source,
+            parser.cacheKey,
+            result,
+            async () =>
+              this.#cloudCurrent(view, revision) &&
+              (await prepared.pdf.isCurrent()) &&
+              this.#cloudCurrent(view, revision),
+          );
+          if (!this.#cloudCurrent(view, revision)) return;
+          view.cloudState = saved ? 'saved' : 'unsaved';
+        } catch {
+          this.#host.debug('Document analysis cache write unavailable');
+        }
+      }
+      if (this.#cloudCurrent(view, revision)) {
+        view.status.textContent = this.#readyText(view);
+        this.#render(view);
+      }
     } catch (error) {
-      if (this.#current(view)) view.status.textContent = String(error);
+      if (this.#cloudCurrent(view, revision)) {
+        view.cloudNotice = String(error);
+        view.status.textContent = view.cloudNotice;
+      }
     } finally {
-      view.cloudPending = false;
-      if (this.#current(view)) view.cloudButton.disabled = false;
+      if (this.#cloudCurrent(view, revision)) this.#busy(view, false);
     }
   }
 
@@ -330,6 +472,13 @@ export class ReaderDocumentComparison {
         const summary = doc.createElementNS(H, 'p');
         summary.textContent = `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${(result.durationMs / 1000).toFixed(1)}s`;
         section.append(summary);
+        if (result === view.cloud && view.cloudState) {
+          const cache = doc.createElementNS(H, 'p');
+          cache.textContent =
+            this.#readyText(view) +
+            (view.cloudSavedAt ? ` · ${new Date(view.cloudSavedAt).toLocaleString()}` : '');
+          section.append(cache);
+        }
         for (const group of result.objectGroups.slice(0, 500)) {
           section.append(
             comparisonTarget(

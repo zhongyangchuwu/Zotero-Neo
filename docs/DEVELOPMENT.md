@@ -225,6 +225,10 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；请求体、凭据不进入日志或结果。导航模块中的 `ReaderDocumentComparison` 拥有显式处理、对照界面和迟到结果隔离。原生与云端结果独立，取消本地请求不承诺远端停止计算；SDK 原生提取不可取消。API 密钥只存在于本次界面。表格 HTML 使用宿主纯文本转换器展示，不插入后端 HTML 或加载其中资源。
 
+`document-analysis/cache.ts` 定义外部解析缓存契约、明确的非秘密配置身份及完整数据校验；`platform/document-analysis-cache.ts` 使用 Zotero 公共文件 API 读写、Gecko `IOUtils.move` 精确提交隐藏文件名，在附件存储目录保存 `.zotero-neo-analysis-<配置摘要>.json`，链接 PDF 也使用 Zotero 的附件目录，不写外部源文件旁。每项配置仅保留最后一次成功提交的结果，包含来源文件哈希、页面几何、后端、适配器版本、已知模型版本和保存时间。缓存格式版本、区域种类、唯一身份与完整坐标均校验；32 MiB 文件上限与 100000 区域上限避免无界载入。损坏或不匹配的缓存视为未命中，打开面板不会因此自动上传。
+
+写入按目标文件串行，先写唯一暂存文件，再次检查精确调用寿命及 PDF 来源，最后原子替换；取消、失效或写入失败保留旧结果。临时文件由写入调用清理，已开始的最终替换不因后续界面关闭而撤销。仅投影保存 `ParsedDocument` 的已知字段，不保存凭据、原始响应或派生 `objectGroups`；读取后复用 `analyzeParsedDocument()` 按当前算法关联图表。原生 SDT 缓存仍由 Zotero 单独管理，不重复保存或改写其来源元数据。当前外部缓存使用 OXR，MinerU 尚未接入插件；PDF 内嵌缓存和跨设备同步不在本实现范围。
+
 后续阶段后端应继续消费这些显式产物及来源坐标；不通过修改全局 SDT 缓存或伪造 textMap 接入原生 Reading Mode。当前尚未实现外部结构替换、跨后端布局／识别阶段编排和跨页图表关联。
 
 

@@ -162,27 +162,37 @@ export function oxrMultipart(bytes: Uint8Array, apiKey: string, boundary: string
   return body;
 }
 
+function oxrEndpoint(baseURL: string): string {
+  const url = new URL(baseURL);
+  if (
+    !['https:', 'http:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    throw new Error('Invalid OXR API address');
+  return url.href.replace(/\/$/u, '');
+}
+
 export function oxrDocumentParser(options: OXRParserOptions): DocumentParser {
+  const endpoint = oxrEndpoint(options.baseURL);
   return {
     id: 'oxr',
+    cacheKey: {
+      backend: 'oxr',
+      adapterVersion: 1,
+      configuration: JSON.stringify({ endpoint, outputFormats: ['json'], keepHeaderFooter: true }),
+    },
     capabilities: ['layout', 'text', 'reading-order', 'tables'],
     async parse(source, { signal }) {
       checkParseCurrent(signal);
-      const url = new URL(options.baseURL);
-      if (
-        !['https:', 'http:'].includes(url.protocol) ||
-        url.username ||
-        url.password ||
-        url.search ||
-        url.hash
-      )
-        throw new Error('Invalid OXR API address');
       const started = Date.now(),
         bytes = await options.readPDF();
       checkParseCurrent(signal);
       const boundary = `neo-document-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const payload = await options.request({
-        url: `${url.href.replace(/\/$/u, '')}/parse/sync`,
+        url: `${endpoint}/parse/sync`,
         body: oxrMultipart(bytes, options.apiKey, boundary),
         contentType: `multipart/form-data; boundary=${boundary}`,
         signal,
