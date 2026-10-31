@@ -1,3 +1,4 @@
+import { mineruCredentialField, type MinerUCredentialField } from '../../ui/mineru-credentials';
 import type { PreferenceStore } from '../../core/preference-store';
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
@@ -88,6 +89,7 @@ interface ComparisonView {
   readonly endpoint: HTMLInputElement;
   readonly provider: HTMLSelectElement;
   readonly key: HTMLInputElement;
+  readonly credentials: MinerUCredentialField;
   readonly abort: AbortController;
   readonly untheme: () => void;
   prepared?: {
@@ -170,19 +172,19 @@ export class ReaderDocumentComparison {
     provider.value =
       this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
     endpoint.hidden = provider.value === 'mineru';
-    const key = element('input');
-    key.type = 'password';
-    key.autocomplete = 'off';
-    key.placeholder = this.#text('key');
-    key.setAttribute('aria-label', this.#text('key'));
-    key.value = provider.value === 'oxr' ? 'dummy' : '';
+    const credentials = mineruCredentialField(
+        doc,
+        this.#host.language,
+        provider.value === 'mineru',
+      ),
+      key = credentials.input;
     const cloudButton = comparisonButton(doc, this.#text('parseCloud'));
     cloudButton.disabled = true;
     const refreshButton = comparisonButton(doc, this.#text('refreshCloud'));
     refreshButton.disabled = true;
     const copy = comparisonButton(doc, this.#text('copyReport'));
     const close = comparisonButton(doc, this.#text('close'));
-    controls.append(provider, endpoint, key, cloudButton, refreshButton, copy, close);
+    controls.append(provider, endpoint, credentials.root, cloudButton, refreshButton, copy, close);
     const status = element('p', this.#text('preparing'));
     status.setAttribute('role', 'status');
     const results = element('div');
@@ -199,6 +201,7 @@ export class ReaderDocumentComparison {
       endpoint,
       provider,
       key,
+      credentials,
       cloudButton,
       refreshButton,
       cloudRevision: 0,
@@ -224,7 +227,7 @@ export class ReaderDocumentComparison {
     });
     provider.addEventListener('change', () => {
       endpoint.hidden = provider.value === 'mineru';
-      key.value = provider.value === 'oxr' ? 'dummy' : '';
+      credentials.setMinerU(provider.value === 'mineru');
       this.#host.preferences.set(DOCUMENT_PROVIDER_KEY, provider.value);
       void this.#restoreCloud(view);
     });
@@ -289,6 +292,7 @@ export class ReaderDocumentComparison {
     if (!view) return;
     const cleanup = new CleanupFailure();
     cleanup.run(() => view.abort.abort());
+    cleanup.run(() => view.credentials.dispose());
     cleanup.run(view.untheme);
     cleanup.run(() => view.backdrop.remove());
     cleanup.rethrow();
@@ -353,7 +357,8 @@ export class ReaderDocumentComparison {
   #busy(view: ComparisonView, busy: boolean): void {
     view.cloudPending = busy;
     view.cloudButton.disabled = view.refreshButton.disabled = busy || !view.prepared;
-    view.endpoint.disabled = view.key.disabled = view.provider.disabled = busy;
+    view.endpoint.disabled = view.provider.disabled = busy;
+    view.credentials.setDisabled(busy);
   }
 
   #parser(view: ComparisonView): DocumentParser {
@@ -508,7 +513,7 @@ export class ReaderDocumentComparison {
       }
       if (result) {
         const summary = doc.createElementNS(H, 'p');
-        summary.textContent = `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${(result.durationMs / 1000).toFixed(1)}s`;
+        summary.textContent = `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${this.#text('elapsed')} ${(result.durationMs / 1000).toFixed(1)}s`;
         section.append(summary);
         if (result === view.cloud && view.cloudState) {
           const cache = doc.createElementNS(H, 'p');

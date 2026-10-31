@@ -76,7 +76,7 @@ import {
   closeMainAdvancedSearch,
 } from '../toolkit/main';
 import { mainCursorItem } from './action-targets';
-import { MAIN_ITEM_TARGET } from './main-item-target';
+import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
 import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
 import { MainItemStateDecoration } from './item-state-decoration';
@@ -640,6 +640,7 @@ export class MainWindowController implements MainWindowControllerApi {
     failure.run(() =>
       this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`),
     );
+    failure.run(() => this.#dependencies.documentPreparation?.closeOwner(window));
     if (modules) failure.run(() => modules.scope.dispose());
     failure.run(() => decoration?.dispose());
     failure.run(() => session.dispose());
@@ -945,6 +946,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
+    if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
       return;
@@ -1362,6 +1364,23 @@ export class MainWindowController implements MainWindowControllerApi {
             if (this.#sessions.get(window) === session)
               this.execute(nextAction, window, session, nextCount);
           },
+        });
+        break;
+      }
+      case 'prepareDocuments': {
+        const targets = resolveMainDocumentAttachments(
+          window,
+          this.worksetsModule(session)?.selection ?? null,
+          this.worksetsModule(session)?.isVisual
+            ? this.worksetsModule(session)?.currentTarget()
+            : undefined,
+        );
+        this.#dependencies.documentPreparation?.open({
+          window,
+          targets,
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root) => session.theme.add(root),
+          isCurrent: () => this.#sessions.get(window) === session && !session.cleanup.disposed,
         });
         break;
       }

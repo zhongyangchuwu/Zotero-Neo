@@ -17,6 +17,7 @@ export const MAIN_NORMAL_ACTIONS = Object.freeze([
   'mainAdvancedSearch',
   ...EXTENSIONS_SURFACE_ACTIONS,
   'openNeoSettings',
+  'prepareDocuments',
   'manageSelection',
   'navigateBack',
   'navigateForward',

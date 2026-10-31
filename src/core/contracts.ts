@@ -1,3 +1,4 @@
+import type { DocumentPreparationPort } from '../document-analysis/preparation-controller';
 import type { ActionId } from '../input/actions';
 import type { BindingMap, BindingContext } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
@@ -113,6 +114,7 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 }
 
 export interface ReaderControllerDependencies {
+  readonly documentPreparation?: DocumentPreparationPort;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
@@ -120,6 +122,7 @@ export interface ReaderControllerDependencies {
 }
 
 export interface MainWindowControllerDependencies {
+  readonly documentPreparation?: DocumentPreparationPort;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;

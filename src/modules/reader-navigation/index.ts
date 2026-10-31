@@ -15,6 +15,7 @@ import { ReaderMarks, type MarksHost } from './marks';
 import { ReaderNativeSidebar, type ReaderNativeSidebarHost } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
 import { readReaderDocumentCache } from './document-cache';
+import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
 import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from './document-settings';
 import { t } from '../../i18n';
 import {
@@ -142,6 +143,8 @@ export function createReaderNavigationModule(
       if (loaded) void captions.load();
     };
     const preferences = ports.documentComparison?.preferences;
+    if (ports.reader.itemID)
+      scope.add(observeAttachmentDocumentCache(ports.reader.itemID, refreshAnalysis));
     for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
       const stop = preferences?.observe?.(key, refreshAnalysis);
       if (stop) scope.add(stop);
@@ -188,7 +191,6 @@ export function createReaderNavigationModule(
           debug: ports.debug,
           reader: ports.reader,
           isCurrent: () => scope.isCurrent(),
-          onCacheSaved: refreshAnalysis,
           focusReader: () => {
             const window = ports.navigationHost.activePdfWindow();
             if (ports.markViewCurrent(window)) window.focus();

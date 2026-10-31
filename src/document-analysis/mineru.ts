@@ -4,7 +4,6 @@ import {
   documentRegionFlow,
   record,
   type DocumentParser,
-  type DocumentCacheKey,
   type DocumentRegion,
   type DocumentRegionKind,
   type DocumentSource,
@@ -13,8 +12,12 @@ import {
 import { rasterPDFRect } from './geometry';
 import type { DocumentServiceTransport } from './transport';
 
-const API = 'https://mineru.net/api/v4';
-const SETTINGS = { model_version: 'vlm', enable_table: true, enable_formula: true, language: 'en' };
+import {
+  mineruClient,
+  mineruDocumentCacheKey,
+  MINERU_MAX_PAGES,
+  MINERU_MAX_BYTES,
+} from './mineru-client';
 const KINDS: Readonly<Record<string, DocumentRegionKind>> = {
   text: 'text',
   title: 'heading',
@@ -159,31 +162,7 @@ export function mineruParsedDocument(
   };
 }
 
-/** Signed storage URLs never receive API credentials, and are not included in results or errors. */
-function storageURL(value: unknown): string {
-  if (typeof value !== 'string') throw new Error('Invalid MinerU storage URL');
-  const url = new URL(value);
-  if (url.protocol !== 'https:' || url.username || url.password || url.hash)
-    throw new Error('Invalid MinerU storage URL');
-  return url.href;
-}
-
-function serviceData(payload: unknown): Readonly<Record<string, unknown>> {
-  const envelope = record(payload),
-    data = record(envelope?.data);
-  if (envelope?.code !== 0 || !data)
-    throw new Error('MinerU service rejected the request; check your token and quota');
-  return data;
-}
-
-/** Non-secret identity is shared by cache consumers without constructing a network parser. */
-export function mineruDocumentCacheKey(): DocumentCacheKey {
-  return {
-    backend: 'mineru',
-    adapterVersion: 1,
-    configuration: JSON.stringify({ endpoint: API, ...SETTINGS }),
-  };
-}
+export { mineruDocumentCacheKey } from './mineru-client';
 
 /** One PDF uses the batch upload protocol, so upload/task/normalization do not need a second implementation. */
 export function mineruDocumentParser(options: MinerUParserOptions): DocumentParser {
@@ -196,75 +175,29 @@ export function mineruDocumentParser(options: MinerUParserOptions): DocumentPars
       checkParseCurrent(signal);
       if (!options.apiKey.trim() || /[\r\n]/u.test(options.apiKey))
         throw new Error('MinerU API token required');
-      if (source.pages.length > 200)
+      if (source.pages.length > MINERU_MAX_PAGES)
         throw new Error('MinerU cloud supports up to 200 pages per PDF');
       const started = Date.now(),
         bytes = await options.readPDF();
       checkParseCurrent(signal);
-      if (bytes.byteLength > 200 * 1024 * 1024) throw new Error('MinerU PDF exceeds 200 MB');
-      const headers = { Authorization: `Bearer ${options.apiKey.trim()}` };
+      if (bytes.byteLength > MINERU_MAX_BYTES) throw new Error('MinerU PDF exceeds 200 MB');
+      const client = mineruClient(options.apiKey, transport);
       const dataID = 'document';
       options.onProgress?.('uploading');
-      const data = serviceData(
-        await transport.requestJSON({
-          url: `${API}/file-urls/batch`,
-          body: JSON.stringify({ files: [{ name: 'document.pdf', data_id: dataID }], ...SETTINGS }),
-          contentType: 'application/json',
-          headers,
-          signal,
-        }),
-      );
-      checkParseCurrent(signal);
-      if (
-        typeof data.batch_id !== 'string' ||
-        !data.batch_id ||
-        !Array.isArray(data.file_urls) ||
-        data.file_urls.length !== 1
-      )
-        throw new Error('Invalid MinerU upload receipt');
-      await transport.upload({
-        url: storageURL(data.file_urls[0]),
-        method: 'PUT',
-        body: bytes,
-        signal,
-      });
-      checkParseCurrent(signal);
+      const receipt = await client.submit([dataID], signal);
+      await client.upload(receipt.uploads[0]!.url, bytes, signal);
       for (let attempt = 0; attempt < 180; attempt++) {
-        const status = serviceData(
-          await transport.requestJSON({
-            url: `${API}/extract-results/batch/${encodeURIComponent(data.batch_id)}`,
-            method: 'GET',
-            headers,
-            signal,
-          }),
-        );
-        checkParseCurrent(signal);
-        const entries = status.extract_result;
-        if (!Array.isArray(entries) || entries.length !== 1)
-          throw new Error('Invalid MinerU task receipt');
-        const entry = record(entries[0]);
-        if (entry?.data_id !== dataID) throw new Error('MinerU returned a different document');
+        const entries = await client.poll(receipt.batchID, signal);
+        if (entries.length !== 1 || entries[0]?.dataID !== dataID)
+          throw new Error('MinerU returned a different document');
+        const entry = entries[0];
         if (entry.state === 'failed') throw new Error('MinerU could not parse this PDF');
         if (entry.state === 'done') {
           options.onProgress?.('downloading');
-          const archive = await transport.download({
-            url: storageURL(entry.full_zip_url),
-            method: 'GET',
-            signal,
-          });
-          checkParseCurrent(signal);
-          const layout = await transport.readArchive(archive, 'layout.json', signal);
-          checkParseCurrent(signal);
+          const layout = await client.layout(entry, signal);
           return mineruParsedDocument(source, layout, Date.now() - started);
         }
-        if (!['waiting-file', 'pending', 'running', 'converting'].includes(String(entry.state)))
-          throw new Error('Unsupported MinerU task state');
-        const progress = record(entry.extract_progress);
-        options.onProgress?.(
-          String(entry.state),
-          typeof progress?.extracted_pages === 'number' ? progress.extracted_pages : undefined,
-          typeof progress?.total_pages === 'number' ? progress.total_pages : undefined,
-        );
+        options.onProgress?.(entry.state, entry.completedPages, entry.totalPages);
         await transport.wait(3000, signal);
         checkParseCurrent(signal);
       }

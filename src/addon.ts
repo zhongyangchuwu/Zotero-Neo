@@ -1,3 +1,4 @@
+import { DocumentPreparationController } from './document-analysis/preparation-controller';
 import type {
   CommandPaletteContext,
   MainWindow,
@@ -47,6 +48,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#logger,
     moduleStartupFlags(this.#preferences),
   );
+  readonly #preparation = new DocumentPreparationController((message) =>
+    this.#logger.debug(message),
+  );
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -57,6 +61,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
       modules: this.#modules,
+      documentPreparation: this.#preparation,
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
@@ -85,6 +90,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     });
     this.#main = createMainWindowController({
       modules: this.#modules,
+      documentPreparation: this.#preparation,
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
@@ -119,6 +125,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     if (host.Neo === this.api) delete host.Neo;
     this.#context = null;
     const failure = new CleanupFailure();
+    failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#reader.shutdown());
     failure.run(() => this.#main.shutdown());
     failure.rethrow();

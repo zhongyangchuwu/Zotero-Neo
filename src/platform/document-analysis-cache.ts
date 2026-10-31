@@ -5,9 +5,23 @@ import {
   type DocumentResultCache,
 } from '../document-analysis/cache';
 import type { DocumentCacheKey } from '../document-analysis/contracts';
+import { ZoteroLogger } from '../core/logging';
 
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 const pendingWrites = new Map<string, Promise<unknown>>();
+const observers = new Map<number, Set<() => void>>();
+const logger = new ZoteroLogger();
+
+/** Reader owners subscribe once; any single/batch writer can retire their memoized navigation targets after commit. */
+export function observeAttachmentDocumentCache(itemID: number, saved: () => void): () => void {
+  const listeners = observers.get(itemID) ?? new Set<() => void>();
+  listeners.add(saved);
+  observers.set(itemID, listeners);
+  return () => {
+    listeners.delete(saved);
+    if (!listeners.size) observers.delete(itemID);
+  };
+}
 
 /** Zotero.File.rename sanitizes leading dots; commit the exact cache path with Gecko's move API. */
 async function commitCacheFile(stage: string, destination: string): Promise<void> {
@@ -67,7 +81,16 @@ export function attachmentDocumentCache(itemID: number): DocumentResultCache {
         });
       pendingWrites.set(file.path, task);
       try {
-        return await task;
+        const saved = await task;
+        if (saved)
+          for (const observer of observers.get(itemID) ?? []) {
+            try {
+              observer();
+            } catch {
+              logger.debug('Document cache presentation could not refresh');
+            }
+          }
+        return saved;
       } finally {
         if (pendingWrites.get(file.path) === task) pendingWrites.delete(file.path);
       }

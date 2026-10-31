@@ -104,7 +104,7 @@ import {
   type ReaderOwnedCompletion,
   type ReaderOwnedNavigation,
 } from '../toolkit';
-import { READER_ITEM_TARGET } from './item-target';
+import { resolveReaderDocumentAttachments, READER_ITEM_TARGET } from './item-target';
 import { smoothScrollSpec } from '../modules/reader-navigation/smooth-scroll';
 import {
   COLORS,
@@ -1149,6 +1149,11 @@ export class ReaderSession {
     const failure = new CleanupFailure();
     failure.run(() => this.clearNativeSelection());
     failure.run(() => this.#nativeInput.release());
+    failure.run(() => {
+      const window = readerWindow(this.#dependencies.reader);
+      if (window)
+        this.#dependencies.controller.dependencies.documentPreparation?.closeOwner(window);
+    });
     failure.run(() => this.#viewLifecycle.dispose());
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
@@ -1302,6 +1307,7 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
+    if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#navigationModule?.handleKey(event)) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
       this.input.reset();
@@ -1590,6 +1596,18 @@ export class ReaderSession {
       case 'managePlugins':
         main.openPluginManager(ownerWindow);
         return;
+      case 'prepareDocuments': {
+        const window = readerWindow(this.#dependencies.reader);
+        if (window)
+          this.#dependencies.controller.dependencies.documentPreparation?.open({
+            window,
+            targets: resolveReaderDocumentAttachments(this.#dependencies.reader),
+            language: () => this.keyGuideLanguage(),
+            themeRoot: (root) => this.themeRoot(root),
+            isCurrent: () => !this.#scope.disposed,
+          });
+        return;
+      }
       case 'openNeoSettings':
         main.openSettingsFromReader(ownerWindow);
         return;
