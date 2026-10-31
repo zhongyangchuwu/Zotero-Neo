@@ -202,13 +202,15 @@ export class ReaderNavigation {
   }
 
   /** A caption choice uses the exact active view's native position/history producer. */
-  async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<void> {
+  async navigateCaption(target: ReaderCaptionTarget, pdfWindow: PdfWindow): Promise<boolean> {
     if (
       !(await this.#dependencies.captions.sourceCurrent(target)) ||
-      this.#host.activePdfWindow() !== pdfWindow
+      this.#host.activePdfWindow() !== pdfWindow ||
+      !this.#host.canNavigate(pdfWindow)
     )
-      return;
+      return false;
     await this.#host.navigateToRegion(pdfWindow, target.location);
+    return true;
   }
 
   toggleReadingMode(window: PdfWindow): Promise<void> {

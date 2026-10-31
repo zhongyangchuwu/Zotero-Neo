@@ -15,7 +15,7 @@ import {
 import { asElement, isEditableElement } from '../../platform/dom';
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
 import { THEME_VARS } from '../../ui/theme';
-import { fuzzyMatchScore } from '../../main/picker/fuzzy';
+import { fuzzyMatchScore } from '../../ui/fuzzy';
 import {
   installedPlugins,
   openPluginInfoURL,

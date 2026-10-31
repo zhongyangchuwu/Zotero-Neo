@@ -2,6 +2,11 @@ export function cloneInto<T extends object>(value: T, targetWindow: Window): T {
   return Components.utils.cloneInto(value, targetWindow) as T;
 }
 
+/** Preserve content-owned canvas reflectors while cloning renderer options into their own realm. */
+export function cloneIntoWithReflectors<T extends object>(value: T, targetWindow: Window): T {
+  return Components.utils.cloneInto(value, targetWindow, { wrapReflectors: true }) as T;
+}
+
 /** Canonicalizes native objects whose chrome wrappers differ across callback/getter boundaries. */
 export function nativeObjectIdentity<T extends object>(value: T): T {
   return Components.utils.waiveXrays(value) as T;

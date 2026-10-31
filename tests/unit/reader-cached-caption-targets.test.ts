@@ -63,6 +63,12 @@ describe('cached graph targets', () => {
           e.source === 'cache',
       ),
     ).toBe(true);
+    const bodies = t.targets.bodies;
+    expect(bodies).toHaveLength(3);
+    expect(
+      bodies.every((body) => body.part === 'body' && body.location.position.rects.length === 1),
+    ).toBe(true);
+    expect(await t.targets.sourceCurrent(bodies[0])).toBe(true);
     await t.targets.loadHeadings();
     expect(
       t.targets.headingPosition({
@@ -71,6 +77,7 @@ describe('cached graph targets', () => {
       }),
     ).toEqual({ pageIndex: 0, rects: [[50, 720, 300, 750]] });
     expect(t.targets.entries).toBe(entries);
+    expect(t.targets.bodies).toBe(bodies);
     await t.targets.load();
     expect(t.read).toHaveBeenCalledTimes(1);
     expect(t.native).toHaveBeenCalledTimes(1);
@@ -94,6 +101,7 @@ describe('cached graph targets', () => {
   it('rechecks file/service identity before using cached targets and retires old choices', async () => {
     const t = harness(),
       old = (await t.targets.load())[0]!;
+    const oldBody = t.targets.bodies[0]!;
     expect(await t.targets.sourceCurrent(old)).toBe(true);
     t.current.mockResolvedValue(false);
     t.read.mockResolvedValue(null);
@@ -101,6 +109,8 @@ describe('cached graph targets', () => {
     expect(t.targets.entries).toEqual([]);
     expect(t.native).toHaveBeenCalledTimes(1);
     expect(await t.targets.sourceCurrent(old)).toBe(false);
+    expect(await t.targets.sourceCurrent(oldBody)).toBe(false);
+    expect(t.targets.bodies).toEqual([]);
   });
   it('allows an explicit saved result to supersede an old lookup and contains disposal', async () => {
     const t = harness(),

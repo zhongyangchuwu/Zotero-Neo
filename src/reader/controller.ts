@@ -724,6 +724,7 @@ export class ReaderSession {
                 this.#navigationHost.pageNavigationSupported(pdfWindow),
               onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
             },
+            captureView: (window) => this.invocationCurrent(window, null),
             beginCaptionJump: (pdfWindow) => {
               if (
                 this.#scope.disposed ||
@@ -873,6 +874,7 @@ export class ReaderSession {
           this.#interactionRevision += 1;
           if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
           const failure = new CleanupFailure();
+          failure.run(() => this.#navigationModule?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
           failure.run(() => this.#hints?.copy.releaseView(pdfWindow));
@@ -1189,6 +1191,7 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
+    this.#navigationModule?.deactivate();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
     this.#sidebar?.deactivate();

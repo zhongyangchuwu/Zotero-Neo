@@ -15,6 +15,7 @@ export function isReaderNavigationAction(action: ActionId): action is ReaderNavi
 }
 
 export interface ReaderNavigationActionPorts {
+  readonly openFigurePicker: (window: PdfWindow) => void;
   readonly openDocumentComparison: () => void;
   readonly executeNavigation: (
     window: PdfWindow,
@@ -74,6 +75,9 @@ export function bindReaderNavigationActions(
           });
         };
         switch (action) {
+          case 'openFigurePicker':
+            ports.openFigurePicker(window);
+            break;
           case 'compareDocumentParsing':
             ports.openDocumentComparison();
             break;

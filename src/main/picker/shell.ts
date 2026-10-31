@@ -13,7 +13,7 @@ import type { MainWindowSession } from '../session';
 import { MainNavigation } from '../navigation';
 import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
-import { fuzzyMatchScore } from './fuzzy';
+import { fuzzyMatchScore } from '../../ui/fuzzy';
 import { itemRowText } from './item-row';
 import { createCommandsProvider } from './providers/commands';
 
