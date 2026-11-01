@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "paper": {
+    "id": "deepseek-ocr-2510.18234v1",
+    "fingerprint": "f842cb8a74e708bc35b3463c7ab1ee76",
+    "title": "DeepSeek-OCR",
+    "subtitle": "Contexts Optical Compression",
+    "authors": "Haoran Wei · Yaofeng Sun · Yukun Li",
+    "sourceURL": "https://arxiv.org/abs/2510.18234",
+    "pdfURL": "https://arxiv.org/pdf/2510.18234v1",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "section": "3.2.2 Multiple resolution support"
+  },
+  "blocks": [
+    {
+      "id": "p46",
+      "text": "Suppose we have an image with 1000 optical characters and we want to test how many vision tokens are needed for decoding. This requires the model to support a variable number of vision tokens. That is to say the DeepEncoder needs to support multiple resolutions.",
+      "page": 6,
+      "rects": [[70.87, 306.51, 524.41, 344.1]]
+    },
+    {
+      "id": "p47",
+      "text": "We meet the requirement aforementioned through dynamic interpolation of positional encodings, and design several resolution modes for simultaneous model training to achieve the capability of a single DeepSeek-OCR model supporting multiple resolutions. As shown in Figure 4, DeepEncoder mainly supports two major input modes: native resolution and dynamic resolution. Each of them contains multiple sub-modes.",
+      "page": 6,
+      "rects": [[70.87, 231.99, 524.42, 296.68]]
+    },
+    {
+      "id": "p48",
+      "text": "Native resolution supports four sub-modes: Tiny, Small, Base, and Large, with corresponding resolutions and token counts of 512×512 (64), 640×640 (100), 1024×1024 (256), and 1280×1280 (400) respectively. Since Tiny and Small modes have relatively small resolutions, to avoid wasting vision tokens, images are processed by directly resizing the original shape. For Base and Large modes, in order to preserve the original image aspect ratio, images are padded to the corresponding size. After padding, the number of valid vision tokens is less than the actual number of vision tokens, with the calculation formula being:",
+      "page": 6,
+      "rects": [[70.41, 130.37, 524.41, 222.16]]
+    },
+    {
+      "id": "p52",
+      "text": "Dynamic resolution can be composed of two native resolutions. For example, Gundam mode consists of n×640×640 tiles (local views) and a 1024×1024 global view. The tiling method following InternVL2.0 [8]. Supporting dynamic resolution is mainly for application considerations, especially for ultra-high-resolution inputs (such as newspaper images). Tiling is a form of secondary window attention that can effectively reduce activation memory further. It’s worth noting that due to our relatively large native resolutions, images won’t be fragmented too much under dynamic resolution (the number of tiles is controlled within the range of 2 to 9). The vision token number output by the DeepEncoder under Gundam mode is: n× 100 + 256, where n is the number of tiles. For images with both width and height smaller than 640, n is set to 0, i.e., Gundam mode will degrade to Base mode.",
+      "page": 7,
+      "rects": [[70.56, 620.87, 526.22, 753.31]]
+    },
+    {
+      "id": "p53",
+      "text": "Gundam mode is trained together with the four native resolution modes to achieve the goal of one model supporting multiple resolutions. Note that Gundam-master mode (1024×1024 local views+1280×1280 global view) is obtained through continued training on a trained DeepSeek-OCR model. This is mainly for load balancing, as Gundam-master’s resolution is too large and training it together would slow down the overall training speed.",
+      "page": 7,
+      "rects": [[70.56, 546.35, 526.22, 611.04]]
+    }
+  ],
+  "pages": [
+    {
+      "page": 6,
+      "width": 595.276,
+      "height": 841.89,
+      "image": "assets/page-6.png"
+    },
+    {
+      "page": 7,
+      "width": 595.276,
+      "height": 841.89,
+      "image": "assets/page-7.png"
+    }
+  ],
+  "table": {
+    "id": "table1",
+    "page": 6,
+    "rects": [
+      [67.03107899159663, 487.51537455410227, 527.2444571428571, 514.5439476813318],
+      [99.04592268907562, 392.41483947681326, 493.2286857142857, 478.5058501783591]
+    ],
+    "image": "assets/table-1.png"
+  },
+  "equation": {
+    "id": "equation1",
+    "page": 6,
+    "rects": [[152.24, 106.16, 439.82, 116.95]],
+    "image": "assets/equation-1.png"
+  },
+  "records": [
+    {
+      "id": "summary",
+      "kind": "summary",
+      "title": "本节要点",
+      "text": "通过多种分辨率控制视觉 token 数，适配研究和应用需求。\n原生模式覆盖 64—400 个视觉 token；动态模式将局部图块与全局图像结合。\n不同模式对缩放与填充的选择不同，阅读实验结果时应同时核对模式与 token 预算。",
+      "targets": ["p47", "p48", "p52"]
+    },
+    {
+      "id": "qa-native",
+      "kind": "question",
+      "title": "Base 和 Large 各使用多少视觉 token？",
+      "text": "Base 对应 1024×1024、256 个视觉 token；Large 对应 1280×1280、400 个视觉 token。填充图像的有效 token 数可能更少。",
+      "targets": ["table1", "p48"]
+    },
+    {
+      "id": "qa-dynamic",
+      "kind": "question",
+      "title": "Gundam 的局部图块和全局图像分辨率是什么？",
+      "text": "局部图块为 640×640，全局图像为 1024×1024；token 预算为 n×100＋256。原文还说明，当宽和高均小于 640 时，n＝0，退化为 Base 模式。",
+      "targets": ["p52"]
+    },
+    {
+      "id": "translation-p48",
+      "kind": "translation",
+      "title": "原生分辨率模式 · 中文译文",
+      "text": "原生分辨率有 Tiny、Small、Base 和 Large 四种模式，分别对应 512×512（64 个视觉 token）、640×640（100）、1024×1024（256）和 1280×1280（400）。Tiny 和 Small 直接缩放图像；Base 和 Large 通过填充保留长宽比。填充后，有效视觉 token 数会少于实际 token 数。",
+      "targets": ["p48"]
+    },
+    {
+      "id": "translation-p52",
+      "kind": "translation",
+      "title": "动态分辨率模式 · 中文译文",
+      "text": "动态分辨率可以由两种原生分辨率组合而成。例如，Gundam 模式包含 n 个 640×640 的局部图块和一张 1024×1024 的全局图像，面向报纸等超高分辨率输入。图块通常控制在 2 到 9 个，输出 token 数为 n×100＋256。当图像的宽和高均小于 640 时，n 取 0，此时退化为 Base 模式。",
+      "targets": ["p52"]
+    }
+  ]
+}

@@ -109,6 +109,7 @@ export default defineConfig({
     'coverage/**',
     'dist/**',
     'node_modules/**',
+    'prototypes/**',
     'src/**',
     'tests/**',
     'tools/**',
