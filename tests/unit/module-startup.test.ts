@@ -26,9 +26,13 @@ describe('application module startup flags', () => {
     const logger = { debug: vi.fn(), diagnostic: vi.fn() };
     const first = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
     const reloaded = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
-    expect(first.applied).toEqual({ 'reader-hints': false, extensions: true });
+    expect(first.applied).toEqual({ 'reader-hints': false, extensions: true, 'reader-ai': false });
     expect(reloaded.applied).toEqual(first.applied);
-    expect(reloaded.requested()).toEqual({ 'reader-hints': true, extensions: false });
+    expect(reloaded.requested()).toEqual({
+      'reader-hints': true,
+      extensions: false,
+      'reader-ai': true,
+    });
     const owner = {};
     const main = reloaded.createScope('main', owner, () => true);
     const reader = reloaded.createScope(
@@ -45,6 +49,7 @@ describe('application module startup flags', () => {
       }
     }
     expect(reader.activate('reader-hints', vi.fn())).toBeNull();
+    expect(reader.activate('reader-ai', vi.fn())).toBeNull();
     expect(main.activate('extensions', () => ({}))).not.toBeNull();
     const inspected = reloaded.inspect(owner);
     expect(
@@ -61,7 +66,11 @@ describe('application module startup flags', () => {
       logger,
       moduleStartupFlags(preferences),
     );
-    expect(restarted.applied).toEqual({ 'reader-hints': true, extensions: false });
+    expect(restarted.applied).toEqual({
+      'reader-hints': true,
+      extensions: false,
+      'reader-ai': true,
+    });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
   });
 });

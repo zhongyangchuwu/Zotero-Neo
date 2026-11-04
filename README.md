@@ -14,7 +14,7 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 ## 主要功能
 
-- [PDF 阅读与导航](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记。
+- [PDF 阅读、导航与 Reader AI](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记；也可按需解释选区或准备章节导引，预览依据后确认跳回原文，并明确采纳为 Zotero 笔记。
 - [选择文字与批注](docs/SELECTION_GUIDE.md)：输入词句定位选区，调整范围，复制、划线和编辑评论。
 - [文献库与批量整理](docs/MAIN_GUIDE.md)：查找论文、建立临时选择集、整理标签和分类。
 - [笔记](docs/NOTE_GUIDE.md)：查找已有笔记，按需使用 Vim 风格编辑。
@@ -28,4 +28,4 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 项目最初使用了 [Zotero Vim Plus](https://github.com/ZorroStardust/zotero-vim-plus) 的代码，后者包含来自 [zotero-vim](https://codeberg.org/finktank/zotero-vim) 的工作。历史版权声明按项目许可证保留。
 
-许可证：[AGPL-3.0](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/LICENSE)。XPI 的 `LICENSE` 包含项目许可证，`licenses/fuzzysort-LICENSE` 包含所捆绑 fuzzysort 的 MIT 声明。构建包与生成它的源码提交对应；正式发布的二进制文件还应提供同一标签下的源码。
+许可证：[AGPL-3.0](https://github.com/zhongyangchuwu/Zotero-Neo/blob/main/LICENSE)。XPI 中的 `LICENSE` 是项目许可证，`licenses/fuzzysort-LICENSE` 是 fuzzysort 的 MIT 声明；静态打包的 AI SDK 和 React 闭包另附 `licenses/ai-sdk-NOTICE`、`licenses/ai-sdk-provenance.json`、`licenses/react-NOTICE` 与 `licenses/react-provenance.json`。版本、来源与完整依赖闭包见 provenance 文件。XPI 包含生成后的 bundle，不单独分发原始 vendor 包；构建包与生成它的源码提交对应，正式发布的二进制文件还应提供同一标签下的源码。

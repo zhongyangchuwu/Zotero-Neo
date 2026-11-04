@@ -1,12 +1,13 @@
 # 模块拆分与基座能力设计
 
-本文说明 `main` 的当前模块边界。代码分为十一个内部功能区；`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 九个核心区固定启用，只有 `reader-hints`（链接与复制提示）与 `extensions`（扩展管理面板）是可选增强。运行时所有权见[架构](ARCHITECTURE.md)；可选项配置见[模块设置](SETTINGS_GUIDE.md#开关两项可选功能)。
+本文说明 `main` 的当前模块边界。代码分为 12 个内部功能区，`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 九个核心区固定启用。
+`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）与 `reader-ai`（阅读辅助）是三项可选增强。运行时所有权见[架构](ARCHITECTURE.md)；可选项配置见[模块设置](SETTINGS_GUIDE.md#开关可选功能)。
 
 ## 范围与取舍
 
-采用单 XPI、静态内置模块、统一版本和发布周期。模块表示内部功能所有权分区，不等同于可关闭插件；用户只能选择是否启用 `reader-hints` 与 `extensions` 两项增强。模块化用于隔离功能所有权与生命周期，不建设另一个插件平台。
+采用单 XPI、静态内置模块、统一版本和发布周期。模块表示内部功能所有权分区，不等同于可关闭插件；用户只能选择是否启用 `reader-hints`、`extensions` 与 `reader-ai` 三项增强。模块化用于隔离功能所有权与生命周期，不建设另一个插件平台。
 
-当前实现不包含 AI 模块、Actions & Tags 运行时依赖或脚本执行机制。内部职责划分不改变已声明的按键、数据格式和 Zotero 兼容范围。
+不引入 Actions & Tags 运行时依赖或脚本执行机制。内部职责划分不改变已声明的按键、数据格式和 Zotero 兼容范围。
 
 基座接口服务实际功能调用，不建立没有消费者的空框架。内部模块数量不决定可选项范围。
 
@@ -33,7 +34,8 @@
 - `src/modules/reader-annotations/`：按 ReaderSession 拥有批注创建、删除、改色、过滤、复制及精确视图的评论编辑器，并向 Select 注入下划线和 Add note。Surface 保留 CurrentTarget、NativeInput 与 `i` / `zb` 的混合仲裁；已接纳保存继续完成，旧交互不恢复状态、选择或焦点。
 - `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
 
-`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。十一项均为内部模块分区，其中九个核心区固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 不再关闭核心功能。只有 `reader-hints` 与 `extensions` 的模块偏好控制可选增强；保存请求后需真正重启 Zotero 才应用，Neo 重载沿用本进程已应用快照。现有绑定、行为偏好与公共插件接口保持原义。
+`src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。12 项均为内部模块分区，其中九个核心区固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 不再关闭核心功能；`reader-hints`、`extensions` 与 `reader-ai` 三项模块偏好控制可选增强。`reader-ai` 硬依赖 `reader-selection`。
+保存的可选模块请求需真正重启 Zotero 后才应用；Neo 重载沿用本进程已应用快照。现有绑定、行为偏好与公共插件接口保持原义。
 
 ## Actions & Tags 提供了什么
 
@@ -53,7 +55,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 
 ## 模块目录与所有权
 
-当前包含以下 11 个内置模块。它们是内部所有权边界，不等于 11 个可选开关：`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 是固定启用的核心模块；只有 `reader-hints`（链接与复制提示）与 `extensions`（扩展管理面板）可由用户关闭。表中的路径是实际实现来源；每个模块引用现有命令标识，不重新命名动作。
+当前包含以下 12 个内置模块。它们是内部所有权边界，不等于 12 个可选开关：`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 是固定启用的九个核心模块；`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）与 `reader-ai`（阅读辅助）是三项可选增强。表中的路径是实际实现来源；每个模块引用现有命令标识，不重新命名动作。
 
 | 模块 ID | 用户功能与业务状态 | 当前实现来源 | 实例范围及依赖 |
 | --- | --- | --- | --- |
@@ -65,6 +67,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `reader-selection` | Reader Select、DOM 范围与 motions、Flash、复制/搜索所选文本、Selection Actions 展示及现有公共选择接口的领域实现。 | `src/modules/reader-selection/` | 已按 ReaderSession 接入；范围和界面绑定精确 ReaderView/Document，外部定义由应用级注册表保留。可选 PDFTranslate 对接不变，复制/搜索不依赖导航或批注模块。 |
 | `reader-annotations` | 原生批注创建、删除、改色、颜色过滤、选中批注评论编辑；向 Select 提供高亮、下划线、Add note 等动作。 | `src/modules/reader-annotations/`、`src/operations/delete-annotation.ts` | 已按 ReaderSession 接入，评论交互绑定精确 ReaderView / Document；Select 贡献具名注入，原生批注操作本身不依赖选择模块。CurrentTarget 与 NativeInput 始终由 Surface 提供。 |
 | `reader-hints` | 可选增强“链接与复制提示”：批注 Excerpt/Comment、DOI/arXiv/URL 等可见目标的复制，以及 PDF 链接/标识符跟随。 | `src/modules/reader-hints/` | 已按 ReaderSession 接入，保留精确 ReaderView 与单次提示交互。不依赖 `reader-annotations`：仍可读取 Zotero 已有批注。 |
+| `reader-ai` | 可选阅读辅助：从 Reader Normal 打开面板，提供选区解释、提问和章节证据任务。 | `src/modules/reader-ai/`、`src/reader-ai/`、`src/ai/`、`src/toolkit/reader/ai-panel.ts` | ReaderSession 提供入口和选区；应用级任务与本地成果可在 Reader 关闭后继续处理。硬依赖固定启用的 `reader-selection`。 |
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/modules/notes/`；Surface 输入与身份保留在 `src/main/note-editor.ts`、`note-runtime.ts` | 已按 MainWindow 接入，附着到精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找。 |
 | `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、Show in Library 等跨 Surface 定位。 | `src/modules/workspace/` | 已按 MainWindow / ReaderSession 接入，使用基座导航端口与唯一 Back/Forward 历史；不依赖 Library 或 Reader 导航模块。Main/Note 通用面板焦点含 Note Insert 仍由基座负责。 |
 | `extensions` | 可选增强“扩展管理面板”：已安装 Zotero 扩展的 Plugin Manager，包括筛选、详情、刷新、允许的启停、设置及链接。 | `src/modules/extensions/`；`src/toolkit/main/plugins.ts` | 已按 MainWindow 接入，Main/Reader/Note 进入实际所属窗口的独立面板。不负责 Neo 内部模块管理，也不新增安装、更新或卸载功能。 |
@@ -91,7 +94,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | 宿主能力与订阅 | Toolkit 提供具名的 Main、Note、Reader 能力，管理私有接缝、原生订阅、窗口/视图发现及释放。共享桥接由一个所有者按实际消费者安装。 | 每个模块单独 patch 同一个 PdfView，或把 `_tabs`、原生 tree、PDF/editor 私有对象交给业务代码。 |
 | Picker 与共享 UI 原语 | 共享现有 Picker 的搜索、排序、渲染、预览、IME、焦点、取消及 stale-work 隔离；模块注入候选和确认语义。主题、局部绑定和必要的纯展示辅助按现有模式复用。 | 把 Selection Panel、Plugin Manager、Reader overlay 合并为一个通用面板框架；给候选 provider 增加领域写入。 |
 | 导航与历史 | 保留每个 MainWindow 唯一的历史栈、协调器和 `NavigationPort`。模块请求具体导航并提供完成证据，录制/恢复策略仍由现有导航所有者维护。 | 每个模块各存一份 Back/Forward，或把 marks 数据并入全局导航历史。 |
-| 配置与管理入口 | 同一偏好存储、迁移、Settings、i18n、主题和 logger。Settings 只为 `reader-hints` 与 `extensions` 提供可选开关；核心分区固定启用。 | 第二套设置应用、把行为/存储偏好误当模块开关、把内部模块放进 Plugin Manager，或给共享 Picker 增加开关。 |
+| 配置与管理入口 | 同一偏好存储、迁移、Settings、i18n、主题和 logger。Settings 为 `reader-hints`、`extensions` 与 `reader-ai` 提供可选开关；Reader AI 的服务参数在阅读助手面板配置，不在 Zotero 原生偏好页中配置；九个核心分区固定启用。 | 第二套设置应用、把行为/存储偏好误当模块开关、把内部模块放进 Plugin Manager，或给共享 Picker 增加开关。 |
 | 明确的领域写操作 | `src/operations/` 中的具体操作消费显式条目或 ID；动作所有者负责目标、基数、确认、反馈。公共原生模型/API 可以直接使用。 | 自动扫描全库、通用 CRUD/ORM、统一“尽力成功”的错误吞噬，或用 `saveTx()` 嵌套现有事务。 |
 | 现有公共入口 | 保留 `Zotero.Neo.openSettings` 和 Reader selection API。Selection API 门面稳定，注册定义由领域注册表保留并返回原有 disposer；当前选择无效或实例不可用时 `getSelection()` 返回 `null`，不执行其回调。 | 新的通用第三方模块 SDK；不能因内部目录迁移删除现有选择动作扩展接口。 |
 
@@ -186,23 +189,23 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 
 退出顺序为：先退休 scope / generation，再移除动作入口、取消未接纳交互、注销原生回调与恢复自己拥有的 patch，最后释放其余资源。单个释放失败不能阻止其他资源释放；意外错误记录到共享 logger，不能把失败状态报告为已成功清理。
 
-共享原生桥接由基座按活跃消费者集合保有。关闭一项可选增强只释放它的消费关系，不能注销其他功能仍使用的桥接。基座自身也是消费者，因此关闭 `reader-hints` 与 `extensions` 不等于整个插件不再有任何宿主监听器。
+共享原生桥接由基座按活跃消费者集合保有。关闭一项可选增强只释放它的消费关系，不能注销其他功能仍使用的桥接。基座自身也是消费者，因此关闭 `reader-hints`、`extensions` 与 `reader-ai` 不等于整个插件不再有任何宿主监听器。
 
 ## 可选增强与设置语义
 
-模块偏好沿用 `extensions.zotero-neo.modules.<id>.enabled` 键形，但只有 `extensions.zotero-neo.modules.reader-hints.enabled`（链接与复制提示）与 `extensions.zotero-neo.modules.extensions.enabled`（扩展管理面板）是用户可配置的模块开关，默认均为 `true`。九个核心分区固定启用；已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值被忽略，不会关闭对应功能。
+模块偏好沿用 `extensions.zotero-neo.modules.<id>.enabled` 键形，只有 `extensions.zotero-neo.modules.reader-hints.enabled`（链接与复制提示）、`extensions.zotero-neo.modules.extensions.enabled`（扩展管理面板）与 `extensions.zotero-neo.modules.reader-ai.enabled`（阅读辅助）是用户可配置的模块开关，默认均为 `true`。`reader-ai` 依赖固定启用的 `reader-selection`；九个核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值被忽略，不会关闭对应功能。
 
-可选模块请求只在**真正重启 Zotero** 后应用；关闭设置、重新打开 Reader 或 Neo 热重载都不切换当前运行时图。保存与恢复默认只改动这两个可选增强的请求，不改核心配置、快捷键、行为偏好、marks 或 Zotero 数据。`noteEditor.enabled` 仍只控制 Vim 风格笔记编辑，关闭它不关闭笔记查找；`annotationCommentEditor.enabled`、`marks.persist`、`mode.visual.enabled`、`keyGuide.enabled` 与 `picker.mouse.enabled` 等也继续保留各自原义。
+可选模块请求只在**真正重启 Zotero** 后应用；关闭设置、重新打开 Reader 或 Neo 热重载都不切换当前运行时图。保存与恢复默认只改动这三项可选增强的请求，不改核心配置、快捷键、行为偏好、marks 或 Zotero 数据。`noteEditor.enabled` 仍只控制 Vim 风格笔记编辑，关闭它不关闭笔记查找；`annotationCommentEditor.enabled`、`marks.persist`、`mode.visual.enabled`、`keyGuide.enabled` 与 `picker.mouse.enabled` 等也继续保留各自原义。
 
 | 状态 | Settings 展示 | 当前会话行为 |
 | --- | --- | --- |
 | 已开启且激活成功 | Enabled | 安装该可选模块在当前 scope 支持的贡献。 |
-| 已关闭且未运行 | Disabled | 仅适用于 `reader-hints` 或 `extensions`；不创建增强实例，其绑定不参与匹配或前缀等待。 |
+| 已关闭且未运行 | Disabled | 仅适用于 `reader-hints`、`extensions` 或 `reader-ai`；不创建对应增强实例，其贡献不参与匹配或前缀等待。 |
 | 用户修改可选开关，尚未重启 | 当前状态 + Pending restart；分别显示请求值与已应用值 | 继续使用当前启动时的应用图，不提前删除处理器或假装已经停止。 |
 | 依赖或实际宿主未就绪 | Blocked 或 Pending host，并说明原因 | 不运行受影响的可选贡献；不自动修改其他设置。 |
 | 激活失败 | Failed，显示可读原因并记录详细日志 | 退休该宿主实例的入口并清理已获取资源；该实例不循环重试，新宿主实例或重启 Zotero 可重新激活。 |
 
-Settings 的模块区域只管理这两个可选增强。恢复默认仅清除它们的模块偏好并恢复默认启用请求；核心分区始终开启，原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 始终可用。共享 Picker 属于核心交互基座，没有独立开关。
+Settings 的模块区域只管理这三项可选增强。恢复默认仅清除它们的模块偏好并恢复默认启用请求；核心分区始终开启，原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 始终可用。阅读助手服务参数在 AI 面板配置；共享 Picker 属于核心交互基座，没有独立开关。
 
 ### 异步写入与可用性
 

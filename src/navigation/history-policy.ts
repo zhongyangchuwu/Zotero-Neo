@@ -48,6 +48,7 @@ const EVENT_RULES: Readonly<Record<NavigationEventId, Rule>> = {
   'main-local-find.confirm': (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
   'main-selection-panel.reveal': (intent) => (isItems(intent) ? SETTLED_CHANGE : IGNORE),
   'reader-mark.jump': (intent) => (isReaderPath(intent, 'mark') ? MANAGED_FINAL : IGNORE),
+  'reader-ai.jump': (intent) => (isReaderPath(intent, 'internal-link') ? NATIVE_HARD : IGNORE),
   'reader-native.hard': (intent) => (intent.surface === 'reader' ? NATIVE_HARD : IGNORE),
 };
 

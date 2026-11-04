@@ -17,6 +17,7 @@ export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
     return Object.freeze({
       'reader-hints': previous['reader-hints'],
       extensions: previous.extensions,
+      'reader-ai': previous['reader-ai'] === true,
     });
   }
   const flags = Object.freeze(

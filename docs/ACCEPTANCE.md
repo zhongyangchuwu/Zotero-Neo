@@ -1,6 +1,6 @@
 # main 分支验收指南
 
-本指南用于验证 `main` 分支实际构建的 XPI，包含 U1–U9 场景。每轮在对应变更的 PR 或独立验收记录中保存提交、包身份与实际结果；不沿用其他提交的通过结论。未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
+本指南用于验证 `main` 分支实际构建的 XPI，包含 U1–U10 场景。每轮在对应变更的 PR 或独立验收记录中保存提交、包身份与实际结果；不沿用其他提交的通过结论。未执行项记 `NOT PERFORMED`，仅可选且条件缺失的项目记 `NOT APPLICABLE`。
 
 ## 1. 固定 main 构建与边界
 
@@ -148,17 +148,28 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 ### U9：变更与可选集成
 
-- 模块边界：在一次性 profile 中，将 `library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 各自对应的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）。保存请求前后、Neo 重载后确认当前能力不变；真正重启 Zotero 后确认只关闭两项增强，九个核心仍提供 Main、Reader、Note 与 Workspace 工作流，包括 Main Visual、选择/批注、导航、笔记查找和标签/分类操作。
-- 恢复默认模块请求，只恢复 `reader-hints` 与 `extensions` 两项默认启用值；对照确认九个核心旧值及 `noteEditor.enabled` 等行为偏好未被改写。模块保存与恢复默认都不得改变快捷键、行为偏好或 Zotero 数据。
+- 模块边界：在一次性 profile 中，将 `library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 各自对应的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `reader-ai`（阅读助手）。保存请求前后、Neo 重载后确认当前能力不变；真正重启 Zotero 后确认只关闭三项增强，九个核心仍提供 Main、Reader、Note 与 Workspace 工作流，包括 Main Visual、选择/批注、导航、笔记查找和标签/分类操作。
+- 恢复默认模块请求，只恢复三项可选增强的默认启用值；对照确认九个核心旧值及 `noteEditor.enabled` 等行为偏好未被改写。模块保存与恢复默认都不得改变快捷键、行为偏好或 Zotero 数据。
 
 - 标签／集合操作在主窗口以 Neo 选择集为优先目标，在阅读器／笔记编辑器中使用各自上下文，操作目标和数量应清楚可解释。主窗口清除视图筛选不等于清除 Neo 选择集。
 - 对一次性测试条目执行 Trash 取消，再执行确认／`u` 恢复；应能观察到对隐藏 Neo 选择集成员的拒绝，以及取消后的保存结果。阅读器中的批注删除是永久操作，仅使用一次性测试批注并检查确认。
 - 只有实际安装并工作的 Better BibTeX 才验收 citekey；只有实际 Translate provider 才录制翻译结果。未具备条件的可选场景写 `NOT APPLICABLE` 并说明条件，不能替代任何必需场景。
 - Plugin Manager 只演示现有列表／查询／enable-disable／registered settings／信息链接。它不能停用 Neo 自身；没有通用商店、自动安装或卸载工作流。
 
+### U10：阅读助手、来源与持久成果
+
+- 使用同一测试父条目下的两个不同 PDF，分别从主窗口标签页和独立 Reader 按 `<Space>aa` 打开阅读助手。主窗口原生面板及独立工具窗显示精确附件；重复打开独立助手不创建第二个工具窗，不改变原 PDF 的可用宽度、缩放或分屏。工具窗关闭后可重开；关闭来源 Reader 会释放其工具窗，不能借用另一个 Reader 的面板或选区。
+- 打开与重开已存成果不发起模型请求。真实调用仅使用获准服务和测试资料，密钥在界面安全输入，不写入验收记录。区分可控协议端点与真实模型：前者可验证取消、错误和保存边界，不能替代模型对原表格、跨语言问题及无依据问题的语义验收。
+- 从实际文字选区执行解释、选区问答和章节图文导引，核对请求范围与附件。章节选择本身不调用模型；初次本机准备后仍保持所选章节。默认无图像，明确启用后只发送对应图表裁剪；原文、题注与模型解释分开核对。
+- 预览只显示来源上下文／原 PDF 裁图，确认后才跳到发起动作的精确窗格；切换活动分屏不能改写已捕获来源。未知引用或来源变化不得提供假定位，也不得保存貌似完成的结果。
+- 慢请求显式取消不保存半成品、不自动重试。另一次请求接纳后关闭工具窗或来源 Reader，完成后重开能找到结果；不把仍在准备证据时来源已关闭的失败混作已接纳请求丢失。
+- 保存人工修订并重开，核对原稿与修订分别保留。明确另存为笔记后修改该笔记，再重复采纳同一结果修订，笔记仍保留人工正文；删除本机成果不删除已采纳的笔记。批注数不因生成、预览、跳转或笔记采纳而增长。
+- 在面板和工具窗实际输入问题／修订，按 U4–U7 的物理输入法与原生键要求验证，不以合成事件代替。Neo 重载和卸载后没有遗留工具窗、旧代按键处理或退休界面更新；打包安装与更新仍按 U1／U2 单独验证。
+
+
 ## 7. 结果记录与收束
 
-每条 U1–U9 记录以下字段，内容由实际观察填写，不预填成功：
+每条 U1–U10 记录以下字段，内容由实际观察填写，不预填成功：
 
 - `main` 提交、包 SHA256、Neo/Zotero 版本、OS/输入法、持久安装来源、profile/data identity。
 - 用例 ID、开始 Surface/mode/focus、实际键序列、native input/IME 阶段、期望和实际可见结果。

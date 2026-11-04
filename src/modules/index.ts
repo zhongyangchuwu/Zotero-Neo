@@ -32,11 +32,12 @@ export type BuiltinModuleId =
   | 'reader-selection'
   | 'reader-annotations'
   | 'reader-hints'
+  | 'reader-ai'
   | 'notes'
   | 'workspace'
   | 'extensions';
 
-export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions'] as const;
+export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'reader-ai'] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
@@ -224,6 +225,17 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [{ host: 'reader', context: 'reader-normal', actions: READER_HINT_ACTIONS }],
     selectionActions: [],
     ui: ['Link hints', 'Copy hints'],
+  },
+  {
+    id: 'reader-ai',
+    names: { en: 'Reading Assistance', 'zh-CN': '阅读辅助' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reading task', 'Reading results'],
+    requires: ['reader-selection'],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openReaderAI'] }],
+    selectionActions: ['neo.ai.explain'],
+    ui: ['Reading assistance', 'Evidence preview'],
   },
   {
     id: 'notes',

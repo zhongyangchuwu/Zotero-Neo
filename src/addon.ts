@@ -15,6 +15,7 @@ import { migrateBindingPreferences, migrateReaderPreferences } from './core/pref
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
+import { ReaderAIController } from './reader-ai/controller';
 
 export interface AddonContext {
   readonly id: string;
@@ -56,12 +57,14 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly api: ZoteroNeoPublicApi;
   #context: AddonContext | null = null;
   #preferencesRegistered = false;
+  #readerAI: ReaderAIController | null = null;
 
   constructor() {
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
+      readerAI: () => this.#readerAI,
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
@@ -91,6 +94,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#main = createMainWindowController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
+      readerAI: () => this.#readerAI,
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
@@ -112,6 +116,19 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
+    if (this.#modules.applied['reader-ai'] && !this.#readerAI) {
+      try {
+        this.#readerAI = new ReaderAIController({
+          pluginID: context.id,
+          rootURI: context.rootURI,
+          preferences: this.#preferences,
+          logger: this.#logger,
+        });
+      } catch {
+        // Optional AI registration must not prevent core Reader/Main startup.
+        this.#logger.debug('Reader AI initialization failed');
+      }
+    }
     this.#reader.start(context.id);
     (Zotero as ZoteroWithNeo).Neo = this.api;
     this.#logger.debug(`Initialized v${context.version} on Zotero ${Zotero.version || '?'}`);
@@ -127,6 +144,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     const failure = new CleanupFailure();
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#reader.shutdown());
+    failure.run(() => this.#readerAI?.dispose());
+    this.#readerAI = null;
     failure.run(() => this.#main.shutdown());
     failure.rethrow();
     this.#logger.debug('Shut down');

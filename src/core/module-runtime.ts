@@ -65,6 +65,7 @@ export class BuiltinModuleRuntime {
     this.applied = Object.freeze({
       'reader-hints': flags['reader-hints'],
       extensions: flags.extensions,
+      'reader-ai': flags['reader-ai'] === true,
     });
   }
 
