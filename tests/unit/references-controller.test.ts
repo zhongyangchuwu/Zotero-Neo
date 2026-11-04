@@ -185,10 +185,10 @@ describe('reference panel', () => {
       title: 'Chosen paper',
       authors: ['Author'],
       year: 2020,
-      venue: null,
+      venue: 'Original publication venue',
       abstract: 'Original source abstract',
-      doi: null,
-      arxivID: null,
+      doi: '10.1234/record-identity',
+      arxivID: '1706.03762v7',
       url: null,
       pdfURL: null,
       referenceCount: 3,
@@ -206,6 +206,9 @@ describe('reference panel', () => {
     ui.button('Chosen paper — Author 2020').emit('click');
     await flush();
     expect(ui.document.documentElement.textContent).toContain('Original source abstract');
+    expect(ui.document.documentElement.textContent).toContain(paper.venue);
+    expect(ui.document.documentElement.textContent).toContain(paper.doi);
+    expect(ui.document.documentElement.textContent).toContain(paper.arxivID);
     expect(ui.document.documentElement.textContent).toContain('Add to Zotero');
     expect(host.add).not.toHaveBeenCalled();
     ui.controller.dispose();

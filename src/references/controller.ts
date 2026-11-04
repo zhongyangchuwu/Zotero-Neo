@@ -417,6 +417,8 @@ export class ReferenceController {
         summary.tabIndex = -1;
         result.append(summary);
         result.append(element('p', `${value.source} · ${value.retrievedAt}`));
+        result.append(element('p', `${text('Publication', '出版信息')}: ${value.venue ?? '—'}`));
+        result.append(element('p', `DOI: ${value.doi ?? '—'} · arXiv: ${value.arxivID ?? '—'}`));
         result.append(
           element(
             'p',
