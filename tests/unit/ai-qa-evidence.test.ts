@@ -3,7 +3,7 @@ import type { PreferenceStore } from '../../src/core/preference-store';
 import type { DocumentRegion } from '../../src/document-analysis/contracts';
 import type { ReaderCachedDocument } from '../../src/reader/document-cache';
 import type { ReaderRuntime } from '../../src/toolkit/reader';
-import { readReaderAIContext, type ReaderAISourceCapture } from '../../src/reader-ai/evidence';
+import { readAIQAContext, type AIQASourceCapture } from '../../src/ai-qa/evidence';
 
 const data = vi.hoisted(() => ({ snapshot: null as ReaderCachedDocument | null }));
 vi.mock('../../src/reader/document-cache', () => ({
@@ -73,8 +73,8 @@ it('keeps uncaptioned visual bodies and table structure without duplicating grou
       fileName: 'owned.pdf',
     },
     isCurrent: async () => true,
-  } as ReaderAISourceCapture;
-  const context = await readReaderAIContext(
+  } as AIQASourceCapture;
+  const context = await readAIQAContext(
     { itemID: 1 } as ReaderRuntime,
     {} as PreferenceStore,
     capture,

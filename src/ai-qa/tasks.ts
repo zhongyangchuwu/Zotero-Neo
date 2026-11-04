@@ -1,22 +1,22 @@
 import type { AIClient } from '../ai/contracts';
 import { aiErrorCode } from '../ai/errors';
 import type {
-  ReaderAIRecord,
-  ReaderAIRepository,
-  ReaderAITaskInput,
-  ReaderAITaskState,
-  ReaderAITasks,
+  AIQARecord,
+  AIQARepository,
+  AIQATaskInput,
+  AIQATaskState,
+  AIQATasks,
 } from './contracts';
-import { ReaderAIError } from './errors';
-import { parseReaderAIOutput } from './output';
-import { readerAIPrompt } from './prompts';
+import { AIQAError } from './errors';
+import { parseAIQAOutput } from './output';
+import { aiQAPrompt } from './prompts';
 
-export function createReaderAITasks(options: {
+export function createAIQATasks(options: {
   client: AIClient;
-  repository: ReaderAIRepository;
+  repository: AIQARepository;
   createAbortController: () => AbortController;
-}): ReaderAITasks {
-  const states = new Map<number, ReaderAITaskState>();
+}): AIQATasks {
+  const states = new Map<number, AIQATaskState>();
   const active = new Map<number, { controller: AbortController; id: string }>();
   const listeners = new Set<() => void>();
   let disposed = false;
@@ -29,7 +29,7 @@ export function createReaderAITasks(options: {
       }
     }
   };
-  const idle = (itemID: number): ReaderAITaskState => ({
+  const idle = (itemID: number): AIQATaskState => ({
     itemID,
     taskID: null,
     phase: 'idle',
@@ -64,21 +64,21 @@ export function createReaderAITasks(options: {
     },
     async run(input) {
       const itemID = input.source.itemID;
-      if (disposed) throw new ReaderAIError('cancelled');
-      if (active.has(itemID)) throw new ReaderAIError('busy');
+      if (disposed) throw new AIQAError('cancelled');
+      if (active.has(itemID)) throw new AIQAError('busy');
       const controller = options.createAbortController();
       input = {
         ...input,
         source: { ...input.source },
-        evidence: JSON.parse(JSON.stringify(input.evidence)) as ReaderAITaskInput['evidence'],
+        evidence: JSON.parse(JSON.stringify(input.evidence)) as AIQATaskInput['evidence'],
         images: input.images?.map((image) => ({ ...image })),
       };
       const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
       const job = { controller, id };
       active.set(itemID, job);
       const setPhase = (
-        phase: ReaderAITaskState['phase'],
-        error: ReaderAITaskState['error'] = null,
+        phase: AIQATaskState['phase'],
+        error: AIQATaskState['error'] = null,
         resultID: string | null = null,
       ) => {
         if (disposed || active.get(itemID) !== job) return;
@@ -92,21 +92,19 @@ export function createReaderAITasks(options: {
       };
       const requireCurrent = async () => {
         if (!(await current()))
-          throw new ReaderAIError(
-            controller.signal.aborted || disposed ? 'cancelled' : 'stale-source',
-          );
+          throw new AIQAError(controller.signal.aborted || disposed ? 'cancelled' : 'stale-source');
       };
       try {
         setPhase('preparing');
         await requireCurrent();
         setPhase('requesting');
-        const result = await options.client.generate(readerAIPrompt(input), {
+        const result = await options.client.generate(aiQAPrompt(input), {
           signal: controller.signal,
         });
         await requireCurrent();
-        const output = parseReaderAIOutput(result.output, input.evidence);
+        const output = parseAIQAOutput(result.output, input.evidence);
         const now = new Date().toISOString();
-        const record: ReaderAIRecord = {
+        const record: AIQARecord = {
           id,
           revision: 1,
           source: input.source,
@@ -130,11 +128,11 @@ export function createReaderAITasks(options: {
         const code =
           controller.signal.aborted || disposed
             ? 'cancelled'
-            : error instanceof ReaderAIError
+            : error instanceof AIQAError
               ? error.code
               : aiErrorCode(error);
         setPhase(code === 'cancelled' ? 'cancelled' : 'failed', code);
-        throw new ReaderAIError(code);
+        throw new AIQAError(code);
       } finally {
         if (active.get(itemID) === job) active.delete(itemID);
       }

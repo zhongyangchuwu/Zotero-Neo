@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createReaderAITasks } from '../../src/reader-ai/tasks';
-import { createReaderAIRepository, type ReaderAIStorage } from '../../src/reader-ai/repository';
+import { createAIQATasks } from '../../src/ai-qa/tasks';
+import { createAIQARepository, type AIQAStorage } from '../../src/ai-qa/repository';
 import type { AIClient, AIGenerationResult } from '../../src/ai/contracts';
-import type { ReaderAITaskInput } from '../../src/reader-ai/contracts';
+import type { AIQATaskInput } from '../../src/ai-qa/contracts';
 
 const result: AIGenerationResult = {
   output: { paragraphs: [{ text: 'Answer', evidenceIDs: ['a'] }], guide: [] },
@@ -10,7 +10,7 @@ const result: AIGenerationResult = {
   endpoint: 'https://example.test',
   usage: { inputTokens: 4, outputTokens: 2 },
 };
-const input: ReaderAITaskInput = {
+const input: AIQATaskInput = {
   source: { itemID: 1, libraryID: 2, key: 'ABC', fingerprint: 'v1', fileName: 'paper.pdf' },
   kind: 'question',
   question: 'Why?',
@@ -32,7 +32,7 @@ const input: ReaderAITaskInput = {
 };
 function setup(generate: AIClient['generate']) {
   let contents: string | null = null;
-  const storage: ReaderAIStorage = {
+  const storage: AIQAStorage = {
     async read() {
       return contents;
     },
@@ -42,10 +42,10 @@ function setup(generate: AIClient['generate']) {
       return true;
     },
   };
-  const repository = createReaderAIRepository(storage);
+  const repository = createAIQARepository(storage);
   return {
     repository,
-    tasks: createReaderAITasks({
+    tasks: createAIQATasks({
       client: { generate },
       repository,
       createAbortController: () => new AbortController(),
@@ -89,7 +89,7 @@ describe('reader AI tasks', () => {
     const release = Promise.withResolvers<void>();
     let contents: string | null = null;
     let current = true;
-    const storage: ReaderAIStorage = {
+    const storage: AIQAStorage = {
       async read() {
         return contents;
       },
@@ -101,8 +101,8 @@ describe('reader AI tasks', () => {
         return true;
       },
     };
-    const repository = createReaderAIRepository(storage);
-    const tasks = createReaderAITasks({
+    const repository = createAIQARepository(storage);
+    const tasks = createAIQATasks({
       client: { generate: async () => result },
       repository,
       createAbortController: () => new AbortController(),

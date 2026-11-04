@@ -6,7 +6,7 @@ import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
 import type { BuiltinModuleRuntime } from './module-runtime';
 import type { NavigationPort } from '../navigation/types';
-import type { ReaderAIController } from '../reader-ai/controller';
+import type { AIQAController } from '../ai-qa/controller';
 
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
 export type MainWindow = Window;
@@ -116,7 +116,7 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 
 export interface ReaderControllerDependencies {
   readonly documentPreparation?: DocumentPreparationPort;
-  readonly readerAI?: () => ReaderAIController | null;
+  readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
@@ -125,7 +125,7 @@ export interface ReaderControllerDependencies {
 
 export interface MainWindowControllerDependencies {
   readonly documentPreparation?: DocumentPreparationPort;
-  readonly readerAI?: () => ReaderAIController | null;
+  readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;

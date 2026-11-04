@@ -1,7 +1,7 @@
 import type { AIConfiguration, AIConfigurationState } from '../ai/contracts';
-import type { ReaderAIRecord, ReaderAISource, ReaderAITaskState } from './contracts';
+import type { AIQARecord, AIQASource, AIQATaskState } from './contracts';
 
-export const READER_AI_TEXT_KEYS = [
+export const AI_QA_TEXT_KEYS = [
   'title',
   'configure',
   'api',
@@ -54,14 +54,14 @@ export const READER_AI_TEXT_KEYS = [
   'confirmRemove',
   'close',
 ] as const;
-export type ReaderAITextKey = (typeof READER_AI_TEXT_KEYS)[number];
+export type AIQATextKey = (typeof AI_QA_TEXT_KEYS)[number];
 
-export interface ReaderAIRecordView {
-  readonly record: ReaderAIRecord;
+export interface AIQARecordView {
+  readonly record: AIQARecord;
   readonly sourceCurrent: boolean;
 }
 
-export interface ReaderAISourcePreview {
+export interface AIQASourcePreview {
   readonly id: string;
   readonly title: string;
   readonly text: string;
@@ -69,24 +69,24 @@ export interface ReaderAISourcePreview {
 }
 
 /** Safe projection only; model keys, native Reader handles and mutable repository state never enter it. */
-export interface ReaderAIViewModel {
-  readonly labels: Readonly<Record<ReaderAITextKey, string>>;
+export interface AIQAViewModel {
+  readonly labels: Readonly<Record<AIQATextKey, string>>;
   readonly configuration: AIConfigurationState;
-  readonly source: ReaderAISource | null;
+  readonly source: AIQASource | null;
   readonly contextTitle: string;
   readonly hasSelection: boolean;
   readonly sections: readonly { readonly id: string; readonly title: string }[];
   readonly selectedSectionID: string | null;
   readonly limitedContext: boolean;
-  readonly task: ReaderAITaskState;
-  readonly records: readonly ReaderAIRecordView[];
-  readonly preview: ReaderAISourcePreview | null;
+  readonly task: AIQATaskState;
+  readonly records: readonly AIQARecordView[];
+  readonly preview: AIQASourcePreview | null;
   readonly error: string | null;
   readonly notice: string | null;
   readonly loading: boolean;
 }
 
-export type ReaderAICommand =
+export type AIQACommand =
   | { readonly type: 'close' }
   | {
       readonly type: 'configure';
@@ -110,15 +110,15 @@ export type ReaderAICommand =
     }
   | { readonly type: 'remove'; readonly resultID: string; readonly revision: number };
 
-export interface ReaderAIView {
-  update(model: ReaderAIViewModel): void;
+export interface AIQAView {
+  update(model: AIQAViewModel): void;
   dispose(): void;
 }
 
-export interface ReaderAIUIRuntime {
+export interface AIQAUIRuntime {
   mount(
     root: HTMLElement,
-    model: ReaderAIViewModel,
-    dispatch: (command: ReaderAICommand) => void,
-  ): ReaderAIView;
+    model: AIQAViewModel,
+    dispatch: (command: AIQACommand) => void,
+  ): AIQAView;
 }

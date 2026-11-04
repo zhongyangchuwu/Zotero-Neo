@@ -1,22 +1,22 @@
 import { cloneInto, isDeadObject } from '../platform/cross-compartment';
-import { exportReaderAIDispatch, loadReaderAIUI } from '../platform/reader-ai-ui';
-import type { ReaderAIPanelLease } from '../toolkit/reader';
-import type { ReaderAICommand, ReaderAIView, ReaderAIViewModel } from './view-contracts';
+import { exportAIQADispatch, loadAIQAUI } from '../platform/ai-qa-ui';
+import type { AIQAPanelLease } from '../toolkit/reader';
+import type { AIQACommand, AIQAView, AIQAViewModel } from './view-contracts';
 
 /** Mount only in the native window and panel represented by this exact lease. */
-export async function mountReaderAIView(
+export async function mountAIQAView(
   rootURI: string,
-  lease: ReaderAIPanelLease,
-  model: ReaderAIViewModel,
-  dispatch: (command: ReaderAICommand) => void,
-): Promise<ReaderAIView> {
-  if (!lease.isCurrent()) throw new Error('Reader AI panel lease is no longer current');
+  lease: AIQAPanelLease,
+  model: AIQAViewModel,
+  dispatch: (command: AIQACommand) => void,
+): Promise<AIQAView> {
+  if (!lease.isCurrent()) throw new Error('AI Q&A panel lease is no longer current');
   const owner = lease.window;
-  const runtime = await loadReaderAIUI(rootURI, owner);
-  if (!lease.isCurrent()) throw new Error('Reader AI panel lease is no longer current');
+  const runtime = await loadAIQAUI(rootURI, owner);
+  if (!lease.isCurrent()) throw new Error('AI Q&A panel lease is no longer current');
 
   let disposed = false;
-  const callback = exportReaderAIDispatch(owner, (command) => {
+  const callback = exportAIQADispatch(owner, (command) => {
     if (!disposed && lease.isCurrent()) dispatch(command);
   });
   const view = runtime.mount(lease.root, cloneInto(model, owner), callback);
@@ -33,7 +33,7 @@ export async function mountReaderAIView(
   };
   if (!lease.isCurrent()) {
     dispose();
-    throw new Error('Reader AI panel lease is no longer current');
+    throw new Error('AI Q&A panel lease is no longer current');
   }
   return {
     update(nextModel): void {

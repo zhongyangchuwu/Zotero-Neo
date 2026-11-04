@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseReaderAIOutput } from '../../src/reader-ai/output';
-import type { ReaderAIEvidence } from '../../src/reader-ai/contracts';
+import { parseAIQAOutput } from '../../src/ai-qa/output';
+import type { AIQAEvidence } from '../../src/ai-qa/contracts';
 
-const evidence: ReaderAIEvidence[] = [
+const evidence: AIQAEvidence[] = [
   {
     id: 'figure-1',
     kind: 'figure',
@@ -21,7 +21,7 @@ describe('reader AI output', () => {
       paragraphs: [{ text: 'Insufficient evidence', evidenceIDs: [] }],
       guide: [{ evidenceID: 'figure-1', role: 'result', reason: 'Shows a result' }],
     };
-    expect(parseReaderAIOutput(output, evidence)).toEqual(output);
+    expect(parseAIQAOutput(output, evidence)).toEqual(output);
   });
   it('rejects unknown paragraph and guide IDs, unsupported roles, and malformed output', () => {
     for (const output of [
@@ -36,6 +36,6 @@ describe('reader AI output', () => {
       },
       { paragraphs: [], guide: [] },
     ])
-      expect(() => parseReaderAIOutput(output, evidence)).toThrow('invalid-output');
+      expect(() => parseAIQAOutput(output, evidence)).toThrow('invalid-output');
   });
 });

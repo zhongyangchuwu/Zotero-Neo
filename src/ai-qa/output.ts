@@ -1,5 +1,5 @@
-import type { ReaderAIEvidence, ReaderAIOutput } from './contracts';
-import { ReaderAIError } from './errors';
+import type { AIQAEvidence, AIQAOutput } from './contracts';
+import { AIQAError } from './errors';
 
 const roles = ['goal', 'method', 'result', 'limitation', 'other'];
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -8,10 +8,7 @@ const text = (value: unknown, max: number): value is string =>
   typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 
 /** Reject unsupported references rather than inventing a navigable source. */
-export function parseReaderAIOutput(
-  value: unknown,
-  evidence: readonly ReaderAIEvidence[],
-): ReaderAIOutput {
+export function parseAIQAOutput(value: unknown, evidence: readonly AIQAEvidence[]): AIQAOutput {
   const ids = new Set(evidence.map((entry) => entry.id));
   if (
     !object(value) ||
@@ -21,7 +18,7 @@ export function parseReaderAIOutput(
     value.paragraphs.length > 100 ||
     value.guide.length > 100
   )
-    throw new ReaderAIError('invalid-output');
+    throw new AIQAError('invalid-output');
   const paragraphs = value.paragraphs.map((entry) => {
     if (
       !object(entry) ||
@@ -30,7 +27,7 @@ export function parseReaderAIOutput(
       entry.evidenceIDs.length > 100 ||
       !entry.evidenceIDs.every((id: unknown) => typeof id === 'string' && ids.has(id))
     )
-      throw new ReaderAIError('invalid-output');
+      throw new AIQAError('invalid-output');
     return { text: entry.text, evidenceIDs: [...entry.evidenceIDs] as string[] };
   });
   const guide = value.guide.map((entry) => {
@@ -42,10 +39,10 @@ export function parseReaderAIOutput(
       !roles.includes(entry.role) ||
       !text(entry.reason, 4000)
     )
-      throw new ReaderAIError('invalid-output');
+      throw new AIQAError('invalid-output');
     return {
       evidenceID: entry.evidenceID,
-      role: entry.role as ReaderAIOutput['guide'][number]['role'],
+      role: entry.role as AIQAOutput['guide'][number]['role'],
       reason: entry.reason,
     };
   });

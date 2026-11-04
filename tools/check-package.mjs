@@ -10,8 +10,8 @@ const expected = [
   'LICENSE',
   'bootstrap.js',
   'content/ai-runtime.js',
-  'content/reader-ai-ui.js',
-  'content/reader-ai-window.xhtml',
+  'content/ai-qa-ui.js',
+  'content/ai-qa-window.xhtml',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
@@ -27,8 +27,8 @@ const expected = [
   'licenses/ai-sdk-provenance.json',
   'licenses/react-NOTICE',
   'licenses/react-provenance.json',
-  'locale/en-US/zotero-neo-reader-ai.ftl',
-  'locale/zh-CN/zotero-neo-reader-ai.ftl',
+  'locale/en-US/zotero-neo-ai-qa.ftl',
+  'locale/zh-CN/zotero-neo-ai-qa.ftl',
   'manifest.json',
 ].sort();
 
@@ -68,7 +68,7 @@ for (const script of [
   'content/zotero-neo.js',
   'content/preferences/pane.js',
   'content/ai-runtime.js',
-  'content/reader-ai-ui.js',
+  'content/ai-qa-ui.js',
 ]) {
   const source = readFileSync(resolve(root, 'build/addon', script), 'utf8');
   if (/^\s*(?:import|export)\s/m.test(source)) {

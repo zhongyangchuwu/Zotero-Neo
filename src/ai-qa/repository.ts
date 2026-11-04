@@ -1,29 +1,25 @@
-import type { ReaderAIRecord, ReaderAIRepository, ReaderAISource } from './contracts';
-import { ReaderAIError } from './errors';
-import { parseReaderAIOutput } from './output';
+import type { AIQARecord, AIQARepository, AIQASource } from './contracts';
+import { AIQAError } from './errors';
+import { parseAIQAOutput } from './output';
 import { documentRect } from '../document-analysis/contracts';
 
-export interface ReaderAIStorage {
-  read(source: ReaderAISource): Promise<string | null>;
-  write(
-    source: ReaderAISource,
-    contents: string,
-    current: () => Promise<boolean>,
-  ): Promise<boolean>;
+export interface AIQAStorage {
+  read(source: AIQASource): Promise<string | null>;
+  write(source: AIQASource, contents: string, current: () => Promise<boolean>): Promise<boolean>;
 }
 
 const MAX_BYTES = 16 * 1024 * 1024;
 const MAX_RECORDS = 1000;
 const queues = new Map<string, Promise<unknown>>();
-const key = (source: ReaderAISource) => `${source.libraryID}:${source.key}`;
+const key = (source: AIQASource) => `${source.libraryID}:${source.key}`;
 const obj = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 const str = (v: unknown, max = 200000): v is string => typeof v === 'string' && v.length <= max;
 const integer = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
-const sameAttachment = (a: ReaderAISource, b: ReaderAISource) =>
+const sameAttachment = (a: AIQASource, b: AIQASource) =>
   a.itemID === b.itemID && a.libraryID === b.libraryID && a.key === b.key;
 
-function validSource(v: unknown): v is ReaderAISource {
+function validSource(v: unknown): v is AIQASource {
   return (
     obj(v) &&
     integer(v.itemID) &&
@@ -35,7 +31,7 @@ function validSource(v: unknown): v is ReaderAISource {
     str(v.fileName, 2000)
   );
 }
-function validRecord(v: unknown, source: ReaderAISource): v is ReaderAIRecord {
+function validRecord(v: unknown, source: AIQASource): v is AIQARecord {
   if (
     !obj(v) ||
     !str(v.id, 200) ||
@@ -91,7 +87,7 @@ function validRecord(v: unknown, source: ReaderAISource): v is ReaderAIRecord {
     ids.add(e.id);
   }
   try {
-    parseReaderAIOutput(v.output, v.evidence);
+    parseAIQAOutput(v.output, v.evidence);
   } catch {
     return false;
   }
@@ -101,9 +97,9 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function createReaderAIRepository(storage: ReaderAIStorage): ReaderAIRepository {
-  async function read(source: ReaderAISource): Promise<ReaderAIRecord[]> {
-    if (!validSource(source)) throw new ReaderAIError('storage');
+export function createAIQARepository(storage: AIQAStorage): AIQARepository {
+  async function read(source: AIQASource): Promise<AIQARecord[]> {
+    if (!validSource(source)) throw new AIQAError('storage');
     try {
       const contents = await storage.read(source);
       if (contents === null) return [];
@@ -115,16 +111,15 @@ export function createReaderAIRepository(storage: ReaderAIStorage): ReaderAIRepo
         !Array.isArray(data.records) ||
         data.records.length > MAX_RECORDS ||
         !data.records.every((record: unknown) => validRecord(record, source)) ||
-        new Set(data.records.map((record: ReaderAIRecord) => record.id)).size !==
-          data.records.length
+        new Set(data.records.map((record: AIQARecord) => record.id)).size !== data.records.length
       )
         throw new Error('invalid store');
-      return data.records as ReaderAIRecord[];
+      return data.records as AIQARecord[];
     } catch {
-      throw new ReaderAIError('storage');
+      throw new AIQAError('storage');
     }
   }
-  async function serialized<T>(source: ReaderAISource, fn: () => Promise<T>): Promise<T> {
+  async function serialized<T>(source: AIQASource, fn: () => Promise<T>): Promise<T> {
     const slot = key(source);
     const previous = queues.get(slot) ?? Promise.resolve();
     const task = previous.catch(() => {}).then(fn);
@@ -136,19 +131,17 @@ export function createReaderAIRepository(storage: ReaderAIStorage): ReaderAIRepo
     }
   }
   async function save(
-    source: ReaderAISource,
-    records: ReaderAIRecord[],
+    source: AIQASource,
+    records: AIQARecord[],
     current: () => Promise<boolean>,
   ): Promise<void> {
     const contents = JSON.stringify({ version: 1, records });
-    if (records.length > MAX_RECORDS || contents.length > MAX_BYTES)
-      throw new ReaderAIError('storage');
+    if (records.length > MAX_RECORDS || contents.length > MAX_BYTES) throw new AIQAError('storage');
     try {
-      if (!(await storage.write(source, contents, current)))
-        throw new ReaderAIError('stale-source');
+      if (!(await storage.write(source, contents, current))) throw new AIQAError('stale-source');
     } catch (error) {
-      if (error instanceof ReaderAIError) throw error;
-      throw new ReaderAIError('storage');
+      if (error instanceof AIQAError) throw error;
+      throw new AIQAError('storage');
     }
   }
   return {
@@ -157,7 +150,7 @@ export function createReaderAIRepository(storage: ReaderAIStorage): ReaderAIRepo
       serialized(record.source, async () => {
         const records = await read(record.source);
         if (!validRecord(record, record.source) || records.some((r) => r.id === record.id))
-          throw new ReaderAIError('storage');
+          throw new AIQAError('storage');
         records.push(clone(record));
         await save(record.source, records, current);
         return clone(record);
@@ -171,7 +164,7 @@ export function createReaderAIRepository(storage: ReaderAIStorage): ReaderAIRepo
           records[index].revision !== revision ||
           !(userText === null || str(userText))
         )
-          throw new ReaderAIError('storage');
+          throw new AIQAError('storage');
         const updated = {
           ...records[index],
           revision: revision + 1,
@@ -186,7 +179,7 @@ export function createReaderAIRepository(storage: ReaderAIStorage): ReaderAIRepo
       serialized(source, async () => {
         const records = await read(source);
         const index = records.findIndex((r) => r.id === id);
-        if (index < 0 || records[index].revision !== revision) throw new ReaderAIError('storage');
+        if (index < 0 || records[index].revision !== revision) throw new AIQAError('storage');
         records.splice(index, 1);
         await save(source, records, async () => true);
       }),

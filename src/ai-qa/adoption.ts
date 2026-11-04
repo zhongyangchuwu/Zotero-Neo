@@ -3,12 +3,12 @@ import { escapeHTML } from '../core/html';
 import { createSourceNote } from '../operations/source-note';
 import { sourceNoteIdentity } from '../platform/note-relations';
 import { sourcePDFLink } from '../toolkit/main';
-import type { ReaderAIRecord } from './contracts';
-import { ReaderAIError } from './errors';
-import type { ReaderAISourceCapture } from './evidence';
-import { parseReaderAIOutput } from './output';
+import type { AIQARecord } from './contracts';
+import { AIQAError } from './errors';
+import type { AIQASourceCapture } from './evidence';
+import { parseAIQAOutput } from './output';
 
-export interface ReaderAIAdoptionLabels {
+export interface AIQAAdoptionLabels {
   readonly title: string;
   readonly question: string;
   readonly source: string;
@@ -17,7 +17,7 @@ export interface ReaderAIAdoptionLabels {
   readonly modified: string;
 }
 
-function sameSource(record: ReaderAIRecord, capture: ReaderAISourceCapture): boolean {
+function sameSource(record: AIQARecord, capture: AIQASourceCapture): boolean {
   const source = record.source,
     captured = capture.source,
     attachment = capture.target.attachment;
@@ -49,11 +49,11 @@ function staleSourceFailure(error: unknown): boolean {
 }
 
 function adoptionDraft(
-  record: ReaderAIRecord,
-  capture: ReaderAISourceCapture,
-  labels: ReaderAIAdoptionLabels,
+  record: AIQARecord,
+  capture: AIQASourceCapture,
+  labels: AIQAAdoptionLabels,
 ): SourceNoteDraft {
-  const output = parseReaderAIOutput(record.output, record.evidence),
+  const output = parseAIQAOutput(record.output, record.evidence),
     evidenceByID = new Map(record.evidence.map((entry) => [entry.id, entry] as const)),
     anchorByID = new Map(
       record.evidence.map((entry, index) => [entry.id, `reader-ai-evidence-${index + 1}`] as const),
@@ -119,25 +119,25 @@ function adoptionDraft(
   };
 }
 
-/** Save one immutable Reader AI revision as a linked source note without changing its PDF or annotations. */
-export async function saveReaderAIToNote(
-  record: ReaderAIRecord,
-  capture: ReaderAISourceCapture,
-  labels: ReaderAIAdoptionLabels,
+/** Save one immutable AI Q&A revision as a linked source note without changing its PDF or annotations. */
+export async function saveAIQAToNote(
+  record: AIQARecord,
+  capture: AIQASourceCapture,
+  labels: AIQAAdoptionLabels,
 ): Promise<void> {
-  if (!sameSource(record, capture)) throw new ReaderAIError('stale-source');
+  if (!sameSource(record, capture)) throw new AIQAError('stale-source');
   let current = false;
   try {
     current = await capture.isCurrent();
   } catch {
     current = false;
   }
-  if (!current) throw new ReaderAIError('stale-source');
+  if (!current) throw new AIQAError('stale-source');
   try {
     const draft = adoptionDraft(record, capture, labels);
     await createSourceNote(capture.target, draft);
   } catch (error) {
-    if (error instanceof ReaderAIError) throw error;
-    throw new ReaderAIError(staleSourceFailure(error) ? 'stale-source' : 'storage');
+    if (error instanceof AIQAError) throw error;
+    throw new AIQAError(staleSourceFailure(error) ? 'stale-source' : 'storage');
   }
 }

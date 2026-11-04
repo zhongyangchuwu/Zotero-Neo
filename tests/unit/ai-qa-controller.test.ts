@@ -3,21 +3,21 @@ import { setImmediate as drain } from 'node:timers/promises';
 import type { AIGenerationRequest, AIGenerationResult } from '../../src/ai/contracts';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import type { ReaderSelectionContext } from '../../src/core/contracts';
-import type { ReaderAIPanelCallbacks, ReaderRuntime } from '../../src/toolkit/reader';
-import type { ReaderAISourceCapture } from '../../src/reader-ai/evidence';
-import type * as EvidenceModule from '../../src/reader-ai/evidence';
-import type { ReaderAICommand, ReaderAIViewModel } from '../../src/reader-ai/view-contracts';
+import type { AIQAPanelCallbacks, ReaderRuntime } from '../../src/toolkit/reader';
+import type { AIQASourceCapture } from '../../src/ai-qa/evidence';
+import type * as EvidenceModule from '../../src/ai-qa/evidence';
+import type { AIQACommand, AIQAViewModel } from '../../src/ai-qa/view-contracts';
 import type { ReaderDocumentSnapshot } from '../../src/reader/document-cache';
 import type { DocumentRegion } from '../../src/document-analysis/contracts';
-import { ReaderAIController } from '../../src/reader-ai/controller';
+import { AIQAController } from '../../src/ai-qa/controller';
 
 const host = vi.hoisted(() => ({
   generate: vi.fn<(request: AIGenerationRequest) => Promise<AIGenerationResult>>(),
-  capture: vi.fn<() => Promise<ReaderAISourceCapture>>(),
+  capture: vi.fn<() => Promise<AIQASourceCapture>>(),
   render: vi.fn(),
   current: vi.fn<() => Promise<boolean>>(),
-  model: null as ReaderAIViewModel | null,
-  dispatch: null as ((command: ReaderAICommand) => void) | null,
+  model: null as AIQAViewModel | null,
+  dispatch: null as ((command: AIQACommand) => void) | null,
   contents: null as string | null,
   nativeDocument: null as ReaderDocumentSnapshot | null,
 }));
@@ -40,8 +40,8 @@ vi.mock('../../src/ai/service', () => ({
 vi.mock('../../src/platform/ai-runtime', () => ({
   createAIAbortController: () => new AbortController(),
 }));
-vi.mock('../../src/platform/reader-ai-ui', () => ({ releaseReaderAIUI() {} }));
-vi.mock('../../src/platform/reader-ai-storage', () => ({
+vi.mock('../../src/platform/ai-qa-ui', () => ({ releaseAIQAUI() {} }));
+vi.mock('../../src/platform/ai-qa-storage', () => ({
   attachmentReadingStorage: () => ({
     read: async () => host.contents,
     write: async (_source: unknown, contents: string, current: () => Promise<boolean>) => {
@@ -51,25 +51,25 @@ vi.mock('../../src/platform/reader-ai-storage', () => ({
     },
   }),
 }));
-vi.mock('../../src/reader-ai/evidence', async (importOriginal) => ({
+vi.mock('../../src/ai-qa/evidence', async (importOriginal) => ({
   ...(await importOriginal<typeof EvidenceModule>()),
-  captureReaderAISource: host.capture,
+  captureAIQASource: host.capture,
 }));
 vi.mock('../../src/reader/document-cache', () => ({
   readReaderDocumentCache: async () => null,
   readReaderDocument: async () => host.nativeDocument,
 }));
-vi.mock('../../src/reader-ai/view-host', () => ({
-  mountReaderAIView: async (
+vi.mock('../../src/ai-qa/view-host', () => ({
+  mountAIQAView: async (
     _uri: string,
     _lease: unknown,
-    model: ReaderAIViewModel,
-    dispatch: (command: ReaderAICommand) => void,
+    model: AIQAViewModel,
+    dispatch: (command: AIQACommand) => void,
   ) => {
     host.model = model;
     host.dispatch = dispatch;
     return {
-      update: (value: ReaderAIViewModel) => {
+      update: (value: AIQAViewModel) => {
         host.model = value;
       },
       dispose() {},
@@ -78,14 +78,14 @@ vi.mock('../../src/reader-ai/view-host', () => ({
 }));
 vi.mock('../../src/toolkit/reader', () => ({
   readerRegionPreview: (...args: unknown[]) => host.render(...args),
-  ReaderAIPanelHost: class {
-    callbacks: ReaderAIPanelCallbacks;
+  AIQAPanelHost: class {
+    callbacks: AIQAPanelCallbacks;
     release: (() => void) | null = null;
     readonly root = {
       ownerDocument: { createElementNS: () => ({ addEventListener() {}, textContent: '' }) },
       replaceChildren() {},
     } as unknown as HTMLElement;
-    constructor(_id: string, _icon: string, callbacks: ReaderAIPanelCallbacks) {
+    constructor(_id: string, _icon: string, callbacks: AIQAPanelCallbacks) {
       this.callbacks = callbacks;
     }
     open(reader: ReaderRuntime) {
@@ -129,8 +129,8 @@ const result: AIGenerationResult = {
 const capture = {
   source: { itemID: 1, libraryID: 1, key: 'ABC', fingerprint: 'pdf', fileName: 'owned.pdf' },
   isCurrent: () => host.current(),
-} as ReaderAISourceCapture;
-let controller: ReaderAIController;
+} as AIQASourceCapture;
+let controller: AIQAController;
 const reader = { itemID: 1 } as ReaderRuntime;
 beforeEach(() => {
   host.generate.mockReset().mockResolvedValue(result);
@@ -143,7 +143,7 @@ beforeEach(() => {
   host.dispatch = null;
   host.contents = null;
   host.nativeDocument = null;
-  controller = new ReaderAIController({
+  controller = new AIQAController({
     pluginID: 'fixture',
     rootURI: 'file:///fixture/',
     preferences: {} as PreferenceStore,
@@ -162,7 +162,7 @@ afterEach(() => controller.dispose());
 
 describe('Reader AI invocation ownership', () => {
   it('does not retarget an accepted selection while source loading is pending', async () => {
-    const loading = Promise.withResolvers<ReaderAISourceCapture>();
+    const loading = Promise.withResolvers<AIQASourceCapture>();
     host.capture.mockReturnValue(loading.promise);
     const running = controller.explain(reader, selection('original selection'));
     controller.open(reader, selection('later selection'));

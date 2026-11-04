@@ -1,13 +1,8 @@
 import { React, createRoot } from '../../../vendor/react/index.js';
 import { compositionOwnsKey } from '../../input/composition';
 import type { AIAPI, AIConfiguration } from '../../ai/contracts';
-import type { ReaderAIEvidence, ReaderAIRecord, ReaderAITaskPhase } from '../contracts';
-import type {
-  ReaderAICommand,
-  ReaderAIView,
-  ReaderAIViewModel,
-  ReaderAIUIRuntime,
-} from '../view-contracts';
+import type { AIQAEvidence, AIQARecord, AIQATaskPhase } from '../contracts';
+import type { AIQACommand, AIQAView, AIQAViewModel, AIQAUIRuntime } from '../view-contracts';
 const MAX_QUESTION_LENGTH = 4000;
 
 function parseAIAPI(value: string): AIAPI | null {
@@ -21,8 +16,8 @@ function parseAIAPI(value: string): AIAPI | null {
 }
 
 const CSS = `
-.neo-reader-ai, .neo-reader-ai * { box-sizing: border-box; }
-.neo-reader-ai {
+.neo-ai-qa, .neo-ai-qa * { box-sizing: border-box; }
+.neo-ai-qa {
   color: var(--zotero-neo-text);
   background: var(--zotero-neo-surface);
   border: 1px solid var(--zotero-neo-border);
@@ -33,8 +28,8 @@ const CSS = `
   overflow: auto;
   padding: 14px;
 }
-.neo-reader-ai button, .neo-reader-ai input, .neo-reader-ai select, .neo-reader-ai textarea { font: inherit; }
-.neo-reader-ai button {
+.neo-ai-qa button, .neo-ai-qa input, .neo-ai-qa select, .neo-ai-qa textarea { font: inherit; }
+.neo-ai-qa button {
   background: var(--zotero-neo-elevated);
   border: 1px solid var(--zotero-neo-border);
   border-radius: 5px;
@@ -42,14 +37,14 @@ const CSS = `
   cursor: pointer;
   padding: 5px 9px;
 }
-.neo-reader-ai button:hover:not(:disabled) { border-color: var(--zotero-neo-accent); }
-.neo-reader-ai button:focus-visible, .neo-reader-ai input:focus-visible, .neo-reader-ai select:focus-visible,
-.neo-reader-ai textarea:focus-visible, .neo-reader-ai [tabindex='0']:focus-visible {
+.neo-ai-qa button:hover:not(:disabled) { border-color: var(--zotero-neo-accent); }
+.neo-ai-qa button:focus-visible, .neo-ai-qa input:focus-visible, .neo-ai-qa select:focus-visible,
+.neo-ai-qa textarea:focus-visible, .neo-ai-qa [tabindex='0']:focus-visible {
   outline: 2px solid var(--zotero-neo-focus-ring);
   outline-offset: 2px;
 }
-.neo-reader-ai button:disabled { cursor: not-allowed; opacity: .55; }
-.neo-reader-ai input, .neo-reader-ai select, .neo-reader-ai textarea {
+.neo-ai-qa button:disabled { cursor: not-allowed; opacity: .55; }
+.neo-ai-qa input, .neo-ai-qa select, .neo-ai-qa textarea {
   background: var(--zotero-neo-input);
   border: 1px solid var(--zotero-neo-border);
   border-radius: 5px;
@@ -58,47 +53,47 @@ const CSS = `
   padding: 6px 8px;
   width: 100%;
 }
-.neo-reader-ai textarea { min-height: 72px; resize: vertical; }
-.neo-reader-ai label { display: grid; gap: 4px; }
-.neo-reader-ai h2, .neo-reader-ai h3, .neo-reader-ai p { margin: 0; }
-.neo-reader-ai h2 { font-size: 1.1em; }
-.neo-reader-ai h3 { font-size: 1em; }
-.neo-reader-ai-header, .neo-reader-ai-actions, .neo-reader-ai-chips, .neo-reader-ai-statuses {
+.neo-ai-qa textarea { min-height: 72px; resize: vertical; }
+.neo-ai-qa label { display: grid; gap: 4px; }
+.neo-ai-qa h2, .neo-ai-qa h3, .neo-ai-qa p { margin: 0; }
+.neo-ai-qa h2 { font-size: 1.1em; }
+.neo-ai-qa h3 { font-size: 1em; }
+.neo-ai-qa-header, .neo-ai-qa-actions, .neo-ai-qa-chips, .neo-ai-qa-statuses {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
-.neo-reader-ai-header { justify-content: space-between; margin-bottom: 12px; }
-.neo-reader-ai-form, .neo-reader-ai-result, .neo-reader-ai-preview { display: grid; gap: 10px; }
-.neo-reader-ai-controls { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
-.neo-reader-ai-check { align-items: center; display: flex !important; gap: 8px !important; }
-.neo-reader-ai-check input { width: auto; }
-.neo-reader-ai-section, .neo-reader-ai-result, .neo-reader-ai-preview {
+.neo-ai-qa-header { justify-content: space-between; margin-bottom: 12px; }
+.neo-ai-qa-form, .neo-ai-qa-result, .neo-ai-qa-preview { display: grid; gap: 10px; }
+.neo-ai-qa-controls { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+.neo-ai-qa-check { align-items: center; display: flex !important; gap: 8px !important; }
+.neo-ai-qa-check input { width: auto; }
+.neo-ai-qa-section, .neo-ai-qa-result, .neo-ai-qa-preview {
   border: 1px solid var(--zotero-neo-border);
   border-radius: 6px;
   margin-top: 12px;
   padding: 10px;
 }
-.neo-reader-ai-status { border-radius: 5px; padding: 7px 9px; }
-.neo-reader-ai-status-info { background: var(--zotero-neo-status-info); color: var(--zotero-neo-status-info-text); }
-.neo-reader-ai-status-success { background: var(--zotero-neo-status-success); color: var(--zotero-neo-status-success-text); }
-.neo-reader-ai-status-error { background: var(--zotero-neo-status-error); color: var(--zotero-neo-status-error-text); }
-.neo-reader-ai-muted { color: var(--zotero-neo-muted); }
-.neo-reader-ai-chip { border-radius: 999px !important; font-size: .9em !important; }
-.neo-reader-ai-chip[aria-pressed='true'] { background: var(--zotero-neo-selected); color: var(--zotero-neo-selected-text); }
-.neo-reader-ai-output { overflow-wrap: anywhere; white-space: pre-wrap; }
-.neo-reader-ai-guide { border-inline-start: 2px solid var(--zotero-neo-border); display: grid; gap: 5px; padding-inline-start: 9px; }
-.neo-reader-ai-results { outline: none; }
-.neo-reader-ai-result[aria-current='true'] { border-color: var(--zotero-neo-accent); }
-.neo-reader-ai-preview img { height: auto; max-height: 240px; max-width: 100%; object-fit: contain; }
-.neo-reader-ai-inline-confirm { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.neo-ai-qa-status { border-radius: 5px; padding: 7px 9px; }
+.neo-ai-qa-status-info { background: var(--zotero-neo-status-info); color: var(--zotero-neo-status-info-text); }
+.neo-ai-qa-status-success { background: var(--zotero-neo-status-success); color: var(--zotero-neo-status-success-text); }
+.neo-ai-qa-status-error { background: var(--zotero-neo-status-error); color: var(--zotero-neo-status-error-text); }
+.neo-ai-qa-muted { color: var(--zotero-neo-muted); }
+.neo-ai-qa-chip { border-radius: 999px !important; font-size: .9em !important; }
+.neo-ai-qa-chip[aria-pressed='true'] { background: var(--zotero-neo-selected); color: var(--zotero-neo-selected-text); }
+.neo-ai-qa-output { overflow-wrap: anywhere; white-space: pre-wrap; }
+.neo-ai-qa-guide { border-inline-start: 2px solid var(--zotero-neo-border); display: grid; gap: 5px; padding-inline-start: 9px; }
+.neo-ai-qa-results { outline: none; }
+.neo-ai-qa-result[aria-current='true'] { border-color: var(--zotero-neo-accent); }
+.neo-ai-qa-preview img { height: auto; max-height: 240px; max-width: 100%; object-fit: contain; }
+.neo-ai-qa-inline-confirm { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
 `;
 
-type Dispatch = (command: ReaderAICommand) => void;
-type Labels = ReaderAIViewModel['labels'];
+type Dispatch = (command: AIQACommand) => void;
+type Labels = AIQAViewModel['labels'];
 
-function generatedText(record: ReaderAIRecord): string {
+function generatedText(record: AIQARecord): string {
   return record.output.paragraphs.map((paragraph) => paragraph.text).join('\n\n');
 }
 
@@ -108,11 +103,11 @@ function safeImageDataURL(value: string | null): string | null {
     : null;
 }
 
-function canJump(sourceCurrent: boolean, evidence: ReaderAIEvidence): boolean {
+function canJump(sourceCurrent: boolean, evidence: AIQAEvidence): boolean {
   return sourceCurrent && evidence.location !== null;
 }
 
-function phaseText(phase: ReaderAITaskPhase, labels: Labels): string | null {
+function phaseText(phase: AIQATaskPhase, labels: Labels): string | null {
   switch (phase) {
     case 'preparing':
       return labels.preparing;
@@ -132,7 +127,7 @@ function phaseText(phase: ReaderAITaskPhase, labels: Labels): string | null {
 }
 
 interface ResultCardProps {
-  readonly record: ReaderAIRecord;
+  readonly record: AIQARecord;
   readonly sourceCurrent: boolean;
   readonly activeEvidenceID: string | null;
   readonly previewEvidenceID: string | null;
@@ -168,54 +163,54 @@ const ResultCard = React.memo(function ResultCard({
   }
 
   return (
-    <article className="neo-reader-ai-result" aria-current={activeEvidenceID !== null}>
-      <div className="neo-reader-ai-header">
+    <article className="neo-ai-qa-result" aria-current={activeEvidenceID !== null}>
+      <div className="neo-ai-qa-header">
         <h3>{record.contextTitle || record.source.fileName}</h3>
-        <div className="neo-reader-ai-statuses">
-          <span className="neo-reader-ai-chip">
+        <div className="neo-ai-qa-statuses">
+          <span className="neo-ai-qa-chip">
             {record.userText === null ? labels.generated : labels.modified}
           </span>
-          {!sourceCurrent && <span className="neo-reader-ai-chip">{labels.sourceChanged}</span>}
+          {!sourceCurrent && <span className="neo-ai-qa-chip">{labels.sourceChanged}</span>}
         </div>
       </div>
       {record.question && (
-        <p className="neo-reader-ai-muted">
+        <p className="neo-ai-qa-muted">
           {labels.question}: {record.question}
         </p>
       )}
       <div>
         <strong>{labels.original}</strong>
-        <div className="neo-reader-ai-output">{original}</div>
+        <div className="neo-ai-qa-output">{original}</div>
       </div>
       {record.userText !== null && (
         <div>
           <strong>{labels.myText}</strong>
-          <div className="neo-reader-ai-output">{record.userText}</div>
+          <div className="neo-ai-qa-output">{record.userText}</div>
         </div>
       )}
       {record.kind === 'guide' && record.output.guide.length > 0 && (
-        <section className="neo-reader-ai-section" aria-label={labels.prepareGuide}>
+        <section className="neo-ai-qa-section" aria-label={labels.prepareGuide}>
           <h3>{labels.prepareGuide}</h3>
           {record.output.guide.map((entry, index) => {
             const evidence = record.evidence.find((candidate) => candidate.id === entry.evidenceID);
             if (!evidence) {
               return (
-                <p className="neo-reader-ai-muted" key={`${entry.evidenceID}:${index}`}>
+                <p className="neo-ai-qa-muted" key={`${entry.evidenceID}:${index}`}>
                   {labels.evidenceUnavailable}
                 </p>
               );
             }
             return (
-              <div className="neo-reader-ai-guide" key={`${entry.evidenceID}:${index}`}>
+              <div className="neo-ai-qa-guide" key={`${entry.evidenceID}:${index}`}>
                 <strong>{evidence.title}</strong>
-                <p className="neo-reader-ai-output">{evidence.text}</p>
+                <p className="neo-ai-qa-output">{evidence.text}</p>
                 <p>{entry.reason}</p>
               </div>
             );
           })}
         </section>
       )}
-      <div className="neo-reader-ai-chips" aria-label={labels.source}>
+      <div className="neo-ai-qa-chips" aria-label={labels.source}>
         {record.evidence.map((evidence) => {
           const isActive = activeEvidenceID === evidence.id;
           const title = evidence.pageLabel
@@ -224,7 +219,7 @@ const ResultCard = React.memo(function ResultCard({
           return (
             <React.Fragment key={evidence.id}>
               <button
-                className="neo-reader-ai-chip"
+                className="neo-ai-qa-chip"
                 type="button"
                 aria-label={`${labels.preview}: ${title}`}
                 aria-pressed={isActive}
@@ -246,7 +241,7 @@ const ResultCard = React.memo(function ResultCard({
       </div>
       {editing ? (
         <form
-          className="neo-reader-ai-form"
+          className="neo-ai-qa-form"
           onSubmit={(event) => {
             event.preventDefault();
             dispatch({ type: 'edit', resultID: record.id, revision: editRevision, text: draft });
@@ -263,7 +258,7 @@ const ResultCard = React.memo(function ResultCard({
             {labels.edit}
             <textarea value={draft} onChange={(event) => setDraft(event.currentTarget.value)} />
           </label>
-          <div className="neo-reader-ai-actions">
+          <div className="neo-ai-qa-actions">
             <button type="submit">{labels.saveEdit}</button>
             <button type="button" onClick={() => setEditing(false)}>
               {labels.cancelEdit}
@@ -271,7 +266,7 @@ const ResultCard = React.memo(function ResultCard({
           </div>
         </form>
       ) : (
-        <div className="neo-reader-ai-actions">
+        <div className="neo-ai-qa-actions">
           <button type="button" onClick={beginEdit}>
             {labels.edit}
           </button>
@@ -287,7 +282,7 @@ const ResultCard = React.memo(function ResultCard({
             </button>
           ) : (
             <div
-              className="neo-reader-ai-inline-confirm"
+              className="neo-ai-qa-inline-confirm"
               role="group"
               aria-label={labels.confirmRemove}
             >
@@ -308,17 +303,17 @@ const ResultCard = React.memo(function ResultCard({
           )}
         </div>
       )}
-      {!editing && !sourceCurrent && <p className="neo-reader-ai-muted">{labels.stale}</p>}
+      {!editing && !sourceCurrent && <p className="neo-ai-qa-muted">{labels.stale}</p>}
     </article>
   );
 });
 
-interface ReaderAIAppProps {
-  readonly model: ReaderAIViewModel;
+interface AIQAAppProps {
+  readonly model: AIQAViewModel;
   readonly dispatch: Dispatch;
 }
 
-function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement {
+function AIQAApp({ model, dispatch }: AIQAAppProps): React.ReactElement {
   const labels = model.labels;
   const [question, setQuestion] = React.useState('');
   const [configurationOpen, setConfigurationOpen] = React.useState(!model.configuration.configured);
@@ -375,7 +370,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
     setConfigurationDirty(false);
   }, [model.configuration]);
 
-  const closeReaderAI = React.useCallback(() => {
+  const closeAIQA = React.useCallback(() => {
     setPassword('');
     setForgetKey(false);
     dispatch({ type: 'close' });
@@ -414,7 +409,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
     if (event.key === 'Escape') {
       event.preventDefault();
       if (configurationOpen) closeConfiguration();
-      else closeReaderAI();
+      else closeAIQA();
       return;
     }
     if (!resultList.current?.contains(target)) return;
@@ -474,11 +469,11 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
   }
 
   return (
-    <section className="neo-reader-ai" aria-label={labels.title} onKeyDown={onAppKeyDown}>
+    <section className="neo-ai-qa" aria-label={labels.title} onKeyDown={onAppKeyDown}>
       <style>{CSS}</style>
-      <header className="neo-reader-ai-header">
+      <header className="neo-ai-qa-header">
         <h2>{labels.title}</h2>
-        <div className="neo-reader-ai-actions">
+        <div className="neo-ai-qa-actions">
           <button
             type="button"
             onClick={() => {
@@ -489,45 +484,45 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
           >
             {labels.configure}
           </button>
-          <button type="button" onClick={closeReaderAI}>
+          <button type="button" onClick={closeAIQA}>
             {labels.close}
           </button>
         </div>
       </header>
 
       {!model.configuration.configured && (
-        <p className="neo-reader-ai-status neo-reader-ai-status-info">{labels.unconfigured}</p>
+        <p className="neo-ai-qa-status neo-ai-qa-status-info">{labels.unconfigured}</p>
       )}
       {model.loading && (
-        <p className="neo-reader-ai-status neo-reader-ai-status-info" role="status">
+        <p className="neo-ai-qa-status neo-ai-qa-status-info" role="status">
           {labels.loading}
         </p>
       )}
       {model.error && (
-        <p className="neo-reader-ai-status neo-reader-ai-status-error" role="alert">
+        <p className="neo-ai-qa-status neo-ai-qa-status-error" role="alert">
           {model.error}
         </p>
       )}
       {model.notice && (
-        <p className="neo-reader-ai-status neo-reader-ai-status-success" role="status">
+        <p className="neo-ai-qa-status neo-ai-qa-status-success" role="status">
           {model.notice}
         </p>
       )}
       {phase && (
         <p
-          className={`neo-reader-ai-status ${model.task.phase === 'failed' ? 'neo-reader-ai-status-error' : 'neo-reader-ai-status-info'}`}
+          className={`neo-ai-qa-status ${model.task.phase === 'failed' ? 'neo-ai-qa-status-error' : 'neo-ai-qa-status-info'}`}
           role="status"
         >
           {phase}
         </p>
       )}
       {model.limitedContext && (
-        <p className="neo-reader-ai-status neo-reader-ai-status-info">{labels.limitedContext}</p>
+        <p className="neo-ai-qa-status neo-ai-qa-status-info">{labels.limitedContext}</p>
       )}
 
       {configurationOpen && (
         <form
-          className="neo-reader-ai-section neo-reader-ai-form"
+          className="neo-ai-qa-section neo-ai-qa-form"
           onSubmit={submitConfiguration}
           onKeyDown={(event) => {
             if (event.key === 'Escape' && !compositionOwnsKey(event.nativeEvent, false)) {
@@ -553,7 +548,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
               <option value="openai-responses">{labels.apiResponses}</option>
             </select>
           </label>
-          <div className="neo-reader-ai-controls">
+          <div className="neo-ai-qa-controls">
             <label>
               {labels.endpoint}
               <input
@@ -595,7 +590,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
               />
             </label>
           </div>
-          <label className="neo-reader-ai-check">
+          <label className="neo-ai-qa-check">
             <input
               type="checkbox"
               checked={sendImages}
@@ -620,12 +615,12 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
             />
           </label>
           {model.configuration.hasCredential && (
-            <p className="neo-reader-ai-muted">
+            <p className="neo-ai-qa-muted">
               {labels.storedKey}. {labels.keyHint}
             </p>
           )}
           {model.configuration.hasCredential && (
-            <label className="neo-reader-ai-check">
+            <label className="neo-ai-qa-check">
               <input
                 type="checkbox"
                 checked={forgetKey}
@@ -639,7 +634,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
               {labels.forgetKey}
             </label>
           )}
-          <div className="neo-reader-ai-actions">
+          <div className="neo-ai-qa-actions">
             <button type="submit">{labels.saveSettings}</button>
             <button type="button" onClick={closeConfiguration}>
               {labels.cancel}
@@ -649,7 +644,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
       )}
 
       <section
-        className="neo-reader-ai-section neo-reader-ai-form"
+        className="neo-ai-qa-section neo-ai-qa-form"
         aria-label={model.hasSelection ? labels.selection : labels.chapter}
       >
         {model.source ? (
@@ -661,7 +656,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
               {model.hasSelection ? labels.selection : labels.chapter}:{' '}
               {model.contextTitle || model.source.fileName}
             </p>
-            {!model.hasSelection && <p className="neo-reader-ai-muted">{labels.noSelection}</p>}
+            {!model.hasSelection && <p className="neo-ai-qa-muted">{labels.noSelection}</p>}
             {model.sections.length > 0 && (
               <label>
                 {labels.chapter}
@@ -686,9 +681,9 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
             )}
           </>
         ) : (
-          <p className="neo-reader-ai-muted">{labels.noSource}</p>
+          <p className="neo-ai-qa-muted">{labels.noSource}</p>
         )}
-        <div className="neo-reader-ai-actions">
+        <div className="neo-ai-qa-actions">
           <button
             type="button"
             disabled={!model.configuration.configured || !model.source || busy || model.loading}
@@ -703,7 +698,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
           )}
         </div>
         <form
-          className="neo-reader-ai-form"
+          className="neo-ai-qa-form"
           onSubmit={(event) => {
             event.preventDefault();
             const value = question.trim();
@@ -750,13 +745,13 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
       </section>
 
       <section
-        className="neo-reader-ai-section neo-reader-ai-results"
+        className="neo-ai-qa-section neo-ai-qa-results"
         aria-label={labels.title}
         tabIndex={0}
         ref={resultList}
       >
         {model.records.length === 0 ? (
-          <p className="neo-reader-ai-muted">{labels.noRecords}</p>
+          <p className="neo-ai-qa-muted">{labels.noRecords}</p>
         ) : (
           model.records.map(({ record, sourceCurrent }) => (
             <ResultCard
@@ -782,9 +777,9 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
       </section>
 
       {model.preview && (
-        <aside className="neo-reader-ai-preview" aria-label={labels.preview}>
+        <aside className="neo-ai-qa-preview" aria-label={labels.preview}>
           <h3>{model.preview.title || labels.preview}</h3>
-          <p className="neo-reader-ai-output">{model.preview.text}</p>
+          <p className="neo-ai-qa-output">{model.preview.text}</p>
           {previewImage && <img src={previewImage} alt={model.preview.title || labels.preview} />}
         </aside>
       )}
@@ -792,14 +787,14 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
   );
 }
 
-const runtime: ReaderAIUIRuntime = {
-  mount(root, model, dispatch): ReaderAIView {
+const runtime: AIQAUIRuntime = {
+  mount(root, model, dispatch): AIQAView {
     const reactRoot = createRoot(root);
     let disposed = false;
-    reactRoot.render(<ReaderAIApp model={model} dispatch={dispatch} />);
+    reactRoot.render(<AIQAApp model={model} dispatch={dispatch} />);
     return {
       update(nextModel): void {
-        if (!disposed) reactRoot.render(<ReaderAIApp model={nextModel} dispatch={dispatch} />);
+        if (!disposed) reactRoot.render(<AIQAApp model={nextModel} dispatch={dispatch} />);
       },
       dispose(): void {
         if (disposed) return;
@@ -811,7 +806,7 @@ const runtime: ReaderAIUIRuntime = {
 };
 
 declare global {
-  var NeoReaderAIUI: ReaderAIUIRuntime | undefined;
+  var NeoAIQAUI: AIQAUIRuntime | undefined;
 }
 
-globalThis.NeoReaderAIUI = runtime;
+globalThis.NeoAIQAUI = runtime;

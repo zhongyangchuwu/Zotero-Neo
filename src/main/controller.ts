@@ -946,7 +946,7 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
-    if (this.#dependencies.readerAI?.()?.ownsTarget(event.target)) {
+    if (this.#dependencies.aiQA?.()?.ownsTarget(event.target)) {
       this.resetMainInput(window, session);
       return;
     }

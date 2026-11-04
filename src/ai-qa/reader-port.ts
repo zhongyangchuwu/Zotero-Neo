@@ -4,7 +4,7 @@ import type { AppLanguage } from '../i18n';
 import type { PdfWindow, ReaderRuntime } from '../toolkit/reader';
 
 /** Captured before panel focus; navigation cannot drift to a later active PDF pane. */
-export interface ReaderAIViewAccess {
+export interface AIQAReaderViewAccess {
   readonly window: PdfWindow;
   readonly pageIndex: number | null;
   isCurrent(): boolean;
@@ -12,10 +12,10 @@ export interface ReaderAIViewAccess {
 }
 
 /** A Reader session supplies policy-owned selection, exact-view lifetime and jump history. */
-export interface ReaderAIPort {
+export interface AIQAReaderPort {
   readonly reader: ReaderRuntime;
   captureSelection(): ReaderSelectionContext | null;
-  captureView(): ReaderAIViewAccess | null;
+  captureView(): AIQAReaderViewAccess | null;
   language(): AppLanguage;
   themeRoot(root: HTMLElement): () => void;
   showStatus(message: string): void;

@@ -2,11 +2,11 @@ import { CleanupFailure } from '../../core/cleanup';
 import { asElement } from '../../platform/dom';
 import { isDeadObject } from '../../platform/cross-compartment';
 import type { ReaderRuntime } from './contracts';
-import { createReaderAIWindowHost, type ReaderAIWindowHost } from '../../platform/reader-ai-ui';
+import { createAIQAWindowHost, type AIQAWindowHost } from '../../platform/ai-qa-ui';
 import { readerByTabID, readerOwnerWindow } from './host';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const RESOURCE = 'zotero-neo-reader-ai.ftl';
+const RESOURCE = 'zotero-neo-ai-qa.ftl';
 
 interface NativeDetails extends Element {
   readonly tabID?: string;
@@ -20,7 +20,7 @@ interface PanelWindow extends Window {
   readonly ZoteroContextPane?: { collapsed: boolean; update(): void };
 }
 
-export interface ReaderAIPanelLease {
+export interface AIQAPanelLease {
   readonly root: HTMLElement;
   readonly window: Window;
   readonly reader: ReaderRuntime;
@@ -30,7 +30,7 @@ export interface ReaderAIPanelLease {
 }
 
 interface Mount {
-  readonly lease: ReaderAIPanelLease;
+  readonly lease: AIQAPanelLease;
   readonly details: NativeDetails;
   readonly section: NativeSection;
   readonly tabID: string;
@@ -39,36 +39,36 @@ interface Mount {
 
 interface ToolWindowMount {
   readonly window: Window;
-  lease: ReaderAIPanelLease | null;
+  lease: AIQAPanelLease | null;
   isCurrent(): boolean;
   release(): void;
 }
 
-export interface ReaderAIPanelCallbacks {
+export interface AIQAPanelCallbacks {
   readonly entryLabel: (window: Window) => string;
-  readonly mount: (lease: ReaderAIPanelLease) => () => void;
-  readonly activate: (lease: ReaderAIPanelLease) => void;
-  readonly changed: (lease: ReaderAIPanelLease) => void;
+  readonly mount: (lease: AIQAPanelLease) => () => void;
+  readonly activate: (lease: AIQAPanelLease) => void;
+  readonly changed: (lease: AIQAPanelLease) => void;
   readonly failed: (reader: ReaderRuntime, error: unknown) => void;
 }
 
 /** Native tab sections and standalone tool windows share exact Reader leases, never an active-tab fallback. */
-export class ReaderAIPanelHost {
+export class AIQAPanelHost {
   readonly #mounts = new Map<HTMLElement, Mount>();
   readonly #toolWindows = new Map<ReaderRuntime, ToolWindowMount>();
-  readonly #toolWindowHost: ReaderAIWindowHost;
+  readonly #toolWindowHost: AIQAWindowHost;
   readonly #documents = new Set<Document>();
-  readonly #callbacks: ReaderAIPanelCallbacks;
+  readonly #callbacks: AIQAPanelCallbacks;
   readonly #paneID: string;
   #disposed = false;
 
-  constructor(pluginID: string, rootURI: string, callbacks: ReaderAIPanelCallbacks) {
-    this.#toolWindowHost = createReaderAIWindowHost(rootURI);
+  constructor(pluginID: string, rootURI: string, callbacks: AIQAPanelCallbacks) {
+    this.#toolWindowHost = createAIQAWindowHost(rootURI);
     this.#callbacks = callbacks;
     const addResource = (doc: Document): void => {
       if (this.#documents.has(doc)) return;
       const localization = doc.l10n;
-      if (!localization) throw new Error('Native reading assistance localization unavailable');
+      if (!localization) throw new Error('Native AI Q&A localization unavailable');
       localization.addResourceIds([RESOURCE]);
       this.#documents.add(doc);
     };
@@ -88,7 +88,7 @@ export class ReaderAIPanelHost {
       }
       if (previous) this.#release(body);
       let retired = false;
-      const lease: ReaderAIPanelLease = {
+      const lease: AIQAPanelLease = {
         root: body,
         window: owner,
         reader,
@@ -134,10 +134,10 @@ export class ReaderAIPanelHost {
       });
     };
     const paneID = Zotero.ItemPaneManager.registerSection({
-      paneID: 'reader-ai',
+      paneID: 'ai-qa',
       pluginID,
-      header: { l10nID: 'zotero-neo-reader-ai-section', icon: `${rootURI}icons/icon-32x32.png` },
-      sidenav: { l10nID: 'zotero-neo-reader-ai-sidenav', icon: `${rootURI}icons/icon-32x32.png` },
+      header: { l10nID: 'zotero-neo-ai-qa-section', icon: `${rootURI}icons/icon-32x32.png` },
+      sidenav: { l10nID: 'zotero-neo-ai-qa-sidenav', icon: `${rootURI}icons/icon-32x32.png` },
       onInit: ({ doc }) => addResource(doc),
       onItemChange: (props) => {
         props.setEnabled(props.tabType === 'reader');
@@ -146,7 +146,7 @@ export class ReaderAIPanelHost {
       onRender: (props) => sync(props.body, props.doc, props.tabType),
       onDestroy: ({ body }) => this.#release(body),
     });
-    if (!paneID) throw new Error('Reading assistance section registration failed');
+    if (!paneID) throw new Error('AI Q&A section registration failed');
     this.#paneID = paneID;
   }
 
@@ -259,9 +259,9 @@ export class ReaderAIPanelHost {
       if ((event && event.target !== doc) || doc.documentURI !== this.#toolWindowHost.uri) return;
       window.removeEventListener('load', onLoad);
       try {
-        const root = doc.getElementById('zotero-neo-reader-ai-root') as HTMLElement | null;
-        if (!root) throw new Error('Reader AI tool window root unavailable');
-        const lease: ReaderAIPanelLease = {
+        const root = doc.getElementById('zotero-neo-ai-qa-root') as HTMLElement | null;
+        if (!root) throw new Error('AI Q&A tool window root unavailable');
+        const lease: AIQAPanelLease = {
           root,
           window,
           reader,

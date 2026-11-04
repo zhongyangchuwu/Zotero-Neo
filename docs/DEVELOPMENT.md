@@ -103,13 +103,13 @@ npm run dev:status
 
 ## 品牌与资源
 
-`assets/branding/` 保存仓库 artwork，`assets/package/` 提供静态 XPI 骨架、运行时图标、偏好页和 Reader AI 工具窗文档。偏好页定义在 `assets/package/content/preferences/pane.xhtml`，Reader AI 工具窗定义在 `assets/package/content/reader-ai-window.xhtml`，偏好行为由 `src/preferences/index.ts` 生成。品牌原始图不复制进 XPI；包内路径保持 `icons/*` 与 `content/preferences/*`。
+`assets/branding/` 保存仓库 artwork，`assets/package/` 提供静态 XPI 骨架、运行时图标、偏好页和 AI 问答工具窗文档。偏好页定义在 `assets/package/content/preferences/pane.xhtml`，AI 问答工具窗定义在 `assets/package/content/ai-qa-window.xhtml`，偏好行为由 `src/preferences/index.ts` 生成。品牌原始图不复制进 XPI；包内路径保持 `icons/*` 与 `content/preferences/*`。
 
-### 静态 AI 与 Reader UI bundle
+### 静态 AI 与 AI 问答界面 bundle
 
-`tools/build.mjs` 将 `src/ai/runtime.ts` 打包为 `content/ai-runtime.js`，将 `src/reader-ai/ui/index.tsx` 打包为 `content/reader-ai-ui.js`，并把 Reader AI 工具窗静态文档复制到 `content/reader-ai-window.xhtml`。`vendor/ai-sdk/` 固定 `ai@7.0.162`、`@ai-sdk/openai-compatible@3.0.84` 与 `@ai-sdk/openai@4.0.108`，分别通过兼容 Chat 模型和 Responses 模型支持显式协议选择；完整闭包、tarball integrity、上游来源和许可证记录在该目录的 `package-lock.json` 与 `provenance.json`。`vendor/react/` 固定 `react@19.3.1`、`react-dom@19.3.1` 和 `scheduler@0.28.0`，完整闭包记录在对应的 lockfile 和 provenance 文件中。
+`tools/build.mjs` 将 `src/ai/runtime.ts` 打包为 `content/ai-runtime.js`，将 `src/ai-qa/ui/index.tsx` 打包为 `content/ai-qa-ui.js`，并把 AI 问答工具窗静态文档复制到 `content/ai-qa-window.xhtml`。`vendor/ai-sdk/` 固定 `ai@7.0.162`、`@ai-sdk/openai-compatible@3.0.84` 与 `@ai-sdk/openai@4.0.108`，分别通过兼容 Chat 模型和 Responses 模型支持显式协议选择；完整闭包、tarball integrity、上游来源和许可证记录在该目录的 `package-lock.json` 与 `provenance.json`。`vendor/react/` 固定 `react@19.3.1`、`react-dom@19.3.1` 和 `scheduler@0.28.0`，完整闭包记录在对应的 lockfile 和 provenance 文件中。
 
-Reader AI 工具窗使用生产 URI `chrome://zotero-neo-reader-ai/content/reader-ai-window.xhtml`，不直接以 file/jar URI 加载。`src/platform/reader-ai-ui.ts` 在首次打开时惰性注册已打包的 `content/` 资源并持有 `destruct()` 句柄；`src/toolkit/reader/ai-panel.ts` 负责精确 Reader 的工具窗，Addon/Toolkit 退出时先关闭所拥有的窗口，再释放共享注册。
+AI 问答工具窗使用生产 URI `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`，不直接以 file/jar URI 加载。`src/platform/ai-qa-ui.ts` 在首次打开时惰性注册已打包的 `content/` 资源并持有 `destruct()` 句柄；`src/toolkit/reader/ai-qa-panel.ts` 负责精确 Reader 的工具窗，窗口类型为 `zotero-neo:ai-qa`。Addon/Toolkit 退出时先关闭所拥有的窗口，再释放共享注册。
 
 XPI 收录项目 `LICENSE`，以及 `licenses/fuzzysort-LICENSE`、`licenses/ai-sdk-NOTICE`、`licenses/ai-sdk-provenance.json`、`licenses/react-NOTICE` 和 `licenses/react-provenance.json`。AI SDK 闭包包含 Apache-2.0 与 MIT 组件，React 闭包使用 MIT；`NOTICE` 文件保留相应许可证文本。可执行依赖静态进入生成的 bundle，不在运行时安装或下载，也不以原始 vendor 包作为单独的 XPI 成员。`tools/check-package.mjs` 对成员清单和打包后的 notice/provenance 内容作精确校验。
 
@@ -126,12 +126,12 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。12 个模块为 `tags`、`extensions`、`collections`、`worksets`、`reader-hints`、`reader-ai`、`library`、`notes`、`reader-navigation`、`reader-selection`、`reader-annotations`、`workspace`；九个核心固定启用，可选增强为 `reader-hints`、`extensions`、`reader-ai`。`reader-ai` 依赖核心 `reader-selection`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。12 个模块为 `tags`、`extensions`、`collections`、`worksets`、`reader-hints`、`ai-qa`、`library`、`notes`、`reader-navigation`、`reader-selection`、`reader-annotations`、`workspace`；九个核心固定启用，可选增强为 `reader-hints`、`extensions`、`ai-qa`。`ai-qa` 依赖核心 `reader-selection`。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes 与 Workspace；ReaderSession 组合导航、选择、批注、hints、可选 AI、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes 与 Workspace；ReaderSession 组合导航、选择、批注、hints、可选 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
-`src/core/module-runtime.ts` 根据三项可选请求应用增强；请求默认启用。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留三项请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
-实机核对模块配置时使用专用 profile 和自有数据，分别确认三项可选请求保存、Neo 热重载与 Zotero 完全退出/重启的差异；关闭三项后九个核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+`src/core/module-runtime.ts` 根据三项可选请求应用增强；`reader-hints` 与 `extensions` 默认开启，`ai-qa` 默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留三项请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
+实机核对模块配置时使用专用 profile 和自有数据，分别确认三项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；手动启用 `ai-qa` 并重启后入口可用；关闭再重启后入口撤除且既有成果仍保留；恢复默认后 `ai-qa` 为关闭、另两项为开启。关闭全部三项后九个核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 

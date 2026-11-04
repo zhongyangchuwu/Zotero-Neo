@@ -32,13 +32,18 @@ export type BuiltinModuleId =
   | 'reader-selection'
   | 'reader-annotations'
   | 'reader-hints'
-  | 'reader-ai'
+  | 'ai-qa'
   | 'notes'
   | 'workspace'
   | 'extensions';
 
-export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'reader-ai'] as const;
+export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'ai-qa'] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
+export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
+  'reader-hints': true,
+  extensions: true,
+  'ai-qa': false,
+};
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
 /** Internal ownership is not a user switch; only independent enhancements are optional. */
@@ -227,15 +232,15 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ui: ['Link hints', 'Copy hints'],
   },
   {
-    id: 'reader-ai',
-    names: { en: 'Reading Assistance', 'zh-CN': '阅读辅助' },
+    id: 'ai-qa',
+    names: { en: 'AI Q&A (Experimental)', 'zh-CN': 'AI 问答（实验）' },
     hosts: ['reader'],
     scopes: ['Reader session', 'Reading task', 'Reading results'],
     requires: ['reader-selection'],
     optional: [],
-    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openReaderAI'] }],
-    selectionActions: ['neo.ai.explain'],
-    ui: ['Reading assistance', 'Evidence preview'],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openAIQA'] }],
+    selectionActions: ['neo.ai-qa.explain'],
+    ui: ['AI Q&A', 'Evidence preview'],
   },
   {
     id: 'notes',

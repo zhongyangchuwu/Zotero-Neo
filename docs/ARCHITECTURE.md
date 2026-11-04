@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录 12 项内部模块分区及其迁移约束：九个核心分区固定启用，`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `reader-ai`（阅读辅助）是三个可选增强。静态清单、宿主依赖及启动配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录 12 项内部模块分区及其迁移约束：九个核心分区固定启用，`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `ai-qa`（AI 问答（实验））是三个可选增强。前两项默认开启，`ai-qa` 默认关闭；用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)，下文维护运行时所有权。
 
 ## 分层
 
@@ -26,7 +26,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。九个核心分区固定启用；只有 `reader-hints`、`extensions` 与 `reader-ai` 可按已应用请求关闭。`reader-ai` 依赖核心 `reader-selection`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。九个核心分区固定启用；只有 `reader-hints`、`extensions` 与 `ai-qa` 可按已应用请求关闭。`ai-qa` 依赖核心 `reader-selection`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
@@ -92,25 +92,30 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/modules/reader-hints/` 按 ReaderSession 拥有可见复制/跟随目标、临时标签、原生链接激活和目的地 cue。模块只接收精确视图、复制、反馈与导航端口；Surface 保留输入优先级、模式、共享滚动机制和历史策略。父作用域退休后，旧确认、异步导航完成和 RAF 不能写入或重画；清理仍释放各自的标签、cue 与计时器，并保留原始失败。`src/reader/hint-labels.ts` 继续作为 Flash 与 hints 共用的纯标签辅助。
 
-#### Reader AI
+#### AI 问答（实验）
 
-`src/modules/reader-ai/` 为每个 Reader 提供可选入口和 `neo.ai.explain` 选区动作，依赖固定启用的 `reader-selection`。Normal 中 `<Space>aa` 打开阅读辅助；`<Space>ai` 仍是 Add By Identifier。AI 配置表单位于 Reader AI 界面，而非 Zotero 原生偏好 pane。
+`src/modules/ai-qa/` 为 Reader 提供可选入口和 `neo.ai-qa.explain` 选区动作，依赖固定启用的 `reader-selection`。启用并在 Zotero 完全重启后，Normal 中 `<Space>aa` 打开 AI 问答（实验）面板；`<Space>ai` 仍是 Add By Identifier。配置在该面板中，不在 Zotero 原生偏好 pane。
 
 | 负责方 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| `src/ai/` 与平台适配器 | 通用生成契约、`api`/`endpoint`/`model`/`maxOutputTokens`/`sendImages` 配置、错误归一化及安全凭据访问 | Reader 证据、任务和来源策略 |
-| `src/reader-ai/` 与 `src/modules/reader-ai/` | 精确 Reader 上下文、证据、任务、结果校验与仓库、预览/跳转和明确采纳 | 密钥、SDK 调用细节、私有 PDF/SDT DOM |
-| `src/reader-ai/ui/` | 静态打包的 React 视图与用户交互 | 原生 Reader 句柄、保存密钥的读回、领域数据写入 |
-| `src/platform/reader-ai-ui.ts` | 按需注册 Reader AI 工具窗的 chrome URI，并加载/释放界面 runtime | Reader 身份与每 Reader 窗口生命周期 |
-| `src/toolkit/reader/` | 原生 section、每 Reader 工具窗、精确 Reader lease；退休时先关闭窗口再释放共享宿主 | 提示词、模型请求、阅读任务/成果策略 |
+| `src/ai/` 与通用平台适配器 | 域无关的单次结构化生成契约、模型配置与凭据、安全请求及取消 | Reader 证据、任务、来源策略、Agent 工具调用或 MCP |
+| `src/ai-qa/` 与 `src/modules/ai-qa/` | 解释／提问／导引任务、当前 Reader 上下文与证据编排、结果校验和成果、预览/跳转与明确采纳；模块入口与生命周期 | 通用模型请求实现、密钥读回、私有 PDF/SDT DOM |
+| `src/ai-qa/ui/` | 静态打包的 React 视图与用户交互 | 原生 Reader 句柄、保存密钥的读回、领域数据写入 |
+| `src/platform/ai-qa-ui.ts` | 按需注册 AI 问答工具窗的 chrome URI，并加载/释放界面 runtime | Reader 身份与每 Reader 窗口生命周期 |
+| `src/platform/ai-qa-storage.ts` | 保存与读取附件成果及修订 | 用户确认之外的 Zotero Note 写入 |
+| `src/toolkit/reader/ai-qa-panel.ts` | 原生 section、每 Reader 工具窗、精确 Reader lease；退休时先关闭窗口再释放共享宿主 | 提示词、模型请求、任务／成果策略 |
+
+当前证据仅来自用户在 Reader 中选中的文字，或明确选择的有限章节；用户可明确允许附带相关图表／表格裁图。没有对批注、笔记或其他论文的检索，也没有整篇 PDF 自动上传。AI 问答的固定领域任务不构成通用 Agent 平台。
 
 `AIService` 保存非秘密配置，并通过 `Services.logins` 按 endpoint 保存密钥；只向视图投影 `hasCredential`，不把密钥暴露到 view model、普通偏好、成果或日志。端点限 HTTPS 或 loopback HTTP；协议由 `api` 显式选择 Chat Completions 或 Responses，后者设置 `store: false`，不续接远端会话。请求禁止重定向，不自动重试或静默切换协议／服务。`sendImages` 默认关闭；只有显式启用才发送最多四张短暂的原始 PNG 图表裁剪。
 
-`ReaderAIController` 在 Reader AI 模块启用时由 Addon 持有，负责连接通用 AI 服务、应用任务、成果仓库和视图。`src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime，并在 Addon 关闭时释放。打开 Reader AI 只读取缓存和已存成果；证据准备与模型请求需由用户明确发起，选择章节本身不调用模型。输入最多 40 条证据、32000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标，ID 有效不证明语义正确。
+`AIQAController` 在 `ai-qa` 模块启用时由 Addon 持有，负责连接通用 AI 服务、应用任务、成果仓库和视图。`src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime；关闭的模块不注册入口／动作，不挂载面板或界面 runtime，也不读取凭据或发送请求。打开面板只读取缓存和已存成果；用户明确发起任务后才准备证据并请求模型。输入最多 40 条证据、32,000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标；有效 ID 不证明语义正确。
 
 主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller、React 视图和成果仓库。关闭工具窗只释放界面，不取消已接纳任务；Reader 退出时关闭其工具窗并退休视图，但已接纳任务仍可完成。显式取消不保存部分结果。校验通过的成果按附件与 PDF 指纹在本机 JSON 持久保存，生成原稿与人工修改版本分开；这不是 Zotero 同步。来源跳转先预览再明确确认，只有用户明确采纳时才通过既有 Operation 写入带来源的 Zotero Note，不自动创建 PDF 批注。
 
-`assets/package/content/reader-ai-window.xhtml` 通过生产 URI `chrome://zotero-neo-reader-ai/content/reader-ai-window.xhtml` 加载。`src/platform/reader-ai-ui.ts` 首次打开时惰性注册该 chrome 资源并持有销毁句柄；Reader Toolkit 关闭所有归其所有的工具窗后才释放该注册。Reader 关闭会退休其窗口，但不会单独移除仍供其他 Reader 使用的共享注册。
+静态宿主文档 `assets/package/content/ai-qa-window.xhtml` 打包为 `content/ai-qa-window.xhtml`，由 `src/platform/ai-qa-ui.ts` 按需注册到 `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`；窗口类型为 `zotero-neo:ai-qa`。AI 问答 UI bundle 为 `content/ai-qa-ui.js`。关闭所有归 Toolkit 所有的工具窗后才释放共享注册；关闭 Reader 会退休其窗口，但不会单独移除仍供其他 Reader 使用的共享注册。
+
+更名不会更改既有持久化身份：配置 `ai.configuration`、端点凭据身份、附件成果文件 `.zotero-neo-reader-ai.json` 及 Note provenance／幂等标记继续沿用。关闭模块也不会清除配置、凭据、成果或人工修订。
 
 
 

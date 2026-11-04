@@ -1,9 +1,9 @@
 import type { AIErrorCode, AIInputImage, AIUsage } from '../ai/contracts';
 import type { DocumentLocation } from '../document-analysis/contracts';
 
-export type ReaderAITaskKind = 'explain' | 'question' | 'guide';
+export type AIQATaskKind = 'explain' | 'question' | 'guide';
 
-export interface ReaderAISource {
+export interface AIQASource {
   readonly itemID: number;
   readonly libraryID: number;
   readonly key: string;
@@ -11,7 +11,7 @@ export interface ReaderAISource {
   readonly fileName: string;
 }
 
-export interface ReaderAIEvidence {
+export interface AIQAEvidence {
   readonly id: string;
   readonly kind: 'selection' | 'text' | 'figure' | 'table';
   readonly title: string;
@@ -23,32 +23,32 @@ export interface ReaderAIEvidence {
   readonly nativePosition: string | null;
 }
 
-export interface ReaderAIParagraph {
+export interface AIQAParagraph {
   readonly text: string;
   readonly evidenceIDs: readonly string[];
 }
 
-export interface ReaderAIGuideEntry {
+export interface AIQAGuideEntry {
   readonly evidenceID: string;
   readonly role: 'goal' | 'method' | 'result' | 'limitation' | 'other';
   readonly reason: string;
 }
 
-export interface ReaderAIOutput {
-  readonly paragraphs: readonly ReaderAIParagraph[];
-  readonly guide: readonly ReaderAIGuideEntry[];
+export interface AIQAOutput {
+  readonly paragraphs: readonly AIQAParagraph[];
+  readonly guide: readonly AIQAGuideEntry[];
 }
 
 /** User edits are a revision of the result, never a replacement for the generated original. */
-export interface ReaderAIRecord {
+export interface AIQARecord {
   readonly id: string;
   readonly revision: number;
-  readonly source: ReaderAISource;
-  readonly kind: ReaderAITaskKind;
+  readonly source: AIQASource;
+  readonly kind: AIQATaskKind;
   readonly question: string;
   readonly contextTitle: string;
-  readonly evidence: readonly ReaderAIEvidence[];
-  readonly output: ReaderAIOutput;
+  readonly evidence: readonly AIQAEvidence[];
+  readonly output: AIQAOutput;
   readonly model: string;
   readonly endpoint: string;
   readonly usage: AIUsage;
@@ -57,21 +57,21 @@ export interface ReaderAIRecord {
   readonly userText: string | null;
 }
 
-export interface ReaderAIRepository {
+export interface AIQARepository {
   /** Includes older PDF revisions for the same attachment; the UI marks their sources as changed. */
-  list(source: ReaderAISource): Promise<readonly ReaderAIRecord[]>;
-  add(record: ReaderAIRecord, current: () => Promise<boolean>): Promise<ReaderAIRecord>;
+  list(source: AIQASource): Promise<readonly AIQARecord[]>;
+  add(record: AIQARecord, current: () => Promise<boolean>): Promise<AIQARecord>;
   edit(
-    source: ReaderAISource,
+    source: AIQASource,
     id: string,
     revision: number,
     userText: string | null,
-  ): Promise<ReaderAIRecord>;
-  remove(source: ReaderAISource, id: string, revision: number): Promise<void>;
+  ): Promise<AIQARecord>;
+  remove(source: AIQASource, id: string, revision: number): Promise<void>;
 }
 
-export type ReaderAIErrorCode = AIErrorCode | 'stale-source' | 'storage' | 'busy';
-export type ReaderAITaskPhase =
+export type AIQAErrorCode = AIErrorCode | 'stale-source' | 'storage' | 'busy';
+export type AIQATaskPhase =
   | 'idle'
   | 'preparing'
   | 'requesting'
@@ -80,36 +80,36 @@ export type ReaderAITaskPhase =
   | 'failed'
   | 'cancelled';
 
-export interface ReaderAITaskState {
+export interface AIQATaskState {
   readonly itemID: number;
   readonly taskID: string | null;
-  readonly phase: ReaderAITaskPhase;
-  readonly kind: ReaderAITaskKind | null;
-  readonly error: ReaderAIErrorCode | null;
+  readonly phase: AIQATaskPhase;
+  readonly kind: AIQATaskKind | null;
+  readonly error: AIQAErrorCode | null;
   readonly resultID: string | null;
 }
 
 /** Image order is explicit and linked to an existing evidence identity, never model coordinates. */
-export interface ReaderAIInputImage extends AIInputImage {
+export interface AIQAInputImage extends AIInputImage {
   readonly evidenceID: string;
 }
 
-export interface ReaderAITaskInput {
-  readonly source: ReaderAISource;
-  readonly kind: ReaderAITaskKind;
+export interface AIQATaskInput {
+  readonly source: AIQASource;
+  readonly kind: AIQATaskKind;
   readonly question: string;
   readonly contextTitle: string;
-  readonly evidence: readonly ReaderAIEvidence[];
+  readonly evidence: readonly AIQAEvidence[];
   /** Explicit, ephemeral visual context; source locations, not image bytes, are persisted. */
-  readonly images?: readonly ReaderAIInputImage[];
+  readonly images?: readonly AIQAInputImage[];
   /** Checks the captured PDF identity, not whichever tab happens to be active later. */
   readonly isCurrent: () => Promise<boolean>;
 }
 
-export interface ReaderAITasks {
-  run(input: ReaderAITaskInput): Promise<ReaderAIRecord>;
+export interface AIQATasks {
+  run(input: AIQATaskInput): Promise<AIQARecord>;
   cancel(itemID: number): void;
-  state(itemID: number): ReaderAITaskState;
+  state(itemID: number): AIQATaskState;
   subscribe(listener: () => void): () => void;
   dispose(): void;
 }

@@ -9,54 +9,54 @@ import type { PreferenceStore } from '../core/preference-store';
 import { neoCommandLanguage } from '../core/preferences';
 import { t } from '../i18n';
 import { createAIAbortController } from '../platform/ai-runtime';
-import { attachmentReadingStorage } from '../platform/reader-ai-storage';
-import { releaseReaderAIUI } from '../platform/reader-ai-ui';
+import { attachmentReadingStorage } from '../platform/ai-qa-storage';
+import { releaseAIQAUI } from '../platform/ai-qa-ui';
 import {
-  ReaderAIPanelHost,
+  AIQAPanelHost,
   readerRegionPreview,
-  type ReaderAIPanelLease,
+  type AIQAPanelLease,
   type ReaderRuntime,
 } from '../toolkit/reader';
 import { ThemeManager } from '../ui/theme';
-import { saveReaderAIToNote } from './adoption';
+import { saveAIQAToNote } from './adoption';
 import type {
-  ReaderAIEvidence,
-  ReaderAIErrorCode,
-  ReaderAIInputImage,
-  ReaderAIRecord,
-  ReaderAIRepository,
-  ReaderAITaskKind,
-  ReaderAITasks,
-  ReaderAITaskState,
+  AIQAEvidence,
+  AIQAErrorCode,
+  AIQAInputImage,
+  AIQARecord,
+  AIQARepository,
+  AIQATaskKind,
+  AIQATasks,
+  AIQATaskState,
 } from './contracts';
 import {
-  captureReaderAISource,
-  readerAISelectionEvidence,
-  readReaderAIContext,
-  type ReaderAIContext,
-  type ReaderAISourceCapture,
+  captureAIQASource,
+  aiQASelectionEvidence,
+  readAIQAContext,
+  type AIQAContext,
+  type AIQASourceCapture,
 } from './evidence';
-import { ReaderAIError } from './errors';
-import type { ReaderAIPort, ReaderAIViewAccess } from './reader-port';
-import { createReaderAIRepository } from './repository';
-import { createReaderAITasks } from './tasks';
-import { mountReaderAIView } from './view-host';
+import { AIQAError } from './errors';
+import type { AIQAReaderPort, AIQAReaderViewAccess } from './reader-port';
+import { createAIQARepository } from './repository';
+import { createAIQATasks } from './tasks';
+import { mountAIQAView } from './view-host';
 import {
-  READER_AI_TEXT_KEYS,
-  type ReaderAICommand,
-  type ReaderAISourcePreview,
-  type ReaderAIView,
-  type ReaderAIViewModel,
+  AI_QA_TEXT_KEYS,
+  type AIQACommand,
+  type AIQASourcePreview,
+  type AIQAView,
+  type AIQAViewModel,
 } from './view-contracts';
 
 interface Session {
-  readonly port: ReaderAIPort;
-  capture: ReaderAISourceCapture | null;
-  context: ReaderAIContext | null;
+  readonly port: AIQAReaderPort;
+  capture: AIQASourceCapture | null;
+  context: AIQAContext | null;
   selection: ReaderSelectionContext | null;
-  access: ReaderAIViewAccess | null;
-  records: readonly ReaderAIRecord[];
-  preview: ReaderAISourcePreview | null;
+  access: AIQAReaderViewAccess | null;
+  records: readonly AIQARecord[];
+  preview: AIQASourcePreview | null;
   previewAbort: AbortController | null;
   error: string | null;
   notice: string | null;
@@ -67,32 +67,32 @@ interface Session {
   operationRevision: number;
 }
 interface Mount {
-  readonly lease: ReaderAIPanelLease;
-  view: ReaderAIView | null;
+  readonly lease: AIQAPanelLease;
+  view: AIQAView | null;
   active: boolean;
   revision: number;
   themeRelease: (() => void) | null;
 }
 interface Preparation {
   readonly abort: AbortController;
-  readonly kind: ReaderAITaskKind;
+  readonly kind: AIQATaskKind;
 }
 
 interface Invocation {
   readonly selection: ReaderSelectionContext | null;
-  readonly access: ReaderAIViewAccess | null;
+  readonly access: AIQAReaderViewAccess | null;
   readonly sectionID: string | null;
 }
 
 /** App-owned tasks and results outlive the native panel; Reader supplies selection and exact-view policy. */
-export class ReaderAIController {
+export class AIQAController {
   readonly #rootURI: string;
   readonly #preferences: PreferenceStore;
   readonly #logger: Logger;
   readonly #service: AIService;
-  readonly #repository: ReaderAIRepository;
-  readonly #tasks: ReaderAITasks;
-  readonly #panel: ReaderAIPanelHost;
+  readonly #repository: AIQARepository;
+  readonly #tasks: AIQATasks;
+  readonly #panel: AIQAPanelHost;
   readonly #unsubscribe: () => void;
   readonly #sessions = new Map<ReaderRuntime, Session>();
   readonly #mounts = new Map<HTMLElement, Mount>();
@@ -109,8 +109,8 @@ export class ReaderAIController {
     this.#preferences = options.preferences;
     this.#logger = options.logger;
     this.#service = createAIService({ rootURI: options.rootURI, preferences: options.preferences });
-    this.#repository = createReaderAIRepository(attachmentReadingStorage());
-    this.#tasks = createReaderAITasks({
+    this.#repository = createAIQARepository(attachmentReadingStorage());
+    this.#tasks = createAIQATasks({
       client: this.#service,
       repository: this.#repository,
       createAbortController: createAIAbortController,
@@ -126,7 +126,7 @@ export class ReaderAIController {
       }
     });
     try {
-      this.#panel = new ReaderAIPanelHost(options.pluginID, options.rootURI, {
+      this.#panel = new AIQAPanelHost(options.pluginID, options.rootURI, {
         entryLabel: () =>
           t('reader.ai.title', neoCommandLanguage(options.preferences, Zotero.locale ?? '')),
         mount: (lease) => {
@@ -144,7 +144,7 @@ export class ReaderAIController {
               this.#retire(mount);
             } finally {
               if (![...this.#mounts.values()].some((other) => other.lease.window === lease.window))
-                releaseReaderAIUI(lease.window);
+                releaseAIQAUI(lease.window);
             }
           };
         },
@@ -154,7 +154,7 @@ export class ReaderAIController {
           if (state) this.#emit(state);
         },
         failed: (reader, error) => {
-          reportDiagnosticError(this.#logger, 'Reader AI tool window failed', error);
+          reportDiagnosticError(this.#logger, 'AI Q&A tool window failed', error);
           const state = this.#sessions.get(reader);
           if (state) state.port.showStatus(this.#text(state, 'error.unsupported'));
         },
@@ -167,8 +167,8 @@ export class ReaderAIController {
     }
   }
 
-  register(port: ReaderAIPort): () => void {
-    if (this.#disposed || this.#sessions.has(port.reader)) throw new ReaderAIError('unsupported');
+  register(port: AIQAReaderPort): () => void {
+    if (this.#disposed || this.#sessions.has(port.reader)) throw new AIQAError('unsupported');
     const state: Session = {
       port,
       capture: null,
@@ -235,7 +235,7 @@ export class ReaderAIController {
     return t(`reader.ai.${key}`, state.port.language());
   }
 
-  #task(state: Session): ReaderAITaskState {
+  #task(state: Session): AIQATaskState {
     const itemID = state.capture?.source.itemID ?? state.port.reader.itemID ?? 0;
     const preparation = this.#preparing.get(itemID);
     return preparation
@@ -250,10 +250,10 @@ export class ReaderAIController {
       : this.#tasks.state(itemID);
   }
 
-  #model(state: Session): ReaderAIViewModel {
+  #model(state: Session): AIQAViewModel {
     const labels = Object.fromEntries(
-      READER_AI_TEXT_KEYS.map((key) => [key, this.#text(state, key)]),
-    ) as ReaderAIViewModel['labels'];
+      AI_QA_TEXT_KEYS.map((key) => [key, this.#text(state, key)]),
+    ) as AIQAViewModel['labels'];
     const task = this.#task(state);
     const hasSelection = !!state.selection?.text.trim();
     return {
@@ -291,12 +291,12 @@ export class ReaderAIController {
       try {
         mount.view?.update(model);
       } catch {
-        this.#logger.debug('Reader AI view update failed');
+        this.#logger.debug('AI Q&A view update failed');
       }
     }
   }
 
-  #activate(lease: ReaderAIPanelLease): void {
+  #activate(lease: AIQAPanelLease): void {
     const mount = this.#mounts.get(lease.root),
       state = this.#sessions.get(lease.reader);
     if (!mount || !lease.isCurrent() || mount.active || !state) return;
@@ -311,7 +311,7 @@ export class ReaderAIController {
     state.access ??= state.port.captureView();
     state.selection ??= state.port.captureSelection();
     const revision = ++mount.revision;
-    void mountReaderAIView(this.#rootURI, lease, this.#model(state), (command) =>
+    void mountAIQAView(this.#rootURI, lease, this.#model(state), (command) =>
       this.#perform(state, () => this.#command(state, command)),
     )
       .then((view) => {
@@ -361,10 +361,9 @@ export class ReaderAIController {
       await action();
     } catch (error) {
       if (!this.#current(state) || state.operationRevision !== revision) return;
-      const code: ReaderAIErrorCode =
-        error instanceof ReaderAIError ? error.code : aiErrorCode(error);
+      const code: AIQAErrorCode = error instanceof AIQAError ? error.code : aiErrorCode(error);
       state.error = this.#text(state, `error.${code}`);
-      this.#logger.debug(`Reader AI operation failed code=${code}`);
+      this.#logger.debug(`AI Q&A operation failed code=${code}`);
     } finally {
       this.#emit(state);
     }
@@ -375,7 +374,7 @@ export class ReaderAIController {
     state.loading = true;
     this.#emit(state);
     const load = async (): Promise<void> => {
-      const capture = await captureReaderAISource(state.port.reader);
+      const capture = await captureAIQASource(state.port.reader);
       if (!this.#current(state)) return;
       if (state.capture?.source.fingerprint !== capture.source.fingerprint) {
         state.context = null;
@@ -383,7 +382,7 @@ export class ReaderAIController {
       }
       state.capture = capture;
       await this.#reloadRecords(state);
-      const context = await readReaderAIContext(
+      const context = await readAIQAContext(
         state.port.reader,
         this.#preferences,
         capture,
@@ -416,7 +415,7 @@ export class ReaderAIController {
 
   async #run(
     state: Session,
-    kind: ReaderAITaskKind,
+    kind: AIQATaskKind,
     question: string,
     invocation: Invocation = {
       selection: state.selection && { ...state.selection },
@@ -425,28 +424,28 @@ export class ReaderAIController {
     },
   ): Promise<void> {
     const capture = state.capture;
-    if (!capture || !this.#current(state)) throw new ReaderAIError('stale-source');
-    if (!this.#service.configuration().configured) throw new ReaderAIError('unconfigured');
+    if (!capture || !this.#current(state)) throw new AIQAError('stale-source');
+    if (!this.#service.configuration().configured) throw new AIQAError('unconfigured');
     const itemID = capture.source.itemID;
     if (
       this.#preparing.has(itemID) ||
       ['preparing', 'requesting', 'saving'].includes(this.#tasks.state(itemID).phase)
     )
-      throw new ReaderAIError('busy');
+      throw new AIQAError('busy');
     question = question.trim();
     if (question.length > 8000 || (kind === 'question' && !question))
-      throw new ReaderAIError('unsupported');
+      throw new AIQAError('unsupported');
     const preparation: Preparation = { abort: createAIAbortController(), kind };
     this.#preparing.set(itemID, preparation);
     const current = (): boolean => !this.#disposed && !preparation.abort.signal.aborted;
     this.#emit(state);
     try {
-      if (!(await capture.isCurrent())) throw new ReaderAIError('stale-source');
-      let evidence = readerAISelectionEvidence(capture.source, invocation.selection);
-      if (kind === 'explain' && !evidence.length) throw new ReaderAIError('unsupported');
+      if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+      let evidence = aiQASelectionEvidence(capture.source, invocation.selection);
+      if (kind === 'explain' && !evidence.length) throw new AIQAError('unsupported');
       let title = this.#text(state, 'selection');
       if (kind === 'guide' || (kind === 'question' && !evidence.length)) {
-        const context = await readReaderAIContext(
+        const context = await readAIQAContext(
           state.port.reader,
           this.#preferences,
           capture,
@@ -458,7 +457,7 @@ export class ReaderAIController {
             pageIndex: invocation.access?.pageIndex ?? null,
           },
         );
-        if (!context?.evidence.length) throw new ReaderAIError('unsupported');
+        if (!context?.evidence.length) throw new AIQAError('unsupported');
         if (
           this.#current(state) &&
           (!state.context || state.context.sectionID === invocation.sectionID)
@@ -467,19 +466,19 @@ export class ReaderAIController {
         evidence = context.evidence;
         title = context.title;
       }
-      const images: ReaderAIInputImage[] = [];
+      const images: AIQAInputImage[] = [];
       if (this.#service.configuration().sendImages) {
         for (const entry of evidence
           .filter((value) => (value.kind === 'figure' || value.kind === 'table') && value.location)
           .slice(0, 4)) {
-          if (!current()) throw new ReaderAIError('cancelled');
+          if (!current()) throw new AIQAError('cancelled');
           const preview = await readerRegionPreview(
             state.port.reader,
             entry.location!,
             preparation.abort.signal,
           );
           const prefix = 'data:image/png;base64,';
-          if (!preview.dataURL.startsWith(prefix)) throw new ReaderAIError('unsupported');
+          if (!preview.dataURL.startsWith(prefix)) throw new AIQAError('unsupported');
           images.push({
             evidenceID: entry.id,
             data: preview.dataURL.slice(prefix.length),
@@ -487,7 +486,7 @@ export class ReaderAIController {
           });
         }
       }
-      if (!current()) throw new ReaderAIError('cancelled');
+      if (!current()) throw new AIQAError('cancelled');
       // A prepared request is admitted independently of panel focus; only the PDF revision guards its save.
       this.#preparing.delete(itemID);
       const pending = this.#tasks.run({
@@ -507,13 +506,13 @@ export class ReaderAIController {
     }
   }
 
-  #record(state: Session, id: string): ReaderAIRecord {
+  #record(state: Session, id: string): AIQARecord {
     const record = state.records.find((value) => value.id === id);
-    if (!record) throw new ReaderAIError('storage');
+    if (!record) throw new AIQAError('storage');
     return record;
   }
 
-  async #evidence(state: Session, resultID: string, evidenceID: string): Promise<ReaderAIEvidence> {
+  async #evidence(state: Session, resultID: string, evidenceID: string): Promise<AIQAEvidence> {
     const record = this.#record(state, resultID),
       capture = state.capture;
     if (
@@ -521,9 +520,9 @@ export class ReaderAIController {
       record.source.fingerprint !== capture.source.fingerprint ||
       !(await capture.isCurrent())
     )
-      throw new ReaderAIError('stale-source');
+      throw new AIQAError('stale-source');
     const evidence = record.evidence.find((value) => value.id === evidenceID);
-    if (!evidence) throw new ReaderAIError('invalid-output');
+    if (!evidence) throw new AIQAError('invalid-output');
     return evidence;
   }
 
@@ -552,7 +551,7 @@ export class ReaderAIController {
     }
   }
 
-  async #command(state: Session, command: ReaderAICommand): Promise<void> {
+  async #command(state: Session, command: AIQACommand): Promise<void> {
     switch (command.type) {
       case 'configure':
         await this.#service.configure(
@@ -600,8 +599,8 @@ export class ReaderAIController {
       case 'select-section': {
         const capture = state.capture;
         if (!capture || !state.context?.sections.some((value) => value.id === command.id))
-          throw new ReaderAIError('unsupported');
-        state.context = await readReaderAIContext(
+          throw new AIQAError('unsupported');
+        state.context = await readAIQAContext(
           state.port.reader,
           this.#preferences,
           capture,
@@ -625,13 +624,13 @@ export class ReaderAIController {
           !state.access?.isCurrent() ||
           !state.access.jump(evidence.location)
         )
-          throw new ReaderAIError('stale-source');
+          throw new AIQAError('stale-source');
         return;
       }
       case 'save-note': {
-        if (!state.capture) throw new ReaderAIError('stale-source');
+        if (!state.capture) throw new AIQAError('stale-source');
         const labels = this.#model(state).labels;
-        await saveReaderAIToNote(this.#record(state, command.resultID), state.capture, labels);
+        await saveAIQAToNote(this.#record(state, command.resultID), state.capture, labels);
         state.notice = this.#text(state, 'saved');
         return;
       }
@@ -665,7 +664,7 @@ export class ReaderAIController {
     failure.run(this.#unsubscribe);
     failure.run(() => this.#tasks.dispose());
     failure.run(() => this.#panel.dispose());
-    for (const owner of owners) failure.run(() => releaseReaderAIUI(owner));
+    for (const owner of owners) failure.run(() => releaseAIQAUI(owner));
     failure.run(() => this.#service.dispose());
     this.#mounts.clear();
     this.#sessions.clear();

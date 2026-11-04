@@ -1,32 +1,32 @@
 import type { ReaderSelectionActionDefinition } from '../../core/contracts';
 import type { ModuleHost } from '../../core/module-host';
 import { t } from '../../i18n';
-import type { ReaderAIController } from '../../reader-ai/controller';
-import { ReaderAIError } from '../../reader-ai/errors';
-import type { ReaderAIPort } from '../../reader-ai/reader-port';
+import type { AIQAController } from '../../ai-qa/controller';
+import { AIQAError } from '../../ai-qa/errors';
+import type { AIQAReaderPort } from '../../ai-qa/reader-port';
 
-export interface ReaderAIModule {
+export interface AIQAModule {
   open(): boolean;
   selectionActions(): readonly ReaderSelectionActionDefinition[];
 }
 
 /** Reader owns invocation context; the app owns task and accepted-result lifetime. */
-export function createReaderAIModule(
+export function createAIQAModule(
   host: ModuleHost,
-  controller: ReaderAIController | null,
-  port: ReaderAIPort,
-): ReaderAIModule {
-  if (!controller) throw new ReaderAIError('unsupported');
-  return host.activate('reader-ai', (scope) => {
+  controller: AIQAController | null,
+  port: AIQAReaderPort,
+): AIQAModule {
+  if (!controller) throw new AIQAError('unsupported');
+  return host.activate('ai-qa', (scope) => {
     scope.add(controller.register(port));
-    const open = host.bind<void>(scope, 'reader-normal', 'openReaderAI', () => {
+    const open = host.bind<void>(scope, 'reader-normal', 'openAIQA', () => {
       controller.open(port.reader);
     });
     return {
       open: () => open(),
       selectionActions: () => [
         {
-          id: 'neo.ai.explain',
+          id: 'neo.ai-qa.explain',
           label: t('reader.ai.explain', port.language()),
           isAvailable: (context) =>
             scope.isCurrent() && context.itemID === port.reader.itemID && !!context.text.trim(),

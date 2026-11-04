@@ -14,7 +14,7 @@ Zotero Neo 是一个受 Vim/Neovim 启发的 Zotero 插件。它给文献列表�
 
 ## 主要功能
 
-- [PDF 阅读、导航与 Reader AI](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记；也可按需解释选区或准备章节导引，预览依据后确认跳回原文，并明确采纳为 Zotero 笔记。
+- [PDF 阅读、导航与 AI 问答（实验）](docs/READER_GUIDE.md)：滚动、搜索、标题与图表跳转、分屏和阅读位置标记；可对当前 Reader 选区或有限章节证据提问、解释并准备导引，预览后确认来源，再明确采纳为 Zotero 笔记。当前不检索批注、笔记或其他论文。
 - [选择文字与批注](docs/SELECTION_GUIDE.md)：输入词句定位选区，调整范围，复制、划线和编辑评论。
 - [文献库与批量整理](docs/MAIN_GUIDE.md)：查找论文、建立临时选择集、整理标签和分类。
 - [笔记](docs/NOTE_GUIDE.md)：查找已有笔记，按需使用 Vim 风格编辑。

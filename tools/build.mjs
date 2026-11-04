@@ -62,7 +62,7 @@ await build({
 
 for (const [entry, output] of [
   ['src/ai/runtime.ts', 'content/ai-runtime.js'],
-  ['src/reader-ai/ui/index.tsx', 'content/reader-ai-ui.js'],
+  ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
 ]) {
   await build({
     ...common,

@@ -22,32 +22,32 @@ import {
   type ReaderCachedDocument,
 } from '../reader/document-cache';
 import type { ReaderRuntime } from '../toolkit/reader';
-import type { ReaderAIEvidence, ReaderAISource } from './contracts';
-import { ReaderAIError } from './errors';
+import type { AIQAEvidence, AIQASource } from './contracts';
+import { AIQAError } from './errors';
 
 const MAX_EVIDENCE = 40;
 const MAX_CONTEXT_CHARACTERS = 32000;
 
-export interface ReaderAISourceCapture {
-  readonly source: ReaderAISource;
+export interface AIQASourceCapture {
+  readonly source: AIQASource;
   readonly target: SourceNoteTarget;
   isCurrent(): Promise<boolean>;
 }
 
-export interface ReaderAIContext {
+export interface AIQAContext {
   readonly sections: readonly { readonly id: string; readonly title: string }[];
   readonly sectionID: string;
   readonly title: string;
-  readonly evidence: readonly ReaderAIEvidence[];
+  readonly evidence: readonly AIQAEvidence[];
   readonly limited: boolean;
 }
 
 /** Captures this Reader's attachment and file revision without uploading or preparing native structure. */
-export async function captureReaderAISource(reader: ReaderRuntime): Promise<ReaderAISourceCapture> {
+export async function captureAIQASource(reader: ReaderRuntime): Promise<AIQASourceCapture> {
   const target = resolveReaderSourceNoteTarget(reader);
-  if (!target) throw new ReaderAIError('stale-source');
+  if (!target) throw new AIQAError('stale-source');
   const pdf = await analysisPDF(target.attachment.itemID);
-  const source: ReaderAISource = {
+  const source: AIQASource = {
     itemID: target.attachment.itemID,
     libraryID: target.attachment.libraryID,
     key: target.attachment.key,
@@ -95,12 +95,12 @@ function selectionLocation(position: string | null): DocumentLocation | null {
 }
 
 /** A saved selection is authored text with a native position, not an OCR region promoted to characters. */
-export function readerAISelectionEvidence(
-  source: ReaderAISource,
+export function aiQASelectionEvidence(
+  source: AIQASource,
   context: ReaderSelectionContext | null,
-): readonly ReaderAIEvidence[] {
+): readonly AIQAEvidence[] {
   if (!context || context.itemID !== source.itemID || !context.text.trim()) return [];
-  if (context.text.length > MAX_CONTEXT_CHARACTERS) throw new ReaderAIError('unsupported');
+  if (context.text.length > MAX_CONTEXT_CHARACTERS) throw new AIQAError('unsupported');
   return [
     {
       id: 'selection',
@@ -157,7 +157,7 @@ function projectContext(
   selectedID: string | null,
   selection: ReaderSelectionContext | null,
   pageIndex: number | null,
-): ReaderAIContext {
+): AIQAContext {
   const regions = snapshot.parsed.regions,
     blocks = documentTextBlocks(regions),
     sections = documentSections(blocks);
@@ -166,10 +166,10 @@ function projectContext(
   const regionIDs = new Set(
     selectedBlocks.flatMap((block) => block.regions.map((region) => region.id)),
   );
-  const evidence: ReaderAIEvidence[] = [];
+  const evidence: AIQAEvidence[] = [];
   let characters = 0,
     limited = false;
-  const append = (value: ReaderAIEvidence): void => {
+  const append = (value: AIQAEvidence): void => {
     if (!value.text.trim() && (value.kind === 'selection' || value.kind === 'text')) return;
     if (evidence.length >= MAX_EVIDENCE || characters >= MAX_CONTEXT_CHARACTERS) {
       limited = true;
@@ -237,10 +237,10 @@ function projectContext(
 }
 
 /** Cache-only opening remains cheap; native preparation happens only after an explicit task/context action. */
-export async function readReaderAIContext(
+export async function readAIQAContext(
   reader: ReaderRuntime,
   preferences: PreferenceStore,
-  capture: ReaderAISourceCapture,
+  capture: AIQASourceCapture,
   current: () => boolean,
   options: {
     readonly prepare: boolean;
@@ -248,7 +248,7 @@ export async function readReaderAIContext(
     readonly selection: ReaderSelectionContext | null;
     readonly pageIndex: number | null;
   },
-): Promise<ReaderAIContext | null> {
+): Promise<AIQAContext | null> {
   const snapshot = options.prepare
     ? await readReaderDocument(reader, preferences, current)
     : await readReaderDocumentCache(reader, preferences, current);
@@ -259,6 +259,6 @@ export async function readReaderAIContext(
     !(await snapshot.isCurrent()) ||
     !(await capture.isCurrent())
   )
-    throw new ReaderAIError('stale-source');
+    throw new AIQAError('stale-source');
   return projectContext(snapshot, options.sectionID, options.selection, options.pageIndex);
 }

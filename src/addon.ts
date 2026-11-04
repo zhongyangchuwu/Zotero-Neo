@@ -15,7 +15,7 @@ import { migrateBindingPreferences, migrateReaderPreferences } from './core/pref
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
-import { ReaderAIController } from './reader-ai/controller';
+import { AIQAController } from './ai-qa/controller';
 
 export interface AddonContext {
   readonly id: string;
@@ -57,14 +57,14 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly api: ZoteroNeoPublicApi;
   #context: AddonContext | null = null;
   #preferencesRegistered = false;
-  #readerAI: ReaderAIController | null = null;
+  aiQA: AIQAController | null = null;
 
   constructor() {
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
-      readerAI: () => this.#readerAI,
+      aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
@@ -94,7 +94,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#main = createMainWindowController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
-      readerAI: () => this.#readerAI,
+      aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
@@ -116,9 +116,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
-    if (this.#modules.applied['reader-ai'] && !this.#readerAI) {
+    if (this.#modules.applied['ai-qa'] && !this.aiQA) {
       try {
-        this.#readerAI = new ReaderAIController({
+        this.aiQA = new AIQAController({
           pluginID: context.id,
           rootURI: context.rootURI,
           preferences: this.#preferences,
@@ -126,7 +126,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
         });
       } catch {
         // Optional AI registration must not prevent core Reader/Main startup.
-        this.#logger.debug('Reader AI initialization failed');
+        this.#logger.debug('AI Q&A initialization failed');
       }
     }
     this.#reader.start(context.id);
@@ -144,8 +144,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     const failure = new CleanupFailure();
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#reader.shutdown());
-    failure.run(() => this.#readerAI?.dispose());
-    this.#readerAI = null;
+    failure.run(() => this.aiQA?.dispose());
+    this.aiQA = null;
     failure.run(() => this.#main.shutdown());
     failure.rethrow();
     this.#logger.debug('Shut down');

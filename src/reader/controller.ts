@@ -59,7 +59,7 @@ import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
 import { createReaderNotesModule, type ReaderNotesModule } from '../modules/notes/reader';
-import { createReaderAIModule, type ReaderAIModule } from '../modules/reader-ai';
+import { createAIQAModule, type AIQAModule } from '../modules/ai-qa';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -525,7 +525,7 @@ export class ReaderSession {
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
   readonly #notes: ReaderNotesModule | null;
-  readonly #ai: ReaderAIModule | null;
+  readonly #ai: AIQAModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
   readonly #selectionRange: ReaderSelectionModule['range'] | null;
   readonly #selectionActions: ReaderSelectionModule['actions'] | null;
@@ -915,10 +915,10 @@ export class ReaderSession {
           this.#jumpHistoryBridge.sync();
         },
       });
-      this.#ai = this.#modules.activate('reader-ai', () =>
-        createReaderAIModule(
+      this.#ai = this.#modules.activate('ai-qa', () =>
+        createAIQAModule(
           this.#modules.host,
-          dependencies.controller.dependencies.readerAI?.() ?? null,
+          dependencies.controller.dependencies.aiQA?.() ?? null,
           {
             reader: dependencies.reader,
             captureSelection: () => this.selectionContext(),
@@ -937,7 +937,7 @@ export class ReaderSession {
                   return !!this.executeReaderNavigation(
                     window,
                     {
-                      cause: { kind: 'event', event: 'reader-ai.jump' },
+                      cause: { kind: 'event', event: 'ai-qa.jump' },
                       surface: 'reader',
                       context: { readerPath: 'internal-link', isCurrent },
                     },
@@ -1284,7 +1284,7 @@ export class ReaderSession {
 
   focusAndHandle(event: KeyboardEvent): void {
     if (this.#scope.disposed) return;
-    if (this.#dependencies.controller.dependencies.readerAI?.()?.ownsTarget(event.target)) return;
+    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     if (!pdfWindow) return;
     const sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target);
@@ -1374,7 +1374,7 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
-    if (this.#dependencies.controller.dependencies.readerAI?.()?.ownsTarget(event.target)) return;
+    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#selection?.handleKey(event)) return;
     if (this.#notes?.handleKey(event)) return;
@@ -1631,7 +1631,7 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
-    if (action === 'openReaderAI') {
+    if (action === 'openAIQA') {
       this.#ai?.open();
       return;
     }

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { createReaderAIRepository, type ReaderAIStorage } from '../../src/reader-ai/repository';
-import type { ReaderAIRecord, ReaderAISource } from '../../src/reader-ai/contracts';
+import { createAIQARepository, type AIQAStorage } from '../../src/ai-qa/repository';
+import type { AIQARecord, AIQASource } from '../../src/ai-qa/contracts';
 
-const source: ReaderAISource = {
+const source: AIQASource = {
   itemID: 1,
   libraryID: 2,
   key: 'ABC',
   fingerprint: 'old',
   fileName: 'paper.pdf',
 };
-const record: ReaderAIRecord = {
+const record: AIQARecord = {
   id: 'one',
   revision: 1,
   source,
@@ -28,7 +28,7 @@ const record: ReaderAIRecord = {
 function storage(initial: string | null = null) {
   let contents = initial;
   let fail = false;
-  const io: ReaderAIStorage = {
+  const io: AIQAStorage = {
     async read() {
       return contents;
     },
@@ -47,10 +47,10 @@ function storage(initial: string | null = null) {
     },
   };
 }
-describe('reader AI repository', () => {
+describe('AI Q&A repository', () => {
   it('preserves generated output and older fingerprints while serializing optimistic edits', async () => {
     const disk = storage();
-    const repo = createReaderAIRepository(disk.io);
+    const repo = createAIQARepository(disk.io);
     await repo.add(record, async () => true);
     const nextSource = { ...source, fingerprint: 'new' };
     expect(await repo.list(nextSource)).toEqual([record]);
@@ -68,14 +68,26 @@ describe('reader AI repository', () => {
     await repo.remove(source, 'one', 2);
     expect(await repo.list(source)).toEqual([]);
   });
+  it('loads existing records and human revisions without rewriting their originals', async () => {
+    const saved = { ...record, revision: 2, userText: 'Human revision' };
+    const original = JSON.stringify({ version: 1, records: [saved] });
+    const disk = storage(original);
+    const repo = createAIQARepository(disk.io);
+    expect(await repo.list(source)).toEqual([saved]);
+    expect(disk.contents()).toBe(original);
+    const revised = await repo.edit(source, saved.id, saved.revision, 'Updated human revision');
+    expect(revised.output).toEqual(record.output);
+    expect(revised.userText).toBe('Updated human revision');
+    expect(revised.revision).toBe(3);
+  });
   it('never replaces a corrupt store or a previously committed file on failure', async () => {
     const corrupt = storage('{broken');
-    const repo = createReaderAIRepository(corrupt.io);
+    const repo = createAIQARepository(corrupt.io);
     await expect(repo.list(source)).rejects.toThrow('storage');
     await expect(repo.add(record, async () => true)).rejects.toThrow('storage');
     expect(corrupt.contents()).toBe('{broken');
     const disk = storage();
-    const valid = createReaderAIRepository(disk.io);
+    const valid = createAIQARepository(disk.io);
     await valid.add(record, async () => true);
     const before = disk.contents();
     disk.fail();
@@ -84,7 +96,7 @@ describe('reader AI repository', () => {
   });
   it('rejects records with unsupported evidence instead of creating links', async () => {
     const disk = storage();
-    const repo = createReaderAIRepository(disk.io);
+    const repo = createAIQARepository(disk.io);
     const invalid = {
       ...record,
       evidence: [
@@ -100,13 +112,13 @@ describe('reader AI repository', () => {
           nativePosition: null,
         },
       ],
-    } as unknown as ReaderAIRecord;
+    } as unknown as AIQARecord;
     await expect(repo.add(invalid, async () => true)).rejects.toThrow('storage');
     expect(disk.contents()).toBeNull();
   });
   it('does not commit when the captured source is no longer current', async () => {
     const disk = storage();
-    await expect(createReaderAIRepository(disk.io).add(record, async () => false)).rejects.toThrow(
+    await expect(createAIQARepository(disk.io).add(record, async () => false)).rejects.toThrow(
       'stale-source',
     );
     expect(disk.contents()).toBeNull();
@@ -139,7 +151,7 @@ describe('reader AI repository', () => {
       };
       const original = JSON.stringify({ version: 1, records: [malformed] });
       const disk = storage(original);
-      const repo = createReaderAIRepository(disk.io);
+      const repo = createAIQARepository(disk.io);
       await expect(repo.list(source)).rejects.toThrow('storage');
       await expect(repo.add({ ...record, id: 'new' }, async () => true)).rejects.toThrow('storage');
       expect(disk.contents()).toBe(original);

@@ -17,7 +17,7 @@ packaging.
 ```
 
 On Windows (no bash needed): `powershell -ExecutionPolicy Bypass -File tools\build.ps1`
-Creates `zotero-neo.xpi` — a deterministic archive containing generated JavaScript bundles, the Reader AI tool-window shell, preference markup, the manifest and icons, the project `LICENSE`, and vendored notices/provenance: `licenses/fuzzysort-LICENSE`, `licenses/ai-sdk-NOTICE`, `licenses/ai-sdk-provenance.json`, `licenses/react-NOTICE`, and `licenses/react-provenance.json`.
+Creates `zotero-neo.xpi` — a deterministic archive containing generated JavaScript bundles, the AI Q&A experimental tool-window shell, preference markup, the manifest and icons, the project `LICENSE`, and vendored notices/provenance: `licenses/fuzzysort-LICENSE`, `licenses/ai-sdk-NOTICE`, `licenses/ai-sdk-provenance.json`, `licenses/react-NOTICE`, and `licenses/react-provenance.json`.
 
 ### Installing
 
@@ -126,7 +126,7 @@ src/
   i18n/                    shared app localization and locale catalogs
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and matcher
-  modules/                 12 internal partitions; nine core; optional `reader-hints`, `extensions`, and `reader-ai`
+  modules/                 12 internal partitions; nine core; optional `reader-hints`, `extensions`, and `ai-qa`
   reader/                  reader lifecycle and features
   toolkit/                 internal Main (including Note-pane) and Reader host capabilities
   platform/                narrow host-boundary adapters
