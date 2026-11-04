@@ -672,6 +672,7 @@
   "reader.chapterNotes.page": "Page",
   "reader.chapterNotes.entries": "entries",
   "action.openAIQA": "Open AI Q&A (Experimental)",
+  "action.openReferences": "Open References",
   "reader.ai.title": "AI Q&A (Experimental)",
   "reader.ai.configure": "Configure AI service",
   "reader.ai.api": "API protocol",

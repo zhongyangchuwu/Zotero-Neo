@@ -18,6 +18,7 @@ export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
       'reader-hints': previous['reader-hints'],
       extensions: previous.extensions,
       'ai-qa': previous['ai-qa'] === true,
+      references: previous.references === true,
     });
   }
   const flags = Object.freeze(

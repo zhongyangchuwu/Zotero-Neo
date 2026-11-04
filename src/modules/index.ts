@@ -33,16 +33,18 @@ export type BuiltinModuleId =
   | 'reader-annotations'
   | 'reader-hints'
   | 'ai-qa'
+  | 'references'
   | 'notes'
   | 'workspace'
   | 'extensions';
 
-export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'ai-qa'] as const;
+export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'ai-qa', 'references'] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
 export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
   'reader-hints': true,
   extensions: true,
   'ai-qa': false,
+  references: true,
 };
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
@@ -230,6 +232,17 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     contributions: [{ host: 'reader', context: 'reader-normal', actions: READER_HINT_ACTIONS }],
     selectionActions: [],
     ui: ['Link hints', 'Copy hints'],
+  },
+  {
+    id: 'references',
+    names: { en: 'Reference Enhancements', 'zh-CN': '引用增强' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view'],
+    requires: [],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openReferences'] }],
+    selectionActions: [],
+    ui: ['References'],
   },
   {
     id: 'ai-qa',

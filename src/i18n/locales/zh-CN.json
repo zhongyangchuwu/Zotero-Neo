@@ -672,6 +672,7 @@
   "reader.chapterNotes.page": "页码",
   "reader.chapterNotes.entries": "条",
   "action.openAIQA": "打开 AI 问答（实验）",
+  "action.openReferences": "打开引用",
   "reader.ai.title": "AI 问答（实验）",
   "reader.ai.configure": "配置 AI 服务",
   "reader.ai.api": "API 协议",

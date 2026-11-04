@@ -1,5 +1,6 @@
 /** Minimal chooser DOM; actual focus, IME and rendering are also checked in the dedicated Zotero profile. */
 export class DialogElement {
+  readonly nodeType = 1;
   children: DialogElement[] = [];
   parent: DialogElement | null = null;
   style: Record<string, string> = {};

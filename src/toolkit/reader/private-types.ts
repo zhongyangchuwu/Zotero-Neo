@@ -206,6 +206,8 @@ export interface PdfOptionalContentConfigRuntime {
 
 export interface PdfDocumentRuntime {
   readonly numPages?: number;
+  getProcessedData?(): Promise<unknown>;
+  getData?(): Promise<Uint8Array>;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
   getOptionalContentConfig?(options: {

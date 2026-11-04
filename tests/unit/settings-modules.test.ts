@@ -341,6 +341,7 @@ describe('Settings Modules page', () => {
       [modulePreferenceKey('reader-hints')]: false,
       [modulePreferenceKey('extensions')]: false,
       [modulePreferenceKey('ai-qa')]: true,
+      [modulePreferenceKey('references')]: false,
       'modules.library.enabled': false,
       'modules.notes.enabled': false,
       'modules.workspace.enabled': false,
@@ -371,6 +372,9 @@ describe('Settings Modules page', () => {
     expect(test.modules.requested().extensions).toBe(true);
     expect(test.modules.applied['ai-qa']).toBe(true);
     expect(test.modules.requested()['ai-qa']).toBe(false);
+    expect(test.modules.applied.references).toBe(false);
+    expect(test.modules.requested().references).toBe(true);
+    expect(requestCheckbox(test.root, 'references').checked).toBe(true);
     expect(requestCheckbox(test.root, 'ai-qa').checked).toBe(false);
     expect(requestCheckbox(test.root, 'reader-hints').checked).toBe(true);
     expect(requestCheckbox(test.root, 'extensions').checked).toBe(true);

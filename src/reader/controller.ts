@@ -60,6 +60,7 @@ import { createReaderHintsModule, type ReaderHintsModule } from '../modules/read
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
 import { createReaderNotesModule, type ReaderNotesModule } from '../modules/notes/reader';
 import { createAIQAModule, type AIQAModule } from '../modules/ai-qa';
+import { createReferencesModule, type ReferencesModule } from '../modules/references';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -526,6 +527,7 @@ export class ReaderSession {
   readonly #selection: ReaderSelectionModule | null;
   readonly #notes: ReaderNotesModule | null;
   readonly #ai: AIQAModule | null;
+  readonly #references: ReferencesModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
   readonly #selectionRange: ReaderSelectionModule['range'] | null;
   readonly #selectionActions: ReaderSelectionModule['actions'] | null;
@@ -648,7 +650,9 @@ export class ReaderSession {
         reader: dependencies.reader,
         nativeEditableFocused: () => this.nativeEditableFocused(),
         consumesKey: (key, pdfWindow) => this.readerConsumesKey(key, pdfWindow),
-        commentInputFocused: (window) => this.#commentEditor?.isInputFocused(window) ?? false,
+        featureInputFocused: (window) =>
+          (this.#commentEditor?.isInputFocused(window) ?? false) ||
+          (this.#references?.isInputFocused(window) ?? false),
         debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       });
       this.#jumpHistoryBridge = new ReaderJumpHistoryBridge({
@@ -863,7 +867,8 @@ export class ReaderSession {
         timerWindow: dependencies.firstPdfWindow,
         onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
         onKeyUp: (event) => this.handleKeyUp(event),
-        onPointerDown: () => {
+        onPointerDown: (pdfWindow) => {
+          this.#references?.activateView(pdfWindow);
           this.#markJumpRevision += 1;
           this.#interactionRevision += 1;
           this.#hints?.copy.close();
@@ -903,6 +908,7 @@ export class ReaderSession {
           failure.run(() => this.#navigationModule?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
           failure.run(() => this.#notes?.releaseView(pdfWindow));
+          failure.run(() => this.#references?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
           failure.run(() => this.#hints?.copy.releaseView(pdfWindow));
           failure.run(() => this.#selectionActions?.releaseView(pdfWindow));
@@ -951,6 +957,39 @@ export class ReaderSession {
             showStatus: (message) => this.showStatus(message),
           },
         ),
+      );
+      this.#references = this.#modules.activate('references', () =>
+        createReferencesModule(this.#modules.host, {
+          reader: dependencies.reader,
+          captureView: () => {
+            const window = this.#navigationHost.activePdfWindow();
+            if (!window || !this.readerViewForWindow(window)) return null;
+            const lifetime = this.captureViewLifetime(window);
+            const isCurrent = () => lifetime() && this.readerViewCurrent(window);
+            return {
+              window,
+              isCurrent,
+              restoreFocus: () => {
+                if (isCurrent()) window.focus();
+              },
+              jump: (location) => {
+                if (!isCurrent() || !this.#navigationHost.canNavigate(window)) return false;
+                return !!this.executeReaderNavigation(
+                  window,
+                  {
+                    cause: { kind: 'event', event: 'references.jump' },
+                    surface: 'reader',
+                    context: { readerPath: 'internal-link', isCurrent },
+                  },
+                  () => this.#navigationHost.navigateToRegion(window, { position: location }),
+                );
+              },
+            };
+          },
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root) => this.themeRoot(root),
+          showStatus: (message) => this.showStatus(message),
+        }),
       );
       this.#scope.add(() => this.input.dispose());
       this.#scope.addTimeout(() => {
@@ -1263,6 +1302,7 @@ export class ReaderSession {
     this.#navigationModule?.deactivate();
     this.#selection?.deactivate();
     this.#notes?.close();
+    this.#references?.close();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
     this.#sidebar?.deactivate();
@@ -1284,6 +1324,7 @@ export class ReaderSession {
 
   focusAndHandle(event: KeyboardEvent): void {
     if (this.#scope.disposed) return;
+    if (this.#references?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     if (!pdfWindow) return;
@@ -1374,6 +1415,8 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
+    if (this.#references?.ownsTarget(event.target)) return;
+    this.#references?.activateView(pdfWindow);
     if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#selection?.handleKey(event)) return;
@@ -1631,6 +1674,10 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
+    if (action === 'openReferences') {
+      this.#references?.open();
+      return;
+    }
     if (action === 'openAIQA') {
       this.#ai?.open();
       return;

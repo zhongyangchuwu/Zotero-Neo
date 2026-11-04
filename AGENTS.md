@@ -126,7 +126,7 @@ src/
   i18n/                    shared app localization and locale catalogs
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and matcher
-  modules/                 12 internal partitions; nine core; optional `reader-hints`, `extensions`, and `ai-qa`
+  modules/                 13 internal partitions; nine core; optional `reader-hints`, `extensions`, `ai-qa`, and `references`
   reader/                  reader lifecycle and features
   toolkit/                 internal Main (including Note-pane) and Reader host capabilities
   platform/                narrow host-boundary adapters
@@ -177,7 +177,7 @@ vendor/                    pinned, licensed third-party source/build snapshots
 - `ReaderController` owns reader sessions in a `Map` keyed by `instanceID`.
 - `MainWindowController` owns main-window sessions in a `Map` keyed by window.
 - Session cleanup owns listeners, timers, observers, DOM, and host patches.
-- Reader Surface mode is only `normal | visual`; `ReaderCommentEditor` owns exact-view text input and `ReaderNativeInput` owns Reader-wide native passthrough until Escape/deactivation. Neither is a Reader mode or binding scope.
+- Reader Surface mode is only `normal | visual`. `ReaderCommentEditor` and the References panel report exact-view text focus to the Reader controller; its shared `featureInputFocused` predicate feeds the Toolkit `_textAnnotationFocused` seam. `ReaderNativeInput` owns Reader-wide native passthrough until Escape/deactivation. These are input owners, not Reader modes or binding scopes.
 
 ### Cross-Compartment Security (Chrome ↔ Content)
 
@@ -261,6 +261,11 @@ compatibility dispatcher/re-export remains.
 | `src/modules/reader-navigation/` | Reader navigation, marks, semantic targets, scoped native sidebar and smooth-scroll behavior |
 | `src/modules/reader-selection/` | Select ranges/motions, Flash, selection actions, and the stable selection API domain |
 | `src/modules/reader-annotations/` | 批注创建/删除/改色/过滤/复制、Select 贡献及精确视图评论编辑 |
+| `src/modules/references/` | Reader module entry, action, and view lifetime |
+| `src/references/` | Reference controller, metadata provider, and Reader port |
+| `src/operations/references.ts` | Local reference matching and explicit Zotero add operation |
+| `src/toolkit/reader/references.ts` | Native whole-document snapshot and PDF source validation |
+| `src/platform/reference-credentials.ts` | Optional Semantic Scholar key stored through Zotero Login Manager |
 | `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
 | `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |
 | `tools/build.mjs`                    | esbuild/XPI package pipeline                                                             |
