@@ -144,6 +144,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>ps': 'openNeoSettings',
   'reader-normal:<Space>yy': 'mainYankCitekey',
   'reader-normal:<Space>ai': 'mainAddByIdentifier',
+  'reader-normal:<Space>aa': 'openAIQA',
   'reader-select:s': 'flashText',
   'reader-select:a': 'openSelectionActions',
   'reader-select:<Enter>': 'openSelectionActions',
@@ -920,6 +921,7 @@ const RETIRED_SHORTCUT_ACTIONS = new Map<string, ActionId>([
   ['copyIdentifier', 'copyTarget'],
   ['followIdentifier', 'followLink'],
   ['focusReaderSidebar', 'focusReaderOutline'],
+  ['openReaderAI', 'openAIQA'],
 ]);
 
 /** Translate persisted retired IDs before earlier schema steps parse ActionIds. */

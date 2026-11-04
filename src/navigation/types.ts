@@ -29,6 +29,7 @@ export type NavigationEventId =
   | 'main-local-find.confirm'
   | 'main-selection-panel.reveal'
   | 'reader-mark.jump'
+  | 'ai-qa.jump'
   | 'reader-native.hard';
 
 export type NavigationCause =

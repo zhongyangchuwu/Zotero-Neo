@@ -17,9 +17,7 @@ packaging.
 ```
 
 On Windows (no bash needed): `powershell -ExecutionPolicy Bypass -File tools\build.ps1`
-Creates `zotero-neo.xpi` — a deterministic archive containing generated runtime
-bundles, the preference pane markup, the manifest, icons, the project `LICENSE`,
-and the complete vendored notice at `licenses/fuzzysort-LICENSE`.
+Creates `zotero-neo.xpi` — a deterministic archive containing generated JavaScript bundles, the AI Q&A experimental tool-window shell, preference markup, the manifest and icons, the project `LICENSE`, and vendored notices/provenance: `licenses/fuzzysort-LICENSE`, `licenses/ai-sdk-NOTICE`, `licenses/ai-sdk-provenance.json`, `licenses/react-NOTICE`, and `licenses/react-provenance.json`.
 
 ### Installing
 
@@ -128,7 +126,7 @@ src/
   i18n/                    shared app localization and locale catalogs
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and matcher
-  modules/                 eleven internal partitions; nine core; optional Link and Copy Hints (`reader-hints`) and Plugin Manager (`extensions`)
+  modules/                 12 internal partitions; nine core; optional `reader-hints`, `extensions`, and `ai-qa`
   reader/                  reader lifecycle and features
   toolkit/                 internal Main (including Note-pane) and Reader host capabilities
   platform/                narrow host-boundary adapters
@@ -139,9 +137,12 @@ vendor/                    pinned, licensed third-party source/build snapshots
 
 - Use strict TypeScript and `import type` for type-only dependencies.
 - The packaged runtime has no dynamic npm/package-manager dependency. Development
-  dependencies stay limited to build/test tooling; small audited zero-dependency
-  libraries may be vendored and bundled by esbuild when their version, upstream
-  source, and license are pinned under `vendor/`.
+  dependencies stay limited to build/test tooling and type declarations. Runtime
+  libraries, including the approved AI SDK and local React UI, may be included as
+  pinned, audited, self-contained vendored build snapshots. Pin the complete
+  dependency closure, upstream sources and integrity, preserve its license texts,
+  and bundle all executable code statically into the XPI; never install or fetch
+  packages, CDN scripts, or helper services at runtime.
 - Keep global Gecko guards in named platform adapters and private Zotero SDK/DOM
   seams inside `src/toolkit/`. Business modules import the public Toolkit entries,
   never private implementation types or raw pane/tree/PDF/editor objects. Prefer
@@ -274,16 +275,18 @@ compatibility dispatcher/re-export remains.
 
 - **Latest stable Zotero only.** Older versions may work but are outside the
   compatibility guarantee and release test matrix.
-- **No dynamic runtime dependencies.** Do not load npm packages, CDN scripts,
-  native helper binaries, or network-hosted libraries at runtime. A small
-  third-party library may be included only as a pinned, licensed vendored
-  snapshot that esbuild folds into the generated JavaScript.
+- **No runtime package fetching.** Do not load npm packages, CDN scripts, native
+  helper binaries, or network-hosted libraries at runtime. Approved runtime
+  libraries must have an exact, audited dependency closure and corresponding
+  source/provenance under `vendor/`, with all executable code statically bundled
+  into generated JavaScript and complete distribution notices in every XPI.
 - **TypeScript source, JavaScript XPI.** Package only generated JavaScript and
   static assets; never source maps, TypeScript, tests, `node_modules`, or raw
   vendor modules as separate XPI runtime files.
-- **Distribution notices.** Copy canonical project and vendored license texts into
-  every XPI; validate actual archive payloads, and provide the corresponding tagged
-  source beside published assets. Raw vendor code remains bundled, not separately shipped.
+- **Distribution notices.** Copy the project `LICENSE` and vendored license
+  notices/provenance into every XPI; validate the actual archive payloads and
+  provide the corresponding tagged source beside published assets. Raw vendor
+  code remains bundled, not separately shipped.
 - **CI covers packaging and Node contracts.** Zotero GUI/runtime behavior still
   requires manual verification.
 - **No pre-commit hooks.**

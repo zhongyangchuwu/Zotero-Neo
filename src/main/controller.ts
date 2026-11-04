@@ -946,6 +946,10 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
+    if (this.#dependencies.aiQA?.()?.ownsTarget(event.target)) {
+      this.resetMainInput(window, session);
+      return;
+    }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);

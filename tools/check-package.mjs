@@ -9,6 +9,9 @@ const members = listZipMembers(archive);
 const expected = [
   'LICENSE',
   'bootstrap.js',
+  'content/ai-runtime.js',
+  'content/ai-qa-ui.js',
+  'content/ai-qa-window.xhtml',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
@@ -20,6 +23,12 @@ const expected = [
   'icons/icon-64x64.png',
   'icons/icon-96x96.png',
   'licenses/fuzzysort-LICENSE',
+  'licenses/ai-sdk-NOTICE',
+  'licenses/ai-sdk-provenance.json',
+  'licenses/react-NOTICE',
+  'licenses/react-provenance.json',
+  'locale/en-US/zotero-neo-ai-qa.ftl',
+  'locale/zh-CN/zotero-neo-ai-qa.ftl',
   'manifest.json',
 ].sort();
 
@@ -39,6 +48,10 @@ for (const member of members) {
 for (const [member, source] of [
   ['LICENSE', resolve(root, 'LICENSE')],
   ['licenses/fuzzysort-LICENSE', resolve(root, 'vendor/fuzzysort/LICENSE')],
+  ['licenses/ai-sdk-NOTICE', resolve(root, 'vendor/ai-sdk/NOTICE')],
+  ['licenses/ai-sdk-provenance.json', resolve(root, 'vendor/ai-sdk/provenance.json')],
+  ['licenses/react-NOTICE', resolve(root, 'vendor/react/NOTICE')],
+  ['licenses/react-provenance.json', resolve(root, 'vendor/react/provenance.json')],
 ]) {
   if (!readZipMember(archive, member).equals(readFileSync(source))) {
     throw new Error(`Packaged license notice differs from authoritative source: ${member}`);
@@ -50,7 +63,13 @@ if (manifest.applications?.zotero?.id !== 'zotero-neo@zotero-neo') {
   throw new Error('Packaged manifest has the wrong extension ID');
 }
 
-for (const script of ['bootstrap.js', 'content/zotero-neo.js', 'content/preferences/pane.js']) {
+for (const script of [
+  'bootstrap.js',
+  'content/zotero-neo.js',
+  'content/preferences/pane.js',
+  'content/ai-runtime.js',
+  'content/ai-qa-ui.js',
+]) {
   const source = readFileSync(resolve(root, 'build/addon', script), 'utf8');
   if (/^\s*(?:import|export)\s/m.test(source)) {
     throw new Error(`Unbundled module syntax in ${script}`);

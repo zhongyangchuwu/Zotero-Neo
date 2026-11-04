@@ -9,6 +9,7 @@ import {
 } from '../core/module-runtime';
 import {
   BUILTIN_MODULES,
+  OPTIONAL_MODULE_DEFAULTS,
   OPTIONAL_MODULES,
   type BuiltinModuleId,
   type OptionalModuleDescriptor,
@@ -180,7 +181,7 @@ export class SettingsModules {
   }
 
   #restoreDefaults(): void {
-    for (const { id } of OPTIONAL_MODULES) this.#draft[id] = true;
+    for (const { id } of OPTIONAL_MODULES) this.#draft[id] = OPTIONAL_MODULE_DEFAULTS[id];
     this.#refresh();
     try {
       for (const { id } of OPTIONAL_MODULES) this.#preferences.clear(modulePreferenceKey(id));

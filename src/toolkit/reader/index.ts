@@ -37,3 +37,5 @@ export { readerRegionPreview } from './region-preview';
 export type { ReaderRegionPreview } from './region-preview';
 
 export { readerReadingMode } from './presentation';
+export { AIQAPanelHost } from './ai-qa-panel';
+export type { AIQAPanelLease, AIQAPanelCallbacks } from './ai-qa-panel';

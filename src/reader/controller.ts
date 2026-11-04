@@ -59,6 +59,7 @@ import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
 import { createReaderNotesModule, type ReaderNotesModule } from '../modules/notes/reader';
+import { createAIQAModule, type AIQAModule } from '../modules/ai-qa';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -524,6 +525,7 @@ export class ReaderSession {
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
   readonly #notes: ReaderNotesModule | null;
+  readonly #ai: AIQAModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
   readonly #selectionRange: ReaderSelectionModule['range'] | null;
   readonly #selectionActions: ReaderSelectionModule['actions'] | null;
@@ -831,8 +833,10 @@ export class ReaderSession {
           pluginID: () => this.#dependencies.selection?.pluginID() ?? null,
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
-          contributedActions: (window, language) =>
-            this.#annotations?.selectionActions(window, language) ?? [],
+          contributedActions: (window, language) => [
+            ...(this.#annotations?.selectionActions(window, language) ?? []),
+            ...(this.#ai?.selectionActions() ?? []),
+          ],
           showStatus: (message, duration) => this.showStatus(message, duration),
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
@@ -911,6 +915,43 @@ export class ReaderSession {
           this.#jumpHistoryBridge.sync();
         },
       });
+      this.#ai = this.#modules.activate('ai-qa', () =>
+        createAIQAModule(
+          this.#modules.host,
+          dependencies.controller.dependencies.aiQA?.() ?? null,
+          {
+            reader: dependencies.reader,
+            captureSelection: () => this.selectionContext(),
+            captureView: () => {
+              const window = this.#navigationHost.activePdfWindow();
+              if (!window || !this.readerViewForWindow(window)) return null;
+              const isCurrent = this.captureViewLifetime(window);
+              return {
+                window,
+                pageIndex: this.#navigationHost.outlinePosition(window)?.pageIndex ?? null,
+                isCurrent,
+                jump: (location) => {
+                  if (!isCurrent() || !this.#navigationHost.canNavigate(window)) return false;
+                  this.#navigationHost.activatePdfWindow(window);
+                  if (this.#navigationHost.activePdfWindow() !== window) return false;
+                  return !!this.executeReaderNavigation(
+                    window,
+                    {
+                      cause: { kind: 'event', event: 'ai-qa.jump' },
+                      surface: 'reader',
+                      context: { readerPath: 'internal-link', isCurrent },
+                    },
+                    () => this.#navigationHost.navigateToRegion(window, { position: location }),
+                  );
+                },
+              };
+            },
+            language: () => this.keyGuideLanguage(),
+            themeRoot: (root) => this.themeRoot(root),
+            showStatus: (message) => this.showStatus(message),
+          },
+        ),
+      );
       this.#scope.add(() => this.input.dispose());
       this.#scope.addTimeout(() => {
         const failure = new CleanupFailure();
@@ -1243,6 +1284,7 @@ export class ReaderSession {
 
   focusAndHandle(event: KeyboardEvent): void {
     if (this.#scope.disposed) return;
+    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     if (!pdfWindow) return;
     const sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target);
@@ -1332,6 +1374,7 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
+    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
     if (this.#selection?.handleKey(event)) return;
     if (this.#notes?.handleKey(event)) return;
@@ -1588,6 +1631,10 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
+    if (action === 'openAIQA') {
+      this.#ai?.open();
+      return;
+    }
     if (action === 'organizeChapterNotes') {
       this.#notes?.open(pdfWindow);
       return;

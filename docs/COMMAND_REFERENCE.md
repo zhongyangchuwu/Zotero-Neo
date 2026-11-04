@@ -26,7 +26,7 @@
 
 ## 模式、焦点与功能可用性
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用，只有链接与复制提示（`reader-hints`）和扩展管理面板（`extensions`）可关闭，设置见[模块设置指南](SETTINGS_GUIDE.md#开关两项可选功能)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用；`reader-hints`、`extensions` 与 `ai-qa` 三项可选增强可关闭，其中 `ai-qa` 依赖固定启用的 `reader-selection`。前两项默认开启，`ai-qa` 默认关闭。设置见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |
@@ -126,6 +126,7 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `organizeChapterNotes` | `<Space>rn` | 预览当前 PDF 已有批注与图表摘录，按章节筛选并显式保存新笔记；相同内容复用已有笔记并保留手工修改。 |
 | `prepareDocuments` | `<Space>ru`（Main／Reader） | 打开增强阅读准备：Main 固定 EffectiveSelection 对应 PDF，Reader 只取当前附件；优先读缓存，显式上传缺失项，显示逐文件进度、回执，支持停止本地等待和继续／重试。 |
 | `compareDocumentParsing` | `<Space>rd` | 打开原生／云端解析对照（默认 MinerU）并读取匹配的本地缓存；普通解析按钮优先复用，缓存未命中时上传 PDF，“重新解析并上传 PDF”明确刷新结果。支持区域／整组定位及报告复制。 |
+| `openAIQA` | `<Space>aa` | 打开当前 Reader 的 AI 问答（实验）面板。打开只读取本地成果和缓存，不请求模型；显式解释选区、提问或准备有限章节证据才会启动相应任务。当前只使用 Reader 选区或有限章节证据；`neo.ai-qa.explain` 在 Reader Select 的选区操作中提供。操作流程见[AI 问答操作指南](READER_GUIDE.md#解释选区和询问论文)，配置与数据范围见[设置参考](SETTINGS_REFERENCE.md)。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
 | `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | 每步移动半个视口；计数会重复执行。 |
@@ -418,6 +419,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `yankAnnotationComment` | Reader Normal `Y` | 直接复制当前批注目标的评论 |
 | `openCommandPalette` | Reader/Main/Note Normal `:` | 打开当前上下文的命令面板 |
 | `openNeoSettings` | Reader/Main/Note Normal `<Space>ps` | 打开设置界面 |
+| `openAIQA` | Reader Normal `<Space>aa` | 打开当前 Reader 的 AI 问答（实验）面板；仅在可选 `ai-qa` 模块启用后提供 |
 | `findAllItems` | Reader/Main/Note Normal `<Space>ff` | 打开共享文库条目选择器 |
 | `findCollectionItems` | Reader/Main/Note Normal `<Space>fc` | 打开共享分类条目选择器 |
 | `findNotes` | Reader/Main/Note Normal `<Space>fn` | 打开共享 Note 选择器 |
@@ -651,6 +653,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `reader-normal:<Space>pp` | `managePlugins` |
 | `reader-normal:<Space>ps` | `openNeoSettings` |
 | `reader-normal:<Space>yy` | `mainYankCitekey` |
+| `reader-normal:<Space>aa` | `openAIQA` |
 | `reader-normal:<Space>ai` | `mainAddByIdentifier` |
 | `reader-select:s` | `flashText` |
 | `reader-select:a` | `openSelectionActions` |

@@ -17,6 +17,13 @@ cpSync(resolve(root, 'LICENSE'), resolve(buildRoot, 'LICENSE'));
 const licenseDirectory = resolve(buildRoot, 'licenses');
 mkdirSync(licenseDirectory, { recursive: true });
 cpSync(resolve(root, 'vendor/fuzzysort/LICENSE'), resolve(licenseDirectory, 'fuzzysort-LICENSE'));
+for (const name of ['ai-sdk', 'react']) {
+  cpSync(resolve(root, `vendor/${name}/NOTICE`), resolve(licenseDirectory, `${name}-NOTICE`));
+  cpSync(
+    resolve(root, `vendor/${name}/provenance.json`),
+    resolve(licenseDirectory, `${name}-provenance.json`),
+  );
+}
 cpSync(resolve(root, 'manifest.json'), resolve(buildRoot, 'manifest.json'));
 
 const common = {
@@ -52,6 +59,22 @@ await build({
   format: 'iife',
   platform: 'browser',
 });
+
+for (const [entry, output] of [
+  ['src/ai/runtime.ts', 'content/ai-runtime.js'],
+  ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
+]) {
+  await build({
+    ...common,
+    entryPoints: [resolve(root, entry)],
+    outfile: resolve(buildRoot, output),
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    minify: true,
+    define: { 'process.env.NODE_ENV': '"production"' },
+  });
+}
 
 zipDirectory(buildRoot, outputXpi);
 console.log(`Built ${outputXpi}`);

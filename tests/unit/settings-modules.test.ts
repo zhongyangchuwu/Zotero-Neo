@@ -340,6 +340,7 @@ describe('Settings Modules page', () => {
     const test = mount({
       [modulePreferenceKey('reader-hints')]: false,
       [modulePreferenceKey('extensions')]: false,
+      [modulePreferenceKey('ai-qa')]: true,
       'modules.library.enabled': false,
       'modules.notes.enabled': false,
       'modules.workspace.enabled': false,
@@ -368,6 +369,9 @@ describe('Settings Modules page', () => {
     expect(test.modules.applied['reader-hints']).toBe(false);
     expect(test.modules.requested()['reader-hints']).toBe(true);
     expect(test.modules.requested().extensions).toBe(true);
+    expect(test.modules.applied['ai-qa']).toBe(true);
+    expect(test.modules.requested()['ai-qa']).toBe(false);
+    expect(requestCheckbox(test.root, 'ai-qa').checked).toBe(false);
     expect(requestCheckbox(test.root, 'reader-hints').checked).toBe(true);
     expect(requestCheckbox(test.root, 'extensions').checked).toBe(true);
 

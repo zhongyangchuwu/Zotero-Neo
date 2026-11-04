@@ -23,6 +23,7 @@ const BASE_ACTION_IDS = [
   'openChapterSearch',
   'openObjectExcerpts',
   'organizeChapterNotes',
+  'openAIQA',
   'zoomIn',
   'zoomOut',
   'zoomReset',
