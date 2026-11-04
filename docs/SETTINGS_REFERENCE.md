@@ -66,9 +66,11 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 配置阅读助手
 
-Reader Normal 中按 `<Space>aa` 打开阅读助手面板；Reader Select 的选区操作还提供 `neo.ai.explain`（解释选区）。端点、模型、最大输出 token 数及是否允许发送图像都在该面板配置，不在 Zotero 原生偏好页中配置。最大输出 token 数默认是 `2048`；发送图像默认关闭。服务地址须使用 HTTPS，或使用回环地址的 HTTP。
+Reader Normal 中按 `<Space>aa` 打开阅读助手面板；Reader Select 的选区操作还提供 `neo.ai.explain`（解释选区）。API 协议、基础 URL、模型、最大输出 token 数及是否允许发送图像都在该面板配置，不在 Zotero 原生偏好页中配置。最大输出 token 数默认是 `2048`；发送图像默认关闭。服务地址须使用 HTTPS，或使用回环地址的 HTTP。
 
-API 密钥按端点存入 Zotero 本机密码管理器，界面只显示是否已有密钥，不提供密钥读回；它与 MinerU、PDFTranslate 凭据分开。打开面板只读取本地成果与缓存，不会调用模型；只有显式解释选区、提问或准备章节证据才会准备数据并请求模型。每次请求最多包含 40 条、32,000 字符的文本证据；只有开启发送图像后，才可能附带最多 4 张图表局部 PNG。已完成成果保存在本机，不通过 Zotero 同步；请求不会自动跟随重定向、重试或切换其他服务。
+协议可选 **OpenAI Chat Completions**（`openai-chat-completions`）或 **OpenAI Responses**（`openai-responses`）；基础 URL 不含 `/chat/completions` 或 `/responses` 后缀。旧配置没有协议字段时仍按 Chat Completions 读取，选择 Responses 时发送无会话续接的请求并设置 `store: false`。协议不会自动探测，也不会在失败后自动切换；服务须支持所选协议和 JSON Schema 结构化输出。
+
+API 密钥按端点存入 Zotero 本机密码管理器，界面只显示是否已有密钥，不提供密钥读回；它与 MinerU、PDFTranslate 凭据分开。正在编辑的密钥或忘记密钥操作绑定当前草稿端点，不因另一 Reader 保存配置而换到别的地址。打开面板只读取本地成果与缓存，不会调用模型；只有显式解释选区、提问或准备章节证据才会准备数据并请求模型。每次请求最多包含 40 条、32,000 字符的文本证据；只有开启发送图像后，才可能附带最多 4 张图表局部 PNG。已完成成果保存在本机，不通过 Zotero 同步；请求不会自动跟随重定向、重试或切换其他服务。
 
 选区解释与章节提问的操作流程见[解释选区和询问论文](READER_GUIDE.md#解释选区和询问论文)。
 

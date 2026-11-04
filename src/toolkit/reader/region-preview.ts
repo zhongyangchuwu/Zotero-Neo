@@ -105,17 +105,47 @@ export async function readerRegionPreview(
       output = masked.getContext('2d');
     if (!context || !output || !page.render) throw new Error('PDF canvas unavailable');
     current();
-    task = page.render(
+    const nativePDF = nativeObjectIdentity(pdf);
+    if (!nativePDF.getOptionalContentConfig)
+      throw new Error('PDF optional-content configuration unavailable');
+    const display = nativeObjectIdentity(
+      await nativePDF.getOptionalContentConfig(cloneInto({ intent: 'display' }, window)),
+    );
+    current();
+    const printPromise = nativePDF.getOptionalContentConfig(cloneInto({ intent: 'print' }, window));
+    const print = nativeObjectIdentity(await printPromise);
+    current();
+    if (display.getOrder() !== null) {
+      // Native getOrder() omits unlisted groups; this SDK channel inventories every layer.
+      const handler = nativePDF._transport?.messageHandler;
+      if (!handler) throw new Error('PDF optional-content inventory unavailable');
+      const data = await handler.sendWithPromise('GetOptionalContentConfig', null);
+      current();
+      if (data) {
+        const group = nativeObjectIdentity(cloneInto({ type: 'OCG' as const, id: '' }, window));
+        for (const entry of data.groups) {
+          group.id = entry.id;
+          print.setVisibility(entry.id, display.isVisible(group), false);
+        }
+      }
+    }
+    const renderOptions = nativeObjectIdentity(
       cloneIntoWithReflectors(
         {
           canvasContext: context,
           viewport: page.getViewport(cloneInto({ scale: plan.scale }, window)),
           transform: [1, 0, 0, 1, -plan.left * plan.scale, -plan.top * plan.scale],
+          // Detached crops must not wait for a hidden Reader window's animation frames.
+          intent: 'print' as const,
           annotationMode: 0,
         },
         window,
       ),
     );
+    // This Promise already belongs to the PDF realm; structured cloning would reject it.
+    Reflect.set(renderOptions, 'optionalContentConfigPromise', nativeObjectIdentity(printPromise));
+    current();
+    task = page.render(renderOptions);
     await task.promise;
     current();
     output.fillStyle = 'white';

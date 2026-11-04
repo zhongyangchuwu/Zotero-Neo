@@ -18,6 +18,7 @@ const temp = mkdtempSync(join(tmpdir(), 'neo-runtime-vendor-'));
 try {
   const dependencies = {
     ai: '7.0.162',
+    '@ai-sdk/openai': '4.0.108',
     '@ai-sdk/openai-compatible': '3.0.84',
     zod: '4.2.0',
     react: '19.3.1',
@@ -32,15 +33,24 @@ try {
     ) + '\n',
   );
   const existingLock = join(root, 'vendor/ai-sdk/package-lock.json');
-  if (existsSync(existingLock)) copyFileSync(existingLock, join(temp, 'package-lock.json'));
+  const hasExistingLock = existsSync(existingLock);
+  let lockMatchesDependencies = false;
+  if (hasExistingLock) {
+    const lockedDependencies =
+      JSON.parse(readFileSync(existingLock, 'utf8')).packages?.['']?.dependencies ?? {};
+    lockMatchesDependencies =
+      Object.keys(lockedDependencies).length === Object.keys(dependencies).length &&
+      Object.entries(dependencies).every(([name, version]) => lockedDependencies[name] === version);
+    copyFileSync(existingLock, join(temp, 'package-lock.json'));
+  }
   execFileSync(
     'npm',
-    [existsSync(existingLock) ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund'],
+    [lockMatchesDependencies ? 'ci' : 'install', '--ignore-scripts', '--no-audit', '--no-fund'],
     { cwd: temp, stdio: 'inherit' },
   );
   const entries = {
     'ai-sdk':
-      "export { generateText, Output, jsonSchema } from 'ai';\nexport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\n",
+      "export { generateText, Output, jsonSchema } from 'ai';\nexport { createOpenAI } from '@ai-sdk/openai';\nexport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\n",
     react:
       "import * as React from 'react';\nexport { React };\nexport { createRoot } from 'react-dom/client';\n",
   };
@@ -119,7 +129,7 @@ try {
   );
   writeFileSync(
     join(root, 'vendor/ai-sdk/index.d.ts'),
-    'export const generateText: (options: any) => Promise<any>;\nexport const Output: { object(options: any): any };\nexport const jsonSchema: (schema: any) => any;\nexport const createOpenAICompatible: (options: any) => (model: string) => any;\n',
+    'export const generateText: (options: any) => Promise<any>;\nexport const Output: { object(options: any): any };\nexport const jsonSchema: (schema: any) => any;\nexport const createOpenAI: (options: any) => any;\nexport const createOpenAICompatible: (options: any) => (model: string) => any;\n',
   );
 } finally {
   rmSync(temp, { recursive: true, force: true });

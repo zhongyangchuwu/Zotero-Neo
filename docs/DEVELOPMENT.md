@@ -107,7 +107,7 @@ npm run dev:status
 
 ### 静态 AI 与 Reader UI bundle
 
-`tools/build.mjs` 将 `src/ai/runtime.ts` 打包为 `content/ai-runtime.js`，将 `src/reader-ai/ui/index.tsx` 打包为 `content/reader-ai-ui.js`，并把 Reader AI 工具窗静态文档复制到 `content/reader-ai-window.xhtml`。`vendor/ai-sdk/` 固定 `ai@7.0.162` 与 `@ai-sdk/openai-compatible@3.0.84`；完整闭包、tarball integrity、上游来源和许可证记录在该目录的 `package-lock.json` 与 `provenance.json`。`vendor/react/` 固定 `react@19.3.1`、`react-dom@19.3.1` 和 `scheduler@0.28.0`，完整闭包记录在对应的 lockfile 和 provenance 文件中。
+`tools/build.mjs` 将 `src/ai/runtime.ts` 打包为 `content/ai-runtime.js`，将 `src/reader-ai/ui/index.tsx` 打包为 `content/reader-ai-ui.js`，并把 Reader AI 工具窗静态文档复制到 `content/reader-ai-window.xhtml`。`vendor/ai-sdk/` 固定 `ai@7.0.162`、`@ai-sdk/openai-compatible@3.0.84` 与 `@ai-sdk/openai@4.0.108`，分别通过兼容 Chat 模型和 Responses 模型支持显式协议选择；完整闭包、tarball integrity、上游来源和许可证记录在该目录的 `package-lock.json` 与 `provenance.json`。`vendor/react/` 固定 `react@19.3.1`、`react-dom@19.3.1` 和 `scheduler@0.28.0`，完整闭包记录在对应的 lockfile 和 provenance 文件中。
 
 Reader AI 工具窗使用生产 URI `chrome://zotero-neo-reader-ai/content/reader-ai-window.xhtml`，不直接以 file/jar URI 加载。`src/platform/reader-ai-ui.ts` 在首次打开时惰性注册已打包的 `content/` 资源并持有 `destruct()` 句柄；`src/toolkit/reader/ai-panel.ts` 负责精确 Reader 的工具窗，Addon/Toolkit 退出时先关闭所拥有的窗口，再释放共享注册。
 
@@ -181,6 +181,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | 可见批注模型与几何 | `src/toolkit/reader/annotation-targets.ts` | 只接纳当前过滤视图中、具有支持锚点且与 viewport 相交的原生批注；隐藏、已过滤、屏外及不支持的目标不进入候选。 |
 | marks 几何与旧存储 | `src/toolkit/reader/marks.ts` | 提供宿主存储/几何；父条目或附件的存储策略由 `ReaderMarks` 决定。 |
 | Zotero 结构化文档块 | `src/toolkit/reader/structured-document.ts` | 原生冷处理可能覆盖整个 PDF 且无法取消；请求保持显式，语义分类属于 `ReaderCaptionTargets`。 |
+| PDF 原图局部裁剪 | `src/toolkit/reader/region-preview.ts` | 使用不依赖后台动画帧的打印调度，并将默认显示图层的有效可见性复制到独立打印配置，不修改 Reader。当前 SDK 没有完整组枚举接口，`GetOptionalContentConfig` 窄通道补齐所有图层，不能用 `/Order` 代替。原生 Promise 直接归还所属 realm，不跨域克隆。 |
 
 分类工作流由 `src/modules/collections/` 拥有。Main/Reader 在发起 Surface 提供自己的目标解析器；模块固定来源、库与条目身份，并负责确认、草稿和工作流权限，不直接读取 Main session。`src/operations/collections.ts`、`item-collections.ts` 接收明确条目和分类 ID，在写入前重新验证身份、库与可编辑性。模块内的 Picker provider 只提供同库候选和直接成员覆盖率，不选择操作目标或写入数据。组合根提供精确交互代次与释放句柄；原生对话框返回后也必须重查当前性。
 

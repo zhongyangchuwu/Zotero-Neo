@@ -98,13 +98,13 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 | 负责方 | 拥有 | 不拥有 |
 | --- | --- | --- |
-| `src/ai/` 与平台适配器 | 通用生成契约、`endpoint`/`model`/`maxOutputTokens`/`sendImages` 配置、错误归一化及安全凭据访问 | Reader 证据、任务和来源策略 |
+| `src/ai/` 与平台适配器 | 通用生成契约、`api`/`endpoint`/`model`/`maxOutputTokens`/`sendImages` 配置、错误归一化及安全凭据访问 | Reader 证据、任务和来源策略 |
 | `src/reader-ai/` 与 `src/modules/reader-ai/` | 精确 Reader 上下文、证据、任务、结果校验与仓库、预览/跳转和明确采纳 | 密钥、SDK 调用细节、私有 PDF/SDT DOM |
 | `src/reader-ai/ui/` | 静态打包的 React 视图与用户交互 | 原生 Reader 句柄、保存密钥的读回、领域数据写入 |
 | `src/platform/reader-ai-ui.ts` | 按需注册 Reader AI 工具窗的 chrome URI，并加载/释放界面 runtime | Reader 身份与每 Reader 窗口生命周期 |
 | `src/toolkit/reader/` | 原生 section、每 Reader 工具窗、精确 Reader lease；退休时先关闭窗口再释放共享宿主 | 提示词、模型请求、阅读任务/成果策略 |
 
-`AIService` 保存非秘密配置，并通过 `Services.logins` 按 endpoint 保存密钥；只向视图投影 `hasCredential`，不把密钥暴露到 view model、普通偏好、成果或日志。端点限 HTTPS 或 loopback HTTP；请求禁止重定向，不自动重试或静默切换服务。`sendImages` 默认关闭；只有显式启用才发送最多四张短暂的原始 PNG 图表裁剪。
+`AIService` 保存非秘密配置，并通过 `Services.logins` 按 endpoint 保存密钥；只向视图投影 `hasCredential`，不把密钥暴露到 view model、普通偏好、成果或日志。端点限 HTTPS 或 loopback HTTP；协议由 `api` 显式选择 Chat Completions 或 Responses，后者设置 `store: false`，不续接远端会话。请求禁止重定向，不自动重试或静默切换协议／服务。`sendImages` 默认关闭；只有显式启用才发送最多四张短暂的原始 PNG 图表裁剪。
 
 `ReaderAIController` 在 Reader AI 模块启用时由 Addon 持有，负责连接通用 AI 服务、应用任务、成果仓库和视图。`src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime，并在 Addon 关闭时释放。打开 Reader AI 只读取缓存和已存成果；证据准备与模型请求需由用户明确发起，选择章节本身不调用模型。输入最多 40 条证据、32000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标，ID 有效不证明语义正确。
 

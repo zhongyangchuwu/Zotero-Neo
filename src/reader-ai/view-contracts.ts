@@ -4,6 +4,9 @@ import type { ReaderAIRecord, ReaderAISource, ReaderAITaskState } from './contra
 export const READER_AI_TEXT_KEYS = [
   'title',
   'configure',
+  'api',
+  'apiChatCompletions',
+  'apiResponses',
   'endpoint',
   'model',
   'key',

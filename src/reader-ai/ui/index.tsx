@@ -1,6 +1,6 @@
 import { React, createRoot } from '../../../vendor/react/index.js';
 import { compositionOwnsKey } from '../../input/composition';
-import type { AIConfiguration } from '../../ai/contracts';
+import type { AIAPI, AIConfiguration } from '../../ai/contracts';
 import type { ReaderAIEvidence, ReaderAIRecord, ReaderAITaskPhase } from '../contracts';
 import type {
   ReaderAICommand,
@@ -9,6 +9,16 @@ import type {
   ReaderAIUIRuntime,
 } from '../view-contracts';
 const MAX_QUESTION_LENGTH = 4000;
+
+function parseAIAPI(value: string): AIAPI | null {
+  switch (value) {
+    case 'openai-chat-completions':
+    case 'openai-responses':
+      return value;
+    default:
+      return null;
+  }
+}
 
 const CSS = `
 .neo-reader-ai, .neo-reader-ai * { box-sizing: border-box; }
@@ -312,6 +322,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
   const labels = model.labels;
   const [question, setQuestion] = React.useState('');
   const [configurationOpen, setConfigurationOpen] = React.useState(!model.configuration.configured);
+  const [api, setAPI] = React.useState<AIAPI>(model.configuration.api);
   const [endpoint, setEndpoint] = React.useState(model.configuration.endpoint);
   const [modelName, setModelName] = React.useState(model.configuration.model);
   const [maxTokens, setMaxTokens] = React.useState(String(model.configuration.maxOutputTokens));
@@ -344,6 +355,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
 
   React.useEffect(() => {
     if (!configurationDirty) {
+      setAPI(model.configuration.api);
       setEndpoint(model.configuration.endpoint);
       setModelName(model.configuration.model);
       setMaxTokens(String(model.configuration.maxOutputTokens));
@@ -356,6 +368,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
     setPassword('');
     setForgetKey(false);
     setEndpoint(model.configuration.endpoint);
+    setAPI(model.configuration.api);
     setModelName(model.configuration.model);
     setMaxTokens(String(model.configuration.maxOutputTokens));
     setSendImages(model.configuration.sendImages);
@@ -442,6 +455,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
     )
       return;
     const configuration: AIConfiguration = {
+      api,
       endpoint: endpoint.trim(),
       model: modelName.trim(),
       maxOutputTokens: parsedMaxTokens,
@@ -524,6 +538,21 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
           }}
         >
           <h3>{labels.configure}</h3>
+          <label>
+            {labels.api}
+            <select
+              value={api}
+              onChange={(event) => {
+                const selectedAPI = parseAIAPI(event.currentTarget.value);
+                if (selectedAPI === null) return;
+                setAPI(selectedAPI);
+                setConfigurationDirty(true);
+              }}
+            >
+              <option value="openai-chat-completions">{labels.apiChatCompletions}</option>
+              <option value="openai-responses">{labels.apiResponses}</option>
+            </select>
+          </label>
           <div className="neo-reader-ai-controls">
             <label>
               {labels.endpoint}
@@ -584,7 +613,10 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
               autoComplete="new-password"
               value={password}
               disabled={forgetKey}
-              onChange={(event) => setPassword(event.currentTarget.value)}
+              onChange={(event) => {
+                setPassword(event.currentTarget.value);
+                setConfigurationDirty(true);
+              }}
             />
           </label>
           {model.configuration.hasCredential && (
@@ -600,6 +632,7 @@ function ReaderAIApp({ model, dispatch }: ReaderAIAppProps): React.ReactElement 
                 onChange={(event) => {
                   const shouldForget = event.currentTarget.checked;
                   setForgetKey(shouldForget);
+                  setConfigurationDirty(true);
                   if (shouldForget) setPassword('');
                 }}
               />

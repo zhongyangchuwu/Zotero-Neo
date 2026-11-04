@@ -14,6 +14,7 @@ import { AIServiceError } from './errors';
 
 const KEY = 'ai.configuration';
 const empty: AIConfiguration = {
+  api: 'openai-chat-completions',
   endpoint: '',
   model: '',
   maxOutputTokens: 2048,
@@ -39,6 +40,7 @@ function normalize(value: AIConfiguration): AIConfiguration {
   const loopback =
     url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
   if (
+    (value.api !== 'openai-chat-completions' && value.api !== 'openai-responses') ||
     (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
     url.username ||
     url.password ||
@@ -51,6 +53,7 @@ function normalize(value: AIConfiguration): AIConfiguration {
   )
     throw new AIServiceError('unsupported');
   return {
+    api: value.api,
     endpoint: url.href.replace(/\/$/u, ''),
     model: value.model.trim(),
     maxOutputTokens: value.maxOutputTokens,
@@ -84,7 +87,10 @@ export function createAIService(options: {
         typeof parsed.sendImages !== 'boolean'
       )
         return empty;
+      const api = 'api' in parsed ? parsed.api : 'openai-chat-completions';
+      if (api !== 'openai-chat-completions' && api !== 'openai-responses') return empty;
       return normalize({
+        api,
         endpoint: parsed.endpoint,
         model: parsed.model,
         maxOutputTokens: parsed.maxOutputTokens,

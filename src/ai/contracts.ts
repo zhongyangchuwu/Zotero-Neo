@@ -6,7 +6,10 @@ export type AIJSONValue =
   | readonly AIJSONValue[]
   | { readonly [key: string]: AIJSONValue };
 
+export type AIAPI = 'openai-chat-completions' | 'openai-responses';
+
 export interface AIConfiguration {
+  readonly api: AIAPI;
   readonly endpoint: string;
   readonly model: string;
   readonly maxOutputTokens: number;

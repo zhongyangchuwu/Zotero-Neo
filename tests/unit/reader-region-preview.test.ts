@@ -28,7 +28,13 @@ function harness() {
   }));
   const window = {
     document: { createElement: () => canvases[next++] },
-    PDFViewerApplication: { pdfDocument: { numPages: 1, getPage } },
+    PDFViewerApplication: {
+      pdfDocument: {
+        numPages: 1,
+        getPage,
+        getOptionalContentConfig: async () => ({ getOrder: () => null }),
+      },
+    },
   };
   const reader = {
     _internalReader: { _primaryView: { _iframeWindow: window } },
@@ -115,7 +121,10 @@ describe('detached source PDF previews', () => {
     );
     const rejected = expect(result).rejects.toThrow('retired');
     await vi.waitFor(() => expect(t.render).toHaveBeenCalledOnce());
-    t.window.PDFViewerApplication.pdfDocument = { numPages: 2, getPage: t.getPage };
+    t.window.PDFViewerApplication.pdfDocument = {
+      ...t.window.PDFViewerApplication.pdfDocument,
+      numPages: 2,
+    };
     t.completion.resolve();
     await rejected;
   });

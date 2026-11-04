@@ -1,14 +1,16 @@
 import {
+  createOpenAI,
   createOpenAICompatible,
   generateText,
   jsonSchema,
   Output,
 } from '../../vendor/ai-sdk/index.js';
-import type { AIErrorCode, AIGenerationRequest, AIUsage } from './contracts';
+import type { AIAPI, AIErrorCode, AIGenerationRequest, AIUsage } from './contracts';
 import { fetchAIResponse } from './bounded-fetch';
 
 interface RuntimeRequest {
   id: string;
+  api: AIAPI;
   endpoint: string;
   model: string;
   apiKey: string;
@@ -41,16 +43,22 @@ const runtime = {
     const controller = new AbortController();
     controllers.set(input.id, controller);
     try {
-      const provider = createOpenAICompatible({
-        name: 'neo-openai-compatible',
+      const providerConfig = {
         baseURL: input.endpoint,
         apiKey: input.apiKey,
-        supportsStructuredOutputs: true,
         fetch: fetchAIResponse,
-      });
+      };
+      const model =
+        input.api === 'openai-responses'
+          ? createOpenAI(providerConfig).responses(input.model)
+          : createOpenAICompatible({
+              name: 'neo-openai-compatible',
+              ...providerConfig,
+              supportsStructuredOutputs: true,
+            })(input.model);
       const images = input.request.images ?? [];
       const result = await generateText({
-        model: provider(input.model),
+        model,
         system: input.request.system,
         messages: [
           {
@@ -58,8 +66,8 @@ const runtime = {
             content: [
               { type: 'text', text: input.request.prompt },
               ...images.map((image) => ({
-                type: 'image',
-                image: Uint8Array.from(atob(image.data), (c) => c.charCodeAt(0)),
+                type: 'file',
+                data: Uint8Array.from(atob(image.data), (c) => c.charCodeAt(0)),
                 mediaType: image.mediaType,
               })),
             ],
@@ -69,6 +77,9 @@ const runtime = {
         maxOutputTokens: input.maxOutputTokens,
         abortSignal: controller.signal,
         maxRetries: 0,
+        ...(input.api === 'openai-responses'
+          ? { providerOptions: { openai: { store: false } } }
+          : {}),
       });
       if (controller.signal.aborted) return JSON.stringify({ error: 'cancelled' });
       const output = result.output;

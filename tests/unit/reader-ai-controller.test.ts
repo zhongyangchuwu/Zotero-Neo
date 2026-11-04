@@ -24,6 +24,7 @@ const host = vi.hoisted(() => ({
 vi.mock('../../src/ai/service', () => ({
   createAIService: () => ({
     configuration: () => ({
+      api: 'openai-chat-completions',
       endpoint: 'https://fixture.test/v1',
       model: 'fixture',
       maxOutputTokens: 100,

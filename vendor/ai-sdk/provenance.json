@@ -10,6 +10,17 @@
       "directory": "packages/gateway"
     }
   },
+  "node_modules/@ai-sdk/openai": {
+    "version": "4.0.108",
+    "resolved": "https://registry.npmjs.org/@ai-sdk/openai/-/openai-4.0.108.tgz",
+    "integrity": "sha512-XmCnCVnahoFs9VUWsSzn4LyONdDkFivBVs5t7YUWi74giDRwh8VRX4hnk/BtBKEhiBNGRQd80/QTWlf6GsVtng==",
+    "license": "Apache-2.0",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/vercel/ai",
+      "directory": "packages/openai"
+    }
+  },
   "node_modules/@ai-sdk/openai-compatible": {
     "version": "3.0.84",
     "resolved": "https://registry.npmjs.org/@ai-sdk/openai-compatible/-/openai-compatible-3.0.84.tgz",

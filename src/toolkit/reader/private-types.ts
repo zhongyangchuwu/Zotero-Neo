@@ -198,10 +198,27 @@ export interface PdfRenderTaskRuntime {
   cancel(): void;
 }
 
+export interface PdfOptionalContentConfigRuntime {
+  getOrder(): readonly unknown[] | null;
+  isVisible(group: { readonly type: 'OCG'; readonly id: string }): boolean;
+  setVisibility(id: string, visible: boolean, preserveRB: boolean): void;
+}
+
 export interface PdfDocumentRuntime {
   readonly numPages?: number;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
+  getOptionalContentConfig?(options: {
+    readonly intent: 'display' | 'print';
+  }): Promise<PdfOptionalContentConfigRuntime>;
+  readonly _transport?: {
+    readonly messageHandler?: {
+      sendWithPromise(
+        method: 'GetOptionalContentConfig',
+        data: null,
+      ): Promise<{ readonly groups: readonly { readonly id: string }[] } | null>;
+    };
+  };
   getPage?(page: number): Promise<{
     readonly view?: readonly number[];
     readonly rotate?: number;
@@ -212,6 +229,8 @@ export interface PdfDocumentRuntime {
       readonly canvasContext: CanvasRenderingContext2D;
       readonly transform: readonly number[];
       readonly annotationMode: number;
+      readonly intent?: 'display' | 'print';
+      readonly optionalContentConfigPromise?: Promise<PdfOptionalContentConfigRuntime>;
     }): PdfRenderTaskRuntime;
   }>;
 }

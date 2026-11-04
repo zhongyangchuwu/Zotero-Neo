@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAIService } from '../../src/ai/service';
+import type { AIConfiguration } from '../../src/ai/contracts';
 import type { PreferenceStore } from '../../src/core/preference-store';
 interface Login {
   httpRealm: string;
@@ -58,7 +59,8 @@ function harness() {
   const service = createAIService({ rootURI: 'resource://neo/', preferences });
   return { service, records, manager, prefs };
 }
-const config = {
+const config: AIConfiguration = {
+  api: 'openai-chat-completions',
   endpoint: 'https://example.test/v1',
   model: 'one',
   maxOutputTokens: 100,
@@ -88,6 +90,37 @@ describe('AI service', () => {
     await service.configure(config, { kind: 'forget' });
     expect(records).toHaveLength(1);
     expect(records[0].password).toBe('other');
+  });
+  it('preserves legacy endpoint credentials and explicitly switches protocol', async () => {
+    const { service, manager, prefs } = harness();
+    await service.configure(config, { kind: 'replace', value: 'secret' });
+    const { api: _api, ...legacy } = config;
+    prefs.set('ai.configuration', JSON.stringify(legacy));
+    manager.findLogins.mockClear();
+    expect(service.configuration()).toMatchObject({
+      api: 'openai-chat-completions',
+      endpoint: config.endpoint,
+      configured: true,
+    });
+    await service.configure({ ...config, api: 'openai-responses' }, { kind: 'keep' });
+    expect(service.configuration()).toMatchObject({
+      api: 'openai-responses',
+      endpoint: config.endpoint,
+      configured: true,
+    });
+    expect(manager.findLogins).not.toHaveBeenCalled();
+  });
+  it('does not silently fall back for an unknown persisted protocol', async () => {
+    const { service, manager, prefs } = harness();
+    await service.configure(config, { kind: 'replace', value: 'secret' });
+    prefs.set('ai.configuration', JSON.stringify({ ...config, api: 'unknown-protocol' }));
+    manager.findLogins.mockClear();
+    expect(service.configuration().configured).toBe(false);
+    await expect(
+      service.generate(request, { signal: new AbortController().signal }),
+    ).rejects.toMatchObject({ code: 'unconfigured' });
+    expect(manager.findLogins).not.toHaveBeenCalled();
+    expect(host.generate).not.toHaveBeenCalled();
   });
   it('rejects unsafe endpoints and refuses implicit image transmission', async () => {
     const { service } = harness();
