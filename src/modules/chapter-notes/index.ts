@@ -13,7 +13,7 @@ import { sourceNoteIdentity, SOURCE_NOTE_IDENTITY_PREFIX } from '../../platform/
 import { SearchDialog } from '../../ui/search-dialog';
 import { chapterNoteEntries, chapterNoteMarkup, type ChapterNoteEntry } from './chapter-plan';
 
-export interface ReaderNotesHost {
+export interface ChapterNotesHost {
   readonly reader: ReaderRuntime;
   readonly preferences: PreferenceStore;
   readonly target: () => SourceNoteTarget | null;
@@ -24,19 +24,19 @@ export interface ReaderNotesHost {
   readonly navigate: (window: PdfWindow, location: DocumentLocation) => void | Promise<void>;
   readonly debug: (message: string) => void;
 }
-export interface ReaderNotesModule {
+export interface ChapterNotesModule {
   open(window: PdfWindow): boolean;
   handleKey(event: KeyboardEvent): boolean;
   releaseView(window: PdfWindow): void;
   close(): void;
 }
 
-/** Notes owns the review and explicit generation workflow; Reader supplies the exact source and navigation capability. */
-export function createReaderNotesModule(
+/** Chapter notes owns the review and explicit generation workflow; Reader supplies the exact source and navigation capability. */
+export function createChapterNotesModule(
   host: ModuleHost,
-  ports: ReaderNotesHost,
-): ReaderNotesModule {
-  return host.activate('notes', (scope) => {
+  ports: ChapterNotesHost,
+): ChapterNotesModule {
+  return host.activate('chapter-notes', (scope) => {
     const dialog = new SearchDialog<ChapterNoteEntry>();
     let revision = 0,
       active: PdfWindow | null = null;

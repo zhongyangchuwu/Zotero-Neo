@@ -23,7 +23,7 @@ export interface ReaderChapterSearchHost {
   readonly debug: (message: string) => void;
 }
 
-/** Chapter scope and literal search belong to navigation; the shared dialog owns only query/list interaction. */
+/** Chapter scope and literal search stay local; the shared dialog owns query/list interaction. */
 export class ReaderChapterSearch {
   readonly #host: ReaderChapterSearchHost;
   readonly #dialog = new SearchDialog<SectionSearchResult>();

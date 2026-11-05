@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReaderDocumentComparison } from '../../src/modules/reader-navigation/document-comparison';
+import { ReaderDocumentComparison } from '../../src/modules/document-comparison/document-comparison';
 import { oxrParsedDocument } from '../../src/document-analysis/oxr';
 import { mineruParsedDocument } from '../../src/document-analysis/mineru';
 import type { DocumentSource } from '../../src/document-analysis/contracts';

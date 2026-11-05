@@ -1,5 +1,5 @@
 import { fuzzyMatchScore } from '../../ui/fuzzy';
-import type { ReaderCaptionTarget } from './caption-targets';
+import type { ReaderCaptionTarget } from '../reader-navigation';
 
 /** Literal page constraints plus fuzzy words; no model request or full-text index is involved. */
 export function filterFigureTargets(
