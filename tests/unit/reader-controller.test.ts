@@ -529,6 +529,20 @@ describe('Reader event lifecycle', () => {
     const reader = {
       _instanceID: 'reader-1',
       itemID: 42,
+      _iframeWindow: {
+        document: {
+          documentElement: {},
+          getElementById: () => null,
+          querySelector: () => null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          createElement: () => ({
+            ownerDocument: { defaultView: null },
+            style: {},
+            remove: () => {},
+          }),
+        },
+      },
       _internalReader: { _primaryView: primaryView },
     } as unknown as ReaderRuntime;
     const readerService = {
@@ -638,6 +652,20 @@ describe('Reader event lifecycle', () => {
         _instanceID: instanceID,
         itemID,
         _window: ownerWindow,
+        _iframeWindow: {
+          document: {
+            documentElement: {},
+            getElementById: () => null,
+            querySelector: () => null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            createElement: () => ({
+              ownerDocument: { defaultView: null },
+              style: {},
+              remove: () => {},
+            }),
+          },
+        },
         _internalReader: { _primaryView: { _iframeWindow: pdfWindow() } },
       }) as unknown as ReaderRuntime;
     const first = reader('reader-a', 41);

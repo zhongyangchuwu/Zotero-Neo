@@ -30,6 +30,9 @@ export interface InternalReaderRuntime {
   readonly _secondaryView?: NativeReaderViewRuntime;
   readonly _lastView?: NativeReaderViewRuntime;
   readonly _lastViewPrimary?: boolean;
+  readonly _primaryViewContainer?: HTMLElement;
+  readonly _secondaryViewContainer?: HTMLElement;
+  _handleOverlayPopupClose?(primary: boolean): void;
   readonly _state?: {
     readonly annotations?: readonly NativeReaderAnnotationRuntime[];
     readonly filter?: object;
@@ -44,6 +47,8 @@ export interface InternalReaderRuntime {
     readonly sidebarView?: 'outline' | 'annotations' | 'thumbnails';
     readonly outline?: readonly ReaderNativeOutlineEntry[] | null;
     readonly pageLabels?: readonly string[];
+    readonly primaryViewOverlayPopup?: unknown;
+    readonly secondaryViewOverlayPopup?: unknown;
   };
   readonly splitType?: 'horizontal' | 'vertical' | null;
   _enableAnnotationDeletionFromComment?: boolean;

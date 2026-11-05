@@ -8,6 +8,16 @@ export type {
   ReaderOwnedCompletion,
 } from './history-bridge';
 export * from './host';
+export { observeReaderReferenceInteractions } from './reference-interactions';
+export type {
+  ReaderReferenceClientRect,
+  ReaderReferenceInteractionContext,
+  ReaderReferencePopupSlot,
+  ReaderReferenceMenuItem,
+  ReaderReferenceMenuContext,
+  ReaderReferenceToolbarSlot,
+  ReaderReferenceInteractionCallbacks,
+} from './reference-interaction-contracts';
 export * from './selection-geometry';
 export type {
   ReaderRuntime,

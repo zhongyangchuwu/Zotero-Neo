@@ -19,7 +19,7 @@ import type {
   ReaderReferenceLocation,
 } from './reference-contracts';
 
-function location(value: unknown): ReaderReferenceLocation | null {
+export function referenceLocation(value: unknown): ReaderReferenceLocation | null {
   const position = record(value);
   const pageIndex = position?.pageIndex;
   if (
@@ -69,6 +69,27 @@ function referenceText(reference: Readonly<Record<string, unknown>>): string {
     if (parts.length) return parts.join('').trim();
   }
   return typeof reference.text === 'string' ? reference.text.trim() : charsText(reference.chars);
+}
+
+/** Project one native reference without exposing its content-realm identity. */
+export function projectNativeReference(value: unknown): ReaderReferenceEntry | null {
+  const reference = record(value);
+  const position = referenceLocation(reference?.position);
+  if (!reference || !position) return null;
+  const text = referenceText(reference);
+  if (!text) return null;
+  const identifiers = recognizeIdentifiers(text);
+  return {
+    id: JSON.stringify([position.pageIndex, position.rects, position.nextPageRects]),
+    label:
+      typeof reference.index === 'number' || typeof reference.index === 'string'
+        ? String(reference.index)
+        : '',
+    text,
+    location: position,
+    doi: identifiers.find((id) => id.kind === 'doi')?.value ?? null,
+    arxivID: identifiers.find((id) => id.kind === 'arxiv')?.value ?? null,
+  };
 }
 
 function context(chars: unknown, word: unknown): string {
@@ -263,28 +284,10 @@ export async function readReaderReferenceDocument(
   const entries = new Map<string, ReaderReferenceEntry>();
   const occurrences = new Map<string, ReaderCitationOccurrence>();
   const addReference = (value: unknown): string | null => {
-    const reference = record(value);
-    const position = location(reference?.position);
-    if (!reference || !position) return null;
-    const text = referenceText(reference);
-    if (!text) return null;
-    const key = JSON.stringify([position.pageIndex, position.rects, position.nextPageRects]);
-    if (!entries.has(key)) {
-      const identifiers = recognizeIdentifiers(text);
-      const label =
-        typeof reference.index === 'number' || typeof reference.index === 'string'
-          ? String(reference.index)
-          : '';
-      entries.set(key, {
-        id: key,
-        label,
-        text,
-        location: position,
-        doi: identifiers.find((id) => id.kind === 'doi')?.value ?? null,
-        arxivID: identifiers.find((id) => id.kind === 'arxiv')?.value ?? null,
-      });
-    }
-    return key;
+    const entry = projectNativeReference(value);
+    if (!entry) return null;
+    if (!entries.has(entry.id)) entries.set(entry.id, entry);
+    return entry.id;
   };
   for (const page of Object.values(pages)) {
     const pageData = record(page);
@@ -301,7 +304,7 @@ export async function readReaderReferenceDocument(
         ...new Set(overlay.references.map(addReference).filter((id): id is string => id !== null)),
       ];
       if (overlay.type !== 'citation' || !referenceIDs.length) continue;
-      const position = location(overlay.position);
+      const position = referenceLocation(overlay.position);
       if (!position) continue;
       const id = JSON.stringify([position.pageIndex, position.rects, position.nextPageRects]);
       const previous = occurrences.get(id);

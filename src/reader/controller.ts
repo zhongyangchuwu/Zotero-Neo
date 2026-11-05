@@ -398,7 +398,8 @@ export class ReaderController implements ReaderControllerApi {
         return;
       }
       const pdfWindow = readerPrimaryWindow(reader);
-      if (pdfWindow) {
+      const uiWindow = readerWindow(reader);
+      if (pdfWindow && uiWindow && !isDeadObject(uiWindow) && uiWindow.document?.documentElement) {
         this.#waitTimers.delete(instanceID);
         this.#pending.delete(instanceID);
         const session = (provisional = new ReaderSession({
@@ -958,12 +959,19 @@ export class ReaderSession {
           },
         ),
       );
-      this.#references = this.#modules.activate('references', () =>
-        createReferencesModule(this.#modules.host, {
+      this.#references = this.#modules.activate('references', () => {
+        const referencePluginID = dependencies.controller.pluginID;
+        if (!referencePluginID) throw new Error('Reader reference integration is inactive');
+        return createReferencesModule(this.#modules.host, {
           reader: dependencies.reader,
-          captureView: () => {
-            const window = this.#navigationHost.activePdfWindow();
+          pluginID: referencePluginID,
+          captureView: (requestedWindow) => {
+            const window = requestedWindow ?? this.#navigationHost.activePdfWindow();
             if (!window || !this.readerViewForWindow(window)) return null;
+            if (requestedWindow && this.#navigationHost.activePdfWindow() !== window) {
+              this.#navigationHost.activatePdfWindow(window);
+              if (this.#navigationHost.activePdfWindow() !== window) return null;
+            }
             const lifetime = this.captureViewLifetime(window);
             const isCurrent = () => lifetime() && this.readerViewCurrent(window);
             return {
@@ -989,8 +997,8 @@ export class ReaderSession {
           language: () => this.keyGuideLanguage(),
           themeRoot: (root) => this.themeRoot(root),
           showStatus: (message) => this.showStatus(message),
-        }),
-      );
+        });
+      });
       this.#scope.add(() => this.input.dispose());
       this.#scope.addTimeout(() => {
         const failure = new CleanupFailure();

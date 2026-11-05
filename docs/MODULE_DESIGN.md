@@ -91,7 +91,7 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | 能力 | 契约与所有权 | 不包含什么 |
 | --- | --- | --- |
 | 模块组合与生命周期 | 静态清单描述 ID、作用域、硬依赖和贡献；启动时验证依赖环及重复动作归属。组合根注入具名能力，创建各级子 scope，记录启用结果与失败原因。复用现有 `CleanupScope` 等机制。 | 动态包加载、版本求解、远程代码、模块市场、任意 `require(serviceName)`。 |
-| 输入与焦点仲裁 | 复用 `src/input/` 的归一化、count/sequence、精确 BindingContext 与本地绑定 runtime。Surface 输入宿主统一决定 IME、原生输入、Note Normal、局部交互的所有权；Reader 评论编辑器和引用面板通过既有 `featureInputFocused` / `_textAnnotationFocused` 接缝共享原生按键让出，不新增 Reader mode 或各模块独立 patch。 | 用统一的“所有 editable 一律透传”破坏 Note Normal，或把评论编辑/原生输入新增为 Reader mode。 |
+| 输入与焦点仲裁 | 复用 `src/input/` 的归一化、count/sequence、精确 BindingContext 与本地绑定 runtime。Surface 输入宿主统一决定 IME、原生输入、Note Normal、局部交互的所有权；Reader 评论编辑器和引用上下文控件（包括原生预览内的按钮）通过既有 `featureInputFocused` / `_textAnnotationFocused` 接缝共享精确窗格的原生按键让出，不新增 Reader mode 或各模块独立 patch。 | 用统一的“所有 editable 一律透传”破坏 Note Normal，或把评论编辑/原生输入新增为 Reader mode。 |
 | 命令、绑定与可用性 | `src/input/actions.ts` 与现有默认绑定保持唯一。核心贡献固定参与结构能力过滤；只有可选增强可以按已应用请求关闭，再按上下文过滤后提供给匹配器、Prefix Guide、Palette 和提示。 | 新的动作 ID 体系、跨上下文继承、无实现的可执行菜单项、关闭增强后仍吞键。 |
 | 上下文与目标 | Main/Reader/Note 解析器产生显式目标；保留 `ItemTargetSet` 及原生 `Zotero.Item`，携带来源和当前性证据。跨异步边界的交互快照使用稳定身份，写入前重新验证。 | 全局可变 ActiveSurface、全局 Selection、把原生条目再包装成另一套数据模型。 |
 | 宿主能力与订阅 | Toolkit 提供具名的 Main、Note、Reader 能力，管理私有接缝、原生订阅、窗口/视图发现及释放。共享桥接由一个所有者按实际消费者安装。 | 每个模块单独 patch 同一个 PdfView，或把 `_tabs`、原生 tree、PDF/editor 私有对象交给业务代码。 |

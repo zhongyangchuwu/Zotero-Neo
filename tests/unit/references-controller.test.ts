@@ -4,33 +4,33 @@ import type {
   ReaderReferenceDocument,
   ReaderReferenceSnapshot,
 } from '../../src/toolkit/reader/reference-contracts';
+import type {
+  ReaderReferenceInteractionCallbacks,
+  ReaderReferenceInteractionContext,
+} from '../../src/toolkit/reader/reference-interaction-contracts';
 import type { ReferenceReaderPort } from '../../src/references/reader-port';
 
 const host = vi.hoisted(() => ({
   read: vi.fn(),
   lookup: vi.fn(),
-  hasKey: vi.fn(),
-  setKey: vi.fn(),
   dispose: vi.fn(),
   find: vi.fn(),
   add: vi.fn(),
   open: vi.fn(),
+  observe: vi.fn(),
+  launch: vi.fn(),
 }));
 vi.mock('../../src/toolkit/reader', () => ({
   readReaderReferenceDocument: host.read,
   readerMainWindow: () => ({}),
+  observeReaderReferenceInteractions: host.observe,
 }));
 vi.mock('../../src/toolkit/main', () => ({
-  launchMainURL: vi.fn(),
+  launchMainURL: host.launch,
   mainItemOpening: () => ({ viewAttachment: host.open }),
 }));
 vi.mock('../../src/references/metadata', () => ({
-  createReferenceMetadataService: () => ({
-    lookup: host.lookup,
-    hasSemanticScholarKey: host.hasKey,
-    setSemanticScholarKey: host.setKey,
-    dispose: host.dispose,
-  }),
+  createReferenceMetadataService: () => ({ lookup: host.lookup, dispose: host.dispose }),
 }));
 vi.mock('../../src/operations/references', () => ({
   findReferenceItems: host.find,
@@ -46,92 +46,229 @@ const snapshot: ReaderReferenceDocument = {
     {
       id: 'a',
       label: '[1]',
-      text: 'Original reference',
+      text: 'First reference',
       doi: null,
       arxivID: null,
-      location: { pageIndex: 8, rects: [[0, 0, 1, 1]], nextPageRects: [[2, 3, 4, 5]] },
+      location: { pageIndex: 8, rects: [[0, 0, 10, 10]] },
+    },
+    {
+      id: 'b',
+      label: '[2]',
+      text: 'Second reference',
+      doi: '10.1/example',
+      arxivID: '2401.12345v2',
+      location: { pageIndex: 8, rects: [[0, 20, 10, 30]] },
+    },
+    {
+      id: 'c',
+      label: '[5]',
+      text: 'Uncited fifth reference',
+      doi: null,
+      arxivID: null,
+      location: { pageIndex: 8, rects: [[0, 40, 10, 50]] },
     },
   ],
   occurrences: [
     {
       id: 'o',
-      referenceIDs: ['a'],
-      text: '[1]',
+      referenceIDs: ['b'],
+      text: '[2]',
       context: 'Context from page two',
-      location: { pageIndex: 1, rects: [[0, 0, 1, 1]], nextPageRects: [[5, 6, 7, 8]] },
+      location: { pageIndex: 1, rects: [[0, 0, 1, 1]] },
     },
   ],
 };
-const source = (document = snapshot): ReaderReferenceSnapshot => ({
-  document,
+const source = (): ReaderReferenceSnapshot => ({
+  document: snapshot,
   isCurrent: () => true,
   validate: async () => true,
 });
 const flush = async (): Promise<void> => {
   await new Promise<void>((resolve) => setImmediate(resolve));
 };
+const paper = {
+  source: 'arxiv' as const,
+  sourceID: '2401.12345v2',
+  title: 'Original title',
+  authors: ['Author'],
+  year: 2024,
+  venue: 'Journal',
+  abstract: 'Original abstract text',
+  doi: '10.1/example',
+  arxivID: '2401.12345v2',
+  url: 'https://example.com',
+  pdfURL: null,
+  referenceCount: null,
+  citationCount: 3,
+  retrievedAt: 'today',
+};
+const WindowURL = URL;
+const windowFixture = (document = new DocumentFixture()): Window =>
+  ({
+    document,
+    innerWidth: 800,
+    innerHeight: 600,
+    URL: WindowURL,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }) as unknown as Window;
 
 function setup() {
   const document = new DocumentFixture();
-  const listeners = new Map<string, EventListener>();
-  const window = {
-    document,
-    addEventListener: (name: string, fn: EventListener) => listeners.set(name, fn),
-    removeEventListener: (name: string) => listeners.delete(name),
-  } as unknown as Window;
+  const window = windowFixture(document);
   let current = true;
   const jump = vi.fn(() => true);
   const restoreFocus = vi.fn();
+  const captureView = vi.fn(() => ({ window, isCurrent: () => current, jump, restoreFocus }));
   const port: ReferenceReaderPort = {
     reader: { itemID: 7 },
-    captureView: () => ({ window, isCurrent: () => current, jump, restoreFocus }),
+    pluginID: 'test',
+    captureView,
     language: () => 'en',
     themeRoot: () => () => {},
     showStatus: vi.fn(),
   };
   const controller = new ReferenceController(port);
+  const callbacks = host.observe.mock.calls.at(-1)![2] as ReaderReferenceInteractionCallbacks;
   const button = (label: string): DialogElement =>
     document.nodes.find(
       (node) => node.isConnected && node.tagName === 'button' && node.textContent === label,
     )!;
+  const context = (index = 1): ReaderReferenceInteractionContext => ({
+    window: window as ReaderReferenceInteractionContext['window'],
+    uiWindow: window,
+    position: null,
+    references: [snapshot.entries[index]!],
+    anchorRect: () => [1, 2, 3, 4],
+    isCurrent: () => current,
+    isSourceCurrent: () => current,
+    dismissPreview: vi.fn(),
+  });
+  const openEntry = async (): Promise<void> => {
+    controller.open();
+    await flush();
+    button('[2] Second reference').emit('click');
+  };
   return {
     document,
     window,
     controller,
+    callbacks,
     button,
+    context,
+    captureView,
     jump,
     restoreFocus,
+    openEntry,
     retire: () => {
       current = false;
     },
   };
 }
-
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   vi.stubGlobal('Zotero', { Items: { get: () => ({ libraryID: 4 }) } });
+  host.observe.mockReturnValue(() => {});
   host.read.mockResolvedValue(source());
   host.find.mockResolvedValue([]);
+  host.launch.mockReturnValue(true);
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe('reference panel', () => {
-  it('keeps local browsing offline and jumps the captured view to every recognized mention', async () => {
+describe('contextual references', () => {
+  it('mounts a passive native row control and resolves that row only after activation', async () => {
     const ui = setup();
-    ui.controller.open();
-    await flush();
+    const mount = ui.document.createElementNS('', 'div');
+    ui.document.documentElement.append(mount);
+    const context = ui.context();
+    const cleanup = ui.callbacks.onCitationPopup({
+      context,
+      mount: mount as unknown as HTMLElement,
+    });
+    expect(ui.captureView).not.toHaveBeenCalled();
+    expect(host.read).not.toHaveBeenCalled();
     expect(host.lookup).not.toHaveBeenCalled();
-    expect(host.hasKey).not.toHaveBeenCalled();
+    expect(ui.document.activeElement).toBeNull();
+    const control = ui.button('In-text mentions');
+    control.listeners.get('click')![0]!({ target: control, stopPropagation: vi.fn() });
+    await flush();
+    expect(ui.captureView).toHaveBeenCalledWith(ui.window);
+    expect(context.dismissPreview).toHaveBeenCalledOnce();
+    expect(ui.document.documentElement.textContent).toContain('Second reference');
+    expect(ui.document.documentElement.textContent).not.toContain('First reference');
     ui.button('Page 2: Context from page two').emit('click');
     await flush();
     expect(ui.jump).toHaveBeenCalledWith(snapshot.occurrences[0]!.location);
-    ui.button('Jump to bibliography').emit('click');
-    await flush();
-    expect(ui.jump).toHaveBeenCalledWith(snapshot.entries[0]!.location);
+    expect(ui.restoreFocus).toHaveBeenCalledOnce();
+    if (typeof cleanup === 'function') cleanup();
     ui.controller.dispose();
   });
-
-  it('does not resurrect a closed panel after analysis completes', async () => {
+  it('keeps the catalog discovery-only and makes uncited entries reachable', async () => {
+    const ui = setup();
+    ui.controller.open();
+    await flush();
+    expect(ui.button('[5] Uncited fifth reference')).toBeDefined();
+    expect(ui.document.documentElement.textContent).not.toContain('Scholarly metadata');
+    expect(host.lookup).not.toHaveBeenCalled();
+    ui.button('[5] Uncited fifth reference').emit('click');
+    expect(ui.button('Recognized local mentions')).toBeDefined();
+    expect(ui.document.documentElement.textContent).not.toContain('[1] First reference');
+    ui.controller.dispose();
+  });
+  it('resolves menu position only on command and offers search for an unknown target', async () => {
+    const ui = setup();
+    const context = {
+      ...ui.context(),
+      references: [],
+      position: { pageIndex: 4, rects: [[100, 100, 101, 101]] as const },
+    };
+    const append = vi.fn();
+    ui.callbacks.onContextMenu({ context, append });
+    expect(host.read).not.toHaveBeenCalled();
+    append.mock.calls[0]![0][0].onCommand();
+    await flush();
+    expect(ui.document.documentElement.textContent).toContain('No reference identified');
+    ui.button('Search bibliography').emit('click');
+    expect(ui.button('[5] Uncited fifth reference')).toBeDefined();
+    ui.controller.dispose();
+  });
+  it('resolves a bibliography position to its own reverse mentions', async () => {
+    const ui = setup();
+    const context = { ...ui.context(), references: [], position: snapshot.entries[1]!.location };
+    const append = vi.fn();
+    ui.callbacks.onContextMenu({ context, append });
+    append.mock.calls[0]![0][0].onCommand();
+    await flush();
+    expect(ui.document.documentElement.textContent).toContain('Second reference');
+    ui.button('Page 2: Context from page two').emit('click');
+    await flush();
+    expect(ui.jump).toHaveBeenCalledWith(snapshot.occurrences[0]!.location);
+    ui.controller.dispose();
+  });
+  it('keeps broad metadata candidates manual and preserves source fields on adoption and import', async () => {
+    host.lookup.mockResolvedValue({ kind: 'candidates', papers: [paper] });
+    const ui = setup();
+    await ui.openEntry();
+    ui.button('Paper details').emit('click');
+    await flush();
+    expect(host.lookup).toHaveBeenCalledOnce();
+    expect(host.lookup).toHaveBeenCalledWith(
+      { text: 'Second reference', doi: '10.1/example', arxivID: '2401.12345v2' },
+      expect.anything(),
+    );
+    expect(ui.document.documentElement.textContent).not.toContain('Original abstract text');
+    ui.button('Original title — Author 2024').emit('click');
+    await flush();
+    expect(ui.document.documentElement.textContent).toContain('Original abstract text');
+    expect(ui.document.documentElement.textContent).toContain('Journal');
+    expect(ui.document.documentElement.textContent).toContain('2401.12345v2');
+    host.add.mockResolvedValue({ title: 'Original title' });
+    ui.button('Add to Zotero').emit('click');
+    await flush();
+    expect(host.add).toHaveBeenCalledWith(paper, 4, expect.any(Function));
+    ui.controller.dispose();
+  });
+  it('does not publish stale results after close or source replacement', async () => {
     let resolve!: (value: ReaderReferenceSnapshot) => void;
     host.read.mockReturnValue(
       new Promise<ReaderReferenceSnapshot>((done) => {
@@ -147,18 +284,45 @@ describe('reference panel', () => {
     expect(ui.restoreFocus).not.toHaveBeenCalled();
     ui.controller.dispose();
   });
-
-  it('requires an explicit candidate choice and ignores a response after view retirement', async () => {
-    const nativeAbortController = AbortController;
-    vi.stubGlobal('AbortController', undefined);
-    vi.stubGlobal('Components', {
-      utils: {
-        importGlobalProperties: (properties: string[]) => {
-          if (properties.includes('AbortController'))
-            vi.stubGlobal('AbortController', nativeAbortController);
-        },
-      },
+  it.each([
+    { typed: 'Edited title', submitted: { text: 'Edited title' } },
+    {
+      typed: 'https://doi.org/10.1234/ABC',
+      submitted: { text: 'https://doi.org/10.1234/ABC', doi: '10.1234/abc' },
+    },
+    {
+      typed: 'arxiv:2401.12345v2',
+      submitted: { text: 'arxiv:2401.12345v2', arxivID: '2401.12345v2' },
+    },
+  ])('captures $typed before async source admission', async ({ typed, submitted }) => {
+    let admit!: (valid: boolean) => void;
+    let delayed = false;
+    host.read.mockResolvedValue({
+      ...source(),
+      validate: () =>
+        delayed
+          ? new Promise<boolean>((resolve) => {
+              admit = resolve;
+            })
+          : Promise.resolve(true),
     });
+    const ui = setup();
+    await ui.openEntry();
+    ui.button('Paper details').emit('click');
+    await flush();
+    host.lookup.mockClear();
+    const input = ui.document.nodes.find((node) => node.isConnected && node.tagName === 'input')!;
+    input.value = typed;
+    input.emit('input');
+    delayed = true;
+    ui.button('Search metadata').emit('click');
+    input.value = 'Later title';
+    admit(true);
+    await flush();
+    expect(host.lookup).toHaveBeenCalledWith(submitted, expect.anything());
+    ui.controller.dispose();
+  });
+  it('cancels an in-flight lookup when its query changes', async () => {
     let resolve!: (value: unknown) => void;
     host.lookup.mockReturnValue(
       new Promise((done) => {
@@ -166,301 +330,284 @@ describe('reference panel', () => {
       }),
     );
     const ui = setup();
-    ui.controller.open();
+    await ui.openEntry();
+    ui.button('Paper details').emit('click');
     await flush();
-    ui.button('Query metadata').emit('click');
+    const signal = host.lookup.mock.calls[0]![1] as AbortSignal;
+    const input = ui.document.nodes.find((node) => node.isConnected && node.tagName === 'input')!;
+    input.value = 'Different title';
+    input.emit('input');
+    expect(signal.aborted).toBe(true);
+    resolve({ kind: 'found', paper });
     await flush();
-    expect(host.lookup).toHaveBeenCalledOnce();
+    expect(ui.document.documentElement.textContent).not.toContain('Original abstract text');
+    ui.controller.dispose();
+  });
+  it('does not publish a lookup after its captured source is retired', async () => {
+    let resolve!: (value: unknown) => void;
+    host.lookup.mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const ui = setup();
+    await ui.openEntry();
+    ui.button('Paper details').emit('click');
+    await flush();
     ui.retire();
-    resolve({ kind: 'candidates', papers: [{ title: 'Candidate', authors: [], year: null }] });
+    resolve({ kind: 'found', paper });
     await flush();
-    expect(ui.document.documentElement.children).toHaveLength(0);
+    expect(ui.document.documentElement.textContent).not.toContain('Original abstract text');
     expect(ui.restoreFocus).not.toHaveBeenCalled();
     ui.controller.dispose();
   });
-  it('shows candidates without adopting one until the user chooses', async () => {
-    const paper = {
-      source: 'semantic-scholar',
-      sourceID: 'id',
-      title: 'Chosen paper',
-      authors: ['Author'],
-      year: 2020,
-      venue: 'Original publication venue',
-      abstract: 'Original source abstract',
-      doi: '10.1234/record-identity',
-      arxivID: '1706.03762v7',
-      url: null,
-      pdfURL: null,
-      referenceCount: 3,
-      citationCount: 5,
-      retrievedAt: '2026-01-01',
-    };
-    host.lookup.mockResolvedValue({ kind: 'candidates', papers: [paper] });
+  it('owns focus in the Reader UI document for the captured pane and respects IME Escape', async () => {
     const ui = setup();
-    ui.controller.open();
+    const uiDocument = new DocumentFixture();
+    const uiWindow = windowFixture(uiDocument);
+    const context = { ...ui.context(), uiWindow };
+    const append = vi.fn();
+    ui.callbacks.onContextMenu({ context, append });
+    append.mock.calls[0]![0][0].onCommand();
     await flush();
-    ui.button('Query metadata').emit('click');
-    await flush();
-    expect(ui.document.documentElement.textContent).not.toContain('Original source abstract');
-    expect(ui.document.documentElement.textContent).not.toContain('Add to Zotero');
-    ui.button('Chosen paper — Author 2020').emit('click');
-    await flush();
-    expect(ui.document.documentElement.textContent).toContain('Original source abstract');
-    expect(ui.document.documentElement.textContent).toContain(paper.venue);
-    expect(ui.document.documentElement.textContent).toContain(paper.doi);
-    expect(ui.document.documentElement.textContent).toContain(paper.arxivID);
-    expect(ui.document.documentElement.textContent).toContain('Add to Zotero');
-    expect(host.add).not.toHaveBeenCalled();
-    ui.controller.dispose();
-  });
-
-  it('shows a rate limit without adding a record or retrying', async () => {
-    host.lookup.mockRejectedValue(new Error('Reference service rate limited (429)'));
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    ui.button('Query metadata').emit('click');
-    await flush();
-    expect(ui.document.documentElement.textContent).toContain('429');
-    expect(host.lookup).toHaveBeenCalledOnce();
-    expect(host.add).not.toHaveBeenCalled();
-    ui.controller.dispose();
-  });
-
-  it('keeps partial coverage visible and does not claim an unrecognized mention is absent', async () => {
-    host.read.mockResolvedValue(
-      source({ ...snapshot, bibliographyCoverage: 'partial', occurrences: [] }),
-    );
-    host.lookup.mockRejectedValue(new Error('Reference service rate limited (429)'));
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    expect(ui.document.documentElement.textContent).toContain('Bibliography is partial');
-    expect(ui.document.documentElement.textContent).toContain(
-      'does not establish that the reference is uncited',
-    );
-    ui.button('Query metadata').emit('click');
-    await flush();
-    expect(ui.document.documentElement.textContent).toContain('Bibliography is partial');
-    expect(ui.document.documentElement.textContent).toContain('429');
-    ui.controller.dispose();
-  });
-
-  it('restores focus only for an explicit close of a current view', async () => {
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    ui.button('Close').emit('click');
-    expect(ui.restoreFocus).toHaveBeenCalledOnce();
-    ui.controller.open();
-    await flush();
-    ui.retire();
-    ui.button('Close').emit('click');
-    expect(ui.restoreFocus).toHaveBeenCalledOnce();
-    ui.controller.dispose();
-  });
-
-  it('retires pending work when another pane becomes active', async () => {
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    ui.controller.activateView({} as Window);
-    expect(ui.document.documentElement.children).toHaveLength(0);
-    expect(ui.restoreFocus).not.toHaveBeenCalled();
-    ui.controller.dispose();
-  });
-
-  it('retains connected dialog focus when bibliography and candidate selections change', async () => {
-    host.lookup.mockResolvedValue({
-      kind: 'candidates',
-      papers: [
-        {
-          source: 'arxiv',
-          sourceID: '1706.03762',
-          title: 'Chosen original',
-          authors: [],
-          year: 2017,
-          venue: null,
-          abstract: 'Original abstract',
-          doi: null,
-          arxivID: '1706.03762',
-          url: null,
-          pdfURL: null,
-          referenceCount: null,
-          citationCount: null,
-          retrievedAt: '2026-01-01',
-        },
-      ],
-    });
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    const row = ui.button('[1] Original reference');
-    row.focus();
-    row.emit('click');
-    await flush();
-    expect(ui.document.activeElement).toBe(row);
-    expect(row.isConnected).toBe(true);
+    const root = uiDocument.nodes.find((node) => node.isConnected && node.tagName === 'section')!;
     expect(ui.controller.isInputFocused(ui.window)).toBe(true);
-    expect(ui.controller.isInputFocused({ document: ui.document } as unknown as Window)).toBe(
+    expect(ui.controller.ownsTarget(uiDocument.activeElement as unknown as EventTarget)).toBe(true);
+    const key = root.listeners.get('keydown')![0]!;
+    root.emit('compositionstart');
+    key({ key: 'Escape', stopPropagation: vi.fn(), preventDefault: vi.fn() });
+    expect(root.isConnected).toBe(true);
+    root.emit('compositionend');
+    key({ key: 'Escape', stopPropagation: vi.fn(), preventDefault: vi.fn() });
+    expect(root.isConnected).toBe(false);
+    expect(ui.restoreFocus).toHaveBeenCalledOnce();
+    ui.controller.dispose();
+  });
+  it('dismisses on a pointer in the captured PDF without restoring focus or trapping Tab', async () => {
+    const ui = setup();
+    const uiDocument = new DocumentFixture();
+    const context = { ...ui.context(), uiWindow: windowFixture(uiDocument) };
+    const append = vi.fn();
+    ui.callbacks.onContextMenu({ context, append });
+    append.mock.calls[0]![0][0].onCommand();
+    await flush();
+    const root = uiDocument.nodes.find((node) => node.isConnected && node.tagName === 'section')!;
+    const tab = root.emit('keydown', { key: 'Tab' });
+    expect(tab.defaultPrevented).toBe(false);
+    ui.document.emit('pointerdown', { target: ui.document.documentElement });
+    expect(root.isConnected).toBe(false);
+    expect(ui.restoreFocus).not.toHaveBeenCalled();
+    ui.controller.dispose();
+  });
+  it('treats local matches as candidates and opens only the chosen attachment', async () => {
+    const ui = setup();
+    await ui.openEntry();
+    host.find.mockResolvedValue([{ itemID: 22, attachmentID: 23, title: 'Possible match' }]);
+    ui.button('Find local matches').emit('click');
+    await flush();
+    expect(host.open).not.toHaveBeenCalled();
+    ui.button('Possible match (PDF)').emit('click');
+    await flush();
+    expect(host.open).toHaveBeenCalledWith(23);
+    ui.controller.dispose();
+  });
+});
+
+describe('contextual reference lifetime boundaries', () => {
+  it('owns focused native footer controls for their exact pane without hover work', () => {
+    const ui = setup();
+    const document = new DocumentFixture();
+    const mount = document.createElementNS('', 'span');
+    document.documentElement.append(mount);
+    const context = { ...ui.context(), uiWindow: windowFixture(document) };
+    const cleanup = ui.callbacks.onCitationPopup({
+      context,
+      mount: mount as unknown as HTMLElement,
+    });
+    const control = document.nodes.find((node) => node.tagName === 'button')!;
+    expect(host.read).not.toHaveBeenCalled();
+    expect(host.lookup).not.toHaveBeenCalled();
+    expect(document.activeElement).toBeNull();
+    control.focus();
+    expect(ui.controller.ownsTarget(control as unknown as EventTarget)).toBe(true);
+    expect(ui.controller.isInputFocused(ui.window)).toBe(true);
+    expect(ui.controller.isInputFocused({} as Window)).toBe(false);
+    const enter = control.parent!.emit('keydown', { key: 'Enter' });
+    expect(enter.defaultPrevented).toBe(false);
+    expect(enter.propagationStopped).toBe(true);
+    control.parent!.emit('keydown', { key: 'Escape' });
+    expect(context.dismissPreview).toHaveBeenCalledOnce();
+    expect(ui.restoreFocus).toHaveBeenCalledOnce();
+    ui.captureView.mockClear();
+    if (typeof cleanup === 'function') cleanup();
+    control.emit('click');
+    expect(ui.captureView).not.toHaveBeenCalled();
+    ui.controller.dispose();
+  });
+
+  it('opens discovery in the toolbar document and keeps an edge anchor on screen', async () => {
+    const ui = setup();
+    const document = new DocumentFixture();
+    const owner = Object.assign(windowFixture(document), { innerWidth: 480, innerHeight: 400 });
+    const mount = document.createElementNS('', 'span');
+    document.documentElement.append(mount);
+    vi.spyOn(mount, 'getBoundingClientRect').mockReturnValue({
+      left: 450,
+      top: 370,
+      right: 470,
+      bottom: 390,
+      width: 20,
+      height: 20,
+    });
+    let toolbarCurrent = true;
+    const cleanup = ui.callbacks.onToolbar({
+      uiWindow: owner,
+      mount: mount as unknown as HTMLElement,
+      isCurrent: () => toolbarCurrent,
+    });
+    const toolbarButton = document.nodes.find((node) => node.tagName === 'button')!;
+    toolbarButton.focus();
+    expect(ui.controller.ownsTarget(toolbarButton as unknown as EventTarget)).toBe(true);
+    toolbarButton.emit('click');
+    await flush();
+    const root = document.find('section');
+    expect(ui.document.nodes.some((node) => node.isConnected && node.tagName === 'section')).toBe(
       false,
     );
-    ui.button('Query metadata').emit('click');
-    await flush();
-    const candidate = ui.button('Chosen original —  2017');
-    candidate.focus();
-    candidate.emit('click');
-    await flush();
-    expect(ui.document.activeElement?.isConnected).toBe(true);
-    expect(ui.controller.isInputFocused(ui.window)).toBe(true);
-    expect(ui.document.documentElement.textContent).toContain('Original abstract');
-    ui.controller.dispose();
-  });
-
-  it('honors rapid bibliography selections in invocation order during source validation', async () => {
-    host.read.mockResolvedValue(
-      source({
-        ...snapshot,
-        entries: [
-          ...snapshot.entries,
-          { ...snapshot.entries[0]!, id: 'b', label: '[2]', text: 'Second reference' },
-        ],
-      }),
+    expect(parseFloat(root.style.left)).toBeGreaterThanOrEqual(0);
+    expect(parseFloat(root.style.left) + root.getBoundingClientRect().width).toBeLessThanOrEqual(
+      owner.innerWidth,
     );
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    ui.button('[1] Original reference').emit('click');
-    const last = ui.button('[2] Second reference');
-    last.focus();
-    last.emit('click');
-    await flush();
-    expect(ui.document.find('h3').textContent).toBe('[2]');
-    expect(ui.document.activeElement).toBe(last);
-    expect(last.isConnected).toBe(true);
-    ui.controller.dispose();
-  });
-
-  it('rejects old coordinates after the published PDF identity retires', async () => {
-    let current = true;
-    host.read.mockResolvedValue({ ...source(), isCurrent: () => current });
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    current = false;
-    ui.button('Jump to bibliography').emit('click');
-    await flush();
-    expect(ui.jump).not.toHaveBeenCalled();
-    expect(ui.document.documentElement.children).toHaveLength(0);
-    expect(ui.restoreFocus).not.toHaveBeenCalled();
-    ui.controller.dispose();
-  });
-
-  it('retires a published file revision before pending metadata can appear', async () => {
-    let current = true;
-    host.read.mockResolvedValue({ ...source(), validate: async () => current });
-    let resolve!: (value: unknown) => void;
-    host.lookup.mockReturnValue(
-      new Promise((done) => {
-        resolve = done;
-      }),
+    expect(parseFloat(root.style.top)).toBeGreaterThanOrEqual(0);
+    expect(parseFloat(root.style.top) + root.getBoundingClientRect().height).toBeLessThanOrEqual(
+      owner.innerHeight,
     );
+    expect(root.textContent).toContain('Uncited fifth reference');
+    expect(host.lookup).not.toHaveBeenCalled();
+    ui.controller.close();
+    toolbarCurrent = false;
+    expect(ui.controller.ownsTarget(toolbarButton as unknown as EventTarget)).toBe(false);
+    toolbarButton.emit('click');
+    expect(document.nodes.some((node) => node.isConnected && node.tagName === 'section')).toBe(
+      false,
+    );
+    ui.controller.dispose();
+    if (typeof cleanup === 'function') cleanup();
+    toolbarCurrent = true;
+    expect(ui.controller.ownsTarget(toolbarButton as unknown as EventTarget)).toBe(false);
+  });
+
+  it('opens identifier websites without a metadata request or Bootstrap URL constructor', async () => {
     const ui = setup();
-    ui.controller.open();
+    vi.stubGlobal('URL', undefined);
+    await ui.openEntry();
+    ui.button('Open DOI').emit('click');
     await flush();
-    ui.button('Query metadata').emit('click');
-    await flush();
-    current = false;
-    resolve({
-      kind: 'candidates',
-      papers: [{ title: 'Old source result', authors: [], year: null }],
+    expect(host.launch).toHaveBeenCalledWith('https://doi.org/10.1/example');
+    expect(host.lookup).not.toHaveBeenCalled();
+    ui.controller.dispose();
+  });
+
+  it('does not launch a website after its source retires during byte admission', async () => {
+    let admit!: (valid: boolean) => void;
+    let delayed = false;
+    host.read.mockResolvedValue({
+      ...source(),
+      validate: () =>
+        delayed
+          ? new Promise<boolean>((resolve) => {
+              admit = resolve;
+            })
+          : Promise.resolve(true),
     });
+    const ui = setup();
+    await ui.openEntry();
+    delayed = true;
+    ui.button('Open arXiv').emit('click');
+    ui.retire();
+    admit(true);
     await flush();
-    expect(ui.document.documentElement.children).toHaveLength(0);
+    expect(host.launch).not.toHaveBeenCalled();
     expect(ui.restoreFocus).not.toHaveBeenCalled();
-    expect(ui.jump).not.toHaveBeenCalled();
     ui.controller.dispose();
   });
 
-  it.each([
-    ['Query metadata', 'lookup'],
-    ['Find local matches', 'find'],
-  ] as const)('does not submit edited text from a pending %s action', async (label, method) => {
-    const validate = vi.fn(async () => true);
-    host.read.mockResolvedValue({ ...source(), validate });
-    host.lookup.mockResolvedValue({ kind: 'not-found' });
+  it('lets a manual offline title search replace pending local candidates without opening either automatically', async () => {
+    const pending =
+      Promise.withResolvers<Array<{ itemID: number; attachmentID: number; title: string }>>();
+    host.find
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue([{ itemID: 30, attachmentID: 31, title: 'Manual title match' }]);
     const ui = setup();
-    ui.controller.open();
+    await ui.openEntry();
+    ui.button('Find local matches').emit('click');
     await flush();
-    const pending = Promise.withResolvers<boolean>();
-    validate.mockReturnValueOnce(pending.promise);
-    ui.button(label).emit('click');
-    await flush();
-    const input = ui.document.nodes.find(
-      (node) => node.attributes.get('aria-label') === 'Reference search query',
-    )!;
-    input.value = 'Edited but not submitted';
+    const input = ui.document.find('input');
+    input.value = 'A manual title';
     input.emit('input');
-    pending.resolve(true);
+    ui.button('Find in library').emit('click');
     await flush();
-    expect(host[method]).not.toHaveBeenCalled();
-    ui.button(label).emit('click');
+    pending.resolve([{ itemID: 20, attachmentID: 21, title: 'Old candidate' }]);
     await flush();
-    expect(host[method]).toHaveBeenCalledOnce();
-    expect(host[method].mock.calls[0]?.[0]).toEqual({ text: 'Edited but not submitted' });
+    expect(ui.document.documentElement.textContent).not.toContain('Old candidate');
+    expect(host.open).not.toHaveBeenCalled();
+    expect(host.lookup).not.toHaveBeenCalled();
+    ui.button('Manual title match (PDF)').emit('click');
+    await flush();
+    expect(host.open).toHaveBeenCalledWith(31);
     ui.controller.dispose();
   });
 
-  it('saves and forgets a key only on explicit actions', async () => {
-    host.setKey.mockResolvedValue(undefined);
+  it('restores a selected metadata candidate to connected details and rejects detached candidate clicks', async () => {
+    host.lookup.mockResolvedValue({
+      kind: 'candidates',
+      papers: [paper, { ...paper, sourceID: 'other', title: 'Other title' }],
+    });
     const ui = setup();
-    ui.controller.open();
+    await ui.openEntry();
+    ui.button('Paper details').emit('click');
     await flush();
-    expect(host.hasKey).not.toHaveBeenCalled();
-    expect(host.setKey).not.toHaveBeenCalled();
-    const input = ui.document.nodes.find(
-      (node) => node.attributes.get('aria-label') === 'Semantic Scholar API key',
-    )!;
-    input.value = 'example-key';
-    ui.button('Save key').emit('click');
+    const chosen = ui.button('Original title — Author 2024');
+    const stale = ui.button('Other title — Author 2024');
+    chosen.focus();
+    chosen.emit('click');
     await flush();
-    expect(host.setKey).toHaveBeenCalledWith('example-key');
-    expect(input.value).toBe('');
-    ui.button('Forget key').emit('click');
+    expect(chosen.isConnected).toBe(false);
+    expect(ui.document.activeElement?.isConnected).toBe(true);
+    expect(ui.document.activeElement?.textContent).toContain('Original abstract text');
+    stale.emit('click');
     await flush();
-    expect(host.setKey).toHaveBeenLastCalledWith(null);
+    expect(ui.document.documentElement.textContent).not.toContain('Other title');
     ui.controller.dispose();
   });
+});
 
-  it('leaves IME-owned Escape alone and closes only after composition ends', async () => {
-    const ui = setup();
-    ui.controller.open();
-    await flush();
-    const root = ui.document.nodes.find((node) => node.attributes.get('role') === 'dialog')!;
-    const prevented = vi.fn();
-    const stopped = vi.fn();
-    root.emit('compositionstart');
-    for (const listener of root.listeners.get('keydown') ?? [])
-      listener({
-        key: 'Escape',
-        keyCode: 229,
-        isComposing: false,
-        preventDefault: prevented,
-        stopPropagation: stopped,
-      });
-    expect(prevented).not.toHaveBeenCalled();
-    expect(ui.document.documentElement.children).toHaveLength(1);
-    root.emit('compositionend');
-    for (const listener of root.listeners.get('keydown') ?? [])
-      listener({
-        key: 'Escape',
-        keyCode: 27,
-        isComposing: false,
-        preventDefault: prevented,
-        stopPropagation: stopped,
-      });
-    expect(prevented).toHaveBeenCalledOnce();
-    expect(ui.document.documentElement.children).toHaveLength(0);
-    ui.controller.dispose();
+it('keeps the invocation anchor when activating its pane dismisses the native preview', async () => {
+  const ui = setup();
+  let previewLive = true;
+  const context: ReaderReferenceInteractionContext = {
+    ...ui.context(),
+    isCurrent: () => previewLive,
+    isSourceCurrent: () => true,
+    anchorRect: () => (previewLive ? [120, 100, 180, 120] : null),
+  };
+  ui.captureView.mockImplementation(() => {
+    previewLive = false;
+    return {
+      window: ui.window,
+      isCurrent: () => true,
+      jump: ui.jump,
+      restoreFocus: ui.restoreFocus,
+    };
   });
+  const mount = ui.document.createElementNS('', 'span');
+  ui.document.documentElement.append(mount);
+  const cleanup = ui.callbacks.onCitationPopup({ context, mount: mount as unknown as HTMLElement });
+  ui.button('In-text mentions').emit('click');
+  await flush();
+  const root = ui.document.find('section');
+  expect(root.style.left).toBe('120px');
+  expect(parseFloat(root.style.top)).toBeGreaterThanOrEqual(120);
+  if (typeof cleanup === 'function') cleanup();
+  ui.controller.dispose();
 });

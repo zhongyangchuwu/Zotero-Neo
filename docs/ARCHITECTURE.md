@@ -18,7 +18,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/` 负责按键归一化、语义 token、序列/count 匹配、已解析绑定，以及 `src/input/engine.ts` 中的纯 reducer。`src/input/runtime.ts` 为每个输入处理方维护待完成序列、count 和定时器。`src/ui/key-guide-runtime.ts` 单独负责按键指引展示；局部控件使用 `src/input/local-binding-runtime.ts`。
 
-宿主判定原生输入、可编辑输入和输入法组合状态，并负责焦点、动作执行与生命周期。`BindingContext` 表示精确的输入处理方/能力契约，不是 Surface mode；上下文不继承其他模式的绑定，也不使用全局后备绑定。Main 和 Reader 具有 Normal/Visual 交互，Note 具有 Normal/Insert。Main Visual 的 `main-select` 上下文只在临时范围存在时适用，不取决于 Persistent Selection。批注评论输入和引用面板的局部输入由各自功能持有，Reader controller 通过共享 `featureInputFocused` / `_textAnnotationFocused` seam 让 Zotero 原生处理在精确视图获得焦点时让出按键；这不是额外 Reader mode。输入法与文本输入见[输入说明](INPUT_METHODS.md)；完整上下文和按键清单由命令参考维护。
+宿主判定原生输入、可编辑输入和输入法组合状态，并负责焦点、动作执行与生命周期。`BindingContext` 表示精确的输入处理方/能力契约，不是 Surface mode；上下文不继承其他模式的绑定，也不使用全局后备绑定。Main 和 Reader 具有 Normal/Visual 交互，Note 具有 Normal/Insert。Main Visual 的 `main-select` 上下文只在临时范围存在时适用，不取决于 Persistent Selection。批注评论输入和引用增强的局部控件由各自功能持有，Reader controller 通过共享 `featureInputFocused` / `_textAnnotationFocused` seam 让 Zotero 原生处理在精确视图获得焦点时让出按键；这不是额外 Reader mode。输入法与文本输入见[输入说明](INPUT_METHODS.md)；完整上下文和按键清单由命令参考维护。
 
 持久化绑定迁移位于 `src/core/preferences.ts`，不创建运行时别名或继承 keymap。
 
@@ -80,7 +80,7 @@ Selection Panel 通过具名端口请求现有导航协调器执行 Reveal，不
 
 Reader Base 先建立视图和外层输入监听，再在 Navigation 激活事务内加载 marks、启动原生侧栏；失败时退休该模块全部贡献，不关闭独立 Select、批注、hints 或 Workspace。Base 启动失败则释放未完成的 Reader session，原生对象在本次运行中不循环重试，新原生对象可重新附着。正常退出由显式清理收集器继续释放所有负责方，并向调用方保留首个清理失败。
 
-Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。Workspace 的 Reader 实例通过同一宿主处理分屏创建/关闭与方向焦点，普通按键、延迟绑定和 Palette 使用相同实现；原始方向键只在实际成功时消费。Main/Note 通用面板焦点（含 Note Insert）、共享滚动与 `src/reader/native-input.ts` 仍属基座，不依赖 Reader 导航或 Workspace 的业务实现。评论编辑器由批注模块持有，引用面板由 `references` 模块持有；Surface 将两者的精确输入焦点纳入现有原生键盘让出，不新增 Reader mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
+Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。Workspace 的 Reader 实例通过同一宿主处理分屏创建/关闭与方向焦点，普通按键、延迟绑定和 Palette 使用相同实现；原始方向键只在实际成功时消费。Main/Note 通用面板焦点（含 Note Insert）、共享滚动与 `src/reader/native-input.ts` 仍属基座，不依赖 Reader 导航或 Workspace 的业务实现。评论编辑器由批注模块持有，引用上下文控件由 `references` 模块持有；Surface 将两者的精确输入焦点纳入现有原生键盘让出，不新增 Reader mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。
 
@@ -94,7 +94,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 #### 引用增强
 
-`src/modules/references/` 按 ReaderSession 拥有引用面板与 `openReferences`；`src/references/controller.ts` 拥有选择、显式元数据查询、本地匹配和添加的交互。Toolkit 返回包含参考文献、识别到的提及及来源守卫的数据快照；控制器捕获精确 PDF presentation/Window/Document 身份，并在异步操作前后验证 PDF 字节来源。引用跳转复用已有 NavigationPort 与共享历史，不建立第二套栈。用户交互见[Reader 指南](READER_GUIDE.md)，宿主细节见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
+`src/modules/references/` 按 ReaderSession 拥有引用增强与 `openReferences`；`src/references/controller.ts` 拥有原生预览中的逐文献操作、右键动作、搜索清单及单项任务浮层。Toolkit 提供原生预览挂载、同步菜单追加与工具栏入口，并返回参考文献、识别到的提及及来源守卫。悬停不激活窗格或查询服务；明确操作先捕获锚点，再激活并固定精确 PDF presentation/Window/Document，在异步操作前后验证 PDF 字节来源。引用跳转复用已有 NavigationPort 与共享历史，不建立第二套栈。用户交互见[Reader 指南](READER_GUIDE.md)，宿主细节见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
 
 本地分析和文库查找不访问网络。元数据仅在用户明确查询后从 Semantic Scholar 或 arXiv 获取；展示来源原始字段、原始摘要和检索时间，未提供的摘要不生成。本模块不依赖或调用 AI 问答，不对论文或引用作 AI 生成、质量判断或分类。`src/operations/references.ts` 只在明确确认后添加条目；已存在条目不覆盖，精确 DOI/arXiv 身份用于去重。
 

@@ -168,7 +168,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | Main 渲染行装饰 | `src/toolkit/main/rendered-items.ts` | 管理行标记与观察者；安装失败时先退休回调，再释放资源，保留原错误。 |
 | 已安装扩展与偏好 | `src/toolkit/main/plugins.ts` | 将 Mozilla AddonManager 和 Zotero 偏好注册表投影为元数据/能力；扩展管理策略仍属于 Plugin Manager。 |
 | Reader 注册、清单与身份 | `src/toolkit/reader/host.ts` | Reader 身份就是原生句柄；只有权威原生清单才能据此退休缺失 session。 |
-| Reader 按键转发 | `src/toolkit/reader/input-bridge.ts` | 包装私有 `PdfView._onKeyDown` 与 `_textAnnotationFocused`。Zotero 会在普通 DOM 传播之外转发 PDF 按键；ReaderSession 决定消费策略，Reader controller 将评论编辑器和引用面板的精确焦点汇总为 `featureInputFocused`，使原生处理在这些输入期间让出按键。模块不各自安装宿主 patch。 |
+| Reader 按键转发 | `src/toolkit/reader/input-bridge.ts` | 包装私有 `PdfView._onKeyDown` 与 `_textAnnotationFocused`。Zotero 会在普通 DOM 传播之外转发 PDF 按键；ReaderSession 决定消费策略，Reader controller 将评论编辑器与引用控件的精确焦点汇总为 `featureInputFocused`，包括位于 Reader UI 文档中的原生预览按钮。模块不各自安装宿主 patch。 |
 | PDF 视图监听与发现 | `src/toolkit/reader/view-lifecycle.ts` | 管理主/次 PDF 视图的附着与释放；注册绑定 ReaderView、Window 与 Document，复用 Window 不复活旧监听，部分获取失败仍释放先前句柄。 |
 | Reader 原生导航、搜索、缩放、分屏与焦点 | `src/toolkit/reader/navigation.ts` | 在当前原生视图执行操作，并将载荷克隆进其 realm。`prepareReaderSelectionSearch()` 返回精确 pane/原生 Find 状态的一次写入能力，不覆盖后续输入或重开的 Find；语义与历史仍由业务负责。 |
 | 跳转捕获、重开与完成桥接 | `src/toolkit/reader/jump-host.ts`、`history-bridge.ts` | 在宿主边界保留视图/历史身份与完成来源；共享历史策略属于 `src/navigation/`。 |
@@ -182,11 +182,12 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | marks 几何与旧存储 | `src/toolkit/reader/marks.ts` | 提供宿主存储/几何；父条目或附件的存储策略由 `ReaderMarks` 决定。 |
 | Zotero 结构化文档块 | `src/toolkit/reader/structured-document.ts` | 原生冷处理可能覆盖整个 PDF 且无法取消；请求保持显式，语义分类属于 `ReaderCaptionTargets`。 |
 | Reader 引用快照 | `src/toolkit/reader/references.ts`、`reference-contracts.ts` | 读取 Zotero 原生 PDF 全文 overlay，包括未渲染页面；快照捕获精确 PDF、presentation、Window、Document 与已加载 PDF 字节指纹，异步阶段持续验证来源。SDT 块只有在 `metadata.source.hash` 与该 PDF 指纹相同时才参与补充或上下文映射。唯一、明确的 `References`/`Bibliography` 标题下，可完整解析的连续编号条目补入未被原生 overlay 覆盖的条目；引用上下文来自原 PDF 字符或唯一映射的原文段落。不完整时界面标记 `partial` 并显示遗漏警告；零条识别不是未引用的证明。只返回不含 SDK/DOM 句柄的数据和来源守卫；不使用 OCR，也不声称对所有 PDF 均能完整识别。 |
+| 原生引文预览、右键与工具栏挂载 | `src/toolkit/reader/reference-interactions.ts`、`reference-interaction-contracts.ts` | 在各 presentation 的原生预览行内挂载控件，以原文及位置核对行归属；在 `createViewContextMenu` 同步追加菜单，工具栏使用既有 `custom-sections`。DOM observer 处理挂载与替换，不以常驻轮询扫描预览。原生引用逐项投影到插件 realm，避免把特权对象交给 content 数组回调。交互当前性与来源当前性分开，关闭原预览后仍保留精确来源；旧菜单不能在窗格或标签页切换后重获目标。 |
 | PDF 原图局部裁剪 | `src/toolkit/reader/region-preview.ts` | 使用不依赖后台动画帧的打印调度，并将默认显示图层的有效可见性复制到独立打印配置，不修改 Reader。当前 SDK 没有完整组枚举接口，`GetOptionalContentConfig` 窄通道补齐所有图层，不能用 `/Order` 代替。原生 Promise 直接归还所属 realm，不跨域克隆。 |
 
-引用增强由 `src/modules/references/` 和 `src/references/controller.ts` 拥有 Reader 面板、选择状态、显式查询与交互；Reader Normal 的 `openReferences` 使用 `<Space>fr`。面板捕获一次 ReaderView，并通过既有导航端口跳转，不另建历史。用户操作见[Reader 指南](READER_GUIDE.md)。
+引用增强由 `src/modules/references/` 和 `src/references/controller.ts` 拥有逐文献上下文动作、搜索清单、引用位置、本地匹配及单篇详情。Reader Normal 的 `openReferences` 使用 `<Space>fr`，与工具栏共用只含清单的查找入口；原生悬停不查询或聚焦。明确操作先记录锚点，再捕获并固定发起 ReaderView，通过既有导航端口跳转，不另建历史。原生预览内的按钮与浮层均按实际 ownerDocument 的焦点和精确来源窗格处理输入；没有全局 Tab 陷阱或全屏遮罩。退出或来源视图退休时取消在途工作，不能向后继文档发布结果。用户操作见[Reader 指南](READER_GUIDE.md)。
 
-`src/references/metadata.ts` 仅在用户明确查询时请求 Semantic Scholar Graph 或 arXiv Atom，并展示来源原始字段与原始摘要；缺失摘要保持为空。查询支持取消，Semantic Scholar 与 arXiv 分别至少间隔 1 秒和 3 秒；429、离线或服务错误如实显示，不自动重试。候选需由用户选择，API 引用/被引计数与本地识别位置数分开显示。`src/platform/reference-credentials.ts` 通过 Zotero Login Manager 显式读取、保存或忘记可选 Semantic Scholar key；密钥不进入偏好、查询结果或日志，也不参与本地分析。该功能不调用 AI、生成摘要或判断引用意义。
+`src/references/metadata.ts` 仅在用户明确查询时请求 Semantic Scholar Graph 或 arXiv Atom，并展示来源原始字段与原始摘要；缺失摘要保持为空。查询支持取消，Semantic Scholar 与 arXiv 分别至少间隔 1 秒和 3 秒；429、离线或服务错误如实显示，不自动重试。候选需由用户选择，API 引用/被引计数与本地识别位置数分开显示。`src/ui/reference-credentials.ts` 在 Neo 设置的阅读器分类中管理可选 Semantic Scholar key，使用独立服务实例，只投影是否存在密钥；论文详情不包含凭据表单。`src/platform/reference-credentials.ts` 通过 Zotero Login Manager 显式读取、保存或忘记密钥，不写入偏好、查询结果或日志，也不参与本地分析。该功能不调用 AI、生成摘要或判断引用意义。
 
 `src/operations/references.ts` 拥有按当前 Library 查询本地匹配和用户明确添加论文的操作；只按 DOI/arXiv 身份去重，不覆盖已有条目，同名但身份未确认时拒绝自动添加，并拒绝只读 Library。
 
