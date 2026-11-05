@@ -99,7 +99,9 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 | 负责方 | 拥有 | 不拥有 |
 | --- | --- | --- |
 | `src/ai/` 与通用平台适配器 | 域无关的单次结构化生成契约、模型配置与凭据、安全请求及取消 | Reader 证据、任务、来源策略、Agent 工具调用或 MCP |
-| `src/ai-qa/` 与 `src/modules/ai-qa/` | 解释／提问／导引任务、当前 Reader 上下文与证据编排、结果校验和成果、预览/跳转与明确采纳；模块入口与生命周期 | 通用模型请求实现、密钥读回、私有 PDF/SDT DOM |
+| `src/modules/ai-qa/` | Reader 入口、选区动作与会话注册 | 模型调用、界面挂载、成果写入实现 |
+| `src/ai-qa/reader-application.ts` 与领域服务 | 解释／提问／导引、Reader 上下文与证据编排、任务取消、成果校验与修订、预览／跳转及明确采纳；`reader-contracts.ts` 定义命令、快照与通知 | 面板、主题、React 挂载、通用模型请求实现、密钥读回、私有 PDF/SDT DOM |
+| `src/ai-qa/presentation.ts` | 原生面板与工具窗的精确 lease、异步视图挂载、主题、重开入口和窗口界面 runtime 的释放 | 证据准备、模型请求、成果仓库、Zotero Note 写入 |
 | `src/ai-qa/ui/` | 静态打包的 React 视图与用户交互 | 原生 Reader 句柄、保存密钥的读回、领域数据写入 |
 | `src/platform/ai-qa-ui.ts` | 按需注册 AI 问答工具窗的 chrome URI，并加载/释放界面 runtime | Reader 身份与每 Reader 窗口生命周期 |
 | `src/platform/ai-qa-storage.ts` | 保存与读取附件成果及修订 | 用户确认之外的 Zotero Note 写入 |
@@ -109,7 +111,9 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `AIService` 保存非秘密配置，并通过 `Services.logins` 按 endpoint 保存密钥；只向视图投影 `hasCredential`，不把密钥暴露到 view model、普通偏好、成果或日志。端点限 HTTPS 或 loopback HTTP；协议由 `api` 显式选择 Chat Completions 或 Responses，后者设置 `store: false`，不续接远端会话。请求禁止重定向，不自动重试或静默切换协议／服务。`sendImages` 默认关闭；只有显式启用才发送最多四张短暂的原始 PNG 图表裁剪。
 
-`AIQAController` 在 `ai-qa` 模块启用时由 Addon 持有，负责连接通用 AI 服务、应用任务、成果仓库和视图。`src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime；关闭的模块不注册入口／动作，不挂载面板或界面 runtime，也不读取凭据或发送请求。打开面板只读取缓存和已存成果；用户明确发起任务后才准备证据并请求模型。输入最多 40 条证据、32,000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标；有效 ID 不证明语义正确。
+`AIQAController` 在 `ai-qa` 模块启用时由 Addon 持有，组合唯一的通用 AI 服务、任务管理器和成果仓库，并将它们借给 Reader 应用层；应用层和呈现层不各自销毁这些共享资源。领域通知不包含界面文案，由 controller 在 view model 边界映射本地化消息。`AIQAPresentation` 按精确 lease 退休异步挂载，只有同一 Window 的最后一个挂载释放后才卸载该窗口的界面 runtime。
+
+`src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime；关闭的模块不注册入口／动作，不挂载面板或界面 runtime，也不读取凭据或发送请求。打开面板前先从发起的 Reader 捕获选区与视图，打开本身只读取缓存和已存成果；用户明确发起任务后才准备证据并请求模型。输入最多 40 条证据、32,000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标；有效 ID 不证明语义正确。
 
 主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller、React 视图和成果仓库。关闭工具窗只释放界面，不取消已接纳任务；Reader 退出时关闭其工具窗并退休视图，但已接纳任务仍可完成。显式取消不保存部分结果。校验通过的成果按附件与 PDF 指纹在本机 JSON 持久保存，生成原稿与人工修改版本分开；这不是 Zotero 同步。来源跳转先预览再明确确认，只有用户明确采纳时才通过既有 Operation 写入带来源的 Zotero Note，不自动创建 PDF 批注。
 

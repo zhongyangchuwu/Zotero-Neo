@@ -1,5 +1,6 @@
 import type { AIConfiguration, AIConfigurationState } from '../ai/contracts';
 import type { AIQARecord, AIQASource, AIQATaskState } from './contracts';
+import type { AIQAReaderCommand, AIQASourcePreview } from './reader-contracts';
 
 export const AI_QA_TEXT_KEYS = [
   'title',
@@ -61,13 +62,6 @@ export interface AIQARecordView {
   readonly sourceCurrent: boolean;
 }
 
-export interface AIQASourcePreview {
-  readonly id: string;
-  readonly title: string;
-  readonly text: string;
-  readonly imageDataURL: string | null;
-}
-
 /** Safe projection only; model keys, native Reader handles and mutable repository state never enter it. */
 export interface AIQAViewModel {
   readonly labels: Readonly<Record<AIQATextKey, string>>;
@@ -94,21 +88,7 @@ export type AIQACommand =
       readonly key: string;
       readonly forget: boolean;
     }
-  | { readonly type: 'explain' }
-  | { readonly type: 'ask'; readonly question: string }
-  | { readonly type: 'select-section'; readonly id: string }
-  | { readonly type: 'guide' }
-  | { readonly type: 'cancel' }
-  | { readonly type: 'preview'; readonly resultID: string; readonly evidenceID: string }
-  | { readonly type: 'jump'; readonly resultID: string; readonly evidenceID: string }
-  | { readonly type: 'save-note'; readonly resultID: string }
-  | {
-      readonly type: 'edit';
-      readonly resultID: string;
-      readonly revision: number;
-      readonly text: string;
-    }
-  | { readonly type: 'remove'; readonly resultID: string; readonly revision: number };
+  | AIQAReaderCommand;
 
 export interface AIQAView {
   update(model: AIQAViewModel): void;
