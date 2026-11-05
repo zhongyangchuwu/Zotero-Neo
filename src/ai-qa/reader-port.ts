@@ -20,3 +20,15 @@ export interface AIQAReaderPort {
   themeRoot(root: HTMLElement): () => void;
   showStatus(message: string): void;
 }
+
+/** Reader evidence and invocation policy; independent of native panel presentation. */
+export type AIQAReaderTaskPort = Pick<
+  AIQAReaderPort,
+  'reader' | 'captureSelection' | 'captureView' | 'language'
+>;
+
+/** Native presentation capabilities; no selection or exact-view task capture. */
+export type AIQAReaderPresentationPort = Pick<
+  AIQAReaderPort,
+  'reader' | 'language' | 'themeRoot' | 'showStatus'
+>;

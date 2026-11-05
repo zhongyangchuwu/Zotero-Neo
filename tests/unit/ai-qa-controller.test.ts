@@ -3,7 +3,7 @@ import { setImmediate as drain } from 'node:timers/promises';
 import type { AIGenerationRequest, AIGenerationResult } from '../../src/ai/contracts';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import type { ReaderSelectionContext } from '../../src/core/contracts';
-import type { AIQAPanelCallbacks, ReaderRuntime } from '../../src/toolkit/reader';
+import type { AIQAPanelCallbacks, AIQAPanelLease, ReaderRuntime } from '../../src/toolkit/reader';
 import type { AIQASourceCapture } from '../../src/ai-qa/evidence';
 import type * as EvidenceModule from '../../src/ai-qa/evidence';
 import type { AIQACommand, AIQAViewModel } from '../../src/ai-qa/view-contracts';
@@ -16,6 +16,7 @@ const host = vi.hoisted(() => ({
   capture: vi.fn<() => Promise<AIQASourceCapture>>(),
   render: vi.fn(),
   current: vi.fn<() => Promise<boolean>>(),
+  open: vi.fn<() => boolean>(),
   model: null as AIQAViewModel | null,
   dispatch: null as ((command: AIQACommand) => void) | null,
   contents: null as string | null,
@@ -68,11 +69,18 @@ vi.mock('../../src/ai-qa/view-host', () => ({
   ) => {
     host.model = model;
     host.dispatch = dispatch;
+    let disposed = false;
     return {
       update: (value: AIQAViewModel) => {
-        host.model = value;
+        if (!disposed) host.model = value;
       },
-      dispose() {},
+      dispose() {
+        disposed = true;
+        if (host.dispatch === dispatch) {
+          host.model = null;
+          host.dispatch = null;
+        }
+      },
     };
   },
 }));
@@ -81,6 +89,7 @@ vi.mock('../../src/toolkit/reader', () => ({
   AIQAPanelHost: class {
     callbacks: AIQAPanelCallbacks;
     release: (() => void) | null = null;
+    lease: AIQAPanelLease | null = null;
     readonly root = {
       ownerDocument: { createElementNS: () => ({ addEventListener() {}, textContent: '' }) },
       replaceChildren() {},
@@ -89,27 +98,32 @@ vi.mock('../../src/toolkit/reader', () => ({
       this.callbacks = callbacks;
     }
     open(reader: ReaderRuntime) {
-      const lease = {
+      if (!host.open()) return false;
+      if (this.lease && this.lease.reader !== reader) this.releaseReader();
+      const lease: AIQAPanelLease = this.lease ?? {
         reader,
         root: this.root,
         window: {} as Window,
         ownsWindow: false,
-        isCurrent: () => true,
+        isCurrent: () => this.lease === lease,
       };
+      this.lease = lease;
       this.release ??= this.callbacks.mount(lease);
       this.callbacks.activate(lease);
       return true;
     }
     close() {}
     releaseReader() {
-      this.release?.();
+      const release = this.release;
       this.release = null;
+      this.lease = null;
+      release?.();
     }
     ownsTarget() {
       return false;
     }
     dispose() {
-      this.release?.();
+      this.releaseReader();
     }
   },
 }));
@@ -136,6 +150,7 @@ beforeEach(() => {
   host.generate.mockReset().mockResolvedValue(result);
   host.capture.mockReset().mockResolvedValue(capture);
   host.current.mockReset().mockResolvedValue(true);
+  host.open.mockReset().mockReturnValue(true);
   host.render
     .mockReset()
     .mockResolvedValue({ dataURL: 'data:image/png;base64,AA==', width: 1, height: 1 });
@@ -161,6 +176,20 @@ beforeEach(() => {
 afterEach(() => controller.dispose());
 
 describe('Reader AI invocation ownership', () => {
+  it('does not generate when the explicit Reader entry cannot open, and retries with the new selection', async () => {
+    host.open.mockReturnValue(false);
+    await controller.explain(reader, selection('blocked selection'));
+    expect(host.generate).not.toHaveBeenCalled();
+    expect(host.contents).toBeNull();
+    host.open.mockReturnValue(true);
+    await controller.explain(reader, selection('retry selection'));
+    expect(
+      JSON.parse(host.contents!).records.map((record: { evidence: { text: string }[] }) =>
+        record.evidence.map((entry) => entry.text),
+      ),
+    ).toEqual([['retry selection']]);
+  });
+
   it('does not retarget an accepted selection while source loading is pending', async () => {
     const loading = Promise.withResolvers<AIQASourceCapture>();
     host.capture.mockReturnValue(loading.promise);
@@ -231,8 +260,11 @@ describe('Reader AI invocation ownership', () => {
     host.dispatch!({ type: 'close' });
     pending.resolve(true);
     await drain();
+    expect(host.model).toBeNull();
     controller.open(reader);
-    await drain();
+    await vi.waitFor(() =>
+      expect(host.model?.records.some((value) => value.record.id === record.id)).toBe(true),
+    );
     expect(host.render).not.toHaveBeenCalled();
     expect(host.model?.preview).toBeNull();
   });
@@ -294,4 +326,28 @@ describe('Reader AI invocation ownership', () => {
     expect(prompt.evidence.map((entry) => entry.text)).toContain('Second chapter source');
     expect(prompt.evidence.map((entry) => entry.text)).not.toContain('First chapter source');
   });
+});
+
+it('keeps the replacement Reader registration when its old cleanup repeats with the same port', async () => {
+  const replacementReader = { itemID: 2 } as ReaderRuntime;
+  host.capture.mockResolvedValue({
+    ...capture,
+    source: { ...capture.source, itemID: 2, key: 'DEF', fileName: 'replacement.pdf' },
+  });
+  const port = {
+    reader: replacementReader,
+    captureSelection: () => ({ ...selection('replacement source'), itemID: 2 }),
+    captureView: () => null,
+    language: () => 'en' as const,
+    themeRoot: () => () => {},
+    showStatus() {},
+  };
+  const oldRelease = controller.register(port);
+  oldRelease();
+  const release = controller.register(port);
+  oldRelease();
+  expect(controller.open(replacementReader)).toBe(true);
+  await vi.waitFor(() => expect(host.model?.source?.key).toBe('DEF'));
+  release();
+  expect(controller.open(replacementReader)).toBe(false);
 });
