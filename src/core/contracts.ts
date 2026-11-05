@@ -1,4 +1,4 @@
-import type { DocumentPreparationPort } from '../document-analysis/preparation-controller';
+import type { DocumentPreparationPort } from '../modules/document-preparation';
 import type { ActionId } from '../input/actions';
 import type { BindingMap, BindingContext } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';

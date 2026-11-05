@@ -58,9 +58,20 @@ import {
 import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
-import { createReaderNotesModule, type ReaderNotesModule } from '../modules/notes/reader';
+import { createChapterNotesModule, type ChapterNotesModule } from '../modules/chapter-notes';
 import { createAIQAModule, type AIQAModule } from '../modules/ai-qa';
 import { createReferencesModule, type ReferencesModule } from '../modules/references';
+import { createReaderChaptersModule, type ReaderChaptersModule } from '../modules/reader-chapters';
+import { createReaderFiguresModule, type ReaderFiguresModule } from '../modules/reader-figures';
+import {
+  createDocumentComparisonModule,
+  type DocumentComparisonModule,
+} from '../modules/document-comparison';
+import { createReaderExcerptsModule, type ReaderExcerptsModule } from '../modules/reader-excerpts';
+import {
+  createDocumentPreparationModule,
+  type DocumentPreparationModule,
+} from '../modules/document-preparation';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -78,7 +89,7 @@ import {
 } from '../modules/workspace/reader';
 import { isReaderWorkspaceAction } from '../modules/workspace/reader-actions';
 import { ReaderNativeInput } from './native-input';
-import { readerSelectionIsFiltered } from '../toolkit/reader';
+import { readerRegionPreview, readerSelectionIsFiltered } from '../toolkit/reader';
 import {
   ReaderHostKeyBridge,
   ReaderJumpHostAdapter,
@@ -526,7 +537,12 @@ export class ReaderSession {
   readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
-  readonly #notes: ReaderNotesModule | null;
+  readonly #chapterNotes: ChapterNotesModule | null;
+  readonly #chapters: ReaderChaptersModule | null;
+  #figures: ReaderFiguresModule | null = null;
+  readonly #comparison: DocumentComparisonModule | null;
+  readonly #excerpts: ReaderExcerptsModule | null;
+  readonly #preparation: DocumentPreparationModule | null;
   readonly #ai: AIQAModule | null;
   readonly #references: ReferencesModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
@@ -697,18 +713,61 @@ export class ReaderSession {
           canFocusDirection: (direction) => this.#navigationHost.canFocusDirection(direction),
         }),
       );
+      const preferences = dependencies.controller.dependencies.preferences;
+      const preparationService = dependencies.controller.dependencies.documentPreparation;
+      this.#preparation = preparationService
+        ? this.#modules.activate('document-preparation', () =>
+            createDocumentPreparationModule(
+              this.#modules.host,
+              'reader-normal',
+              preparationService,
+            ),
+          )
+        : null;
+      this.#chapters = this.#modules.activate('reader-chapters', () =>
+        createReaderChaptersModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences,
+          captureView: (window) => this.invocationCurrent(window, null),
+          themeRoot: (root) => this.themeRoot(root),
+          text: (key) => t(`reader.chapter.${key}`, this.keyGuideLanguage()),
+          navigate: (result, window) =>
+            this.#navigationHost.navigateToRegion(window, { position: result.location }),
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
+      this.#comparison = this.#modules.activate('document-comparison', () =>
+        createDocumentComparisonModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences,
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root) => this.themeRoot(root),
+          copyText: (text) => this.copyText(text),
+          focusReader: () => {
+            const window = this.#navigationHost.activePdfWindow();
+            const reader = dependencies.reader;
+            const owner = readerOwnerWindow(reader);
+            if (
+              this.readerViewForWindow(window) &&
+              (!reader.tabID || (!!owner && readerSelectedTabID(owner) === reader.tabID))
+            )
+              window.focus();
+          },
+          navigate: (position) => {
+            const window = this.#navigationHost.activePdfWindow();
+            const current = this.#beginCaptionJump(window);
+            if (current?.()) return this.#navigationHost.navigateToRegion(window, { position });
+          },
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
       this.#startNavigation = () => {
         if (this.#modules.enabled('reader-navigation')) return;
         const navigationModule = this.#modules.activate('reader-navigation', () => {
           const module = createReaderNavigationModule(this.#modules.host, {
             reader: dependencies.reader,
             navigationHost: this.#navigationHost,
-            documentComparison: {
-              preferences: dependencies.controller.dependencies.preferences,
-              language: () => this.keyGuideLanguage(),
-              themeRoot: (root) => this.themeRoot(root),
-              copyText: (text) => this.copyText(text),
-            },
+            preferences,
             smooth: {
               preferences: dependencies.controller.dependencies.preferences,
               scrollBy: (pdfWindow, x, y) => this.scrollContainer(pdfWindow).scrollBy(x, y),
@@ -737,17 +796,7 @@ export class ReaderSession {
                 this.#navigationHost.pageNavigationSupported(pdfWindow),
               onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
             },
-            captureView: (window) => this.invocationCurrent(window, null),
-            beginCaptionJump: (pdfWindow) => {
-              if (
-                this.#scope.disposed ||
-                this.#nativeInput.ownsInput ||
-                this.#commentEditor?.ownsInput
-              )
-                return null;
-              this.#interactionRevision += 1;
-              return this.invocationCurrent(pdfWindow);
-            },
+            beginCaptionJump: (window) => this.#beginCaptionJump(window),
             sidebar: {
               bindings: () =>
                 this.#modules.enabled('reader-navigation')
@@ -813,12 +862,27 @@ export class ReaderSession {
         this.#marks = navigationModule?.marks ?? null;
         this.#sidebar = navigationModule?.sidebar ?? null;
         this.#smoothScroller = navigationModule?.smooth ?? null;
+        if (navigationModule) {
+          this.#figures = this.#modules.activate('reader-figures', () =>
+            createReaderFiguresModule(this.#modules.host, {
+              reader: dependencies.reader,
+              preferences,
+              captions: navigationModule.captions,
+              text: (key) => t(`reader.figures.${key}`, this.keyGuideLanguage()),
+              themeRoot: (root) => this.themeRoot(root),
+              captureView: (window) => this.invocationCurrent(window, null),
+              render: (target, signal) =>
+                readerRegionPreview(dependencies.reader, target.location.position, signal),
+              navigate: (target, window) => navigationModule.navigateCaption(target, window),
+              debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+            }),
+          );
+        }
       };
       this.#selection = this.#modules.activate('reader-selection', () =>
         createReaderSelectionModule(this.#modules.host, {
           reader: dependencies.reader,
           preferences: dependencies.controller.dependencies.preferences,
-          noteTarget: () => resolveReaderSourceNoteTarget(dependencies.reader),
           activeWindow: () => this.#navigationHost.activePdfWindow(),
           isViewCurrent: (window) => this.readerViewCurrent(window),
           capturePresentation: (window) => this.invocationCurrent(window),
@@ -846,8 +910,20 @@ export class ReaderSession {
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );
-      this.#notes = this.#modules.activate('notes', () =>
-        createReaderNotesModule(this.#modules.host, {
+      this.#excerpts = this.#modules.activate('reader-excerpts', () =>
+        createReaderExcerptsModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences,
+          target: () => resolveReaderSourceNoteTarget(dependencies.reader),
+          captureView: (window) => this.invocationCurrent(window, null),
+          themeRoot: (root) => this.themeRoot(root),
+          text: (key) => t(`reader.excerpts.${key}`, this.keyGuideLanguage()),
+          showStatus: (message) => this.showStatus(message),
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
+      this.#chapterNotes = this.#modules.activate('chapter-notes', () =>
+        createChapterNotesModule(this.#modules.host, {
           reader: dependencies.reader,
           preferences: dependencies.controller.dependencies.preferences,
           target: () => resolveReaderSourceNoteTarget(dependencies.reader),
@@ -906,9 +982,11 @@ export class ReaderSession {
           this.#interactionRevision += 1;
           if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
           const failure = new CleanupFailure();
-          failure.run(() => this.#navigationModule?.releaseView(pdfWindow));
+          failure.run(() => this.#chapters?.releaseView(pdfWindow));
+          failure.run(() => this.#figures?.releaseView(pdfWindow));
+          failure.run(() => this.#excerpts?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
-          failure.run(() => this.#notes?.releaseView(pdfWindow));
+          failure.run(() => this.#chapterNotes?.releaseView(pdfWindow));
           failure.run(() => this.#references?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
           failure.run(() => this.#hints?.copy.releaseView(pdfWindow));
@@ -1260,11 +1338,6 @@ export class ReaderSession {
     const failure = new CleanupFailure();
     failure.run(() => this.clearNativeSelection());
     failure.run(() => this.#nativeInput.release());
-    failure.run(() => {
-      const window = readerWindow(this.#dependencies.reader);
-      if (window)
-        this.#dependencies.controller.dependencies.documentPreparation?.closeOwner(window);
-    });
     failure.run(() => this.#viewLifecycle.dispose());
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
@@ -1307,9 +1380,10 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
-    this.#navigationModule?.deactivate();
-    this.#selection?.deactivate();
-    this.#notes?.close();
+    this.#chapters?.close();
+    this.#figures?.close();
+    this.#excerpts?.close();
+    this.#chapterNotes?.close();
     this.#references?.close();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
@@ -1427,9 +1501,11 @@ export class ReaderSession {
     this.#references?.activateView(pdfWindow);
     if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
-    if (this.#selection?.handleKey(event)) return;
-    if (this.#notes?.handleKey(event)) return;
-    if (this.#navigationModule?.handleKey(event)) return;
+    if (this.#excerpts?.handleKey(event)) return;
+    if (this.#chapterNotes?.handleKey(event)) return;
+    if (this.#chapters?.handleKey(event)) return;
+    if (this.#figures?.handleKey(event)) return;
+    if (this.#comparison?.handleKey(event)) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
       this.input.reset();
       this.clearKeyGuide();
@@ -1536,6 +1612,14 @@ export class ReaderSession {
           );
       });
     }
+  }
+
+  /** Retires prior presentation work before admitting a jump in the initiating PDF view. */
+  #beginCaptionJump(window: PdfWindow): (() => boolean) | null {
+    if (this.#scope.disposed || this.#nativeInput.ownsInput || this.#commentEditor?.ownsInput)
+      return null;
+    this.#interactionRevision += 1;
+    return this.invocationCurrent(window);
   }
 
   private handleMarkChord(event: KeyboardEvent, key: string, pdfWindow: PdfWindow): boolean {
@@ -1690,8 +1774,30 @@ export class ReaderSession {
       this.#ai?.open();
       return;
     }
+    if (action === 'openChapterSearch') {
+      this.#figures?.close();
+      this.#comparison?.close();
+      this.#chapters?.open(pdfWindow);
+      return;
+    }
+    if (action === 'openFigurePicker') {
+      this.#chapters?.close();
+      this.#comparison?.close();
+      this.#figures?.open(pdfWindow);
+      return;
+    }
+    if (action === 'compareDocumentParsing') {
+      this.#chapters?.close();
+      this.#figures?.close();
+      this.#comparison?.open();
+      return;
+    }
+    if (action === 'openObjectExcerpts') {
+      this.#excerpts?.open(pdfWindow);
+      return;
+    }
     if (action === 'organizeChapterNotes') {
-      this.#notes?.open(pdfWindow);
+      this.#chapterNotes?.open(pdfWindow);
       return;
     }
     if (isReaderNavigationAction(action)) {
@@ -1732,7 +1838,7 @@ export class ReaderSession {
       case 'prepareDocuments': {
         const window = readerWindow(this.#dependencies.reader);
         if (window)
-          this.#dependencies.controller.dependencies.documentPreparation?.open({
+          this.#preparation?.open({
             window,
             targets: resolveReaderDocumentAttachments(this.#dependencies.reader),
             language: () => this.keyGuideLanguage(),

@@ -31,7 +31,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 模块
 
-项目有 13 个内部功能分区：9 个核心分区固定启用，4 个可选增强可配置。九个核心 ID 为 `library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes` 和 `workspace`；可选 ID 为 `reader-hints`、`extensions`、`references` 和 `ai-qa`。
+内部功能按可组合模块划分，核心模块固定启用；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`references` 和 `ai-qa`。
 四个可选模块的偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled`、`extensions.zotero-neo.modules.extensions.enabled`、`extensions.zotero-neo.modules.references.enabled` 和 `extensions.zotero-neo.modules.ai-qa.enabled`。前三项默认 `true`，`ai-qa` 默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
 
 | 模块 ID | 名称 | 功能与依赖 |
@@ -41,8 +41,14 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `tags` | 标签 | 添加/移除标签及 Main 标签过滤。 |
 | `collections` | 分类 | 分类查找、成员关系及结构工作流。 |
 | `reader-navigation` | 阅读导航 | 页面、滚动、缩放、搜索、位置遍历、marks 与原生侧栏增强。 |
+| `reader-chapters` | 章节查找 | 章节范围选择、字面查找及确认定位，不改写原生 Find。 |
+| `reader-figures` | 图表浏览 | 图表筛选、原图预览和确认定位；依赖 `reader-navigation` 提供既有来源与导航。 |
+| `document-comparison` | 文档解析对照 | 原生／云端解析对照、缓存和显式解析；打开面板不自动上传。 |
 | `reader-selection` | 阅读选区 | Select、范围动作、Flash、复制/搜索所选文本和所选文本操作面板。 |
 | `reader-annotations` | 阅读批注 | 批注创建、删除、改色、过滤、复制和评论编辑。 |
+| `reader-excerpts` | 对象摘录 | 图表／公式的预览、复制及显式保存为来源笔记。 |
+| `chapter-notes` | 章节笔记整理 | 来源内容的章节归属、筛选、预览与显式生成笔记。 |
+| `document-preparation` | 文档准备 | Main／Reader 的 PDF 准备入口；界面关闭不停止已接纳的应用级队列。 |
 | `reader-hints` | 链接与复制提示 | 可选增强：复制／跟随提示；读取 Zotero 原生批注不依赖阅读批注模块。 |
 | `references` | 引用增强 | 可选增强：在本机定位参考文献和已识别的正文提及；按需查询原始学术元数据。默认开启，不调用 AI。操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。 |
 | `ai-qa` | AI 问答（实验） | 可选增强：解释当前 Reader 选区、就选区或有限章节证据提问，并准备章节图文导引；仅可选附带相关图表裁图，不检索批注、笔记或其他论文。依赖 `reader-selection`；默认关闭。 |
@@ -63,7 +69,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
-设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部四项可选增强，九个核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部四项可选增强，核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
 ## 引用增强的元数据来源与密钥
 

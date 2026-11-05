@@ -126,12 +126,12 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。13 个模块中，`library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 是九个固定启用的核心模块；`reader-hints`、`extensions`、`ai-qa` 与 `references` 是四项可选增强。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；核心模块固定启用，可选增强为 `reader-hints`、`extensions`、`ai-qa` 与 `references`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes 与 Workspace；ReaderSession 组合导航、选择、批注、hints、引用增强、可选 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 与文档准备入口；ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
 `src/core/module-runtime.ts` 根据四项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`ai-qa` 默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留四项请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。早于 `references` 的快照缺少该字段时，已应用值按关闭处理；默认请求仍为开启，Settings 会显示待重启。旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
-实机核对模块配置时使用专用 profile 和自有数据，确认四项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留；恢复默认后 `reader-hints`、`extensions`、`references` 为开启，`ai-qa` 为关闭。关闭全部四项后九个核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+实机核对模块配置时使用专用 profile 和自有数据，确认四项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留；恢复默认后 `reader-hints`、`extensions`、`references` 为开启，`ai-qa` 为关闭。关闭全部四项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 
@@ -237,11 +237,11 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `reader/document-cache.ts` 的 `readReaderDocument()` 为句段、章节和后续笔记提供相同的缓存优先来源契约，原生退路统一归一化与哈希验证。`reader-selection/structured-text.ts` 只缓存区域快照；`paragraph-mapping.ts` 在一次动作中对原文字符建立临时映射，必须唯一、完整、无替字且起点源页一致；同一段落的完整原文可证实邻页续段端点，不能借用其他页面的独立出现。Reading Mode 限制在焦点附近段落，映射不常驻。`text-boundary-motion.ts` 共享句段端点与常见缩写处理；PDF 不再调用 Gecko 的句段粒度，缺映射使用词元退路。异步准备后必须复查原选区端点和精确视图，不能覆盖后续输入。
 
-`document-analysis/sections.ts` 只确定编号章节范围与字面匹配；`reader-navigation/chapter-search.ts` 拥有范围选择与跳转，`ui/search-dialog.ts` 只提供可复用的查询／候选界面、IME 和生命周期。该流程不改写原生 Find，不创建第二套导航历史。区域结果只定位段落，不能直接保存为字符高亮。
+`document-analysis/sections.ts` 只确定编号章节范围与字面匹配；`modules/reader-chapters/chapter-search.ts` 拥有范围选择与跳转，`ui/search-dialog.ts` 只提供可复用的查询／候选界面、IME 和生命周期。该流程不改写原生 Find，不创建第二套导航历史。区域结果只定位段落，不能直接保存为字符高亮。
 
-`modules/notes/reader.ts` 为 Reader 的 `notes` 实例，拥有章节整理、筛选、预览与显式保存。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。`chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容标识 `dc:relation` 串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
+`modules/chapter-notes/index.ts` 按 ReaderSession 创建独立的 `chapter-notes` 实例，拥有章节整理、筛选、预览与显式保存，不由 Main 的 `notes` 模块转发。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。模块内 `chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容标识 `dc:relation` 串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
 
-`reader-selection/object-excerpts.ts` 拥有显式图表／公式摘录与预览接纳，复用共享文档快照、对象成员和原 PDF 渲染，不恢复一般文字 Capture。`ui/search-dialog.ts` 只负责可取消预览与显式动作；操作前重查来源和精确视图。Reader 解析固定 `SourceNoteTarget`，`operations/source-note.ts` 负责可编辑性、来源哈希、嵌图保存及失败时清理自有半成品；已接纳写入独立于 Reader 界面寿命。Toolkit 使用 Zotero 原生序列化保留区域来源，平台层负责安全表格 HTML、PNG 与多格式剪贴板。新笔记保留指向 PDF 的 `dc:relation`，不创建伪批注或修改既有笔记。
+`modules/reader-excerpts/object-excerpts.ts` 拥有显式图表／公式摘录与预览接纳，复用共享文档快照、对象成员和原 PDF 渲染，不恢复一般文字 Capture，也不由 Select 构造或关闭。`ui/search-dialog.ts` 只负责可取消预览与显式动作；操作前重查来源和精确视图。Reader 解析固定 `SourceNoteTarget`，`operations/source-note.ts` 负责可编辑性、来源哈希、嵌图保存及失败时清理自有半成品；已接纳写入独立于 Reader 界面寿命。Toolkit 使用 Zotero 原生序列化保留区域来源，平台层负责安全表格 HTML、PNG 与多格式剪贴板。新笔记保留指向 PDF 的 `dc:relation`，不创建伪批注或修改既有笔记。
 
 `reader-selection/body-selection.ts` 拥有会话级正文选择开关、显式异步准备与退休结果隔离；布局优先复用当前服务的有效附件缓存，原生退路保持 `DocumentRegion` 归一化及来源哈希校验；缓存键由 `document-analysis/settings.ts` 统一确定。PDF 缓存命中不请求 SDT，Reading Mode 按需读取原生块并验证同一来源。`body-text.ts` 只决定正文接纳策略，Toolkit 的 `text-admission.ts` 负责将精确视图的 Text 映射为 PDF 来源矩形或 SDT 顶层块 ID，并安装可逆属性租约；业务代码不读取 PDF.js 或 SDT 私有 DOM。后续布局后端可复用相同区域契约，不各自实现键盘选择。
 
@@ -251,7 +251,7 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `document-source.ts` 单独读取 PDF 页面几何，使云端后端不依赖 SDT 成功。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过原生 `_pageInfo` 适配。共享 `geometry.ts` 将 OXR / MinerU 页面坐标按原 PDF CropBox 与旋转转换，缺页、重复页、非法尺寸和越界矩形使该结果失败，不静默裁剪。来源文件版本变更不能继续应用原结果。
 
-`src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；请求体、凭据不进入日志或结果。导航模块中的 `ReaderDocumentComparison` 拥有显式处理、对照界面和迟到结果隔离。原生与云端结果独立，取消本地请求不承诺远端停止计算；SDK 原生提取不可取消。API 密钥只存在于本次界面。表格 HTML 使用宿主纯文本转换器展示，不插入后端 HTML 或加载其中资源。
+`src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；请求体、凭据不进入日志或结果。`src/modules/document-comparison/` 中的 `ReaderDocumentComparison` 拥有显式处理、对照界面和迟到结果隔离，不再由 Navigation 创建。原生与云端结果独立，取消本地请求不承诺远端停止计算；SDK 原生提取不可取消。Token 的显式保存与清除沿用现有本机凭据入口。表格 HTML 使用宿主纯文本转换器展示，不插入后端 HTML 或加载其中资源。
 
 `document-analysis/cache.ts` 定义外部解析缓存契约、明确的非秘密配置身份及完整数据校验；`platform/document-analysis-cache.ts` 使用 Zotero 公共文件 API 读写、Gecko `IOUtils.move` 精确提交隐藏文件名，在附件存储目录保存 `.zotero-neo-analysis-<配置摘要>.json`，链接 PDF 也使用 Zotero 的附件目录，不写外部源文件旁。每项配置仅保留最后一次成功提交的结果，包含来源文件哈希、页面几何、后端、适配器版本、已知模型版本和保存时间。缓存格式版本、区域种类、唯一身份与完整坐标均校验；32 MiB 文件上限与 100000 区域上限避免无界载入。损坏或不匹配的缓存视为未命中，打开面板不会因此自动上传。
 
@@ -273,3 +273,7 @@ MinerU 的 table/image/chart 父对象归一化为成员区域上的 `sourceObje
 `reader/document-cache.ts` 供导航与选择在显式请求时读取当前服务的附件缓存，复用后端独立导出的非秘密缓存键与 PDF 来源几何；它不构造网络解析器，也不运行原生 SDT。`ReaderCaptionTargets` 优先投影有效缓存的图表对象，缺失或不可用时才使用既有原生路径。图表目标携带稳定对象身份、显式类型和来源，编号缺失时不按标题猜类型或合并同页对象。原生标题通过单独的 `loadHeadings()` 准备，保留原有大纲与标题校正，不必为缓存图表等待原生全文分析。
 
 缓存导航在使用前重查 PDF 版本、服务配置和 Reader 所有权；旧侧栏选择在目标被替换后不能继续导航。当前 Reader 的分析成功提交以及服务偏好变化会退休并按需重载已准备的图表目标。所有缓存和原生目标继续通过同一原生位置／导航历史能力跳转，不直接操作 PDF.js 滚动位置。
+
+`src/modules/reader-figures/` 拥有图表查询、类型／整组筛选、裁图预览和确认；它依赖 Navigation 已成功启动，但只接收既有 caption 来源与定位端口。章节、图表和对象摘录各自持有缓存／服务失效订阅，不能把这些订阅挂回 Select 或 Navigation 的大作用域。精确视图、输入和唯一历史策略继续由 Reader Surface 提供。
+
+`src/modules/document-preparation/controller.ts` 由 Addon 创建一次；`createDocumentPreparationModule()` 分别绑定 Main／Reader 的 `prepareDocuments`。服务返回绑定精确 presentation 的释放句柄，旧作用域退出只能退休自己的界面，不能关闭后来的同窗口界面。局部模块不停止或销毁借用的应用级队列；显式开始、继续和停止、任务记录及缓存仍沿用原契约。实机核对 Main 目标与 Reader 附件分别解析、替换后关闭旧 Reader 不关闭新界面；真实上传及已接纳任务继续执行需单独使用受控数据验证。

@@ -8,13 +8,13 @@ import { keyString } from '../../input/keys';
 import { THEME_VARS } from '../../ui/theme';
 import { readerWindow, type ReaderRegionPreview } from '../../toolkit/reader';
 import type { PdfWindow, ReaderRuntime } from '../../reader/types';
-import type { ReaderCaptionTarget, ReaderCaptionTargets } from './caption-targets';
+import type { ReaderCaptionTarget, ReaderCaptionSource } from '../reader-navigation';
 import { filterFigureTargets } from './figure-search';
 
 const H = 'http://www.w3.org/1999/xhtml';
 export interface ReaderFigurePickerHost {
   readonly reader: ReaderRuntime;
-  readonly captions: ReaderCaptionTargets;
+  readonly captions: ReaderCaptionSource;
   readonly text: (key: string) => string;
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly captureView: (window: PdfWindow) => () => boolean;

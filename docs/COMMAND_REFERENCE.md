@@ -26,7 +26,7 @@
 
 ## 模式、焦点与功能可用性
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用；`reader-hints`、`extensions`、`references` 与 `ai-qa` 四项可选增强可关闭，其中 `ai-qa` 依赖固定启用的 `reader-selection`。前三项默认开启，`ai-qa` 默认关闭。设置见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。核心模块固定启用；`reader-hints`、`extensions`、`references` 与 `ai-qa` 四项可选增强可关闭，其中 `ai-qa` 依赖固定启用的 `reader-selection`。前三项默认开启，`ai-qa` 默认关闭。设置见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |

@@ -1,4 +1,4 @@
-import { DocumentPreparationController } from './document-analysis/preparation-controller';
+import { DocumentPreparationController } from './modules/document-preparation';
 import type {
   CommandPaletteContext,
   MainWindow,

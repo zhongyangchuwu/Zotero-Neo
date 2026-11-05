@@ -1,21 +1,21 @@
-import { mineruCredentialField, type MinerUCredentialField } from '../ui/mineru-credentials';
-import { CleanupFailure } from '../core/cleanup';
-import { isDeadObject } from '../platform/cross-compartment';
-import { asElement } from '../platform/dom';
-import { t } from '../i18n';
-import { bindCompositionState, compositionOwnsKey } from '../input/composition';
-import { keyString } from '../input/keys';
-import type { KeyGuideLanguage } from '../input/key-guide-config';
-import { THEME_VARS } from '../ui/theme';
+import { mineruCredentialField, type MinerUCredentialField } from '../../ui/mineru-credentials';
+import { CleanupFailure, type Cleanup } from '../../core/cleanup';
+import { isDeadObject } from '../../platform/cross-compartment';
+import { asElement } from '../../platform/dom';
+import { t } from '../../i18n';
+import { bindCompositionState, compositionOwnsKey } from '../../input/composition';
+import { keyString } from '../../input/keys';
+import type { KeyGuideLanguage } from '../../input/key-guide-config';
+import { THEME_VARS } from '../../ui/theme';
 import {
   documentPreparationAbort,
   documentPreparationHost,
-} from '../platform/document-preparation';
+} from '../../platform/document-preparation';
 import {
   DocumentPreparationQueue,
   MAX_PREPARATION_FILES,
   type DocumentAttachment,
-} from './preparation';
+} from '../../document-analysis/preparation';
 
 export interface PreparationPresentation {
   readonly window: Window;
@@ -25,7 +25,7 @@ export interface PreparationPresentation {
   readonly isCurrent: () => boolean;
 }
 export interface DocumentPreparationPort {
-  open(presentation: PreparationPresentation): void;
+  open(presentation: PreparationPresentation): Cleanup | null;
   handleKey(event: KeyboardEvent): boolean;
   closeOwner(window: Window): void;
 }
@@ -65,9 +65,9 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     this.close(false);
     return false;
   }
-  open(host: PreparationPresentation): void {
+  open(host: PreparationPresentation): Cleanup | null {
+    if (!host.isCurrent()) return null;
     this.close(false);
-    if (!host.isCurrent()) return;
     const doc = host.window.document,
       H = 'http://www.w3.org/1999/xhtml';
     const text = (key: string): string => t(`documentPreparation.${key}`, host.language());
@@ -173,6 +173,9 @@ export class DocumentPreparationController implements DocumentPreparationPort {
         (this.queue.running ? view.stop : view.input).focus();
       }
     });
+    return () => {
+      if (this.#view === view) this.close(false);
+    };
   }
   #render(view: View): void {
     if (!this.#current(view)) return;

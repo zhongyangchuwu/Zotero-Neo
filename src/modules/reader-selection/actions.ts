@@ -5,7 +5,6 @@ import type { PdfWindow } from '../../reader/types';
 export const READER_SELECTION_NORMAL_ACTIONS = [
   'enterVisual',
   'toggleBodySelection',
-  'openObjectExcerpts',
 ] as const satisfies readonly ActionId[];
 export const READER_SELECTION_SELECT_ACTIONS = [
   'flashText',

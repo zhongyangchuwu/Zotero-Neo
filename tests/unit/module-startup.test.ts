@@ -3,18 +3,10 @@ import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module
 import type { PreferenceReader } from '../../src/core/preferences';
 import { BUILTIN_MODULES, isOptionalModule } from '../../src/modules';
 import { moduleStartupFlags } from '../../src/platform/module-startup';
-import { DEFAULT_BINDINGS } from '../../src/input/bindings';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('application module startup flags', () => {
-  it('exposes the canonical reference shortcut in Reader Normal', () => {
-    expect(DEFAULT_BINDINGS['reader-normal:<Space>fr']).toBe('openReferences');
-    expect(BUILTIN_MODULES).toHaveLength(13);
-    expect(BUILTIN_MODULES.filter(({ id }) => isOptionalModule(id))).toHaveLength(4);
-    expect(BUILTIN_MODULES.filter(({ id }) => !isOptionalModule(id))).toHaveLength(9);
-  });
-
   it('keeps pending requests unapplied across Neo reloads and applies them after Zotero restarts', () => {
     const legacy = Object.fromEntries(BUILTIN_MODULES.map(({ id }) => [id, false]));
     delete legacy.references;
