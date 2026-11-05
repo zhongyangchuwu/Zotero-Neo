@@ -30,6 +30,7 @@ export type NavigationEventId =
   | 'main-selection-panel.reveal'
   | 'reader-mark.jump'
   | 'ai-qa.jump'
+  | 'references.jump'
   | 'reader-native.hard';
 
 export type NavigationCause =

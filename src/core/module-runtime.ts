@@ -67,6 +67,7 @@ export class BuiltinModuleRuntime {
       'reader-hints': flags['reader-hints'],
       extensions: flags.extensions,
       'ai-qa': flags['ai-qa'] === true,
+      references: flags.references === true,
     });
   }
 

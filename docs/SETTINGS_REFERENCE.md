@@ -31,8 +31,8 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 模块
 
-内部功能按可组合模块划分，但不为每个模块提供开关。文库、阅读、笔记、工作区及文档准备等核心功能固定启用；只有 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `ai-qa`（AI 问答（实验））可配置。
-模块偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled`、`extensions.zotero-neo.modules.extensions.enabled` 与 `extensions.zotero-neo.modules.ai-qa.enabled`。前两项默认 `true`，`ai-qa` 默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
+内部功能按可组合模块划分，核心模块固定启用；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`references` 和 `ai-qa`。
+四个可选模块的偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled`、`extensions.zotero-neo.modules.extensions.enabled`、`extensions.zotero-neo.modules.references.enabled` 和 `extensions.zotero-neo.modules.ai-qa.enabled`。前三项默认 `true`，`ai-qa` 默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
@@ -50,6 +50,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `chapter-notes` | 章节笔记整理 | 来源内容的章节归属、筛选、预览与显式生成笔记。 |
 | `document-preparation` | 文档准备 | Main／Reader 的 PDF 准备入口；界面关闭不停止已接纳的应用级队列。 |
 | `reader-hints` | 链接与复制提示 | 可选增强：复制／跟随提示；读取 Zotero 原生批注不依赖阅读批注模块。 |
+| `references` | 引用增强 | 可选增强：在本机定位参考文献和已识别的正文提及；按需查询原始学术元数据。默认开启，不调用 AI。操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。 |
 | `ai-qa` | AI 问答（实验） | 可选增强：解释当前 Reader 选区、就选区或有限章节证据提问，并准备章节图文导引；仅可选附带相关图表裁图，不检索批注、笔记或其他论文。依赖 `reader-selection`；默认关闭。 |
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点；不依赖 `library` 或 `reader-navigation`。 |
@@ -58,17 +59,25 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | 运行状态 | 含义 |
 | --- | --- |
 | 已启用（Enabled） | 当前宿主中的模块激活成功。 |
-| 已停用（Disabled） | 仅适用于 `reader-hints`、`extensions` 或 `ai-qa`；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
+| 已停用（Disabled） | 仅适用于 `reader-hints`、`extensions`、`references` 或 `ai-qa`；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
 | 已阻止（Blocked） | 当前启用图或实际宿主缺少必需依赖；界面列出依赖，不自动修改开关。 |
 | 失败（Failed） | 当前宿主实例激活失败，已退休其入口并尝试清理部分资源；显示失败原因，详细日志保留原错误。该实例不自动重试，新宿主实例或重启 Zotero 可重新激活。 |
 | 等待主机（Pending host） | 尚未在支持的宿主激活，例如还没有打开 Reader。 |
 | 等待重启（Pending restart） | 保存请求与已应用值不同，附加在当前状态后；当前能力不提前变化。 |
 
-草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**会将 `reader-hints`、`extensions` 设为开启，将 `ai-qa` 设为关闭；恢复后仍需重启 Zotero。保存与恢复默认都不改动核心模块偏好或其他行为设置。
+草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**会将 `reader-hints`、`extensions` 和 `references` 设为开启，将 `ai-qa` 设为关闭；恢复后仍需重启 Zotero。Neo 重载不会应用模块请求；对于启动快照中没有 `references` 的旧进程，该模块保持关闭至完全重启。保存与恢复默认都不改动核心模块偏好或其他行为设置。
 
 行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
-设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部三项可选增强，核心模块仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部四项可选增强，核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+
+## 引用增强的元数据来源与密钥
+
+本机解析、在 PDF 中跳转和查找当前 Reader 所属文库都不访问元数据服务，也不需要 API 密钥或 AI。只有明确选择当前文献的**论文详情**，或编辑查询后点击**搜索元数据**，才按需查询：DOI 或标题查询使用 Semantic Scholar 的免费 Graph API，arXiv ID 查询使用免费的 arXiv 接口；请求只包含查询词或标识符，不上传 PDF。
+
+Semantic Scholar 可返回题名、作者、年份、刊名、摘要、标识符、来源链接及 API 计数；arXiv 可返回题名、作者、年份、期刊字段和原始摘要，不提供引用计数。来源未给出的字段在结果中为 `null`，不会合成摘要或分类。单篇详情标明来源和获取时间，并区分 API 计数与本机引用位置数。标题查询可能返回候选项，必须手动选择，不会自动采用第一条。
+
+Semantic Scholar API 密钥为可选项；没有密钥时仍可匿名查询，但服务可能限流（429）或离线。在 **Neo 设置 → 阅读器 → Semantic Scholar** 中显式保存或忘记密钥；论文详情不提供密钥表单。密钥存入 Zotero 本机 Login Manager，不写入普通偏好、结果或日志，密码框不回显已有值。关闭设置会清空未提交的输入。请求失败会如实显示，不自动重试。完整操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。
 
 ## 配置 AI 问答（实验）
 

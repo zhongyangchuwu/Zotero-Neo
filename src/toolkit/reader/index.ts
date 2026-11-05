@@ -8,6 +8,16 @@ export type {
   ReaderOwnedCompletion,
 } from './history-bridge';
 export * from './host';
+export { observeReaderReferenceInteractions } from './reference-interactions';
+export type {
+  ReaderReferenceClientRect,
+  ReaderReferenceInteractionContext,
+  ReaderReferencePopupSlot,
+  ReaderReferenceMenuItem,
+  ReaderReferenceMenuContext,
+  ReaderReferenceToolbarSlot,
+  ReaderReferenceInteractionCallbacks,
+} from './reference-interaction-contracts';
 export * from './selection-geometry';
 export type {
   ReaderRuntime,
@@ -33,6 +43,14 @@ export * from './annotation-targets';
 export * from './sidebar';
 export * from './structured-document';
 export * from './document-source';
+export { readReaderReferenceDocument } from './references';
+export type {
+  ReaderReferenceDocument,
+  ReaderReferenceSnapshot,
+  ReaderReferenceEntry,
+  ReaderCitationOccurrence,
+  ReaderReferenceLocation,
+} from './reference-contracts';
 export { readerRegionPreview } from './region-preview';
 export type { ReaderRegionPreview } from './region-preview';
 

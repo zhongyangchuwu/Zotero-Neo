@@ -145,6 +145,7 @@ export const DEFAULT_BINDINGS = {
   'reader-normal:<Space>yy': 'mainYankCitekey',
   'reader-normal:<Space>ai': 'mainAddByIdentifier',
   'reader-normal:<Space>aa': 'openAIQA',
+  'reader-normal:<Space>fr': 'openReferences',
   'reader-select:s': 'flashText',
   'reader-select:a': 'openSelectionActions',
   'reader-select:<Enter>': 'openSelectionActions',
