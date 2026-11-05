@@ -18,7 +18,7 @@ interface MainWindowEvent {
 }
 
 interface BootstrapController {
-  init(context: RuntimeBootstrapContext): void;
+  init(context: RuntimeBootstrapContext): Promise<void>;
   shutdown(): void;
   addToWindow(window: _ZoteroTypes.MainWindow): void;
   removeFromWindow(window: _ZoteroTypes.MainWindow): void;
@@ -95,14 +95,13 @@ async function startup(context: BootstrapContext, reason: number): Promise<void>
   Services.scriptloader.loadSubScript(`${context.rootURI}content/zotero-neo.js`);
   if (!ZoteroNeo) throw new Error('Zotero Neo runtime bundle did not install its controller');
 
-  try {
-    ZoteroNeo.init(runtimeContext);
-  } catch (error) {
+  const controller = ZoteroNeo;
+  const earlyInit = controller.init(runtimeContext).catch((error: unknown) => {
     log(`Early init failed: ${String(error)}`);
     logFile(`early init FAILED: ${String(error)}`);
-  }
+  });
   try {
-    for (const window of Zotero.getMainWindows()) ZoteroNeo.addToWindow(window);
+    for (const window of Zotero.getMainWindows()) controller.addToWindow(window);
   } catch (error) {
     log(`Early window injection failed: ${String(error)}`);
     logFile(`early window injection FAILED: ${String(error)}`);
@@ -111,15 +110,18 @@ async function startup(context: BootstrapContext, reason: number): Promise<void>
   await Zotero.initializationPromise;
   log(`initializationPromise resolved (startup +${Date.now() - startedAt}ms)`);
   logFile(`initializationPromise resolved (startup +${Date.now() - startedAt}ms)`);
+  await earlyInit;
+  if (ZoteroNeo !== controller) return;
 
   try {
-    ZoteroNeo.init(runtimeContext);
+    await controller.init(runtimeContext);
   } catch (error) {
     log(`Init after initialization failed: ${String(error)}`);
     logFile(`init after initialization FAILED: ${String(error)}`);
   }
+  if (ZoteroNeo !== controller) return;
   try {
-    for (const window of Zotero.getMainWindows()) ZoteroNeo.addToWindow(window);
+    for (const window of Zotero.getMainWindows()) controller.addToWindow(window);
   } catch (error) {
     log(`Window injection after init failed: ${String(error)}`);
     logFile(`window injection after init FAILED: ${String(error)}`);
