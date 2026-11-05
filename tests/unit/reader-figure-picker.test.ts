@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ReaderFigurePicker } from '../../src/modules/reader-navigation/figure-picker';
+import { ReaderFigurePicker } from '../../src/modules/reader-figures/figure-picker';
 import type {
   ReaderCaptionTarget,
   ReaderCaptionTargets,

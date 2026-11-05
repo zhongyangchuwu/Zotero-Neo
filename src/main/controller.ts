@@ -56,6 +56,10 @@ import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
 import { createNotesModule, type NotesModule } from '../modules/notes';
 import { createWorkspaceModule, type WorkspaceModule } from '../modules/workspace';
+import {
+  createDocumentPreparationModule,
+  type DocumentPreparationModule,
+} from '../modules/document-preparation';
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
@@ -110,6 +114,7 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly library: LibraryModule | null;
       readonly notes: NotesModule | null;
       readonly workspace: WorkspaceModule | null;
+      readonly preparation: DocumentPreparationModule | null;
     }
   >();
   readonly #itemDecorations = new MainItemStateDecoration();
@@ -163,6 +168,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const host = scope.host;
     session.cleanup.add(() => scope.dispose());
     try {
+      const preparationService = this.#dependencies.documentPreparation;
+      const preparation = preparationService
+        ? scope.activate('document-preparation', () =>
+            createDocumentPreparationModule(host, 'main-normal', preparationService),
+          )
+        : null;
       const tags = scope.activate('tags', () =>
         createTagModule(host, {
           logger: this.#dependencies.logger,
@@ -414,6 +425,7 @@ export class MainWindowController implements MainWindowControllerApi {
         library,
         notes,
         workspace,
+        preparation,
       });
     } catch (error) {
       const failure = new CleanupFailure();
@@ -640,7 +652,6 @@ export class MainWindowController implements MainWindowControllerApi {
     failure.run(() =>
       this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`),
     );
-    failure.run(() => this.#dependencies.documentPreparation?.closeOwner(window));
     if (modules) failure.run(() => modules.scope.dispose());
     failure.run(() => decoration?.dispose());
     failure.run(() => session.dispose());
@@ -1379,7 +1390,7 @@ export class MainWindowController implements MainWindowControllerApi {
             ? this.worksetsModule(session)?.currentTarget()
             : undefined,
         );
-        this.#dependencies.documentPreparation?.open({
+        this.#modules.get(session)?.preparation?.open({
           window,
           targets,
           language: () => this.keyGuideLanguage(),

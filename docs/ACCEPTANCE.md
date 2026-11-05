@@ -145,11 +145,14 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 - 用真实的主窗口 → 阅读器 → 标签页／PDF 位置跳转，再执行 `<C-o>` / `<C-i>`。恢复符合条件的位置，而不是复制 Neo 选择集；历史不承诺恢复缩放、布局或笔记编辑器中的文本光标。
 - `<Space>ro/rm/ra/rt` 直接打开／聚焦 Outline、Bookmarks、Annotations、Thumbnails，重复操作不把目标侧栏关闭。
 - `[s` / `]s` 从 PDF 和四种侧栏上下文按实际位置遍历原生完整 heading tree；Figure/Table 只在存在真实 native 数据时验收，不通过标题正则编造目标。冷 SDT 处理可有等待，不能把等待宣传为零成本。
+- `<Space>rs` 在所选章节内返回真实段落，确认后定位且不改写原生 Find。依次打开章节、图表和解析对照，原有互斥界面不叠加；对照打开只准备原生结果并读取缓存，不自动上传。
+- 使用包含真实图表的测试 PDF，核对 `<Space>rf` 预览不导航、确认才跳转；`<Space>re` 保存的摘录包含原图及精确 PDF 来源。再用 `<Space>rn` 整理该来源，确认生成内容、嵌图、章节及来源身份；手工修改生成笔记后重复保存相同内容，应复用原笔记且保留修改，不递归收集生成结果或新建重复图像。
+- Main 与 Reader 的 `<Space>ru` 分别固定各自解析的 PDF，不混用 Main 选择与 Reader 附件。替换准备界面后关闭旧 Reader，替换界面仍在；关闭所属 Reader 只退休自己的界面。另用获准服务和测试资料核对已接纳任务在关闭面板后继续，只有明确停止才取消本地等待。
 
 ### U9：变更与可选集成
 
-- 模块边界：在一次性 profile 中，将九个核心模块的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `ai-qa`（AI 问答（实验））。确认保存及 Neo 热重载不切换已应用状态，完全重启 Zotero 后仅关闭三项增强，九个核心仍提供 Main、Reader、Note 与 Workspace 工作流。保留旧版 `reader-ai` 偏好为启用时，新 `ai-qa` 仍默认关闭。
-- 确认默认关闭的 `ai-qa` 不注册 Reader 选择动作或 `<Space>aa` 入口，不挂载面板／界面 runtime、不读取凭据或发起网络请求；手动启用 `ai-qa` 并完全重启 Zotero 后才提供 AI 问答入口和选区动作。保存关闭请求后，Neo 热重载仍保持当前应用状态；真正重启后关闭入口，已存配置和成果仍保留。恢复默认后 `reader-hints` 与 `extensions` 开启、`ai-qa` 关闭。保存或恢复默认不得改变九个核心旧值、快捷键、行为偏好或 Zotero 数据。
+- 模块边界：在一次性 profile 中，将核心模块的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `ai-qa`（AI 问答（实验））。确认保存及 Neo 热重载不切换已应用状态，完全重启 Zotero 后仅关闭三项增强，核心模块仍提供 Main、Reader、Note 与 Workspace 工作流。保留旧版 `reader-ai` 偏好为启用时，新 `ai-qa` 仍默认关闭。
+- 确认默认关闭的 `ai-qa` 不注册 Reader 选择动作或 `<Space>aa` 入口，不挂载面板／界面 runtime、不读取凭据或发起网络请求；手动启用 `ai-qa` 并完全重启 Zotero 后才提供 AI 问答入口和选区动作。保存关闭请求后，Neo 热重载仍保持当前应用状态；真正重启后关闭入口，已存配置和成果仍保留。恢复默认后 `reader-hints` 与 `extensions` 开启、`ai-qa` 关闭。保存或恢复默认不得改变核心模块旧值、快捷键、行为偏好或 Zotero 数据。
 
 - 标签／集合操作在主窗口以 Neo 选择集为优先目标，在阅读器／笔记编辑器中使用各自上下文，操作目标和数量应清楚可解释。主窗口清除视图筛选不等于清除 Neo 选择集。
 - 对一次性测试条目执行 Trash 取消，再执行确认／`u` 恢复；应能观察到对隐藏 Neo 选择集成员的拒绝，以及取消后的保存结果。阅读器中的批注删除是永久操作，仅使用一次性测试批注并检查确认。
