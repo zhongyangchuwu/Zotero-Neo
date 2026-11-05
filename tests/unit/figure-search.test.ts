@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterFigureTargets } from '../../src/modules/reader-navigation/figure-search';
+import { filterFigureTargets } from '../../src/modules/reader-figures/figure-search';
 import { documentVisualBodies } from '../../src/document-analysis/visual-bodies';
 import type { ReaderCaptionTarget } from '../../src/modules/reader-navigation/caption-targets';
 import type { DocumentRegion } from '../../src/document-analysis/contracts';

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModuleHost } from '../../src/core/module-host';
-import { createReaderNotesModule, type ReaderNotesHost } from '../../src/modules/notes/reader';
+import { createChapterNotesModule, type ChapterNotesHost } from '../../src/modules/chapter-notes';
 import type { SourceNoteEntry } from '../../src/core/source-note';
 import { DocumentFixture } from '../fixtures/dialog-dom';
 
@@ -47,11 +47,11 @@ function fixture() {
     showStatus = vi.fn();
   let current = true;
   const window = { document: { activeElement: null }, focus: vi.fn() } as unknown as Parameters<
-    ReturnType<typeof createReaderNotesModule>['open']
+    ReturnType<typeof createChapterNotesModule>['open']
   >[0];
-  const ports: ReaderNotesHost = {
+  const ports: ChapterNotesHost = {
     reader: { itemID: 7 },
-    preferences: {} as ReaderNotesHost['preferences'],
+    preferences: {} as ChapterNotesHost['preferences'],
     target: () => ({
       attachment: { itemID: 7, libraryID: 1, key: 'PDF', title: 'Paper' },
       parent: null,
@@ -63,7 +63,7 @@ function fixture() {
     showStatus,
     debug: vi.fn(),
   };
-  const module = createReaderNotesModule(host, ports);
+  const module = createChapterNotesModule(host, ports);
   const loaded = async () => {
     for (let i = 0; i < 10; i++) await Promise.resolve();
   };
