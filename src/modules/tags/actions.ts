@@ -4,6 +4,7 @@ import { tagSeparatorFromPreferences, type PreferenceReader } from '../../core/p
 import { setItemTag } from '../../operations/item-tags';
 import type { PickerOpenOptions } from '../../main/picker/types';
 import { createTagCandidateProvider, type TagRecord } from '../../main/picker/providers/tags';
+import { isSourceNoteIdentity } from '../../platform/note-relations';
 
 function sameTag(left: string, right: string): boolean {
   return left.toLocaleLowerCase() === right.toLocaleLowerCase();
@@ -27,8 +28,7 @@ function targetTags(targets: ItemTargetSet): TagRecord[] {
   const byName = new Map<string, TagRecord>();
   for (const item of targets.items) {
     for (const record of item.getTags()) {
-      const existing = byName.get(record.tag);
-      if (!existing || (existing.type === 1 && record.type !== 1)) byName.set(record.tag, record);
+      if (!byName.has(record.tag)) byName.set(record.tag, record);
     }
   }
   return [...byName.values()];
@@ -38,8 +38,7 @@ function mergeTags(...sources: readonly (readonly TagRecord[])[]): TagRecord[] {
   const byName = new Map<string, TagRecord>();
   for (const source of sources) {
     for (const record of source) {
-      const existing = byName.get(record.tag);
-      if (!existing || (existing.type === 1 && record.type !== 1)) byName.set(record.tag, record);
+      if (!byName.has(record.tag)) byName.set(record.tag, record);
     }
   }
   return [...byName.values()];
@@ -49,7 +48,8 @@ function candidateName(item: {
   readonly tagName?: string;
   readonly tagCandidate?: string;
 }): string {
-  return item.tagCandidate === 'namespace' ? '' : (item.tagName?.trim() ?? '');
+  const name = item.tagCandidate === 'namespace' ? '' : (item.tagName?.trim() ?? '');
+  return isSourceNoteIdentity(name) ? '' : name;
 }
 
 function presenceLabel(targets: ItemTargetSet, tag: string): string | undefined {

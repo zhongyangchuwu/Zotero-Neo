@@ -16,7 +16,8 @@ import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
 import { AIQAController } from './ai-qa/controller';
-import { migrateLegacySourceNoteIdentities } from './platform/note-relations';
+import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
+import { ManagedTagsUI } from './toolkit/main';
 
 export interface AddonContext {
   readonly id: string;
@@ -45,6 +46,9 @@ type ZoteroWithNeo = typeof Zotero & {
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
   readonly #preferences = new ZoteroPreferenceStore();
+  readonly #managedTags = new ManagedTagsUI(isSourceNoteIdentity, (error) =>
+    this.#logger.debug(`Managed tag UI failed: ${String(error)}`),
+  );
   readonly #modules = new BuiltinModuleRuntime(
     this.#preferences,
     this.#logger,
@@ -117,6 +121,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
+    this.#managedTags.start();
     if (this.#modules.applied['ai-qa'] && !this.aiQA) {
       try {
         this.aiQA = new AIQAController({
@@ -150,6 +155,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     if (host.Neo === this.api) delete host.Neo;
     this.#context = null;
     const failure = new CleanupFailure();
+    failure.run(() => this.#managedTags.dispose());
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#reader.shutdown());
     failure.run(() => this.aiQA?.dispose());
