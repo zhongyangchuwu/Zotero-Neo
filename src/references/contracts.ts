@@ -23,12 +23,19 @@ export interface ReferenceQuery {
 }
 
 export type ReferenceLookupResult =
-  | { readonly kind: 'found'; readonly paper: ScholarlyPaper }
-  | { readonly kind: 'candidates'; readonly papers: readonly ScholarlyPaper[] }
-  | { readonly kind: 'not-found' };
+  | { readonly kind: 'found'; readonly paper: ScholarlyPaper; readonly cache?: ReferenceCacheInfo }
+  | { readonly kind: 'candidates'; readonly papers: readonly ScholarlyPaper[]; readonly cache?: ReferenceCacheInfo }
+  | { readonly kind: 'not-found'; readonly cache?: ReferenceCacheInfo };
+
+export interface ReferenceCacheInfo {
+  readonly origin: 'cached' | 'network';
+  readonly stale: boolean;
+  readonly warning?: string;
+}
 
 export interface ReferenceMetadataService {
-  lookup(query: ReferenceQuery, signal: AbortSignal): Promise<ReferenceLookupResult>;
+  lookup(query: ReferenceQuery, signal: AbortSignal, mode?: 'cache-only' | 'refresh'): Promise<ReferenceLookupResult>;
+  clearCache(): Promise<void>;
   hasSemanticScholarKey(): Promise<boolean>;
   setSemanticScholarKey(key: string | null): Promise<void>;
   dispose(): void;

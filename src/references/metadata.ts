@@ -6,13 +6,12 @@ import {
 } from '../platform/reference-http';
 import type { ReferenceLookupResult, ReferenceMetadataService, ScholarlyPaper } from './contracts';
 import { normalizeArxiv, normalizeDOI } from './identifiers';
+import { cacheGeneration, clearReferenceCache, readCachedReference, saveCachedReference } from './cache';
 
 const FIELDS =
   'title,authors,year,venue,abstract,url,externalIds,openAccessPdf,referenceCount,citationCount';
 const S2 = 'https://api.semanticscholar.org/graph/v1/paper/';
 const ARXIV = 'https://export.arxiv.org/api/query?id_list=';
-const CACHE_LIMIT = 50;
-const CACHE_AGE = 30 * 60 * 1000;
 type Provider = 's2' | 'arxiv';
 interface WaitingRequest {
   signal: AbortSignal;
@@ -175,11 +174,10 @@ function arxivPaper(xml: string, requested: string, retrievedAt: string): Schola
 }
 
 export function createReferenceMetadataService(): ReferenceMetadataService {
-  const cache = new Map<string, { time: number; result: ReferenceLookupResult }>();
   const active = new Set<AbortController>();
   let disposed = false;
   return {
-    async lookup(query, signal) {
+    async lookup(query, signal, mode) {
       if (disposed || signal.aborted) throw new Error('Reference lookup cancelled');
       const doi = normalizeDOI(query.doi);
       const arxiv = normalizeArxiv(query.arxivID);
@@ -193,8 +191,12 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
       if (!doi && !arxiv && !term) return { kind: 'not-found' };
       const provider = arxiv ? 'arxiv' : 's2';
       const cacheKey = arxiv ? `arxiv:${arxiv}` : doi ? `doi:${doi}` : `search:${term}`;
-      const cached = cache.get(cacheKey);
-      if (cached && Date.now() - cached.time < CACHE_AGE) return cached.result;
+      const generation = cacheGeneration();
+      const cached = await readCachedReference(cacheKey);
+      if (generation !== cacheGeneration()) throw new Error('Reference cache cleared');
+      if (disposed || signal.aborted) throw new Error('Reference lookup cancelled');
+      if (mode !== 'refresh' && cached.value) return cached.value;
+      if (mode === 'cache-only') return { kind: 'not-found', ...(cached.warning ? { cache: { origin: 'cached', stale: false, warning: cached.warning } } : {}) };
       const controller = createReferenceAbortController();
       const abort = (): void => controller.abort();
       active.add(controller);
@@ -212,7 +214,10 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
           return referenceRequest(endpoint, key, controller.signal);
         });
         if (response.status === 429) throw new Error('Reference service rate limited (429)');
-        if (response.status === 404) return { kind: 'not-found' };
+        if (response.status === 404) {
+          if (cached.value) throw new Error('No metadata found on refresh');
+          return { kind: 'not-found' };
+        }
         if (response.status < 200 || response.status >= 300)
           throw new Error(`Reference service returned HTTP ${response.status}`);
         const retrievedAt = new Date().toISOString();
@@ -246,15 +251,24 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
           }
         }
         if (controller.signal.aborted) throw new Error('Reference lookup cancelled');
-        cache.delete(cacheKey);
-        cache.set(cacheKey, { time: Date.now(), result });
-        if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!);
-        return result;
+        if (result.kind === 'not-found' && cached.value) throw new Error('No metadata found on refresh');
+        const warning = result.kind === 'not-found' ? cached.warning :
+          await saveCachedReference(cacheKey, result, generation, () => !controller.signal.aborted && !disposed);
+        if (controller.signal.aborted || disposed) throw new Error('Reference lookup cancelled');
+        return result.kind === 'not-found' && !warning ? result : {
+          ...result, cache: { origin: 'network', stale: false, ...((warning || cached.warning) ? { warning: warning || cached.warning } : {}) },
+        };
+      } catch (error) {
+        if (controller.signal.aborted || disposed || signal.aborted) throw new Error('Reference lookup cancelled');
+        if (cached.value && generation === cacheGeneration())
+          return { ...cached.value, cache: { origin: 'cached', stale: true, warning: error instanceof Error ? error.message : 'Reference refresh failed' } };
+        throw error;
       } finally {
         active.delete(controller);
         signal.removeEventListener('abort', abort);
       }
     },
+    clearCache: clearReferenceCache,
     async hasSemanticScholarKey() {
       return !!readReferenceKey();
     },
@@ -263,13 +277,11 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
       const trimmed = key?.trim() ?? '';
       if (key !== null && !trimmed) throw new Error('Semantic Scholar key is empty');
       await changeReferenceKey(key === null ? null : trimmed);
-      cache.clear();
     },
     dispose() {
       disposed = true;
       for (const controller of active) controller.abort();
       active.clear();
-      cache.clear();
     },
   };
 }

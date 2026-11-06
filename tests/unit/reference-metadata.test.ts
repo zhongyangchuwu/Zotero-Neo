@@ -9,6 +9,10 @@ vi.mock('../../src/platform/reference-credentials', () => ({
   readReferenceKey: vi.fn(),
   changeReferenceKey: vi.fn(),
 }));
+vi.mock('../../src/platform/reference-cache', () => ({
+  readReferenceCache: vi.fn(async () => null),
+  writeReferenceCache: vi.fn(async () => {}),
+}));
 import { referenceRequest } from '../../src/platform/reference-http';
 import { changeReferenceKey, readReferenceKey } from '../../src/platform/reference-credentials';
 const request = vi.mocked(referenceRequest);
@@ -24,7 +28,8 @@ const raw = {
   citationCount: 3,
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await createReferenceMetadataService().clearCache();
   vi.clearAllMocks();
   readKey.mockReturnValue('secret');
 });
@@ -49,7 +54,8 @@ describe('reference metadata', () => {
       referenceCount: null,
       citationCount: 3,
     });
-    expect(await service.lookup({ text: '', doi: '10.1234/ABC' }, signal())).toEqual(result);
+    const cached = await service.lookup({ text: '', doi: '10.1234/ABC' }, signal());
+    expect(cached).toMatchObject({ kind: 'found', paper: result.paper, cache: { origin: 'cached' } });
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0][1]).toBe('secret');
     service.dispose();
