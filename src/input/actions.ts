@@ -148,6 +148,8 @@ const BASE_ACTION_IDS = [
   'nextTab',
   'tabFocusSidebar',
   'tabToggleSidebar',
+  'mainCreateReadingGroup',
+  'mainAppendReadingGroup',
   'tabCreateGroup',
   'tabRenameGroup',
   'tabCloseEntry',

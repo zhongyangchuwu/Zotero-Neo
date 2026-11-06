@@ -57,6 +57,7 @@ export interface TabGroupManager {
   subscribe(listener: () => void): Cleanup;
   view(hostID: string, titleFormat: string): TabSidebarView;
   createGroup(name: string): string;
+  importDocuments(destination: { readonly name: string } | { readonly groupID: string }, documents: readonly { readonly document: TabDocumentRef; readonly title: string }[]): number;
   renameGroup(groupID: string, name: string): void;
   setGroupColor(groupID: string, color: string): void;
   toggleGroup(groupID: string): void;

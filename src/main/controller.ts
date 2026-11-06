@@ -79,7 +79,7 @@ import {
   applyMainTagFilter,
   closeMainAdvancedSearch,
 } from '../toolkit/main';
-import { mainCursorItem } from './action-targets';
+import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
 import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
@@ -1526,6 +1526,15 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'tabToggleSidebar':
         this.tabEnhancementsModule(session)?.toggle('main-normal');
         break;
+      case 'mainCreateReadingGroup':
+      case 'mainAppendReadingGroup': {
+        const module = this.tabEnhancementsModule(session);
+        if (!module) break;
+        const worksets = this.worksetsModule(session);
+        const targets = resolveMainEffectiveTargets(window, worksets?.selection ?? null, worksets?.isVisual ? worksets.currentTarget() : undefined);
+        module.importSelection(targets, action === 'mainCreateReadingGroup');
+        break;
+      }
       case 'findNotes':
         this.openNotesPickerForSurface(window, session);
         break;

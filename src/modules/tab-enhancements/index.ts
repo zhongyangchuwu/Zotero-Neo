@@ -19,6 +19,8 @@ import { TAB_ENHANCEMENT_PREFERENCES, tabRailOptions, tabTitleFormat } from './c
 import { TabEnhancementsSidebar } from './sidebar';
 import { validateTabTitleFormat } from './title-format';
 import type { TabGroupManager } from './types';
+import type { MainResolvedTargets } from '../../main/action-targets';
+import { importReadingSelection } from './selection-import';
 
 export interface TabEnhancementsModuleHost {
   readonly window: MainWindow;
@@ -36,6 +38,7 @@ export interface TabEnhancementsModule {
   handleKey(event: KeyboardEvent): void;
   focus(context: SurfaceContext): boolean;
   toggle(context: SurfaceContext): boolean;
+  importSelection(targets: MainResolvedTargets, create: boolean): boolean;
 }
 
 /** Owns one Main presentation; shared groups never take ownership of native Reader lifetimes. */
@@ -184,6 +187,24 @@ export function createTabEnhancementsModule(
       'reader-normal': bind('reader-normal'),
       'note-normal': bind('note-normal'),
     };
+    const importSelection = host.bind<{ targets: MainResolvedTargets; create: boolean }>(
+      scope, 'main-normal', 'mainCreateReadingGroup', ({ targets, create }) => {
+        try {
+          importReadingSelection({ window: ports.window, language: ports.language(), targets, groups: ports.groups, hostID: native.id, titleFormat: appliedFormat, create, isCurrent: current });
+        } catch (error) {
+          report(error);
+          if (current()) {
+            const prompt = Services.prompt as unknown as { alert(parent: Window, title: string, text: string): void };
+            prompt.alert(ports.window, t('tabs.selectionImportTitle', ports.language()), t('tabs.operationFailed', ports.language()));
+          }
+        }
+      },
+    );
+    const appendSelection = host.bind<{ targets: MainResolvedTargets; create: boolean }>(
+      scope, 'main-normal', 'mainAppendReadingGroup', ({ targets, create }) => {
+        importSelection({ targets, create });
+      },
+    );
     return {
       ownsTarget: (target) =>
         current() && (sidebar.ownsTarget(target) || layout.ownsTarget(target)),
@@ -192,6 +213,7 @@ export function createTabEnhancementsModule(
       },
       focus: (context) => actions[context].focus(),
       toggle: (context) => actions[context].toggle(),
+      importSelection: (targets, create) => create ? importSelection({ targets, create }) : appendSelection({ targets, create }),
     };
   });
 }

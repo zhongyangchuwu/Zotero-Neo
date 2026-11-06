@@ -383,6 +383,29 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       });
       return id;
     },
+    importDocuments(destination, documents) {
+      requireActive();
+      if ('name' in destination && !validString(destination.name)) throw new Error('Group name is required');
+      const target = 'groupID' in destination ? getGroup(destination.groupID) : undefined;
+      const keys = new Set(target?.members.map(({ document }) => `${document.kind}:${document.libraryID}:${document.key}`));
+      const added: SavedTabMember[] = [];
+      for (const entry of documents) {
+        const key = `${entry.document.kind}:${entry.document.libraryID}:${entry.document.key}`;
+        if (keys.has(key)) continue;
+        keys.add(key);
+        added.push({ id: options.createID(), document: { ...entry.document }, title: entry.title });
+      }
+      if (!added.length) return 0;
+      const groupID = target?.id ?? options.createID();
+      commit((draft) => {
+        if ('name' in destination) {
+          draft.push({ id: groupID, name: destination.name.trim(), color: '', collapsed: false, members: added });
+        } else {
+          getGroup(destination.groupID, draft).members.push(...added);
+        }
+      });
+      return added.length;
+    },
     renameGroup(id, name) {
       if (!validString(name)) throw new Error('Group name is required');
       commit((draft) => {
