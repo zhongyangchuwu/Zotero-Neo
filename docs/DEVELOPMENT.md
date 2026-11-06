@@ -239,7 +239,11 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `document-analysis/sections.ts` 只确定编号章节范围与字面匹配；`modules/reader-chapters/chapter-search.ts` 拥有范围选择与跳转，`ui/search-dialog.ts` 只提供可复用的查询／候选界面、IME 和生命周期。该流程不改写原生 Find，不创建第二套导航历史。区域结果只定位段落，不能直接保存为字符高亮。
 
-`modules/chapter-notes/index.ts` 按 ReaderSession 创建独立的 `chapter-notes` 实例，拥有章节整理、筛选、预览与显式保存，不由 Main 的 `notes` 模块转发。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。模块内 `chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容标识 `dc:relation` 串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
+`modules/chapter-notes/index.ts` 按 ReaderSession 创建独立的 `chapter-notes` 实例，拥有章节整理、筛选、预览与显式保存，不由 Main 的 `notes` 模块转发。Toolkit 的 `sourceNoteEntries()` 读取精确 PDF 的公开批注 SDK、相关笔记及原生嵌图来源；HTML 在惰性 template 中解析，外部资源不插入活文档。模块内 `chapter-plan.ts` 用唯一原文或无歧义位置归属章节，跨章节／不确定内容保留待归类。对象副本按来源内容去重，独立批注保持身份。保存前重新读取来源内容，生成笔记用内容身份串行接纳并复用已有条目，手工修改不覆盖；新内容另建带时间的版本，生成结果不递归收集。
+
+来源 Note 的幂等身份由 `platform/note-relations.ts` 定义，保留 `urn:zotero-neo:chapter-note:v1:<32 个小写十六进制字符>` 的原值，但存入 Zotero 自动标签（`type: 1`），不写入任何关系谓词。`dc:relation` 保留真实来源 PDF 的 Zotero URI；写入方按该 URI 查找相关 Note，再核对身份标签、文库和所属条目。章节整理按身份标签排除生成结果。标签可随 Note 同步，且不会被原生笔记编辑器的 HTML 规范化移除；用户侧注意事项见[来源笔记的自动标签](NOTE_GUIDE.md#来源笔记的自动标签)。
+
+启动在数据库初始化后扫描所有文库及回收站，仅迁移 Note 上符合完整身份格式的旧 `dc:relation` 对象。迁移通过公开 `addTag`、`removeRelation` 和 `saveTx` 提交，保留正文、条目身份、修改时间、其他关系及已有同名人工标签类型，并正常标记待同步。只读文库不绕过权限，数量写入诊断日志；来源读取时可在恢复写权限后完成单向迁移，也处理启动后到达的旧数据。启动和来源读取按 Note 合并在途保存；早期 Main 注入不等待数据库，迁移较晚完成也不能复活已关闭的控制器。
 
 `modules/reader-excerpts/object-excerpts.ts` 拥有显式图表／公式摘录与预览接纳，复用共享文档快照、对象成员和原 PDF 渲染，不恢复一般文字 Capture，也不由 Select 构造或关闭。`ui/search-dialog.ts` 只负责可取消预览与显式动作；操作前重查来源和精确视图。Reader 解析固定 `SourceNoteTarget`，`operations/source-note.ts` 负责可编辑性、来源哈希、嵌图保存及失败时清理自有半成品；已接纳写入独立于 Reader 界面寿命。Toolkit 使用 Zotero 原生序列化保留区域来源，平台层负责安全表格 HTML、PNG 与多格式剪贴板。新笔记保留指向 PDF 的 `dc:relation`，不创建伪批注或修改既有笔记。
 

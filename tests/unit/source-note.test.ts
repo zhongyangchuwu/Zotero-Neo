@@ -4,10 +4,6 @@ import type { SourceNoteTarget } from '../../src/core/source-note';
 const io = vi.hoisted(() => ({ pdf: vi.fn(), blob: vi.fn(), related: vi.fn() }));
 vi.mock('../../src/platform/document-analysis', () => ({ analysisPDF: io.pdf }));
 vi.mock('../../src/platform/image-data', () => ({ pngBlob: io.blob }));
-vi.mock('../../src/platform/note-relations', () => ({
-  relatedSourceNotes: io.related,
-  SOURCE_NOTE_IDENTITY_PREFIX: 'urn:zotero-neo:chapter-note:v1:',
-}));
 afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => vi.resetAllMocks());
 function fixture() {
@@ -22,7 +18,7 @@ function fixture() {
   };
   const parent = { id: 3, key: 'PARENT', libraryID: 1, isRegularItem: () => true, deleted: false };
   const library = { editable: true, filesEditable: true };
-  const saved: object[] = [],
+  const saved: Note[] = [],
     erased = vi.fn(),
     imported = vi.fn(async () => ({ key: 'IMAGEKEY' }));
   const current = vi.fn(async () => true);
@@ -34,6 +30,20 @@ function fixture() {
     libraryID = 0;
     parentID = 0;
     relations: [string, string][] = [];
+    tags = new Map<string, number>();
+    deleted = false;
+    isNote() {
+      return true;
+    }
+    getRelationsByPredicate(predicate: string) {
+      return this.relations.filter(([p]) => p === predicate).map(([, value]) => value);
+    }
+    hasTag(value: string) {
+      return this.tags.has(value);
+    }
+    addTag(value: string, type: number) {
+      this.tags.set(value, type);
+    }
     addRelation(predicate: string, object: string) {
       this.relations.push([predicate, object]);
     }
@@ -47,6 +57,7 @@ function fixture() {
   }
   vi.stubGlobal('Zotero', {
     URI: { getItemURI: () => 'http://zotero.org/users/local/TEST/items/PDFKEY' },
+    Relations: { getByPredicateAndObject: io.related },
     Items: { getAsync: async (id: number) => (id === 4 ? source : id === 3 ? parent : false) },
     Libraries: { get: () => library },
     Item: Note,
@@ -75,6 +86,7 @@ describe('explicit source note writes', () => {
         parentID: 3,
         deleted: false,
         isNote: () => true,
+        hasTag: (value: string) => value === 'urn:zotero-neo:chapter-note:v1:' + 'a'.repeat(32),
         getRelationsByPredicate: () => ['http://zotero.org/users/local/TEST/items/PDFKEY'],
         getNote: () => 'handwritten edits',
       },
@@ -88,22 +100,27 @@ describe('explicit source note writes', () => {
     expect(f.saved).toEqual([]);
     expect(f.imported).not.toHaveBeenCalled();
   });
+  it('keeps opaque identities out of item relations and uses automatic tags without replacing human edits', async () => {
+    const f = fixture();
+    const identity = 'urn:zotero-neo:chapter-note:v1:' + 'c'.repeat(32);
+    const draft = { ...f.draft, identity };
+    const created = await createSourceNote(f.target, draft);
+    const note = f.saved.at(-1)!;
+    expect(note.relations).toEqual([
+      ['dc:relation', 'http://zotero.org/users/local/TEST/items/PDFKEY'],
+    ]);
+    expect(note.tags.get(identity)).toBe(1);
+    note.setNote('<p>Human edits remain authoritative.</p>');
+    io.related.mockResolvedValue([note]);
+    expect(await createSourceNote(f.target, draft)).toEqual({ ...created, reused: true });
+    expect(note.html).toBe('<p>Human edits remain authoritative.</p>');
+    expect(f.imported).toHaveBeenCalledOnce();
+  });
   it('serializes concurrent generation for one source identity and rechecks each destination', async () => {
     const f = fixture(),
       first = Promise.withResolvers<void>();
     io.related.mockImplementation(async () => {
-      if (f.saved.length)
-        return [
-          {
-            id: 10,
-            key: 'NOTEKEY',
-            libraryID: 1,
-            parentID: 3,
-            deleted: false,
-            isNote: () => true,
-            getRelationsByPredicate: () => ['http://zotero.org/users/local/TEST/items/PDFKEY'],
-          },
-        ];
+      if (f.saved.length) return [f.saved.at(-1)!];
       await first.promise;
       return [];
     });
@@ -115,11 +132,8 @@ describe('explicit source note writes', () => {
     const a = createSourceNote(f.target, draft),
       b = createSourceNote(f.target, draft),
       c = createSourceNote(f.target, draft);
-    for (let i = 0; i < 10; i++) await Promise.resolve();
-    expect(io.related).toHaveBeenCalledOnce();
     first.resolve();
     const receipts = await Promise.all([a, b, c]);
-    expect(io.related).toHaveBeenCalledTimes(3);
     expect(receipts.map((r) => r.reused)).toEqual([false, true, true]);
     expect(f.imported).toHaveBeenCalledOnce();
     expect((f.saved[0] as { html: string }).html).toContain('data-schema-version="10"');

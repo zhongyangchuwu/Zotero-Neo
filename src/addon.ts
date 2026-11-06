@@ -16,6 +16,7 @@ import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
 import { AIQAController } from './ai-qa/controller';
+import { migrateLegacySourceNoteIdentities } from './platform/note-relations';
 
 export interface AddonContext {
   readonly id: string;
@@ -31,7 +32,7 @@ export interface ZoteroNeoPublicApi {
 
 export interface ZoteroNeoController {
   readonly api: ZoteroNeoPublicApi;
-  init(context: AddonContext): void;
+  init(context: AddonContext): Promise<void>;
   shutdown(): void;
   addToWindow(window: MainWindow): void;
   removeFromWindow(window: MainWindow): void;
@@ -111,7 +112,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     };
   }
 
-  init(context: AddonContext): void {
+  async init(context: AddonContext): Promise<void> {
     this.#context = context;
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
@@ -131,6 +132,13 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     }
     this.#reader.start(context.id);
     (Zotero as ZoteroWithNeo).Neo = this.api;
+    const migration = await migrateLegacySourceNoteIdentities();
+    if (this.#context !== context) return;
+    if (migration.migrated || migration.readOnly) {
+      this.#logger.debug(
+        `Source note identities migrated=${migration.migrated} deferredReadOnly=${migration.readOnly}`,
+      );
+    }
     this.#logger.debug(`Initialized v${context.version} on Zotero ${Zotero.version || '?'}`);
     this.#logger.diagnostic(
       `addon initialized version=${context.version} zotero=${Zotero.version || '?'}`,
