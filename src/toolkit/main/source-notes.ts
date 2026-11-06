@@ -64,7 +64,7 @@ export async function sourceNoteEntries(
     ...related.map((note) => note.id),
     ...(parent ? parent.getNotes() : []),
   ]);
-  const document = Zotero.getMainWindow().document;
+  let htmlDocument: Document | undefined;
   for (const id of noteIDs) {
     const note = await Zotero.Items.getAsync(id);
     if (!note || note.deleted || !note.isNote() || note.libraryID !== source.libraryID) continue;
@@ -74,10 +74,9 @@ export async function sourceNoteEntries(
       note.getTags().some(({ tag }) => tag.startsWith(excludeIdentityPrefix))
     )
       continue;
-    const template = document.createElementNS(
-      'http://www.w3.org/1999/xhtml',
-      'template',
-    ) as HTMLTemplateElement;
+    // The chrome document is XHTML; native note markup needs the inert HTML fragment parser.
+    htmlDocument ??= Zotero.getMainWindow().document.implementation.createHTMLDocument();
+    const template = htmlDocument.createElement('template');
     template.innerHTML = note.getNote();
     let index = 0;
     for (const image of Array.from(
