@@ -6,7 +6,12 @@ import {
 } from '../platform/reference-http';
 import type { ReferenceLookupResult, ReferenceMetadataService, ScholarlyPaper } from './contracts';
 import { normalizeArxiv, normalizeDOI } from './identifiers';
-import { cacheGeneration, clearReferenceCache, readCachedReference, saveCachedReference } from './cache';
+import {
+  cacheGeneration,
+  clearReferenceCache,
+  readCachedReference,
+  saveCachedReference,
+} from './cache';
 
 const FIELDS =
   'title,authors,year,venue,abstract,url,externalIds,openAccessPdf,referenceCount,citationCount';
@@ -196,7 +201,13 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
       if (generation !== cacheGeneration()) throw new Error('Reference cache cleared');
       if (disposed || signal.aborted) throw new Error('Reference lookup cancelled');
       if (mode !== 'refresh' && cached.value) return cached.value;
-      if (mode === 'cache-only') return { kind: 'not-found', ...(cached.warning ? { cache: { origin: 'cached', stale: false, warning: cached.warning } } : {}) };
+      if (mode === 'cache-only')
+        return {
+          kind: 'not-found',
+          ...(cached.warning
+            ? { cache: { origin: 'cached', stale: false, warning: cached.warning } }
+            : {}),
+        };
       const controller = createReferenceAbortController();
       const abort = (): void => controller.abort();
       active.add(controller);
@@ -251,17 +262,40 @@ export function createReferenceMetadataService(): ReferenceMetadataService {
           }
         }
         if (controller.signal.aborted) throw new Error('Reference lookup cancelled');
-        if (result.kind === 'not-found' && cached.value) throw new Error('No metadata found on refresh');
-        const warning = result.kind === 'not-found' ? cached.warning :
-          await saveCachedReference(cacheKey, result, generation, () => !controller.signal.aborted && !disposed);
+        if (result.kind === 'not-found' && cached.value)
+          throw new Error('No metadata found on refresh');
+        const warning =
+          result.kind === 'not-found'
+            ? cached.warning
+            : await saveCachedReference(
+                cacheKey,
+                result,
+                generation,
+                () => !controller.signal.aborted && !disposed,
+              );
         if (controller.signal.aborted || disposed) throw new Error('Reference lookup cancelled');
-        return result.kind === 'not-found' && !warning ? result : {
-          ...result, cache: { origin: 'network', stale: false, ...((warning || cached.warning) ? { warning: warning || cached.warning } : {}) },
-        };
+        return result.kind === 'not-found' && !warning
+          ? result
+          : {
+              ...result,
+              cache: {
+                origin: 'network',
+                stale: false,
+                ...(warning || cached.warning ? { warning: warning || cached.warning } : {}),
+              },
+            };
       } catch (error) {
-        if (controller.signal.aborted || disposed || signal.aborted) throw new Error('Reference lookup cancelled');
+        if (controller.signal.aborted || disposed || signal.aborted)
+          throw new Error('Reference lookup cancelled');
         if (cached.value && generation === cacheGeneration())
-          return { ...cached.value, cache: { origin: 'cached', stale: true, warning: error instanceof Error ? error.message : 'Reference refresh failed' } };
+          return {
+            ...cached.value,
+            cache: {
+              origin: 'cached',
+              stale: true,
+              warning: error instanceof Error ? error.message : 'Reference refresh failed',
+            },
+          };
         throw error;
       } finally {
         active.delete(controller);

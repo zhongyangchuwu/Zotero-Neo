@@ -31,7 +31,11 @@ vi.mock('../../src/toolkit/main', () => ({
   mainItemOpening: () => ({ viewAttachment: host.open }),
 }));
 vi.mock('../../src/references/metadata', () => ({
-  createReferenceMetadataService: () => ({ lookup: host.lookup, clearCache: host.clearCache, dispose: host.dispose }),
+  createReferenceMetadataService: () => ({
+    lookup: host.lookup,
+    clearCache: host.clearCache,
+    dispose: host.dispose,
+  }),
 }));
 vi.mock('../../src/operations/references', () => ({
   findReferenceItems: host.find,
@@ -247,8 +251,16 @@ describe('contextual references', () => {
     ui.controller.dispose();
   });
   it('shows cached provenance, refresh failure and a cache-only clear action', async () => {
-    host.lookup.mockResolvedValueOnce({ kind: 'found', paper, cache: { origin: 'cached', stale: true } });
-    host.lookup.mockResolvedValueOnce({ kind: 'found', paper, cache: { origin: 'cached', stale: true, warning: 'offline' } });
+    host.lookup.mockResolvedValueOnce({
+      kind: 'found',
+      paper,
+      cache: { origin: 'cached', stale: true },
+    });
+    host.lookup.mockResolvedValueOnce({
+      kind: 'found',
+      paper,
+      cache: { origin: 'cached', stale: true, warning: 'offline' },
+    });
     host.clearCache.mockResolvedValue(undefined);
     const ui = setup();
     await ui.openEntry();
@@ -265,6 +277,26 @@ describe('contextual references', () => {
     await flush();
     expect(ui.document.documentElement.textContent).toContain('Metadata cache cleared.');
     expect(ui.document.documentElement.textContent).not.toContain('Original abstract text');
+    ui.controller.dispose();
+  });
+  it('retains the displayed paper when refresh has no cache fallback and fails', async () => {
+    host.lookup.mockResolvedValueOnce({
+      kind: 'found',
+      paper,
+      cache: { origin: 'network', stale: false },
+    });
+    host.lookup.mockRejectedValueOnce(new Error('offline after eviction'));
+    const ui = setup();
+    await ui.openEntry();
+    ui.button('Paper details').emit('click');
+    await flush();
+    ui.button('Refresh metadata').emit('click');
+    expect(ui.document.documentElement.textContent).toContain('Original abstract text');
+    await flush();
+    expect(ui.document.documentElement.textContent).toContain('Original abstract text');
+    expect(ui.document.documentElement.textContent).toContain(paper.retrievedAt);
+    expect(ui.document.documentElement.textContent).toContain('offline after eviction');
+    expect(ui.button('Add to Zotero')).toBeDefined();
     ui.controller.dispose();
   });
   it('keeps broad metadata candidates manual and preserves source fields on adoption and import', async () => {

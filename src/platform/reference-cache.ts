@@ -19,7 +19,10 @@ export async function readReferenceCache(): Promise<string | null> {
   return contents;
 }
 
-export async function writeReferenceCache(contents: string, current: () => boolean = () => true): Promise<void> {
+export async function writeReferenceCache(
+  contents: string,
+  current: () => boolean = () => true,
+): Promise<void> {
   if (contents.length > MAX_BYTES) throw new Error('Reference cache exceeds size limit');
   const file = cacheFile();
   const stage = file.clone();

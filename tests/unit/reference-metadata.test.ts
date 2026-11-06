@@ -55,7 +55,11 @@ describe('reference metadata', () => {
       citationCount: 3,
     });
     const cached = await service.lookup({ text: '', doi: '10.1234/ABC' }, signal());
-    expect(cached).toMatchObject({ kind: 'found', paper: result.paper, cache: { origin: 'cached' } });
+    expect(cached).toMatchObject({
+      kind: 'found',
+      paper: result.paper,
+      cache: { origin: 'cached' },
+    });
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0][1]).toBe('secret');
     service.dispose();
