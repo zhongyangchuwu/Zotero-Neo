@@ -22,7 +22,10 @@ import {
 import { TAG_ITEM_ACTIONS, TAG_MAIN_ACTIONS } from './tags/capabilities';
 import { WORKSETS_SELECT_ACTIONS } from './worksets/capabilities';
 import { READER_WORKSPACE_ACTIONS } from './workspace/reader-actions';
-import { TAB_ENHANCEMENT_SURFACE_ACTIONS } from './tab-enhancements/capabilities';
+import {
+  TAB_ENHANCEMENT_MAIN_ACTIONS,
+  TAB_ENHANCEMENT_SURFACE_ACTIONS,
+} from './tab-enhancements/capabilities';
 
 export type BuiltinModuleId =
   | 'library'
@@ -402,7 +405,7 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     requires: ['workspace'],
     optional: [],
     contributions: [
-      { host: 'main', context: 'main-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
+      { host: 'main', context: 'main-normal', actions: TAB_ENHANCEMENT_MAIN_ACTIONS },
       { host: 'main', context: 'reader-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
       { host: 'main', context: 'note-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
     ],

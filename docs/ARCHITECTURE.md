@@ -54,9 +54,9 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `src/modules/tab-enhancements/` 按 MainWindow 拥有垂直侧栏、标题格式展示与窗口级交互；MainWindowController 在 `Zotero.initializationPromise` 完成后，只有原 session 仍有效时才延迟激活。应用共享的分组管理器协调已登记的 Main 宿主，但不接管 Reader 生命周期。它依赖核心 `workspace`：跨窗口激活先转到拥有该原生标签页的窗口，再沿用 `workspace.activateTab`；标签页切换及导航仍复用基座唯一历史。
 
-Zotero 原生标签页清单是唯一事实来源。Toolkit 将每个 Reader/Note 视图的版本化 `viewID` 存入原生 `tab.data`，作为跨卸载、载入和 Zotero 重启保持稳定的单视图身份；同一 PDF 的多个原生视图分别有自己的 `viewID`。Zotero 的 `nativeID` 是当前会话操作标签页的句柄，不作为分组身份持久化，重启后可重新生成。Toolkit 合并原生 `Zotero_Tabs._update` 与 `Notifier` 的 `item`/`tab` 通知，再刷新原生清单和条目元数据；不另建 Reader 标签页清单。分组的关闭与原生排序只作用于发起请求的窗口；激活其他窗口中的成员时，通过其已登记宿主执行。异步恢复先核对成员、窗口与关闭代次，再接纳真实原生标签页，避免重复打开或让过期打开结果重新加入界面。
+原生标签页清单是已打开 Reader/Note 视图的唯一事实来源。Toolkit 将每个原生视图的版本化 `viewID` 存入原生 `tab.data`，作为跨卸载、载入和 Zotero 重启保持稳定的单视图身份；同一 PDF 的多个原生视图分别有自己的 `viewID`。分组成员以该稳定 ID 和 `SavedTabMember.document` 引用保存；Main 导入未打开的 PDF 时先分配成员 ID，显式打开时再将同一 ID 作为 `viewID` 写入新原生标签页，不要求保存成员时已有 Reader 视图。Zotero 的 `nativeID` 是当前会话操作标签页的句柄，不作为分组身份持久化，重启后可重新生成。Toolkit 合并原生 `Zotero_Tabs._update` 与 `Notifier` 的 `item`/`tab` 通知，再刷新原生清单和条目元数据；不另建 Reader 标签页清单。分组的关闭与原生排序只作用于发起请求的窗口；激活其他窗口中的成员时，通过其已登记宿主执行。异步恢复先核对成员、窗口与关闭代次，再接纳真实原生标签页，避免重复打开或让过期打开结果重新加入界面。
 
-阅读组只保存可恢复的浅层界面状态，保存在 profile-local 键 `tabEnhancements.groups.v1`，与侧栏位置、宽度、收起状态和标题格式等显示偏好分开；停用功能或重置显示偏好不会清除分组。分组不使用 Zotero 标签或分类。关闭标签页不移除组成员，解散分组也不关闭仍打开的原生文档。
+阅读组只保存可恢复的浅层界面状态，保存在 profile-local 键 `tabEnhancements.groups.v1`，与侧栏位置、宽度、收起状态和标题格式等显示偏好分开；停用功能或重置显示偏好不会清除分组。Main 专用的创建／追加动作在发起时固定 Main 有效目标（非空 Neo 选择集优先），明确解析所选 PDF 后，只将新增的关闭成员及其附件引用原子写入该组。多份可用 PDF 要求明确选择；取消提示不改变分组，缺失、删除或无可用 PDF 的目标显示数量并跳过。导入去重按附件身份进行，并跳过目的组已有成员，不搬走其他组或已打开视图中的成员；原有重复视图仍保留。该操作不打开 PDF，也不写入 Zotero 标签、分类或元数据；之后可通过现有成员打开／组恢复流程明确打开。关闭标签页不移除组成员，解散分组也不关闭仍打开的原生文档。
 
 `src/toolkit/main/tab-enhancements/` 独占私有原生 Tab 接口、外层布局和原生工具栏的可逆租约。侧栏作为整个 `#appcontent` 的外侧兄弟节点放在最左或最右；Toolkit 不重挂原生内容 deck、Reader/PDF iframe 或文档。只有识别到支持的原生布局时才替换横向标签栏并移入原生工具栏；布局不受支持时保留 Zotero 原生标签页界面。
 

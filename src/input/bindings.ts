@@ -363,6 +363,8 @@ export const DEFAULT_BINDINGS = {
   'plugins-list:L': 'pluginsGitLog',
   'main-normal:<Space>bb': 'tabFocusSidebar',
   'main-normal:<Space>bt': 'tabToggleSidebar',
+  'main-normal:<Space>bc': 'mainCreateReadingGroup',
+  'main-normal:<Space>ba': 'mainAppendReadingGroup',
   'reader-normal:<Space>bb': 'tabFocusSidebar',
   'reader-normal:<Space>bt': 'tabToggleSidebar',
   'note-normal:<Space>bb': 'tabFocusSidebar',

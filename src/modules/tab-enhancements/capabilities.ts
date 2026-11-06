@@ -5,6 +5,12 @@ export const TAB_ENHANCEMENT_SURFACE_ACTIONS = Object.freeze([
   'tabToggleSidebar',
 ] as const satisfies readonly ActionId[]);
 
+export const TAB_ENHANCEMENT_MAIN_ACTIONS = Object.freeze([
+  ...TAB_ENHANCEMENT_SURFACE_ACTIONS,
+  'mainCreateReadingGroup',
+  'mainAppendReadingGroup',
+] as const satisfies readonly ActionId[]);
+
 export const TAB_SIDEBAR_INPUT_ACTIONS = Object.freeze([
   'uiNext',
   'uiPrevious',

@@ -73,6 +73,52 @@ function storage(initial = '') {
 }
 
 describe('persistent tab groups', () => {
+  it('imports closed documents atomically without stealing views and restores them later', async () => {
+    const store = storage();
+    const a = host('a', [tab('existing')]);
+    const manager = createTabGroupManager(store);
+    manager.registerHost(a.port);
+    const old = manager.createGroup('Existing');
+    manager.assign('existing', old, 'a');
+    const second = { kind: 'reader' as const, libraryID: 1, key: 'SECOND' };
+    expect(
+      manager.importDocuments({ name: 'Imported' }, [
+        { document, title: 'Paper' },
+        { document, title: 'Duplicate' },
+        { document: second, title: 'Second' },
+      ]),
+    ).toBe(2);
+    let groups = manager.view('a', '{title}').groups;
+    expect(groups[0]?.entries.map((entry) => entry.id)).toEqual(['existing']);
+    expect(groups[1]?.entries.map((entry) => entry.status)).toEqual(['closed', 'closed']);
+    expect(a.native.open).not.toHaveBeenCalled();
+    expect(
+      manager.importDocuments({ groupID: groups[1]!.id }, [{ document, title: 'Again' }]),
+    ).toBe(0);
+    manager.dispose();
+    const restored = createTabGroupManager(store);
+    restored.registerHost(a.port);
+    groups = restored.view('a', '{title}').groups;
+    await restored.openGroup(groups[1]!.id, 'a');
+    expect(a.native.open).toHaveBeenCalledTimes(2);
+    expect(restored.view('a', '{title}').groups[0]?.entries[0]?.id).toBe('existing');
+  });
+  it('does not leave an empty group when an import write fails', () => {
+    const store = storage();
+    const a = host('a');
+    const manager = createTabGroupManager({
+      ...store,
+      write: () => {
+        throw new Error('disk');
+      },
+    });
+    manager.registerHost(a.port);
+    expect(() =>
+      manager.importDocuments({ name: 'Failed' }, [{ document, title: 'Paper' }]),
+    ).toThrow('disk');
+    expect(manager.view('a', '{title}').groups).toEqual([]);
+    expect(store.value()).toBe('');
+  });
   it('conserves native views across unload/close, reload and reopens with the same view identity', async () => {
     const store = storage();
     const first = host('one', [tab('view-a'), tab('view-b')]);
