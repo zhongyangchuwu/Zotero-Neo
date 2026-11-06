@@ -252,6 +252,8 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 来源 Note 的幂等身份由 `platform/note-relations.ts` 定义，保留 `urn:zotero-neo:chapter-note:v1:<32 个小写十六进制字符>` 的原值，但存入 Zotero 标签，不写入任何关系谓词。新标记使用 `type: 1`，已有同名 `type: 0` 保留原类型；内部身份只按完整名称判断。`dc:relation` 保留真实来源 PDF 的 Zotero URI；写入方按该 URI 查找相关 Note，再核对身份标签、文库和所属条目。章节整理按身份标签排除生成结果。标记随 Note 同步，不受原生笔记编辑器的 HTML 规范化影响；用户边界见[来源笔记的内部标记](NOTE_GUIDE.md#来源笔记的内部标记)。
 
+读取已有图表摘录时，`src/toolkit/main/source-notes.ts` 为本次读取延迟创建一个无浏览上下文的 HTML 文档，在其 `template.content` 中解析 Zotero 原生笔记 HTML。主窗口是 XHTML，不能直接使用其片段解析器；模板内容不插入活文档。解析后仍逐张核对来源 PDF URI、页内位置和嵌图附件归属，坏图片只隔离自身，生成 Note 在解析前排除。
+
 启动在数据库初始化后扫描所有文库及回收站，仅迁移 Note 上符合完整身份格式的旧 `dc:relation` 对象。迁移通过公开 `addTag`、`removeRelation` 和 `saveTx` 提交，保留正文、条目身份、修改时间、其他关系及已有同名人工标签类型，并正常标记待同步。只读文库不绕过权限，数量写入诊断日志；来源读取时可在恢复写权限后完成单向迁移，也处理启动后到达的旧数据。启动和来源读取按 Note 合并在途保存；早期 Main 注入不等待数据库，迁移较晚完成也不能复活已关闭的控制器。
 
 `toolkit/main/managed-tags/` 按附加组件寿命保护内部标记：通过 `platform/chrome-windows.ts` 观察 Main、独立 Reader 和 Note 等顶层窗口，按精确 Document 管理标签框、原生选择器和标签补全输入。选择器投影最终 React 候选，包含仅有颜色设置的合成条目；补全只把 `fieldName: 'tag'` 的控件路由到独立原生代理。普通业务候选按名称去重，不显示手动／自动区别；底层类型和原生普通标签偏好不变。
