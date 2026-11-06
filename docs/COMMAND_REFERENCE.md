@@ -226,6 +226,7 @@ Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick
 | `mainTrashItems` | `dd`、`x` | Neo 选择集非空时将其中条目移入回收站；否则处理当前临时目标或条目游标所在条目。需要确认。隐藏的选择集成员会阻止操作；取消确认会保留选择集。 |
 | `mainRestoreTrashedItems` | `u` | 恢复 Neo 最近一次移入回收站的条目批次；该批次不可用时操作无效果/失败。 |
 | `mainOpenPDF` | `o` | 仅打开条目游标所在的条目/PDF；不会批量打开 Neo 选择集或 Zotero 原生多选中的条目。 |
+| `mainCreateReadingGroup` / `mainAppendReadingGroup` | `<Space>bc` / `<Space>ba` | 仅在 `tab-enhancements` 启用并重启后有效，且只在 Main Normal 提供。操作开始时固定 Main 有效目标（非空 Neo 选择集优先，否则使用当前 Main 目标）；创建新组或选择现有组，将所选 PDF 保存为关闭的成员，不打开文档或修改 Zotero 标签、分类、元数据。普通条目只有一份可用 PDF 时自动采用，多份需明确选择；缺失、已删除或没有可用 PDF 的目标显示数量并跳过。取消任一步不更改分组；重复导入和目标组已有成员会跳过，不移动现有视图或其他组成员。 |
 | `mainYankCitekey` | `<Space>yy` | 复制 Main 当前有效条目目标的 citekey。任何目标不可用或缺少 citekey 时，剪贴板保持不变。 |
 | `openSearch` | `/` | Main Normal 中要求 Items 获得焦点；会取消临时 Visual 范围，并打开 Neo 内部查找提示框，在可见条目行中搜索。它不是 Zotero Quick Search；后者使用 `mainQuickSearch`（`<Space>fq`）。 |
 | `findNext` / `findPrevious` | `n` / `N` | 条目列表获得焦点时，按已提交的内部查找查询向前/后重复搜索一次；忽略计数。没有查询、未命中或游标未改变时，位置不变。游标改变时可添加历史记录。 |
@@ -472,6 +473,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `mainYankCitekey` | Reader/Main/Note Normal `<Space>yy` | 根据当前上下文复制 citekey |
 | `mainAddByIdentifier` | Reader/Main Normal `<Space>ai` | 在关联的 Library 窗口中打开 Zotero 原生“通过标识符添加条目”；不使用条目选择集 |
 | `mainOpenPDF` | Main Normal `o`；Note Normal `<Space>o` | 打开 Main 条目游标所在的条目，或 Note 上下文条目 |
+| `mainCreateReadingGroup` / `mainAppendReadingGroup` | Main Normal `<Space>bc` / `<Space>ba` | Main-only；创建阅读分组或向已有分组添加关闭的 PDF 成员，不自动打开文档。有效目标在操作开始时固定；多个可用 PDF 必须明确选择，取消不写入。 |
 | `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | 关闭当前原生标签页；若它属于保存的分组，关闭不会移除成员记录。 |
 | `tabFocusSidebar` | Main/Reader/Note Normal `<Space>bb` | 仅在 `tab-enhancements` 启用时聚焦侧栏；已收起时先展开。 |
 | `tabToggleSidebar` | Main/Reader/Note Normal `<Space>bt` | 仅在 `tab-enhancements` 启用时收起或展开侧栏。 |
@@ -962,6 +964,8 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `reader-normal:<Space>bt` | `tabToggleSidebar` |
 | `main-normal:<Space>bb` | `tabFocusSidebar` |
 | `main-normal:<Space>bt` | `tabToggleSidebar` |
+| `main-normal:<Space>bc` | `mainCreateReadingGroup` |
+| `main-normal:<Space>ba` | `mainAppendReadingGroup` |
 | `note-normal:<Space>bb` | `tabFocusSidebar` |
 | `note-normal:<Space>bt` | `tabToggleSidebar` |
 | `tabs-input:<C-j>` | `uiNext` |
