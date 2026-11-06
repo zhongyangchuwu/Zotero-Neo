@@ -198,6 +198,8 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 
 `src/references/metadata.ts` 仅在用户明确查询时请求 Semantic Scholar Graph 或 arXiv Atom，并展示来源原始字段与原始摘要；缺失摘要保持为空。查询支持取消，Semantic Scholar 与 arXiv 分别至少间隔 1 秒和 3 秒；429、离线或服务错误如实显示，不自动重试。候选需由用户选择，API 引用/被引计数与本地识别位置数分开显示。`src/ui/reference-credentials.ts` 在 Neo 设置的阅读器分类中管理可选 Semantic Scholar key，使用独立服务实例，只投影是否存在密钥；论文详情不包含凭据表单。`src/platform/reference-credentials.ts` 通过 Zotero Login Manager 显式读取、保存或忘记密钥，不写入偏好、查询结果或日志，也不参与本地分析。该功能不调用 AI、生成摘要或判断引用意义。
 
+`src/references/cache.ts` 负责元数据缓存策略：同一进程中的 Reader／服务实例共用串行化、带代次保护的缓存；只持久化成功取得的记录，保留来源原始字段和检索时间，不保存 PDF 文本、笔记、坐标或凭据。缓存使用版本 1 JSON，最多 50 条、文件不超过 4 MiB；记录满 30 分钟后标记为过期但不删除，DOI／arXiv 身份经过校验，坏记录单独忽略。`src/platform/reference-cache.ts` 负责 Gecko 文件读写，将数据保存到 `<Zotero profile>/zotero-neo-reference-cache.json`，并通过暂存文件替换。读取、保存和清除失败会返回可见错误；清除会递增代次，阻止旧在途工作重新填充缓存，且只清除元数据缓存。
+
 `src/operations/references.ts` 拥有按当前 Library 查询本地匹配和用户明确添加论文的操作；只按 DOI/arXiv 身份去重，不覆盖已有条目，同名但身份未确认时拒绝自动添加，并拒绝只读 Library。
 
 分类工作流由 `src/modules/collections/` 拥有。Main/Reader 在发起 Surface 提供自己的目标解析器；模块固定来源、库与条目身份，并负责确认、草稿和工作流权限，不直接读取 Main session。`src/operations/collections.ts`、`item-collections.ts` 接收明确条目和分类 ID，在写入前重新验证身份、库与可编辑性。模块内的 Picker provider 只提供同库候选和直接成员覆盖率，不选择操作目标或写入数据。组合根提供精确交互代次与释放句柄；原生对话框返回后也必须重查当前性。

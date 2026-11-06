@@ -668,6 +668,10 @@ export class ReferenceController {
         const result = element('div');
         result.tabIndex = -1;
         body.append(result);
+        const provenance = element('p');
+        body.insertBefore(provenance, result);
+        let displayedQuery: string | null = null;
+        let displayedProvenance = '';
         const showPaper = (value: ScholarlyPaper): void => {
           const ownsFocus = result.contains(doc.activeElement);
           stop();
@@ -718,12 +722,21 @@ export class ReferenceController {
           if (ownsFocus) result.focus();
           place();
         };
-        const search = (): void => {
+        const search = (mode?: 'cache-only' | 'refresh'): void => {
           stop();
           const token = revision;
           const submitted =
             input.value === entry.text ? queryFor(entry) : queryFromInput(input.value);
-          paper = null;
+          const queryKey = JSON.stringify(submitted);
+          const preserveDisplayed = mode === 'refresh' && displayedQuery === queryKey;
+          const previousProvenance = displayedProvenance;
+          if (!preserveDisplayed) {
+            paper = null;
+            displayedQuery = null;
+            displayedProvenance = '';
+            provenance.textContent = '';
+            status.textContent = '';
+          }
           if (!submitted.text) {
             result.textContent = text(
               'Enter a title, DOI or arXiv ID.',
@@ -733,20 +746,45 @@ export class ReferenceController {
           }
           const controller = createReferenceAbortController();
           abort = controller;
-          result.textContent = text('Querying…', '正在查询…');
+          if (preserveDisplayed)
+            status.textContent = text('Refreshing metadata…', '正在刷新元数据…');
+          else
+            result.textContent =
+              mode === 'cache-only'
+                ? text('Checking cache…', '正在检查缓存…')
+                : text('Querying…', '正在查询…');
           void validated()
             .then((valid) =>
               valid && revision === token
-                ? this.#metadata.lookup(submitted, controller.signal)
+                ? this.#metadata.lookup(submitted, controller.signal, mode)
                 : null,
             )
             .then(async (value) => {
               if (!value || revision !== token || !(await validated()) || revision !== token)
                 return;
+              const info = value.cache;
+              const origin = info
+                ? `${info.origin === 'cached' ? text('Cached', '缓存') : text('Fetched', '已获取')}${info.stale ? ` · ${text('Stale', '已过期')}` : ''}`
+                : '';
+              provenance.textContent = `${origin}${info?.warning ? ` · ${info.warning}` : ''}`;
+              if (preserveDisplayed && info?.origin === 'cached' && info.warning) {
+                displayedProvenance = origin;
+                status.textContent = info.warning;
+                return;
+              }
+              displayedQuery = value.kind === 'not-found' ? null : queryKey;
+              displayedProvenance = origin;
+              status.textContent = '';
               result.replaceChildren();
               if (value.kind === 'found') showPaper(value.paper);
               else if (value.kind === 'not-found')
-                result.textContent = text('No metadata found.', '未找到元数据。');
+                result.textContent =
+                  mode === 'cache-only'
+                    ? text(
+                        'No cached metadata. Search to fetch it.',
+                        '没有缓存的元数据。请搜索以获取。',
+                      )
+                    : text('No metadata found.', '未找到元数据。');
               else {
                 result.append(
                   element('p', text('Choose a matching record:', '请选择匹配的记录：')),
@@ -770,13 +808,43 @@ export class ReferenceController {
               }
             })
             .catch((error: unknown) => {
-              if (current() && revision === token) result.textContent = message(error);
+              if (!current() || revision !== token) return;
+              if (preserveDisplayed) {
+                provenance.textContent = [
+                  previousProvenance,
+                  text('Refresh failed; showing previous result', '刷新失败，显示原有结果'),
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                status.textContent = message(error);
+              } else result.textContent = message(error);
             });
         };
-        button(body, text('Search metadata', '搜索元数据'), search);
+        button(body, text('Search metadata', '搜索元数据'), () => search());
+        button(body, text('Refresh metadata', '刷新元数据'), () => search('refresh'));
+        button(body, text('Clear metadata cache', '清除元数据缓存'), () => {
+          stop();
+          const token = revision;
+          void this.#metadata
+            .clearCache()
+            .then(() => {
+              if (!current() || revision !== token) return;
+              paper = null;
+              displayedQuery = null;
+              displayedProvenance = '';
+              provenance.textContent = '';
+              result.textContent = text('Metadata cache cleared.', '元数据缓存已清除。');
+            })
+            .catch((error: unknown) => {
+              if (current() && revision === token) status.textContent = message(error);
+            });
+        });
         input.addEventListener('input', () => {
           stop();
           paper = null;
+          displayedQuery = null;
+          displayedProvenance = '';
+          provenance.textContent = '';
           result.replaceChildren();
         });
         input.addEventListener('keydown', (event) => {
@@ -786,8 +854,7 @@ export class ReferenceController {
           }
         });
         button(body, text('Back', '返回'), targetScene);
-        if (paper) showPaper(paper);
-        else search();
+        search('cache-only');
         if (doc.activeElement === root) input.focus();
       });
     const presentTarget = (): void => {
