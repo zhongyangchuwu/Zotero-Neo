@@ -1531,7 +1531,11 @@ export class MainWindowController implements MainWindowControllerApi {
         const module = this.tabEnhancementsModule(session);
         if (!module) break;
         const worksets = this.worksetsModule(session);
-        const targets = resolveMainEffectiveTargets(window, worksets?.selection ?? null, worksets?.isVisual ? worksets.currentTarget() : undefined);
+        const targets = resolveMainEffectiveTargets(
+          window,
+          worksets?.selection ?? null,
+          worksets?.isVisual ? worksets.currentTarget() : undefined,
+        );
         module.importSelection(targets, action === 'mainCreateReadingGroup');
         break;
       }

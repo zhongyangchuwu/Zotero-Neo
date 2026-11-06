@@ -385,9 +385,14 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
     },
     importDocuments(destination, documents) {
       requireActive();
-      if ('name' in destination && !validString(destination.name)) throw new Error('Group name is required');
+      if ('name' in destination && !validString(destination.name))
+        throw new Error('Group name is required');
       const target = 'groupID' in destination ? getGroup(destination.groupID) : undefined;
-      const keys = new Set(target?.members.map(({ document }) => `${document.kind}:${document.libraryID}:${document.key}`));
+      const keys = new Set(
+        target?.members.map(
+          ({ document }) => `${document.kind}:${document.libraryID}:${document.key}`,
+        ),
+      );
       const added: SavedTabMember[] = [];
       for (const entry of documents) {
         const key = `${entry.document.kind}:${entry.document.libraryID}:${entry.document.key}`;
@@ -399,7 +404,13 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       const groupID = target?.id ?? options.createID();
       commit((draft) => {
         if ('name' in destination) {
-          draft.push({ id: groupID, name: destination.name.trim(), color: '', collapsed: false, members: added });
+          draft.push({
+            id: groupID,
+            name: destination.name.trim(),
+            color: '',
+            collapsed: false,
+            members: added,
+          });
         } else {
           getGroup(destination.groupID, draft).members.push(...added);
         }

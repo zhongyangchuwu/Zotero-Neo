@@ -7,7 +7,7 @@ import { LANGUAGE_PREFERENCE_KEY } from '../../core/preferences';
 import { t } from '../../i18n';
 import type { BindingMap } from '../../input/bindings';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
-import { confirmChromeAction } from '../../platform/chrome-windows';
+import { alertChromeAction, confirmChromeAction } from '../../platform/chrome-windows';
 import {
   activateMainWindow,
   createTabEnhancementHost,
@@ -187,23 +187,40 @@ export function createTabEnhancementsModule(
       'reader-normal': bind('reader-normal'),
       'note-normal': bind('note-normal'),
     };
-    const importSelection = host.bind<{ targets: MainResolvedTargets; create: boolean }>(
-      scope, 'main-normal', 'mainCreateReadingGroup', ({ targets, create }) => {
-        try {
-          importReadingSelection({ window: ports.window, language: ports.language(), targets, groups: ports.groups, hostID: native.id, titleFormat: appliedFormat, create, isCurrent: current });
-        } catch (error) {
-          report(error);
-          if (current()) {
-            const prompt = Services.prompt as unknown as { alert(parent: Window, title: string, text: string): void };
-            prompt.alert(ports.window, t('tabs.selectionImportTitle', ports.language()), t('tabs.operationFailed', ports.language()));
-          }
+    const runSelectionImport = (targets: MainResolvedTargets, create: boolean): void => {
+      try {
+        importReadingSelection({
+          window: ports.window,
+          language: ports.language(),
+          targets,
+          groups: ports.groups,
+          hostID: native.id,
+          titleFormat: appliedFormat,
+          create,
+          isCurrent: current,
+        });
+      } catch (error) {
+        report(error);
+        if (current()) {
+          alertChromeAction(
+            ports.window,
+            t('tabs.selectionImportTitle', ports.language()),
+            t('tabs.operationFailed', ports.language()),
+          );
         }
-      },
+      }
+    };
+    const importSelection = host.bind<MainResolvedTargets>(
+      scope,
+      'main-normal',
+      'mainCreateReadingGroup',
+      (targets) => runSelectionImport(targets, true),
     );
-    const appendSelection = host.bind<{ targets: MainResolvedTargets; create: boolean }>(
-      scope, 'main-normal', 'mainAppendReadingGroup', ({ targets, create }) => {
-        importSelection({ targets, create });
-      },
+    const appendSelection = host.bind<MainResolvedTargets>(
+      scope,
+      'main-normal',
+      'mainAppendReadingGroup',
+      (targets) => runSelectionImport(targets, false),
     );
     return {
       ownsTarget: (target) =>
@@ -213,7 +230,8 @@ export function createTabEnhancementsModule(
       },
       focus: (context) => actions[context].focus(),
       toggle: (context) => actions[context].toggle(),
-      importSelection: (targets, create) => create ? importSelection({ targets, create }) : appendSelection({ targets, create }),
+      importSelection: (targets, create) =>
+        create ? importSelection(targets) : appendSelection(targets),
     };
   });
 }
