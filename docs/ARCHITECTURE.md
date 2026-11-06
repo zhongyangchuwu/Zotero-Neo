@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录内部模块及其组合约束：核心分区固定启用，`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）、`ai-qa`（AI 问答（实验））与 `references`（引用增强）是四个可选增强；除 `ai-qa` 默认关闭外，其余三项默认开启。用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)和[Reader 指南](READER_GUIDE.md)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录内部模块及其组合约束：当前共有 20 个内置模块，其中 15 个核心分区固定启用，5 个可选增强为 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）、`references`（引用增强）、`ai-qa`（AI 问答（实验））和 `tab-enhancements`（标签页增强）；前三项默认开启，后两项默认关闭。用户操作见[模块设置](SETTINGS_GUIDE.md#开关可选功能)和[Reader 指南](READER_GUIDE.md)，下文维护运行时所有权。
 
 ## 分层
 
@@ -26,8 +26,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。核心分区固定启用；只有 `reader-hints`、`extensions`、`ai-qa` 与 `references` 可按已应用请求关闭。`ai-qa` 依赖核心 `reader-selection`，`references` 无 AI 或选择模块依赖。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
-
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。核心分区固定启用；只有 `reader-hints`、`extensions`、`references`、`ai-qa` 与 `tab-enhancements` 可按已应用请求关闭。`ai-qa` 依赖核心 `reader-selection`，`references` 无 AI 或选择模块依赖，`tab-enhancements` 依赖核心 `workspace`。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
@@ -51,10 +50,19 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `src/modules/workspace/` 按 MainWindow 拥有 Main/Reader/Note Normal 的标签页候选、确认、切换、循环和关闭，以及 Reader/Note 的 Show in Library。候选来源显式注入 Picker，不负责导航；Surface 传入明确条目目标。模块只持有本次 Picker 的释放句柄，旧确认与晚到状态不能操作替换界面；实际切换和定位沿用基座导航端口，不依赖 Library，不另建历史。原生标签页委托及历史恢复重扫仍在基座。
 
+##### 标签页增强
+
+`src/modules/tab-enhancements/` 按 MainWindow 拥有垂直侧栏、标题格式展示与窗口级交互；MainWindowController 在 `Zotero.initializationPromise` 完成后，只有原 session 仍有效时才延迟激活。应用共享的分组管理器协调已登记的 Main 宿主，但不接管 Reader 生命周期。它依赖核心 `workspace`：跨窗口激活先转到拥有该原生标签页的窗口，再沿用 `workspace.activateTab`；标签页切换及导航仍复用基座唯一历史。
+
+Zotero 原生标签页清单是唯一事实来源。Toolkit 将每个 Reader/Note 视图的版本化 `viewID` 存入原生 `tab.data`，作为跨卸载、载入和 Zotero 重启保持稳定的单视图身份；同一 PDF 的多个原生视图分别有自己的 `viewID`。Zotero 的 `nativeID` 是当前会话操作标签页的句柄，不作为分组身份持久化，重启后可重新生成。Toolkit 合并原生 `Zotero_Tabs._update` 与 `Notifier` 的 `item`/`tab` 通知，再刷新原生清单和条目元数据；不另建 Reader 标签页清单。分组的关闭与原生排序只作用于发起请求的窗口；激活其他窗口中的成员时，通过其已登记宿主执行。异步恢复先核对成员、窗口与关闭代次，再接纳真实原生标签页，避免重复打开或让过期打开结果重新加入界面。
+
+阅读组只保存可恢复的浅层界面状态，保存在 profile-local 键 `tabEnhancements.groups.v1`，与侧栏位置、宽度、收起状态和标题格式等显示偏好分开；停用功能或重置显示偏好不会清除分组。分组不使用 Zotero 标签或分类。关闭标签页不移除组成员，解散分组也不关闭仍打开的原生文档。
+
+`src/toolkit/main/tab-enhancements/` 独占私有原生 Tab 接口、外层布局和原生工具栏的可逆租约。侧栏作为整个 `#appcontent` 的外侧兄弟节点放在最左或最右；Toolkit 不重挂原生内容 deck、Reader/PDF iframe 或文档。只有识别到支持的原生布局时才替换横向标签栏并移入原生工具栏；布局不受支持时保留 Zotero 原生标签页界面。
+
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
-`BuiltinModuleRuntime` 对四个可选增强分别保存已应用值与偏好请求；核心分区固定启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存四项请求的不可变布尔图 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，只有真正重启 Zotero 进程后才应用可选项的新请求。旧快照缺少 `references` 字段时当前进程按关闭处理；默认请求为开启并显示待重启，重启后才启用。Settings 显示请求、已应用值、当前宿主状态与待重启状态；恢复默认只清除四项可选请求。
-
+`BuiltinModuleRuntime` 对五个可选增强分别保存已应用值与偏好请求；核心分区固定启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存五项请求的不可变布尔图 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，只有真正重启 Zotero 进程后才应用可选项的新请求。旧快照缺少 `references` 或 `tab-enhancements` 字段时，该进程按关闭处理；默认请求分别为 `references` 开启、`tab-enhancements` 关闭，重启后才应用。Settings 显示请求、已应用值、当前宿主状态与待重启状态；恢复默认只清除五项可选请求。
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
@@ -101,6 +109,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 `src/modules/references/` 按 ReaderSession 拥有引用增强与 `openReferences`；`src/references/controller.ts` 拥有原生预览中的逐文献操作、右键动作、搜索清单及单项任务浮层。Toolkit 提供原生预览挂载、同步菜单追加与工具栏入口，并返回参考文献、识别到的提及及来源守卫。悬停不激活窗格或查询服务；明确操作先捕获锚点，再激活并固定精确 PDF presentation/Window/Document，在异步操作前后验证 PDF 字节来源。引用跳转复用已有 NavigationPort 与共享历史，不建立第二套栈。用户交互见[Reader 指南](READER_GUIDE.md)，宿主细节见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
 
 本地分析和文库查找不访问网络。元数据仅在用户明确查询后从 Semantic Scholar 或 arXiv 获取；展示来源原始字段、原始摘要和检索时间，未提供的摘要不生成。本模块不依赖或调用 AI 问答，不对论文或引用作 AI 生成、质量判断或分类。`src/operations/references.ts` 只在明确确认后添加条目；已存在条目不覆盖，精确 DOI/arXiv 身份用于去重。
+
 #### 文档准备
 
 `src/modules/document-preparation/` 的 controller 由 Addon 持有，复用 `src/document-analysis/` 的应用级队列与任务记录。MainWindow 和 ReaderSession 分别激活局部模块，传入发起 Surface 已解析的 PDF；Reader 不借用 Main Selection。局部作用域只借用本次 presentation，释放同时核对精确界面身份，旧作用域退出不能关闭同窗口的替换界面。
@@ -135,8 +144,6 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 静态宿主文档 `assets/package/content/ai-qa-window.xhtml` 打包为 `content/ai-qa-window.xhtml`，由 `src/platform/ai-qa-ui.ts` 按需注册到 `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`；窗口类型为 `zotero-neo:ai-qa`。AI 问答 UI bundle 为 `content/ai-qa-ui.js`。关闭所有归 Toolkit 所有的工具窗后才释放共享注册；关闭 Reader 会退休其窗口，但不会单独移除仍供其他 Reader 使用的共享注册。
 
 更名不会更改既有持久化身份：配置 `ai.configuration`、端点凭据身份、附件成果文件 `.zotero-neo-reader-ai.json` 及 Note provenance／幂等标记继续沿用。关闭模块也不会清除配置、凭据、成果或人工修订。
-
-
 
 宿主能力位于 `src/toolkit/reader/`；具体路径和私有接缝见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。Reader 生命周期工作仅对活跃 session 及精确 PDF 视图有效。同 Window 的 ReaderView 或 Document 替换也会退休旧注册；部分监听获取失败或获取期间重入退出时，先封住回调，再排空已取得的句柄。原生事件回调在注销前先按身份退休；只有权威 Reader 清单才能据此退休缺失 session。退出时防护已销毁的 Gecko wrapper，同时保持活对象上的失败可观测。
 

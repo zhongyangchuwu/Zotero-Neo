@@ -17,6 +17,7 @@ import {
 } from '../modules';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
 import { settingsButton, settingsStatus } from './settings-ui';
+import { SettingsTabs } from './settings-tabs';
 
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -159,6 +160,12 @@ export class SettingsModules {
     this.#cleanups.push(() => checkbox.removeEventListener('change', onChange));
 
     row.append(name, scope, request, summary, details);
+    if (descriptor.id === 'tab-enhancements') {
+      const display = doc.createElementNS(H, 'div') as HTMLElement;
+      row.append(display);
+      const tabs = new SettingsTabs(doc, display, this.#preferences, this.#language);
+      this.#cleanups.push(() => tabs.dispose());
+    }
     this.#rows.set(descriptor.id, { checkbox, summary, details });
     return row;
   }

@@ -31,8 +31,8 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 模块
 
-内部功能按可组合模块划分，核心模块固定启用；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`references` 和 `ai-qa`。
-四个可选模块的偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled`、`extensions.zotero-neo.modules.extensions.enabled`、`extensions.zotero-neo.modules.references.enabled` 和 `extensions.zotero-neo.modules.ai-qa.enabled`。前三项默认 `true`，`ai-qa` 默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
+当前目录共 20 个模块：15 个固定启用的核心模块和 5 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`ai-qa`、`references` 和 `tab-enhancements`。
+五个模块请求的偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled`、`extensions.zotero-neo.modules.extensions.enabled`、`extensions.zotero-neo.modules.ai-qa.enabled`、`extensions.zotero-neo.modules.references.enabled` 和 `extensions.zotero-neo.modules.tab-enhancements.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；`ai-qa` 和 `tab-enhancements` 默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
@@ -55,21 +55,52 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点；不依赖 `library` 或 `reader-navigation`。 |
 | `extensions` | 扩展管理面板 | 可选增强：已安装 Zotero 扩展的 Plugin Manager；不管理 Neo 内部模块。 |
+| `tab-enhancements` | 标签页增强 | 可选增强：Main 垂直标签栏与不支持嵌套的可恢复阅读分组；依赖 `workspace`，默认关闭。分组流程见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。 |
 
 | 运行状态 | 含义 |
 | --- | --- |
 | 已启用（Enabled） | 当前宿主中的模块激活成功。 |
-| 已停用（Disabled） | 仅适用于 `reader-hints`、`extensions`、`references` 或 `ai-qa`；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
+| 已停用（Disabled） | 仅适用于 `reader-hints`、`extensions`、`ai-qa`、`references` 或 `tab-enhancements`；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
 | 已阻止（Blocked） | 当前启用图或实际宿主缺少必需依赖；界面列出依赖，不自动修改开关。 |
 | 失败（Failed） | 当前宿主实例激活失败，已退休其入口并尝试清理部分资源；显示失败原因，详细日志保留原错误。该实例不自动重试，新宿主实例或重启 Zotero 可重新激活。 |
 | 等待主机（Pending host） | 尚未在支持的宿主激活，例如还没有打开 Reader。 |
 | 等待重启（Pending restart） | 保存请求与已应用值不同，附加在当前状态后；当前能力不提前变化。 |
 
-草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**会将 `reader-hints`、`extensions` 和 `references` 设为开启，将 `ai-qa` 设为关闭；恢复后仍需重启 Zotero。Neo 重载不会应用模块请求；对于启动快照中没有 `references` 的旧进程，该模块保持关闭至完全重启。保存与恢复默认都不改动核心模块偏好或其他行为设置。
+草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**会将 `reader-hints`、`extensions` 和 `references` 设为开启，将 `ai-qa` 和 `tab-enhancements` 设为关闭；恢复后仍需完全重启 Zotero。Neo 热重载沿用已应用的启动快照，不能应用新请求；旧启动快照中缺少某个可选模块标记时，该模块按关闭处理。保存与恢复默认都不改动核心模块偏好或其他行为设置。
 
 行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
-设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部四项可选增强，核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部五项可选增强，核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+
+## 标签页增强的显示设置
+
+这些控件位于 **Neo 设置 → 模块 → 标签页增强**卡片的**标签页显示**区域，而不是 Zotero 原生偏好页。模块请求仍需完全重启 Zotero；模块启用时，显示偏好立即生效。四个显示偏好使用以下键：`extensions.zotero-neo.tabEnhancements.{side,width,collapsed,titleFormat}`。
+
+| 偏好键 | 默认值 | 含义 |
+| --- | --- | --- |
+| `extensions.zotero-neo.tabEnhancements.side` | `left` | 侧栏位置；可选 `left`（**最左侧**）或 `right`（**最右侧**）。 |
+| `extensions.zotero-neo.tabEnhancements.width` | `260` px | 展开时的侧栏宽度，范围 `180`–`520` px。 |
+| `extensions.zotero-neo.tabEnhancements.collapsed` | `false` | 侧栏是否收起；在 Main、Reader 或 Note Normal 中按 `<Space>bt` 切换。 |
+| `extensions.zotero-neo.tabEnhancements.titleFormat` | `{title}` | Neo 垂直栏标签的显示模板。 |
+
+标题模板支持以下动态字段：
+
+| 占位符 | 显示内容 |
+| --- | --- |
+| `{title}` | 所属文献标题。 |
+| `{citekey}` | 所属常规条目的真实 citekey；使用 Zotero／Better BibTeX 可用的引用键，不会用 Zotero item key 冒充。 |
+| `{author}` | 首位创建者的姓氏或名称。 |
+| `{year}` | 日期字段中识别出的四位年份。 |
+| `{filename}` | 附件文件名。 |
+
+::: v-pre
+
+用 `{{` 和 `}}` 分别显示字面左、右花括号。未知占位符或不配对的花括号会校验失败，设置不会保存无效模板。模板只识别上述占位符，不计算表达式。模板含动态占位符但所有对应字段都为空时，整项显示回退为原生标签标题；模板只有字面文本时则按字面文本显示。字面分隔符不会因某个字段为空而自动隐藏：例如 `{citekey} — {title}` 在 citekey 缺失但标题存在时仍会显示分隔号；若所有字段都为空，则回退为原生标题。模板只改变 Neo 垂直栏中打开或已关闭标签页成员的显示，不改写 Zotero 原生标签标题或文献元数据。
+
+:::
+
+保存的阅读分组是仅保存在当前 Zotero 配置文件中的界面状态，存于 `extensions.zotero-neo.tabEnhancements.groups.v1`，不是 Zotero 标签或分类。停用模块或点击**恢复标签页显示默认值**不会删除分组；完整操作见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。
+
 
 ## 引用增强的元数据来源与密钥
 

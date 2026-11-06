@@ -37,6 +37,8 @@ const SCOPE_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
   'Reader view': 'Reader view',
   'Hint overlay': 'Hint overlay',
   'Plugin manager': 'Plugin manager',
+  'Tab sidebar': 'Tab sidebar',
+  'Saved reading groups': 'Saved reading groups',
 };
 
 /** Translates static module-scope labels while preserving unknown future labels. */

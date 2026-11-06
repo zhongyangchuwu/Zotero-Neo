@@ -1865,6 +1865,12 @@ export class ReaderSession {
       case 'switchTab':
         main.openTabPicker(ownerWindow);
         return;
+      case 'tabFocusSidebar':
+        main.focusTabSidebar(ownerWindow);
+        return;
+      case 'tabToggleSidebar':
+        main.toggleTabSidebar(ownerWindow);
+        return;
       case 'closeCurrentTab':
         main.closeReaderTab(ownerWindow);
         return;

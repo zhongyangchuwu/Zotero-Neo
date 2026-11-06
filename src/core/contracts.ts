@@ -77,6 +77,8 @@ export interface ReaderMainOperations {
   navigateForwardFromReader(ownerWindow: MainWindow | null, count?: number): void;
   navigationForReader(ownerWindow: MainWindow | null): NavigationPort | null;
   openTabPicker(ownerWindow: MainWindow | null): void;
+  focusTabSidebar(ownerWindow: MainWindow | null): void;
+  toggleTabSidebar(ownerWindow: MainWindow | null): void;
   closeReaderTab(ownerWindow: MainWindow | null): void;
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;
   showReaderItemInLibrary(ownerWindow: MainWindow | null, targets: ItemTargetSet<'reader'>): void;

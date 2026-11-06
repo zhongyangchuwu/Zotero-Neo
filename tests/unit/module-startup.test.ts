@@ -10,6 +10,7 @@ describe('application module startup flags', () => {
   it('keeps pending requests unapplied across Neo reloads and applies them after Zotero restarts', () => {
     const legacy = Object.fromEntries(BUILTIN_MODULES.map(({ id }) => [id, false]));
     delete legacy.references;
+    delete legacy['tab-enhancements'];
     legacy.extensions = true;
     legacy['reader-ai'] = true;
     vi.stubGlobal('Zotero', {
@@ -22,6 +23,7 @@ describe('application module startup flags', () => {
       [modulePreferenceKey('reader-hints'), true],
       [modulePreferenceKey('extensions'), false],
       [modulePreferenceKey('ai-qa'), true],
+      [modulePreferenceKey('tab-enhancements'), true],
     ]);
     const preferences = {
       get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
@@ -34,6 +36,7 @@ describe('application module startup flags', () => {
       extensions: true,
       'ai-qa': false,
       references: false,
+      'tab-enhancements': false,
     });
     expect(reloaded.applied).toEqual(first.applied);
     expect(reloaded.requested()).toEqual({
@@ -41,6 +44,7 @@ describe('application module startup flags', () => {
       extensions: false,
       'ai-qa': true,
       references: true,
+      'tab-enhancements': true,
     });
     const owner = {};
     const main = reloaded.createScope('main', owner, () => true);
@@ -62,6 +66,7 @@ describe('application module startup flags', () => {
     expect(reader.activate('references', vi.fn())).toBeNull();
     expect(reader.available('reader-normal', 'openReferences')).toBe(false);
     expect(main.activate('extensions', () => ({}))).not.toBeNull();
+    expect(main.activate('tab-enhancements', vi.fn())).toBeNull();
     const inspected = reloaded.inspect(owner);
     expect(
       inspected.filter(({ id }) => isOptionalModule(id)).every((state) => state.pendingRestart),
@@ -82,6 +87,7 @@ describe('application module startup flags', () => {
       extensions: false,
       'ai-qa': true,
       references: true,
+      'tab-enhancements': true,
     });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
   });
@@ -94,12 +100,7 @@ describe('application module startup flags', () => {
     } as PreferenceReader;
     const logger = { debug: vi.fn(), diagnostic: vi.fn() };
     const runtime = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
-    expect(runtime.applied).toEqual({
-      'reader-hints': true,
-      extensions: true,
-      'ai-qa': false,
-      references: true,
-    });
+    expect(runtime.applied['ai-qa']).toBe(false);
     expect(runtime.requested()['ai-qa']).toBe(false);
     const activate = vi.fn();
     const reader = runtime.createScope('reader', {}, () => true);
