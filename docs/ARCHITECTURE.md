@@ -108,7 +108,9 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/modules/references/` 按 ReaderSession 拥有引用增强与 `openReferences`；`src/references/controller.ts` 拥有原生预览中的逐文献操作、右键动作、搜索清单及单项任务浮层。Toolkit 提供原生预览挂载、同步菜单追加与工具栏入口，并返回参考文献、识别到的提及及来源守卫。悬停不激活窗格或查询服务；明确操作先捕获锚点，再激活并固定精确 PDF presentation/Window/Document，在异步操作前后验证 PDF 字节来源。引用跳转复用已有 NavigationPort 与共享历史，不建立第二套栈。用户交互见[Reader 指南](READER_GUIDE.md)，宿主细节见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
 
-本地分析和文库查找不访问网络。元数据仅在用户明确查询后从 Semantic Scholar 或 arXiv 获取；展示来源原始字段、原始摘要和检索时间，未提供的摘要不生成。本模块不依赖或调用 AI 问答，不对论文或引用作 AI 生成、质量判断或分类。`src/operations/references.ts` 只在明确确认后添加条目；已存在条目不覆盖，精确 DOI/arXiv 身份用于去重。
+本地分析和文库查找不访问网络。元数据只在显式搜索未命中缓存或显式刷新时从 Semantic Scholar 或 arXiv 获取；展示来源原始字段、原始摘要和检索时间，未提供的摘要不生成。本模块不依赖或调用 AI 问答，不对论文或引用作 AI 生成、质量判断或分类。`src/operations/references.ts` 只在明确确认后添加条目；已存在条目不覆盖，精确 DOI/arXiv 身份用于去重。
+
+论文元数据缓存由 `src/references/cache.ts` 在进程内跨 Reader／服务实例共享并串行管理，`src/platform/reference-cache.ts` 负责配置目录中的持久化。打开论文详情只读缓存；显式搜索按规范化查询键命中缓存（包括已过期结果）时不联网，未命中时才请求来源；刷新跳过缓存并请求网络。成功取得的原始元数据保存在当前 Zotero 配置目录的有界 JSON 中，标记来源、原始检索时间与过期状态；缓存不读取或保存 PDF 文本、笔记、坐标或凭据。刷新失败保留既有内容并报告错误。用户清除时只清除该缓存，代次保护使已清除的在途请求不能重新写回；不影响文库条目、已采纳记录或凭据。
 
 #### 文档准备
 
