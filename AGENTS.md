@@ -39,6 +39,10 @@ the esbuild package build, and the XPI member check. GitHub Actions runs the
 repository CI workflow; inspect the current workflow definition rather than
 assuming a fixed OS matrix.
 
+### 本地开发与 PR 交付
+
+本地开发默认使用功能分支和 PR。完成相关本地检查及必要的 Zotero 界面验证后，等待 PR 的 CI 通过，核对最新 HEAD 并合并，再向用户汇报已合并的结果。除非用户明确要求只准备 PR，不要停在“PR 已创建”或再次等待合并授权。验证失败、合并冲突或需要用户取舍时，先解决可达问题，再说明具体阻碍；不要绕过检查合并。
+
 ### GitHub MCP development workflow
 
 When development is performed through GitHub MCP rather than a local checkout,

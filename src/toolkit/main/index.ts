@@ -103,3 +103,4 @@ export {
 } from './collections';
 export { executeCollectionTransaction } from './collection-transactions';
 export { sourceNoteImageMarkup, sourcePDFLink, sourceNoteEntries } from './source-notes';
+export { ManagedTagsUI } from './managed-tags';

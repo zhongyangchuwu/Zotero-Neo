@@ -1590,6 +1590,36 @@ describe('tag candidate chooser', () => {
     expect(session.picker.open).toBe(false);
   });
 
+  it('hides valid Neo identities from tag search, colon namespaces, and create candidates', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('Services', { focus: { focusedWindow: null } });
+    const { window, session } = createPickerHarness();
+    const picker = createFuzzyPicker(
+      { debug: vi.fn(), diagnostic: vi.fn() },
+      new MainNavigation({ debug: vi.fn(), diagnostic: vi.fn() }, () => {}),
+    );
+    const identity = 'urn:zotero-neo:chapter-note:v1:0123456789abcdef0123456789abcdef';
+    const source = createTagCandidateProvider({
+      title: 'Add Tag',
+      placeholder: '> Search or create a tag…',
+      separator: ':',
+      allowCreate: true,
+      loadTags: async () => [{ tag: identity, type: 1 }, { tag: 'ordinary' }],
+    });
+
+    await picker.open(window, session, 'tags', { source });
+    expect(session.picker.filtered.map((item) => item.tagName)).toEqual(['ordinary']);
+
+    const input = session.picker.input as HTMLInputElement & { emit(type: string): void };
+    input.value = identity;
+    input.emit('input');
+    expect(session.picker.filtered).toEqual([]);
+
+    input.value = 'urn:zotero-neo:';
+    input.emit('input');
+    expect(session.picker.filtered).toEqual([]);
+  });
+
   it('leaves domain mutation keys unclaimed and uses the ordinary pointer policy', async () => {
     vi.stubGlobal('Services', { focus: { focusedWindow: null } });
     const { window, session } = createPickerHarness();
