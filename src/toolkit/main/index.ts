@@ -104,3 +104,12 @@ export {
 export { executeCollectionTransaction } from './collection-transactions';
 export { sourceNoteImageMarkup, sourcePDFLink, sourceNoteEntries } from './source-notes';
 export { ManagedTagsUI } from './managed-tags';
+export { createTabEnhancementHost } from './tab-enhancements';
+export type {
+  TabDocumentRef,
+  TabTitleFields,
+  TabViewSnapshot,
+  TabEnhancementHost,
+  TabRailLayout,
+  TabRailLayoutOptions,
+} from './tab-enhancements-types';

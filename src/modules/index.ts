@@ -22,6 +22,7 @@ import {
 import { TAG_ITEM_ACTIONS, TAG_MAIN_ACTIONS } from './tags/capabilities';
 import { WORKSETS_SELECT_ACTIONS } from './worksets/capabilities';
 import { READER_WORKSPACE_ACTIONS } from './workspace/reader-actions';
+import { TAB_ENHANCEMENT_SURFACE_ACTIONS } from './tab-enhancements/capabilities';
 
 export type BuiltinModuleId =
   | 'library'
@@ -42,15 +43,23 @@ export type BuiltinModuleId =
   | 'reader-excerpts'
   | 'chapter-notes'
   | 'document-preparation'
-  | 'extensions';
+  | 'extensions'
+  | 'tab-enhancements';
 
-export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'ai-qa', 'references'] as const;
+export const OPTIONAL_MODULE_IDS = [
+  'reader-hints',
+  'extensions',
+  'ai-qa',
+  'references',
+  'tab-enhancements',
+] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
 export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
   'reader-hints': true,
   extensions: true,
   'ai-qa': false,
   references: true,
+  'tab-enhancements': false,
 };
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
@@ -384,6 +393,21 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ],
     selectionActions: [],
     ui: ['Plugin manager'],
+  },
+  {
+    id: 'tab-enhancements',
+    names: { en: 'Tab Enhancements', 'zh-CN': '标签页增强' },
+    hosts: ['main'],
+    scopes: ['Main window', 'Tab sidebar', 'Saved reading groups'],
+    requires: ['workspace'],
+    optional: [],
+    contributions: [
+      { host: 'main', context: 'main-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
+      { host: 'main', context: 'reader-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
+      { host: 'main', context: 'note-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
+    ],
+    selectionActions: [],
+    ui: ['Tab sidebar', 'Saved reading groups'],
   },
 ];
 

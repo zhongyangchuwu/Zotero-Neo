@@ -169,6 +169,9 @@ const NATIVE_KEYS: Partial<Record<BindingContext, readonly string[]>> = {
   'plugins-list': ['<Tab>', '<S-Tab>'],
 };
 
+NATIVE_KEYS['tabs-input'] = NATIVE_KEYS['picker-input'];
+NATIVE_KEYS['tabs-list'] = NATIVE_KEYS['picker-list'];
+
 /** Native records are disclosures, not editable BindingMap defaults. */
 export function nativeShortcutCatalog(
   context: BindingContext | undefined,
@@ -225,7 +228,7 @@ function nativeTokenReservation(context: BindingContext, token: string): 'exclus
     (nativeTokens?.has(terminal) && NATIVE_NAVIGATION_TOKENS.has(terminal))
   )
     return 'exclusive';
-  if (context === 'picker-input' || context === 'plugins-input') {
+  if (context === 'picker-input' || context === 'plugins-input' || context === 'tabs-input') {
     if ([...token].length === 1 || (token.startsWith('shift+') && [...terminal].length === 1))
       return 'exclusive';
     if (['backspace', 'delete', 'arrowleft', 'arrowright', 'home', 'end'].includes(terminal))

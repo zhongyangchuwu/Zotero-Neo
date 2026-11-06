@@ -85,6 +85,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
           main?.navigateForwardFromReader(ownerWindow, count),
         navigationForReader: (ownerWindow) => main?.navigationForReader(ownerWindow) ?? null,
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
+        focusTabSidebar: (ownerWindow) => main?.focusTabSidebar(ownerWindow),
+        toggleTabSidebar: (ownerWindow) => main?.toggleTabSidebar(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
         showReaderItemInLibrary: (ownerWindow, targets) =>

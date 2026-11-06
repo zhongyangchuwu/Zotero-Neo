@@ -87,6 +87,13 @@ import { MainItemStateDecoration } from './item-state-decoration';
 import { MainNavigationExecutor } from './jump-history';
 import { createCollectionsModule, type CollectionsModule } from '../modules/collections';
 import { installMainViewLifecycle } from './view-lifecycle';
+import {
+  createTabEnhancementsModule,
+  type TabEnhancementsModule,
+} from '../modules/tab-enhancements';
+import { createTabGroupManager } from '../modules/tab-enhancements/model';
+import { TAB_GROUP_STATE_PREFERENCE } from '../modules/tab-enhancements/config';
+import type { TabGroupManager } from '../modules/tab-enhancements/types';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -115,10 +122,12 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly notes: NotesModule | null;
       readonly workspace: WorkspaceModule | null;
       readonly preparation: DocumentPreparationModule | null;
+      tabEnhancements: TabEnhancementsModule | null;
     }
   >();
   readonly #itemDecorations = new MainItemStateDecoration();
   readonly #navigationExecutor: MainNavigationExecutor;
+  #tabGroups: TabGroupManager | null = null;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -157,6 +166,18 @@ export class MainWindowController implements MainWindowControllerApi {
       (session) => this.#modules.get(session)?.notes?.editing ?? null,
       (session) => this.#sessions.get(session.window) === session && !session.cleanup.disposed,
     );
+  }
+
+  /** Saved reading groups belong to this application controller, not to one window's rail. */
+  private tabGroupManager(): TabGroupManager {
+    if (!this.#tabGroups) {
+      this.#tabGroups = createTabGroupManager({
+        read: () => this.#dependencies.preferences.get(TAB_GROUP_STATE_PREFERENCE, ''),
+        write: (value) => this.#dependencies.preferences.set(TAB_GROUP_STATE_PREFERENCE, value),
+        createID: () => `neo-group-${Zotero.Utilities.randomString(20)}`,
+      });
+    }
+    return this.#tabGroups;
   }
 
   private attachModules(window: MainWindow, session: MainWindowSession): void {
@@ -426,7 +447,38 @@ export class MainWindowController implements MainWindowControllerApi {
         notes,
         workspace,
         preparation,
+        tabEnhancements: null,
       });
+      if (this.#dependencies.modules.applied['tab-enhancements']) {
+        void Zotero.initializationPromise
+          .then(() => {
+            if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+            const attached = this.#modules.get(session);
+            if (!attached) return;
+            attached.tabEnhancements = scope.activate('tab-enhancements', () => {
+              if (!workspace) throw new Error('Core workspace is unavailable');
+              return createTabEnhancementsModule(host, {
+                window,
+                preferences: this.#dependencies.preferences,
+                logger: this.#dependencies.logger,
+                bindings: () => this.sessionBindings(session),
+                language: () => this.keyGuideLanguage(),
+                themeRoot: (root) => session.theme.add(root),
+                groups: this.tabGroupManager(),
+                workspace,
+              });
+            });
+          })
+          .catch((error: unknown) => {
+            if (this.#sessions.get(window) === session && !session.cleanup.disposed) {
+              reportDiagnosticError(
+                this.#dependencies.logger,
+                'Tab enhancement startup failed',
+                error,
+              );
+            }
+          });
+      }
     } catch (error) {
       const failure = new CleanupFailure();
       failure.run(() => scope.dispose());
@@ -469,6 +521,10 @@ export class MainWindowController implements MainWindowControllerApi {
 
   private workspaceModule(session: MainWindowSession): WorkspaceModule | null {
     return this.#modules.get(session)?.workspace ?? null;
+  }
+
+  private tabEnhancementsModule(session: MainWindowSession): TabEnhancementsModule | null {
+    return this.#modules.get(session)?.tabEnhancements ?? null;
   }
 
   private cancelMainCurrentTarget(window: MainWindow, session: MainWindowSession): void {
@@ -661,6 +717,8 @@ export class MainWindowController implements MainWindowControllerApi {
   shutdown(): void {
     const failure = new CleanupFailure();
     for (const window of this.#sessions.keys()) failure.run(() => this.removeWindow(window));
+    failure.run(() => this.#tabGroups?.dispose());
+    this.#tabGroups = null;
     failure.rethrow();
   }
 
@@ -841,6 +899,18 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
+  focusTabSidebar(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'tabFocusSidebar', (_window, session) =>
+      this.tabEnhancementsModule(session)?.focus('reader-normal'),
+    );
+  }
+
+  toggleTabSidebar(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'tabToggleSidebar', (_window, session) =>
+      this.tabEnhancementsModule(session)?.toggle('reader-normal'),
+    );
+  }
+
   closeReaderTab(ownerWindow: MainWindow | null): void {
     this.withReaderWindow(ownerWindow, 'closeCurrentTab', (_window, session) =>
       this.workspaceModule(session)?.closeTab('reader'),
@@ -1000,6 +1070,12 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
+      return;
+    }
+    const tabs = this.tabEnhancementsModule(session);
+    if (tabs?.ownsTarget(event.target)) {
+      this.resetMainInput(window, session);
+      tabs.handleKey(event);
       return;
     }
     if (
@@ -1305,6 +1381,12 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'switchTab':
         this.workspaceModule(session)?.switchTab('note');
         return true;
+      case 'tabFocusSidebar':
+        this.tabEnhancementsModule(session)?.focus('note-normal');
+        return true;
+      case 'tabToggleSidebar':
+        this.tabEnhancementsModule(session)?.toggle('note-normal');
+        return true;
       case 'closeCurrentTab':
         this.workspaceModule(session)?.closeTab('note');
         return true;
@@ -1437,6 +1519,12 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'switchTab':
         this.workspaceModule(session)?.switchTab('main');
+        break;
+      case 'tabFocusSidebar':
+        this.tabEnhancementsModule(session)?.focus('main-normal');
+        break;
+      case 'tabToggleSidebar':
+        this.tabEnhancementsModule(session)?.toggle('main-normal');
         break;
       case 'findNotes':
         this.openNotesPickerForSurface(window, session);

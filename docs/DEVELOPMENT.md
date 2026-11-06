@@ -125,16 +125,25 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；15 个核心模块固定启用，5 个可选增强为 `reader-hints`、`extensions`、`references`、`ai-qa` 与 `tab-enhancements`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；核心模块固定启用，可选增强为 `reader-hints`、`extensions`、`ai-qa` 与 `references`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 与文档准备入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 与文档准备入口；ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+`src/core/module-runtime.ts` 根据五项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`ai-qa` 与 `tab-enhancements` 默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留五项请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧版启动快照缺少 `references` 或 `tab-enhancements` 字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-`src/core/module-runtime.ts` 根据四项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`ai-qa` 默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留四项请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。早于 `references` 的快照缺少该字段时，已应用值按关闭处理；默认请求仍为开启，Settings 会显示待重启。旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
-实机核对模块配置时使用专用 profile 和自有数据，确认四项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留；恢复默认后 `reader-hints`、`extensions`、`references` 为开启，`ai-qa` 为关闭。关闭全部四项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+实机核对模块配置时使用专用 profile 和自有数据，确认五项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认默认状态下标签页增强关闭；手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留；恢复默认后 `reader-hints`、`extensions`、`references` 为开启，`ai-qa`、`tab-enhancements` 为关闭。关闭全部五项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+
+#### 标签页增强手动核对
+
+使用专用 profile，按实际操作核对下列行为：
+
+- 保持默认请求关闭时，原生标签栏与核心 Workspace 操作、共享历史仍可用。保存启用请求后只热重载 Neo，标签页增强仍使用原已应用状态；完全退出并重启 Zotero 后才应用新请求。关闭请求并再次完整重启后，核对原生横向标签栏和工具栏恢复。
+- 将垂直栏分别放在内容区最左和最右，拖动至宽度下限 `180`、上限 `520`，并核对默认宽度 `260`；在两侧位置调整或重开面板时，Reader 与 PDF 文档不因布局变化而重新载入。遇到不受支持的原生布局时，确认原生标签页仍可见。
+- 在 Neo 侧栏中使用真实 citekey，并在引用键更新后核对标题同步；对没有 citekey 的条目核对动态标题回退到原生标题。自定义标题只影响 Neo 侧栏，不改 Zotero 原生标签标题或条目标题。
+- 建立阅读组后关闭成员，再从组中重新打开；关闭后组成员仍保留，解散组不会关闭仍打开的文档。对同一 PDF 打开两个 Reader 标签页，分别分组和激活，确认它们是两个独立视图。两窗口场景下，跨窗口激活应转到该标签页所属窗口；关闭和排序只影响发起操作的窗口。
+- 完整退出并重启 Zotero 后核对已保存分组与视图身份能够对应；同时确认分组只保存在 `tabEnhancements.groups.v1`，不写入 Zotero 标签或分类。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
-
 
 工作集拥有 SelectionStore、Visual 范围及 Selection Panel。Main Surface 继续初始化和取消原生 Cursor/多目标，持有共享行渲染，并向模块注入刷新、主题和现有 Reveal 导航端口。目标解析与 Library Trash 接收明确 Selection 端口；来源为空或退休后沿用当前目标，不读取旧 Selection。共享导航通过局部界面端口捕获原面板，不再读取 session 的 Selection Panel 状态。
 
@@ -145,7 +154,6 @@ Library 拥有 Local Find 查询/界面及最近回收批次，Main session 不�
 Notes 按窗口拥有候选、选择后的打开编排及可选 Vim 编辑的模式、寄存器和 caret 样式。`NoteSurfaceRuntime` 只保留精确编辑器身份、输入 runtime 和退休代次；Surface 继续决定原生/IME 输入、count、前缀及焦点。Note 普通动作和 Insert 退出登记到原上下文；候选必须显式传给 Picker。共享导航提供选择完成后的宿主委托，不新增 Note 历史栈。
 
 输入缓冲和计时器由 `InputRuntime` 管理，Surface 负责原生输入／IME 仲裁与状态反馈；`PrefixGuideRuntime` 根据精确上下文和当前有效绑定投影后续键，不再由 Surface 限制为 Space 前缀。`keyGuideTimeout()` 只为不带独立动作的命令前缀提供 5 秒阅读时间，歧义短动作继续使用 matcher 超时，数字计数不引入新解析器或指南延迟。Escape 清除整条待完成输入，退格保留尚未删去的计数，并使被取消的动作计时器失效。
-
 
 Reader 导航拥有页面/滚动/缩放/搜索、语义与批注位置遍历、marks、按需 captions、原生侧栏增强及平滑滚动状态，登记 Normal 与四个侧栏上下文的实际处理器。Surface 保留输入和精确视图、CurrentTarget、共享导航历史与 Toolkit 导航宿主；Workspace 复用该宿主处理分屏与方向焦点。marks 保存完成后重查发起交互，不能覆盖新的输入或界面状态；销毁视图时先清空 RAF/完成回调的所有权，再尝试原生取消，即使取消失败也不保留旧视图或阻塞下一次滚动。
 
@@ -162,6 +170,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | 能力 | Toolkit 负责方 | 边界与原因 |
 | --- | --- | --- |
 | Main 条目、标签页、Note 上下文与过滤 | `src/toolkit/main/host.ts` | 提供宿主事实与操作，不选择 Surface 目标。只在恰好一个原生 Scope 时调用 `getSelectedCollection()`；零个或多个 Scope 先用外层复数 API，再回退到原生 tree 的复数 API。分离的 Scope Cursor 不代替已选分类。 |
+| Main 原生标签与外层侧栏布局 | `src/toolkit/main/tab-enhancements/` | 从当前 MainWindow 的原生清单投影标签页，并在 Toolkit 内适配私有 Tab API；合并原生 `_update` 与 `Notifier` 的 `item`/`tab` 通知。只在受支持布局中将侧栏放在整个 `#appcontent` 外侧，并以可逆租约移动原生工具栏；不重挂内容 deck 或 Reader/PDF iframe。 |
 | Main tree 焦点、ScopeSet 与行 Cursor | `src/toolkit/main/tree.ts`、`host.ts` | 保留原生 Scope 选择与仅焦点的条目行操作；generation 令牌隔离替换或尚未稳定的行视图回调。 |
 | 分类身份、条目搜索与 Scope 选择 | `src/toolkit/main/collections.ts` | 提供稳定分类 ID、路径与库可写性；先限制原生搜索 ID 数量再加载候选；等待 `onCollectionSelected()` 和 Main 条目视图加载，并核对已选及已渲染 Scope ID 后才报告完成。 |
 | 分类事务回调屏障 | `src/toolkit/main/collection-transactions.ts` | 只在进入的事务体内捕获回调，按实际所属 ID 分发一次。局部观察原生 10.0.6 在 SQL 提交后的 `_commitCount` 增量，在共享回调执行前确认该事务结果，区分 SQL 回滚与提交后回调失败。仅恢复自有临时 registrar/counter descriptor，保留外部替换，不清空共享队列，也不安装宿主常驻 patch。 |
@@ -266,7 +275,6 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 写入按目标文件串行，先写唯一暂存文件，再次检查精确调用寿命及 PDF 来源，最后原子替换；取消、失效或写入失败保留旧结果。临时文件由写入调用清理，已开始的最终替换不因后续界面关闭而撤销。仅投影保存 `ParsedDocument` 的已知字段，不保存凭据、原始响应或派生 `objectGroups`；读取后复用 `analyzeParsedDocument()` 按当前算法关联图表。原生 SDT 缓存仍由 Zotero 单独管理，不重复保存或改写其来源元数据。当前外部缓存覆盖 OXR 与 MinerU 官方云端，`sourceObject` 显式成员关系随区域保留；PDF 内嵌缓存和跨设备同步不在本实现范围。
 
 后续阶段后端应继续消费这些显式产物及来源坐标；不通过修改全局 SDT 缓存或伪造 textMap 接入原生 Reading Mode。当前尚未实现外部结构替换、跨后端布局／识别阶段编排和跨页图表关联。
-
 
 `analyze.ts` 在完整解析后执行共享图表关联；协议适配器不各自复制分组算法。`object-groups.ts` 只消费 `DocumentRegion`，产出 caption 身份、成员 ID 和 `backend`／`geometry`／`caption-only`／`ambiguous` 状态。`sourceBlock` 保留一个原生块的多个矩形及源顺序；无效原生块留下的顺序缺口不能被跨越。轻量侧栏与结构跳转通过 `nativeDocumentRegions()` 使用同一归一化和关联步骤，不额外读取完整解析元数据。
 
