@@ -200,9 +200,11 @@ const ResultCard = React.memo(function ResultCard({
                 </p>
               );
             }
+            const precision = evidence.precision === 'text' ? labels.textRange : labels.pageRegion;
             return (
               <div className="neo-ai-qa-guide" key={`${entry.evidenceID}:${index}`}>
                 <strong>{evidence.title}</strong>
+                <p className="neo-ai-qa-muted">{precision}</p>
                 <p className="neo-ai-qa-output">{evidence.text}</p>
                 <p>{entry.reason}</p>
               </div>
@@ -213,24 +215,27 @@ const ResultCard = React.memo(function ResultCard({
       <div className="neo-ai-qa-chips" aria-label={labels.source}>
         {record.evidence.map((evidence) => {
           const isActive = activeEvidenceID === evidence.id;
+          const precision = evidence.precision === 'text' ? labels.textRange : labels.pageRegion;
           const title = evidence.pageLabel
             ? `${evidence.title} · ${evidence.pageLabel}`
             : evidence.title;
+          const sourceLabel = `${title || labels.source} · ${precision}`;
           return (
             <React.Fragment key={evidence.id}>
               <button
                 className="neo-ai-qa-chip"
                 type="button"
-                aria-label={`${labels.preview}: ${title}`}
+                aria-label={`${labels.preview}: ${sourceLabel}`}
+                title={sourceLabel}
                 aria-pressed={isActive}
                 onClick={() => onPreview(record.id, evidence.id)}
               >
-                {title || labels.source}
+                {sourceLabel}
               </button>
               <button
                 type="button"
                 disabled={previewEvidenceID !== evidence.id || !canJump(sourceCurrent, evidence)}
-                aria-label={`${labels.jump}: ${title}`}
+                aria-label={`${labels.jump}: ${sourceLabel}`}
                 onClick={() => onJump(record.id, evidence.id)}
               >
                 {labels.jump}
@@ -239,6 +244,8 @@ const ResultCard = React.memo(function ResultCard({
           );
         })}
       </div>
+      {record.evidence.length > 0 && <p className="neo-ai-qa-muted">{labels.sourceNotice}</p>}
+
       {editing ? (
         <form
           className="neo-ai-qa-form"
@@ -341,6 +348,17 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): React.ReactElement {
           ({ record, evidence }) =>
             record.id === cursor.resultID && evidence.id === cursor.evidenceID,
         ) ?? null);
+  const previewEvidence =
+    model.preview === null
+      ? null
+      : (entries.find(({ record, evidence }) => model.preview?.id === `${record.id}/${evidence.id}`)
+          ?.evidence ?? null);
+  const previewPrecision =
+    previewEvidence === null
+      ? null
+      : previewEvidence.precision === 'text'
+        ? labels.textRange
+        : labels.pageRegion;
   const busy =
     model.task.phase === 'preparing' ||
     model.task.phase === 'requesting' ||
@@ -777,8 +795,16 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): React.ReactElement {
       </section>
 
       {model.preview && (
-        <aside className="neo-ai-qa-preview" aria-label={labels.preview}>
+        <aside
+          className="neo-ai-qa-preview"
+          aria-label={
+            previewPrecision === null
+              ? labels.preview
+              : `${labels.preview}: ${model.preview.title || labels.preview} · ${previewPrecision}`
+          }
+        >
           <h3>{model.preview.title || labels.preview}</h3>
+          {previewPrecision !== null && <p className="neo-ai-qa-muted">{previewPrecision}</p>}
           <p className="neo-ai-qa-output">{model.preview.text}</p>
           {previewImage && <img src={previewImage} alt={model.preview.title || labels.preview} />}
         </aside>
