@@ -10,14 +10,15 @@
     "dev:start": "npm run build && node tools/dev-gui.mjs start",
     "dev:setup": "npm run build && node tools/dev-gui.mjs setup",
     "dev:status": "node tools/dev-gui.mjs status",
-    "format": "prettier --write src tests tools/*.mjs *.json *.ts \".vitepress/**/*.{ts,vue,css}\"",
-    "format:check": "prettier --check src tests tools/*.mjs *.json *.ts \".vitepress/**/*.{ts,vue,css}\"",
+    "format": "prettier --write src tests tools/*.mjs *.json *.ts \".vitepress/**/*.{ts,vue,css}\" \"prototypes/reading-assistant/**/*.{js,css,html,json}\"",
+    "format:check": "prettier --check src tests tools/*.mjs *.json *.ts \".vitepress/**/*.{ts,vue,css}\" \"prototypes/reading-assistant/**/*.{js,css,html,json}\"",
     "docs:dev": "vitepress dev .",
     "docs:build": "vitepress build .",
     "docs:preview": "vitepress preview .",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false",
     "test": "vitest run",
-    "verify": "node tools/verify.mjs"
+    "verify": "node tools/verify.mjs",
+    "prototype:reader": "node tools/preview-reader-assistant.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
