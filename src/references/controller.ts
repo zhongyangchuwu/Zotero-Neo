@@ -30,6 +30,9 @@ import { normalizeArxiv, normalizeDOI } from './identifiers';
 import { CleanupScope } from '../core/cleanup';
 import { THEME_VARS } from '../ui/theme';
 import { compositionOwnsKey } from '../input/composition';
+import { mountNativeReactView } from '../platform/native-ui';
+import type { ReferenceCommand, ReferenceRow, ReferenceViewModel } from './react-model';
+import type { NativeReactView } from '../ui/react/types';
 
 const H = 'http://www.w3.org/1999/xhtml';
 type ReferenceIntent = 'actions' | 'mentions' | 'local' | 'metadata' | 'catalog';
@@ -263,16 +266,13 @@ export class ReferenceController {
     root.setAttribute('aria-label', text('References', '引用'));
     root.style.cssText = `position:fixed;z-index:2147483645;left:20px;top:50px;width:420px;max-width:calc(100vw - 24px);max-height:65vh;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:12px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:6px;font:menu`;
     root.tabIndex = -1;
-    const status = element('p', text('Loading references…', '正在加载参考文献…'));
-    status.setAttribute('role', 'status');
-    const body = element('div');
-    const closeButton = element('button', text('Close', '关闭'));
-    closeButton.type = 'button';
-    root.append(closeButton, status, body);
+    const content = element('div');
+    root.append(content);
     const cleanup = new CleanupScope();
     cleanup.add(this.port.themeRoot(root));
     cleanup.add(() => root.remove());
     doc.documentElement.append(root);
+    // The React view is disposed by the cleanup scope before its connected host is removed.
     let live = true;
     let composing = false;
     let revision = 0;
@@ -282,6 +282,7 @@ export class ReferenceController {
     let selected: ReaderReferenceEntry | null = null;
     let paper: ScholarlyPaper | null = null;
     const mainWindow = readerMainWindow(this.port.reader);
+    let view: NativeReactView<ReferenceViewModel> | null = null;
     const opening = mainWindow ? mainItemOpening(mainWindow) : null;
     const attachment = this.port.reader.itemID ? Zotero.Items.get(this.port.reader.itemID) : false;
     const libraryID = attachment ? attachment.libraryID : null;
@@ -345,7 +346,7 @@ export class ReferenceController {
     this.#window = access.window;
     this.#root = root;
     this.#close = () => close();
-    closeButton.addEventListener('click', () => close(true));
+    cleanup.add(() => view?.dispose());
     cleanup.addEventListener(doc, 'pointerdown', outside, true);
     if (sourceDocument !== doc)
       cleanup.addEventListener(sourceDocument, 'pointerdown', outside, true);
@@ -408,455 +409,123 @@ export class ReferenceController {
         );
       return value;
     };
-    const button = (parent: HTMLElement, label: string, run: () => void): HTMLButtonElement => {
-      const node = element('button', label);
-      node.type = 'button';
-      node.style.cssText = `box-sizing:border-box;white-space:normal;margin:4px 6px 0 0;padding:4px 6px;border:1px solid ${THEME_VARS.border};border-radius:4px;text-align:left;cursor:pointer`;
-      node.addEventListener('click', () => {
-        if (node.isConnected && current()) run();
-      });
-      parent.append(node);
-      return node;
-    };
-    const go = (render: () => void): void => {
-      const ownsFocus = body.contains(doc.activeElement);
-      stop();
-      status.textContent = '';
-      body.replaceChildren();
-      if (ownsFocus) root.focus();
-      render();
-      place();
+    let model: ReferenceViewModel = { generation: 0, chinese: this.port.language() === 'zh-CN', scene: 'loading', status: text('Loading references…', '正在加载参考文献…'), title: '', description: '', query: '', rows: [], result: '', provenance: '', paper: null, hasTarget: false, doi: false, arxiv: false };
+    let matches: readonly ReferenceLocalMatch[] = [];
+    let candidates: readonly ScholarlyPaper[] = [];
+    let choices: readonly ReaderReferenceEntry[] = [];
+    let initialQuery: ReferenceQuery | null = null;
+    let displayedQuery: string | null = null;
+    let displayedProvenance = '';
+    const update = (changes: Partial<ReferenceViewModel>): void => { model = { ...model, ...changes, generation: model.generation + 1 }; view?.update(model); place(); };
+    const setStatus = (status: string): void => update({ status });
+    const go = (scene: ReferenceViewModel['scene'], changes: Partial<ReferenceViewModel>): void => {
+      const ownsFocus = content.contains(doc.activeElement); stop(); if (ownsFocus) root.focus();
+      update({ scene, status: '', title: '', description: '', query: '', rows: [], result: '', provenance: '', paper: null, hasTarget: false, doi: false, arxiv: false, ...changes });
     };
     const jump = (location: ReaderReferenceLocation): void => {
       const token = revision;
-      void validated()
-        .then((valid) => {
-          if (!valid || revision !== token) return;
-          if (access.jump(location)) close(true);
-          else
-            status.textContent = text(
-              'Navigation unavailable for this location.',
-              '无法跳转到此位置。',
-            );
-        })
-        .catch((error: unknown) => {
-          if (current() && revision === token) status.textContent = message(error);
-        });
+      void validated().then((valid) => { if (!valid || revision !== token) return; if (access.jump(location)) close(true); else setStatus(text('Navigation unavailable for this location.', '无法跳转到此位置。')); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); });
     };
     const safeOpen = (url: string): void => {
       const token = revision;
-      void validated()
-        .then((valid) => {
-          if (!valid || revision !== token) return;
-          const URLConstructor = (uiWindow as Window & typeof globalThis).URL;
-          const parsed = new URLConstructor(url);
-          if (!['https:', 'http:'].includes(parsed.protocol) || !launchMainURL(parsed.href))
-            throw new Error('URL navigation unavailable');
-        })
-        .catch((error: unknown) => {
-          if (current() && revision === token) status.textContent = message(error);
-        });
+      void validated().then((valid) => { if (!valid || revision !== token) return; const URLConstructor = (uiWindow as Window & typeof globalThis).URL; const parsed = new URLConstructor(url); if (!['https:', 'http:'].includes(parsed.protocol) || !launchMainURL(parsed.href)) throw new Error('URL navigation unavailable'); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); });
     };
-    const queryFor = (entry: ReaderReferenceEntry): ReferenceQuery => ({
-      text: entry.text,
-      ...(entry.doi ? { doi: entry.doi } : {}),
-      ...(entry.arxivID ? { arxivID: entry.arxivID } : {}),
-    });
-    const queryFromInput = (value: string): ReferenceQuery => {
-      const text = value.trim();
-      const doi = normalizeDOI(text);
-      const arxivID = normalizeArxiv(text);
-      return { text, ...(doi ? { doi } : {}), ...(arxivID ? { arxivID } : {}) };
+    const queryFor = (entry: ReaderReferenceEntry): ReferenceQuery => ({ text: entry.text, ...(entry.doi ? { doi: entry.doi } : {}), ...(entry.arxivID ? { arxivID: entry.arxivID } : {}) });
+    const queryFromInput = (value: string): ReferenceQuery => { const text = value.trim(); const doi = normalizeDOI(text); const arxivID = normalizeArxiv(text); return { text, ...(doi ? { doi } : {}), ...(arxivID ? { arxivID } : {}) }; };
+    const catalogRows = (query: string): readonly ReferenceRow[] => { const term = query.trim().toLocaleLowerCase(); return (data?.entries ?? []).filter((entry) => !term || `${entry.label} ${entry.text}`.toLocaleLowerCase().includes(term)).map((entry) => ({ id: entry.id, label: `${entry.label} ${entry.text}` })); };
+    const catalogScene = (): void => {
+      const rows = catalogRows(''); go('catalog', { title: text('Bibliography', '参考文献'), rows, result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。'), status: data?.bibliographyCoverage === 'partial' ? text('Bibliography is partial; other entries may be missing.', '参考文献列表不完整，可能仍有遗漏。') : '' });
+      if (doc.activeElement === root) view?.getElement('query')?.focus();
     };
-    const catalogScene = (): void =>
-      go(() => {
-        body.append(element('h3', text('Bibliography', '参考文献')));
-        const search = element('input');
-        search.type = 'search';
-        search.placeholder = text('Filter bibliography', '筛选参考文献');
-        search.setAttribute('aria-label', search.placeholder);
-        const list = element('div');
-        body.append(search, list);
-        const render = (): void => {
-          list.replaceChildren();
-          const term = search.value.trim().toLocaleLowerCase();
-          for (const entry of data?.entries ?? [])
-            if (!term || `${entry.label} ${entry.text}`.toLocaleLowerCase().includes(term)) {
-              const row = button(list, `${entry.label} ${entry.text}`, () => {
-                selected = entry;
-                paper = null;
-                targetScene();
-              });
-              row.style.display = 'block';
-              row.style.width = '100%';
-            }
-          if (!list.children.length)
-            list.append(element('p', text('No matching references.', '没有匹配的参考文献。')));
-        };
-        search.addEventListener('input', (event) => {
-          if (!composing && !(event as InputEvent).isComposing) render();
-        });
-        search.addEventListener('compositionend', render);
-        render();
-        if (doc.activeElement === root) search.focus();
-        if (data?.bibliographyCoverage === 'partial')
-          status.textContent = text(
-            'Bibliography is partial; other entries may be missing.',
-            '参考文献列表不完整，可能仍有遗漏。',
-          );
-      });
-    const targetScene = (): void =>
-      go(() => {
-        if (!selected) {
-          body.append(
-            element(
-              'p',
-              text('No reference identified at this position.', '此位置未识别到参考文献。'),
-            ),
-          );
-          button(body, text('Search bibliography', '搜索参考文献'), catalogScene);
-          return;
+    const targetScene = (): void => { go('target', selected ? { hasTarget: true, title: selected.label, description: selected.text, doi: !!selected.doi, arxiv: !!selected.arxivID } : { description: text('No reference identified at this position.', '此位置未识别到参考文献。') }); };
+    const mentionsScene = (): void => {
+      const occurrences = data?.occurrences.filter((item) => selected && item.referenceIDs.includes(selected.id)) ?? [];
+      go('mentions', { title: text(`Recognized local mentions (${occurrences.length})`, `已识别的本地引用位置（${occurrences.length}）`), description: selected?.text ?? '', rows: occurrences.map((item, index) => ({ id: String(index), label: `${text('Page', '第')} ${item.location.pageIndex + 1}: ${item.context || item.text}` })), result: occurrences.length ? '' : text('No local mentions were recognized; this does not establish that the reference is uncited.', '未识别到本地引用位置；这并不代表该文献未被引用。') });
+    };
+    const localSearch = (): void => {
+      stop(); const submitted = initialQuery && model.query === initialQuery.text ? initialQuery : queryFromInput(model.query);
+      if (!submitted.text) { update({ rows: [], result: text('Enter a title, DOI or arXiv ID.', '请输入标题、DOI 或 arXiv ID。') }); return; }
+      if (libraryID === null) { update({ rows: [], result: text('Library unavailable.', '文库不可用。') }); return; }
+      const token = revision; update({ rows: [], result: text('Searching…', '正在查找…') });
+      void validated().then((valid) => valid && revision === token ? findReferenceItems(submitted, libraryID) : null).then(async (value) => {
+        if (!value || revision !== token || !(await validated()) || revision !== token) return;
+        matches = value; update({ rows: value.map((match, index) => ({ id: String(index), label: `${match.title}${match.attachmentID ? ' (PDF)' : ''}` })), result: value.length ? '' : text('No local matches.', '没有本地匹配。') });
+      }).catch((error: unknown) => { if (current() && revision === token) update({ result: message(error) }); });
+    };
+    const localScene = (): void => {
+      if (!selected) return; initialQuery = paper ? { text: paper.title, ...(paper.doi ? { doi: paper.doi } : {}), ...(paper.arxivID ? { arxivID: paper.arxivID } : {}) } : queryFor(selected);
+      go('local', { title: text('Local library candidates', '本地文库候选'), query: initialQuery.text }); localSearch(); if (doc.activeElement === root) view?.getElement('query')?.focus();
+    };
+    const showPaper = (value: ScholarlyPaper): void => { const ownsFocus = !!view?.getElement('result')?.contains(doc.activeElement); stop(); paper = value; update({ paper: value, rows: [], result: '' }); if (ownsFocus) view?.getElement('result')?.focus(); };
+    const metadataSearch = (mode?: 'cache-only' | 'refresh'): void => {
+      stop(); const token = revision; const submitted = initialQuery && model.query === initialQuery.text ? initialQuery : queryFromInput(model.query); const queryKey = JSON.stringify(submitted); const preserve = mode === 'refresh' && displayedQuery === queryKey; const previousProvenance = displayedProvenance;
+      if (!preserve) { paper = null; displayedQuery = null; displayedProvenance = ''; update({ paper: null, rows: [], provenance: '', status: '' }); }
+      if (!submitted.text) { update({ result: text('Enter a title, DOI or arXiv ID.', '请输入标题、DOI 或 arXiv ID。') }); return; }
+      const controller = createReferenceAbortController(); abort = controller;
+      update(preserve ? { status: text('Refreshing metadata…', '正在刷新元数据…') } : { result: mode === 'cache-only' ? text('Checking cache…', '正在检查缓存…') : text('Querying…', '正在查询…') });
+      void validated().then((valid) => valid && revision === token ? this.#metadata.lookup(submitted, controller.signal, mode) : null).then(async (value) => {
+        if (!value || revision !== token || !(await validated()) || revision !== token) return;
+        const info = value.cache; const origin = info ? `${info.origin === 'cached' ? text('Cached', '缓存') : text('Fetched', '已获取')}${info.stale ? ` · ${text('Stale', '已过期')}` : ''}` : ''; const provenance = `${origin}${info?.warning ? ` · ${info.warning}` : ''}`;
+        if (preserve && info?.origin === 'cached' && info.warning) { displayedProvenance = origin; update({ provenance, status: info.warning }); return; }
+        displayedQuery = value.kind === 'not-found' ? null : queryKey; displayedProvenance = origin;
+        if (value.kind === 'found') { update({ provenance, status: '' }); showPaper(value.paper); }
+        else if (value.kind === 'not-found') update({ provenance, status: '', rows: [], result: mode === 'cache-only' ? text('No cached metadata. Search to fetch it.', '没有缓存的元数据。请搜索以获取。') : text('No metadata found.', '未找到元数据。') });
+        else { candidates = value.papers; update({ provenance, status: '', result: text('Choose a matching record:', '请选择匹配的记录：'), rows: candidates.map((candidate, index) => ({ id: String(index), label: `${candidate.title} — ${candidate.authors.join(', ')} ${candidate.year ?? ''}` })) }); }
+      }).catch((error: unknown) => { if (!current() || revision !== token) return; if (preserve) update({ provenance: [previousProvenance, text('Refresh failed; showing previous result', '刷新失败，显示原有结果')].filter(Boolean).join(' · '), status: message(error) }); else update({ result: message(error) }); });
+    };
+    const metadataScene = (): void => { if (!selected) return; initialQuery = queryFor(selected); displayedQuery = null; displayedProvenance = ''; go('metadata', { title: text('Scholarly metadata', '学术元数据'), query: selected.text }); metadataSearch('cache-only'); if (doc.activeElement === root) view?.getElement('query')?.focus(); };
+    const dispatch = (command: ReferenceCommand): void => {
+      if (!current() || !command || typeof command !== 'object' || command.generation !== model.generation) return;
+      if (composing && (command.type === 'local-search' || command.type === 'metadata-search')) return;
+      switch (command.type) {
+        case 'close': close(true); break;
+        case 'catalog': if (model.scene === 'target' || model.scene === 'choose') catalogScene(); break;
+        case 'back': if (model.scene === 'mentions' || model.scene === 'local' || model.scene === 'metadata') targetScene(); break;
+        case 'mentions': if (model.scene === 'target' && selected) mentionsScene(); break;
+        case 'local': if (model.scene === 'target' && selected) localScene(); break;
+        case 'metadata': if (model.scene === 'target' && selected) metadataScene(); break;
+        case 'query': {
+          if (typeof command.value !== 'string') break;
+          if (model.scene === 'catalog') { const rows = catalogRows(command.value); update({ query: command.value, rows, result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。') }); }
+          else if (model.scene === 'local' || model.scene === 'metadata') { stop(); if (model.scene === 'metadata') { paper = null; displayedQuery = null; displayedProvenance = ''; } update({ query: command.value, rows: [], result: '', provenance: '', paper: null }); } break;
         }
-        const entry = selected;
-        body.append(element('h3', entry.label), element('p', entry.text));
-        button(body, text('Jump to bibliography', '跳转到参考文献'), () => jump(entry.location));
-        button(body, text('Recognized local mentions', '已识别的本地引用位置'), mentionsScene);
-        button(body, text('Find local matches', '查找本地匹配'), localScene);
-        button(body, text('Paper details', '论文详情'), metadataScene);
-        if (entry.doi)
-          button(body, text('Open DOI', '打开 DOI'), () =>
-            safeOpen(`https://doi.org/${entry.doi}`),
-          );
-        if (entry.arxivID)
-          button(body, text('Open arXiv', '打开 arXiv'), () =>
-            safeOpen(`https://arxiv.org/abs/${entry.arxivID}`),
-          );
-        button(body, text('Search web', '网页搜索'), () =>
-          safeOpen(`https://scholar.google.com/scholar?q=${encodeURIComponent(entry.text)}`),
-        );
-        button(body, text('Search bibliography', '搜索参考文献'), catalogScene);
-      });
-    const mentionsScene = (): void =>
-      go(() => {
-        const occurrences =
-          data?.occurrences.filter((item) => selected && item.referenceIDs.includes(selected.id)) ??
-          [];
-        body.append(
-          element(
-            'h3',
-            text(
-              `Recognized local mentions (${occurrences.length})`,
-              `已识别的本地引用位置（${occurrences.length}）`,
-            ),
-          ),
-        );
-        if (selected) body.append(element('p', selected.text));
-        if (!occurrences.length)
-          body.append(
-            element(
-              'p',
-              text(
-                'No local mentions were recognized; this does not establish that the reference is uncited.',
-                '未识别到本地引用位置；这并不代表该文献未被引用。',
-              ),
-            ),
-          );
-        for (const occurrence of occurrences)
-          button(
-            body,
-            `${text('Page', '第')} ${occurrence.location.pageIndex + 1}: ${occurrence.context || occurrence.text}`,
-            () => jump(occurrence.location),
-          );
-        button(body, text('Back', '返回'), targetScene);
-      });
-    const openMatch = (match: ReferenceLocalMatch): void => {
-      if (!match.attachmentID || !opening?.viewAttachment) {
-        status.textContent = text('No local PDF available.', '没有可用的本地 PDF。');
-        return;
+        case 'select': {
+          const entry = (model.scene === 'choose' ? choices : model.scene === 'catalog' ? data?.entries ?? [] : []).find((item) => item.id === command.id && model.rows.some((row) => row.id === command.id));
+          if (entry) { selected = entry; paper = null; if (model.scene === 'choose') presentTarget(); else targetScene(); } break;
+        }
+        case 'jump': if (model.scene === 'target' && selected) jump(selected.location); break;
+        case 'occurrence': { if (model.scene !== 'mentions' || !model.rows.some((row) => row.id === command.id)) break; const occurrence = data?.occurrences.filter((item) => selected && item.referenceIDs.includes(selected.id))[Number(command.id)]; if (occurrence) jump(occurrence.location); break; }
+        case 'doi': if (model.scene === 'target' && selected?.doi) safeOpen(`https://doi.org/${selected.doi}`); break;
+        case 'arxiv': if (model.scene === 'target' && selected?.arxivID) safeOpen(`https://arxiv.org/abs/${selected.arxivID}`); break;
+        case 'web': if (model.scene === 'target' && selected) safeOpen(`https://scholar.google.com/scholar?q=${encodeURIComponent(selected.text)}`); break;
+        case 'local-search': if (model.scene === 'local') localSearch(); break;
+        case 'match': {
+          if (model.scene !== 'local' || !model.rows.some((row) => row.id === command.id)) break; const match = matches[Number(command.id)];
+          if (!match?.attachmentID || !opening?.viewAttachment) { setStatus(text('No local PDF available.', '没有可用的本地 PDF。')); break; }
+          const attachmentID = match.attachmentID; const viewAttachment = opening.viewAttachment; const token = revision;
+          void validated().then((valid) => valid && revision === token ? viewAttachment(attachmentID) : undefined).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); }); break;
+        }
+        case 'metadata-search': if (model.scene === 'metadata') metadataSearch(); break;
+        case 'metadata-refresh': if (model.scene === 'metadata') metadataSearch('refresh'); break;
+        case 'metadata-clear': {
+          if (model.scene !== 'metadata') break; stop(); const token = revision;
+          void this.#metadata.clearCache().then(() => { if (!current() || revision !== token) return; paper = null; displayedQuery = null; displayedProvenance = ''; update({ paper: null, rows: [], provenance: '', result: text('Metadata cache cleared.', '元数据缓存已清除。') }); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); }); break;
+        }
+        case 'candidate': {
+          if (model.scene !== 'metadata' || !model.rows.some((row) => row.id === command.id)) break; const candidate = candidates[Number(command.id)]; if (!candidate) break; stop(); const token = revision;
+          void validated().then((valid) => { if (valid && revision === token) showPaper(candidate); }).catch((error: unknown) => { if (current() && revision === token) update({ result: message(error) }); }); break;
+        }
+        case 'source': if (model.scene === 'metadata' && paper?.url) safeOpen(paper.url); break;
+        case 'pdf': if (model.scene === 'metadata' && paper?.pdfURL) safeOpen(paper.pdfURL); break;
+        case 'add': {
+          if (model.scene !== 'metadata' || !paper) break; if (libraryID === null) { setStatus(text('Library unavailable.', '文库不可用。')); break; }
+          const value = paper; const token = revision; setStatus(text('Adding…', '正在添加…'));
+          void addReferencePaper(value, libraryID, async () => (await validated()) && revision === token).then(async (match) => { if (revision === token && (await validated()) && revision === token) setStatus(`${text('Available in Zotero', '已在 Zotero 中可用')}: ${match.title}`); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); }); break;
+        }
       }
-      const viewAttachment = opening.viewAttachment;
-      const token = revision;
-      void validated()
-        .then((valid) =>
-          valid && revision === token ? viewAttachment(match.attachmentID!) : undefined,
-        )
-        .catch((error: unknown) => {
-          if (current() && revision === token) status.textContent = message(error);
-        });
     };
-    const localScene = (): void =>
-      go(() => {
-        if (!selected) return;
-        body.append(element('h3', text('Local library candidates', '本地文库候选')));
-        const initial = paper
-          ? {
-              text: paper.title,
-              ...(paper.doi ? { doi: paper.doi } : {}),
-              ...(paper.arxivID ? { arxivID: paper.arxivID } : {}),
-            }
-          : queryFor(selected);
-        const input = element('input');
-        input.type = 'search';
-        input.value = initial.text;
-        input.setAttribute(
-          'aria-label',
-          text('Local title, DOI or arXiv ID', '本地标题、DOI 或 arXiv ID'),
-        );
-        body.append(input);
-        const results = element('div');
-        body.append(results);
-        const search = (): void => {
-          stop();
-          const submitted = input.value === initial.text ? initial : queryFromInput(input.value);
-          if (!submitted.text) {
-            results.textContent = text(
-              'Enter a title, DOI or arXiv ID.',
-              '请输入标题、DOI 或 arXiv ID。',
-            );
-            return;
-          }
-          if (libraryID === null) {
-            results.textContent = text('Library unavailable.', '文库不可用。');
-            return;
-          }
-          const token = revision;
-          results.textContent = text('Searching…', '正在查找…');
-          void validated()
-            .then((valid) =>
-              valid && revision === token ? findReferenceItems(submitted, libraryID) : null,
-            )
-            .then(async (matches) => {
-              if (!matches || revision !== token || !(await validated()) || revision !== token)
-                return;
-              results.replaceChildren();
-              if (!matches.length)
-                results.textContent = text('No local matches.', '没有本地匹配。');
-              for (const match of matches)
-                button(results, `${match.title}${match.attachmentID ? ' (PDF)' : ''}`, () =>
-                  openMatch(match),
-                );
-            })
-            .catch((error: unknown) => {
-              if (current() && revision === token) results.textContent = message(error);
-            });
-        };
-        button(body, text('Find in library', '在文库中查找'), search);
-        input.addEventListener('input', () => {
-          stop();
-          results.replaceChildren();
-        });
-        input.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter' && !compositionOwnsKey(event, composing)) {
-            event.preventDefault();
-            search();
-          }
-        });
-        button(body, text('Back', '返回'), targetScene);
-        search();
-        if (doc.activeElement === root) input.focus();
-      });
-    const metadataScene = (): void =>
-      go(() => {
-        if (!selected) return;
-        const entry = selected;
-        body.append(element('h3', text('Scholarly metadata', '学术元数据')));
-        const input = element('input');
-        input.type = 'search';
-        input.value = entry.text;
-        input.setAttribute('aria-label', text('Reference search query', '参考文献搜索词'));
-        body.append(input);
-        const result = element('div');
-        result.tabIndex = -1;
-        body.append(result);
-        const provenance = element('p');
-        body.insertBefore(provenance, result);
-        let displayedQuery: string | null = null;
-        let displayedProvenance = '';
-        const showPaper = (value: ScholarlyPaper): void => {
-          const ownsFocus = result.contains(doc.activeElement);
-          stop();
-          paper = value;
-          result.replaceChildren();
-          result.append(
-            element(
-              'p',
-              `${value.title} — ${value.authors.join(', ')}${value.year ? ` (${value.year})` : ''}`,
-            ),
-            element('p', `${value.source} · ${value.retrievedAt}`),
-            element('p', `${text('Publication', '出版信息')}: ${value.venue ?? '—'}`),
-            element('p', `DOI: ${value.doi ?? '—'} · arXiv: ${value.arxivID ?? '—'}`),
-            element(
-              'p',
-              `${text('API references', 'API 参考文献数')}: ${value.referenceCount ?? '—'} · ${text('API citations', 'API 引用数')}: ${value.citationCount ?? '—'}`,
-            ),
-            element('h4', text('Original abstract', '原始摘要')),
-            element(
-              'p',
-              value.abstract || text('No abstract provided by source.', '来源未提供摘要。'),
-            ),
-          );
-          if (value.url)
-            button(result, text('Open source', '打开来源'), () => safeOpen(value.url!));
-          if (value.pdfURL)
-            button(result, text('Open source PDF', '打开来源 PDF'), () => safeOpen(value.pdfURL!));
-          button(result, text('Add to Zotero', '添加到 Zotero'), () => {
-            if (libraryID === null) {
-              status.textContent = text('Library unavailable.', '文库不可用。');
-              return;
-            }
-            const token = revision;
-            status.textContent = text('Adding…', '正在添加…');
-            void addReferencePaper(
-              value,
-              libraryID,
-              async () => (await validated()) && revision === token,
-            )
-              .then(async (match) => {
-                if (revision === token && (await validated()) && revision === token)
-                  status.textContent = `${text('Available in Zotero', '已在 Zotero 中可用')}: ${match.title}`;
-              })
-              .catch((error: unknown) => {
-                if (current() && revision === token) status.textContent = message(error);
-              });
-          });
-          if (ownsFocus) result.focus();
-          place();
-        };
-        const search = (mode?: 'cache-only' | 'refresh'): void => {
-          stop();
-          const token = revision;
-          const submitted =
-            input.value === entry.text ? queryFor(entry) : queryFromInput(input.value);
-          const queryKey = JSON.stringify(submitted);
-          const preserveDisplayed = mode === 'refresh' && displayedQuery === queryKey;
-          const previousProvenance = displayedProvenance;
-          if (!preserveDisplayed) {
-            paper = null;
-            displayedQuery = null;
-            displayedProvenance = '';
-            provenance.textContent = '';
-            status.textContent = '';
-          }
-          if (!submitted.text) {
-            result.textContent = text(
-              'Enter a title, DOI or arXiv ID.',
-              '请输入标题、DOI 或 arXiv ID。',
-            );
-            return;
-          }
-          const controller = createReferenceAbortController();
-          abort = controller;
-          if (preserveDisplayed)
-            status.textContent = text('Refreshing metadata…', '正在刷新元数据…');
-          else
-            result.textContent =
-              mode === 'cache-only'
-                ? text('Checking cache…', '正在检查缓存…')
-                : text('Querying…', '正在查询…');
-          void validated()
-            .then((valid) =>
-              valid && revision === token
-                ? this.#metadata.lookup(submitted, controller.signal, mode)
-                : null,
-            )
-            .then(async (value) => {
-              if (!value || revision !== token || !(await validated()) || revision !== token)
-                return;
-              const info = value.cache;
-              const origin = info
-                ? `${info.origin === 'cached' ? text('Cached', '缓存') : text('Fetched', '已获取')}${info.stale ? ` · ${text('Stale', '已过期')}` : ''}`
-                : '';
-              provenance.textContent = `${origin}${info?.warning ? ` · ${info.warning}` : ''}`;
-              if (preserveDisplayed && info?.origin === 'cached' && info.warning) {
-                displayedProvenance = origin;
-                status.textContent = info.warning;
-                return;
-              }
-              displayedQuery = value.kind === 'not-found' ? null : queryKey;
-              displayedProvenance = origin;
-              status.textContent = '';
-              result.replaceChildren();
-              if (value.kind === 'found') showPaper(value.paper);
-              else if (value.kind === 'not-found')
-                result.textContent =
-                  mode === 'cache-only'
-                    ? text(
-                        'No cached metadata. Search to fetch it.',
-                        '没有缓存的元数据。请搜索以获取。',
-                      )
-                    : text('No metadata found.', '未找到元数据。');
-              else {
-                result.append(
-                  element('p', text('Choose a matching record:', '请选择匹配的记录：')),
-                );
-                for (const candidate of value.papers)
-                  button(
-                    result,
-                    `${candidate.title} — ${candidate.authors.join(', ')} ${candidate.year ?? ''}`,
-                    () => {
-                      stop();
-                      const token = revision;
-                      void validated()
-                        .then((valid) => {
-                          if (valid && revision === token) showPaper(candidate);
-                        })
-                        .catch((error: unknown) => {
-                          if (current() && revision === token) result.textContent = message(error);
-                        });
-                    },
-                  );
-              }
-            })
-            .catch((error: unknown) => {
-              if (!current() || revision !== token) return;
-              if (preserveDisplayed) {
-                provenance.textContent = [
-                  previousProvenance,
-                  text('Refresh failed; showing previous result', '刷新失败，显示原有结果'),
-                ]
-                  .filter(Boolean)
-                  .join(' · ');
-                status.textContent = message(error);
-              } else result.textContent = message(error);
-            });
-        };
-        button(body, text('Search metadata', '搜索元数据'), () => search());
-        button(body, text('Refresh metadata', '刷新元数据'), () => search('refresh'));
-        button(body, text('Clear metadata cache', '清除元数据缓存'), () => {
-          stop();
-          const token = revision;
-          void this.#metadata
-            .clearCache()
-            .then(() => {
-              if (!current() || revision !== token) return;
-              paper = null;
-              displayedQuery = null;
-              displayedProvenance = '';
-              provenance.textContent = '';
-              result.textContent = text('Metadata cache cleared.', '元数据缓存已清除。');
-            })
-            .catch((error: unknown) => {
-              if (current() && revision === token) status.textContent = message(error);
-            });
-        });
-        input.addEventListener('input', () => {
-          stop();
-          paper = null;
-          displayedQuery = null;
-          displayedProvenance = '';
-          provenance.textContent = '';
-          result.replaceChildren();
-        });
-        input.addEventListener('keydown', (event) => {
-          if (event.key === 'Enter' && !compositionOwnsKey(event, composing)) {
-            event.preventDefault();
-            search();
-          }
-        });
-        button(body, text('Back', '返回'), targetScene);
-        search('cache-only');
-        if (doc.activeElement === root) input.focus();
-      });
+    view = mountNativeReactView({ surface: 'references', root: content, model, dispatch, isCurrent: current, loadingText: text('Loading references…', '正在加载参考文献…'), errorText: text('Reference view unavailable.', '引用视图不可用。'), onError: (error) => { if (current()) this.port.showStatus(message(error)); } });
+    void view.ready.then(() => { if (current() && doc.activeElement === root && (model.scene === 'catalog' || model.scene === 'local' || model.scene === 'metadata')) view?.getElement('query')?.focus(); }).catch(() => {});
     const presentTarget = (): void => {
       if (!selected) targetScene();
       else if (intent === 'mentions') mentionsScene();
@@ -891,19 +560,14 @@ export class ReferenceController {
           selected = candidates[0]!;
           presentTarget();
         } else if (candidates.length > 1)
-          go(() => {
-            body.append(element('p', text('Choose a reference:', '请选择参考文献：')));
-            for (const entry of candidates)
-              button(body, `${entry.label} ${entry.text}`, () => {
-                selected = entry;
-                presentTarget();
-              });
-            button(body, text('Search bibliography', '搜索参考文献'), catalogScene);
-          });
+          {
+            choices = candidates;
+            go('choose', { description: text('Choose a reference:', '请选择参考文献：'), rows: choices.map((entry) => ({ id: entry.id, label: `${entry.label} ${entry.text}` })) });
+          }
         else targetScene();
       })
       .catch((error: unknown) => {
-        if (current()) status.textContent = message(error);
+        if (current()) setStatus(message(error));
       });
   }
 }
