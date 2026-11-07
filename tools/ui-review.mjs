@@ -33,7 +33,11 @@ const server = createServer((request, response) => {
     response.writeHead(404).end('Not found');
     return;
   }
-  response.writeHead(200, { 'Content-Type': file[0], 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  response.writeHead(200, {
+    'Content-Type': file[0],
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff',
+  });
   response.end(file[1]);
 });
 server.listen(port, '127.0.0.1', () => console.log(`UI review ready: http://127.0.0.1:${port}/`));
