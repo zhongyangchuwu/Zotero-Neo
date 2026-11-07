@@ -44,6 +44,11 @@ npm run docs:preview
 
 仓库管理员需要将 Pages 构建来源设为 GitHub Actions。PR 只构建和检查站点，不发布；部署仅允许 `main`。文档站输出独立于 XPI 和插件运行时。
 
+### React UI 设计评审
+
+`npm run ui:review` 启动仅监听回环地址的离线设计工作台，`npm run ui:review:check` 检查其严格类型，并随 `typecheck`／`verify` 执行。设置中心、Picker、参考详情的交互样例、当前实机截图、浅深色方案和迁移边界见[仓库 UI 评审资料](https://github.com/zhongyangchuwu/Zotero-Neo/tree/main/assets/ui-review)。样例不调用 Zotero SDK 或网络服务，不代表生产界面已经迁移。
+
+
 ### 本地 Zotero GUI 迭代
 
 使用专用 Zotero 开发 profile，并将其数据目录与个人文献库分开。开发工具只选择 profile，不会自动隔离数据目录。
@@ -104,6 +109,9 @@ npm run dev:status
 ## 品牌与资源
 
 `assets/branding/` 保存仓库 artwork，`assets/package/` 提供静态 XPI 骨架、运行时图标、偏好页和 AI 问答工具窗文档。偏好页定义在 `assets/package/content/preferences/pane.xhtml`，AI 问答工具窗定义在 `assets/package/content/ai-qa-window.xhtml`，偏好行为由 `src/preferences/index.ts` 生成。品牌原始图不复制进 XPI；包内路径保持 `icons/*` 与 `content/preferences/*`。
+
+`assets/ui-review/` 保存开发评审用 React 源码、功能截图、捕获来源和架构记录；不复制进 XPI，也不作为 VitePress 页面构建。其运行与截图索引由该目录的 `README.md` 维护。
+
 
 ### 静态 AI 与 AI 问答界面 bundle
 
