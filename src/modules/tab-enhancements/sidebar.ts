@@ -292,6 +292,15 @@ export class TabEnhancementsSidebar {
   status(message: string): void {
     this.#status.textContent = message;
   }
+  restorePreview(group: TabSidebarGroup, start: () => void, cancel: () => void): void {
+    const count = (status: TabSidebarEntry['status']) => group.entries.filter((entry) => entry.status === status).length;
+    this.#status.textContent = `${this.#text('restorePreview')}: ${group.name}. ${this.#text('restoreClosed')}: ${count('closed')}; ${this.#text('restoreHere')}: ${count('open')}; ${this.#text('otherWindow')}: ${count('other-window')}; ${this.#text('missing')}: ${count('missing')}. `;
+    this.#status.append(this.#button(this.#text('restoreStart'), start), this.#button(this.#text('restoreCancel'), cancel));
+  }
+  restoreProgress(message: string, stop?: () => void): void {
+    this.#status.textContent = message;
+    if (stop) this.#status.append(this.#button(this.#text('restoreStop'), stop));
+  }
   dispose(): void {
     this.#closeContextMenu();
     this.root.ownerDocument.removeEventListener('mousedown', this.#dismissContextMenu, true);

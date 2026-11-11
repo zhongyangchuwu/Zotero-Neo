@@ -106,6 +106,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
   >();
   const admitted = new Map<string, { registration: Registration; nativeID: string }>();
   const memberEpoch = new Map<string, number>();
+  const restoring = new Set<Registration>();
 
   function notify(): void {
     for (const listener of [...listeners]) listener();
@@ -241,7 +242,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       kind: tab.kind,
     };
   }
-  function openMember(memberID: string, registration: Registration) {
+  function openMember(memberID: string, registration: Registration, allowed = () => true) {
     const existing = pending.get(memberID);
     if (existing) return existing;
     if (admitted.has(memberID)) return undefined;
@@ -251,6 +252,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
     const closeEpoch = registration.closedMembers.get(memberID) ?? 0;
     const isCurrent = () =>
       !disposed &&
+      allowed() &&
       registration.active &&
       hosts.get(registration.host.native.id) === registration &&
       (memberEpoch.get(memberID) ?? 0) === epoch &&
@@ -286,7 +288,23 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
     pending.set(memberID, admission);
     return admission;
   }
+  function prepareGroup(groupID: string, hostID: string) {
+    const registration = getHost(hostID);
+    const closeStart = registration.closedGroups.get(groupID) ?? 0;
+    const members = getGroup(groupID).members.map((member) => ({
+      id: member.id,
+      epoch: memberEpoch.get(member.id) ?? 0,
+      closeEpoch: registration.closedMembers.get(member.id) ?? 0,
+      closed: !live(member.id) && !admitted.has(member.id) && !pending.has(member.id) && !!registration.host.native.metadata(member.document),
+    }));
+    return {
+      groupID, hostID, members,
+      isCurrent: () => !disposed && registration.active && hosts.get(hostID) === registration &&
+        (registration.closedGroups.get(groupID) ?? 0) === closeStart && groups.some((group) => group.id === groupID),
+    };
+  }
   return {
+    prepareGroup,
     registerHost(host) {
       requireActive();
       if (hosts.has(host.native.id)) throw new Error(`Duplicate tab host: ${host.native.id}`);
@@ -355,6 +373,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
                 open.registration === registration ? 'open' : 'other-window',
                 titleFormat,
               );
+            const accepted = admitted.get(member.id);
             const fields = registration.host.native.metadata(member.document);
             const display =
               fields && !fields.nativeTitle ? { ...fields, nativeTitle: member.title } : fields;
@@ -362,7 +381,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
               id: member.id,
               title: display ? formatTabTitle(titleFormat, display) : member.title,
               nativeTitle: display?.nativeTitle ?? member.title,
-              status: fields ? ('closed' as const) : ('missing' as const),
+              status: accepted ? (accepted.registration === registration ? 'open' as const : 'other-window' as const) : fields ? ('closed' as const) : ('missing' as const),
               selected: false,
               kind: member.document.kind,
             };
@@ -459,6 +478,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         },
         { registration, apply: (draft) => reorderNative(registration, draft) },
       );
+      if (existing && existing.group.id !== groupID) invalidate(memberID);
     },
     removeMember(memberID, hostID) {
       const registration = getHost(hostID);
@@ -495,6 +515,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
           },
           { registration, apply: (draft) => reorderNative(registration, draft) },
         );
+        if (existing && existing.group.id !== groupID) invalidate(memberID);
       } else {
         const tab = registration.host.native
           .snapshot()
@@ -534,6 +555,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
     },
     ungroup(groupID, hostID) {
       const registration = getHost(hostID);
+      const members = getGroup(groupID).members.map((member) => member.id);
       commit(
         (draft) => {
           const group = getGroup(groupID, draft);
@@ -541,6 +563,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         },
         { registration, apply: (draft) => reorderNative(registration, draft) },
       );
+      for (const memberID of members) invalidate(memberID);
     },
     async activate(memberID, hostID) {
       const registration = getHost(hostID);
@@ -620,30 +643,48 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         .find((item) => item.viewID === memberID && item.kind !== 'library');
       if (tab) registration.host.native.close([tab.nativeID]);
     },
-    async openGroup(groupID, hostID) {
+    async openGroup(groupID, hostID, restore) {
       const registration = getHost(hostID);
-      const members = getGroup(groupID).members.map((member) => ({
-        id: member.id,
-        closeEpoch: registration.closedMembers.get(member.id) ?? 0,
-      }));
-      const closeStart = registration.closedGroups.get(groupID) ?? 0;
-      for (const { id: memberID, closeEpoch } of members) {
-        if (
-          disposed ||
-          !registration.active ||
-          (registration.closedGroups.get(groupID) ?? 0) !== closeStart ||
-          !groups.some((group) => group.id === groupID)
-        )
-          break;
-        const saved = findMember(memberID);
-        if (
-          saved?.group.id === groupID &&
-          (registration.closedMembers.get(memberID) ?? 0) === closeEpoch &&
-          !live(memberID) &&
-          !admitted.has(memberID)
-        ) {
-          await openMember(memberID, registration)?.promise;
+      if (restoring.has(registration)) throw new Error('Group restore already in progress');
+      const plan = restore?.plan ?? prepareGroup(groupID, hostID);
+      if (plan.groupID !== groupID || plan.hostID !== hostID) throw new Error('Invalid group restore plan');
+      const members = plan.members;
+      let opened = 0;
+      let skipped = 0;
+      let failed = 0;
+      let stopped = false;
+      const current = () =>
+        plan.isCurrent() && (restore?.isCurrent() ?? true);
+      const progress = () => ({ total: members.length, processed: opened + skipped + failed, opened, skipped, failed, stopped });
+      restoring.add(registration);
+      try {
+        restore?.progress(progress());
+        for (const member of members) {
+          if (!current()) { stopped = true; break; }
+          const eligible = () => current() &&
+            (memberEpoch.get(member.id) ?? 0) === member.epoch &&
+            (registration.closedMembers.get(member.id) ?? 0) === member.closeEpoch &&
+            findMember(member.id)?.group.id === groupID;
+          try {
+            const saved = findMember(member.id);
+            if (!member.closed || !eligible() || !saved || live(member.id) || admitted.has(member.id) || pending.has(member.id) ||
+                !registration.host.native.metadata(saved.member.document)) {
+              skipped++;
+            } else {
+              const nativeID = await openMember(member.id, registration, eligible)?.promise;
+              if (nativeID) opened++;
+              else skipped++;
+            }
+          } catch {
+            failed++;
+          }
+          if (!current()) stopped = true;
+          restore?.progress(progress());
+          if (stopped) break;
         }
+        return progress();
+      } finally {
+        restoring.delete(registration);
       }
     },
     closeGroup(groupID, hostID) {

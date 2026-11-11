@@ -89,6 +89,22 @@ function harness() {
 }
 
 describe('tab sidebar', () => {
+  it('presents preview counts with explicit cancel and start controls in the status region', () => {
+    const h = harness();
+    let starts = 0;
+    h.sidebar.restorePreview(view().groups[0]!, () => { starts++; }, () => h.sidebar.status(''));
+    const status = h.doc.nodes.find((node) => node.isConnected && node.attributes.get('role') === 'status')!;
+    expect(status.textContent).toContain('Closed to open: 1');
+    expect(status.textContent).toContain('Already open here: 1');
+    expect(status.textContent).toContain('Other window: 1');
+    expect(status.textContent).toContain('Missing: 1');
+    h.find('button', 'Cancel').emit('click');
+    expect(starts).toBe(0);
+    expect(status.textContent).toBe('');
+    h.sidebar.restorePreview(view().groups[0]!, () => { starts++; }, () => h.sidebar.status(''));
+    h.find('button', 'Start opening').emit('click');
+    expect(starts).toBe(1);
+  });
   it('keeps the active tab visible in a collapsed group and preserves its node on selection changes', () => {
     const h = harness();
     const active = h.find('button', 'active');
