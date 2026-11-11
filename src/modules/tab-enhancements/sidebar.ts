@@ -45,6 +45,12 @@ export class TabEnhancementsSidebar {
   #editComposition = { active: false };
   #uneditComposition: (() => void) | null = null;
   #editor: HTMLInputElement | null = null;
+  #contextMenu: HTMLElement | null = null;
+  readonly #dismissContextMenu = (event: MouseEvent): void => {
+    if (this.#contextMenu && !this.#contextMenu.contains(event.target as Node)) {
+      this.#closeContextMenu();
+    }
+  };
   #view: TabSidebarView = { library: null, groups: [], ungrouped: [] };
   #selection: Selection | null = null;
   #rows: { selection: Selection; node: HTMLElement }[] = [];
@@ -86,6 +92,12 @@ export class TabEnhancementsSidebar {
     this.#list.setAttribute('aria-label', this.#text('title'));
     this.#list.style.cssText = 'overflow:auto;min-height:0;flex:1';
     this.#dropTarget(this.#list, null, null, true);
+    this.#list.addEventListener('contextmenu', (event) => {
+      this.#showContextMenu(event, (menu) => {
+        menu.append(this.#button(this.#text('newGroup'), () => this.#startEdit(null)));
+      });
+    });
+    doc.addEventListener('mousedown', this.#dismissContextMenu, true);
     this.#status = node('div');
     this.#status.setAttribute('role', 'status');
     this.#body.append(this.toolbarSlot, this.#search, this.#list, this.#status);
@@ -158,6 +170,13 @@ export class TabEnhancementsSidebar {
     ) {
       this.#runtime.deactivate();
       event.stopPropagation();
+      return;
+    }
+    if (keyString(event) === 'escape' && this.#contextMenu?.contains(target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.#closeContextMenu();
+      this.#list.focus();
       return;
     }
     const key = keyString(event);
@@ -274,6 +293,8 @@ export class TabEnhancementsSidebar {
     this.#status.textContent = message;
   }
   dispose(): void {
+    this.#closeContextMenu();
+    this.root.ownerDocument.removeEventListener('mousedown', this.#dismissContextMenu, true);
     if (this.#disposed) return;
     this.#disposed = true;
     this.#runtime.dispose();
@@ -445,6 +466,29 @@ export class TabEnhancementsSidebar {
       }
     });
   }
+  #closeContextMenu(): void {
+    this.#contextMenu?.remove();
+    this.#contextMenu = null;
+  }
+  #showContextMenu(event: MouseEvent, populate: (menu: HTMLElement) => void): void {
+    if (this.#disposed || this.#editor || !this.#options.isCurrent()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.#closeContextMenu();
+    const menu = this.#node('div');
+    menu.setAttribute('role', 'group');
+    menu.setAttribute('aria-label', this.#text('entryActions'));
+    menu.style.cssText = `position:fixed;z-index:2147483647;display:flex;flex-direction:column;max-height:70vh;overflow:auto;padding:4px;background:${THEME_VARS.elevated};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};box-shadow:${THEME_VARS.shadow}`;
+    populate(menu);
+    menu.addEventListener('click', () => this.#closeContextMenu());
+    this.root.append(menu);
+    this.#contextMenu = menu;
+    const rect = menu.getBoundingClientRect();
+    const win = this.#options.window;
+    menu.style.left = `${Math.max(0, Math.min(event.clientX, win.innerWidth - rect.width))}px`;
+    menu.style.top = `${Math.max(0, Math.min(event.clientY, win.innerHeight - rect.height))}px`;
+    menu.querySelector('button')?.focus();
+  }
   #render(force = false): void {
     if (this.#disposed || this.#editor) return;
     const signature = JSON.stringify(
@@ -455,6 +499,7 @@ export class TabEnhancementsSidebar {
       this.#refreshSelection();
       return;
     }
+    this.#closeContextMenu();
     this.#signature = signature;
     const active = this.root.ownerDocument.activeElement;
     const focused = this.#rows.find(
@@ -500,15 +545,35 @@ export class TabEnhancementsSidebar {
     const summary = this.#node('summary');
     summary.textContent = this.#text('groupActions');
     menu.append(summary);
+    this.#addGroupActions(menu, group);
+    row.append(menu);
+    section.append(row);
+    this.#list.append(section);
+    this.#select({ kind: 'group', id: group.id }, row);
+    this.#dragSource(row, { kind: 'group', id: group.id });
+    this.#dropTarget(row, null, group.id, true);
+    row.addEventListener('contextmenu', (event) => {
+      this.#showContextMenu(event, (context) => {
+        context.append(this.#button(this.#text('newGroup'), () => this.#startEdit(null)));
+        this.#addGroupActions(context, group);
+      });
+    });
+    const members = this.#node('div');
+    section.append(members);
+    for (const entry of entries) this.#renderEntry(entry, group.id, members);
+    this.#dropTarget(members, group.id, null);
+    this.#dropTarget(section, group.id, null);
+  }
+  #addGroupActions(menu: HTMLElement, group: TabSidebarGroup): void {
     menu.append(this.#button(this.#text('rename'), () => this.#startEdit(group.id)));
     const palette = this.#node('div');
     palette.setAttribute('aria-label', this.#text('color'));
     for (const color of COLORS) {
-      const b = this.#button(`${this.#text('color')} ${color}`, () =>
+      const button = this.#button(`${this.#text('color')} ${color}`, () =>
         this.#options.callbacks.setGroupColor(group.id, color),
       );
-      b.style.background = color;
-      palette.append(b);
+      button.style.background = color;
+      palette.append(button);
     }
     menu.append(
       palette,
@@ -516,17 +581,22 @@ export class TabEnhancementsSidebar {
       this.#button(this.#text('closeGroup'), () => this.#options.callbacks.closeGroup(group.id)),
       this.#button(this.#text('ungroup'), () => this.#options.callbacks.ungroup(group.id)),
     );
-    row.append(menu);
-    section.append(row);
-    this.#list.append(section);
-    this.#select({ kind: 'group', id: group.id }, row);
-    this.#dragSource(row, { kind: 'group', id: group.id });
-    this.#dropTarget(row, null, group.id, true);
-    const members = this.#node('div');
-    section.append(members);
-    for (const entry of entries) this.#renderEntry(entry, group.id, members);
-    this.#dropTarget(members, group.id, null);
-    this.#dropTarget(section, group.id, null);
+  }
+  #addEntryActions(menu: HTMLElement, entry: TabSidebarEntry, groupID: string | null): void {
+    if (entry.status === 'open')
+      menu.append(this.#button(this.#text('close'), () => this.#options.callbacks.close(entry.id)));
+    if (groupID)
+      menu.append(
+        this.#button(this.#text('remove'), () => this.#options.callbacks.removeMember(entry.id)),
+      );
+    menu.append(this.#button(this.#text('newGroup'), () => this.#startEdit(null, entry.id)));
+    for (const group of this.#view.groups)
+      if (group.id !== groupID)
+        menu.append(
+          this.#button(`${this.#text('moveTo')}: ${group.name}`, () =>
+            this.#options.callbacks.moveMember(entry.id, group.id, null),
+          ),
+        );
   }
   #refreshSelection(): void {
     const entries = new Map<string, TabSidebarEntry>();
@@ -575,23 +645,11 @@ export class TabEnhancementsSidebar {
       summary.title = this.#text('entryActions');
       summary.setAttribute('aria-label', this.#text('entryActions'));
       menu.append(summary);
-      if (entry.status === 'open')
-        menu.append(
-          this.#button(this.#text('close'), () => this.#options.callbacks.close(entry.id)),
-        );
-      if (groupID)
-        menu.append(
-          this.#button(this.#text('remove'), () => this.#options.callbacks.removeMember(entry.id)),
-        );
-      menu.append(this.#button(this.#text('newGroup'), () => this.#startEdit(null, entry.id)));
-      for (const group of this.#view.groups)
-        if (group.id !== groupID)
-          menu.append(
-            this.#button(`${this.#text('moveTo')}: ${group.name}`, () =>
-              this.#options.callbacks.moveMember(entry.id, group.id, null),
-            ),
-          );
+      this.#addEntryActions(menu, entry, groupID);
       row.append(menu);
+      row.addEventListener('contextmenu', (event) => {
+        this.#showContextMenu(event, (context) => this.#addEntryActions(context, entry, groupID));
+      });
       this.#dragSource(row, { kind: 'entry', id: entry.id });
       this.#dropTarget(row, groupID, entry.id);
     }

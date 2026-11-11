@@ -215,6 +215,63 @@ describe('tab sidebar', () => {
     ).toBe(true);
   });
 
+  it('opens a context menu for a tab or blank rail and creates the intended group', () => {
+    const h = harness();
+    const root = h.sidebar.root as unknown as DialogElement;
+    const row = h.find('button', 'loose').parent!;
+    const opened = row.emit('contextmenu', { clientX: 40, clientY: 50 });
+    expect(opened.defaultPrevented).toBe(true);
+    const popup = root.children.find((node) => node.attributes.get('role') === 'group')!;
+    popup.children.find((node) => node.textContent === 'New group')!.emit('click');
+    const input = h.doc.activeElement!;
+    input.value = 'From tab';
+    h.key(input, 'Enter');
+    expect(h.callbacks.createGroup).toHaveBeenCalledWith('From tab', 'loose');
+
+    h.sidebar.focus();
+    const list = h.doc.activeElement!;
+    list.emit('contextmenu', { clientX: 40, clientY: 50 });
+    const blankPopup = root.children.find((node) => node.attributes.get('role') === 'group')!;
+    blankPopup.children.find((node) => node.textContent === 'New group')!.emit('click');
+    const emptyInput = h.doc.activeElement!;
+    emptyInput.value = 'Empty';
+    h.key(emptyInput, 'Enter');
+    expect(h.callbacks.createGroup).toHaveBeenCalledWith('Empty', undefined);
+  });
+
+  it('dismisses a context menu without changing groups', () => {
+    const h = harness();
+    const row = h.find('button', 'loose').parent!;
+    row.emit('contextmenu', { clientX: 40, clientY: 50 });
+    const menuButton = h.doc.activeElement!;
+    h.key(menuButton, 'Escape');
+    expect(h.callbacks.createGroup).not.toHaveBeenCalled();
+    expect(h.doc.nodes.some((node) => node.isConnected && node.attributes.get('role') === 'group')).toBe(false);
+  });
+
+  it('drags a group before another group without moving its members separately', () => {
+    const h = harness();
+    const initial = view();
+    h.sidebar.update({
+      ...initial,
+      groups: [...initial.groups, { id: 'next', name: 'Next', color: '', collapsed: false, entries: [] }],
+    }, false);
+    const source = h.find('button', '▸ Research (4)').parent!;
+    const target = h.find('button', '▾ Next (0)').parent!;
+    const data = new Map<string, string>();
+    const transfer = {
+      types: [] as string[],
+      setData(type: string, value: string) { this.types.push(type); data.set(type, value); },
+      getData: (type: string) => data.get(type) ?? '',
+      effectAllowed: '',
+      dropEffect: '',
+    };
+    source.emit('dragstart', { dataTransfer: transfer });
+    target.emit('drop', { dataTransfer: transfer });
+    expect(h.callbacks.moveGroup).toHaveBeenCalledWith('g', 'next');
+    expect(h.callbacks.moveMember).not.toHaveBeenCalled();
+  });
+
   it('accepts only a current own drag, and disables filtered reorder', () => {
     const h = harness();
     const source = h.find('button', 'loose').parent!;
