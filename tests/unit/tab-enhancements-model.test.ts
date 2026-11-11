@@ -222,6 +222,59 @@ describe('persistent tab groups', () => {
     a.native.metadata.mockReturnValue({ ...fields, nativeTitle: '' });
     expect(manager.view('a', '{citekey}').groups[0]?.entries[0]?.title).toBe('Paper.pdf');
   });
+
+  it('searches actual metadata and uses the saved title when metadata is unavailable', () => {
+    const metadata = {
+      ...fields,
+      nativeTitle: 'Saved native title',
+      title: 'Actual article title',
+      citekey: 'Smith2024',
+      author: 'Jane Smith',
+      year: '2024',
+      filename: 'article.pdf',
+    };
+    const a = host('a', [{ ...tab('open'), fields: metadata }]);
+    const b = host('b', [{ ...tab('remote'), fields: metadata }]);
+    const store = storage();
+    const manager = createTabGroupManager(store);
+    manager.registerHost(a.port);
+    manager.registerHost(b.port);
+    const group = manager.createGroup('Search');
+    manager.assign('open', group, 'a');
+    manager.assign('remote', group, 'b');
+
+    const entries = manager.view('a', '{citekey}').groups[0]!.entries;
+    expect(entries.map((item) => [item.status, item.title, item.searchText])).toEqual([
+      [
+        'open',
+        'Smith2024',
+        'Actual article title Saved native title Jane Smith 2024 article.pdf Smith2024',
+      ],
+      [
+        'other-window',
+        'Smith2024',
+        'Actual article title Saved native title Jane Smith 2024 article.pdf Smith2024',
+      ],
+    ]);
+
+    manager.closeMember('open', 'a');
+    a.native.metadata.mockReturnValue(metadata);
+    const closed = manager.view('a', '{citekey}').groups[0]!.entries[0]!;
+    expect(closed.status).toBe('closed');
+    expect(closed.title).toBe('Smith2024');
+    expect(closed.searchText).toBe(
+      'Actual article title Saved native title Jane Smith 2024 article.pdf Smith2024',
+    );
+
+    a.native.metadata.mockReturnValue(null);
+    const missing = manager.view('a', '{citekey}').groups[0]!.entries[0]!;
+    expect(missing.status).toBe('missing');
+    expect(missing.title).toBe('Saved native title');
+    expect(missing.searchText).toBe('Saved native title');
+    expect(JSON.parse(store.value()).groups[0].members[0].title).toBe('Saved native title');
+    manager.dispose();
+  });
+
   it('keeps native traversal aligned with grouped rows before the ungrouped list', () => {
     const a = host('a', [tab('ungrouped'), tab('first'), tab('second')]);
     const manager = createTabGroupManager(storage());

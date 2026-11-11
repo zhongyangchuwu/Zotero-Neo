@@ -519,11 +519,11 @@ export class TabEnhancementsSidebar {
     this.#rows = [];
     this.#entryRows = [];
     this.#list.replaceChildren();
-    if (this.#view.library && matches(this.#view.library.title))
+    if (this.#view.library && matches(this.#view.library.searchText))
       this.#renderEntry(this.#view.library, null);
     for (const group of this.#view.groups) {
       const groupMatches = matches(group.name);
-      const entries = group.entries.filter((entry) => groupMatches || matches(entry.title));
+      const entries = group.entries.filter((entry) => groupMatches || matches(entry.searchText));
       if (query && !groupMatches && !entries.length) continue;
       this.#renderGroup(group, entries);
     }
@@ -531,7 +531,7 @@ export class TabEnhancementsSidebar {
     ungrouped.setAttribute('aria-label', this.#text('ungrouped'));
     this.#list.append(ungrouped);
     for (const entry of this.#view.ungrouped)
-      if (matches(entry.title)) this.#renderEntry(entry, null, ungrouped);
+      if (matches(entry.searchText)) this.#renderEntry(entry, null, ungrouped);
     this.#dropTarget(ungrouped, null, null);
     this.#refreshSelection();
     if (focused)

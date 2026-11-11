@@ -11,10 +11,12 @@ const entry = (
   id: string,
   status: TabSidebarEntry['status'] = 'open',
   selected = false,
+  searchText = id,
 ): TabSidebarEntry => ({
   id,
   title: id,
   nativeTitle: id,
+  searchText,
   status,
   selected,
   kind: 'reader',
@@ -135,6 +137,83 @@ describe('tab sidebar', () => {
     expect((saved.parent! as DialogElement & { hidden: boolean }).hidden).toBe(false);
     expect(active.parent!.style.display).toBe('none');
     expect(saved.parent!.style.display).toBe('flex');
+  });
+
+  it('searches metadata and group names without changing displayed titles', () => {
+    const h = harness();
+    const current = view();
+    h.sidebar.update(
+      {
+        library: {
+          ...entry('Library display'),
+          searchText: 'Library actual title Zotero',
+        },
+        groups: [
+          {
+            ...current.groups[0]!,
+            name: 'Research',
+            entries: [
+              entry(
+                'Closed display',
+                'closed',
+                false,
+                'Article title Saved native title Jane Doe 2024 Archive.pdf Smith2024',
+              ),
+              entry(
+                'Remote display',
+                'other-window',
+                false,
+                'Remote title Other Native Lee 2023 Remote.pdf',
+              ),
+              entry('Missing saved title', 'missing', false, 'Saved only title'),
+            ],
+          },
+        ],
+        ungrouped: [
+          entry('Loose display', 'open', false, 'Loose actual title Native Nguyen 2021 Loose.pdf'),
+        ],
+      },
+      false,
+    );
+    const search = h.doc.nodes.find((n) => n.isConnected && n.tagName === 'input')!;
+    const query = (value: string) => {
+      search.value = value;
+      search.emit('input');
+    };
+
+    query('sMiTh2024');
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    expect(h.find('button', 'Library display')).toBeUndefined();
+    query('article title');
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    query('saved native');
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    query('jane doe');
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    query('2024');
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    query('archive.pdf');
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    query('REMOTE.PDF');
+    expect(h.find('button', 'Remote display')).toBeDefined();
+    query('other native');
+    expect(h.find('button', 'Remote display')).toBeDefined();
+    query('SAVED ONLY');
+    expect(h.find('button', 'Missing saved title')).toBeDefined();
+    query('library actual');
+    expect(h.find('button', 'Library display')).toBeDefined();
+    query('loose actual');
+    expect(h.find('button', 'Loose display')).toBeDefined();
+    query('RESEARCH');
+    expect(h.find('button', '▸ Research (3)')).toBeDefined();
+    expect(h.find('button', 'Closed display')).toBeDefined();
+    expect(h.find('button', 'Remote display')).toBeDefined();
+    expect(h.find('button', 'Missing saved title')).toBeDefined();
+    query('no matching metadata');
+    expect(h.find('button', '▸ Research (3)')).toBeUndefined();
+    expect(h.find('button', 'Closed display')).toBeUndefined();
+    expect(h.find('button', 'Library display')).toBeUndefined();
+    expect(h.find('button', 'Loose display')).toBeUndefined();
   });
 
   it('distinguishes closing a live tab from removing saved membership and labels other windows', () => {

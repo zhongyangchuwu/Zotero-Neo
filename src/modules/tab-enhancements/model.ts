@@ -228,15 +228,34 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       before = nativeID;
     }
   }
+  function makeSearchText(
+    fields: TabViewSnapshot['fields'] | null,
+    fallbackTitle: string,
+  ): string {
+    if (!fields) return fallbackTitle;
+    return [
+      fields.title,
+      fields.nativeTitle || fallbackTitle,
+      fields.author,
+      fields.year,
+      fields.filename,
+      fields.citekey,
+    ]
+      .filter((value) => value.trim().length > 0)
+      .join(' ');
+  }
+
   function entry(
     tab: TabViewSnapshot,
     status: TabSidebarEntry['status'],
     format: string,
+    fallbackTitle = '',
   ): TabSidebarEntry {
     return {
       id: tab.viewID,
       title: formatTabTitle(format, tab.fields),
       nativeTitle: tab.fields.nativeTitle,
+      searchText: makeSearchText(tab.fields, fallbackTitle),
       status,
       selected: status === 'open' && tab.selected,
       kind: tab.kind,
@@ -372,6 +391,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
                 open.tab,
                 open.registration === registration ? 'open' : 'other-window',
                 titleFormat,
+                member.title,
               );
             const accepted = admitted.get(member.id);
             const fields = registration.host.native.metadata(member.document);
@@ -381,6 +401,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
               id: member.id,
               title: display ? formatTabTitle(titleFormat, display) : member.title,
               nativeTitle: display?.nativeTitle ?? member.title,
+              searchText: makeSearchText(fields, member.title),
               status: accepted ? (accepted.registration === registration ? 'open' as const : 'other-window' as const) : fields ? ('closed' as const) : ('missing' as const),
               selected: false,
               kind: member.document.kind,

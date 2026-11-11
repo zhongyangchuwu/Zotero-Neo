@@ -24,6 +24,7 @@ export interface TabSidebarEntry {
   readonly id: string;
   readonly title: string;
   readonly nativeTitle: string;
+  readonly searchText: string;
   readonly status: 'open' | 'other-window' | 'closed' | 'missing';
   readonly selected: boolean;
   readonly kind: 'reader' | 'note' | 'library' | 'other';
