@@ -14,6 +14,13 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 
 const root = resolve(import.meta.dirname, '..');
+const selected = process.argv[2] ?? null;
+if (
+  process.argv.length > 3 ||
+  (selected !== null && selected !== 'react' && selected !== 'ai-sdk')
+) {
+  throw new Error('Usage: node tools/vendor-runtimes.mjs [react|ai-sdk]');
+}
 const temp = mkdtempSync(join(tmpdir(), 'neo-runtime-vendor-'));
 try {
   const dependencies = {
@@ -52,10 +59,11 @@ try {
     'ai-sdk':
       "export { generateText, Output, jsonSchema } from 'ai';\nexport { createOpenAI } from '@ai-sdk/openai';\nexport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\n",
     react:
-      "import * as React from 'react';\nexport { React };\nexport { createRoot } from 'react-dom/client';\n",
+      "import * as React from 'react';\nexport { React };\nexport { createRoot } from 'react-dom/client';\nexport { flushSync } from 'react-dom';\n",
   };
   const lock = JSON.parse(readFileSync(join(temp, 'package-lock.json'), 'utf8'));
   for (const [name, source] of Object.entries(entries)) {
+    if (selected !== null && selected !== name) continue;
     const dest = join(root, 'vendor', name);
     mkdirSync(dest, { recursive: true });
     const entry = join(temp, `${name}.mjs`);
@@ -123,14 +131,18 @@ try {
     writeFileSync(join(dest, 'provenance.json'), JSON.stringify(closure, null, 2) + '\n');
     copyFileSync(join(temp, 'package-lock.json'), join(dest, 'package-lock.json'));
   }
-  writeFileSync(
-    join(root, 'vendor/react/index.d.ts'),
-    "import * as React from 'react';\nexport { React };\nexport { createRoot } from 'react-dom/client';\n",
-  );
-  writeFileSync(
-    join(root, 'vendor/ai-sdk/index.d.ts'),
-    'export const generateText: (options: any) => Promise<any>;\nexport const Output: { object(options: any): any };\nexport const jsonSchema: (schema: any) => any;\nexport const createOpenAI: (options: any) => any;\nexport const createOpenAICompatible: (options: any) => (model: string) => any;\n',
-  );
+  if (selected === null || selected === 'react') {
+    writeFileSync(
+      join(root, 'vendor/react/index.d.ts'),
+      "import * as React from 'react';\nexport { React };\nexport { createRoot } from 'react-dom/client';\nexport { flushSync } from 'react-dom';\n",
+    );
+  }
+  if (selected === null || selected === 'ai-sdk') {
+    writeFileSync(
+      join(root, 'vendor/ai-sdk/index.d.ts'),
+      'export const generateText: (options: any) => Promise<any>;\nexport const Output: { object(options: any): any };\nexport const jsonSchema: (schema: any) => any;\nexport const createOpenAI: (options: any) => any;\nexport const createOpenAICompatible: (options: any) => (model: string) => any;\n',
+    );
+  }
 } finally {
   rmSync(temp, { recursive: true, force: true });
 }

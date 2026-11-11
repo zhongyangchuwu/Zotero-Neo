@@ -1,5 +1,6 @@
 import type { AIQACommand, AIQAUIRuntime } from '../ai-qa/view-contracts';
 import { isDeadObject, nativeObjectIdentity } from './cross-compartment';
+import { ensureNativeReactRuntime } from './native-ui';
 
 interface RuntimeWindow extends Window {
   NeoAIQAUI?: AIQAUIRuntime;
@@ -99,7 +100,8 @@ export function loadAIQAUI(rootURI: string, window: Window): Promise<AIQAUIRunti
 
   const entry: RuntimeEntry = {
     active: true,
-    promise: Promise.resolve().then(() => {
+    promise: Promise.resolve().then(async () => {
+      await ensureNativeReactRuntime(owner);
       if (!entry.active) throw new Error('AI Q&A UI runtime released');
       if (isDeadObject(owner) || owner.closed) throw new Error('AI Q&A owner window unavailable');
       const target = owner as RuntimeWindow;

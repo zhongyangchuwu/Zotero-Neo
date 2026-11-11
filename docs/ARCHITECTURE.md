@@ -46,6 +46,8 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `src/modules/worksets/` 按窗口拥有 Persistent Selection、临时 Visual 范围及 Selection Panel，状态独立于原生行选择，不再预建在 Main session 中。`src/main/picker/` 负责共享候选交互，Library 显式提供条目来源；纯条目行展示由 Library 和 Collections 共用。确认及宿主写入由动作负责。共享写操作位于 `src/operations/`，Main 宿主能力位于 `src/toolkit/main/`。
 
+设置中心、Picker 和引用详情使用 `src/ui/react/` 的静态 React 视图；`src/platform/native-ui.ts` 按确切 Window／Document 加载共享运行时、克隆展示模型并退休挂载。领域状态、键盘与组合输入、设置提交、Picker 确认以及引用来源／缓存仍由各自控制器负责。设置中心管理模态 Tab 边界，原生 disclosure 和普通控件均可进入键盘顺序；已保存的凭据不进入共享展示模型。
+
 每个 MainWindow 仍只有一份导航历史和协调器。Library 通过具名端口请求现有操作；历史恢复直接取得原生 View 能力，不依赖 Library 的业务动作。Local Find 的查询和精确界面、最近回收批次归 Library 实例，旧恢复完成不能清空后来记录的回收批次。
 
 `src/modules/workspace/` 按 MainWindow 拥有 Main/Reader/Note Normal 的标签页候选、确认、切换、循环和关闭，以及 Reader/Note 的 Show in Library。候选来源显式注入 Picker，不负责导航；Surface 传入明确条目目标。模块只持有本次 Picker 的释放句柄，旧确认与晚到状态不能操作替换界面；实际切换和定位沿用基座导航端口，不依赖 Library，不另建历史。原生标签页委托及历史恢复重扫仍在基座。

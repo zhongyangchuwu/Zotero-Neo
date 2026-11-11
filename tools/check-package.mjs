@@ -12,6 +12,8 @@ const expected = [
   'content/ai-runtime.js',
   'content/ai-qa-ui.js',
   'content/ai-qa-window.xhtml',
+  'content/native-ui.js',
+  'content/react-runtime.js',
   'content/preferences/pane.js',
   'content/preferences/pane.xhtml',
   'content/zotero-neo.js',
@@ -69,6 +71,8 @@ for (const script of [
   'content/preferences/pane.js',
   'content/ai-runtime.js',
   'content/ai-qa-ui.js',
+  'content/native-ui.js',
+  'content/react-runtime.js',
 ]) {
   const source = readFileSync(resolve(root, 'build/addon', script), 'utf8');
   if (/^\s*(?:import|export)\s/m.test(source)) {

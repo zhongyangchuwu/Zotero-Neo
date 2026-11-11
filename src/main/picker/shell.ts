@@ -15,6 +15,8 @@ import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerOpenOptions, PickerPane, PickerProvider } from './types';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
 import { itemRowText } from './item-row';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { PickerReactCommand, PickerReactModel } from './react-model';
 import { createCommandsProvider } from './providers/commands';
 
 import { ACTION_LABELS, type ActionId } from '../../input/actions';
@@ -104,77 +106,8 @@ export class FuzzyPicker {
       orphanOverlay = overlay;
       overlay.style.cssText = `position:fixed;inset:0;background:${THEME_VARS.backdrop};z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:5vh 3vw`;
       const modal = create('div');
-      modal.style.cssText = `background:${THEME_VARS.surface};color:${THEME_VARS.text};width:min(1280px,94vw);height:min(780px,86vh);border:1px solid ${THEME_VARS.border};border-radius:8px;overflow:hidden;box-shadow:0 20px 60px ${THEME_VARS.shadow};font:13px/1.45 monospace`;
-      const content = create('div');
+      modal.style.cssText = `background:${THEME_VARS.surface};color:${THEME_VARS.text};width:min(1280px,94vw);height:min(780px,86vh);border:1px solid ${THEME_VARS.border};border-radius:8px;overflow:hidden;box-shadow:0 20px 60px ${THEME_VARS.shadow};font:13px/1.45 system-ui,sans-serif`;
       const single = (window.innerWidth || 1024) < 900;
-      content.style.cssText = single
-        ? 'display:grid;grid-template-columns:1fr;grid-template-rows:minmax(280px,1fr) minmax(180px,.65fr);height:100%;min-height:0'
-        : 'display:grid;grid-template-columns:minmax(360px,48%) minmax(0,1fr);height:100%;min-height:0';
-      const left = create('section');
-      left.style.cssText = `display:flex;flex-direction:column;min-width:0;min-height:0;border-right:${single ? '0' : `1px solid ${THEME_VARS.border}`};border-bottom:${single ? `1px solid ${THEME_VARS.border}` : '0'}`;
-      const leftHeader = create('header');
-      leftHeader.style.cssText = `display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:4px 12px;color:${THEME_VARS.accent};background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border};font-weight:700`;
-      const title = create('span');
-      title.textContent = provider.title;
-      title.style.gridColumn = '2';
-      const count = create('span');
-      count.style.cssText = `grid-column:3;justify-self:end;color:${THEME_VARS.muted}`;
-      leftHeader.append(title, count);
-      const sourceButton = provider.alternateSource
-        ? (create('button') as HTMLButtonElement)
-        : null;
-      if (sourceButton) {
-        sourceButton.type = 'button';
-        sourceButton.style.cssText = `grid-column:1;grid-row:1;justify-self:start;font:inherit;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:3px;padding:2px 6px`;
-        leftHeader.append(sourceButton);
-      }
-      const input = create('input') as HTMLInputElement;
-      input.type = 'text';
-      input.placeholder = provider.placeholder;
-      input.style.cssText = `margin:8px 10px;background:${THEME_VARS.input};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};outline:2px solid ${THEME_VARS.focusRing};outline-offset:1px;border-radius:3px;padding:7px 10px;font:13px/1 monospace`;
-      const results = create('div');
-      results.style.cssText = 'overflow:auto;flex:1;min-height:0;outline:none;padding:2px 0';
-      results.tabIndex = -1;
-      let shortcuts: HTMLElement | null = null;
-      let queryHelp: HTMLElement | null = null;
-      let listHelp: HTMLElement | null = null;
-      const helpStyle = (): HTMLElement => {
-        const help = create('div');
-        help.style.cssText = `flex:0 0 auto;min-height:18px;padding:0 10px 6px;color:${THEME_VARS.muted};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`;
-        return help;
-      };
-      if (provider.help) {
-        queryHelp = helpStyle();
-        listHelp = helpStyle();
-        queryHelp.textContent = provider.help.query;
-        listHelp.textContent = provider.help.list;
-        left.append(leftHeader, input, queryHelp, results, listHelp);
-      } else {
-        shortcuts = helpStyle();
-        shortcuts.textContent = this.shortcutReference('picker-input');
-        left.append(leftHeader, input, shortcuts, results);
-      }
-      const operationStatus = create('div');
-      operationStatus.setAttribute('role', 'status');
-      operationStatus.setAttribute('aria-live', 'polite');
-      operationStatus.setAttribute('aria-atomic', 'true');
-      operationStatus.style.cssText = `padding:0 10px 6px;color:${THEME_VARS.text};font-size:12px`;
-      operationStatus.hidden = true;
-      left.append(operationStatus);
-
-      const right = create('section');
-      right.style.cssText = 'display:flex;flex-direction:column;min-width:0;min-height:0';
-      const rightHeader = create('header');
-      rightHeader.style.cssText = `padding:4px 12px;text-align:center;color:${THEME_VARS.accent};background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border};font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis`;
-      const previewTitle = create('span');
-      previewTitle.textContent = 'Preview';
-      rightHeader.append(previewTitle);
-      const preview = create('div');
-      preview.tabIndex = -1;
-      preview.style.cssText = `overflow:auto;flex:1;min-height:0;outline:none;padding:14px 16px;white-space:pre-wrap;color:${THEME_VARS.text};background:${THEME_VARS.elevated}`;
-      right.append(rightHeader, preview);
-      content.append(left, right);
-      modal.append(content);
       overlay.append(modal);
       (doc.body ?? doc.documentElement).append(overlay);
       const themeCleanup = session.theme.add(overlay);
@@ -184,20 +117,11 @@ export class FuzzyPicker {
         open: true,
         scope,
         overlay,
-        input,
         composition: { active: false },
         committedQuery: '',
         confirming: false,
-        sourceTitle: title,
-        sourceButton,
-        operationStatus,
-        results,
-        preview,
-        count,
-        previewTitle,
-        help: shortcuts,
-        queryHelp,
-        listHelp,
+        status: '',
+        loadingText: '',
         selected: 0,
         filtered: [],
         items: [],
@@ -209,6 +133,36 @@ export class FuzzyPicker {
       });
       orphanOverlay = null;
       orphanThemeCleanup = null;
+      const view = mountNativeReactView<PickerReactModel, PickerReactCommand>({
+        surface: 'picker',
+        root: modal,
+        model: this.viewModel(session),
+        dispatch: () => undefined,
+        isCurrent: () => this.isCurrent(session, generation),
+        loadingText: provider.loadingText ?? 'Loading…',
+        errorText: 'Unable to open picker.',
+        onError: (error) => this.failure('picker React view', error),
+      });
+      session.picker.view = view;
+      await view.ready;
+      if (!this.isCurrent(session, generation)) return;
+      const input = view.getElement('query') as HTMLInputElement | null;
+      const results = view.getElement('results');
+      const preview = view.getElement('preview');
+      const sourceButton = view.getElement('source') as HTMLButtonElement | null;
+      if (!input || !results || !preview || !sourceButton)
+        throw new Error('Picker view is missing required parts');
+      Object.assign(session.picker, {
+        input,
+        results,
+        preview,
+        sourceButton,
+        count: view.getElement('count'),
+        operationStatus: view.getElement('status'),
+        previewTitle: view.getElement('preview-title'),
+        queryHelp: view.getElement('query-help'),
+        listHelp: view.getElement('list-help'),
+      });
       session.picker.localBindings = new LocalBindingRuntime({
         bindings: this.#bindings,
         execute: (action, event) =>
@@ -356,6 +310,7 @@ export class FuzzyPicker {
       previousWindow,
       localBindings,
       inputCleanup,
+      view,
       themeCleanup,
       onClose,
     } = picker;
@@ -374,6 +329,7 @@ export class FuzzyPicker {
     const cleanup = new CleanupFailure();
     cleanup.run(() => localBindings?.dispose());
     cleanup.run(() => inputCleanup?.());
+    cleanup.run(() => view?.dispose());
     cleanup.run(() => themeCleanup?.());
     cleanup.run(() => overlay?.remove());
     cleanup.run(() => onClose?.(reason));
@@ -565,76 +521,54 @@ export class FuzzyPicker {
   private selectRow(session: MainWindowSession, index: number): void {
     if (index < 0 || index >= session.picker.filtered.length) return;
     session.picker.selected = index;
-    this.refreshRowSelection(session);
-    this.renderPreview(session);
+    this.render(session);
   }
 
-  private refreshRowSelection(session: MainWindowSession): void {
-    const results = session.picker.results;
-    if (!results) return;
-    const mouseEnabled = this.#mouseEnabled();
-    Array.from(results.children).forEach((child, index) =>
-      this.styleRow(child as HTMLElement, index === session.picker.selected, mouseEnabled),
-    );
-  }
-
-  private styleRow(row: HTMLElement, selected: boolean, mouseEnabled: boolean): void {
-    row.style.cssText = `padding:6px 12px;cursor:${mouseEnabled ? 'pointer' : 'default'};color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'};background:${selected ? THEME_VARS.selected : 'transparent'}`;
-    row.style.borderTop =
-      row.dataset.zvPickerBoundary === '1' ? `1px solid ${THEME_VARS.border}` : '0';
+  private viewModel(session: MainWindowSession): PickerReactModel {
+    const picker = session.picker;
+    const provider = picker.provider;
+    const item = picker.filtered[picker.selected];
+    const preview = item ? provider?.preview(item) : undefined;
+    const queryHelp = this.shortcutReference('picker-input');
+    const listHelp = this.shortcutReference('picker-list');
+    return {
+      title: provider?.title ?? '',
+      placeholder: provider?.placeholder ?? '',
+      sourceLabel: provider?.alternateSource?.label ?? null,
+      sourceDisabled: picker.confirming || picker.composition.active,
+      count:
+        provider?.countText?.(picker.filtered.length, picker.items.length) ??
+        `${picker.filtered.length}/${picker.items.length}`,
+      rows: picker.filtered.map((row, index) => ({
+        text: provider?.rowText(row, index) ?? fuzzyPickerRowText(row, index, picker.scope),
+        boundary: Boolean(
+          row.group &&
+            picker.filtered[index - 1]?.group &&
+            row.group !== picker.filtered[index - 1]?.group,
+        ),
+      })),
+      selected: picker.selected,
+      empty:
+        picker.loadingText || provider?.emptyText?.(picker.committedQuery.trim()) || 'No results',
+      loading: Boolean(picker.loadingText),
+      previewTitle: item ? (preview?.title ?? item.title) || '(untitled)' : 'Preview',
+      previewBody: item ? (preview?.body ?? item.title) : 'No result selected.',
+      queryHelp: provider?.help
+        ? [provider.help.query, queryHelp].filter(Boolean).join(' · ')
+        : picker.focusPane === 'search'
+          ? queryHelp
+          : listHelp,
+      listHelp: provider?.help ? [provider.help.list, listHelp].filter(Boolean).join(' · ') : null,
+      status: picker.status,
+      focusPane: picker.focusPane,
+      mouseEnabled: this.#mouseEnabled(),
+      single: picker.layout === 'single',
+    };
   }
 
   private render(session: MainWindowSession): void {
-    const container = session.picker.results;
-    if (!container) return;
-    container.replaceChildren();
-    const provider = session.picker.provider;
-    if (session.picker.count)
-      session.picker.count.textContent =
-        provider?.countText?.(session.picker.filtered.length, session.picker.items.length) ??
-        `${session.picker.filtered.length}/${session.picker.items.length}`;
-    this.refreshHints(session);
-    const doc = container.ownerDocument;
-    const query = session.picker.committedQuery.trim();
-    if (!session.picker.filtered.length) {
-      container.textContent = provider?.emptyText?.(query) ?? 'No results';
-      this.renderPreview(session);
-      return;
-    }
-    container.style.color = THEME_VARS.text;
-    const mouseEnabled = this.#mouseEnabled();
-    session.picker.filtered.forEach((item, index) => {
-      const row = doc.createElementNS(H, 'div');
-      row.dataset.zvPickerRow = '1';
-      row.dataset.zvPickerIndex = String(index);
-      const previousGroup = session.picker.filtered[index - 1]?.group;
-      if (item.group && previousGroup && item.group !== previousGroup)
-        row.dataset.zvPickerBoundary = '1';
-      this.styleRow(row, index === session.picker.selected, mouseEnabled);
-      const label = doc.createElementNS(H, 'span');
-      label.textContent =
-        provider?.rowText(item, index) ?? fuzzyPickerRowText(item, index, session.picker.scope);
-      row.append(label);
-      container.append(row);
-    });
-    container.children[session.picker.selected]?.scrollIntoView({ block: 'nearest' });
-    this.renderPreview(session);
-  }
-
-  private renderPreview(session: MainWindowSession): void {
-    const preview = session.picker.preview;
-    const title = session.picker.previewTitle;
-    if (!preview || !title) return;
-    preview.replaceChildren();
-    const item = session.picker.filtered[session.picker.selected];
-    if (!item) {
-      title.textContent = 'Preview';
-      preview.textContent = 'No result selected.';
-      return;
-    }
-    const content = session.picker.provider?.preview(item);
-    title.textContent = (content?.title ?? item.title) || '(untitled)';
-    preview.textContent = content?.body ?? item.title;
+    session.picker.view?.update(this.viewModel(session));
+    session.picker.results?.children[session.picker.selected]?.scrollIntoView({ block: 'nearest' });
   }
 
   private admitConfirmation(session: MainWindowSession, openInWindow: boolean): void {
@@ -733,23 +667,12 @@ export class FuzzyPicker {
   }
 
   private setOperationStatus(session: MainWindowSession, message: string): void {
-    const status = session.picker.operationStatus;
-    if (!status) return;
-    status.textContent = message;
-    status.hidden = !message;
+    session.picker.status = message;
+    this.render(session);
   }
 
   private refreshSource(session: MainWindowSession): void {
-    const picker = session.picker;
-    const provider = picker.provider;
-    if (!provider) return;
-    if (picker.sourceTitle) picker.sourceTitle.textContent = provider.title;
-    if (picker.input) picker.input.placeholder = provider.placeholder;
-    if (picker.sourceButton) {
-      picker.sourceButton.textContent = provider.alternateSource?.label ?? '';
-      picker.sourceButton.hidden = !provider.alternateSource;
-      picker.sourceButton.disabled = picker.confirming || picker.composition.active;
-    }
+    this.render(session);
   }
 
   private switchSource(session: MainWindowSession): void {
@@ -790,11 +713,8 @@ export class FuzzyPicker {
       session.picker.filtered = [];
       this.render(session);
     }
-    const results = session.picker.results;
-    if (results && provider.loadingText) {
-      results.style.color = THEME_VARS.muted;
-      results.textContent = provider.loadingText;
-    }
+    session.picker.loadingText = provider.loadingText ?? '';
+    this.render(session);
     try {
       const items = await (provider.query ? provider.query(query) : provider.load());
       if (
@@ -804,6 +724,7 @@ export class FuzzyPicker {
         this.trace(`picker load discarded scope=${scope} generation=${generation}`);
         return;
       }
+      session.picker.loadingText = '';
       session.picker.items = items;
       if (provider.query) {
         session.picker.filtered = items.slice(0, 100);
@@ -827,7 +748,7 @@ export class FuzzyPicker {
         return;
       }
       this.failure(`picker load scope=${scope}`, error);
-      results?.replaceChildren();
+      session.picker.loadingText = ' ';
       this.setOperationStatus(session, `Error loading ${scope}: ${String(error).slice(0, 160)}`);
     }
   }
@@ -874,13 +795,7 @@ export class FuzzyPicker {
   private markFocus(session: MainWindowSession, pane: PickerPane): void {
     if (session.picker.focusPane !== pane) session.picker.localBindings?.deactivate();
     session.picker.focusPane = pane;
-    this.refreshHints(session);
-    if (session.picker.results)
-      session.picker.results.style.boxShadow =
-        pane === 'list' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
-    if (session.picker.preview)
-      session.picker.preview.style.boxShadow =
-        pane === 'preview' ? `inset 0 0 0 2px ${THEME_VARS.focusRing}` : 'none';
+    this.render(session);
   }
 
   private provider(scope: PickerScope, commandContext?: CommandPaletteContext): PickerProvider {
@@ -945,6 +860,9 @@ export class FuzzyPicker {
     const picker = session.picker;
     picker.generation = generation;
     picker.open = false;
+    picker.view = null;
+    picker.status = '';
+    picker.loadingText = '';
     picker.overlay = null;
     picker.input = null;
     picker.composition.active = false;
@@ -992,27 +910,5 @@ export class FuzzyPicker {
         return keys.length ? [`${keys.join('/')} ${ACTION_LABELS[action].en}`] : [];
       })
       .join(' · ');
-  }
-
-  private refreshHints(session: MainWindowSession): void {
-    const picker = session.picker;
-    if (picker.help)
-      picker.help.textContent = this.shortcutReference(
-        picker.focusPane === 'search' ? 'picker-input' : 'picker-list',
-      );
-    if (picker.queryHelp)
-      picker.queryHelp.textContent = [
-        picker.provider?.help?.query,
-        this.shortcutReference('picker-input'),
-      ]
-        .filter(Boolean)
-        .join(' · ');
-    if (picker.listHelp)
-      picker.listHelp.textContent = [
-        picker.provider?.help?.list,
-        this.shortcutReference('picker-list'),
-      ]
-        .filter(Boolean)
-        .join(' · ');
   }
 }

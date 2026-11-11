@@ -1,170 +1,174 @@
+import { CleanupScope } from '../core/cleanup';
 import type { PreferenceStore } from '../core/preference-store';
+import { t } from '../i18n';
 import { normalizeTabRailWidth, TAB_RAIL_WIDTH } from '../toolkit/main/tab-enhancements-types';
 import {
   TAB_ENHANCEMENT_PREFERENCES,
-  TAB_SIDEBAR_DEFAULT_FORMAT,
   tabRailOptions,
   tabTitleFormat,
 } from '../modules/tab-enhancements/config';
 import { validateTabTitleFormat } from '../modules/tab-enhancements/title-format';
+import type { SettingsFormCommand, SettingsFormGroup } from './settings-form-model';
 import { settingsText, type SettingsLanguage } from './settings-i18n';
-import {
-  settingsButton,
-  settingsChoices,
-  settingsControlRow,
-  settingsGroup,
-  settingsNumberRow,
-  settingsStatus,
-  settingsTextRow,
-  type SettingsNumberInput,
-  type SettingsTextInput,
-} from './settings-ui';
 
 /** Display preferences apply live; resetting them deliberately leaves saved reading groups alone. */
 export class SettingsTabs {
-  readonly #root: HTMLElement;
   readonly #preferences: PreferenceStore;
   readonly #language: SettingsLanguage;
-  readonly #cleanups: Array<() => void> = [];
-  readonly #side: {
-    element: HTMLElement;
-    select(value: 'left' | 'right'): void;
-  };
-  readonly #format: SettingsTextInput;
-  readonly #width: SettingsNumberInput;
-  readonly #status: HTMLElement;
+  readonly #changed: () => void;
+  readonly #cleanups = new CleanupScope();
+  #status = '';
+  #formatDraft: string | null = null;
 
-  constructor(
-    doc: Document,
-    root: HTMLElement,
-    preferences: PreferenceStore,
-    language: SettingsLanguage,
-  ) {
-    this.#root = root;
+  constructor(preferences: PreferenceStore, language: SettingsLanguage, changed: () => void) {
     this.#preferences = preferences;
     this.#language = language;
-    this.#status = settingsStatus(doc);
-    const options = tabRailOptions(preferences);
-    const group = settingsGroup(
-      doc,
-      settingsText(language, 'Tab display'),
-      settingsText(
+    this.#changed = changed;
+    try {
+      for (const key of Object.values(TAB_ENHANCEMENT_PREFERENCES)) {
+        const cleanup = preferences.observe?.(key, () => {
+          if (key === TAB_ENHANCEMENT_PREFERENCES.titleFormat) this.#formatDraft = null;
+          this.#changed();
+        });
+        if (cleanup) this.#cleanups.add(cleanup);
+      }
+    } catch (error) {
+      this.dispose();
+      throw error;
+    }
+  }
+
+  get status(): string {
+    return this.#status;
+  }
+
+  group(): SettingsFormGroup {
+    const language = this.#language;
+    const options = tabRailOptions(this.#preferences);
+    return {
+      id: 'tab-display',
+      title: settingsText(language, 'Tab display'),
+      description: settingsText(
         language,
         'Display changes apply immediately when Tab Enhancements is active. The module request requires restarting Zotero.',
       ),
-    );
-    this.#side = settingsChoices<'left' | 'right'>(
-      doc,
-      [
-        { value: 'left', label: settingsText(language, 'Far left') },
-        { value: 'right', label: settingsText(language, 'Far right') },
-      ],
-      options.side,
-      (value) => this.#save(TAB_ENHANCEMENT_PREFERENCES.side, value),
-      this.#cleanups,
-    );
-    group.append(
-      settingsControlRow(doc, settingsText(language, 'Sidebar position'), this.#side.element),
-    );
-    this.#format = settingsTextRow(
-      doc,
-      settingsText(language, 'Title format'),
-      tabTitleFormat(preferences),
-      (value) => {
-        if (validateTabTitleFormat(value)) {
-          this.#status.textContent = settingsText(
-            language,
-            'Unknown or unbalanced title placeholders.',
-          );
-          return false;
-        }
-        return this.#save(TAB_ENHANCEMENT_PREFERENCES.titleFormat, value) ? value : false;
-      },
-      this.#cleanups,
-      settingsText(
-        language,
-        'Use {title}, {citekey}, {author}, {year} or {filename}. Escape braces as {{ and }}. Missing citation keys fall back to the native title.',
-      ),
-    );
-    group.append(this.#format.element);
-    this.#width = settingsNumberRow(
-      doc,
-      settingsText(language, 'Sidebar width (px)'),
-      options.width,
-      { minimum: TAB_RAIL_WIDTH.min, maximum: TAB_RAIL_WIDTH.max, step: 8 },
-      (value) => {
-        if (!Number.isFinite(value)) return false;
-        const next = normalizeTabRailWidth(value);
-        return this.#save(TAB_ENHANCEMENT_PREFERENCES.width, next) ? next : false;
-      },
-      this.#cleanups,
-    );
-    group.append(this.#width.element);
-    group.append(
-      settingsButton(
-        doc,
-        settingsText(language, 'Restore tab display defaults'),
-        () => {
-          try {
-            for (const key of Object.values(TAB_ENHANCEMENT_PREFERENCES)) {
-              if (preferences.has(key)) preferences.clear(key);
-            }
-            this.#refresh();
-          } catch {
-            this.#failed();
-          }
+      fields: [
+        {
+          kind: 'choice',
+          id: 'tabs.side',
+          label: settingsText(language, 'Sidebar position'),
+          value: options.side,
+          options: [
+            { value: 'left', label: settingsText(language, 'Far left') },
+            { value: 'right', label: settingsText(language, 'Far right') },
+          ],
         },
-        this.#cleanups,
-      ),
-    );
-    const help = doc.createElementNS('http://www.w3.org/1999/xhtml', 'p');
-    help.textContent = settingsText(
-      language,
-      'Saved groups are kept when resetting display settings.',
-    );
-    group.append(help, this.#status);
-    root.append(group);
-    for (const key of Object.values(TAB_ENHANCEMENT_PREFERENCES)) {
-      const cleanup = preferences.observe?.(key, () => this.#refresh());
-      if (cleanup) this.#cleanups.push(cleanup);
-    }
+        {
+          kind: 'boolean',
+          id: 'tabs.collapsed',
+          label: t('tabs.collapse', language),
+          value: options.collapsed,
+        },
+        {
+          kind: 'text',
+          id: 'tabs.titleFormat',
+          label: settingsText(language, 'Title format'),
+          value: this.#formatDraft ?? tabTitleFormat(this.#preferences),
+          commit: 'change',
+          invalid: this.#formatDraft !== null,
+          description: settingsText(
+            language,
+            'Use {title}, {citekey}, {author}, {year} or {filename}. Escape braces as {{ and }}. Missing citation keys fall back to the native title.',
+          ),
+        },
+        {
+          kind: 'number',
+          id: 'tabs.width',
+          label: settingsText(language, 'Sidebar width (px)'),
+          value: options.width,
+          minimum: TAB_RAIL_WIDTH.min,
+          maximum: TAB_RAIL_WIDTH.max,
+          step: 8,
+          disabled: options.collapsed,
+        },
+        {
+          kind: 'action',
+          id: 'tabs.restore',
+          label: settingsText(language, 'Restore tab display defaults'),
+          description: settingsText(
+            language,
+            'Saved groups are kept when resetting display settings.',
+          ),
+        },
+      ],
+    };
   }
 
-  #save(key: string, value: string | number): boolean {
+  dispatch(command: SettingsFormCommand): boolean {
+    if (command.type === 'action') {
+      if (command.id !== 'tabs.restore') return false;
+      try {
+        for (const key of Object.values(TAB_ENHANCEMENT_PREFERENCES)) {
+          if (this.#preferences.has(key)) this.#preferences.clear(key);
+        }
+        this.#formatDraft = null;
+        this.#status = '';
+      } catch {
+        this.#status = settingsText(this.#language, 'Could not update tab display settings.');
+      }
+      this.#changed();
+      return true;
+    }
+    let key: string;
+    let value: string | number | boolean;
+    switch (command.id) {
+      case 'tabs.side':
+        if (command.value !== 'left' && command.value !== 'right') return true;
+        key = TAB_ENHANCEMENT_PREFERENCES.side;
+        value = command.value;
+        break;
+      case 'tabs.collapsed':
+        if (typeof command.value !== 'boolean') return true;
+        key = TAB_ENHANCEMENT_PREFERENCES.collapsed;
+        value = command.value;
+        break;
+      case 'tabs.width':
+        if (
+          typeof command.value !== 'number' ||
+          !Number.isFinite(command.value) ||
+          tabRailOptions(this.#preferences).collapsed
+        )
+          return true;
+        key = TAB_ENHANCEMENT_PREFERENCES.width;
+        value = normalizeTabRailWidth(command.value);
+        break;
+      case 'tabs.titleFormat':
+        if (typeof command.value !== 'string') return true;
+        if (validateTabTitleFormat(command.value)) {
+          this.#formatDraft = command.value;
+          this.#status = settingsText(this.#language, 'Unknown or unbalanced title placeholders.');
+          this.#changed();
+          return true;
+        }
+        key = TAB_ENHANCEMENT_PREFERENCES.titleFormat;
+        value = command.value;
+        break;
+      default:
+        return false;
+    }
     try {
       this.#preferences.set(key, value);
-      this.#status.textContent = '';
-      return true;
+      if (command.id === 'tabs.titleFormat') this.#formatDraft = null;
+      this.#status = '';
     } catch {
-      this.#failed();
-      return false;
+      if (command.id === 'tabs.titleFormat') this.#formatDraft = null;
+      this.#status = settingsText(this.#language, 'Could not update tab display settings.');
     }
-  }
-
-  #failed(): void {
-    this.#status.textContent = settingsText(
-      this.#language,
-      'Could not update tab display settings.',
-    );
-  }
-
-  #refresh(): void {
-    const options = tabRailOptions(this.#preferences);
-    this.#side.select(options.side);
-    this.#width.set(options.width);
-    this.#format.set(tabTitleFormat(this.#preferences) || TAB_SIDEBAR_DEFAULT_FORMAT);
-    this.#status.textContent = '';
+    this.#changed();
+    return true;
   }
 
   dispose(): void {
-    for (let i = this.#cleanups.length - 1; i >= 0; i -= 1) {
-      try {
-        this.#cleanups[i]?.();
-      } catch {
-        /* The Settings owner still releases remaining fields. */
-      }
-    }
-    this.#cleanups.length = 0;
-    this.#root.replaceChildren();
+    this.#cleanups.dispose();
   }
 }

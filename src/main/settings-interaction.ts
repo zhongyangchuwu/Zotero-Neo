@@ -6,102 +6,117 @@ import {
   pickerMouseEnabled,
 } from '../core/preferences';
 import type { PreferenceStore } from '../core/preference-store';
-import { settingsText, settingsToggleLabels, type SettingsLanguage } from './settings-i18n';
-import {
-  settingsGroup,
-  settingsStatus,
-  settingsToggleRow,
-  type SettingsToggle,
-} from './settings-ui';
+import { settingsText, type SettingsLanguage } from './settings-i18n';
+import type { SettingsFormCommand, SettingsFormModel } from './settings-form-model';
 
-const H = 'http://www.w3.org/1999/xhtml';
+const PICKER_MOUSE_FIELD_ID = 'pickerMouseEnabled';
+const NOTE_EDITOR_FIELD_ID = 'noteEditorEnabled';
 
 /** Owns the two live cross-surface Interaction controls for one open Settings page. */
 export class SettingsInteraction {
-  readonly #root: HTMLElement;
   readonly #preferences: PreferenceStore;
+  readonly #language: SettingsLanguage;
+  readonly #changed: () => void;
   readonly #cleanups: Array<() => void> = [];
-  readonly #pickerToggle: SettingsToggle;
-  readonly #noteToggle: SettingsToggle;
-  readonly #status: HTMLElement;
+  #status: SettingsFormModel['status'];
+  #disposed = false;
 
   constructor(
-    window: MainWindow,
-    root: HTMLElement,
+    _window: MainWindow,
     preferences: PreferenceStore,
-    language: SettingsLanguage = 'en',
+    language: SettingsLanguage,
+    changed: () => void,
   ) {
-    this.#root = root;
     this.#preferences = preferences;
-    const doc = window.document;
-    root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
-    const title = doc.createElementNS(H, 'h2');
-    title.textContent = settingsText(language, 'Interaction');
-    title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
+    this.#language = language;
+    this.#changed = changed;
 
-    const picker = settingsGroup(
-      doc,
-      settingsText(language, 'Picker'),
-      settingsText(
-        language,
-        'Mouse controls apply to all shared pickers, including items, collections, tags, tabs, and notes.',
-      ),
-    );
-    this.#pickerToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Mouse row selection and double-click confirmation'),
-      pickerMouseEnabled(preferences),
-      (enabled) => this.#save(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, enabled, language),
-      this.#cleanups,
-      undefined,
-      settingsToggleLabels(language),
-    );
-    picker.append(this.#pickerToggle.element);
-
-    const note = settingsGroup(
-      doc,
-      settingsText(language, 'Note editing'),
-      settingsText(language, 'Applies to Zotero context-pane notes and standalone note tabs.'),
-    );
-    this.#noteToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Vim-style note editing'),
-      noteEditorEnabled(preferences),
-      (enabled) => this.#save(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, enabled, language),
-      this.#cleanups,
-      undefined,
-      settingsToggleLabels(language),
-    );
-    note.append(this.#noteToggle.element);
-
-    this.#status = settingsStatus(doc);
-    root.append(title, picker, note, this.#status);
     for (const key of [PICKER_MOUSE_ENABLED_PREFERENCE_KEY, NOTE_EDITOR_ENABLED_PREFERENCE_KEY]) {
-      const cleanup = preferences.observe?.(key, () => this.#refresh(true));
+      const cleanup = preferences.observe?.(key, () => {
+        if (this.#disposed) return;
+        this.#status = undefined;
+        this.#changed();
+      });
       if (cleanup) this.#cleanups.push(cleanup);
     }
   }
 
-  #refresh(clearStatus = false): void {
-    this.#pickerToggle.set(pickerMouseEnabled(this.#preferences));
-    this.#noteToggle.set(noteEditorEnabled(this.#preferences));
-    if (clearStatus) this.#status.textContent = '';
+  model(): SettingsFormModel {
+    const language = this.#language;
+    return {
+      title: settingsText(language, 'Interaction'),
+      groups: [
+        {
+          id: 'picker',
+          title: settingsText(language, 'Picker'),
+          description: settingsText(
+            language,
+            'Mouse controls apply to all shared pickers, including items, collections, tags, tabs, and notes.',
+          ),
+          fields: [
+            {
+              id: PICKER_MOUSE_FIELD_ID,
+              label: settingsText(language, 'Mouse row selection and double-click confirmation'),
+              kind: 'boolean',
+              value: pickerMouseEnabled(this.#preferences),
+            },
+          ],
+        },
+        {
+          id: 'note-editing',
+          title: settingsText(language, 'Note editing'),
+          description: settingsText(
+            language,
+            'Applies to Zotero context-pane notes and standalone note tabs.',
+          ),
+          fields: [
+            {
+              id: NOTE_EDITOR_FIELD_ID,
+              label: settingsText(language, 'Vim-style note editing'),
+              kind: 'boolean',
+              value: noteEditorEnabled(this.#preferences),
+            },
+          ],
+        },
+      ],
+      ...(this.#status ? { status: this.#status } : {}),
+    };
   }
 
-  #save(key: string, enabled: boolean, language: SettingsLanguage): boolean {
-    try {
-      this.#preferences.set(key, enabled);
-      this.#refresh(true);
-      return true;
-    } catch {
-      this.#refresh();
-      this.#status.textContent = settingsText(language, 'Could not update Interaction settings.');
-      return false;
+  dispatch(command: SettingsFormCommand): void {
+    if (this.#disposed || !command || typeof command !== 'object') return;
+    if (command.type !== 'value') return;
+    switch (command.id) {
+      case PICKER_MOUSE_FIELD_ID:
+        if (typeof command.value === 'boolean')
+          this.#save(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, command.value);
+        return;
+      case NOTE_EDITOR_FIELD_ID:
+        if (typeof command.value === 'boolean')
+          this.#save(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, command.value);
+        return;
     }
   }
 
+  #save(
+    key: typeof PICKER_MOUSE_ENABLED_PREFERENCE_KEY | typeof NOTE_EDITOR_ENABLED_PREFERENCE_KEY,
+    enabled: boolean,
+  ): void {
+    try {
+      this.#preferences.set(key, enabled);
+      this.#status = undefined;
+    } catch {
+      this.#status = {
+        text: settingsText(this.#language, 'Could not update Interaction settings.'),
+        error: true,
+      };
+    }
+    this.#changed();
+  }
+
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
-    this.#root.replaceChildren();
   }
 }

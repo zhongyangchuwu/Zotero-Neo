@@ -2,12 +2,17 @@ import type { LocalBindingRuntime } from '../../input/local-binding-runtime';
 import type { CompositionState } from '../../input/composition';
 import type { PickerItem, PickerScope } from './model';
 import type { PickerCloseReason, PickerConfirm, PickerProvider } from './types';
+import type { NativeReactView } from '../../ui/react/types';
+import type { PickerReactModel } from './react-model';
 
 /** Mutable runtime state owned by one active Main-window picker instance. */
 export class PickerRuntime {
   open = false;
   generation = 0;
   scope: PickerScope = 'all';
+  view: NativeReactView<PickerReactModel> | null = null;
+  status = '';
+  loadingText = '';
   overlay: HTMLElement | null = null;
   input: HTMLInputElement | null = null;
   composition: CompositionState = { active: false };
