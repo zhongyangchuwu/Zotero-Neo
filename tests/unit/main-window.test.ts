@@ -39,6 +39,12 @@ import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import { createCommandsProvider } from '../../src/main/picker/providers/commands';
 import { FuzzyPicker } from '../../src/main/picker';
 import type { PickerProvider } from '../../src/main/picker/types';
+import type { SettingsReactCommand, SettingsReactModel } from '../../src/main/settings-react-model';
+import type { PickerReactModel } from '../../src/main/picker/react-model';
+import { nativeHosts, resetNativeHosts, setDeferredSettings } from './native-settings-host';
+
+vi.mock('../../src/platform/native-ui', async () => import('./native-settings-host'));
+beforeEach(() => resetNativeHosts());
 
 const logger = { debug: () => {}, diagnostic: () => {} };
 
@@ -134,6 +140,7 @@ function pickerMainWindow(): {
       type: '',
       placeholder: '',
       tabIndex: 0,
+      getClientRects: () => [{}],
       clientHeight: 400,
       isConnected: true,
       get textContent() {
@@ -213,7 +220,7 @@ function pickerMainWindow(): {
           if (node.nodeType !== 1) return;
           for (const child of Array.from(node.children) as HTMLElement[]) {
             const candidate = child as HTMLElement & { matches?(selector: string): boolean };
-            if (candidate.matches?.(selector)) matches.push(child);
+            if (selector.split(',').some((part) => candidate.matches?.(part.trim()))) matches.push(child);
             visit(child);
           }
         };
@@ -304,6 +311,7 @@ function pickerMainWindow(): {
     focus: vi.fn(),
     addEventListener: () => {},
     removeEventListener: () => {},
+    getComputedStyle: () => ({ visibility: 'visible' }),
     setInterval: () => 0,
     clearInterval: () => {},
     setTimeout,
@@ -1487,6 +1495,10 @@ function settingsMainHost(initial: Record<string, boolean | number | string> = {
   const values = new Map<string, boolean | number | string>(Object.entries(initial));
   const writes: Array<[string, boolean | number | string]> = [];
   const observers = new Map<string, Set<() => void>>();
+  const external = (key: string, value: boolean | number | string) => {
+    values.set(key, value);
+    for (const listener of [...(observers.get(key) ?? [])]) listener();
+  };
   const controller = createController({
     preferences: {
       has: (key: string) => values.has(key),
@@ -1494,11 +1506,11 @@ function settingsMainHost(initial: Record<string, boolean | number | string> = {
       set: (key: string, value: boolean | number | string) => {
         values.set(key, value);
         writes.push([key, value]);
-        for (const listener of observers.get(key) ?? []) listener();
+        for (const listener of [...(observers.get(key) ?? [])]) listener();
       },
       clear: (key: string) => {
         values.delete(key);
-        for (const listener of observers.get(key) ?? []) listener();
+        for (const listener of [...(observers.get(key) ?? [])]) listener();
       },
       observe: (key: string, listener: () => void) => {
         const group = observers.get(key) ?? new Set<() => void>();
@@ -1537,10 +1549,20 @@ function settingsMainHost(initial: Record<string, boolean | number | string> = {
     host.keydown(event);
     return event;
   };
+  const native = () => {
+    const root = host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-center');
+    const view = [...nativeHosts].reverse().find((entry) => entry.root === root && !entry.disposed);
+    if (!view) throw new Error('Expected Settings native host');
+    return view;
+  };
+  const model = () => native().model as SettingsReactModel;
+  const dispatch = (command: SettingsReactCommand extends infer C ? C extends { generation: number } ? Omit<C, 'generation'> : never : never) => {
+    native().dispatch({ ...command, generation: model().generation } as SettingsReactCommand);
+  };
   const drawer = () => host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-center');
   const backdrop = () =>
     host.bodyChildren.find((child) => child.id === 'zotero-neo-settings-backdrop');
-  return { ...host, controller, press, drawer, backdrop, values, writes };
+  return { ...host, controller, press, drawer, backdrop, values, writes, native, model, dispatch, external };
 }
 
 describe('startup module configuration', () => {
@@ -1936,295 +1958,240 @@ describe('Main Current Item Notes target', () => {
 });
 
 describe('Main Settings Center shell', () => {
-  it('opens centered once, remembers section, and removes backdrop and panel on close', () => {
+  it('opens once, remembers its section and restores focus on backdrop close', async () => {
     const host = settingsMainHost();
     const prior = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
     host.window.document.body?.append(prior);
     prior.focus();
-    host.press(' ');
-    host.press('p');
-    host.press('s');
-    const panel = host.drawer();
-    const backdrop = host.backdrop() as HTMLElement & {
-      emit(type: string, event?: Partial<Event>): void;
-      listenerCount(type: string): number;
-    };
-    const navigation = panel?.children[1] as HTMLElement;
-    for (const button of Array.from(navigation.children) as HTMLElement[]) {
-      expect(button.tabIndex).toBe(-1);
-    }
-    expect((panel?.children[0]?.children[1] as HTMLElement).tabIndex).toBe(-1);
-    const reader = Array.from(navigation.children).find(
-      (button) => (button as HTMLElement).dataset.section === 'Reader',
-    ) as HTMLElement & { emit(type: string): void };
-    reader.emit('click');
-    expect(host.controller.openSettings(host.window)).toBe(true);
-    expect(host.drawer()).toBe(panel);
-    expect(
-      host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-center'),
-    ).toHaveLength(1);
-    expect(
-      host.bodyChildren.filter((node) => node.id === 'zotero-neo-settings-backdrop'),
-    ).toHaveLength(1);
-    backdrop.emit('click', { target: panel });
-    expect(host.drawer()).toBe(panel);
-    backdrop.emit('click');
-    expect(host.drawer()).toBeUndefined();
-    expect(host.backdrop()).toBeUndefined();
-    expect(backdrop.listenerCount('click')).toBe(0);
-    expect(host.window.document.activeElement).toBe(prior);
-    host.controller.openSettings(host.window);
-    const restoredReader = Array.from(host.drawer()?.children[1]?.children ?? []).find(
-      (button) => (button as HTMLElement).dataset.section === 'Reader',
-    );
-    expect(restoredReader?.getAttribute('aria-current')).toBe('page');
-    host.controller.shutdown();
-    expect(host.drawer()).toBeUndefined();
-    expect(host.backdrop()).toBeUndefined();
+    try {
+      host.press(' '); host.press('p'); host.press('s');
+      const panel = host.drawer();
+      const view = host.native();
+      await view.ready;
+      expect(host.window.document.activeElement).toBe(view.parts.get('heading'));
+      host.dispatch({ type: 'section', section: 'Reader' });
+      expect(host.controller.openSettings(host.window)).toBe(true);
+      expect(host.drawer()).toBe(panel);
+      const backdrop = host.backdrop() as HTMLElement & { emit(type: string, event?: Partial<Event>): void; listenerCount(type: string): number };
+      backdrop.emit('click', { target: panel });
+      expect(host.drawer()).toBe(panel);
+      backdrop.emit('click');
+      expect(host.drawer()).toBeUndefined();
+      expect(host.backdrop()).toBeUndefined();
+      expect(view.disposed).toBe(true);
+      expect(backdrop.listenerCount('click')).toBe(0);
+      expect(host.window.document.activeElement).toBe(prior);
+      host.controller.openSettings(host.window);
+      expect(host.model().section).toBe('Reader');
+    } finally { host.controller.shutdown(); }
   });
 
-  it('saves Prefix Guide controls live and clamps its display delay', () => {
+  it('saves Prefix Guide controls live and clamps the delay', () => {
     const host = settingsMainHost();
-    const all = (node: HTMLElement): HTMLElement[] => [
-      node,
-      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
-    ];
     try {
       host.controller.openSettings(host.window);
-      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
-        HTMLElement & { emit(type: string): void }
-      >;
-      nav[3]!.emit('click');
-      const page = host.drawer()?.children[2] as HTMLElement;
-      const controls = all(page);
-      const guide = controls.find(
-        (node) => node.getAttribute('aria-label') === 'Show Prefix Guide',
-      ) as HTMLElement & { emit(type: string): void };
-      guide.emit('click');
+      host.dispatch({ type: 'section', section: 'Keybindings' });
+      host.dispatch({ type: 'keybindings', command: { type: 'guide-enabled', value: false } });
+      host.dispatch({ type: 'keybindings', command: { type: 'guide-number', setting: 'delayMs', value: 9000 } });
       expect(host.values.get('keyGuide.enabled')).toBe(false);
-
-      const delay = controls.find(
-        (node) => node.getAttribute('aria-label') === 'Display delay (ms)',
-      ) as HTMLInputElement & { emit(type: string): void };
-      delay.value = '9000';
-      delay.emit('change');
       expect(host.values.get('keyGuide.delayMs')).toBe(KEY_GUIDE_CONFIG.maxDelayMs);
-      expect(delay.value).toBe(String(KEY_GUIDE_CONFIG.maxDelayMs));
-    } finally {
-      host.controller.shutdown();
-    }
+      const page = host.model().page;
+      expect(page.kind === 'keybindings' && page.model.guide.delayMs).toBe(KEY_GUIDE_CONFIG.maxDelayMs);
+      host.external('keyGuide.enabled', true);
+      const updated = host.model().page;
+      expect(updated.kind === 'keybindings' && updated.model.guide.enabled).toBe(true);
+    } finally { host.controller.shutdown(); }
   });
 
-  it('switches the whole Settings workspace language live and keeps Advanced writes active', () => {
-    const host = settingsMainHost();
-    const all = (node: HTMLElement): HTMLElement[] => [
-      node,
-      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
-    ];
+  it('switches workspace language live and keeps Advanced writes active', () => {
+    const host = settingsMainHost({ language: 'en' });
     try {
       host.controller.openSettings(host.window);
-      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
-        HTMLElement & { emit(type: string): void }
-      >;
-      Array.from(nav)
-        .find((button) => button.dataset.section === 'Advanced')!
-        .emit('click');
-      let controls = all(host.drawer()?.children[2] as HTMLElement);
-      const chinese = controls.find(
-        (node) => node.localName === 'button' && node.textContent === '中文',
-      ) as HTMLElement & { emit(type: string): void };
-      chinese.emit('click');
+      host.dispatch({ type: 'section', section: 'Advanced' });
+      const english = host.model();
+      host.dispatch({ type: 'form', command: { type: 'value', id: 'language', value: 'zh-CN' } });
       expect(host.values.get('language')).toBe('zh-CN');
-
-      const panel = host.drawer()!;
-
-      (
-        Array.from(panel.children[1]?.children ?? []).find(
-          (button) => (button as HTMLElement).dataset.section === 'Advanced',
-        ) as HTMLElement & { emit(type: string): void }
-      ).emit('click');
-
-      controls = all(panel.children[2] as HTMLElement);
-      const separator = controls.find(
-        (node) => node.getAttribute('aria-label') === '命名空间分隔符',
-      ) as HTMLInputElement & { emit(type: string): void };
-      separator.value = '::';
-      separator.emit('change');
+      expect(host.model().language).toBe('zh-CN');
+      expect(host.model().sections.find((section) => section.id === 'Advanced')?.label).not.toBe(english.sections.find((section) => section.id === 'Advanced')?.label);
+      host.dispatch({ type: 'form', command: { type: 'value', id: 'tagSeparator', value: '::' } });
       expect(host.values.get('tags.separator')).toBe('::');
-      separator.value = '';
-      separator.emit('change');
+      host.dispatch({ type: 'form', command: { type: 'value', id: 'tagSeparator', value: '' } });
       expect(host.values.get('tags.separator')).toBe('');
-
-      const english = controls.find(
-        (node) => node.localName === 'button' && node.textContent === 'English',
-      ) as HTMLElement & { emit(type: string): void };
-      english.emit('click');
-      expect(host.values.get('language')).toBe('en');
-    } finally {
-      host.controller.shutdown();
-    }
+      host.dispatch({ type: 'form', command: { type: 'value', id: 'language', value: 'en' } });
+      expect(host.model().language).toBe('en');
+    } finally { host.controller.shutdown(); }
   });
 
-  it('keeps unexpected outside focus when closed by the Close button', () => {
+  it('keeps unexpected outside focus when closed by the view', () => {
     const host = settingsMainHost();
     const outside = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
     host.window.document.body?.append(outside);
-    host.controller.openSettings(host.window);
-    outside.focus();
-    const close = host.drawer()?.children[0]?.children[1] as HTMLElement & {
-      emit(type: string): void;
-    };
-    close.emit('click');
-    expect(host.window.document.activeElement).toBe(outside);
-    expect(host.backdrop()).toBeUndefined();
-    host.controller.shutdown();
+    try {
+      host.controller.openSettings(host.window);
+      outside.focus();
+      host.dispatch({ type: 'close' });
+      expect(host.window.document.activeElement).toBe(outside);
+      expect(host.backdrop()).toBeUndefined();
+    } finally { host.controller.shutdown(); }
   });
 
-  it('discards unadded themes on Close, backdrop, and Escape', () => {
+  it('discards unadded themes on close, backdrop, and Escape', () => {
     const host = settingsMainHost();
-    const all = (node: HTMLElement): HTMLElement[] => [
-      node,
-      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
-    ];
     try {
-      for (const method of ['Close', 'backdrop', 'Escape'] as const) {
+      for (const method of ['close', 'backdrop', 'Escape'] as const) {
         host.controller.openSettings(host.window);
-        const addCustom = all(host.drawer()!).find(
-          (node) => node.localName === 'button' && node.textContent === '+ Custom',
-        ) as HTMLElement & { emit(type: string): void };
-        addCustom.emit('click');
+        host.dispatch({ type: 'appearance', command: { type: 'create' } });
+        const editing = host.model().page;
+        expect(editing.kind === 'appearance' && editing.model.view).toBe('editor');
         expect(host.values.has('appearance.interaction.customThemes')).toBe(false);
-        if (method === 'Close') {
-          (
-            host.drawer()?.children[0]?.children[1] as HTMLElement & { emit(type: string): void }
-          ).emit('click');
-        } else if (method === 'backdrop') {
-          (host.backdrop() as HTMLElement & { emit(type: string): void }).emit('click');
-        } else host.press('Escape');
+        if (method === 'close') host.dispatch({ type: 'close' });
+        else if (method === 'backdrop') (host.backdrop() as HTMLElement & { emit(type: string): void }).emit('click');
+        else host.press('Escape');
         expect(host.drawer()).toBeUndefined();
         expect(host.values.has('appearance.interaction.customThemes')).toBe(false);
         host.controller.openSettings(host.window);
-        expect(
-          all(host.drawer()!).some(
-            (node) => node.localName === 'button' && node.textContent === '+ Custom',
-          ),
-        ).toBe(true);
-        expect(
-          all(host.drawer()!).some(
-            (node) => node.localName === 'button' && node.textContent === 'Add',
-          ),
-        ).toBe(false);
-        host.press('Escape');
+        const page = host.model().page;
+        expect(page.kind === 'appearance' && page.model.view).toBe('library');
+        host.dispatch({ type: 'close' });
       }
-    } finally {
-      host.controller.shutdown();
-    }
+    } finally { host.controller.shutdown(); }
   });
 
-  it('closes on Escape before Selection or Visual and suppresses Main keys while open', () => {
+  it('fences outside Main input, lets inside input through, and respects composing Escape', () => {
     const host = settingsMainHost();
     try {
       host.controller.openSettings(host.window);
-      const outside = host.window.document.createElementNS(
-        'http://www.w3.org/1999/xhtml',
-        'button',
-      );
+      const outside = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
       host.window.document.body?.append(outside);
-      outside.focus();
-      const blocked = host.press('v', outside);
-      host.press('j', outside);
-      host.press(':', outside);
-      expect(blocked.preventDefault).toHaveBeenCalledOnce();
+      for (const key of ['v', 'j', ':']) expect(host.press(key, outside).preventDefault).toHaveBeenCalledOnce();
       expect(host.bodyChildren.some((node) => node.id === 'zv-picker-overlay')).toBe(false);
-      const inside = host.drawer()?.children[0]?.children[1] as HTMLElement;
-      const tab = host.press('Tab', inside);
-      expect(tab.preventDefault).not.toHaveBeenCalled();
+      const inside = host.native().parts.get('heading')!;
+      expect(host.press('a', inside).preventDefault).not.toHaveBeenCalled();
+      expect(host.press('Escape', inside, { isComposing: true, keyCode: 229 }).preventDefault).not.toHaveBeenCalled();
+      expect(host.drawer()).toBeDefined();
       const escape = host.press('Escape', outside);
       expect(escape.preventDefault).toHaveBeenCalledOnce();
       expect(host.drawer()).toBeUndefined();
-    } finally {
-      host.controller.shutdown();
-    }
-  });
-  it('leaves composing Escape in Settings native while ordinary Escape closes', () => {
-    const host = settingsMainHost();
-    try {
-      expect(host.controller.openSettings(host.window)).toBe(true);
-      const nav = host.drawer()?.children[1]?.children as unknown as ArrayLike<
-        HTMLElement & { emit(type: string): void }
-      >;
-      nav[3]!.emit('click');
-      const visit = (node: HTMLElement): HTMLElement[] => [
-        node,
-        ...Array.from(node.children).flatMap((child) => visit(child as HTMLElement)),
-      ];
-      const input = visit(host.drawer()!).find(
-        (node) => node.getAttribute('aria-label') === 'Display delay (ms)',
-      );
-      if (!input) throw new Error('Expected a Settings input');
-      const composing = host.press('Escape', input, { isComposing: true, keyCode: 229 });
-      expect(composing.preventDefault).not.toHaveBeenCalled();
-      expect(host.drawer()).toBeDefined();
-      const escape = host.press('Escape', input);
-      expect(escape.preventDefault).toHaveBeenCalledOnce();
-      expect(host.drawer()).toBeUndefined();
-    } finally {
-      host.controller.shutdown();
-    }
+    } finally { host.controller.shutdown(); }
   });
 
-  it('retains persisted custom editor and Dark tab across navigation and close', () => {
+  it('traps modal Tab in both directions but leaves the recorder and composition in control', () => {
     const host = settingsMainHost();
-    const all = (node: HTMLElement): HTMLElement[] => [
-      node,
-      ...Array.from(node.children).flatMap((child) => all(child as HTMLElement)),
-    ];
-    const click = (text: string): void => {
-      const button = all(host.drawer()!).find(
-        (node) => node.localName === 'button' && node.textContent === text,
-      ) as HTMLElement & { emit(type: string): void };
-      expect(button).toBeDefined();
-      button.emit('click');
-    };
     try {
       host.controller.openSettings(host.window);
-      click('+ Custom');
-      expect(host.values.get('appearance.interaction.customThemes')).toBeUndefined();
-      click('Dark');
-      const field = all(host.drawer()!).find(
-        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
-      ) as HTMLInputElement & { emit(type: string): void };
-      field.focus();
-      const typed = host.press('a', field);
-      expect(typed.preventDefault).not.toHaveBeenCalled();
-      field.value = '#123456';
-      field.emit('input');
-      expect(all(host.drawer()!)).toContain(field);
-      expect(host.window.document.activeElement).toBe(field);
-      click('Add');
-      expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
-      click('Edit');
-      (host.drawer()?.children[1]?.children[1] as HTMLElement & { emit(type: string): void }).emit(
-        'click',
-      );
-      expect(host.drawer()?.children[2]?.children[0]?.textContent).toBe('Interaction');
-      (host.drawer()?.children[1]?.children[0] as HTMLElement & { emit(type: string): void }).emit(
-        'click',
-      );
-      const restored = all(host.drawer()!).find(
-        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
-      ) as HTMLInputElement;
-      expect(restored.value).toBe('#123456');
-      click('Close');
-      expect(host.backdrop()).toBeUndefined();
+      const panel = host.drawer()! as HTMLElement & { emit(type: string, event: Partial<KeyboardEvent>): void };
+      const first = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+      const last = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+      panel.append(first, last);
+      const preventDefault = vi.fn();
+      last.focus();
+      panel.emit('keydown', { key: 'Tab', target: last, preventDefault });
+      expect(preventDefault).toHaveBeenCalledOnce();
+      expect(host.window.document.activeElement).toBe(first);
+      preventDefault.mockClear();
+      panel.emit('keydown', { key: 'Tab', shiftKey: true, target: first, preventDefault });
+      expect(preventDefault).toHaveBeenCalledOnce();
+      expect(host.window.document.activeElement).toBe(last);
+      const recorder = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'input');
+      recorder.setAttribute('data-neo-ui-key-scope', 'recorder');
+      panel.append(recorder);
+      preventDefault.mockClear();
+      panel.emit('keydown', { key: 'Escape', target: recorder, preventDefault });
+      panel.emit('keydown', { key: 'Escape', target: first, isComposing: true, preventDefault });
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(host.drawer()).toBe(panel);
+      panel.emit('keydown', { key: 'Escape', target: first, preventDefault });
+      expect(preventDefault).toHaveBeenCalledOnce();
+      expect(host.drawer()).toBeUndefined();
+    } finally { host.controller.shutdown(); }
+  });
+
+  it('retains a saved custom editor and palette mode across navigation and close', () => {
+    const host = settingsMainHost();
+    try {
       host.controller.openSettings(host.window);
-      const reopened = all(host.drawer()!).find(
-        (node) => node.localName === 'input' && node.getAttribute('aria-label') === 'Yellow hex',
-      ) as HTMLInputElement;
-      expect(reopened.value).toBe('#123456');
-    } finally {
-      host.controller.shutdown();
-    }
+      host.dispatch({ type: 'appearance', command: { type: 'create' } });
+      host.dispatch({ type: 'appearance', command: { type: 'mode', value: 'dark' } });
+      host.dispatch({ type: 'appearance', command: { type: 'hex', key: 'yellow', value: '#123456' } });
+      host.dispatch({ type: 'appearance', command: { type: 'add' } });
+      expect(host.values.get('appearance.interaction.customThemes')).toBeDefined();
+      const library = host.model().page;
+      if (library.kind !== 'appearance') throw new Error('Expected Appearance');
+      const custom = library.model.themes.find((theme) => theme.custom)!;
+      host.dispatch({ type: 'appearance', command: { type: 'edit', id: custom.id } });
+      host.dispatch({ type: 'section', section: 'Interaction' });
+      host.dispatch({ type: 'section', section: 'Appearance' });
+      let page = host.model().page;
+      expect(page.kind === 'appearance' && page.model.editor?.hex.dark.yellow).toBe('#123456');
+      host.dispatch({ type: 'close' });
+      host.controller.openSettings(host.window);
+      page = host.model().page;
+      expect(page.kind === 'appearance' && page.model.editor?.mode).toBe('dark');
+      expect(page.kind === 'appearance' && page.model.editor?.hex.dark.yellow).toBe('#123456');
+    } finally { host.controller.shutdown(); }
+  });
+
+  it('rejects stale page commands and retains a keybinding draft across navigation and language changes', () => {
+    const host = settingsMainHost();
+    try {
+      host.controller.openSettings(host.window);
+      host.dispatch({ type: 'section', section: 'Keybindings' });
+      const stale = host.model().generation;
+      host.dispatch({ type: 'keybindings', command: { type: 'unbind', context: 'main-normal', action: 'scrollDown' } });
+      let page = host.model().page;
+      expect(page.kind === 'keybindings' && page.model.dirty).toBe(true);
+      host.native().dispatch({ generation: stale, type: 'keybindings', command: { type: 'apply' } });
+      expect(host.values.has('bindings')).toBe(false);
+      host.dispatch({ type: 'section', section: 'Advanced' });
+      host.dispatch({ type: 'form', command: { type: 'value', id: 'language', value: 'zh-CN' } });
+      host.dispatch({ type: 'section', section: 'Keybindings' });
+      page = host.model().page;
+      expect(page.kind === 'keybindings' && page.model.dirty).toBe(true);
+      host.dispatch({ type: 'keybindings', command: { type: 'apply' } });
+      expect(host.values.has('bindings')).toBe(true);
+      page = host.model().page;
+      expect(page.kind === 'keybindings' && page.model.dirty).toBe(false);
+      const retired = host.native();
+      const generation = host.model().generation;
+      host.dispatch({ type: 'close' });
+      host.controller.openSettings(host.window);
+      retired.dispatch({ generation, type: 'section', section: 'Advanced' });
+      expect(host.model().section).toBe('Keybindings');
+    } finally { host.controller.shutdown(); }
+  });
+
+  it('saves module requests only on explicit save', () => {
+    const host = settingsMainHost();
+    try {
+      host.controller.openSettings(host.window);
+      host.dispatch({ type: 'section', section: 'Modules' });
+      host.dispatch({ type: 'form', command: { type: 'value', id: 'modules.request.reader-hints', value: false } });
+      expect(host.values.has('modules.reader-hints.enabled')).toBe(false);
+      host.dispatch({ type: 'form', command: { type: 'action', id: 'modules.save' } });
+      expect(host.values.get('modules.reader-hints.enabled')).toBe(false);
+    } finally { host.controller.shutdown(); }
+  });
+
+  it('fences pending input and retires a loading view before readiness', async () => {
+    setDeferredSettings(true);
+    const host = settingsMainHost();
+    const prior = host.window.document.createElementNS('http://www.w3.org/1999/xhtml', 'button');
+    host.window.document.body?.append(prior); prior.focus();
+    try {
+      host.controller.openSettings(host.window);
+      const view = host.native();
+      view.dispatch({ generation: host.model().generation, type: 'section', section: 'Advanced' });
+      expect(host.model().section).toBe('Appearance');
+      expect(host.press('j', prior).preventDefault).toHaveBeenCalledOnce();
+      host.press('Escape', prior);
+      expect(view.disposed).toBe(true);
+      expect(host.drawer()).toBeUndefined();
+      view.resolve();
+      await expect(view.ready).rejects.toThrow('retired before mount');
+      await Promise.resolve();
+      expect(view.mounted).toBe(false);
+      expect(host.window.document.activeElement).toBe(prior);
+    } finally { host.controller.shutdown(); }
   });
 
   it('rejects ambiguous ownerless opens and uses only an attached owner or sole fallback', () => {
@@ -2501,10 +2468,8 @@ describe('Main tab picker routing', () => {
     await vi.waitFor(() =>
       expect(host.bodyChildren.some((child) => child.id === 'zv-picker-overlay')).toBe(true),
     );
-    const overlay = host.bodyChildren.find((child) => child.id === 'zv-picker-overlay');
-    const title =
-      overlay?.children[0]?.children[0]?.children[0]?.children[0]?.children[0]?.textContent;
-    expect(title).toBe('Tabs');
+    const view = nativeHosts.find((entry) => entry.root.parentElement?.id === 'zv-picker-overlay');
+    expect((view?.model as PickerReactModel).title).toBe('Tabs');
     controller.shutdown();
   });
 });
@@ -2617,15 +2582,12 @@ describe('Reader to Main command palette integration', () => {
       host.bodyChildren.find((child) => child.id === 'zv-picker-overlay') ?? null;
     const pickerParts = (host: { bodyChildren: HTMLElement[] }) => {
       const overlay = overlayFor(host);
-      const left = overlay?.children[0]?.children[0]?.children[0];
-      if (!left) throw new Error('Expected mounted picker left pane');
+      const view = [...nativeHosts].reverse().find((entry) => entry.root.parentElement === overlay && !entry.disposed);
+      if (!view) throw new Error('Expected picker native host');
       return {
-        input: left.children[1] as HTMLElement & {
-          value: string;
-          emit(type: string, event?: Partial<Event>): void;
-        },
-        results: left.children[3] as HTMLElement,
-        title: left.children[0]?.children[0]?.textContent ?? '',
+        input: view.parts.get('query') as HTMLInputElement & { emit(type: string): void },
+        results: view.parts.get('results')!,
+        model: view.model as PickerReactModel,
       };
     };
     const key = (value: string, target: EventTarget | null = null): KeyboardEvent =>
@@ -2642,7 +2604,7 @@ describe('Reader to Main command palette integration', () => {
 
     owner.keydown(key(':'));
     await vi.waitFor(() => expect(overlayFor(owner)).not.toBeNull());
-    await vi.waitFor(() => expect(pickerParts(owner).results.children.length).toBeGreaterThan(0));
+    await vi.waitFor(() => expect(pickerParts(owner).model.rows.length).toBeGreaterThan(0));
     const readerCommands = pickerParts(owner);
     readerCommands.input.value = 'Zoom in';
     readerCommands.input.emit('input');
@@ -2653,11 +2615,12 @@ describe('Reader to Main command palette integration', () => {
 
     owner.keydown(key(':'));
     await vi.waitFor(() => expect(overlayFor(owner)).not.toBeNull());
+    await vi.waitFor(() => expect(pickerParts(owner).model.rows.length).toBeGreaterThan(0));
     const mainCommands = pickerParts(owner);
     mainCommands.input.value = 'all items';
     mainCommands.input.emit('input');
     owner.keydown(key('Enter', mainCommands.results));
-    await vi.waitFor(() => expect(pickerParts(owner).title).toBe('All items'));
+    await vi.waitFor(() => expect(pickerParts(owner).model.title).toBe('All items'));
     expect(overlayFor(other)).toBeNull();
 
     main.removeWindow(owner.window);
