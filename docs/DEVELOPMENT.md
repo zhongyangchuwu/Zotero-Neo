@@ -44,10 +44,11 @@ npm run docs:preview
 
 仓库管理员需要将 Pages 构建来源设为 GitHub Actions。PR 只构建和检查站点，不发布；部署仅允许 `main`。文档站输出独立于 XPI 和插件运行时。
 
-### React UI 设计评审
+### Zotero 原生 React 界面
 
-`npm run ui:review` 启动仅监听回环地址的离线设计工作台，`npm run ui:review:check` 检查其严格类型，并随 `typecheck`／`verify` 执行。设置中心、Picker、参考详情的交互样例、当前实机截图、浅深色方案和迁移边界见[仓库 UI 评审资料](https://github.com/zhongyangchuwu/Zotero-Neo/tree/main/assets/ui-review)。样例不调用 Zotero SDK 或网络服务，不代表生产界面已经迁移。
+设置中心、Picker 和引用详情在实际 Zotero 窗口中使用静态打包的 React 界面。`src/platform/native-ui.ts` 按精确 Window／Document 管理运行时和视图，跨 compartment 只传递克隆的数据模型和显式命令；业务控制器继续负责输入、提交及异步工作。界面关闭时先卸载 React，再释放宿主节点。共享 React bundle 也供 AI 问答界面使用，不会因为打开这些界面而发起模型请求。
 
+按下文使用隔离配置在 Zotero 中验证受影响的设置、Picker 和 Reader 工作流，包括焦点、重开与释放。真实界面截图及历史设计图见[仓库 UI 评审资料](https://github.com/zhongyangchuwu/Zotero-Neo/tree/main/assets/ui-review)。
 
 ### 本地 Zotero GUI 迭代
 
