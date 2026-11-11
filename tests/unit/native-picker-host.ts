@@ -21,9 +21,20 @@ export function mountNativeReactView(options: {
   isCurrent: () => boolean;
 }): NativeReactView<PickerReactModel> {
   const { root } = options;
-  const create = (tag: string) => root.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', tag) as HTMLElement;
+  const create = (tag: string) =>
+    root.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', tag) as HTMLElement;
   const parts = new Map<string, HTMLElement>();
-  for (const part of ['query', 'results', 'preview', 'count', 'source', 'status', 'preview-title', 'query-help', 'list-help']) {
+  for (const part of [
+    'query',
+    'results',
+    'preview',
+    'count',
+    'source',
+    'status',
+    'preview-title',
+    'query-help',
+    'list-help',
+  ]) {
     const element = create(part === 'query' ? 'input' : part === 'source' ? 'button' : 'div');
     parts.set(part, element);
     root.append(element);
@@ -51,15 +62,21 @@ export function mountNativeReactView(options: {
     ready,
     update,
     getElement: (part: string) => parts.get(part) ?? null,
-    dispose: () => { disposed = true; },
-    get model() { return model; },
+    dispose: () => {
+      disposed = true;
+    },
+    get model() {
+      return model;
+    },
   };
   update(model);
   return view;
 }
 
 export function pickerModel(session: MainWindowSession): PickerReactModel {
-  const view = session.picker.view as (NativeReactView<PickerReactModel> & { model: PickerReactModel }) | null;
+  const view = session.picker.view as
+    | (NativeReactView<PickerReactModel> & { model: PickerReactModel })
+    | null;
   if (!view) throw new Error('Expected mounted picker view');
   return view.model;
 }

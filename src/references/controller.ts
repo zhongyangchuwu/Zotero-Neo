@@ -409,123 +409,538 @@ export class ReferenceController {
         );
       return value;
     };
-    let model: ReferenceViewModel = { generation: 0, chinese: this.port.language() === 'zh-CN', scene: 'loading', status: text('Loading references…', '正在加载参考文献…'), title: '', description: '', query: '', rows: [], result: '', provenance: '', paper: null, hasTarget: false, doi: false, arxiv: false };
+    let model: ReferenceViewModel = {
+      generation: 0,
+      chinese: this.port.language() === 'zh-CN',
+      scene: 'loading',
+      status: text('Loading references…', '正在加载参考文献…'),
+      title: '',
+      description: '',
+      query: '',
+      rows: [],
+      result: '',
+      provenance: '',
+      paper: null,
+      hasTarget: false,
+      doi: false,
+      arxiv: false,
+    };
     let matches: readonly ReferenceLocalMatch[] = [];
     let candidates: readonly ScholarlyPaper[] = [];
     let choices: readonly ReaderReferenceEntry[] = [];
     let initialQuery: ReferenceQuery | null = null;
     let displayedQuery: string | null = null;
     let displayedProvenance = '';
-    const update = (changes: Partial<ReferenceViewModel>): void => { model = { ...model, ...changes, generation: model.generation + 1 }; view?.update(model); place(); };
+    const update = (changes: Partial<ReferenceViewModel>): void => {
+      model = { ...model, ...changes, generation: model.generation + 1 };
+      view?.update(model);
+      place();
+    };
     const setStatus = (status: string): void => update({ status });
     const go = (scene: ReferenceViewModel['scene'], changes: Partial<ReferenceViewModel>): void => {
-      const ownsFocus = content.contains(doc.activeElement); stop(); if (ownsFocus) root.focus();
-      update({ scene, status: '', title: '', description: '', query: '', rows: [], result: '', provenance: '', paper: null, hasTarget: false, doi: false, arxiv: false, ...changes });
+      const ownsFocus = content.contains(doc.activeElement);
+      stop();
+      if (ownsFocus) root.focus();
+      update({
+        scene,
+        status: '',
+        title: '',
+        description: '',
+        query: '',
+        rows: [],
+        result: '',
+        provenance: '',
+        paper: null,
+        hasTarget: false,
+        doi: false,
+        arxiv: false,
+        ...changes,
+      });
     };
     const jump = (location: ReaderReferenceLocation): void => {
       const token = revision;
-      void validated().then((valid) => { if (!valid || revision !== token) return; if (access.jump(location)) close(true); else setStatus(text('Navigation unavailable for this location.', '无法跳转到此位置。')); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); });
+      void validated()
+        .then((valid) => {
+          if (!valid || revision !== token) return;
+          if (access.jump(location)) close(true);
+          else setStatus(text('Navigation unavailable for this location.', '无法跳转到此位置。'));
+        })
+        .catch((error: unknown) => {
+          if (current() && revision === token) setStatus(message(error));
+        });
     };
     const safeOpen = (url: string): void => {
       const token = revision;
-      void validated().then((valid) => { if (!valid || revision !== token) return; const URLConstructor = (uiWindow as Window & typeof globalThis).URL; const parsed = new URLConstructor(url); if (!['https:', 'http:'].includes(parsed.protocol) || !launchMainURL(parsed.href)) throw new Error('URL navigation unavailable'); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); });
+      void validated()
+        .then((valid) => {
+          if (!valid || revision !== token) return;
+          const URLConstructor = (uiWindow as Window & typeof globalThis).URL;
+          const parsed = new URLConstructor(url);
+          if (!['https:', 'http:'].includes(parsed.protocol) || !launchMainURL(parsed.href))
+            throw new Error('URL navigation unavailable');
+        })
+        .catch((error: unknown) => {
+          if (current() && revision === token) setStatus(message(error));
+        });
     };
-    const queryFor = (entry: ReaderReferenceEntry): ReferenceQuery => ({ text: entry.text, ...(entry.doi ? { doi: entry.doi } : {}), ...(entry.arxivID ? { arxivID: entry.arxivID } : {}) });
-    const queryFromInput = (value: string): ReferenceQuery => { const text = value.trim(); const doi = normalizeDOI(text); const arxivID = normalizeArxiv(text); return { text, ...(doi ? { doi } : {}), ...(arxivID ? { arxivID } : {}) }; };
-    const catalogRows = (query: string): readonly ReferenceRow[] => { const term = query.trim().toLocaleLowerCase(); return (data?.entries ?? []).filter((entry) => !term || `${entry.label} ${entry.text}`.toLocaleLowerCase().includes(term)).map((entry) => ({ id: entry.id, label: `${entry.label} ${entry.text}` })); };
+    const queryFor = (entry: ReaderReferenceEntry): ReferenceQuery => ({
+      text: entry.text,
+      ...(entry.doi ? { doi: entry.doi } : {}),
+      ...(entry.arxivID ? { arxivID: entry.arxivID } : {}),
+    });
+    const queryFromInput = (value: string): ReferenceQuery => {
+      const text = value.trim();
+      const doi = normalizeDOI(text);
+      const arxivID = normalizeArxiv(text);
+      return { text, ...(doi ? { doi } : {}), ...(arxivID ? { arxivID } : {}) };
+    };
+    const catalogRows = (query: string): readonly ReferenceRow[] => {
+      const term = query.trim().toLocaleLowerCase();
+      return (data?.entries ?? [])
+        .filter(
+          (entry) => !term || `${entry.label} ${entry.text}`.toLocaleLowerCase().includes(term),
+        )
+        .map((entry) => ({ id: entry.id, label: `${entry.label} ${entry.text}` }));
+    };
     const catalogScene = (): void => {
-      const rows = catalogRows(''); go('catalog', { title: text('Bibliography', '参考文献'), rows, result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。'), status: data?.bibliographyCoverage === 'partial' ? text('Bibliography is partial; other entries may be missing.', '参考文献列表不完整，可能仍有遗漏。') : '' });
+      const rows = catalogRows('');
+      go('catalog', {
+        title: text('Bibliography', '参考文献'),
+        rows,
+        result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。'),
+        status:
+          data?.bibliographyCoverage === 'partial'
+            ? text(
+                'Bibliography is partial; other entries may be missing.',
+                '参考文献列表不完整，可能仍有遗漏。',
+              )
+            : '',
+      });
       if (doc.activeElement === root) view?.getElement('query')?.focus();
     };
-    const targetScene = (): void => { go('target', selected ? { hasTarget: true, title: selected.label, description: selected.text, doi: !!selected.doi, arxiv: !!selected.arxivID } : { description: text('No reference identified at this position.', '此位置未识别到参考文献。') }); };
+    const targetScene = (): void => {
+      go(
+        'target',
+        selected
+          ? {
+              hasTarget: true,
+              title: selected.label,
+              description: selected.text,
+              doi: !!selected.doi,
+              arxiv: !!selected.arxivID,
+            }
+          : {
+              description: text(
+                'No reference identified at this position.',
+                '此位置未识别到参考文献。',
+              ),
+            },
+      );
+    };
     const mentionsScene = (): void => {
-      const occurrences = data?.occurrences.filter((item) => selected && item.referenceIDs.includes(selected.id)) ?? [];
-      go('mentions', { title: text(`Recognized local mentions (${occurrences.length})`, `已识别的本地引用位置（${occurrences.length}）`), description: selected?.text ?? '', rows: occurrences.map((item, index) => ({ id: String(index), label: `${text('Page', '第')} ${item.location.pageIndex + 1}: ${item.context || item.text}` })), result: occurrences.length ? '' : text('No local mentions were recognized; this does not establish that the reference is uncited.', '未识别到本地引用位置；这并不代表该文献未被引用。') });
+      const occurrences =
+        data?.occurrences.filter((item) => selected && item.referenceIDs.includes(selected.id)) ??
+        [];
+      go('mentions', {
+        title: text(
+          `Recognized local mentions (${occurrences.length})`,
+          `已识别的本地引用位置（${occurrences.length}）`,
+        ),
+        description: selected?.text ?? '',
+        rows: occurrences.map((item, index) => ({
+          id: String(index),
+          label: `${text('Page', '第')} ${item.location.pageIndex + 1}: ${item.context || item.text}`,
+        })),
+        result: occurrences.length
+          ? ''
+          : text(
+              'No local mentions were recognized; this does not establish that the reference is uncited.',
+              '未识别到本地引用位置；这并不代表该文献未被引用。',
+            ),
+      });
     };
     const localSearch = (): void => {
-      stop(); const submitted = initialQuery && model.query === initialQuery.text ? initialQuery : queryFromInput(model.query);
-      if (!submitted.text) { update({ rows: [], result: text('Enter a title, DOI or arXiv ID.', '请输入标题、DOI 或 arXiv ID。') }); return; }
-      if (libraryID === null) { update({ rows: [], result: text('Library unavailable.', '文库不可用。') }); return; }
-      const token = revision; update({ rows: [], result: text('Searching…', '正在查找…') });
-      void validated().then((valid) => valid && revision === token ? findReferenceItems(submitted, libraryID) : null).then(async (value) => {
-        if (!value || revision !== token || !(await validated()) || revision !== token) return;
-        matches = value; update({ rows: value.map((match, index) => ({ id: String(index), label: `${match.title}${match.attachmentID ? ' (PDF)' : ''}` })), result: value.length ? '' : text('No local matches.', '没有本地匹配。') });
-      }).catch((error: unknown) => { if (current() && revision === token) update({ result: message(error) }); });
+      stop();
+      const submitted =
+        initialQuery && model.query === initialQuery.text
+          ? initialQuery
+          : queryFromInput(model.query);
+      if (!submitted.text) {
+        update({
+          rows: [],
+          result: text('Enter a title, DOI or arXiv ID.', '请输入标题、DOI 或 arXiv ID。'),
+        });
+        return;
+      }
+      if (libraryID === null) {
+        update({ rows: [], result: text('Library unavailable.', '文库不可用。') });
+        return;
+      }
+      const token = revision;
+      update({ rows: [], result: text('Searching…', '正在查找…') });
+      void validated()
+        .then((valid) =>
+          valid && revision === token ? findReferenceItems(submitted, libraryID) : null,
+        )
+        .then(async (value) => {
+          if (!value || revision !== token || !(await validated()) || revision !== token) return;
+          matches = value;
+          update({
+            rows: value.map((match, index) => ({
+              id: String(index),
+              label: `${match.title}${match.attachmentID ? ' (PDF)' : ''}`,
+            })),
+            result: value.length ? '' : text('No local matches.', '没有本地匹配。'),
+          });
+        })
+        .catch((error: unknown) => {
+          if (current() && revision === token) update({ result: message(error) });
+        });
     };
     const localScene = (): void => {
-      if (!selected) return; initialQuery = paper ? { text: paper.title, ...(paper.doi ? { doi: paper.doi } : {}), ...(paper.arxivID ? { arxivID: paper.arxivID } : {}) } : queryFor(selected);
-      go('local', { title: text('Local library candidates', '本地文库候选'), query: initialQuery.text }); localSearch(); if (doc.activeElement === root) view?.getElement('query')?.focus();
+      if (!selected) return;
+      initialQuery = paper
+        ? {
+            text: paper.title,
+            ...(paper.doi ? { doi: paper.doi } : {}),
+            ...(paper.arxivID ? { arxivID: paper.arxivID } : {}),
+          }
+        : queryFor(selected);
+      go('local', {
+        title: text('Local library candidates', '本地文库候选'),
+        query: initialQuery.text,
+      });
+      localSearch();
+      if (doc.activeElement === root) view?.getElement('query')?.focus();
     };
-    const showPaper = (value: ScholarlyPaper): void => { const ownsFocus = !!view?.getElement('result')?.contains(doc.activeElement); stop(); paper = value; update({ paper: value, rows: [], result: '' }); if (ownsFocus) view?.getElement('result')?.focus(); };
+    const showPaper = (value: ScholarlyPaper): void => {
+      const ownsFocus = !!view?.getElement('result')?.contains(doc.activeElement);
+      stop();
+      paper = value;
+      update({ paper: value, rows: [], result: '' });
+      if (ownsFocus) view?.getElement('result')?.focus();
+    };
     const metadataSearch = (mode?: 'cache-only' | 'refresh'): void => {
-      stop(); const token = revision; const submitted = initialQuery && model.query === initialQuery.text ? initialQuery : queryFromInput(model.query); const queryKey = JSON.stringify(submitted); const preserve = mode === 'refresh' && displayedQuery === queryKey; const previousProvenance = displayedProvenance;
-      if (!preserve) { paper = null; displayedQuery = null; displayedProvenance = ''; update({ paper: null, rows: [], provenance: '', status: '' }); }
-      if (!submitted.text) { update({ result: text('Enter a title, DOI or arXiv ID.', '请输入标题、DOI 或 arXiv ID。') }); return; }
-      const controller = createReferenceAbortController(); abort = controller;
-      update(preserve ? { status: text('Refreshing metadata…', '正在刷新元数据…') } : { result: mode === 'cache-only' ? text('Checking cache…', '正在检查缓存…') : text('Querying…', '正在查询…') });
-      void validated().then((valid) => valid && revision === token ? this.#metadata.lookup(submitted, controller.signal, mode) : null).then(async (value) => {
-        if (!value || revision !== token || !(await validated()) || revision !== token) return;
-        const info = value.cache; const origin = info ? `${info.origin === 'cached' ? text('Cached', '缓存') : text('Fetched', '已获取')}${info.stale ? ` · ${text('Stale', '已过期')}` : ''}` : ''; const provenance = `${origin}${info?.warning ? ` · ${info.warning}` : ''}`;
-        if (preserve && info?.origin === 'cached' && info.warning) { displayedProvenance = origin; update({ provenance, status: info.warning }); return; }
-        displayedQuery = value.kind === 'not-found' ? null : queryKey; displayedProvenance = origin;
-        if (value.kind === 'found') { update({ provenance, status: '' }); showPaper(value.paper); }
-        else if (value.kind === 'not-found') update({ provenance, status: '', rows: [], result: mode === 'cache-only' ? text('No cached metadata. Search to fetch it.', '没有缓存的元数据。请搜索以获取。') : text('No metadata found.', '未找到元数据。') });
-        else { candidates = value.papers; update({ provenance, status: '', result: text('Choose a matching record:', '请选择匹配的记录：'), rows: candidates.map((candidate, index) => ({ id: String(index), label: `${candidate.title} — ${candidate.authors.join(', ')} ${candidate.year ?? ''}` })) }); }
-      }).catch((error: unknown) => { if (!current() || revision !== token) return; if (preserve) update({ provenance: [previousProvenance, text('Refresh failed; showing previous result', '刷新失败，显示原有结果')].filter(Boolean).join(' · '), status: message(error) }); else update({ result: message(error) }); });
+      stop();
+      const token = revision;
+      const submitted =
+        initialQuery && model.query === initialQuery.text
+          ? initialQuery
+          : queryFromInput(model.query);
+      const queryKey = JSON.stringify(submitted);
+      const preserve = mode === 'refresh' && displayedQuery === queryKey;
+      const previousProvenance = displayedProvenance;
+      if (!preserve) {
+        paper = null;
+        displayedQuery = null;
+        displayedProvenance = '';
+        update({ paper: null, rows: [], provenance: '', status: '' });
+      }
+      if (!submitted.text) {
+        update({
+          result: text('Enter a title, DOI or arXiv ID.', '请输入标题、DOI 或 arXiv ID。'),
+        });
+        return;
+      }
+      const controller = createReferenceAbortController();
+      abort = controller;
+      update(
+        preserve
+          ? { status: text('Refreshing metadata…', '正在刷新元数据…') }
+          : {
+              result:
+                mode === 'cache-only'
+                  ? text('Checking cache…', '正在检查缓存…')
+                  : text('Querying…', '正在查询…'),
+            },
+      );
+      void validated()
+        .then((valid) =>
+          valid && revision === token
+            ? this.#metadata.lookup(submitted, controller.signal, mode)
+            : null,
+        )
+        .then(async (value) => {
+          if (!value || revision !== token || !(await validated()) || revision !== token) return;
+          const info = value.cache;
+          const origin = info
+            ? `${info.origin === 'cached' ? text('Cached', '缓存') : text('Fetched', '已获取')}${info.stale ? ` · ${text('Stale', '已过期')}` : ''}`
+            : '';
+          const provenance = `${origin}${info?.warning ? ` · ${info.warning}` : ''}`;
+          if (preserve && info?.origin === 'cached' && info.warning) {
+            displayedProvenance = origin;
+            update({ provenance, status: info.warning });
+            return;
+          }
+          displayedQuery = value.kind === 'not-found' ? null : queryKey;
+          displayedProvenance = origin;
+          if (value.kind === 'found') {
+            update({ provenance, status: '' });
+            showPaper(value.paper);
+          } else if (value.kind === 'not-found') {
+            paper = null;
+            update({
+              provenance,
+              status: '',
+              paper: null,
+              rows: [],
+              result:
+                mode === 'cache-only'
+                  ? text(
+                      'No cached metadata. Search to fetch it.',
+                      '没有缓存的元数据。请搜索以获取。',
+                    )
+                  : text('No metadata found.', '未找到元数据。'),
+            });
+          } else {
+            paper = null;
+            candidates = value.papers;
+            update({
+              provenance,
+              status: '',
+              paper: null,
+              result: text('Choose a matching record:', '请选择匹配的记录：'),
+              rows: candidates.map((candidate, index) => ({
+                id: String(index),
+                label: `${candidate.title} — ${candidate.authors.join(', ')} ${candidate.year ?? ''}`,
+              })),
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          if (!current() || revision !== token) return;
+          if (preserve)
+            update({
+              provenance: [
+                previousProvenance,
+                text('Refresh failed; showing previous result', '刷新失败，显示原有结果'),
+              ]
+                .filter(Boolean)
+                .join(' · '),
+              status: message(error),
+            });
+          else update({ result: message(error) });
+        });
     };
-    const metadataScene = (): void => { if (!selected) return; initialQuery = queryFor(selected); displayedQuery = null; displayedProvenance = ''; go('metadata', { title: text('Scholarly metadata', '学术元数据'), query: selected.text }); metadataSearch('cache-only'); if (doc.activeElement === root) view?.getElement('query')?.focus(); };
+    const metadataScene = (): void => {
+      if (!selected) return;
+      initialQuery = queryFor(selected);
+      displayedQuery = null;
+      displayedProvenance = '';
+      go('metadata', { title: text('Scholarly metadata', '学术元数据'), query: selected.text });
+      metadataSearch('cache-only');
+      if (doc.activeElement === root) view?.getElement('query')?.focus();
+    };
     const dispatch = (command: ReferenceCommand): void => {
-      if (!current() || !command || typeof command !== 'object' || command.generation !== model.generation) return;
-      if (composing && (command.type === 'local-search' || command.type === 'metadata-search')) return;
+      if (
+        !current() ||
+        !command ||
+        typeof command !== 'object' ||
+        command.generation !== model.generation
+      )
+        return;
+      if (composing && (command.type === 'local-search' || command.type === 'metadata-search'))
+        return;
       switch (command.type) {
-        case 'close': close(true); break;
-        case 'catalog': if (model.scene === 'target' || model.scene === 'choose') catalogScene(); break;
-        case 'back': if (model.scene === 'mentions' || model.scene === 'local' || model.scene === 'metadata') targetScene(); break;
-        case 'mentions': if (model.scene === 'target' && selected) mentionsScene(); break;
-        case 'local': if (model.scene === 'target' && selected) localScene(); break;
-        case 'metadata': if (model.scene === 'target' && selected) metadataScene(); break;
+        case 'close':
+          close(true);
+          break;
+        case 'catalog':
+          if (model.scene === 'target' || model.scene === 'choose') catalogScene();
+          break;
+        case 'back':
+          if (model.scene === 'mentions' || model.scene === 'local' || model.scene === 'metadata')
+            targetScene();
+          break;
+        case 'mentions':
+          if (model.scene === 'target' && selected) mentionsScene();
+          break;
+        case 'local':
+          if (model.scene === 'target' && selected) localScene();
+          break;
+        case 'metadata':
+          if (model.scene === 'target' && selected) metadataScene();
+          break;
         case 'query': {
           if (typeof command.value !== 'string') break;
-          if (model.scene === 'catalog') { const rows = catalogRows(command.value); update({ query: command.value, rows, result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。') }); }
-          else if (model.scene === 'local' || model.scene === 'metadata') { stop(); if (model.scene === 'metadata') { paper = null; displayedQuery = null; displayedProvenance = ''; } update({ query: command.value, rows: [], result: '', provenance: '', paper: null }); } break;
+          if (model.scene === 'catalog') {
+            const rows = catalogRows(command.value);
+            update({
+              query: command.value,
+              rows,
+              result: rows.length ? '' : text('No matching references.', '没有匹配的参考文献。'),
+            });
+          } else if (model.scene === 'local' || model.scene === 'metadata') {
+            stop();
+            if (model.scene === 'metadata') {
+              paper = null;
+              displayedQuery = null;
+              displayedProvenance = '';
+            }
+            update({ query: command.value, rows: [], result: '', provenance: '', paper: null });
+          }
+          break;
         }
         case 'select': {
-          const entry = (model.scene === 'choose' ? choices : model.scene === 'catalog' ? data?.entries ?? [] : []).find((item) => item.id === command.id && model.rows.some((row) => row.id === command.id));
-          if (entry) { selected = entry; paper = null; if (model.scene === 'choose') presentTarget(); else targetScene(); } break;
+          const entry = (
+            model.scene === 'choose'
+              ? choices
+              : model.scene === 'catalog'
+                ? (data?.entries ?? [])
+                : []
+          ).find(
+            (item) => item.id === command.id && model.rows.some((row) => row.id === command.id),
+          );
+          if (entry) {
+            selected = entry;
+            paper = null;
+            if (model.scene === 'choose') presentTarget();
+            else targetScene();
+          }
+          break;
         }
-        case 'jump': if (model.scene === 'target' && selected) jump(selected.location); break;
-        case 'occurrence': { if (model.scene !== 'mentions' || !model.rows.some((row) => row.id === command.id)) break; const occurrence = data?.occurrences.filter((item) => selected && item.referenceIDs.includes(selected.id))[Number(command.id)]; if (occurrence) jump(occurrence.location); break; }
-        case 'doi': if (model.scene === 'target' && selected?.doi) safeOpen(`https://doi.org/${selected.doi}`); break;
-        case 'arxiv': if (model.scene === 'target' && selected?.arxivID) safeOpen(`https://arxiv.org/abs/${selected.arxivID}`); break;
-        case 'web': if (model.scene === 'target' && selected) safeOpen(`https://scholar.google.com/scholar?q=${encodeURIComponent(selected.text)}`); break;
-        case 'local-search': if (model.scene === 'local') localSearch(); break;
+        case 'jump':
+          if (model.scene === 'target' && selected) jump(selected.location);
+          break;
+        case 'occurrence': {
+          if (model.scene !== 'mentions' || !model.rows.some((row) => row.id === command.id)) break;
+          const occurrence = data?.occurrences.filter(
+            (item) => selected && item.referenceIDs.includes(selected.id),
+          )[Number(command.id)];
+          if (occurrence) jump(occurrence.location);
+          break;
+        }
+        case 'doi':
+          if (model.scene === 'target' && selected?.doi)
+            safeOpen(`https://doi.org/${selected.doi}`);
+          break;
+        case 'arxiv':
+          if (model.scene === 'target' && selected?.arxivID)
+            safeOpen(`https://arxiv.org/abs/${selected.arxivID}`);
+          break;
+        case 'web':
+          if (model.scene === 'target' && selected)
+            safeOpen(`https://scholar.google.com/scholar?q=${encodeURIComponent(selected.text)}`);
+          break;
+        case 'local-search':
+          if (model.scene === 'local') localSearch();
+          break;
         case 'match': {
-          if (model.scene !== 'local' || !model.rows.some((row) => row.id === command.id)) break; const match = matches[Number(command.id)];
-          if (!match?.attachmentID || !opening?.viewAttachment) { setStatus(text('No local PDF available.', '没有可用的本地 PDF。')); break; }
-          const attachmentID = match.attachmentID; const viewAttachment = opening.viewAttachment; const token = revision;
-          void validated().then((valid) => valid && revision === token ? viewAttachment(attachmentID) : undefined).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); }); break;
+          if (model.scene !== 'local' || !model.rows.some((row) => row.id === command.id)) break;
+          const match = matches[Number(command.id)];
+          if (!match?.attachmentID || !opening?.viewAttachment) {
+            setStatus(text('No local PDF available.', '没有可用的本地 PDF。'));
+            break;
+          }
+          const attachmentID = match.attachmentID;
+          const viewAttachment = opening.viewAttachment;
+          const token = revision;
+          void validated()
+            .then((valid) =>
+              valid && revision === token ? viewAttachment(attachmentID) : undefined,
+            )
+            .catch((error: unknown) => {
+              if (current() && revision === token) setStatus(message(error));
+            });
+          break;
         }
-        case 'metadata-search': if (model.scene === 'metadata') metadataSearch(); break;
-        case 'metadata-refresh': if (model.scene === 'metadata') metadataSearch('refresh'); break;
+        case 'metadata-search':
+          if (model.scene === 'metadata') metadataSearch();
+          break;
+        case 'metadata-refresh':
+          if (model.scene === 'metadata') metadataSearch('refresh');
+          break;
         case 'metadata-clear': {
-          if (model.scene !== 'metadata') break; stop(); const token = revision;
-          void this.#metadata.clearCache().then(() => { if (!current() || revision !== token) return; paper = null; displayedQuery = null; displayedProvenance = ''; update({ paper: null, rows: [], provenance: '', result: text('Metadata cache cleared.', '元数据缓存已清除。') }); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); }); break;
+          if (model.scene !== 'metadata') break;
+          stop();
+          const token = revision;
+          void this.#metadata
+            .clearCache()
+            .then(() => {
+              if (!current() || revision !== token) return;
+              paper = null;
+              displayedQuery = null;
+              displayedProvenance = '';
+              update({
+                paper: null,
+                rows: [],
+                provenance: '',
+                result: text('Metadata cache cleared.', '元数据缓存已清除。'),
+              });
+            })
+            .catch((error: unknown) => {
+              if (current() && revision === token) setStatus(message(error));
+            });
+          break;
         }
         case 'candidate': {
-          if (model.scene !== 'metadata' || !model.rows.some((row) => row.id === command.id)) break; const candidate = candidates[Number(command.id)]; if (!candidate) break; stop(); const token = revision;
-          void validated().then((valid) => { if (valid && revision === token) showPaper(candidate); }).catch((error: unknown) => { if (current() && revision === token) update({ result: message(error) }); }); break;
+          if (model.scene !== 'metadata' || !model.rows.some((row) => row.id === command.id)) break;
+          const candidate = candidates[Number(command.id)];
+          if (!candidate) break;
+          stop();
+          const token = revision;
+          void validated()
+            .then((valid) => {
+              if (valid && revision === token) showPaper(candidate);
+            })
+            .catch((error: unknown) => {
+              if (current() && revision === token) update({ result: message(error) });
+            });
+          break;
         }
-        case 'source': if (model.scene === 'metadata' && paper?.url) safeOpen(paper.url); break;
-        case 'pdf': if (model.scene === 'metadata' && paper?.pdfURL) safeOpen(paper.pdfURL); break;
+        case 'source':
+          if (model.scene === 'metadata' && paper?.url) safeOpen(paper.url);
+          break;
+        case 'pdf':
+          if (model.scene === 'metadata' && paper?.pdfURL) safeOpen(paper.pdfURL);
+          break;
         case 'add': {
-          if (model.scene !== 'metadata' || !paper) break; if (libraryID === null) { setStatus(text('Library unavailable.', '文库不可用。')); break; }
-          const value = paper; const token = revision; setStatus(text('Adding…', '正在添加…'));
-          void addReferencePaper(value, libraryID, async () => (await validated()) && revision === token).then(async (match) => { if (revision === token && (await validated()) && revision === token) setStatus(`${text('Available in Zotero', '已在 Zotero 中可用')}: ${match.title}`); }).catch((error: unknown) => { if (current() && revision === token) setStatus(message(error)); }); break;
+          if (model.scene !== 'metadata' || !paper) break;
+          if (libraryID === null) {
+            setStatus(text('Library unavailable.', '文库不可用。'));
+            break;
+          }
+          const value = paper;
+          const token = revision;
+          setStatus(text('Adding…', '正在添加…'));
+          void addReferencePaper(
+            value,
+            libraryID,
+            async () => (await validated()) && revision === token,
+          )
+            .then(async (match) => {
+              if (revision === token && (await validated()) && revision === token)
+                setStatus(`${text('Available in Zotero', '已在 Zotero 中可用')}: ${match.title}`);
+            })
+            .catch((error: unknown) => {
+              if (current() && revision === token) setStatus(message(error));
+            });
+          break;
         }
       }
     };
-    view = mountNativeReactView({ surface: 'references', root: content, model, dispatch, isCurrent: current, loadingText: text('Loading references…', '正在加载参考文献…'), errorText: text('Reference view unavailable.', '引用视图不可用。'), onError: (error) => { if (current()) this.port.showStatus(message(error)); } });
-    void view.ready.then(() => { if (current() && doc.activeElement === root && (model.scene === 'catalog' || model.scene === 'local' || model.scene === 'metadata')) view?.getElement('query')?.focus(); }).catch(() => {});
+    view = mountNativeReactView({
+      surface: 'references',
+      root: content,
+      model,
+      dispatch,
+      isCurrent: current,
+      loadingText: text('Loading references…', '正在加载参考文献…'),
+      errorText: text('Reference view unavailable.', '引用视图不可用。'),
+      onError: (error) => {
+        if (current()) this.port.showStatus(message(error));
+      },
+    });
+    void view.ready
+      .then(() => {
+        if (
+          current() &&
+          doc.activeElement === root &&
+          (model.scene === 'catalog' || model.scene === 'local' || model.scene === 'metadata')
+        )
+          view?.getElement('query')?.focus();
+      })
+      .catch(() => {});
     const presentTarget = (): void => {
       if (!selected) targetScene();
       else if (intent === 'mentions') mentionsScene();
@@ -559,12 +974,13 @@ export class ReferenceController {
         if (candidates.length === 1) {
           selected = candidates[0]!;
           presentTarget();
-        } else if (candidates.length > 1)
-          {
-            choices = candidates;
-            go('choose', { description: text('Choose a reference:', '请选择参考文献：'), rows: choices.map((entry) => ({ id: entry.id, label: `${entry.label} ${entry.text}` })) });
-          }
-        else targetScene();
+        } else if (candidates.length > 1) {
+          choices = candidates;
+          go('choose', {
+            description: text('Choose a reference:', '请选择参考文献：'),
+            rows: choices.map((entry) => ({ id: entry.id, label: `${entry.label} ${entry.text}` })),
+          });
+        } else targetScene();
       })
       .catch((error: unknown) => {
         if (current()) setStatus(message(error));

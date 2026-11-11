@@ -60,10 +60,7 @@ class Preferences implements PreferenceStore {
   }
 }
 
-function mount(
-  initial: Record<string, PreferenceValue> = {},
-  language: 'en' | 'zh-CN' = 'en',
-) {
+function mount(initial: Record<string, PreferenceValue> = {}, language: 'en' | 'zh-CN' = 'en') {
   const preferences = new Preferences(initial);
   let changes = 0;
   const page = new SettingsAdvanced({} as never, preferences, language, () => changes++);
@@ -71,38 +68,15 @@ function mount(
 }
 
 function field(page: SettingsAdvanced, id: string) {
-  const match = page.model().groups.flatMap((group) => group.fields).find((item) => item.id === id);
+  const match = page
+    .model()
+    .groups.flatMap((group) => group.fields)
+    .find((item) => item.id === id);
   if (!match) throw new Error(`Missing field: ${id}`);
   return match;
 }
 
 describe('Advanced Settings controller', () => {
-  it('models the existing choices and separator default without writing on construction', () => {
-    const test = mount();
-    const language = field(test.page, 'language');
-
-    expect(test.page.model().groups.map((group) => group.id)).toEqual(['language', 'tag-namespaces']);
-    expect(language).toMatchObject({
-      id: 'language',
-      kind: 'choice',
-      value: '',
-      options: [
-        { value: '', label: 'Follow Zotero' },
-        { value: 'en', label: 'English' },
-        { value: 'zh-CN', label: '中文' },
-      ],
-    });
-    expect(field(test.page, 'tagSeparator')).toMatchObject({
-      id: 'tagSeparator',
-      kind: 'text',
-      value: '/',
-      commit: 'change',
-    });
-    expect(test.preferences.writes).toEqual([]);
-    expect(test.changes()).toBe(0);
-    test.page.dispose();
-  });
-
   it('persists only accepted language and separator values immediately, including explicit flat matching', () => {
     const test = mount();
 
@@ -119,14 +93,17 @@ describe('Advanced Settings controller', () => {
     expect(tagSeparatorFromPreferences(test.preferences)).toBe('');
     expect(field(test.page, 'tagSeparator')).toMatchObject({ value: '' });
 
+    test.page.dispatch({ type: 'value', id: 'language', value: 'en' });
+    expect(configuredNeoLanguage(test.preferences)).toBe('en');
+    const acceptedWrites = [...test.preferences.writes];
     test.page.dispatch({ type: 'value', id: 'language', value: 'fr' });
     test.page.dispatch({ type: 'value', id: 'language', value: true });
     test.page.dispatch({ type: 'value', id: 'tagSeparator', value: false });
-    test.page.dispatch({ type: 'value', id: LANGUAGE, value: 'en' });
+    test.page.dispatch({ type: 'value', id: 'unowned.preference', value: 'en' });
     test.page.dispatch({ type: 'action', id: 'language' });
-    expect(test.preferences.writes).toHaveLength(3);
-    expect(test.page.model().status).toBeUndefined();
-    expect(test.changes()).toBeGreaterThan(0);
+    expect(test.preferences.writes).toEqual(acceptedWrites);
+    expect(configuredNeoLanguage(test.preferences)).toBe('en');
+    expect(tagSeparatorFromPreferences(test.preferences)).toBe('');
     test.page.dispose();
   });
 

@@ -2461,7 +2461,12 @@ describe('picker owner boundaries', () => {
     const confirm = vi.fn();
     await picker.open(window, session, 'notes', { source: candidateSource(items), confirm });
     expect(pickerModel(session).rows.map((row) => row.boundary)).toEqual([
-      false, false, true, false, false, true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
     ]);
     picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
     picker.onKeyDown(pickerKey('ArrowDown', session.picker.results), window, session);
@@ -2691,8 +2696,7 @@ describe('picker semantic handoff and completed mutation refresh', () => {
       await session.picker.queue;
       expect(confirm).toHaveBeenCalledTimes(activation === 'Enter' ? 2 : 1);
       expect(session.picker.open).toBe(activation === 'Enter');
-      if (activation === 'Enter')
-        expect(pickerModel(session).status).toBe('Saved addition 2');
+      if (activation === 'Enter') expect(pickerModel(session).status).toBe('Saved addition 2');
       refresh.resolve([{ id: 99, title: 'Obsolete refresh', search: 'obsolete' }]);
       await refresh.promise;
       expect(session.picker.open).toBe(activation === 'Enter');

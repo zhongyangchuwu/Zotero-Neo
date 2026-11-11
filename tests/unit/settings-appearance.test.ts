@@ -11,7 +11,10 @@ import {
   serializeCustomInteractionThemes,
   type CustomInteractionTheme,
 } from '../../src/main/interaction-appearance';
-import { SettingsAppearance, type SettingsAppearanceState } from '../../src/main/settings-appearance';
+import {
+  SettingsAppearance,
+  type SettingsAppearanceState,
+} from '../../src/main/settings-appearance';
 
 class Preferences implements PreferenceStore {
   readonly data = new Map<string, boolean | number | string>();
@@ -22,7 +25,9 @@ class Preferences implements PreferenceStore {
   constructor(initial: Record<string, boolean | number | string> = {}) {
     for (const [key, value] of Object.entries(initial)) this.data.set(key, value);
   }
-  has(key: string): boolean { return this.data.has(key); }
+  has(key: string): boolean {
+    return this.data.has(key);
+  }
   get(key: string, fallback: boolean): boolean;
   get(key: string, fallback: number): number;
   get(key: string, fallback: string): string;
@@ -44,7 +49,9 @@ class Preferences implements PreferenceStore {
     const listeners = this.observers.get(key) ?? new Set();
     listeners.add(listener);
     this.observers.set(key, listeners);
-    return () => { listeners.delete(listener); };
+    return () => {
+      listeners.delete(listener);
+    };
   }
   listenerCount(): number {
     return [...this.observers.values()].reduce((count, group) => count + group.size, 0);
@@ -52,14 +59,28 @@ class Preferences implements PreferenceStore {
 }
 
 const custom: CustomInteractionTheme = {
-  id: 'custom:study', name: 'Study', version: 2,
+  id: 'custom:study',
+  name: 'Study',
+  version: 2,
   light: {
-    black: '#202020', red: '#AA0000', green: '#00FF00', yellow: '#FF0000',
-    blue: '#0000AA', magenta: '#AA00AA', cyan: '#00AAAA', white: '#FAFAFA',
+    black: '#202020',
+    red: '#AA0000',
+    green: '#00FF00',
+    yellow: '#FF0000',
+    blue: '#0000AA',
+    magenta: '#AA00AA',
+    cyan: '#00AAAA',
+    white: '#FAFAFA',
   },
   dark: {
-    black: '#161616', red: '#FF2222', green: '#00FFFF', yellow: '#FF00FF',
-    blue: '#2222FF', magenta: '#AA00AA', cyan: '#00AAAA', white: '#F0F0F0',
+    black: '#161616',
+    red: '#FF2222',
+    green: '#00FFFF',
+    yellow: '#FF00FF',
+    blue: '#2222FF',
+    magenta: '#AA00AA',
+    cyan: '#00AAAA',
+    white: '#F0F0F0',
   },
 };
 const stored = serializeCustomInteractionThemes({ version: 2, themes: [custom] });
@@ -74,7 +95,9 @@ function mount(
   const preferences = new Preferences(initial);
   const source = { theme: mode, observe: () => () => {} };
   const manager = new InteractionAppearanceManager(preferences, source);
-  const window = { document: { defaultView: { crypto: { randomUUID: () => 'opaque-123' } } } } as never;
+  const window = {
+    document: { defaultView: { crypto: { randomUUID: () => 'opaque-123' } } },
+  } as never;
   const changed = vi.fn();
   const open = () => new SettingsAppearance(window, preferences, manager, state, 'en', changed);
   const appearance = open();
@@ -92,8 +115,13 @@ describe('Settings Appearance consumer contracts', () => {
     expect(model.themes.map((theme) => theme.id)).toEqual(
       expect.arrayContaining(['zotero', 'catppuccin', 'tokyo-night', 'gruvbox', custom.id]),
     );
-    expect(model.themes.filter((theme) => theme.selected).map((theme) => theme.id)).toEqual([custom.id]);
-    expect(model.themes.find((theme) => theme.id === custom.id)).toMatchObject({ custom: true, palette: custom.dark });
+    expect(model.themes.filter((theme) => theme.selected).map((theme) => theme.id)).toEqual([
+      custom.id,
+    ]);
+    expect(model.themes.find((theme) => theme.id === custom.id)).toMatchObject({
+      custom: true,
+      palette: custom.dark,
+    });
     test.appearance.dispose();
     test.manager.dispose();
   });
@@ -102,12 +130,20 @@ describe('Settings Appearance consumer contracts', () => {
     const test = mount({ [CUSTOM]: stored, [PRESET]: custom.id, [WIDTH]: 1, [STYLE]: 'tinted' });
     test.appearance.dispatch({ type: 'select', id: 'gruvbox' });
     expect(test.preferences.writes).toEqual([[PRESET, 'gruvbox']]);
-    expect(test.manager.appearance).toMatchObject({ colorPreset: 'gruvbox', marker: { width: 1 }, statusStyle: 'tinted' });
+    expect(test.manager.appearance).toMatchObject({
+      colorPreset: 'gruvbox',
+      marker: { width: 1 },
+      statusStyle: 'tinted',
+    });
     test.appearance.dispatch({ type: 'marker-width', value: 4 });
     test.appearance.dispatch({ type: 'status-style', value: 'neutral' });
     test.appearance.dispatch({ type: 'select', id: 'catppuccin' });
     expect(test.appearance.model()).toMatchObject({ markerWidth: 4, statusStyle: 'neutral' });
-    expect(test.manager.appearance).toMatchObject({ colorPreset: 'catppuccin', marker: { width: 4 }, statusStyle: 'neutral' });
+    expect(test.manager.appearance).toMatchObject({
+      colorPreset: 'catppuccin',
+      marker: { width: 4 },
+      statusStyle: 'neutral',
+    });
     expect(test.preferences.get(WIDTH, 0)).toBe(4);
     expect(test.preferences.get(STYLE, '')).toBe('neutral');
     test.appearance.dispose();
@@ -120,13 +156,24 @@ describe('Settings Appearance consumer contracts', () => {
     test.appearance.dispatch({ type: 'create' });
     expect(test.state).toMatchObject({ view: 'editor', editingThemeId: null });
     test.appearance.dispatch({ type: 'hex', key: 'yellow', value: '#112233' });
-    const seeded = seedCustomInteractionTheme(test.preferences, 'catppuccin', 'custom:preview', 'New theme');
+    const seeded = seedCustomInteractionTheme(
+      test.preferences,
+      'catppuccin',
+      'custom:preview',
+      'New theme',
+    );
     const expected = resolveInteractionAppearance(test.preferences, 'light', {
-      ...seeded, light: { ...seeded.light, yellow: '#112233' },
+      ...seeded,
+      light: { ...seeded.light, yellow: '#112233' },
     });
     expect(test.appearance.model().editor).toMatchObject({
-      isNew: true, colors: { yellow: '#112233' },
-      preview: { markerWidth: 1, selection: interactionStatusColors(expected, 'selection'), visual: interactionStatusColors(expected, 'visual') },
+      isNew: true,
+      colors: { yellow: '#112233' },
+      preview: {
+        markerWidth: 1,
+        selection: interactionStatusColors(expected, 'selection'),
+        visual: interactionStatusColors(expected, 'visual'),
+      },
     });
     expect(test.manager.appearance).toEqual(initialAppearance);
     expect(test.preferences.writes).toEqual([]);
@@ -142,7 +189,11 @@ describe('Settings Appearance consumer contracts', () => {
     test.appearance.dispatch({ type: 'create' });
     const original = test.appearance.model().editor!.colors.yellow;
     test.appearance.dispatch({ type: 'hex', key: 'yellow', value: '#123' });
-    expect(test.appearance.model().editor).toMatchObject({ canAdd: false, colors: { yellow: original }, hex: { light: { yellow: '#123' } } });
+    expect(test.appearance.model().editor).toMatchObject({
+      canAdd: false,
+      colors: { yellow: original },
+      hex: { light: { yellow: '#123' } },
+    });
     test.appearance.dispatch({ type: 'name', value: '   ' });
     test.appearance.dispatch({ type: 'hex', key: 'yellow', value: '#123456' });
     expect(test.appearance.model().editor).toMatchObject({ nameValid: false, canAdd: false });
@@ -156,11 +207,15 @@ describe('Settings Appearance consumer contracts', () => {
     expect(test.preferences.writes).toEqual([]);
     test.appearance.dispatch({ type: 'add' });
     const id = test.preferences.get(PRESET, '');
-    expect(themes(test.preferences)).toEqual([{
-      id, name: 'Personal', version: 2,
-      light: expect.objectContaining({ yellow: '#123456', blue: '#456789' }),
-      dark: expect.objectContaining({ green: '#A6E3A1' }),
-    }]);
+    expect(themes(test.preferences)).toEqual([
+      {
+        id,
+        name: 'Personal',
+        version: 2,
+        light: expect.objectContaining({ yellow: '#123456', blue: '#456789' }),
+        dark: expect.objectContaining({ green: '#A6E3A1' }),
+      },
+    ]);
     expect(test.preferences.writes.map(([key]) => key)).toEqual([CUSTOM, PRESET]);
     expect(test.manager.appearance.colors.selectionMarker).toBe('#123456');
     expect(test.appearance.model().themes.find((theme) => theme.id === id)?.selected).toBe(true);
@@ -179,7 +234,12 @@ describe('Settings Appearance consumer contracts', () => {
     expect(test.preferences.get(PRESET, '')).toBe(copy.id);
     expect(test.manager.appearance).toMatchObject({ marker: { width: 2 }, statusStyle: 'tinted' });
     test.appearance.dispatch({ type: 'copy', id: 'catppuccin' });
-    const seeded = seedCustomInteractionTheme(test.preferences, 'catppuccin', 'custom:other', 'New theme');
+    const seeded = seedCustomInteractionTheme(
+      test.preferences,
+      'catppuccin',
+      'custom:other',
+      'New theme',
+    );
     expect(test.appearance.model().editor?.colors).toEqual(seeded.light);
     test.appearance.dispatch({ type: 'back' });
     test.appearance.dispose();
@@ -192,13 +252,19 @@ describe('Settings Appearance consumer contracts', () => {
     expect(test.preferences.get(PRESET, '')).toBe(custom.id);
     test.appearance.dispatch({ type: 'hex', key: 'yellow', value: '#ff' });
     test.appearance.dispatch({ type: 'name', value: '   ' });
-    expect(test.appearance.model().editor).toMatchObject({ nameValid: false, hex: { light: { yellow: '#ff' } } });
+    expect(test.appearance.model().editor).toMatchObject({
+      nameValid: false,
+      hex: { light: { yellow: '#ff' } },
+    });
     expect(test.preferences.writes).toEqual([[PRESET, custom.id]]);
     test.appearance.dispatch({ type: 'hex', key: 'yellow', value: '#abcdef' });
     expect(test.appearance.model().editor?.hex.light.yellow).toBe('#abcdef');
     expect(test.manager.appearance.colors.selectionMarker).toBe('#ABCDEF');
     test.appearance.dispatch({ type: 'name', value: '  Study 2  ' });
-    expect(themes(test.preferences)[0]).toMatchObject({ name: 'Study 2', light: { yellow: '#ABCDEF' } });
+    expect(themes(test.preferences)[0]).toMatchObject({
+      name: 'Study 2',
+      light: { yellow: '#ABCDEF' },
+    });
     expect(test.preferences.writes.map(([key]) => key)).toEqual([PRESET, CUSTOM, CUSTOM]);
     test.appearance.dispose();
     test.manager.dispose();
@@ -213,7 +279,11 @@ describe('Settings Appearance consumer contracts', () => {
     expect(test.appearance.model().editor?.hex.dark.green).toBe('#123456');
     test.appearance.dispose();
     const reopened = test.open();
-    expect(test.state).toMatchObject({ view: 'editor', editingThemeId: custom.id, paletteMode: 'dark' });
+    expect(test.state).toMatchObject({
+      view: 'editor',
+      editingThemeId: custom.id,
+      paletteMode: 'dark',
+    });
     expect(reopened.model().editor).toMatchObject({ mode: 'dark', colors: { green: '#123456' } });
     reopened.dispose();
     test.preferences.set(CUSTOM, serializeCustomInteractionThemes({ version: 2, themes: [] }));
@@ -263,7 +333,10 @@ describe('Settings Appearance consumer contracts', () => {
     test.appearance.dispatch({ type: 'add' });
     expect(test.preferences.get(CUSTOM, '')).toBe('');
     expect(test.preferences.get(PRESET, '')).toBe('zotero');
-    expect(test.appearance.model()).toMatchObject({ view: 'editor', editor: { hex: { light: { yellow: '#123456' } } } });
+    expect(test.appearance.model()).toMatchObject({
+      view: 'editor',
+      editor: { hex: { light: { yellow: '#123456' } } },
+    });
     expect(test.appearance.model().status).not.toBe('');
     test.preferences.failPreset = false;
     test.appearance.dispatch({ type: 'add' });
@@ -288,13 +361,25 @@ describe('Settings Appearance consumer contracts', () => {
   it('reflects external selection and custom-theme updates while preserving later edits', () => {
     const test = mount({ [CUSTOM]: stored, [PRESET]: 'zotero' });
     test.preferences.set(PRESET, custom.id);
-    expect(test.appearance.model().themes.find((theme) => theme.id === custom.id)?.selected).toBe(true);
+    expect(test.appearance.model().themes.find((theme) => theme.id === custom.id)?.selected).toBe(
+      true,
+    );
     test.appearance.dispatch({ type: 'edit', id: custom.id });
     const updated = { ...custom, name: 'External', light: { ...custom.light, yellow: '#123456' } };
-    test.preferences.set(CUSTOM, serializeCustomInteractionThemes({ version: 2, themes: [updated] }));
-    expect(test.appearance.model().editor).toMatchObject({ name: 'External', colors: { yellow: '#123456' }, hex: { light: { yellow: '#123456' } } });
+    test.preferences.set(
+      CUSTOM,
+      serializeCustomInteractionThemes({ version: 2, themes: [updated] }),
+    );
+    expect(test.appearance.model().editor).toMatchObject({
+      name: 'External',
+      colors: { yellow: '#123456' },
+      hex: { light: { yellow: '#123456' } },
+    });
     test.appearance.dispatch({ type: 'picker', key: 'blue', value: '#654321' });
-    expect(themes(test.preferences)[0]).toMatchObject({ name: 'External', light: { yellow: '#123456', blue: '#654321' } });
+    expect(themes(test.preferences)[0]).toMatchObject({
+      name: 'External',
+      light: { yellow: '#123456', blue: '#654321' },
+    });
     test.preferences.set(CUSTOM, serializeCustomInteractionThemes({ version: 2, themes: [] }));
     expect(test.appearance.model()).toMatchObject({ view: 'library', editor: null });
     test.appearance.dispose();

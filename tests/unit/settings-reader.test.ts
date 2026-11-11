@@ -10,31 +10,52 @@ import {
 import { SettingsReader } from '../../src/main/settings-reader';
 
 const credentials = vi.hoisted(() => ({
-  readMinerU: vi.fn(), saveMinerU: vi.fn(), hasKey: vi.fn(), setKey: vi.fn(), dispose: vi.fn(),
+  readMinerU: vi.fn(),
+  saveMinerU: vi.fn(),
+  hasKey: vi.fn(),
+  setKey: vi.fn(),
+  dispose: vi.fn(),
 }));
-vi.mock('../../src/platform/document-credentials', () => ({ readMinerUToken: credentials.readMinerU, saveMinerUToken: credentials.saveMinerU }));
-vi.mock('../../src/references/metadata', () => ({ createReferenceMetadataService: () => ({ hasSemanticScholarKey: credentials.hasKey, setSemanticScholarKey: credentials.setKey, dispose: credentials.dispose }) }));
+vi.mock('../../src/platform/document-credentials', () => ({
+  readMinerUToken: credentials.readMinerU,
+  saveMinerUToken: credentials.saveMinerU,
+}));
+vi.mock('../../src/references/metadata', () => ({
+  createReferenceMetadataService: () => ({
+    hasSemanticScholarKey: credentials.hasKey,
+    setSemanticScholarKey: credentials.setKey,
+    dispose: credentials.dispose,
+  }),
+}));
 
 class Preferences implements PreferenceStore {
   readonly values = new Map<string, boolean | number | string>();
   readonly observers = new Map<string, Set<() => void>>();
   readonly writes: Array<[string, boolean | number | string]> = [];
   failKey: string | null = null;
-  has(key: string): boolean { return this.values.has(key); }
+  has(key: string): boolean {
+    return this.values.has(key);
+  }
   get(key: string, fallback: boolean): boolean;
   get(key: string, fallback: number): number;
   get(key: string, fallback: string): string;
-  get(key: string, fallback: boolean | number | string): boolean | number | string { return this.values.get(key) ?? fallback; }
+  get(key: string, fallback: boolean | number | string): boolean | number | string {
+    return this.values.get(key) ?? fallback;
+  }
   set(key: string, value: boolean | number | string): void {
     if (key === this.failKey) throw new Error('Write failed');
     this.values.set(key, value);
     this.writes.push([key, value]);
     for (const listener of this.observers.get(key) ?? []) listener();
   }
-  clear(key: string): void { this.values.delete(key); for (const listener of this.observers.get(key) ?? []) listener(); }
+  clear(key: string): void {
+    this.values.delete(key);
+    for (const listener of this.observers.get(key) ?? []) listener();
+  }
   observe(key: string, listener: () => void): () => void {
     const group = this.observers.get(key) ?? new Set();
-    group.add(listener); this.observers.set(key, group);
+    group.add(listener);
+    this.observers.set(key, group);
     return () => group.delete(listener);
   }
 }
@@ -78,7 +99,12 @@ describe('Reader Settings', () => {
     page.dispatch({ type: 'comment', value: false });
     page.dispatch({ type: 'marks', value: true });
     page.dispatch({ type: 'color', value: 'purple' });
-    expect(preferences.writes).toEqual([[VISUAL, false], [COMMENT, false], [MARKS, true], [COLOR, 'purple']]);
+    expect(preferences.writes).toEqual([
+      [VISUAL, false],
+      [COMMENT, false],
+      [MARKS, true],
+      [COLOR, 'purple'],
+    ]);
     preferences.failKey = MODE;
     page.dispatch({ type: 'mode', value: 'trapezoid' });
     expect(page.model().scroll.mode).not.toBe('trapezoid');
@@ -92,7 +118,9 @@ describe('Reader Settings', () => {
     preferences.set(MARKS, false);
     page.dispatch({ type: 'marks', value: true });
     expect(changed).not.toHaveBeenCalled();
-    expect([...preferences.observers.values()].every((listeners) => listeners.size === 0)).toBe(true);
+    expect([...preferences.observers.values()].every((listeners) => listeners.size === 0)).toBe(
+      true,
+    );
   });
 
   it('keeps stored credentials out of the model and explicitly saves and forgets both providers', async () => {
@@ -118,7 +146,11 @@ describe('Reader Settings', () => {
 
   it('reports credential failures and ignores completions after disposal', async () => {
     let finish!: () => void;
-    credentials.saveMinerU.mockReturnValue(new Promise<void>((resolve) => { finish = resolve; }));
+    credentials.saveMinerU.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
     credentials.setKey.mockRejectedValue(new Error('storage failed'));
     const { page, changed } = mount();
     await Promise.resolve();
@@ -127,7 +159,9 @@ describe('Reader Settings', () => {
     expect(page.model().semanticScholar.error).toBe(true);
     page.dispatch({ type: 'saveCredential', provider: 'mineru', value: 'token' });
     expect(page.model().mineru.pending).toBe(true);
-    page.dispose(); changed.mockClear(); finish();
+    page.dispose();
+    changed.mockClear();
+    finish();
     await Promise.resolve();
     expect(changed).not.toHaveBeenCalled();
     expect(credentials.dispose).toHaveBeenCalled();

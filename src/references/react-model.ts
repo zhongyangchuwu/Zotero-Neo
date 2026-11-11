@@ -1,7 +1,17 @@
 import type { ScholarlyPaper } from './contracts';
 
-export type ReferenceScene = 'loading' | 'catalog' | 'choose' | 'target' | 'mentions' | 'local' | 'metadata';
-export interface ReferenceRow { readonly id: string; readonly label: string }
+export type ReferenceScene =
+  | 'loading'
+  | 'catalog'
+  | 'choose'
+  | 'target'
+  | 'mentions'
+  | 'local'
+  | 'metadata';
+export interface ReferenceRow {
+  readonly id: string;
+  readonly label: string;
+}
 export interface ReferenceViewModel {
   readonly generation: number;
   readonly chinese: boolean;
@@ -19,6 +29,26 @@ export interface ReferenceViewModel {
   readonly arxiv: boolean;
 }
 export type ReferenceCommand = { readonly generation: number } & (
-  | { readonly type: 'close' | 'catalog' | 'mentions' | 'local' | 'metadata' | 'back' | 'jump' | 'doi' | 'arxiv' | 'web' | 'local-search' | 'metadata-search' | 'metadata-refresh' | 'metadata-clear' | 'source' | 'pdf' | 'add' }
+  | {
+      readonly type:
+        | 'close'
+        | 'catalog'
+        | 'mentions'
+        | 'local'
+        | 'metadata'
+        | 'back'
+        | 'jump'
+        | 'doi'
+        | 'arxiv'
+        | 'web'
+        | 'local-search'
+        | 'metadata-search'
+        | 'metadata-refresh'
+        | 'metadata-clear'
+        | 'source'
+        | 'pdf'
+        | 'add';
+    }
   | { readonly type: 'query'; readonly value: string }
-  | { readonly type: 'select' | 'occurrence' | 'match' | 'candidate'; readonly id: string });
+  | { readonly type: 'select' | 'occurrence' | 'match' | 'candidate'; readonly id: string }
+);

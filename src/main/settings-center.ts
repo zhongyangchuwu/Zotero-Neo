@@ -2,7 +2,13 @@ import type { BuiltinModuleRuntime } from '../core/module-runtime';
 import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import { LANGUAGE_PREFERENCE_KEY } from '../core/preferences';
+import { CleanupFailure } from '../core/cleanup';
+import { ZoteroLogger } from '../core/logging';
+import { compositionOwnsKey } from '../input/composition';
+import { asElement } from '../platform/dom';
+import { mountNativeReactView } from '../platform/native-ui';
 import { THEME_VARS, type ThemeManager } from '../ui/theme';
+import type { NativeReactView } from '../ui/react/types';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { SettingsAdvanced } from './settings-advanced';
 import { SettingsAppearance, type SettingsAppearanceState } from './settings-appearance';
@@ -11,43 +17,51 @@ import { settingsLanguage, settingsText, type SettingsLanguage } from './setting
 import { SettingsKeybindings, type SettingsKeybindingsState } from './settings-keybindings';
 import { SettingsModules } from './settings-modules';
 import { SettingsReader } from './settings-reader';
-import { settingsButton, setSettingsPressed } from './settings-ui';
+import type {
+  SettingsPagePresentation,
+  SettingsReactCommand,
+  SettingsReactModel,
+  SettingsSection,
+} from './settings-react-model';
 
 const H = 'http://www.w3.org/1999/xhtml';
-const SECTIONS = [
+const SECTIONS: readonly SettingsSection[] = [
   'Appearance',
   'Interaction',
   'Reader',
   'Keybindings',
   'Modules',
   'Advanced',
-] as const;
-type SettingsSection = (typeof SECTIONS)[number];
+];
+type ActivePage =
+  | { readonly section: 'Appearance'; readonly controller: SettingsAppearance }
+  | { readonly section: 'Interaction'; readonly controller: SettingsInteraction }
+  | { readonly section: 'Reader'; readonly controller: SettingsReader }
+  | { readonly section: 'Keybindings'; readonly controller: SettingsKeybindings }
+  | { readonly section: 'Modules'; readonly controller: SettingsModules }
+  | { readonly section: 'Advanced'; readonly controller: SettingsAdvanced };
 
-interface SettingsPage {
-  dispose(): void;
-}
-
-/** One Main-window-owned, centered Settings workspace. */
+/** One Main-window-owned React Settings workspace; page policies remain headless controllers. */
 export class SettingsCenter {
   readonly #window: MainWindow;
   readonly #theme: ThemeManager;
   readonly #appearance: InteractionAppearanceManager;
   readonly #preferences: PreferenceStore;
   readonly #modules: BuiltinModuleRuntime;
+  readonly #logger = new ZoteroLogger();
   #panel: HTMLElement | null = null;
   #backdrop: HTMLElement | null = null;
-  #heading: HTMLElement | null = null;
-  #closeButton: HTMLButtonElement | null = null;
-  #content: HTMLElement | null = null;
-  #navigation: HTMLElement | null = null;
+  #view: NativeReactView<SettingsReactModel> | null = null;
   #previousElement: Element | null = null;
   #themeCleanup: (() => void) | null = null;
-  #activePage: SettingsPage | null = null;
-  #mountedSection: SettingsSection | null = null;
+  #activePage: ActivePage | null = null;
   #mountedLanguage: SettingsLanguage | null = null;
   #listeners: Array<() => void> = [];
   #section: SettingsSection = 'Appearance';
+  #pageEpoch = 0;
+  #viewEpoch = 0;
+  #generation = 0;
+  #composing = false;
   readonly #appearanceState: SettingsAppearanceState = {
     view: 'library',
     editingThemeId: null,
@@ -72,15 +86,12 @@ export class SettingsCenter {
   get open(): boolean {
     return this.#panel !== null;
   }
-
   get section(): SettingsSection {
     return this.#section;
   }
-
   contains(target: EventTarget | null): boolean {
     return !!target && !!this.#panel?.contains(target as Node);
   }
-
   #language(): SettingsLanguage {
     return settingsLanguage(
       this.#preferences,
@@ -90,179 +101,313 @@ export class SettingsCenter {
 
   openWorkspace(): void {
     if (this.#panel) {
-      this.#heading?.focus();
+      (this.#view?.getElement('heading') ?? this.#panel).focus();
       return;
     }
     const doc = this.#window.document;
-    const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
-    const backdrop = create('div');
+    const backdrop = doc.createElementNS(H, 'div');
     backdrop.id = 'zotero-neo-settings-backdrop';
     backdrop.style.cssText = `position:fixed;inset:0;z-index:99996;background:${THEME_VARS.backdrop}`;
-    const onBackdrop = (event: MouseEvent): void => {
-      if (event.target === backdrop) this.close();
-    };
-    backdrop.addEventListener('click', onBackdrop);
-    this.#listeners.push(() => backdrop.removeEventListener('click', onBackdrop));
-    const panel = create('aside');
+    const panel = doc.createElementNS(H, 'aside');
     panel.id = 'zotero-neo-settings-center';
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
-    panel.setAttribute('aria-label', 'Zotero Neo Settings');
-    panel.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(820px,calc(100vw - 48px));height:min(760px,calc(100vh - 64px));box-sizing:border-box;z-index:99997;display:flex;flex-direction:column;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:10px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:inherit;line-height:1.5`;
-    const header = create('header');
-    header.style.cssText = `display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}`;
-    const heading = create('h2');
-    heading.textContent = 'Zotero Neo Settings';
-    heading.tabIndex = -1;
-    heading.style.cssText = 'margin:0;font-size:1.15em;outline:none';
-    const close = settingsButton(doc, 'Close', () => this.close(), this.#listeners);
-    close.setAttribute('aria-label', 'Close Neo Settings');
-    header.append(heading, close);
-
-    const navigation = create('nav');
-    navigation.setAttribute('aria-label', 'Settings sections');
-    navigation.style.cssText = `display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid ${THEME_VARS.border}`;
-    for (const section of SECTIONS) {
-      const button = settingsButton(
-        doc,
-        section,
-        () => {
-          this.#section = section;
-          this.render();
-        },
-        this.#listeners,
-      );
-      button.dataset.section = section;
-      button.style.cssText +=
-        ';width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;padding:0.35em';
-      navigation.append(button);
-    }
-
-    const languageCleanup = this.#preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () =>
-      this.render(true),
-    );
-    if (languageCleanup) this.#listeners.push(languageCleanup);
-
-    const content = create('section');
-    content.style.cssText = 'flex:1;min-height:0;overflow:auto;padding:12px 14px';
-    panel.append(header, navigation, content);
+    panel.tabIndex = -1;
+    panel.style.cssText = `position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(1100px,calc(100vw - 40px));height:min(860px,calc(100vh - 56px));box-sizing:border-box;z-index:99997;overflow:hidden;color:${THEME_VARS.text};background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 12px 40px ${THEME_VARS.shadow};font:inherit;line-height:1.5;outline:none`;
     this.#previousElement = doc.activeElement;
     this.#backdrop = backdrop;
     this.#panel = panel;
-    this.#heading = heading;
-    this.#closeButton = close;
-    this.#navigation = navigation;
-    this.#content = content;
+    const epoch = ++this.#viewEpoch;
+    const listen = (
+      target: EventTarget,
+      type: string,
+      listener: EventListener,
+      capture = false,
+    ): void => {
+      target.addEventListener(type, listener, capture);
+      this.#listeners.push(() => target.removeEventListener(type, listener, capture));
+    };
+    listen(backdrop, 'click', (event) => {
+      if (event.target === backdrop) this.close();
+    });
+    listen(panel, 'compositionstart', () => {
+      this.#composing = true;
+    });
+    listen(panel, 'compositionend', () => {
+      this.#composing = false;
+    });
+    listen(panel, 'keydown', (event) => this.#keyDown(event as KeyboardEvent), true);
+    // Let React/native defaults inside the owned root run, but not unrelated host commands.
+    listen(panel, 'keydown', (event) => event.stopPropagation());
+    const languageCleanup = this.#preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () =>
+      this.#render(true),
+    );
+    if (languageCleanup) this.#listeners.push(languageCleanup);
     (doc.body ?? doc.documentElement).append(backdrop, panel);
     const removeBackdropTheme = this.#theme.add(backdrop);
-    this.#themeCleanup = removeBackdropTheme;
     const removePanelTheme = this.#theme.add(panel);
     this.#themeCleanup = () => {
       removeBackdropTheme();
       removePanelTheme();
     };
-    this.render();
-    heading.focus();
+    this.#render();
+    const language = this.#language();
+    const current = (): boolean =>
+      this.#panel === panel &&
+      this.#viewEpoch === epoch &&
+      panel.isConnected &&
+      this.#window.document === doc;
+    const view = mountNativeReactView<SettingsReactModel, SettingsReactCommand>({
+      surface: 'settings',
+      root: panel,
+      model: this.#model(),
+      dispatch: (command) => this.#dispatch(command),
+      isCurrent: current,
+      loadingText: language === 'zh-CN' ? '正在准备设置界面…' : 'Preparing Settings…',
+      errorText:
+        language === 'zh-CN'
+          ? '无法打开设置界面。按 Escape 关闭。'
+          : 'Could not load Settings. Press Escape to close.',
+      onError: (error) => this.#logger.debug(`Settings renderer failed: ${String(error)}`),
+    });
+    this.#view = view;
+    panel.focus();
+    void view.ready.then(
+      () => {
+        if (current()) (view.getElement('heading') ?? panel).focus();
+      },
+      () => undefined,
+    );
   }
 
   close(): void {
     const panel = this.#panel;
     if (!panel) return;
-    const restoreFocus = this.contains(this.#window.document.activeElement);
-    this.#activePage?.dispose();
+    const restore = this.contains(this.#window.document.activeElement);
+    const previous = this.#previousElement;
+    const page = this.#activePage;
+    const view = this.#view;
+    const backdrop = this.#backdrop;
+    this.#panel = this.#backdrop = null;
+    this.#view = null;
     this.#activePage = null;
-    this.#mountedSection = null;
-    this.#mountedLanguage = null;
-    for (const remove of this.#listeners.splice(0)) remove();
-    this.#themeCleanup?.();
-    this.#themeCleanup = null;
-    panel.remove();
-    this.#backdrop?.remove();
-    this.#backdrop = null;
-    this.#panel = null;
-    this.#heading = null;
-    this.#closeButton = null;
-    this.#navigation = null;
-    this.#content = null;
-    if (restoreFocus && this.#previousElement?.isConnected) {
-      try {
-        (this.#previousElement as HTMLElement).focus();
-      } catch {}
-    }
     this.#previousElement = null;
+    this.#mountedLanguage = null;
+    this.#composing = false;
+    this.#viewEpoch++;
+    this.#pageEpoch++;
+    const failure = new CleanupFailure();
+    failure.run(() => page?.controller.dispose());
+    failure.run(() => view?.dispose());
+    for (const remove of this.#listeners.splice(0)) failure.run(remove);
+    failure.run(() => this.#themeCleanup?.());
+    this.#themeCleanup = null;
+    failure.run(() => panel.remove());
+    failure.run(() => backdrop?.remove());
+    if (restore && previous?.isConnected) {
+      try {
+        (previous as HTMLElement).focus();
+      } catch {
+        /* A native focus target may retire with its document. */
+      }
+    }
+    failure.rethrow();
   }
 
-  private render(force = false): void {
-    const content = this.#content;
-    if (!content) return;
+  #keyDown(event: KeyboardEvent): void {
+    const panel = this.#panel;
+    if (!panel || compositionOwnsKey(event, this.#composing)) return;
+    const target = asElement(event.target);
+    if (target?.closest('[data-neo-ui-key-scope="recorder"]')) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.close();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable: HTMLElement[] = [];
+    for (const candidate of Array.from(
+      panel.querySelectorAll(
+        'button,input,select,textarea,summary,a[href],[tabindex],[contenteditable="true"]',
+      ),
+    )) {
+      const element = asElement(candidate);
+      if (!element) continue;
+      const node = element as HTMLElement;
+      if (
+        node.tabIndex >= 0 &&
+        !(node as HTMLButtonElement).disabled &&
+        node.getClientRects().length > 0 &&
+        this.#window.getComputedStyle(node)?.visibility !== 'hidden'
+      )
+        focusable.push(node);
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = this.#window.document.activeElement;
+    if (!first || !last) {
+      event.preventDefault();
+      panel.focus();
+      return;
+    }
+    if (event.shiftKey && (active === first || !focusable.includes(active as HTMLElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (active === last || !focusable.includes(active as HTMLElement))) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  #render(force = false): void {
+    if (!this.#panel) return;
     const language = this.#language();
-    this.#panel?.setAttribute('aria-label', settingsText(language, 'Zotero Neo Settings'));
-    if (this.#heading) this.#heading.textContent = settingsText(language, 'Zotero Neo Settings');
-    if (this.#closeButton) {
-      this.#closeButton.textContent = settingsText(language, 'Close');
-      this.#closeButton.setAttribute('aria-label', settingsText(language, 'Close Neo Settings'));
+    this.#panel.setAttribute('aria-label', settingsText(language, 'Zotero Neo Settings'));
+    if (
+      force ||
+      !this.#activePage ||
+      this.#activePage.section !== this.#section ||
+      this.#mountedLanguage !== language
+    ) {
+      const epoch = ++this.#pageEpoch;
+      this.#activePage?.controller.dispose();
+      this.#activePage = null;
+      this.#mountedLanguage = language;
+      const changed = (): void => {
+        if (this.#panel && this.#pageEpoch === epoch) this.#publish();
+      };
+      switch (this.#section) {
+        case 'Appearance':
+          this.#activePage = {
+            section: 'Appearance',
+            controller: new SettingsAppearance(
+              this.#window,
+              this.#preferences,
+              this.#appearance,
+              this.#appearanceState,
+              language,
+              changed,
+            ),
+          };
+          break;
+        case 'Interaction':
+          this.#activePage = {
+            section: 'Interaction',
+            controller: new SettingsInteraction(this.#window, this.#preferences, language, changed),
+          };
+          break;
+        case 'Reader':
+          this.#activePage = {
+            section: 'Reader',
+            controller: new SettingsReader(this.#window, this.#preferences, language, changed),
+          };
+          break;
+        case 'Keybindings':
+          this.#activePage = {
+            section: 'Keybindings',
+            controller: new SettingsKeybindings(
+              this.#window,
+              this.#preferences,
+              this.#keybindingsState,
+              language,
+              changed,
+            ),
+          };
+          break;
+        case 'Modules':
+          this.#activePage = {
+            section: 'Modules',
+            controller: new SettingsModules(
+              this.#window,
+              this.#preferences,
+              this.#modules,
+              language,
+              changed,
+            ),
+          };
+          break;
+        case 'Advanced':
+          this.#activePage = {
+            section: 'Advanced',
+            controller: new SettingsAdvanced(this.#window, this.#preferences, language, changed),
+          };
+          break;
+      }
     }
-    this.#navigation?.setAttribute('aria-label', settingsText(language, 'Settings sections'));
-    for (const button of Array.from(this.#navigation?.children ?? [])) {
-      const section = (button as HTMLElement).dataset.section as SettingsSection | undefined;
-      if (!section) continue;
-      const selected = section === this.#section;
-      button.textContent = settingsText(language, section);
-      button.setAttribute('aria-current', selected ? 'page' : 'false');
-      setSettingsPressed(button as HTMLButtonElement, selected);
+    this.#publish();
+  }
+
+  #presentation(): SettingsPagePresentation {
+    const page = this.#activePage;
+    if (!page) throw new Error('Settings page is not active');
+    switch (page.section) {
+      case 'Appearance':
+        return { kind: 'appearance', model: page.controller.model() };
+      case 'Keybindings':
+        return { kind: 'keybindings', model: page.controller.model() };
+      case 'Reader':
+        return { kind: 'reader', model: page.controller.model() };
+      default:
+        return { kind: 'form', model: page.controller.model() };
     }
-    if (!force && this.#mountedSection === this.#section && this.#mountedLanguage === language)
+  }
+
+  #model(): SettingsReactModel {
+    const language = this.#language();
+    return {
+      generation: ++this.#generation,
+      language,
+      title: settingsText(language, 'Zotero Neo Settings'),
+      closeLabel: settingsText(language, 'Close Neo Settings'),
+      navigationLabel: settingsText(language, 'Settings sections'),
+      section: this.#section,
+      sections: SECTIONS.map((id) => ({ id, label: settingsText(language, id) })),
+      page: this.#presentation(),
+    };
+  }
+
+  #publish(): void {
+    if (this.#panel && this.#activePage && this.#view) this.#view.update(this.#model());
+  }
+
+  #dispatch(command: SettingsReactCommand): void {
+    if (
+      !this.#panel ||
+      !command ||
+      typeof command !== 'object' ||
+      command.generation !== this.#generation
+    )
       return;
-    this.#activePage?.dispose();
-    this.#activePage = null;
-    this.#mountedSection = this.#section;
-    this.#mountedLanguage = language;
-    content.replaceChildren();
-    content.style.whiteSpace = '';
-    if (this.#section === 'Appearance') {
-      this.#activePage = new SettingsAppearance(
-        this.#window,
-        content,
-        this.#preferences,
-        this.#appearance,
-        this.#appearanceState,
-        language,
-      );
-      return;
+    const page = this.#activePage;
+    switch (command.type) {
+      case 'close':
+        this.close();
+        return;
+      case 'section':
+        if (SECTIONS.includes(command.section)) {
+          this.#section = command.section;
+          this.#render();
+        }
+        return;
+      case 'appearance':
+        if (page?.section === 'Appearance') page.controller.dispatch(command.command);
+        return;
+      case 'keybindings':
+        if (page?.section === 'Keybindings') page.controller.dispatch(command.command);
+        return;
+      case 'reader':
+        if (page?.section === 'Reader') page.controller.dispatch(command.command);
+        return;
+      case 'form':
+        if (
+          page &&
+          page.section !== 'Appearance' &&
+          page.section !== 'Keybindings' &&
+          page.section !== 'Reader'
+        )
+          page.controller.dispatch(command.command);
+        return;
     }
-    if (this.#section === 'Interaction') {
-      this.#activePage = new SettingsInteraction(
-        this.#window,
-        content,
-        this.#preferences,
-        language,
-      );
-      return;
-    }
-    if (this.#section === 'Reader') {
-      this.#activePage = new SettingsReader(this.#window, content, this.#preferences, language);
-      return;
-    }
-    if (this.#section === 'Keybindings') {
-      this.#activePage = new SettingsKeybindings(
-        this.#window,
-        content,
-        this.#preferences,
-        this.#keybindingsState,
-        language,
-      );
-      return;
-    }
-    if (this.#section === 'Modules') {
-      this.#activePage = new SettingsModules(
-        this.#window,
-        content,
-        this.#preferences,
-        this.#modules,
-        language,
-      );
-      return;
-    }
-    this.#activePage = new SettingsAdvanced(this.#window, content, this.#preferences, language);
   }
 }

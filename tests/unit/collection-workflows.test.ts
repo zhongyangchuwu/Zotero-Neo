@@ -9,6 +9,9 @@ import type { MainNavigation } from '../../src/main/navigation';
 import { FuzzyPicker } from '../../src/main/picker';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
+import { pickerModel } from './native-picker-host';
+
+vi.mock('../../src/platform/native-ui', async () => import('./native-picker-host'));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -290,9 +293,7 @@ describe('collection workflows', () => {
     await h.confirm(2);
     expect(h.second.getCollections()).toEqual([11, 10]);
     expect(h.session.picker.open).toBe(true);
-    expect(h.session.picker.operationStatus?.textContent).toContain(
-      'Current filters remain unchanged',
-    );
+    expect(pickerModel(h.session).status).toContain('Current filters remain unchanged');
     expect(h.selection.values()).toEqual([{ libraryID: 1, itemID: 1 }]);
     expect(h.selectItem).not.toHaveBeenCalled();
     expect(h.navigate).not.toHaveBeenCalled();
@@ -322,7 +323,7 @@ describe('collection workflows', () => {
     expect(h.second.getCollections()).toEqual([11]);
     expect(h.session.picker.open).toBe(true);
     expect(h.session.picker.input?.value).toBe('Paper 2');
-    expect(h.session.picker.operationStatus?.textContent).toContain('no longer available');
+    expect(pickerModel(h.session).status).toContain('no longer available');
   });
 
   it('retains query and candidate on a failed addition and rejects changed permissions before save', async () => {
@@ -337,11 +338,11 @@ describe('collection workflows', () => {
     expect(h.second.getCollections()).toEqual([11]);
     expect(h.session.picker.open).toBe(true);
     expect(h.session.picker.input?.value).toBe('Paper 2');
-    expect(h.session.picker.operationStatus?.textContent).toContain('disk unavailable');
+    expect(pickerModel(h.session).status).toContain('disk unavailable');
     h.library.editable = false;
     await h.confirm(2);
     expect(h.second.save).toHaveBeenCalledTimes(1);
-    expect(h.session.picker.operationStatus?.textContent).toContain('read-only');
+    expect(pickerModel(h.session).status).toContain('read-only');
   });
 
   it('requires actual direct source membership for movement and refuses a changed source at confirmation', async () => {
@@ -360,7 +361,7 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.first.getCollections()).toEqual([10]);
     expect(h.session.picker.open).toBe(true);
-    expect(h.session.picker.operationStatus?.textContent).toContain('unchanged targets');
+    expect(pickerModel(h.session).status).toContain('unchanged targets');
   });
 
   it('keeps explicit creation mutation-free on cancel and restores the original membership query', async () => {
@@ -432,7 +433,7 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.first.save).not.toHaveBeenCalled();
     expect(h.session.picker.open).toBe(true);
-    expect(h.session.picker.operationStatus?.textContent).toContain('target changed');
+    expect(pickerModel(h.session).status).toContain('target changed');
   });
 
   it('finds read-only collections without navigating on preview or cancel, and navigates only on confirmation', async () => {
@@ -637,7 +638,7 @@ describe('collection workflows', () => {
     await h.confirm(20);
     expect(h.session.picker.open).toBe(true);
     expect(h.session.picker.filtered[h.session.picker.selected]?.id).toBe(20);
-    expect(h.session.picker.operationStatus?.textContent).toContain('transaction unavailable');
+    expect(pickerModel(h.session).status).toContain('transaction unavailable');
     expect(h.collections.size).toBe(3);
     expect(h.first.getCollections()).toEqual([10]);
     h.prompt.mockImplementationOnce((_window, _title, _label, value) => {

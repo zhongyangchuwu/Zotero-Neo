@@ -3,7 +3,10 @@ import type { MainWindow } from '../../src/core/contracts';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import { OPTIONAL_MODULES, type OptionalModuleId } from '../../src/modules';
-import { TAB_ENHANCEMENT_PREFERENCES as tabs, TAB_GROUP_STATE_PREFERENCE } from '../../src/modules/tab-enhancements/config';
+import {
+  TAB_ENHANCEMENT_PREFERENCES as tabs,
+  TAB_GROUP_STATE_PREFERENCE,
+} from '../../src/modules/tab-enhancements/config';
 import { SettingsModules } from '../../src/main/settings-modules';
 
 class Preferences implements PreferenceStore {
@@ -19,7 +22,9 @@ class Preferences implements PreferenceStore {
   constructor(initial: Record<string, boolean | number | string> = {}) {
     for (const [key, value] of Object.entries(initial)) this.values.set(key, value);
   }
-  has(key: string): boolean { return this.values.has(key); }
+  has(key: string): boolean {
+    return this.values.has(key);
+  }
   get(key: string, fallback: boolean): boolean;
   get(key: string, fallback: number): number;
   get(key: string, fallback: string): string;
@@ -61,7 +66,10 @@ function mount(initial: Record<string, boolean | number | string> = {}, owner = 
   return { owner, preferences, modules, changed, page };
 }
 function field(page: SettingsModules, id: string) {
-  const result = page.model().groups.flatMap((group) => group.fields).find((entry) => entry.id === id);
+  const result = page
+    .model()
+    .groups.flatMap((group) => group.fields)
+    .find((entry) => entry.id === id);
   if (!result) throw new Error(`Missing field ${id}`);
   return result;
 }
@@ -76,7 +84,8 @@ describe('headless module settings', () => {
     request(test.page, 'extensions', false);
     test.page.dispatch({ type: 'action', id: 'modules.save' });
     expect(test.preferences.writes).toEqual([
-      [modulePreferenceKey('reader-hints'), false], [modulePreferenceKey('extensions'), false],
+      [modulePreferenceKey('reader-hints'), false],
+      [modulePreferenceKey('extensions'), false],
     ]);
     expect(field(test.page, 'modules.request.reader-hints').note).toContain('Applied: On');
     expect(field(test.page, 'modules.request.reader-hints').note).toContain('Requested: Off');
@@ -105,7 +114,11 @@ describe('headless module settings', () => {
   });
 
   it('reports partial default restoration without changing core or applied state', () => {
-    const test = mount({ [modulePreferenceKey('reader-hints')]: false, [modulePreferenceKey('extensions')]: false, 'modules.library.enabled': false });
+    const test = mount({
+      [modulePreferenceKey('reader-hints')]: false,
+      [modulePreferenceKey('extensions')]: false,
+      'modules.library.enabled': false,
+    });
     test.preferences.failClearKey = modulePreferenceKey('extensions');
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
     expect(test.modules.applied['reader-hints']).toBe(false);
@@ -116,7 +129,9 @@ describe('headless module settings', () => {
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     test.preferences.failClearKey = null;
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
-    expect(OPTIONAL_MODULES.every(({ id }) => !test.preferences.has(modulePreferenceKey(id)))).toBe(true);
+    expect(OPTIONAL_MODULES.every(({ id }) => !test.preferences.has(modulePreferenceKey(id)))).toBe(
+      true,
+    );
     test.page.dispose();
   });
 
@@ -125,12 +140,15 @@ describe('headless module settings', () => {
     const other = {} as MainWindow;
     const pageB = new SettingsModules(other, test.preferences, test.modules, 'en', vi.fn());
     const scope = test.modules.createScope('main', test.owner, () => true);
-    scope.activate('extensions', () => { throw new Error('Only window A failed'); });
+    scope.activate('extensions', () => {
+      throw new Error('Only window A failed');
+    });
     expect(field(test.page, 'modules.request.extensions').note).toContain('Only window A failed');
     expect(field(pageB, 'modules.request.extensions').note).not.toContain('Only window A failed');
     expect(field(pageB, 'modules.request.extensions').note).toContain('Pending host');
     test.preferences.failCleanupKey = modulePreferenceKey('reader-hints');
-    test.page.dispose(); pageB.dispose();
+    test.page.dispose();
+    pageB.dispose();
     expect(test.preferences.listenerCount()).toBe(0);
     scope.dispose();
   });
@@ -138,8 +156,13 @@ describe('headless module settings', () => {
   it('cleans up earlier subscriptions if construction fails', () => {
     const preferences = new Preferences();
     preferences.failObserveKey = modulePreferenceKey('extensions');
-    const modules = new BuiltinModuleRuntime(preferences, { debug: () => {}, diagnostic: () => {} });
-    expect(() => new SettingsModules({} as MainWindow, preferences, modules, 'en', vi.fn())).toThrow('Preference observer failed');
+    const modules = new BuiltinModuleRuntime(preferences, {
+      debug: () => {},
+      diagnostic: () => {},
+    });
+    expect(
+      () => new SettingsModules({} as MainWindow, preferences, modules, 'en', vi.fn()),
+    ).toThrow('Preference observer failed');
     expect(preferences.listenerCount()).toBe(0);
   });
 
@@ -157,7 +180,10 @@ describe('headless module settings', () => {
     test.page.dispatch({ type: 'value', id: 'tabs.width', value: 200 });
     expect(test.preferences.values.get(tabs.width)).toBe(520);
     test.page.dispatch({ type: 'value', id: 'tabs.titleFormat', value: '{unknown}' });
-    expect(field(test.page, 'tabs.titleFormat')).toMatchObject({ invalid: true, value: '{unknown}' });
+    expect(field(test.page, 'tabs.titleFormat')).toMatchObject({
+      invalid: true,
+      value: '{unknown}',
+    });
     expect(test.preferences.has(tabs.titleFormat)).toBe(false);
     test.page.dispatch({ type: 'value', id: 'tabs.titleFormat', value: '{author}' });
     expect(test.preferences.values.get(tabs.titleFormat)).toBe('{author}');

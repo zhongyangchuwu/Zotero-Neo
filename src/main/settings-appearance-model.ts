@@ -1,4 +1,8 @@
-import type { InteractionPalette8, InteractionStatusColors, InteractionStatusStyle } from './interaction-appearance';
+import type {
+  InteractionPalette8,
+  InteractionStatusColors,
+  InteractionStatusStyle,
+} from './interaction-appearance';
 import type { SettingsLanguage } from './settings-i18n';
 
 export type AppearancePaletteMode = 'light' | 'dark';

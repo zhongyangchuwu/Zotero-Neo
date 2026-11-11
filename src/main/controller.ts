@@ -1039,21 +1039,17 @@ export class MainWindowController implements MainWindowControllerApi {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
     if (session.settings.open) {
+      this.resetMainInput(window, session);
+      // The owned modal handles Tab, Escape and recording in its actual DOM realm.
+      if (session.settings.contains(event.target)) return;
       if (compositionOwnsKey(event, false)) {
         event.stopPropagation();
         return;
       }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopImmediatePropagation?.();
-        event.stopPropagation();
-        session.settings.close();
-      } else if (!session.settings.contains(event.target)) {
-        event.preventDefault();
-        event.stopImmediatePropagation?.();
-        event.stopPropagation();
-      }
-      this.resetMainInput(window, session);
+      event.preventDefault();
+      event.stopImmediatePropagation?.();
+      event.stopPropagation();
+      if (event.key === 'Escape') session.settings.close();
       return;
     }
     if (this.libraryModule(session)?.isLocalFindOpen) {

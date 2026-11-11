@@ -15,7 +15,11 @@ import {
   type OptionalModuleDescriptor,
   type OptionalModuleId,
 } from '../modules';
-import type { SettingsFormCommand, SettingsFormGroup, SettingsFormModel } from './settings-form-model';
+import type {
+  SettingsFormCommand,
+  SettingsFormGroup,
+  SettingsFormModel,
+} from './settings-form-model';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
 import { SettingsTabs } from './settings-tabs';
 
@@ -35,7 +39,13 @@ export class SettingsModules {
   #status = '';
   #disposed = false;
 
-  constructor(window: MainWindow, preferences: PreferenceStore, modules: BuiltinModuleRuntime, language: SettingsLanguage, changed: () => void) {
+  constructor(
+    window: MainWindow,
+    preferences: PreferenceStore,
+    modules: BuiltinModuleRuntime,
+    language: SettingsLanguage,
+    changed: () => void,
+  ) {
     this.#owner = window;
     this.#preferences = preferences;
     this.#modules = modules;
@@ -48,7 +58,9 @@ export class SettingsModules {
     this.#cleanups.add(() => this.#tabs.dispose());
     try {
       for (const { id } of OPTIONAL_MODULES) {
-        const cleanup = preferences.observe?.(modulePreferenceKey(id), () => this.#syncRequestedPreferences());
+        const cleanup = preferences.observe?.(modulePreferenceKey(id), () =>
+          this.#syncRequestedPreferences(),
+        );
         if (cleanup) this.#cleanups.add(cleanup);
       }
       this.#cleanups.add(modules.subscribe(() => this.#notify()));
@@ -60,34 +72,66 @@ export class SettingsModules {
 
   model(): SettingsFormModel {
     const language = this.#language;
-    const states = new Map(this.#modules.inspect(this.#owner).map((state) => [state.id, state] as const));
-    const groups: SettingsFormGroup[] = [{
-      id: 'module-actions', title: settingsText(language, 'Optional enhancements'), fields: [
-        { kind: 'action', id: 'modules.save', label: settingsText(language, 'Save module requests'), primary: true, disabled: OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]) },
-        { kind: 'action', id: 'modules.restore', label: settingsText(language, 'Restore default module requests') },
-      ],
-    }];
+    const states = new Map(
+      this.#modules.inspect(this.#owner).map((state) => [state.id, state] as const),
+    );
+    const groups: SettingsFormGroup[] = [
+      {
+        id: 'module-actions',
+        title: settingsText(language, 'Optional enhancements'),
+        fields: [
+          {
+            kind: 'action',
+            id: 'modules.save',
+            label: settingsText(language, 'Save module requests'),
+            primary: true,
+            disabled: OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]),
+          },
+          {
+            kind: 'action',
+            id: 'modules.restore',
+            label: settingsText(language, 'Restore default module requests'),
+          },
+        ],
+      },
+    ];
     for (const descriptor of OPTIONAL_MODULES) {
       const state = states.get(descriptor.id);
-      const summary = state ? [
-        `${settingsText(language, 'Applied')}: ${settingsText(language, state.applied ? 'On' : 'Off')}`,
-        `${settingsText(language, 'Requested')}: ${settingsText(language, state.requested ? 'On' : 'Off')}`,
-        `${settingsText(language, 'Draft request')}: ${settingsText(language, this.#draft[descriptor.id] ? 'On' : 'Off')}`,
-        `${settingsText(language, 'Runtime status')}: ${this.#statusText(state.status)}`,
-        ...(state.pendingRestart ? [settingsText(language, 'Pending restart')] : []),
-        this.#runtimeDetails(descriptor, state),
-      ].filter(Boolean).join(' · ') : '';
+      const summary = state
+        ? [
+            `${settingsText(language, 'Applied')}: ${settingsText(language, state.applied ? 'On' : 'Off')}`,
+            `${settingsText(language, 'Requested')}: ${settingsText(language, state.requested ? 'On' : 'Off')}`,
+            `${settingsText(language, 'Draft request')}: ${settingsText(language, this.#draft[descriptor.id] ? 'On' : 'Off')}`,
+            `${settingsText(language, 'Runtime status')}: ${this.#statusText(state.status)}`,
+            ...(state.pendingRestart ? [settingsText(language, 'Pending restart')] : []),
+            this.#runtimeDetails(descriptor, state),
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '';
       groups.push({
-        id: `module.${descriptor.id}`, title: descriptor.names[language],
+        id: `module.${descriptor.id}`,
+        title: descriptor.names[language],
         description: `${settingsText(language, 'Scope:')} ${descriptor.scopes.map((item) => settingsScopeText(language, item)).join(', ')}`,
-        fields: [{ kind: 'boolean', id: `modules.request.${descriptor.id}`, label: `${settingsText(language, 'Draft request')}: ${descriptor.names[language]}`, value: this.#draft[descriptor.id], note: summary }],
+        fields: [
+          {
+            kind: 'boolean',
+            id: `modules.request.${descriptor.id}`,
+            label: `${settingsText(language, 'Draft request')}: ${descriptor.names[language]}`,
+            value: this.#draft[descriptor.id],
+            note: summary,
+          },
+        ],
       });
       if (descriptor.id === 'tab-enhancements') groups.push(this.#tabs.group());
     }
     const status = this.#status || this.#tabs.status;
     return {
       title: settingsText(language, 'Optional enhancements'),
-      description: settingsText(language, 'Choose which optional enhancements to request after restarting Zotero. Core library, worksets, tags, collections, reader navigation, selection, annotations, notes, and workspace remain available and are not affected.'),
+      description: settingsText(
+        language,
+        'Choose which optional enhancements to request after restarting Zotero. Core library, worksets, tags, collections, reader navigation, selection, annotations, notes, and workspace remain available and are not affected.',
+      ),
       groups,
       ...(status ? { status: { text: status, error: true } } : {}),
     };
@@ -117,13 +161,17 @@ export class SettingsModules {
   #save(): void {
     try {
       for (const { id } of OPTIONAL_MODULES) {
-        if (this.#draft[id] !== this.#saved[id]) this.#preferences.set(modulePreferenceKey(id), this.#draft[id]);
+        if (this.#draft[id] !== this.#saved[id])
+          this.#preferences.set(modulePreferenceKey(id), this.#draft[id]);
       }
       this.#syncRequestedPreferences();
       this.#status = '';
     } catch {
       this.#syncRequestedPreferences();
-      this.#status = settingsText(this.#language, 'Could not save module requests. Some changes may already be saved.');
+      this.#status = settingsText(
+        this.#language,
+        'Could not save module requests. Some changes may already be saved.',
+      );
     }
     this.#notify();
   }
@@ -136,7 +184,10 @@ export class SettingsModules {
       this.#status = '';
     } catch {
       this.#syncRequestedPreferences();
-      this.#status = settingsText(this.#language, 'Could not restore module requests. Some requests may already be restored.');
+      this.#status = settingsText(
+        this.#language,
+        'Could not restore module requests. Some requests may already be restored.',
+      );
     }
     this.#notify();
   }
@@ -150,32 +201,52 @@ export class SettingsModules {
     this.#notify();
   }
 
-  #notify(): void { if (!this.#disposed) this.#changed(); }
+  #notify(): void {
+    if (!this.#disposed) this.#changed();
+  }
 
   #statusText(status: ModuleStatus): string {
     switch (status) {
-      case 'enabled': return settingsText(this.#language, 'Enabled');
-      case 'disabled': return settingsText(this.#language, 'Disabled');
-      case 'blocked': return settingsText(this.#language, 'Blocked');
-      case 'failed': return settingsText(this.#language, 'Failed');
-      case 'pending': return settingsText(this.#language, 'Pending host');
+      case 'enabled':
+        return settingsText(this.#language, 'Enabled');
+      case 'disabled':
+        return settingsText(this.#language, 'Disabled');
+      case 'blocked':
+        return settingsText(this.#language, 'Blocked');
+      case 'failed':
+        return settingsText(this.#language, 'Failed');
+      case 'pending':
+        return settingsText(this.#language, 'Pending host');
     }
   }
 
   #runtimeDetails(descriptor: OptionalModuleDescriptor, state: ModuleSettingsState): string {
     const details = state.instances.map((instance) => {
-      const host = settingsScopeText(this.#language, instance.host === 'main' ? 'Main window' : 'Reader session');
+      const host = settingsScopeText(
+        this.#language,
+        instance.host === 'main' ? 'Main window' : 'Reader session',
+      );
       const parts = [`${host}: ${this.#statusText(instance.status)}`];
-      if (instance.dependencyIds.length) parts.push(`${settingsText(this.#language, 'Requires:')} ${instance.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`);
-      if (instance.failure) parts.push(`${settingsText(this.#language, 'Failure:')} ${instance.failure}`);
+      if (instance.dependencyIds.length)
+        parts.push(
+          `${settingsText(this.#language, 'Requires:')} ${instance.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
+        );
+      if (instance.failure)
+        parts.push(`${settingsText(this.#language, 'Failure:')} ${instance.failure}`);
       return parts.join(' — ');
     });
     if (!state.instances.length && state.status === 'pending') {
-      const hosts = descriptor.hosts.map((host) => settingsScopeText(this.#language, host === 'main' ? 'Main window' : 'Reader session'));
-      details.push(`${settingsText(this.#language, 'Waiting for supported hosts:')} ${hosts.join(', ')}`);
+      const hosts = descriptor.hosts.map((host) =>
+        settingsScopeText(this.#language, host === 'main' ? 'Main window' : 'Reader session'),
+      );
+      details.push(
+        `${settingsText(this.#language, 'Waiting for supported hosts:')} ${hosts.join(', ')}`,
+      );
     }
     if (state.status === 'blocked' && state.dependencyIds.length && !details.length) {
-      details.push(`${settingsText(this.#language, 'Requires:')} ${state.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`);
+      details.push(
+        `${settingsText(this.#language, 'Requires:')} ${state.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
+      );
     }
     return details.join(' · ');
   }

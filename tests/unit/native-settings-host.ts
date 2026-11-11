@@ -18,25 +18,42 @@ type Host = {
 
 export const nativeHosts: Host[] = [];
 export let deferSettings = false;
-export function setDeferredSettings(value: boolean): void { deferSettings = value; }
-export function resetNativeHosts(): void { nativeHosts.length = 0; deferSettings = false; }
+export function setDeferredSettings(value: boolean): void {
+  deferSettings = value;
+}
+export function resetNativeHosts(): void {
+  nativeHosts.length = 0;
+  deferSettings = false;
+}
 
 export function mountNativeReactView(options: SettingsOptions | PickerOptions) {
   // The project targets ES2022, before Promise.withResolvers is available.
   let resolveReady!: () => void;
   let rejectReady!: (error: Error) => void;
-  const ready = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
   void ready.catch(() => undefined);
   const pending = options.surface === 'settings' && deferSettings;
   const parts = new Map<string, HTMLElement>();
   const host: Host = {
-    root: options.root, model: options.model, ready, disposed: false, mounted: false, parts,
+    root: options.root,
+    model: options.model,
+    ready,
+    disposed: false,
+    mounted: false,
+    parts,
     resolve: () => {
       if (!host.disposed && options.isCurrent()) {
         host.mounted = true;
-        const names = options.surface === 'settings' ? ['heading'] : ['query', 'results', 'preview', 'source'];
+        const names =
+          options.surface === 'settings' ? ['heading'] : ['query', 'results', 'preview', 'source'];
         for (const name of names) {
-          const part = options.root.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', name === 'query' ? 'input' : name === 'source' ? 'button' : 'div');
+          const part = options.root.ownerDocument.createElementNS(
+            'http://www.w3.org/1999/xhtml',
+            name === 'query' ? 'input' : name === 'source' ? 'button' : 'div',
+          );
           options.root.append(part);
           parts.set(name, part);
         }
@@ -54,8 +71,16 @@ export function mountNativeReactView(options: SettingsOptions | PickerOptions) {
   if (!pending) host.resolve();
   return {
     ready,
-    update(model: SettingsReactModel | PickerReactModel) { host.model = model; },
-    getElement(part: string) { return host.mounted && !host.disposed && options.isCurrent() ? parts.get(part) ?? null : null; },
-    dispose() { host.disposed = true; },
+    update(model: SettingsReactModel | PickerReactModel) {
+      host.model = model;
+    },
+    getElement(part: string) {
+      return host.mounted && !host.disposed && options.isCurrent()
+        ? (parts.get(part) ?? null)
+        : null;
+    },
+    dispose() {
+      host.disposed = true;
+    },
   };
 }

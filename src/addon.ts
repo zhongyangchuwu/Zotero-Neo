@@ -18,6 +18,7 @@ import { moduleStartupFlags } from './platform/module-startup';
 import { AIQAController } from './ai-qa/controller';
 import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
 import { ManagedTagsUI } from './toolkit/main';
+import { registerNativeUIResources } from './platform/native-ui';
 
 export interface AddonContext {
   readonly id: string;
@@ -62,6 +63,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly api: ZoteroNeoPublicApi;
   #context: AddonContext | null = null;
   #preferencesRegistered = false;
+  #releaseNativeUI: (() => void) | null = null;
   aiQA: AIQAController | null = null;
 
   constructor() {
@@ -120,6 +122,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
 
   async init(context: AddonContext): Promise<void> {
     this.#context = context;
+    // Bootstrap initializes both early and after Zotero initialization completes.
+    this.#releaseNativeUI ??= registerNativeUIResources(context.rootURI);
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
@@ -163,6 +167,9 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     failure.run(() => this.aiQA?.dispose());
     this.aiQA = null;
     failure.run(() => this.#main.shutdown());
+    const releaseNativeUI = this.#releaseNativeUI;
+    this.#releaseNativeUI = null;
+    failure.run(() => releaseNativeUI?.());
     failure.rethrow();
     this.#logger.debug('Shut down');
     this.#logger.diagnostic('addon shut down');

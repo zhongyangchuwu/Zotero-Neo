@@ -35,6 +35,26 @@ const common = {
   logLevel: 'info',
 };
 
+// UI components share one audited React instance in each native DOM owner.
+// The library entry itself is deliberately built without this binding.
+const nativeReactBinding = {
+  name: 'native-react-binding',
+  setup(builder) {
+    builder.onResolve({ filter: /vendor[\\/]react[\\/]index\.js$/ }, () => ({
+      path: 'native-react',
+      namespace: 'neo-native-react',
+    }));
+    builder.onLoad({ filter: /.*/, namespace: 'neo-native-react' }, () => ({
+      contents: `const library = globalThis.NeoReactRuntime;
+if (!library) throw new Error('Native React library has not been loaded in this window');
+export const React = library.React;
+export const createRoot = library.createRoot;
+export const flushSync = library.flushSync;`,
+      loader: 'js',
+    }));
+  },
+};
+
 await build({
   ...common,
   entryPoints: [resolve(root, 'src/bootstrap.ts')],
@@ -63,6 +83,8 @@ await build({
 for (const [entry, output] of [
   ['src/ai/runtime.ts', 'content/ai-runtime.js'],
   ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
+  ['src/ui/react/library.ts', 'content/react-runtime.js'],
+  ['src/ui/react/index.ts', 'content/native-ui.js'],
 ]) {
   await build({
     ...common,
@@ -73,6 +95,10 @@ for (const [entry, output] of [
     platform: 'browser',
     minify: true,
     define: { 'process.env.NODE_ENV': '"production"' },
+    plugins:
+      output === 'content/native-ui.js' || output === 'content/ai-qa-ui.js'
+        ? [nativeReactBinding]
+        : [],
   });
 }
 

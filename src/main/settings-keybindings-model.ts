@@ -1,7 +1,15 @@
-import type { BindingEditorIssue, BindingEditorRow, BindingSaveOutcome } from '../input/binding-editor';
+import type {
+  BindingEditorIssue,
+  BindingEditorRow,
+  BindingSaveOutcome,
+} from '../input/binding-editor';
 import type { BindingContext } from '../input/bindings';
 import type { ActionId } from '../input/actions';
-import type { ActionGroup, NativeShortcutEntry, ShortcutCatalogEntry } from '../input/shortcut-catalog';
+import type {
+  ActionGroup,
+  NativeShortcutEntry,
+  ShortcutCatalogEntry,
+} from '../input/shortcut-catalog';
 import type { KeyEventLike } from '../input/keys';
 
 export interface KeybindingsPageModel {
@@ -16,16 +24,40 @@ export interface KeybindingsPageModel {
   readonly dirty: boolean;
   readonly canApply: boolean;
   readonly saveOutcome: BindingSaveOutcome;
-  readonly recording: { readonly context: BindingContext; readonly action: ActionId; readonly rowId: number | null; readonly tokens: readonly string[]; readonly sequence: string } | null;
+  readonly recording: {
+    readonly context: BindingContext;
+    readonly action: ActionId;
+    readonly rowId: number | null;
+    readonly tokens: readonly string[];
+    readonly sequence: string;
+  } | null;
   readonly status: string;
-  readonly guide: { readonly enabled: boolean; readonly delayMs: number; readonly fontSizePx: number; readonly error: string };
+  readonly guide: {
+    readonly enabled: boolean;
+    readonly delayMs: number;
+    readonly fontSizePx: number;
+    readonly error: string;
+  };
 }
 
 export type KeybindingsPageCommand =
-  | { readonly type: 'record'; readonly context: BindingContext; readonly action: ActionId; readonly rowId: number | null }
+  | {
+      readonly type: 'record';
+      readonly context: BindingContext;
+      readonly action: ActionId;
+      readonly rowId: number | null;
+    }
   | { readonly type: 'record-key'; readonly event: KeyEventLike }
   | { readonly type: 'finish-recording' | 'cancel-recording' | 'apply' }
-  | { readonly type: 'unbind' | 'reset-action'; readonly context: BindingContext; readonly action: ActionId }
+  | {
+      readonly type: 'unbind' | 'reset-action';
+      readonly context: BindingContext;
+      readonly action: ActionId;
+    }
   | { readonly type: 'delete-row'; readonly rowId: number }
   | { readonly type: 'guide-enabled'; readonly value: boolean }
-  | { readonly type: 'guide-number'; readonly setting: 'delayMs' | 'fontSizePx'; readonly value: number };
+  | {
+      readonly type: 'guide-number';
+      readonly setting: 'delayMs' | 'fontSizePx';
+      readonly value: number;
+    };

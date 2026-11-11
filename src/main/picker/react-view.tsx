@@ -27,23 +27,86 @@ export const PICKER_REACT_CSS = `
 .neo-picker .focused { box-shadow:inset 0 0 0 2px var(--zotero-neo-focus-ring); }
 `;
 
-export function mountPickerReactView(root: HTMLElement, initialModel: PickerReactModel, _dispatch: (command: PickerReactCommand) => void): ReactView<PickerReactModel> {
-  return createReactView(root, (model) => <div className="neo-ui neo-picker">
-    <div className={`picker-content${model.single ? ' single' : ''}`}>
-      <section className="picker-left">
-        <header className="picker-header">
-          <button type="button" className="picker-source" data-neo-ui-part="source" hidden={model.sourceLabel === null} disabled={model.sourceDisabled}>{model.sourceLabel}</button>
-          <span className="picker-title">{model.title}</span><span className="picker-count" data-neo-ui-part="count">{model.count}</span>
-        </header>
-        <input type="text" data-neo-ui-part="query" placeholder={model.placeholder} />
-        <div className="picker-help" data-neo-ui-part="query-help">{model.queryHelp}</div>
-        <div className={`picker-results${model.focusPane === 'list' ? ' focused' : ''}`} data-neo-ui-part="results" tabIndex={-1}>
-          {model.loading || !model.rows.length ? model.empty : model.rows.map((row, index) => <div key={index} data-zv-picker-row="1" data-zv-picker-index={index} className={`picker-row${row.boundary ? ' boundary' : ''}${index === model.selected ? ' selected' : ''}`} style={{cursor: model.mouseEnabled ? 'pointer' : 'default'}}><span>{row.text}</span></div>)}
+export function mountPickerReactView(
+  root: HTMLElement,
+  initialModel: PickerReactModel,
+  _dispatch: (command: PickerReactCommand) => void,
+): ReactView<PickerReactModel> {
+  return createReactView(
+    root,
+    (model) => (
+      <div className="neo-ui neo-picker">
+        <div className={`picker-content${model.single ? ' single' : ''}`}>
+          <section className="picker-left">
+            <header className="picker-header">
+              <button
+                type="button"
+                className="picker-source"
+                data-neo-ui-part="source"
+                hidden={model.sourceLabel === null}
+                disabled={model.sourceDisabled}
+              >
+                {model.sourceLabel}
+              </button>
+              <span className="picker-title">{model.title}</span>
+              <span className="picker-count" data-neo-ui-part="count">
+                {model.count}
+              </span>
+            </header>
+            <input type="text" data-neo-ui-part="query" placeholder={model.placeholder} />
+            <div className="picker-help" data-neo-ui-part="query-help">
+              {model.queryHelp}
+            </div>
+            <div
+              className={`picker-results${model.focusPane === 'list' ? ' focused' : ''}`}
+              data-neo-ui-part="results"
+              tabIndex={-1}
+            >
+              {model.loading || !model.rows.length
+                ? model.empty
+                : model.rows.map((row, index) => (
+                    <div
+                      key={index}
+                      data-zv-picker-row="1"
+                      data-zv-picker-index={index}
+                      className={`picker-row${row.boundary ? ' boundary' : ''}${index === model.selected ? ' selected' : ''}`}
+                      style={{ cursor: model.mouseEnabled ? 'pointer' : 'default' }}
+                    >
+                      <span>{row.text}</span>
+                    </div>
+                  ))}
+            </div>
+            {model.listHelp !== null && (
+              <div className="picker-help" data-neo-ui-part="list-help">
+                {model.listHelp}
+              </div>
+            )}
+            <div
+              className="picker-status"
+              data-neo-ui-part="status"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              hidden={!model.status}
+            >
+              {model.status}
+            </div>
+          </section>
+          <section>
+            <header className="picker-preview-header" data-neo-ui-part="preview-title">
+              {model.previewTitle}
+            </header>
+            <div
+              className={`picker-preview${model.focusPane === 'preview' ? ' focused' : ''}`}
+              data-neo-ui-part="preview"
+              tabIndex={-1}
+            >
+              {model.previewBody}
+            </div>
+          </section>
         </div>
-        {model.listHelp !== null && <div className="picker-help" data-neo-ui-part="list-help">{model.listHelp}</div>}
-        <div className="picker-status" data-neo-ui-part="status" role="status" aria-live="polite" aria-atomic="true" hidden={!model.status}>{model.status}</div>
-      </section>
-      <section><header className="picker-preview-header" data-neo-ui-part="preview-title">{model.previewTitle}</header><div className={`picker-preview${model.focusPane === 'preview' ? ' focused' : ''}`} data-neo-ui-part="preview" tabIndex={-1}>{model.previewBody}</div></section>
-    </div>
-  </div>, initialModel);
+      </div>
+    ),
+    initialModel,
+  );
 }

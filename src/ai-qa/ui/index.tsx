@@ -1,4 +1,5 @@
-import { React, createRoot } from '../../../vendor/react/index.js';
+import { React, createRoot } from '../../ui/react/runtime';
+import type { React as ReactTypes } from '../../../vendor/react/index.js';
 import { compositionOwnsKey } from '../../input/composition';
 import type { AIAPI, AIConfiguration } from '../../ai/contracts';
 import type { AIQAEvidence, AIQARecord, AIQATaskPhase } from '../contracts';
@@ -320,7 +321,7 @@ interface AIQAAppProps {
   readonly dispatch: Dispatch;
 }
 
-function AIQAApp({ model, dispatch }: AIQAAppProps): React.ReactElement {
+function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
   const labels = model.labels;
   const [question, setQuestion] = React.useState('');
   const [configurationOpen, setConfigurationOpen] = React.useState(!model.configuration.configured);
@@ -420,7 +421,7 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): React.ReactElement {
     [dispatch, entries, model.records, model.preview?.id],
   );
 
-  function onAppKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
+  function onAppKeyDown(event: ReactTypes.KeyboardEvent<HTMLElement>): void {
     if (compositionOwnsKey(event.nativeEvent, false)) return;
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
@@ -457,7 +458,7 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): React.ReactElement {
     }
   }
 
-  function submitConfiguration(event: React.FormEvent<HTMLFormElement>): void {
+  function submitConfiguration(event: ReactTypes.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     const parsedMaxTokens = Number(maxTokens);
     if (

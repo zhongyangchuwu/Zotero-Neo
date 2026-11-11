@@ -60,10 +60,7 @@ class Preferences implements PreferenceStore {
   }
 }
 
-function mount(
-  initial: Record<string, PreferenceValue> = {},
-  language: 'en' | 'zh-CN' = 'en',
-) {
+function mount(initial: Record<string, PreferenceValue> = {}, language: 'en' | 'zh-CN' = 'en') {
   const preferences = new Preferences(initial);
   let changes = 0;
   const page = new SettingsInteraction({} as never, preferences, language, () => changes++);
@@ -71,7 +68,10 @@ function mount(
 }
 
 function field(page: SettingsInteraction, id: string) {
-  const match = page.model().groups.flatMap((group) => group.fields).find((item) => item.id === id);
+  const match = page
+    .model()
+    .groups.flatMap((group) => group.fields)
+    .find((item) => item.id === id);
   if (!match) throw new Error(`Missing field: ${id}`);
   return match;
 }
