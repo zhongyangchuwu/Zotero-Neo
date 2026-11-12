@@ -98,7 +98,8 @@ function TabIcon({
 }
 
 export const TAB_SIDEBAR_REACT_CSS = `
-[data-zv-tab-sidebar] #zotero-tabs-toolbar { display:flex !important; align-items:center; }
+[data-zv-tab-sidebar] #zotero-tabs-toolbar { display:flex !important; align-items:center; background:${THEME_VARS.surface} !important; color:${THEME_VARS.text} !important; }
+[data-zv-tab-sidebar] #zotero-tabs-toolbar > .zotero-tb-button { color:${THEME_VARS.muted} !important; fill:currentColor !important; }
 [data-zv-tab-sidebar] #zotero-tabs-toolbar > .zotero-tb-separator { width:1px; height:18px; flex:0 0 1px; }
 .neo-tab-sidebar__header { grid-row:1; display:flex; align-items:center; gap:4px; padding:4px 6px; }
 .neo-tab-sidebar__header > button { min-width:28px; min-height:28px; border:0; border-radius:7px; background:transparent; color:inherit; }
