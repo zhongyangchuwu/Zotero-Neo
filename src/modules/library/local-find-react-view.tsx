@@ -7,6 +7,7 @@ export const LOCAL_FIND_REACT_CSS = `
 .neo-local-find { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
 .neo-local-find .local-find-prefix { color:var(--zotero-neo-muted); font-weight:bold; }
 .neo-local-find input { flex:1; min-width:0; border:0; outline:none; background:transparent; color:var(--zotero-neo-text); font:inherit; }
+.neo-local-find input::placeholder { color:var(--zotero-neo-muted) !important; opacity:1; }
 `;
 
 export function mountLocalFindReactView(
