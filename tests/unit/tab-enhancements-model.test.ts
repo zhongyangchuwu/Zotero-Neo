@@ -23,6 +23,7 @@ function host(id: string, initial: TabViewSnapshot[] = []) {
   let listener = () => {};
   const native = {
     id,
+    window: { setTimeout },
     snapshot: () => tabs,
     observe: (fn: () => void) => {
       listener = fn;
@@ -30,7 +31,7 @@ function host(id: string, initial: TabViewSnapshot[] = []) {
         listener = () => {};
       };
     },
-    metadata: vi.fn(() => fields as typeof fields | null),
+    metadata: vi.fn((_doc: TabDocumentRef) => fields as typeof fields | null),
     close: vi.fn((ids: readonly string[]) => {
       tabs = tabs.filter((t) => !ids.includes(t.nativeID));
       listener();
@@ -222,6 +223,59 @@ describe('persistent tab groups', () => {
     a.native.metadata.mockReturnValue({ ...fields, nativeTitle: '' });
     expect(manager.view('a', '{citekey}').groups[0]?.entries[0]?.title).toBe('Paper.pdf');
   });
+
+  it('searches actual metadata and uses the saved title when metadata is unavailable', () => {
+    const metadata = {
+      ...fields,
+      nativeTitle: 'Saved native title',
+      title: 'Actual article title',
+      citekey: 'Smith2024',
+      author: 'Jane Smith',
+      year: '2024',
+      filename: 'article.pdf',
+    };
+    const a = host('a', [{ ...tab('open'), fields: metadata }]);
+    const b = host('b', [{ ...tab('remote'), fields: metadata }]);
+    const store = storage();
+    const manager = createTabGroupManager(store);
+    manager.registerHost(a.port);
+    manager.registerHost(b.port);
+    const group = manager.createGroup('Search');
+    manager.assign('open', group, 'a');
+    manager.assign('remote', group, 'b');
+
+    const entries = manager.view('a', '{citekey}').groups[0]!.entries;
+    expect(entries.map((item) => [item.status, item.title, item.searchText])).toEqual([
+      [
+        'open',
+        'Smith2024',
+        'Actual article title Saved native title Jane Smith 2024 article.pdf Smith2024',
+      ],
+      [
+        'other-window',
+        'Smith2024',
+        'Actual article title Saved native title Jane Smith 2024 article.pdf Smith2024',
+      ],
+    ]);
+
+    manager.closeMember('open', 'a');
+    a.native.metadata.mockReturnValue(metadata);
+    const closed = manager.view('a', '{citekey}').groups[0]!.entries[0]!;
+    expect(closed.status).toBe('closed');
+    expect(closed.title).toBe('Smith2024');
+    expect(closed.searchText).toBe(
+      'Actual article title Saved native title Jane Smith 2024 article.pdf Smith2024',
+    );
+
+    a.native.metadata.mockReturnValue(null);
+    const missing = manager.view('a', '{citekey}').groups[0]!.entries[0]!;
+    expect(missing.status).toBe('missing');
+    expect(missing.title).toBe('Saved native title');
+    expect(missing.searchText).toBe('Saved native title');
+    expect(JSON.parse(store.value()).groups[0].members[0].title).toBe('Saved native title');
+    manager.dispose();
+  });
+
   it('keeps native traversal aligned with grouped rows before the ungrouped list', () => {
     const a = host('a', [tab('ungrouped'), tab('first'), tab('second')]);
     const manager = createTabGroupManager(storage());
@@ -321,7 +375,7 @@ describe('persistent tab groups', () => {
     }
     expect(manager.view('a', '{title}').groups[0]?.entries).toEqual([]);
   });
-  it('propagates native open failures without discarding recoverable members', async () => {
+  it('reports native open failures without discarding recoverable members', async () => {
     const store = storage();
     const a = host('a', [tab('a')]);
     const manager = createTabGroupManager(store);
@@ -330,7 +384,11 @@ describe('persistent tab groups', () => {
     manager.assign('a', group, 'a');
     a.setTabs([]);
     a.native.open.mockRejectedValueOnce(new Error('document unavailable'));
-    await expect(manager.openGroup(group, 'a')).rejects.toThrow('document unavailable');
+    await expect(manager.openGroup(group, 'a')).resolves.toMatchObject({
+      opened: 0,
+      failed: 1,
+      skipped: 0,
+    });
     expect(manager.view('a', '{title}').groups[0]?.entries[0]?.id).toBe('a');
   });
   it('activates an accepted native ID before the coalesced snapshot and avoids duplicate opens', async () => {
@@ -611,5 +669,179 @@ describe('persistent tab groups', () => {
     expect(b.activate).not.toHaveBeenCalled();
     await manager.openGroup(group, 'b');
     expect(b.native.open).not.toHaveBeenCalled();
+  });
+  it('previews without mutations and continues after failures while skipping missing and foreign views', async () => {
+    const store = storage();
+    const a = host('a', [tab('first'), tab('second'), tab('missing'), tab('here')]);
+    const b = host('b', [tab('foreign')]);
+    const manager = createTabGroupManager(store);
+    manager.registerHost(a.port);
+    manager.registerHost(b.port);
+    const group = manager.createGroup('Reading');
+    for (const id of ['first', 'second', 'missing', 'here']) manager.assign(id, group, 'a');
+    manager.assign('foreign', group, 'b');
+    a.setTabs([tab('here')]);
+    a.native.metadata.mockImplementation((doc) => (doc.key === 'MISSING' ? null : fields));
+    // Give the missing record its own document through the persisted import path.
+    manager.removeMember('missing', 'a');
+    manager.importDocuments({ groupID: group }, [
+      { document: { ...document, key: 'MISSING' }, title: 'Missing' },
+    ]);
+    const before = store.value();
+    const plan = manager.prepareGroup(group, 'a');
+    expect(a.native.open).not.toHaveBeenCalled();
+    expect(a.native.close).not.toHaveBeenCalled();
+    expect(store.value()).toBe(before);
+    a.native.open.mockRejectedValueOnce(new Error('failed'));
+    const updates: number[] = [];
+    const result = await manager.openGroup(group, 'a', {
+      plan,
+      isCurrent: () => true,
+      progress: (p) => updates.push(p.processed),
+    });
+    expect(result).toEqual({
+      total: 5,
+      processed: 5,
+      opened: 1,
+      skipped: 3,
+      failed: 1,
+      stopped: false,
+    });
+    expect(updates).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(b.native.open).not.toHaveBeenCalled();
+    expect(store.value()).toBe(before);
+  });
+
+  it('stops a delayed admission and rejects simultaneous same-window restores', async () => {
+    const a = host('a', [tab('first'), tab('second')]);
+    const manager = createTabGroupManager(storage());
+    manager.registerHost(a.port);
+    const group = manager.createGroup('Reading');
+    manager.assign('first', group, 'a');
+    manager.assign('second', group, 'a');
+    a.setTabs([]);
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const original = a.native.open.getMockImplementation()!;
+    a.native.open.mockImplementation(async (...args) => {
+      await gate;
+      return original(...args);
+    });
+    let current = true;
+    const opening = manager.openGroup(group, 'a', { isCurrent: () => current, progress: () => {} });
+    await expect(manager.openGroup(group, 'a')).rejects.toThrow('already in progress');
+    current = false;
+    release();
+    expect(await opening).toEqual({
+      total: 2,
+      processed: 1,
+      opened: 0,
+      skipped: 1,
+      failed: 0,
+      stopped: true,
+    });
+    expect(a.native.snapshot()).toEqual([]);
+    expect(a.native.open).toHaveBeenCalledTimes(1);
+    expect(a.native.close).not.toHaveBeenCalled();
+  });
+
+  it('yields to user input between immediately completed member opens', async () => {
+    vi.useFakeTimers();
+    try {
+      const a = host('a', [tab('first'), tab('second')]);
+      const manager = createTabGroupManager(storage());
+      manager.registerHost(a.port);
+      const group = manager.createGroup('Reading');
+      manager.assign('first', group, 'a');
+      manager.assign('second', group, 'a');
+      a.setTabs([]);
+      let current = true;
+      const first = Promise.withResolvers<void>();
+      const opening = manager.openGroup(group, 'a', {
+        isCurrent: () => current,
+        progress: (value) => {
+          if (value.processed === 1) first.resolve();
+        },
+      });
+      await first.promise;
+      current = false;
+      await vi.runAllTimersAsync();
+      const result = await opening;
+      expect(result).toMatchObject({ opened: 1, stopped: true });
+      expect(a.native.open).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors a new member click after stopping a delayed group restore', async () => {
+    const a = host('a', [tab('first')]);
+    const manager = createTabGroupManager(storage());
+    manager.registerHost(a.port);
+    const group = manager.createGroup('Reading');
+    manager.assign('first', group, 'a');
+    a.setTabs([]);
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const original = a.native.open.getMockImplementation()!;
+    a.native.open.mockImplementationOnce(async (...args) => {
+      await gate;
+      return original(...args);
+    });
+    let current = true;
+    const opening = manager.openGroup(group, 'a', { isCurrent: () => current, progress: () => {} });
+    current = false;
+    const activating = manager.activate('first', 'a');
+    release();
+    await Promise.all([opening, activating]);
+    expect(a.native.open).toHaveBeenCalledTimes(2);
+    expect(a.activate).toHaveBeenCalledWith('new-first');
+  });
+
+  it('does not schedule a second open for a member already opening', async () => {
+    const a = host('a', [tab('first')]);
+    const manager = createTabGroupManager(storage());
+    manager.registerHost(a.port);
+    const group = manager.createGroup('Reading');
+    manager.assign('first', group, 'a');
+    a.setTabs([]);
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const original = a.native.open.getMockImplementation()!;
+    a.native.open.mockImplementationOnce(async (...args) => {
+      await gate;
+      return original(...args);
+    });
+    const activating = manager.activate('first', 'a');
+    const plan = manager.prepareGroup(group, 'a');
+    expect(plan.members[0]?.closed).toBe(false);
+    release();
+    await activating;
+    const result = await manager.openGroup(group, 'a', {
+      plan,
+      isCurrent: () => true,
+      progress: () => {},
+    });
+    expect(result).toMatchObject({ opened: 0, skipped: 1 });
+    expect(a.native.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reopen a preview member closed or moved away and back before start', async () => {
+    const a = host('a', [tab('first'), tab('second')]);
+    const manager = createTabGroupManager(storage());
+    manager.registerHost(a.port);
+    const group = manager.createGroup('Reading');
+    const other = manager.createGroup('Other');
+    manager.assign('first', group, 'a');
+    manager.assign('second', group, 'a');
+    a.setTabs([]);
+    const plan = manager.prepareGroup(group, 'a');
+    manager.closeMember('first', 'a');
+    manager.moveMember('second', other, null, 'a');
+    manager.moveMember('second', group, null, 'a');
+    const result = await manager.openGroup(group, 'a', {
+      plan,
+      isCurrent: () => true,
+      progress: () => {},
+    });
+    expect(result).toMatchObject({ opened: 0, skipped: 2, stopped: false });
+    expect(a.native.open).not.toHaveBeenCalled();
   });
 });

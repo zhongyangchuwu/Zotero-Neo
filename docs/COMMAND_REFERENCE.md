@@ -354,7 +354,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `tabs-list` | `r` | `tabRenameGroup` | 重命名所选分组。 |
 | `tabs-list` | `d`、`<Del>` | `tabCloseEntry` | 关闭当前窗口中所选的打开 Reader／Note 标签页；该成员仍保留在分组中。 |
 | `tabs-list` | `<Space>` | `tabToggleGroup` | 收起或展开所选分组。 |
-| `tabs-list` | `o` | `tabOpenGroup` | 打开该组已关闭的保存成员。 |
+| `tabs-list` | `o` | `tabOpenGroup` | 预览该组的成员状态，确认后打开已关闭的保存成员。 |
 | `tabs-list` | `c` | `tabCloseGroup` | 关闭该组在当前窗口中已打开的标签页，但保留分组和成员记录。 |
 | `tabs-list` | `u` | `tabUngroup` | 确认后解散整组；已打开的标签页保持打开，已关闭的保存成员从组中移除。 |
 | `tabs-list` | `x` | `tabRemoveFromGroup` | 将所选单个成员移出分组；若标签页仍打开，不会关闭它。 |

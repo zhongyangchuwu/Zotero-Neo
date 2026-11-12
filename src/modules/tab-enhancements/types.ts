@@ -24,6 +24,7 @@ export interface TabSidebarEntry {
   readonly id: string;
   readonly title: string;
   readonly nativeTitle: string;
+  readonly searchText: string;
   readonly status: 'open' | 'other-window' | 'closed' | 'missing';
   readonly selected: boolean;
   readonly kind: 'reader' | 'note' | 'library' | 'other';
@@ -51,11 +52,40 @@ export interface TabGroupManagerOptions {
   write(value: string): void;
   createID(): string;
 }
+export interface TabGroupRestoreProgress {
+  readonly total: number;
+  readonly processed: number;
+  readonly opened: number;
+  readonly skipped: number;
+  readonly failed: number;
+  readonly stopped: boolean;
+}
+
+export interface TabGroupRestorePlan {
+  readonly groupID: string;
+  readonly hostID: string;
+  readonly isCurrent: () => boolean;
+  readonly members: readonly {
+    readonly id: string;
+    readonly epoch: number;
+    readonly closeEpoch: number;
+    readonly closed: boolean;
+  }[];
+}
+
+export interface TabGroupRestoreOptions {
+  readonly isCurrent: () => boolean;
+  readonly progress: (value: TabGroupRestoreProgress) => void;
+  readonly onError?: (error: unknown) => void;
+  readonly plan?: TabGroupRestorePlan;
+}
+
 export interface TabGroupManager {
   registerHost(host: TabGroupHost): Cleanup;
   refresh(hostID: string): void;
   subscribe(listener: () => void): Cleanup;
   view(hostID: string, titleFormat: string): TabSidebarView;
+  prepareGroup(groupID: string, hostID: string): TabGroupRestorePlan;
   createGroup(name: string): string;
   importDocuments(
     destination: { readonly name: string } | { readonly groupID: string },
@@ -76,7 +106,11 @@ export interface TabGroupManager {
   ungroup(groupID: string, hostID: string): void;
   activate(memberID: string, hostID: string): Promise<void>;
   closeMember(memberID: string, hostID: string): void;
-  openGroup(groupID: string, hostID: string): Promise<void>;
+  openGroup(
+    groupID: string,
+    hostID: string,
+    options?: TabGroupRestoreOptions,
+  ): Promise<TabGroupRestoreProgress>;
   closeGroup(groupID: string, hostID: string): void;
   dispose(): void;
 }
