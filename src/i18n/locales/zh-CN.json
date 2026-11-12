@@ -756,6 +756,8 @@
   "tabs.search": "搜索标签页和分组",
   "tabs.expand": "展开标签页侧栏",
   "tabs.collapse": "收起标签页侧栏",
+  "tabs.expandGroup": "展开分组",
+  "tabs.collapseGroup": "收起分组",
   "tabs.newGroup": "新建分组",
   "tabs.groupName": "分组名称",
   "tabs.rename": "重命名分组",

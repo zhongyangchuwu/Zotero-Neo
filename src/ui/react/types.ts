@@ -4,7 +4,7 @@ import type {
 } from '../../../vendor/react/index.js';
 import type { flushSync as flushReactSync } from 'react-dom';
 
-export type NativeReactSurface = 'settings' | 'picker' | 'references';
+export type NativeReactSurface = 'settings' | 'picker' | 'references' | 'tab-sidebar';
 
 /** One renderer-owned root. Updates commit before an imperative host reads UI parts. */
 export interface ReactView<Model> {

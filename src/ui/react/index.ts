@@ -4,6 +4,11 @@ import { mountPickerReactView, PICKER_REACT_CSS } from '../../main/picker/react-
 import type { PickerReactModel } from '../../main/picker/react-model';
 import { mountReferenceReactView, REFERENCES_REACT_CSS } from '../../references/react-view';
 import type { ReferenceViewModel } from '../../references/react-model';
+import {
+  mountTabSidebarReactView,
+  TAB_SIDEBAR_REACT_CSS,
+} from '../../modules/tab-enhancements/react-view';
+import type { TabSidebarReactModel } from '../../modules/tab-enhancements/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -15,7 +20,11 @@ const runtime: NativeUIRuntime = {
       stylesheet = root.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', 'style');
       stylesheet.id = 'zotero-neo-native-react-style';
       stylesheet.textContent =
-        NATIVE_UI_CSS + SETTINGS_REACT_CSS + PICKER_REACT_CSS + REFERENCES_REACT_CSS;
+        NATIVE_UI_CSS +
+        SETTINGS_REACT_CSS +
+        PICKER_REACT_CSS +
+        REFERENCES_REACT_CSS +
+        TAB_SIDEBAR_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -30,6 +39,12 @@ const runtime: NativeUIRuntime = {
       case 'references':
         return mountReferenceReactView(root, model as ReferenceViewModel, (command) =>
           dispatch(command),
+        ) as ReactView<unknown>;
+      case 'tab-sidebar':
+        return mountTabSidebarReactView(
+          root,
+          model as TabSidebarReactModel,
+          () => {},
         ) as ReactView<unknown>;
       default:
         throw new Error(`Unsupported native UI surface: ${String(surface)}`);

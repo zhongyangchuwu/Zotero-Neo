@@ -216,6 +216,11 @@ export function createTabEnhancementsModule(
     );
     // Layout restores the native toolbar before Sidebar releases its owned DOM.
     scope.add(() => layout.dispose());
+    sidebar.mount((error) => {
+      layout.dispose();
+      sidebar.dispose();
+      ports.logger.debug(`Tab sidebar React view failed: ${String(error)}`);
+    });
     function refresh(): void {
       if (!current()) return;
       try {
