@@ -60,7 +60,7 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 阅读组只保存可恢复的浅层界面状态，保存在 profile-local 键 `tabEnhancements.groups.v1`，与侧栏位置、宽度、收起状态和标题格式等显示偏好分开；停用功能或重置显示偏好不会清除分组。Main 专用的创建／追加动作在发起时固定 Main 有效目标（非空 Neo 选择集优先），明确解析所选 PDF 后，只将新增的关闭成员及其附件引用原子写入该组。多份可用 PDF 要求明确选择；取消提示不改变分组，缺失、删除或无可用 PDF 的目标显示数量并跳过。导入去重按附件身份进行，并跳过目的组已有成员，不搬走其他组或已打开视图中的成员；原有重复视图仍保留。该操作不打开 PDF，也不写入 Zotero 标签、分类或元数据；之后可通过现有成员打开／组恢复流程明确打开。关闭标签页不移除组成员，解散分组也不关闭仍打开的原生文档。
 
-`src/toolkit/main/tab-enhancements/` 独占私有原生 Tab 接口、外层布局和原生工具栏的可逆租约。侧栏作为整个 `#appcontent` 的外侧兄弟节点放在最左或最右；Toolkit 不重挂原生内容 deck、Reader/PDF iframe 或文档。只有识别到支持的原生布局时才替换横向标签栏并移入原生工具栏；布局不受支持时保留 Zotero 原生标签页界面。
+`src/toolkit/main/tab-enhancements/` 独占私有原生 Tab 接口、外层布局和原生工具栏的可逆租约。侧栏作为整个 `#appcontent` 的外侧兄弟节点放在最左或最右；Toolkit 不重挂原生内容 deck、Reader/PDF iframe 或文档。Neo 侧栏内容由绑定确切 Main Window／Document 的静态 React 视图呈现，分组、查询输入、焦点和恢复操作仍由侧栏控制器与分组管理器负责；原生工具栏是视图的独立兄弟节点，不由 React 接管。只有识别到支持的原生布局时才替换横向标签栏并移入原生工具栏；布局不受支持或视图挂载失败时恢复 Zotero 原生标签页界面。
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 

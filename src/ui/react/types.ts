@@ -4,7 +4,12 @@ import type {
 } from '../../../vendor/react/index.js';
 import type { flushSync as flushReactSync } from 'react-dom';
 
-export type NativeReactSurface = 'settings' | 'picker' | 'references' | 'selection-panel';
+export type NativeReactSurface =
+  | 'settings'
+  | 'picker'
+  | 'references'
+  | 'selection-panel'
+  | 'tab-sidebar';
 
 /** One renderer-owned root. Updates commit before an imperative host reads UI parts. */
 export interface ReactView<Model> {

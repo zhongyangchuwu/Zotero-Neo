@@ -1,11 +1,29 @@
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mountTabSidebarReactView } from '../../src/modules/tab-enhancements/react-view';
 import { TabEnhancementsSidebar } from '../../src/modules/tab-enhancements/sidebar';
 import type {
   TabSidebarCallbacks,
   TabSidebarEntry,
   TabSidebarView,
 } from '../../src/modules/tab-enhancements/types';
-import { DocumentFixture, type DialogElement } from '../fixtures/dialog-dom';
+import type {
+  TabSidebarReactCommand,
+  TabSidebarReactModel,
+} from '../../src/modules/tab-enhancements/react-model';
+import type { NativeReactViewOptions } from '../../src/ui/react/types';
+
+// Exercise the actual vendored React view; only the Gecko resource loader is replaced.
+vi.mock('../../src/platform/native-ui', () => {
+  return {
+    mountNativeReactView(
+      options: NativeReactViewOptions<TabSidebarReactModel, TabSidebarReactCommand>,
+    ) {
+      const view = mountTabSidebarReactView(options.root, options.model, options.dispatch);
+      return { ...view, ready: Promise.resolve() };
+    },
+  };
+});
 
 const entry = (
   id: string,
@@ -40,11 +58,11 @@ const view = (): TabSidebarView => ({
   ungrouped: [entry('loose')],
 });
 
+const cleanups: Array<() => void> = [];
+afterEach(() => {
+  for (const cleanup of cleanups.splice(0)) cleanup();
+});
 function harness() {
-  const doc = new DocumentFixture();
-  const create = doc.createElementNS.bind(doc);
-  doc.createElementNS = (ns, tag) =>
-    Object.assign(create(ns, tag), { localName: tag, select: () => {} });
   const callbacks: TabSidebarCallbacks = {
     toggleSidebar: vi.fn(),
     activate: vi.fn(),
@@ -62,71 +80,99 @@ function harness() {
     leave: vi.fn(),
   };
   const sidebar = new TabEnhancementsSidebar({
-    window: { document: doc, setTimeout, clearTimeout } as unknown as Window,
+    window,
     callbacks,
     bindings: () => ({ 'tabs-list:j': 'uiNext', 'tabs-list:<Enter>': 'uiConfirm' }),
     language: () => 'en',
     isCurrent: () => true,
     themeRoot: () => () => {},
   });
-  doc.documentElement.append(sidebar.root as unknown as DialogElement);
+  document.body.append(sidebar.root);
+  sidebar.mount((error) => {
+    throw error;
+  });
   sidebar.update(view(), false);
-  const find = (tag: string, text: string) =>
-    doc.nodes.find(
-      (node) => node.isConnected && node.tagName === tag && node.textContent === text,
+  cleanups.push(() => sidebar.dispose());
+  const part = (name: string) =>
+    sidebar.root.querySelector<HTMLElement>(`[data-neo-ui-part="${name}"]`)!;
+  const action = (name: string, id?: string) =>
+    sidebar.root.querySelector<HTMLButtonElement>(
+      `[data-action="${name}"]${id === undefined ? '' : `[data-entry-id="${id}"]`}`,
     )!;
-  const key = (target: DialogElement, value: string, extra: Record<string, unknown> = {}) => {
-    const event = {
-      target,
-      key: value,
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-      stopImmediatePropagation: vi.fn(),
-      ...extra,
-    };
-    sidebar.handleKey(event as unknown as KeyboardEvent);
+  const row = (kind: string, id: string) =>
+    sidebar.root.querySelector<HTMLElement>(
+      `[data-neo-tab-row="${kind}"][data-${kind === 'group' ? 'group' : 'entry'}-id="${id}"]`,
+    )!;
+  const click = (element: HTMLElement) => element.click();
+  const context = (element: HTMLElement) => {
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 40,
+      clientY: 50,
+    });
+    element.dispatchEvent(event);
     return event;
   };
-  return { doc, sidebar, callbacks, find, key };
+  const key = (target: HTMLElement, value: string, extra: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: value,
+      ...extra,
+    });
+    Object.defineProperty(event, 'target', { value: target });
+    sidebar.handleKey(event);
+    return event;
+  };
+  const search = (value: string) => {
+    const input = part('query') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  return { sidebar, callbacks, part, action, row, click, context, key, search };
+}
+
+function dragEvent(target: HTMLElement, type: string, transfer: object): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', { value: transfer });
+  target.dispatchEvent(event);
+  return event;
+}
+function transfer() {
+  const data = new Map<string, string>();
+  return {
+    types: [] as string[],
+    effectAllowed: '',
+    dropEffect: '',
+    setData(type: string, value: string) {
+      this.types.push(type);
+      data.set(type, value);
+    },
+    getData(type: string) {
+      return data.get(type) ?? '';
+    },
+  };
 }
 
 describe('tab sidebar', () => {
-  it('presents preview counts with explicit cancel and start controls in the status region', () => {
+  it('presents restore counts and explicit cancel and start controls', () => {
     const h = harness();
-    let starts = 0;
-    h.sidebar.restorePreview(
-      view().groups[0]!,
-      1,
-      () => {
-        starts++;
-      },
-      () => h.sidebar.clearRestore(),
-    );
-    const status = h.doc.nodes.find(
-      (node) =>
-        node.isConnected &&
-        node.attributes.get('role') === 'status' &&
-        node.textContent.includes('Restore group preview'),
-    )!;
+    const start = vi.fn();
+    h.sidebar.restorePreview(view().groups[0]!, 1, start, () => h.sidebar.clearRestore());
+    const status = h.part('restore');
     expect(status.textContent).toContain('Closed to open: 1');
     expect(status.textContent).toContain('Already open here: 1');
     expect(status.textContent).toContain('Other window: 1');
     expect(status.textContent).toContain('Missing: 1');
-    h.find('button', 'Cancel').emit('click');
-    expect(starts).toBe(0);
+    h.click(h.action('restore-cancel'));
+    expect(start).not.toHaveBeenCalled();
     expect(status.textContent).toBe('');
-    h.sidebar.restorePreview(
-      view().groups[0]!,
-      1,
-      () => {
-        starts++;
-      },
-      () => h.sidebar.clearRestore(),
-    );
-    h.find('button', 'Start opening').emit('click');
-    expect(starts).toBe(1);
+    h.sidebar.restorePreview(view().groups[0]!, 1, start, () => h.sidebar.clearRestore());
+    h.click(h.action('restore-start'));
+    expect(start).toHaveBeenCalledOnce();
   });
-  it('keeps restore controls available during other feedback and preserves keyboard focus', () => {
+  it('retains restore controls through feedback and moves focus with progress', () => {
     const h = harness();
     h.sidebar.restorePreview(
       view().groups[0]!,
@@ -134,29 +180,25 @@ describe('tab sidebar', () => {
       () => {},
       () => h.sidebar.clearRestore(),
     );
-    const start = h.find('button', 'Start opening');
-    expect(h.doc.activeElement).toBe(start);
-    expect(start.parent!.textContent).toContain('Closed to open: 0');
-    expect(start.parent!.textContent).toContain('Already opening: 1');
+    const start = h.action('restore-start');
+    expect(document.activeElement).toBe(start);
+    expect(h.part('restore').textContent).toContain('Closed to open: 0');
+    expect(h.part('restore').textContent).toContain('Already opening: 1');
     h.sidebar.status('Enter a group name');
     expect(start.isConnected).toBe(true);
     h.sidebar.restoreProgress('Opening', () => {});
-    const firstStop = h.find('button', 'Stop opening');
-    expect(h.doc.activeElement).toBe(firstStop);
+    expect(document.activeElement).toBe(h.action('restore-stop'));
     h.sidebar.restoreProgress('Opening more', () => {});
-    expect(h.doc.activeElement).toBe(h.find('button', 'Stop opening'));
+    expect(document.activeElement).toBe(h.action('restore-stop'));
     h.sidebar.restoreProgress('Finished');
-    expect(h.doc.activeElement).not.toBe(firstStop);
-    expect(h.doc.activeElement?.isConnected).toBe(true);
+    expect(document.activeElement).toBe(h.part('list'));
   });
-
-  it('keeps the active tab visible in a collapsed group and preserves its node on selection changes', () => {
+  it('keeps the selected tab visible in a collapsed group and preserves nodes across selection', () => {
     const h = harness();
-    const active = h.find('button', 'active');
-    const saved = h.find('button', 'saved');
-    expect((active.parent! as DialogElement & { hidden: boolean }).hidden).toBeFalsy();
-    expect((saved.parent! as DialogElement & { hidden: boolean }).hidden).toBe(true);
-    expect(saved.parent!.style.display).toBe('none');
+    const active = h.row('entry', 'active');
+    const saved = h.row('entry', 'saved');
+    expect(active.hidden).toBe(false);
+    expect(saved.hidden).toBe(true);
     const current = view();
     h.sidebar.update(
       {
@@ -175,26 +217,18 @@ describe('tab sidebar', () => {
       },
       false,
     );
-    expect(h.find('button', 'active')).toBe(active);
-    expect((active.parent! as DialogElement & { hidden: boolean }).hidden).toBe(true);
-    expect((saved.parent! as DialogElement & { hidden: boolean }).hidden).toBe(false);
-    expect(active.parent!.style.display).toBe('none');
-    expect(saved.parent!.style.display).toBe('flex');
+    expect(h.row('entry', 'active')).toBe(active);
+    expect(active.hidden).toBe(true);
+    expect(saved.hidden).toBe(false);
   });
-
   it('searches metadata and group names without changing displayed titles', () => {
     const h = harness();
-    const current = view();
     h.sidebar.update(
       {
-        library: {
-          ...entry('Library display'),
-          searchText: 'Library actual title Zotero',
-        },
+        library: { ...entry('Library display'), searchText: 'Library actual title Zotero' },
         groups: [
           {
-            ...current.groups[0]!,
-            name: 'Research',
+            ...view().groups[0]!,
             entries: [
               entry(
                 'Closed display',
@@ -218,178 +252,130 @@ describe('tab sidebar', () => {
       },
       false,
     );
-    const search = h.doc.nodes.find((n) => n.isConnected && n.tagName === 'input')!;
-    const query = (value: string) => {
-      search.value = value;
-      search.emit('input');
-    };
-
-    query('sMiTh2024');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    query('closed display');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    expect(h.find('button', 'Library display')).toBeUndefined();
-    query('article title');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    query('saved native');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    query('jane doe');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    query('2024');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    query('archive.pdf');
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    query('REMOTE.PDF');
-    expect(h.find('button', 'Remote display')).toBeDefined();
-    query('other native');
-    expect(h.find('button', 'Remote display')).toBeDefined();
-    query('SAVED ONLY');
-    expect(h.find('button', 'Missing saved title')).toBeDefined();
-    query('library actual');
-    expect(h.find('button', 'Library display')).toBeDefined();
-    query('loose actual');
-    expect(h.find('button', 'Loose display')).toBeDefined();
-    query('RESEARCH');
-    expect(h.find('button', '▸ Research (3)')).toBeDefined();
-    expect(h.find('button', 'Closed display')).toBeDefined();
-    expect(h.find('button', 'Remote display')).toBeDefined();
-    expect(h.find('button', 'Missing saved title')).toBeDefined();
-    query('no matching metadata');
-    expect(h.find('button', '▸ Research (3)')).toBeUndefined();
-    expect(h.find('button', 'Closed display')).toBeUndefined();
-    expect(h.find('button', 'Library display')).toBeUndefined();
-    expect(h.find('button', 'Loose display')).toBeUndefined();
+    for (const value of [
+      'sMiTh2024',
+      'closed display',
+      'article title',
+      'saved native',
+      'jane doe',
+      '2024',
+      'archive.pdf',
+    ]) {
+      h.search(value);
+      expect(h.row('entry', 'Closed display')).not.toBeNull();
+      expect(h.action('activate', 'Closed display').textContent).toBe('Closed display');
+    }
+    for (const value of ['REMOTE.PDF', 'other native']) {
+      h.search(value);
+      expect(h.row('entry', 'Remote display')).not.toBeNull();
+    }
+    h.search('SAVED ONLY');
+    expect(h.row('entry', 'Missing saved title')).not.toBeNull();
+    h.search('library actual');
+    expect(h.row('entry', 'Library display')).not.toBeNull();
+    h.search('loose actual');
+    expect(h.row('entry', 'Loose display')).not.toBeNull();
+    h.search('RESEARCH');
+    expect(h.row('group', 'g')).not.toBeNull();
+    for (const id of ['Closed display', 'Remote display', 'Missing saved title'])
+      expect(h.row('entry', id)).not.toBeNull();
+    h.search('no matching metadata');
+    expect(h.row('group', 'g')).toBeNull();
+    expect(h.row('entry', 'Library display')).toBeNull();
+    expect(h.row('entry', 'Loose display')).toBeNull();
   });
-
   it('distinguishes closing a live tab from removing saved membership and labels other windows', () => {
     const h = harness();
-    expect(h.find('span', 'Closed')).toBeDefined();
-    expect(h.find('span', 'Other window')).toBeDefined();
-    expect(h.find('span', 'Missing')).toBeDefined();
-    const activeRow = h.find('button', 'active').parent!;
-    activeRow.children.find((n) => n.dataset.neoTabMenu === '1')!.emit('click');
-    h.find('button', 'Close in this window').emit('click');
+    expect(h.row('entry', 'saved').textContent).toContain('Closed');
+    expect(h.row('entry', 'elsewhere').textContent).toContain('Other window');
+    expect(h.row('entry', 'missing').textContent).toContain('Missing');
+    h.click(h.action('entry-menu', 'active'));
+    h.click(h.action('close', 'active'));
     expect(h.callbacks.close).toHaveBeenCalledWith('active');
-    const savedRow = h.find('button', 'saved').parent!;
-    savedRow.children.find((n) => n.dataset.neoTabMenu === '1')!.emit('click');
-    h.find('button', 'Remove from group').emit('click');
+    h.click(h.action('entry-menu', 'saved'));
+    h.click(h.action('remove', 'saved'));
     expect(h.callbacks.removeMember).toHaveBeenCalledWith('saved');
     expect(h.callbacks.close).toHaveBeenCalledTimes(1);
   });
-
-  it('preserves pending rename and composition over updates and rejects stale groups', () => {
+  it('preserves a pending rename and composition over updates and rejects stale groups', () => {
     const h = harness();
-    h.find('button', '▸ Research (4)').parent!.emit('contextmenu', { clientX: 10, clientY: 10 });
-    h.find('button', 'Rename group').emit('click');
-    const input = h.doc.activeElement!;
+    h.context(h.row('group', 'g'));
+    h.click(h.action('rename'));
+    const input = h.part('editor') as HTMLInputElement;
     input.value = 'New name';
-    input.emit('compositionstart');
+    input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
     h.sidebar.update(view(), false);
-    const ime = h.key(input, 'Enter', { isComposing: true });
-    expect(ime.preventDefault).not.toHaveBeenCalled();
+    expect(h.key(input, 'Enter', { isComposing: true }).defaultPrevented).toBe(false);
     expect(h.callbacks.renameGroup).not.toHaveBeenCalled();
-    expect(h.doc.activeElement).toBe(input);
-    input.emit('compositionend');
+    expect(document.activeElement).toBe(input);
+    input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
     h.key(input, 'Enter');
     expect(h.callbacks.renameGroup).toHaveBeenCalledWith('g', 'New name');
-    h.find('button', '▸ Research (4)').parent!.emit('contextmenu', { clientX: 10, clientY: 10 });
-    h.find('button', 'Rename group').emit('click');
-    const stale = h.doc.activeElement!;
+    h.context(h.row('group', 'g'));
+    h.click(h.action('rename'));
+    const stale = h.part('editor') as HTMLInputElement;
     stale.value = 'Stale';
     h.sidebar.update({ library: null, groups: [], ungrouped: [] }, false);
     h.key(stale, 'Enter');
     expect(h.callbacks.renameGroup).toHaveBeenCalledTimes(1);
   });
-
-  it('routes local list bindings without consuming native input or composition', () => {
+  it('routes list bindings without consuming native input or composition', () => {
     const h = harness();
     h.sidebar.focus();
-    const list = h.doc.activeElement!;
-    const move = h.key(list, 'j');
-    expect(move.preventDefault).toHaveBeenCalled();
-    h.key(h.doc.activeElement!, 'Enter');
+    expect(h.key(h.part('list'), 'j').defaultPrevented).toBe(true);
+    h.key(document.activeElement as HTMLElement, 'Enter');
     expect(h.callbacks.activate).toHaveBeenCalledWith('Library');
-    const search = h.doc.nodes.find((n) => n.isConnected && n.tagName === 'input')!;
-    const typing = h.key(search, 'a');
-    expect(typing.preventDefault).not.toHaveBeenCalled();
-    search.emit('compositionstart');
-    const ime = h.key(search, 'Enter');
-    expect(ime.preventDefault).not.toHaveBeenCalled();
+    const input = h.part('query');
+    expect(h.key(input, 'a').defaultPrevented).toBe(false);
+    input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    expect(h.key(input, 'Enter').defaultPrevented).toBe(false);
     expect(h.callbacks.activate).toHaveBeenCalledTimes(1);
   });
-
   it('creates a group with the source tab when initiated from a row', () => {
     const h = harness();
-    const row = h.find('button', 'loose').parent!;
-    row.children.find((n) => n.dataset.neoTabMenu === '1')!.emit('click');
-    h.find('button', 'New group').emit('click');
-    const input = h.doc.activeElement!;
+    h.click(h.action('entry-menu', 'loose'));
+    h.click(h.action('new-group-for-entry', 'loose'));
+    const input = h.part('editor') as HTMLInputElement;
     input.value = 'Projects';
     h.key(input, 'Enter');
     expect(h.callbacks.createGroup).toHaveBeenCalledWith('Projects', 'loose');
   });
-
-  it('does not capture native toolbar input and Escape cancels an editor', () => {
+  it('leaves native toolbar input alone and Escape cancels an editor', () => {
     const h = harness();
-    const toolbarInput = h.doc.createElementNS('', 'input');
-    (h.sidebar.toolbarSlot as unknown as DialogElement).append(toolbarInput);
-    const native = h.key(toolbarInput, 'j');
-    expect(native.preventDefault).not.toHaveBeenCalled();
-    expect(native.stopPropagation).not.toHaveBeenCalled();
-    h.doc.nodes
-      .find((node) => node.isConnected && node.attributes.get('aria-label') === 'New group')!
-      .emit('click');
-    const input = h.doc.activeElement!;
-    input.value = 'Discard';
-    h.key(input, 'Escape');
+    const native = document.createElement('input');
+    h.sidebar.toolbarSlot.append(native);
+    expect(h.key(native, 'j').defaultPrevented).toBe(false);
+    h.click(h.action('new-group'));
+    const editor = h.part('editor') as HTMLInputElement;
+    editor.value = 'Discard';
+    h.key(editor, 'Escape');
     expect(h.callbacks.createGroup).not.toHaveBeenCalled();
     h.sidebar.update(view(), true);
-    expect(
-      (
-        (h.sidebar.toolbarSlot as unknown as DialogElement).parent! as DialogElement & {
-          hidden: boolean;
-        }
-      ).hidden,
-    ).toBe(true);
+    expect(h.sidebar.toolbarSlot.hidden).toBe(true);
   });
-
-  it('opens a context menu for a tab or blank rail and creates the intended group', () => {
+  it('opens tab and blank context menus with the intended group source', () => {
     const h = harness();
-    const root = h.sidebar.root as unknown as DialogElement;
-    const row = h.find('button', 'loose').parent!;
-    const opened = row.emit('contextmenu', { clientX: 40, clientY: 50 });
-    expect(opened.defaultPrevented).toBe(true);
-    const popup = root.children.find((node) => node.attributes.get('role') === 'group')!;
-    popup.children.find((node) => node.textContent === 'New group')!.emit('click');
-    const input = h.doc.activeElement!;
+    expect(h.context(h.row('entry', 'loose')).defaultPrevented).toBe(true);
+    h.click(h.action('new-group-for-entry', 'loose'));
+    let input = h.part('editor') as HTMLInputElement;
     input.value = 'From tab';
     h.key(input, 'Enter');
     expect(h.callbacks.createGroup).toHaveBeenCalledWith('From tab', 'loose');
-
-    h.sidebar.focus();
-    const list = h.doc.activeElement!;
-    list.emit('contextmenu', { clientX: 40, clientY: 50 });
-    const blankPopup = root.children.find((node) => node.attributes.get('role') === 'group')!;
-    blankPopup.children.find((node) => node.textContent === 'New group')!.emit('click');
-    const emptyInput = h.doc.activeElement!;
-    emptyInput.value = 'Empty';
-    h.key(emptyInput, 'Enter');
+    h.context(h.part('list'));
+    h.click(h.action('new-group'));
+    input = h.part('editor') as HTMLInputElement;
+    input.value = 'Empty';
+    h.key(input, 'Enter');
     expect(h.callbacks.createGroup).toHaveBeenCalledWith('Empty', undefined);
   });
-
   it('dismisses a context menu without changing groups', () => {
     const h = harness();
-    const row = h.find('button', 'loose').parent!;
-    row.emit('contextmenu', { clientX: 40, clientY: 50 });
-    const menuButton = h.doc.activeElement!;
-    h.key(menuButton, 'Escape');
+    h.context(h.row('entry', 'loose'));
+    h.key(document.activeElement as HTMLElement, 'Escape');
     expect(h.callbacks.createGroup).not.toHaveBeenCalled();
-    expect(
-      h.doc.nodes.some((node) => node.isConnected && node.attributes.get('role') === 'group'),
-    ).toBe(false);
+    expect(h.part('menu')).toBeNull();
   });
-
-  it('drags a group before another group without moving its members separately', () => {
+  it('drags a group before another without moving members separately', () => {
     const h = harness();
     const initial = view();
     h.sidebar.update(
@@ -402,54 +388,26 @@ describe('tab sidebar', () => {
       },
       false,
     );
-    const source = h.find('button', '▸ Research (4)').parent!;
-    const target = h.find('button', '▾ Next (0)').parent!;
-    const data = new Map<string, string>();
-    const transfer = {
-      types: [] as string[],
-      setData(type: string, value: string) {
-        this.types.push(type);
-        data.set(type, value);
-      },
-      getData: (type: string) => data.get(type) ?? '',
-      effectAllowed: '',
-      dropEffect: '',
-    };
-    source.emit('dragstart', { dataTransfer: transfer });
-    target.emit('drop', { dataTransfer: transfer });
+    const data = transfer();
+    dragEvent(h.row('group', 'g'), 'dragstart', data);
+    dragEvent(h.row('group', 'next'), 'drop', data);
     expect(h.callbacks.moveGroup).toHaveBeenCalledWith('g', 'next');
     expect(h.callbacks.moveMember).not.toHaveBeenCalled();
   });
-
-  it('accepts only a current own drag, and disables filtered reorder', () => {
+  it('accepts only a current own drag and disables filtered reorder', () => {
     const h = harness();
-    const source = h.find('button', 'loose').parent!;
-    const destination = h.find('button', '▸ Research (4)').parent!.parent!;
-    const data = new Map<string, string>();
-    const transfer = {
-      types: [] as string[],
-      setData(type: string, value: string) {
-        this.types.push(type);
-        data.set(type, value);
-      },
-      getData: (type: string) => data.get(type) ?? '',
-      effectAllowed: '',
-      dropEffect: '',
-    };
-    source.emit('dragstart', { dataTransfer: transfer });
-    destination.emit('drop', { dataTransfer: transfer });
+    const data = transfer();
+    const destination = h.sidebar.root.querySelector<HTMLElement>('[data-drop-group="g"]')!;
+    dragEvent(h.row('entry', 'loose'), 'dragstart', data);
+    dragEvent(destination, 'drop', data);
     expect(h.callbacks.moveMember).toHaveBeenCalledWith('loose', 'g', null);
-    destination.emit('drop', { dataTransfer: transfer });
+    dragEvent(destination, 'drop', data);
     expect(h.callbacks.moveMember).toHaveBeenCalledTimes(1);
-    source.emit('dragstart', { dataTransfer: transfer });
+    dragEvent(h.row('entry', 'loose'), 'dragstart', data);
     h.sidebar.update(view(), false);
-    destination.emit('drop', { dataTransfer: transfer });
+    dragEvent(destination, 'drop', data);
     expect(h.callbacks.moveMember).toHaveBeenCalledTimes(1);
-    const search = h.doc.nodes.find((n) => n.isConnected && n.tagName === 'input')!;
-    search.value = 'loose';
-    search.emit('input');
-    const filtered = h.find('button', 'loose').parent!;
-    const result = filtered.emit('dragstart', { dataTransfer: transfer });
-    expect(result.defaultPrevented).toBe(true);
+    h.search('loose');
+    expect(dragEvent(h.row('entry', 'loose'), 'dragstart', data).defaultPrevented).toBe(true);
   });
 });

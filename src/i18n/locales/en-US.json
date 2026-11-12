@@ -756,6 +756,8 @@
   "tabs.search": "Search tabs and groups",
   "tabs.expand": "Expand tab sidebar",
   "tabs.collapse": "Collapse tab sidebar",
+  "tabs.expandGroup": "Expand group",
+  "tabs.collapseGroup": "Collapse group",
   "tabs.newGroup": "New group",
   "tabs.groupName": "Group name",
   "tabs.rename": "Rename group",
