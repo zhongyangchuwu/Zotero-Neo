@@ -545,6 +545,39 @@ describe('picker mouse activation', () => {
 });
 
 describe('command palette provider', () => {
+  it('offers live Actions & Tags commands without colliding with Neo action IDs', async () => {
+    vi.stubGlobal('Zotero', {
+      ActionsTags: {
+        api: {
+          actionManager: {
+            getActions: () => ({
+              nextTab: { enabled: true, name: 'Apply reading tag' },
+              disabled: { enabled: false, name: 'Hidden action' },
+            }),
+            dispatchActionByKey: vi.fn(),
+          },
+        },
+      },
+    });
+    const context: CommandPaletteContext = {
+      mode: 'main',
+      bindingMode: 'main-normal',
+      actions: ['nextTab'],
+      bindings: DEFAULT_BINDINGS,
+      language: 'en',
+      execute: () => {},
+      actionsTagsTarget: { itemIDs: [4], isCurrent: () => true },
+    };
+    const provider = createCommandsProvider(context);
+    const rows = await provider.load();
+    expect(rows.find((item) => item.id === 'nextTab')?.kind).toBe('command');
+    const external = rows.find((item) => item.id === 'actions-tags:nextTab');
+    expect(external?.title).toBe('Apply reading tag');
+    expect(external?.kind).toBe('actions-tags');
+    expect(external && provider.rowText(external, 0)).toContain('Actions & Tags');
+    expect(rows.some((item) => item.title === 'Hidden action')).toBe(false);
+  });
+
   it('projects exact resolved Action shortcuts while keeping unbound Actions available', async () => {
     const bindings = resolveBindings(
       JSON.stringify({

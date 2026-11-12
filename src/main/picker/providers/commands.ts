@@ -1,6 +1,7 @@
 import type { CommandPaletteContext } from '../../../core/contracts';
 import { actionsForBindingMode } from '../../../input/binding-capabilities';
 import { ACTION_LABELS, isActionId, type ActionId } from '../../../input/actions';
+import { listActionsTagsActions } from '../../../platform/actions-tags';
 import { t } from '../../../i18n';
 import {
   actionGroup,
@@ -59,19 +60,35 @@ export function createCommandsProvider(context: CommandPaletteContext): PickerPr
           : 'palette.mainPrompt',
       context.language,
     ),
-    load: async () => commandItems(context),
+    load: async () => {
+      const commands = commandItems(context);
+      if (!context.actionsTagsTarget) return commands;
+      return commands.concat(
+        listActionsTagsActions().map((action) => ({
+          id: `actions-tags:${action.id}`,
+          title: action.label,
+          search: `${action.label} ${action.id} Actions & Tags`.toLowerCase(),
+          kind: 'actions-tags',
+          meta: 'Actions & Tags',
+        })),
+      );
+    },
     rowText: (item) => {
+      if (item.kind === 'actions-tags') return `${item.title} · Actions & Tags`;
       const group = isActionId(item.id) ? groupLabel(actionGroup(item.id), context.language) : '';
       return `${item.title} · ${group} · ${item.meta ?? unbound}`;
     },
-    preview: (item): PickerPreview => ({
-      title: item.title,
-      body: [
-        contextLabel(context.bindingMode, context.language),
-        isActionId(item.id) ? groupLabel(actionGroup(item.id), context.language) : '',
-        `${t('settings.Action', context.language)}: ${item.id}`,
-        `${t('settings.Current shortcuts', context.language)}: ${item.meta ?? unbound}`,
-      ].join('\n'),
-    }),
+    preview: (item): PickerPreview =>
+      item.kind === 'actions-tags'
+        ? { title: item.title, body: 'Actions & Tags' }
+        : {
+            title: item.title,
+            body: [
+              contextLabel(context.bindingMode, context.language),
+              isActionId(item.id) ? groupLabel(actionGroup(item.id), context.language) : '',
+              `${t('settings.Action', context.language)}: ${item.id}`,
+              `${t('settings.Current shortcuts', context.language)}: ${item.meta ?? unbound}`,
+            ].join('\n'),
+          },
   };
 }

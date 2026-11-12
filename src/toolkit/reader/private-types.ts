@@ -8,6 +8,7 @@ import type { ReaderRuntime } from './contracts';
 
 /** Native structures are confined to Toolkit; casts preserve the host object's identity. */
 export type NativeReaderRuntime = ReaderRuntime & {
+  readonly _item?: { readonly id?: number; readonly libraryID?: number };
   readonly _instanceID?: string;
   readonly _isTabClosed?: boolean;
   readonly _iframeWindow?: Window;
@@ -106,6 +107,7 @@ export interface NativeReaderAnnotationRuntime {
 }
 
 export interface NativeReaderViewRuntime {
+  readonly _selectedAnnotationIDs?: readonly string[];
   toDisplayedRange?(position: object): Range | null;
   getAnnotationFromRange?(
     range: Range,

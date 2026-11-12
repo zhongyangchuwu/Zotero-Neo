@@ -7,7 +7,7 @@
 
 采用单 XPI、静态内置模块、统一版本和发布周期。模块表示内部功能所有权分区，不等同于可关闭插件；用户只能选择是否启用 `reader-hints`、`extensions`、`references`、`ai-qa` 与 `tab-enhancements` 五项增强。模块化用于隔离功能所有权与生命周期，不建设另一个插件平台。
 
-不引入 Actions & Tags 运行时依赖或脚本执行机制。内部职责划分不改变已声明的按键、数据格式和 Zotero 兼容范围。
+不引入 Actions & Tags 硬依赖或脚本执行机制。安装该插件时，Neo 命令面板可以将动作和明确目标交给它执行；未安装或接口不可用时，Neo 仍可独立运行。
 
 基座接口服务实际功能调用，不建立没有消费者的空框架。内部模块数量不决定可选项范围。
 
@@ -47,7 +47,7 @@
 
 | 接口或机制 | 实际来源与组合方式 | Neo 的取舍 |
 | --- | --- | --- |
-| `actionManager` | AT 自己提供 `dispatchActionByEvent`、`dispatchActionByKey`、`dispatchActionByShortcut`、`getActions`、`updateAction`、`deleteAction`，不是 Zotero API。[源码](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/api.ts#L1-L25) | 保留 Neo 已有的 `ActionId`、能力目录和绑定系统，不增加第二套动作或快捷键注册表。 |
+| `actionManager` | AT 自己提供 `dispatchActionByEvent`、`dispatchActionByKey`、`dispatchActionByShortcut`、`getActions`、`updateAction`、`deleteAction`，不是 Zotero API。[源码](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/api.ts#L1-L25) | 命令面板通过可选适配器读取并委托执行 AT 动作；Neo 不接管动作配置或脚本，也不为其建立快捷键注册表。 |
 | 菜单与 Reader 入口 | 使用 Zotero `MenuManager.registerMenu`、Reader 的 `renderToolbar` / `createAnnotationContextMenu` 事件，再交给 AT 分发。[源码](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/modules/menu.ts) | 将宿主入口与业务动作分开；有实际需求时接原生菜单，不因接口存在而额外添加菜单。 |
 | 通知与业务事件 | 订阅 `Notifier` 的 `item`、`file`、`tab`，派生 `createAnnotation`、`appendNote`、`changeAnnotationColor`、`closeTab` 等 AT 事件。[源码](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/modules/notify.ts#L5-L135) | 基座只适配原生订阅；业务含义由功能模块解释。不将这些派生名称宣称为 Zotero 原生事件，也不预建全局业务事件总线。 |
 | 显式动作参数 | 入口解析条目或分类，把 `item`、`items`、`collection` 等注入动作；AT 自身仍有全局活动 pane 与私有 Reader 查找。[源码](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/utils/items.ts) | 借鉴显式目标传递，但沿用 Neo 的 Surface 专属解析器，不能用 Main 当前选择代替 Reader / Note 目标。 |
@@ -55,7 +55,7 @@
 | 工具与脚本环境 | `ClipboardHelper`、`ExtraFieldTool`、键盘/UI 工具来自 `zotero-plugin-toolkit`；脚本由 `AsyncFunction` 执行，`require` 指向 toolkit 全局查找，并非 Node 包加载。[API](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/api.ts#L1-L25)、[执行实现](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/utils/actions.ts#L220-L350) | 这些不是 Zotero 官方底层接口。Neo 不引入该 toolkit、任意全局服务查找或特权脚本引擎。 |
 | 生命周期 | 在启动、窗口装卸时注册功能，并借助 toolkit 清理；部分清理依赖宿主或后续回调。[源码](https://github.com/windingwind/zotero-actions-tags/blob/8d8735331b994f629bd85977f19d2cdac94649c0/src/hooks.ts#L15-L132) | 每个内部模块必须拥有自己的释放句柄；不能用整个插件的 `unregisterAll()` 代替模块清理，也不延迟到下一次通知才注销。 |
 
-AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行。Neo 不采用这种调用约定：一次用户确认对应一次明确的 TargetSet 调用，批处理由具体 Operation 决定，避免重复写入。
+AT 菜单分发先对整批目标执行一次，再逐项执行；Neo 委托 AT 动作时保留此约定，供现有脚本区分 `items` 和 `item`。Neo 自身操作仍只接收一次明确的 TargetSet，不手动重发 AT 监听的 Zotero 通知。
 
 ## 模块目录与所有权
 
