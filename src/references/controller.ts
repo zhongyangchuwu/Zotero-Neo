@@ -31,7 +31,12 @@ import { CleanupScope } from '../core/cleanup';
 import { THEME_VARS } from '../ui/theme';
 import { compositionOwnsKey } from '../input/composition';
 import { mountNativeReactView } from '../platform/native-ui';
-import type { ReferenceCommand, ReferenceRow, ReferenceViewModel } from './react-model';
+import type {
+  ReferenceCommand,
+  ReferenceControlsCommand,
+  ReferenceRow,
+  ReferenceViewModel,
+} from './react-model';
 import type { NativeReactView } from '../ui/react/types';
 
 const H = 'http://www.w3.org/1999/xhtml';
@@ -75,23 +80,36 @@ export class ReferenceController {
     this.#unobserve = observeReaderReferenceInteractions(port.reader, port.pluginID, {
       onCitationPopup: ({ context, mount }: ReaderReferencePopupSlot) => {
         const controls = mount.ownerDocument.createElementNS(H, 'span') as HTMLElement;
-        controls.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px';
+        controls.className = 'neo-reference-controls';
         const untheme = this.port.themeRoot(controls);
-        const actions: ReadonlyArray<readonly [ReferenceIntent, string, string]> = [
-          ['mentions', 'In-text mentions', '文中引用'],
-          ['local', 'Local copies', '本地副本'],
-          ['metadata', 'Paper details', '论文详情'],
-        ];
-        for (const [intent, en, cn] of actions) {
-          const button = mount.ownerDocument.createElementNS(H, 'button') as HTMLButtonElement;
-          button.type = 'button';
-          button.textContent = this.port.language() === 'zh-CN' ? cn : en;
-          button.style.cssText = `padding:2px 6px;border:1px solid ${THEME_VARS.border};border-radius:4px;cursor:pointer`;
-          button.addEventListener('click', (event) => {
-            event.stopPropagation();
-            if (controls.isConnected && context.isCurrent()) this.#openContext(context, intent);
+        mount.append(controls);
+        let view: NativeReactView<{ chinese: boolean }>;
+        try {
+          view = mountNativeReactView({
+            surface: 'reference-controls',
+            root: controls,
+            model: { chinese: this.port.language() === 'zh-CN' },
+            dispatch: (command: ReferenceControlsCommand) => {
+              if (
+                controls.isConnected &&
+                context.isCurrent() &&
+                context.isSourceCurrent() &&
+                (command.type === 'mentions' ||
+                  command.type === 'local' ||
+                  command.type === 'metadata')
+              )
+                this.#openContext(context, command.type);
+            },
+            isCurrent: () =>
+              controls.isConnected && context.isCurrent() && context.isSourceCurrent(),
+            loadingText: '',
+            errorText: '',
+            onError: (error) => this.port.showStatus(String(error)),
           });
-          controls.append(button);
+        } catch (error) {
+          untheme();
+          controls.remove();
+          throw error;
         }
         let composing = false;
         controls.addEventListener('compositionstart', () => {
@@ -113,10 +131,10 @@ export class ReferenceController {
             if (access?.isCurrent() && context.isSourceCurrent()) access.restoreFocus();
           } else if (event.key !== 'Tab') event.stopPropagation();
         });
-        mount.append(controls);
         this.#footers.set(controls, context);
         return () => {
           this.#footers.delete(controls);
+          view.dispose();
           untheme();
           controls.remove();
         };

@@ -164,36 +164,6 @@ html[data-color-scheme="dark"] [data-zv-outline-navigation] {
   display: inline-flex; flex: none; margin-inline: 6px;
   font-size: 11px; opacity: .65;
 }
-#zv-reader-captions {
-  flex: 0 1 auto; max-height: 35%; overflow: auto;
-  border-top: 1px solid var(--color-border, currentColor); padding: 4px 8px;
-  font: inherit; color: inherit;
-}
-#zv-reader-captions summary { cursor: pointer; padding-block: 3px; }
-#zv-reader-captions details details { margin-inline-start: 8px; }
-#zv-reader-captions button {
-  display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  border: 0; background: transparent; color: inherit; font: inherit;
-  padding: 4px; text-align: start; cursor: pointer;
-}
-#zv-reader-captions [data-zv-caption-kind="figure"] > summary { color: var(--zv-outline-figure); }
-#zv-reader-captions [data-zv-caption-kind="table"] > summary { color: var(--zv-outline-table); }
-#zv-reader-captions :focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-#zv-reader-captions .zv-caption-status { opacity: .7; padding: 4px; }
-#zv-reader-marks {
-  flex: 0 1 auto; max-height: 35%; overflow: auto;
-  border-top: 1px solid var(--color-border, currentColor); padding: 8px;
-  font: inherit; color: inherit;
-}
-#zv-reader-marks summary { cursor: pointer; padding-block: 3px; }
-#zv-reader-marks .zv-mark-row { display: flex; align-items: center; gap: 4px; }
-#zv-reader-marks button {
-  font: inherit; color: inherit; background: transparent; border: 0;
-  border-radius: 3px; padding: 5px; text-align: start; cursor: pointer;
-}
-#zv-reader-marks button[data-zv-mark] { flex: 1; min-width: 0; }
-#zv-reader-marks button:focus-visible { outline: 2px solid currentColor; }
-#zv-reader-marks .zv-empty-marks { opacity: .65; padding-block: 5px; }
 `;
 export interface ReaderOutlineDecoration {
   readonly rowIndex: number;

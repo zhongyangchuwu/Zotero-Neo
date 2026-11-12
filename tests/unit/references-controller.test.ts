@@ -49,9 +49,43 @@ vi.mock('../../src/operations/references', () => ({
 }));
 vi.mock('../../src/platform/native-ui', () => ({
   mountNativeReactView: (options: {
+    surface: string;
+    root: DialogElement;
+    isCurrent: () => boolean;
     model: ReferenceViewModel;
     dispatch: (command: ReferenceCommand) => void;
   }) => {
+    if (options.surface === 'reference-controls') {
+      let disposed = false;
+      for (const [type, label] of [
+        ['mentions', 'In-text mentions'],
+        ['local', 'Local copies'],
+        ['metadata', 'Paper details'],
+      ] as const) {
+        const button = options.root.ownerDocument.createElementNS('', 'button');
+        button.textContent = label;
+        button.addEventListener('click', (event) => {
+          if (
+            event &&
+            typeof event === 'object' &&
+            'stopPropagation' in event &&
+            typeof event.stopPropagation === 'function'
+          )
+            event.stopPropagation();
+          if (!disposed && options.isCurrent()) options.dispatch({ type, generation: 0 });
+        });
+        options.root.append(button);
+      }
+      return {
+        ready: Promise.resolve(),
+        update: () => {},
+        getElement: () => null,
+        dispose: () => {
+          disposed = true;
+          options.root.replaceChildren();
+        },
+      };
+    }
     const view = { model: options.model, dispatch: options.dispatch, disposed: false };
     host.view = view;
     return {

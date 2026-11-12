@@ -52,3 +52,9 @@ export type ReferenceCommand = { readonly generation: number } & (
   | { readonly type: 'query'; readonly value: string }
   | { readonly type: 'select' | 'occurrence' | 'match' | 'candidate'; readonly id: string }
 );
+
+export interface ReferenceControlsModel {
+  readonly chinese: boolean;
+}
+
+export type ReferenceControlsCommand = { readonly type: 'mentions' | 'local' | 'metadata' };

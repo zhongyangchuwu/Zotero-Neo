@@ -17,7 +17,9 @@ export type NativeReactSurface =
   | 'document-preparation'
   | 'document-comparison'
   | 'annotation-comment'
-  | 'selection-actions';
+  | 'selection-actions'
+  | 'reader-sidebar'
+  | 'reference-controls';
 
 /** One renderer-owned root. Updates commit before an imperative host reads UI parts. */
 export interface ReactView<Model> {

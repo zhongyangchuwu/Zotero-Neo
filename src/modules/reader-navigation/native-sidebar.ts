@@ -30,6 +30,9 @@ import { asElement, isEditableElement } from '../../platform/dom';
 import type { ReaderMarks } from './marks';
 import { outlineEntryKind } from './outline-presentation';
 import type { ReaderCaptionTarget, ReaderCaptionTargets } from './caption-targets';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { ReaderSidebarCommand, ReaderSidebarViewModel } from './react-model';
 import type {
   PdfWindow,
   ReaderNativeOutlineEntry,
@@ -86,6 +89,8 @@ export class ReaderNativeSidebar {
   readonly #decoration = new ReaderSidebarDecoration();
   #marksRoot: HTMLElement | null = null;
   #captionsRoot: HTMLElement | null = null;
+  #marksView: NativeReactView<ReaderSidebarViewModel> | null = null;
+  #captionsView: NativeReactView<ReaderSidebarViewModel> | null = null;
   #captionEntries: readonly ReaderCaptionTarget[] | null = null;
   #captionState = '';
   #captionLanguage = '';
@@ -446,13 +451,14 @@ export class ReaderNativeSidebar {
     if (!wrapper) return;
     this.refreshCaptions();
     if (!this.#marksRoot || this.#marksRoot.parentElement !== wrapper) {
+      this.#marksView?.dispose();
+      this.#marksView = null;
       if (this.#marksRoot && !isDeadObject(this.#marksRoot)) this.#marksRoot.remove();
       this.#marksRoot = document.createElement('section');
       this.#marksRoot.id = 'zv-reader-marks';
       this.#marksRoot.setAttribute('role', 'group');
       this.#marksRoot.dataset.tabstop = '1';
       this.#marksRoot.tabIndex = -1;
-      this.#marksRoot.addEventListener('click', (event) => this.handleMarkClick(event));
       wrapper.appendChild(this.#marksRoot);
       this.#marksSignature = '';
       this.refreshMarks();
@@ -473,6 +479,8 @@ export class ReaderNativeSidebar {
     const wrapper = readerOutlineContainer(document);
     if (!wrapper) return;
     if (!this.#captionsRoot || this.#captionsRoot.parentElement !== wrapper) {
+      this.#captionsView?.dispose();
+      this.#captionsView = null;
       this.#captionsRoot?.remove();
       const root = document.createElement('section');
       this.#captionsRoot = root;
@@ -487,14 +495,6 @@ export class ReaderNativeSidebar {
         },
         true,
       );
-      root.addEventListener('click', (event) => {
-        const index = asElement(event.target)?.closest<HTMLElement>('button[data-zv-caption]')
-          ?.dataset.zvCaption;
-        if (index === undefined || !this.isCurrent()) return;
-        const target = this.#host.captions.entries[Number(index)];
-        const window = this.#host.activePdfWindow();
-        if (target && window) this.#host.onCaptionTarget(target, window);
-      });
       wrapper.insertBefore(
         root,
         this.#marksRoot?.parentElement === wrapper ? this.#marksRoot : null,
@@ -523,60 +523,49 @@ export class ReaderNativeSidebar {
       const group = groups[index];
       groupOpen.set(group.dataset.zvCaptionKind!, group.open);
     }
-    root.setAttribute('aria-label', t('reader.sidebar.captions', language));
-    const details = document.createElement('details');
-    details.open = open;
-    const summary = document.createElement('summary');
-    summary.dataset.tabstop = '1';
-    summary.tabIndex = 0;
-    summary.textContent = '▧ / ▤';
-    summary.setAttribute('aria-label', t('reader.sidebar.captions', language));
-    summary.title = t('reader.sidebar.captionsCost', language);
-    details.appendChild(summary);
-    if (state !== 'ready' || !entries.length) {
-      const status = document.createElement('div');
-      status.className = 'zv-caption-status';
-      status.setAttribute('role', 'status');
-      status.textContent = t(
-        state === 'loading'
-          ? 'reader.sidebar.captionsLoading'
-          : state === 'idle'
-            ? 'reader.sidebar.captionsIdle'
-            : 'reader.sidebar.captionsEmpty',
-        language,
-      );
-      details.appendChild(status);
-    } else {
-      for (const kind of ['figure', 'table'] as const) {
-        const group = document.createElement('details');
-        group.dataset.zvCaptionKind = kind;
-        group.open = groupOpen.get(kind) ?? false;
-        const heading = document.createElement('summary');
-        heading.dataset.tabstop = '1';
-        heading.tabIndex = 0;
-        let count = 0;
-        for (const entry of entries) if (entry.kind === kind) count += 1;
-        heading.textContent = `${OUTLINE_ICON[kind]} ${count}`;
-        heading.setAttribute('aria-label', `${t(`reader.sidebar.${kind}`, language)} · ${count}`);
-        group.appendChild(heading);
-        entries.forEach((caption, index) => {
-          if (caption.kind !== kind) return;
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.dataset.zvCaption = String(index);
-          button.dataset.tabstop = '1';
+    const label = t('reader.sidebar.captions', language);
+    root.setAttribute('aria-label', label);
+    const model: ReaderSidebarViewModel = {
+      kind: 'captions',
+      label,
+      open,
+      cost: t('reader.sidebar.captionsCost', language),
+      status:
+        state !== 'ready' || !entries.length
+          ? t(
+              state === 'loading'
+                ? 'reader.sidebar.captionsLoading'
+                : state === 'idle'
+                  ? 'reader.sidebar.captionsIdle'
+                  : 'reader.sidebar.captionsEmpty',
+              language,
+            )
+          : '',
+      groups: (['figure', 'table'] as const).map((kind) => {
+        const items = entries.flatMap((caption, index) => {
+          if (caption.kind !== kind) return [];
           const description = caption.title
             .slice(caption.title.indexOf(caption.label) + caption.label.length)
             .replace(/^\s*[:：.．、]\s*/, '')
             .trimStart();
-          button.textContent = `${OUTLINE_ICON[kind]} ${caption.label} · ${description}`;
-          button.title = caption.title;
-          group.appendChild(button);
+          return [
+            {
+              index,
+              title: caption.title,
+              label: `${OUTLINE_ICON[kind]} ${caption.label} · ${description}`,
+            },
+          ];
         });
-        details.appendChild(group);
-      }
-    }
-    root.replaceChildren(details);
+        return {
+          kind,
+          open: groupOpen.get(kind) ?? false,
+          label: `${t(`reader.sidebar.${kind}`, language)} · ${items.length}`,
+          entries: items,
+        };
+      }),
+    };
+    if (this.#captionsView) this.#captionsView.update(model);
+    else this.#captionsView = this.mountView(root, model);
     this.#captionEntries = entries;
     this.#captionState = state;
     this.#captionLanguage = language;
@@ -588,8 +577,8 @@ export class ReaderNativeSidebar {
             ? root.querySelector<HTMLElement>(
                 `details[data-zv-caption-kind="${focusedKind}"] > summary`,
               )
-            : summary;
-      (target ?? summary).focus();
+            : root.querySelector<HTMLElement>('summary');
+      (target ?? root.querySelector<HTMLElement>('summary'))?.focus();
     }
   }
 
@@ -630,44 +619,30 @@ export class ReaderNativeSidebar {
           break;
         }
     }
-    root.setAttribute('aria-label', t('reader.sidebar.marks', language));
-    const details = root.ownerDocument.createElement('details');
-    details.open = root.querySelector<HTMLDetailsElement>('details')?.open ?? true;
-    const summary = root.ownerDocument.createElement('summary');
-    summary.tabIndex = -1;
-    summary.textContent = `${t('reader.sidebar.marks', language)} (${entries.length})`;
-    details.appendChild(summary);
-    if (!entries.length) {
-      const empty = root.ownerDocument.createElement('div');
-      empty.className = 'zv-empty-marks';
-      empty.textContent = t('reader.sidebar.emptyMarks', language);
-      details.appendChild(empty);
-    }
-    for (const [char, mark] of entries) {
-      const row = root.ownerDocument.createElement('div');
-      row.className = 'zv-mark-row';
-      const button = root.ownerDocument.createElement('button');
-      button.type = 'button';
-      button.tabIndex = -1;
-      button.dataset.zvMark = char;
-      const label =
-        mark.pageIndex === null
-          ? `${Math.round(mark.ratio * 100)}%`
-          : t('reader.sidebar.page', language).replace(
-              '{page}',
-              labels[mark.pageIndex] ?? String(mark.pageIndex + 1),
-            );
-      button.textContent = `${char} · ${label}${mark.key ? ` · ${t('reader.sidebar.annotationMark', language)}` : ''}`;
-      const remove = root.ownerDocument.createElement('button');
-      remove.type = 'button';
-      remove.tabIndex = -1;
-      remove.dataset.zvDeleteMark = char;
-      remove.textContent = '×';
-      remove.setAttribute('aria-label', `${t('reader.sidebar.deleteMark', language)} ${char}`);
-      row.append(button, remove);
-      details.appendChild(row);
-    }
-    root.replaceChildren(details);
+    const label = t('reader.sidebar.marks', language);
+    root.setAttribute('aria-label', label);
+    const model: ReaderSidebarViewModel = {
+      kind: 'marks',
+      label,
+      empty: t('reader.sidebar.emptyMarks', language),
+      open: root.querySelector<HTMLDetailsElement>('details')?.open ?? true,
+      entries: entries.map(([char, mark]) => {
+        const location =
+          mark.pageIndex === null
+            ? `${Math.round(mark.ratio * 100)}%`
+            : t('reader.sidebar.page', language).replace(
+                '{page}',
+                labels[mark.pageIndex] ?? String(mark.pageIndex + 1),
+              );
+        return {
+          char,
+          label: `${char} · ${location}${mark.key ? ` · ${t('reader.sidebar.annotationMark', language)}` : ''}`,
+          deleteLabel: `${t('reader.sidebar.deleteMark', language)} ${char}`,
+        };
+      }),
+    };
+    if (this.#marksView) this.#marksView.update(model);
+    else this.#marksView = this.mountView(root, model);
     this.#marksSignature = signature;
     if (focusOwned) {
       const buttons = root.querySelectorAll<HTMLButtonElement>('button[data-zv-mark]');
@@ -682,7 +657,7 @@ export class ReaderNativeSidebar {
         }
         target ??= buttons.item(Math.min(focusedIndex, buttons.length - 1));
       }
-      (target ?? summary).focus();
+      (target ?? root.querySelector<HTMLElement>('summary'))?.focus();
     }
   }
 
@@ -722,6 +697,12 @@ export class ReaderNativeSidebar {
     });
     const marks = this.#marksRoot;
     const captions = this.#captionsRoot;
+    const marksView = this.#marksView;
+    const captionsView = this.#captionsView;
+    this.#marksView = null;
+    this.#captionsView = null;
+    failure.run(() => captionsView?.dispose());
+    failure.run(() => marksView?.dispose());
     this.#captionsRoot = null;
     this.#captionEntries = null;
     failure.run(() => {
@@ -742,16 +723,52 @@ export class ReaderNativeSidebar {
     this.#host.activePdfWindow()?.focus();
   }
 
-  private handleMarkClick(event: Event): void {
-    if (!this.isCurrent()) return;
-    const target = asElement(event.target);
-    const remove = target?.closest<HTMLElement>('button[data-zv-delete-mark]');
-    if (remove) {
-      this.deleteMark(remove.dataset.zvDeleteMark ?? '');
-      return;
-    }
-    const char = target?.closest<HTMLElement>('button[data-zv-mark]')?.dataset.zvMark;
-    if (char) this.jumpMark(char);
+  private mountView(
+    root: HTMLElement,
+    model: ReaderSidebarViewModel,
+  ): NativeReactView<ReaderSidebarViewModel> {
+    const document = root.ownerDocument;
+    const current = (): boolean => {
+      if (!this.isCurrent() || !root.isConnected || isDeadObject(document)) return false;
+      try {
+        return (
+          this.#document === document &&
+          readerWindow(this.#host.reader)?.document === document &&
+          (model.kind === 'marks' ? this.#marksRoot === root : this.#captionsRoot === root) &&
+          root.parentElement === readerOutlineContainer(document)
+        );
+      } catch {
+        return false;
+      }
+    };
+    const view = mountNativeReactView({
+      surface: 'reader-sidebar',
+      root,
+      model,
+      isCurrent: current,
+      loadingText: '',
+      errorText: '',
+      onError: (error) => this.#host.log(`reader sidebar view failed: ${String(error)}`),
+      dispatch: (command: ReaderSidebarCommand) => {
+        if (!current() || !command || typeof command !== 'object') return;
+        if (model.kind === 'marks') {
+          if (command.type === 'jump-mark' && typeof command.char === 'string')
+            this.jumpMark(command.char);
+          else if (command.type === 'delete-mark' && typeof command.char === 'string')
+            this.deleteMark(command.char);
+        } else if (command.type === 'caption' && Number.isInteger(command.index)) {
+          const target = this.#host.captions.entries[command.index];
+          const window = this.#host.activePdfWindow();
+          if (target && window) this.#host.onCaptionTarget(target, window);
+        }
+      },
+    });
+    void view.ready
+      .then(() => {
+        if (current()) this.refreshFocus();
+      })
+      .catch(() => {});
+    return view;
   }
 
   private jumpMark(char: string): void {
@@ -822,7 +839,8 @@ export class ReaderNativeSidebar {
       target = readerSidebarFocusTarget(document, 'outline');
     else if (request === 'marks') {
       const details = this.#marksRoot?.querySelector<HTMLDetailsElement>('details');
-      if (details) details.open = true;
+      if (!details) return;
+      details.open = true;
       target =
         this.#marksRoot?.querySelector<HTMLElement>('button[data-zv-mark]') ??
         this.#marksRoot?.querySelector<HTMLElement>('summary') ??
