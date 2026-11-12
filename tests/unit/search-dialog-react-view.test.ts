@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mountSearchDialogReactView } from '../../src/ui/search-dialog-react-view';
+import { mountSearchDialogReactView } from '../../src/ui/react/surfaces/search-dialog';
 import type { SearchDialogReactModel } from '../../src/ui/search-dialog-react-model';
 
 const model: SearchDialogReactModel = {

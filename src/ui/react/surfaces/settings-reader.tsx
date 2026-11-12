@@ -1,10 +1,13 @@
-import { React } from '../ui/react/runtime';
-import { READER_SCROLL_NUMBER_SPECS, type ReaderScrollNumberSetting } from '../core/preferences';
+import { React } from '../runtime';
+import {
+  READER_SCROLL_NUMBER_SPECS,
+  type ReaderScrollNumberSetting,
+} from '../../../core/preferences';
 import type {
   ReaderCredentialModel,
   ReaderPageCommand,
   ReaderPageModel,
-} from './settings-reader-model';
+} from '../../../main/settings-reader-model';
 
 const STEPS: Record<ReaderScrollNumberSetting, number> = {
   scrollStep: 10,

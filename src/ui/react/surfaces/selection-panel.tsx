@@ -1,7 +1,10 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { SelectionPanelReactCommand, SelectionPanelReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type {
+  SelectionPanelReactCommand,
+  SelectionPanelReactModel,
+} from '../../../modules/worksets/react-model';
 
 export const SELECTION_PANEL_REACT_CSS = `
 .neo-selection-panel { width:min(900px,calc(100vw - 80px)); height:min(600px,calc(100vh - 80px)); min-width:580px; min-height:380px; display:flex; flex-direction:column; overflow:hidden; background:var(--zotero-neo-surface); border:1px solid var(--zotero-neo-border); border-radius:8px; box-shadow:0 24px 70px var(--zotero-neo-shadow); }

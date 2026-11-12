@@ -21,7 +21,7 @@ vi.mock('../../src/platform/note-relations', () => ({
   SOURCE_NOTE_IDENTITY_PREFIX: 'urn:zotero-neo:chapter-note:v1:',
 }));
 vi.mock('../../src/platform/native-ui', async () => {
-  const { mountSearchDialogReactView } = await import('../../src/ui/search-dialog-react-view');
+  const { mountSearchDialogReactView } = await import('../../src/ui/react/surfaces/search-dialog');
   return {
     mountNativeReactView(options: {
       root: HTMLElement;

@@ -1,7 +1,7 @@
-import { React } from '../ui/react/runtime';
-import { createReactView } from '../ui/react/view';
-import type { ReactView } from '../ui/react/types';
-import type { ReferenceCommand, ReferenceViewModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type { ReferenceCommand, ReferenceViewModel } from '../../../references/react-model';
 
 export const REFERENCES_REACT_CSS = `
 .neo-reference button { box-sizing: border-box; white-space: normal; margin: 4px 6px 0 0; padding: 4px 6px; border: 1px solid var(--zotero-neo-border); border-radius: 4px; text-align: left; cursor: pointer; }

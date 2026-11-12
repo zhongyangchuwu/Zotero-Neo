@@ -48,6 +48,8 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 设置中心、Picker 和引用详情使用 `src/ui/react/` 的静态 React 视图；`src/platform/native-ui.ts` 按确切 Window／Document 加载共享运行时、克隆展示模型并退休挂载。领域状态、键盘与组合输入、设置提交、Picker 确认以及引用来源／缓存仍由各自控制器负责。设置中心管理模态 Tab 边界，原生 disclosure 和普通控件均可进入键盘顺序；已保存的凭据不进入共享展示模型。
 
+Neo 自有 React 界面的素材集中在 `src/ui/react/`：`components.tsx` 提供通用控件，`styles.ts` 定义共享基础样式，`surfaces/` 按面板分别保存布局、专属样式及展示组件；主题变量由 `src/ui/theme.ts` 提供。领域数据和命令模型仍归各业务模块，原生 Zotero 控件与宿主生命周期不并入素材库。
+
 每个 MainWindow 仍只有一份导航历史和协调器。Library 通过具名端口请求现有操作；历史恢复直接取得原生 View 能力，不依赖 Library 的业务动作。Local Find 的查询和精确界面、最近回收批次归 Library 实例，旧恢复完成不能清空后来记录的回收批次。Local Find 的输入提示由静态打包的 React 呈现；搜索提交、IME、焦点和界面寿命仍由 Library 控制器负责。
 
 `src/modules/workspace/` 按 MainWindow 拥有 Main/Reader/Note Normal 的标签页候选、确认、切换、循环和关闭，以及 Reader/Note 的 Show in Library。候选来源显式注入 Picker，不负责导航；Surface 传入明确条目目标。模块只持有本次 Picker 的释放句柄，旧确认与晚到状态不能操作替换界面；实际切换和定位沿用基座导航端口，不依赖 Library，不另建历史。原生标签页委托及历史恢复重扫仍在基座。

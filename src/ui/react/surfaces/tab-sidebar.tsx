@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react';
-import { t } from '../../i18n';
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import { THEME_VARS } from '../../ui/theme';
-import type { TabSidebarEntry, TabSidebarGroup } from './types';
-import type { TabSidebarReactCommand, TabSidebarReactModel } from './react-model';
+import { t } from '../../../i18n';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import { THEME_VARS } from '../../theme';
+import type { TabSidebarEntry, TabSidebarGroup } from '../../../modules/tab-enhancements/types';
+import type {
+  TabSidebarReactCommand,
+  TabSidebarReactModel,
+} from '../../../modules/tab-enhancements/react-model';
 
 const COLORS = [
   '#e06c75',

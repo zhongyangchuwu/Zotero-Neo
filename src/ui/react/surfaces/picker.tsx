@@ -1,7 +1,7 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { PickerReactCommand, PickerReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type { PickerReactCommand, PickerReactModel } from '../../../main/picker/react-model';
 
 export const PICKER_REACT_CSS = `
 .neo-picker { height:100%; color:var(--zotero-neo-text); font:13px/1.45 system-ui,sans-serif; }

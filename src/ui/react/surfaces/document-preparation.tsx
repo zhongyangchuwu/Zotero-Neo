@@ -1,16 +1,16 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { PreparationReactCommand, PreparationReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import { Button } from '../components';
+import type {
+  PreparationReactCommand,
+  PreparationReactModel,
+} from '../../../modules/document-preparation/react-model';
 
-const actionStyle = {
-  padding: '6px 10px',
-  background: 'var(--zotero-neo-input)',
-  color: 'var(--zotero-neo-text)',
-  border: '1px solid var(--zotero-neo-border)',
-  borderRadius: 4,
-  font: 'inherit',
-};
+export const DOCUMENT_PREPARATION_REACT_CSS = `
+.neo-preparation-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.neo-preparation-actions .neo-button { padding:6px 10px; border-radius:4px; }
+`;
 export function mountDocumentPreparationReactView(
   root: HTMLElement,
   initialModel: PreparationReactModel,
@@ -56,42 +56,31 @@ export function mountDocumentPreparationReactView(
             {model.credentialStatus}
           </small>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <button
+        <div className="neo-preparation-actions">
+          <Button
             data-neo-ui-part="start"
-            type="button"
-            style={actionStyle}
             disabled={model.startDisabled}
             onClick={() => dispatch({ type: 'start' })}
           >
             {model.start}
-          </button>
-          <button
+          </Button>
+          <Button
             data-neo-ui-part="retry"
-            type="button"
-            style={actionStyle}
             disabled={model.retryDisabled}
             onClick={() => dispatch({ type: 'retry' })}
           >
             {model.retry}
-          </button>
-          <button
+          </Button>
+          <Button
             data-neo-ui-part="stop"
-            type="button"
-            style={actionStyle}
             disabled={model.stopDisabled}
             onClick={() => dispatch({ type: 'stop' })}
           >
             {model.stop}
-          </button>
-          <button
-            data-neo-ui-part="close"
-            type="button"
-            style={actionStyle}
-            onClick={() => dispatch({ type: 'close' })}
-          >
+          </Button>
+          <Button data-neo-ui-part="close" onClick={() => dispatch({ type: 'close' })}>
             {model.close}
-          </button>
+          </Button>
         </div>
         <p role="status" style={{ margin: 0 }}>
           {model.status}

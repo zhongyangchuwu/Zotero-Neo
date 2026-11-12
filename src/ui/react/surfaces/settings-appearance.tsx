@@ -1,10 +1,10 @@
-import { React } from '../ui/react/runtime';
-import { settingsText, type SettingsMessage } from './settings-i18n';
+import { React } from '../runtime';
+import { settingsText, type SettingsMessage } from '../../../main/settings-i18n';
 import type {
   AppearanceColor,
   AppearancePageCommand,
   AppearancePageModel,
-} from './settings-appearance-model';
+} from '../../../main/settings-appearance-model';
 
 const COLORS: readonly [AppearanceColor, SettingsMessage][] = [
   ['black', 'Black'],

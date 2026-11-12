@@ -1,7 +1,10 @@
-import { React } from './react/runtime';
-import { createReactView } from './react/view';
-import type { ReactView } from './react/types';
-import type { SearchDialogReactCommand, SearchDialogReactModel } from './search-dialog-react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type {
+  SearchDialogReactCommand,
+  SearchDialogReactModel,
+} from '../../search-dialog-react-model';
 
 export const SEARCH_DIALOG_REACT_CSS = `
 .neo-search-backdrop { position:fixed; inset:0; z-index:2147483645; background:var(--zotero-neo-backdrop); }
