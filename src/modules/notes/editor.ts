@@ -3,6 +3,7 @@ import type { ActionId } from '../../input/actions';
 import { NOTE_COMMAND_BY_ACTION, isNoteActionId } from '../../input/note-actions';
 import { copyToClipboard } from '../../platform/clipboard';
 import { isDeadObject } from '../../platform/cross-compartment';
+import { NOTE_CARET_CSS } from '../../ui/react/shells/main';
 
 export type NoteMode = 'normal' | 'insert';
 export interface NoteEditingPort {
@@ -90,9 +91,7 @@ export class NoteEditing implements NoteEditingPort {
       !this.#host.isCurrent()
     )
       return;
-    style.textContent =
-      'html.zv-note-normal-mode [contenteditable="true"],html.zv-note-normal-mode textarea,html.zv-note-normal-mode input{caret-color:rgb(96,150,255)!important}' +
-      'html.zv-note-insert-mode [contenteditable="true"],html.zv-note-insert-mode textarea,html.zv-note-insert-mode input{caret-color:rgb(255,148,77)!important}';
+    style.textContent = NOTE_CARET_CSS;
     doc.documentElement.classList.toggle('zv-note-normal-mode', this.#mode === 'normal');
     doc.documentElement.classList.toggle('zv-note-insert-mode', this.#mode === 'insert');
   }

@@ -15,7 +15,7 @@ import {
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
 import type { AnnotationCommentReactCommand, AnnotationCommentReactModel } from './react-model';
-import { THEME_VARS } from '../../ui/theme';
+import { ANNOTATION_COMMENT_OVERLAY_STYLE } from '../../ui/react/shells/reader';
 import type { AnnotationRuntime, PdfWindow, ReaderRuntime, ReaderTimer } from '../../reader/types';
 
 export interface AnnotationCommentTarget {
@@ -299,7 +299,7 @@ export class ReaderCommentEditor {
     const document = pdfWindow.document;
     const overlay = document.createElement('div');
     overlay.id = 'zv-annotation-comment';
-    overlay.style.cssText = `position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 32px ${THEME_VARS.shadow}`;
+    overlay.style.cssText = ANNOTATION_COMMENT_OVERLAY_STYLE;
     this.#overlay = overlay;
     document.body?.appendChild(overlay);
     if (!this.#continueOpen(generation, pdfWindow)) return;

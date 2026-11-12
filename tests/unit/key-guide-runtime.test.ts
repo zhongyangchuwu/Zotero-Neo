@@ -1,20 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACTION_LABELS } from '../../src/input/actions';
 import type { BindingMap } from '../../src/input/bindings';
 import { InputRuntime, type InputTimerHost } from '../../src/input/runtime';
 import { PrefixGuideRuntime, type PrefixGuideView } from '../../src/ui/key-guide-runtime';
+import { mountKeyGuideReactView } from '../../src/ui/react/surfaces/key-guide';
+import type { KeyGuideReactModel } from '../../src/ui/key-guide-react-model';
+import type { NativeReactViewOptions } from '../../src/ui/react/types';
 
-interface FakeGuideNode {
-  id: string;
-  textContent: string;
-  style: { cssText: string; fontSize: string };
-  children: FakeGuideNode[];
-  setAttribute(name: string, value: string): void;
-  append(...nodes: FakeGuideNode[]): void;
-  appendChild(node: FakeGuideNode): void;
-  replaceChildren(...nodes: FakeGuideNode[]): void;
-  remove(): void;
-}
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView(options: NativeReactViewOptions<KeyGuideReactModel, never>) {
+    return { ...mountKeyGuideReactView(options.root, options.model), ready: Promise.resolve() };
+  },
+}));
+
+beforeEach(() => {
+  document.body.replaceChildren();
+});
 
 function guideHarness() {
   const callbacks: Array<() => void> = [];
@@ -30,29 +32,7 @@ function guideHarness() {
       if (timer !== undefined) cancelled.push(timer);
     },
   };
-  const mounted: FakeGuideNode[] = [];
-  function element(): FakeGuideNode {
-    const children: FakeGuideNode[] = [];
-    const node: FakeGuideNode = {
-      id: '',
-      textContent: '',
-      style: { cssText: '', fontSize: '' },
-      children,
-      setAttribute: () => {},
-      append: (...nodes) => children.push(...nodes),
-      appendChild: (child) => children.push(child),
-      replaceChildren: (...nodes) => children.splice(0, children.length, ...nodes),
-      remove() {
-        const index = mounted.indexOf(node);
-        if (index >= 0) mounted.splice(index, 1);
-      },
-    };
-    return node;
-  }
-  const document = {
-    createElement: element,
-    body: { appendChild: (node: FakeGuideNode) => mounted.push(node) },
-  } as unknown as Document;
+  const mounted = document.body.children;
   const theme = { add: vi.fn(() => vi.fn()) };
   const input = new InputRuntime(timers);
   const guide = new PrefixGuideRuntime(timers);
@@ -75,8 +55,11 @@ function guideHarness() {
   return { callbacks, delays, cancelled, mounted, input, guide, bindings, current, update, theme };
 }
 
-function firstLabel(mounted: readonly FakeGuideNode[]): string | undefined {
-  return mounted[0]?.children[1]?.children[0]?.children[1]?.textContent;
+function firstLabel(mounted: HTMLCollection): string | undefined {
+  return (
+    mounted.item(0)?.querySelector('.neo-key-guide-entries > div > span:last-child')?.textContent ??
+    undefined
+  );
 }
 
 describe('PrefixGuideRuntime', () => {
@@ -95,8 +78,8 @@ describe('PrefixGuideRuntime', () => {
     h.guide.refresh(h.current);
     expect(h.mounted).toHaveLength(1);
     expect(h.delays).toEqual([200]);
-    expect(h.mounted[0].style.fontSize).toBe('18px');
-    expect(h.mounted[0].children[1].children).toHaveLength(2);
+    expect(h.mounted[0].querySelector<HTMLElement>('.neo-key-guide')?.style.fontSize).toBe('18px');
+    expect(h.mounted[0].querySelector('.neo-key-guide-entries')?.children).toHaveLength(2);
     h.guide.clear();
     expect(h.mounted).toHaveLength(0);
     expect(h.theme.add.mock.results[0]?.value).toHaveBeenCalledOnce();
@@ -113,8 +96,8 @@ describe('PrefixGuideRuntime', () => {
     h.guide.refresh(h.current);
     h.callbacks[0]();
     expect(h.mounted).toHaveLength(1);
-    expect(h.mounted[0].children[0]?.textContent).toBe('SPC');
-    expect(h.mounted[0].children[1]?.children).toHaveLength(1);
+    expect(h.mounted[0].querySelector('.neo-key-guide-title')?.textContent).toBe('SPC');
+    expect(h.mounted[0].querySelector('.neo-key-guide-entries')?.children).toHaveLength(1);
     expect(firstLabel(h.mounted)).toBe('+ Find');
     h.guide.dispose();
   });

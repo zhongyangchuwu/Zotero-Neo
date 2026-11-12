@@ -17,9 +17,18 @@ export function deferNextPickerReady(): { resolve: () => void; reject: (error: E
 /** Fake only the native React adapter: the controller still owns all event policy. */
 export function mountNativeReactView(options: {
   root: HTMLElement;
+  surface: string;
   model: PickerReactModel;
   isCurrent: () => boolean;
 }): NativeReactView<PickerReactModel> {
+  if (options.surface === 'main-notice') {
+    return {
+      ready: Promise.resolve(),
+      update: () => {},
+      getElement: () => null,
+      dispose: () => {},
+    };
+  }
   const { root } = options;
   const create = (tag: string) =>
     root.ownerDocument.createElementNS('http://www.w3.org/1999/xhtml', tag) as HTMLElement;

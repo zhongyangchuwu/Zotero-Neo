@@ -10,6 +10,7 @@ import {
 import { indexedStructuralTextPosition } from './text-boundary-motion';
 import { buildMappedTextIndex, mappedTextContains, type MappedTextIndex } from './token-boundaries';
 import { isDeadObject } from '../../platform/cross-compartment';
+import { PDF_SELECTION_CURSOR_STYLE } from '../../ui/react/shells/reader';
 import type { FlashIntent, FlashSelectionTarget } from './flash';
 import { verticalTextPosition } from './text-motion';
 import {
@@ -534,8 +535,7 @@ export class ReaderSelectionRange {
       const marker = document.createElement('span');
       marker.dataset.zvCursor = 'token';
       marker.setAttribute('aria-hidden', 'true');
-      marker.style.cssText =
-        'position:fixed;z-index:9998;pointer-events:none;outline:2px solid Highlight;outline-offset:1px;background:color-mix(in srgb,Highlight 16%,transparent);border-radius:2px;';
+      marker.style.cssText = PDF_SELECTION_CURSOR_STYLE;
       marker.style.left = `${rect.left}px`;
       marker.style.top = `${rect.top}px`;
       marker.style.width = `${rect.width}px`;

@@ -8,6 +8,7 @@ import { nativeReservation } from '../../input/shortcut-catalog';
 import { asElement } from '../../platform/dom';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
+import { TAB_SIDEBAR_STYLE } from '../../ui/react/shells/main';
 import type { TabSidebarReactCommand, TabSidebarReactModel } from './react-model';
 import type { TabSidebarEntry, TabSidebarGroup, TabSidebarOptions, TabSidebarView } from './types';
 
@@ -45,8 +46,7 @@ export class TabEnhancementsSidebar {
     const doc = options.window.document;
     this.root = doc.createElementNS(H, 'section') as HTMLElement;
     this.root.dataset.zvTabSidebar = '1';
-    this.root.style.cssText =
-      'display:grid;grid-template-rows:auto auto minmax(0,1fr);min-width:0;height:100%;background:var(--zotero-neo-surface);color:var(--zotero-neo-text);font:menu;font-size:13px';
+    this.root.style.cssText = TAB_SIDEBAR_STYLE;
     this.#content = doc.createElementNS(H, 'div') as HTMLElement;
     this.#content.style.display = 'contents';
     this.toolbarSlot = doc.createElementNS(H, 'div') as HTMLElement;

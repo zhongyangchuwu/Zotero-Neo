@@ -41,7 +41,13 @@ import { FuzzyPicker } from '../../src/main/picker';
 import type { PickerProvider } from '../../src/main/picker/types';
 import type { SettingsReactCommand, SettingsReactModel } from '../../src/main/settings-react-model';
 import type { PickerReactModel } from '../../src/main/picker/react-model';
-import { nativeHosts, resetNativeHosts, setDeferredSettings } from './native-settings-host';
+import {
+  nativeHosts,
+  nativeGuides,
+  nativeNotices,
+  resetNativeHosts,
+  setDeferredSettings,
+} from './native-settings-host';
 
 vi.mock('../../src/platform/native-ui', async () => import('./native-settings-host'));
 beforeEach(() => resetNativeHosts());
@@ -1872,9 +1878,9 @@ describe('Main retirement ownership', () => {
       vi.advanceTimersByTime(1900);
       navigation.status(session, 'B', 2000);
       vi.advanceTimersByTime(100);
-      expect(session.status.style.display).toBe('block');
+      expect(nativeNotices.get(session.status)?.visible).toBe(true);
       vi.advanceTimersByTime(1900);
-      expect(session.status.style.display).toBe('none');
+      expect(nativeNotices.get(session.status)?.visible).toBe(false);
       navigation.status(session, 'C', 2000);
       session.dispose();
       expect(vi.getTimerCount()).toBe(0);
@@ -3111,9 +3117,9 @@ describe('main pending-prefix key guide', () => {
     press(' ');
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.defaultDelayMs);
     expect(children.some((child) => child.id === 'zotero-neo-key-guide')).toBe(true);
-    expect(children.find((child) => child.id === 'zotero-neo-key-guide')?.style.fontSize).toBe(
-      '18px',
-    );
+    expect(
+      nativeGuides.get(children.find((child) => child.id === 'zotero-neo-key-guide')!)?.fontSizePx,
+    ).toBe(18);
 
     press('Escape');
     expect(children.some((child) => child.id === 'zotero-neo-key-guide')).toBe(false);

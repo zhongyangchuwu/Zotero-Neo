@@ -49,8 +49,27 @@ vi.mock('../../src/platform/native-ui', async (importOriginal) => {
     mountNativeReactView: (options: {
       surface: string;
       root: HTMLElement;
-      model: { comment?: string };
+      model: { comment?: string; text?: string };
     }) => {
+      if (options.surface === 'reader-status') {
+        options.root.textContent = options.model.text ?? '';
+        return {
+          ready: Promise.resolve(),
+          update: (model: { text?: string }) => {
+            options.root.textContent = model.text ?? '';
+          },
+          getElement: () => null,
+          dispose: () => {},
+        };
+      }
+      if (options.surface === 'key-guide') {
+        return {
+          ready: Promise.resolve(),
+          update: () => {},
+          getElement: () => null,
+          dispose: () => {},
+        };
+      }
       if (options.surface !== 'annotation-comment' && options.surface !== 'selection-actions')
         return actual.mountNativeReactView(options as never);
       const input =

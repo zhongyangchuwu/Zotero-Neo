@@ -17,7 +17,7 @@ import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
 import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model';
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
-import { THEME_VARS } from '../../ui/theme';
+import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
 import {
   installedPlugins,
@@ -84,7 +84,7 @@ export class PluginManagerPanel {
       pendingOverlay = overlay;
       overlay.id = 'zv-plugin-manager';
       overlay.tabIndex = -1;
-      overlay.style.cssText = `position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:40px;background:${THEME_VARS.backdrop};color:${THEME_VARS.text};font:13px/1.4 monospace`;
+      overlay.style.cssText = CENTERED_MONOSPACE_OVERLAY_STYLE;
 
       const root = create('div');
       overlay.append(root);

@@ -28,7 +28,7 @@ import { addReferencePaper, findReferenceItems } from '../operations/references'
 import { createReferenceAbortController } from '../platform/reference-http';
 import { normalizeArxiv, normalizeDOI } from './identifiers';
 import { CleanupScope } from '../core/cleanup';
-import { THEME_VARS } from '../ui/theme';
+import { REFERENCES_PANEL_STYLE } from '../ui/react/shells/reader';
 import { compositionOwnsKey } from '../input/composition';
 import { mountNativeReactView } from '../platform/native-ui';
 import type {
@@ -282,7 +282,7 @@ export class ReferenceController {
     const root = element('section');
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-label', text('References', '引用'));
-    root.style.cssText = `position:fixed;z-index:2147483645;left:20px;top:50px;width:420px;max-width:calc(100vw - 24px);max-height:65vh;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:12px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:6px;font:menu`;
+    root.style.cssText = REFERENCES_PANEL_STYLE;
     root.tabIndex = -1;
     const content = element('div');
     root.append(content);

@@ -4,6 +4,7 @@ import { isDeadObject } from '../../platform/cross-compartment';
 import { asElement, isEditableElement } from '../../platform/dom';
 import { hintLabels } from '../../reader/hint-labels';
 import type { PdfWindow } from '../../reader/types';
+import { PDF_HINT_BADGE_STYLE, PDF_HINT_PROMPT_STYLE } from '../../ui/react/shells/reader';
 
 export interface ReaderHintTarget<Value> {
   readonly value: Value;
@@ -32,8 +33,6 @@ interface TargetHintsHost<Value> {
   readonly failed?: (error: unknown) => void;
   readonly closed?: (reason: 'cancelled' | 'confirmed') => void;
 }
-const BADGE_STYLE =
-  'position:fixed;z-index:99999;background:#f9e2af;color:#1e1e2e;padding:1px 3px;border:1px solid #1e1e2e;border-radius:2px;font:bold 10px monospace;line-height:1.2;pointer-events:none;';
 const GAP = 3;
 
 /** Owns transient labels and input, not candidate discovery or copy/follow policy. */
@@ -77,7 +76,7 @@ export class ReaderTargetHints<Value> {
       if (target.group) element.dataset.zoteroNeoHintGroup = target.group;
       const label = labels[index]!;
       element.textContent = target.caption ? `${label} ${target.caption}` : label;
-      element.style.cssText = BADGE_STYLE;
+      element.style.cssText = PDF_HINT_BADGE_STYLE;
       const badge = { element, label, target };
       this.#badges.push(badge);
       geometry.set(badge, target.rect);
@@ -103,7 +102,7 @@ export class ReaderTargetHints<Value> {
       this.#prompt = element;
       element.dataset.zoteroNeoHintPrompt = '1';
       element.textContent = prompt;
-      element.style.cssText = `${BADGE_STYLE}top:4px;right:4px;padding:3px 6px;`;
+      element.style.cssText = PDF_HINT_PROMPT_STYLE;
       body.appendChild(element);
       if (!this.#host.isCurrent(window)) {
         const failure = new CleanupFailure();

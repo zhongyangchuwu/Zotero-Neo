@@ -9,6 +9,7 @@ import {
 } from '../../toolkit/reader';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { ReaderTargetHints } from './target-hints';
+import { PDF_LINK_CUE_STYLE } from '../../ui/react/shells/reader';
 import {
   identifierHintTargets,
   identifierOpenURL,
@@ -277,8 +278,7 @@ export class ReaderLinkHints {
       if (!this.#activationIsCurrent(invocation)) return;
       cue.dataset.zoteroNeoDestinationCue = '1';
       cue.hidden = true;
-      cue.style.cssText =
-        'position:fixed;z-index:99998;background:#f57b7b;mix-blend-mode:multiply;pointer-events:none;';
+      cue.style.cssText = PDF_LINK_CUE_STYLE;
       const body = pdfWindow.document.body;
       if (!this.#activationIsCurrent(invocation)) return;
       this.#destinationCue = cue;

@@ -2,7 +2,7 @@ import { CleanupFailure } from '../../core/cleanup';
 
 import type { Logger } from '../../core/logging';
 import type { CommandPaletteContext, MainWindow } from '../../core/contracts';
-import { THEME_VARS } from '../../ui/theme';
+import { PICKER_MODAL_STYLE, PICKER_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { asElement } from '../../platform/dom';
 import {
   bindCompositionState,
@@ -104,9 +104,9 @@ export class FuzzyPicker {
       const overlay = create('div');
       overlay.id = 'zv-picker-overlay';
       orphanOverlay = overlay;
-      overlay.style.cssText = `position:fixed;inset:0;background:${THEME_VARS.backdrop};z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:5vh 3vw`;
+      overlay.style.cssText = PICKER_OVERLAY_STYLE;
       const modal = create('div');
-      modal.style.cssText = `background:${THEME_VARS.surface};color:${THEME_VARS.text};width:min(1280px,94vw);height:min(780px,86vh);border:1px solid ${THEME_VARS.border};border-radius:8px;overflow:hidden;box-shadow:0 20px 60px ${THEME_VARS.shadow};font:13px/1.45 system-ui,sans-serif`;
+      modal.style.cssText = PICKER_MODAL_STYLE;
       const single = (window.innerWidth || 1024) < 900;
       overlay.append(modal);
       (doc.body ?? doc.documentElement).append(overlay);

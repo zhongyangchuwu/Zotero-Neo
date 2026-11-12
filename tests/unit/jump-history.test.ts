@@ -1236,6 +1236,7 @@ describe('Main jump history', () => {
     );
     Object.assign(h.session, {
       status: { style: {}, textContent: '' },
+      statusView: { update: vi.fn() },
       cleanup: { add: vi.fn() },
     });
     const items = h.window.ZoteroPane?.itemsView as object;

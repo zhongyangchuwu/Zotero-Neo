@@ -33,7 +33,7 @@ import {
   structuredDocumentData,
   type ReaderRuntime,
 } from '../../toolkit/reader';
-import { THEME_VARS } from '../../ui/theme';
+import { COMPARISON_BACKDROP_STYLE, COMPARISON_PANEL_STYLE } from '../../ui/react/shells/reader';
 import {
   DOCUMENT_PROVIDER_KEY,
   OXR_ENDPOINT_KEY,
@@ -130,12 +130,12 @@ export class ReaderDocumentComparison {
     };
     const root = element('section');
     const backdrop = element('div');
-    backdrop.style.cssText = `position:fixed;inset:0;z-index:2147483644;background:${THEME_VARS.backdrop}`;
+    backdrop.style.cssText = COMPARISON_BACKDROP_STYLE;
     root.dataset.zvDocumentComparison = '1';
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-label', this.#text('title'));
-    root.style.cssText = `position:fixed;inset:5%;z-index:2147483645;overflow:auto;padding:20px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 40px #0006;font:menu`;
+    root.style.cssText = COMPARISON_PANEL_STYLE;
     const content = element('div');
     const provider: ComparisonView['provider'] = {
       value:
