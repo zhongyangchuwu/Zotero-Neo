@@ -8,7 +8,8 @@ export const SEARCH_DIALOG_REACT_CSS = `
 .neo-search-dialog { position:absolute; inset:8%; display:flex; flex-direction:column; gap:10px; padding:18px; overflow:auto; background:var(--zotero-neo-surface); color:var(--zotero-neo-text); border:1px solid var(--zotero-neo-border); border-radius:8px; box-shadow:0 8px 40px #0006; font:menu; }
 .neo-search-dialog h2, .neo-search-dialog p { margin:0; }
 .neo-search-controls { display:flex; gap:8px; flex-wrap:wrap; }
-.neo-search-controls input { flex:1; min-width:160px; }
+.neo-search-controls input { flex:1; min-width:160px; color:var(--zotero-neo-text) !important; background:var(--zotero-neo-input) !important; }
+.neo-search-controls input::placeholder { color:var(--zotero-neo-muted) !important; opacity:1; }
 .neo-search-content { display:flex; flex-wrap:wrap; gap:12px; flex:1; min-height:0; }
 .neo-search-results { flex:1 1 250px; overflow:auto; min-height:80px; }
 .neo-search-row { padding:10px; white-space:pre-wrap; overflow-wrap:anywhere; cursor:pointer; border-bottom:1px solid var(--zotero-neo-border); }

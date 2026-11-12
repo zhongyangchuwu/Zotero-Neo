@@ -80,8 +80,15 @@ export class SearchDialog<T> {
     if (!options.current()) return;
     const document = options.owner.document;
     const root = document.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
+    root.tabIndex = -1;
     document.documentElement.append(root);
-    const untheme = options.themeRoot(root);
+    let untheme: () => void;
+    try {
+      untheme = options.themeRoot(root);
+    } catch (error) {
+      root.remove();
+      throw error;
+    }
     const model: SearchDialogReactModel = {
       title: options.title,
       placeholder: options.placeholder,
@@ -102,39 +109,51 @@ export class SearchDialog<T> {
     };
     let unbind = (): void => {};
     let view: SearchView<T>;
-    const react = mountNativeReactView<SearchDialogReactModel, SearchDialogReactCommand>({
-      surface: 'search-dialog',
-      root,
-      model,
-      isCurrent: () => this.#current(view),
-      loadingText: options.loading,
-      errorText: options.unavailable,
-      onError: options.debug,
-      dispatch: (command) => {
-        if (!this.#current(view)) return;
-        if (command.type === 'close') this.close(true);
-        else if (
-          command.type === 'scope' &&
-          view.model.scopes.some((scope) => scope.id === command.value)
-        ) {
-          view.model = { ...view.model, scope: command.value };
-          this.#filter(view);
-        } else if (
-          command.type === 'select' &&
-          Number.isInteger(command.index) &&
-          command.index >= 0 &&
-          command.index < view.filtered.length
-        ) {
-          if (view.selected === command.index) void this.#confirm(view);
-          else this.#select(view, command.index);
-        } else if (command.type === 'action' && Number.isInteger(command.index)) {
-          const action = options.actions?.[command.index];
-          const item = view.filtered[view.selected];
-          if (action && item !== undefined && action.available?.(item) !== false)
-            void this.#confirm(view, action.run);
-        }
-      },
-    });
+    let react: NativeReactView<SearchDialogReactModel>;
+    try {
+      react = mountNativeReactView<SearchDialogReactModel, SearchDialogReactCommand>({
+        surface: 'search-dialog',
+        root,
+        model,
+        isCurrent: () => this.#current(view),
+        loadingText: options.loading,
+        errorText: options.unavailable,
+        onError: (error) => {
+          options.debug(error);
+          if (this.#current(view)) root.focus();
+        },
+        dispatch: (command) => {
+          if (!this.#current(view)) return;
+          if (command.type === 'close') this.close(true);
+          else if (
+            command.type === 'scope' &&
+            view.model.scopes.some((scope) => scope.id === command.value)
+          ) {
+            view.model = { ...view.model, scope: command.value };
+            this.#filter(view);
+          } else if (
+            command.type === 'select' &&
+            Number.isInteger(command.index) &&
+            command.index >= 0 &&
+            command.index < view.filtered.length
+          ) {
+            if (view.selected === command.index) void this.#confirm(view);
+            else this.#select(view, command.index);
+          } else if (command.type === 'action' && Number.isInteger(command.index)) {
+            const action = options.actions?.[command.index];
+            const item = view.filtered[view.selected];
+            if (action && item !== undefined && action.available?.(item) !== false)
+              void this.#confirm(view, action.run);
+          }
+        },
+      });
+    } catch (error) {
+      try {
+        untheme();
+      } catch {}
+      root.remove();
+      throw error;
+    }
     view = {
       options,
       root,

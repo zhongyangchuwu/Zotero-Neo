@@ -216,4 +216,17 @@ describe('query dialog lifetime', () => {
     expect(t.options.debug).toHaveBeenCalledOnce();
     t.dialog.close();
   });
+  it('removes the new dialog root when theme acquisition fails', () => {
+    const t = harness();
+    const error = new Error('theme unavailable');
+    expect(() =>
+      t.dialog.open({
+        ...t.options,
+        themeRoot: () => {
+          throw error;
+        },
+      }),
+    ).toThrow(error);
+    expect(t.doc.documentElement.children).toEqual([]);
+  });
 });
