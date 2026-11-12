@@ -5,6 +5,10 @@ import {
 } from '../../src/toolkit/main/tab-enhancements';
 import { mountRail } from '../../src/toolkit/main/tab-enhancements/layout';
 
+vi.mock('../../src/platform/cross-compartment', () => ({
+  cloneInto: (value: object) => structuredClone(value),
+}));
+
 const oldZotero = Reflect.get(globalThis, 'Zotero');
 afterEach(() => {
   vi.useRealTimers();
@@ -12,7 +16,7 @@ afterEach(() => {
   else Reflect.set(globalThis, 'Zotero', oldZotero);
 });
 
-function fixture() {
+function fixture(options: { prefix?: string; copiedData?: Record<string, unknown> } = {}) {
   vi.useFakeTimers();
   let counter = 0;
   const item = {
@@ -39,7 +43,12 @@ function fixture() {
     _selectedID: 'zotero-pane',
     _tabs: [
       { id: 'zotero-pane', type: 'library', title: 'Library', data: {} as Record<string, unknown> },
-      { id: 'a', type: 'reader', title: 'A', data: { ...data } },
+      {
+        id: 'a',
+        type: 'reader',
+        title: 'A',
+        data: options.copiedData ?? { ...data },
+      },
       { id: 'b', type: 'reader', title: 'B', data: { ...data } },
     ],
     _update: vi.fn(),
@@ -72,7 +81,7 @@ function fixture() {
   const window = {
     document: {},
     closed: false,
-    crypto: { randomUUID: () => `uid-${++counter}` },
+    crypto: { randomUUID: () => `${options.prefix ?? 'uid'}-${++counter}` },
     setTimeout,
     clearTimeout,
     addEventListener: vi.fn(),
@@ -137,6 +146,28 @@ describe('native tab enhancement host', () => {
       state: 'unloaded',
     });
     h.host.dispose();
+  });
+
+  it('assigns copied tabs distinct identities across windows and releases retired claims', () => {
+    const first = fixture({ prefix: 'first' });
+    const original = first.host.snapshot()[1]!.viewID;
+    const sharedData = first.tabs._tabs[1]!.data;
+    const second = fixture({ prefix: 'second', copiedData: sharedData });
+    const duplicate = second.host.snapshot()[1]!.viewID;
+    expect(duplicate).not.toBe(original);
+    expect(first.host.snapshot()[1]!.viewID).toBe(original);
+    expect(first.tabs._tabs[1]!.data).toBe(sharedData);
+    expect(second.tabs._tabs[1]!.data).not.toBe(sharedData);
+    expect(sharedData.zoteroNeoTabEnhancements).toEqual({ version: 1, viewID: original });
+    expect(second.tabs._tabs[1]!.data.zoteroNeoTabEnhancements).toEqual({
+      version: 1,
+      viewID: duplicate,
+    });
+    first.host.dispose();
+    const restored = fixture({ prefix: 'third', copiedData: sharedData });
+    expect(restored.host.snapshot()[1]!.viewID).toBe(original);
+    second.host.dispose();
+    restored.host.dispose();
   });
 
   it('uses native insertion boundaries and protects the library tab', () => {

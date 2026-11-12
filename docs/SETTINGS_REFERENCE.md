@@ -55,7 +55,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点；不依赖 `library` 或 `reader-navigation`。 |
 | `extensions` | 扩展管理面板 | 可选增强：已安装 Zotero 扩展的 Plugin Manager；不管理 Neo 内部模块。 |
-| `tab-enhancements` | 标签页增强 | 可选增强：Main 垂直标签栏与不支持嵌套的可恢复阅读分组；依赖 `workspace`，默认关闭。分组流程见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。 |
+| `tab-enhancements` | 标签页增强 | 可选增强：Main 垂直标签栏与不支持嵌套的活动标签分组；依赖 `workspace`，默认关闭。分组流程见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。 |
 
 | 运行状态 | 含义 |
 | --- | --- |
@@ -99,7 +99,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 :::
 
-保存的阅读分组是仅保存在当前 Zotero 配置文件中的界面状态，存于 `extensions.zotero-neo.tabEnhancements.groups.v1`，不是 Zotero 标签或分类。停用模块或点击**恢复标签页显示默认值**不会删除分组；完整操作见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。
+阅读分组是仅保存在当前 Zotero 配置文件中的界面状态，当前使用 `extensions.zotero-neo.tabEnhancements.groups.v2`，旧 `groups.v1` 原样保留为备份；它不是 Zotero 标签或分类。停用模块或点击**恢复标签页显示默认值**不会删除分组；完整操作见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。
 
 
 ## 引用增强的元数据来源与密钥

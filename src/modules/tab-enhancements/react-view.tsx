@@ -138,9 +138,7 @@ export const TAB_SIDEBAR_REACT_CSS = `
 .neo-tab-sidebar__color { width:20px; height:20px; padding:0 !important; border:1px solid ${THEME_VARS.border} !important; border-radius:50%; }
 .neo-tab-sidebar__color { display:flex; align-items:center; justify-content:center; }
 .neo-tab-sidebar__color-swatch { display:block; width:14px; height:14px; border-radius:50%; }
-.neo-tab-sidebar__restore,
 .neo-tab-sidebar__status { flex:0 0 auto; }
-.neo-tab-sidebar__restore:not(:empty),
 .neo-tab-sidebar__status:not(:empty) { margin:4px 6px; padding:8px; border:1px solid ${THEME_VARS.border}; border-radius:8px; background:${THEME_VARS.elevated}; }
 `;
 
@@ -201,14 +199,13 @@ export function mountTabSidebarReactView(
             entryID={entry.id}
             className="neo-tab-sidebar__entry-title"
             title={entry.nativeTitle}
-            disabled={entry.status === 'missing'}
             current={entry.selected}
           >
             {entry.title}
           </ActionButton>
-          {entry.status !== 'open' && (
+          {entry.status === 'other-window' && (
             <span className="neo-tab-sidebar__badge" data-neo-tab-badge="1">
-              {text(entry.status === 'other-window' ? 'otherWindow' : entry.status)}
+              {text('otherWindow')}
             </span>
           )}
           {entry.kind !== 'library' && entry.kind !== 'other' && (
@@ -344,50 +341,6 @@ export function mountTabSidebarReactView(
               {editing?.groupID === null && renderEditor(`new:${editing.memberID ?? ''}`)}
             </div>
             <div
-              className="neo-tab-sidebar__restore"
-              data-neo-ui-part="restore"
-              role="status"
-              aria-live="polite"
-              hidden={!model.restore}
-            >
-              {model.restore && (
-                <>
-                  <span>{model.restore.message}</span>
-                  {model.restore.mode === 'preview' && (
-                    <>
-                      {' '}
-                      <ActionButton
-                        action="restore-start"
-                        part="restore-start"
-                        label={text('restoreStart')}
-                      >
-                        {text('restoreStart')}
-                      </ActionButton>
-                      <ActionButton
-                        action="restore-cancel"
-                        part="restore-cancel"
-                        label={text('restoreCancel')}
-                      >
-                        {text('restoreCancel')}
-                      </ActionButton>
-                    </>
-                  )}
-                  {model.restore.mode === 'progress' && model.restore.canStop && (
-                    <>
-                      {' '}
-                      <ActionButton
-                        action="restore-stop"
-                        part="restore-stop"
-                        label={text('restoreStop')}
-                      >
-                        {text('restoreStop')}
-                      </ActionButton>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-            <div
               className="neo-tab-sidebar__status"
               role="status"
               aria-live="polite"
@@ -442,13 +395,6 @@ export function mountTabSidebarReactView(
                         </ActionButton>
                       ))}
                     </div>
-                    <ActionButton
-                      action="open-group"
-                      label={text('openGroup')}
-                      groupID={menuGroup.id}
-                    >
-                      {text('openGroup')}
-                    </ActionButton>
                     <ActionButton
                       action="close-group"
                       label={text('closeGroup')}

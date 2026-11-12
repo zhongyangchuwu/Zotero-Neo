@@ -352,11 +352,10 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `tabs-list` | `/` | `uiSearch` | 聚焦查询框。 |
 | `tabs-list` | `a` | `tabCreateGroup` | 新建分组。 |
 | `tabs-list` | `r` | `tabRenameGroup` | 重命名所选分组。 |
-| `tabs-list` | `d`、`<Del>` | `tabCloseEntry` | 关闭当前窗口中所选的打开 Reader／Note 标签页；该成员仍保留在分组中。 |
+| `tabs-list` | `d`、`<Del>` | `tabCloseEntry` | 关闭当前窗口中所选的 Reader／Note 标签页并移除其成员关系。 |
 | `tabs-list` | `<Space>` | `tabToggleGroup` | 收起或展开所选分组。 |
-| `tabs-list` | `o` | `tabOpenGroup` | 预览该组的成员状态，确认后打开已关闭的保存成员。 |
-| `tabs-list` | `c` | `tabCloseGroup` | 关闭该组在当前窗口中已打开的标签页，但保留分组和成员记录。 |
-| `tabs-list` | `u` | `tabUngroup` | 确认后解散整组；已打开的标签页保持打开，已关闭的保存成员从组中移除。 |
+| `tabs-list` | `c` | `tabCloseGroup` | 关闭该组在当前窗口中已打开的标签页，保留分组。 |
+| `tabs-list` | `u` | `tabUngroup` | 确认后解散整组；已打开的标签页保持打开。 |
 | `tabs-list` | `x` | `tabRemoveFromGroup` | 将所选单个成员移出分组；若标签页仍打开，不会关闭它。 |
 
 `tabs-input` 和 `tabs-list` 都支持本地导航、确认、取消、焦点切换及分组操作；`tabs-list` 另外支持 `uiSearch`。两个上下文都支持 `uiNextPane` 和 `uiPreviousPane`，但默认未绑定。完整分组操作流程见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。
@@ -473,17 +472,16 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `mainYankCitekey` | Reader/Main/Note Normal `<Space>yy` | 根据当前上下文复制 citekey |
 | `mainAddByIdentifier` | Reader/Main Normal `<Space>ai` | 在关联的 Library 窗口中打开 Zotero 原生“通过标识符添加条目”；不使用条目选择集 |
 | `mainOpenPDF` | Main Normal `o`；Note Normal `<Space>o` | 打开 Main 条目游标所在的条目，或 Note 上下文条目 |
-| `mainCreateReadingGroup` / `mainAppendReadingGroup` | Main Normal `<Space>bc` / `<Space>ba` | Main-only；创建阅读分组或向已有分组添加关闭的 PDF 成员，不自动打开文档。有效目标在操作开始时固定；多个可用 PDF 必须明确选择，取消不写入。 |
-| `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | 关闭当前原生标签页；若它属于保存的分组，关闭不会移除成员记录。 |
+| `mainCreateReadingGroup` / `mainAppendReadingGroup` | Main Normal `<Space>bc` / `<Space>ba` | Main-only；确认后打开所选 PDF 并将成功打开的视图加入分组。有效目标在操作开始时固定；多个可用 PDF 必须明确选择。 |
+| `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | 关闭当前原生标签页并移除其分组成员关系。 |
 | `tabFocusSidebar` | Main/Reader/Note Normal `<Space>bb` | 仅在 `tab-enhancements` 启用时聚焦侧栏；已收起时先展开。 |
 | `tabToggleSidebar` | Main/Reader/Note Normal `<Space>bt` | 仅在 `tab-enhancements` 启用时收起或展开侧栏。 |
 | `tabCreateGroup` | `tabs-list` `a`；`tabs-input` 未绑定 | 在标签页侧栏新建分组。 |
 | `tabRenameGroup` | `tabs-list` `r`；`tabs-input` 未绑定 | 重命名所选分组。 |
-| `tabCloseEntry` | `tabs-list` `d`、`<Del>`；`tabs-input` 未绑定 | 关闭所选打开的 Reader／Note 标签页；已保存的分组成员记录仍保留。 |
+| `tabCloseEntry` | `tabs-list` `d`、`<Del>`；`tabs-input` 未绑定 | 关闭当前窗口中所选的 Reader／Note 标签页并移除成员关系。 |
 | `tabToggleGroup` | `tabs-list` `<Space>`；`tabs-input` 未绑定 | 收起或展开所选分组。 |
-| `tabOpenGroup` | `tabs-list` `o`；`tabs-input` 未绑定 | 打开该组保存的已关闭成员。 |
-| `tabCloseGroup` | `tabs-list` `c`；`tabs-input` 未绑定 | 关闭该组在当前窗口中已打开的标签页，但保留分组和成员记录。 |
-| `tabUngroup` | `tabs-list` `u`；`tabs-input` 未绑定 | 确认后解散整组，保留仍打开的标签页并移除已关闭的保存成员。 |
+| `tabCloseGroup` | `tabs-list` `c`；`tabs-input` 未绑定 | 关闭该组当前窗口的标签页，保留分组。 |
+| `tabUngroup` | `tabs-list` `u`；`tabs-input` 未绑定 | 确认后解散整组，保留打开的标签页。 |
 | `tabRemoveFromGroup` | `tabs-list` `x`；`tabs-input` 未绑定 | 将单个成员移出分组，不关闭仍打开的标签页。 |
 | `addTag` | Reader/Main/Note Normal `<Space>ta` | 为符合条件的目标添加标签 |
 | `removeTag` | Reader/Main/Note Normal `<Space>tr` | 从符合条件的目标移除标签 |
@@ -993,7 +991,6 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `tabs-list:d` | `tabCloseEntry` |
 | `tabs-list:<Del>` | `tabCloseEntry` |
 | `tabs-list:<Space>` | `tabToggleGroup` |
-| `tabs-list:o` | `tabOpenGroup` |
 | `tabs-list:c` | `tabCloseGroup` |
 | `tabs-list:u` | `tabUngroup` |
 | `tabs-list:x` | `tabRemoveFromGroup` |
