@@ -12,6 +12,9 @@ import {
   nativeObjectIdentity,
   privilegedEventTarget,
 } from '../../platform/cross-compartment';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { AnnotationCommentReactCommand, AnnotationCommentReactModel } from './react-model';
 import { THEME_VARS } from '../../ui/theme';
 import type { AnnotationRuntime, PdfWindow, ReaderRuntime, ReaderTimer } from '../../reader/types';
 
@@ -54,6 +57,7 @@ export class ReaderCommentEditor {
   #viewValid: (() => boolean) | null = null;
   #viewLifetimeValid: (() => boolean) | null = null;
   #overlay: HTMLElement | null = null;
+  #view: NativeReactView<AnnotationCommentReactModel> | null = null;
   #input: HTMLTextAreaElement | null = null;
   #inputCleanup: (() => void) | null = null;
   #themeCleanup: (() => void) | null = null;
@@ -204,7 +208,7 @@ export class ReaderCommentEditor {
         return;
       }
       this.#deletionOverride = deletionOverride;
-      this.#mount(
+      await this.#mount(
         pdfWindow,
         target,
         annotation?.annotationComment ?? '',
@@ -284,29 +288,53 @@ export class ReaderCommentEditor {
     return false;
   }
 
-  #mount(
+  async #mount(
     pdfWindow: PdfWindow,
     target: AnnotationCommentTarget,
     comment: string,
     quote: string,
-  ): void {
+  ): Promise<void> {
     const generation = this.#generation;
     this.#target = target;
     const document = pdfWindow.document;
     const overlay = document.createElement('div');
     overlay.id = 'zv-annotation-comment';
-    overlay.style.cssText = `position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 32px ${THEME_VARS.shadow};display:flex;flex-direction:column;font:13px/1.4 sans-serif`;
-    if (quote) {
-      const excerpt = document.createElement('div');
-      excerpt.style.cssText = `padding:8px 12px;color:${THEME_VARS.muted};font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:${THEME_VARS.elevated}`;
-      excerpt.textContent = excerptText(quote).slice(0, 200);
-      overlay.appendChild(excerpt);
+    overlay.style.cssText = `position:fixed;left:50%;bottom:14px;transform:translateX(-50%);width:min(560px,92%);z-index:99998;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 32px ${THEME_VARS.shadow}`;
+    this.#overlay = overlay;
+    document.body?.appendChild(overlay);
+    if (!this.#continueOpen(generation, pdfWindow)) return;
+    const cleanup = this.#host.themeRoot(overlay);
+    if (!this.#isCurrent(generation, pdfWindow)) {
+      cleanup();
+      this.#continueOpen(generation, pdfWindow);
+      return;
     }
-    const input = document.createElement('textarea');
-    input.id = 'zv-annotation-comment-input';
-    input.value = comment;
-    input.spellcheck = false;
-    input.style.cssText = `width:100%;box-sizing:border-box;min-height:72px;max-height:220px;padding:10px 12px;background:${THEME_VARS.input};color:${THEME_VARS.text};border:0;outline:2px solid ${THEME_VARS.focusRing};outline-offset:-2px;resize:none;font:13px/1.5 sans-serif`;
+    this.#themeCleanup = cleanup;
+    const view = mountNativeReactView<AnnotationCommentReactModel, AnnotationCommentReactCommand>({
+      surface: 'annotation-comment',
+      root: overlay,
+      model: {
+        comment,
+        excerpt: excerptText(quote).slice(0, 200),
+        hint: /^zh/i.test(this.#host.locale())
+          ? 'Enter 换行 · Esc 保存并关闭'
+          : 'Enter newline · Esc save & close',
+      },
+      dispatch: () => {},
+      isCurrent: () =>
+        this.#isCurrent(generation, pdfWindow) &&
+        this.#overlay === overlay &&
+        pdfWindow.document === document,
+      loadingText: 'Loading comment editor…',
+      errorText: 'Comment editor unavailable.',
+      onError: (error) => this.#host.debug(`Annotation comment view failed: ${String(error)}`),
+    });
+    this.#view = view;
+    await view.ready;
+    if (!this.#continueOpen(generation, pdfWindow)) return;
+    const input = view.getElement('input') as HTMLTextAreaElement | null;
+    if (!input) throw new Error('Annotation comment input unavailable');
+    this.#input = input;
     const compositionStart = (): void => {
       if (this.#isCurrent(generation, pdfWindow)) this.#composing = true;
     };
@@ -326,45 +354,11 @@ export class ReaderCommentEditor {
     };
     this.#inputCleanup = cleanupInput;
     input.addEventListener('compositionstart', compositionStart);
-    if (!this.#isCurrent(generation, pdfWindow)) {
-      cleanupInput();
-      this.#continueOpen(generation, pdfWindow);
-      return;
-    }
-    input.addEventListener('compositionend', compositionEnd);
-    if (!this.#isCurrent(generation, pdfWindow)) {
-      cleanupInput();
-      this.#continueOpen(generation, pdfWindow);
-      return;
-    }
-    input.addEventListener('input', changed);
-    if (!this.#isCurrent(generation, pdfWindow)) {
-      cleanupInput();
-      this.#continueOpen(generation, pdfWindow);
-      return;
-    }
-    const hint = document.createElement('div');
-    hint.style.cssText = `padding:5px 12px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted};font-size:11px`;
-    hint.textContent = /^zh/i.test(this.#host.locale())
-      ? 'Enter 换行 · Esc 保存并关闭'
-      : 'Enter newline · Esc save & close';
     if (!this.#continueOpen(generation, pdfWindow)) return;
-    overlay.append(input, hint);
-    this.#overlay = overlay;
-    this.#input = input;
-    document.body?.appendChild(overlay);
-    if (!this.#isCurrent(generation, pdfWindow)) {
-      if (!isDeadObject(overlay)) overlay.remove();
-      this.#continueOpen(generation, pdfWindow);
-      return;
-    }
-    const cleanup = this.#host.themeRoot(overlay);
-    if (!this.#isCurrent(generation, pdfWindow)) {
-      cleanup();
-      this.#continueOpen(generation, pdfWindow);
-      return;
-    }
-    this.#themeCleanup = cleanup;
+    input.addEventListener('compositionend', compositionEnd);
+    if (!this.#continueOpen(generation, pdfWindow)) return;
+    input.addEventListener('input', changed);
+    this.#continueOpen(generation, pdfWindow);
   }
 
   #release(): void {
@@ -379,6 +373,7 @@ export class ReaderCommentEditor {
     const inputCleanup = this.#inputCleanup;
     const themeCleanup = this.#themeCleanup;
     const overlay = this.#overlay;
+    const view = this.#view;
     const override = this.#deletionOverride;
     this.#ownerWindow = null;
     this.#viewValid = null;
@@ -392,6 +387,7 @@ export class ReaderCommentEditor {
     this.#inputCleanup = null;
     this.#themeCleanup = null;
     this.#overlay = null;
+    this.#view = null;
     this.#input = null;
     this.#target = null;
     this.#composing = false;
@@ -413,6 +409,7 @@ export class ReaderCommentEditor {
       if (popupGuard && !isDeadObject(popupGuard)) popupGuard.disconnect();
     });
     failure.run(() => inputCleanup?.());
+    failure.run(() => view?.dispose());
     failure.run(() => themeCleanup?.());
     failure.run(() => {
       if (overlay && !isDeadObject(overlay)) overlay.remove();

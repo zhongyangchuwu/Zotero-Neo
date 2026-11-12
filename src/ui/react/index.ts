@@ -38,6 +38,16 @@ import {
   DOCUMENT_COMPARISON_REACT_CSS,
 } from '../../modules/document-comparison/react-view';
 import type { DocumentComparisonModel } from '../../modules/document-comparison/react-model';
+import {
+  mountAnnotationCommentReactView,
+  ANNOTATION_COMMENT_REACT_CSS,
+} from '../../modules/reader-annotations/react-view';
+import type { AnnotationCommentReactModel } from '../../modules/reader-annotations/react-model';
+import {
+  mountSelectionActionsReactView,
+  SELECTION_ACTIONS_REACT_CSS,
+} from '../../modules/reader-selection/react-view';
+import type { SelectionActionsReactModel } from '../../modules/reader-selection/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -59,7 +69,9 @@ const runtime: NativeUIRuntime = {
         EXTENSIONS_REACT_CSS +
         SEARCH_DIALOG_REACT_CSS +
         READER_FIGURES_REACT_CSS +
-        DOCUMENT_COMPARISON_REACT_CSS;
+        DOCUMENT_COMPARISON_REACT_CSS +
+        ANNOTATION_COMMENT_REACT_CSS +
+        SELECTION_ACTIONS_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -112,6 +124,18 @@ const runtime: NativeUIRuntime = {
       case 'document-comparison':
         return mountDocumentComparisonReactView(root, model as DocumentComparisonModel, (command) =>
           dispatch(command),
+        ) as ReactView<unknown>;
+      case 'annotation-comment':
+        return mountAnnotationCommentReactView(
+          root,
+          model as AnnotationCommentReactModel,
+          () => {},
+        ) as ReactView<unknown>;
+      case 'selection-actions':
+        return mountSelectionActionsReactView(
+          root,
+          model as SelectionActionsReactModel,
+          () => {},
         ) as ReactView<unknown>;
       default:
         throw new Error(`Unsupported native UI surface: ${String(surface)}`);
