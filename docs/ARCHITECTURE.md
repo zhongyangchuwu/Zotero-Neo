@@ -94,6 +94,8 @@ Reader Base 先建立视图和外层输入监听，再在 Navigation 激活事�
 
 章节查找、图表浏览和解析对照分别由 `src/modules/reader-chapters/`、`reader-figures/` 和 `document-comparison/` 拥有。图表浏览只在 Navigation 成功激活后组合，通过具名端口借用已有 caption 来源与定位，不新建目标引擎或导航历史。章节与图表模块各自持有缓存／服务失效订阅，对照模块管理自己的界面和迟到结果；原有的互斥打开策略仍由 Reader Surface 协调。
 
+章节查找、对象摘录和章节笔记共用 `src/ui/search-dialog.ts` 管理查询、IME、焦点、预览取消与确认寿命；其列表和预览由静态 React 视图呈现，数据来源、匹配和写入仍由调用模块负责。视图绑定精确 Window／Document，旧结果不能接管替换的对话框。
+
 Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。Workspace 的 Reader 实例通过同一宿主处理分屏创建/关闭与方向焦点，普通按键、延迟绑定和 Palette 使用相同实现；原始方向键只在实际成功时消费。Main/Note 通用面板焦点（含 Note Insert）、共享滚动与 `src/reader/native-input.ts` 仍属基座，不依赖 Reader 导航或 Workspace 的业务实现。评论编辑器由批注模块持有，引用上下文控件由 `references` 模块持有；Surface 将两者的精确输入焦点纳入现有原生键盘让出，不新增 Reader mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。
