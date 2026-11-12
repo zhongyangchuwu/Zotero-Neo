@@ -19,6 +19,11 @@ import {
   LOCAL_FIND_REACT_CSS,
 } from '../../modules/library/local-find-react-view';
 import type { LocalFindReactModel } from '../../modules/library/local-find-react-model';
+import {
+  mountExtensionsReactView,
+  EXTENSIONS_REACT_CSS,
+} from '../../modules/extensions/react-view';
+import type { ExtensionsReactModel } from '../../modules/extensions/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -36,7 +41,8 @@ const runtime: NativeUIRuntime = {
         REFERENCES_REACT_CSS +
         SELECTION_PANEL_REACT_CSS +
         TAB_SIDEBAR_REACT_CSS +
-        LOCAL_FIND_REACT_CSS;
+        LOCAL_FIND_REACT_CSS +
+        EXTENSIONS_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -69,6 +75,10 @@ const runtime: NativeUIRuntime = {
           root,
           model as LocalFindReactModel,
           () => {},
+        ) as ReactView<unknown>;
+      case 'extensions':
+        return mountExtensionsReactView(root, model as ExtensionsReactModel, (command) =>
+          dispatch(command),
         ) as ReactView<unknown>;
       default:
         throw new Error(`Unsupported native UI surface: ${String(surface)}`);

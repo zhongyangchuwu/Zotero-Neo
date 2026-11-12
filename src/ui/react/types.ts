@@ -10,7 +10,8 @@ export type NativeReactSurface =
   | 'references'
   | 'selection-panel'
   | 'tab-sidebar'
-  | 'local-find';
+  | 'local-find'
+  | 'extensions';
 
 /** One renderer-owned root. Updates commit before an imperative host reads UI parts. */
 export interface ReactView<Model> {
