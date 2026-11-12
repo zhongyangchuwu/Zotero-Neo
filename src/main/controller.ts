@@ -45,6 +45,7 @@ import {
 import type { InputRuntime } from '../input/runtime';
 import { keyString } from '../input/keys';
 import { asElement, isEditableElement } from '../platform/dom';
+import { runActionsTagsAction } from '../platform/actions-tags';
 import { resolveActiveSurface } from './active-surface';
 import { MainWindowSession } from './session';
 import { MainNavigation } from './navigation';
@@ -63,6 +64,7 @@ import {
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
+  mainNoteItemID,
   mainItem,
   mainReaderForTab,
   selectedMainTabID,
@@ -1011,6 +1013,31 @@ export class MainWindowController implements MainWindowControllerApi {
       commandContext: ownerContext,
       closeBeforeConfirm: true,
       confirm: (item) => {
+        if (item.kind === 'actions-tags' && typeof item.id === 'string') {
+          const target = ownerContext.actionsTagsTarget;
+          if (
+            !target ||
+            !item.id.startsWith('actions-tags:') ||
+            this.#sessions.get(window) !== session ||
+            !target.isCurrent()
+          )
+            return;
+          void runActionsTagsAction(item.id.slice('actions-tags:'.length), target.itemIDs)
+            .then((executed) => {
+              if (!executed && this.#sessions.get(window) === session)
+                this.#navigation.status(session, 'Actions & Tags action is no longer available');
+            })
+            .catch((error: unknown) => {
+              reportDiagnosticError(
+                this.#dependencies.logger,
+                'Actions & Tags action failed',
+                error,
+              );
+              if (this.#sessions.get(window) === session)
+                this.#navigation.status(session, 'Actions & Tags action failed');
+            });
+          return;
+        }
         if (isActionId(item.id) && item.id !== 'openCommandPalette')
           ownerContext.execute(item.id, 0);
       },
@@ -1277,6 +1304,7 @@ export class MainWindowController implements MainWindowControllerApi {
     if (action === 'openCommandPalette') {
       const noteTargets = NOTE_ITEM_TARGET.resolve(window);
       const isEditorCurrent = this.#noteEditor.captureCurrent(session);
+      const noteItemID = mainNoteItemID(window, target.ownerDocument.defaultView);
       this.openCommandPalette(window, {
         mode: 'note',
         bindingMode,
@@ -1286,6 +1314,9 @@ export class MainWindowController implements MainWindowControllerApi {
             : actionsForBindingMode(bindingMode),
         bindings,
         language: this.keyGuideLanguage(),
+        actionsTagsTarget: noteItemID
+          ? { itemIDs: [noteItemID], isCurrent: isEditorCurrent }
+          : undefined,
         execute: (nextAction, nextCount) => {
           if (!isEditorCurrent()) return;
           const nextLocal = this.#noteEditor.executeAction(
@@ -1464,12 +1495,25 @@ export class MainWindowController implements MainWindowControllerApi {
         break;
       case 'openCommandPalette': {
         const mode = this.bindingMode(window);
+        const targets = resolveMainEffectiveTargets(
+          window,
+          this.worksetsModule(session)?.selection ?? null,
+          this.worksetsModule(session)?.isVisual
+            ? this.worksetsModule(session)?.currentTarget()
+            : undefined,
+        );
         this.openCommandPalette(window, {
           mode: 'main',
           bindingMode: mode,
           actions: mode === 'main-select' ? MAIN_SELECT_ACTIONS : MAIN_NORMAL_ACTIONS,
           bindings: this.sessionBindings(session),
           language: this.keyGuideLanguage(),
+          actionsTagsTarget: targets.missing
+            ? undefined
+            : {
+                itemIDs: targets.items.map((item) => item.id),
+                isCurrent: () => this.#sessions.get(window) === session,
+              },
           execute: (nextAction, nextCount) => {
             if (this.#sessions.get(window) === session)
               this.execute(nextAction, window, session, nextCount);

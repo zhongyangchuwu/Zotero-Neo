@@ -20,6 +20,11 @@ export interface CommandPaletteContext {
   readonly bindings: BindingMap;
   readonly language: 'en' | 'zh-CN';
   readonly execute: (action: ActionId, count: number) => void;
+  /** Exact initiating targets and lifetime for optional Actions & Tags commands. */
+  readonly actionsTagsTarget?: {
+    readonly itemIDs: readonly number[];
+    readonly isCurrent: () => boolean;
+  };
 }
 
 /** Stable, DOM-free snapshot passed to Selection Actions and other Zotero plugins. */

@@ -99,6 +99,7 @@ import {
   ReaderJumpHistoryBridge,
   ReaderViewLifecycle,
   ReaderNavigationHost,
+  readerActionsTagsItemIDs,
   readerSidebarContainsTarget,
   readerInstanceID,
   readerOwnerWindow,
@@ -1757,6 +1758,8 @@ export class ReaderSession {
       if (!pdfWindow || this.#scope.disposed) return;
       const ownerWindow = readerMainWindow(this.#dependencies.reader);
       if (!ownerWindow) return;
+      const actionsTagsItemIDs = readerActionsTagsItemIDs(this.#dependencies.reader);
+      const isActionsTagsCurrent = this.invocationCurrent(pdfWindow, null);
       this.#dependencies.controller.dependencies.main.openCommandPalette(ownerWindow, {
         mode: 'normal',
         bindingMode: 'reader-normal',
@@ -1765,6 +1768,10 @@ export class ReaderSession {
         ),
         bindings: this.availableBindings(),
         language: this.keyGuideLanguage(),
+        actionsTagsTarget: {
+          itemIDs: actionsTagsItemIDs,
+          isCurrent: isActionsTagsCurrent,
+        },
         execute: (nextAction, _count) => {
           if (this.#scope.disposed) return;
           const active = this.#navigationHost.activePdfWindow();

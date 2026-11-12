@@ -40,6 +40,7 @@ export {
 export type { ReaderTextSourceLocation } from './text-admission';
 export * from './identifier-text';
 export * from './annotation-targets';
+export { readerActionsTagsItemIDs } from './actions-tags-targets';
 export * from './sidebar';
 export * from './structured-document';
 export * from './document-source';
