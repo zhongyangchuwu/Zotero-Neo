@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY as COLOR,
@@ -9,79 +9,30 @@ import {
 } from '../../src/core/preferences';
 import { SettingsReader } from '../../src/main/settings-reader';
 
-class ElementFake {
-  readonly children: ElementFake[] = [];
-  readonly attributes = new Map<string, string>();
-  readonly listeners = new Map<string, Set<() => void>>();
-  readonly style: Record<string, string> = {
-    cssText: '',
-    display: '',
-    background: '',
-    color: '',
-    borderColor: '',
-  };
-  textContent = '';
-  tabIndex = 0;
-  type = '';
-  value = '';
-  min = '';
-  max = '';
-  step = '';
-  constructor(readonly tag: string) {}
-  append(...children: ElementFake[]): void {
-    this.children.push(...children);
-  }
-  replaceChildren(...children: ElementFake[]): void {
-    this.children.splice(0, this.children.length, ...children);
-  }
-  setAttribute(key: string, value: string): void {
-    this.attributes.set(key, value);
-  }
-  getAttribute(key: string): string | null {
-    return this.attributes.get(key) ?? null;
-  }
-  addEventListener(type: string, listener: () => void): void {
-    const group = this.listeners.get(type) ?? new Set();
-    group.add(listener);
-    this.listeners.set(type, group);
-  }
-  removeEventListener(type: string, listener: () => void): void {
-    this.listeners.get(type)?.delete(listener);
-  }
-  emit(type: string): void {
-    for (const listener of this.listeners.get(type) ?? []) listener();
-  }
-  click(): void {
-    this.emit('click');
-  }
-  all(): ElementFake[] {
-    return [this, ...this.children.flatMap((child) => child.all())];
-  }
-  byAria(label: string): ElementFake {
-    const match = this.all().find((node) => node.getAttribute('aria-label') === label);
-    if (!match) throw new Error(`Missing control: ${label}`);
-    return match;
-  }
-  button(label: string): ElementFake {
-    const match = this.all().find((node) => node.tag === 'button' && node.textContent === label);
-    if (!match) throw new Error(`Missing button: ${label}`);
-    return match;
-  }
-  modeBlock(mode: string): ElementFake {
-    const match = this.all().find((node) => node.getAttribute('data-scroll-mode') === mode);
-    if (!match) throw new Error(`Missing scroll mode block: ${mode}`);
-    return match;
-  }
-}
+const credentials = vi.hoisted(() => ({
+  readMinerU: vi.fn(),
+  saveMinerU: vi.fn(),
+  hasKey: vi.fn(),
+  setKey: vi.fn(),
+  dispose: vi.fn(),
+}));
+vi.mock('../../src/platform/document-credentials', () => ({
+  readMinerUToken: credentials.readMinerU,
+  saveMinerUToken: credentials.saveMinerU,
+}));
+vi.mock('../../src/references/metadata', () => ({
+  createReferenceMetadataService: () => ({
+    hasSemanticScholarKey: credentials.hasKey,
+    setSemanticScholarKey: credentials.setKey,
+    dispose: credentials.dispose,
+  }),
+}));
 
 class Preferences implements PreferenceStore {
   readonly values = new Map<string, boolean | number | string>();
   readonly observers = new Map<string, Set<() => void>>();
   readonly writes: Array<[string, boolean | number | string]> = [];
   failKey: string | null = null;
-  constructor(initial: Record<string, boolean | number | string> = {}) {
-    for (const [key, value] of Object.entries(initial)) this.values.set(key, value);
-  }
   has(key: string): boolean {
     return this.values.has(key);
   }
@@ -107,108 +58,112 @@ class Preferences implements PreferenceStore {
     this.observers.set(key, group);
     return () => group.delete(listener);
   }
-  listenerCount(): number {
-    return [...this.observers.values()].reduce((count, group) => count + group.size, 0);
-  }
 }
 
-function mount(initial: Record<string, boolean | number | string> = {}) {
-  const document = { createElementNS: (_ns: string, tag: string) => new ElementFake(tag) };
-  const root = new ElementFake('section');
-  const preferences = new Preferences(initial);
-  const page = new SettingsReader({ document } as never, root as never, preferences);
-  const status = root.all().find((node) => node.getAttribute('role') === 'status')!;
-  return { page, root, preferences, status };
+beforeEach(() => {
+  vi.resetAllMocks();
+  credentials.readMinerU.mockReturnValue('stored-mineru-secret');
+  credentials.saveMinerU.mockResolvedValue(undefined);
+  credentials.hasKey.mockResolvedValue(true);
+  credentials.setKey.mockResolvedValue(undefined);
+});
+
+function mount() {
+  const preferences = new Preferences();
+  const changed = vi.fn();
+  const page = new SettingsReader({} as never, preferences, 'en', changed);
+  return { page, preferences, changed };
 }
 
 describe('Reader Settings', () => {
-  it('renders Reader controls with truthful defaults and active scroll-model controls', () => {
-    const test = mount();
-    expect(test.root.byAria('Text Select mode').getAttribute('aria-checked')).toBe('true');
-    expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe(
-      'true',
-    );
-    expect(test.root.byAria('Persist marks').getAttribute('aria-checked')).toBe('false');
-    expect(test.root.button('Constant').getAttribute('aria-pressed')).toBe('true');
-    expect(test.root.button('Yellow').getAttribute('aria-pressed')).toBe('true');
-    expect(test.root.modeBlock('step').style.display).toBe('none');
-    expect(test.root.modeBlock('follow').style.display).toBe('block');
-    expect(test.root.modeBlock('trapezoid').style.display).toBe('none');
-    expect(test.root.byAria('Scroll speed (px/s)').value).toBe('2000');
-    test.page.dispose();
+  it('switches models and applies canonical numeric normalization, including dependent maximum speed', () => {
+    const { page, preferences } = mount();
+    page.dispatch({ type: 'mode', value: 'step' });
+    page.dispatch({ type: 'number', setting: 'scrollStep', value: '9999' });
+    expect(preferences.writes).toContainEqual([MODE, 'step']);
+    expect(page.model().scroll.scrollStep).toBe(500);
+    page.dispatch({ type: 'mode', value: 'trapezoid' });
+    page.dispatch({ type: 'number', setting: 'initialSpeed', value: '-20' });
+    expect(page.model().scroll.initialSpeed).toBe(50);
+    page.dispatch({ type: 'number', setting: 'initialSpeed', value: '1800' });
+    page.dispatch({ type: 'number', setting: 'maxSpeed', value: '100' });
+    expect(page.model().scroll.maxSpeed).toBe(1800);
+    page.dispatch({ type: 'number', setting: 'scrollStep', value: '' });
+    expect(page.model().scroll.scrollStep).toBe(60);
+    page.dispose();
   });
 
-  it('switches scroll models and normalizes numeric writes through the canonical Reader policy', () => {
-    const test = mount();
-    test.root.button('Step').click();
-    expect(test.preferences.writes).toContainEqual([MODE, 'step']);
-    expect(test.root.modeBlock('step').style.display).toBe('block');
-    expect(test.root.modeBlock('follow').style.display).toBe('none');
-
-    const step = test.root.byAria('Scroll step (px)');
-    step.value = '9999';
-    step.emit('change');
-    expect(test.preferences.writes).toContainEqual(['scrollStep', 500]);
-    expect(step.value).toBe('500');
-
-    test.root.button('Accelerating').click();
-    expect(test.root.modeBlock('trapezoid').style.display).toBe('block');
-    const initial = test.root.byAria('Initial speed (px/s)');
-    initial.value = '-20';
-    initial.emit('change');
-    expect(test.preferences.writes).toContainEqual(['smoothScroll.initialSpeed', 50]);
-    expect(initial.value).toBe('50');
-    test.page.dispose();
-  });
-
-  it('writes mode, marks, and annotation choices live while vetoing failed persistence', () => {
-    const test = mount();
-    test.root.byAria('Text Select mode').click();
-    test.root.byAria('Annotation comment editing').click();
-    test.root.byAria('Persist marks').click();
-    test.root.button('Purple').click();
-    expect(test.preferences.writes).toEqual([
+  it('writes preferences immediately, reports failures, observes external writes and releases observers', () => {
+    const { page, preferences, changed } = mount();
+    page.dispatch({ type: 'visual', value: false });
+    page.dispatch({ type: 'comment', value: false });
+    page.dispatch({ type: 'marks', value: true });
+    page.dispatch({ type: 'color', value: 'purple' });
+    expect(preferences.writes).toEqual([
       [VISUAL, false],
       [COMMENT, false],
       [MARKS, true],
       [COLOR, 'purple'],
     ]);
-
-    test.preferences.failKey = MODE;
-    test.root.button('Accelerating').click();
-    expect(test.root.button('Constant').getAttribute('aria-pressed')).toBe('true');
-    test.preferences.failKey = null;
-    test.root.button('Accelerating').click();
-    expect(test.status.textContent).toBe('');
-    expect(test.root.button('Accelerating').getAttribute('aria-pressed')).toBe('true');
-    test.page.dispose();
+    preferences.failKey = MODE;
+    page.dispatch({ type: 'mode', value: 'trapezoid' });
+    expect(page.model().scroll.mode).not.toBe('trapezoid');
+    expect(page.model().status).not.toBe('');
+    preferences.failKey = null;
+    preferences.set(MODE, 'step');
+    expect(page.model().scroll.mode).toBe('step');
+    expect(page.model().status).toBe('');
+    page.dispose();
+    changed.mockClear();
+    preferences.set(MARKS, false);
+    page.dispatch({ type: 'marks', value: true });
+    expect(changed).not.toHaveBeenCalled();
+    expect([...preferences.observers.values()].every((listeners) => listeners.size === 0)).toBe(
+      true,
+    );
   });
 
-  it('tracks external preference writes and releases observers and control listeners on dispose', () => {
-    const test = mount();
-    const step = test.root.byAria('Scroll step (px)');
-    const before = test.preferences.listenerCount();
-    expect(before).toBeGreaterThan(0);
+  it('keeps stored credentials out of the model and explicitly saves and forgets both providers', async () => {
+    const { page } = mount();
+    await Promise.resolve();
+    expect(page.model().mineru.configured).toBe(true);
+    expect(page.model().semanticScholar.configured).toBe(true);
+    expect(JSON.stringify(page.model())).not.toContain('stored-mineru-secret');
+    page.dispatch({ type: 'saveCredential', provider: 'mineru', value: 'new-token' });
+    expect(credentials.saveMinerU).toHaveBeenCalledWith('new-token');
+    expect(JSON.stringify(page.model())).not.toContain('new-token');
+    await Promise.resolve();
+    page.dispatch({ type: 'forgetCredential', provider: 'mineru' });
+    expect(credentials.saveMinerU).toHaveBeenLastCalledWith('');
+    page.dispatch({ type: 'saveCredential', provider: 'semanticScholar', value: 'new-key' });
+    expect(credentials.setKey).toHaveBeenCalledWith('new-key');
+    expect(JSON.stringify(page.model())).not.toContain('new-key');
+    await Promise.resolve();
+    page.dispatch({ type: 'forgetCredential', provider: 'semanticScholar' });
+    expect(credentials.setKey).toHaveBeenLastCalledWith(null);
+    page.dispose();
+  });
 
-    test.preferences.set(MODE, 'step');
-    test.preferences.set('scrollStep', 120);
-    test.preferences.set(MARKS, true);
-    test.preferences.set(COLOR, 'blue');
-    test.preferences.set(COMMENT, false);
-    expect(test.root.modeBlock('step').style.display).toBe('block');
-    expect(step.value).toBe('120');
-    expect(test.root.byAria('Persist marks').getAttribute('aria-checked')).toBe('true');
-    expect(test.root.button('Blue').getAttribute('aria-pressed')).toBe('true');
-    expect(test.root.byAria('Annotation comment editing').getAttribute('aria-checked')).toBe(
-      'false',
+  it('reports credential failures and ignores completions after disposal', async () => {
+    let finish!: () => void;
+    credentials.saveMinerU.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
     );
-
-    const writeCount = test.preferences.writes.length;
-    test.page.dispose();
-    expect(test.preferences.listenerCount()).toBe(0);
-    expect(test.root.children).toEqual([]);
-    step.value = '200';
-    step.emit('change');
-    expect(test.preferences.writes).toHaveLength(writeCount);
+    credentials.setKey.mockRejectedValue(new Error('storage failed'));
+    const { page, changed } = mount();
+    await Promise.resolve();
+    page.dispatch({ type: 'saveCredential', provider: 'semanticScholar', value: 'key' });
+    await Promise.resolve();
+    expect(page.model().semanticScholar.error).toBe(true);
+    page.dispatch({ type: 'saveCredential', provider: 'mineru', value: 'token' });
+    expect(page.model().mineru.pending).toBe(true);
+    page.dispose();
+    changed.mockClear();
+    finish();
+    await Promise.resolve();
+    expect(changed).not.toHaveBeenCalled();
+    expect(credentials.dispose).toHaveBeenCalled();
   });
 });

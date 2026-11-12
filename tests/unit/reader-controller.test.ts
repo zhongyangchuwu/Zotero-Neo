@@ -38,6 +38,61 @@ import type {
 } from '../fixtures/reader-native-types';
 import { KEY_GUIDE_CONFIG } from '../../src/input/key-guide-config';
 import { ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
+import type * as NativeUI from '../../src/platform/native-ui';
+
+// The Reader harness uses a lightweight PDF document, not Gecko's script loader.
+// Keep rendering at that boundary while exercising actual Reader input ownership.
+vi.mock('../../src/platform/native-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof NativeUI>();
+  return {
+    ...actual,
+    mountNativeReactView: (options: {
+      surface: string;
+      root: HTMLElement;
+      model: { comment?: string; text?: string };
+    }) => {
+      if (options.surface === 'reader-status') {
+        options.root.textContent = options.model.text ?? '';
+        return {
+          ready: Promise.resolve(),
+          update: (model: { text?: string }) => {
+            options.root.textContent = model.text ?? '';
+          },
+          getElement: () => null,
+          dispose: () => {},
+        };
+      }
+      if (options.surface === 'key-guide') {
+        return {
+          ready: Promise.resolve(),
+          update: () => {},
+          getElement: () => null,
+          dispose: () => {},
+        };
+      }
+      if (options.surface !== 'annotation-comment' && options.surface !== 'selection-actions')
+        return actual.mountNativeReactView(options as never);
+      const input =
+        options.surface === 'annotation-comment'
+          ? options.root.ownerDocument.createElement('textarea')
+          : null;
+      if (input) {
+        input.id = 'zv-annotation-comment-input';
+        input.value = options.model.comment ?? '';
+        options.root.appendChild(input);
+      }
+      return {
+        ready: Promise.resolve(),
+        update: (model: { stage?: string; resultText?: string }) => {
+          if (options.surface === 'selection-actions')
+            options.root.textContent = model.stage === 'result' ? (model.resultText ?? '') : '';
+        },
+        getElement: (part: string) => (part === 'input' ? input : null),
+        dispose: () => {},
+      };
+    },
+  };
+});
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 const originalServices = Reflect.get(globalThis, 'Services');
@@ -53,6 +108,8 @@ const noopReaderMainOperations: ReaderMainOperations = {
   navigateForwardFromReader: () => {},
   navigationForReader: () => null,
   openTabPicker: () => {},
+  focusTabSidebar: () => {},
+  toggleTabSidebar: () => {},
   closeReaderTab: () => {},
   cycleReaderTab: () => {},
   showReaderItemInLibrary: () => {},
@@ -529,6 +586,20 @@ describe('Reader event lifecycle', () => {
     const reader = {
       _instanceID: 'reader-1',
       itemID: 42,
+      _iframeWindow: {
+        document: {
+          documentElement: {},
+          getElementById: () => null,
+          querySelector: () => null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          createElement: () => ({
+            ownerDocument: { defaultView: null },
+            style: {},
+            remove: () => {},
+          }),
+        },
+      },
       _internalReader: { _primaryView: primaryView },
     } as unknown as ReaderRuntime;
     const readerService = {
@@ -638,6 +709,20 @@ describe('Reader event lifecycle', () => {
         _instanceID: instanceID,
         itemID,
         _window: ownerWindow,
+        _iframeWindow: {
+          document: {
+            documentElement: {},
+            getElementById: () => null,
+            querySelector: () => null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            createElement: () => ({
+              ownerDocument: { defaultView: null },
+              style: {},
+              remove: () => {},
+            }),
+          },
+        },
         _internalReader: { _primaryView: { _iframeWindow: pdfWindow() } },
       }) as unknown as ReaderRuntime;
     const first = reader('reader-a', 41);
@@ -2503,13 +2588,14 @@ describe('Reader Selection Actions capture', () => {
           (node) => node.dataset.zoteroNeoSelectionActions === '1',
         );
         expect(fixture.created.bodyChildren).not.toContain(oldOverlay);
+        await settleReaderMicrotasks();
         fixture.press('G');
         fixture.press('Enter');
         fixture.created.intervalTasks[0]?.();
         pending.resolve({ body: 'successor result' });
         await settleReaderMicrotasks();
         expect(fixture.created.bodyChildren).toContain(currentOverlay);
-        expect(currentOverlay?.children[1]?.textContent).toBe('successor result');
+        expect(currentOverlay?.textContent).toBe('successor result');
       } finally {
         fixture.dispose();
       }
@@ -2632,7 +2718,9 @@ describe('Reader Selection Actions capture', () => {
         reader: created.reader,
         params: { annotation: { text: 'alpha' }, onAddAnnotation: () => {} },
       });
-      for (const key of ['a', 'G', 'Enter'])
+      controller.forwardKey(readerKey('a').event, created.ownerWindow);
+      await settleReaderMicrotasks();
+      for (const key of ['G', 'Enter'])
         controller.forwardKey(readerKey(key).event, created.ownerWindow);
       expect(run).toHaveBeenCalledOnce();
       controller.forwardKey(readerKey('Enter').event, created.ownerWindow);
@@ -2645,7 +2733,7 @@ describe('Reader Selection Actions capture', () => {
       const overlay = created.bodyChildren.find(
         (node) => node.dataset.zoteroNeoSelectionActions === '1',
       );
-      expect(overlay?.children[1]?.textContent).toBe('original action result');
+      expect(overlay?.textContent).toBe('original action result');
       expect(run).toHaveBeenCalledOnce();
     } finally {
       controller.shutdown();

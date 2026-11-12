@@ -6,168 +6,142 @@ import {
   configuredNeoLanguage,
   tagSeparatorFromPreferences,
 } from '../../src/core/preferences';
+import { settingsText } from '../../src/main/settings-i18n';
 import { SettingsAdvanced } from '../../src/main/settings-advanced';
 
-class ElementFake {
-  readonly children: ElementFake[] = [];
-  readonly attributes = new Map<string, string>();
-  readonly listeners = new Map<string, Set<() => void>>();
-  readonly style: Record<string, string> = {
-    cssText: '',
-    background: '',
-    color: '',
-    borderColor: '',
-  };
-  textContent = '';
-  tabIndex = 0;
-  type = '';
-  value = '';
-  constructor(readonly tag: string) {}
-  append(...children: ElementFake[]): void {
-    this.children.push(...children);
-  }
-  replaceChildren(...children: ElementFake[]): void {
-    this.children.splice(0, this.children.length, ...children);
-  }
-  setAttribute(key: string, value: string): void {
-    this.attributes.set(key, value);
-  }
-  getAttribute(key: string): string | null {
-    return this.attributes.get(key) ?? null;
-  }
-  addEventListener(type: string, listener: () => void): void {
-    const group = this.listeners.get(type) ?? new Set();
-    group.add(listener);
-    this.listeners.set(type, group);
-  }
-  removeEventListener(type: string, listener: () => void): void {
-    this.listeners.get(type)?.delete(listener);
-  }
-  emit(type: string): void {
-    for (const listener of this.listeners.get(type) ?? []) listener();
-  }
-  click(): void {
-    this.emit('click');
-  }
-  all(): ElementFake[] {
-    return [this, ...this.children.flatMap((child) => child.all())];
-  }
-  button(label: string): ElementFake {
-    const match = this.all().find((node) => node.tag === 'button' && node.textContent === label);
-    if (!match) throw new Error(`Missing button: ${label}`);
-    return match;
-  }
-  byAria(label: string): ElementFake {
-    const match = this.all().find((node) => node.getAttribute('aria-label') === label);
-    if (!match) throw new Error(`Missing control: ${label}`);
-    return match;
-  }
-}
+type PreferenceValue = boolean | number | string;
 
 class Preferences implements PreferenceStore {
-  readonly values = new Map<string, boolean | number | string>();
+  readonly values = new Map<string, PreferenceValue>();
   readonly observers = new Map<string, Set<() => void>>();
-  readonly writes: Array<[string, boolean | number | string]> = [];
+  readonly writes: Array<[string, PreferenceValue]> = [];
   failKey: string | null = null;
-  constructor(initial: Record<string, boolean | number | string> = {}) {
+
+  constructor(initial: Record<string, PreferenceValue> = {}) {
     for (const [key, value] of Object.entries(initial)) this.values.set(key, value);
   }
+
   has(key: string): boolean {
     return this.values.has(key);
   }
+
   get(key: string, fallback: boolean): boolean;
   get(key: string, fallback: number): number;
   get(key: string, fallback: string): string;
-  get(key: string, fallback: boolean | number | string): boolean | number | string {
+  get(key: string, fallback: PreferenceValue): PreferenceValue {
     return this.values.get(key) ?? fallback;
   }
-  set(key: string, value: boolean | number | string): void {
+
+  set(key: string, value: PreferenceValue): void {
     if (key === this.failKey) throw new Error('Write failed');
     this.values.set(key, value);
     this.writes.push([key, value]);
-    for (const listener of this.observers.get(key) ?? []) listener();
+    this.#notify(key);
   }
+
   clear(key: string): void {
     this.values.delete(key);
-    for (const listener of this.observers.get(key) ?? []) listener();
+    this.#notify(key);
   }
+
   observe(key: string, listener: () => void): () => void {
     const group = this.observers.get(key) ?? new Set();
     group.add(listener);
     this.observers.set(key, group);
     return () => group.delete(listener);
   }
+
   listenerCount(): number {
     return [...this.observers.values()].reduce((count, group) => count + group.size, 0);
   }
+
+  #notify(key: string): void {
+    for (const listener of this.observers.get(key) ?? []) listener();
+  }
 }
 
-function mount(initial: Record<string, boolean | number | string> = {}) {
-  const document = { createElementNS: (_ns: string, tag: string) => new ElementFake(tag) };
-  const root = new ElementFake('section');
+function mount(initial: Record<string, PreferenceValue> = {}, language: 'en' | 'zh-CN' = 'en') {
   const preferences = new Preferences(initial);
-  const page = new SettingsAdvanced({ document } as never, root as never, preferences);
-  const status = root.all().find((node) => node.getAttribute('role') === 'status')!;
-  return { page, root, preferences, status };
+  let changes = 0;
+  const page = new SettingsAdvanced({} as never, preferences, language, () => changes++);
+  return { page, preferences, changes: () => changes };
 }
 
-describe('Advanced Settings', () => {
-  it('renders command language and virtual tag namespace controls with truthful defaults', () => {
-    const test = mount();
-    expect(test.root.button('Follow Zotero').getAttribute('aria-pressed')).toBe('true');
-    expect(test.root.button('English').getAttribute('aria-pressed')).toBe('false');
-    expect(test.root.button('中文').getAttribute('aria-pressed')).toBe('false');
-    expect(test.root.byAria('Namespace separator').value).toBe('/');
-    expect(test.preferences.writes).toEqual([]);
-    test.page.dispose();
-  });
+function field(page: SettingsAdvanced, id: string) {
+  const match = page
+    .model()
+    .groups.flatMap((group) => group.fields)
+    .find((item) => item.id === id);
+  if (!match) throw new Error(`Missing field: ${id}`);
+  return match;
+}
 
-  it('persists language and tag separators live, including explicit flat matching', () => {
+describe('Advanced Settings controller', () => {
+  it('persists only accepted language and separator values immediately, including explicit flat matching', () => {
     const test = mount();
-    test.root.button('中文').click();
+
+    test.page.dispatch({ type: 'value', id: 'language', value: 'zh-CN' });
     expect(test.preferences.writes).toEqual([[LANGUAGE, 'zh-CN']]);
     expect(configuredNeoLanguage(test.preferences)).toBe('zh-CN');
+    expect(field(test.page, 'language')).toMatchObject({ value: 'zh-CN' });
 
-    const separator = test.root.byAria('Namespace separator');
-    separator.value = '::';
-    separator.emit('change');
+    test.page.dispatch({ type: 'value', id: 'tagSeparator', value: '::' });
     expect(test.preferences.writes).toContainEqual([TAG_SEPARATOR, '::']);
     expect(tagSeparatorFromPreferences(test.preferences)).toBe('::');
-
-    separator.value = '';
-    separator.emit('change');
+    test.page.dispatch({ type: 'value', id: 'tagSeparator', value: '' });
     expect(test.preferences.writes).toContainEqual([TAG_SEPARATOR, '']);
     expect(tagSeparatorFromPreferences(test.preferences)).toBe('');
-    expect(test.status.textContent).toBe('');
+    expect(field(test.page, 'tagSeparator')).toMatchObject({ value: '' });
+
+    test.page.dispatch({ type: 'value', id: 'language', value: 'en' });
+    expect(configuredNeoLanguage(test.preferences)).toBe('en');
+    const acceptedWrites = [...test.preferences.writes];
+    test.page.dispatch({ type: 'value', id: 'language', value: 'fr' });
+    test.page.dispatch({ type: 'value', id: 'language', value: true });
+    test.page.dispatch({ type: 'value', id: 'tagSeparator', value: false });
+    test.page.dispatch({ type: 'value', id: 'unowned.preference', value: 'en' });
+    test.page.dispatch({ type: 'action', id: 'language' });
+    expect(test.preferences.writes).toEqual(acceptedWrites);
+    expect(configuredNeoLanguage(test.preferences)).toBe('en');
+    expect(tagSeparatorFromPreferences(test.preferences)).toBe('');
     test.page.dispose();
   });
 
-  it('vetoes failed writes, tracks external changes, and releases observers and listeners', () => {
-    const test = mount();
-    const chinese = test.root.button('中文');
-    const follow = test.root.button('Follow Zotero');
-    const separator = test.root.byAria('Namespace separator');
-    expect(test.preferences.listenerCount()).toBe(1);
-
+  it('reverts failed values, localizes status, follows external separator resets, and disposes observers', () => {
+    const test = mount({}, 'zh-CN');
     test.preferences.failKey = LANGUAGE;
-    chinese.click();
-    expect(chinese.getAttribute('aria-pressed')).toBe('false');
-    expect(follow.getAttribute('aria-pressed')).toBe('true');
+    test.page.dispatch({ type: 'value', id: 'language', value: 'en' });
+    expect(field(test.page, 'language')).toMatchObject({ value: '' });
+    expect(test.page.model().status).toEqual({
+      text: settingsText('zh-CN', 'Could not update Advanced settings.'),
+      error: true,
+    });
 
     test.preferences.failKey = null;
-    chinese.click();
-    expect(chinese.getAttribute('aria-pressed')).toBe('true');
-    expect(test.status.textContent).toBe('');
     test.preferences.set(TAG_SEPARATOR, ':');
-    expect(separator.value).toBe(':');
+    expect(field(test.page, 'tagSeparator')).toMatchObject({ value: ':' });
+    expect(test.page.model().status).toBeUndefined();
 
-    const writeCount = test.preferences.writes.length;
+    test.preferences.failKey = TAG_SEPARATOR;
+    test.page.dispatch({ type: 'value', id: 'tagSeparator', value: ';' });
+    expect(field(test.page, 'tagSeparator')).toMatchObject({ value: ':' });
+    expect(test.page.model().status).toEqual({
+      text: settingsText('zh-CN', 'Could not update Advanced settings.'),
+      error: true,
+    });
+
+    test.preferences.failKey = null;
+    test.preferences.clear(TAG_SEPARATOR);
+    expect(field(test.page, 'tagSeparator')).toMatchObject({ value: '/' });
+    expect(test.page.model().status).toBeUndefined();
+
+    const changesBeforeDispose = test.changes();
+    expect(test.preferences.listenerCount()).toBe(1);
     test.page.dispose();
     expect(test.preferences.listenerCount()).toBe(0);
-    expect(test.root.children).toEqual([]);
-    separator.value = '/';
-    separator.emit('change');
-    chinese.click();
-    expect(test.preferences.writes).toHaveLength(writeCount);
+    test.preferences.set(TAG_SEPARATOR, ':');
+    test.page.dispatch({ type: 'value', id: 'tagSeparator', value: ';' });
+    expect(test.changes()).toBe(changesBeforeDispose);
+    expect(test.preferences.writes).toHaveLength(2);
   });
 });

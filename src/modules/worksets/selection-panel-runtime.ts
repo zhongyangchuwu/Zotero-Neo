@@ -9,10 +9,6 @@ export class SelectionPanelRuntime {
   commandBuffer = '';
   commandTimer: number | undefined;
   overlay: HTMLElement | null = null;
-  list: HTMLElement | null = null;
-  details: HTMLElement | null = null;
-  count: HTMLElement | null = null;
-  footer: HTMLElement | null = null;
   previousElement: Element | null = null;
   themeCleanup: (() => void) | null = null;
 }

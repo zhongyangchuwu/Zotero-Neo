@@ -11,9 +11,38 @@ import type {
   ReaderTimer,
 } from '../../src/reader/types';
 
+const commentBridge = vi.hoisted(() => ({ load: null as Promise<void> | null }));
+
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: (options: {
+    root: HTMLElement;
+    model: { comment: string };
+    isCurrent: () => boolean;
+  }) => {
+    let input: HTMLTextAreaElement | null = null;
+    let disposed = false;
+    const ready = (commentBridge.load ?? Promise.resolve()).then(() => {
+      if (disposed || !options.isCurrent()) throw new Error('View retired');
+      input = options.root.ownerDocument.createElement('textarea');
+      input.id = 'zv-annotation-comment-input';
+      input.value = options.model.comment;
+      options.root.appendChild(input);
+    });
+    return {
+      ready,
+      update: () => {},
+      getElement: (part: string) => (part === 'input' ? input : null),
+      dispose: () => {
+        disposed = true;
+      },
+    };
+  },
+}));
+
 const originalComponents = Reflect.get(globalThis, 'Components');
 
 afterEach(() => {
+  commentBridge.load = null;
   vi.useRealTimers();
   if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
   else Reflect.set(globalThis, 'Components', originalComponents);
@@ -291,6 +320,36 @@ async function settleJobs(): Promise<void> {
 }
 
 describe('ReaderCommentEditor input ownership', () => {
+  it('does not save or mount a retired draft when React is still loading', async () => {
+    const h = createHarness();
+    const load = Promise.withResolvers<void>();
+    commentBridge.load = load.promise;
+    const opening = h.editor.open('ANN');
+    await Promise.resolve();
+    expect(h.editor.ownsInput).toBe(true);
+    expect(h.editor.hasInput).toBe(false);
+    h.editor.releaseView(h.primary.pdfWindow);
+    load.resolve();
+    await opening;
+    expect(h.annotationForSave).not.toHaveBeenCalled();
+    expect(h.primary.mounted).toHaveLength(0);
+    expect(h.editor.hasInput).toBe(false);
+  });
+
+  it('does not save an initial comment when React loading fails', async () => {
+    const h = createHarness();
+    const load = Promise.withResolvers<void>();
+    commentBridge.load = load.promise;
+    const opening = h.editor.open('ANN');
+    await Promise.resolve();
+    load.reject(new Error('React unavailable'));
+    await opening;
+    expect(h.annotationForSave).not.toHaveBeenCalled();
+    expect(h.annotation.annotationComment).toBe('before');
+    expect(h.editor.ownsInput).toBe(false);
+    expect(h.primary.mounted).toHaveLength(0);
+  });
+
   it('claims the opening view before annotation resolution and never follows a split-view focus change', async () => {
     const h = createHarness();
     const pending = Promise.withResolvers<AnnotationRuntime>();

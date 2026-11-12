@@ -1,12 +1,15 @@
 import { CleanupFailure } from '../../core/cleanup';
 import { compositionOwnsKey } from '../../input/composition';
 import { isDeadObject } from '../../platform/cross-compartment';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { SelectionActionsReactCommand, SelectionActionsReactModel } from './react-model';
 import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionActionOutcome,
   ReaderSelectionContext,
 } from '../../core/contracts';
-import { THEME_VARS } from '../../ui/theme';
+import { SELECTION_ACTIONS_OVERLAY_STYLE } from '../../ui/react/shells/reader';
 import type { PdfWindow } from '../../reader/types';
 
 export interface ReaderSelectionActionHost {
@@ -38,9 +41,12 @@ export class ReaderSelectionActions {
   #actions: readonly ReaderSelectionActionDefinition[] = [];
   #selected = 0;
   #overlay: HTMLElement | null = null;
+  #view: NativeReactView<SelectionActionsReactModel> | null = null;
+  #ready = false;
   #themeCleanup: (() => void) | null = null;
   #stage: PaletteStage = 'menu';
   #resultText = '';
+  #resultTitle = '';
   #generation = 0;
 
   constructor(host: ReaderSelectionActionHost) {
@@ -60,9 +66,13 @@ export class ReaderSelectionActions {
     this.close();
     if (this.#generation !== priorGeneration + 1) return false;
     const generation = this.#generation;
+    const document = pdfWindow.document;
     const capturedView = this.#host.captureView(pdfWindow);
     const viewCurrent = () =>
-      !isDeadObject(pdfWindow) && this.#host.isCurrent(pdfWindow) && capturedView();
+      !isDeadObject(pdfWindow) &&
+      pdfWindow.document === document &&
+      this.#host.isCurrent(pdfWindow) &&
+      capturedView();
     const isCurrent = () =>
       generation === this.#generation && viewCurrent() && generation === this.#generation;
     if (!isCurrent()) return false;
@@ -121,6 +131,7 @@ export class ReaderSelectionActions {
         pdfWindow.focus();
       return true;
     }
+    if (!this.#ready) return true;
     if (this.#stage === 'busy') return true;
     if (this.#stage === 'result') {
       if (event.key.toLowerCase() === 'y' && this.#resultText) {
@@ -183,7 +194,10 @@ export class ReaderSelectionActions {
     this.#generation += 1;
     const overlay = this.#overlay;
     const themeCleanup = this.#themeCleanup;
+    const view = this.#view;
     this.#overlay = null;
+    this.#view = null;
+    this.#ready = false;
     this.#themeCleanup = null;
     this.#window = null;
     this.#viewCurrent = null;
@@ -192,7 +206,9 @@ export class ReaderSelectionActions {
     this.#selected = 0;
     this.#stage = 'menu';
     this.#resultText = '';
+    this.#resultTitle = '';
     const failure = new CleanupFailure();
+    failure.run(() => view?.dispose());
     failure.run(() => {
       if (overlay && !isDeadObject(overlay)) overlay.remove();
     });
@@ -245,6 +261,7 @@ export class ReaderSelectionActions {
       if (outcome && typeof outcome === 'object' && 'body' in outcome && outcome.body) {
         this.#stage = 'result';
         this.#resultText = outcome.body;
+        this.#resultTitle = outcome.title || 'RESULT';
         this.#renderResult(outcome);
         return;
       }
@@ -301,68 +318,64 @@ export class ReaderSelectionActions {
   }
 
   #mount(pdfWindow: PdfWindow, generation: number): void {
-    const overlay = pdfWindow.document.createElement('div');
+    const document = pdfWindow.document;
+    const overlay = document.createElement('div');
     this.#overlay = overlay;
     overlay.id = 'zv-selection-actions';
     overlay.dataset.zoteroNeoSelectionActions = '1';
-    overlay.style.cssText = `position:fixed;right:16px;bottom:52px;z-index:100002;width:min(430px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;padding:10px;border:1px solid ${THEME_VARS.border};border-radius:8px;background:${THEME_VARS.surface};color:${THEME_VARS.text};box-shadow:0 12px 36px ${THEME_VARS.shadow};font:12px/1.4 system-ui,sans-serif;pointer-events:none;`;
-    pdfWindow.document.body?.appendChild(overlay);
+    overlay.style.cssText = SELECTION_ACTIONS_OVERLAY_STYLE;
+    document.body?.appendChild(overlay);
     if (!this.#canComplete(generation, pdfWindow)) return;
     const cleanup = this.#host.themeRoot(overlay);
-    if (generation !== this.#generation || this.#overlay !== overlay) cleanup();
-    else this.#themeCleanup = cleanup;
+    if (generation !== this.#generation || this.#overlay !== overlay) {
+      cleanup();
+      return;
+    }
+    this.#themeCleanup = cleanup;
+    this.#view = mountNativeReactView<SelectionActionsReactModel, SelectionActionsReactCommand>({
+      surface: 'selection-actions',
+      root: overlay,
+      model: this.#model(),
+      dispatch: () => {},
+      isCurrent: () =>
+        this.#window === pdfWindow &&
+        this.#overlay === overlay &&
+        pdfWindow.document === document &&
+        !!this.#viewCurrent?.(),
+      loadingText: 'Loading selection actions…',
+      errorText: 'Selection actions unavailable.',
+      onError: (error) => {
+        this.#host.debug(`Selection actions view failed: ${String(error)}`);
+        if (this.#overlay === overlay) this.close();
+      },
+    });
+    const view = this.#view;
+    void view.ready
+      .then(() => {
+        if (this.#view === view && this.#canComplete(this.#generation, pdfWindow))
+          this.#ready = true;
+      })
+      .catch(() => {});
+  }
+
+  #model(message = ''): SelectionActionsReactModel {
+    const compact = (this.#context?.text ?? '').replace(/\s+/g, ' ').trim();
+    return {
+      stage: this.#stage,
+      preview: compact.length > 120 ? `${compact.slice(0, 117)}…` : compact,
+      actions: this.#actions.map((action) => action.label),
+      selected: this.#selected,
+      message,
+      resultTitle: this.#resultTitle,
+      resultText: this.#resultText,
+    };
   }
 
   #render(message?: string): void {
-    const overlay = this.#overlay;
-    const context = this.#context;
-    if (!overlay || !context) return;
-    overlay.replaceChildren();
-    const title = overlay.ownerDocument.createElement('div');
-    title.textContent = 'SELECT ACTIONS';
-    title.style.cssText = `font-weight:700;letter-spacing:.06em;color:${THEME_VARS.accent};margin-bottom:6px;`;
-    const preview = overlay.ownerDocument.createElement('div');
-    const compact = context.text.replace(/\s+/g, ' ').trim();
-    preview.textContent = compact.length > 120 ? `${compact.slice(0, 117)}…` : compact;
-    preview.style.cssText = `padding:6px 8px;margin-bottom:8px;border-radius:5px;background:${THEME_VARS.elevated};color:${THEME_VARS.muted};white-space:normal;`;
-    overlay.append(title, preview);
-    if (message) {
-      const status = overlay.ownerDocument.createElement('div');
-      status.textContent = message;
-      status.style.cssText = `padding:8px;color:${THEME_VARS.text};`;
-      overlay.appendChild(status);
-      return;
-    }
-    this.#actions.forEach((action, index) => {
-      const row = overlay.ownerDocument.createElement('div');
-      const key = index < 9 ? String(index + 1) : '·';
-      row.textContent = `${key}  ${action.label}`;
-      row.style.cssText = `padding:5px 8px;border-radius:4px;${
-        index === this.#selected
-          ? `background:${THEME_VARS.accent};color:${THEME_VARS.onAccent};font-weight:600;`
-          : `color:${THEME_VARS.text};`
-      }`;
-      overlay.appendChild(row);
-    });
-    const help = overlay.ownerDocument.createElement('div');
-    help.textContent = 'j/k move · 1–9 run · Enter run · Esc close';
-    help.style.cssText = `margin-top:8px;color:${THEME_VARS.muted};`;
-    overlay.appendChild(help);
+    this.#view?.update(this.#model(message));
   }
 
-  #renderResult(outcome: Extract<ReaderSelectionActionOutcome, { body: string }>): void {
-    const overlay = this.#overlay;
-    if (!overlay) return;
-    overlay.replaceChildren();
-    const title = overlay.ownerDocument.createElement('div');
-    title.textContent = outcome.title || 'RESULT';
-    title.style.cssText = `font-weight:700;letter-spacing:.04em;color:${THEME_VARS.accent};margin-bottom:8px;`;
-    const body = overlay.ownerDocument.createElement('div');
-    body.textContent = outcome.body;
-    body.style.cssText = `white-space:pre-wrap;user-select:text;-moz-user-select:text;padding:8px;border-radius:5px;background:${THEME_VARS.elevated};color:${THEME_VARS.text};`;
-    const help = overlay.ownerDocument.createElement('div');
-    help.textContent = 'y copy result · Enter/Esc close';
-    help.style.cssText = `margin-top:8px;color:${THEME_VARS.muted};`;
-    overlay.append(title, body, help);
+  #renderResult(_outcome: Extract<ReaderSelectionActionOutcome, { body: string }>): void {
+    this.#render();
   }
 }

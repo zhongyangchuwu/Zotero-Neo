@@ -10,6 +10,10 @@ import {
 } from '../reader/action-capabilities';
 import { PICKER_INPUT_ACTIONS, PICKER_LIST_ACTIONS } from '../main/picker/action-capabilities';
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from '../modules/extensions/capabilities';
+import {
+  TAB_SIDEBAR_INPUT_ACTIONS,
+  TAB_SIDEBAR_LIST_ACTIONS,
+} from '../modules/tab-enhancements/capabilities';
 import type { BindingContext } from './bindings';
 import type { ActionId } from './actions';
 
@@ -44,5 +48,9 @@ export function actionsForBindingMode(mode: BindingContext): readonly ActionId[]
       return PLUGINS_INPUT_ACTIONS;
     case 'plugins-list':
       return PLUGINS_LIST_ACTIONS;
+    case 'tabs-input':
+      return TAB_SIDEBAR_INPUT_ACTIONS;
+    case 'tabs-list':
+      return TAB_SIDEBAR_LIST_ACTIONS;
   }
 }

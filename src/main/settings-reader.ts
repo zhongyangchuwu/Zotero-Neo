@@ -1,5 +1,5 @@
-import { mineruCredentialField } from '../ui/mineru-credentials';
 import type { MainWindow } from '../core/contracts';
+import type { PreferenceStore } from '../core/preference-store';
 import {
   READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY,
   ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
@@ -14,236 +14,90 @@ import {
   readerMarksPersist,
   readerModeEnabled,
   readerScrollConfig,
-  type HighlightColorName,
-  type ReaderScrollNumberSetting,
-  type ScrollMode,
 } from '../core/preferences';
-import type { PreferenceStore } from '../core/preference-store';
-import { settingsText, settingsToggleLabels, type SettingsLanguage } from './settings-i18n';
-import {
-  settingsChoices,
-  settingsControlRow,
-  settingsGroup,
-  settingsNumberRow,
-  settingsStatus,
-  settingsToggleRow,
-  type SettingsNumberInput,
-  type SettingsToggle,
-} from './settings-ui';
+import { t } from '../i18n';
+import { readMinerUToken, saveMinerUToken } from '../platform/document-credentials';
+import { createReferenceMetadataService } from '../references/metadata';
+import { settingsText, type SettingsLanguage } from './settings-i18n';
+import type {
+  ReaderCredentialModel,
+  ReaderPageCommand,
+  ReaderPageModel,
+} from './settings-reader-model';
 
-const H = 'http://www.w3.org/1999/xhtml';
+type Provider = 'mineru' | 'semanticScholar';
+type CredentialState = Pick<ReaderCredentialModel, 'configured' | 'pending' | 'error' | 'status'>;
 
-interface SettingsChoice<T extends string | number> {
-  readonly element: HTMLElement;
-  select(value: T): void;
-}
-
-const SCROLL_INPUT_STEPS: Readonly<Record<ReaderScrollNumberSetting, number>> = {
-  scrollStep: 10,
-  followSpeed: 50,
-  initialSpeed: 10,
-  maxSpeed: 50,
-  acceleration: 100,
-  deceleration: 100,
-};
-
-/** Owns Reader mode, scrolling, marks, and annotation preferences for one open Settings page. */
+/** Owns Reader preferences and credential operations for one open Settings page. */
 export class SettingsReader {
-  readonly #root: HTMLElement;
   readonly #preferences: PreferenceStore;
   readonly #language: SettingsLanguage;
+  readonly #changed: () => void;
   readonly #cleanups: Array<() => void> = [];
-  readonly #visualToggle: SettingsToggle;
-  readonly #commentEditorToggle: SettingsToggle;
-  readonly #scrollMode: SettingsChoice<ScrollMode>;
-  readonly #scrollNumbers: Record<ReaderScrollNumberSetting, SettingsNumberInput>;
-  readonly #stopOnReleaseToggle: SettingsToggle;
-  readonly #marksToggle: SettingsToggle;
-  readonly #highlightColor: SettingsChoice<HighlightColorName>;
-  readonly #stepBlock: HTMLElement;
-  readonly #followBlock: HTMLElement;
-  readonly #trapezoidBlock: HTMLElement;
-  readonly #status: HTMLElement;
+  readonly #reference = createReferenceMetadataService();
+  readonly #revision: Record<Provider, number> = { mineru: 0, semanticScholar: 0 };
+  readonly #credentials: Record<Provider, CredentialState>;
+  #disposed = false;
+  #status = '';
 
   constructor(
-    window: MainWindow,
-    root: HTMLElement,
+    _window: MainWindow,
     preferences: PreferenceStore,
-    language: SettingsLanguage = 'en',
+    language: SettingsLanguage,
+    changed: () => void,
   ) {
-    this.#root = root;
     this.#preferences = preferences;
     this.#language = language;
-    const doc = window.document;
-    const scroll = readerScrollConfig(preferences);
-    root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
-
-    const title = doc.createElementNS(H, 'h2');
-    title.textContent = settingsText(language, 'Reader');
-    title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
-
-    const inputGroup = settingsGroup(doc, settingsText(language, 'Reader input'));
-    this.#visualToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Text Select mode'),
-      readerModeEnabled(preferences, 'visual'),
-      (enabled) => this.#save(READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY, enabled),
-      this.#cleanups,
-      settingsText(
-        language,
-        'Allow v and Zotero text selections to enter Neo Select mode for selection actions.',
-      ),
-      settingsToggleLabels(language),
-    );
-    this.#commentEditorToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Annotation comment editing'),
-      annotationCommentEditorEnabled(preferences),
-      (enabled) => this.#save(ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY, enabled),
-      this.#cleanups,
-      settingsText(
-        language,
-        "When enabled, i / Enter opens the selected annotation's comment editor. When disabled, i gives native inputs keyboard ownership; Enter does nothing.",
-      ),
-      settingsToggleLabels(language),
-    );
-    inputGroup.append(this.#visualToggle.element, this.#commentEditorToggle.element);
-
-    const scrolling = settingsGroup(
-      doc,
-      settingsText(language, 'Scrolling'),
-      settingsText(
-        language,
-        'Reader j/k/zh/zl use the selected motion model. Only controls for the active model are shown.',
-      ),
-    );
-    this.#scrollMode = settingsChoices(
-      doc,
-      [
-        { value: 'step', label: settingsText(language, 'Step') },
-        { value: 'follow', label: settingsText(language, 'Constant') },
-        { value: 'trapezoid', label: settingsText(language, 'Accelerating') },
-      ] as const,
-      scroll.mode,
-      (mode) => this.#save(READER_SCROLL_MODE_PREFERENCE_KEY, mode),
-      this.#cleanups,
-    );
-    scrolling.append(
-      settingsControlRow(doc, settingsText(language, 'Scrolling mode'), this.#scrollMode.element),
-    );
-
-    this.#stepBlock = this.#modeBlock(doc, 'step');
-    this.#followBlock = this.#modeBlock(doc, 'follow');
-    this.#trapezoidBlock = this.#modeBlock(doc, 'trapezoid');
-    this.#scrollNumbers = {
-      scrollStep: this.#number(
-        doc,
-        settingsText(language, 'Scroll step (px)'),
-        'scrollStep',
-        scroll.scrollStep,
-      ),
-      followSpeed: this.#number(
-        doc,
-        settingsText(language, 'Scroll speed (px/s)'),
-        'followSpeed',
-        scroll.followSpeed,
-      ),
-      initialSpeed: this.#number(
-        doc,
-        settingsText(language, 'Initial speed (px/s)'),
-        'initialSpeed',
-        scroll.initialSpeed,
-      ),
-      maxSpeed: this.#number(
-        doc,
-        settingsText(language, 'Max speed (px/s)'),
-        'maxSpeed',
-        scroll.maxSpeed,
-      ),
-      acceleration: this.#number(
-        doc,
-        settingsText(language, 'Acceleration (px/s²)'),
-        'acceleration',
-        scroll.acceleration,
-      ),
-      deceleration: this.#number(
-        doc,
-        settingsText(language, 'Deceleration (px/s²)'),
-        'deceleration',
-        scroll.deceleration,
-      ),
+    this.#changed = changed;
+    this.#credentials = {
+      mineru: {
+        configured: null,
+        pending: false,
+        error: false,
+        status: this.#credentialText('mineru', 'hint'),
+      },
+      semanticScholar: {
+        configured: null,
+        pending: true,
+        error: false,
+        status: this.#credentialText('semanticScholar', 'checking'),
+      },
     };
-    this.#stepBlock.append(this.#scrollNumbers.scrollStep.element);
-    this.#followBlock.append(this.#scrollNumbers.followSpeed.element);
-    this.#trapezoidBlock.append(
-      this.#scrollNumbers.initialSpeed.element,
-      this.#scrollNumbers.maxSpeed.element,
-      this.#scrollNumbers.acceleration.element,
-      this.#scrollNumbers.deceleration.element,
+    try {
+      this.#credentials.mineru = { ...this.#credentials.mineru, configured: !!readMinerUToken() };
+    } catch {
+      this.#credentials.mineru = {
+        ...this.#credentials.mineru,
+        error: true,
+        status: this.#credentialText('mineru', 'unavailable'),
+      };
+    }
+    const revision = ++this.#revision.semanticScholar;
+    void this.#reference.hasSemanticScholarKey().then(
+      (configured) => {
+        if (!this.#current('semanticScholar', revision)) return;
+        this.#credentials.semanticScholar = {
+          configured,
+          pending: false,
+          error: false,
+          status: this.#credentialText(
+            'semanticScholar',
+            configured ? 'configured' : 'notConfigured',
+          ),
+        };
+        this.#changed();
+      },
+      () => {
+        if (!this.#current('semanticScholar', revision)) return;
+        this.#credentials.semanticScholar = {
+          configured: null,
+          pending: false,
+          error: true,
+          status: this.#credentialText('semanticScholar', 'unavailable'),
+        };
+        this.#changed();
+      },
     );
-    this.#stopOnReleaseToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Stop immediately on key release'),
-      scroll.stopOnRelease,
-      (enabled) => this.#save(READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY, enabled),
-      this.#cleanups,
-      settingsText(language, 'Otherwise accelerating scrolling decelerates after release.'),
-      settingsToggleLabels(language),
-    );
-    this.#trapezoidBlock.append(this.#stopOnReleaseToggle.element);
-    scrolling.append(this.#stepBlock, this.#followBlock, this.#trapezoidBlock);
-
-    const marks = settingsGroup(doc, settingsText(language, 'Marks'));
-    this.#marksToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Persist marks'),
-      readerMarksPersist(preferences),
-      (enabled) => this.#save(READER_MARKS_PERSIST_PREFERENCE_KEY, enabled),
-      this.#cleanups,
-      settingsText(
-        language,
-        "Store marks in the parent item's Extra field so they survive restarts and sync with the item.",
-      ),
-      settingsToggleLabels(language),
-    );
-    marks.append(this.#marksToggle.element);
-
-    const annotations = settingsGroup(
-      doc,
-      settingsText(language, 'Annotations'),
-      settingsText(
-        language,
-        'The default color is used when underlining selected text or adding a note without an explicit color.',
-      ),
-    );
-    this.#highlightColor = settingsChoices(
-      doc,
-      [
-        { value: 'yellow', label: settingsText(language, 'Yellow') },
-        { value: 'red', label: settingsText(language, 'Red') },
-        { value: 'green', label: settingsText(language, 'Green') },
-        { value: 'blue', label: settingsText(language, 'Blue') },
-        { value: 'purple', label: settingsText(language, 'Purple') },
-      ] as const,
-      readerDefaultHighlightColor(preferences),
-      (color) => this.#save(READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY, color),
-      this.#cleanups,
-    );
-    annotations.append(
-      settingsControlRow(
-        doc,
-        settingsText(language, 'Default color'),
-        this.#highlightColor.element,
-      ),
-    );
-
-    this.#status = settingsStatus(doc);
-    root.append(title, inputGroup, scrolling, marks, annotations, this.#status);
-    this.#refresh();
-
-    const credentials = mineruCredentialField(doc, () => language);
-    root.append(credentials.root);
-    this.#cleanups.push(() => credentials.dispose());
     const keys = [
       READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
       ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
@@ -254,76 +108,212 @@ export class SettingsReader {
       ...Object.values(READER_SCROLL_NUMBER_SPECS).map((spec) => spec.key),
     ];
     for (const key of keys) {
-      const cleanup = preferences.observe?.(key, () => this.#refresh(true));
+      const cleanup = preferences.observe?.(key, () => {
+        if (this.#disposed) return;
+        this.#status = '';
+        this.#changed();
+      });
       if (cleanup) this.#cleanups.push(cleanup);
     }
   }
 
-  #modeBlock(doc: Document, mode: ScrollMode): HTMLElement {
-    const block = doc.createElementNS(H, 'div') as HTMLElement;
-    block.setAttribute('data-scroll-mode', mode);
-    block.style.cssText = 'margin-top:0.55em';
-    return block;
-  }
-
-  #number(
-    doc: Document,
-    label: string,
-    setting: ReaderScrollNumberSetting,
-    value: number,
-  ): SettingsNumberInput {
-    const spec = READER_SCROLL_NUMBER_SPECS[setting];
-    return settingsNumberRow(
-      doc,
-      label,
-      value,
-      {
-        minimum: spec.minimum,
-        maximum: spec.maximum,
-        step: SCROLL_INPUT_STEPS[setting],
-      },
-      (next) => this.#saveNumber(setting, next),
-      this.#cleanups,
+  #credentialText(provider: Provider, key: string): string {
+    return t(
+      provider === 'mineru' ? `documentCredentials.${key}` : `reader.references.credentials.${key}`,
+      this.#language,
     );
   }
 
-  #saveNumber(setting: ReaderScrollNumberSetting, raw: number): number | false {
-    const next = normalizeReaderScrollNumber(setting, raw);
-    if (!this.#save(READER_SCROLL_NUMBER_SPECS[setting].key, next)) return false;
-    return readerScrollConfig(this.#preferences)[setting];
+  model(): ReaderPageModel {
+    const s = (message: Parameters<typeof settingsText>[1]): string =>
+      settingsText(this.#language, message);
+    const credential = (provider: Provider): ReaderCredentialModel => ({
+      ...this.#credentials[provider],
+      title:
+        provider === 'mineru'
+          ? this.#credentialText(provider, 'token')
+          : this.#credentialText(provider, 'title'),
+      hint: this.#credentialText(provider, 'hint'),
+      inputLabel: this.#credentialText(provider, provider === 'mineru' ? 'token' : 'key'),
+      saveLabel: this.#credentialText(provider, 'save'),
+      forgetLabel: this.#credentialText(provider, provider === 'mineru' ? 'clear' : 'forget'),
+    });
+    return {
+      labels: {
+        title: s('Reader'),
+        input: s('Reader input'),
+        visual: s('Text Select mode'),
+        visualHint: s(
+          'Allow v and Zotero text selections to enter Neo Select mode for selection actions.',
+        ),
+        comment: s('Annotation comment editing'),
+        commentHint: s(
+          "When enabled, i / Enter opens the selected annotation's comment editor. When disabled, i gives native inputs keyboard ownership; Enter does nothing.",
+        ),
+        scrolling: s('Scrolling'),
+        scrollingHint: s(
+          'Reader j/k/zh/zl use the selected motion model. Only controls for the active model are shown.',
+        ),
+        mode: s('Scrolling mode'),
+        modes: { step: s('Step'), follow: s('Constant'), trapezoid: s('Accelerating') },
+        numbers: {
+          scrollStep: s('Scroll step (px)'),
+          followSpeed: s('Scroll speed (px/s)'),
+          initialSpeed: s('Initial speed (px/s)'),
+          maxSpeed: s('Max speed (px/s)'),
+          acceleration: s('Acceleration (px/s²)'),
+          deceleration: s('Deceleration (px/s²)'),
+        },
+        stop: s('Stop immediately on key release'),
+        stopHint: s('Otherwise accelerating scrolling decelerates after release.'),
+        marks: s('Marks'),
+        persist: s('Persist marks'),
+        persistHint: s(
+          "Store marks in the parent item's Extra field so they survive restarts and sync with the item.",
+        ),
+        annotations: s('Annotations'),
+        annotationsHint: s(
+          'The default color is used when underlining selected text or adding a note without an explicit color.',
+        ),
+        color: s('Default color'),
+        colors: {
+          yellow: s('Yellow'),
+          red: s('Red'),
+          green: s('Green'),
+          blue: s('Blue'),
+          purple: s('Purple'),
+        },
+        on: s('On'),
+        off: s('Off'),
+        cancel: s('Cancel'),
+      },
+      visual: readerModeEnabled(this.#preferences, 'visual'),
+      comment: annotationCommentEditorEnabled(this.#preferences),
+      marks: readerMarksPersist(this.#preferences),
+      color: readerDefaultHighlightColor(this.#preferences),
+      scroll: readerScrollConfig(this.#preferences),
+      status: this.#status,
+      mineru: credential('mineru'),
+      semanticScholar: credential('semanticScholar'),
+    };
   }
 
-  #save(key: string, value: boolean | number | string): boolean {
+  dispatch(command: ReaderPageCommand): void {
+    if (this.#disposed || !command || typeof command !== 'object') return;
+    if (command.type === 'saveCredential' || command.type === 'forgetCredential') {
+      if (command.provider !== 'mineru' && command.provider !== 'semanticScholar') return;
+      if (command.type === 'saveCredential' && typeof command.value !== 'string') return;
+      const value = command.type === 'saveCredential' ? command.value : null;
+      if (value !== null && !value.trim() && command.provider === 'semanticScholar') {
+        if (this.#credentials.semanticScholar.pending) return;
+        this.#credentials.semanticScholar = {
+          ...this.#credentials.semanticScholar,
+          error: true,
+          status: this.#credentialText('semanticScholar', 'required'),
+        };
+        this.#changed();
+        return;
+      }
+      void this.#writeCredential(command.provider, value);
+      return;
+    }
+    let key: string;
+    let value: string | number | boolean;
+    switch (command.type) {
+      case 'visual':
+      case 'comment':
+      case 'marks':
+      case 'stop':
+        if (typeof command.value !== 'boolean') return;
+        key = {
+          visual: READER_VISUAL_MODE_ENABLED_PREFERENCE_KEY,
+          comment: ANNOTATION_COMMENT_EDITOR_ENABLED_PREFERENCE_KEY,
+          marks: READER_MARKS_PERSIST_PREFERENCE_KEY,
+          stop: READER_SCROLL_STOP_ON_RELEASE_PREFERENCE_KEY,
+        }[command.type];
+        value = command.value;
+        break;
+      case 'mode':
+        if (!['step', 'follow', 'trapezoid'].includes(command.value)) return;
+        key = READER_SCROLL_MODE_PREFERENCE_KEY;
+        value = command.value;
+        break;
+      case 'color':
+        if (!['yellow', 'red', 'green', 'blue', 'purple'].includes(command.value)) return;
+        key = READER_DEFAULT_HIGHLIGHT_COLOR_PREFERENCE_KEY;
+        value = command.value;
+        break;
+      case 'number':
+        if (
+          !Object.hasOwn(READER_SCROLL_NUMBER_SPECS, command.setting) ||
+          typeof command.value !== 'string'
+        )
+          return;
+        key = READER_SCROLL_NUMBER_SPECS[command.setting].key;
+        value = normalizeReaderScrollNumber(command.setting, Number.parseInt(command.value, 10));
+        break;
+      default:
+        return;
+    }
     try {
       this.#preferences.set(key, value);
-      this.#refresh(true);
-      return true;
+      this.#status = '';
     } catch {
-      this.#refresh();
-      this.#status.textContent = settingsText(this.#language, 'Could not update Reader settings.');
-      return false;
+      this.#status = settingsText(this.#language, 'Could not update Reader settings.');
     }
+    this.#changed();
   }
 
-  #refresh(clearStatus = false): void {
-    const scroll = readerScrollConfig(this.#preferences);
-    this.#visualToggle.set(readerModeEnabled(this.#preferences, 'visual'));
-    this.#commentEditorToggle.set(annotationCommentEditorEnabled(this.#preferences));
-    this.#scrollMode.select(scroll.mode);
-    for (const setting of Object.keys(this.#scrollNumbers) as ReaderScrollNumberSetting[]) {
-      this.#scrollNumbers[setting].set(scroll[setting]);
+  #current(provider: Provider, revision: number): boolean {
+    return !this.#disposed && this.#revision[provider] === revision;
+  }
+
+  async #writeCredential(provider: Provider, value: string | null): Promise<void> {
+    if (this.#disposed || this.#credentials[provider].pending) return;
+    const forget = value === null || (provider === 'mineru' && !value.trim());
+    const revision = ++this.#revision[provider];
+    this.#credentials[provider] = {
+      ...this.#credentials[provider],
+      pending: true,
+      error: false,
+      status:
+        provider === 'semanticScholar'
+          ? this.#credentialText(provider, 'saving')
+          : this.#credentials[provider].status,
+    };
+    this.#changed();
+    try {
+      if (provider === 'mineru') await saveMinerUToken(forget ? '' : value!);
+      else await this.#reference.setSemanticScholarKey(forget ? null : value);
+      if (!this.#current(provider, revision)) return;
+      this.#credentials[provider] = {
+        configured: !forget,
+        pending: false,
+        error: false,
+        status: this.#credentialText(
+          provider,
+          forget ? (provider === 'mineru' ? 'cleared' : 'forgotten') : 'saved',
+        ),
+      };
+    } catch {
+      if (!this.#current(provider, revision)) return;
+      this.#credentials[provider] = {
+        ...this.#credentials[provider],
+        configured: null,
+        pending: false,
+        error: true,
+        status: this.#credentialText(provider, 'unavailable'),
+      };
     }
-    this.#stopOnReleaseToggle.set(scroll.stopOnRelease);
-    this.#marksToggle.set(readerMarksPersist(this.#preferences));
-    this.#highlightColor.select(readerDefaultHighlightColor(this.#preferences));
-    this.#stepBlock.style.display = scroll.mode === 'step' ? 'block' : 'none';
-    this.#followBlock.style.display = scroll.mode === 'follow' ? 'block' : 'none';
-    this.#trapezoidBlock.style.display = scroll.mode === 'trapezoid' ? 'block' : 'none';
-    if (clearStatus) this.#status.textContent = '';
+    this.#changed();
   }
 
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#revision.mineru++;
+    this.#revision.semanticScholar++;
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
-    this.#root.replaceChildren();
+    this.#reference.dispose();
   }
 }

@@ -1,4 +1,4 @@
-import type { DocumentPreparationPort } from '../document-analysis/preparation-controller';
+import type { DocumentPreparationPort } from '../modules/document-preparation';
 import type { ActionId } from '../input/actions';
 import type { BindingMap, BindingContext } from '../input/bindings';
 import type { ItemTargetSet } from './item-target';
@@ -6,6 +6,7 @@ import type { Logger } from './logging';
 import type { PreferenceStore } from './preference-store';
 import type { BuiltinModuleRuntime } from './module-runtime';
 import type { NavigationPort } from '../navigation/types';
+import type { AIQAController } from '../ai-qa/controller';
 
 /** Business owners use standard DOM windows; native Zotero fields stay in Toolkit. */
 export type MainWindow = Window;
@@ -76,6 +77,8 @@ export interface ReaderMainOperations {
   navigateForwardFromReader(ownerWindow: MainWindow | null, count?: number): void;
   navigationForReader(ownerWindow: MainWindow | null): NavigationPort | null;
   openTabPicker(ownerWindow: MainWindow | null): void;
+  focusTabSidebar(ownerWindow: MainWindow | null): void;
+  toggleTabSidebar(ownerWindow: MainWindow | null): void;
   closeReaderTab(ownerWindow: MainWindow | null): void;
   cycleReaderTab(ownerWindow: MainWindow | null, direction: -1 | 1): void;
   showReaderItemInLibrary(ownerWindow: MainWindow | null, targets: ItemTargetSet<'reader'>): void;
@@ -115,6 +118,7 @@ export interface MainWindowControllerApi extends ReaderMainOperations {
 
 export interface ReaderControllerDependencies {
   readonly documentPreparation?: DocumentPreparationPort;
+  readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;
@@ -123,6 +127,7 @@ export interface ReaderControllerDependencies {
 
 export interface MainWindowControllerDependencies {
   readonly documentPreparation?: DocumentPreparationPort;
+  readonly aiQA?: () => AIQAController | null;
   readonly modules: BuiltinModuleRuntime;
   readonly preferences: PreferenceStore;
   readonly logger: Logger;

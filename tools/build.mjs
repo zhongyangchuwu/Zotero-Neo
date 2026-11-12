@@ -17,6 +17,13 @@ cpSync(resolve(root, 'LICENSE'), resolve(buildRoot, 'LICENSE'));
 const licenseDirectory = resolve(buildRoot, 'licenses');
 mkdirSync(licenseDirectory, { recursive: true });
 cpSync(resolve(root, 'vendor/fuzzysort/LICENSE'), resolve(licenseDirectory, 'fuzzysort-LICENSE'));
+for (const name of ['ai-sdk', 'react']) {
+  cpSync(resolve(root, `vendor/${name}/NOTICE`), resolve(licenseDirectory, `${name}-NOTICE`));
+  cpSync(
+    resolve(root, `vendor/${name}/provenance.json`),
+    resolve(licenseDirectory, `${name}-provenance.json`),
+  );
+}
 cpSync(resolve(root, 'manifest.json'), resolve(buildRoot, 'manifest.json'));
 
 const common = {
@@ -26,6 +33,26 @@ const common = {
   minify: false,
   sourcemap: false,
   logLevel: 'info',
+};
+
+// UI components share one audited React instance in each native DOM owner.
+// The library entry itself is deliberately built without this binding.
+const nativeReactBinding = {
+  name: 'native-react-binding',
+  setup(builder) {
+    builder.onResolve({ filter: /vendor[\\/]react[\\/]index\.js$/ }, () => ({
+      path: 'native-react',
+      namespace: 'neo-native-react',
+    }));
+    builder.onLoad({ filter: /.*/, namespace: 'neo-native-react' }, () => ({
+      contents: `const library = globalThis.NeoReactRuntime;
+if (!library) throw new Error('Native React library has not been loaded in this window');
+export const React = library.React;
+export const createRoot = library.createRoot;
+export const flushSync = library.flushSync;`,
+      loader: 'js',
+    }));
+  },
 };
 
 await build({
@@ -52,6 +79,28 @@ await build({
   format: 'iife',
   platform: 'browser',
 });
+
+for (const [entry, output] of [
+  ['src/ai/runtime.ts', 'content/ai-runtime.js'],
+  ['src/ai-qa/ui/index.tsx', 'content/ai-qa-ui.js'],
+  ['src/ui/react/library.ts', 'content/react-runtime.js'],
+  ['src/ui/react/index.ts', 'content/native-ui.js'],
+]) {
+  await build({
+    ...common,
+    entryPoints: [resolve(root, entry)],
+    outfile: resolve(buildRoot, output),
+    bundle: true,
+    format: 'iife',
+    platform: 'browser',
+    minify: true,
+    define: { 'process.env.NODE_ENV': '"production"' },
+    plugins:
+      output === 'content/native-ui.js' || output === 'content/ai-qa-ui.js'
+        ? [nativeReactBinding]
+        : [],
+  });
+}
 
 zipDirectory(buildRoot, outputXpi);
 console.log(`Built ${outputXpi}`);

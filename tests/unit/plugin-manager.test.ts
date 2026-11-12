@@ -8,6 +8,71 @@ import type { InstalledPlugin } from '../../src/modules/extensions/host';
 import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/input/bindings';
 import { ZOTERO_NEO_PLUGIN_ID } from '../../src/modules/extensions/host';
 import { createPickerHarness, pickerKey } from './feature-panel-harness';
+import type {
+  ExtensionsReactCommand,
+  ExtensionsReactModel,
+} from '../../src/modules/extensions/react-model';
+
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView(options: {
+    root: HTMLElement;
+    model: ExtensionsReactModel;
+    dispatch: (command: ExtensionsReactCommand) => void;
+    isCurrent: () => boolean;
+  }) {
+    const create = (tag: string) =>
+      options.root.ownerDocument.createElementNS(
+        'http://www.w3.org/1999/xhtml',
+        tag,
+      ) as HTMLElement;
+    const panel = create('section');
+    const header = create('header');
+    const title = create('strong');
+    const count = create('span');
+    const input = create('input');
+    const content = create('div');
+    const list = create('div');
+    const details = create('div');
+    const footer = create('footer');
+    header.append(title, count, input);
+    content.append(list, details);
+    panel.append(header, content, footer);
+    options.root.append(panel);
+    const parts: Record<string, HTMLElement> = { input, list, details, count, footer };
+    let disposed = false;
+    const update = (model: ExtensionsReactModel): void => {
+      if (disposed || !options.isCurrent()) return;
+      count.textContent = model.count;
+      footer.textContent = model.footer;
+      const selected = model.plugins[model.selected];
+      details.textContent = selected
+        ? `${selected.name} ${model.shortcuts}`
+        : 'No plugin selected.';
+      if (model.listMessage) {
+        list.replaceChildren();
+        list.textContent = model.listMessage;
+      } else {
+        list.replaceChildren(
+          ...model.plugins.map((plugin, index) => {
+            const row = create('div');
+            row.textContent = plugin.name;
+            row.addEventListener('click', () => options.dispatch({ type: 'select', index }));
+            return row;
+          }),
+        );
+      }
+    };
+    update(options.model);
+    return {
+      ready: Promise.resolve(),
+      update,
+      getElement: (part: string) => (disposed ? null : (parts[part] ?? null)),
+      dispose: () => {
+        disposed = true;
+      },
+    };
+  },
+}));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -464,7 +529,7 @@ function createModuleFixture(themeRoot?: (root: HTMLElement) => () => void) {
 }
 
 function panelElements(overlay: HTMLElement) {
-  const panel = overlay.children[0] as HTMLElement;
+  const panel = overlay.children[0].children[0] as HTMLElement;
   const header = panel.children[0] as HTMLElement;
   const content = panel.children[1] as HTMLElement;
   return {
@@ -473,6 +538,34 @@ function panelElements(overlay: HTMLElement) {
     details: content.children[1] as HTMLElement,
   };
 }
+
+it('ignores a refresh completing after the owner document changes', async () => {
+  const native = installManagerHost();
+  const pending =
+    Promise.withResolvers<[typeof native.alpha, typeof native.beta, typeof native.neo]>();
+  native.manager.getAddonsByTypes.mockReturnValueOnce(pending.promise);
+  const { window, state, panel } = createPanelFixture();
+  panel.open();
+  const oldDocument = window.document;
+  Object.assign(window, { document: {} });
+  pending.resolve([native.alpha, native.beta, native.neo]);
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  expect(state.plugins).toEqual([]);
+  Object.assign(window, { document: oldDocument });
+  panel.close();
+});
+
+it('routes a row selection through the controller', async () => {
+  installManagerHost();
+  const { state, panel } = createPanelFixture();
+  panel.open();
+  await vi.waitFor(() => expect(state.loading).toBe(false));
+  const row = state.list!.children[1] as HTMLElement & { emit(type: string): void };
+  row.emit('click');
+  expect(state.filtered[state.selected]?.name).toBe('Beta');
+  expect(state.details?.textContent).toContain('Beta');
+  panel.close();
+});
 
 describe('extensions module lifetime', () => {
   it('does not paint or respond to detached events after retirement during a pending refresh', async () => {
@@ -485,6 +578,7 @@ describe('extensions module lifetime', () => {
     const overlay = bodyChildren[0] as HTMLElement & {
       emit(type: string, event?: Partial<Event>): void;
     };
+    await Promise.resolve();
     const { input, list, details } = panelElements(overlay);
     host.dispose();
     expect(module.isOpen).toBe(false);
@@ -512,6 +606,7 @@ describe('extensions module lifetime', () => {
     const { host, module, bodyChildren } = createModuleFixture();
     module.open('main-normal');
     const overlay = bodyChildren[0];
+    await Promise.resolve();
     const { list, details } = panelElements(overlay);
     await vi.waitFor(() => expect(list.textContent).toContain('Alpha'));
     module.handleKey(pickerKey('e', overlay));
@@ -536,6 +631,7 @@ describe('extensions module lifetime', () => {
     expect(second.module.open('reader-normal')).toBe(true);
     const firstOverlay = first.bodyChildren[0];
     const secondOverlay = second.bodyChildren[0];
+    await Promise.resolve();
     const firstPanel = panelElements(firstOverlay);
     const secondPanel = panelElements(secondOverlay);
     await vi.waitFor(() => expect(secondPanel.list.textContent).toContain('Beta'));

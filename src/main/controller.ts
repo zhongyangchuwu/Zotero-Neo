@@ -56,6 +56,10 @@ import { createWorksetsModule, type WorksetsModule } from '../modules/worksets';
 import { createLibraryModule, type LibraryModule } from '../modules/library';
 import { createNotesModule, type NotesModule } from '../modules/notes';
 import { createWorkspaceModule, type WorkspaceModule } from '../modules/workspace';
+import {
+  createDocumentPreparationModule,
+  type DocumentPreparationModule,
+} from '../modules/document-preparation';
 import type { PickerOpenOptions } from './picker/types';
 import {
   mainLibrarySelection,
@@ -74,8 +78,9 @@ import {
   applyMainQuickSearch,
   applyMainTagFilter,
   closeMainAdvancedSearch,
+  prepareTabEnhancementData,
 } from '../toolkit/main';
-import { mainCursorItem } from './action-targets';
+import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
 import { NOTE_ITEM_TARGET } from './note-item-target';
 import { createExtensionsModule, type ExtensionsModule } from '../modules/extensions';
@@ -83,6 +88,16 @@ import { MainItemStateDecoration } from './item-state-decoration';
 import { MainNavigationExecutor } from './jump-history';
 import { createCollectionsModule, type CollectionsModule } from '../modules/collections';
 import { installMainViewLifecycle } from './view-lifecycle';
+import {
+  createTabEnhancementsModule,
+  type TabEnhancementsModule,
+} from '../modules/tab-enhancements';
+import { createTabGroupManager } from '../modules/tab-enhancements/model';
+import {
+  LEGACY_TAB_GROUP_STATE_PREFERENCE,
+  TAB_GROUP_STATE_PREFERENCE,
+} from '../modules/tab-enhancements/config';
+import type { TabGroupManager } from '../modules/tab-enhancements/types';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
   _zvMainHandled?: boolean;
@@ -110,10 +125,13 @@ export class MainWindowController implements MainWindowControllerApi {
       readonly library: LibraryModule | null;
       readonly notes: NotesModule | null;
       readonly workspace: WorkspaceModule | null;
+      readonly preparation: DocumentPreparationModule | null;
+      tabEnhancements: TabEnhancementsModule | null;
     }
   >();
   readonly #itemDecorations = new MainItemStateDecoration();
   readonly #navigationExecutor: MainNavigationExecutor;
+  #tabGroups: TabGroupManager | null = null;
 
   constructor(dependencies: MainWindowControllerDependencies) {
     this.#dependencies = dependencies;
@@ -154,6 +172,20 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
+  /** Saved reading groups belong to this application controller, not to one window's rail. */
+  private tabGroupManager(): TabGroupManager {
+    if (!this.#tabGroups) {
+      this.#tabGroups = createTabGroupManager({
+        read: () =>
+          this.#dependencies.preferences.get(TAB_GROUP_STATE_PREFERENCE, '') ||
+          this.#dependencies.preferences.get(LEGACY_TAB_GROUP_STATE_PREFERENCE, ''),
+        write: (value) => this.#dependencies.preferences.set(TAB_GROUP_STATE_PREFERENCE, value),
+        createID: () => `neo-group-${Zotero.Utilities.randomString(20)}`,
+      });
+    }
+    return this.#tabGroups;
+  }
+
   private attachModules(window: MainWindow, session: MainWindowSession): void {
     const scope = this.#dependencies.modules.createScope(
       'main',
@@ -163,6 +195,12 @@ export class MainWindowController implements MainWindowControllerApi {
     const host = scope.host;
     session.cleanup.add(() => scope.dispose());
     try {
+      const preparationService = this.#dependencies.documentPreparation;
+      const preparation = preparationService
+        ? scope.activate('document-preparation', () =>
+            createDocumentPreparationModule(host, 'main-normal', preparationService),
+          )
+        : null;
       const tags = scope.activate('tags', () =>
         createTagModule(host, {
           logger: this.#dependencies.logger,
@@ -414,7 +452,50 @@ export class MainWindowController implements MainWindowControllerApi {
         library,
         notes,
         workspace,
+        preparation,
+        tabEnhancements: null,
       });
+      if (this.#dependencies.modules.applied['tab-enhancements']) {
+        const document = window.document;
+        const current = (): boolean =>
+          this.#sessions.get(window) === session &&
+          !session.cleanup.disposed &&
+          window.document === document &&
+          !window.closed;
+        void Zotero.initializationPromise
+          .then(async () => {
+            if (!current()) return;
+            await Zotero.uiReadyPromise;
+            if (!current()) return;
+            const groups = this.tabGroupManager();
+            await prepareTabEnhancementData(window, groups.libraryIDs());
+            if (!current()) return;
+            const attached = this.#modules.get(session);
+            if (!attached) return;
+            attached.tabEnhancements = scope.activate('tab-enhancements', () => {
+              if (!workspace) throw new Error('Core workspace is unavailable');
+              return createTabEnhancementsModule(host, {
+                window,
+                preferences: this.#dependencies.preferences,
+                logger: this.#dependencies.logger,
+                bindings: () => this.sessionBindings(session),
+                language: () => this.keyGuideLanguage(),
+                themeRoot: (root) => session.theme.add(root),
+                groups,
+                workspace,
+              });
+            });
+          })
+          .catch((error: unknown) => {
+            if (current()) {
+              reportDiagnosticError(
+                this.#dependencies.logger,
+                'Tab enhancement startup failed',
+                error,
+              );
+            }
+          });
+      }
     } catch (error) {
       const failure = new CleanupFailure();
       failure.run(() => scope.dispose());
@@ -457,6 +538,10 @@ export class MainWindowController implements MainWindowControllerApi {
 
   private workspaceModule(session: MainWindowSession): WorkspaceModule | null {
     return this.#modules.get(session)?.workspace ?? null;
+  }
+
+  private tabEnhancementsModule(session: MainWindowSession): TabEnhancementsModule | null {
+    return this.#modules.get(session)?.tabEnhancements ?? null;
   }
 
   private cancelMainCurrentTarget(window: MainWindow, session: MainWindowSession): void {
@@ -640,7 +725,6 @@ export class MainWindowController implements MainWindowControllerApi {
     failure.run(() =>
       this.#dependencies.logger.diagnostic(`main window detached sessions=${this.#sessions.size}`),
     );
-    failure.run(() => this.#dependencies.documentPreparation?.closeOwner(window));
     if (modules) failure.run(() => modules.scope.dispose());
     failure.run(() => decoration?.dispose());
     failure.run(() => session.dispose());
@@ -650,6 +734,8 @@ export class MainWindowController implements MainWindowControllerApi {
   shutdown(): void {
     const failure = new CleanupFailure();
     for (const window of this.#sessions.keys()) failure.run(() => this.removeWindow(window));
+    failure.run(() => this.#tabGroups?.dispose());
+    this.#tabGroups = null;
     failure.rethrow();
   }
 
@@ -830,6 +916,18 @@ export class MainWindowController implements MainWindowControllerApi {
     );
   }
 
+  focusTabSidebar(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'tabFocusSidebar', (_window, session) =>
+      this.tabEnhancementsModule(session)?.focus('reader-normal'),
+    );
+  }
+
+  toggleTabSidebar(ownerWindow: MainWindow | null): void {
+    this.withReaderWindow(ownerWindow, 'tabToggleSidebar', (_window, session) =>
+      this.tabEnhancementsModule(session)?.toggle('reader-normal'),
+    );
+  }
+
   closeReaderTab(ownerWindow: MainWindow | null): void {
     this.withReaderWindow(ownerWindow, 'closeCurrentTab', (_window, session) =>
       this.workspaceModule(session)?.closeTab('reader'),
@@ -946,6 +1044,10 @@ export class MainWindowController implements MainWindowControllerApi {
     session: MainWindowSession,
   ): void {
     if (this.#sessions.get(window) !== session) return;
+    if (this.#dependencies.aiQA?.()?.ownsTarget(event.target)) {
+      this.resetMainInput(window, session);
+      return;
+    }
     if (this.#dependencies.documentPreparation?.handleKey(event)) return;
     if (mainIdentifierLookupOwnsInput(window)) {
       this.resetMainInput(window, session);
@@ -954,21 +1056,17 @@ export class MainWindowController implements MainWindowControllerApi {
     if (event._zvMainHandled) return;
     event._zvMainHandled = true;
     if (session.settings.open) {
+      this.resetMainInput(window, session);
+      // The owned modal handles Tab, Escape and recording in its actual DOM realm.
+      if (session.settings.contains(event.target)) return;
       if (compositionOwnsKey(event, false)) {
         event.stopPropagation();
         return;
       }
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopImmediatePropagation?.();
-        event.stopPropagation();
-        session.settings.close();
-      } else if (!session.settings.contains(event.target)) {
-        event.preventDefault();
-        event.stopImmediatePropagation?.();
-        event.stopPropagation();
-      }
-      this.resetMainInput(window, session);
+      event.preventDefault();
+      event.stopImmediatePropagation?.();
+      event.stopPropagation();
+      if (event.key === 'Escape') session.settings.close();
       return;
     }
     if (this.libraryModule(session)?.isLocalFindOpen) {
@@ -985,6 +1083,12 @@ export class MainWindowController implements MainWindowControllerApi {
     }
     if (session.picker.open) {
       this.#picker.onKeyDown(event, window, session);
+      return;
+    }
+    const tabs = this.tabEnhancementsModule(session);
+    if (tabs?.ownsTarget(event.target)) {
+      this.resetMainInput(window, session);
+      tabs.handleKey(event);
       return;
     }
     if (
@@ -1290,6 +1394,12 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'switchTab':
         this.workspaceModule(session)?.switchTab('note');
         return true;
+      case 'tabFocusSidebar':
+        this.tabEnhancementsModule(session)?.focus('note-normal');
+        return true;
+      case 'tabToggleSidebar':
+        this.tabEnhancementsModule(session)?.toggle('note-normal');
+        return true;
       case 'closeCurrentTab':
         this.workspaceModule(session)?.closeTab('note');
         return true;
@@ -1375,7 +1485,7 @@ export class MainWindowController implements MainWindowControllerApi {
             ? this.worksetsModule(session)?.currentTarget()
             : undefined,
         );
-        this.#dependencies.documentPreparation?.open({
+        this.#modules.get(session)?.preparation?.open({
           window,
           targets,
           language: () => this.keyGuideLanguage(),
@@ -1423,6 +1533,25 @@ export class MainWindowController implements MainWindowControllerApi {
       case 'switchTab':
         this.workspaceModule(session)?.switchTab('main');
         break;
+      case 'tabFocusSidebar':
+        this.tabEnhancementsModule(session)?.focus('main-normal');
+        break;
+      case 'tabToggleSidebar':
+        this.tabEnhancementsModule(session)?.toggle('main-normal');
+        break;
+      case 'mainCreateReadingGroup':
+      case 'mainAppendReadingGroup': {
+        const module = this.tabEnhancementsModule(session);
+        if (!module) break;
+        const worksets = this.worksetsModule(session);
+        const targets = resolveMainEffectiveTargets(
+          window,
+          worksets?.selection ?? null,
+          worksets?.isVisual ? worksets.currentTarget() : undefined,
+        );
+        module.importSelection(targets, action === 'mainCreateReadingGroup');
+        break;
+      }
       case 'findNotes':
         this.openNotesPickerForSurface(window, session);
         break;

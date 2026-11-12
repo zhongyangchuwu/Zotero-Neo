@@ -6,8 +6,49 @@ import { DEFAULT_BINDINGS, resolveBindings, type BindingMap } from '../../src/in
 import { ModuleHost } from '../../src/core/module-host';
 import type { PdfWindow, ReaderNativeOutlineEntry, ReaderRuntime } from '../../src/reader/types';
 
+const nativeMount = vi.hoisted(() => ({ deferred: false, pending: [] as (() => void)[] }));
+
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: (options: {
+    root: HTMLElement;
+    model: { kind: 'marks' | 'captions'; label: string; open: boolean };
+  }) => {
+    let disposed = false;
+    const render = () => {
+      if (disposed) return;
+      const details = options.root.ownerDocument.createElement('details');
+      details.open = options.model.open;
+      const summary = options.root.ownerDocument.createElement('summary');
+      summary.textContent = options.model.label;
+      details.appendChild(summary);
+      options.root.replaceChildren(details);
+    };
+    const { promise: ready, resolve } = Promise.withResolvers<void>();
+    if (nativeMount.deferred)
+      nativeMount.pending.push(() => {
+        render();
+        resolve();
+      });
+    else {
+      render();
+      resolve();
+    }
+    return {
+      ready,
+      update: () => {},
+      getElement: () => null,
+      dispose: () => {
+        disposed = true;
+        options.root.replaceChildren();
+      },
+    };
+  },
+}));
+
 const originalComponents = Reflect.get(globalThis, 'Components');
 beforeEach(() => {
+  nativeMount.deferred = false;
+  nativeMount.pending.length = 0;
   vi.useFakeTimers();
 });
 afterEach(() => {
@@ -56,6 +97,9 @@ function harness(
     readonly dataset: Record<string, string> = {};
     readonly children: Node[] = [];
     parentElement: Node | null = null;
+    get isConnected(): boolean {
+      return this === sidebarRoot || !!this.parentElement?.isConnected;
+    }
     id = '';
     className = '';
     textContent = '';
@@ -529,6 +573,33 @@ describe('native Reader sidebar consumers', () => {
     vi.runAllTimers();
     expect(test.nativeNavigate).not.toHaveBeenCalled();
     test.sidebar.dispose();
+  });
+
+  it('focuses marks after deferred mounting but never reclaims focus after deactivation', async () => {
+    nativeMount.deferred = true;
+    const test = harness();
+    try {
+      test.sidebar.focus('marks', test.pdf);
+      expect(test.document.activeElement).toBeNull();
+      for (const finish of nativeMount.pending.splice(0)) finish();
+      await Promise.resolve();
+      expect(test.document.activeElement?.closest('#zv-reader-marks')).toBeTruthy();
+      test.sidebar.dispose();
+
+      const next = harness();
+      try {
+        next.sidebar.focus('marks', next.pdf);
+        next.sidebar.deactivate();
+        next.outline.focus();
+        for (const finish of nativeMount.pending.splice(0)) finish();
+        await Promise.resolve();
+        expect(next.document.activeElement).toBe(next.outline);
+      } finally {
+        next.sidebar.dispose();
+      }
+    } finally {
+      test.sidebar.dispose();
+    }
   });
 
   it('retires deferred focus when native pane changes or the Reader deactivates, and permits a fresh reopened request', () => {

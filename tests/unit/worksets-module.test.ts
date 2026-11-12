@@ -5,6 +5,16 @@ import { resolveInteractionAppearance } from '../../src/main/interaction-appeara
 import type { PreferenceReader } from '../../src/core/preferences';
 import { createWorksetsModule, type WorksetsModuleHost } from '../../src/modules/worksets';
 
+// Lifecycle tests exercise the native controller, not Gecko resource loading.
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: () => ({
+    ready: Promise.resolve(),
+    update: () => {},
+    getElement: () => null,
+    dispose: () => {},
+  }),
+}));
+
 function fixture() {
   const logger = { debug: vi.fn(), diagnostic: vi.fn() };
   const active = { id: 'item-tree-row-0' } as unknown as Element;

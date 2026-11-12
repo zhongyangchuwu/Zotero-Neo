@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReaderDocumentComparison } from '../../src/modules/reader-navigation/document-comparison';
+import { ReaderDocumentComparison } from '../../src/modules/document-comparison/document-comparison';
 import { oxrParsedDocument } from '../../src/document-analysis/oxr';
 import { mineruParsedDocument } from '../../src/document-analysis/mineru';
 import type { DocumentSource } from '../../src/document-analysis/contracts';
 import type { ReaderRuntime } from '../../src/toolkit/reader';
 import type { PreferenceStore } from '../../src/core/preference-store';
+import type {
+  DocumentComparisonCommand,
+  DocumentComparisonModel,
+} from '../../src/modules/document-comparison/react-model';
 
 const host = vi.hoisted(() => ({
   window: null as unknown,
@@ -15,6 +19,10 @@ const host = vi.hoisted(() => ({
   writeCache: vi.fn(),
   native: vi.fn(),
   analysisChanged: vi.fn(),
+  navigate: vi.fn(),
+  readToken: vi.fn(),
+  saveToken: vi.fn(),
+  models: [] as DocumentComparisonModel[],
 }));
 vi.mock('../../src/platform/document-analysis', () => ({
   analysisPDF: async () => ({
@@ -35,6 +43,79 @@ vi.mock('../../src/toolkit/reader', () => ({
   structuredDocumentData: host.native,
 }));
 vi.mock('../../src/i18n', () => ({ t: (key: string) => key.replace('documentAnalysis.', '') }));
+vi.mock('../../src/platform/document-credentials', () => ({
+  readMinerUToken: host.readToken,
+  saveMinerUToken: host.saveToken,
+}));
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: (options: {
+    root: Element;
+    model: DocumentComparisonModel;
+    dispatch: (command: DocumentComparisonCommand) => void;
+  }) => {
+    const credential = options.root.ownerDocument.createElementNS('', 'input');
+    credential.type = 'password';
+    const render = (model: DocumentComparisonModel) => {
+      host.models.push(structuredClone(model));
+      const root = options.root;
+      root.replaceChildren();
+      const node = (tag: string, text = '') => {
+        const value = root.ownerDocument.createElementNS('', tag);
+        value.textContent = text;
+        root.append(value);
+        return value;
+      };
+      const provider = node('select');
+      provider.value = model.provider;
+      provider.addEventListener('change', () =>
+        options.dispatch({ type: 'provider', value: provider.value === 'oxr' ? 'oxr' : 'mineru' }),
+      );
+      const endpoint = node('input');
+      endpoint.type = 'url';
+      endpoint.value = model.endpoint;
+      endpoint.addEventListener('change', () =>
+        options.dispatch({ type: 'endpoint', value: endpoint.value }),
+      );
+      root.append(credential);
+      credential.disabled = model.busy || model.credentialPending;
+      if (model.provider === 'mineru') {
+        const save = node('button', model.credentialSaveLabel);
+        const clear = node('button', model.credentialClearLabel);
+        save.disabled = clear.disabled = model.busy || model.credentialPending;
+        save.addEventListener('click', () => options.dispatch({ type: 'credential-save' }));
+        clear.addEventListener('click', () => options.dispatch({ type: 'credential-clear' }));
+      }
+      for (const [label, type] of [
+        [model.parseLabel, 'parse'],
+        [model.refreshLabel, 'refresh'],
+        [model.copyLabel, 'copy'],
+        [model.closeLabel, 'close'],
+      ] as const) {
+        const button = node('button', label);
+        button.disabled = (type === 'parse' || type === 'refresh') && (!model.ready || model.busy);
+        button.addEventListener('click', () => options.dispatch({ type }));
+      }
+      node('p', model.status);
+      for (const column of model.columns) {
+        node('p', column.error + column.summary + column.cache);
+        for (const target of column.targets) {
+          node('p', target.title + target.text);
+          const button = node('button', target.action);
+          button.addEventListener('click', () =>
+            options.dispatch({ type: 'locate', id: target.id }),
+          );
+        }
+      }
+    };
+    render(options.model);
+    return {
+      ready: Promise.resolve(),
+      update: render,
+      getElement: (part: string) => (part === 'credential' ? credential : null),
+      dispose: () => options.root.replaceChildren(),
+    };
+  },
+}));
 
 /** Only the dialog's DOM operations are modeled; real Gecko and file I/O are exercised separately. */
 class Element {
@@ -64,6 +145,9 @@ class Element {
   }
   setAttribute() {}
   focus() {}
+  contains(node: Element | null | undefined): boolean {
+    return this === node || this.children.some((child) => child.contains(node));
+  }
   append(...nodes: Element[]) {
     for (const node of nodes) {
       node.parent = this;
@@ -145,8 +229,11 @@ let document: DocumentFixture;
 let comparison: ReaderDocumentComparison;
 beforeEach(() => {
   vi.resetAllMocks();
+  host.models.length = 0;
   document = new DocumentFixture();
   host.window = { document, AbortController };
+  host.readToken.mockReturnValue('');
+  host.saveToken.mockResolvedValue(undefined);
   host.readPDF.mockResolvedValue(new Uint8Array([1]));
   host.isCurrent.mockResolvedValue(true);
   host.request.mockResolvedValue(payload);
@@ -167,7 +254,7 @@ beforeEach(() => {
     language: () => 'en',
     themeRoot: () => () => {},
     copyText: vi.fn(),
-    navigate: vi.fn(),
+    navigate: host.navigate,
     focusReader: vi.fn(),
     isCurrent: () => true,
     debug: vi.fn(),
@@ -179,6 +266,55 @@ const ready = async () => {
 };
 
 describe('document comparison cache workflow', () => {
+  it('loads, saves and clears MinerU credentials without exposing them in the model', async () => {
+    host.readToken.mockReturnValue('saved-secret');
+    comparison.open();
+    await ready();
+    const provider = document.nodes.find((n) => n.isConnected && n.tag === 'select')!;
+    provider.value = 'mineru';
+    provider.emit('change');
+    const input = document.nodes.find((n) => n.isConnected && n.type === 'password')!;
+    expect(input.value).toBe('saved-secret');
+    input.value = 'new-secret';
+    document.button('documentCredentials.save').emit('click');
+    await vi.waitFor(() => expect(host.saveToken).toHaveBeenCalledWith('new-secret'));
+    await vi.waitFor(() =>
+      expect(host.models.at(-1)?.credentialStatus).toBe('documentCredentials.saved'),
+    );
+    document.button('documentCredentials.clear').emit('click');
+    await vi.waitFor(() => expect(host.saveToken).toHaveBeenCalledWith(''));
+    await vi.waitFor(() => expect(input.value).toBe(''));
+    expect(JSON.stringify(host.models)).not.toContain('saved-secret');
+    expect(JSON.stringify(host.models)).not.toContain('new-secret');
+    expect(host.request).not.toHaveBeenCalled();
+    comparison.close();
+  });
+  it('routes a displayed target to the owning reader after checking the PDF', async () => {
+    host.readCache.mockResolvedValue(cached);
+    comparison.open();
+    await vi.waitFor(() => expect(document.status()).toContain('cacheReady'));
+    document.button('locate').emit('click');
+    await vi.waitFor(() =>
+      expect(host.navigate).toHaveBeenCalledWith(expect.objectContaining({ pageIndex: 0 })),
+    );
+    expect(host.request).not.toHaveBeenCalled();
+    comparison.close();
+  });
+  it('keeps credentials out of models including service errors', async () => {
+    comparison.open();
+    await ready();
+    const key = document.nodes.find(
+      (n) => n.isConnected && n.tag === 'input' && n.type === 'password',
+    )!;
+    key.value = 'secret-token';
+    host.request.mockRejectedValue(new Error('request failed: secret-token'));
+    document.button('refreshCloud').emit('click');
+    await vi.waitFor(() =>
+      expect(document.status()).toContain('Error: request failed: [redacted]'),
+    );
+    expect(JSON.stringify(host.models)).not.toContain('secret-token');
+    comparison.close();
+  });
   it('switches provider cache identities without uploading and clears credentials at the provider boundary', async () => {
     const mineru = mineruParsedDocument(source, {
       pdf_info: [

@@ -6,164 +6,147 @@ import {
   noteEditorEnabled,
   pickerMouseEnabled,
 } from '../../src/core/preferences';
+import { settingsText } from '../../src/main/settings-i18n';
 import { SettingsInteraction } from '../../src/main/settings-interaction';
 
-class ElementFake {
-  readonly children: ElementFake[] = [];
-  readonly attributes = new Map<string, string>();
-  readonly listeners = new Map<string, Set<() => void>>();
-  readonly style: Record<string, string> = { cssText: '' };
-  textContent = '';
-  tabIndex = 0;
-  type = '';
-  constructor(readonly tag: string) {}
-  append(...children: ElementFake[]): void {
-    this.children.push(...children);
-  }
-  replaceChildren(...children: ElementFake[]): void {
-    this.children.splice(0, this.children.length, ...children);
-  }
-  setAttribute(key: string, value: string): void {
-    this.attributes.set(key, value);
-  }
-  getAttribute(key: string): string | null {
-    return this.attributes.get(key) ?? null;
-  }
-  addEventListener(type: string, listener: () => void): void {
-    const group = this.listeners.get(type) ?? new Set();
-    group.add(listener);
-    this.listeners.set(type, group);
-  }
-  removeEventListener(type: string, listener: () => void): void {
-    this.listeners.get(type)?.delete(listener);
-  }
-  click(): void {
-    for (const listener of this.listeners.get('click') ?? []) listener();
-  }
-  all(): ElementFake[] {
-    return [this, ...this.children.flatMap((child) => child.all())];
-  }
-  switch(label: string): ElementFake {
-    const match = this.all().find((node) => node.getAttribute('aria-label') === label);
-    if (!match) throw new Error(`Missing switch: ${label}`);
-    return match;
-  }
-}
+type PreferenceValue = boolean | number | string;
 
 class Preferences implements PreferenceStore {
-  readonly values = new Map<string, boolean | number | string>();
+  readonly values = new Map<string, PreferenceValue>();
   readonly observers = new Map<string, Set<() => void>>();
-  readonly writes: Array<[string, boolean | number | string]> = [];
+  readonly writes: Array<[string, PreferenceValue]> = [];
   failKey: string | null = null;
-  constructor(initial: Record<string, boolean> = {}) {
+
+  constructor(initial: Record<string, PreferenceValue> = {}) {
     for (const [key, value] of Object.entries(initial)) this.values.set(key, value);
   }
+
   has(key: string): boolean {
     return this.values.has(key);
   }
+
   get(key: string, fallback: boolean): boolean;
   get(key: string, fallback: number): number;
   get(key: string, fallback: string): string;
-  get(key: string, fallback: boolean | number | string): boolean | number | string {
+  get(key: string, fallback: PreferenceValue): PreferenceValue {
     return this.values.get(key) ?? fallback;
   }
-  set(key: string, value: boolean | number | string): void {
+
+  set(key: string, value: PreferenceValue): void {
     if (key === this.failKey) throw new Error('Write failed');
     this.values.set(key, value);
     this.writes.push([key, value]);
-    for (const listener of this.observers.get(key) ?? []) listener();
+    this.#notify(key);
   }
+
   clear(key: string): void {
     this.values.delete(key);
-    for (const listener of this.observers.get(key) ?? []) listener();
+    this.#notify(key);
   }
+
   observe(key: string, listener: () => void): () => void {
     const group = this.observers.get(key) ?? new Set();
     group.add(listener);
     this.observers.set(key, group);
     return () => group.delete(listener);
   }
+
   listenerCount(): number {
     return [...this.observers.values()].reduce((count, group) => count + group.size, 0);
   }
+
+  #notify(key: string): void {
+    for (const listener of this.observers.get(key) ?? []) listener();
+  }
 }
 
-function mount(initial: Record<string, boolean> = {}) {
-  const document = { createElementNS: (_ns: string, tag: string) => new ElementFake(tag) };
-  const root = new ElementFake('section');
+function mount(initial: Record<string, PreferenceValue> = {}, language: 'en' | 'zh-CN' = 'en') {
   const preferences = new Preferences(initial);
-  const page = new SettingsInteraction({ document } as never, root as never, preferences);
-  const status = root.all().find((node) => node.getAttribute('role') === 'status')!;
-  return { page, root, preferences, status };
+  let changes = 0;
+  const page = new SettingsInteraction({} as never, preferences, language, () => changes++);
+  return { page, preferences, changes: () => changes };
 }
 
-const PICKER_LABEL = 'Mouse row selection and double-click confirmation';
-const NOTE_LABEL = 'Vim-style note editing';
+function field(page: SettingsInteraction, id: string) {
+  const match = page
+    .model()
+    .groups.flatMap((group) => group.fields)
+    .find((item) => item.id === id);
+  if (!match) throw new Error(`Missing field: ${id}`);
+  return match;
+}
 
-describe('Interaction Settings', () => {
-  it('shows both cross-surface toggles without writing preferences on mount', () => {
+describe('Interaction Settings controller', () => {
+  it('models both live controls with their existing defaults without writing on construction', () => {
     const test = mount();
-    expect(test.root.switch(PICKER_LABEL).getAttribute('aria-checked')).toBe('false');
-    expect(test.root.switch(NOTE_LABEL).getAttribute('aria-checked')).toBe('true');
-    expect(test.root.all().filter((node) => node.getAttribute('role') === 'switch')).toHaveLength(
-      2,
-    );
+
+    expect(test.page.model().groups.map((group) => group.id)).toEqual(['picker', 'note-editing']);
+    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({
+      id: 'pickerMouseEnabled',
+      kind: 'boolean',
+      value: false,
+    });
+    expect(field(test.page, 'noteEditorEnabled')).toMatchObject({
+      id: 'noteEditorEnabled',
+      kind: 'boolean',
+      value: true,
+    });
     expect(test.preferences.writes).toEqual([]);
+    expect(test.changes()).toBe(0);
     test.page.dispose();
   });
 
-  it('writes only the clicked key and keeps live runtime helpers aligned', () => {
+  it('writes only whitelisted boolean commands immediately and keeps live helpers aligned', () => {
     const test = mount();
-    test.root.switch(PICKER_LABEL).click();
+
+    test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
     expect(test.preferences.writes).toEqual([[PICKER, true]]);
-    expect(test.root.switch(PICKER_LABEL).getAttribute('aria-checked')).toBe('true');
+    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({ value: true });
     expect(pickerMouseEnabled(test.preferences)).toBe(true);
-    test.root.switch(NOTE_LABEL).click();
+
+    test.page.dispatch({ type: 'value', id: 'noteEditorEnabled', value: false });
     expect(test.preferences.writes).toEqual([
       [PICKER, true],
       [NOTE, false],
     ]);
+    expect(field(test.page, 'noteEditorEnabled')).toMatchObject({ value: false });
     expect(noteEditorEnabled(test.preferences)).toBe(false);
-    expect(test.root.switch(NOTE_LABEL).getAttribute('aria-checked')).toBe('false');
-    expect(test.status.textContent).toBe('');
+
+    test.page.dispatch({ type: 'value', id: PICKER, value: true });
+    test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: 'true' });
+    test.page.dispatch({ type: 'action', id: 'pickerMouseEnabled' });
+    expect(test.preferences.writes).toHaveLength(2);
+    expect(test.changes()).toBeGreaterThan(0);
     test.page.dispose();
   });
 
-  it('vetoes failed writes and clears the inline error after a successful retry', () => {
-    const test = mount();
+  it('reverts failed writes, localizes the error, and clears status after success or external updates', () => {
+    const test = mount({}, 'zh-CN');
     test.preferences.failKey = PICKER;
-    test.root.switch(PICKER_LABEL).click();
-    expect(test.preferences.writes).toEqual([]);
-    expect(test.root.switch(PICKER_LABEL).getAttribute('aria-checked')).toBe('false');
-    test.preferences.failKey = null;
-    test.root.switch(PICKER_LABEL).click();
-    expect(test.preferences.writes).toEqual([[PICKER, true]]);
-    expect(test.status.textContent).toBe('');
-    test.page.dispose();
-  });
+    test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
 
-  it('updates mounted controls on external writes and releases all observers and listeners', () => {
-    const test = mount();
-    const picker = test.root.switch(PICKER_LABEL);
-    const note = test.root.switch(NOTE_LABEL);
-    expect(test.preferences.listenerCount()).toBe(2);
-    test.preferences.failKey = PICKER;
-    picker.click();
+    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({ value: false });
+    expect(test.page.model().status).toEqual({
+      text: settingsText('zh-CN', 'Could not update Interaction settings.'),
+      error: true,
+    });
+
     test.preferences.failKey = null;
-    test.preferences.set(PICKER, true);
-    expect(test.status.textContent).toBe('');
-    test.preferences.set(NOTE, false);
-    expect(test.root.switch(PICKER_LABEL)).toBe(picker);
-    expect(test.root.switch(NOTE_LABEL)).toBe(note);
-    expect(picker.getAttribute('aria-checked')).toBe('true');
-    expect(note.getAttribute('aria-checked')).toBe('false');
+    test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
+    expect(test.page.model().status).toBeUndefined();
+    test.page.dispatch({ type: 'value', id: 'noteEditorEnabled', value: false });
+    test.preferences.clear(PICKER);
+    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({ value: false });
+    expect(field(test.page, 'noteEditorEnabled')).toMatchObject({ value: false });
+    expect(test.page.model().status).toBeUndefined();
+
+    const changesBeforeDispose = test.changes();
     expect(test.preferences.listenerCount()).toBe(2);
     test.page.dispose();
     expect(test.preferences.listenerCount()).toBe(0);
-    expect(picker.listeners.get('click')?.size).toBe(0);
-    expect(note.listeners.get('click')?.size).toBe(0);
-    picker.click();
-    expect(test.preferences.writes).toHaveLength(2);
-    expect(test.root.children).toEqual([]);
+    test.preferences.set(NOTE, true);
+    test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
+    expect(test.changes()).toBe(changesBeforeDispose);
+    expect(test.preferences.writes).toHaveLength(3);
   });
 });

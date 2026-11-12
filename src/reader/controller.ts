@@ -31,6 +31,7 @@ import {
 import { copyToClipboard } from '../platform/clipboard';
 import { cloneInto, isDeadObject } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
+import { mountNativeReactView } from '../platform/native-ui';
 import { compositionOwnsKey } from '../input/composition';
 import { advanceInput, inputWouldConsume } from '../input/engine';
 import { InputRuntime, type InputTimerHost } from '../input/runtime';
@@ -49,7 +50,9 @@ import {
 } from './action-capabilities';
 import { ACTION_LABELS, focusDirectionForAction, type ActionId } from '../input/actions';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
-import { THEME_VARS, ThemeManager } from '../ui/theme';
+import { ThemeManager } from '../ui/theme';
+import type { NativeReactView } from '../ui/react/types';
+import type { ReaderStatusReactModel } from './status-react-model';
 import { ReaderAnnotationNavigationState } from './annotation-navigation-state';
 import {
   createReaderNavigationModule,
@@ -58,7 +61,20 @@ import {
 import { isReaderNavigationAction } from '../modules/reader-navigation/actions';
 import { createReaderHintsModule, type ReaderHintsModule } from '../modules/reader-hints';
 import { createReaderLibraryModule, type ReaderLibraryModule } from '../modules/library/reader';
-import { createReaderNotesModule, type ReaderNotesModule } from '../modules/notes/reader';
+import { createChapterNotesModule, type ChapterNotesModule } from '../modules/chapter-notes';
+import { createAIQAModule, type AIQAModule } from '../modules/ai-qa';
+import { createReferencesModule, type ReferencesModule } from '../modules/references';
+import { createReaderChaptersModule, type ReaderChaptersModule } from '../modules/reader-chapters';
+import { createReaderFiguresModule, type ReaderFiguresModule } from '../modules/reader-figures';
+import {
+  createDocumentComparisonModule,
+  type DocumentComparisonModule,
+} from '../modules/document-comparison';
+import { createReaderExcerptsModule, type ReaderExcerptsModule } from '../modules/reader-excerpts';
+import {
+  createDocumentPreparationModule,
+  type DocumentPreparationModule,
+} from '../modules/document-preparation';
 import {
   createReaderSelectionModule,
   type ReaderSelectionModule,
@@ -76,7 +92,7 @@ import {
 } from '../modules/workspace/reader';
 import { isReaderWorkspaceAction } from '../modules/workspace/reader-actions';
 import { ReaderNativeInput } from './native-input';
-import { readerSelectionIsFiltered } from '../toolkit/reader';
+import { readerRegionPreview, readerSelectionIsFiltered } from '../toolkit/reader';
 import {
   ReaderHostKeyBridge,
   ReaderJumpHostAdapter,
@@ -396,7 +412,8 @@ export class ReaderController implements ReaderControllerApi {
         return;
       }
       const pdfWindow = readerPrimaryWindow(reader);
-      if (pdfWindow) {
+      const uiWindow = readerWindow(reader);
+      if (pdfWindow && uiWindow && !isDeadObject(uiWindow) && uiWindow.document?.documentElement) {
         this.#waitTimers.delete(instanceID);
         this.#pending.delete(instanceID);
         const session = (provisional = new ReaderSession({
@@ -523,12 +540,21 @@ export class ReaderSession {
   readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
-  readonly #notes: ReaderNotesModule | null;
+  readonly #chapterNotes: ChapterNotesModule | null;
+  readonly #chapters: ReaderChaptersModule | null;
+  #figures: ReaderFiguresModule | null = null;
+  readonly #comparison: DocumentComparisonModule | null;
+  readonly #excerpts: ReaderExcerptsModule | null;
+  readonly #preparation: DocumentPreparationModule | null;
+  readonly #ai: AIQAModule | null;
+  readonly #references: ReferencesModule | null;
   readonly #flash: ReaderSelectionModule['flash'] | null;
   readonly #selectionRange: ReaderSelectionModule['range'] | null;
   readonly #selectionActions: ReaderSelectionModule['actions'] | null;
   #smoothScroller: ReaderNavigationModule['smooth'] | null = null;
   readonly #themeManagers = new Map<Window, ThemeManager>();
+  #indicatorView: NativeReactView<ReaderStatusReactModel> | null = null;
+  #indicatorModel: ReaderStatusReactModel | null = null;
   readonly #prefixGuide = new PrefixGuideRuntime(READER_INPUT_TIMERS);
   readonly input = new InputRuntime(READER_INPUT_TIMERS);
   #markJumpRevision = 0;
@@ -646,7 +672,9 @@ export class ReaderSession {
         reader: dependencies.reader,
         nativeEditableFocused: () => this.nativeEditableFocused(),
         consumesKey: (key, pdfWindow) => this.readerConsumesKey(key, pdfWindow),
-        commentInputFocused: (window) => this.#commentEditor?.isInputFocused(window) ?? false,
+        featureInputFocused: (window) =>
+          (this.#commentEditor?.isInputFocused(window) ?? false) ||
+          (this.#references?.isInputFocused(window) ?? false),
         debug: (message) => dependencies.controller.dependencies.logger.debug(message),
       });
       this.#jumpHistoryBridge = new ReaderJumpHistoryBridge({
@@ -690,18 +718,61 @@ export class ReaderSession {
           canFocusDirection: (direction) => this.#navigationHost.canFocusDirection(direction),
         }),
       );
+      const preferences = dependencies.controller.dependencies.preferences;
+      const preparationService = dependencies.controller.dependencies.documentPreparation;
+      this.#preparation = preparationService
+        ? this.#modules.activate('document-preparation', () =>
+            createDocumentPreparationModule(
+              this.#modules.host,
+              'reader-normal',
+              preparationService,
+            ),
+          )
+        : null;
+      this.#chapters = this.#modules.activate('reader-chapters', () =>
+        createReaderChaptersModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences,
+          captureView: (window) => this.invocationCurrent(window, null),
+          themeRoot: (root) => this.themeRoot(root),
+          text: (key) => t(`reader.chapter.${key}`, this.keyGuideLanguage()),
+          navigate: (result, window) =>
+            this.#navigationHost.navigateToRegion(window, { position: result.location }),
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
+      this.#comparison = this.#modules.activate('document-comparison', () =>
+        createDocumentComparisonModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences,
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root) => this.themeRoot(root),
+          copyText: (text) => this.copyText(text),
+          focusReader: () => {
+            const window = this.#navigationHost.activePdfWindow();
+            const reader = dependencies.reader;
+            const owner = readerOwnerWindow(reader);
+            if (
+              this.readerViewForWindow(window) &&
+              (!reader.tabID || (!!owner && readerSelectedTabID(owner) === reader.tabID))
+            )
+              window.focus();
+          },
+          navigate: (position) => {
+            const window = this.#navigationHost.activePdfWindow();
+            const current = this.#beginCaptionJump(window);
+            if (current?.()) return this.#navigationHost.navigateToRegion(window, { position });
+          },
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
       this.#startNavigation = () => {
         if (this.#modules.enabled('reader-navigation')) return;
         const navigationModule = this.#modules.activate('reader-navigation', () => {
           const module = createReaderNavigationModule(this.#modules.host, {
             reader: dependencies.reader,
             navigationHost: this.#navigationHost,
-            documentComparison: {
-              preferences: dependencies.controller.dependencies.preferences,
-              language: () => this.keyGuideLanguage(),
-              themeRoot: (root) => this.themeRoot(root),
-              copyText: (text) => this.copyText(text),
-            },
+            preferences,
             smooth: {
               preferences: dependencies.controller.dependencies.preferences,
               scrollBy: (pdfWindow, x, y) => this.scrollContainer(pdfWindow).scrollBy(x, y),
@@ -730,17 +801,7 @@ export class ReaderSession {
                 this.#navigationHost.pageNavigationSupported(pdfWindow),
               onJump: (pdfWindow, perform) => this.recordMarkJump(pdfWindow, perform),
             },
-            captureView: (window) => this.invocationCurrent(window, null),
-            beginCaptionJump: (pdfWindow) => {
-              if (
-                this.#scope.disposed ||
-                this.#nativeInput.ownsInput ||
-                this.#commentEditor?.ownsInput
-              )
-                return null;
-              this.#interactionRevision += 1;
-              return this.invocationCurrent(pdfWindow);
-            },
+            beginCaptionJump: (window) => this.#beginCaptionJump(window),
             sidebar: {
               bindings: () =>
                 this.#modules.enabled('reader-navigation')
@@ -806,12 +867,27 @@ export class ReaderSession {
         this.#marks = navigationModule?.marks ?? null;
         this.#sidebar = navigationModule?.sidebar ?? null;
         this.#smoothScroller = navigationModule?.smooth ?? null;
+        if (navigationModule) {
+          this.#figures = this.#modules.activate('reader-figures', () =>
+            createReaderFiguresModule(this.#modules.host, {
+              reader: dependencies.reader,
+              preferences,
+              captions: navigationModule.captions,
+              text: (key) => t(`reader.figures.${key}`, this.keyGuideLanguage()),
+              themeRoot: (root) => this.themeRoot(root),
+              captureView: (window) => this.invocationCurrent(window, null),
+              render: (target, signal) =>
+                readerRegionPreview(dependencies.reader, target.location.position, signal),
+              navigate: (target, window) => navigationModule.navigateCaption(target, window),
+              debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+            }),
+          );
+        }
       };
       this.#selection = this.#modules.activate('reader-selection', () =>
         createReaderSelectionModule(this.#modules.host, {
           reader: dependencies.reader,
           preferences: dependencies.controller.dependencies.preferences,
-          noteTarget: () => resolveReaderSourceNoteTarget(dependencies.reader),
           activeWindow: () => this.#navigationHost.activePdfWindow(),
           isViewCurrent: (window) => this.readerViewCurrent(window),
           capturePresentation: (window) => this.invocationCurrent(window),
@@ -831,14 +907,28 @@ export class ReaderSession {
           pluginID: () => this.#dependencies.selection?.pluginID() ?? null,
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
-          contributedActions: (window, language) =>
-            this.#annotations?.selectionActions(window, language) ?? [],
+          contributedActions: (window, language) => [
+            ...(this.#annotations?.selectionActions(window, language) ?? []),
+            ...(this.#ai?.selectionActions() ?? []),
+          ],
           showStatus: (message, duration) => this.showStatus(message, duration),
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );
-      this.#notes = this.#modules.activate('notes', () =>
-        createReaderNotesModule(this.#modules.host, {
+      this.#excerpts = this.#modules.activate('reader-excerpts', () =>
+        createReaderExcerptsModule(this.#modules.host, {
+          reader: dependencies.reader,
+          preferences,
+          target: () => resolveReaderSourceNoteTarget(dependencies.reader),
+          captureView: (window) => this.invocationCurrent(window, null),
+          themeRoot: (root) => this.themeRoot(root),
+          text: (key) => t(`reader.excerpts.${key}`, this.keyGuideLanguage()),
+          showStatus: (message) => this.showStatus(message),
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
+      this.#chapterNotes = this.#modules.activate('chapter-notes', () =>
+        createChapterNotesModule(this.#modules.host, {
           reader: dependencies.reader,
           preferences: dependencies.controller.dependencies.preferences,
           target: () => resolveReaderSourceNoteTarget(dependencies.reader),
@@ -859,7 +949,8 @@ export class ReaderSession {
         timerWindow: dependencies.firstPdfWindow,
         onKeyDown: (event, pdfWindow) => this.handleKeyDown(event, pdfWindow),
         onKeyUp: (event) => this.handleKeyUp(event),
-        onPointerDown: () => {
+        onPointerDown: (pdfWindow) => {
+          this.#references?.activateView(pdfWindow);
           this.#markJumpRevision += 1;
           this.#interactionRevision += 1;
           this.#hints?.copy.close();
@@ -896,9 +987,12 @@ export class ReaderSession {
           this.#interactionRevision += 1;
           if (this.#selectionWindow === pdfWindow) this.clearNativeSelection();
           const failure = new CleanupFailure();
-          failure.run(() => this.#navigationModule?.releaseView(pdfWindow));
+          failure.run(() => this.#chapters?.releaseView(pdfWindow));
+          failure.run(() => this.#figures?.releaseView(pdfWindow));
+          failure.run(() => this.#excerpts?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
-          failure.run(() => this.#notes?.releaseView(pdfWindow));
+          failure.run(() => this.#chapterNotes?.releaseView(pdfWindow));
+          failure.run(() => this.#references?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
           failure.run(() => this.#hints?.copy.releaseView(pdfWindow));
           failure.run(() => this.#selectionActions?.releaseView(pdfWindow));
@@ -910,6 +1004,83 @@ export class ReaderSession {
           this.#hostKeyBridge.sync();
           this.#jumpHistoryBridge.sync();
         },
+      });
+      this.#ai = this.#modules.activate('ai-qa', () =>
+        createAIQAModule(
+          this.#modules.host,
+          dependencies.controller.dependencies.aiQA?.() ?? null,
+          {
+            reader: dependencies.reader,
+            captureSelection: () => this.selectionContext(),
+            captureView: () => {
+              const window = this.#navigationHost.activePdfWindow();
+              if (!window || !this.readerViewForWindow(window)) return null;
+              const isCurrent = this.captureViewLifetime(window);
+              return {
+                window,
+                pageIndex: this.#navigationHost.outlinePosition(window)?.pageIndex ?? null,
+                isCurrent,
+                jump: (location) => {
+                  if (!isCurrent() || !this.#navigationHost.canNavigate(window)) return false;
+                  this.#navigationHost.activatePdfWindow(window);
+                  if (this.#navigationHost.activePdfWindow() !== window) return false;
+                  return !!this.executeReaderNavigation(
+                    window,
+                    {
+                      cause: { kind: 'event', event: 'ai-qa.jump' },
+                      surface: 'reader',
+                      context: { readerPath: 'internal-link', isCurrent },
+                    },
+                    () => this.#navigationHost.navigateToRegion(window, { position: location }),
+                  );
+                },
+              };
+            },
+            language: () => this.keyGuideLanguage(),
+            themeRoot: (root) => this.themeRoot(root),
+            showStatus: (message) => this.showStatus(message),
+          },
+        ),
+      );
+      this.#references = this.#modules.activate('references', () => {
+        const referencePluginID = dependencies.controller.pluginID;
+        if (!referencePluginID) throw new Error('Reader reference integration is inactive');
+        return createReferencesModule(this.#modules.host, {
+          reader: dependencies.reader,
+          pluginID: referencePluginID,
+          captureView: (requestedWindow) => {
+            const window = requestedWindow ?? this.#navigationHost.activePdfWindow();
+            if (!window || !this.readerViewForWindow(window)) return null;
+            if (requestedWindow && this.#navigationHost.activePdfWindow() !== window) {
+              this.#navigationHost.activatePdfWindow(window);
+              if (this.#navigationHost.activePdfWindow() !== window) return null;
+            }
+            const lifetime = this.captureViewLifetime(window);
+            const isCurrent = () => lifetime() && this.readerViewCurrent(window);
+            return {
+              window,
+              isCurrent,
+              restoreFocus: () => {
+                if (isCurrent()) window.focus();
+              },
+              jump: (location) => {
+                if (!isCurrent() || !this.#navigationHost.canNavigate(window)) return false;
+                return !!this.executeReaderNavigation(
+                  window,
+                  {
+                    cause: { kind: 'event', event: 'references.jump' },
+                    surface: 'reader',
+                    context: { readerPath: 'internal-link', isCurrent },
+                  },
+                  () => this.#navigationHost.navigateToRegion(window, { position: location }),
+                );
+              },
+            };
+          },
+          language: () => this.keyGuideLanguage(),
+          themeRoot: (root) => this.themeRoot(root),
+          showStatus: (message) => this.showStatus(message),
+        });
       });
       this.#scope.add(() => this.input.dispose());
       this.#scope.addTimeout(() => {
@@ -1172,14 +1343,13 @@ export class ReaderSession {
     const failure = new CleanupFailure();
     failure.run(() => this.clearNativeSelection());
     failure.run(() => this.#nativeInput.release());
-    failure.run(() => {
-      const window = readerWindow(this.#dependencies.reader);
-      if (window)
-        this.#dependencies.controller.dependencies.documentPreparation?.closeOwner(window);
-    });
     failure.run(() => this.#viewLifecycle.dispose());
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
+    const indicatorView = this.#indicatorView;
+    this.#indicatorView = null;
+    this.#indicatorModel = null;
+    failure.run(() => indicatorView?.dispose());
     const indicatorCleanup = this.state.indicatorThemeCleanup;
     this.state.indicatorThemeCleanup = null;
     failure.run(() => indicatorCleanup?.());
@@ -1219,9 +1389,11 @@ export class ReaderSession {
   }
 
   deactivateInteraction(): void {
-    this.#navigationModule?.deactivate();
-    this.#selection?.deactivate();
-    this.#notes?.close();
+    this.#chapters?.close();
+    this.#figures?.close();
+    this.#excerpts?.close();
+    this.#chapterNotes?.close();
+    this.#references?.close();
     this.#markJumpRevision += 1;
     this.#interactionRevision += 1;
     this.#sidebar?.deactivate();
@@ -1243,6 +1415,8 @@ export class ReaderSession {
 
   focusAndHandle(event: KeyboardEvent): void {
     if (this.#scope.disposed) return;
+    if (this.#references?.ownsTarget(event.target)) return;
+    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
     if (!pdfWindow) return;
     const sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target);
@@ -1332,10 +1506,15 @@ export class ReaderSession {
     sidebarTarget = readerSidebarContainsTarget(this.#dependencies.reader, event.target),
   ): void {
     if (this.#scope.disposed) return;
+    if (this.#references?.ownsTarget(event.target)) return;
+    this.#references?.activateView(pdfWindow);
+    if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.documentPreparation?.handleKey(event)) return;
-    if (this.#selection?.handleKey(event)) return;
-    if (this.#notes?.handleKey(event)) return;
-    if (this.#navigationModule?.handleKey(event)) return;
+    if (this.#excerpts?.handleKey(event)) return;
+    if (this.#chapterNotes?.handleKey(event)) return;
+    if (this.#chapters?.handleKey(event)) return;
+    if (this.#figures?.handleKey(event)) return;
+    if (this.#comparison?.handleKey(event)) return;
     if (!this.#nativeInput.ownsInput && sidebarTarget) {
       this.input.reset();
       this.clearKeyGuide();
@@ -1442,6 +1621,14 @@ export class ReaderSession {
           );
       });
     }
+  }
+
+  /** Retires prior presentation work before admitting a jump in the initiating PDF view. */
+  #beginCaptionJump(window: PdfWindow): (() => boolean) | null {
+    if (this.#scope.disposed || this.#nativeInput.ownsInput || this.#commentEditor?.ownsInput)
+      return null;
+    this.#interactionRevision += 1;
+    return this.invocationCurrent(window);
   }
 
   private handleMarkChord(event: KeyboardEvent, key: string, pdfWindow: PdfWindow): boolean {
@@ -1588,8 +1775,38 @@ export class ReaderSession {
       return;
     }
     if (!pdfWindow) return;
+    if (action === 'openReferences') {
+      this.#references?.open();
+      return;
+    }
+    if (action === 'openAIQA') {
+      this.#ai?.open();
+      return;
+    }
+    if (action === 'openChapterSearch') {
+      this.#figures?.close();
+      this.#comparison?.close();
+      this.#chapters?.open(pdfWindow);
+      return;
+    }
+    if (action === 'openFigurePicker') {
+      this.#chapters?.close();
+      this.#comparison?.close();
+      this.#figures?.open(pdfWindow);
+      return;
+    }
+    if (action === 'compareDocumentParsing') {
+      this.#chapters?.close();
+      this.#figures?.close();
+      this.#comparison?.open();
+      return;
+    }
+    if (action === 'openObjectExcerpts') {
+      this.#excerpts?.open(pdfWindow);
+      return;
+    }
     if (action === 'organizeChapterNotes') {
-      this.#notes?.open(pdfWindow);
+      this.#chapterNotes?.open(pdfWindow);
       return;
     }
     if (isReaderNavigationAction(action)) {
@@ -1630,7 +1847,7 @@ export class ReaderSession {
       case 'prepareDocuments': {
         const window = readerWindow(this.#dependencies.reader);
         if (window)
-          this.#dependencies.controller.dependencies.documentPreparation?.open({
+          this.#preparation?.open({
             window,
             targets: resolveReaderDocumentAttachments(this.#dependencies.reader),
             language: () => this.keyGuideLanguage(),
@@ -1656,6 +1873,12 @@ export class ReaderSession {
         return;
       case 'switchTab':
         main.openTabPicker(ownerWindow);
+        return;
+      case 'tabFocusSidebar':
+        main.focusTabSidebar(ownerWindow);
+        return;
+      case 'tabToggleSidebar':
+        main.toggleTabSidebar(ownerWindow);
         return;
       case 'closeCurrentTab':
         main.closeReaderTab(ownerWindow);
@@ -1759,7 +1982,6 @@ export class ReaderSession {
     existing?.remove();
     const indicator = document.createElement('div');
     indicator.id = 'zotero-vim-mode-indicator';
-    indicator.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:9999;padding:4px 8px;border:1px solid ${THEME_VARS.border};border-radius:4px;color:${THEME_VARS.text};background:${THEME_VARS.elevated};box-shadow:0 4px 16px ${THEME_VARS.shadow};font:12px monospace;pointer-events:none;display:none`;
     document.body?.appendChild(indicator);
     return indicator;
   }
@@ -1825,51 +2047,75 @@ export class ReaderSession {
         ? 'COMMENT'
         : null;
     if (inputOwner) {
-      indicator.style.display = 'block';
-      indicator.textContent = `-- ${inputOwner} --`;
-      indicator.style.color = THEME_VARS.modeInsertText;
-      indicator.style.background = THEME_VARS.modeInsert;
+      this.renderIndicator({ visible: true, text: `-- ${inputOwner} --`, kind: 'insert' });
       return;
     }
     if (this.mode === 'normal' && !this.input.keyBuffer && !this.input.countBuffer) {
-      indicator.style.display = 'none';
+      if (this.#indicatorModel) this.renderIndicator({ ...this.#indicatorModel, visible: false });
       return;
     }
-    indicator.style.display = 'block';
     if (this.mode === 'visual') {
       const selected = annotationText(
         this.#navigationHost.activePdfWindow()?.getSelection()?.toString() ?? '',
       );
       const pending = this.input.countBuffer || this.input.keyBuffer;
       const body = readerSelectionIsFiltered(this.#navigationHost.activePdfWindow()) ? ' BODY' : '';
-      indicator.textContent = `SELECT${body} · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
-      indicator.style.color = THEME_VARS.modeVisualText;
-      indicator.style.background = THEME_VARS.modeVisual;
+      this.renderIndicator({
+        visible: true,
+        text: `SELECT${body} · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`,
+        kind: 'visual',
+      });
       return;
     }
-    indicator.textContent = `-- ${this.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
-    indicator.style.color = THEME_VARS.modeNormalText;
-    indicator.style.background = THEME_VARS.modeNormal;
+    this.renderIndicator({
+      visible: true,
+      text: `-- ${this.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`,
+      kind: 'normal',
+    });
   }
 
   private showStatus(message: string, duration = 2000): void {
     const indicator = this.state.indicator;
     if (!indicator) return;
-    indicator.style.display = 'block';
-    indicator.textContent = message;
-    const success = message.startsWith('✓');
-    const info = message.startsWith('→') || message.startsWith('▶');
-    indicator.style.color = success
-      ? THEME_VARS.statusSuccessText
-      : info
-        ? THEME_VARS.statusInfoText
-        : THEME_VARS.statusErrorText;
-    indicator.style.background = success
-      ? THEME_VARS.statusSuccess
-      : info
-        ? THEME_VARS.statusInfo
-        : THEME_VARS.statusError;
+    this.renderIndicator({
+      visible: true,
+      text: message,
+      kind: message.startsWith('✓')
+        ? 'success'
+        : message.startsWith('→') || message.startsWith('▶')
+          ? 'info'
+          : 'error',
+    });
     this.schedule(duration, () => this.updateIndicator());
+  }
+
+  private renderIndicator(model: ReaderStatusReactModel): void {
+    const root = this.state.indicator;
+    if (!root) return;
+    this.#indicatorModel = model;
+    if (this.#indicatorView) {
+      this.#indicatorView.update(model);
+      return;
+    }
+    if (!model.visible) return;
+    const document = root.ownerDocument;
+    this.#indicatorView = mountNativeReactView({
+      surface: 'reader-status',
+      root,
+      model,
+      dispatch: () => {},
+      isCurrent: () =>
+        !this.#scope.disposed &&
+        this.state.indicator === root &&
+        readerWindow(this.#dependencies.reader)?.document === document &&
+        root.isConnected,
+      loadingText: '',
+      errorText: '',
+      onError: (error) =>
+        this.#dependencies.controller.dependencies.logger.debug(
+          `Reader status view failed: ${String(error)}`,
+        ),
+    });
   }
 
   private modeEnabled(mode: Exclude<ReaderMode, 'normal'>): boolean {

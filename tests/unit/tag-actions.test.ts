@@ -112,9 +112,15 @@ function harness(options: {
   } as unknown as MainWindow;
   const selection = new SelectionStore();
   for (const item of items) selection.add({ libraryID: item.libraryID, itemID: item.id });
+  const status = { textContent: '', style: {} };
   const session = {
     window,
-    status: { textContent: '', style: {} },
+    status,
+    statusView: {
+      update: (model: { text: string }) => {
+        status.textContent = model.text;
+      },
+    },
     cleanup: { add: vi.fn() },
   } as unknown as MainWindowSession;
   let lastOpen:
@@ -230,6 +236,78 @@ describe('semantic Tag actions', () => {
     );
     expect(first.hasTag('robotics')).toBe(false);
     expect(second.hasTag('robotics')).toBe(false);
+  });
+
+  it('deduplicates same-named tags across types and keeps the candidate actionable', async () => {
+    const typeOne = tagItem(1, [{ tag: 'mixed', type: 1 }]);
+    const typeZero = tagItem(2, [{ tag: 'mixed', type: 0 }]);
+    const unassigned = tagItem(3);
+    installZotero([typeOne, typeZero, unassigned], [{ tag: 'mixed', type: 0 }]);
+    const h = harness({ items: [typeOne, typeZero, unassigned] });
+
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const add = h.open();
+    const addCandidates = await add.options.source!.load();
+    expect(addCandidates.map((candidate) => candidate.tagName)).toEqual(['mixed']);
+    await add.options.confirm?.(addCandidates[0]!, false);
+    expect(unassigned.hasTag('mixed')).toBe(true);
+    expect(typeOne.getTags()).toEqual([{ tag: 'mixed', type: 1 }]);
+    expect(typeZero.getTags()).toEqual([{ tag: 'mixed', type: 0 }]);
+
+    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const remove = h.open();
+    const removeCandidates = await remove.options.source!.load();
+    expect(removeCandidates.map((candidate) => candidate.tagName)).toEqual(['mixed']);
+    await remove.options.confirm?.(removeCandidates[0]!, false);
+    expect([typeOne, typeZero, unassigned].every((item) => !item.hasTag('mixed'))).toBe(true);
+  });
+
+  it('hides valid Neo identities from tag actions and rejects forged create candidates', async () => {
+    const identity = 'urn:zotero-neo:chapter-note:v1:0123456789abcdef0123456789abcdef';
+    const assigned = tagItem(1, [
+      { tag: identity, type: 1 },
+      { tag: 'ordinary', type: 0 },
+    ]);
+    const unassigned = tagItem(2);
+    installZotero(
+      [assigned, unassigned],
+      [
+        { tag: identity, type: 0 },
+        { tag: 'ordinary', type: 0 },
+      ],
+    );
+    const h = harness({ items: [assigned, unassigned] });
+    const forgedIdentity = {
+      id: `create:${identity}`,
+      title: identity,
+      search: identity,
+      tagName: identity,
+      tagCandidate: 'create',
+    } as PickerItem;
+
+    h.actions.add(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const add = h.open();
+    expect((await add.options.source!.load()).map((candidate) => candidate.tagName)).toEqual([
+      'ordinary',
+    ]);
+    await add.options.confirm?.(forgedIdentity, false);
+    expect(unassigned.hasTag(identity)).toBe(false);
+
+    h.actions.remove(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+    const remove = h.open();
+    expect((await remove.options.source!.load()).map((candidate) => candidate.tagName)).toEqual([
+      'ordinary',
+    ]);
+    await remove.options.confirm?.(forgedIdentity, false);
+    expect(assigned.hasTag(identity)).toBe(true);
+
+    h.actions.toggleFilter();
+    const filter = h.open();
+    expect((await filter.options.source!.load()).map((candidate) => candidate.tagName)).toEqual([
+      'ordinary',
+    ]);
+    await filter.options.confirm?.(forgedIdentity, false);
+    expect(h.setFilter).not.toHaveBeenCalled();
   });
 
   it('uses Neo EffectiveSelection instead of native Main tree selection', async () => {

@@ -46,7 +46,7 @@ function createRetirementHarness() {
     reader: { _internalReader: internal } as unknown as ReaderRuntime,
     nativeEditableFocused,
     consumesKey,
-    commentInputFocused,
+    featureInputFocused: commentInputFocused,
     debug: vi.fn(),
   });
   return {
@@ -84,7 +84,7 @@ describe('ReaderHostKeyBridge', () => {
       reader,
       nativeEditableFocused: () => false,
       consumesKey: (key) => key === 'j',
-      commentInputFocused: (window) => commentFocused && window === pdfWindow,
+      featureInputFocused: (window) => commentFocused && window === pdfWindow,
       debug,
     });
 
@@ -123,7 +123,7 @@ describe('ReaderHostKeyBridge', () => {
       nativeEditableFocused: () => false,
       consumesKey: (key, pdfWindow) =>
         pdfWindow === ownerWindow && ['x', 'enter', 'escape'].includes(key),
-      commentInputFocused: () => false,
+      featureInputFocused: () => false,
       debug: vi.fn(),
     });
     bridge.sync();
@@ -158,7 +158,7 @@ describe('ReaderHostKeyBridge', () => {
       reader,
       nativeEditableFocused: () => false,
       consumesKey: () => false,
-      commentInputFocused: () => false,
+      featureInputFocused: () => false,
       debug: vi.fn(),
     });
 

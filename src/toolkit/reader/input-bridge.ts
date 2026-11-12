@@ -13,7 +13,7 @@ export interface ReaderHostKeyBridgeDependencies {
   readonly reader: ReaderRuntime;
   readonly nativeEditableFocused: () => boolean;
   readonly consumesKey: (key: string, pdfWindow: PdfWindow | undefined) => boolean;
-  readonly commentInputFocused: (window: Window | undefined) => boolean;
+  readonly featureInputFocused: (window: Window | undefined) => boolean;
   readonly debug: (message: string) => void;
 }
 
@@ -111,7 +111,7 @@ export class ReaderHostKeyBridge {
     const original = view._textAnnotationFocused;
     const wrapper = (): boolean => {
       if (!patch.active) return original.call(view);
-      if (this.#dependencies.commentInputFocused(view._iframeWindow)) return true;
+      if (this.#dependencies.featureInputFocused(view._iframeWindow)) return true;
       return original.call(view);
     };
     const patch = { original, wrapper, active: true };

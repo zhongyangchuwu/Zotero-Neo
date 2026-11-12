@@ -1,14 +1,57 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ReaderFigurePicker } from '../../src/modules/reader-navigation/figure-picker';
+import { ReaderFigurePicker } from '../../src/modules/reader-figures/figure-picker';
 import type {
   ReaderCaptionTarget,
   ReaderCaptionTargets,
 } from '../../src/modules/reader-navigation/caption-targets';
 import type { PdfWindow } from '../../src/reader/types';
 import type { ReaderRegionPreview } from '../../src/toolkit/reader';
+import type {
+  ReaderFiguresReactCommand,
+  ReaderFiguresReactModel,
+} from '../../src/modules/reader-figures/react-model';
+import type { DialogElement } from '../fixtures/dialog-dom';
 
-const native = vi.hoisted(() => ({ window: null as unknown }));
+const native = vi.hoisted(() => ({
+  window: null as unknown,
+  model: null as ReaderFiguresReactModel | null,
+  dispatch: null as ((command: ReaderFiguresReactCommand) => void) | null,
+}));
 vi.mock('../../src/toolkit/reader', () => ({ readerWindow: () => native.window }));
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: (options: {
+    root: DialogElement;
+    model: ReaderFiguresReactModel;
+    dispatch: (command: ReaderFiguresReactCommand) => void;
+  }) => {
+    native.dispatch = options.dispatch;
+    const doc = options.root.ownerDocument;
+    const dialog = doc.createElementNS('', 'section');
+    const input = doc.createElementNS('', 'input');
+    const list = doc.createElementNS('', 'div');
+    const preview = doc.createElementNS('', 'div');
+    const status = doc.createElementNS('', 'p');
+    dialog.append(input, list, preview, status);
+    options.root.append(dialog);
+    const update = (model: typeof options.model) => {
+      native.model = model;
+      status.textContent = model.status;
+      preview.replaceChildren();
+      if (model.image) {
+        const image = doc.createElementNS('', 'img');
+        image.src = model.image.src;
+        preview.append(image);
+      } else preview.textContent = model.previewText;
+    };
+    update(options.model);
+    return {
+      ready: Promise.resolve(),
+      update,
+      getElement: (part: string) => ({ query: input, list, preview })[part] ?? null,
+      dispose: () => dialog.remove(),
+    };
+  },
+}));
 
 import { DocumentFixture } from '../fixtures/dialog-dom';
 function harness() {
@@ -73,6 +116,8 @@ function harness() {
 }
 afterEach(() => {
   native.window = null;
+  native.model = null;
+  native.dispatch = null;
 });
 describe('Reader figure chooser lifetime', () => {
   it('contains a late load after closing and restores the initiating focus only on request', async () => {
@@ -80,6 +125,7 @@ describe('Reader figure chooser lifetime', () => {
       pending = Promise.withResolvers<readonly ReaderCaptionTarget[]>();
     t.load.mockReturnValueOnce(pending.promise);
     t.picker.open(t.window);
+    await vi.waitFor(() => expect(t.load).toHaveBeenCalledOnce());
     t.picker.close(true);
     pending.resolve(t.targets);
     await Promise.resolve();
@@ -102,6 +148,26 @@ describe('Reader figure chooser lifetime', () => {
     first.resolve({ dataURL: 'stale', width: 1, height: 1 });
     await Promise.resolve();
     expect(t.doc.find('img').src).toBe('second');
+    expect(t.navigate).not.toHaveBeenCalled();
+    t.picker.close();
+  });
+  it('filters committed input and applies selection and zoom commands without navigating', async () => {
+    const t = harness();
+    t.picker.open(t.window);
+    await vi.waitFor(() => expect(native.model?.rows).toHaveLength(2));
+    native.dispatch?.({ type: 'select', index: 1 });
+    native.dispatch?.({ type: 'zoom', direction: 1 });
+    expect(native.model?.selected).toBe(1);
+    expect(native.model?.zoom).toBe(1.25);
+    const input = t.doc.find('input');
+    input.emit('compositionstart');
+    input.value = 'alpha';
+    input.emit('input', { isComposing: true });
+    expect(native.model?.rows).toHaveLength(2);
+    input.emit('compositionend');
+    input.emit('input');
+    expect(native.model?.rows).toHaveLength(1);
+    expect(native.model?.rows[0]).toContain('alpha');
     expect(t.navigate).not.toHaveBeenCalled();
     t.picker.close();
   });

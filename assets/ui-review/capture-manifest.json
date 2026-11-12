@@ -1,0 +1,223 @@
+{
+  "version": 1,
+  "capturedAt": "2026-11-07T07:11:56.801Z",
+  "scope": "Zotero 原生 React 界面截图及历史原生基线、浏览器设计截图。",
+  "baseline": {
+    "sourceCommit": "e84f16301dce5e93ee2ced72d088e4ef640f674a",
+    "zoteroVersion": "10.0.8",
+    "packageSHA256": "667ca269620de80814ffe61b53cc515a615666c26f90fb1daa60b5a7d824bd5e",
+    "environment": "Windows 独立临时配置；公开论文和预置测试条目；采集实例已正常退出并删除。"
+  },
+  "design": {
+    "note": "历史浏览器设计样例，源码已退役；以下摘要记录采集时的原始文件。",
+    "renderer": "existing vendor/react static bundle",
+    "sourceHashes": {
+      "examples/app.tsx": "8feabd9477e5a5be2794f7831c26eba6374450eca45784201371d9d6b20e2972",
+      "examples/style.css": "98014f0211fd86530b46d1ab9ec950942bcc6bb6b8737c3cb6695be573a89624",
+      "examples/index.html": "9e2e5bb2051f2a72cc528f86f8d79e07066e71599de461db793a62867e414420"
+    },
+    "network": "工作台只请求本地静态资源；离线刷新为明确标记的本地交互场景，不是真实服务故障。",
+    "exampleDate": "2024-01-15 是固定示例记录日期，并非本次获取时间。"
+  },
+  "nativeReact": {
+    "capturedAt": "2026-11-11",
+    "zoteroVersion": "10.0.8",
+    "packageSHA256": "24a24ad0bcdd7b2127cfbc271368b1c7088a48bf3e53c50c3c5ec7d5f1866f6b",
+    "environment": "Windows 隔离测试配置；公开文献及测试条目；采集后正常退出并删除测试配置。",
+    "input": "Gecko 测试输入事务；不等同物理键盘或系统输入法认证。",
+    "network": "本次截图和工作流未发起 AI 请求或联网元数据刷新。"
+  },
+  "captures": [
+    {
+      "file": "screenshots/zotero/settings-current.png",
+      "kind": "zotero-historical",
+      "surface": "settings",
+      "width": 1424,
+      "height": 992,
+      "zoteroVersion": "10.0.8",
+      "sourceCommit": "e84f16301dce5e93ee2ced72d088e4ef640f674a",
+      "packageSHA256": "667ca269620de80814ffe61b53cc515a615666c26f90fb1daa60b5a7d824bd5e",
+      "sha256": "4b310597d00bdbe850deeb6f570122a1bf490f79160dc88093cfd07fc6dc022d"
+    },
+    {
+      "file": "screenshots/zotero/picker-current.png",
+      "kind": "zotero-historical",
+      "surface": "picker",
+      "width": 1424,
+      "height": 992,
+      "zoteroVersion": "10.0.8",
+      "sourceCommit": "e84f16301dce5e93ee2ced72d088e4ef640f674a",
+      "packageSHA256": "667ca269620de80814ffe61b53cc515a615666c26f90fb1daa60b5a7d824bd5e",
+      "sha256": "54644d3ded8eb58b42bba60f9a1db54e5b4e082451197115ac16c5d3551b90a5"
+    },
+    {
+      "file": "screenshots/zotero/references-current.png",
+      "kind": "zotero-historical",
+      "surface": "references",
+      "width": 1424,
+      "height": 992,
+      "zoteroVersion": "10.0.8",
+      "sourceCommit": "e84f16301dce5e93ee2ced72d088e4ef640f674a",
+      "packageSHA256": "667ca269620de80814ffe61b53cc515a615666c26f90fb1daa60b5a7d824bd5e",
+      "sha256": "cb74bb65e2d0a7721d7acaf57021c827869c3b24804987b093212246504a9407"
+    },
+    {
+      "file": "screenshots/design/settings-light.png",
+      "kind": "design-example",
+      "surface": "settings",
+      "theme": "light",
+      "state": "default",
+      "route": "/?surface=settings&theme=light",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "85635d4765f0ae743dcbf4ee59c4265b5df92f13a6126bafc17890980b87d430"
+    },
+    {
+      "file": "screenshots/design/settings-dark.png",
+      "kind": "design-example",
+      "surface": "settings",
+      "theme": "dark",
+      "state": "default",
+      "route": "/?surface=settings&theme=dark",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "da2e4ab163cd0ef4245c677f087d6f7b45b02dc87a46e6b8ba44585755319ef7"
+    },
+    {
+      "file": "screenshots/design/picker-light.png",
+      "kind": "design-example",
+      "surface": "picker",
+      "theme": "light",
+      "state": "default",
+      "route": "/?surface=picker&theme=light",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "9a8f81d6575077be8f3f7d556a0539d82943f471f5c10c0b44092a7ffe9bb861"
+    },
+    {
+      "file": "screenshots/design/picker-dark.png",
+      "kind": "design-example",
+      "surface": "picker",
+      "theme": "dark",
+      "state": "default",
+      "route": "/?surface=picker&theme=dark",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "3831c8764194bbf5def08ef529cb4077c38ad86f84a55a8b9642a4e0f7b1295d"
+    },
+    {
+      "file": "screenshots/design/references-light.png",
+      "kind": "design-example",
+      "surface": "references",
+      "theme": "light",
+      "state": "default",
+      "route": "/?surface=references&theme=light",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "b4ce41e162705bf626514dc65f25df38d000493bc02dd6ee1e66342c1e57f24f"
+    },
+    {
+      "file": "screenshots/design/references-dark.png",
+      "kind": "design-example",
+      "surface": "references",
+      "theme": "dark",
+      "state": "default",
+      "route": "/?surface=references&theme=dark",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "978a8db8772176422fca8cac6eb0aa6c2f7db18c51c6a15ea77515088cdd0ba8"
+    },
+    {
+      "file": "screenshots/design/references-error-dark.png",
+      "kind": "design-example",
+      "surface": "references",
+      "theme": "dark",
+      "state": "error",
+      "route": "/?surface=references&theme=dark&state=error",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "42608ae62d3fbcdbd9ead6cf5e96b52e12b86c304b0d93b6e5e4a9bc24d3b30b"
+    },
+    {
+      "file": "screenshots/design/references-empty-light.png",
+      "kind": "design-example",
+      "surface": "references",
+      "theme": "light",
+      "state": "empty",
+      "route": "/?surface=references&theme=light&state=empty",
+      "viewportWidth": 1440,
+      "viewportHeight": 1000,
+      "documentWidth": 1440,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "9b8bddd0aedf0cfbd18f49d948a82e63eda7cddd8599c1f73d01e034a5db1389"
+    },
+    {
+      "file": "screenshots/design/settings-narrow.png",
+      "kind": "design-example",
+      "surface": "settings",
+      "theme": "light",
+      "state": "default",
+      "route": "/?surface=settings&theme=light",
+      "viewportWidth": 760,
+      "viewportHeight": 1000,
+      "documentWidth": 760,
+      "documentHeight": 1000,
+      "banner": "交互设计样例 · 尚未接入 Zotero数据与设置仅存在于样例会话，不代表实际文库或配置。",
+      "sha256": "86409760268b971d374ba31627d56a7e74b246e780d913701603884acba9b653"
+    },
+    {
+      "file": "native-settings.png",
+      "kind": "zotero-native-react",
+      "surface": "settings",
+      "width": 1707,
+      "height": 1019,
+      "sha256": "5ad06f847b4b1a71099cdc48e02bae1759dc1fa3f642039de9d014e1e98cb385"
+    },
+    {
+      "file": "native-keybindings.png",
+      "kind": "zotero-native-react",
+      "surface": "keybindings",
+      "width": 1707,
+      "height": 1019,
+      "sha256": "35af178df3423a11573bffec41d801cac6d4b2d3ca188d5fdbe500a296ad9fb7"
+    },
+    {
+      "file": "native-picker.png",
+      "kind": "zotero-native-react",
+      "surface": "picker",
+      "width": 1707,
+      "height": 1019,
+      "sha256": "7cf4d1165e31bcefc5ffd4e6aa7350fd3b2c699995a849a404c7b9b4107864d8"
+    },
+    {
+      "file": "native-references.png",
+      "kind": "zotero-native-react",
+      "surface": "references-local",
+      "width": 1707,
+      "height": 1019,
+      "sha256": "d7af59531b96c48c52816fd8862a3f80cfd58dcabad668774e22483ce0cac41f"
+    }
+  ]
+}

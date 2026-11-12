@@ -1,0 +1,37 @@
+import { React } from '../runtime';
+import type { ReactView } from '../types';
+import { createReactView } from '../view';
+import type {
+  LocalFindReactCommand,
+  LocalFindReactModel,
+} from '../../../modules/library/local-find-react-model';
+
+export const LOCAL_FIND_REACT_CSS = `
+.neo-local-find { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }
+.neo-local-find .local-find-prefix { color:var(--zotero-neo-muted); font-weight:bold; }
+.neo-local-find input { flex:1; min-width:0; border:0; outline:none; background:transparent; color:var(--zotero-neo-text); font:inherit; }
+.neo-local-find input::placeholder { color:var(--zotero-neo-muted) !important; opacity:1; }
+`;
+
+export function mountLocalFindReactView(
+  root: HTMLElement,
+  initialModel: LocalFindReactModel,
+  _dispatch: (command: LocalFindReactCommand) => void,
+): ReactView<LocalFindReactModel> {
+  return createReactView(
+    root,
+    (model) => (
+      <div className="neo-local-find">
+        <span className="local-find-prefix">/</span>
+        <input
+          type="text"
+          data-neo-ui-part="query"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={model.placeholder}
+        />
+      </div>
+    ),
+    initialModel,
+  );
+}

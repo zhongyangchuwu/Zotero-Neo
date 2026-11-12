@@ -30,6 +30,9 @@ export interface InternalReaderRuntime {
   readonly _secondaryView?: NativeReaderViewRuntime;
   readonly _lastView?: NativeReaderViewRuntime;
   readonly _lastViewPrimary?: boolean;
+  readonly _primaryViewContainer?: HTMLElement;
+  readonly _secondaryViewContainer?: HTMLElement;
+  _handleOverlayPopupClose?(primary: boolean): void;
   readonly _state?: {
     readonly annotations?: readonly NativeReaderAnnotationRuntime[];
     readonly filter?: object;
@@ -44,6 +47,8 @@ export interface InternalReaderRuntime {
     readonly sidebarView?: 'outline' | 'annotations' | 'thumbnails';
     readonly outline?: readonly ReaderNativeOutlineEntry[] | null;
     readonly pageLabels?: readonly string[];
+    readonly primaryViewOverlayPopup?: unknown;
+    readonly secondaryViewOverlayPopup?: unknown;
   };
   readonly splitType?: 'horizontal' | 'vertical' | null;
   _enableAnnotationDeletionFromComment?: boolean;
@@ -198,10 +203,29 @@ export interface PdfRenderTaskRuntime {
   cancel(): void;
 }
 
+export interface PdfOptionalContentConfigRuntime {
+  getOrder(): readonly unknown[] | null;
+  isVisible(group: { readonly type: 'OCG'; readonly id: string }): boolean;
+  setVisibility(id: string, visible: boolean, preserveRB: boolean): void;
+}
+
 export interface PdfDocumentRuntime {
   readonly numPages?: number;
+  getProcessedData?(): Promise<unknown>;
+  getData?(): Promise<Uint8Array>;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
+  getOptionalContentConfig?(options: {
+    readonly intent: 'display' | 'print';
+  }): Promise<PdfOptionalContentConfigRuntime>;
+  readonly _transport?: {
+    readonly messageHandler?: {
+      sendWithPromise(
+        method: 'GetOptionalContentConfig',
+        data: null,
+      ): Promise<{ readonly groups: readonly { readonly id: string }[] } | null>;
+    };
+  };
   getPage?(page: number): Promise<{
     readonly view?: readonly number[];
     readonly rotate?: number;
@@ -212,6 +236,8 @@ export interface PdfDocumentRuntime {
       readonly canvasContext: CanvasRenderingContext2D;
       readonly transform: readonly number[];
       readonly annotationMode: number;
+      readonly intent?: 'display' | 'print';
+      readonly optionalContentConfigPromise?: Promise<PdfOptionalContentConfigRuntime>;
     }): PdfRenderTaskRuntime;
   }>;
 }

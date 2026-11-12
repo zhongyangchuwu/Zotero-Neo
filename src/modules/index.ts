@@ -22,6 +22,10 @@ import {
 import { TAG_ITEM_ACTIONS, TAG_MAIN_ACTIONS } from './tags/capabilities';
 import { WORKSETS_SELECT_ACTIONS } from './worksets/capabilities';
 import { READER_WORKSPACE_ACTIONS } from './workspace/reader-actions';
+import {
+  TAB_ENHANCEMENT_MAIN_ACTIONS,
+  TAB_ENHANCEMENT_SURFACE_ACTIONS,
+} from './tab-enhancements/capabilities';
 
 export type BuiltinModuleId =
   | 'library'
@@ -32,12 +36,34 @@ export type BuiltinModuleId =
   | 'reader-selection'
   | 'reader-annotations'
   | 'reader-hints'
+  | 'ai-qa'
+  | 'references'
   | 'notes'
   | 'workspace'
-  | 'extensions';
+  | 'reader-chapters'
+  | 'reader-figures'
+  | 'document-comparison'
+  | 'reader-excerpts'
+  | 'chapter-notes'
+  | 'document-preparation'
+  | 'extensions'
+  | 'tab-enhancements';
 
-export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions'] as const;
+export const OPTIONAL_MODULE_IDS = [
+  'reader-hints',
+  'extensions',
+  'ai-qa',
+  'references',
+  'tab-enhancements',
+] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
+export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
+  'reader-hints': true,
+  extensions: true,
+  'ai-qa': false,
+  references: true,
+  'tab-enhancements': false,
+};
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
 /** Internal ownership is not a user switch; only independent enhancements are optional. */
@@ -226,16 +252,110 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ui: ['Link hints', 'Copy hints'],
   },
   {
+    id: 'references',
+    names: { en: 'Reference Enhancements', 'zh-CN': '引用增强' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view'],
+    requires: [],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openReferences'] }],
+    selectionActions: [],
+    ui: ['References'],
+  },
+  {
+    id: 'reader-chapters',
+    names: { en: 'Chapter Search', 'zh-CN': '章节查找' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view', 'Chapter search'],
+    requires: [],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openChapterSearch'] }],
+    selectionActions: [],
+    ui: ['Chapter search'],
+  },
+  {
+    id: 'reader-figures',
+    names: { en: 'Figure Browser', 'zh-CN': '图表浏览' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view', 'Figure picker'],
+    requires: ['reader-navigation'],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openFigurePicker'] }],
+    selectionActions: [],
+    ui: ['Figure picker'],
+  },
+  {
+    id: 'document-comparison',
+    names: { en: 'Document Comparison', 'zh-CN': '文档解析对照' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Document comparison'],
+    requires: [],
+    optional: [],
+    contributions: [
+      { host: 'reader', context: 'reader-normal', actions: ['compareDocumentParsing'] },
+    ],
+    selectionActions: [],
+    ui: ['Document comparison'],
+  },
+  {
+    id: 'reader-excerpts',
+    names: { en: 'Object Excerpts', 'zh-CN': '对象摘录' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view', 'Object excerpts'],
+    requires: [],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openObjectExcerpts'] }],
+    selectionActions: [],
+    ui: ['Object excerpts'],
+  },
+  {
+    id: 'chapter-notes',
+    names: { en: 'Chapter Notes', 'zh-CN': '章节笔记整理' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view', 'Chapter notes preview'],
+    requires: [],
+    optional: [],
+    contributions: [
+      { host: 'reader', context: 'reader-normal', actions: ['organizeChapterNotes'] },
+    ],
+    selectionActions: [],
+    ui: ['Chapter notes preview'],
+  },
+  {
+    id: 'document-preparation',
+    names: { en: 'Document Preparation', 'zh-CN': '文档准备' },
+    hosts: ['main', 'reader'],
+    scopes: ['Application task queue', 'Main window', 'Reader session'],
+    requires: [],
+    optional: [],
+    contributions: [
+      { host: 'main', context: 'main-normal', actions: ['prepareDocuments'] },
+      { host: 'reader', context: 'reader-normal', actions: ['prepareDocuments'] },
+    ],
+    selectionActions: [],
+    ui: ['Document preparation'],
+  },
+  {
+    id: 'ai-qa',
+    names: { en: 'AI Q&A (Experimental)', 'zh-CN': 'AI 问答（实验）' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reading task', 'Reading results'],
+    requires: ['reader-selection'],
+    optional: [],
+    contributions: [{ host: 'reader', context: 'reader-normal', actions: ['openAIQA'] }],
+    selectionActions: ['neo.ai-qa.explain'],
+    ui: ['AI Q&A', 'Evidence preview'],
+  },
+  {
     id: 'notes',
     names: { en: 'Notes', 'zh-CN': '笔记' },
-    hosts: ['main', 'reader'],
-    scopes: ['Main window', 'Note editor', 'Note picker', 'Reader notes preview'],
+    hosts: ['main'],
+    scopes: ['Main window', 'Note editor', 'Note picker'],
     requires: [],
     optional: [],
     contributions: [
       { host: 'main', context: 'main-normal', actions: ['findNotes'] },
       { host: 'main', context: 'reader-normal', actions: ['findNotes'] },
-      { host: 'reader', context: 'reader-normal', actions: ['organizeChapterNotes'] },
       {
         host: 'main',
         context: 'note-normal',
@@ -276,6 +396,21 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
     ],
     selectionActions: [],
     ui: ['Plugin manager'],
+  },
+  {
+    id: 'tab-enhancements',
+    names: { en: 'Tab Enhancements', 'zh-CN': '标签页增强' },
+    hosts: ['main'],
+    scopes: ['Main window', 'Tab sidebar', 'Saved reading groups'],
+    requires: ['workspace'],
+    optional: [],
+    contributions: [
+      { host: 'main', context: 'main-normal', actions: TAB_ENHANCEMENT_MAIN_ACTIONS },
+      { host: 'main', context: 'reader-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
+      { host: 'main', context: 'note-normal', actions: TAB_ENHANCEMENT_SURFACE_ACTIONS },
+    ],
+    selectionActions: [],
+    ui: ['Tab sidebar', 'Saved reading groups'],
   },
 ];
 

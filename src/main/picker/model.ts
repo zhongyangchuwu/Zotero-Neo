@@ -20,7 +20,6 @@ export interface PickerItem {
   meta?: string;
   /** Stable owner identity for decorative boundaries; never a selectable row. */
   group?: string;
-  tagType?: 'manual' | 'automatic';
   tagName?: string;
   tagCandidate?: 'tag' | 'create' | 'namespace';
   collectionCandidate?: 'collection' | 'root' | 'create';

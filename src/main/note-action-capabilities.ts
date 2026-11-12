@@ -2,6 +2,7 @@ import type { ActionId } from '../input/actions';
 import { NOTE_ACTION_IDS, type NoteActionId } from '../input/note-actions';
 import { TAG_ITEM_ACTIONS } from '../modules/tags/capabilities';
 import { EXTENSIONS_SURFACE_ACTIONS } from '../modules/extensions/capabilities';
+import { TAB_ENHANCEMENT_SURFACE_ACTIONS } from '../modules/tab-enhancements/capabilities';
 
 export const NOTE_NORMAL_ACTIONS = Object.freeze([
   ...NOTE_ACTION_IDS,
@@ -12,6 +13,7 @@ export const NOTE_NORMAL_ACTIONS = Object.freeze([
   'findCollectionItems',
   'findNotes',
   ...EXTENSIONS_SURFACE_ACTIONS,
+  ...TAB_ENHANCEMENT_SURFACE_ACTIONS,
   'openNeoSettings',
   'navigateBack',
   'navigateForward',
