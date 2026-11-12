@@ -52,6 +52,8 @@ function fixture(options: { prefix?: string; copiedData?: Record<string, unknown
       { id: 'b', type: 'reader', title: 'B', data: { ...data } },
     ],
     _update: vi.fn(),
+    _openMenu: vi.fn(),
+    toggleAudio: vi.fn(),
     setTabData(id: string, patch: Record<string, unknown>) {
       Object.assign(this._tabs.find((tab) => tab.id === id)!.data, patch);
     },
@@ -93,6 +95,42 @@ function fixture(options: { prefix?: string; copiedData?: Record<string, unknown
 }
 
 describe('native tab enhancement host', () => {
+  it('projects audio and delegates native controls only for live window tabs', () => {
+    const h = fixture();
+    Object.assign(h.tabs._tabs[1]!, { audioStatus: { active: true, paused: true } });
+    h.tabs._update();
+    vi.runOnlyPendingTimers();
+    const tab = h.host.snapshot().find((item) => item.nativeID === 'a')!;
+    expect(tab.audioStatus).toEqual({ active: true, paused: true });
+    h.host.toggleAudio(tab.viewID);
+    expect(h.tabs.toggleAudio).toHaveBeenCalledWith('a');
+    const removed: string[] = [];
+    const menuItems = ['tabs.moveToStart', 'tabs.moveToEnd', 'tabs.moveToWindow'].map((label) => ({
+      localName: 'menuitem',
+      getAttribute: () => label,
+      remove: () => removed.push(label),
+    }));
+    const popup = {
+      children: [
+        {
+          localName: 'menu',
+          getAttribute: () => 'tabs.move',
+          querySelector: () => ({ children: menuItems }),
+        },
+      ],
+      hidePopup: vi.fn(),
+    };
+    Reflect.set(Zotero, 'getString', (key: string) => key);
+    h.tabs._openMenu.mockReturnValue(popup);
+    h.host.openNativeMenu(tab.viewID, 120, 80);
+    vi.runOnlyPendingTimers();
+    expect(h.tabs._openMenu).toHaveBeenCalledWith(120, 80, 'a');
+    expect(removed).toEqual(['tabs.moveToStart', 'tabs.moveToEnd']);
+    h.host.openNativeMenu('missing', 0, 0);
+    vi.runOnlyPendingTimers();
+    expect(h.tabs._openMenu).toHaveBeenCalledTimes(1);
+    h.host.dispose();
+  });
   it('waits for saved and open-tab libraries before accessing their items', async () => {
     const pending = Promise.withResolvers<void>();
     const load = vi.fn((id: number) => (id === 2 ? pending.promise : Promise.resolve()));
@@ -241,11 +279,14 @@ class Element extends EventTargetFixture {
   children: Element[] = [];
   parentNode: Element | null = null;
   attributes = new Map<string, string>();
+  dataset: Record<string, string> = {};
   style = {
     display: '',
     width: '',
     flex: '',
     cssText: '',
+    paddingInlineStart: '',
+    paddingInlineEnd: '',
     getPropertyValue: (name: string) => (name === 'display' ? this.style.display : ''),
     getPropertyPriority: () => '',
     setProperty: (name: string, value: string) => {
@@ -384,6 +425,22 @@ describe('native rail layout', () => {
     expect(rail.resized).toEqual([]);
   });
 
+  it('reserves native titlebar safe areas and updates them on resize', () => {
+    const rail = railFixture('left', 240);
+    let safeStart = '90px';
+    Object.assign(rail.window, {
+      getComputedStyle: () => ({
+        getPropertyValue: (name: string) => (name === '--safe-area-start' ? safeStart : '0px'),
+      }),
+    });
+    rail.layout.update({ side: 'top', width: 240, collapsed: false });
+    expect(rail.root.style.paddingInlineStart).toBe('90px');
+    safeStart = '8px';
+    rail.window.emit('resize', {});
+    expect(rail.root.style.paddingInlineStart).toBe('8px');
+    rail.layout.dispose();
+  });
+
   it('moves only the rail and toolbar, switches sides, and restores the native toolbar', () => {
     const browser = new Element();
     const content = new Element();
@@ -427,9 +484,21 @@ describe('native rail layout', () => {
     expect(layout.ownsTarget(splitter as unknown as EventTarget)).toBe(true);
     layout.update({ side: 'right', width: 300, collapsed: false });
     expect(browser.children).toEqual([content, splitter, root]);
+    layout.update({ side: 'top', width: 300, collapsed: false });
+    expect(browser.children).toEqual([content]);
+    expect(title.children).toEqual([root, strip, toolbar]);
+    expect(strip.style.display).toBe('none');
+    expect(toolbar.parentNode).toBe(title);
+    layout.update({ side: 'top', width: 300, collapsed: true });
+    expect(strip.style.display).toBe('');
+    layout.update({ side: 'left', width: 240, collapsed: false });
+    expect(title.style.display).toBe('none');
+    expect(slot.children).toEqual([toolbar]);
+    layout.update({ side: 'top', width: 300, collapsed: false });
     layout.dispose();
     expect(browser.children).toEqual([content]);
     expect(title.children).toEqual([strip, toolbar]);
+    expect(strip.style.display).toBe('');
     expect(title.style.display).toBe('');
     const second = mountRail(
       window,

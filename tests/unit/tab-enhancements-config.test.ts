@@ -63,6 +63,8 @@ describe('tab enhancement display preferences', () => {
       width: 520,
       collapsed: true,
     });
+    values.set(TAB_ENHANCEMENT_PREFERENCES.side, 'top');
+    expect(tabRailOptions(preferences).side).toBe('top');
     expect(tabTitleFormat(preferences)).toBe('{author} — {title}');
   });
 });

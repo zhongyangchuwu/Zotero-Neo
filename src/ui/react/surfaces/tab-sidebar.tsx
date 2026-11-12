@@ -142,6 +142,17 @@ export const TAB_SIDEBAR_REACT_CSS = `
 .neo-tab-sidebar__color { display:flex; align-items:center; justify-content:center; }
 .neo-tab-sidebar__color-swatch { display:block; width:14px; height:14px; border-radius:50%; }
 .neo-tab-sidebar__status { flex:0 0 auto; }
+[data-zv-tab-top] .neo-tab-sidebar__header { flex:0 0 auto; padding:0 4px; }
+[data-zv-tab-top] .neo-tab-sidebar__body { flex:1 1 auto; flex-direction:row; align-items:center; min-width:0; }
+[data-zv-tab-top] .neo-tab-sidebar__query { flex:0 1 130px; width:100px; margin:2px 4px; padding:4px; }
+[data-zv-tab-top] .neo-tab-sidebar__list { display:flex; flex:1 1 auto; align-items:center; overflow-x:auto; overflow-y:hidden; padding:0; scrollbar-width:thin; }
+[data-zv-tab-top] .neo-tab-sidebar__group, [data-zv-tab-top] .neo-tab-sidebar__members { display:flex; flex:0 0 auto; align-items:center; padding:0; }
+[data-zv-tab-top] .neo-tab-sidebar__group { border-inline-start:0; border-bottom:3px solid transparent; }
+[data-zv-tab-top] [data-ungrouped] { min-width:16px; min-height:32px; }
+[data-zv-tab-top] .neo-tab-sidebar__row { flex:0 0 auto; min-width:0; max-width:240px; margin:0 2px; }
+[data-zv-tab-top] .neo-tab-sidebar__entry-row { width:180px; }
+[data-zv-tab-top] .neo-tab-sidebar__group-row { max-width:180px; }
+[data-zv-tab-top] .neo-tab-sidebar__status:not(:empty) { max-width:180px; margin:0; padding:4px; }
 .neo-tab-sidebar__status:not(:empty) { margin:4px 6px; padding:8px; border:1px solid ${THEME_VARS.border}; border-radius:8px; background:${THEME_VARS.elevated}; }
 `;
 
@@ -158,7 +169,7 @@ export function mountTabSidebarReactView(
       const matches = (value: string): boolean =>
         !query || value.toLocaleLowerCase().includes(query);
       const matchesEntry = (entry: TabSidebarEntry): boolean =>
-        matches(entry.title) || matches(entry.searchText);
+        (model.top && entry.selected) || matches(entry.title) || matches(entry.searchText);
       const findEntry = (id: string): TabSidebarEntry | undefined => {
         if (model.view.library?.id === id) return model.view.library;
         for (const entry of model.view.ungrouped) if (entry.id === id) return entry;
@@ -206,6 +217,20 @@ export function mountTabSidebarReactView(
           >
             {entry.title}
           </ActionButton>
+          {model.top && entry.status === 'open' && entry.audioStatus?.active && (
+            <ActionButton
+              action="toggle-audio"
+              entryID={entry.id}
+              label={text(entry.audioStatus.paused ? 'playAudio' : 'pauseAudio')}
+            >
+              {entry.audioStatus.paused ? '▶' : 'Ⅱ'}
+            </ActionButton>
+          )}
+          {model.top && entry.status === 'open' && entry.kind !== 'library' && (
+            <ActionButton action="close" entryID={entry.id} label={text('close')}>
+              ×
+            </ActionButton>
+          )}
           {entry.status === 'other-window' && (
             <span className="neo-tab-sidebar__badge" data-neo-tab-badge="1">
               {text('otherWindow')}
@@ -236,7 +261,7 @@ export function mountTabSidebarReactView(
             key={group.id}
             className="neo-tab-sidebar__group"
             data-drop-group={group.id}
-            style={{ borderInlineStartColor: group.color || THEME_VARS.accent }}
+            style={{ borderColor: group.color || THEME_VARS.accent }}
           >
             <div
               className="neo-tab-sidebar__row neo-tab-sidebar__group-row"
@@ -300,8 +325,24 @@ export function mountTabSidebarReactView(
             <ActionButton
               action="toggle-sidebar"
               part="toggle"
-              label={text(model.collapsed ? 'expand' : 'collapse')}
-              title={text(model.collapsed ? 'expand' : 'collapse')}
+              label={text(
+                model.top
+                  ? model.collapsed
+                    ? 'showGroups'
+                    : 'showNativeTabs'
+                  : model.collapsed
+                    ? 'expand'
+                    : 'collapse',
+              )}
+              title={text(
+                model.top
+                  ? model.collapsed
+                    ? 'showGroups'
+                    : 'showNativeTabs'
+                  : model.collapsed
+                    ? 'expand'
+                    : 'collapse',
+              )}
             >
               {model.collapsed ? '≡' : '−'}
             </ActionButton>
@@ -313,6 +354,16 @@ export function mountTabSidebarReactView(
             >
               +
             </ActionButton>
+            {model.top && !model.collapsed && (
+              <>
+                <ActionButton action="scroll-back" label={text('scrollBack')}>
+                  ‹
+                </ActionButton>
+                <ActionButton action="scroll-forward" label={text('scrollForward')}>
+                  ›
+                </ActionButton>
+              </>
+            )}
           </header>
           <div className="neo-tab-sidebar__body" data-neo-ui-part="body" hidden={model.collapsed}>
             <input

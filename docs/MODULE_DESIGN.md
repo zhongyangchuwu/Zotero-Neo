@@ -35,7 +35,7 @@
 - `reader-chapters`、`reader-figures`、`document-comparison`、`reader-excerpts` 与 `chapter-notes` 分别通过自己的 `index.ts` 接入 ReaderSession，登记原有动作并拥有界面和释放；来源失效订阅随实际消费者归属。Reader Surface 直接组合这些能力，不再经 Navigation、Select 或 Main Notes 转发。
 - `document-preparation` 提供应用级 controller 与 Main/Reader 的局部入口。模块作用域只保留本次界面的精确释放句柄，不取得共享队列的停止或销毁权。
 - `src/modules/workspace/`：MainWindow 拥有三个 Surface 的标签页候选、切换、循环、关闭及 Reader/Note 的 Show in Library；ReaderSession 拥有分屏切换与方向焦点。共享历史、原生标签页重扫、精确视图发现、NativeInput 及 Main/Note 通用面板焦点仍在基座；方向焦点实际成功才消费按键。
-- `src/modules/tab-enhancements/`：按 MainWindow 拥有垂直标签栏、标题格式与分组界面；应用共享的 `TabGroupManager` 管理打开视图的分组，依赖核心 `workspace` 激活原生标签页并复用共享历史。Main 创建／追加动作确认后打开 PDF 并分组成功视图；Reader／Note 不提供导入。成员以原生 `viewID` 区分，关闭时移除；关闭、排序只作用于发起窗口，跨窗口激活委托给所属宿主。Toolkit 负责原生清单同步和外层布局，不重挂 Reader/PDF 内容。
+- `src/modules/tab-enhancements/`：按 MainWindow 拥有左／右侧栏或上方横向模式的标签页增强界面、标题展示与分组交互；默认位置为左侧。上方栏由 Neo 绘制，保留 Zotero 原生工具栏，并逐项适配原生标签操作。应用共享的 `TabGroupManager` 管理打开视图的分组，依赖核心 `workspace` 激活原生标签页并复用共享历史。分组不按 Zotero 分类自动生成；Main 创建／追加动作确认后打开 PDF 并分组成功视图，Reader／Note 不提供导入。成员以原生 `viewID` 区分，关闭时移除，空组保留；关闭和排序只作用于发起窗口，跨窗口激活委托给所属宿主。Toolkit 负责原生清单同步和布局接缝，不重挂 Reader/PDF 内容或 Note editor。
 
 `src/modules/index.ts` 提供静态描述与依赖校验，`src/core/module-runtime.ts` 组合实际宿主实例、失败状态和结构能力过滤。核心模块固定启用，旧核心偏好 `extensions.zotero-neo.modules.<core>.enabled=false` 不再关闭核心功能；`reader-hints`、`extensions`、`references`、`ai-qa` 与 `tab-enhancements` 五项模块偏好控制可选增强。`ai-qa` 硬依赖 `reader-selection`，`references` 没有 AI 模块依赖，`tab-enhancements` 依赖核心 `workspace`。
 
@@ -82,21 +82,23 @@ AT 的菜单/快捷键分发会先对整批目标执行一次，再逐项执行�
 | `notes` | Note 选择器、Note 上下文打开/定位，以及现有可选 Vim Note 编辑。编辑模式和寄存器归本模块。 | `src/modules/notes/`；Surface 输入与身份保留在 `src/main/note-editor.ts`、`note-runtime.ts` | 已按 MainWindow 接入，附着到精确 NoteEditor 身份；`noteEditor.enabled` 只控制 Vim 编辑，不控制 Note 查找。 |
 | `workspace` | 标签页查找/切换/关闭、Reader 分屏创建与关闭、分屏焦点切换、Show in Library 等跨 Surface 定位。 | `src/modules/workspace/` | 已按 MainWindow / ReaderSession 接入，使用基座导航端口与唯一 Back/Forward 历史；不依赖 Library 或 Reader 导航模块。Main/Note 通用面板焦点含 Note Insert 仍由基座负责。 |
 | `extensions` | 可选增强“扩展管理面板”：已安装 Zotero 扩展的 Plugin Manager，包括筛选、详情、刷新、允许的启停、设置及链接。 | `src/modules/extensions/`；`src/toolkit/main/plugins.ts` | 已按 MainWindow 接入，Main/Reader/Note 进入实际所属窗口的独立面板。不负责 Neo 内部模块管理，也不新增安装、更新或卸载功能。 |
-| `tab-enhancements` | 可选标签页增强：Main 垂直侧栏、Neo 侧栏标题格式及打开视图的阅读组；Main 普通模式可打开所选 PDF 并加入分组。 | `src/modules/tab-enhancements/`、`src/toolkit/main/tab-enhancements/`、`src/modules/tab-enhancements/model.ts` | 默认关闭，硬依赖核心 `workspace`；每个 MainWindow 拥有独立侧栏和模块作用域，应用共享分组模型。原生清单是打开视图的事实来源，成员按 `viewID` 对应；关闭后移除成员并保留空组。组关闭和重排只作用于发起窗口，跨窗口激活由所属宿主执行；Toolkit 不移动原生内容或 Reader/PDF iframe。 |
+| `tab-enhancements` | 可选标签页增强：Main 左／右侧栏或上方横向标签显示、Neo 标题展示及打开视图的阅读组；Main 普通模式可打开所选 PDF 并加入分组。 | `src/modules/tab-enhancements/`、`src/toolkit/main/tab-enhancements/`、`src/modules/tab-enhancements/model.ts` | 默认关闭，默认位置为左侧，硬依赖核心 `workspace`；每个 MainWindow 拥有独立显示界面和模块作用域，应用共享分组模型。原生清单是打开视图的事实来源，成员按 `viewID` 对应；关闭后立即移除成员并保留空组。组关闭和重排只作用于发起窗口，跨窗口激活由所属宿主执行；Toolkit 不移动原生内容或 Reader/PDF iframe。 |
 
 ### 标签页增强与原生标签页
 
-`src/modules/tab-enhancements/model.ts` 中的 `TabGroupManager` 在应用范围共享分组；`src/modules/tab-enhancements/` 为每个 MainWindow 建立独立的侧栏与模块作用域。原生清单是打开视图的事实来源；成员以原生 `tab.data` 的版本化 `viewID` 关联，区分同一 PDF 的多个视图，`nativeID` 仅用于当前会话操作。关闭视图即移除成员，空组保留；原生会话恢复时仍打开的视图可重新关联分组。
+`src/modules/tab-enhancements/model.ts` 中的 `TabGroupManager` 是阅读分组唯一模型，在应用范围共享分组；`src/modules/tab-enhancements/` 为每个 MainWindow 建立独立的显示界面与模块作用域。原生清单是打开视图的事实来源；成员以原生 `tab.data` 的版本化 `viewID` 关联，区分同一 PDF 的多个视图，`nativeID` 仅用于当前会话操作。关闭视图即移除成员，空组保留；原生会话恢复时仍打开的视图可重新关联分组。
+
+当前唯一分组定义保存在 profile-local 的 `tabEnhancements.groups.v2`，旧 `tabEnhancements.groups.v1` 原样保留为备份；分组不写入 Zotero 标签或分类，也不随停用模块或重置显示偏好删除。Main 创建／追加动作固定发起时的目标，选择 PDF 并确认后打开标签页，只将成功打开的视图加入分组。解散分组不关闭文档；组关闭和原生排序仅作用于发起窗口，跨窗口激活由所属宿主执行。
 
 ::: v-pre
 
-Neo 侧栏默认以 `{title}` 显示标题，模板支持 `{title}`、`{citekey}`、`{author}`、`{year}` 和 `{filename}`；`{{` 与 `}}` 表示字面花括号，模板不执行代码。引用键取自现有 citekey 适配器，不用条目 key 伪造。需要的动态字段都为空时回退到 Zotero 原生标题；模板中的混合字面文本仍按字面处理，标题格式只影响 Neo 侧栏，不改原生标签标题或 Zotero 条目标题。
+Neo 标签页增强界面默认以 `{title}` 显示标题，模板支持 `{title}`、`{citekey}`、`{author}`、`{year}` 和 `{filename}`；`{{` 与 `}}` 表示字面花括号，模板不执行代码。引用键取自现有 citekey 适配器，不用条目 key 伪造。需要的动态字段都为空时回退到 Zotero 原生标题；标题格式只影响 Neo 自有标签界面，不改原生标签标题或 Zotero 条目标题。
 
-:::
+切换显示位置不改变 `TabGroupManager` 或标题偏好。停用 `tab-enhancements` 或重置显示偏好后，分组数据仍保留。
 
-当前分组定义保存在 profile-local 的 `tabEnhancements.groups.v2`，旧 `tabEnhancements.groups.v1` 原样保留为备份；分组不写入 Zotero 标签或分类。Main 创建／追加动作固定发起时的目标，选择 PDF 并确认后打开标签页，只将成功打开的视图加入分组。解散分组不关闭文档；组关闭和原生排序仅作用于发起窗口，跨窗口激活由所属宿主执行。
+::::
 
-`src/toolkit/main/tab-enhancements/` 负责私有原生接口、外层布局和原生工具栏的可逆租约。侧栏只能作为 `#appcontent` 外侧的兄弟节点放在最左或最右，不重挂原生内容 deck、Reader/PDF iframe。识别不到受支持的原生布局时保留原生标签页界面。标签页切换继续使用核心 `workspace.activateTab` 与既有共享历史，不创建另一套导航栈。
+`src/toolkit/main/tab-enhancements/` 负责私有原生接口、左右侧栏布局、上方模式接入和原生工具栏的可逆租约。上方模式由 Neo 绘制横向标签栏并保留原生工具栏；Neo 自有 UI 使用共享 React UI，Toolkit 独占私有 DOM 与宿主布局接缝。顶部模式以鼠标交互为主，不增加快捷键，保留原生键盘输入。需要支持的原生标签操作逐项适配；未逐项验证的拖放、菜单或其他原生行为不作为已支持能力。若挂载失败，恢复原生标签栏和工具栏；任何模式都不重挂原生内容、Reader/PDF iframe 或 Note editor，不重载 Reader、PDF 或 Note。标签页切换继续使用核心 `workspace.activateTab` 与既有共享历史，不创建另一套导航栈。
 
 `references` 不调用 AI。Toolkit 只把 PDF 原生全文数据投影为无宿主句柄的快照；只有来源版本匹配时才用 SDT 补充，编号参考文献提取不完整时保留 `partial` 状态。文库查询不访问网络；添加只在用户明确操作后执行，精确重复项不重写，已有同名但身份不明确时不自动选定。详细 Reader 与来源边界见[架构](ARCHITECTURE.md)和[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
 

@@ -31,9 +31,19 @@ export function mountRail(
   const toolbarNext = toolbar.nextSibling;
   const nativeBrowser = browser;
   const nativeContent = content;
+  const nativeTitleBar = titleBar;
+  const nativeStrip = strip;
+  const nativeToolbar = toolbar;
   const splitter = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
   const titleDisplay = titleBar.style.getPropertyValue('display');
   const titleDisplayPriority = titleBar.style.getPropertyPriority('display');
+  const stripDisplay = strip.style.getPropertyValue('display');
+  const stripDisplayPriority = strip.style.getPropertyPriority('display');
+  const rootStyle = root.style.cssText;
+  function restoreDisplay(element: HTMLElement, value: string, priority: string): void {
+    if (value) element.style.setProperty('display', value, priority);
+    else element.style.removeProperty('display');
+  }
   splitter.setAttribute('role', 'separator');
   splitter.setAttribute('aria-orientation', 'vertical');
   splitter.setAttribute('aria-label', 'Resize tab sidebar');
@@ -48,14 +58,47 @@ export function mountRail(
   let drag: { x: number; width: number; lastWidth: number } | null = null;
   splitter.setAttribute('aria-valuemin', String(TAB_RAIL_WIDTH.min));
   splitter.setAttribute('aria-valuemax', String(TAB_RAIL_WIDTH.max));
+  function updateTopSafeArea(): void {
+    if (disposed || options.side !== 'top') return;
+    const style = window.getComputedStyle?.(nativeStrip);
+    root.style.paddingInlineStart = style?.getPropertyValue('--safe-area-start').trim() || '0px';
+    root.style.paddingInlineEnd = style?.getPropertyValue('--safe-area-end').trim() || '0px';
+  }
   function place(): void {
-    if (options.side === 'left') {
-      nativeBrowser.insertBefore(root, nativeContent);
-      nativeBrowser.insertBefore(splitter, nativeContent);
+    const focused = doc.activeElement as HTMLElement | null;
+    const restoreFocus = !!focused && (root.contains(focused) || nativeToolbar.contains(focused));
+    if (options.side === 'top') {
+      splitter.remove();
+      if (nativeToolbar.parentNode === toolbarSlot)
+        nativeTitleBar.insertBefore(
+          nativeToolbar,
+          toolbarNext?.parentNode === nativeTitleBar ? toolbarNext : null,
+        );
+      restoreDisplay(nativeTitleBar, titleDisplay, titleDisplayPriority);
+      nativeTitleBar.insertBefore(root, nativeStrip);
+      nativeStrip.style.setProperty('display', 'none', 'important');
+      root.dataset.zvTabTop = '1';
+      root.style.cssText = rootStyle;
+      root.style.display = 'flex';
+      root.style.height = 'auto';
+      root.style.flex = '1 1 auto';
+      root.style.minWidth = '0';
+      updateTopSafeArea();
     } else {
-      nativeBrowser.insertBefore(splitter, nativeContent.nextSibling);
-      nativeBrowser.insertBefore(root, splitter.nextSibling);
+      restoreDisplay(nativeStrip, stripDisplay, stripDisplayPriority);
+      delete root.dataset.zvTabTop;
+      root.style.cssText = rootStyle;
+      if (options.side === 'left') {
+        nativeBrowser.insertBefore(root, nativeContent);
+        nativeBrowser.insertBefore(splitter, nativeContent);
+      } else {
+        nativeBrowser.insertBefore(splitter, nativeContent.nextSibling);
+        nativeBrowser.insertBefore(root, splitter.nextSibling);
+      }
+      toolbarSlot.appendChild(nativeToolbar);
+      nativeTitleBar.style.display = 'none';
     }
+    if (restoreFocus && focused?.isConnected && doc.activeElement !== focused) focused.focus();
   }
   function update(next: TabRailLayoutOptions): void {
     if (disposed) return;
@@ -64,9 +107,16 @@ export function mountRail(
     if (sideChanged && drag) finishDrag(false);
     options = normalized;
     if (sideChanged) place();
-    root.style.width = `${options.collapsed ? 48 : options.width}px`;
-    root.style.flex = '0 0 auto';
-    splitter.style.display = options.collapsed ? 'none' : '';
+    if (options.side === 'top') {
+      if (options.collapsed) restoreDisplay(nativeStrip, stripDisplay, stripDisplayPriority);
+      else nativeStrip.style.setProperty('display', 'none', 'important');
+      root.style.flex = options.collapsed ? '0 0 auto' : '1 1 auto';
+    }
+    if (options.side !== 'top') {
+      root.style.width = `${options.collapsed ? 48 : options.width}px`;
+      root.style.flex = '0 0 auto';
+    }
+    splitter.style.display = options.side === 'top' || options.collapsed ? 'none' : '';
     splitter.setAttribute('aria-valuenow', String(options.width));
   }
   function move(event: MouseEvent): void {
@@ -105,12 +155,22 @@ export function mountRail(
     update({ ...options, width });
     onResize(options.width);
   }
-  place();
-  toolbarSlot.appendChild(toolbar);
-  titleBar.style.display = 'none';
-  splitter.addEventListener('mousedown', start);
-  splitter.addEventListener('keydown', key);
-  update(initial);
+  try {
+    place();
+    splitter.addEventListener('mousedown', start);
+    splitter.addEventListener('keydown', key);
+    window.addEventListener('resize', updateTopSafeArea);
+    update(initial);
+  } catch (error) {
+    window.removeEventListener('resize', updateTopSafeArea);
+    if (toolbar.parentNode === toolbarSlot)
+      titleBar.insertBefore(toolbar, toolbarNext?.parentNode === titleBar ? toolbarNext : null);
+    restoreDisplay(titleBar, titleDisplay, titleDisplayPriority);
+    restoreDisplay(strip, stripDisplay, stripDisplayPriority);
+    splitter.remove();
+    root.remove();
+    throw error;
+  }
   return {
     ownsTarget(target) {
       return target === splitter;
@@ -122,14 +182,13 @@ export function mountRail(
       finishDrag(false);
       splitter.removeEventListener('mousedown', start);
       splitter.removeEventListener('keydown', key);
+      window.removeEventListener('resize', updateTopSafeArea);
       if (toolbar.parentNode === toolbarSlot)
         titleBar.insertBefore(toolbar, toolbarNext?.parentNode === titleBar ? toolbarNext : null);
-      if (titleBar.style.display === 'none') {
-        if (titleDisplay) titleBar.style.setProperty('display', titleDisplay, titleDisplayPriority);
-        else titleBar.style.removeProperty('display');
-      }
-      if (splitter.parentNode === browser) splitter.remove();
-      if (root.parentNode === browser) root.remove();
+      restoreDisplay(titleBar, titleDisplay, titleDisplayPriority);
+      restoreDisplay(strip, stripDisplay, stripDisplayPriority);
+      splitter.remove();
+      root.remove();
     },
   };
 }

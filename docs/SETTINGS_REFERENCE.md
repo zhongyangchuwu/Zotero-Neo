@@ -55,7 +55,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点；不依赖 `library` 或 `reader-navigation`。 |
 | `extensions` | 扩展管理面板 | 可选增强：已安装 Zotero 扩展的 Plugin Manager；不管理 Neo 内部模块。 |
-| `tab-enhancements` | 标签页增强 | 可选增强：Main 垂直标签栏与不支持嵌套的活动标签分组；依赖 `workspace`，默认关闭。分组流程见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。 |
+| `tab-enhancements` | 标签页增强 | 可选增强：Main 左侧／右侧垂直栏或上方横向标签显示，以及不支持嵌套的活动标签分组；依赖 `workspace`，默认关闭。分组流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。 |
 
 | 运行状态 | 含义 |
 | --- | --- |
@@ -74,14 +74,14 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 标签页增强的显示设置
 
-这些控件位于 **Neo 设置 → 模块 → 标签页增强**卡片的**标签页显示**区域，而不是 Zotero 原生偏好页。模块请求仍需完全重启 Zotero；模块启用时，显示偏好立即生效。四个显示偏好使用以下键：`extensions.zotero-neo.tabEnhancements.{side,width,collapsed,titleFormat}`。
+这些控件位于 **Neo 设置 → 模块 → 标签页增强**卡片的**标签页显示**区域，而不是 Zotero 原生偏好页。模块请求仍需完全重启 Zotero；模块启用时，显示位置变更立即生效。显示偏好使用以下键：`extensions.zotero-neo.tabEnhancements.{side,width,collapsed,titleFormat}`。
 
 | 偏好键 | 默认值 | 含义 |
 | --- | --- | --- |
-| `extensions.zotero-neo.tabEnhancements.side` | `left` | 侧栏位置；可选 `left`（**最左侧**）或 `right`（**最右侧**）。 |
-| `extensions.zotero-neo.tabEnhancements.width` | `260` px | 展开时的侧栏宽度，范围 `180`–`520` px。 |
-| `extensions.zotero-neo.tabEnhancements.collapsed` | `false` | 侧栏是否收起；在 Main、Reader 或 Note Normal 中按 `<Space>bt` 切换。 |
-| `extensions.zotero-neo.tabEnhancements.titleFormat` | `{title}` | Neo 垂直栏标签的显示模板。 |
+| `extensions.zotero-neo.tabEnhancements.side` | `left` | 显示位置；可选 `left`（**最左侧**）、`right`（**最右侧**）或 `top`（**上方**）。默认仍为 `left`。 |
+| `extensions.zotero-neo.tabEnhancements.width` | `260` px | 左／右侧栏展开时的宽度，范围 `180`–`520` px。 |
+| `extensions.zotero-neo.tabEnhancements.collapsed` | `false` | 左／右侧栏是否收起；已有收起／展开快捷键定义保持不变。 |
+| `extensions.zotero-neo.tabEnhancements.titleFormat` | `{title}` | Neo 标签页增强界面中的标签标题模板。 |
 
 标题模板支持以下动态字段：
 
@@ -93,13 +93,13 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `{year}` | 日期字段中识别出的四位年份。 |
 | `{filename}` | 附件文件名。 |
 
-::: v-pre
+:::: v-pre
 
-用 `{{` 和 `}}` 分别显示字面左、右花括号。未知占位符或不配对的花括号会校验失败，设置不会保存无效模板。模板只识别上述占位符，不计算表达式。模板含动态占位符但所有对应字段都为空时，整项显示回退为原生标签标题；模板只有字面文本时则按字面文本显示。字面分隔符不会因某个字段为空而自动隐藏：例如 `{citekey} — {title}` 在 citekey 缺失但标题存在时仍会显示分隔号；若所有字段都为空，则回退为原生标题。模板只改变 Neo 垂直栏中打开或已关闭标签页成员的显示，不改写 Zotero 原生标签标题或文献元数据。
+用 `{{` 和 `}}` 分别显示字面左、右花括号。未知占位符或不配对的花括号会校验失败，设置不会保存无效模板。模板只识别上述占位符，不计算表达式。模板含动态占位符但所有对应字段都为空时，整项显示回退为原生标签标题；模板只有字面文本时则按字面文本显示。字面分隔符不会因某个字段为空而自动隐藏：例如 `{citekey} — {title}` 在 citekey 缺失但标题存在时仍会显示分隔号；若所有字段都为空，则回退为原生标题。标题模板不会改写 Zotero 原生标签标题或文献元数据。
 
-:::
+::::
 
-阅读分组是仅保存在当前 Zotero 配置文件中的界面状态，当前使用 `extensions.zotero-neo.tabEnhancements.groups.v2`，旧 `groups.v1` 原样保留为备份；它不是 Zotero 标签或分类。停用模块或点击**恢复标签页显示默认值**不会删除分组；完整操作见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。
+阅读分组仅保存在当前 Zotero 配置文件中，`extensions.zotero-neo.tabEnhancements.groups.v2` 是唯一模型；旧 `groups.v1` 原样保留为备份。分组不是 Zotero 标签或分类。停用模块或点击**恢复标签页显示默认值**不会删除分组；完整操作见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。
 
 
 ## 引用增强的元数据来源与密钥

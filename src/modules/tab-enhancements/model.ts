@@ -243,6 +243,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       status,
       selected: status === 'open' && tab.selected,
       kind: tab.kind,
+      audioStatus: tab.audioStatus,
     };
   }
   return {
@@ -521,6 +522,53 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
           draft.splice(indexBefore(draft, beforeGroupID), 0, group);
         },
         { registration, apply: (draft) => reorderNative(registration, draft) },
+      );
+    },
+    moveToEdge(memberID, edge, hostID) {
+      const registration = getHost(hostID);
+      const tabs = registration.host.native.snapshot().filter((tab) => tab.kind !== 'library');
+      const selected = tabs.find((tab) => tab.viewID === memberID);
+      if (!selected) throw new Error('View is not open in this window');
+      commit(
+        (draft) => {
+          const found = findMember(memberID, draft);
+          if (!found) return;
+          const { group, member } = found;
+          group.members.splice(group.members.indexOf(member), 1);
+          if (edge === 'start') group.members.unshift(member);
+          else group.members.push(member);
+          draft.splice(draft.indexOf(group), 1);
+          if (edge === 'start') draft.unshift(group);
+          else draft.push(group);
+        },
+        {
+          registration,
+          apply: (draft) => {
+            const byID = new Map(tabs.map((tab) => [tab.viewID, tab.nativeID]));
+            const grouped = draft.flatMap((group) =>
+              group.members.flatMap((member) => {
+                const nativeID = byID.get(member.id);
+                return nativeID ? [nativeID] : [];
+              }),
+            );
+            const groupedIDs = new Set(grouped);
+            const loose = tabs.map((tab) => tab.nativeID).filter((id) => !groupedIDs.has(id));
+            const isGrouped = groupedIDs.has(selected.nativeID);
+            const otherLoose = loose.filter((id) => id !== selected.nativeID);
+            const desired = isGrouped
+              ? edge === 'start'
+                ? [...grouped, ...loose]
+                : [...loose, ...grouped]
+              : edge === 'start'
+                ? [selected.nativeID, ...grouped, ...otherLoose]
+                : [...grouped, ...otherLoose, selected.nativeID];
+            let before: string | null = null;
+            for (let index = desired.length - 1; index >= 0; index--) {
+              registration.host.native.move(desired[index]!, before);
+              before = desired[index]!;
+            }
+          },
+        },
       );
     },
     ungroup(groupID, hostID) {

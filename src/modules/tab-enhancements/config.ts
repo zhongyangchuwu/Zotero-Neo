@@ -18,7 +18,7 @@ export function tabRailOptions(preferences: PreferenceReader): TabRailLayoutOpti
   const width: unknown = preferences.get(TAB_ENHANCEMENT_PREFERENCES.width, TAB_RAIL_WIDTH.default);
   const collapsed: unknown = preferences.get(TAB_ENHANCEMENT_PREFERENCES.collapsed, false);
   return {
-    side: side === 'right' ? 'right' : 'left',
+    side: side === 'right' || side === 'top' ? side : 'left',
     width: normalizeTabRailWidth(width),
     collapsed: typeof collapsed === 'boolean' ? collapsed : false,
   };

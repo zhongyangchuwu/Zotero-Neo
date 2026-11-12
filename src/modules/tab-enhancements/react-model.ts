@@ -4,6 +4,7 @@ import type { TabSidebarView } from './types';
 export interface TabSidebarReactModel {
   readonly view: TabSidebarView;
   readonly language: KeyGuideLanguage;
+  readonly top?: boolean;
   readonly collapsed: boolean;
   readonly query: string;
   readonly editing: null | {

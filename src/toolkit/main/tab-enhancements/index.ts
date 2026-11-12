@@ -9,7 +9,13 @@ import type {
 } from '../tab-enhancements-types';
 import { mountRail } from './layout';
 
-type NativeTab = { id: string; type: string; title?: string; data: Record<string, unknown> };
+type NativeTab = {
+  id: string;
+  type: string;
+  title?: string;
+  data: Record<string, unknown>;
+  audioStatus?: { active: boolean; paused: boolean };
+};
 type NativeTabs = {
   _tabs: NativeTab[];
   _selectedID: string;
@@ -19,6 +25,8 @@ type NativeTabs = {
   close(ids: string[]): void;
   move(id: string, index: number): void;
   refocus(): void;
+  _openMenu(x: number, y: number, id: string): HTMLElement & { hidePopup(): void };
+  toggleAudio(id: string): void;
   add(options: { type: string; title: string; data: Record<string, unknown>; select: boolean }): {
     id: string;
   };
@@ -163,6 +171,9 @@ export function createTabEnhancementHost(
           selected: tab.id === tabs._selectedID,
           document: ref,
           fields: titleFields,
+          audioStatus: tab.audioStatus
+            ? { active: tab.audioStatus.active, paused: tab.audioStatus.paused }
+            : undefined,
         });
       }),
     );
@@ -233,6 +244,46 @@ export function createTabEnhancementHost(
     focusContent() {
       if (current()) tabs.refocus();
     },
+    openNativeMenu(viewID, screenX, screenY) {
+      const tab = cache.find((entry) => entry.viewID === viewID);
+      if (!current() || !tab || typeof tabs._openMenu !== 'function') return;
+      window.setTimeout(() => {
+        if (!current() || !tabs._tabs.some((item) => item.id === tab.nativeID)) return;
+        try {
+          const popup = tabs._openMenu(screenX, screenY, tab.nativeID);
+          if (tab.kind !== 'library') {
+            const move = Array.from(popup.children).find(
+              (child) =>
+                child.localName === 'menu' &&
+                child.getAttribute('label') === Zotero.getString('tabs.move'),
+            );
+            const submenu = move?.querySelector('menupopup');
+            const labels = new Set([
+              Zotero.getString('tabs.moveToStart'),
+              Zotero.getString('tabs.moveToEnd'),
+            ]);
+            const items = Array.from(submenu?.children ?? []).filter(
+              (child) =>
+                child.localName === 'menuitem' && labels.has(child.getAttribute('label') ?? ''),
+            );
+            if (items.length !== 2) {
+              popup.hidePopup();
+              throw new Error('Unsupported native tab menu');
+            }
+            for (const item of items) item.remove();
+          }
+        } catch (error) {
+          for (const layout of layouts) layout.dispose();
+          layouts.clear();
+          report(error);
+        }
+      }, 0);
+    },
+    toggleAudio(viewID) {
+      const tab = cache.find((entry) => entry.viewID === viewID);
+      if (current() && tab && typeof tabs.toggleAudio === 'function')
+        tabs.toggleAudio(tab.nativeID);
+    },
     close(nativeIDs) {
       if (!current()) return;
       const ids = nativeIDs.filter(
@@ -268,12 +319,24 @@ export function createTabEnhancementHost(
       return result.id;
     },
     mountSidebar(root, toolbarSlot, options, onResize) {
+      if (
+        options.side === 'top' &&
+        (typeof tabs._openMenu !== 'function' || typeof tabs.toggleAudio !== 'function')
+      )
+        throw new Error('Unsupported native tab controls');
       if (!current()) throw new Error('Tab host retired');
       const layout = mountRail(window, root, toolbarSlot, options, onResize);
       layouts.add(layout);
       return {
         ownsTarget: layout.ownsTarget,
-        update: layout.update,
+        update(next) {
+          if (
+            next.side === 'top' &&
+            (typeof tabs._openMenu !== 'function' || typeof tabs.toggleAudio !== 'function')
+          )
+            throw new Error('Unsupported native tab controls');
+          layout.update(next);
+        },
         dispose() {
           layouts.delete(layout);
           layout.dispose();

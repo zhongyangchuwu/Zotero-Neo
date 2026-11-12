@@ -61,6 +61,7 @@ export class SettingsTabs {
           options: [
             { value: 'left', label: settingsText(language, 'Far left') },
             { value: 'right', label: settingsText(language, 'Far right') },
+            { value: 'top', label: settingsText(language, 'Top') },
           ],
         },
         {
@@ -89,7 +90,7 @@ export class SettingsTabs {
           minimum: TAB_RAIL_WIDTH.min,
           maximum: TAB_RAIL_WIDTH.max,
           step: 8,
-          disabled: options.collapsed,
+          disabled: options.collapsed || options.side === 'top',
         },
         {
           kind: 'action',
@@ -123,7 +124,8 @@ export class SettingsTabs {
     let value: string | number | boolean;
     switch (command.id) {
       case 'tabs.side':
-        if (command.value !== 'left' && command.value !== 'right') return true;
+        if (command.value !== 'left' && command.value !== 'right' && command.value !== 'top')
+          return true;
         key = TAB_ENHANCEMENT_PREFERENCES.side;
         value = command.value;
         break;
@@ -136,7 +138,8 @@ export class SettingsTabs {
         if (
           typeof command.value !== 'number' ||
           !Number.isFinite(command.value) ||
-          tabRailOptions(this.#preferences).collapsed
+          tabRailOptions(this.#preferences).collapsed ||
+          tabRailOptions(this.#preferences).side === 'top'
         )
           return true;
         key = TAB_ENHANCEMENT_PREFERENCES.width;

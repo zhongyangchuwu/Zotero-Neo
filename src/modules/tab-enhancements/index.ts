@@ -126,6 +126,13 @@ export function createTabEnhancementsModule(
         moveMember: (id, groupID, beforeID) =>
           invoke(() => ports.groups.moveMember(id, groupID, beforeID, native.id)),
         moveGroup: (id, beforeID) => invoke(() => ports.groups.moveGroup(id, beforeID, native.id)),
+        nativeMenu: (id, x, y) =>
+          invoke(() =>
+            native.openNativeMenu(id, x, y, (edge) =>
+              invoke(() => ports.groups.moveToEdge(id, edge, native.id)),
+            ),
+          ),
+        toggleAudio: (id) => invoke(() => native.toggleAudio(id)),
         leave: () => {
           if (current()) native.focusContent();
         },
@@ -162,10 +169,16 @@ export function createTabEnhancementsModule(
         const invalid = validateTabTitleFormat(format);
         if (!invalid) appliedFormat = format;
         const options = tabRailOptions(ports.preferences);
-        sidebar.update(ports.groups.view(native.id, appliedFormat), options.collapsed);
         layout.update(options);
+        sidebar.update(
+          ports.groups.view(native.id, appliedFormat),
+          options.collapsed,
+          options.side === 'top',
+        );
         if (invalid) sidebar.status(t('tabs.invalidFormat', ports.language()));
       } catch (error) {
+        layout.dispose();
+        sidebar.dispose();
         report(error);
       }
     }

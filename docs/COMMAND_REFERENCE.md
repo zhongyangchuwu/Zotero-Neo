@@ -358,7 +358,7 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `tabs-list` | `u` | `tabUngroup` | 确认后解散整组；已打开的标签页保持打开。 |
 | `tabs-list` | `x` | `tabRemoveFromGroup` | 将所选单个成员移出分组；若标签页仍打开，不会关闭它。 |
 
-`tabs-input` 和 `tabs-list` 都支持本地导航、确认、取消、焦点切换及分组操作；`tabs-list` 另外支持 `uiSearch`。两个上下文都支持 `uiNextPane` 和 `uiPreviousPane`，但默认未绑定。完整分组操作流程见[用垂直标签栏整理阅读分组](MAIN_GUIDE.md#用垂直标签栏整理阅读分组)。
+`tabs-input` 和 `tabs-list` 都支持本地导航、确认、取消、焦点切换及分组操作；`tabs-list` 另外支持 `uiSearch`。两个上下文都支持 `uiNextPane` 和 `uiPreviousPane`，但默认未绑定。完整分组操作流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。
 
 
 ## Action ID 索引

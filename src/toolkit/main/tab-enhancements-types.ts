@@ -33,10 +33,11 @@ export interface TabViewSnapshot {
   readonly selected: boolean;
   readonly document: TabDocumentRef | null;
   readonly fields: TabTitleFields;
+  readonly audioStatus?: { readonly active: boolean; readonly paused: boolean };
 }
 
 export interface TabRailLayoutOptions {
-  readonly side: 'left' | 'right';
+  readonly side: 'left' | 'right' | 'top';
   readonly width: number;
   readonly collapsed: boolean;
 }
@@ -55,6 +56,13 @@ export interface TabEnhancementHost {
   metadata(document: TabDocumentRef): TabTitleFields | null;
   select(nativeID: string): boolean;
   focusContent(): void;
+  openNativeMenu(
+    viewID: string,
+    screenX: number,
+    screenY: number,
+    onMove?: (edge: 'start' | 'end') => void,
+  ): void;
+  toggleAudio(viewID: string): void;
   close(nativeIDs: readonly string[]): void;
   move(nativeID: string, beforeNativeID: string | null): void;
   /** Opens a real native unloaded view; false means retired before mutation, never a fake tab. */
