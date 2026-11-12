@@ -8,7 +8,7 @@ import { t } from '../../i18n';
 import { bindCompositionState, compositionOwnsKey } from '../../input/composition';
 import { keyString } from '../../input/keys';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
-import { THEME_VARS } from '../../ui/theme';
+import { PREPARATION_BACKDROP_STYLE, PREPARATION_PANEL_STYLE } from '../../ui/react/shells/reader';
 import {
   documentPreparationAbort,
   documentPreparationHost,
@@ -75,7 +75,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     this.close(false);
     const doc = host.window.document;
     const backdrop = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
-    backdrop.style.cssText = `position:fixed;inset:0;z-index:2147483646;background:${THEME_VARS.backdrop};display:flex;align-items:center;justify-content:center`;
+    backdrop.style.cssText = PREPARATION_BACKDROP_STYLE;
     const root = doc.createElementNS('http://www.w3.org/1999/xhtml', 'section') as HTMLElement;
     root.className = 'neo-ui';
     root.dataset.zvDocumentPreparation = '1';
@@ -83,7 +83,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-label', t('documentPreparation.title', host.language()));
-    root.style.cssText = `display:flex;flex-direction:column;gap:10px;padding:18px;width:min(880px,90vw);max-height:90vh;overflow:auto;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;font:menu`;
+    root.style.cssText = PREPARATION_PANEL_STYLE;
     const focus = doc.activeElement as HTMLElement | null;
     backdrop.append(root);
     doc.documentElement.append(backdrop);

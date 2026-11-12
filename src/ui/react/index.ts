@@ -45,6 +45,14 @@ import {
 import type { SelectionActionsReactModel } from '../../modules/reader-selection/react-model';
 import { mountReaderSidebarReactView, READER_SIDEBAR_REACT_CSS } from './surfaces/reader-sidebar';
 import type { ReaderSidebarViewModel } from '../../modules/reader-navigation/react-model';
+import { mountMainNoticeReactView, MAIN_NOTICE_REACT_CSS } from './surfaces/main-notice';
+import type { MainNoticeReactModel } from '../../main/notice-react-model';
+import { mountKeyGuideReactView, KEY_GUIDE_REACT_CSS } from './surfaces/key-guide';
+import type { KeyGuideReactModel } from '../key-guide-react-model';
+import { mountMainStatusReactView, MAIN_STATUS_REACT_CSS } from './surfaces/main-status';
+import type { MainStatusReactModel } from '../../modules/worksets/status-react-model';
+import { mountReaderStatusReactView, READER_STATUS_REACT_CSS } from './surfaces/reader-status';
+import type { ReaderStatusReactModel } from '../../reader/status-react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -70,7 +78,11 @@ const runtime: NativeUIRuntime = {
         DOCUMENT_PREPARATION_REACT_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS +
-        READER_SIDEBAR_REACT_CSS;
+        READER_SIDEBAR_REACT_CSS +
+        MAIN_NOTICE_REACT_CSS +
+        KEY_GUIDE_REACT_CSS +
+        MAIN_STATUS_REACT_CSS +
+        READER_STATUS_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -93,6 +105,17 @@ const runtime: NativeUIRuntime = {
       case 'reader-sidebar':
         return mountReaderSidebarReactView(root, model as ReaderSidebarViewModel, (command) =>
           dispatch(command),
+        ) as ReactView<unknown>;
+      case 'main-notice':
+        return mountMainNoticeReactView(root, model as MainNoticeReactModel) as ReactView<unknown>;
+      case 'key-guide':
+        return mountKeyGuideReactView(root, model as KeyGuideReactModel) as ReactView<unknown>;
+      case 'main-status':
+        return mountMainStatusReactView(root, model as MainStatusReactModel) as ReactView<unknown>;
+      case 'reader-status':
+        return mountReaderStatusReactView(
+          root,
+          model as ReaderStatusReactModel,
         ) as ReactView<unknown>;
       case 'selection-panel':
         return mountSelectionPanelReactView(

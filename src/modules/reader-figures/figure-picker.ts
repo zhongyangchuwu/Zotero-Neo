@@ -6,7 +6,7 @@ import {
 } from '../../input/composition';
 import { keyString } from '../../input/keys';
 import { mountNativeReactView } from '../../platform/native-ui';
-import { THEME_VARS } from '../../ui/theme';
+import { FIGURES_BACKDROP_STYLE } from '../../ui/react/shells/reader';
 import type { NativeReactView } from '../../ui/react/types';
 import { readerWindow, type ReaderRegionPreview } from '../../toolkit/reader';
 import type { PdfWindow, ReaderRuntime } from '../../reader/types';
@@ -72,7 +72,7 @@ export class ReaderFigurePicker {
     const doc = outer.document;
     const originalFocus = window.document.activeElement as HTMLElement | null;
     const backdrop = doc.createElementNS(H, 'div') as HTMLElement;
-    backdrop.style.cssText = `position:fixed;inset:0;z-index:2147483645;background:${THEME_VARS.backdrop}`;
+    backdrop.style.cssText = FIGURES_BACKDROP_STYLE;
     const root = doc.createElementNS(H, 'div') as HTMLElement;
     backdrop.append(root);
     doc.documentElement.append(backdrop);

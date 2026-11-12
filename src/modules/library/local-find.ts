@@ -11,7 +11,7 @@ import { citationKey } from '../../platform/better-bibtex';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { NativeReactView } from '../../ui/react/types';
 import type { LocalFindReactCommand, LocalFindReactModel } from './local-find-react-model';
-import { THEME_VARS } from '../../ui/theme';
+import { LOCAL_FIND_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import {
   mainItem,
   mainItemCursorRow,
@@ -147,7 +147,7 @@ export class MainLocalFind {
       const overlay = doc.createElementNS(H, 'div');
       opening.overlay = overlay;
       overlay.id = 'zv-main-local-find';
-      overlay.style.cssText = `position:fixed;left:14px;right:14px;bottom:10px;z-index:100000;display:flex;align-items:center;gap:8px;max-width:760px;margin:0 auto;padding:7px 10px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:5px;box-shadow:0 8px 28px ${THEME_VARS.shadow};font:13px/1.4 monospace`;
+      overlay.style.cssText = LOCAL_FIND_OVERLAY_STYLE;
 
       if (!current()) {
         this.#discard(opening);

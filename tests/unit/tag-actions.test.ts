@@ -112,9 +112,15 @@ function harness(options: {
   } as unknown as MainWindow;
   const selection = new SelectionStore();
   for (const item of items) selection.add({ libraryID: item.libraryID, itemID: item.id });
+  const status = { textContent: '', style: {} };
   const session = {
     window,
-    status: { textContent: '', style: {} },
+    status,
+    statusView: {
+      update: (model: { text: string }) => {
+        status.textContent = model.text;
+      },
+    },
     cleanup: { add: vi.fn() },
   } as unknown as MainWindowSession;
   let lastOpen:

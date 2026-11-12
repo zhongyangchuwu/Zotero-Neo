@@ -4,7 +4,9 @@ import type { MainWindow } from '../core/contracts';
 import type { PreferenceStore } from '../core/preference-store';
 import type { BuiltinModuleRuntime } from '../core/module-runtime';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
-import { THEME_VARS, type ThemeManager } from '../ui/theme';
+import type { ThemeManager } from '../ui/theme';
+import type { NativeReactView } from '../ui/react/types';
+import type { MainNoticeReactModel } from './notice-react-model';
 import { PickerRuntime } from './picker/runtime';
 import type { InteractionAppearanceManager } from './interaction-appearance';
 import { NavigationHistoryState } from '../navigation/history';
@@ -22,6 +24,7 @@ export class MainWindowSession {
   readonly cleanup = new CleanupScope();
   readonly host: ZoteroWindowRuntime;
   readonly status: HTMLElement;
+  statusView: NativeReactView<MainNoticeReactModel> | null = null;
   statusTimer: number | undefined;
   readonly focusOwnership: MainFocusOwnership;
   activePanel: MainPanel = 'items';
@@ -46,13 +49,20 @@ export class MainWindowSession {
     this.cleanup.add(() => this.focusOwnership.dispose());
     const doc = window.document;
     this.status = doc.createElementNS('http://www.w3.org/1999/xhtml', 'div');
-    this.status.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:99999;font:bold 12px/1.4 monospace;color:${THEME_VARS.text};background:${THEME_VARS.surface};padding:2px 8px;border:1px solid ${THEME_VARS.border};border-radius:3px;pointer-events:none;display:none;user-select:none;box-shadow:0 4px 16px ${THEME_VARS.shadow}`;
+    this.status.setAttribute('aria-live', 'polite');
     (doc.body ?? doc.documentElement).append(this.status);
     this.host.theme.add(this.status);
     this.cleanup.add(() => this.input.dispose());
     this.cleanup.add(() => this.note.input.dispose());
     this.cleanup.add(() => this.prefixGuide.dispose());
-    this.cleanup.add(() => this.status.remove());
+    this.cleanup.add(() => {
+      try {
+        this.statusView?.dispose();
+      } finally {
+        this.statusView = null;
+        this.status.remove();
+      }
+    });
     this.cleanup.add(() => {
       const timer = this.statusTimer;
       this.statusTimer = undefined;

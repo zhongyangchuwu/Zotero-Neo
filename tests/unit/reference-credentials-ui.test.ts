@@ -1,177 +1,132 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { referenceCredentialField } from '../../src/ui/reference-credentials';
+import type { MainWindow } from '../../src/core/contracts';
+import type { PreferenceStore } from '../../src/core/preference-store';
+import { React } from '../../src/ui/react/runtime';
+import { createReactView } from '../../src/ui/react/view';
+import { ReaderPage } from '../../src/ui/react/surfaces/settings-reader';
+import type { ReactView } from '../../src/ui/react/types';
+import type { ReaderPageModel } from '../../src/main/settings-reader-model';
+import { SettingsReader } from '../../src/main/settings-reader';
 
 vi.mock('../../src/platform/reference-credentials', () => ({
   readReferenceKey: vi.fn(),
   changeReferenceKey: vi.fn(),
 }));
+vi.mock('../../src/platform/document-credentials', () => ({
+  readMinerUToken: vi.fn(() => ''),
+  saveMinerUToken: vi.fn(),
+}));
 vi.mock('../../src/platform/reference-http', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/platform/reference-http')>()),
   referenceRequest: vi.fn(),
 }));
-
 import { changeReferenceKey, readReferenceKey } from '../../src/platform/reference-credentials';
 import { referenceRequest } from '../../src/platform/reference-http';
 
-class ElementFake {
-  readonly children: ElementFake[] = [];
-  readonly attributes = new Map<string, string>();
-  readonly listeners = new Map<string, Set<() => void>>();
-  readonly style: Record<string, string> = { cssText: '', marginInlineStart: '' };
-  textContent = '';
-  value = '';
-  type = '';
-  autocomplete = '';
-  disabled = false;
-
-  constructor(readonly tag: string) {}
-
-  append(...children: ElementFake[]): void {
-    this.children.push(...children);
-  }
-
-  setAttribute(key: string, value: string): void {
-    this.attributes.set(key, value);
-  }
-
-  getAttribute(key: string): string | null {
-    return this.attributes.get(key) ?? null;
-  }
-
-  addEventListener(type: string, listener: () => void): void {
-    const group = this.listeners.get(type) ?? new Set();
-    group.add(listener);
-    this.listeners.set(type, group);
-  }
-
-  removeEventListener(type: string, listener: () => void): void {
-    this.listeners.get(type)?.delete(listener);
-  }
-
-  click(): void {
-    for (const listener of this.listeners.get('click') ?? []) listener();
-  }
-
-  all(): ElementFake[] {
-    return [this, ...this.children.flatMap((child) => child.all())];
-  }
-
-  byAria(label: string): ElementFake {
-    const match = this.all().find((node) => node.getAttribute('aria-label') === label);
-    if (!match) throw new Error(`Missing control: ${label}`);
-    return match;
-  }
-
-  button(label: string): ElementFake {
-    const match = this.all().find((node) => node.tag === 'button' && node.textContent === label);
-    if (!match) throw new Error(`Missing button: ${label}`);
-    return match;
-  }
-
-  status(): ElementFake {
-    const match = this.all().find((node) => node.getAttribute('role') === 'status');
-    if (!match) throw new Error('Missing credential status');
-    return match;
-  }
+async function settle(): Promise<void> {
+  for (let index = 0; index < 5; index++) await Promise.resolve();
 }
 
 function mount() {
-  const document = {
-    createElementNS: (_namespace: string, tag: string) => new ElementFake(tag),
-  } as unknown as Document;
-  const field = referenceCredentialField(document, () => 'en');
-  return { field, root: field.root as unknown as ElementFake };
+  const root = document.createElement('div');
+  document.body.append(root);
+  const changed = vi.fn(() => view?.update(reader.model()));
+  const preferences = {
+    get: (_key: string, fallback: unknown) => fallback,
+    has: () => false,
+    set: () => {},
+    clear: () => {},
+  } as unknown as PreferenceStore;
+  let view: ReactView<ReaderPageModel> | undefined;
+  const reader = new SettingsReader({} as MainWindow, preferences, 'en', changed);
+  view = createReactView(
+    root,
+    (model) =>
+      React.createElement(ReaderPage, { model, dispatch: (command) => reader.dispatch(command) }),
+    reader.model(),
+  );
+  const section = (): HTMLElement => {
+    const nodes = root.querySelectorAll('section');
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes.item(index) as HTMLElement | null;
+      if (node?.querySelector('h3')?.textContent === reader.model().semanticScholar.title)
+        return node;
+    }
+    throw new Error('Reference credential section not found');
+  };
+  const input = () => section().querySelector<HTMLInputElement>('input[type=password]')!;
+  const button = (label: string): HTMLButtonElement => {
+    const nodes = section().querySelectorAll('button');
+    for (let index = 0; index < nodes.length; index++) {
+      const node = nodes.item(index) as HTMLButtonElement | null;
+      if (node?.textContent === label) return node;
+    }
+    throw new Error(`Missing credential button: ${label}`);
+  };
+  const dispose = () => {
+    view?.dispose();
+    reader.dispose();
+    root.remove();
+  };
+  return { root, reader, changed, input, button, dispose };
 }
-
-async function settle(): Promise<void> {
-  for (let i = 0; i < 5; i++) await Promise.resolve();
-}
-
-const readKey = vi.mocked(readReferenceKey);
-const changeKey = vi.mocked(changeReferenceKey);
-const request = vi.mocked(referenceRequest);
 
 beforeEach(() => {
   vi.resetAllMocks();
-  readKey.mockReturnValue('stored-secret');
-  changeKey.mockResolvedValue(undefined);
+  vi.mocked(readReferenceKey).mockReturnValue('stored-secret');
+  vi.mocked(changeReferenceKey).mockResolvedValue(undefined);
 });
 
-describe('Reference credentials settings field', () => {
-  it('keeps stored credentials blank and mutates them only after explicit Save or Forget', async () => {
-    const { field, root } = mount();
+describe('Reader Settings reference credentials', () => {
+  it('keeps stored keys private and saves or forgets only on explicit action', async () => {
+    const ui = mount();
     await settle();
-
-    expect(root.byAria('API key').type).toBe('password');
-    expect(root.byAria('API key').value).toBe('');
-    expect(readKey).toHaveBeenCalledTimes(1);
-    expect(changeKey).not.toHaveBeenCalled();
-    expect(root.status().textContent).toContain('A key is stored');
-    expect(
-      root
-        .all()
-        .map((node) => node.textContent)
-        .join(' '),
-    ).not.toContain('stored-secret');
-
-    root.byAria('API key').value = 'replacement-secret';
-    root.button('Save key').click();
-    expect(changeKey).toHaveBeenCalledWith('replacement-secret');
-    expect(root.byAria('API key').value).toBe('');
+    const model = ui.reader.model().semanticScholar;
+    expect(model.configured).toBe(true);
+    expect(ui.input().value).toBe('');
+    expect(ui.root.textContent).not.toContain('stored-secret');
+    expect(changeReferenceKey).not.toHaveBeenCalled();
+    ui.input().value = 'replacement-secret';
+    ui.button(model.saveLabel).click();
+    expect(ui.input().value).toBe('');
+    expect(changeReferenceKey).toHaveBeenCalledWith('replacement-secret');
     await settle();
-    expect(
-      root
-        .all()
-        .map((node) => node.textContent)
-        .join(' '),
-    ).not.toContain('replacement-secret');
-
-    root.button('Forget key').click();
-    expect(changeKey).toHaveBeenLastCalledWith(null);
+    expect(ui.root.textContent).not.toContain('replacement-secret');
+    ui.button(model.forgetLabel).click();
+    expect(changeReferenceKey).toHaveBeenLastCalledWith(null);
     await settle();
-    expect(root.byAria('API key').value).toBe('');
-    expect(request).not.toHaveBeenCalled();
-    field.dispose();
+    expect(referenceRequest).not.toHaveBeenCalled();
+    ui.dispose();
   });
 
-  it('keeps anonymous use when no key exists and rejects a blank save without mutating credentials', async () => {
-    readKey.mockReturnValue('');
-    const { field, root } = mount();
+  it('rejects a blank key without changing anonymous credentials', async () => {
+    vi.mocked(readReferenceKey).mockReturnValue('');
+    const ui = mount();
     await settle();
-
-    expect(root.byAria('API key').value).toBe('');
-    expect(root.status().textContent).toContain('No key is stored');
-    root.button('Save key').click();
-    expect(root.status().textContent).toContain('Enter a key to save');
-    expect(changeKey).not.toHaveBeenCalled();
-    expect(request).not.toHaveBeenCalled();
-    field.dispose();
+    const model = ui.reader.model().semanticScholar;
+    expect(model.configured).toBe(false);
+    ui.button(model.saveLabel).click();
+    expect(ui.reader.model().semanticScholar.error).toBe(true);
+    expect(changeReferenceKey).not.toHaveBeenCalled();
+    expect(referenceRequest).not.toHaveBeenCalled();
+    ui.dispose();
   });
 
-  it('clears input and ignores late mutation completion after disposal', async () => {
-    const { promise: save, resolve: resolveSave } = Promise.withResolvers<void>();
-    changeKey.mockReturnValue(save);
-    const { field, root } = mount();
+  it('clears the input and ignores a late save after the page closes', async () => {
+    const pending = Promise.withResolvers<void>();
+    vi.mocked(changeReferenceKey).mockReturnValue(pending.promise);
+    const ui = mount();
     await settle();
-
-    const input = root.byAria('API key');
+    const input = ui.input();
     input.value = 'late-secret';
-    root.button('Save key').click();
-    const statusBeforeDispose = root.status().textContent;
+    ui.button(ui.reader.model().semanticScholar.saveLabel).click();
     expect(input.value).toBe('');
-    field.dispose();
-    expect(input.value).toBe('');
-    input.value = 'ignored-secret';
-    root.button('Save key').click();
-    expect(changeKey).toHaveBeenCalledTimes(1);
-    resolveSave();
+    const changedBeforeDispose = ui.changed.mock.calls.length;
+    ui.dispose();
+    pending.resolve();
     await settle();
-    expect(root.status().textContent).toBe(statusBeforeDispose);
-    expect(
-      root
-        .all()
-        .map((node) => node.textContent)
-        .join(' '),
-    ).not.toContain('late-secret');
+    expect(ui.changed).toHaveBeenCalledTimes(changedBeforeDispose);
+    expect(referenceRequest).not.toHaveBeenCalled();
   });
 });

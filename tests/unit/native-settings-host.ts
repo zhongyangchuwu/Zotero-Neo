@@ -1,9 +1,17 @@
 import type { NativeReactViewOptions } from '../../src/ui/react/types';
 import type { SettingsReactCommand, SettingsReactModel } from '../../src/main/settings-react-model';
 import type { PickerReactModel } from '../../src/main/picker/react-model';
+import type { MainNoticeReactModel } from '../../src/main/notice-react-model';
+import type { KeyGuideReactModel } from '../../src/ui/key-guide-react-model';
 
-type SettingsOptions = NativeReactViewOptions<SettingsReactModel, SettingsReactCommand>;
-type PickerOptions = NativeReactViewOptions<PickerReactModel, never>;
+type SettingsOptions = NativeReactViewOptions<SettingsReactModel, SettingsReactCommand> & {
+  surface: 'settings';
+};
+type PickerOptions = NativeReactViewOptions<PickerReactModel, never> & { surface: 'picker' };
+type NoticeOptions = NativeReactViewOptions<MainNoticeReactModel, never> & {
+  surface: 'main-notice';
+};
+type GuideOptions = NativeReactViewOptions<KeyGuideReactModel, never> & { surface: 'key-guide' };
 
 type Host = {
   root: HTMLElement;
@@ -17,16 +25,52 @@ type Host = {
 };
 
 export const nativeHosts: Host[] = [];
+export const nativeNotices = new Map<HTMLElement, MainNoticeReactModel>();
+export const nativeGuides = new Map<HTMLElement, KeyGuideReactModel>();
 export let deferSettings = false;
 export function setDeferredSettings(value: boolean): void {
   deferSettings = value;
 }
 export function resetNativeHosts(): void {
   nativeHosts.length = 0;
+  nativeNotices.clear();
+  nativeGuides.clear();
   deferSettings = false;
 }
 
-export function mountNativeReactView(options: SettingsOptions | PickerOptions) {
+export function mountNativeReactView(
+  options: SettingsOptions | PickerOptions | NoticeOptions | GuideOptions,
+) {
+  if (options.surface === 'key-guide') {
+    const update = (model: KeyGuideReactModel) => nativeGuides.set(options.root, model);
+    update(options.model);
+    return {
+      ready: Promise.resolve(),
+      update,
+      getElement: () => null,
+      dispose: () => {
+        nativeGuides.delete(options.root);
+      },
+    };
+  }
+  if (options.surface === 'main-notice') {
+    let disposed = false;
+    const update = (model: MainNoticeReactModel) => {
+      if (disposed) return;
+      nativeNotices.set(options.root, model);
+      options.root.textContent = model.text;
+    };
+    update(options.model);
+    return {
+      ready: Promise.resolve(),
+      update,
+      getElement: () => null,
+      dispose: () => {
+        disposed = true;
+        nativeNotices.delete(options.root);
+      },
+    };
+  }
   // The project targets ES2022, before Promise.withResolvers is available.
   let resolveReady!: () => void;
   let rejectReady!: (error: Error) => void;

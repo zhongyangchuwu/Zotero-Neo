@@ -31,6 +31,7 @@ import {
 import { copyToClipboard } from '../platform/clipboard';
 import { cloneInto, isDeadObject } from '../platform/cross-compartment';
 import { asElement, asKeyboardEvent, isEditableElement } from '../platform/dom';
+import { mountNativeReactView } from '../platform/native-ui';
 import { compositionOwnsKey } from '../input/composition';
 import { advanceInput, inputWouldConsume } from '../input/engine';
 import { InputRuntime, type InputTimerHost } from '../input/runtime';
@@ -49,7 +50,9 @@ import {
 } from './action-capabilities';
 import { ACTION_LABELS, focusDirectionForAction, type ActionId } from '../input/actions';
 import { PrefixGuideRuntime } from '../ui/key-guide-runtime';
-import { THEME_VARS, ThemeManager } from '../ui/theme';
+import { ThemeManager } from '../ui/theme';
+import type { NativeReactView } from '../ui/react/types';
+import type { ReaderStatusReactModel } from './status-react-model';
 import { ReaderAnnotationNavigationState } from './annotation-navigation-state';
 import {
   createReaderNavigationModule,
@@ -550,6 +553,8 @@ export class ReaderSession {
   readonly #selectionActions: ReaderSelectionModule['actions'] | null;
   #smoothScroller: ReaderNavigationModule['smooth'] | null = null;
   readonly #themeManagers = new Map<Window, ThemeManager>();
+  #indicatorView: NativeReactView<ReaderStatusReactModel> | null = null;
+  #indicatorModel: ReaderStatusReactModel | null = null;
   readonly #prefixGuide = new PrefixGuideRuntime(READER_INPUT_TIMERS);
   readonly input = new InputRuntime(READER_INPUT_TIMERS);
   #markJumpRevision = 0;
@@ -1341,6 +1346,10 @@ export class ReaderSession {
     failure.run(() => this.#viewLifecycle.dispose());
     failure.run(() => this.#hostKeyBridge.dispose());
     failure.run(() => this.#jumpHistoryBridge.dispose());
+    const indicatorView = this.#indicatorView;
+    this.#indicatorView = null;
+    this.#indicatorModel = null;
+    failure.run(() => indicatorView?.dispose());
     const indicatorCleanup = this.state.indicatorThemeCleanup;
     this.state.indicatorThemeCleanup = null;
     failure.run(() => indicatorCleanup?.());
@@ -1973,7 +1982,6 @@ export class ReaderSession {
     existing?.remove();
     const indicator = document.createElement('div');
     indicator.id = 'zotero-vim-mode-indicator';
-    indicator.style.cssText = `position:fixed;bottom:10px;right:14px;z-index:9999;padding:4px 8px;border:1px solid ${THEME_VARS.border};border-radius:4px;color:${THEME_VARS.text};background:${THEME_VARS.elevated};box-shadow:0 4px 16px ${THEME_VARS.shadow};font:12px monospace;pointer-events:none;display:none`;
     document.body?.appendChild(indicator);
     return indicator;
   }
@@ -2039,51 +2047,75 @@ export class ReaderSession {
         ? 'COMMENT'
         : null;
     if (inputOwner) {
-      indicator.style.display = 'block';
-      indicator.textContent = `-- ${inputOwner} --`;
-      indicator.style.color = THEME_VARS.modeInsertText;
-      indicator.style.background = THEME_VARS.modeInsert;
+      this.renderIndicator({ visible: true, text: `-- ${inputOwner} --`, kind: 'insert' });
       return;
     }
     if (this.mode === 'normal' && !this.input.keyBuffer && !this.input.countBuffer) {
-      indicator.style.display = 'none';
+      if (this.#indicatorModel) this.renderIndicator({ ...this.#indicatorModel, visible: false });
       return;
     }
-    indicator.style.display = 'block';
     if (this.mode === 'visual') {
       const selected = annotationText(
         this.#navigationHost.activePdfWindow()?.getSelection()?.toString() ?? '',
       );
       const pending = this.input.countBuffer || this.input.keyBuffer;
       const body = readerSelectionIsFiltered(this.#navigationHost.activePdfWindow()) ? ' BODY' : '';
-      indicator.textContent = `SELECT${body} · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
-      indicator.style.color = THEME_VARS.modeVisualText;
-      indicator.style.background = THEME_VARS.modeVisual;
+      this.renderIndicator({
+        visible: true,
+        text: `SELECT${body} · ${selected.length} chars · y copy · Enter actions · s Flash · Esc cancel${pending ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`,
+        kind: 'visual',
+      });
       return;
     }
-    indicator.textContent = `-- ${this.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`;
-    indicator.style.color = THEME_VARS.modeNormalText;
-    indicator.style.background = THEME_VARS.modeNormal;
+    this.renderIndicator({
+      visible: true,
+      text: `-- ${this.mode.toUpperCase()} --${this.input.countBuffer || this.input.keyBuffer ? `  ${this.input.countBuffer}${this.input.keyBuffer}` : ''}`,
+      kind: 'normal',
+    });
   }
 
   private showStatus(message: string, duration = 2000): void {
     const indicator = this.state.indicator;
     if (!indicator) return;
-    indicator.style.display = 'block';
-    indicator.textContent = message;
-    const success = message.startsWith('✓');
-    const info = message.startsWith('→') || message.startsWith('▶');
-    indicator.style.color = success
-      ? THEME_VARS.statusSuccessText
-      : info
-        ? THEME_VARS.statusInfoText
-        : THEME_VARS.statusErrorText;
-    indicator.style.background = success
-      ? THEME_VARS.statusSuccess
-      : info
-        ? THEME_VARS.statusInfo
-        : THEME_VARS.statusError;
+    this.renderIndicator({
+      visible: true,
+      text: message,
+      kind: message.startsWith('✓')
+        ? 'success'
+        : message.startsWith('→') || message.startsWith('▶')
+          ? 'info'
+          : 'error',
+    });
     this.schedule(duration, () => this.updateIndicator());
+  }
+
+  private renderIndicator(model: ReaderStatusReactModel): void {
+    const root = this.state.indicator;
+    if (!root) return;
+    this.#indicatorModel = model;
+    if (this.#indicatorView) {
+      this.#indicatorView.update(model);
+      return;
+    }
+    if (!model.visible) return;
+    const document = root.ownerDocument;
+    this.#indicatorView = mountNativeReactView({
+      surface: 'reader-status',
+      root,
+      model,
+      dispatch: () => {},
+      isCurrent: () =>
+        !this.#scope.disposed &&
+        this.state.indicator === root &&
+        readerWindow(this.#dependencies.reader)?.document === document &&
+        root.isConnected,
+      loadingText: '',
+      errorText: '',
+      onError: (error) =>
+        this.#dependencies.controller.dependencies.logger.debug(
+          `Reader status view failed: ${String(error)}`,
+        ),
+    });
   }
 
   private modeEnabled(mode: Exclude<ReaderMode, 'normal'>): boolean {

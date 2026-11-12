@@ -1,4 +1,9 @@
 import { CleanupFailure } from '../../core/cleanup';
+import {
+  PDF_FLASH_HINT_STYLE,
+  PDF_FLASH_INPUT_STYLE,
+  PDF_FLASH_PROMPT_STYLE,
+} from '../../ui/react/shells/reader';
 import { readerTextSpans } from '../../toolkit/reader';
 import {
   compositionOwnsKey,
@@ -547,8 +552,7 @@ export class ReaderFlash {
         const element = pdfWindow.document.createElement('span');
         element.dataset.zoteroNeoFlashHint = '1';
         element.textContent = label;
-        element.style.cssText =
-          'position:fixed;z-index:100000;background:#f9e2af;color:#1e1e2e;padding:1px 3px;border:1px solid #1e1e2e;border-radius:2px;font:bold 10px monospace;line-height:1.2;pointer-events:none;';
+        element.style.cssText = PDF_FLASH_HINT_STYLE;
         element.style.left = `${candidate.rect.left}px`;
         element.style.top = `${candidate.rect.top}px`;
         const target = {
@@ -719,8 +723,7 @@ export class ReaderFlash {
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.placeholder = 'Type visible text…';
-    input.style.cssText =
-      'position:fixed;left:12px;bottom:46px;z-index:100001;width:min(360px,calc(100vw - 24px));box-sizing:border-box;padding:6px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#0f172a;color:#ffffff;outline:none;font:13px/1.2 monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);';
+    input.style.cssText = PDF_FLASH_INPUT_STYLE;
     const composition: CompositionState = { active: false };
     this.#composition = composition;
     this.#input = input;
@@ -774,8 +777,7 @@ export class ReaderFlash {
   #createPrompt(pdfWindow: PdfWindow, generation: number): void {
     const prompt = pdfWindow.document.createElement('div');
     prompt.dataset.zoteroNeoFlashPrompt = '1';
-    prompt.style.cssText =
-      'position:fixed;left:12px;bottom:12px;z-index:100001;padding:5px 8px;border:2px solid #8ab4ff;border-radius:5px;background:#172554;color:#ffffff;font:bold 12px monospace;box-shadow:0 4px 14px rgba(0,0,0,.28);pointer-events:none;';
+    prompt.style.cssText = PDF_FLASH_PROMPT_STYLE;
     this.#prompt = prompt;
     try {
       pdfWindow.document.body?.appendChild(prompt);

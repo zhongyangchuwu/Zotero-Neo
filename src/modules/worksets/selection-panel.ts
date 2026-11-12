@@ -1,7 +1,7 @@
 import type { MainWindow } from '../../core/contracts';
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import { keyString } from '../../input/keys';
-import { THEME_VARS } from '../../ui/theme';
+import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { mainItem, mainItemRowForRef } from '../../toolkit/main';
 import type { ItemRef } from '../../core/item-ref';
 import type { NavigationExecution } from '../../navigation/types';
@@ -109,7 +109,7 @@ export class SelectionPanel {
     const overlay = create('div');
     overlay.id = 'zv-selection-panel';
     overlay.tabIndex = -1;
-    overlay.style.cssText = `position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:40px;background:${THEME_VARS.backdrop};color:${THEME_VARS.text};font:13px/1.4 monospace`;
+    overlay.style.cssText = CENTERED_MONOSPACE_OVERLAY_STYLE;
 
     const content = create('div');
     overlay.append(content);

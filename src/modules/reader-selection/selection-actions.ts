@@ -9,7 +9,7 @@ import type {
   ReaderSelectionActionOutcome,
   ReaderSelectionContext,
 } from '../../core/contracts';
-import { THEME_VARS } from '../../ui/theme';
+import { SELECTION_ACTIONS_OVERLAY_STYLE } from '../../ui/react/shells/reader';
 import type { PdfWindow } from '../../reader/types';
 
 export interface ReaderSelectionActionHost {
@@ -323,7 +323,7 @@ export class ReaderSelectionActions {
     this.#overlay = overlay;
     overlay.id = 'zv-selection-actions';
     overlay.dataset.zoteroNeoSelectionActions = '1';
-    overlay.style.cssText = `position:fixed;right:16px;bottom:52px;z-index:100002;width:min(430px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;padding:10px;border:1px solid ${THEME_VARS.border};border-radius:8px;background:${THEME_VARS.surface};color:${THEME_VARS.text};box-shadow:0 12px 36px ${THEME_VARS.shadow};pointer-events:none;`;
+    overlay.style.cssText = SELECTION_ACTIONS_OVERLAY_STYLE;
     document.body?.appendChild(overlay);
     if (!this.#canComplete(generation, pdfWindow)) return;
     const cleanup = this.#host.themeRoot(overlay);

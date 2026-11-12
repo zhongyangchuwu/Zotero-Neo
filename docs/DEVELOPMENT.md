@@ -206,7 +206,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 
 引用增强由 `src/modules/references/` 和 `src/references/controller.ts` 拥有逐文献上下文动作、搜索清单、引用位置、本地匹配及单篇详情。Reader Normal 的 `openReferences` 使用 `<Space>fr`，与工具栏共用只含清单的查找入口；原生悬停不查询或聚焦。明确操作先记录锚点，再捕获并固定发起 ReaderView，通过既有导航端口跳转，不另建历史。原生预览内的按钮与浮层均按实际 ownerDocument 的焦点和精确来源窗格处理输入；没有全局 Tab 陷阱或全屏遮罩。退出或来源视图退休时取消在途工作，不能向后继文档发布结果。用户操作见[Reader 指南](READER_GUIDE.md)。
 
-`src/references/metadata.ts` 仅在用户明确查询时请求 Semantic Scholar Graph 或 arXiv Atom，并展示来源原始字段与原始摘要；缺失摘要保持为空。查询支持取消，Semantic Scholar 与 arXiv 分别至少间隔 1 秒和 3 秒；429、离线或服务错误如实显示，不自动重试。候选需由用户选择，API 引用/被引计数与本地识别位置数分开显示。`src/ui/reference-credentials.ts` 在 Neo 设置的阅读器分类中管理可选 Semantic Scholar key，使用独立服务实例，只投影是否存在密钥；论文详情不包含凭据表单。`src/platform/reference-credentials.ts` 通过 Zotero Login Manager 显式读取、保存或忘记密钥，不写入偏好、查询结果或日志，也不参与本地分析。该功能不调用 AI、生成摘要或判断引用意义。
+`src/references/metadata.ts` 仅在用户明确查询时请求 Semantic Scholar Graph 或 arXiv Atom，并展示来源原始字段与原始摘要；缺失摘要保持为空。查询支持取消，Semantic Scholar 与 arXiv 分别至少间隔 1 秒和 3 秒；429、离线或服务错误如实显示，不自动重试。候选需由用户选择，API 引用/被引计数与本地识别位置数分开显示。`src/main/settings-reader.ts` 在 Neo 设置的阅读器分类中管理可选 Semantic Scholar key，React 设置界面只投影是否存在密钥；论文详情不包含凭据表单。`src/platform/reference-credentials.ts` 通过 Zotero Login Manager 显式读取、保存或忘记密钥，不写入偏好、查询结果或日志，也不参与本地分析。该功能不调用 AI、生成摘要或判断引用意义。
 
 `src/references/cache.ts` 负责元数据缓存策略：同一进程中的 Reader／服务实例共用串行化、带代次保护的缓存；只持久化成功取得的记录，保留来源原始字段和检索时间，不保存 PDF 文本、笔记、坐标或凭据。缓存使用版本 1 JSON，最多 50 条、文件不超过 4 MiB；记录满 30 分钟后标记为过期但不删除，DOI／arXiv 身份经过校验，坏记录单独忽略。`src/platform/reference-cache.ts` 负责 Gecko 文件读写，将数据保存到 `<Zotero profile>/zotero-neo-reference-cache.json`，并通过暂存文件替换。读取、保存和清除失败会返回可见错误；清除会递增代次，阻止旧在途工作重新填充缓存，且只清除元数据缓存。
 
