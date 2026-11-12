@@ -10,6 +10,7 @@ export type NativeReactSurface =
   | 'references'
   | 'selection-panel'
   | 'tab-sidebar'
+  | 'local-find'
   | 'extensions'
   | 'search-dialog';
 

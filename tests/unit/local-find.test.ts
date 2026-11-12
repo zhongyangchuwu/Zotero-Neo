@@ -1,9 +1,27 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { MainWindow } from '../../src/core/contracts';
 import type { NavigationCause } from '../../src/navigation/types';
 import { MainLocalFind, findVisibleMainItemRow } from '../../src/modules/library/local-find';
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
+
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView(options: { root: HTMLElement }) {
+    const input = options.root.ownerDocument.createElementNS(
+      'http://www.w3.org/1999/xhtml',
+      'input',
+    );
+    let disposed = false;
+    return {
+      ready: Promise.resolve(),
+      update: () => {},
+      getElement: () => (disposed ? null : input),
+      dispose: () => {
+        disposed = true;
+      },
+    };
+  },
+}));
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
@@ -58,7 +76,7 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
   });
   const ensureRowIsVisible = vi.fn();
 
-  const elements: Array<{ value: string }> = [];
+  const elements: Array<{ value: string; focus: Mock }> = [];
   const overlays: Array<{ remove: () => void }> = [];
   const previous = { isConnected: true, focus: vi.fn() };
   const document = {
@@ -67,6 +85,9 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
     createElementNS: (_namespace: string, tag: string) => {
       const element = {
         value: '',
+        ownerDocument: document,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
         style: { cssText: '' },
         append: vi.fn(),
         remove: vi.fn(),
@@ -118,13 +139,18 @@ function harness(items: readonly Zotero.Item[], visibleIDs: readonly number[], i
     isCurrent: () => current,
   };
   const find = new MainLocalFind(ports);
-  const submit = (query: string): void => {
+  const open = async (): Promise<void> => {
     find.open();
+    await Promise.resolve();
+  };
+  const submit = async (query: string): Promise<void> => {
+    await open();
     elements.at(-1)!.value = query;
     find.handleKey(key('Enter'));
   };
 
   return {
+    open,
     window,
     ports,
     document,
@@ -183,14 +209,14 @@ describe('Main local find', () => {
     expect(findVisibleMainItemRow(h.window, 'hidden', 1)).toBeUndefined();
   });
 
-  it('moves only Cursor on repeat and leaves Selection unchanged on match or miss', () => {
+  it('moves only Cursor on repeat and leaves Selection unchanged on match or miss', async () => {
     const alpha = item(1, 'Alpha');
     const beta = item(2, 'Beta');
     const gamma = item(3, 'Gamma');
     const h = harness([alpha, beta, gamma], [1, 2, 3], 0);
     const before = h.selection.values();
 
-    h.submit('gamma');
+    await h.submit('gamma');
     expect(h.find.repeat(1)).toBe(true);
     expect(h.focused()).toBe(2);
     expect(h.select).toHaveBeenCalledWith(2, false);
@@ -201,27 +227,27 @@ describe('Main local find', () => {
     ]);
     expect(h.selection.values()).toEqual(before);
 
-    h.submit('missing');
+    await h.submit('missing');
     expect(h.find.repeat(1)).toBe(false);
     expect(h.focused()).toBe(2);
     expect(h.selection.values()).toEqual(before);
     expect(h.statuses.at(-1)).toContain('No visible match');
   });
 
-  it('commits Enter from the prompt and Esc preserves the previous committed query', () => {
+  it('commits Enter from the prompt and Esc preserves the previous committed query', async () => {
     const alpha = item(1, 'Alpha');
     const beta = item(2, 'Beta');
     const h = harness([alpha, beta], [1, 2], 0);
 
-    h.submit('alpha');
-    h.find.open();
+    await h.submit('alpha');
+    await h.open();
     h.elements.at(-1)!.value = 'beta';
     h.find.handleKey(key('Enter'));
 
     expect(h.find.isOpen).toBe(false);
     expect(h.focused()).toBe(1);
     expect(h.causes.at(-1)).toEqual({ kind: 'event', event: 'main-local-find.confirm' });
-    h.find.open();
+    await h.open();
     h.elements.at(-1)!.value = 'alpha';
     h.find.handleKey(key('Escape'));
 
@@ -230,11 +256,11 @@ describe('Main local find', () => {
     expect(h.statuses.at(-1)).toContain('/beta');
   });
 
-  it('does not commit Enter while IME composition is active', () => {
+  it('does not commit Enter while IME composition is active', async () => {
     const alpha = item(1, 'Alpha');
     const h = harness([alpha], [1], 0);
-    h.submit('alpha');
-    h.find.open();
+    await h.submit('alpha');
+    await h.open();
     h.elements.at(-1)!.value = 'new';
 
     h.find.handleKey(key('Enter', true));
@@ -250,9 +276,9 @@ describe('Main local find', () => {
     expect(h.statuses.at(-1)).toContain('/alpha');
   });
 
-  it('preserves a query across close but not across instances and does not restore focus on disposal', () => {
+  it('preserves a query across close but not across instances and does not restore focus on disposal', async () => {
     const h = harness([item(1, 'Alpha')], [1]);
-    h.submit('alpha');
+    await h.submit('alpha');
     h.previous.focus.mockClear();
     h.find.open();
     h.find.close(false);
@@ -261,6 +287,20 @@ describe('Main local find', () => {
     const replacement = new MainLocalFind(h.ports);
     expect(replacement.repeat(1)).toBe(false);
     expect(h.statuses.at(-1)).toContain('No local find query');
+  });
+
+  it('does not focus an opening retired before the React view is ready', async () => {
+    const h = harness([item(1, 'Alpha')], [1]);
+    h.find.open();
+    const first = h.elements[0]!;
+    h.find.close(false);
+    h.find.open();
+    const second = h.elements[1]!;
+    await Promise.resolve();
+    expect(first.focus).not.toHaveBeenCalled();
+    expect(second.focus).toHaveBeenCalledOnce();
+    expect(h.find.isOpen).toBe(true);
+    h.find.close(false);
   });
 
   it('releases a late theme handle without closing or focusing over a replacement', () => {
