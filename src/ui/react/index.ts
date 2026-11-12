@@ -15,6 +15,11 @@ import {
 } from '../../modules/tab-enhancements/react-view';
 import type { TabSidebarReactModel } from '../../modules/tab-enhancements/react-model';
 import {
+  mountLocalFindReactView,
+  LOCAL_FIND_REACT_CSS,
+} from '../../modules/library/local-find-react-view';
+import type { LocalFindReactModel } from '../../modules/library/local-find-react-model';
+import {
   mountExtensionsReactView,
   EXTENSIONS_REACT_CSS,
 } from '../../modules/extensions/react-view';
@@ -36,6 +41,7 @@ const runtime: NativeUIRuntime = {
         REFERENCES_REACT_CSS +
         SELECTION_PANEL_REACT_CSS +
         TAB_SIDEBAR_REACT_CSS +
+        LOCAL_FIND_REACT_CSS +
         EXTENSIONS_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
@@ -62,6 +68,12 @@ const runtime: NativeUIRuntime = {
         return mountTabSidebarReactView(
           root,
           model as TabSidebarReactModel,
+          () => {},
+        ) as ReactView<unknown>;
+      case 'local-find':
+        return mountLocalFindReactView(
+          root,
+          model as LocalFindReactModel,
           () => {},
         ) as ReactView<unknown>;
       case 'extensions':
