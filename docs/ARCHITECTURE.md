@@ -54,7 +54,7 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 ##### 标签页增强
 
-`src/modules/tab-enhancements/` 按 MainWindow 拥有垂直侧栏、标题格式展示与窗口级交互；MainWindowController 在 `Zotero.initializationPromise` 完成后，只有原 session 仍有效时才延迟激活。应用共享的分组管理器协调已登记的 Main 宿主，但不接管 Reader 生命周期。它依赖核心 `workspace`：跨窗口激活先转到拥有该原生标签页的窗口，再沿用 `workspace.activateTab`；标签页切换及导航仍复用基座唯一历史。
+`src/modules/tab-enhancements/` 按 MainWindow 拥有垂直侧栏、标题格式展示与窗口级交互。MainWindowController 等待 Zotero 初始化、主界面就绪和已保存分组／原生标签页所引用的文库条目加载；每次等待后核对原 session 与 Document，才激活侧栏，不加载无关文库。应用共享的分组管理器协调已登记的 Main 宿主，但不接管 Reader 生命周期。它依赖核心 `workspace`：跨窗口激活先转到拥有该原生标签页的窗口，再沿用 `workspace.activateTab`；标签页切换及导航仍复用基座唯一历史。
 
 原生标签页清单是已打开 Reader/Note 视图的唯一事实来源。Toolkit 将每个原生视图的版本化 `viewID` 存入原生 `tab.data`，作为跨卸载、载入和 Zotero 重启保持稳定的单视图身份；同一 PDF 的多个原生视图分别有自己的 `viewID`。分组成员以该稳定 ID 和 `SavedTabMember.document` 引用保存；Main 导入未打开的 PDF 时先分配成员 ID，显式打开时再将同一 ID 作为 `viewID` 写入新原生标签页，不要求保存成员时已有 Reader 视图。Zotero 的 `nativeID` 是当前会话操作标签页的句柄，不作为分组身份持久化，重启后可重新生成。Toolkit 合并原生 `Zotero_Tabs._update` 与 `Notifier` 的 `item`/`tab` 通知，再刷新原生清单和条目元数据；不另建 Reader 标签页清单。分组的关闭与原生排序只作用于发起请求的窗口；激活其他窗口中的成员时，通过其已登记宿主执行。异步恢复先核对成员、窗口与关闭代次，再接纳真实原生标签页，避免重复打开或让过期打开结果重新加入界面。
 
@@ -80,7 +80,7 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 工作集模块提供受作用域约束的 Selection 读取/成员移除端口和 Selection/Visual 行投影。Main 保留 Cursor 初始化、原生多目标取消、共享行渲染及视图生命周期；没有工作集投影时，Cursor 仍独立渲染。行渲染登记由确切的 Main session 持有，先退休登记身份，再释放捕获的资源；旧窗口装卸或获取失败不能清理重入创建的新实例。Main 目标解析器消费明确的可选 Selection 来源，不读取整个 session；成功 Trash 只从发起时捕获的来源移除原目标。`src/core/item-ref.ts` 为实际共享此身份的 Toolkit、导航和工作集提供稳定条目引用。
 
-Selection Panel 通过具名端口请求现有导航协调器执行 Reveal，不拥有第二份历史。面板关闭先退休精确界面身份，再释放计时器、主题和 DOM；旧确认、计时器及导航完成不能修改替换界面。主题和外观订阅返回时若模块已退休，立即释放新取得的句柄，清理失败仍尝试其余释放。
+Selection Panel 使用绑定确切 Window／Document 的静态 React 视图显示工作集；成员操作、按键、焦点与界面寿命仍归工作集控制器。面板通过具名端口请求现有导航协调器执行 Reveal，不拥有第二份历史。关闭先退休精确界面身份，再释放计时器、React 视图、主题和 DOM；旧确认、计时器及导航完成不能修改替换界面。主题和外观订阅返回时若模块已退休，立即释放新取得的句柄，清理失败仍尝试其余释放。
 
 #### Reader
 

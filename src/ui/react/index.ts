@@ -5,6 +5,11 @@ import type { PickerReactModel } from '../../main/picker/react-model';
 import { mountReferenceReactView, REFERENCES_REACT_CSS } from '../../references/react-view';
 import type { ReferenceViewModel } from '../../references/react-model';
 import {
+  mountSelectionPanelReactView,
+  SELECTION_PANEL_REACT_CSS,
+} from '../../modules/worksets/react-view';
+import type { SelectionPanelReactModel } from '../../modules/worksets/react-model';
+import {
   mountTabSidebarReactView,
   TAB_SIDEBAR_REACT_CSS,
 } from '../../modules/tab-enhancements/react-view';
@@ -29,6 +34,7 @@ const runtime: NativeUIRuntime = {
         SETTINGS_REACT_CSS +
         PICKER_REACT_CSS +
         REFERENCES_REACT_CSS +
+        SELECTION_PANEL_REACT_CSS +
         TAB_SIDEBAR_REACT_CSS +
         EXTENSIONS_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
@@ -45,6 +51,12 @@ const runtime: NativeUIRuntime = {
       case 'references':
         return mountReferenceReactView(root, model as ReferenceViewModel, (command) =>
           dispatch(command),
+        ) as ReactView<unknown>;
+      case 'selection-panel':
+        return mountSelectionPanelReactView(
+          root,
+          model as SelectionPanelReactModel,
+          () => {},
         ) as ReactView<unknown>;
       case 'tab-sidebar':
         return mountTabSidebarReactView(

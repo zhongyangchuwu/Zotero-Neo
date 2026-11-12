@@ -8,6 +8,7 @@ export type NativeReactSurface =
   | 'settings'
   | 'picker'
   | 'references'
+  | 'selection-panel'
   | 'tab-sidebar'
   | 'extensions';
 

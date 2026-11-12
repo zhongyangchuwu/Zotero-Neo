@@ -74,6 +74,35 @@ function storage(initial = '') {
 }
 
 describe('persistent tab groups', () => {
+  it('identifies the libraries referenced by persisted reading groups', () => {
+    const store = storage(
+      JSON.stringify({
+        version: 1,
+        groups: [
+          {
+            id: 'a',
+            name: 'One',
+            color: '',
+            collapsed: false,
+            members: [
+              { id: 'v1', title: 'A', document },
+              { id: 'v2', title: 'B', document: { ...document, key: 'B' } },
+            ],
+          },
+          {
+            id: 'b',
+            name: 'Two',
+            color: '',
+            collapsed: false,
+            members: [{ id: 'v3', title: 'C', document: { ...document, libraryID: 2, key: 'C' } }],
+          },
+        ],
+      }),
+    );
+    const manager = createTabGroupManager(store);
+    expect(manager.libraryIDs()).toEqual([1, 2]);
+    manager.dispose();
+  });
   it('imports closed documents atomically without stealing views and restores them later', async () => {
     const store = storage();
     const a = host('a', [tab('existing')]);
