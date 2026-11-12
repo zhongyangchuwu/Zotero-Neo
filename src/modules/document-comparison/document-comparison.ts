@@ -1,4 +1,4 @@
-import { mineruCredentialField, type MinerUCredentialField } from '../../ui/mineru-credentials';
+import { readMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
 import type { PreferenceStore } from '../../core/preference-store';
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
@@ -39,36 +39,16 @@ import {
   OXR_ENDPOINT_KEY,
   DEFAULT_OXR_ENDPOINT,
 } from '../../document-analysis/settings';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type {
+  ComparisonColumn,
+  ComparisonTarget,
+  DocumentComparisonCommand,
+  DocumentComparisonModel,
+} from './react-model';
 
 const H = 'http://www.w3.org/1999/xhtml';
-
-function comparisonButton(doc: Document, text: string): HTMLButtonElement {
-  const button = doc.createElementNS(H, 'button') as HTMLButtonElement;
-  button.type = 'button';
-  button.textContent = text;
-  button.style.cssText = `padding:4px 9px;border:1px solid ${THEME_VARS.border};border-radius:4px;background:${THEME_VARS.input};color:${THEME_VARS.text};cursor:pointer;font:inherit`;
-  return button;
-}
-
-function comparisonTarget(
-  doc: Document,
-  title: string,
-  text: string,
-  action: string,
-  run: () => void,
-): HTMLDetailsElement {
-  const details = doc.createElementNS(H, 'details') as HTMLDetailsElement;
-  details.style.cssText = `padding:6px 0;border-bottom:1px solid ${THEME_VARS.border}`;
-  const heading = doc.createElementNS(H, 'summary');
-  heading.textContent = title;
-  const content = doc.createElementNS(H, 'p');
-  content.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere';
-  content.textContent = text;
-  const jump = comparisonButton(doc, action);
-  jump.addEventListener('click', run);
-  details.append(heading, content, jump);
-  return details;
-}
 
 export interface DocumentComparisonHost {
   readonly reader: ReaderRuntime;
@@ -86,16 +66,18 @@ export interface DocumentComparisonHost {
 interface ComparisonView {
   readonly backdrop: HTMLElement;
   readonly root: HTMLElement;
-  readonly status: HTMLElement;
-  readonly results: HTMLElement;
-  readonly cloudButton: HTMLButtonElement;
-  readonly refreshButton: HTMLButtonElement;
-  readonly endpoint: HTMLInputElement;
-  readonly provider: HTMLSelectElement;
-  readonly key: HTMLInputElement;
-  readonly credentials: MinerUCredentialField;
+  readonly status: { textContent: string };
+  readonly cloudButton: { disabled: boolean };
+  readonly refreshButton: { disabled: boolean };
+  readonly endpoint: { value: string; disabled: boolean };
+  readonly provider: { value: 'mineru' | 'oxr'; disabled: boolean };
+  credentialStatus: string;
+  credentialPending: boolean;
   readonly abort: AbortController;
   readonly untheme: () => void;
+  react?: NativeReactView<DocumentComparisonModel>;
+  title: string;
+  locations: Map<string, DocumentLocation>;
   prepared?: {
     readonly source: DocumentSource;
     readonly pdf: AnalysisPDF;
@@ -154,109 +136,188 @@ export class ReaderDocumentComparison {
     root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-label', this.#text('title'));
     root.style.cssText = `position:fixed;inset:5%;z-index:2147483645;overflow:auto;padding:20px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 40px #0006;font:menu`;
-    const title = element('h2', this.#text('title'));
-    const note = element('p', this.#text('description'));
-    const controls = element('div');
-    controls.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;align-items:center';
-    const endpoint = element('input');
-    endpoint.type = 'url';
-    endpoint.value = this.#host.preferences.get(OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT);
-    endpoint.setAttribute('aria-label', this.#text('endpoint'));
-    endpoint.style.width = 'min(420px,80%)';
-    const provider = element('select');
-    provider.setAttribute('aria-label', this.#text('provider'));
-    for (const [value, label] of [
-      ['mineru', 'MinerU'],
-      ['oxr', 'OXR'],
-    ]) {
-      const option = element('option', label);
-      option.value = value;
-      provider.append(option);
-    }
-    provider.value =
-      this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
-    endpoint.hidden = provider.value === 'mineru';
-    const credentials = mineruCredentialField(
-        doc,
-        this.#host.language,
-        provider.value === 'mineru',
-      ),
-      key = credentials.input;
-    const cloudButton = comparisonButton(doc, this.#text('parseCloud'));
-    cloudButton.disabled = true;
-    const refreshButton = comparisonButton(doc, this.#text('refreshCloud'));
-    refreshButton.disabled = true;
-    const copy = comparisonButton(doc, this.#text('copyReport'));
-    const close = comparisonButton(doc, this.#text('close'));
-    controls.append(provider, endpoint, credentials.root, cloudButton, refreshButton, copy, close);
-    const status = element('p', this.#text('preparing'));
-    status.setAttribute('role', 'status');
-    const results = element('div');
-    results.style.cssText = 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px';
-    root.append(title, note, controls, status, results);
+    const content = element('div');
+    const provider: ComparisonView['provider'] = {
+      value:
+        this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru',
+      disabled: false,
+    };
+    root.append(content);
     backdrop.append(root);
     doc.documentElement.append(backdrop);
-    const abort = new (window as Window & typeof globalThis).AbortController();
+    let statusText = this.#text('preparing');
     const view: ComparisonView = {
       root,
       backdrop,
-      status,
-      results,
-      endpoint,
       provider,
-      key,
-      credentials,
-      cloudButton,
-      refreshButton,
+      credentialStatus: '',
+      credentialPending: false,
+      endpoint: {
+        value: this.#host.preferences.get(OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT),
+        disabled: false,
+      },
+      cloudButton: { disabled: true },
+      refreshButton: { disabled: true },
+      status: {
+        get textContent() {
+          return statusText;
+        },
+        set textContent(value: string) {
+          statusText = value;
+          if (view.react) view.react.update(model());
+        },
+      },
+      title: this.#text('title'),
+      locations: new Map(),
       cloudRevision: 0,
-      abort,
+      abort: new (window as Window & typeof globalThis).AbortController(),
       untheme: this.#host.themeRoot(backdrop),
     };
     this.#view = view;
-    close.addEventListener('click', () => this.close(true));
+    const model = () => this.#model(view);
+    view.react = mountNativeReactView({
+      surface: 'document-comparison',
+      root: content,
+      model: model(),
+      dispatch: (command: DocumentComparisonCommand) => this.#command(view, command),
+      isCurrent: () => this.#current(view),
+      loadingText: this.#text('preparing'),
+      errorText: this.#text('nativeReady'),
+      onError: () => this.#host.debug('Document comparison view unavailable'),
+    });
+    void view.react.ready
+      .then(() => {
+        if (this.#current(view)) {
+          this.#loadCredential(view);
+          view.react?.getElement('close')?.focus();
+        }
+      })
+      .catch(() => {});
     backdrop.addEventListener('pointerdown', (event) => {
       if (event.target === backdrop) {
         event.preventDefault();
         this.close(true);
       }
     });
-    cloudButton.addEventListener('click', () => {
-      void this.#cloud(view);
-    });
-    refreshButton.addEventListener('click', () => {
-      void this.#cloud(view, true);
-    });
-    endpoint.addEventListener('change', () => {
-      void this.#restoreCloud(view);
-    });
-    provider.addEventListener('change', () => {
-      endpoint.hidden = provider.value === 'mineru';
-      credentials.setMinerU(provider.value === 'mineru');
-      this.#host.preferences.set(DOCUMENT_PROVIDER_KEY, provider.value);
-      void this.#restoreCloud(view);
-    });
-    copy.addEventListener('click', () => {
-      if (!this.#current(view)) return;
-      this.#host.copyText(
-        JSON.stringify(
-          {
-            schemaVersion: 1,
-            source: view.prepared?.source ?? null,
-            native: view.native ?? null,
-            cloud: view.cloud ?? null,
-            cloudCache: { state: view.cloudState ?? null, savedAt: view.cloudSavedAt ?? null },
-            comparison:
-              view.native && view.cloud ? compareDocuments(view.native, view.cloud) : null,
-          },
-          null,
-          2,
-        ),
-      );
-      status.textContent = this.#text('copied');
-    });
     root.addEventListener('keydown', (event) => this.handleKey(event));
-    close.focus();
     void this.#prepare(view);
+  }
+
+  #command(view: ComparisonView, command: DocumentComparisonCommand): void {
+    if (!this.#current(view)) return;
+    switch (command.type) {
+      case 'close':
+        this.close(true);
+        break;
+      case 'parse':
+        void this.#cloud(view);
+        break;
+      case 'refresh':
+        void this.#cloud(view, true);
+        break;
+      case 'credential-save':
+        void this.#saveCredential(view, false);
+        break;
+      case 'credential-clear':
+        void this.#saveCredential(view, true);
+        break;
+      case 'provider':
+        if (view.cloudPending) break;
+        view.provider.value = command.value;
+        this.#loadCredential(view);
+        this.#host.preferences.set(DOCUMENT_PROVIDER_KEY, command.value);
+        this.#render(view);
+        void this.#restoreCloud(view);
+        break;
+      case 'endpoint':
+        if (view.cloudPending) break;
+        view.endpoint.value = command.value;
+        void this.#restoreCloud(view);
+        break;
+      case 'locate': {
+        const location = view.locations.get(command.id);
+        if (location) void this.#locate(view, location);
+        break;
+      }
+      case 'copy':
+        this.#host.copyText(
+          JSON.stringify(
+            {
+              schemaVersion: 1,
+              source: view.prepared?.source ?? null,
+              native: view.native ?? null,
+              cloud: view.cloud ?? null,
+              cloudCache: { state: view.cloudState ?? null, savedAt: view.cloudSavedAt ?? null },
+              comparison:
+                view.native && view.cloud ? compareDocuments(view.native, view.cloud) : null,
+            },
+            null,
+            2,
+          ),
+        );
+        view.status.textContent = this.#text('copied');
+        break;
+    }
+  }
+
+  #loadCredential(view: ComparisonView): void {
+    const input = view.react?.getElement('credential') as HTMLInputElement | null;
+    if (!input) return;
+    try {
+      input.value = view.provider.value === 'mineru' ? readMinerUToken() : 'dummy';
+      view.credentialStatus =
+        view.provider.value === 'mineru'
+          ? t('documentCredentials.hint', this.#host.language())
+          : '';
+    } catch {
+      input.value = '';
+      view.credentialStatus = t('documentCredentials.unavailable', this.#host.language());
+    }
+    this.#render(view);
+  }
+
+  async #saveCredential(view: ComparisonView, clear: boolean): Promise<void> {
+    if (
+      !this.#current(view) ||
+      view.cloudPending ||
+      view.credentialPending ||
+      view.provider.value !== 'mineru'
+    )
+      return;
+    const input = view.react?.getElement('credential') as HTMLInputElement | null;
+    if (!input) return;
+    const doc = view.root.ownerDocument;
+    const ownedFocus = view.root.contains(doc.activeElement);
+    const forget = clear || !input.value.trim();
+    const value = forget ? '' : input.value;
+    view.credentialPending = true;
+    this.#render(view);
+    try {
+      await saveMinerUToken(value);
+      if (this.#current(view)) {
+        if (forget) input.value = '';
+        view.credentialStatus = t(
+          `documentCredentials.${forget ? 'cleared' : 'saved'}`,
+          this.#host.language(),
+        );
+      }
+    } catch {
+      if (this.#current(view))
+        view.credentialStatus = t('documentCredentials.unavailable', this.#host.language());
+    } finally {
+      if (this.#current(view)) {
+        view.credentialPending = false;
+        this.#render(view);
+        if (
+          ownedFocus &&
+          (!doc.activeElement ||
+            doc.activeElement === view.root ||
+            doc.activeElement === doc.body ||
+            doc.activeElement === doc.documentElement)
+        )
+          input.focus();
+      }
+    }
   }
 
   /** Keep dialog keys out of Reader's matcher; Tab remains native and Escape closes this owner. */
@@ -292,11 +353,15 @@ export class ReaderDocumentComparison {
 
   close(focus = false): void {
     const view = this.#view;
-    this.#view = null;
     if (!view) return;
+    const input = view.react?.getElement('credential') as HTMLInputElement | null;
+    this.#view = null;
     const cleanup = new CleanupFailure();
+    cleanup.run(() => {
+      if (input) input.value = '';
+    });
     cleanup.run(() => view.abort.abort());
-    cleanup.run(() => view.credentials.dispose());
+    cleanup.run(() => view.react?.dispose());
     cleanup.run(view.untheme);
     cleanup.run(() => view.backdrop.remove());
     cleanup.rethrow();
@@ -307,7 +372,8 @@ export class ReaderDocumentComparison {
     try {
       const pdf = await analysisPDF(this.#host.reader.itemID!);
       if (!this.#current(view)) return;
-      view.root.querySelector('h2')!.textContent = `${this.#text('title')} · ${pdf.fileName}`;
+      view.title = `${this.#text('title')} · ${pdf.fileName}`;
+      this.#render(view);
       const pages = await readerDocumentPageGeometry(this.#host.reader, () => this.#current(view));
       if (!this.#current(view)) return;
       const source = {
@@ -362,13 +428,13 @@ export class ReaderDocumentComparison {
     view.cloudPending = busy;
     view.cloudButton.disabled = view.refreshButton.disabled = busy || !view.prepared;
     view.endpoint.disabled = view.provider.disabled = busy;
-    view.credentials.setDisabled(busy);
+    this.#render(view);
   }
 
-  #parser(view: ComparisonView): DocumentParser {
+  #parser(view: ComparisonView, credential = ''): DocumentParser {
     if (view.provider.value === 'mineru')
       return mineruDocumentParser({
-        apiKey: view.key.value,
+        apiKey: credential,
         readPDF: () => view.prepared!.pdf.read(),
         transport: documentServiceTransport,
         onProgress: (state, completed, total) => {
@@ -380,7 +446,7 @@ export class ReaderDocumentComparison {
       });
     return oxrDocumentParser({
       baseURL: view.endpoint.value.trim(),
-      apiKey: view.key.value,
+      apiKey: credential,
       readPDF: () => view.prepared!.pdf.read(),
       request: requestDocumentJSON,
     });
@@ -443,13 +509,15 @@ export class ReaderDocumentComparison {
   async #cloud(view: ComparisonView, refresh = false): Promise<void> {
     const prepared = view.prepared;
     if (!prepared || !this.#current(view) || view.cloudButton.disabled) return;
+    const credential =
+      (view.react?.getElement('credential') as HTMLInputElement | null)?.value ?? '';
     const revision = ++view.cloudRevision;
     this.#busy(view, true);
     view.cloudNotice = undefined;
     view.status.textContent = this.#text('processing');
     try {
       const endpoint = view.endpoint.value.trim();
-      const parser = this.#parser(view);
+      const parser = this.#parser(view, credential);
       if (!refresh) {
         try {
           if (await this.#readCloud(view, parser, revision)) return;
@@ -491,7 +559,8 @@ export class ReaderDocumentComparison {
       }
     } catch (error) {
       if (this.#cloudCurrent(view, revision)) {
-        view.cloudNotice = String(error);
+        const message = String(error);
+        view.cloudNotice = credential ? message.split(credential).join('[redacted]') : message;
         view.status.textContent = view.cloudNotice;
       }
     } finally {
@@ -500,83 +569,92 @@ export class ReaderDocumentComparison {
   }
 
   #render(view: ComparisonView): void {
-    const doc = view.root.ownerDocument;
-    view.results.replaceChildren();
-    for (const [label, result, error] of [
-      [this.#text('native'), view.native, view.nativeError],
-      [view.provider.value === 'mineru' ? 'MinerU' : 'OXR', view.cloud, undefined],
+    view.react?.update(this.#model(view));
+  }
+
+  #model(view: ComparisonView): DocumentComparisonModel {
+    const locations = new Map<string, DocumentLocation>();
+    const columns: ComparisonColumn[] = [];
+    for (const [index, label, result, error] of [
+      [0, this.#text('native'), view.native, view.nativeError],
+      [1, view.provider.value === 'mineru' ? 'MinerU' : 'OXR', view.cloud, undefined],
     ] as const) {
-      const section = doc.createElementNS(H, 'section');
-      const title = doc.createElementNS(H, 'h3');
-      title.textContent = label;
-      section.append(title);
-      if (!result && error) {
-        const message = doc.createElementNS(H, 'p');
-        message.textContent = error;
-        section.append(message);
-      }
+      const targets: ComparisonTarget[] = [];
       if (result) {
-        const summary = doc.createElementNS(H, 'p');
-        summary.textContent = `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${this.#text('elapsed')} ${(result.durationMs / 1000).toFixed(1)}s`;
-        section.append(summary);
-        if (result === view.cloud && view.cloudState) {
-          const cache = doc.createElementNS(H, 'p');
-          cache.textContent =
-            this.#readyText(view) +
-            (view.cloudSavedAt ? ` · ${new Date(view.cloudSavedAt).toLocaleString()}` : '');
-          section.append(cache);
-        }
-        for (const group of result.objectGroups.slice(0, 500)) {
+        for (const [i, group] of result.objectGroups.slice(0, 500).entries()) {
           const location = documentObjectLocation(result.regions, group);
+          const id = `${index}:group:${i}`;
+          locations.set(id, location);
           const name =
             group.title.slice(0, 140) ||
             `${this.#text(`kind.${group.kind === 'figure' ? 'image' : 'table'}`)} · ${location.pageIndex + 1}`;
-          section.append(
-            comparisonTarget(
-              doc,
-              `${this.#text('objectGroup')} · ${name} · ${this.#text(`association.${group.association}`)}`,
-              `${group.title}\n${this.#text('members')}: ${group.memberRegionIds.length}`,
-              this.#text('locateGroup'),
-              () => {
-                void this.#locate(view, location);
-              },
-            ),
-          );
+          targets.push({
+            id,
+            title: `${this.#text('objectGroup')} · ${name} · ${this.#text(`association.${group.association}`)}`,
+            text: `${group.title}\n${this.#text('members')}: ${group.memberRegionIds.length}`,
+            action: this.#text('locateGroup'),
+          });
         }
-        for (const region of result.regions.slice(0, 500)) {
+        for (const [i, region] of result.regions.slice(0, 500).entries()) {
           const text = region.format === 'html' ? documentMarkupText(region.text) : region.text;
-          section.append(
-            comparisonTarget(
-              doc,
-              `${region.pageIndex + 1} · ${this.#text(`kind.${region.kind}`)} · ${this.#text(`flow.${region.flow}`)} · ${text.slice(0, 100)}`,
-              text,
-              this.#text('locate'),
-              () => {
-                void this.#locate(view, { pageIndex: region.pageIndex, rects: [region.rect] });
-              },
-            ),
-          );
-        }
-        if (result.regions.length > 500 || result.objectGroups.length > 500) {
-          const note = doc.createElementNS(H, 'p');
-          note.textContent = this.#text('truncated');
-          section.append(note);
+          const id = `${index}:region:${i}`;
+          locations.set(id, { pageIndex: region.pageIndex, rects: [region.rect] });
+          targets.push({
+            id,
+            title: `${region.pageIndex + 1} · ${this.#text(`kind.${region.kind}`)} · ${this.#text(`flow.${region.flow}`)} · ${text.slice(0, 100)}`,
+            text,
+            action: this.#text('locate'),
+          });
         }
       }
-      view.results.append(section);
+      columns.push({
+        label,
+        error: result ? '' : (error ?? ''),
+        targets,
+        summary: result
+          ? `${result.pages.length} ${this.#text('pages')} · ${result.regions.length} ${this.#text('regions')} · ${this.#text('elapsed')} ${(result.durationMs / 1000).toFixed(1)}s`
+          : '',
+        cache:
+          result && index === 1 && view.cloudState
+            ? this.#readyText(view) +
+              (view.cloudSavedAt ? ` · ${new Date(view.cloudSavedAt).toLocaleString()}` : '')
+            : '',
+        truncated:
+          result && (result.regions.length > 500 || result.objectGroups.length > 500)
+            ? this.#text('truncated')
+            : '',
+      });
     }
-    if (view.native && view.cloud) {
-      const comparison = compareDocuments(view.native, view.cloud);
-      const details = doc.createElementNS(H, 'details');
-      details.style.gridColumn = '1 / -1';
-      const heading = doc.createElementNS(H, 'summary');
-      heading.textContent = this.#text('vocabulary');
-      const note = doc.createElementNS(H, 'p');
-      note.style.whiteSpace = 'pre-wrap';
-      note.textContent = `${this.#text('diagnostic')}\n${this.#text('nativeOnly')}: ${comparison.nativeOnlyWords.slice(0, 50).join(', ')}\n${this.#text('cloudOnly')}: ${comparison.cloudOnlyWords.slice(0, 50).join(', ')}`;
-      details.append(heading, note);
-      view.results.prepend(details);
-    }
+    view.locations = locations;
+    const comparison = view.native && view.cloud ? compareDocuments(view.native, view.cloud) : null;
+    return {
+      title: view.title,
+      description: this.#text('description'),
+      providerLabel: this.#text('provider'),
+      endpointLabel: this.#text('endpoint'),
+      provider: view.provider.value,
+      endpoint: view.endpoint.value,
+      credentialLabel: t(
+        `documentCredentials.${view.provider.value === 'mineru' ? 'token' : 'temporaryToken'}`,
+        this.#host.language(),
+      ),
+      credentialSaveLabel: t('documentCredentials.save', this.#host.language()),
+      credentialClearLabel: t('documentCredentials.clear', this.#host.language()),
+      credentialStatus: view.credentialStatus,
+      credentialPending: view.credentialPending,
+      busy: !!view.cloudPending,
+      ready: !!view.prepared,
+      parseLabel: this.#text('parseCloud'),
+      refreshLabel: this.#text('refreshCloud'),
+      copyLabel: this.#text('copyReport'),
+      closeLabel: this.#text('close'),
+      status: view.status.textContent,
+      vocabularyLabel: this.#text('vocabulary'),
+      vocabulary: comparison
+        ? `${this.#text('diagnostic')}\n${this.#text('nativeOnly')}: ${comparison.nativeOnlyWords.slice(0, 50).join(', ')}\n${this.#text('cloudOnly')}: ${comparison.cloudOnlyWords.slice(0, 50).join(', ')}`
+        : '',
+      columns,
+    };
   }
 
   /** Recheck the source version at use time; an earlier successful parse is not current-file admission. */

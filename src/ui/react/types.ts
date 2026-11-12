@@ -13,7 +13,9 @@ export type NativeReactSurface =
   | 'local-find'
   | 'extensions'
   | 'search-dialog'
-  | 'reader-figures';
+  | 'reader-figures'
+  | 'document-preparation'
+  | 'document-comparison';
 
 /** One renderer-owned root. Updates commit before an imperative host reads UI parts. */
 export interface ReactView<Model> {

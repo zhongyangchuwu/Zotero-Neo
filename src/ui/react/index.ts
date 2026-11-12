@@ -31,6 +31,13 @@ import {
   READER_FIGURES_REACT_CSS,
 } from '../../modules/reader-figures/react-view';
 import type { ReaderFiguresReactModel } from '../../modules/reader-figures/react-model';
+import { mountDocumentPreparationReactView } from '../../modules/document-preparation/react-view';
+import type { PreparationReactModel } from '../../modules/document-preparation/react-model';
+import {
+  mountDocumentComparisonReactView,
+  DOCUMENT_COMPARISON_REACT_CSS,
+} from '../../modules/document-comparison/react-view';
+import type { DocumentComparisonModel } from '../../modules/document-comparison/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -51,7 +58,8 @@ const runtime: NativeUIRuntime = {
         LOCAL_FIND_REACT_CSS +
         EXTENSIONS_REACT_CSS +
         SEARCH_DIALOG_REACT_CSS +
-        READER_FIGURES_REACT_CSS;
+        READER_FIGURES_REACT_CSS +
+        DOCUMENT_COMPARISON_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -95,6 +103,14 @@ const runtime: NativeUIRuntime = {
         ) as ReactView<unknown>;
       case 'reader-figures':
         return mountReaderFiguresReactView(root, model as ReaderFiguresReactModel, (command) =>
+          dispatch(command),
+        ) as ReactView<unknown>;
+      case 'document-preparation':
+        return mountDocumentPreparationReactView(root, model as PreparationReactModel, (command) =>
+          dispatch(command),
+        ) as ReactView<unknown>;
+      case 'document-comparison':
+        return mountDocumentComparisonReactView(root, model as DocumentComparisonModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       default:
