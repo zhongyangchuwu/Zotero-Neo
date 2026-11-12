@@ -191,7 +191,10 @@ export function createTabEnhancementsModule(
       'reader-normal': bind('reader-normal'),
       'note-normal': bind('note-normal'),
     };
-    const runSelectionImport = async (targets: MainResolvedTargets, create: boolean): Promise<void> => {
+    const runSelectionImport = async (
+      targets: MainResolvedTargets,
+      create: boolean,
+    ): Promise<void> => {
       try {
         await importReadingSelection({
           window: ports.window,
@@ -218,13 +221,17 @@ export function createTabEnhancementsModule(
       scope,
       'main-normal',
       'mainCreateReadingGroup',
-      (targets) => { void runSelectionImport(targets, true); },
+      (targets) => {
+        void runSelectionImport(targets, true);
+      },
     );
     const appendSelection = host.bind<MainResolvedTargets>(
       scope,
       'main-normal',
       'mainAppendReadingGroup',
-      (targets) => { void runSelectionImport(targets, false); },
+      (targets) => {
+        void runSelectionImport(targets, false);
+      },
     );
     return {
       ownsTarget: (target) =>

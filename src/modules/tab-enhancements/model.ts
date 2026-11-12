@@ -133,10 +133,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
     for (const registration of hosts.values()) {
       const tab = registration.host.native
         .snapshot()
-        .find(
-          (item) =>
-            item.viewID === id && (item.kind === 'reader' || item.kind === 'note'),
-        );
+        .find((item) => item.viewID === id && (item.kind === 'reader' || item.kind === 'note'));
       if (tab) return { registration, tab };
     }
     return undefined;
@@ -324,7 +321,14 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
           entries: group.members.flatMap((member) => {
             const open = live(member.id);
             return open
-              ? [entry(open.tab, open.registration === registration ? 'open' : 'other-window', titleFormat, member.title)]
+              ? [
+                  entry(
+                    open.tab,
+                    open.registration === registration ? 'open' : 'other-window',
+                    titleFormat,
+                    member.title,
+                  ),
+                ]
               : [];
           }),
         })),
@@ -349,11 +353,15 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         throw new Error('Group name is required');
       if ('groupID' in destination) getGroup(destination.groupID);
       let groupID = 'groupID' in destination ? destination.groupID : undefined;
-      const closeEpoch = groupID ? registration.closedGroups.get(groupID) ?? 0 : 0;
-      const current = () => !disposed && registration.active &&
-        hosts.get(hostID) === registration && isCurrent() &&
-        (!groupID || (groups.some((group) => group.id === groupID) &&
-          (registration.closedGroups.get(groupID) ?? 0) === closeEpoch));
+      const closeEpoch = groupID ? (registration.closedGroups.get(groupID) ?? 0) : 0;
+      const current = () =>
+        !disposed &&
+        registration.active &&
+        hosts.get(hostID) === registration &&
+        isCurrent() &&
+        (!groupID ||
+          (groups.some((group) => group.id === groupID) &&
+            (registration.closedGroups.get(groupID) ?? 0) === closeEpoch));
       let count = 0;
       const keys = new Set<string>();
       for (const item of documents) {
@@ -373,17 +381,26 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
         }
         if (!nativeID) continue;
         if (!current() || wasClosed) {
-          if (registration.active && !wasClosed)
-            registration.host.native.close([nativeID]);
+          if (registration.active && !wasClosed) registration.host.native.close([nativeID]);
           break;
         }
         try {
           const newGroupID = groupID ?? options.createID();
           commit((draft) => {
             if (!groupID && 'name' in destination) {
-              draft.push({ id: newGroupID, name: destination.name.trim(), color: '', collapsed: false, members: [] });
+              draft.push({
+                id: newGroupID,
+                name: destination.name.trim(),
+                color: '',
+                collapsed: false,
+                members: [],
+              });
             }
-            getGroup(newGroupID, draft).members.push({ id: viewID, document: { ...item.document }, title: item.title });
+            getGroup(newGroupID, draft).members.push({
+              id: viewID,
+              document: { ...item.document },
+              title: item.title,
+            });
           });
           groupID = newGroupID;
           if (findMember(viewID)) count++;
@@ -418,8 +435,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       const open = live(memberID);
       const document: TabDocumentRef | null | undefined =
         existing?.member.document ?? open?.tab.document;
-      if (!document || !open)
-        throw new Error('Only open reader and note views can be grouped');
+      if (!document || !open) throw new Error('Only open reader and note views can be grouped');
       const member = existing?.member ?? {
         id: memberID,
         document,

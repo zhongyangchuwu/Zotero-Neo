@@ -177,10 +177,7 @@ describe('tab sidebar', () => {
         groups: [
           {
             ...current.groups[0]!,
-            entries: [
-              entry('active'),
-              entry('elsewhere', 'other-window', true),
-            ],
+            entries: [entry('active'), entry('elsewhere', 'other-window', true)],
           },
         ],
       },
@@ -243,8 +240,7 @@ describe('tab sidebar', () => {
     expect(h.row('entry', 'Loose display')).not.toBeNull();
     h.search('RESEARCH');
     expect(h.row('group', 'g')).not.toBeNull();
-    for (const id of ['Open display', 'Remote display'])
-      expect(h.row('entry', id)).not.toBeNull();
+    for (const id of ['Open display', 'Remote display']) expect(h.row('entry', id)).not.toBeNull();
     h.search('no matching metadata');
     expect(h.row('group', 'g')).toBeNull();
     expect(h.row('entry', 'Library display')).toBeNull();

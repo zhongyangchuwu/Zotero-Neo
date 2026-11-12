@@ -229,8 +229,7 @@ export class TabEnhancementsSidebar {
         this.#moveSelection(Infinity);
         return true;
       case 'uiConfirm':
-        if (entry && entry.kind !== 'other')
-          callbacks.activate(entry.id);
+        if (entry && entry.kind !== 'other') callbacks.activate(entry.id);
         else if (group) callbacks.toggleGroup(group.id);
         else return false;
         return true;

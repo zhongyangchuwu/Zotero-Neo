@@ -86,7 +86,8 @@ export async function importReadingSelection(options: {
     destination = { groupID: group.id };
   }
   if (!isCurrent()) return;
-  if (!confirmChromeAction(window, title, t('tabs.selectionOpensTabs', language)) || !isCurrent()) return;
+  if (!confirmChromeAction(window, title, t('tabs.selectionOpensTabs', language)) || !isCurrent())
+    return;
   const count = await groups.importDocuments(destination, documents, hostID, isCurrent);
   alert(t('tabs.selectionAdded', language).replace('{count}', String(count)));
 }

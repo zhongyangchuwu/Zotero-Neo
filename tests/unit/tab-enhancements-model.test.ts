@@ -286,26 +286,44 @@ describe('persistent tab groups', () => {
     expect(() => createTabGroupManager(storage(JSON.stringify(bad)))).toThrow();
   });
   it('migrates legacy data without losing groups or members before hosts register', () => {
-    const original = { version: 1, groups: [
-      { id: 'g', name: 'Papers', color: '#123456', collapsed: true,
-        members: [{ id: 'one', title: 'One', document }, { id: 'two', title: 'Two', document }] },
-      { id: 'empty', name: 'Empty', color: '', collapsed: false, members: [] },
-    ] };
+    const original = {
+      version: 1,
+      groups: [
+        {
+          id: 'g',
+          name: 'Papers',
+          color: '#123456',
+          collapsed: true,
+          members: [
+            { id: 'one', title: 'One', document },
+            { id: 'two', title: 'Two', document },
+          ],
+        },
+        { id: 'empty', name: 'Empty', color: '', collapsed: false, members: [] },
+      ],
+    };
     const store = storage(JSON.stringify(original));
     const manager = createTabGroupManager(store);
     expect(JSON.parse(store.value())).toEqual({ ...original, version: 2 });
     const a = host('a', [tab('one')]);
     manager.registerHost(a.port);
-    expect(manager.view('a', '{title}').groups[0]?.entries.map((entry) => entry.id)).toEqual(['one']);
+    expect(manager.view('a', '{title}').groups[0]?.entries.map((entry) => entry.id)).toEqual([
+      'one',
+    ]);
     expect(JSON.parse(store.value()).groups[0].members).toHaveLength(2);
     const b = host('b', [tab('two')]);
     const retire = manager.registerHost(b.port);
-    expect(manager.view('a', '{title}').groups[0]?.entries.map((entry) => entry.status)).toEqual(['open', 'other-window']);
+    expect(manager.view('a', '{title}').groups[0]?.entries.map((entry) => entry.status)).toEqual([
+      'open',
+      'other-window',
+    ]);
     retire();
     expect(JSON.parse(store.value()).groups[0].members).toHaveLength(2);
     manager.registerHost(b.port);
     b.setTabs([]);
-    expect(JSON.parse(store.value()).groups[0].members.map((member: { id: string }) => member.id)).toEqual(['one']);
+    expect(
+      JSON.parse(store.value()).groups[0].members.map((member: { id: string }) => member.id),
+    ).toEqual(['one']);
   });
 
   it('keeps unresolved native views open and removes only the observed closed duplicate', () => {
@@ -317,8 +335,12 @@ describe('persistent tab groups', () => {
     manager.assign('one', group, 'a');
     manager.assign('two', group, 'a');
     a.setTabs([{ ...tab('two'), document: null, fields: { ...fields, title: '' } }]);
-    expect(manager.view('a', '{title}').groups[0]?.entries.map((entry) => [entry.id, entry.title])).toEqual([['two', 'Paper.pdf']]);
-    expect(JSON.parse(store.value()).groups[0].members.map((member: { id: string }) => member.id)).toEqual(['two']);
+    expect(
+      manager.view('a', '{title}').groups[0]?.entries.map((entry) => [entry.id, entry.title]),
+    ).toEqual([['two', 'Paper.pdf']]);
+    expect(
+      JSON.parse(store.value()).groups[0].members.map((member: { id: string }) => member.id),
+    ).toEqual(['two']);
     expect(a.native.open).not.toHaveBeenCalled();
   });
 
@@ -328,11 +350,15 @@ describe('persistent tab groups', () => {
     manager.registerHost(a.port);
     const first = { document, title: 'Paper' };
     const second = { document: { ...document, key: 'SECOND' }, title: 'Second' };
-    expect(await manager.importDocuments({ name: 'Papers' }, [first, first, second], 'a', () => true)).toBe(2);
+    expect(
+      await manager.importDocuments({ name: 'Papers' }, [first, first, second], 'a', () => true),
+    ).toBe(2);
     const group = manager.view('a', '{title}').groups[0]!;
     expect(group.entries).toHaveLength(2);
     a.native.open.mockRejectedValueOnce(new Error('unavailable'));
-    await expect(manager.importDocuments({ groupID: group.id }, [first], 'a', () => true)).rejects.toThrow('unavailable');
+    await expect(
+      manager.importDocuments({ groupID: group.id }, [first], 'a', () => true),
+    ).rejects.toThrow('unavailable');
     expect(manager.view('a', '{title}').groups[0]?.entries).toHaveLength(2);
   });
 
@@ -344,9 +370,17 @@ describe('persistent tab groups', () => {
       const groupID = manager.createGroup('Papers');
       const { promise: gate, resolve: release } = Promise.withResolvers<void>();
       const original = a.native.open.getMockImplementation()!;
-      a.native.open.mockImplementation(async (...args) => { await gate; return original(...args); });
+      a.native.open.mockImplementation(async (...args) => {
+        await gate;
+        return original(...args);
+      });
       let current = true;
-      const importing = manager.importDocuments({ groupID }, [{ document, title: 'Paper' }], 'a', () => current);
+      const importing = manager.importDocuments(
+        { groupID },
+        [{ document, title: 'Paper' }],
+        'a',
+        () => current,
+      );
       if (cancel === 'retire') retire();
       else if (cancel === 'close') manager.closeGroup(groupID, 'a');
       else current = false;
@@ -358,9 +392,16 @@ describe('persistent tab groups', () => {
 
   it('closes a newly opened view if saving its membership fails', async () => {
     const a = host('a');
-    const manager = createTabGroupManager({ ...storage(), write: () => { throw new Error('disk'); } });
+    const manager = createTabGroupManager({
+      ...storage(),
+      write: () => {
+        throw new Error('disk');
+      },
+    });
     manager.registerHost(a.port);
-    await expect(manager.importDocuments({ name: 'Papers' }, [{ document, title: 'Paper' }], 'a', () => true)).rejects.toThrow('disk');
+    await expect(
+      manager.importDocuments({ name: 'Papers' }, [{ document, title: 'Paper' }], 'a', () => true),
+    ).rejects.toThrow('disk');
     expect(a.native.snapshot()).toEqual([]);
     expect(manager.view('a', '{title}').groups).toEqual([]);
   });
@@ -374,7 +415,14 @@ describe('persistent tab groups', () => {
       a.setTabs([]);
       return viewID;
     });
-    expect(await manager.importDocuments({ name: 'Papers' }, [{ document, title: 'Paper' }], 'a', () => true)).toBe(0);
+    expect(
+      await manager.importDocuments(
+        { name: 'Papers' },
+        [{ document, title: 'Paper' }],
+        'a',
+        () => true,
+      ),
+    ).toBe(0);
     expect(manager.view('a', '{title}').groups).toEqual([]);
     expect(a.native.open).toHaveBeenCalledTimes(1);
   });
