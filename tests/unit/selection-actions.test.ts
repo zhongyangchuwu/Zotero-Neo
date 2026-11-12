@@ -11,6 +11,32 @@ import type {
 } from '../../src/core/contracts';
 import type { PdfWindow } from '../../src/reader/types';
 
+const selectionBridge = vi.hoisted(() => ({ load: null as Promise<void> | null }));
+
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: (options: {
+    isCurrent: () => boolean;
+    onError: (error: unknown) => void;
+  }) => {
+    let disposed = false;
+    const ready = selectionBridge.load
+      ? selectionBridge.load.catch((error: unknown) => {
+          if (!disposed && options.isCurrent()) options.onError(error);
+          throw error;
+        })
+      : Promise.resolve();
+    void ready.catch(() => {});
+    return {
+      ready,
+      update: () => {},
+      getElement: () => null,
+      dispose: () => {
+        disposed = true;
+      },
+    };
+  },
+}));
+
 function createPalette(
   host: Omit<ReaderSelectionActionHost, 'isCurrent' | 'captureView' | 'capturePresentation'> &
     Partial<Pick<ReaderSelectionActionHost, 'isCurrent' | 'captureView' | 'capturePresentation'>>,
@@ -32,6 +58,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  selectionBridge.load = null;
   if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
   else Reflect.set(globalThis, 'Components', originalComponents);
 });
@@ -164,6 +191,28 @@ describe('ReaderSelectionActionRegistry', () => {
 });
 
 describe('ReaderSelectionActions', () => {
+  it('does not execute unseen actions while React loads or after it fails', async () => {
+    const created = createWindow();
+    const load = Promise.withResolvers<void>();
+    selectionBridge.load = load.promise;
+    const run = vi.fn();
+    const palette = createPalette({
+      actions: () => [{ id: 'example', label: 'Example', run }],
+      themeRoot: () => () => {},
+      copyText: () => {},
+      showStatus: () => {},
+      debug: () => {},
+    });
+    expect(palette.open(created.pdfWindow, context)).toBe(true);
+    palette.handleKey(key('Enter'), created.pdfWindow);
+    expect(run).not.toHaveBeenCalled();
+    load.reject(new Error('React unavailable'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(palette.isOpen).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('runs the keyboard-selected action with the immutable selection context', async () => {
     const created = createWindow();
     const first = vi.fn();
@@ -180,6 +229,7 @@ describe('ReaderSelectionActions', () => {
     });
 
     expect(palette.open(created.pdfWindow, context)).toBe(true);
+    await Promise.resolve();
     palette.handleKey(key('j'), created.pdfWindow);
     palette.handleKey(key('Enter'), created.pdfWindow);
     await Promise.resolve();
@@ -203,6 +253,7 @@ describe('ReaderSelectionActions', () => {
     });
 
     expect(palette.open(created.pdfWindow, mutable)).toBe(true);
+    await Promise.resolve();
     mutable.text = 'changed later';
     mutable.pageLabel = '99';
     palette.handleKey(key('Enter'), created.pdfWindow);
@@ -233,6 +284,7 @@ describe('ReaderSelectionActions', () => {
     });
 
     palette.open(created.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), created.pdfWindow);
     await Promise.resolve();
     await Promise.resolve();
@@ -259,6 +311,7 @@ describe('ReaderSelectionActions', () => {
       debug: () => {},
     });
     palette.open(created.pdfWindow, context);
+    await Promise.resolve();
     for (const event of [
       key('Escape', { isComposing: true }),
       key('j', { keyCode: 229 }),
@@ -294,6 +347,7 @@ describe('ReaderSelectionActions', () => {
       debug: () => {},
     });
     palette.open(created.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), created.pdfWindow);
     pending.resolve({ status: 'Saved to Note A' });
     await Promise.resolve();
@@ -304,6 +358,7 @@ describe('ReaderSelectionActions', () => {
     showStatus.mockClear();
     pending = Promise.withResolvers<{ status: string }>();
     palette.open(created.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), created.pdfWindow);
     palette.open(created.pdfWindow, { ...context, text: 'new selection' });
     pending.resolve({ status: 'Late save to Note B' });
@@ -326,6 +381,7 @@ describe('ReaderSelectionActions', () => {
       debug: () => {},
     });
     palette.open(created.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), created.pdfWindow);
     pending.resolve({ retired: true });
     await Promise.resolve();
@@ -357,6 +413,7 @@ describe('ReaderSelectionActions', () => {
       debug: () => {},
     });
     palette.open(primary.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), primary.pdfWindow);
     const oldRoot = primary.bodyChildren[0]!;
     deadObjects.add(oldRoot);
@@ -405,6 +462,7 @@ describe('ReaderSelectionActions', () => {
       debug,
     });
     palette.open(created.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), created.pdfWindow);
     deadObjects.add(created.pdfWindow);
     pending.resolve({ body: 'late result for removed view' });
@@ -553,6 +611,7 @@ describe('ReaderSelectionActions', () => {
       debug: () => {},
     });
     palette.open(view.pdfWindow, context);
+    await Promise.resolve();
     palette.handleKey(key('Enter'), view.pdfWindow);
     revision++;
     pending.resolve({ body: 'late' });
