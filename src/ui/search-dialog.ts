@@ -2,7 +2,9 @@ import { CleanupFailure } from '../core/cleanup';
 import { bindCompositionState, compositionOwnsKey, isCommittedInput } from '../input/composition';
 import { keyString } from '../input/keys';
 import { isDeadObject } from '../platform/cross-compartment';
-import { THEME_VARS } from './theme';
+import { mountNativeReactView } from '../platform/native-ui';
+import type { NativeReactView } from './react/types';
+import type { SearchDialogReactCommand, SearchDialogReactModel } from './search-dialog-react-model';
 
 export interface SearchDialogSource<T> {
   readonly items: readonly T[];
@@ -43,15 +45,11 @@ export interface SearchDialogOptions<T> {
 interface SearchView<T> {
   readonly options: SearchDialogOptions<T>;
   readonly root: HTMLElement;
-  readonly backdrop: HTMLElement;
-  readonly input: HTMLInputElement;
-  readonly scopes: HTMLSelectElement;
-  readonly results: HTMLElement;
-  readonly status: HTMLElement;
+  readonly document: Document;
   readonly composition: { active: boolean };
-  readonly preview: HTMLElement;
-  readonly actions: readonly HTMLButtonElement[];
+  readonly react: NativeReactView<SearchDialogReactModel>;
   readonly dispose: () => void;
+  model: SearchDialogReactModel;
   items: readonly T[];
   filtered: readonly T[];
   selected: number;
@@ -65,7 +63,14 @@ export class SearchDialog<T> {
   #view: SearchView<T> | null = null;
   #current(view: SearchView<T>): boolean {
     if (this.#view !== view) return false;
-    if (view.options.current() && !isDeadObject(view.root) && view.root.isConnected) return true;
+    if (
+      view.options.current() &&
+      !isDeadObject(view.options.owner) &&
+      view.options.owner.document === view.document &&
+      !isDeadObject(view.root) &&
+      view.root.isConnected
+    )
+      return true;
     this.close();
     return false;
   }
@@ -74,78 +79,69 @@ export class SearchDialog<T> {
     this.close();
     if (!options.current()) return;
     const document = options.owner.document;
-    const node = <K extends keyof HTMLElementTagNameMap>(
-      tag: K,
-      text = '',
-    ): HTMLElementTagNameMap[K] => {
-      const element = document.createElementNS(
-        'http://www.w3.org/1999/xhtml',
-        tag,
-      ) as HTMLElementTagNameMap[K];
-      element.textContent = text;
-      return element;
+    const root = document.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
+    document.documentElement.append(root);
+    const untheme = options.themeRoot(root);
+    const model: SearchDialogReactModel = {
+      title: options.title,
+      placeholder: options.placeholder,
+      help: options.help,
+      close: options.close,
+      empty: options.empty,
+      status: options.loading,
+      loaded: false,
+      scopes: [],
+      scope: '',
+      rows: [],
+      selected: 0,
+      pending: false,
+      actions: (options.actions ?? []).map((action) => ({ label: action.label, disabled: false })),
+      hasPreview: !!options.preview,
+      previewText: '',
+      previewImages: [],
     };
-    const root = node('section');
-    const backdrop = node('div');
-    backdrop.style.cssText = `position:fixed;inset:0;z-index:2147483645;background:${THEME_VARS.backdrop}`;
-    root.dataset.zvSearchDialog = '1';
-    root.setAttribute('role', 'dialog');
-    root.setAttribute('aria-modal', 'true');
-    root.setAttribute('aria-label', options.title);
-    root.style.cssText = `position:absolute;inset:8%;display:flex;flex-direction:column;gap:10px;padding:18px;overflow:auto;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 8px 40px #0006;font:menu`;
-    const title = node('h2', options.title);
-    title.style.margin = '0';
-    const controls = node('div');
-    controls.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
-    const scopes = node('select');
-    scopes.setAttribute('aria-label', options.title);
-    scopes.hidden = true;
-    const input = node('input');
-    input.type = 'search';
-    input.placeholder = options.placeholder;
-    input.setAttribute('aria-label', options.placeholder);
-    input.style.cssText = 'flex:1;min-width:160px';
-    const close = node('button', options.close);
-    close.type = 'button';
-    controls.append(scopes, input, close);
-    const buttons = (options.actions ?? []).map((action) => {
-      const button = node('button', action.label);
-      button.type = 'button';
-      controls.insertBefore(button, close);
-      return button;
+    let unbind = (): void => {};
+    let view: SearchView<T>;
+    const react = mountNativeReactView<SearchDialogReactModel, SearchDialogReactCommand>({
+      surface: 'search-dialog',
+      root,
+      model,
+      isCurrent: () => this.#current(view),
+      loadingText: options.loading,
+      errorText: options.unavailable,
+      onError: options.debug,
+      dispatch: (command) => {
+        if (!this.#current(view)) return;
+        if (command.type === 'close') this.close(true);
+        else if (
+          command.type === 'scope' &&
+          view.model.scopes.some((scope) => scope.id === command.value)
+        ) {
+          view.model = { ...view.model, scope: command.value };
+          this.#filter(view);
+        } else if (
+          command.type === 'select' &&
+          Number.isInteger(command.index) &&
+          command.index >= 0 &&
+          command.index < view.filtered.length
+        ) {
+          if (view.selected === command.index) void this.#confirm(view);
+          else this.#select(view, command.index);
+        } else if (command.type === 'action' && Number.isInteger(command.index)) {
+          const action = options.actions?.[command.index];
+          const item = view.filtered[view.selected];
+          if (action && item !== undefined && action.available?.(item) !== false)
+            void this.#confirm(view, action.run);
+        }
+      },
     });
-    const help = node('p', options.help);
-    help.style.margin = '0';
-    const status = node('p', options.loading);
-    status.setAttribute('role', 'status');
-    status.style.margin = '0';
-    const results = node('div');
-    results.setAttribute('role', 'listbox');
-    results.tabIndex = 0;
-    results.style.cssText = 'flex:1;overflow:auto;min-height:80px';
-    const content = node('div');
-    content.style.cssText = 'display:flex;flex-wrap:wrap;gap:12px;flex:1;min-height:0';
-    const preview = node('div');
-    preview.tabIndex = 0;
-    preview.hidden = !options.preview;
-    preview.style.cssText = 'flex:2 1 300px;overflow:auto;min-height:100px';
-    results.style.flex = '1 1 250px';
-    content.append(results, preview);
-    root.append(title, controls, help, status, content);
-    const composition = { active: false },
-      unbind = bindCompositionState(input, composition),
-      untheme = options.themeRoot(backdrop);
-    const view: SearchView<T> = {
+    view = {
       options,
       root,
-      backdrop,
-      input,
-      scopes,
-      results,
-      status,
-      composition,
-      preview,
-      actions: buttons,
+      document,
+      react,
+      model,
+      composition: { active: false },
       items: [],
       filtered: [],
       selected: 0,
@@ -158,128 +154,98 @@ export class SearchDialog<T> {
         cleanup.run(() => {
           if (view.previewAbort && !isDeadObject(view.previewAbort)) view.previewAbort.abort();
         });
-        if (!isDeadObject(backdrop)) cleanup.run(() => backdrop.remove());
+        cleanup.run(() => react.dispose());
+        if (!isDeadObject(root)) cleanup.run(() => root.remove());
         cleanup.rethrow();
       },
     };
     this.#view = view;
-    backdrop.append(root);
-    document.documentElement.append(backdrop);
-    backdrop.addEventListener('click', (event) => {
-      if (event.target === backdrop) this.close(true);
-    });
-    close.addEventListener('click', () => this.close(true));
-    buttons.forEach((button, i) =>
-      button.addEventListener('click', () => {
-        if (!button.disabled) void this.#confirm(view, options.actions![i]!.run);
-      }),
-    );
-    input.addEventListener('input', (event) => {
-      if (isCommittedInput(event, composition.active)) this.#filter(view);
-    });
-    scopes.addEventListener('change', () => this.#filter(view));
     root.addEventListener('keydown', (event) => this.handleKey(event));
-    input.focus();
+    void react.ready
+      .then(() => {
+        if (!this.#current(view)) return;
+        const input = react.getElement('input') as HTMLInputElement | null;
+        if (!input) return;
+        unbind = bindCompositionState(input, view.composition);
+        input.addEventListener('input', (event) => {
+          if (isCommittedInput(event, view.composition.active)) this.#filter(view);
+        });
+        input.focus();
+      })
+      .catch(() => undefined);
     void options
       .load()
       .then((source) => {
         if (!this.#current(view)) return;
         view.items = source.items;
-        for (const scope of source.scopes ?? []) {
-          const option = node('option', scope.title);
-          option.value = scope.id;
-          scopes.append(option);
-        }
-        scopes.hidden = !source.scopes?.length;
-        if (source.initialScope) scopes.value = source.initialScope;
+        const scopes = (source.scopes ?? []).map(({ id, title }) => ({ id, title }));
+        const scope = scopes.some((item) => item.id === source.initialScope)
+          ? source.initialScope!
+          : (scopes[0]?.id ?? '');
+        view.model = { ...view.model, scopes, scope };
         this.#filter(view);
       })
       .catch((error: unknown) => {
         if (this.#current(view)) {
-          status.textContent = options.unavailable;
+          this.#update(view, { status: options.unavailable });
           options.debug(error);
         }
       });
   }
 
+  #update(view: SearchView<T>, changes: Partial<SearchDialogReactModel>): void {
+    view.model = { ...view.model, ...changes };
+    view.react.update(view.model);
+  }
   #filter(view: SearchView<T>): void {
     if (!this.#current(view) || view.pending) return;
+    const input = view.react.getElement('input') as HTMLInputElement | null;
     view.filtered = view.options
-      .filter(view.items, view.input.value, view.scopes.value)
+      .filter(view.items, input?.value ?? '', view.model.scope)
       .slice(0, 100);
-    view.status.textContent =
-      String(view.filtered.length) + (view.filtered.length === 100 ? '+' : '');
+    view.model = {
+      ...view.model,
+      loaded: true,
+      status: String(view.filtered.length) + (view.filtered.length === 100 ? '+' : ''),
+    };
     this.#select(view, 0);
   }
   #select(view: SearchView<T>, index: number): void {
     if (!this.#current(view) || view.pending) return;
     view.selected = Math.max(0, Math.min(index, view.filtered.length - 1));
-    view.results.replaceChildren();
-    view.filtered.forEach((item, i) => {
-      const row = view.root.ownerDocument.createElementNS(
-        'http://www.w3.org/1999/xhtml',
-        'div',
-      ) as HTMLElement;
-      row.id = `zv-search-result-${i}`;
-      row.setAttribute('role', 'option');
-      row.setAttribute('aria-selected', String(i === view.selected));
-      row.style.cssText = `padding:10px;white-space:pre-wrap;overflow-wrap:anywhere;cursor:pointer;border-bottom:1px solid ${THEME_VARS.border};background:${i === view.selected ? THEME_VARS.selected : 'transparent'}`;
-      row.textContent = view.options.label(item);
-      row.addEventListener('click', () => {
-        if (view.selected === i) void this.#confirm(view);
-        else this.#select(view, i);
-      });
-      view.results.append(row);
-      if (i === view.selected) {
-        view.results.setAttribute('aria-activedescendant', row.id);
-        row.scrollIntoView({ block: 'nearest' });
-      }
-    });
-    if (!view.filtered.length) {
-      view.results.removeAttribute('aria-activedescendant');
-      view.results.textContent = view.options.empty;
-    }
     const selected = view.filtered[view.selected];
-    view.actions.forEach((button, i) => {
-      button.disabled =
-        selected === undefined || view.options.actions?.[i]?.available?.(selected) === false;
+    this.#update(view, {
+      rows: view.filtered.map(view.options.label),
+      selected: view.selected,
+      actions: (view.options.actions ?? []).map((action) => ({
+        label: action.label,
+        disabled: selected === undefined || action.available?.(selected) === false,
+      })),
     });
+    view.react
+      .getElement('results')
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView({ block: 'nearest' });
     void this.#preview(view, selected);
   }
   async #preview(view: SearchView<T>, item: T | undefined): Promise<void> {
     view.previewAbort?.abort();
     const revision = ++view.previewRevision;
-    view.preview.replaceChildren();
+    this.#update(view, { previewText: '', previewImages: [] });
     if (item === undefined || !view.options.preview) return;
     const abort = new (view.options.owner as Window & typeof globalThis).AbortController();
     view.previewAbort = abort;
-    view.preview.textContent = view.options.loading;
+    this.#update(view, { previewText: view.options.loading });
     try {
       const result = await view.options.preview(item, abort.signal);
       if (!this.#current(view) || revision !== view.previewRevision || abort.signal.aborted) return;
-      view.preview.replaceChildren();
-      for (const image of result.images ?? []) {
-        const node = view.root.ownerDocument.createElementNS(
-          'http://www.w3.org/1999/xhtml',
-          'img',
-        ) as HTMLImageElement;
-        node.src = image.dataURL;
-        node.alt = image.alt;
-        node.style.cssText = 'display:block;width:100%;height:auto';
-        view.preview.append(node);
-      }
-      if (result.text) {
-        const node = view.root.ownerDocument.createElementNS(
-          'http://www.w3.org/1999/xhtml',
-          'pre',
-        ) as HTMLElement;
-        node.textContent = result.text;
-        node.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere';
-        view.preview.append(node);
-      }
+      this.#update(view, {
+        previewText: result.text ?? '',
+        previewImages: (result.images ?? []).map(({ dataURL, alt }) => ({ dataURL, alt })),
+      });
     } catch (error) {
       if (this.#current(view) && revision === view.previewRevision && !abort.signal.aborted) {
-        view.preview.textContent = view.options.unavailable;
+        this.#update(view, { previewText: view.options.unavailable });
         view.options.debug(error);
       }
     }
@@ -288,25 +254,28 @@ export class SearchDialog<T> {
     const item = view.filtered[view.selected];
     if (!this.#current(view) || view.pending || item === undefined) return;
     view.pending = true;
-    view.actions.forEach((button) => {
-      button.disabled = true;
+    this.#update(view, {
+      pending: true,
+      actions: view.model.actions.map((action) => ({ ...action, disabled: true })),
     });
-    view.input.disabled = view.scopes.disabled = true;
     try {
       if (await run(item)) {
         if (this.#current(view)) this.close(true);
-      } else if (this.#current(view)) view.status.textContent = view.options.unavailable;
+      } else if (this.#current(view)) this.#update(view, { status: view.options.unavailable });
     } catch (error) {
       if (this.#current(view)) {
-        view.status.textContent = view.options.unavailable;
+        this.#update(view, { status: view.options.unavailable });
         view.options.debug(error);
       }
     } finally {
       if (this.#current(view)) {
         view.pending = false;
-        view.input.disabled = view.scopes.disabled = false;
-        view.actions.forEach((button, i) => {
-          button.disabled = view.options.actions?.[i]?.available?.(item) === false;
+        this.#update(view, {
+          pending: false,
+          actions: (view.options.actions ?? []).map((action) => ({
+            label: action.label,
+            disabled: action.available?.(item) === false,
+          })),
         });
       }
     }
@@ -317,28 +286,31 @@ export class SearchDialog<T> {
     event.stopImmediatePropagation();
     if (!this.#current(view) || compositionOwnsKey(event, view.composition.active)) return true;
     const key = keyString(event);
+    const input = view.react.getElement('input');
+    const scopes = view.react.getElement('scopes');
+    const results = view.react.getElement('results');
+    const preview = view.react.getElement('preview');
     if (key === 'escape') {
       event.preventDefault();
       this.close(true);
     } else if (
-      event.target !== view.scopes &&
+      event.target !== scopes &&
       ['arrowdown', 'arrowup', 'ctrl+n', 'ctrl+p'].includes(key)
     ) {
       event.preventDefault();
       this.#select(view, view.selected + (key === 'arrowdown' || key === 'ctrl+n' ? 1 : -1));
     } else if (
       key === 'enter' &&
-      (event.target === view.input ||
-        event.target === view.results ||
-        view.preview.contains(event.target as Node))
+      (event.target === input ||
+        event.target === results ||
+        preview?.contains(event.target as Node))
     ) {
       event.preventDefault();
       if (!event.repeat) void this.#confirm(view);
     } else if (key === 'tab' || key === 'shift+tab') {
-      const controls = (
-        Array.from(
-          view.root.querySelectorAll<HTMLElement>('input,select,button,[tabindex="0"]'),
-        ) as HTMLElement[]
+      const controls = Array.from(
+        view.root.querySelectorAll<HTMLElement>('input,select,button,[tabindex="0"]'),
+        (node) => node as HTMLElement,
       ).filter((n) => !n.hidden && !(n as HTMLInputElement).disabled);
       if (key === 'tab' && event.target === controls.at(-1)) {
         event.preventDefault();
@@ -354,7 +326,11 @@ export class SearchDialog<T> {
     const view = this.#view;
     if (!view) return;
     this.#view = null;
-    const focus = restore && view.options.current();
+    const focus =
+      restore &&
+      view.options.current() &&
+      !isDeadObject(view.options.owner) &&
+      view.options.owner.document === view.document;
     try {
       view.dispose();
     } finally {
