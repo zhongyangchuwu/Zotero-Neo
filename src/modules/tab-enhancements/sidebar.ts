@@ -26,14 +26,9 @@ export class TabEnhancementsSidebar {
   readonly #untheme: () => void;
   #react: NativeReactView<TabSidebarReactModel> | null = null;
   #view: TabSidebarView = { library: null, groups: [], ungrouped: [] };
-  #editingView: TabSidebarView | null = null;
   #editing: TabSidebarReactModel['editing'] = null;
   #menu: TabSidebarReactModel['menu'] = null;
   #menuOrigin: HTMLElement | null = null;
-  #restore: TabSidebarReactModel['restore'] = null;
-  #startRestore: (() => void) | null = null;
-  #cancelRestore: (() => void) | null = null;
-  #stopRestore: (() => void) | null = null;
   #selection: Selection | null = null;
   #drag: Drag | null = null;
   #dragSerial = 0;
@@ -109,14 +104,13 @@ export class TabEnhancementsSidebar {
   }
   #model(): TabSidebarReactModel {
     return {
-      view: this.#editingView ?? this.#view,
+      view: this.#view,
       language: this.#options.language(),
       collapsed: this.#collapsed,
       query: this.#query,
       editing: this.#editing,
       menu: this.#menu,
       status: this.#status,
-      restore: this.#restore,
     };
   }
   #render(): void {
@@ -235,7 +229,7 @@ export class TabEnhancementsSidebar {
         this.#moveSelection(Infinity);
         return true;
       case 'uiConfirm':
-        if (entry && entry.kind !== 'other' && entry.status !== 'missing')
+        if (entry && entry.kind !== 'other')
           callbacks.activate(entry.id);
         else if (group) callbacks.toggleGroup(group.id);
         else return false;
@@ -254,10 +248,6 @@ export class TabEnhancementsSidebar {
       case 'tabToggleGroup':
         if (!group) return false;
         callbacks.toggleGroup(group.id);
-        return true;
-      case 'tabOpenGroup':
-        if (!group) return false;
-        callbacks.openGroup(group.id);
         return true;
       case 'tabCloseGroup':
         if (!group) return false;
@@ -285,40 +275,6 @@ export class TabEnhancementsSidebar {
   status(message: string): void {
     this.#status = message;
     this.#render();
-  }
-  restorePreview(
-    group: TabSidebarGroup,
-    scheduled: number,
-    start: () => void,
-    cancel: () => void,
-  ): void {
-    const count = (status: TabSidebarEntry['status']) =>
-      group.entries.filter((entry) => entry.status === status).length;
-    const pending = Math.max(0, count('closed') - scheduled);
-    this.#restore = {
-      mode: 'preview',
-      canStop: false,
-      message: `${this.#text('restorePreview')}: ${group.name}. ${this.#text('restoreClosed')}: ${scheduled}; ${this.#text('restorePending')}: ${pending}; ${this.#text('restoreHere')}: ${count('open')}; ${this.#text('otherWindow')}: ${count('other-window')}; ${this.#text('missing')}: ${count('missing')}. `,
-    };
-    this.#startRestore = start;
-    this.#cancelRestore = cancel;
-    this.#stopRestore = null;
-    this.#render();
-    this.#part('restore-start')?.focus();
-  }
-  clearRestore(): void {
-    const hadFocus = !!this.#part('restore')?.contains(this.root.ownerDocument.activeElement);
-    this.#restore = null;
-    this.#startRestore = this.#cancelRestore = this.#stopRestore = null;
-    this.#render();
-    if (hadFocus) this.#part('list')?.focus();
-  }
-  restoreProgress(message: string, stop?: () => void): void {
-    const hadFocus = !!this.#part('restore')?.contains(this.root.ownerDocument.activeElement);
-    this.#restore = { mode: stop ? 'progress' : 'finished', canStop: !!stop, message };
-    this.#stopRestore = stop ?? null;
-    this.#render();
-    if (hadFocus) (stop ? this.#part('restore-stop') : this.#part('list'))?.focus();
   }
   dispose(): void {
     if (this.#disposed) return;
@@ -374,7 +330,6 @@ export class TabEnhancementsSidebar {
     const group = groupID ? this.#group(groupID) : undefined;
     if (groupID && !group) return;
     this.#closeMenu(false);
-    this.#editingView = this.#view;
     this.#editing = { groupID, memberID, initialName: group?.name ?? '' };
     this.#editComposing = false;
     this.#render();
@@ -404,7 +359,6 @@ export class TabEnhancementsSidebar {
   }
   #endEdit(): void {
     this.#editing = null;
-    this.#editingView = null;
     this.#editComposing = false;
     this.#render();
     this.#part('list')?.focus();
@@ -467,8 +421,7 @@ export class TabEnhancementsSidebar {
         if (this.#group(groupID)) callbacks.toggleGroup(groupID);
         break;
       case 'activate':
-        if (this.#entry(entryID)?.status !== 'missing' && this.#entry(entryID))
-          callbacks.activate(entryID);
+        if (this.#entry(entryID)) callbacks.activate(entryID);
         break;
       case 'close':
         if (this.#entry(entryID)?.status === 'open') callbacks.close(entryID);
@@ -487,23 +440,11 @@ export class TabEnhancementsSidebar {
         if (this.#group(groupID) && element.dataset.color)
           callbacks.setGroupColor(groupID, element.dataset.color);
         break;
-      case 'open-group':
-        if (this.#group(groupID)) callbacks.openGroup(groupID);
-        break;
       case 'close-group':
         if (this.#group(groupID)) callbacks.closeGroup(groupID);
         break;
       case 'ungroup':
         if (this.#group(groupID)) callbacks.ungroup(groupID);
-        break;
-      case 'restore-start':
-        this.#startRestore?.();
-        break;
-      case 'restore-cancel':
-        this.#cancelRestore?.();
-        break;
-      case 'restore-stop':
-        this.#stopRestore?.();
         break;
     }
   };

@@ -9,11 +9,12 @@ import {
 import {
   alertChromeAction,
   chooseChromeAction,
+  confirmChromeAction,
   promptChromeText,
 } from '../../platform/chrome-windows';
 import type { TabGroupManager } from './types';
 
-export function importReadingSelection(options: {
+export async function importReadingSelection(options: {
   window: MainWindow;
   language: KeyGuideLanguage;
   targets: MainResolvedTargets;
@@ -22,7 +23,7 @@ export function importReadingSelection(options: {
   titleFormat: string;
   create: boolean;
   isCurrent(): boolean;
-}): void {
+}): Promise<void> {
   const { window, language, groups, hostID, titleFormat, isCurrent } = options;
   const snapshot = snapshotReadingGroupDocuments(options.targets.items, options.targets.missing);
   const title = t('tabs.selectionImportTitle', language);
@@ -85,6 +86,7 @@ export function importReadingSelection(options: {
     destination = { groupID: group.id };
   }
   if (!isCurrent()) return;
-  const count = groups.importDocuments(destination, documents);
+  if (!confirmChromeAction(window, title, t('tabs.selectionOpensTabs', language)) || !isCurrent()) return;
+  const count = await groups.importDocuments(destination, documents, hostID, isCurrent);
   alert(t('tabs.selectionAdded', language).replace('{count}', String(count)));
 }

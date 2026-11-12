@@ -154,7 +154,6 @@ const BASE_ACTION_IDS = [
   'tabRenameGroup',
   'tabCloseEntry',
   'tabToggleGroup',
-  'tabOpenGroup',
   'tabCloseGroup',
   'tabUngroup',
   'tabRemoveFromGroup',

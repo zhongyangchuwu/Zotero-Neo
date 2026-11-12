@@ -18,7 +18,7 @@ import { normalizeTabRailWidth, TAB_RAIL_WIDTH } from '../../toolkit/main/tab-en
 import { TAB_ENHANCEMENT_PREFERENCES, tabRailOptions, tabTitleFormat } from './config';
 import { TabEnhancementsSidebar } from './sidebar';
 import { validateTabTitleFormat } from './title-format';
-import type { TabGroupManager, TabGroupRestoreProgress } from './types';
+import type { TabGroupManager } from './types';
 import type { MainResolvedTargets } from '../../main/action-targets';
 import { importReadingSelection } from './selection-import';
 
@@ -71,14 +71,13 @@ export function createTabEnhancementsModule(
       }),
     );
     let sidebar: TabEnhancementsSidebar;
-    let restore: { groupID: string; started: boolean; stopped: boolean } | null = null;
     const report = (error: unknown): void => {
       ports.logger.debug(`Tab enhancement operation failed: ${String(error)}`);
       if (current()) sidebar?.status(t('tabs.operationFailed', ports.language()));
     };
     const invoke = (run: () => void | Promise<void>): void => {
       if (!current()) return;
-      if (!restore) sidebar?.status('');
+      sidebar?.status('');
       try {
         const pending = run();
         if (pending) void pending.catch(report);
@@ -109,71 +108,6 @@ export function createTabEnhancementsModule(
         renameGroup: (id, name) => invoke(() => ports.groups.renameGroup(id, name)),
         setGroupColor: (id, color) => invoke(() => ports.groups.setGroupColor(id, color)),
         toggleGroup: (id) => invoke(() => ports.groups.toggleGroup(id)),
-        openGroup: (id) =>
-          invoke(() => {
-            if (restore) return;
-            const group = ports.groups
-              .view(native.id, appliedFormat)
-              .groups.find((entry) => entry.id === id);
-            if (!group) return;
-            const plan = ports.groups.prepareGroup(id, native.id);
-            const operation = { groupID: id, started: false, stopped: false };
-            restore = operation;
-            sidebar.restorePreview(
-              group,
-              plan.members.filter((member) => member.closed).length,
-              () => {
-                if (restore !== operation || operation.started || !current()) return;
-                if (
-                  !ports.groups
-                    .view(native.id, appliedFormat)
-                    .groups.some((entry) => entry.id === id)
-                ) {
-                  restore = null;
-                  sidebar.clearRestore();
-                  return;
-                }
-                operation.started = true;
-                const show = (value: TabGroupRestoreProgress, done: boolean) => {
-                  if (!current() || restore !== operation) return;
-                  const text = (key: string) => t(`tabs.${key}`, ports.language());
-                  const message = `${text(done ? (value.stopped ? 'restoreStopped' : 'restoreFinished') : 'restoreProgress')}: ${value.processed}/${value.total}; ${text('restoreOpened')}: ${value.opened}; ${text('restoreSkipped')}: ${value.skipped}; ${text('restoreFailed')}: ${value.failed}`;
-                  sidebar.restoreProgress(
-                    message,
-                    done || operation.stopped
-                      ? undefined
-                      : () => {
-                          if (restore !== operation) return;
-                          operation.stopped = true;
-                          show(value, false);
-                        },
-                  );
-                };
-                void ports.groups
-                  .openGroup(id, native.id, {
-                    isCurrent: () => current() && restore === operation && !operation.stopped,
-                    plan,
-                    progress: (value) => show(value, false),
-                    onError: (error) =>
-                      ports.logger.debug(`Tab group restore failed: ${String(error)}`),
-                  })
-                  .then((value) => {
-                    show(value, true);
-                    if (restore === operation) restore = null;
-                  })
-                  .catch((error: unknown) => {
-                    if (restore === operation) restore = null;
-                    sidebar.clearRestore();
-                    report(error);
-                  });
-              },
-              () => {
-                if (restore !== operation || operation.started) return;
-                restore = null;
-                sidebar.clearRestore();
-              },
-            );
-          }),
         closeGroup: (id) => invoke(() => ports.groups.closeGroup(id, native.id)),
         ungroup: (id) =>
           invoke(() => {
@@ -257,9 +191,9 @@ export function createTabEnhancementsModule(
       'reader-normal': bind('reader-normal'),
       'note-normal': bind('note-normal'),
     };
-    const runSelectionImport = (targets: MainResolvedTargets, create: boolean): void => {
+    const runSelectionImport = async (targets: MainResolvedTargets, create: boolean): Promise<void> => {
       try {
-        importReadingSelection({
+        await importReadingSelection({
           window: ports.window,
           language: ports.language(),
           targets,
@@ -284,13 +218,13 @@ export function createTabEnhancementsModule(
       scope,
       'main-normal',
       'mainCreateReadingGroup',
-      (targets) => runSelectionImport(targets, true),
+      (targets) => { void runSelectionImport(targets, true); },
     );
     const appendSelection = host.bind<MainResolvedTargets>(
       scope,
       'main-normal',
       'mainAppendReadingGroup',
-      (targets) => runSelectionImport(targets, false),
+      (targets) => { void runSelectionImport(targets, false); },
     );
     return {
       ownsTarget: (target) =>

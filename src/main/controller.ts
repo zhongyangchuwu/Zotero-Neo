@@ -93,7 +93,10 @@ import {
   type TabEnhancementsModule,
 } from '../modules/tab-enhancements';
 import { createTabGroupManager } from '../modules/tab-enhancements/model';
-import { TAB_GROUP_STATE_PREFERENCE } from '../modules/tab-enhancements/config';
+import {
+  LEGACY_TAB_GROUP_STATE_PREFERENCE,
+  TAB_GROUP_STATE_PREFERENCE,
+} from '../modules/tab-enhancements/config';
 import type { TabGroupManager } from '../modules/tab-enhancements/types';
 
 type KeyboardEventWithHandled = KeyboardEvent & {
@@ -173,7 +176,8 @@ export class MainWindowController implements MainWindowControllerApi {
   private tabGroupManager(): TabGroupManager {
     if (!this.#tabGroups) {
       this.#tabGroups = createTabGroupManager({
-        read: () => this.#dependencies.preferences.get(TAB_GROUP_STATE_PREFERENCE, ''),
+        read: () => this.#dependencies.preferences.get(TAB_GROUP_STATE_PREFERENCE, '') ||
+          this.#dependencies.preferences.get(LEGACY_TAB_GROUP_STATE_PREFERENCE, ''),
         write: (value) => this.#dependencies.preferences.set(TAB_GROUP_STATE_PREFERENCE, value),
         createID: () => `neo-group-${Zotero.Utilities.randomString(20)}`,
       });

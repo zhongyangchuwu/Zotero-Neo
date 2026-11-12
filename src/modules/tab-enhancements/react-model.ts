@@ -19,11 +19,6 @@ export interface TabSidebarReactModel {
     readonly y: number;
   };
   readonly status: string;
-  readonly restore: null | {
-    readonly message: string;
-    readonly mode: 'preview' | 'progress' | 'finished';
-    readonly canStop: boolean;
-  };
 }
 
 // Native event delegation owns keyboard, input, drag/drop and menu commands.

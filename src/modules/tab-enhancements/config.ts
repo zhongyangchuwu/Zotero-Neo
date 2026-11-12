@@ -8,7 +8,8 @@ export const TAB_ENHANCEMENT_PREFERENCES = {
   collapsed: 'tabEnhancements.collapsed',
   titleFormat: 'tabEnhancements.titleFormat',
 } as const;
-export const TAB_GROUP_STATE_PREFERENCE = 'tabEnhancements.groups.v1';
+export const TAB_GROUP_STATE_PREFERENCE = 'tabEnhancements.groups.v2';
+export const LEGACY_TAB_GROUP_STATE_PREFERENCE = 'tabEnhancements.groups.v1';
 export const TAB_SIDEBAR_DEFAULT_FORMAT = '{title}';
 
 /** Saved groups are not display preferences and are deliberately excluded from display reset. */
