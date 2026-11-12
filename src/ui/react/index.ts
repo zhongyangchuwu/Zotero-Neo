@@ -14,6 +14,11 @@ import {
   TAB_SIDEBAR_REACT_CSS,
 } from '../../modules/tab-enhancements/react-view';
 import type { TabSidebarReactModel } from '../../modules/tab-enhancements/react-model';
+import {
+  mountLocalFindReactView,
+  LOCAL_FIND_REACT_CSS,
+} from '../../modules/library/local-find-react-view';
+import type { LocalFindReactModel } from '../../modules/library/local-find-react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -30,7 +35,8 @@ const runtime: NativeUIRuntime = {
         PICKER_REACT_CSS +
         REFERENCES_REACT_CSS +
         SELECTION_PANEL_REACT_CSS +
-        TAB_SIDEBAR_REACT_CSS;
+        TAB_SIDEBAR_REACT_CSS +
+        LOCAL_FIND_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -56,6 +62,12 @@ const runtime: NativeUIRuntime = {
         return mountTabSidebarReactView(
           root,
           model as TabSidebarReactModel,
+          () => {},
+        ) as ReactView<unknown>;
+      case 'local-find':
+        return mountLocalFindReactView(
+          root,
+          model as LocalFindReactModel,
           () => {},
         ) as ReactView<unknown>;
       default:
