@@ -17,7 +17,7 @@ export interface SavedTabGroup {
   readonly members: readonly SavedTabMember[];
 }
 export interface TabGroupState {
-  readonly version: 1;
+  readonly version: 1 | 2;
   readonly groups: readonly SavedTabGroup[];
 }
 export interface TabSidebarEntry {
@@ -25,7 +25,7 @@ export interface TabSidebarEntry {
   readonly title: string;
   readonly nativeTitle: string;
   readonly searchText: string;
-  readonly status: 'open' | 'other-window' | 'closed' | 'missing';
+  readonly status: 'open' | 'other-window';
   readonly selected: boolean;
   readonly kind: 'reader' | 'note' | 'library' | 'other';
 }
@@ -52,33 +52,6 @@ export interface TabGroupManagerOptions {
   write(value: string): void;
   createID(): string;
 }
-export interface TabGroupRestoreProgress {
-  readonly total: number;
-  readonly processed: number;
-  readonly opened: number;
-  readonly skipped: number;
-  readonly failed: number;
-  readonly stopped: boolean;
-}
-
-export interface TabGroupRestorePlan {
-  readonly groupID: string;
-  readonly hostID: string;
-  readonly isCurrent: () => boolean;
-  readonly members: readonly {
-    readonly id: string;
-    readonly epoch: number;
-    readonly closeEpoch: number;
-    readonly closed: boolean;
-  }[];
-}
-
-export interface TabGroupRestoreOptions {
-  readonly isCurrent: () => boolean;
-  readonly progress: (value: TabGroupRestoreProgress) => void;
-  readonly onError?: (error: unknown) => void;
-  readonly plan?: TabGroupRestorePlan;
-}
 
 export interface TabGroupManager {
   libraryIDs(): readonly number[];
@@ -86,12 +59,13 @@ export interface TabGroupManager {
   refresh(hostID: string): void;
   subscribe(listener: () => void): Cleanup;
   view(hostID: string, titleFormat: string): TabSidebarView;
-  prepareGroup(groupID: string, hostID: string): TabGroupRestorePlan;
   createGroup(name: string): string;
   importDocuments(
     destination: { readonly name: string } | { readonly groupID: string },
     documents: readonly { readonly document: TabDocumentRef; readonly title: string }[],
-  ): number;
+    hostID: string,
+    isCurrent: () => boolean,
+  ): Promise<number>;
   renameGroup(groupID: string, name: string): void;
   setGroupColor(groupID: string, color: string): void;
   toggleGroup(groupID: string): void;
@@ -107,11 +81,6 @@ export interface TabGroupManager {
   ungroup(groupID: string, hostID: string): void;
   activate(memberID: string, hostID: string): Promise<void>;
   closeMember(memberID: string, hostID: string): void;
-  openGroup(
-    groupID: string,
-    hostID: string,
-    options?: TabGroupRestoreOptions,
-  ): Promise<TabGroupRestoreProgress>;
   closeGroup(groupID: string, hostID: string): void;
   dispose(): void;
 }
@@ -124,7 +93,6 @@ export interface TabSidebarCallbacks {
   renameGroup(groupID: string, name: string): void;
   setGroupColor(groupID: string, color: string): void;
   toggleGroup(groupID: string): void;
-  openGroup(groupID: string): void;
   closeGroup(groupID: string): void;
   ungroup(groupID: string): void;
   removeMember(memberID: string): void;

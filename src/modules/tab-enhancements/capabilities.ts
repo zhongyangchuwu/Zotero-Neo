@@ -25,7 +25,6 @@ export const TAB_SIDEBAR_INPUT_ACTIONS = Object.freeze([
   'tabRenameGroup',
   'tabCloseEntry',
   'tabToggleGroup',
-  'tabOpenGroup',
   'tabCloseGroup',
   'tabUngroup',
   'tabRemoveFromGroup',

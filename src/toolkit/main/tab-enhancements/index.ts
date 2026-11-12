@@ -1,5 +1,6 @@
 import type { MainWindow } from '../../../core/contracts';
 import { citationKey } from '../../../platform/better-bibtex';
+import { cloneInto } from '../../../platform/cross-compartment';
 import type {
   TabDocumentRef,
   TabEnhancementHost,
@@ -31,6 +32,9 @@ type Notifier = {
   unregisterObserver(id: string | number): void;
 };
 const namespace = 'zoteroNeoTabEnhancements';
+// Native session state can be copied into another Main window. A live view ID
+// belongs to one host at a time; a copied tab receives its own identity.
+const liveViewOwners = new Map<string, object>();
 const blank = (nativeTitle: string): TabTitleFields =>
   Object.freeze({ nativeTitle, title: '', citekey: '', author: '', year: '', filename: '' });
 
@@ -88,6 +92,8 @@ export function createTabEnhancementHost(
   const listeners = new Set<() => void>();
   const layouts = new Set<{ dispose(): void }>();
   let disposed = false;
+  const owner = {};
+  let ownedViewIDs = new Set<string>();
   let timer: number | undefined;
   let cache: readonly TabViewSnapshot[] = Object.freeze([]);
   const current = () => !disposed && window.document === document && !window.closed;
@@ -115,11 +121,17 @@ export function createTabEnhancementHost(
             stored?.version === 1 &&
             typeof stored.viewID === 'string' &&
             stored.viewID &&
-            !seen.has(stored.viewID)
-          )
+            !seen.has(stored.viewID) &&
+            (!liveViewOwners.has(stored.viewID) || liveViewOwners.get(stored.viewID) === owner)
+          ) {
             viewID = stored.viewID;
-          else {
-            viewID = window.crypto.randomUUID();
+          } else {
+            do {
+              viewID = window.crypto.randomUUID();
+            } while (seen.has(viewID) || liveViewOwners.has(viewID));
+            // Zotero may reuse one session data object in multiple windows.
+            // Detach it before setTabData mutates the object in place.
+            tab.data = cloneInto(data, window);
             tabs.setTabData(tab.id, { [namespace]: { version: 1, viewID } });
           }
           seen.add(viewID);
@@ -154,6 +166,11 @@ export function createTabEnhancementHost(
         });
       }),
     );
+    for (const viewID of ownedViewIDs) {
+      if (!seen.has(viewID) && liveViewOwners.get(viewID) === owner) liveViewOwners.delete(viewID);
+    }
+    for (const viewID of seen) liveViewOwners.set(viewID, owner);
+    ownedViewIDs = seen;
   }
   function schedule(): void {
     if (!current() || timer !== undefined) return;
@@ -266,6 +283,10 @@ export function createTabEnhancementHost(
     dispose() {
       if (disposed) return;
       disposed = true;
+      for (const viewID of ownedViewIDs) {
+        if (liveViewOwners.get(viewID) === owner) liveViewOwners.delete(viewID);
+      }
+      ownedViewIDs.clear();
       if (timer !== undefined) window.clearTimeout(timer);
       if (tabs._update === wrappedUpdate) tabs._update = originalUpdate;
       notifier.unregisterObserver(observerID);

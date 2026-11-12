@@ -394,7 +394,6 @@ export const DEFAULT_BINDINGS = {
   'tabs-list:d': 'tabCloseEntry',
   'tabs-list:<Del>': 'tabCloseEntry',
   'tabs-list:<Space>': 'tabToggleGroup',
-  'tabs-list:o': 'tabOpenGroup',
   'tabs-list:c': 'tabCloseGroup',
   'tabs-list:u': 'tabUngroup',
   'tabs-list:x': 'tabRemoveFromGroup',

@@ -47,12 +47,7 @@ const view = (): TabSidebarView => ({
       name: 'Research',
       color: '#e06c75',
       collapsed: true,
-      entries: [
-        entry('active', 'open', true),
-        entry('saved', 'closed'),
-        entry('elsewhere', 'other-window'),
-        entry('missing', 'missing'),
-      ],
+      entries: [entry('active', 'open', true), entry('elsewhere', 'other-window')],
     },
   ],
   ungrouped: [entry('loose')],
@@ -71,7 +66,6 @@ function harness() {
     renameGroup: vi.fn(),
     setGroupColor: vi.fn(),
     toggleGroup: vi.fn(),
-    openGroup: vi.fn(),
     closeGroup: vi.fn(),
     ungroup: vi.fn(),
     removeMember: vi.fn(),
@@ -156,47 +150,24 @@ function transfer() {
 }
 
 describe('tab sidebar', () => {
-  it('presents restore counts and explicit cancel and start controls', () => {
+  it('offers no group restore action and removes closed views even while editing', () => {
     const h = harness();
-    const start = vi.fn();
-    h.sidebar.restorePreview(view().groups[0]!, 1, start, () => h.sidebar.clearRestore());
-    const status = h.part('restore');
-    expect(status.textContent).toContain('Closed to open: 1');
-    expect(status.textContent).toContain('Already open here: 1');
-    expect(status.textContent).toContain('Other window: 1');
-    expect(status.textContent).toContain('Missing: 1');
-    h.click(h.action('restore-cancel'));
-    expect(start).not.toHaveBeenCalled();
-    expect(status.textContent).toBe('');
-    h.sidebar.restorePreview(view().groups[0]!, 1, start, () => h.sidebar.clearRestore());
-    h.click(h.action('restore-start'));
-    expect(start).toHaveBeenCalledOnce();
-  });
-  it('retains restore controls through feedback and moves focus with progress', () => {
-    const h = harness();
-    h.sidebar.restorePreview(
-      view().groups[0]!,
-      0,
-      () => {},
-      () => h.sidebar.clearRestore(),
-    );
-    const start = h.action('restore-start');
-    expect(document.activeElement).toBe(start);
-    expect(h.part('restore').textContent).toContain('Closed to open: 0');
-    expect(h.part('restore').textContent).toContain('Already opening: 1');
-    h.sidebar.status('Enter a group name');
-    expect(start.isConnected).toBe(true);
-    h.sidebar.restoreProgress('Opening', () => {});
-    expect(document.activeElement).toBe(h.action('restore-stop'));
-    h.sidebar.restoreProgress('Opening more', () => {});
-    expect(document.activeElement).toBe(h.action('restore-stop'));
-    h.sidebar.restoreProgress('Finished');
-    expect(document.activeElement).toBe(h.part('list'));
+    h.context(h.row('group', 'g'));
+    expect(h.action('open-group')).toBeNull();
+    h.click(h.action('rename'));
+    const editor = h.part('editor') as HTMLInputElement;
+    editor.value = 'Renamed';
+    const current = view();
+    h.sidebar.update({ ...current, groups: [{ ...current.groups[0]!, entries: [] }] }, false);
+    expect(h.row('entry', 'active')).toBeNull();
+    expect(document.activeElement).toBe(editor);
+    h.key(editor, 'Enter');
+    expect(h.callbacks.renameGroup).toHaveBeenCalledWith('g', 'Renamed');
   });
   it('keeps the selected tab visible in a collapsed group and preserves nodes across selection', () => {
     const h = harness();
     const active = h.row('entry', 'active');
-    const saved = h.row('entry', 'saved');
+    const saved = h.row('entry', 'elsewhere');
     expect(active.hidden).toBe(false);
     expect(saved.hidden).toBe(true);
     const current = view();
@@ -206,12 +177,7 @@ describe('tab sidebar', () => {
         groups: [
           {
             ...current.groups[0]!,
-            entries: [
-              entry('active'),
-              entry('saved', 'closed', true),
-              entry('elsewhere', 'other-window'),
-              entry('missing', 'missing'),
-            ],
+            entries: [entry('active'), entry('elsewhere', 'other-window', true)],
           },
         ],
       },
@@ -231,10 +197,10 @@ describe('tab sidebar', () => {
             ...view().groups[0]!,
             entries: [
               entry(
-                'Closed display',
-                'closed',
+                'Open display',
+                'open',
                 false,
-                'Article title Saved native title Jane Doe 2024 Archive.pdf Smith2024',
+                'Article title Native title Jane Doe 2024 Archive.pdf Smith2024',
               ),
               entry(
                 'Remote display',
@@ -242,7 +208,6 @@ describe('tab sidebar', () => {
                 false,
                 'Remote title Other Native Lee 2023 Remote.pdf',
               ),
-              entry('Missing saved title', 'missing', false, 'Saved only title'),
             ],
           },
         ],
@@ -254,47 +219,43 @@ describe('tab sidebar', () => {
     );
     for (const value of [
       'sMiTh2024',
-      'closed display',
+      'open display',
       'article title',
-      'saved native',
+      'native title',
       'jane doe',
       '2024',
       'archive.pdf',
     ]) {
       h.search(value);
-      expect(h.row('entry', 'Closed display')).not.toBeNull();
-      expect(h.action('activate', 'Closed display').textContent).toBe('Closed display');
+      expect(h.row('entry', 'Open display')).not.toBeNull();
+      expect(h.action('activate', 'Open display').textContent).toBe('Open display');
     }
     for (const value of ['REMOTE.PDF', 'other native']) {
       h.search(value);
       expect(h.row('entry', 'Remote display')).not.toBeNull();
     }
-    h.search('SAVED ONLY');
-    expect(h.row('entry', 'Missing saved title')).not.toBeNull();
     h.search('library actual');
     expect(h.row('entry', 'Library display')).not.toBeNull();
     h.search('loose actual');
     expect(h.row('entry', 'Loose display')).not.toBeNull();
     h.search('RESEARCH');
     expect(h.row('group', 'g')).not.toBeNull();
-    for (const id of ['Closed display', 'Remote display', 'Missing saved title'])
-      expect(h.row('entry', id)).not.toBeNull();
+    for (const id of ['Open display', 'Remote display']) expect(h.row('entry', id)).not.toBeNull();
     h.search('no matching metadata');
     expect(h.row('group', 'g')).toBeNull();
     expect(h.row('entry', 'Library display')).toBeNull();
     expect(h.row('entry', 'Loose display')).toBeNull();
   });
-  it('distinguishes closing a live tab from removing saved membership and labels other windows', () => {
+  it('closes local tabs, removes membership, and labels other windows', () => {
     const h = harness();
-    expect(h.row('entry', 'saved').textContent).toContain('Closed');
     expect(h.row('entry', 'elsewhere').textContent).toContain('Other window');
-    expect(h.row('entry', 'missing').textContent).toContain('Missing');
     h.click(h.action('entry-menu', 'active'));
     h.click(h.action('close', 'active'));
     expect(h.callbacks.close).toHaveBeenCalledWith('active');
-    h.click(h.action('entry-menu', 'saved'));
-    h.click(h.action('remove', 'saved'));
-    expect(h.callbacks.removeMember).toHaveBeenCalledWith('saved');
+    h.click(h.action('entry-menu', 'elsewhere'));
+    expect(h.action('close', 'elsewhere')).toBeNull();
+    h.click(h.action('remove', 'elsewhere'));
+    expect(h.callbacks.removeMember).toHaveBeenCalledWith('elsewhere');
     expect(h.callbacks.close).toHaveBeenCalledTimes(1);
   });
   it('preserves a pending rename and composition over updates and rejects stale groups', () => {
