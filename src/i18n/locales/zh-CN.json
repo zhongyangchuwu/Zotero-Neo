@@ -801,6 +801,7 @@
   "tabs.confirmUngroup": "解散此分组？已打开的标签页保持打开，已关闭的保存成员将从组中移除。",
   "tabs.restorePreview": "恢复分组预览",
   "tabs.restoreClosed": "待打开的已关闭标签页",
+  "tabs.restorePending": "正在打开",
   "tabs.restoreHere": "已在此窗口打开",
   "tabs.restoreStart": "开始打开",
   "tabs.restoreCancel": "取消",

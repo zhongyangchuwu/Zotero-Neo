@@ -109,48 +109,71 @@ export function createTabEnhancementsModule(
         renameGroup: (id, name) => invoke(() => ports.groups.renameGroup(id, name)),
         setGroupColor: (id, color) => invoke(() => ports.groups.setGroupColor(id, color)),
         toggleGroup: (id) => invoke(() => ports.groups.toggleGroup(id)),
-        openGroup: (id) => invoke(() => {
-          if (restore) return;
-          const group = ports.groups.view(native.id, appliedFormat).groups.find((entry) => entry.id === id);
-          if (!group) return;
-          const plan = ports.groups.prepareGroup(id, native.id);
-          const operation = { groupID: id, started: false, stopped: false };
-          restore = operation;
-          sidebar.restorePreview(group, () => {
-            if (restore !== operation || operation.started || !current()) return;
-            if (!ports.groups.view(native.id, appliedFormat).groups.some((entry) => entry.id === id)) {
-              restore = null;
-              sidebar.status('');
-              return;
-            }
-            operation.started = true;
-            const show = (value: TabGroupRestoreProgress, done: boolean) => {
-              if (!current() || restore !== operation) return;
-              const text = (key: string) => t(`tabs.${key}`, ports.language());
-              const message = `${text(done ? (value.stopped ? 'restoreStopped' : 'restoreFinished') : 'restoreProgress')}: ${value.processed}/${value.total}; ${text('restoreOpened')}: ${value.opened}; ${text('restoreSkipped')}: ${value.skipped}; ${text('restoreFailed')}: ${value.failed}`;
-              sidebar.restoreProgress(message, done || operation.stopped ? undefined : () => {
-                if (restore !== operation) return;
-                operation.stopped = true;
-                show(value, false);
-              });
-            };
-            void ports.groups.openGroup(id, native.id, {
-              isCurrent: () => current() && restore === operation && !operation.stopped,
-              plan,
-              progress: (value) => show(value, false),
-            }).then((value) => {
-              show(value, true);
-              if (restore === operation) restore = null;
-            }).catch((error: unknown) => {
-              if (restore === operation) restore = null;
-              report(error);
-            });
-          }, () => {
-            if (restore !== operation || operation.started) return;
-            restore = null;
-            sidebar.status('');
-          });
-        }),
+        openGroup: (id) =>
+          invoke(() => {
+            if (restore) return;
+            const group = ports.groups
+              .view(native.id, appliedFormat)
+              .groups.find((entry) => entry.id === id);
+            if (!group) return;
+            const plan = ports.groups.prepareGroup(id, native.id);
+            const operation = { groupID: id, started: false, stopped: false };
+            restore = operation;
+            sidebar.restorePreview(
+              group,
+              plan.members.filter((member) => member.closed).length,
+              () => {
+                if (restore !== operation || operation.started || !current()) return;
+                if (
+                  !ports.groups
+                    .view(native.id, appliedFormat)
+                    .groups.some((entry) => entry.id === id)
+                ) {
+                  restore = null;
+                  sidebar.clearRestore();
+                  return;
+                }
+                operation.started = true;
+                const show = (value: TabGroupRestoreProgress, done: boolean) => {
+                  if (!current() || restore !== operation) return;
+                  const text = (key: string) => t(`tabs.${key}`, ports.language());
+                  const message = `${text(done ? (value.stopped ? 'restoreStopped' : 'restoreFinished') : 'restoreProgress')}: ${value.processed}/${value.total}; ${text('restoreOpened')}: ${value.opened}; ${text('restoreSkipped')}: ${value.skipped}; ${text('restoreFailed')}: ${value.failed}`;
+                  sidebar.restoreProgress(
+                    message,
+                    done || operation.stopped
+                      ? undefined
+                      : () => {
+                          if (restore !== operation) return;
+                          operation.stopped = true;
+                          show(value, false);
+                        },
+                  );
+                };
+                void ports.groups
+                  .openGroup(id, native.id, {
+                    isCurrent: () => current() && restore === operation && !operation.stopped,
+                    plan,
+                    progress: (value) => show(value, false),
+                    onError: (error) =>
+                      ports.logger.debug(`Tab group restore failed: ${String(error)}`),
+                  })
+                  .then((value) => {
+                    show(value, true);
+                    if (restore === operation) restore = null;
+                  })
+                  .catch((error: unknown) => {
+                    if (restore === operation) restore = null;
+                    sidebar.clearRestore();
+                    report(error);
+                  });
+              },
+              () => {
+                if (restore !== operation || operation.started) return;
+                restore = null;
+                sidebar.clearRestore();
+              },
+            );
+          }),
         closeGroup: (id) => invoke(() => ports.groups.closeGroup(id, native.id)),
         ungroup: (id) =>
           invoke(() => {

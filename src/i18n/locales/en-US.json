@@ -801,6 +801,7 @@
   "tabs.confirmUngroup": "Dissolve this group? Open tabs stay open; saved closed members are removed from the group.",
   "tabs.restorePreview": "Restore group preview",
   "tabs.restoreClosed": "Closed to open",
+  "tabs.restorePending": "Already opening",
   "tabs.restoreHere": "Already open here",
   "tabs.restoreStart": "Start opening",
   "tabs.restoreCancel": "Cancel",

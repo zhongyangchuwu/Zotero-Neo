@@ -101,6 +101,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       registration: Registration;
       epoch: number;
       closeEpoch: number;
+      allowed: () => boolean;
       promise: Promise<string | false>;
     }
   >();
@@ -228,10 +229,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       before = nativeID;
     }
   }
-  function makeSearchText(
-    fields: TabViewSnapshot['fields'] | null,
-    fallbackTitle: string,
-  ): string {
+  function makeSearchText(fields: TabViewSnapshot['fields'] | null, fallbackTitle: string): string {
     if (!fields) return fallbackTitle;
     return [
       fields.title,
@@ -303,7 +301,7 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       pending.delete(memberID);
       if (!disposed) notify();
     });
-    const admission = { registration, epoch, closeEpoch, promise };
+    const admission = { registration, epoch, closeEpoch, allowed, promise };
     pending.set(memberID, admission);
     return admission;
   }
@@ -314,12 +312,22 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       id: member.id,
       epoch: memberEpoch.get(member.id) ?? 0,
       closeEpoch: registration.closedMembers.get(member.id) ?? 0,
-      closed: !live(member.id) && !admitted.has(member.id) && !pending.has(member.id) && !!registration.host.native.metadata(member.document),
+      closed:
+        !live(member.id) &&
+        !admitted.has(member.id) &&
+        !pending.has(member.id) &&
+        !!registration.host.native.metadata(member.document),
     }));
     return {
-      groupID, hostID, members,
-      isCurrent: () => !disposed && registration.active && hosts.get(hostID) === registration &&
-        (registration.closedGroups.get(groupID) ?? 0) === closeStart && groups.some((group) => group.id === groupID),
+      groupID,
+      hostID,
+      members,
+      isCurrent: () =>
+        !disposed &&
+        registration.active &&
+        hosts.get(hostID) === registration &&
+        (registration.closedGroups.get(groupID) ?? 0) === closeStart &&
+        groups.some((group) => group.id === groupID),
     };
   }
   return {
@@ -402,7 +410,13 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
               title: display ? formatTabTitle(titleFormat, display) : member.title,
               nativeTitle: display?.nativeTitle ?? member.title,
               searchText: makeSearchText(fields, member.title),
-              status: accepted ? (accepted.registration === registration ? 'open' as const : 'other-window' as const) : fields ? ('closed' as const) : ('missing' as const),
+              status: accepted
+                ? accepted.registration === registration
+                  ? ('open' as const)
+                  : ('other-window' as const)
+                : fields
+                  ? ('closed' as const)
+                  : ('missing' as const),
               selected: false,
               kind: member.document.kind,
             };
@@ -611,7 +625,10 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       const ownerActive = owner.active;
       const ownerCloseEpoch = owner.closedMembers.get(memberID) ?? 0;
       const staleAtClick =
-        !owner.active || admission.epoch !== epoch || admission.closeEpoch !== ownerCloseEpoch;
+        !owner.active ||
+        !admission.allowed() ||
+        admission.epoch !== epoch ||
+        admission.closeEpoch !== ownerCloseEpoch;
       let nativeID = await admission.promise;
       if (
         !registration.active ||
@@ -668,40 +685,65 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
       const registration = getHost(hostID);
       if (restoring.has(registration)) throw new Error('Group restore already in progress');
       const plan = restore?.plan ?? prepareGroup(groupID, hostID);
-      if (plan.groupID !== groupID || plan.hostID !== hostID) throw new Error('Invalid group restore plan');
+      if (plan.groupID !== groupID || plan.hostID !== hostID)
+        throw new Error('Invalid group restore plan');
       const members = plan.members;
       let opened = 0;
       let skipped = 0;
       let failed = 0;
       let stopped = false;
-      const current = () =>
-        plan.isCurrent() && (restore?.isCurrent() ?? true);
-      const progress = () => ({ total: members.length, processed: opened + skipped + failed, opened, skipped, failed, stopped });
+      const current = () => plan.isCurrent() && (restore?.isCurrent() ?? true);
+      const progress = () => ({
+        total: members.length,
+        processed: opened + skipped + failed,
+        opened,
+        skipped,
+        failed,
+        stopped,
+      });
       restoring.add(registration);
       try {
         restore?.progress(progress());
         for (const member of members) {
-          if (!current()) { stopped = true; break; }
-          const eligible = () => current() &&
+          if (!current()) {
+            stopped = true;
+            break;
+          }
+          const eligible = () =>
+            current() &&
             (memberEpoch.get(member.id) ?? 0) === member.epoch &&
             (registration.closedMembers.get(member.id) ?? 0) === member.closeEpoch &&
             findMember(member.id)?.group.id === groupID;
           try {
             const saved = findMember(member.id);
-            if (!member.closed || !eligible() || !saved || live(member.id) || admitted.has(member.id) || pending.has(member.id) ||
-                !registration.host.native.metadata(saved.member.document)) {
+            if (
+              !member.closed ||
+              !eligible() ||
+              !saved ||
+              live(member.id) ||
+              admitted.has(member.id) ||
+              pending.has(member.id) ||
+              !registration.host.native.metadata(saved.member.document)
+            ) {
               skipped++;
             } else {
               const nativeID = await openMember(member.id, registration, eligible)?.promise;
               if (nativeID) opened++;
               else skipped++;
             }
-          } catch {
+          } catch (error) {
+            restore?.onError?.(error);
             failed++;
           }
           if (!current()) stopped = true;
           restore?.progress(progress());
           if (stopped) break;
+          if (opened + skipped + failed < members.length) {
+            // The runtime targets ES2022, before Promise.withResolvers; yield a real UI turn.
+            await new Promise<void>((resolve) =>
+              registration.host.native.window.setTimeout(resolve, 0),
+            );
+          }
         }
         return progress();
       } finally {

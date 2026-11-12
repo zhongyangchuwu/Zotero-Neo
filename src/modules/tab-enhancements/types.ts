@@ -65,12 +65,18 @@ export interface TabGroupRestorePlan {
   readonly groupID: string;
   readonly hostID: string;
   readonly isCurrent: () => boolean;
-  readonly members: readonly { readonly id: string; readonly epoch: number; readonly closeEpoch: number; readonly closed: boolean }[];
+  readonly members: readonly {
+    readonly id: string;
+    readonly epoch: number;
+    readonly closeEpoch: number;
+    readonly closed: boolean;
+  }[];
 }
 
 export interface TabGroupRestoreOptions {
   readonly isCurrent: () => boolean;
   readonly progress: (value: TabGroupRestoreProgress) => void;
+  readonly onError?: (error: unknown) => void;
   readonly plan?: TabGroupRestorePlan;
 }
 
@@ -100,7 +106,11 @@ export interface TabGroupManager {
   ungroup(groupID: string, hostID: string): void;
   activate(memberID: string, hostID: string): Promise<void>;
   closeMember(memberID: string, hostID: string): void;
-  openGroup(groupID: string, hostID: string, options?: TabGroupRestoreOptions): Promise<TabGroupRestoreProgress>;
+  openGroup(
+    groupID: string,
+    hostID: string,
+    options?: TabGroupRestoreOptions,
+  ): Promise<TabGroupRestoreProgress>;
   closeGroup(groupID: string, hostID: string): void;
   dispose(): void;
 }
