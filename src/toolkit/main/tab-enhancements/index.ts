@@ -48,6 +48,33 @@ function fields(item: Zotero.Item, nativeTitle: string): TabTitleFields {
   });
 }
 
+/** Wait for the libraries actually referenced by saved groups and native tabs. */
+export async function prepareTabEnhancementData(
+  window: MainWindow,
+  savedLibraryIDs: readonly number[],
+): Promise<void> {
+  const ids = new Set(savedLibraryIDs);
+  // Zotero's tab registry is a private window capability, isolated at this boundary.
+  const nativeWindow = window as unknown as { Zotero_Tabs?: NativeTabs };
+  const tabs = nativeWindow.Zotero_Tabs;
+  for (const tab of tabs?._tabs ?? []) {
+    const itemID = tab.data?.itemID;
+    if (typeof itemID !== 'number') continue;
+    const ref = Zotero.Items.getLibraryAndKeyFromID(itemID);
+    if (ref) ids.add(ref.libraryID);
+  }
+  // Zotero exposes this readiness method at runtime, but its public type omits it.
+  const libraries = Zotero.Libraries as unknown as {
+    get(id: number): { waitForDataLoad(type: 'item'): Promise<void> } | false;
+  };
+  await Promise.all(
+    [...ids].map((id) => {
+      const library = libraries.get(id);
+      return library ? library.waitForDataLoad('item') : undefined;
+    }),
+  );
+}
+
 export function createTabEnhancementHost(
   window: MainWindow,
   onError: (error: unknown) => void,
