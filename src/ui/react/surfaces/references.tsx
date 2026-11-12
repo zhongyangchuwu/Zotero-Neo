@@ -1,12 +1,19 @@
 import { React } from '../runtime';
 import { createReactView } from '../view';
 import type { ReactView } from '../types';
-import type { ReferenceCommand, ReferenceViewModel } from '../../../references/react-model';
+import type {
+  ReferenceCommand,
+  ReferenceControlsCommand,
+  ReferenceControlsModel,
+  ReferenceViewModel,
+} from '../../../references/react-model';
 
 export const REFERENCES_REACT_CSS = `
 .neo-reference button { box-sizing: border-box; white-space: normal; margin: 4px 6px 0 0; padding: 4px 6px; border: 1px solid var(--zotero-neo-border); border-radius: 4px; text-align: left; cursor: pointer; }
 .neo-reference .neo-reference-row { display: block; width: 100%; }
 .neo-reference input { box-sizing: border-box; max-width: 100%; }
+.neo-reference-controls { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.neo-reference-controls button { padding:2px 6px; border:1px solid var(--zotero-neo-border); border-radius:4px; cursor:pointer; }
 `;
 
 export function mountReferenceReactView(
@@ -161,4 +168,37 @@ export function mountReferenceReactView(
     );
   };
   return createReactView(root, render, initialModel);
+}
+
+export function mountReferenceControlsReactView(
+  root: HTMLElement,
+  initialModel: ReferenceControlsModel,
+  dispatch: (command: ReferenceControlsCommand) => void,
+): ReactView<ReferenceControlsModel> {
+  return createReactView(
+    root,
+    (model) => (
+      <>
+        {(
+          [
+            ['mentions', 'In-text mentions', '文中引用'],
+            ['local', 'Local copies', '本地副本'],
+            ['metadata', 'Paper details', '论文详情'],
+          ] as const
+        ).map(([type, en, zh]) => (
+          <button
+            key={type}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              dispatch({ type });
+            }}
+          >
+            {model.chinese ? zh : en}
+          </button>
+        ))}
+      </>
+    ),
+    initialModel,
+  );
 }

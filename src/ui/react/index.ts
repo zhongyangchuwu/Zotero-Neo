@@ -2,8 +2,12 @@ import { mountSettingsReactView, SETTINGS_REACT_CSS } from './surfaces/settings'
 import type { SettingsReactModel } from '../../main/settings-react-model';
 import { mountPickerReactView, PICKER_REACT_CSS } from './surfaces/picker';
 import type { PickerReactModel } from '../../main/picker/react-model';
-import { mountReferenceReactView, REFERENCES_REACT_CSS } from './surfaces/references';
-import type { ReferenceViewModel } from '../../references/react-model';
+import {
+  mountReferenceReactView,
+  mountReferenceControlsReactView,
+  REFERENCES_REACT_CSS,
+} from './surfaces/references';
+import type { ReferenceControlsModel, ReferenceViewModel } from '../../references/react-model';
 import {
   mountSelectionPanelReactView,
   SELECTION_PANEL_REACT_CSS,
@@ -39,6 +43,8 @@ import {
   SELECTION_ACTIONS_REACT_CSS,
 } from './surfaces/selection-actions';
 import type { SelectionActionsReactModel } from '../../modules/reader-selection/react-model';
+import { mountReaderSidebarReactView, READER_SIDEBAR_REACT_CSS } from './surfaces/reader-sidebar';
+import type { ReaderSidebarViewModel } from '../../modules/reader-navigation/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
 
@@ -63,7 +69,8 @@ const runtime: NativeUIRuntime = {
         DOCUMENT_COMPARISON_REACT_CSS +
         DOCUMENT_PREPARATION_REACT_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
-        SELECTION_ACTIONS_REACT_CSS;
+        SELECTION_ACTIONS_REACT_CSS +
+        READER_SIDEBAR_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);
     }
     switch (surface) {
@@ -77,6 +84,14 @@ const runtime: NativeUIRuntime = {
         ) as ReactView<unknown>;
       case 'references':
         return mountReferenceReactView(root, model as ReferenceViewModel, (command) =>
+          dispatch(command),
+        ) as ReactView<unknown>;
+      case 'reference-controls':
+        return mountReferenceControlsReactView(root, model as ReferenceControlsModel, (command) =>
+          dispatch(command),
+        ) as ReactView<unknown>;
+      case 'reader-sidebar':
+        return mountReaderSidebarReactView(root, model as ReaderSidebarViewModel, (command) =>
           dispatch(command),
         ) as ReactView<unknown>;
       case 'selection-panel':

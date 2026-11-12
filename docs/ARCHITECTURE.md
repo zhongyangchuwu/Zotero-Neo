@@ -92,6 +92,8 @@ Selection Panel 使用绑定确切 Window／Document 的静态 React 视图显�
 
 `src/modules/reader-navigation/` 按 ReaderSession 拥有页面、滚动/平移、缩放、PDF 搜索、批注位置遍历、语义 Outline、按需 captions、marks 及原生侧栏增强。Normal 与四个侧栏上下文的真实动作均通过模块作用域登记；命名 marks 沿用特殊输入语法与持久化格式，不伪造 ActionId。异步 marks 保存保留实际结果，但只有发起交互仍有效时才显示状态；连续滚动跨重复输入保持有效，销毁视图时先退休 RAF 与完成回调，再释放原生资源。
 
+书签和按需图表目录的 Neo 自有内容由 `src/ui/react/surfaces/reader-sidebar.tsx` 呈现；原生 Outline、侧栏布局与装饰仍由 Toolkit 管理。控制器保留按键、提取、目标和焦点策略，并在渲染器异步加载后重新核对所属文档及焦点请求。
+
 Reader Base 先建立视图和外层输入监听，再在 Navigation 激活事务内加载 marks、启动原生侧栏；失败时退休该模块全部贡献，不关闭独立 Select、批注、hints 或 Workspace。Base 启动失败则释放未完成的 Reader session，原生对象在本次运行中不循环重试，新原生对象可重新附着。正常退出由显式清理收集器继续释放所有负责方，并向调用方保留首个清理失败。
 
 章节查找、图表浏览和解析对照分别由 `src/modules/reader-chapters/`、`reader-figures/` 和 `document-comparison/` 拥有。图表浏览只在 Navigation 成功激活后组合，通过具名端口借用已有 caption 来源与定位，不新建目标引擎或导航历史。章节与图表模块各自持有缓存／服务失效订阅，对照模块管理自己的界面和迟到结果；原有的互斥打开策略仍由 Reader Surface 协调。
@@ -123,6 +125,8 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 #### 引用增强
 
 `src/modules/references/` 按 ReaderSession 拥有引用增强与 `openReferences`；`src/references/controller.ts` 拥有原生预览中的逐文献操作、右键动作、搜索清单及单项任务浮层。Toolkit 提供原生预览挂载、同步菜单追加与工具栏入口，并返回参考文献、识别到的提及及来源守卫。悬停不激活窗格或查询服务；明确操作先捕获锚点，再激活并固定精确 PDF presentation/Window/Document，在异步操作前后验证 PDF 字节来源。引用跳转复用已有 NavigationPort 与共享历史，不建立第二套栈。用户交互见[Reader 指南](READER_GUIDE.md)，宿主细节见[开发指南](DEVELOPMENT.md#宿主能力-toolkit)。
+
+原生引文预览内的 Neo 操作按钮使用 `src/ui/react/surfaces/references.tsx`，不替换原生预览、链接或右键菜单；关闭预览时先退休渲染器及其回调。
 
 本地分析和文库查找不访问网络。元数据只在显式搜索未命中缓存或显式刷新时从 Semantic Scholar 或 arXiv 获取；展示来源原始字段、原始摘要和检索时间，未提供的摘要不生成。本模块不依赖或调用 AI 问答，不对论文或引用作 AI 生成、质量判断或分类。`src/operations/references.ts` 只在明确确认后添加条目；已存在条目不覆盖，精确 DOI/arXiv 身份用于去重。
 
