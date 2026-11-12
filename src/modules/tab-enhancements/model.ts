@@ -332,6 +332,13 @@ export function createTabGroupManager(options: TabGroupManagerOptions): TabGroup
   }
   return {
     prepareGroup,
+    libraryIDs() {
+      requireActive();
+      const ids = new Set<number>();
+      for (const group of groups)
+        for (const member of group.members) ids.add(member.document.libraryID);
+      return [...ids];
+    },
     registerHost(host) {
       requireActive();
       if (hosts.has(host.native.id)) throw new Error(`Duplicate tab host: ${host.native.id}`);

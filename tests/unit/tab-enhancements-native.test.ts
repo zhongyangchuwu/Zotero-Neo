@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createTabEnhancementHost } from '../../src/toolkit/main/tab-enhancements';
+import {
+  createTabEnhancementHost,
+  prepareTabEnhancementData,
+} from '../../src/toolkit/main/tab-enhancements';
 import { mountRail } from '../../src/toolkit/main/tab-enhancements/layout';
 
 const oldZotero = Reflect.get(globalThis, 'Zotero');
@@ -81,6 +84,31 @@ function fixture() {
 }
 
 describe('native tab enhancement host', () => {
+  it('waits for saved and open-tab libraries before accessing their items', async () => {
+    const pending = Promise.withResolvers<void>();
+    const load = vi.fn((id: number) => (id === 2 ? pending.promise : Promise.resolve()));
+    const get = vi.fn((id: number) => (id === 99 ? false : { waitForDataLoad: () => load(id) }));
+    Reflect.set(globalThis, 'Zotero', {
+      Items: {
+        getLibraryAndKeyFromID: (id: number) => (id === 7 ? { libraryID: 1, key: 'PDF' } : false),
+      },
+      Libraries: { get },
+    });
+    const window = {
+      Zotero_Tabs: { _tabs: [{ data: { itemID: 7 } }, { data: { itemID: 7 } }, { data: {} }] },
+    } as unknown as Window;
+    let completed = false;
+    const preparation = prepareTabEnhancementData(window, [2, 2, 99]).then(() => {
+      completed = true;
+    });
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    expect(get.mock.calls.map(([id]) => id).sort()).toEqual([1, 2, 99]);
+    expect(load.mock.calls.map(([id]) => id).sort()).toEqual([1, 2]);
+    pending.resolve();
+    await preparation;
+    expect(completed).toBe(true);
+  });
   it('preserves native data and distinct persistent per-view IDs through unload settlement', () => {
     const h = fixture();
     const first = h.host.snapshot();

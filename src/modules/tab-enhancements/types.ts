@@ -81,6 +81,7 @@ export interface TabGroupRestoreOptions {
 }
 
 export interface TabGroupManager {
+  libraryIDs(): readonly number[];
   registerHost(host: TabGroupHost): Cleanup;
   refresh(hostID: string): void;
   subscribe(listener: () => void): Cleanup;

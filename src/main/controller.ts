@@ -78,6 +78,7 @@ import {
   applyMainQuickSearch,
   applyMainTagFilter,
   closeMainAdvancedSearch,
+  prepareTabEnhancementData,
 } from '../toolkit/main';
 import { mainCursorItem, resolveMainEffectiveTargets } from './action-targets';
 import { resolveMainDocumentAttachments, MAIN_ITEM_TARGET } from './main-item-target';
@@ -450,9 +451,20 @@ export class MainWindowController implements MainWindowControllerApi {
         tabEnhancements: null,
       });
       if (this.#dependencies.modules.applied['tab-enhancements']) {
+        const document = window.document;
+        const current = (): boolean =>
+          this.#sessions.get(window) === session &&
+          !session.cleanup.disposed &&
+          window.document === document &&
+          !window.closed;
         void Zotero.initializationPromise
-          .then(() => {
-            if (this.#sessions.get(window) !== session || session.cleanup.disposed) return;
+          .then(async () => {
+            if (!current()) return;
+            await Zotero.uiReadyPromise;
+            if (!current()) return;
+            const groups = this.tabGroupManager();
+            await prepareTabEnhancementData(window, groups.libraryIDs());
+            if (!current()) return;
             const attached = this.#modules.get(session);
             if (!attached) return;
             attached.tabEnhancements = scope.activate('tab-enhancements', () => {
@@ -464,13 +476,13 @@ export class MainWindowController implements MainWindowControllerApi {
                 bindings: () => this.sessionBindings(session),
                 language: () => this.keyGuideLanguage(),
                 themeRoot: (root) => session.theme.add(root),
-                groups: this.tabGroupManager(),
+                groups,
                 workspace,
               });
             });
           })
           .catch((error: unknown) => {
-            if (this.#sessions.get(window) === session && !session.cleanup.disposed) {
+            if (current()) {
               reportDiagnosticError(
                 this.#dependencies.logger,
                 'Tab enhancement startup failed',
