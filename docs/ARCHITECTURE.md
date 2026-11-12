@@ -98,6 +98,8 @@ Reader Base 先建立视图和外层输入监听，再在 Navigation 激活事�
 
 图表选择器以静态 React 视图呈现筛选、列表和裁图预览；目标解析、筛选、IME、异步预览取消、精确 PDF 视图寿命及确认导航仍由 Reader 控制器负责。关闭或替换视图不会让旧预览和导航完成接管新界面。
 
+解析对照的配置、结果和明确操作由静态 React 视图呈现；PDF 来源校验、服务请求、凭据及迟到结果仍由对照控制器管理，凭据不进入展示模型。
+
 Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确视图及共享历史策略，并直接持有 Toolkit 导航宿主。Workspace 的 Reader 实例通过同一宿主处理分屏创建/关闭与方向焦点，普通按键、延迟绑定和 Palette 使用相同实现；原始方向键只在实际成功时消费。Main/Note 通用面板焦点（含 Note Insert）、共享滚动与 `src/reader/native-input.ts` 仍属基座，不依赖 Reader 导航或 Workspace 的业务实现。评论编辑器由批注模块持有，引用上下文控件由 `references` 模块持有；Surface 将两者的精确输入焦点纳入现有原生键盘让出，不新增 Reader mode。`i` 保留评论偏好与 NativeInput 分支，Normal `zb` 按当前批注决定改色或页面底部回退。
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。
@@ -125,6 +127,8 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 `src/modules/document-preparation/` 的 controller 由 Addon 持有，复用 `src/document-analysis/` 的应用级队列与任务记录。MainWindow 和 ReaderSession 分别激活局部模块，传入发起 Surface 已解析的 PDF；Reader 不借用 Main Selection。局部作用域只借用本次 presentation，释放同时核对精确界面身份，旧作用域退出不能关闭同窗口的替换界面。
 
 关闭面板或 Reader 只退休相应展示，不停止或销毁共享队列；停止仍需明确操作。队列、缓存和记录的身份及恢复语义不随模块拆分变化。
+
+文档准备的队列、进度和凭据控件由静态 React 视图呈现；队列寿命和凭据操作仍归应用 controller，密码不进入展示模型。
 
 #### AI 问答（实验）
 
