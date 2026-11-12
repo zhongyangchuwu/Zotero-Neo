@@ -1,7 +1,10 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { ReaderFiguresReactCommand, ReaderFiguresReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type {
+  ReaderFiguresReactCommand,
+  ReaderFiguresReactModel,
+} from '../../../modules/reader-figures/react-model';
 
 export const READER_FIGURES_REACT_CSS = `
 .neo-figures { position:fixed; inset:4%; z-index:2147483645; padding:16px; display:flex; flex-direction:column; gap:10px; overflow:auto; background:var(--zotero-neo-surface); color:var(--zotero-neo-text); border:1px solid var(--zotero-neo-border); border-radius:8px; box-shadow:0 8px 40px #0006; font:menu; }

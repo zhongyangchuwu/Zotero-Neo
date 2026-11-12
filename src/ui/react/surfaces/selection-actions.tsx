@@ -1,7 +1,10 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { SelectionActionsReactCommand, SelectionActionsReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type {
+  SelectionActionsReactCommand,
+  SelectionActionsReactModel,
+} from '../../../modules/reader-selection/react-model';
 
 export const SELECTION_ACTIONS_REACT_CSS = `
 .neo-selection-actions { font:12px/1.4 system-ui,sans-serif; }

@@ -1,7 +1,10 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { DocumentComparisonCommand, DocumentComparisonModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type {
+  DocumentComparisonCommand,
+  DocumentComparisonModel,
+} from '../../../modules/document-comparison/react-model';
 
 export const DOCUMENT_COMPARISON_REACT_CSS = `
 .neo-comparison-controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }

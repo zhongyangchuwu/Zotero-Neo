@@ -1,9 +1,12 @@
-import { React } from '../ui/react/runtime';
+import { React } from '../runtime';
 import type { KeyboardEvent } from 'react';
-import { KEY_GUIDE_NUMBER_SPECS, normalizeKeyGuideNumber } from '../core/preferences';
-import type { BindingEditorIssue } from '../input/binding-editor';
-import type { ShortcutCatalogEntry } from '../input/shortcut-catalog';
-import type { KeybindingsPageCommand, KeybindingsPageModel } from './settings-keybindings-model';
+import { KEY_GUIDE_NUMBER_SPECS, normalizeKeyGuideNumber } from '../../../core/preferences';
+import type { BindingEditorIssue } from '../../../input/binding-editor';
+import type { ShortcutCatalogEntry } from '../../../input/shortcut-catalog';
+import type {
+  KeybindingsPageCommand,
+  KeybindingsPageModel,
+} from '../../../main/settings-keybindings-model';
 
 interface KeybindingsPageProps {
   readonly model: KeybindingsPageModel;

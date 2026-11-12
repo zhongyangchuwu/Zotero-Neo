@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mountTabSidebarReactView } from '../../src/modules/tab-enhancements/react-view';
+import { mountTabSidebarReactView } from '../../src/ui/react/surfaces/tab-sidebar';
 import { TabEnhancementsSidebar } from '../../src/modules/tab-enhancements/sidebar';
 import type {
   TabSidebarCallbacks,

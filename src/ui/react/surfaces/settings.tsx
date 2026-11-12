@@ -1,16 +1,16 @@
-import { React } from '../ui/react/runtime';
-import { createReactView } from '../ui/react/view';
-import { Button, Field, Kbd, Status } from '../ui/react/components';
-import type { ReactView } from '../ui/react/types';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import { Button, Field, Kbd, Status } from '../components';
+import type { ReactView } from '../types';
 import type {
   SettingsFormCommand,
   SettingsFormField,
   SettingsFormModel,
-} from './settings-form-model';
-import type { SettingsReactCommand, SettingsReactModel } from './settings-react-model';
-import { AppearancePage, APPEARANCE_REACT_CSS } from './settings-appearance-react';
-import { KeybindingsPage, KEYBINDINGS_REACT_CSS } from './settings-keybindings-react';
-import { ReaderPage, READER_REACT_CSS } from './settings-reader-react';
+} from '../../../main/settings-form-model';
+import type { SettingsReactCommand, SettingsReactModel } from '../../../main/settings-react-model';
+import { AppearancePage, APPEARANCE_REACT_CSS } from './settings-appearance';
+import { KeybindingsPage, KEYBINDINGS_REACT_CSS } from './settings-keybindings';
+import { ReaderPage, READER_REACT_CSS } from './settings-reader';
 
 function FormControl({
   field,

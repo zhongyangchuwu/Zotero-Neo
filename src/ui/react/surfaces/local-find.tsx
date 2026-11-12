@@ -1,7 +1,10 @@
-import { React } from '../../ui/react/runtime';
-import type { ReactView } from '../../ui/react/types';
-import { createReactView } from '../../ui/react/view';
-import type { LocalFindReactCommand, LocalFindReactModel } from './local-find-react-model';
+import { React } from '../runtime';
+import type { ReactView } from '../types';
+import { createReactView } from '../view';
+import type {
+  LocalFindReactCommand,
+  LocalFindReactModel,
+} from '../../../modules/library/local-find-react-model';
 
 export const LOCAL_FIND_REACT_CSS = `
 .neo-local-find { display:flex; align-items:center; gap:8px; flex:1; min-width:0; }

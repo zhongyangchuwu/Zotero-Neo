@@ -1,7 +1,10 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import type { AnnotationCommentReactCommand, AnnotationCommentReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import type {
+  AnnotationCommentReactCommand,
+  AnnotationCommentReactModel,
+} from '../../../modules/reader-annotations/react-model';
 
 export const ANNOTATION_COMMENT_REACT_CSS = `
 .neo-annotation-comment { display:flex; flex-direction:column; font:13px/1.4 sans-serif; }

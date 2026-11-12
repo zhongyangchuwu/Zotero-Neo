@@ -1,8 +1,11 @@
-import { React } from '../../ui/react/runtime';
-import { createReactView } from '../../ui/react/view';
-import type { ReactView } from '../../ui/react/types';
-import { THEME_VARS } from '../../ui/theme';
-import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model';
+import { React } from '../runtime';
+import { createReactView } from '../view';
+import type { ReactView } from '../types';
+import { THEME_VARS } from '../../theme';
+import type {
+  ExtensionsReactCommand,
+  ExtensionsReactModel,
+} from '../../../modules/extensions/react-model';
 
 export const EXTENSIONS_REACT_CSS = `
 .neo-extensions-panel{width:min(960px,calc(100vw - 80px));height:min(640px,calc(100vh - 80px));min-width:620px;min-height:420px;display:flex;flex-direction:column;overflow:hidden;background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 24px 70px ${THEME_VARS.shadow}}

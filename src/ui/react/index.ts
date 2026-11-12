@@ -1,52 +1,43 @@
-import { mountSettingsReactView, SETTINGS_REACT_CSS } from '../../main/settings-react';
+import { mountSettingsReactView, SETTINGS_REACT_CSS } from './surfaces/settings';
 import type { SettingsReactModel } from '../../main/settings-react-model';
-import { mountPickerReactView, PICKER_REACT_CSS } from '../../main/picker/react-view';
+import { mountPickerReactView, PICKER_REACT_CSS } from './surfaces/picker';
 import type { PickerReactModel } from '../../main/picker/react-model';
-import { mountReferenceReactView, REFERENCES_REACT_CSS } from '../../references/react-view';
+import { mountReferenceReactView, REFERENCES_REACT_CSS } from './surfaces/references';
 import type { ReferenceViewModel } from '../../references/react-model';
 import {
   mountSelectionPanelReactView,
   SELECTION_PANEL_REACT_CSS,
-} from '../../modules/worksets/react-view';
+} from './surfaces/selection-panel';
 import type { SelectionPanelReactModel } from '../../modules/worksets/react-model';
-import {
-  mountTabSidebarReactView,
-  TAB_SIDEBAR_REACT_CSS,
-} from '../../modules/tab-enhancements/react-view';
+import { mountTabSidebarReactView, TAB_SIDEBAR_REACT_CSS } from './surfaces/tab-sidebar';
 import type { TabSidebarReactModel } from '../../modules/tab-enhancements/react-model';
-import {
-  mountLocalFindReactView,
-  LOCAL_FIND_REACT_CSS,
-} from '../../modules/library/local-find-react-view';
+import { mountLocalFindReactView, LOCAL_FIND_REACT_CSS } from './surfaces/local-find';
 import type { LocalFindReactModel } from '../../modules/library/local-find-react-model';
-import {
-  mountExtensionsReactView,
-  EXTENSIONS_REACT_CSS,
-} from '../../modules/extensions/react-view';
+import { mountExtensionsReactView, EXTENSIONS_REACT_CSS } from './surfaces/extensions';
 import type { ExtensionsReactModel } from '../../modules/extensions/react-model';
-import { mountSearchDialogReactView, SEARCH_DIALOG_REACT_CSS } from '../search-dialog-react-view';
+import { mountSearchDialogReactView, SEARCH_DIALOG_REACT_CSS } from './surfaces/search-dialog';
 import type { SearchDialogReactModel } from '../search-dialog-react-model';
-import {
-  mountReaderFiguresReactView,
-  READER_FIGURES_REACT_CSS,
-} from '../../modules/reader-figures/react-view';
+import { mountReaderFiguresReactView, READER_FIGURES_REACT_CSS } from './surfaces/reader-figures';
 import type { ReaderFiguresReactModel } from '../../modules/reader-figures/react-model';
-import { mountDocumentPreparationReactView } from '../../modules/document-preparation/react-view';
+import {
+  mountDocumentPreparationReactView,
+  DOCUMENT_PREPARATION_REACT_CSS,
+} from './surfaces/document-preparation';
 import type { PreparationReactModel } from '../../modules/document-preparation/react-model';
 import {
   mountDocumentComparisonReactView,
   DOCUMENT_COMPARISON_REACT_CSS,
-} from '../../modules/document-comparison/react-view';
+} from './surfaces/document-comparison';
 import type { DocumentComparisonModel } from '../../modules/document-comparison/react-model';
 import {
   mountAnnotationCommentReactView,
   ANNOTATION_COMMENT_REACT_CSS,
-} from '../../modules/reader-annotations/react-view';
+} from './surfaces/annotation-comment';
 import type { AnnotationCommentReactModel } from '../../modules/reader-annotations/react-model';
 import {
   mountSelectionActionsReactView,
   SELECTION_ACTIONS_REACT_CSS,
-} from '../../modules/reader-selection/react-view';
+} from './surfaces/selection-actions';
 import type { SelectionActionsReactModel } from '../../modules/reader-selection/react-model';
 import { NATIVE_UI_CSS } from './styles';
 import type { NativeUIRuntime, ReactView } from './types';
@@ -70,6 +61,7 @@ const runtime: NativeUIRuntime = {
         SEARCH_DIALOG_REACT_CSS +
         READER_FIGURES_REACT_CSS +
         DOCUMENT_COMPARISON_REACT_CSS +
+        DOCUMENT_PREPARATION_REACT_CSS +
         ANNOTATION_COMMENT_REACT_CSS +
         SELECTION_ACTIONS_REACT_CSS;
       root.ownerDocument.documentElement.append(stylesheet);

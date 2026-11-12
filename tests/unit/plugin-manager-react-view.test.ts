@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mountExtensionsReactView } from '../../src/modules/extensions/react-view';
+import { mountExtensionsReactView } from '../../src/ui/react/surfaces/extensions';
 import type { ExtensionsReactModel } from '../../src/modules/extensions/react-model';
 
 const model: ExtensionsReactModel = {
