@@ -56,13 +56,14 @@ Neo 自有 React 界面的素材集中在 `src/ui/react/`：`components.tsx` 提
 
 ##### 标签页增强
 
-`src/modules/tab-enhancements/` 按 MainWindow 拥有垂直侧栏、标题格式展示与窗口级交互。MainWindowController 等待 Zotero 初始化、主界面就绪和已保存分组／原生标签页所引用的文库条目加载；每次等待后核对原 session 与 Document，才激活侧栏，不加载无关文库。应用共享的分组管理器协调已登记的 Main 宿主，但不接管 Reader 生命周期。它依赖核心 `workspace`：跨窗口激活先转到拥有该原生标签页的窗口，再沿用 `workspace.activateTab`；标签页切换及导航仍复用基座唯一历史。
+`src/modules/tab-enhancements/` 按 MainWindow 拥有标签页增强界面、标题展示与窗口级交互，支持左／右垂直栏和上方横向模式；默认位置为左侧。上方标签栏由 Neo 绘制，Zotero 原生工具栏保留，原生标签操作按宿主能力逐项适配。位置只控制显示，不引入按文库分类自动分组，也不改变阅读分组模型。应用共享的分组管理器协调已登记的 Main 宿主，但不接管 Reader 生命周期。它依赖核心 `workspace`：跨窗口激活先转到拥有该原生标签页的窗口，再沿用 `workspace.activateTab`；标签页切换及导航仍复用基座唯一历史。
 
-原生标签页清单是已打开 Reader/Note 视图的唯一事实来源。Toolkit 将版本化 `viewID` 存入原生 `tab.data`，区分同一 PDF 的多个视图，并在原生会话恢复后关联仍打开的分组成员；`nativeID` 仅是当前会话的操作句柄。关闭视图会移除成员，空组保留；组关闭和原生排序只作用于发起窗口，跨窗口激活由所属宿主执行。
+Zotero 原生标签页清单是已打开 Reader/Note 视图的唯一事实来源。Toolkit 将版本化 `viewID` 存入原生 `tab.data`，区分同一 PDF 的多个视图，并在原生会话恢复后关联仍打开的分组成员；`nativeID` 仅是当前会话的操作句柄。关闭视图会立即移除成员，空组保留；组关闭和排序只作用于发起窗口，跨窗口激活由所属宿主执行，不在当前窗口伪造其他窗口的原生标签页。
 
-当前分组状态保存在 profile-local 的 `tabEnhancements.groups.v2`；旧 `tabEnhancements.groups.v1` 原样保留为备份，不被覆盖。显示偏好独立保存，停用功能或重置显示偏好不会清除分组。Main 创建／追加动作固定发起时的目标，明确选择 PDF 并确认后打开标签页，只将成功打开的视图分组；操作不修改 Zotero 标签、分类或元数据。
+当前唯一分组状态保存在 profile-local 的 `tabEnhancements.groups.v2`；旧 `tabEnhancements.groups.v1` 原样保留为备份。分组独立于显示位置和标题偏好，停用功能或重置显示偏好不会清除分组。Main 创建／追加动作固定发起时的目标，明确选择 PDF 并确认后打开标签页，只将成功打开的视图分组；操作不修改 Zotero 标签、分类或元数据。
 
-`src/toolkit/main/tab-enhancements/` 独占私有原生 Tab 接口、外层布局和原生工具栏的可逆租约。侧栏作为整个 `#appcontent` 的外侧兄弟节点放在最左或最右；Toolkit 不重挂原生内容 deck、Reader/PDF iframe 或文档。Neo 侧栏内容由绑定确切 Main Window／Document 的静态 React 视图呈现，分组、查询输入和焦点由侧栏控制器与分组管理器负责；原生工具栏是视图的独立兄弟节点，不由 React 接管。只有识别到支持的原生布局时才替换横向标签栏并移入原生工具栏；布局不受支持或视图挂载失败时恢复 Zotero 原生标签页界面。
+`src/toolkit/main/tab-enhancements/` 独占私有原生 Tab 接口、外层布局和原生工具栏的可逆租约。左／右模式管理外侧垂直栏；上方模式由 Neo 绘制横向标签栏，原生工具栏保留，逐项适配所需的原生标签操作。Neo 自有 UI 使用共享 React UI；Toolkit 隔离私有原生 DOM、标签栏接缝和布局恢复，不把宿主对象交给 React。上方模式以鼠标操作为主，保留原生键盘输入，不新增快捷键。模式切换或挂载失败必须可逆：失败时恢复原生标签栏和工具栏；不重挂原生内容 deck、Reader/PDF iframe 或 Note editor，也不重载 Reader、PDF 或 Note。
+
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 

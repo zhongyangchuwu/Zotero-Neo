@@ -371,4 +371,34 @@ describe('tab sidebar', () => {
     h.search('loose');
     expect(dragEvent(h.row('entry', 'loose'), 'dragstart', data).defaultPrevented).toBe(true);
   });
+  it('keeps the active tab visible during search and delegates native tab controls', () => {
+    const h = harness();
+    h.callbacks.nativeMenu = vi.fn();
+    h.callbacks.toggleAudio = vi.fn();
+    h.row('entry', 'active').scrollIntoView = vi.fn();
+    const current = view();
+    h.sidebar.update(
+      {
+        ...current,
+        groups: current.groups.map((group) => ({
+          ...group,
+          entries: group.entries.map((item) =>
+            item.id === 'active' ? { ...item, audioStatus: { active: true, paused: true } } : item,
+          ),
+        })),
+      },
+      false,
+      true,
+    );
+    h.context(h.row('entry', 'active'));
+    expect(h.callbacks.nativeMenu).toHaveBeenCalledWith('active', 0, 0);
+    h.click(h.action('toggle-audio', 'active'));
+    expect(h.callbacks.toggleAudio).toHaveBeenCalledWith('active');
+    h.row('entry', 'active').dispatchEvent(
+      new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+    );
+    expect(h.callbacks.close).toHaveBeenCalledWith('active');
+    h.search('no matching tab');
+    expect(h.row('entry', 'active').hidden).toBe(false);
+  });
 });

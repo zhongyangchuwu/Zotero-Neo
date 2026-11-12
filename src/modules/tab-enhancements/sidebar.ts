@@ -36,6 +36,8 @@ export class TabEnhancementsSidebar {
   #query = '';
   #status = '';
   #collapsed = false;
+  #top = false;
+  #selectedID = '';
   #searchComposing = false;
   #editComposing = false;
   #disposed = false;
@@ -60,6 +62,7 @@ export class TabEnhancementsSidebar {
       clearTimer: (timer) => options.window.clearTimeout(timer),
     });
     this.root.addEventListener('click', this.#click);
+    this.root.addEventListener('auxclick', this.#auxClick);
     this.root.addEventListener('contextmenu', this.#contextMenu);
     this.root.addEventListener('focusin', this.#focusIn);
     this.root.addEventListener('input', this.#input);
@@ -95,6 +98,7 @@ export class TabEnhancementsSidebar {
         )
           this.focus();
         this.#pendingFocus = undefined;
+        if (this.#top) this.#revealSelected();
       })
       .catch(() => {});
   }
@@ -106,6 +110,7 @@ export class TabEnhancementsSidebar {
     return {
       view: this.#view,
       language: this.#options.language(),
+      top: this.#top,
       collapsed: this.#collapsed,
       query: this.#query,
       editing: this.#editing,
@@ -122,6 +127,12 @@ export class TabEnhancementsSidebar {
   #part(name: string): HTMLElement | null {
     return this.#react?.getElement(name) ?? null;
   }
+  #revealSelected(): void {
+    this.#part('list')?.querySelector<HTMLElement>('.is-selected')?.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }
   #entry(id: string): TabSidebarEntry | undefined {
     if (this.#view.library?.id === id) return this.#view.library;
     for (const entry of this.#view.ungrouped) if (entry.id === id) return entry;
@@ -134,13 +145,25 @@ export class TabEnhancementsSidebar {
   #group(id: string): TabSidebarGroup | undefined {
     return this.#view.groups.find((group) => group.id === id);
   }
-  update(view: TabSidebarView, collapsed: boolean): void {
+  update(view: TabSidebarView, collapsed: boolean, top = false): void {
     if (this.#disposed) return;
+    const selected =
+      [view.library, ...view.ungrouped, ...view.groups.flatMap((group) => group.entries)].find(
+        (entry) => entry?.selected,
+      )?.id ?? '';
+    const reveal =
+      top &&
+      !collapsed &&
+      selected &&
+      (selected !== this.#selectedID || !this.#top || this.#collapsed);
     this.#view = view;
     this.#collapsed = collapsed;
+    this.#top = top;
+    this.#selectedID = selected;
     this.#drag = null;
     if (this.#menu) this.#closeMenu(true);
     this.#render();
+    if (reveal) this.#revealSelected();
   }
   ownsTarget(target: EventTarget | null): boolean {
     return (
@@ -281,6 +304,7 @@ export class TabEnhancementsSidebar {
     this.#runtime.dispose();
     this.root.ownerDocument.removeEventListener('mousedown', this.#dismissMenu, true);
     this.root.removeEventListener('click', this.#click);
+    this.root.removeEventListener('auxclick', this.#auxClick);
     this.root.removeEventListener('contextmenu', this.#contextMenu);
     this.root.removeEventListener('focusin', this.#focusIn);
     this.root.removeEventListener('input', this.#input);
@@ -371,8 +395,10 @@ export class TabEnhancementsSidebar {
   };
   #input = (event: Event): void => {
     if (event.target === this.#part('query') && isCommittedInput(event, this.#searchComposing)) {
+      const hadQuery = !!this.#query.trim();
       this.#query = (event.target as HTMLInputElement).value;
       this.#render();
+      if (this.#top && !this.#collapsed && hadQuery && !this.#query.trim()) this.#revealSelected();
     }
   };
   #compositionStart = (event: Event): void => {
@@ -383,9 +409,19 @@ export class TabEnhancementsSidebar {
     if (event.target === this.#part('editor')) this.#editComposing = false;
     if (event.target === this.#part('query')) {
       this.#searchComposing = false;
+      const hadQuery = !!this.#query.trim();
       this.#query = (event.target as HTMLInputElement).value;
       this.#render();
+      if (this.#top && !this.#collapsed && hadQuery && !this.#query.trim()) this.#revealSelected();
     }
+  };
+  #auxClick = (event: MouseEvent): void => {
+    if (!this.#top || event.button !== 1) return;
+    const row = asElement(event.target)?.closest<HTMLElement>('[data-neo-tab-row="entry"]');
+    const entry = row?.dataset.entryId && this.#entry(row.dataset.entryId);
+    if (!entry || entry.kind === 'library' || entry.status !== 'open') return;
+    event.preventDefault();
+    this.#options.callbacks.close(entry.id);
   };
   #click = (event: MouseEvent): void => {
     if (this.#disposed || !this.#options.isCurrent()) return;
@@ -409,6 +445,16 @@ export class TabEnhancementsSidebar {
     switch (action) {
       case 'toggle-sidebar':
         callbacks.toggleSidebar();
+        break;
+      case 'scroll-back':
+      case 'scroll-forward':
+        this.#part('list')?.scrollBy({
+          left: action === 'scroll-back' ? -222 : 222,
+          behavior: 'auto',
+        });
+        break;
+      case 'toggle-audio':
+        if (this.#entry(entryID)?.status === 'open') callbacks.toggleAudio?.(entryID);
         break;
       case 'new-group':
         this.#startEdit(null);
@@ -457,7 +503,13 @@ export class TabEnhancementsSidebar {
     const groupID = row?.dataset.groupId || null;
     const entryID = row?.dataset.entryId;
     if (kind === 'entry') {
-      const entry = entryID && this.#entry(entryID);
+      const entry = entryID ? this.#entry(entryID) : undefined;
+      if (this.#top && entry?.status === 'open' && this.#options.callbacks.nativeMenu) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.#options.callbacks.nativeMenu(entry.id, event.screenX, event.screenY);
+        return;
+      }
       if (entry && entry.kind !== 'library' && entry.kind !== 'other') {
         this.#showMenu(event, 'entry', groupID, entryID, row!);
         return;

@@ -28,6 +28,7 @@ export interface TabSidebarEntry {
   readonly status: 'open' | 'other-window';
   readonly selected: boolean;
   readonly kind: 'reader' | 'note' | 'library' | 'other';
+  readonly audioStatus?: { readonly active: boolean; readonly paused: boolean };
 }
 export interface TabSidebarGroup {
   readonly id: string;
@@ -78,6 +79,7 @@ export interface TabGroupManager {
     hostID: string,
   ): void;
   moveGroup(groupID: string, beforeGroupID: string | null, hostID: string): void;
+  moveToEdge(memberID: string, edge: 'start' | 'end', hostID: string): void;
   ungroup(groupID: string, hostID: string): void;
   activate(memberID: string, hostID: string): Promise<void>;
   closeMember(memberID: string, hostID: string): void;
@@ -98,6 +100,8 @@ export interface TabSidebarCallbacks {
   removeMember(memberID: string): void;
   moveMember(memberID: string, groupID: string | null, beforeMemberID: string | null): void;
   moveGroup(groupID: string, beforeGroupID: string | null): void;
+  nativeMenu?(memberID: string, screenX: number, screenY: number): void;
+  toggleAudio?(memberID: string): void;
   leave(): void;
 }
 export interface TabSidebarOptions {
