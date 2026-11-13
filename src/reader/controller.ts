@@ -2052,7 +2052,10 @@ export class ReaderSession {
     if (!window) return () => undefined;
     let manager = this.#themeManagers.get(window);
     if (!manager) {
-      manager = new ThemeManager(window, this.#dependencies.controller.dependencies.preferences);
+      manager = new ThemeManager(
+        readerWindow(this.#dependencies.reader) ?? window,
+        this.#dependencies.controller.dependencies.preferences,
+      );
       this.#themeManagers.set(window, manager);
     }
     return manager.add(root);

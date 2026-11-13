@@ -48,36 +48,36 @@ export const THEME_VARS = {
 
 const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>> = {
   light: {
-    '--zotero-neo-backdrop': 'rgba(15, 23, 42, 0.28)',
+    '--zotero-neo-backdrop': 'rgba(0, 0, 0, 0.24)',
     '--zotero-neo-surface': '#ffffff',
-    '--zotero-neo-elevated': '#f1f5f9',
-    '--zotero-neo-text': '#1f2937',
-    '--zotero-neo-muted': '#64748b',
-    '--zotero-neo-border': '#cbd5e1',
-    '--zotero-neo-input': '#f8fafc',
-    '--zotero-neo-selected': '#dbeafe',
-    '--zotero-neo-selected-text': '#172554',
-    '--zotero-neo-accent': '#2563eb',
+    '--zotero-neo-elevated': '#f2f2f2',
+    '--zotero-neo-text': '#222222',
+    '--zotero-neo-muted': '#666666',
+    '--zotero-neo-border': '#dadada',
+    '--zotero-neo-input': '#ffffff',
+    '--zotero-neo-selected': '#e5e5e5',
+    '--zotero-neo-selected-text': '#222222',
+    '--zotero-neo-accent': '#3568d4',
     '--zotero-neo-on-accent': '#ffffff',
     '--zotero-neo-success': '#287a43',
     '--zotero-neo-warning': '#9a6700',
     '--zotero-neo-error': '#b42318',
-    '--zotero-neo-focus-ring': '#2563eb',
-    '--zotero-neo-shadow': 'rgba(15, 23, 42, 0.24)',
+    '--zotero-neo-focus-ring': '#4072e5',
+    '--zotero-neo-shadow': 'rgba(0, 0, 0, 0.2)',
     '--zotero-neo-item-selection': '#eab308',
     '--zotero-neo-item-visual': '#22c55e',
-    '--zotero-neo-mode-normal': '#e8f0fe',
-    '--zotero-neo-mode-normal-text': '#1e3a8a',
+    '--zotero-neo-mode-normal': '#f2f2f2',
+    '--zotero-neo-mode-normal-text': '#222222',
     '--zotero-neo-mode-visual': '#e8f5e9',
     '--zotero-neo-mode-visual-text': '#14532d',
     '--zotero-neo-mode-insert': '#fff8e1',
     '--zotero-neo-mode-insert-text': '#713f12',
-    '--zotero-neo-mode-main': '#f0e8ff',
-    '--zotero-neo-mode-main-text': '#581c87',
+    '--zotero-neo-mode-main': '#f2f2f2',
+    '--zotero-neo-mode-main-text': '#222222',
     '--zotero-neo-status-success': '#dcfce7',
     '--zotero-neo-status-success-text': '#166534',
-    '--zotero-neo-status-info': '#dbeafe',
-    '--zotero-neo-status-info-text': '#1e40af',
+    '--zotero-neo-status-info': '#f2f2f2',
+    '--zotero-neo-status-info-text': '#222222',
     '--zotero-neo-status-error': '#fee2e2',
     '--zotero-neo-status-error-text': '#991b1b',
   },
@@ -85,37 +85,77 @@ const PALETTES: Readonly<Record<ResolvedTheme, Readonly<Record<string, string>>>
     '--zotero-neo-backdrop': 'rgba(0, 0, 0, 0.62)',
     '--zotero-neo-surface': '#1e1e1e',
     '--zotero-neo-elevated': '#303030',
-    '--zotero-neo-text': '#f1f5f9',
-    '--zotero-neo-muted': '#a8b3c7',
-    '--zotero-neo-border': '#4b5563',
+    '--zotero-neo-text': '#eeeeee',
+    '--zotero-neo-muted': '#aaaaaa',
+    '--zotero-neo-border': '#484848',
     '--zotero-neo-input': '#282828',
-    '--zotero-neo-selected': '#243b5a',
-    '--zotero-neo-selected-text': '#eff6ff',
-    '--zotero-neo-accent': '#66adff',
-    '--zotero-neo-on-accent': '#ffffff',
+    '--zotero-neo-selected': '#444444',
+    '--zotero-neo-selected-text': '#eeeeee',
+    '--zotero-neo-accent': '#8ab4f8',
+    '--zotero-neo-on-accent': '#1e1e1e',
     '--zotero-neo-success': '#2f8f52',
     '--zotero-neo-warning': '#c58a16',
     '--zotero-neo-error': '#c94b4b',
-    '--zotero-neo-focus-ring': '#66adff',
+    '--zotero-neo-focus-ring': '#8ab4f8',
     '--zotero-neo-shadow': 'rgba(0, 0, 0, 0.55)',
     '--zotero-neo-item-selection': '#facc15',
     '--zotero-neo-item-visual': '#4ade80',
-    '--zotero-neo-mode-normal': '#1e2d50',
-    '--zotero-neo-mode-normal-text': '#dbeafe',
+    '--zotero-neo-mode-normal': '#303030',
+    '--zotero-neo-mode-normal-text': '#eeeeee',
     '--zotero-neo-mode-visual': '#1a3020',
     '--zotero-neo-mode-visual-text': '#dcfce7',
     '--zotero-neo-mode-insert': '#332800',
     '--zotero-neo-mode-insert-text': '#fef3c7',
-    '--zotero-neo-mode-main': '#2a1a40',
-    '--zotero-neo-mode-main-text': '#f3e8ff',
+    '--zotero-neo-mode-main': '#303030',
+    '--zotero-neo-mode-main-text': '#eeeeee',
     '--zotero-neo-status-success': '#16301f',
     '--zotero-neo-status-success-text': '#bbf7d0',
-    '--zotero-neo-status-info': '#172554',
-    '--zotero-neo-status-info-text': '#dbeafe',
+    '--zotero-neo-status-info': '#303030',
+    '--zotero-neo-status-info-text': '#eeeeee',
     '--zotero-neo-status-error': '#3f1d1d',
     '--zotero-neo-status-error-text': '#fecaca',
   },
 };
+
+const HOST_COLORS = [
+  ['--color-background', ['surface']],
+  ['--color-sidepane', ['elevated', 'mode-normal', 'mode-main', 'status-info']],
+  [
+    '--fill-primary',
+    ['text', 'selected-text', 'mode-normal-text', 'mode-main-text', 'status-info-text'],
+  ],
+  ['--fill-secondary', ['muted']],
+  ['--color-border', ['border']],
+  ['--color-control', ['input']],
+  ['--color-quarternary-on-background', ['selected']],
+  ['--color-accent', ['focus-ring']],
+] as const;
+
+/** Capture host colors as values so PDF frames and owned tool windows share the same chrome. */
+function hostPalette(window: Window, theme: ResolvedTheme): Readonly<Record<string, string>> {
+  const fallback = PALETTES[theme];
+  try {
+    const style = window.getComputedStyle(window.document.documentElement);
+    if (!style) return fallback;
+    const dark = cssColorIsDark(style.getPropertyValue('--color-background'));
+    // An explicit opposite-mode preference must not combine light and dark surfaces.
+    if (dark === null || dark !== (theme === 'dark')) return fallback;
+    const palette = { ...fallback };
+    for (const [source, targets] of HOST_COLORS) {
+      const value = style.getPropertyValue(source).trim();
+      if (value) for (const target of targets) palette[`--zotero-neo-${target}`] = value;
+    }
+    const accent = style.getPropertyValue('--color-accent').trim();
+    const onAccent = style.getPropertyValue('--color-accent-text').trim();
+    if (accent && onAccent) {
+      palette['--zotero-neo-accent'] = accent;
+      palette['--zotero-neo-on-accent'] = onAccent;
+    }
+    return palette;
+  } catch {
+    return fallback;
+  }
+}
 
 export interface ItemStateColors {
   readonly selection: string;
@@ -210,15 +250,19 @@ export function resolveTheme(window: Window, preferences: PreferenceReader): Res
   );
 }
 
-export function applyTheme(root: ThemeRoot, theme: ResolvedTheme): void {
+export function applyTheme(
+  root: ThemeRoot,
+  theme: ResolvedTheme,
+  palette: Readonly<Record<string, string>> = PALETTES[theme],
+): void {
   if (root.getAttribute('data-zotero-neo-theme') !== theme)
     root.setAttribute('data-zotero-neo-theme', theme);
   if (root.style.colorScheme !== theme) root.style.colorScheme = theme;
-  for (const [name, value] of Object.entries(PALETTES[theme])) {
+  for (const [name, value] of Object.entries(palette)) {
     if (root.style.getPropertyValue(name).trim() !== value) root.style.setProperty(name, value);
   }
 }
-/** Owns live theme updates for Neo roots in one chrome/content window. */
+/** Owns live host colors and light/dark updates, including roots in embedded documents. */
 export class ThemeManager {
   readonly #window: Window;
   readonly #preferences: ThemePreferenceSource;
@@ -229,12 +273,14 @@ export class ThemeManager {
   readonly #observer: MutationObserver | null;
   readonly #preferenceCleanup: (() => void) | null;
   #theme: ResolvedTheme;
+  #palette: Readonly<Record<string, string>>;
   #disposed = false;
 
   constructor(window: Window, preferences: ThemePreferenceSource) {
     this.#window = window;
     this.#preferences = preferences;
     this.#theme = resolveTheme(window, preferences);
+    this.#palette = hostPalette(window, this.#theme);
     this.#media = this.createMediaQuery();
     try {
       this.#media?.addEventListener('change', this.#mediaListener);
@@ -248,7 +294,7 @@ export class ThemeManager {
   add(root: ThemeRoot): () => void {
     if (this.#disposed) return () => undefined;
     this.#roots.add(root);
-    applyTheme(root, this.#theme);
+    applyTheme(root, this.#theme, this.#palette);
     return () => this.#roots.delete(root);
   }
 
@@ -263,7 +309,8 @@ export class ThemeManager {
     const nextTheme = resolveTheme(this.#window, this.#preferences);
     const changed = nextTheme !== this.#theme;
     this.#theme = nextTheme;
-    for (const root of this.#roots) applyTheme(root, this.#theme);
+    this.#palette = hostPalette(this.#window, this.#theme);
+    for (const root of this.#roots) applyTheme(root, this.#theme, this.#palette);
     if (changed) {
       for (const listener of this.#listeners) {
         try {

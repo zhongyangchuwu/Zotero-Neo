@@ -1,6 +1,6 @@
 export const NATIVE_UI_CSS = `
 .neo-ui, .neo-ui * { box-sizing: border-box; }
-.neo-ui { color: var(--zotero-neo-text); font: inherit; line-height: 1.5; min-width: 0; }
+.neo-ui { color: var(--zotero-neo-text); font: menu; line-height: 1.5; min-width: 0; }
 .neo-ui button, .neo-ui input, .neo-ui select, .neo-ui textarea { font: inherit; color: inherit; }
 .neo-ui button, .neo-ui input, .neo-ui select, .neo-ui textarea { border: 1px solid var(--zotero-neo-border); border-radius: 5px; background: var(--zotero-neo-input); }
 .neo-ui button { cursor: pointer; }
@@ -13,8 +13,8 @@ export const NATIVE_UI_CSS = `
 .neo-ui h2 { font-size: 1.15em; line-height: 1.4; }
 .neo-ui a { color: var(--zotero-neo-accent); }
 .neo-button { min-height: 29px; padding: 5px 10px; white-space: nowrap; }
-.neo-button:hover:not(:disabled) { border-color: var(--zotero-neo-accent); }
-.neo-button-primary { border-color: var(--zotero-neo-accent) !important; background: var(--zotero-neo-accent) !important; color: var(--zotero-neo-surface) !important; }
+.neo-button:hover:not(:disabled):not(.neo-button-primary) { background: var(--zotero-neo-elevated); }
+.neo-button-primary { border-color: var(--zotero-neo-accent) !important; background: var(--zotero-neo-accent) !important; color: var(--zotero-neo-on-accent) !important; }
 .neo-muted { color: var(--zotero-neo-muted); font-size: .9em; }
 .neo-field { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--zotero-neo-border); }
 .neo-field:last-child { border-bottom: 0; }

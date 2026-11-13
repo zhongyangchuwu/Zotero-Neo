@@ -13,6 +13,7 @@ const native = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/toolkit/reader', () => ({
+  readerWindow: () => undefined,
   AIQAPanelHost: class {
     constructor(_pluginID: string, _rootURI: string, callbacks: unknown) {
       native.callbacks = callbacks;
