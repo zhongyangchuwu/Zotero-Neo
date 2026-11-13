@@ -141,6 +141,8 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 关闭面板或 Reader 只退休相应展示，不停止或销毁共享队列；停止仍需明确操作。队列、缓存和记录的身份及恢复语义不随模块拆分变化。
 
+该入口固定准备 MinerU 结果。展示层借用与 Reader 相同的 PreferenceStore，按 Reader 实际后端缓存键投影当前消费关系，并观察偏好变化；不会为了消费新结果而自动切换服务或新增请求。
+
 文档准备的队列、进度和凭据控件由静态 React 视图呈现；队列寿命和凭据操作仍归应用 controller，密码不进入展示模型。
 
 #### AI 问答（实验）
@@ -167,6 +169,8 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 `src/platform/ai-runtime.ts` 按首次生成请求惰性建立无窗口 runtime；关闭的模块不注册入口／动作，不挂载面板或界面 runtime，也不读取凭据或发送请求。打开面板前先从发起的 Reader 捕获选区与视图，打开本身只读取缓存和已存成果；用户明确发起任务后才准备证据并请求模型。输入最多 40 条证据、32,000 字符；模型仅收到明确证据 ID，不返回可执行 HTML 或位置坐标；有效 ID 不证明语义正确。
 
 主窗口标签页 Reader 使用原生 ItemPaneManager section；Toolkit 通过窄的私有 `item-details.tabID` seam 解析精确 Reader。独立 Reader 使用单独工具窗，绑定发起它的 Reader，不挤压 PDF 布局，并复用同一 controller、React 视图和成果仓库。关闭工具窗只释放界面，不取消已接纳任务；Reader 退出时关闭其工具窗并退休视图，但已接纳任务仍可完成。显式取消不保存部分结果。校验通过的成果按附件与 PDF 指纹在本机 JSON 持久保存，生成原稿与人工修改版本分开；这不是 Zotero 同步。来源跳转先预览再明确确认，只有用户明确采纳时才通过既有 Operation 写入带来源的 Zotero Note，不自动创建 PDF 批注。
+
+生成段落仅投影自己的 `evidenceIDs`，人工修订不继承原稿的逐段引用。采纳回执绑定成果与修订，通过既有 source-note 身份查询找回笔记，不扫描整库；打开前再次验证可访问性，并委托来源 Reader 的实际主窗口打开。重复采纳复用笔记而不覆盖人工正文。
 
 静态宿主文档 `assets/package/content/ai-qa-window.xhtml` 打包为 `content/ai-qa-window.xhtml`，由 `src/platform/ai-qa-ui.ts` 按需注册到 `chrome://zotero-neo-ai-qa/content/ai-qa-window.xhtml`；窗口类型为 `zotero-neo:ai-qa`。AI 问答 UI bundle 为 `content/ai-qa-ui.js`。关闭所有归 Toolkit 所有的工具窗后才释放共享注册；关闭 Reader 会退休其窗口，但不会单独移除仍供其他 Reader 使用的共享注册。
 

@@ -1,13 +1,14 @@
 import type { AIConfiguration, AICredentialChange, AIService } from '../ai/contracts';
 import { aiErrorCode } from '../ai/errors';
 import { CleanupFailure } from '../core/cleanup';
+import type { SourceNoteReceipt } from '../core/source-note';
 import type { ReaderSelectionContext } from '../core/contracts';
 import type { Logger } from '../core/logging';
 import type { PreferenceStore } from '../core/preference-store';
 import { t } from '../i18n';
 import { createAIAbortController } from '../platform/ai-runtime';
 import { readerRegionPreview, type ReaderRuntime } from '../toolkit/reader';
-import { saveAIQAToNote } from './adoption';
+import { findAIQAAdoptions, saveAIQAToNote } from './adoption';
 import type {
   AIQAEvidence,
   AIQAErrorCode,
@@ -41,6 +42,7 @@ interface Session {
   selection: ReaderSelectionContext | null;
   access: AIQAReaderViewAccess | null;
   records: readonly AIQARecord[];
+  adoptions: Readonly<Record<string, SourceNoteReceipt | 'unavailable' | null>>;
   preview: AIQASourcePreview | null;
   previewAbort: AbortController | null;
   error: AIQAErrorCode | null;
@@ -107,6 +109,7 @@ export class AIQAReaderApplication {
       selection: null,
       access: null,
       records: [],
+      adoptions: {},
       preview: null,
       previewAbort: null,
       error: null,
@@ -130,6 +133,8 @@ export class AIQAReaderApplication {
   capture(reader: ReaderRuntime, selection?: ReaderSelectionContext | null): boolean {
     const state = this.#sessions.get(reader);
     if (!state || this.#disposed) return false;
+    state.operationRevision += 1;
+    state.notice = null;
     state.selection = selection === undefined ? state.port.captureSelection() : selection;
     state.access = state.port.captureView();
     state.previewAbort?.abort();
@@ -214,6 +219,7 @@ export class AIQAReaderApplication {
       limitedContext: state.context?.limited ?? false,
       task,
       records: state.records,
+      adoptions: state.adoptions,
       preview: state.preview,
       error: state.error ?? task.error,
       notice: state.notice,
@@ -314,9 +320,36 @@ export class AIQAReaderApplication {
     const capture = state.capture;
     if (!capture) return;
     const revision = ++state.recordsRevision;
+    const previousAdoptions = state.adoptions;
     const records = await this.#repository.list(capture.source);
-    if (this.#current(state) && state.capture === capture && state.recordsRevision === revision)
+    let adoptions: Session['adoptions'];
+    try {
+      if (records.length === 0) {
+        adoptions = {};
+      } else {
+        if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+        adoptions = await findAIQAAdoptions(records, capture);
+        if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+      }
+    } catch {
+      adoptions = Object.fromEntries(records.map((record) => [record.id, 'unavailable' as const]));
+    }
+    if (this.#current(state) && state.capture === capture && state.recordsRevision === revision) {
+      const currentRecords = state.records;
+      const currentAdoptions = state.adoptions;
       state.records = records;
+      state.adoptions = Object.fromEntries(
+        records.map((record) => [
+          record.id,
+          currentAdoptions[record.id] !== previousAdoptions[record.id] &&
+          currentRecords.some(
+            (entry) => entry.id === record.id && entry.revision === record.revision,
+          )
+            ? currentAdoptions[record.id]
+            : adoptions[record.id],
+        ]),
+      );
+    }
   }
   async #run(
     state: Session,
@@ -495,8 +528,11 @@ export class AIQAReaderApplication {
         return;
       }
       case 'save-note': {
-        if (!state.capture) throw new AIQAError('stale-source');
-        await saveAIQAToNote(this.#record(state, command.resultID), state.capture, {
+        const capture = state.capture;
+        const operationRevision = state.operationRevision;
+        const record = this.#record(state, command.resultID);
+        if (!capture || record.revision !== command.revision) throw new AIQAError('stale-source');
+        const receipt = await saveAIQAToNote(record, capture, {
           title: this.#text(state, 'title'),
           question: this.#text(state, 'question'),
           source: this.#text(state, 'source'),
@@ -504,7 +540,57 @@ export class AIQAReaderApplication {
           generated: this.#text(state, 'generated'),
           modified: this.#text(state, 'modified'),
         });
-        state.notice = 'saved';
+        if (!(await capture.isCurrent())) throw new AIQAError('stale-source');
+        if (
+          this.#current(state) &&
+          state.capture === capture &&
+          state.records.some(
+            (entry) => entry.id === record.id && entry.revision === record.revision,
+          )
+        ) {
+          state.adoptions = { ...state.adoptions, [record.id]: receipt };
+          if (state.operationRevision === operationRevision)
+            state.notice = receipt.reused ? 'adoptedReused' : 'adoptedCreated';
+        }
+        return;
+      }
+      case 'open-note': {
+        const capture = state.capture;
+        const operationRevision = state.operationRevision;
+        const record = this.#record(state, command.resultID);
+        if (!capture || record.revision !== command.revision) throw new AIQAError('stale-source');
+        let receipt: SourceNoteReceipt | 'unavailable' | null = 'unavailable';
+        try {
+          if (await capture.isCurrent())
+            receipt = (await findAIQAAdoptions([record], capture))[record.id] ?? null;
+        } catch {
+          // Report an unavailable note rather than claiming it still exists.
+        }
+        if (
+          !this.#current(state) ||
+          state.operationRevision !== operationRevision ||
+          state.capture !== capture ||
+          !state.records.some(
+            (entry) => entry.id === record.id && entry.revision === record.revision,
+          )
+        )
+          return;
+        state.adoptions = { ...state.adoptions, [record.id]: receipt ?? 'unavailable' };
+        if (receipt && receipt !== 'unavailable') {
+          try {
+            await state.port.openNote(receipt.itemID);
+          } catch {
+            if (
+              this.#current(state) &&
+              state.operationRevision === operationRevision &&
+              state.capture === capture &&
+              state.records.some(
+                (entry) => entry.id === record.id && entry.revision === record.revision,
+              )
+            )
+              state.adoptions = { ...state.adoptions, [record.id]: 'unavailable' };
+          }
+        }
         return;
       }
       case 'edit': {

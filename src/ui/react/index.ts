@@ -159,7 +159,7 @@ const runtime: NativeUIRuntime = {
         return mountAnnotationCommentReactView(
           root,
           model as AnnotationCommentReactModel,
-          () => {},
+          (command) => dispatch(command),
         ) as ReactView<unknown>;
       case 'selection-actions':
         return mountSelectionActionsReactView(

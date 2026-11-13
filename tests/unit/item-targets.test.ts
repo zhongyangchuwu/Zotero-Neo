@@ -67,6 +67,7 @@ describe('Surface-owned item target resolution', () => {
       items: [{ id: 1 }, { id: 3 }],
       total: 3,
       missing: 0,
+      presentation: { origin: 'selection', outsideCurrentList: 2 },
     });
   });
 

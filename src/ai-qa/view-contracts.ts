@@ -1,5 +1,6 @@
 import type { AIConfiguration, AIConfigurationState } from '../ai/contracts';
 import type { AIQARecord, AIQASource, AIQATaskState } from './contracts';
+import type { SourceNoteReceipt } from '../core/source-note';
 import type { AIQAReaderCommand, AIQASourcePreview } from './reader-contracts';
 
 export const AI_QA_TEXT_KEYS = [
@@ -38,6 +39,12 @@ export const AI_QA_TEXT_KEYS = [
   'preview',
   'jump',
   'saveNote',
+  'adopted',
+  'adoptedReused',
+  'adoptedCreated',
+  'openNote',
+  'noteUnavailable',
+  'notAdopted',
   'edit',
   'saveEdit',
   'cancelEdit',
@@ -62,6 +69,7 @@ export type AIQATextKey = (typeof AI_QA_TEXT_KEYS)[number];
 export interface AIQARecordView {
   readonly record: AIQARecord;
   readonly sourceCurrent: boolean;
+  readonly adoption: SourceNoteReceipt | 'unavailable' | null;
 }
 
 /** Safe projection only; model keys, native Reader handles and mutable repository state never enter it. */

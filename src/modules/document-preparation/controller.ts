@@ -1,4 +1,8 @@
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
+import type { PreferenceStore } from '../../core/preference-store';
+import { documentCacheSlot } from '../../document-analysis/cache';
+import { mineruDocumentCacheKey } from '../../document-analysis/mineru-client';
+import { DOCUMENT_PROVIDER_KEY, selectedDocumentCacheKey } from '../../document-analysis/settings';
 import { isDeadObject } from '../../platform/cross-compartment';
 import { asElement } from '../../platform/dom';
 import { readMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
@@ -50,8 +54,10 @@ interface View {
 export class DocumentPreparationController implements DocumentPreparationPort {
   readonly queue: DocumentPreparationQueue;
   readonly #debug: (message: string) => void;
+  readonly #preferences: PreferenceStore;
   #view: View | null = null;
-  constructor(debug: (message: string) => void) {
+  constructor(debug: (message: string) => void, preferences: PreferenceStore) {
+    this.#preferences = preferences;
     this.#debug = debug;
     this.queue = new DocumentPreparationQueue(documentPreparationHost(debug));
   }
@@ -92,6 +98,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     const unload = (): void => this.closeOwner(host.window);
     let unbind = (): void => {};
     let unsubscribe = (): void => {};
+    let unobserve = (): void => {};
     const view: View = {
       host,
       root,
@@ -106,6 +113,7 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       clean: () => {
         const failure = new CleanupFailure();
         failure.run(unsubscribe);
+        failure.run(unobserve);
         if (!isDeadObject(root)) {
           failure.run(() => host.window.removeEventListener('unload', unload));
           failure.run(unbind);
@@ -152,6 +160,8 @@ export class DocumentPreparationController implements DocumentPreparationPort {
     });
     view.react = react;
     unsubscribe = this.queue.subscribe(() => this.#render(view));
+    unobserve =
+      this.#preferences.observe?.(DOCUMENT_PROVIDER_KEY, () => this.#render(view)) ?? (() => {});
     root.addEventListener('keydown', (event) => this.handleKey(event));
     host.window.addEventListener('unload', unload, { once: true });
     this.#render(view);
@@ -188,7 +198,13 @@ export class DocumentPreparationController implements DocumentPreparationPort {
       status += ` · ${this.#text(view, 'limit')}`;
     return {
       title: this.#text(view, 'title'),
-      help: this.#text(view, 'help'),
+      help: `${this.#text(view, 'help')}\n${this.#text(
+        view,
+        documentCacheSlot(selectedDocumentCacheKey(this.#preferences)) ===
+          documentCacheSlot(mineruDocumentCacheKey())
+          ? 'readerMineru'
+          : 'readerOxr',
+      )}`,
       selection: `${this.#text(view, 'selection')} ${view.host.targets.length}`,
       names: view.host.targets.slice(0, MAX_PREPARATION_FILES + 1).map((target) => target.title),
       token: this.#credential(view, 'token'),

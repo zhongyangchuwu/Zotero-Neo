@@ -13,6 +13,12 @@ import {
   privilegedEventTarget,
 } from '../../platform/cross-compartment';
 import { mountNativeReactView } from '../../platform/native-ui';
+import { promptChromeText } from '../../platform/chrome-windows';
+import {
+  AnnotationCommentDraft,
+  type DraftSaveResult,
+} from '../../platform/annotation-comment-drafts';
+import { t } from '../../i18n';
 import type { NativeReactView } from '../../ui/react/types';
 import type { AnnotationCommentReactCommand, AnnotationCommentReactModel } from './react-model';
 import { ANNOTATION_COMMENT_OVERLAY_STYLE } from '../../ui/react/shells/reader';
@@ -63,6 +69,9 @@ export class ReaderCommentEditor {
   #themeCleanup: (() => void) | null = null;
   #target: AnnotationCommentTarget | null = null;
   #autosaveTimer: ReaderTimer | null = null;
+  #draft: AnnotationCommentDraft | null = null;
+  #model: AnnotationCommentReactModel | null = null;
+  #status: 'saved' | 'draft' | 'saving' | 'failed' | 'conflict' | 'storageFailed' = 'saved';
   #focusTimer: ReaderTimer | null = null;
   #watchdogTimer: ReaderTimer | null = null;
   #composing = false;
@@ -116,6 +125,7 @@ export class ReaderCommentEditor {
       event.stopImmediatePropagation();
       const generation = this.#generation + 1;
       const viewValid = this.#viewValid;
+      if (!this.#persistInput()) return true;
       const saving = this.exit();
       void saving
         .catch((error: unknown) => {
@@ -143,6 +153,7 @@ export class ReaderCommentEditor {
 
   async open(key: string): Promise<void> {
     if (this.#disposed) return;
+    if (this.#status === 'storageFailed' && !this.#persistInput()) return;
     const pdfWindow = this.#host.activePdfWindow();
     const previousGeneration = this.#generation;
     const document = pdfWindow?.document;
@@ -190,10 +201,14 @@ export class ReaderCommentEditor {
       if (!this.#continueOpen(generation, pdfWindow)) return;
       const annotation = await this.#host.resolveAnnotation(key);
       if (!this.#continueOpen(generation, pdfWindow)) return;
+      if (!annotation || annotation.libraryID == null || !annotation.key) {
+        this.#release();
+        return;
+      }
       const target: AnnotationCommentTarget = {
-        key,
-        itemID: annotation?.id ?? null,
-        libraryID: annotation?.libraryID ?? null,
+        key: annotation.key,
+        itemID: annotation.id ?? null,
+        libraryID: annotation.libraryID,
       };
       const navigation = navigateToAnnotation(this.#host.reader, key, pdfWindow);
       if (navigation)
@@ -248,20 +263,19 @@ export class ReaderCommentEditor {
     }
   }
 
-  /** Captures the final draft, then releases every ownership resource before awaiting persistence. */
+  /** The durable draft survives retirement; a native save may finish afterward. */
   async exit(): Promise<boolean> {
-    const admitted = !!this.#viewLifetimeValid?.();
-    const text = admitted ? (this.#input?.value ?? null) : null;
-    const target = admitted ? this.#target : null;
-    this.#release();
-    if (text === null || !target) return true;
-    const annotation = await this.#host.annotationForSave(target);
-    if (!annotation || annotation.deleted) return false;
-    if ((annotation.annotationComment ?? '') !== text) {
-      annotation.annotationComment = text;
-      await annotation.saveTx();
+    if (!this.#viewLifetimeValid?.()) {
+      this.#release();
+      return true;
     }
-    return true;
+    if (this.#composing) return false;
+    if (!this.#persistInput()) return false;
+    const draft = this.#draft;
+    const target = this.#target;
+    const save = draft && target ? this.#saveDraft(draft, target) : Promise.resolve(true);
+    this.#release();
+    return save;
   }
 
   /** Restores native behavior synchronously before saving the draft and yielding focus. */
@@ -297,6 +311,15 @@ export class ReaderCommentEditor {
     const generation = this.#generation;
     this.#target = target;
     const document = pdfWindow.document;
+    const draft = new AnnotationCommentDraft(target, comment);
+    this.#draft = draft;
+    this.#status = !draft.stored
+      ? 'storageFailed'
+      : draft.text !== comment
+        ? draft.base !== comment
+          ? 'conflict'
+          : 'draft'
+        : 'saved';
     const overlay = document.createElement('div');
     overlay.id = 'zv-annotation-comment';
     overlay.style.cssText = ANNOTATION_COMMENT_OVERLAY_STYLE;
@@ -313,14 +336,23 @@ export class ReaderCommentEditor {
     const view = mountNativeReactView<AnnotationCommentReactModel, AnnotationCommentReactCommand>({
       surface: 'annotation-comment',
       root: overlay,
-      model: {
-        comment,
+      model: (this.#model = {
+        comment: draft.text,
         excerpt: excerptText(quote).slice(0, 200),
         hint: /^zh/i.test(this.#host.locale())
           ? 'Enter 换行 · Esc 保存并关闭'
           : 'Enter newline · Esc save & close',
+        status: t(`comment.status.${this.#status}`, this.#host.locale()),
+        retry: t('comment.retry', this.#host.locale()),
+        overwrite: t('comment.overwrite', this.#host.locale()),
+        discard: t('comment.discard', this.#host.locale()),
+        canRetry: this.#status === 'draft' || this.#status === 'storageFailed',
+        canOverwrite: this.#status === 'conflict',
+        canDiscard: this.#status !== 'saved',
+      }),
+      dispatch: (command) => {
+        if (this.#draft && this.#target === target) this.#command(command, this.#draft, target);
       },
-      dispatch: () => {},
       isCurrent: () =>
         this.#isCurrent(generation, pdfWindow) &&
         this.#overlay === overlay &&
@@ -339,10 +371,17 @@ export class ReaderCommentEditor {
       if (this.#isCurrent(generation, pdfWindow)) this.#composing = true;
     };
     const compositionEnd = (): void => {
-      if (this.#isCurrent(generation, pdfWindow)) this.#composing = false;
+      if (this.#isCurrent(generation, pdfWindow)) {
+        this.#composing = false;
+        this.#persistInput();
+        this.#scheduleAutosave(generation, pdfWindow);
+      }
     };
     const changed = (): void => {
-      if (this.#isCurrent(generation, pdfWindow)) this.#scheduleAutosave(generation, pdfWindow);
+      if (this.#isCurrent(generation, pdfWindow)) {
+        this.#persistInput();
+        if (!this.#composing) this.#scheduleAutosave(generation, pdfWindow);
+      }
     };
     const cleanupInput = (): void => {
       if (isDeadObject(input)) return;
@@ -361,7 +400,90 @@ export class ReaderCommentEditor {
     this.#continueOpen(generation, pdfWindow);
   }
 
+  #setStatus(status: 'saved' | 'draft' | 'saving' | 'failed' | 'conflict' | 'storageFailed'): void {
+    this.#status = status;
+    if (!this.#model || !this.#view) return;
+    this.#model = {
+      ...this.#model,
+      status: t(`comment.status.${status}`, this.#host.locale()),
+      canRetry: status === 'draft' || status === 'failed' || status === 'storageFailed',
+      canOverwrite: status === 'conflict',
+      canDiscard: status !== 'saved' && status !== 'saving',
+    };
+    this.#view.update(this.#model);
+  }
+
+  #persistInput(): boolean {
+    const draft = this.#draft;
+    const input = this.#input;
+    if (!draft || !input || isDeadObject(input)) return true;
+    if (input.value === draft.text && this.#status !== 'storageFailed') return true;
+    try {
+      draft.update(input.value);
+      this.#setStatus(this.#status === 'conflict' ? 'conflict' : 'draft');
+      return true;
+    } catch {
+      this.#setStatus('storageFailed');
+      return false;
+    }
+  }
+
+  async #saveDraft(
+    draft: AnnotationCommentDraft,
+    target: AnnotationCommentTarget,
+    overwrite = false,
+  ): Promise<boolean> {
+    const text = draft.text;
+    if (this.#draft === draft) this.#setStatus('saving');
+    const result: DraftSaveResult = await draft.save(
+      () => this.#host.annotationForSave(target),
+      overwrite,
+    );
+    if (this.#draft === draft && draft.text === text) this.#setStatus(result);
+    return result === 'saved';
+  }
+
+  #command(
+    command: AnnotationCommentReactCommand,
+    draft: AnnotationCommentDraft,
+    target: AnnotationCommentTarget,
+  ): void {
+    if (this.#draft !== draft || !this.#input || this.#composing || this.#status === 'saving')
+      return;
+    if (command === 'discard') {
+      const text = draft.text;
+      void this.#host
+        .annotationForSave(target)
+        .then((annotation) => {
+          if (
+            this.#draft !== draft ||
+            draft.text !== text ||
+            !this.#input ||
+            !annotation ||
+            annotation.deleted
+          )
+            return;
+          try {
+            draft.discard();
+            this.#input.value = annotation.annotationComment ?? '';
+            draft.release();
+            this.#draft = new AnnotationCommentDraft(target, this.#input.value, false);
+            this.#setStatus('saved');
+          } catch {
+            this.#setStatus('storageFailed');
+          }
+        })
+        .catch(() => {
+          if (this.#draft === draft) this.#setStatus('failed');
+        });
+      return;
+    }
+    if (!this.#persistInput()) return;
+    void this.#saveDraft(draft, target, command === 'overwrite');
+  }
+
   #release(): void {
+    this.#persistInput();
     this.#generation += 1;
     const pdfWindow = this.#ownerWindow;
     const systemKeyOptions = this.#systemKeyOptions;
@@ -375,6 +497,8 @@ export class ReaderCommentEditor {
     const overlay = this.#overlay;
     const view = this.#view;
     const override = this.#deletionOverride;
+    const draft = this.#draft;
+    const unsavedText = draft && !draft.stored ? draft.text : null;
     this.#ownerWindow = null;
     this.#viewValid = null;
     this.#viewLifetimeValid = null;
@@ -390,6 +514,9 @@ export class ReaderCommentEditor {
     this.#view = null;
     this.#input = null;
     this.#target = null;
+    this.#draft = null;
+    this.#model = null;
+    draft?.release();
     this.#composing = false;
     this.#deletionOverride = null;
 
@@ -418,6 +545,15 @@ export class ReaderCommentEditor {
     failure.run(() => {
       if (pdfWindow) this.#host.onInputOwnerChanged();
     });
+    failure.run(() => {
+      if (unsavedText !== null)
+        promptChromeText(
+          null,
+          'Zotero Neo',
+          t('comment.storageRetired', this.#host.locale()),
+          unsavedText,
+        );
+    });
     failure.rethrow();
   }
 
@@ -430,28 +566,9 @@ export class ReaderCommentEditor {
       if (!this.#isCurrent(generation, pdfWindow)) return;
       this.#autosaveTimer = null;
       const target = this.#target;
-      const input = this.#input;
-      if (!target || !input) return;
-      const text = input.value;
-      void this.#host
-        .annotationForSave(target)
-        .then(async (annotation) => {
-          if (
-            !this.#isCurrent(generation, pdfWindow) ||
-            this.#target !== target ||
-            this.#input !== input ||
-            input.value !== text ||
-            !annotation ||
-            annotation.deleted ||
-            (annotation.annotationComment ?? '') === text
-          )
-            return;
-          annotation.annotationComment = text;
-          await annotation.saveTx();
-        })
-        .catch((error: unknown) => {
-          this.#host.debug(`Annotation comment autosave failed: ${String(error)}`);
-        });
+      const draft = this.#draft;
+      if (!target || !draft || this.#composing || !this.#persistInput()) return;
+      void this.#saveDraft(draft, target);
     });
     if (!this.#isCurrent(generation, pdfWindow)) {
       this.#host.clearTimer(timer);
@@ -480,8 +597,10 @@ export class ReaderCommentEditor {
       return;
     }
     const input = this.#input;
-    if (input?.isConnected && !this.#composing && input.ownerDocument.activeElement !== input)
-      input.focus();
+    const focused = input?.ownerDocument.activeElement;
+    const inOverlay =
+      focused && typeof this.#overlay?.contains === 'function' && this.#overlay.contains(focused);
+    if (input?.isConnected && !this.#composing && focused !== input && !inOverlay) input.focus();
     if (!this.#isCurrent(generation, pdfWindow)) return;
     const timer = this.#host.schedule(500, () => {
       if (!this.#isCurrent(generation, pdfWindow)) return;

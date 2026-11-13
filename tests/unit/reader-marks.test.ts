@@ -1,7 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ReaderMarks, type MarksHost } from '../../src/modules/reader-navigation/marks';
 import type { ItemRuntime, PdfWindow, ReaderRuntime } from '../../src/reader/types';
+
+const instances: ReaderMarks[] = [];
+afterEach(() => {
+  for (const marks of instances.splice(0)) marks.dispose();
+  vi.unstubAllGlobals();
+});
 
 function harness() {
   let pageNumber = 2;
@@ -43,6 +49,7 @@ function harness() {
     return true;
   });
   const preferenceValues = new Map<string, boolean | number | string>();
+  const preferenceListeners = new Map<string, Set<() => void>>();
   const host: MarksHost = {
     isCurrent: () => moduleCurrent,
     capturePresentation: () => {
@@ -58,9 +65,20 @@ function harness() {
       has: (key: string) => preferenceValues.has(key),
       set: (key: string, value: boolean | number | string) => {
         preferenceValues.set(key, value);
+        for (const listener of preferenceListeners.get(key) ?? []) listener();
       },
       clear: (key: string) => {
         preferenceValues.delete(key);
+        for (const listener of preferenceListeners.get(key) ?? []) listener();
+      },
+      observe: (key, listener) => {
+        let listeners = preferenceListeners.get(key);
+        if (!listeners) {
+          listeners = new Set();
+          preferenceListeners.set(key, listeners);
+        }
+        listeners.add(listener);
+        return () => listeners.delete(listener);
       },
     },
     itemForReader: () =>
@@ -87,6 +105,7 @@ function harness() {
     },
   };
   const marks = new ReaderMarks(host);
+  instances.push(marks);
   return {
     annotations,
     container,
@@ -123,6 +142,160 @@ function harness() {
     },
   };
 }
+
+describe('shared persistent reader marks', () => {
+  it('serializes interleaved changes across sessions and sibling attachments, including after close', async () => {
+    const a = harness();
+    const b = harness();
+    const c = harness();
+    const pending = Promise.withResolvers<void>();
+    let saved = '';
+    let saves = 0;
+    const parent = {
+      extra: 'unrelated\nzv-marks-pdf1: {"v":1,"marks":{"z":{"pageIndex":0,"ratio":0,"key":null}}}',
+      saveTx: async () => {
+        const snapshot = parent.extra;
+        if (++saves === 1) await pending.promise;
+        saved = snapshot;
+      },
+    };
+    vi.stubGlobal('Zotero', { Items: { get: () => parent } });
+    const first = { key: 'pdf1', parentItemID: 900 } as ItemRuntime;
+    const second = { key: 'pdf2', parentItemID: 900 } as ItemRuntime;
+    vi.spyOn(a.host, 'itemForReader').mockReturnValue(first);
+    vi.spyOn(b.host, 'itemForReader').mockReturnValue(first);
+    vi.spyOn(c.host, 'itemForReader').mockReturnValue(second);
+    const otherReader = { itemID: 11 } as ReaderRuntime;
+    for (const test of [a, b, c]) test.host.preferences.set('marks.persist', true);
+    a.marks.load(a.reader);
+    b.marks.load(b.reader);
+    c.marks.load(otherReader);
+    const refresh = vi.spyOn(b.host, 'onChange');
+    const addA = a.marks.set(a.reader, a.pdfWindow, 'a', null);
+    const addB = b.marks.set(b.reader, b.pdfWindow, 'b', null);
+    const addOther = c.marks.set(otherReader, c.pdfWindow, 'x', null);
+    expect(Object.keys(b.marks.values()).sort()).toEqual(['a', 'b', 'z']);
+    expect(refresh).toHaveBeenCalled();
+    const removeA = a.marks.delete(a.reader, 'a');
+    const addC = b.marks.set(b.reader, b.pdfWindow, 'c', null);
+    a.marks.dispose();
+    pending.resolve();
+    await Promise.all([addA, addB, addOther, removeA, addC]);
+    const lines = saved.split('\n');
+    const pdf1 = JSON.parse(
+      lines.find((line) => line.startsWith('zv-marks-pdf1: '))!.split(': ')[1],
+    );
+    const pdf2 = JSON.parse(
+      lines.find((line) => line.startsWith('zv-marks-pdf2: '))!.split(': ')[1],
+    );
+    expect(Object.keys(pdf1.marks).sort()).toEqual(['b', 'c', 'z']);
+    expect(Object.keys(pdf2.marks)).toEqual(['x']);
+    expect(lines).toContain('unrelated');
+    await b.marks.clear(b.reader);
+    expect(b.marks.values()).toEqual({});
+    expect(parent.extra).not.toContain('zv-marks-pdf1: ');
+    expect(parent.extra).toContain('zv-marks-pdf2: ');
+  });
+
+  it('retains accepted writes when the last subscriber closes before saving', async () => {
+    const a = harness();
+    const b = harness();
+    const pending = Promise.withResolvers<void>();
+    const attachment = {
+      key: 'attachment',
+      extra: '',
+      saveTx: () => pending.promise,
+    };
+    vi.spyOn(a.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    vi.spyOn(b.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    a.host.preferences.set('marks.persist', true);
+    b.host.preferences.set('marks.persist', true);
+    a.marks.load(a.reader);
+    const saving = a.marks.set(a.reader, a.pdfWindow, 'a', null);
+    a.marks.dispose();
+    b.marks.load(b.reader);
+    expect(b.marks.values()).toHaveProperty('a');
+    const clearing = b.marks.clear(b.reader);
+    const adding = b.marks.set(b.reader, b.pdfWindow, 'b', null);
+    pending.resolve();
+    await Promise.all([saving, clearing, adding]);
+    const payload = JSON.parse(attachment.extra.split('zv-marks-attachment: ')[1]);
+    expect(Object.keys(payload.marks)).toEqual(['b']);
+  });
+
+  it('propagates clear to another live subscriber before a later add', async () => {
+    const a = harness();
+    const b = harness();
+    const attachment = { key: 'attachment', extra: '', saveTx: async () => undefined };
+    vi.spyOn(a.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    vi.spyOn(b.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    a.host.preferences.set('marks.persist', true);
+    b.host.preferences.set('marks.persist', true);
+    a.marks.load(a.reader);
+    b.marks.load(b.reader);
+    await a.marks.set(a.reader, a.pdfWindow, 'a', null);
+    await b.marks.clear(b.reader);
+    expect(a.marks.values()).toEqual({});
+    await a.marks.set(a.reader, a.pdfWindow, 'b', null);
+    expect(Object.keys(b.marks.values())).toEqual(['b']);
+    expect(
+      Object.keys(JSON.parse(attachment.extra.split('zv-marks-attachment: ')[1]).marks),
+    ).toEqual(['b']);
+  });
+
+  it('joins already open readers when persistence is enabled', async () => {
+    const a = harness();
+    const b = harness();
+    const attachment = { key: 'attachment', extra: '', saveTx: async () => undefined };
+    vi.spyOn(a.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    vi.spyOn(b.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    a.marks.load(a.reader);
+    b.marks.load(b.reader);
+    const refresh = vi.spyOn(b.host, 'onChange');
+    a.host.preferences.set('marks.persist', true);
+    b.host.preferences.set('marks.persist', true);
+    expect(refresh).toHaveBeenCalled();
+    refresh.mockClear();
+    await a.marks.set(a.reader, a.pdfWindow, 'a', null);
+    expect(b.marks.values()).toHaveProperty('a');
+    expect(refresh).toHaveBeenCalled();
+    await expect(b.marks.jump(b.reader, b.pdfWindow, 'a', () => {})).resolves.toBe(true);
+  });
+
+  it('rejoins detached readers after persistence is switched back on', async () => {
+    const a = harness();
+    const b = harness();
+    const attachment = { key: 'attachment', extra: '', saveTx: async () => undefined };
+    vi.spyOn(a.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    vi.spyOn(b.host, 'itemForReader').mockReturnValue(attachment as ItemRuntime);
+    a.host.preferences.set('marks.persist', true);
+    b.host.preferences.set('marks.persist', true);
+    a.marks.load(a.reader);
+    b.marks.load(b.reader);
+    await a.marks.set(a.reader, a.pdfWindow, 'a', null);
+    a.host.preferences.set('marks.persist', false);
+    b.host.preferences.set('marks.persist', false);
+    await a.marks.set(a.reader, a.pdfWindow, 'local', null);
+    expect(b.marks.values()).not.toHaveProperty('local');
+    a.host.preferences.set('marks.persist', true);
+    b.host.preferences.set('marks.persist', true);
+    const refresh = vi.spyOn(b.host, 'onChange');
+    await a.marks.set(a.reader, a.pdfWindow, 'b', null);
+    expect(b.marks.values()).toHaveProperty('b');
+    expect(refresh).toHaveBeenCalled();
+    await expect(b.marks.jump(b.reader, b.pdfWindow, 'b', () => {})).resolves.toBe(true);
+  });
+
+  it('keeps marks session-local with persistence disabled', async () => {
+    const a = harness();
+    const b = harness();
+    await a.marks.set(a.reader, a.pdfWindow, 'a', null);
+    expect(b.marks.values()).toEqual({});
+    await b.marks.set(b.reader, b.pdfWindow, 'b', null);
+    await a.marks.clear(a.reader);
+    expect(Object.keys(b.marks.values())).toEqual(['b']);
+  });
+});
 
 describe('ReaderMarks persistence presentation', () => {
   it.each(['set', 'delete', 'clear'] as const)(

@@ -3,6 +3,7 @@ import type { DocumentAttachment } from '../document-analysis/preparation';
 import type { MainWindow } from '../core/contracts';
 import type { ItemTargetSet } from '../core/item-target';
 import { normalizeTopLevelItemTargets } from '../platform/zotero-items';
+import { visibleMainSelectionCount } from '../toolkit/main';
 import {
   resolveMainEffectiveTargets,
   type MainCurrentTarget,
@@ -24,11 +25,20 @@ export function resolveMainItemTarget(
   currentTarget?: MainCurrentTarget | null,
 ): ItemTargetSet<'main'> {
   const resolved = resolveMainEffectiveTargets(window, selection, currentTarget);
+  const items = normalizeTopLevelItemTargets(resolved.items);
+  const visible = visibleMainSelectionCount(
+    window,
+    items.map((item) => ({ libraryID: item.libraryID, itemID: item.id })),
+  );
   return {
     source: 'main',
-    items: normalizeTopLevelItemTargets(resolved.items),
+    items,
     total: resolved.total,
     missing: resolved.missing,
+    presentation: {
+      origin: resolved.source,
+      outsideCurrentList: Math.max(0, items.length - visible),
+    },
   };
 }
 

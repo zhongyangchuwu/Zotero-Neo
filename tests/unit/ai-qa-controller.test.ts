@@ -171,6 +171,7 @@ beforeEach(() => {
     language: () => 'en',
     themeRoot: () => () => {},
     showStatus() {},
+    openNote: async () => {},
   });
 });
 afterEach(() => controller.dispose());
@@ -341,6 +342,7 @@ it('keeps the replacement Reader registration when its old cleanup repeats with 
     language: () => 'en' as const,
     themeRoot: () => () => {},
     showStatus() {},
+    openNote: async () => {},
   };
   const oldRelease = controller.register(port);
   oldRelease();

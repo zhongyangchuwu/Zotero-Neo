@@ -149,6 +149,11 @@ export function createReaderAnnotationsModule(
         annotation = items.getByLibraryAndKey?.(target.libraryID, target.key) || null;
       if (!annotation && target.libraryID !== null && items.getByLibraryAndKeyAsync)
         annotation = (await items.getByLibraryAndKeyAsync(target.libraryID, target.key)) || null;
+      if (
+        annotation &&
+        (annotation.key !== target.key || annotation.libraryID !== target.libraryID)
+      )
+        return null;
       if (annotation?.loadDataType) await annotation.loadDataType('annotation');
       return annotation;
     };

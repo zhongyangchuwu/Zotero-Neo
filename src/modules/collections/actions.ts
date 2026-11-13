@@ -30,6 +30,30 @@ import type {
   PickerContinuation,
   PickerProvider,
 } from '../../main/picker/types';
+import { t } from '../../i18n';
+
+function targetLabel(targets: ItemTargetSet, count: number, language: string): string {
+  const countText = String(count);
+  if (targets.source === 'main') {
+    const origin = targets.presentation.origin;
+    const context = t(
+      `workflow.itemTarget.main.${origin === 'native-selection' ? 'nativeSelection' : origin}`,
+      language,
+    );
+    const outside = String(Math.min(count, Math.max(0, targets.presentation.outsideCurrentList)));
+    return t('workflow.itemTarget.main.summary', language)
+      .replace('{context}', context)
+      .replace('{count}', countText)
+      .replace('{outside}', outside);
+  }
+  const context = t(
+    targets.source === 'reader' ? 'workflow.itemTarget.reader' : 'workflow.itemTarget.note',
+    language,
+  );
+  return t('workflow.itemTarget.context.summary', language)
+    .replace('{context}', context)
+    .replace('{count}', countText);
+}
 
 export interface CollectionTargetRequest {
   readonly source: 'main' | 'reader';
@@ -113,10 +137,16 @@ export class CollectionMembershipActions {
     const { window } = this.#host;
     const { resolveTargets } = request;
     this.start(() => {
-      const initial = resolveCollectionMembershipTargets(resolveTargets());
+      const initialTarget = resolveTargets();
+      const initial = resolveCollectionMembershipTargets(initialTarget);
+      const language = Zotero.locale ?? 'en';
+      const target = targetLabel(initialTarget, initial.items.length, language);
       writable(initial.libraryID);
       const source = createCollectionCandidateProvider(initial.libraryID, {
-        title: `${present ? 'Add' : 'Remove'} · ${initial.items.length} items · ${request.label}`,
+        title: t(
+          present ? 'workflow.collections.addTitle' : 'workflow.collections.removeTitle',
+          language,
+        ).replace('{target}', target),
         items: initial.items,
         present,
         includeCreate: present,
@@ -174,8 +204,11 @@ export class CollectionMembershipActions {
           if (
             !confirmMainCollectionAction(
               window,
-              'Create collection and add items',
-              `Create “${name}” under ${parentPath} and add ${current.items.length} items? Other memberships are preserved.`,
+              t('workflow.collections.createAndAddConfirmTitle', language),
+              t('workflow.collections.createAndAddConfirmMessage', language)
+                .replace('{name}', name)
+                .replace('{parent}', parentPath)
+                .replace('{target}', target),
             )
           )
             return back();
@@ -251,7 +284,10 @@ export class CollectionMembershipActions {
         throw new Error(
           'Move requires one active ordinary source collection; use Add to collection instead',
         );
-      const initial = resolveCollectionMembershipTargets(resolveTargets());
+      const initialTarget = resolveTargets();
+      const initial = resolveCollectionMembershipTargets(initialTarget);
+      const language = Zotero.locale ?? 'en';
+      const target = targetLabel(initialTarget, initial.items.length, language);
       const targets = (): CollectionMembershipTargets => {
         const current = resolveCollectionMembershipTargets(resolveTargets());
         const active = mainActiveCollection(window);
@@ -272,7 +308,9 @@ export class CollectionMembershipActions {
       targets();
       this.openPicker(
         createCollectionCandidateProvider(source.libraryID, {
-          title: `Move · ${initial.items.length} items · ${request.label} · from ${source.path}`,
+          title: t('workflow.collections.moveItemsTitle', language)
+            .replace('{target}', target)
+            .replace('{source}', source.path),
           excludeIDs: new Set([source.id]),
         }),
         async (candidate, isCurrent) => {

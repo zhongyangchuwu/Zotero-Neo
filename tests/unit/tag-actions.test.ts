@@ -334,6 +334,69 @@ describe('semantic Tag actions', () => {
     expect(nativeOnly.hasTag('robotics')).toBe(false);
     expect(selected.hasTag('robotics')).toBe(true);
   });
+  it.each([
+    ['visual', 'Visual range'],
+    ['native-selection', 'Zotero native selection'],
+    ['cursor', 'Item cursor'],
+  ] as const)('labels the Main %s action target', (origin, label) => {
+    const items = origin === 'cursor' ? [tagItem(20)] : [tagItem(21), tagItem(22)];
+    installZotero(items, [{ tag: 'robotics' }]);
+    const h = harness({ items });
+    const currentTarget =
+      origin === 'visual'
+        ? {
+            source: 'visual' as const,
+            refs: items.map((value) => ({ libraryID: value.libraryID, itemID: value.id })),
+          }
+        : undefined;
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, null, currentTarget);
+
+    expect(targets.presentation.origin).toBe(origin);
+    h.actions.add(targets);
+    expect(h.open().options.source?.title).toContain(label);
+  });
+
+  it('shows the normalized Main workset and outside count while writing only those targets', async () => {
+    const cursor = tagItem(1);
+    const selected = tagItem(2);
+    const child = tagItem(3);
+    const hidden = tagItem(4);
+    Reflect.set(child, 'isAttachment', () => true);
+    Reflect.set(child, 'parentItemID', selected.id);
+    const items = [cursor, selected, child, hidden];
+    installZotero(items, [{ tag: 'robotics' }]);
+    const h = harness({
+      items,
+      renderedRows: [
+        { isObjectRow: true, ref: cursor },
+        { isObjectRow: true, ref: selected },
+      ],
+    });
+    h.selection.clear();
+    h.selection.add({ libraryID: 1, itemID: selected.id });
+    h.selection.add({ libraryID: 1, itemID: child.id });
+    h.selection.add({ libraryID: 1, itemID: hidden.id });
+
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.selection);
+    expect(targets.items).toEqual([selected, hidden]);
+    expect(targets.total).toBe(3);
+    expect(targets.presentation).toEqual({
+      origin: 'selection',
+      outsideCurrentList: 1,
+    });
+    h.actions.add(targets);
+    const picker = h.open();
+    expect(picker.options.source?.title).toContain(
+      'Neo work set · Items: 2 · Outside current list: 1',
+    );
+    const [candidate] = await picker.options.source!.load();
+    await picker.options.confirm?.(candidate!, false);
+
+    expect(cursor.hasTag('robotics')).toBe(false);
+    expect(selected.hasTag('robotics')).toBe(true);
+    expect(child.hasTag('robotics')).toBe(false);
+    expect(hidden.hasTag('robotics')).toBe(true);
+  });
 
   it('Reader tag mutation targets the active Reader item and ignores Main Selection', async () => {
     const main = tagItem(1);
@@ -343,6 +406,8 @@ describe('semantic Tag actions', () => {
 
     h.actions.add(READER_ITEM_TARGET.resolve({ itemID: reader.id }));
     const add = h.open();
+    expect(add.options.source?.title).toContain('Current Reader item');
+    expect(add.options.source?.title).not.toContain('Neo work set');
     await add.options.confirm?.(
       {
         id: 'tag:robotics',
@@ -376,7 +441,10 @@ describe('semantic Tag actions', () => {
     const noteTargets = NOTE_ITEM_TARGET.resolve(h.window);
     Reflect.set(h.window.document, 'activeElement', null);
     h.actions.add(noteTargets);
-    await h.open().options.confirm?.(
+    const picker = h.open();
+    expect(picker.options.source?.title).toContain('Note context item');
+    expect(picker.options.source?.title).not.toContain('Neo work set');
+    await picker.options.confirm?.(
       {
         id: 'tag:robotics',
         title: 'robotics',
@@ -421,7 +489,13 @@ describe('semantic Tag actions', () => {
     Reflect.set(second, 'libraryID', 2);
     installZotero([first, second]);
     const h = harness({ items: [first] });
-    const targets = { source: 'main' as const, items: [first, second], total: 2, missing: 0 };
+    const targets = {
+      source: 'main' as const,
+      items: [first, second],
+      total: 2,
+      missing: 0,
+      presentation: { origin: 'selection' as const, outsideCurrentList: 0 },
+    };
 
     h.actions.add(targets);
     expect(h.session.status.textContent).toBe('✗ Add Tag requires one library at a time');

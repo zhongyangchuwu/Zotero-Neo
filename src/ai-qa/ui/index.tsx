@@ -130,6 +130,7 @@ function phaseText(phase: AIQATaskPhase, labels: Labels): string | null {
 interface ResultCardProps {
   readonly record: AIQARecord;
   readonly sourceCurrent: boolean;
+  readonly adoption: AIQAViewModel['records'][number]['adoption'];
   readonly activeEvidenceID: string | null;
   readonly previewEvidenceID: string | null;
   readonly labels: Labels;
@@ -141,6 +142,7 @@ interface ResultCardProps {
 const ResultCard = React.memo(function ResultCard({
   record,
   sourceCurrent,
+  adoption,
   activeEvidenceID,
   previewEvidenceID,
   labels,
@@ -171,6 +173,13 @@ const ResultCard = React.memo(function ResultCard({
           <span className="neo-ai-qa-chip">
             {record.userText === null ? labels.generated : labels.modified}
           </span>
+          <span className="neo-ai-qa-chip">
+            {adoption === 'unavailable'
+              ? labels.noteUnavailable
+              : adoption
+                ? labels.adopted
+                : labels.notAdopted}
+          </span>
           {!sourceCurrent && <span className="neo-ai-qa-chip">{labels.sourceChanged}</span>}
         </div>
       </div>
@@ -181,7 +190,54 @@ const ResultCard = React.memo(function ResultCard({
       )}
       <div>
         <strong>{labels.original}</strong>
-        <div className="neo-ai-qa-output">{original}</div>
+        {record.output.paragraphs.map((paragraph, index) => (
+          <div key={index}>
+            <div className="neo-ai-qa-output">{paragraph.text}</div>
+            <div className="neo-ai-qa-chips" aria-label={labels.source}>
+              {paragraph.evidenceIDs.length === 0 && (
+                <span className="neo-ai-qa-muted">{labels.evidenceUnavailable}</span>
+              )}
+              {paragraph.evidenceIDs.map((id, evidenceIndex) => {
+                const evidence = record.evidence.find((candidate) => candidate.id === id);
+                if (!evidence) {
+                  return (
+                    <span className="neo-ai-qa-muted" key={`${id}:${evidenceIndex}`}>
+                      {labels.evidenceUnavailable}
+                    </span>
+                  );
+                }
+                const precision =
+                  evidence.precision === 'text' ? labels.textRange : labels.pageRegion;
+                const title = evidence.pageLabel
+                  ? `${evidence.title} · ${evidence.pageLabel}`
+                  : evidence.title;
+                const sourceLabel = `${title || labels.source} · ${precision}`;
+                return (
+                  <React.Fragment key={`${id}:${evidenceIndex}`}>
+                    <button
+                      className="neo-ai-qa-chip"
+                      type="button"
+                      aria-label={`${labels.preview}: ${sourceLabel}`}
+                      title={sourceLabel}
+                      aria-pressed={activeEvidenceID === id}
+                      onClick={() => onPreview(record.id, id)}
+                    >
+                      {sourceLabel}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={previewEvidenceID !== id || !canJump(sourceCurrent, evidence)}
+                      aria-label={`${labels.jump}: ${sourceLabel}`}
+                      onClick={() => onJump(record.id, id)}
+                    >
+                      {labels.jump}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
       {record.userText !== null && (
         <div>
@@ -214,36 +270,40 @@ const ResultCard = React.memo(function ResultCard({
         </section>
       )}
       <div className="neo-ai-qa-chips" aria-label={labels.source}>
-        {record.evidence.map((evidence) => {
-          const isActive = activeEvidenceID === evidence.id;
-          const precision = evidence.precision === 'text' ? labels.textRange : labels.pageRegion;
-          const title = evidence.pageLabel
-            ? `${evidence.title} · ${evidence.pageLabel}`
-            : evidence.title;
-          const sourceLabel = `${title || labels.source} · ${precision}`;
-          return (
-            <React.Fragment key={evidence.id}>
-              <button
-                className="neo-ai-qa-chip"
-                type="button"
-                aria-label={`${labels.preview}: ${sourceLabel}`}
-                title={sourceLabel}
-                aria-pressed={isActive}
-                onClick={() => onPreview(record.id, evidence.id)}
-              >
-                {sourceLabel}
-              </button>
-              <button
-                type="button"
-                disabled={previewEvidenceID !== evidence.id || !canJump(sourceCurrent, evidence)}
-                aria-label={`${labels.jump}: ${sourceLabel}`}
-                onClick={() => onJump(record.id, evidence.id)}
-              >
-                {labels.jump}
-              </button>
-            </React.Fragment>
-          );
-        })}
+        {record.evidence
+          .filter((evidence) =>
+            record.output.guide.some((entry) => entry.evidenceID === evidence.id),
+          )
+          .map((evidence) => {
+            const isActive = activeEvidenceID === evidence.id;
+            const precision = evidence.precision === 'text' ? labels.textRange : labels.pageRegion;
+            const title = evidence.pageLabel
+              ? `${evidence.title} · ${evidence.pageLabel}`
+              : evidence.title;
+            const sourceLabel = `${title || labels.source} · ${precision}`;
+            return (
+              <React.Fragment key={evidence.id}>
+                <button
+                  className="neo-ai-qa-chip"
+                  type="button"
+                  aria-label={`${labels.preview}: ${sourceLabel}`}
+                  title={sourceLabel}
+                  aria-pressed={isActive}
+                  onClick={() => onPreview(record.id, evidence.id)}
+                >
+                  {sourceLabel}
+                </button>
+                <button
+                  type="button"
+                  disabled={previewEvidenceID !== evidence.id || !canJump(sourceCurrent, evidence)}
+                  aria-label={`${labels.jump}: ${sourceLabel}`}
+                  onClick={() => onJump(record.id, evidence.id)}
+                >
+                  {labels.jump}
+                </button>
+              </React.Fragment>
+            );
+          })}
       </div>
       {record.evidence.length > 0 && <p className="neo-ai-qa-muted">{labels.sourceNotice}</p>}
 
@@ -280,10 +340,26 @@ const ResultCard = React.memo(function ResultCard({
           </button>
           <button
             type="button"
-            onClick={() => dispatch({ type: 'save-note', resultID: record.id })}
+            onClick={() =>
+              dispatch({ type: 'save-note', resultID: record.id, revision: record.revision })
+            }
           >
             {labels.saveNote}
           </button>
+          {adoption && adoption !== 'unavailable' && (
+            <button
+              type="button"
+              onClick={() =>
+                dispatch({
+                  type: 'open-note',
+                  resultID: record.id,
+                  revision: record.revision,
+                })
+              }
+            >
+              {labels.openNote}
+            </button>
+          )}
           {confirmRevision === null ? (
             <button type="button" onClick={() => setConfirmRevision(record.revision)}>
               {labels.remove}
@@ -337,9 +413,15 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
   const resultList = React.useRef<HTMLElement | null>(null);
   const entries = React.useMemo(
     () =>
-      model.records.flatMap(({ record }) =>
-        record.evidence.map((evidence) => ({ record, evidence })),
-      ),
+      model.records.flatMap(({ record }) => {
+        const referenced = new Set([
+          ...record.output.paragraphs.flatMap((paragraph) => paragraph.evidenceIDs),
+          ...record.output.guide.map((entry) => entry.evidenceID),
+        ]);
+        return record.evidence
+          .filter((evidence) => referenced.has(evidence.id))
+          .map((evidence) => ({ record, evidence }));
+      }),
     [model.records],
   );
   const currentEntry =
@@ -772,11 +854,12 @@ function AIQAApp({ model, dispatch }: AIQAAppProps): ReactTypes.ReactElement {
         {model.records.length === 0 ? (
           <p className="neo-ai-qa-muted">{labels.noRecords}</p>
         ) : (
-          model.records.map(({ record, sourceCurrent }) => (
+          model.records.map(({ record, sourceCurrent, adoption }) => (
             <ResultCard
               key={record.id}
               record={record}
               sourceCurrent={sourceCurrent}
+              adoption={adoption}
               activeEvidenceID={
                 currentEntry?.record.id === record.id ? currentEntry.evidence.id : null
               }

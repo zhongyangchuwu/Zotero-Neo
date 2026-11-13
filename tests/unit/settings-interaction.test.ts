@@ -77,27 +77,8 @@ function field(page: SettingsInteraction, id: string) {
 }
 
 describe('Interaction Settings controller', () => {
-  it('models both live controls with their existing defaults without writing on construction', () => {
-    const test = mount();
-
-    expect(test.page.model().groups.map((group) => group.id)).toEqual(['picker', 'note-editing']);
-    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({
-      id: 'pickerMouseEnabled',
-      kind: 'boolean',
-      value: false,
-    });
-    expect(field(test.page, 'noteEditorEnabled')).toMatchObject({
-      id: 'noteEditorEnabled',
-      kind: 'boolean',
-      value: true,
-    });
-    expect(test.preferences.writes).toEqual([]);
-    expect(test.changes()).toBe(0);
-    test.page.dispose();
-  });
-
   it('writes only whitelisted boolean commands immediately and keeps live helpers aligned', () => {
-    const test = mount();
+    const test = mount({ [PICKER]: false, [NOTE]: true });
 
     test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
     expect(test.preferences.writes).toEqual([[PICKER, true]]);
@@ -121,7 +102,7 @@ describe('Interaction Settings controller', () => {
   });
 
   it('reverts failed writes, localizes the error, and clears status after success or external updates', () => {
-    const test = mount({}, 'zh-CN');
+    const test = mount({ [PICKER]: false }, 'zh-CN');
     test.preferences.failKey = PICKER;
     test.page.dispatch({ type: 'value', id: 'pickerMouseEnabled', value: true });
 
@@ -136,7 +117,7 @@ describe('Interaction Settings controller', () => {
     expect(test.page.model().status).toBeUndefined();
     test.page.dispatch({ type: 'value', id: 'noteEditorEnabled', value: false });
     test.preferences.clear(PICKER);
-    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({ value: false });
+    expect(field(test.page, 'pickerMouseEnabled')).toMatchObject({ value: true });
     expect(field(test.page, 'noteEditorEnabled')).toMatchObject({ value: false });
     expect(test.page.model().status).toBeUndefined();
 

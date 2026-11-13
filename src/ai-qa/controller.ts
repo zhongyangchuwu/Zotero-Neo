@@ -118,6 +118,7 @@ export class AIQAController {
       records: state.records.map((record) => ({
         record,
         sourceCurrent: record.source.fingerprint === state.source?.fingerprint,
+        adoption: state.adoptions[record.id] ?? null,
       })),
       error: state.error ? text(`error.${state.error}`) : null,
       notice: state.notice ? text(state.notice) : null,

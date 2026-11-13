@@ -16,7 +16,7 @@ export const ANNOTATION_COMMENT_REACT_CSS = `
 export function mountAnnotationCommentReactView(
   root: HTMLElement,
   initialModel: AnnotationCommentReactModel,
-  _dispatch: (command: AnnotationCommentReactCommand) => void,
+  dispatch: (command: AnnotationCommentReactCommand) => void,
 ): ReactView<AnnotationCommentReactModel> {
   return createReactView(
     root,
@@ -30,6 +30,26 @@ export function mountAnnotationCommentReactView(
           spellCheck={false}
         />
         <div className="hint">{model.hint}</div>
+        <div className="hint" role="status">
+          {model.status}
+        </div>
+        <div className="hint">
+          {model.canRetry && (
+            <button type="button" onClick={() => dispatch('retry')}>
+              {model.retry}
+            </button>
+          )}
+          {model.canOverwrite && (
+            <button type="button" onClick={() => dispatch('overwrite')}>
+              {model.overwrite}
+            </button>
+          )}
+          {model.canDiscard && (
+            <button type="button" onClick={() => dispatch('discard')}>
+              {model.discard}
+            </button>
+          )}
+        </div>
       </div>
     ),
     initialModel,

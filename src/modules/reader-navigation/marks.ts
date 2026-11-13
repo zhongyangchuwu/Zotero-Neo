@@ -85,9 +85,46 @@ function normalizeMark(value: Omit<Mark, 'ts'>): Mark {
 }
 const EMPTY_MARKS: Readonly<Record<string, Mark>> = Object.freeze({});
 
+interface SharedMarks {
+  readonly marks: Record<string, Mark>;
+  readonly subscribers: Set<ReaderMarks>;
+  pending: number;
+}
+
+const sharedMarks = new Map<string, SharedMarks>();
+const storageWrites = new Map<string, Promise<unknown>>();
+
+function serializeStorage<T>(key: string, write: () => Promise<T>): Promise<T> {
+  const previous = storageWrites.get(key);
+  const result = previous ? previous.catch(() => undefined).then(write) : write();
+  storageWrites.set(key, result);
+  void result
+    .finally(() => {
+      if (storageWrites.get(key) === result) storageWrites.delete(key);
+    })
+    .catch(() => undefined);
+  return result;
+}
+
+function attachmentIdentity(reader: ReaderRuntime, attachment: ItemRuntime): string {
+  return reader.itemID != null
+    ? `item:${reader.itemID}`
+    : `key:${attachment.libraryID ?? ''}:${attachment.key}`;
+}
+
+function storageIdentity(reader: ReaderRuntime, attachment: ItemRuntime): string {
+  return attachment.parentItemID != null
+    ? `item:${attachment.parentItemID}`
+    : attachmentIdentity(reader, attachment);
+}
+
 export class ReaderMarks {
   readonly #host: MarksHost;
-  readonly #marks: Record<string, Mark> = {};
+  #marks: Record<string, Mark> = {};
+  #shared: SharedMarks | null = null;
+  #sharedKey = '';
+  #reader: ReaderRuntime | null = null;
+  #stopObserving: (() => void) | undefined;
   #disposed = false;
 
   constructor(host: MarksHost) {
@@ -100,11 +137,73 @@ export class ReaderMarks {
 
   dispose(): void {
     this.#disposed = true;
-    for (const char of Object.keys(this.#marks)) delete this.#marks[char];
+    this.#stopObserving?.();
+    this.#stopObserving = undefined;
+    this.#reader = null;
+    this.detach();
+    this.#marks = {};
+  }
+
+  private detach(): void {
+    if (!this.#shared) return;
+    const shared = this.#shared;
+    shared.subscribers.delete(this);
+    this.#marks = { ...shared.marks };
+    if (!shared.subscribers.size && !shared.pending) sharedMarks.delete(this.#sharedKey);
+    this.#shared = null;
+    this.#sharedKey = '';
+  }
+
+  private bind(reader: ReaderRuntime, attachment: ItemRuntime): void {
+    const key = attachmentIdentity(reader, attachment);
+    if (this.#sharedKey === key) return;
+    this.detach();
+    let shared = sharedMarks.get(key);
+    if (!shared) {
+      const payload =
+        this.readExtra(this.storeItem(attachment), attachment.key) ?? this.readPreference(reader);
+      const marks: Record<string, Mark> = {};
+      for (const [char, mark] of Object.entries(payload?.marks ?? {}))
+        marks[char] = normalizeMark(mark);
+      Object.assign(marks, this.#marks);
+      shared = { marks, subscribers: new Set(), pending: 0 };
+      sharedMarks.set(key, shared);
+    }
+    this.#shared = shared;
+    this.#sharedKey = key;
+    this.#marks = shared.marks;
+    shared.subscribers.add(this);
+  }
+
+  private prepare(reader: ReaderRuntime): void {
+    if (this.#shared) {
+      for (const subscriber of [...this.#shared.subscribers]) {
+        if (!readerMarksPersist(subscriber.#host.preferences)) subscriber.detach();
+      }
+    }
+    if (!readerMarksPersist(this.#host.preferences)) {
+      this.detach();
+      return;
+    }
+    const attachment = this.#host.itemForReader(reader);
+    if (attachment) this.bind(reader, attachment);
+  }
+
+  private changed(): void {
+    if (!this.#shared) {
+      this.#host.onChange?.();
+      return;
+    }
+    for (const subscriber of this.#shared.subscribers) {
+      if (subscriber.isCurrent()) subscriber.#host.onChange?.();
+    }
   }
 
   values(): Readonly<Record<string, Mark>> {
-    return this.isCurrent() ? this.#marks : EMPTY_MARKS;
+    if (!this.isCurrent()) return EMPTY_MARKS;
+    if (this.#reader) this.prepare(this.#reader);
+    else if (!readerMarksPersist(this.#host.preferences)) this.detach();
+    return this.#marks;
   }
 
   position(pdfWindow: PdfWindow): { pageIndex: number | null; ratio: number } {
@@ -118,9 +217,10 @@ export class ReaderMarks {
     annotationKey: string | null,
   ): Promise<void> {
     if (!this.isCurrent()) return;
+    this.prepare(reader);
     const position = this.position(pdfWindow);
     this.#marks[char] = { ...position, key: annotationKey, ts: Date.now() };
-    this.#host.onChange?.();
+    this.changed();
     const presentationCurrent = this.#host.capturePresentation();
     let persisted = '';
     if (readerMarksPersist(this.#host.preferences))
@@ -140,6 +240,7 @@ export class ReaderMarks {
     selectAnnotation: (key: string | null) => void,
   ): Promise<boolean> {
     if (!this.isCurrent()) return false;
+    this.prepare(reader);
     const mark = this.#marks[char];
     if (!mark) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
@@ -171,6 +272,7 @@ export class ReaderMarks {
     selectAnnotation: (key: string | null) => void,
   ): Promise<boolean> {
     if (!this.isCurrent()) return false;
+    this.prepare(reader);
     const entries = Object.entries(this.#marks);
     if (!entries.length) {
       this.#host.showStatus('✗ no bookmarks', 2000);
@@ -277,12 +379,13 @@ export class ReaderMarks {
 
   async delete(reader: ReaderRuntime, char: string): Promise<void> {
     if (!this.isCurrent()) return;
+    this.prepare(reader);
     if (!this.#marks[char]) {
       this.#host.showStatus(`✗ mark ${char} not set`, 2000);
       return;
     }
     delete this.#marks[char];
-    this.#host.onChange?.();
+    this.changed();
     const presentationCurrent = this.#host.capturePresentation();
     if (readerMarksPersist(this.#host.preferences)) await this.save(reader, presentationCurrent);
     if (!this.isCurrent() || !presentationCurrent()) return;
@@ -291,8 +394,9 @@ export class ReaderMarks {
 
   async clear(reader: ReaderRuntime): Promise<void> {
     if (!this.isCurrent()) return;
+    this.prepare(reader);
     for (const char of Object.keys(this.#marks)) delete this.#marks[char];
-    this.#host.onChange?.();
+    this.changed();
     const presentationCurrent = this.#host.capturePresentation();
     if (readerMarksPersist(this.#host.preferences)) await this.save(reader, presentationCurrent);
     if (!this.isCurrent() || !presentationCurrent()) return;
@@ -321,42 +425,73 @@ export class ReaderMarks {
     };
     const hasMarks = Object.keys(payload.marks).length > 0;
     const attachmentKey = attachment.key;
+    const shared = this.#shared;
+    const sharedKey = this.#sharedKey;
+    if (shared) shared.pending += 1;
     try {
-      const store = this.storeItem(attachment);
-      if (!store) throw new Error('no storage item');
-      if (hasMarks) await this.writeExtra(store, attachmentKey, payload);
-      else await this.clearExtra(store, attachmentKey);
-      this.clearPreference(reader);
-      return 'extra';
-    } catch (error) {
-      if (this.isCurrent()) this.#host.log(`mark extra persistence failed: ${String(error)}`);
-    }
-    try {
-      if (hasMarks)
-        this.#host.preferences.set(`marks.data.${reader.itemID ?? ''}`, JSON.stringify(payload));
-      else this.clearPreference(reader);
-      return 'local';
-    } catch (error) {
-      if (this.isCurrent()) {
-        this.#host.log(`mark preference persistence failed: ${String(error)}`);
-        if (presentationCurrent()) this.#host.showStatus('✗ persist failed', 4000);
+      return await serializeStorage(
+        storageIdentity(reader, attachment),
+        async (): Promise<'extra' | 'local' | ''> => {
+          try {
+            const store = this.storeItem(attachment);
+            if (!store) throw new Error('no storage item');
+            if (hasMarks) await this.writeExtra(store, attachmentKey, payload);
+            else await this.clearExtra(store, attachmentKey);
+            this.clearPreference(reader);
+            return 'extra';
+          } catch (error) {
+            if (this.isCurrent()) this.#host.log(`mark extra persistence failed: ${String(error)}`);
+          }
+          try {
+            if (hasMarks)
+              this.#host.preferences.set(
+                `marks.data.${reader.itemID ?? ''}`,
+                JSON.stringify(payload),
+              );
+            else this.clearPreference(reader);
+            return 'local';
+          } catch (error) {
+            if (this.isCurrent()) {
+              this.#host.log(`mark preference persistence failed: ${String(error)}`);
+              if (presentationCurrent()) this.#host.showStatus('✗ persist failed', 4000);
+            }
+            return '';
+          }
+        },
+      );
+    } finally {
+      if (shared) {
+        shared.pending -= 1;
+        if (!shared.pending && !shared.subscribers.size && sharedMarks.get(sharedKey) === shared)
+          sharedMarks.delete(sharedKey);
       }
-      return '';
     }
   }
 
   load(reader: ReaderRuntime, retry = 0): void {
-    if (!this.isCurrent() || !readerMarksPersist(this.#host.preferences)) return;
+    if (!this.isCurrent()) return;
+    this.#reader = reader;
+    if (!this.#stopObserving) {
+      this.#stopObserving = this.#host.preferences.observe?.('marks.persist', () => {
+        if (!this.isCurrent() || !this.#reader) return;
+        if (readerMarksPersist(this.#host.preferences)) this.load(this.#reader);
+        else {
+          this.detach();
+          this.#host.onChange?.();
+        }
+      });
+    }
+    if (!readerMarksPersist(this.#host.preferences)) return;
     const attachment = this.#host.itemForReader(reader);
     if (!attachment) {
       if (retry < 20) this.#host.schedule(500, () => this.load(reader, retry + 1));
       return;
     }
-    const fromExtra = this.readExtra(this.storeItem(attachment), attachment.key);
-    const fromPreference = fromExtra ?? this.readPreference(reader);
-    if (fromPreference) {
-      for (const [char, mark] of Object.entries(fromPreference.marks))
-        this.#marks[char] = normalizeMark(mark);
+    const alreadyLoaded = sharedMarks.has(attachmentIdentity(reader, attachment));
+    this.bind(reader, attachment);
+    if (alreadyLoaded) {
+      this.#host.onChange?.();
+      return;
     }
     let migrated = false;
     for (const annotation of attachment.getAnnotations?.() ?? []) {
@@ -368,7 +503,7 @@ export class ReaderMarks {
         }
       }
     }
-    this.#host.onChange?.();
+    this.changed();
     if (migrated) void this.save(reader);
   }
 

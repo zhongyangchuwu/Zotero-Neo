@@ -1,7 +1,7 @@
-import type { SourceNoteDraft } from '../core/source-note';
+import type { SourceNoteDraft, SourceNoteReceipt } from '../core/source-note';
 import { escapeHTML } from '../core/html';
 import { createSourceNote } from '../operations/source-note';
-import { sourceNoteIdentity } from '../platform/note-relations';
+import { relatedSourceNotes, sourceNoteIdentity } from '../platform/note-relations';
 import { sourcePDFLink } from '../toolkit/main';
 import type { AIQARecord } from './contracts';
 import { AIQAError } from './errors';
@@ -46,6 +46,75 @@ function staleSourceFailure(error: unknown): boolean {
     'Source note destination changed before note commit',
     'Source PDF unavailable',
   ].includes(error.message);
+}
+
+function adoptionIdentity(record: AIQARecord): string {
+  return sourceNoteIdentity(
+    JSON.stringify([
+      'reader-ai-adoption',
+      record.source.libraryID,
+      record.source.itemID,
+      record.source.key,
+      record.source.fingerprint,
+      record.id,
+      record.revision,
+    ]),
+  );
+}
+
+/** Resolve only notes related to the captured attachment, including legacy identities. */
+export async function findAIQAAdoptions(
+  records: readonly AIQARecord[],
+  capture: AIQASourceCapture,
+): Promise<Readonly<Record<string, SourceNoteReceipt | 'unavailable' | null>>> {
+  const source = await Zotero.Items.getAsync(capture.target.attachment.itemID);
+  const parent =
+    capture.target.parent && (await Zotero.Items.getAsync(capture.target.parent.itemID));
+  if (
+    !source ||
+    source.deleted ||
+    !source.isPDFAttachment() ||
+    source.key !== capture.target.attachment.key ||
+    source.libraryID !== capture.target.attachment.libraryID ||
+    !Zotero.Libraries.get(source.libraryID) ||
+    (source.parentItemID || null) !== (capture.target.parent?.itemID ?? null) ||
+    (capture.target.parent &&
+      (!parent ||
+        parent.deleted ||
+        !parent.isRegularItem() ||
+        parent.key !== capture.target.parent.key ||
+        parent.libraryID !== source.libraryID))
+  )
+    throw new AIQAError('stale-source');
+  const uri = Zotero.URI.getItemURI(source);
+  const notes = await relatedSourceNotes(uri);
+  return Object.fromEntries(
+    records.map((record) => {
+      const identity = adoptionIdentity(record);
+      const matches = notes.filter(
+        (candidate) =>
+          candidate.isNote() &&
+          candidate.libraryID === source.libraryID &&
+          (candidate.parentID || null) === (capture.target.parent?.itemID ?? null) &&
+          (candidate.hasTag(identity) ||
+            candidate.getRelationsByPredicate('dc:relation').includes(identity)) &&
+          candidate.getRelationsByPredicate('dc:relation').includes(uri),
+      );
+      const note = matches.find((candidate) => !candidate.deleted) ?? matches[0];
+      return [
+        record.id,
+        !note
+          ? null
+          : note.deleted
+            ? 'unavailable'
+            : {
+                itemID: note.id,
+                key: note.key,
+                reused: true,
+              },
+      ];
+    }),
+  );
 }
 
 function adoptionDraft(
@@ -105,17 +174,7 @@ function adoptionDraft(
     html,
     images: [],
     schemaVersion: 9,
-    identity: sourceNoteIdentity(
-      JSON.stringify([
-        'reader-ai-adoption',
-        record.source.libraryID,
-        record.source.itemID,
-        record.source.key,
-        record.source.fingerprint,
-        record.id,
-        record.revision,
-      ]),
-    ),
+    identity: adoptionIdentity(record),
   };
 }
 
@@ -124,7 +183,7 @@ export async function saveAIQAToNote(
   record: AIQARecord,
   capture: AIQASourceCapture,
   labels: AIQAAdoptionLabels,
-): Promise<void> {
+): Promise<SourceNoteReceipt> {
   if (!sameSource(record, capture)) throw new AIQAError('stale-source');
   let current = false;
   try {
@@ -135,7 +194,7 @@ export async function saveAIQAToNote(
   if (!current) throw new AIQAError('stale-source');
   try {
     const draft = adoptionDraft(record, capture, labels);
-    await createSourceNote(capture.target, draft);
+    return await createSourceNote(capture.target, draft);
   } catch (error) {
     if (error instanceof AIQAError) throw error;
     throw new AIQAError(staleSourceFailure(error) ? 'stale-source' : 'storage');
