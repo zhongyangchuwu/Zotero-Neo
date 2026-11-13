@@ -79,8 +79,9 @@ export function promptChromeText(
   owner: Window | null,
   title: string,
   message: string,
+  initialValue = '',
 ): string | null {
-  const value = { value: '' };
+  const value = { value: initialValue };
   const prompt = Services.prompt as unknown as ChromePromptService;
   return prompt.prompt(owner, title, message, value, null, { value: false }) ? value.value : null;
 }

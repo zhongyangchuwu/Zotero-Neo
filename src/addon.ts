@@ -11,7 +11,11 @@ import { CleanupFailure } from './core/cleanup';
 import { ZoteroLogger } from './core/logging';
 import { ZoteroPreferenceStore } from './core/preference-store';
 import { BuiltinModuleRuntime } from './core/module-runtime';
-import { migrateBindingPreferences, migrateReaderPreferences } from './core/preferences';
+import {
+  migrateBindingPreferences,
+  migrateInteractionPreferences,
+  migrateReaderPreferences,
+} from './core/preferences';
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
@@ -52,9 +56,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#logger.debug(`Managed tag UI failed: ${String(error)}`),
   );
   readonly #modules: BuiltinModuleRuntime;
-  readonly #preparation = new DocumentPreparationController((message) =>
-    this.#logger.debug(message),
-  );
+  readonly #preparation: DocumentPreparationController;
   readonly #reader: ReaderControllerApi;
   readonly #main: MainWindowControllerApi;
   readonly api: ZoteroNeoPublicApi;
@@ -65,6 +67,10 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
 
   constructor(preferences: ZoteroPreferenceStore) {
     this.#preferences = preferences;
+    this.#preparation = new DocumentPreparationController(
+      (message) => this.#logger.debug(message),
+      preferences,
+    );
     this.#modules = new BuiltinModuleRuntime(
       this.#preferences,
       this.#logger,
@@ -127,6 +133,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#context = context;
     // Bootstrap initializes both early and after Zotero initialization completes.
     this.#releaseNativeUI ??= registerNativeUIResources(context.rootURI);
+    migrateInteractionPreferences(this.#preferences);
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();

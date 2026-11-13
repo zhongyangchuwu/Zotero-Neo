@@ -11,16 +11,23 @@ import type {
   ReaderTimer,
 } from '../../src/reader/types';
 
-const commentBridge = vi.hoisted(() => ({ load: null as Promise<void> | null }));
+const commentBridge = vi.hoisted(() => ({
+  load: null as Promise<void> | null,
+  dispatch: null as ((command: 'retry' | 'overwrite' | 'discard') => void) | null,
+  model: null as Record<string, unknown> | null,
+}));
 
 vi.mock('../../src/platform/native-ui', () => ({
   mountNativeReactView: (options: {
     root: HTMLElement;
     model: { comment: string };
     isCurrent: () => boolean;
+    dispatch: (command: 'retry' | 'overwrite' | 'discard') => void;
   }) => {
     let input: HTMLTextAreaElement | null = null;
     let disposed = false;
+    commentBridge.dispatch = options.dispatch;
+    commentBridge.model = options.model;
     const ready = (commentBridge.load ?? Promise.resolve()).then(() => {
       if (disposed || !options.isCurrent()) throw new Error('View retired');
       input = options.root.ownerDocument.createElement('textarea');
@@ -30,7 +37,9 @@ vi.mock('../../src/platform/native-ui', () => ({
     });
     return {
       ready,
-      update: () => {},
+      update: (model: Record<string, unknown>) => {
+        commentBridge.model = model;
+      },
       getElement: (part: string) => (part === 'input' ? input : null),
       dispose: () => {
         disposed = true;
@@ -40,9 +49,14 @@ vi.mock('../../src/platform/native-ui', () => ({
 }));
 
 const originalComponents = Reflect.get(globalThis, 'Components');
+const originalServices = Reflect.get(globalThis, 'Services');
 
 afterEach(() => {
   commentBridge.load = null;
+  commentBridge.dispatch = null;
+  commentBridge.model = null;
+  if (originalServices === undefined) Reflect.deleteProperty(globalThis, 'Services');
+  else Reflect.set(globalThis, 'Services', originalServices);
   vi.useRealTimers();
   if (originalComponents === undefined) Reflect.deleteProperty(globalThis, 'Components');
   else Reflect.set(globalThis, 'Components', originalComponents);
@@ -145,6 +159,19 @@ function createView() {
 
 function createHarness() {
   vi.useFakeTimers();
+  const preferences = new Map<string, string>();
+  Reflect.set(globalThis, 'Services', {
+    prefs: {
+      getPrefType: (key: string) => (preferences.has(key) ? 32 : 0),
+      getStringPref: (key: string) => preferences.get(key),
+      setStringPref: (key: string, value: string) => {
+        preferences.set(key, value);
+      },
+      clearUserPref: (key: string) => {
+        preferences.delete(key);
+      },
+    },
+  });
   const destroyed = new WeakSet<object>();
   const nativeTargets = new WeakMap<object, object>();
   Reflect.set(globalThis, 'Components', {
@@ -576,7 +603,6 @@ describe('ReaderCommentEditor native input and persistence', () => {
     expect(h.internal._enableAnnotationDeletionFromComment).toBe(true);
     expect(h.editor.ownsInput).toBe(false);
     await settleJobs();
-    expect(h.debug).toHaveBeenCalledWith(expect.stringContaining('storage failed'));
     expect(h.onExit).toHaveBeenCalledWith(false, h.primary.pdfWindow);
     expect(vi.getTimerCount()).toBe(0);
     h.editor.dispose();
@@ -694,7 +720,7 @@ describe('ReaderCommentEditor stale work containment', () => {
   });
 
   it.each(['release', 'dispose', 'reopen'] as const)(
-    'ignores an autosave lookup that resolves after %s',
+    'completes an accepted autosave after %s without retargeting it',
     async (action) => {
       const h = createHarness();
       await h.editor.open('ANN');
@@ -710,8 +736,8 @@ describe('ReaderCommentEditor stale work containment', () => {
       pending.resolve(h.annotation);
       await settleJobs();
 
-      expect(h.annotation.annotationComment).toBe('before');
-      expect(h.annotation.saveTx).not.toHaveBeenCalled();
+      expect(h.annotation.annotationComment).toBe('stale autosave');
+      expect(h.annotation.saveTx).toHaveBeenCalledOnce();
       if (action === 'reopen') {
         expect(h.primary.input().value).toBe('other draft');
         expect(h.internal._enableAnnotationDeletionFromComment).toBe(false);
@@ -720,7 +746,7 @@ describe('ReaderCommentEditor stale work containment', () => {
     },
   );
 
-  it('ignores an older autosave draft after a later edit, then saves the current draft', async () => {
+  it('serializes an older autosave and keeps the newer draft for the next save', async () => {
     const h = createHarness();
     await h.editor.open('ANN');
     const input = h.primary.input();
@@ -733,11 +759,11 @@ describe('ReaderCommentEditor stale work containment', () => {
     input.emit('input');
     pending.resolve(h.annotation);
     await settleJobs();
-    expect(h.annotation.annotationComment).toBe('before');
+    expect(h.annotation.annotationComment).toBe('old');
     vi.advanceTimersByTime(2000);
     await settleJobs();
     expect(h.annotation.annotationComment).toBe('new');
-    expect(h.annotation.saveTx).toHaveBeenCalledOnce();
+    expect(h.annotation.saveTx).toHaveBeenCalledTimes(2);
     h.editor.dispose();
   });
 
@@ -751,7 +777,7 @@ describe('ReaderCommentEditor stale work containment', () => {
     vi.advanceTimersByTime(2000);
     await settleJobs();
 
-    expect(h.debug).toHaveBeenCalledWith(expect.stringContaining('autosave lookup failed'));
+    expect(commentBridge.model?.canRetry).toBe(true);
     expect(h.editor.ownsInput).toBe(true);
     expect(input.value).toBe('retained draft');
     await expect(h.editor.exit()).resolves.toBe(true);
@@ -869,7 +895,7 @@ describe('ReaderCommentEditor stale work containment', () => {
     expect(h.editor.ownsInput).toBe(false);
     expect(h.primary.systemKeys.size).toBe(0);
     pending.reject(new Error('save target lookup failed'));
-    await expect(exiting).rejects.toThrow('save target lookup failed');
+    await expect(exiting).resolves.toBe(false);
   });
 });
 
@@ -1019,4 +1045,164 @@ describe('ReaderCommentEditor failure-safe retirement', () => {
       expect(vi.getTimerCount()).toBe(0);
     },
   );
+});
+
+describe('annotation comment durable drafts', () => {
+  it('exposes a copyable draft on forced retirement and recovers it even while storage is unreadable', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    const services = Reflect.get(globalThis, 'Services');
+    const prefs = services.prefs;
+    const setStringPref = prefs.setStringPref;
+    const getPrefType = prefs.getPrefType;
+    const prompt = vi.fn(() => false);
+    services.prompt = { prompt };
+    prefs.setStringPref = () => {
+      throw new Error('storage unavailable');
+    };
+    h.primary.input().value = 'copy this draft';
+    h.primary.input().emit('input');
+    h.editor.releaseView(h.primary.pdfWindow);
+    expect(prompt).toHaveBeenCalledWith(
+      null,
+      'Zotero Neo',
+      expect.stringContaining('Copy'),
+      { value: 'copy this draft' },
+      null,
+      { value: false },
+    );
+    prefs.getPrefType = () => {
+      throw new Error('storage unreadable');
+    };
+    await h.editor.open('ANN');
+    expect(h.primary.input().value).toBe('copy this draft');
+    expect(commentBridge.model?.status).toBe('Local draft storage failed');
+    prefs.getPrefType = getPrefType;
+    prefs.setStringPref = setStringPref;
+    commentBridge.dispatch?.('retry');
+    await settleJobs();
+    expect(h.annotation.annotationComment).toBe('copy this draft');
+    expect(h.annotation.saveTx).toHaveBeenCalledOnce();
+    h.editor.dispose();
+  });
+
+  it('blocks Esc on local storage failure and lets the user retry without losing input', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    const prefs = Reflect.get(Reflect.get(globalThis, 'Services'), 'prefs');
+    const setStringPref = prefs.setStringPref;
+    prefs.setStringPref = () => {
+      throw new Error('disk unavailable');
+    };
+    const input = h.primary.input();
+    input.value = 'unsaved local text';
+    input.emit('input');
+    h.primary.dispatchSystemKey(keyboard('Escape', input));
+    expect(h.editor.ownsInput).toBe(true);
+    expect(input.value).toBe('unsaved local text');
+    expect(commentBridge.model?.canRetry).toBe(true);
+    prefs.setStringPref = setStringPref;
+    commentBridge.dispatch?.('retry');
+    await settleJobs();
+    expect(h.annotation.annotationComment).toBe('unsaved local text');
+    h.editor.dispose();
+  });
+
+  it('restores an input immediately after view retirement without waiting for autosave', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    h.primary.input().value = 'recover me';
+    h.primary.input().emit('input');
+    h.editor.releaseView(h.primary.pdfWindow);
+    await h.editor.open('ANN');
+    expect(h.primary.input().value).toBe('recover me');
+    expect(h.annotation.annotationComment).toBe('before');
+    h.editor.dispose();
+  });
+
+  it('retains a failed save across reopening and retries explicitly', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    h.primary.input().value = 'retry me';
+    h.primary.input().emit('input');
+    vi.mocked(h.annotation.saveTx).mockRejectedValueOnce(new Error('failed'));
+    expect(await h.editor.exit()).toBe(false);
+    await h.editor.open('ANN');
+    expect(h.primary.input().value).toBe('retry me');
+    commentBridge.dispatch?.('retry');
+    await settleJobs();
+    expect(h.annotation.annotationComment).toBe('retry me');
+    expect(h.annotation.saveTx).toHaveBeenCalledTimes(2);
+    h.editor.dispose();
+  });
+
+  it('keeps an external edit on conflict until an explicit overwrite', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    h.primary.input().value = 'local draft';
+    h.primary.input().emit('input');
+    h.editor.releaseView(h.primary.pdfWindow);
+    h.annotation.annotationComment = 'external edit';
+    await h.editor.open('ANN');
+    expect(h.primary.input().value).toBe('local draft');
+    expect(commentBridge.model?.canOverwrite).toBe(true);
+    expect(await h.editor.exit()).toBe(false);
+    expect(h.annotation.annotationComment).toBe('external edit');
+    await h.editor.open('ANN');
+    commentBridge.dispatch?.('overwrite');
+    await settleJobs();
+    expect(h.annotation.annotationComment).toBe('local draft');
+    h.editor.dispose();
+  });
+
+  it.each([false, true])(
+    'advances the recovered draft baseline after an older save (external change: %s)',
+    async (externalChange) => {
+      const h = createHarness();
+      await h.editor.open('ANN');
+      const lookup = Promise.withResolvers<AnnotationRuntime>();
+      h.annotationForSave.mockReturnValueOnce(lookup.promise);
+      h.primary.input().value = 'first';
+      h.primary.input().emit('input');
+      vi.advanceTimersByTime(2000);
+      await settleJobs();
+      expect(h.annotationForSave).toHaveBeenCalledOnce();
+
+      h.editor.releaseView(h.primary.pdfWindow);
+      await h.editor.open('ANN');
+      expect(h.primary.input().value).toBe('first');
+      h.primary.input().value = 'newer';
+      h.primary.input().emit('input');
+      lookup.resolve(h.annotation);
+      await settleJobs();
+      expect(h.annotation.annotationComment).toBe('first');
+
+      if (externalChange) h.annotation.annotationComment = 'external';
+      vi.advanceTimersByTime(2000);
+      await settleJobs();
+      expect(h.annotation.annotationComment).toBe(externalChange ? 'external' : 'newer');
+      expect(commentBridge.model?.canOverwrite).toBe(externalChange);
+      expect(h.annotation.saveTx).toHaveBeenCalledTimes(externalChange ? 1 : 2);
+      h.editor.dispose();
+    },
+  );
+
+  it('does not remove a newer draft when an older save completes', async () => {
+    const h = createHarness();
+    await h.editor.open('ANN');
+    const pending = Promise.withResolvers<void>();
+    vi.mocked(h.annotation.saveTx).mockReturnValueOnce(pending.promise);
+    h.primary.input().value = 'old';
+    h.primary.input().emit('input');
+    vi.advanceTimersByTime(2000);
+    await settleJobs();
+    h.primary.input().value = 'new';
+    h.primary.input().emit('input');
+    h.editor.releaseView(h.primary.pdfWindow);
+    pending.resolve();
+    await settleJobs();
+    await h.editor.open('ANN');
+    expect(h.primary.input().value).toBe('new');
+    h.editor.dispose();
+  });
 });

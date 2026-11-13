@@ -896,7 +896,20 @@ function createHistorySession(
       isDeadWrapper: () => false,
     },
   });
-  Reflect.set(globalThis, 'Services', { focus: { focusedWindow: pdfWindow } });
+  const draftPreferences = new Map<string, string>();
+  Reflect.set(globalThis, 'Services', {
+    focus: { focusedWindow: pdfWindow },
+    prefs: {
+      getPrefType: (key: string) => (draftPreferences.has(key) ? 32 : 0),
+      getStringPref: (key: string) => draftPreferences.get(key),
+      setStringPref: (key: string, value: string) => {
+        draftPreferences.set(key, value);
+      },
+      clearUserPref: (key: string) => {
+        draftPreferences.delete(key);
+      },
+    },
+  });
   const confirm = vi.fn(() => true);
   const ownerWindow = { confirm } as unknown as _ZoteroTypes.MainWindow;
   const reader = {
@@ -3575,6 +3588,59 @@ describe('Reader leader timer guards', () => {
     created.session.dispose();
     vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
     expect(openAllItemsPicker).toHaveBeenCalledOnce();
+  });
+  it.each(['view', 'document', 'split'] as const)(
+    'does not send an ambiguous command to a replaced %s',
+    (replacement) => {
+      vi.useFakeTimers();
+      const openAllItemsPicker = vi.fn();
+      const bindings: BindingMap = {
+        'reader-normal:<Space>f': 'findAllItems',
+        'reader-normal:<Space>ff': 'switchTab',
+      };
+      const created = createHistorySession({}, { openAllItemsPicker }, bindings);
+      created.session.focusAndHandle(readerKey(' ').event);
+      created.session.focusAndHandle(readerKey('f').event);
+      const internal = created.reader._internalReader!;
+      if (replacement === 'view') {
+        Reflect.set(internal, '_primaryView', { _iframeWindow: created.pdfWindow });
+      } else if (replacement === 'document') {
+        Reflect.set(created.pdfWindow, 'document', { ...created.pdfWindow.document });
+      } else {
+        const secondary = { ...created.pdfWindow } as PdfWindow;
+        Reflect.set(internal, '_secondaryView', { _iframeWindow: secondary });
+        Reflect.set(internal, '_lastViewPrimary', false);
+        Reflect.set(Services.focus, 'focusedWindow', secondary);
+      }
+      vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+      expect(openAllItemsPicker).not.toHaveBeenCalled();
+      expect(created.session.input.keyBuffer).toBe('');
+      created.session.dispose();
+    },
+  );
+
+  it('retires an ambiguous command when the originating PDF loses focus', () => {
+    vi.useFakeTimers();
+    const openAllItemsPicker = vi.fn();
+    const bindings: BindingMap = {
+      'reader-normal:<Space>f': 'findAllItems',
+      'reader-normal:<Space>ff': 'switchTab',
+    };
+    const created = createUnstartedHistorySession({}, { openAllItemsPicker }, bindings);
+    const listeners = new Map<string, EventListener>();
+    Reflect.set(created.pdfWindow, 'addEventListener', (type: string, listener: EventListener) => {
+      listeners.set(type, listener);
+    });
+    created.session.start();
+    created.session.focusAndHandle(readerKey(' ').event);
+    created.session.focusAndHandle(readerKey('f').event);
+    const blur = listeners.get('blur');
+    if (!blur) throw new Error('Expected a PDF blur listener');
+    blur({ target: created.pdfWindow } as unknown as Event);
+    vi.advanceTimersByTime(KEY_GUIDE_CONFIG.idleTimeoutMs);
+    expect(openAllItemsPicker).not.toHaveBeenCalled();
+    expect(created.session.input.keyBuffer).toBe('');
+    created.session.dispose();
   });
   it('keeps counted leader cancellation while invalidating timed Reader commands on mode change', () => {
     vi.useFakeTimers();

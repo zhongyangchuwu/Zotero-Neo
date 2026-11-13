@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { findAIQAAdoptions, saveAIQAToNote } from '../../src/ai-qa/adoption';
+import type { AIQARecord } from '../../src/ai-qa/contracts';
+import type { AIQASourceCapture } from '../../src/ai-qa/evidence';
 import { createSourceNote } from '../../src/operations/source-note';
 import type { SourceNoteTarget } from '../../src/core/source-note';
 const io = vi.hoisted(() => ({ pdf: vi.fn(), blob: vi.fn(), related: vi.fn() }));
@@ -61,6 +65,9 @@ function fixture() {
     Items: { getAsync: async (id: number) => (id === 4 ? source : id === 3 ? parent : false) },
     Libraries: { get: () => library },
     Item: Note,
+    Utilities: {
+      Internal: { md5: (value: string) => createHash('md5').update(value).digest('hex') },
+    },
     Attachments: { importEmbeddedImage: imported },
   });
   const target: SourceNoteTarget = {
@@ -195,4 +202,61 @@ describe('explicit source note writes', () => {
     await expect(saving).rejects.toThrow('destination changed');
     expect(f.saved).toEqual([]);
   });
+});
+
+it('recovers each AI revision from the original note identity and preserves manual edits', async () => {
+  const f = fixture();
+  const source = {
+    itemID: 4,
+    key: 'PDFKEY',
+    libraryID: 1,
+    fingerprint: 'source',
+    fileName: 'paper',
+  };
+  const capture = { source, target: f.target, isCurrent: f.current } as AIQASourceCapture;
+  const record: AIQARecord = {
+    id: 'answer',
+    revision: 1,
+    source,
+    kind: 'question',
+    question: 'Why?',
+    contextTitle: 'paper',
+    evidence: [],
+    output: { paragraphs: [{ text: 'Answer', evidenceIDs: [] }], guide: [] },
+    model: 'model',
+    endpoint: '',
+    usage: { inputTokens: null, outputTokens: null },
+    createdAt: '',
+    updatedAt: '',
+    userText: null,
+  };
+  const labels = {
+    title: 'AI',
+    question: 'Question',
+    source: 'Source',
+    model: 'Model',
+    generated: 'Original',
+    modified: 'Edited',
+  };
+  expect(await findAIQAAdoptions([record], capture)).toEqual({ answer: null });
+  expect(await saveAIQAToNote(record, capture, labels)).toEqual({
+    itemID: 10,
+    key: 'NOTEKEY',
+    reused: false,
+  });
+  const note = f.saved[0]!;
+  note.setNote('manual content');
+  io.related.mockImplementation(async () => f.saved);
+  expect(await findAIQAAdoptions([record], capture)).toEqual({
+    answer: { itemID: 10, key: 'NOTEKEY', reused: true },
+  });
+  expect((await saveAIQAToNote(record, capture, labels)).reused).toBe(true);
+  expect(note.html).toBe('manual content');
+  const revised = { ...record, revision: 2, userText: 'My revision' };
+  expect(await findAIQAAdoptions([revised], capture)).toEqual({ answer: null });
+  expect((await saveAIQAToNote(revised, capture, labels)).reused).toBe(false);
+  expect(new Set(f.saved).size).toBe(2);
+  note.deleted = true;
+  expect(await findAIQAAdoptions([record], capture)).toEqual({ answer: 'unavailable' });
+  expect(note.html).toBe('manual content');
 });

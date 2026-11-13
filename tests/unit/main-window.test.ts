@@ -1302,8 +1302,9 @@ describe('Note contextual Open', () => {
     Reflect.set(globalThis, 'Components', { utils: { isDeadWrapper: () => false } });
     const controller = createController({
       preferences: {
-        has: () => false,
-        get: (_key, fallback) => fallback,
+        has: (key) => key === 'noteEditor.enabled',
+        get: <T>(key: string, fallback: T): T =>
+          key === 'noteEditor.enabled' ? (true as T) : fallback,
         set: () => {},
         clear: () => {},
       },

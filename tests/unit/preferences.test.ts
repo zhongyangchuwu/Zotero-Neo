@@ -21,6 +21,7 @@ import {
   configuredNeoLanguage,
   keyGuideConfig,
   migrateBindingPreferences,
+  migrateInteractionPreferences,
   neoCommandLanguage,
   normalizeKeyGuideNumber,
   migrateReaderPreferences,
@@ -805,25 +806,55 @@ describe('key guide preferences', () => {
   });
 });
 
-describe('picker preferences', () => {
-  it('defaults mouse row interaction off and honors explicit values', () => {
-    expect(pickerMouseEnabled(new TestPreferences({}))).toBe(false);
-    expect(
-      pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: false })),
-    ).toBe(false);
-    expect(
-      pickerMouseEnabled(new TestPreferences({ [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: true })),
-    ).toBe(true);
-  });
-});
-
-describe('note editor preferences', () => {
-  it('defaults Vim editing on and reads changes without startup migration', () => {
+describe('interaction preference migration', () => {
+  it('keeps a new installation mouse-friendly after binding initialization and later reloads', () => {
     const preferences = new TestPreferences({});
-    expect(noteEditorEnabled(preferences)).toBe(true);
-    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, false);
+    migrateInteractionPreferences(preferences);
+    migrateBindingPreferences(preferences);
+    migrateInteractionPreferences(preferences);
+    expect(pickerMouseEnabled(preferences)).toBe(true);
     expect(noteEditorEnabled(preferences)).toBe(false);
+
     preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
+    preferences.set(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
+    migrateInteractionPreferences(preferences);
+    expect(noteEditorEnabled(preferences)).toBe(true);
+    expect(pickerMouseEnabled(preferences)).toBe(false);
+  });
+
+  it.each<Readonly<Record<string, string | number | boolean>>>([
+    { 'bindings.schemaVersion': BINDING_SCHEMA_VERSION },
+    { bindings: '{}' },
+  ])('preserves implicit legacy behavior when upgrading %j', (existing) => {
+    const preferences = new TestPreferences(existing);
+    migrateInteractionPreferences(preferences);
+    migrateBindingPreferences(preferences);
+    migrateInteractionPreferences(preferences);
+    expect(pickerMouseEnabled(preferences)).toBe(false);
+    expect(noteEditorEnabled(preferences)).toBe(true);
+  });
+
+  it.each([true, false])(
+    'does not replace explicit interaction choices with defaults (%s)',
+    (value) => {
+      const preferences = new TestPreferences({
+        'bindings.schemaVersion': BINDING_SCHEMA_VERSION,
+        [NOTE_EDITOR_ENABLED_PREFERENCE_KEY]: value,
+        [PICKER_MOUSE_ENABLED_PREFERENCE_KEY]: value,
+      });
+      migrateInteractionPreferences(preferences);
+      expect(noteEditorEnabled(preferences)).toBe(value);
+      expect(pickerMouseEnabled(preferences)).toBe(value);
+    },
+  );
+
+  it('can finish an interrupted migration without changing the original installation policy', () => {
+    const preferences = new TestPreferences({ 'bindings.schemaVersion': BINDING_SCHEMA_VERSION });
+    preferences.failKey = NOTE_EDITOR_ENABLED_PREFERENCE_KEY;
+    expect(() => migrateInteractionPreferences(preferences)).toThrow('Write failed');
+    preferences.failKey = null;
+    migrateInteractionPreferences(preferences);
+    expect(pickerMouseEnabled(preferences)).toBe(false);
     expect(noteEditorEnabled(preferences)).toBe(true);
   });
 });

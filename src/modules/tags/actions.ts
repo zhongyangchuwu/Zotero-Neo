@@ -1,19 +1,43 @@
 import type { ItemTargetSet } from '../../core/item-target';
 import type { Logger } from '../../core/logging';
-import { tagSeparatorFromPreferences, type PreferenceReader } from '../../core/preferences';
+import {
+  neoCommandLanguage,
+  tagSeparatorFromPreferences,
+  type PreferenceReader,
+} from '../../core/preferences';
 import { setItemTag } from '../../operations/item-tags';
 import type { PickerOpenOptions } from '../../main/picker/types';
 import { createTagCandidateProvider, type TagRecord } from '../../main/picker/providers/tags';
 import { isSourceNoteIdentity } from '../../platform/note-relations';
+import { t } from '../../i18n';
 
 function sameTag(left: string, right: string): boolean {
   return left.toLocaleLowerCase() === right.toLocaleLowerCase();
 }
 
-function targetLabel(targets: ItemTargetSet): string {
-  const context =
-    targets.source === 'reader' ? 'Reader' : targets.source === 'note' ? 'Note' : 'Main target';
-  return `${context} · ${targets.items.length} item${targets.items.length === 1 ? '' : 's'}`;
+function targetContext(targets: ItemTargetSet, language: string): string {
+  if (targets.source === 'reader') return t('workflow.itemTarget.reader', language);
+  if (targets.source === 'note') return t('workflow.itemTarget.note', language);
+  const origin = targets.presentation.origin;
+  const context = origin === 'native-selection' ? 'nativeSelection' : origin;
+  return t(`workflow.itemTarget.main.${context}`, language);
+}
+
+function targetLabel(targets: ItemTargetSet, language: string): string {
+  const count = String(targets.items.length);
+  const context = targetContext(targets, language);
+  if (targets.source === 'main') {
+    const outside = String(
+      Math.min(targets.items.length, Math.max(0, targets.presentation.outsideCurrentList)),
+    );
+    return t('workflow.itemTarget.main.summary', language)
+      .replace('{context}', context)
+      .replace('{count}', count)
+      .replace('{outside}', outside);
+  }
+  return t('workflow.itemTarget.context.summary', language)
+    .replace('{context}', context)
+    .replace('{count}', count);
 }
 
 function targetLibraryID(targets: ItemTargetSet): number | null {
@@ -90,9 +114,13 @@ export class TagActions {
       this.#host.status('✗ Add Tag requires one library at a time');
       return;
     }
+    const language = neoCommandLanguage(this.#host.preferences, Zotero.locale ?? 'en');
     const separator = tagSeparatorFromPreferences(this.#host.preferences);
     const source = createTagCandidateProvider({
-      title: `Add Tag · ${targetLabel(targets)}`,
+      title: t('workflow.tags.addTitle', language).replace(
+        '{target}',
+        targetLabel(targets, language),
+      ),
       placeholder: '> Search or create a tag…',
       separator,
       allowCreate: true,
@@ -126,12 +154,15 @@ export class TagActions {
       this.#host.status('→ No assigned tags to remove');
       return;
     }
+    const language = neoCommandLanguage(this.#host.preferences, Zotero.locale ?? 'en');
     const source = createTagCandidateProvider({
-      title: `Remove Tag · ${targetLabel(targets)}`,
+      title: t('workflow.tags.removeTitle', language).replace(
+        '{target}',
+        targetLabel(targets, language),
+      ),
       placeholder: '> Search assigned tags…',
       separator: tagSeparatorFromPreferences(this.#host.preferences),
       loadTags: async () => tags,
-      describe: (tag) => presenceLabel(targets, tag),
     });
     this.#host.choose({
       source,

@@ -51,13 +51,13 @@ export function tagSeparatorFromPreferences(preferences: PreferenceReader): stri
 export const PICKER_MOUSE_ENABLED_PREFERENCE_KEY = 'picker.mouse.enabled' as const;
 
 export function pickerMouseEnabled(preferences: PreferenceReader): boolean {
-  return preferences.get(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, false);
+  return preferences.get(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, true);
 }
 
 export const NOTE_EDITOR_ENABLED_PREFERENCE_KEY = 'noteEditor.enabled' as const;
 
 export function noteEditorEnabled(preferences: PreferenceReader): boolean {
-  return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, true);
+  return preferences.get(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, false);
 }
 
 export type ReaderModePreference = 'visual';
@@ -230,6 +230,21 @@ export interface PreferenceReader {
 export interface PreferenceWriter extends PreferenceReader {
   set(key: string, value: boolean | number | string): void;
   clear(key: string): void;
+}
+
+/** Runs before binding migration so existing installs retain even their implicit interaction defaults. */
+export function migrateInteractionPreferences(
+  preferences: PreferenceWriter & { has(key: string): boolean },
+): void {
+  if (preferences.get('interaction.defaultsVersion', 0) >= 1) return;
+  const existingInstall = preferences.has('bindings.schemaVersion') || preferences.has('bindings');
+  if (!preferences.has(PICKER_MOUSE_ENABLED_PREFERENCE_KEY)) {
+    preferences.set(PICKER_MOUSE_ENABLED_PREFERENCE_KEY, !existingInstall);
+  }
+  if (!preferences.has(NOTE_EDITOR_ENABLED_PREFERENCE_KEY)) {
+    preferences.set(NOTE_EDITOR_ENABLED_PREFERENCE_KEY, existingInstall);
+  }
+  preferences.set('interaction.defaultsVersion', 1);
 }
 
 export function migrateBindingPreferences(preferences: PreferenceWriter): void {

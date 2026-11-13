@@ -19,12 +19,13 @@ export interface AIQAReaderPort {
   language(): AppLanguage;
   themeRoot(root: HTMLElement): () => void;
   showStatus(message: string): void;
+  openNote(itemID: number): Promise<void>;
 }
 
 /** Reader evidence and invocation policy; independent of native panel presentation. */
 export type AIQAReaderTaskPort = Pick<
   AIQAReaderPort,
-  'reader' | 'captureSelection' | 'captureView' | 'language'
+  'reader' | 'captureSelection' | 'captureView' | 'language' | 'openNote'
 >;
 
 /** Native presentation capabilities; no selection or exact-view task capture. */

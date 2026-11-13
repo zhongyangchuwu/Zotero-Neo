@@ -62,9 +62,9 @@ function harness() {
 }
 
 const candidate = { id: 'a', title: 'First', search: 'first' };
-const targets = <S extends 'reader' | 'note'>(source: S, id: number): ItemTargetSet<S> => ({
+const targets = <S extends 'reader' | 'note'>(source: S, id: number) => ({
   source,
-  items: [{ id } as ItemTargetSet<S>['items'][number]],
+  items: [{ id } as ItemTargetSet['items'][number]],
   total: 1,
   missing: 0,
 });

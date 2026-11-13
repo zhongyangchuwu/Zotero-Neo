@@ -102,6 +102,7 @@ import {
   isReaderTranslationControl,
 } from '../toolkit/reader';
 import {
+  mainItemOpening,
   ReaderHostKeyBridge,
   ReaderJumpHostAdapter,
   ReaderJumpHistoryBridge,
@@ -1057,6 +1058,13 @@ export class ReaderSession {
           dependencies.controller.dependencies.aiQA?.() ?? null,
           {
             reader: dependencies.reader,
+            openNote: async (itemID) => {
+              const owner = readerMainWindow(dependencies.reader);
+              if (this.#scope.disposed || !owner) throw new Error('Reader note host unavailable');
+              const openNote = mainItemOpening(owner).openNote;
+              if (!openNote) throw new Error('Reader note host cannot open notes');
+              await openNote(itemID);
+            },
             captureSelection: () => this.selectionContext(),
             captureView: () => {
               const window = this.#navigationHost.activePdfWindow();
@@ -1679,16 +1687,13 @@ export class ReaderSession {
     this.updateIndicator();
     const timeoutMs = keyGuideTimeout(decision);
     if (timeoutMs !== null) {
+      const current = this.invocationCurrent(pdfWindow);
       this.input.schedule(decision, timeoutMs, (resolved) => {
         if (this.#scope.disposed) return;
         this.clearKeyGuide();
         this.updateIndicator();
-        if (resolved.kind === 'execute')
-          this.executeAction(
-            resolved.action,
-            resolved.count,
-            this.#navigationHost.activePdfWindow(),
-          );
+        if (resolved.kind === 'execute' && current())
+          this.executeAction(resolved.action, resolved.count, pdfWindow);
       });
     }
   }

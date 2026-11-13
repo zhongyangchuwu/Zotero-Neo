@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionTransactionDB } from '../fixtures/collection-transactions';
 import type { ItemTargetSet } from '../../src/core/item-target';
+import { MAIN_ITEM_TARGET } from '../../src/main/main-item-target';
 import { ModuleHost } from '../../src/core/module-host';
 import { createCollectionsModule } from '../../src/modules/collections';
 import type { CollectionConfirmation } from '../../src/modules/collections/actions';
@@ -88,6 +89,7 @@ function workflowHarness() {
   };
   const first = makeItem(1, [10]);
   const second = makeItem(2, [11]);
+  const cursor = makeItem(3, []);
   const items = new Map([
     [first.id, first],
     [second.id, second],
@@ -105,7 +107,20 @@ function workflowHarness() {
         getRow: (index: number) => scopeRows[index],
         getRowIndexByID: (id: string) => scopeRows.findIndex((row) => row.id === id),
       },
-      itemsView: { rowCount: 2 },
+      getSelectedItems: () => [cursor],
+      itemsView: {
+        rowCount: 2,
+        selection: { focused: 0 },
+        getRow: (index: number) =>
+          [
+            { isObjectRow: true, ref: cursor },
+            { isObjectRow: true, ref: first },
+          ][index],
+        getRowIndexByID: (id: number) => {
+          const index = [cursor, first].findIndex((item) => item.id === id);
+          return index < 0 ? false : index;
+        },
+      },
       selectItem,
     },
   });
@@ -142,7 +157,7 @@ function workflowHarness() {
         [...collections.values()].filter((collection) => collection.parentID === id),
     },
     Items: {
-      get: (id: number) => items.get(id) ?? false,
+      get: (id: number) => items.get(id) ?? (id === cursor.id ? cursor : false),
       getAsync: async (ids: number[]) => ids.flatMap((id) => items.get(id) ?? []),
       getAll,
       loadDataTypes: vi.fn(async () => undefined),
@@ -207,7 +222,13 @@ function workflowHarness() {
       };
     },
   });
-  let resolved: ItemTargetSet = { source: 'main', items: [first], total: 1, missing: 0 };
+  let resolved: ItemTargetSet = {
+    source: 'main',
+    items: [first],
+    total: 1,
+    missing: 0,
+    presentation: { origin: 'selection', outsideCurrentList: 0 },
+  };
   const resolveTargets = () => resolved;
   const request = { source: 'main' as const, label: 'context item' as const, resolveTargets };
   const start = async (action: () => void) => {
@@ -274,9 +295,90 @@ describe('collection workflows', () => {
         resolveTargets: h.resolveTargets,
       }),
     );
+    expect(h.session.picker.provider?.title).toContain('Current Reader item · Items: 1');
+    expect(h.session.picker.provider?.title).not.toContain('Neo work set');
     await h.confirm(20);
     expect(h.second.getCollections()).toEqual([11, 20]);
     expect(h.first.getCollections()).toEqual([10]);
+  });
+  it('shows normalized Main selection context and writes it instead of the different cursor target', async () => {
+    const h = workflowHarness();
+    h.selection.add({ libraryID: 1, itemID: h.first.id });
+    h.selection.add({ libraryID: 1, itemID: h.second.id });
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.selection);
+    expect(targets.presentation).toEqual({
+      origin: 'selection',
+      outsideCurrentList: 1,
+    });
+    h.targets(targets);
+
+    await h.start(() => h.actions.add(h.request));
+    expect(h.session.picker.provider?.title).toContain(
+      'Neo work set · Items: 2 · Outside current list: 1',
+    );
+    await h.confirm(20);
+
+    expect(h.first.getCollections()).toEqual([10, 20]);
+    expect(h.second.getCollections()).toEqual([11, 20]);
+    const cursor = Zotero.Items.get(3);
+    expect(cursor && cursor.getCollections()).toEqual([]);
+  });
+
+  it('uses normalized top-level count and mutation targets for collections', async () => {
+    const h = workflowHarness();
+    Reflect.set(h.second, 'isAttachment', () => true);
+    Reflect.set(h.second, 'parentItemID', h.first.id);
+    h.selection.add({ libraryID: 1, itemID: h.first.id });
+    h.selection.add({ libraryID: 1, itemID: h.second.id });
+    const targets = MAIN_ITEM_TARGET.resolve(h.window, h.selection);
+
+    expect(targets.total).toBe(2);
+    expect(targets.items).toEqual([h.first]);
+    expect(targets.presentation).toEqual({
+      origin: 'selection',
+      outsideCurrentList: 0,
+    });
+    h.targets(targets);
+    await h.start(() => h.actions.add(h.request));
+    expect(h.session.picker.provider?.title).toContain('Items: 1 · Outside current list: 0');
+    await h.confirm(20);
+
+    expect(h.first.getCollections()).toEqual([10, 20]);
+    expect(h.second.getCollections()).toEqual([11]);
+  });
+
+  it('shows the Main target on collection removal and removes only the workset membership', async () => {
+    const h = workflowHarness();
+    h.first.addToCollection(20);
+    h.second.addToCollection(20);
+    h.selection.add({ libraryID: 1, itemID: h.first.id });
+    h.selection.add({ libraryID: 1, itemID: h.second.id });
+    h.targets(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+
+    await h.start(() => h.actions.remove(h.request));
+    expect(h.session.picker.provider?.title).toContain(
+      'Remove from collection · Neo work set · Items: 2 · Outside current list: 1',
+    );
+    await h.confirm(20);
+
+    expect(h.first.getCollections()).toEqual([10]);
+    expect(h.second.getCollections()).toEqual([11]);
+    const cursor = Zotero.Items.get(3);
+    expect(cursor && cursor.getCollections()).toEqual([]);
+  });
+
+  it('cancels collection target choice without writing to the Main selection', async () => {
+    const h = workflowHarness();
+    h.selection.add({ libraryID: 1, itemID: h.first.id });
+    h.selection.add({ libraryID: 1, itemID: h.second.id });
+    h.targets(MAIN_ITEM_TARGET.resolve(h.window, h.selection));
+
+    await h.start(() => h.actions.add(h.request));
+    h.picker.onKeyDown(pickerKey('Escape', h.session.picker.input), h.window, h.session);
+
+    expect(h.first.getCollections()).toEqual([10]);
+    expect(h.second.getCollections()).toEqual([11]);
+    expect(h.transaction).not.toHaveBeenCalled();
   });
 
   it('continuously adds to the frozen active collection without selecting items, clearing Selection, or loading the library', async () => {
@@ -347,14 +449,26 @@ describe('collection workflows', () => {
 
   it('requires actual direct source membership for movement and refuses a changed source at confirmation', async () => {
     const h = workflowHarness();
-    h.targets({ source: 'main', items: [h.first, h.second], total: 2, missing: 0 });
+    h.targets({
+      source: 'main',
+      items: [h.first, h.second],
+      total: 2,
+      missing: 0,
+      presentation: { origin: 'selection', outsideCurrentList: 0 },
+    });
     h.actions.moveItems(h.request);
     expect(h.opened).not.toHaveBeenCalled();
     expect(h.status).toHaveBeenLastCalledWith(
       h.session,
       expect.stringContaining('directly assigned'),
     );
-    h.targets({ source: 'main', items: [h.first], total: 1, missing: 0 });
+    h.targets({
+      source: 'main',
+      items: [h.first],
+      total: 1,
+      missing: 0,
+      presentation: { origin: 'selection', outsideCurrentList: 0 },
+    });
     await h.start(() => h.actions.moveItems(h.request));
     h.scopeSelection.selected = new Set([1]);
     h.scopeSelection.focused = 1;
@@ -415,7 +529,7 @@ describe('collection workflows', () => {
     expect(h.nativeConfirm).toHaveBeenCalledWith(
       h.window,
       expect.any(String),
-      expect.stringContaining('add 1 items'),
+      expect.stringContaining('Neo work set · Items: 1 · Outside current list: 0'),
     );
     const created = [...h.collections.values()].find(
       (collection) => collection.name === 'Created collection',
@@ -622,6 +736,9 @@ describe('collection workflows', () => {
     const h = workflowHarness();
     h.first.addToCollection(11);
     await h.start(() => h.actions.moveItems(h.request));
+    expect(h.session.picker.provider?.title).toContain(
+      'Move to collection · Neo work set · Items: 1 · Outside current list: 0',
+    );
     await h.confirm(20);
     expect(h.first.getCollections()).toEqual([11, 20]);
     expect(h.second.getCollections()).toEqual([11]);
