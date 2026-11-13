@@ -5,6 +5,7 @@ import type {
   ReaderControllerDependencies,
   ReaderMainOperations,
 } from '../../src/core/contracts';
+import type { SourceNoteReceipt } from '../../src/core/source-note';
 import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
 import { createLibraryModule } from '../../src/modules/library';
 import { createNotesModule } from '../../src/modules/notes';
@@ -5066,6 +5067,171 @@ describe('Reader category history execution', () => {
       }
     },
   );
+});
+
+describe('Reader explicit related-item history', () => {
+  function setupRelatedItem(kind: 'pdf' | 'note') {
+    const execution = navigationHistoryPort();
+    const created = createUnstartedHistorySession(
+      {},
+      { navigationForReader: () => execution.port },
+    );
+    attachNativeReaderHistory(created);
+    const source = {
+      id: 42,
+      libraryID: 1,
+      key: 'SOURCE',
+      deleted: false,
+      isAttachment: () => true,
+      isPDFAttachment: () => true,
+      getField: () => 'Source PDF',
+    };
+    const target = {
+      id: 99,
+      libraryID: 1,
+      key: 'TARGET',
+      deleted: false,
+      isAttachment: () => kind === 'pdf',
+      isPDFAttachment: () => kind === 'pdf',
+      isNote: () => kind === 'note',
+      getFilePathAsync: vi.fn(async () => '/local/target.pdf'),
+    };
+    const tabs = {
+      selectedID: 'reader-test-tab',
+      getTabInfo: (id: string) => ({
+        id,
+        type: id === 'destination' ? (kind === 'pdf' ? 'reader' : 'note') : 'reader',
+        data: { itemID: id === 'destination' ? 99 : 42 },
+      }),
+    };
+    const nativeOpen = vi.fn(async () => {
+      tabs.selectedID = 'destination';
+    });
+    Reflect.set(created.ownerWindow, 'Zotero_Tabs', tabs);
+    Reflect.set(created.ownerWindow, 'ZoteroPane', {
+      viewAttachment: nativeOpen,
+      openNote: nativeOpen,
+    });
+    const lookup = vi.fn(async () => target);
+    Reflect.set(globalThis, 'Zotero', {
+      Items: {
+        get: (id: number) => (id === 42 ? source : id === 99 ? target : false),
+        getAsync: lookup,
+      },
+      Reader: { getByTabID: (id: string) => (id === 'reader-test-tab' ? created.reader : null) },
+    });
+    const receipt: SourceNoteReceipt = { itemID: 99, key: 'TARGET', reused: false };
+    // Exercise the existing session-owned navigation boundary without exporting it for tests.
+    const session = created.session as unknown as {
+      openRelatedReaderItem(
+        window: PdfWindow,
+        target: { kind: 'pdf'; itemID: number } | { kind: 'note'; receipt: SourceNoteReceipt },
+        sourceCurrent: () => boolean,
+      ): Promise<boolean>;
+    };
+    const open = () =>
+      session.openRelatedReaderItem(
+        created.pdfWindow,
+        kind === 'pdf' ? { kind, itemID: 99 } : { kind, receipt },
+        () => tabs.selectedID === 'reader-test-tab',
+      );
+    return { ...created, ...execution, target, tabs, nativeOpen, lookup, receipt, open };
+  }
+
+  it.each(['pdf', 'note'] as const)(
+    'records the initiating PDF and actual %s destination despite leaving the source tab',
+    async (kind) => {
+      const created = setupRelatedItem(kind);
+      try {
+        expect(await created.open()).toBe(true);
+        expect(created.nativeOpen).toHaveBeenCalledOnce();
+        expect(created.history.locations).toHaveLength(2);
+        expect(created.history.locations[0]).toMatchObject({
+          kind: 'reader',
+          tabID: 'reader-test-tab',
+          itemID: 42,
+          libraryID: 1,
+          position: { primary: true, pageIndex: 0, top: 500 },
+        });
+        expect(created.history.locations[1]).toMatchObject({
+          kind: kind === 'pdf' ? 'reader' : 'tab',
+          tabID: 'destination',
+        });
+        expect(created.intents[0]?.cause).toEqual({
+          kind: 'event',
+          event: kind === 'pdf' ? 'references.open-local' : 'reader-excerpts.open-note',
+        });
+        expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
+
+  it.each(['deleted', 'key', 'library'] as const)(
+    'rejects a saved note with changed %s without navigation or history',
+    async (change) => {
+      const created = setupRelatedItem('note');
+      if (change === 'deleted') created.target.deleted = true;
+      else if (change === 'key') created.target.key = 'OTHER';
+      else created.target.libraryID = 2;
+      try {
+        expect(await created.open()).toBe(false);
+        expect(created.nativeOpen).not.toHaveBeenCalled();
+        expect(created.history.locations).toEqual([]);
+        expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+      } finally {
+        created.session.dispose();
+      }
+    },
+  );
+
+  it('does not invoke an attachment host that could fetch a missing local file', async () => {
+    const created = setupRelatedItem('pdf');
+    created.target.getFilePathAsync.mockResolvedValue('');
+    try {
+      expect(await created.open()).toBe(false);
+      expect(created.nativeOpen).not.toHaveBeenCalled();
+      expect(created.history.locations).toEqual([]);
+    } finally {
+      created.session.dispose();
+    }
+  });
+
+  it('rejects a replaced source document while an explicit target lookup is pending', async () => {
+    const created = setupRelatedItem('note');
+    const pending = Promise.withResolvers<typeof created.target>();
+    created.lookup.mockReturnValue(pending.promise);
+    try {
+      const result = created.open();
+      await settleReaderMicrotasks();
+      Reflect.set(created.pdfWindow, 'document', {});
+      pending.resolve(created.target);
+      expect(await result).toBe(false);
+      expect(created.nativeOpen).not.toHaveBeenCalled();
+      expect(created.history.locations).toEqual([]);
+      expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    } finally {
+      created.session.dispose();
+    }
+  });
+
+  it('does not commit an unrelated selected tab after native opening completes late', async () => {
+    const created = setupRelatedItem('pdf');
+    const pending = Promise.withResolvers<void>();
+    created.nativeOpen.mockImplementation(() => pending.promise);
+    try {
+      const result = created.open();
+      await settleReaderMicrotasks();
+      created.tabs.selectedID = 'unrelated';
+      pending.resolve();
+      expect(await result).toBe(false);
+      expect(created.history.locations).toEqual([]);
+      expect(created.pdfWindow.focus).not.toHaveBeenCalled();
+    } finally {
+      created.session.dispose();
+    }
+  });
 });
 
 describe('Reader mark history execution', () => {

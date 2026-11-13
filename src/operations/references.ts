@@ -1,4 +1,9 @@
-import type { ReferenceLocalMatch, ReferenceQuery, ScholarlyPaper } from '../references/contracts';
+import type {
+  ReferenceAdditionReceipt,
+  ReferenceLocalMatch,
+  ReferenceQuery,
+  ScholarlyPaper,
+} from '../references/contracts';
 import { normalizeArxiv, normalizeDOI } from '../references/identifiers';
 
 function writableLibrary(libraryID: number): void {
@@ -60,7 +65,7 @@ export async function addReferencePaper(
   paper: ScholarlyPaper,
   libraryID: number,
   isCurrent: () => boolean | Promise<boolean>,
-): Promise<ReferenceLocalMatch> {
+): Promise<ReferenceAdditionReceipt> {
   const previous = additions.get(libraryID) ?? Promise.resolve();
   const task = previous
     .catch(() => {})
@@ -84,7 +89,7 @@ export async function addReferencePaper(
         const ids = itemIdentifiers(exact[0]);
         if ((doi && ids.doi && doi !== ids.doi) || (arxiv && ids.arxiv && arxiv !== ids.arxiv))
           throw new Error('Existing item identifiers conflict with this reference');
-        return match(exact[0]);
+        return { ...match(exact[0]), reused: true };
       }
       const title = paper.title.trim().toLocaleLowerCase().replace(/\s+/gu, ' ');
       if (
@@ -116,7 +121,7 @@ export async function addReferencePaper(
       if (!(await isCurrent())) throw new Error('Reference destination changed');
       writableLibrary(libraryID);
       await item.saveTx();
-      return match(item);
+      return { ...match(item), reused: false };
     });
   additions.set(libraryID, task);
   try {

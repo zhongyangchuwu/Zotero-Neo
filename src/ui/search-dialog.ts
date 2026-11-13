@@ -26,7 +26,7 @@ export interface SearchDialogOptions<T> {
   readonly load: () => Promise<SearchDialogSource<T>>;
   readonly filter: (items: readonly T[], query: string, scope: string) => readonly T[];
   readonly label: (item: T) => string;
-  readonly confirm: (item: T) => Promise<boolean>;
+  readonly confirm: (item: T) => Promise<boolean | { readonly status: string }>;
   readonly debug: (error: unknown) => void;
   readonly onClose?: () => void;
   readonly preview?: (
@@ -38,7 +38,7 @@ export interface SearchDialogOptions<T> {
   }>;
   readonly actions?: readonly {
     readonly label: string;
-    readonly run: (item: T) => Promise<boolean>;
+    readonly run: (item: T) => Promise<boolean | { readonly status: string }>;
     readonly available?: (item: T) => boolean;
   }[];
 }
@@ -278,9 +278,11 @@ export class SearchDialog<T> {
       actions: view.model.actions.map((action) => ({ ...action, disabled: true })),
     });
     try {
-      if (await run(item)) {
-        if (this.#current(view)) this.close(true);
-      } else if (this.#current(view)) this.#update(view, { status: view.options.unavailable });
+      const result = await run(item);
+      if (!this.#current(view)) return;
+      if (typeof result === 'object') this.#update(view, { status: result.status });
+      else if (result) this.close(true);
+      else this.#update(view, { status: view.options.unavailable });
     } catch (error) {
       if (this.#current(view)) {
         this.#update(view, { status: view.options.unavailable });

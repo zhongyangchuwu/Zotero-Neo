@@ -6,6 +6,7 @@ import type {
   ReaderSelectionActionDefinition,
   ReaderSelectionContext,
 } from '../core/contracts';
+import type { SourceNoteReceipt } from '../core/source-note';
 import { reportDiagnosticError } from '../core/logging';
 import { sameNavigationLocation } from '../navigation/history';
 import type {
@@ -103,6 +104,8 @@ import {
 } from '../toolkit/reader';
 import {
   mainItemOpening,
+  openMainNote,
+  selectedMainTabInfo,
   ReaderHostKeyBridge,
   ReaderJumpHostAdapter,
   ReaderJumpHistoryBridge,
@@ -967,6 +970,12 @@ export class ReaderSession {
           preferences,
           target: () => resolveReaderSourceNoteTarget(dependencies.reader),
           captureView: (window) => this.invocationCurrent(window, null),
+          openNote: (receipt, window) =>
+            this.openRelatedReaderItem(
+              window,
+              { kind: 'note', receipt },
+              this.invocationCurrent(window, null),
+            ),
           themeRoot: (root) => this.themeRoot(root),
           text: (key) => t(`reader.excerpts.${key}`, this.keyGuideLanguage()),
           showStatus: (message) => this.showStatus(message),
@@ -1114,6 +1123,8 @@ export class ReaderSession {
             return {
               window,
               isCurrent,
+              openAttachment: (itemID) =>
+                this.openRelatedReaderItem(window, { kind: 'pdf', itemID }, isCurrent),
               restoreFocus: () => {
                 if (isCurrent()) window.focus();
               },
@@ -1173,6 +1184,97 @@ export class ReaderSession {
 
   get ownerWindow(): MainWindow | null {
     return readerOwnerWindow(this.#dependencies.reader) ?? null;
+  }
+
+  /** Explicit cross-tab opening keeps the source pane, but allows focus to leave it after dispatch. */
+  private async openRelatedReaderItem(
+    pdfWindow: PdfWindow,
+    target:
+      | { readonly kind: 'note'; readonly receipt: SourceNoteReceipt }
+      | {
+          readonly kind: 'pdf';
+          readonly itemID: number;
+        },
+    sourceCurrent: () => boolean,
+  ): Promise<boolean> {
+    const reader = this.#dependencies.reader;
+    const owner = readerMainWindow(reader);
+    const view = this.readerViewForWindow(pdfWindow);
+    const source = resolveReaderSourceNoteTarget(reader);
+    if (!owner || !view || !source || !sourceCurrent()) return false;
+    const lifetime = this.captureViewLifetime(pdfWindow);
+    const itemID = target.kind === 'note' ? target.receipt.itemID : target.itemID;
+    const port = this.#dependencies.controller.dependencies.main.navigationForReader(
+      readerOwnerWindow(reader) ?? null,
+    );
+    const perform = async (isCurrent: () => boolean): Promise<NavigationOutcome> => {
+      if (!isCurrent() || !sourceCurrent()) return { kind: 'stale' };
+      const item = await Zotero.Items.getAsync(itemID);
+      if (!isCurrent() || !sourceCurrent()) return { kind: 'stale' };
+      if (
+        !item ||
+        item.deleted ||
+        item.libraryID !== source.attachment.libraryID ||
+        (target.kind === 'note'
+          ? !item.isNote() || item.key !== target.receipt.key
+          : !item.isPDFAttachment())
+      )
+        return { kind: 'unavailable' };
+      const key = item.key;
+      if (target.kind === 'pdf') {
+        const path = await item.getFilePathAsync();
+        if (!isCurrent() || !sourceCurrent()) return { kind: 'stale' };
+        if (!path || item.deleted || item.key !== key) return { kind: 'unavailable' };
+        const open = mainItemOpening(owner).viewAttachment;
+        if (!open) return { kind: 'unavailable' };
+        await open(itemID);
+      } else {
+        await openMainNote(owner, itemID, false);
+      }
+      if (!isCurrent() || !lifetime()) return { kind: 'stale' };
+      if (item.deleted || item.key !== key || item.libraryID !== source.attachment.libraryID)
+        return { kind: 'unavailable' };
+      const selected = selectedMainTabInfo(owner);
+      if (
+        !selected?.id ||
+        selected.data?.itemID !== itemID ||
+        !selected.type?.startsWith(target.kind === 'pdf' ? 'reader' : 'note')
+      )
+        return { kind: 'unavailable' };
+      const destination =
+        target.kind === 'pdf'
+          ? (this.#dependencies.controller.captureJumpLocation(selected.id, itemID) ?? {
+              kind: 'reader' as const,
+              tabID: selected.id,
+              itemID,
+              libraryID: item.libraryID,
+            })
+          : { kind: 'tab' as const, tabID: selected.id };
+      return { kind: 'completed', evidence: 'settled-change', destination };
+    };
+    if (!port) return (await perform(lifetime)).kind === 'completed';
+    const operation: NavigationOperation = {
+      dispatch: 'serial-navigation',
+      capture: () =>
+        sourceCurrent() && reader.tabID
+          ? this.#dependencies.jumpHost.captureReader(reader, reader.tabID, view)
+          : null,
+      start: (attempt) => ({ kind: 'deferred', settled: perform(attempt.isCurrent) }),
+    };
+    const execution = port.execute(
+      {
+        cause: {
+          kind: 'event',
+          event: target.kind === 'pdf' ? 'references.open-local' : 'reader-excerpts.open-note',
+        },
+        surface: 'reader',
+        context: { isCurrent: lifetime },
+      },
+      operation,
+    );
+    const result = execution.pending ? await execution.result : execution.result;
+    if (result.kind === 'failed') throw result.error;
+    return result.kind === 'completed';
   }
 
   /** Routes one Reader effect through exact-view ownership and evidence-based completion. */

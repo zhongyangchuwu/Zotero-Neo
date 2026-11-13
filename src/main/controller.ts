@@ -158,6 +158,7 @@ export class MainWindowController implements MainWindowControllerApi {
       () => pickerMouseEnabled(dependencies.preferences),
       () => this.bindings(),
       (session) => this.#sessions.get(session.window) === session && !session.cleanup.disposed,
+      () => this.keyGuideLanguage(),
     );
     this.#noteEditor = new NoteEditor(
       dependencies.logger,

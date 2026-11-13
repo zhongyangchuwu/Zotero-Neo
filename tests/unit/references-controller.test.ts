@@ -29,12 +29,10 @@ const host = vi.hoisted(() => ({
 }));
 vi.mock('../../src/toolkit/reader', () => ({
   readReaderReferenceDocument: host.read,
-  readerMainWindow: () => ({}),
   observeReaderReferenceInteractions: host.observe,
 }));
 vi.mock('../../src/toolkit/main', () => ({
   launchMainURL: host.launch,
-  mainItemOpening: () => ({ viewAttachment: host.open }),
 }));
 vi.mock('../../src/references/metadata', () => ({
   createReferenceMetadataService: () => ({
@@ -183,7 +181,13 @@ function setup() {
   let current = true;
   const jump = vi.fn(() => true);
   const restoreFocus = vi.fn();
-  const captureView = vi.fn(() => ({ window, isCurrent: () => current, jump, restoreFocus }));
+  const captureView = vi.fn(() => ({
+    window,
+    isCurrent: () => current,
+    jump,
+    restoreFocus,
+    openAttachment: host.open,
+  }));
   const port: ReferenceReaderPort = {
     reader: { itemID: 7 },
     pluginID: 'test',
@@ -244,6 +248,7 @@ beforeEach(() => {
   host.read.mockResolvedValue(source());
   host.find.mockResolvedValue([]);
   host.launch.mockReturnValue(true);
+  host.open.mockResolvedValue(true);
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -402,7 +407,12 @@ describe('contextual references', () => {
     ui.send({ type: 'candidate', id: '0' });
     await flush();
     expect(host.view!.model.paper).toEqual(paper);
-    host.add.mockResolvedValue({ title: 'Original title' });
+    host.add.mockResolvedValue({
+      itemID: 22,
+      attachmentID: null,
+      title: 'Original title',
+      reused: false,
+    });
     ui.send({ type: 'add' });
     await flush();
     expect(host.add).toHaveBeenCalledWith(paper, 4, expect.any(Function));
@@ -529,6 +539,128 @@ describe('contextual references', () => {
     ui.send({ type: 'match', id: '0' });
     await flush();
     expect(host.open).toHaveBeenCalledWith(23);
+    expect(host.view!.disposed).toBe(true);
+    expect(ui.restoreFocus).not.toHaveBeenCalled();
+    ui.controller.dispose();
+  });
+});
+
+describe('local reference handoff', () => {
+  it.each([
+    { reused: false, label: 'Created item' },
+    { reused: true, label: 'Reused existing item' },
+  ])(
+    'shows a precise $label receipt with an explicit local PDF entry',
+    async ({ reused, label }) => {
+      const ui = setup();
+      host.lookup.mockResolvedValue({ kind: 'found', paper });
+      host.add.mockResolvedValue({ itemID: 22, attachmentID: 23, title: paper.title, reused });
+      await ui.openEntry();
+      ui.send({ type: 'metadata' });
+      await flush();
+      ui.send({ type: 'add' });
+      await flush();
+      expect(host.view!.model.scene).toBe('local');
+      expect(host.view!.model.status).toContain(label);
+      expect(host.view!.model.rows).toEqual([{ id: '0', label: `${paper.title} (PDF)` }]);
+      expect(host.find).not.toHaveBeenCalled();
+      expect(host.open).not.toHaveBeenCalled();
+      expect(ui.restoreFocus).not.toHaveBeenCalled();
+      ui.send({ type: 'match', id: '0' });
+      await flush();
+      expect(host.open).toHaveBeenCalledWith(23);
+      expect(ui.restoreFocus).not.toHaveBeenCalled();
+      ui.controller.dispose();
+    },
+  );
+
+  it('states when the saved item has no local PDF and never opens it implicitly', async () => {
+    const ui = setup();
+    host.lookup.mockResolvedValue({ kind: 'found', paper });
+    host.add.mockResolvedValue({
+      itemID: 22,
+      attachmentID: null,
+      title: paper.title,
+      reused: false,
+    });
+    await ui.openEntry();
+    ui.send({ type: 'metadata' });
+    await flush();
+    ui.send({ type: 'add' });
+    await flush();
+    expect(host.view!.model.status).toContain('Created item');
+    expect(host.view!.model.result).toBe('No local PDF available.');
+    ui.send({ type: 'match', id: '0' });
+    await flush();
+    expect(host.open).not.toHaveBeenCalled();
+    expect(host.view!.disposed).toBe(false);
+    ui.controller.dispose();
+  });
+
+  it.each([false, new Error('PDF removed')])(
+    'keeps unavailable local opening in the originating panel without focus restoration',
+    async (result) => {
+      const ui = setup();
+      host.find.mockResolvedValue([{ itemID: 22, attachmentID: 23, title: 'Local' }]);
+      if (result instanceof Error) host.open.mockRejectedValue(result);
+      else host.open.mockResolvedValue(result);
+      await ui.openEntry();
+      ui.send({ type: 'local' });
+      await flush();
+      ui.send({ type: 'match', id: '0' });
+      await flush();
+      expect(host.view!.model.status).toContain(
+        result instanceof Error ? 'PDF removed' : 'No local PDF available.',
+      );
+      expect(host.view!.disposed).toBe(false);
+      expect(ui.restoreFocus).not.toHaveBeenCalled();
+      ui.send({ type: 'close' });
+      expect(ui.restoreFocus).toHaveBeenCalledOnce();
+      ui.controller.dispose();
+    },
+  );
+
+  it('rejects a local opening when the source retires during admission', async () => {
+    const pending = Promise.withResolvers<boolean>();
+    let delayed = false;
+    host.read.mockResolvedValue({
+      ...source(),
+      validate: () => (delayed ? pending.promise : Promise.resolve(true)),
+    });
+    host.find.mockResolvedValue([{ itemID: 22, attachmentID: 23, title: 'Local' }]);
+    const ui = setup();
+    await ui.openEntry();
+    ui.send({ type: 'local' });
+    await flush();
+    delayed = true;
+    ui.send({ type: 'match', id: '0' });
+    ui.retire();
+    pending.resolve(true);
+    await flush();
+    expect(host.open).not.toHaveBeenCalled();
+    expect(ui.restoreFocus).not.toHaveBeenCalled();
+    ui.controller.dispose();
+  });
+
+  it('ignores a late local-opening failure after a newer panel opens', async () => {
+    const pending = Promise.withResolvers<boolean>();
+    host.open.mockReturnValue(pending.promise);
+    host.find.mockResolvedValue([{ itemID: 22, attachmentID: 23, title: 'Local' }]);
+    const ui = setup();
+    await ui.openEntry();
+    ui.send({ type: 'local' });
+    await flush();
+    ui.send({ type: 'match', id: '0' });
+    await flush();
+    ui.controller.open();
+    await flush();
+    const newer = host.view!;
+    pending.reject(new Error('late failure'));
+    await flush();
+    expect(newer.disposed).toBe(false);
+    expect(newer.model.scene).toBe('catalog');
+    expect(newer.model.status).toBe('');
+    expect(ui.restoreFocus).not.toHaveBeenCalled();
     ui.controller.dispose();
   });
 });
@@ -711,6 +843,7 @@ it('keeps the invocation anchor when activating its pane dismisses the native pr
       window: ui.window,
       isCurrent: () => true,
       jump: ui.jump,
+      openAttachment: host.open,
       restoreFocus: ui.restoreFocus,
     };
   });

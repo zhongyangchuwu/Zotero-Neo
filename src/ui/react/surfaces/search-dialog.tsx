@@ -13,13 +13,16 @@ export const SEARCH_DIALOG_REACT_CSS = `
 .neo-search-controls { display:flex; gap:8px; flex-wrap:wrap; }
 .neo-search-controls input { flex:1; min-width:160px; color:var(--zotero-neo-text) !important; background:var(--zotero-neo-input) !important; }
 .neo-search-controls input::placeholder { color:var(--zotero-neo-muted) !important; opacity:1; }
-.neo-search-content { display:flex; flex-wrap:wrap; gap:12px; flex:1; min-height:0; }
-.neo-search-results { flex:1 1 250px; overflow:auto; min-height:80px; }
+.neo-search-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); grid-template-rows:minmax(0,1fr); gap:12px; flex:1; min-height:0; overflow:hidden; }
+.neo-search-results { overflow:auto; min-width:0; min-height:0; }
 .neo-search-row { padding:10px; white-space:pre-wrap; overflow-wrap:anywhere; cursor:pointer; border-bottom:1px solid var(--zotero-neo-border); }
 .neo-search-row[aria-selected="true"] { background:var(--zotero-neo-selected); }
-.neo-search-preview { flex:2 1 300px; overflow:auto; min-height:100px; }
+.neo-search-preview { overflow:auto; min-width:0; min-height:0; }
 .neo-search-preview img { display:block; width:100%; height:auto; }
 .neo-search-preview pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+@media (max-width:720px) {
+  .neo-search-content { grid-template-columns:minmax(0,1fr); grid-template-rows:repeat(2,minmax(0,1fr)); }
+}
 `;
 
 export function mountSearchDialogReactView(

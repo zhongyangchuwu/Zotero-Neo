@@ -1,5 +1,5 @@
 import type { PreferenceStore } from '../../core/preference-store';
-import type { SourceNoteTarget } from '../../core/source-note';
+import type { SourceNoteReceipt, SourceNoteTarget } from '../../core/source-note';
 import { escapeHTML } from '../../core/html';
 import { documentExcerpts, type DocumentExcerpt } from '../../document-analysis/excerpts';
 import { readReaderDocument, type ReaderDocumentSnapshot } from '../../reader/document-cache';
@@ -10,6 +10,7 @@ import { copyRichClipboard } from '../../platform/clipboard';
 import { documentTableClipboard } from '../../platform/document-markup';
 import { createSourceNote } from '../../operations/source-note';
 import { isDeadObject } from '../../platform/cross-compartment';
+import { sourceNoteIdentity } from '../../platform/note-relations';
 import { SearchDialog } from '../../ui/search-dialog';
 
 export interface ReaderObjectExcerptHost {
@@ -17,6 +18,7 @@ export interface ReaderObjectExcerptHost {
   readonly preferences: PreferenceStore;
   readonly target: () => SourceNoteTarget | null;
   readonly captureView: (window: PdfWindow) => () => boolean;
+  readonly openNote: (receipt: SourceNoteReceipt, window: PdfWindow) => Promise<boolean>;
   readonly isCurrent: () => boolean;
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly text: (key: string) => string;
@@ -137,20 +139,52 @@ export class ReaderObjectExcerpts {
       this.#host.showStatus(text('copiedStructure'));
       return true;
     };
-    const save = async (target: DocumentExcerpt): Promise<boolean> => {
-      const prepared = await admitted(target);
-      await createSourceNote(noteTarget, {
-        sourceFingerprint: source!.parsed.sourceFingerprint,
-        title:
+    const saved = new Map<string, SourceNoteReceipt>();
+    const save = async (target: DocumentExcerpt): Promise<{ readonly status: string }> => {
+      try {
+        const prepared = await admitted(target);
+        const title =
           `${target.label ? `${text(target.kind)} ${target.label}` : target.kind === 'formula' ? `${text('formula')} · ${target.locations[0]!.pageIndex + 1}` : name(target).slice(0, 80)} · ${sourceTitle}`.slice(
             0,
             180,
+          );
+        const receipt = await createSourceNote(noteTarget, {
+          sourceFingerprint: source!.parsed.sourceFingerprint,
+          identity: sourceNoteIdentity(
+            JSON.stringify([
+              'reader-object-excerpt',
+              source!.parsed.sourceFingerprint,
+              target.kind,
+              target.part,
+              target.locations,
+              target.caption,
+            ]),
           ),
-        html: markup(prepared, true),
-        images: prepared.images.map((i) => i.dataURL),
-      });
-      if (current()) this.#host.showStatus(text('saved'));
-      return true;
+          title,
+          html: markup(prepared, true),
+          images: prepared.images.map((image) => image.dataURL),
+        });
+        if (current()) saved.set(target.id, receipt);
+        return { status: `${text(receipt.reused ? 'reused' : 'created')}: ${title}` };
+      } catch (error) {
+        this.#host.debug(`Reader object excerpt save failed: ${String(error)}`);
+        return { status: text('saveFailed') };
+      }
+    };
+    const openNote = async (
+      target: DocumentExcerpt,
+    ): Promise<boolean | { readonly status: string }> => {
+      const receipt = saved.get(target.id);
+      if (!receipt || !current()) return false;
+      try {
+        if (await this.#host.openNote(receipt, window)) {
+          if (this.#revision === revision) this.close();
+          return true;
+        }
+      } catch (error) {
+        this.#host.debug(`Reader object excerpt note unavailable: ${String(error)}`);
+      }
+      return { status: text('noteUnavailable') };
     };
     const originalFocus = window.document.activeElement as HTMLElement | null;
     this.#dialog.open({
@@ -236,6 +270,11 @@ export class ReaderObjectExcerpts {
           available: (target) => !!target.structures.length,
         },
         { label: text('save'), run: save },
+        {
+          label: text('openNote'),
+          run: openNote,
+          available: (target) => saved.has(target.id),
+        },
       ],
       debug: (error) => this.#host.debug(`Reader object excerpt failed: ${String(error)}`),
     });

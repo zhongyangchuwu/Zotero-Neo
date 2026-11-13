@@ -18,8 +18,9 @@ import { itemRowText } from './item-row';
 import { mountNativeReactView } from '../../platform/native-ui';
 import type { PickerReactCommand, PickerReactModel } from './react-model';
 import { createCommandsProvider } from './providers/commands';
+import { actionText, t, type AppLanguage } from '../../i18n';
+import type { ActionId } from '../../input/actions';
 
-import { ACTION_LABELS, type ActionId } from '../../input/actions';
 import { DEFAULT_BINDINGS, type BindingContext, type BindingMap } from '../../input/bindings';
 import { LocalBindingRuntime } from '../../input/local-binding-runtime';
 import { nativeReservation, shortcutsForAction } from '../../input/shortcut-catalog';
@@ -28,6 +29,46 @@ import { serializeBindingTokens } from '../../input/key-sequence';
 import { PICKER_INPUT_ACTIONS, PICKER_LIST_ACTIONS } from './action-capabilities';
 type HandledKey = KeyboardEvent & { _zvPickerHandled?: boolean };
 const H = 'http://www.w3.org/1999/xhtml';
+
+interface PickerFocusSnapshot {
+  readonly window: Window | null;
+  readonly document: Document;
+  readonly element: Element | null;
+  readonly outerElement: Element | null;
+}
+
+/** Read native focus without retaining a dead content-window wrapper. */
+function capturePickerFocus(document: Document): PickerFocusSnapshot | null {
+  try {
+    const window = (Services.focus?.focusedWindow as unknown as Window | null) ?? null;
+    if (window?.closed) return null;
+    const focusedDocument = window?.document ?? document;
+    if (focusedDocument.defaultView === null || focusedDocument.defaultView?.closed) return null;
+    return {
+      window,
+      document: focusedDocument,
+      element: focusedDocument.activeElement,
+      outerElement: document.activeElement,
+    };
+  } catch {
+    // A content frame can retire between the native focus lookup and document access.
+    return null;
+  }
+}
+
+function samePickerFocus(
+  before: PickerFocusSnapshot | null,
+  after: PickerFocusSnapshot | null,
+): boolean {
+  return Boolean(
+    before &&
+      after &&
+      before.window === after.window &&
+      before.document === after.document &&
+      before.element === after.element &&
+      before.outerElement === after.outerElement,
+  );
+}
 
 function pickerRowFromEvent(event: Event, results: HTMLElement): HTMLElement | null {
   const target = asElement(event.target);
@@ -60,6 +101,7 @@ export class FuzzyPicker {
   readonly #mouseEnabled: () => boolean;
   readonly #bindings: () => BindingMap;
   readonly #isSessionCurrent: (session: MainWindowSession) => boolean;
+  readonly #language: () => AppLanguage;
   readonly #sessions = new WeakSet<MainWindowSession>();
 
   constructor(
@@ -68,12 +110,14 @@ export class FuzzyPicker {
     mouseEnabled: () => boolean = () => false,
     bindings: () => BindingMap = () => DEFAULT_BINDINGS,
     isSessionCurrent: (session: MainWindowSession) => boolean,
+    language: () => AppLanguage = () => 'en',
   ) {
     this.#logger = logger;
     this.#navigation = navigation;
     this.#mouseEnabled = mouseEnabled;
     this.#bindings = bindings;
     this.#isSessionCurrent = isSessionCurrent;
+    this.#language = language;
   }
 
   async open(
@@ -100,6 +144,9 @@ export class FuzzyPicker {
       session.picker.onClose = options.onClose ?? null;
       session.picker.queue = Promise.resolve();
       const doc = window.document;
+      const initialFocus = capturePickerFocus(doc);
+      const previousElement = initialFocus?.element ?? doc.activeElement;
+      const focusedWindow = initialFocus?.window ?? null;
       const create = (tag: string): HTMLElement => doc.createElementNS(H, tag);
       const overlay = create('div');
       overlay.id = 'zv-picker-overlay';
@@ -112,7 +159,6 @@ export class FuzzyPicker {
       (doc.body ?? doc.documentElement).append(overlay);
       const themeCleanup = session.theme.add(overlay);
       orphanThemeCleanup = themeCleanup;
-      const focusedWindow = Services.focus?.focusedWindow as unknown as Window | null;
       Object.assign(session.picker, {
         open: true,
         scope,
@@ -121,13 +167,15 @@ export class FuzzyPicker {
         committedQuery: '',
         confirming: false,
         status: '',
-        loadingText: '',
+        loadingText: provider.loadingText || this.text('loading'),
+        loadError: '',
         selected: 0,
+        pendingSelectionID: undefined,
         filtered: [],
         items: [],
         focusPane: provider.initialFocusPane ?? 'search',
         layout: single ? 'single' : 'dual',
-        previousElement: doc.activeElement,
+        previousElement,
         previousWindow: focusedWindow,
         themeCleanup,
       });
@@ -139,8 +187,8 @@ export class FuzzyPicker {
         model: this.viewModel(session),
         dispatch: () => undefined,
         isCurrent: () => this.isCurrent(session, generation),
-        loadingText: provider.loadingText ?? 'Loading…',
-        errorText: 'Unable to open picker.',
+        loadingText: provider.loadingText || this.text('loading'),
+        errorText: this.text('openFailed'),
         onError: (error) => this.failure('picker React view', error),
       });
       session.picker.view = view;
@@ -186,7 +234,6 @@ export class FuzzyPicker {
       const inputHandler = (event: Event): void => {
         if (!this.isCurrent(session, generation)) return;
         if (!isCommittedInput(event, session.picker.composition.active)) return;
-        session.picker.selected = 0;
         session.picker.committedQuery = input.value;
         this.filter(session, input.value);
       };
@@ -261,7 +308,11 @@ export class FuzzyPicker {
       };
       const sourceRevision = ++session.picker.sourceRevision;
       window.setTimeout(() => {
-        if (!this.isCurrent(session, generation)) return;
+        if (
+          !this.isCurrent(session, generation) ||
+          !samePickerFocus(initialFocus, capturePickerFocus(doc))
+        )
+          return;
         this.focusPane(session, session.picker.provider?.initialFocusPane ?? 'search');
       }, 30);
       await this.loadSource(session, provider, generation, sourceRevision);
@@ -295,7 +346,7 @@ export class FuzzyPicker {
         session.picker.generation === generation + 1 &&
         !session.picker.open
       ) {
-        this.#navigation.status(session, `✗ Unable to open ${scope} picker`);
+        this.#navigation.status(session, `✗ ${this.text('openFailed')}`);
       }
     }
   }
@@ -332,17 +383,62 @@ export class FuzzyPicker {
     cleanup.run(() => view?.dispose());
     cleanup.run(() => themeCleanup?.());
     cleanup.run(() => overlay?.remove());
+    let focusBeforeClose: PickerFocusSnapshot | null = null;
+    cleanup.run(() => {
+      if (overlay) focusBeforeClose = capturePickerFocus(overlay.ownerDocument);
+    });
     cleanup.run(() => onClose?.(reason));
     cleanup.run(() => {
+      const currentElement = overlay?.ownerDocument.activeElement;
+      const currentFocus = overlay ? capturePickerFocus(overlay.ownerDocument) : null;
+      const closeHandedOffFocus =
+        onClose &&
+        focusBeforeClose &&
+        currentFocus &&
+        !samePickerFocus(focusBeforeClose, currentFocus) &&
+        (currentFocus.window !== focusBeforeClose.window ||
+          currentFocus.document !== focusBeforeClose.document ||
+          (currentFocus.element &&
+            currentFocus.element !== currentFocus.document.body &&
+            currentFocus.element !== currentFocus.document.documentElement));
+      const focusedWindow = Services.focus?.focusedWindow as unknown as Window | null;
+      const destinationWindowFocused =
+        reason === 'confirm' &&
+        focusedWindow &&
+        !focusedWindow.closed &&
+        focusedWindow.document &&
+        focusedWindow.document !== overlay?.ownerDocument;
+      const destinationFocused =
+        reason === 'confirm' &&
+        currentElement !== activeElement &&
+        currentElement &&
+        currentElement !== overlay?.ownerDocument.body &&
+        currentElement !== overlay?.ownerDocument.documentElement;
       if (
         !restoreFocus ||
+        closeHandedOffFocus ||
+        destinationFocused ||
+        destinationWindowFocused ||
         picker.generation !== retiredGeneration ||
         picker.open ||
         !this.#isSessionCurrent(session)
       )
         return;
-      if (previousElement?.isConnected) (previousElement as HTMLElement).focus();
-      else previousWindow?.focus();
+      const previousDocument = previousElement?.ownerDocument ?? previousWindow?.document;
+      if (
+        previousWindow?.closed ||
+        previousDocument?.defaultView === null ||
+        previousDocument?.defaultView?.closed ||
+        (previousWindow?.document &&
+          previousDocument &&
+          previousWindow.document !== previousDocument) ||
+        (previousElement && !previousElement.isConnected)
+      )
+        return;
+      if (previousElement?.isConnected) {
+        previousWindow?.focus();
+        (previousElement as HTMLElement).focus();
+      } else previousWindow?.focus();
     });
     cleanup.run(() => this.trace(`picker close scope=${scope}`));
     this.reportCleanupFailure('picker close cleanup', cleanup);
@@ -456,7 +552,12 @@ export class FuzzyPicker {
     return true;
   }
 
-  private filter(session: MainWindowSession, query: string): void {
+  private filter(
+    session: MainWindowSession,
+    query: string,
+    selectedID = session.picker.pendingSelectionID ??
+      session.picker.filtered[session.picker.selected]?.id,
+  ): void {
     const startedAt = Date.now();
     const provider = session.picker.provider;
     if (provider?.query) {
@@ -465,24 +566,21 @@ export class FuzzyPicker {
         provider,
         session.picker.generation,
         session.picker.sourceRevision,
+        selectedID,
       );
       return;
     }
     if (provider?.filterItems) {
       const filtered = provider.filterItems(session.picker.items, query).slice(0, 100);
-      session.picker.filtered = filtered;
-      session.picker.selected = Math.max(
-        0,
-        Math.min(session.picker.selected, Math.max(0, filtered.length - 1)),
-      );
-      this.render(session);
+      this.replaceResults(session, filtered, selectedID);
       this.traceSlowFilter(session, query, filtered.length, startedAt);
       return;
     }
     const needle = query.trim();
     let matches = session.picker.items.length;
+    let filtered: PickerItem[];
     if (!needle) {
-      session.picker.filtered = session.picker.items.slice(0, 100);
+      filtered = session.picker.items.slice(0, 100);
     } else {
       const ranked: Array<{ item: PickerItem; score: number }> = [];
       matches = 0;
@@ -502,14 +600,23 @@ export class FuzzyPicker {
         ranked.splice(start, 0, { item, score });
         if (ranked.length > 100) ranked.pop();
       }
-      session.picker.filtered = ranked.map(({ item }) => item);
+      filtered = ranked.map(({ item }) => item);
     }
+    this.replaceResults(session, filtered, selectedID);
+    this.traceSlowFilter(session, query, matches, startedAt);
+  }
+
+  private replaceResults(
+    session: MainWindowSession,
+    filtered: PickerItem[],
+    selectedID = session.picker.filtered[session.picker.selected]?.id,
+  ): void {
+    session.picker.filtered = filtered;
     session.picker.selected = Math.max(
       0,
-      Math.min(session.picker.selected, Math.max(0, session.picker.filtered.length - 1)),
+      filtered.findIndex((item) => item.id === selectedID),
     );
     this.render(session);
-    this.traceSlowFilter(session, query, matches, startedAt);
   }
 
   private moveSelection(session: MainWindowSession, direction: -1 | 1): void {
@@ -519,6 +626,7 @@ export class FuzzyPicker {
   }
 
   private selectRow(session: MainWindowSession, index: number): void {
+    if (session.picker.loadingText || session.picker.loadError) return;
     if (index < 0 || index >= session.picker.filtered.length) return;
     session.picker.selected = index;
     this.render(session);
@@ -536,10 +644,13 @@ export class FuzzyPicker {
       placeholder: provider?.placeholder ?? '',
       sourceLabel: provider?.alternateSource?.label ?? null,
       sourceDisabled: picker.confirming || picker.composition.active,
-      count:
-        provider?.countText?.(picker.filtered.length, picker.items.length) ??
-        `${picker.filtered.length}/${picker.items.length}`,
-      rows: picker.filtered.map((row, index) => ({
+      count: picker.loadingText
+        ? picker.loadingText
+        : picker.loadError
+          ? '—'
+          : (provider?.countText?.(picker.filtered.length, picker.items.length) ??
+            `${picker.filtered.length}/${picker.items.length}`),
+      rows: (picker.loadError ? [] : picker.filtered).map((row, index) => ({
         text: provider?.rowText(row, index) ?? fuzzyPickerRowText(row, index, picker.scope),
         boundary: Boolean(
           row.group &&
@@ -549,10 +660,15 @@ export class FuzzyPicker {
       })),
       selected: picker.selected,
       empty:
-        picker.loadingText || provider?.emptyText?.(picker.committedQuery.trim()) || 'No results',
+        picker.loadingText ||
+        picker.loadError ||
+        provider?.emptyText?.(picker.committedQuery.trim()) ||
+        this.text('empty'),
       loading: Boolean(picker.loadingText),
-      previewTitle: item ? (preview?.title ?? item.title) || '(untitled)' : 'Preview',
-      previewBody: item ? (preview?.body ?? item.title) : 'No result selected.',
+      previewTitle: item
+        ? (preview?.title ?? item.title) || this.text('untitled')
+        : this.text('preview'),
+      previewBody: item ? (preview?.body ?? item.title) : this.text('noSelection'),
       queryHelp: provider?.help
         ? [provider.help.query, queryHelp].filter(Boolean).join(' · ')
         : picker.focusPane === 'search'
@@ -573,21 +689,23 @@ export class FuzzyPicker {
 
   private admitConfirmation(session: MainWindowSession, openInWindow: boolean): void {
     const picker = session.picker;
-    if (picker.confirming || picker.composition.active) return;
+    if (picker.confirming || picker.composition.active || picker.loadingText || picker.loadError)
+      return;
     const candidate = picker.filtered[picker.selected];
     const provider = picker.provider;
     if (!candidate || !provider) return;
     // Admission is synchronous: later previews and repeated activation cannot change this target.
     const itemID = candidate.id;
-    const itemTitle = candidate.title || '(untitled)';
+    const itemTitle = candidate.title || this.text('untitled');
     const generation = picker.generation;
     const sourceRevision = picker.sourceRevision;
+    const queryRevision = picker.queryRevision;
     const confirm = picker.confirm;
     const closeBeforeConfirm = picker.closeBeforeConfirm;
     const scope = picker.scope;
     picker.confirming = true;
     this.refreshSource(session);
-    this.setOperationStatus(session, `Confirming “${itemTitle}”…`);
+    this.setOperationStatus(session, this.text('confirming').replace('{title}', itemTitle));
     picker.queue = picker.queue
       .catch(() => undefined)
       .then(async () => {
@@ -595,9 +713,13 @@ export class FuzzyPicker {
           this.trace(`picker action discarded action=select result generation=${generation}`);
           return;
         }
+        if (picker.queryRevision !== queryRevision || picker.loadingText || picker.loadError) {
+          this.setOperationStatus(session, this.text('resultUnavailable'));
+          return;
+        }
         const item = picker.filtered.find((candidate) => candidate.id === itemID);
         if (!item) {
-          this.setOperationStatus(session, 'Result is no longer available. Select another result.');
+          this.setOperationStatus(session, this.text('resultUnavailable'));
           return;
         }
         this.trace('picker action start action=select result');
@@ -635,11 +757,18 @@ export class FuzzyPicker {
             picker.items = [];
             picker.filtered = [];
             picker.selected = 0;
-            this.render(session);
+            picker.pendingSelectionID = undefined;
+            picker.loadingText = picker.provider?.loadingText || this.text('loading');
           }
           this.refreshSource(session);
           this.setOperationStatus(session, continuation.message ?? '');
-          this.focusPane(session, 'search');
+          let focusOwner = picker.overlay?.ownerDocument.activeElement;
+          while (focusOwner && focusOwner !== picker.overlay) focusOwner = focusOwner.parentElement;
+          if (
+            (continuation.source || continuation.query !== undefined) &&
+            focusOwner === picker.overlay
+          )
+            this.focusPane(session, 'search');
           // The mutation is complete. A supersedable display refresh must not own admission.
           void this.loadSource(session, picker.provider!, generation, picker.sourceRevision);
         } else {
@@ -648,7 +777,9 @@ export class FuzzyPicker {
       })
       .catch((error) => {
         this.failure(`picker confirm scope=${scope}`, error);
-        const message = `Unable to confirm “${itemTitle}”: ${String(error).slice(0, 160)}`;
+        const message = this.text('confirmFailed')
+          .replace('{title}', itemTitle)
+          .replace('{error}', String(error).slice(0, 160));
         if (this.isCurrentSource(session, generation, sourceRevision, provider))
           this.setOperationStatus(session, message);
         else if (closeBeforeConfirm && !picker.open && picker.generation === generation + 1)
@@ -681,6 +812,7 @@ export class FuzzyPicker {
     const alternate = picker.provider?.alternateSource;
     if (!alternate) return;
     try {
+      const selectedID = picker.pendingSelectionID ?? picker.filtered[picker.selected]?.id;
       const provider = alternate.provider();
       picker.localBindings?.deactivate();
       picker.provider = provider;
@@ -688,13 +820,14 @@ export class FuzzyPicker {
       picker.items = [];
       picker.filtered = [];
       picker.selected = 0;
-      this.setOperationStatus(session, '');
-      this.refreshSource(session);
-      this.render(session);
-      void this.loadSource(session, provider, picker.generation, sourceRevision);
+      picker.status = '';
+      void this.loadSource(session, provider, picker.generation, sourceRevision, selectedID);
     } catch (error) {
       this.failure(`picker switch source scope=${picker.scope}`, error);
-      this.setOperationStatus(session, `Unable to switch source: ${String(error).slice(0, 160)}`);
+      this.setOperationStatus(
+        session,
+        this.text('switchFailed').replace('{error}', String(error).slice(0, 160)),
+      );
     }
   }
 
@@ -703,17 +836,18 @@ export class FuzzyPicker {
     provider: PickerProvider,
     generation: number,
     sourceRevision: number,
+    selectedID = session.picker.pendingSelectionID ??
+      session.picker.filtered[session.picker.selected]?.id,
   ): Promise<void> {
     const scope = session.picker.scope;
     const loadStartedAt = Date.now();
     const queryRevision = ++session.picker.queryRevision;
     const query = session.picker.committedQuery;
-    if (provider.query) {
-      session.picker.items = [];
-      session.picker.filtered = [];
-      this.render(session);
-    }
-    session.picker.loadingText = provider.loadingText ?? '';
+    session.picker.pendingSelectionID = selectedID;
+    if (session.picker.loadError) session.picker.status = '';
+    session.picker.loadError = '';
+    // Keep the previous identity/preview while loading, but never admit an outdated result.
+    session.picker.loadingText = provider.loadingText || this.text('loading');
     this.render(session);
     try {
       const items = await (provider.query ? provider.query(query) : provider.load());
@@ -727,15 +861,11 @@ export class FuzzyPicker {
       session.picker.loadingText = '';
       session.picker.items = items;
       if (provider.query) {
-        session.picker.filtered = items.slice(0, 100);
-        session.picker.selected = Math.max(
-          0,
-          Math.min(session.picker.selected, Math.max(0, session.picker.filtered.length - 1)),
-        );
-        this.render(session);
+        this.replaceResults(session, items.slice(0, 100), selectedID);
       } else {
-        this.filter(session, session.picker.committedQuery);
+        this.filter(session, session.picker.committedQuery, selectedID);
       }
+      session.picker.pendingSelectionID = undefined;
       this.trace(
         `picker loaded scope=${scope} items=${items.length} duration=${Date.now() - loadStartedAt}ms`,
       );
@@ -748,8 +878,12 @@ export class FuzzyPicker {
         return;
       }
       this.failure(`picker load scope=${scope}`, error);
-      session.picker.loadingText = ' ';
-      this.setOperationStatus(session, `Error loading ${scope}: ${String(error).slice(0, 160)}`);
+      session.picker.loadingText = '';
+      session.picker.loadError = this.text('unavailable');
+      this.setOperationStatus(
+        session,
+        this.text('loadFailed').replace('{error}', String(error).slice(0, 160)),
+      );
     }
   }
 
@@ -863,6 +997,7 @@ export class FuzzyPicker {
     picker.view = null;
     picker.status = '';
     picker.loadingText = '';
+    picker.loadError = '';
     picker.overlay = null;
     picker.input = null;
     picker.composition.active = false;
@@ -881,6 +1016,7 @@ export class FuzzyPicker {
     picker.items = [];
     picker.filtered = [];
     picker.selected = 0;
+    picker.pendingSelectionID = undefined;
     picker.provider = null;
     picker.confirm = null;
     picker.closeBeforeConfirm = false;
@@ -901,13 +1037,17 @@ export class FuzzyPicker {
     }
   }
 
+  private text(key: string): string {
+    return t(`picker.${key}`, this.#language());
+  }
+
   private shortcutReference(context: BindingContext): string {
     const actions = context === 'picker-input' ? PICKER_INPUT_ACTIONS : PICKER_LIST_ACTIONS;
     const bindings = this.#bindings();
     return actions
       .flatMap((action) => {
         const keys = shortcutsForAction(bindings, context, action);
-        return keys.length ? [`${keys.join('/')} ${ACTION_LABELS[action].en}`] : [];
+        return keys.length ? [`${keys.join('/')} ${actionText(action, this.#language())}`] : [];
       })
       .join(' · ');
   }

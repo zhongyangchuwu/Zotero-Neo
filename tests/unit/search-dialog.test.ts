@@ -127,6 +127,40 @@ describe('query dialog lifetime', () => {
     expect(action).toHaveBeenCalledExactlyOnceWith('beta');
     expect(view.disposed).toBe(true);
   });
+  it('keeps a saved result open and enables its explicit follow-up without restoring focus', async () => {
+    const t = harness();
+    let saved = false;
+    t.dialog.open({
+      ...t.options,
+      confirm: async () => {
+        saved = true;
+        return { status: 'Saved note' };
+      },
+      actions: [
+        {
+          label: 'Open note',
+          available: () => saved,
+          run: async () => {
+            t.dialog.close(false);
+            return true;
+          },
+        },
+      ],
+    });
+    await Promise.resolve();
+    const view = host.views[0]!;
+    expect(view.model.actions[0]?.disabled).toBe(true);
+    t.key('Enter');
+    await Promise.resolve();
+    expect(view.disposed).toBe(false);
+    expect(view.model.status).toBe('Saved note');
+    expect(view.model.actions[0]?.disabled).toBe(false);
+    expect(t.restoreFocus).not.toHaveBeenCalled();
+    view.dispatch({ type: 'action', index: 0 });
+    await Promise.resolve();
+    expect(view.disposed).toBe(true);
+    expect(t.restoreFocus).not.toHaveBeenCalled();
+  });
   it('contains a late source load after cancellation without navigation', async () => {
     const t = harness();
     const pending = Promise.withResolvers<{ items: string[] }>();
