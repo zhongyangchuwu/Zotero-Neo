@@ -2,7 +2,7 @@ import type { SourceNoteDraft, SourceNoteReceipt, SourceNoteTarget } from '../co
 import { analysisPDF } from '../platform/document-analysis';
 import { pngBlob } from '../platform/image-data';
 import { escapeHTML } from '../core/html';
-import { relatedSourceNotes, SOURCE_NOTE_IDENTITY_PREFIX } from '../platform/note-relations';
+import { isSourceNoteIdentity, relatedSourceNotes } from '../platform/note-relations';
 
 const pendingNotes = new Map<string, Promise<SourceNoteReceipt>>();
 
@@ -12,11 +12,7 @@ export async function createSourceNote(
   draft: SourceNoteDraft,
 ): Promise<SourceNoteReceipt> {
   if (!draft.identity) return writeSourceNote(target, draft);
-  if (
-    !draft.identity.startsWith(SOURCE_NOTE_IDENTITY_PREFIX) ||
-    !/^[a-f0-9]{32}$/u.test(draft.identity.slice(SOURCE_NOTE_IDENTITY_PREFIX.length))
-  )
-    throw new Error('Invalid note identity');
+  if (!isSourceNoteIdentity(draft.identity)) throw new Error('Invalid note identity');
   const key = `${target.attachment.itemID}:${target.parent?.itemID ?? ''}:${draft.identity}`;
   const previous = pendingNotes.get(key);
   const task = (previous ?? Promise.resolve())
@@ -73,14 +69,16 @@ async function writeSourceNote(
   if (pdf.fingerprint !== draft.sourceFingerprint || !(await pdf.isCurrent()))
     throw new Error('Source PDF changed');
   if (!destinationCurrent()) throw new Error('Source note destination changed before save');
+  const sourceURI = Zotero.URI.getItemURI(source);
   if (draft.identity) {
-    const existing = (await relatedSourceNotes(draft.identity)).find(
+    const existing = (await relatedSourceNotes(sourceURI)).find(
       (note) =>
         !note.deleted &&
         note.isNote() &&
         note.libraryID === source.libraryID &&
         (note.parentID || null) === (target.parent?.itemID ?? null) &&
-        note.getRelationsByPredicate('dc:relation').includes(Zotero.URI.getItemURI(source)),
+        note.hasTag(draft.identity!) &&
+        note.getRelationsByPredicate('dc:relation').includes(sourceURI),
     );
     if (!(await pdf.isCurrent()) || !destinationCurrent())
       throw new Error('Source PDF or destination changed');
@@ -89,8 +87,8 @@ async function writeSourceNote(
   const note = new Zotero.Item('note');
   note.libraryID = source.libraryID;
   if (target.parent) note.parentID = target.parent.itemID;
-  note.addRelation('dc:relation', Zotero.URI.getItemURI(source));
-  if (draft.identity) note.addRelation('dc:relation', draft.identity);
+  note.addRelation('dc:relation', sourceURI);
+  if (draft.identity) note.addTag(draft.identity, 1);
   const schemaVersion = draft.schemaVersion ?? 9;
   let saved = false;
   try {

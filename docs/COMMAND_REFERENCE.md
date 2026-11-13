@@ -26,7 +26,7 @@
 
 ## 模式、焦点与功能可用性
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。12 个内部模块中，九个核心模块固定启用；链接与复制提示（`reader-hints`）、扩展管理面板（`extensions`）和翻译增强（`translation`）是三项可关闭的可选增强，设置见[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。核心模块固定启用；六项可选增强的默认值与依赖见[设置参考](SETTINGS_REFERENCE.md#模块)。关闭模块后，其动作不会出现在当前按键匹配、前缀提示或命令面板中。设置见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |
@@ -44,6 +44,8 @@
 | 选择器结果 | `picker-list` | 支持查询框中的操作，另可在本地聚焦查询框。 |
 | Plugin Manager 筛选框 | `plugins-input` | 仅支持 `uiFocusList`；其默认按键 `Escape` 会将焦点返回结果列表。 |
 | Plugin Manager 结果 | `plugins-list` | 本地上/下项、首项/末项、翻页、搜索、取消及 Plugin Manager 操作。 |
+| 标签页侧栏查询框 | `tabs-input` | 查询文字由原生输入框处理；支持本地导航、确认和将焦点移到结果列表。 |
+| 标签页侧栏列表 | `tabs-list` | 标签页／分组导航、搜索及分组操作；仅在可选模块 `tab-enhancements` 启用时有效。 |
 
 Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范围内条目行的临时选区。Note Insert 是 Note 编辑器的输入上下文。批注评论编辑和原生输入转交属于输入行为，不是 Reader 模式。文本框和正在进行的输入法组合保留原生编辑按键。
 
@@ -63,7 +65,9 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 
 ## 命令面板、重映射与未绑定操作
 
-在 Reader Normal、Main Normal 或 Note Normal 中按 `:` 打开命令面板。搜索可用操作，用 `↑` / `↓` 移动；结果列表获得焦点时也可按 `j` / `k`，或按 `Ctrl+j` / `Ctrl+k` 移动。按 Enter 执行，按 Escape 关闭。面板包含当前可用但没有按键绑定的操作；不接受命令参数或计数，选中的操作只执行一次。
+在 Reader Normal、Main Normal 或 Note Normal 中按 `:` 打开命令面板。搜索可用操作，用 `↑` / `↓` 移动；结果列表获得焦点时也可按 `j` / `k`，或按 `Ctrl+j` / `Ctrl+k` 移动。按 Enter 执行，按 Escape 关闭。面板包含当前可用但没有按键绑定的操作；不接受命令参数或计数，选中的 Neo 操作只执行一次。
+
+安装并启用 Actions & Tags 后，命令面板也列出其已启用且有名称的动作，选择后交由 Actions & Tags 执行；动作和脚本仍在该插件中配置。Main 使用打开面板时的 Neo 选择或当前条目，Reader 优先使用选中的批注，否则使用当前 PDF 附件，Note 使用当前笔记。Actions & Tags 按其菜单约定先调用整批目标，再逐项调用；自定义脚本应按该插件的说明区分 `items` 和 `item`，避免重复操作。未安装、停用或接口不兼容时不显示其动作。
 
 在“设置 → 快捷键”中，可按操作组或上下文筛选，并按本地化名称、ActionId、当前按键或默认按键搜索。结果会标明**默认**、**自定义**或**未绑定**，包括受支持但没有快捷键的操作。
 
@@ -126,6 +130,8 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `organizeChapterNotes` | `<Space>rn` | 预览当前 PDF 已有批注与图表摘录，按章节筛选并显式保存新笔记；相同内容复用已有笔记并保留手工修改。 |
 | `prepareDocuments` | `<Space>ru`（Main／Reader） | 打开增强阅读准备：Main 固定 EffectiveSelection 对应 PDF，Reader 只取当前附件；优先读缓存，显式上传缺失项，显示逐文件进度、回执，支持停止本地等待和继续／重试。 |
 | `compareDocumentParsing` | `<Space>rd` | 打开原生／云端解析对照（默认 MinerU）并读取匹配的本地缓存；普通解析按钮优先复用，缓存未命中时上传 PDF，“重新解析并上传 PDF”明确刷新结果。支持区域／整组定位及报告复制。 |
+| `openReferences` | `<Space>fr` | 打开当前 Reader 的参考文献搜索清单，仅在可选模块 `references` 启用时提供；也可点击工具栏的**查找参考文献**。清单只负责查找和选择文献，引用位置、本地副本与论文详情按当前目标分别呈现；只有显式查询详情时才访问外部来源。操作与限制见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。 |
+| `openAIQA` | `<Space>aa` | 打开当前 Reader 的 AI 问答（实验）面板。打开只读取本地成果和缓存，不请求模型；显式解释选区、提问或准备有限章节证据才会启动相应任务。当前只使用 Reader 选区或有限章节证据；`neo.ai-qa.explain` 在 Reader Select 的选区操作中提供。操作流程见[AI 问答操作指南](READER_GUIDE.md#解释选区和询问论文)，配置与数据范围见[设置参考](SETTINGS_REFERENCE.md)。 |
 | `scrollDown` / `scrollUp` | `j` / `k` | 按设置的步长滚动；计数按倍数增加步长。连续滚动，不记入历史。 |
 | `scrollLeft` / `scrollRight` | `zh` / `zl` | 按设置的步长水平平移；计数按倍数增加步长。 |
 | `halfPageDown` / `halfPageUp` | `<C-d>` / `<C-u>` | 每步移动半个视口；计数会重复执行。 |
@@ -155,7 +161,8 @@ Reader Select 处理符合条件的 PDF 文本选区；Main Select 是可视范�
 | `toggleReaderSplitHorizontal` / `toggleReaderSplitVertical` | `<Space>-` / <code>&lt;Space&gt;&#124;</code> | 切换 Reader 分屏布局。后退/前进不会恢复分屏布局。 |
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开条目/笔记选择器。确认结果以打开它；浏览或取消不会添加历史位置。 |
 | `mainAddByIdentifier` | `<Space>ai` | 将关联的 Library 窗口置前并打开原生标识符录入，不改变该窗口的分类范围。使用该主窗口上下文，而不是 Reader 条目的分类；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)。
-| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 选择已打开的标签页、切换到上一个/下一个标签页，或关闭当前标签页。切换可添加历史记录；每次 `H` / `L` 只切换一个，不受计数影响。关闭标签页不会清除较早的记录。 |
+| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 选择已打开的标签页、切换到上一个/下一个标签页，或关闭当前原生标签页。关闭当前标签页不会把它从已保存分组移除，也不会清除较早历史；切换可添加历史记录，`H` / `L` 每次只切换一个，不受计数影响。 |
+| `tabFocusSidebar` / `tabToggleSidebar` | Main、Reader、Note Normal：`<Space>bb` / `<Space>bt` | 仅在 `tab-enhancements` 启用时提供。`bb` 聚焦侧栏，若已收起会先展开；`bt` 收起或展开侧栏。 |
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | 遍历共享历史记录；快捷键支持计数，命令面板中的操作每次只执行一次。 |
 | `openCommandPalette` / `openNeoSettings` / `managePlugins` | `:` / `<Space>ps` / `<Space>pp` | 打开命令面板、设置或常驻 Plugin Manager。 |
 | `addTag` / `removeTag` / `addToCollection` / `removeFromCollection` | `<Space>ta` / `<Space>tr` / `<Space>ca` / `<Space>cr` | 对当前 Reader 条目执行标签或分类操作。候选项、目标规则和筛选条件见[标签操作与筛选](TAGS.md)。 |
@@ -191,7 +198,7 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
 | `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在翻译增强已启用且上游 API 可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
 Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#批注评论编辑器)。
 
 ## 主窗口
@@ -221,6 +228,7 @@ Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick
 | `mainTrashItems` | `dd`、`x` | Neo 选择集非空时将其中条目移入回收站；否则处理当前临时目标或条目游标所在条目。需要确认。隐藏的选择集成员会阻止操作；取消确认会保留选择集。 |
 | `mainRestoreTrashedItems` | `u` | 恢复 Neo 最近一次移入回收站的条目批次；该批次不可用时操作无效果/失败。 |
 | `mainOpenPDF` | `o` | 仅打开条目游标所在的条目/PDF；不会批量打开 Neo 选择集或 Zotero 原生多选中的条目。 |
+| `mainCreateReadingGroup` / `mainAppendReadingGroup` | `<Space>bc` / `<Space>ba` | 仅在 `tab-enhancements` 启用并重启后有效，且只在 Main Normal 提供。操作开始时固定 Main 有效目标（非空 Neo 选择集优先，否则使用当前 Main 目标）；创建新组或选择现有组，将所选 PDF 保存为关闭的成员，不打开文档或修改 Zotero 标签、分类、元数据。普通条目只有一份可用 PDF 时自动采用，多份需明确选择；缺失、已删除或没有可用 PDF 的目标显示数量并跳过。取消任一步不更改分组；重复导入和目标组已有成员会跳过，不移动现有视图或其他组成员。 |
 | `mainYankCitekey` | `<Space>yy` | 复制 Main 当前有效条目目标的 citekey。任何目标不可用或缺少 citekey 时，剪贴板保持不变。 |
 | `openSearch` | `/` | Main Normal 中要求 Items 获得焦点；会取消临时 Visual 范围，并打开 Neo 内部查找提示框，在可见条目行中搜索。它不是 Zotero Quick Search；后者使用 `mainQuickSearch`（`<Space>fq`）。 |
 | `findNext` / `findPrevious` | `n` / `N` | 条目列表获得焦点时，按已提交的内部查找查询向前/后重复搜索一次；忽略计数。没有查询、未命中或游标未改变时，位置不变。游标改变时可添加历史记录。 |
@@ -228,7 +236,7 @@ Main Normal 命令取决于焦点所在位置：分类树、条目列表、Quick
 | `mainAddByIdentifier` | `<Space>ai` | 为一个可写文库及其当前所选分类打开原生标识符录入；不使用条目目标或 Neo 选择集。跨文库或只读范围不可用；忽略计数。见[通过标识符添加条目](MAIN_GUIDE.md#用-doi、arxiv-id-等添加论文)。
 | `findAllItems` / `findCollectionItems` / `findNotes` | `<Space>ff` / `<Space>fc` / `<Space>fn` | 打开共享的条目/笔记选择器。确认结果时可添加历史位置；浏览或取消不会添加。 |
 | `findCollections` | **未绑定** | Main Normal：在一个文库范围内按名称或完整路径搜索分类。未选定文库范围时，提示 `Choose one library scope to find collections`。浏览或取消不会改变范围；确认后进入该分类，目标变化时可添加共享历史位置。 |
-| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 打开标签页选择器、切换到上一个/下一个打开的标签页，或关闭当前标签页。选择器确认、`H` / `L` 成功切换时会记录位置；`H` / `L` 忽略计数。单独关闭标签页不会记入历史，也不会删除旧记录。 |
+| `switchTab` / `previousTab` / `nextTab` / `closeCurrentTab` | `<Space>,` / `H` / `L` / `<Space>q` | 打开标签页选择器、切换到上一个/下一个打开的标签页，或关闭当前原生标签页。关闭标签页不会移除其保存的分组成员，也不会记入历史或删除旧记录；选择器确认、`H` / `L` 成功切换时会记录位置，`H` / `L` 忽略计数。 |
 | `navigateBack` / `navigateForward` | `<C-o>` / `<C-i>` | 按计数遍历共享历史记录。 |
 | `addTag` / `removeTag` | `<Space>ta` / `<Space>tr` | 对 Main 当前标签操作目标执行操作。目标优先级、同一文库限制和候选项见[标签操作与筛选](TAGS.md)。 |
 | `toggleTagFilter` / `clearTagFilters` | `<Space>tf` / `<Space>tc` | 仅限 Main：切换 Zotero 原生 AND 标签筛选，或清除全部标签筛选。不会记入跳转历史。 |
@@ -323,11 +331,37 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 ### 选区操作、Plugin Manager、设置与 Neo 选择集面板
 
-在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；翻译增强在重启后已应用且 Translate for Zotero 的公开 API 可用时，还会提供“翻译”。准备和状态见[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)。按 `y` 可复制结果。
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；翻译增强已启用且 Translate for Zotero API 可用时还会显示“翻译”。自动结果旁的保存入口见[保存自动译文](SELECTION_GUIDE.md#保存自动翻译的译文)。按 `y` 可复制结果。
 
-按 `<Space>pp` 打开常驻 Plugin Manager，并在其中浏览扩展。在 `plugins-list` 中，默认按 `j` / Down、`k` / Up 移动，按 `gg` / Home 和 `G` / End 跳到首项/末项，按 `Ctrl+d` / `Ctrl+u` 翻页，按 `/` 筛选，按 Escape / `q` 关闭。按 `r` 重新读取列表；选中未安装的 Translate for Zotero 条目后按 `i` 下载并确认安装，选中已安装插件后按 `u` 检查并确认更新。更新使用 Zotero AddonManager，不改动其自动更新策略。Zotero 允许时可按 `e` / `d` 启用或停用扩展；按 `p` 打开已注册设置，按 `o` 打开主页，按 `R` 打开关联的 GitHub README，按 `L` 打开其提交历史。在 `plugins-input` 中，普通输入仍用于查询，按 Escape 返回结果。哪些生命周期操作可用由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
+按 `<Space>pp` 打开常驻 Plugin Manager。在 `plugins-list` 中，默认用 `j` / Down、`k` / Up 移动，`gg` / Home 和 `G` / End 跳到首项／末项，`Ctrl+d` / `Ctrl+u` 翻页，`/` 筛选，Escape / `q` 关闭。`r` 重新读取列表，不检查更新；`i` 经确认安装所选的未安装 Translate 条目；`u` 经确认检查所选已安装插件的更新，再确认安装。Zotero 允许时，`e` / `d` 启用或停用；`p` 打开已注册设置，`o` 打开主页，`R` 打开关联 GitHub README，`L` 打开提交历史。`plugins-input` 中 Escape 返回结果。生命周期能力由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 
 按 `<Space>ps` 打开设置；快捷键修改在点击**应用绑定**前仍是草稿。按 `<Space>ss` 打开 Main 选择集面板：按 `j` / `k` 移动，按 `Home` / `gg` 或 `End` / `G` 跳到首项/末项，按 Enter 在文库中显示条目，按 `x` 将条目从 Neo 选择集中移除，按 `c` 清空选择集，按 `r` 刷新，按 Escape / `q` 关闭。条目不可用时无法显示；显示失败时面板会保持打开。
+
+### 标签页侧栏
+
+`tab-enhancements` 启用后，Main、Reader 和 Note Normal 都可用 `<Space>bb` 聚焦标签页侧栏；侧栏已收起时会先展开。按 `<Space>bt` 收起或展开侧栏。侧栏查询框和结果列表分别使用 `tabs-input` 与 `tabs-list`，可在快捷键设置中按上下文重映射。
+
+| BindingContext | 默认绑定 | ActionId | 操作 |
+| --- | --- | --- | --- |
+| `tabs-input` | `<C-j>`、`<C-n>`、`<Down>` | `uiNext` | 在候选结果中向下移动。 |
+| `tabs-input` | `<C-k>`、`<C-p>`、`<Up>` | `uiPrevious` | 在候选结果中向上移动。 |
+| `tabs-input` | `<Enter>` | `uiConfirm` | 确认当前目标：打开标签页或切换分组展开状态。 |
+| `tabs-input` | `<Esc>` | `uiFocusList` | 将焦点移到结果列表，不会退出侧栏。 |
+| `tabs-list` | `j`、`<Down>` / `k`、`<Up>` | `uiNext` / `uiPrevious` | 在标签页和分组之间移动选择。 |
+| `tabs-list` | `gg`、`<Home>` / `G`、`<End>` | `uiFirst` / `uiLast` | 选择首项／末项。 |
+| `tabs-list` | `<Enter>` | `uiConfirm` | 打开或激活所选标签页；在分组上切换展开状态。 |
+| `tabs-list` | `<Esc>`、`q` | `uiCancel` | 离开侧栏并将焦点交还内容区。 |
+| `tabs-list` | `/` | `uiSearch` | 聚焦查询框。 |
+| `tabs-list` | `a` | `tabCreateGroup` | 新建分组。 |
+| `tabs-list` | `r` | `tabRenameGroup` | 重命名所选分组。 |
+| `tabs-list` | `d`、`<Del>` | `tabCloseEntry` | 关闭当前窗口中所选的 Reader／Note 标签页并移除其成员关系。 |
+| `tabs-list` | `<Space>` | `tabToggleGroup` | 收起或展开所选分组。 |
+| `tabs-list` | `c` | `tabCloseGroup` | 关闭该组在当前窗口中已打开的标签页，保留分组。 |
+| `tabs-list` | `u` | `tabUngroup` | 确认后解散整组；已打开的标签页保持打开。 |
+| `tabs-list` | `x` | `tabRemoveFromGroup` | 将所选单个成员移出分组；若标签页仍打开，不会关闭它。 |
+
+`tabs-input` 和 `tabs-list` 都支持本地导航、确认、取消、焦点切换及分组操作；`tabs-list` 另外支持 `uiSearch`。两个上下文都支持 `uiNextPane` 和 `uiPreviousPane`，但默认未绑定。完整分组操作流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。
+
 
 ## Action ID 索引
 
@@ -418,6 +452,8 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `yankAnnotationComment` | Reader Normal `Y` | 直接复制当前批注目标的评论 |
 | `openCommandPalette` | Reader/Main/Note Normal `:` | 打开当前上下文的命令面板 |
 | `openNeoSettings` | Reader/Main/Note Normal `<Space>ps` | 打开设置界面 |
+| `openAIQA` | Reader Normal `<Space>aa` | 打开当前 Reader 的 AI 问答（实验）面板；仅在可选 `ai-qa` 模块启用后提供 |
+| `openReferences` | Reader Normal `<Space>fr` | 查找当前 Reader 的参考文献，与工具栏**查找参考文献**使用同一搜索清单；仅在可选 `references` 模块启用后提供。操作见[阅读器指南](READER_GUIDE.md#查找和核对参考文献)。 |
 | `findAllItems` | Reader/Main/Note Normal `<Space>ff` | 打开共享文库条目选择器 |
 | `findCollectionItems` | Reader/Main/Note Normal `<Space>fc` | 打开共享分类条目选择器 |
 | `findNotes` | Reader/Main/Note Normal `<Space>fn` | 打开共享 Note 选择器 |
@@ -438,7 +474,17 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `mainYankCitekey` | Reader/Main/Note Normal `<Space>yy` | 根据当前上下文复制 citekey |
 | `mainAddByIdentifier` | Reader/Main Normal `<Space>ai` | 在关联的 Library 窗口中打开 Zotero 原生“通过标识符添加条目”；不使用条目选择集 |
 | `mainOpenPDF` | Main Normal `o`；Note Normal `<Space>o` | 打开 Main 条目游标所在的条目，或 Note 上下文条目 |
-| `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | 关闭当前标签页 |
+| `mainCreateReadingGroup` / `mainAppendReadingGroup` | Main Normal `<Space>bc` / `<Space>ba` | Main-only；确认后打开所选 PDF 并将成功打开的视图加入分组。有效目标在操作开始时固定；多个可用 PDF 必须明确选择。 |
+| `closeCurrentTab` | Reader/Main/Note Normal `<Space>q` | 关闭当前原生标签页并移除其分组成员关系。 |
+| `tabFocusSidebar` | Main/Reader/Note Normal `<Space>bb` | 仅在 `tab-enhancements` 启用时聚焦侧栏；已收起时先展开。 |
+| `tabToggleSidebar` | Main/Reader/Note Normal `<Space>bt` | 仅在 `tab-enhancements` 启用时收起或展开侧栏。 |
+| `tabCreateGroup` | `tabs-list` `a`；`tabs-input` 未绑定 | 在标签页侧栏新建分组。 |
+| `tabRenameGroup` | `tabs-list` `r`；`tabs-input` 未绑定 | 重命名所选分组。 |
+| `tabCloseEntry` | `tabs-list` `d`、`<Del>`；`tabs-input` 未绑定 | 关闭当前窗口中所选的 Reader／Note 标签页并移除成员关系。 |
+| `tabToggleGroup` | `tabs-list` `<Space>`；`tabs-input` 未绑定 | 收起或展开所选分组。 |
+| `tabCloseGroup` | `tabs-list` `c`；`tabs-input` 未绑定 | 关闭该组当前窗口的标签页，保留分组。 |
+| `tabUngroup` | `tabs-list` `u`；`tabs-input` 未绑定 | 确认后解散整组，保留打开的标签页。 |
+| `tabRemoveFromGroup` | `tabs-list` `x`；`tabs-input` 未绑定 | 将单个成员移出分组，不关闭仍打开的标签页。 |
 | `addTag` | Reader/Main/Note Normal `<Space>ta` | 为符合条件的目标添加标签 |
 | `removeTag` | Reader/Main/Note Normal `<Space>tr` | 从符合条件的目标移除标签 |
 | `toggleTagFilter` | Main Normal `<Space>tf` | 切换 Main 的 Zotero 原生标签筛选 |
@@ -490,27 +536,27 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `focusReaderMarks` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rm` | 打开或聚焦 Bookmarks；重复执行后仍停留在该面板。 |
 | `focusReaderAnnotations` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>ra` | 打开或聚焦 Annotations；重复执行后仍停留在该面板。 |
 | `focusReaderThumbnails` | Reader Normal / Outline / Marks / Annotations / Thumbnails `<Space>rt` | 打开或聚焦 Thumbnails；重复执行后仍停留在该面板。 |
-| `uiNext` | Reader Outline / Marks / Annotations / Thumbnails `j`；Picker Input `<C-j>`、`<C-n>`、`<Down>`；Picker List 再加 `j`；Plugins List `j`、`<Down>` | 仅在所列上下文中可配置的下一项操作。 |
-| `uiPrevious` | Reader Outline / Marks / Annotations / Thumbnails `k`；Picker Input `<C-k>`、`<C-p>`、`<Up>`；Picker List 再加 `k`；Plugins List `k`、`<Up>` | 仅在所列上下文中可配置的上一项操作。 |
-| `uiFirst` | Reader Marks `gg`；Plugins List `gg`、`<Home>` | 仅在所列上下文中可配置的首项操作。 |
-| `uiLast` | Reader Marks `G`；Plugins List `G`、`<End>` | 仅在所列上下文中可配置的末项操作。 |
+| `uiNext` | Reader Outline / Marks / Annotations / Thumbnails `j`；Picker Input `<C-j>`、`<C-n>`、`<Down>`；Picker List 再加 `j`；Plugins List `j`、`<Down>`；Tabs Input `<C-j>`、`<C-n>`、`<Down>`；Tabs List `j`、`<Down>` | 仅在所列上下文中可配置的下一项操作。 |
+| `uiPrevious` | Reader Outline / Marks / Annotations / Thumbnails `k`；Picker Input `<C-k>`、`<C-p>`、`<Up>`；Picker List 再加 `k`；Plugins List `k`、`<Up>`；Tabs Input `<C-k>`、`<C-p>`、`<Up>`；Tabs List `k`、`<Up>` | 仅在所列上下文中可配置的上一项操作。 |
+| `uiFirst` | Reader Marks `gg`；Plugins List `gg`、`<Home>`；Tabs List `gg`、`<Home>`（Tabs Input 支持但未绑定） | 仅在所列上下文中可配置的首项操作。 |
+| `uiLast` | Reader Marks `G`；Plugins List `G`、`<End>`；Tabs List `G`、`<End>`（Tabs Input 支持但未绑定） | 仅在所列上下文中可配置的末项操作。 |
 | `uiParent` | Reader Outline `h` | 在 `reader-outline` 中移到父级。 |
 | `uiChild` | Reader Outline `l` | 在 `reader-outline` 中移到子级。 |
-| `uiConfirm` | Reader Marks `<Enter>`；Picker Input/List `<Enter>`、`<S-Enter>`；Reader Outline **未绑定** | 在受支持的本地上下文中确认；Outline 没有默认绑定，因为 Enter/Return 由宿主处理。 |
-| `uiCancel` | Reader Outline/Marks/Annotations/Thumbnails `<Esc>`；Picker Input/List `<Esc>`；Plugins List `<Esc>`、`q` | 在这些本地上下文中取消或返回；`plugins-input` 不支持此操作。 |
+| `uiConfirm` | Reader Marks `<Enter>`；Picker Input/List `<Enter>`、`<S-Enter>`；Tabs Input/List `<Enter>`；Reader Outline **未绑定** | 在受支持的本地上下文中确认；Outline 没有默认绑定，因为 Enter/Return 由宿主处理。 |
+| `uiCancel` | Reader Outline/Marks/Annotations/Thumbnails `<Esc>`；Picker Input/List `<Esc>`；Plugins List `<Esc>`、`q`；Tabs List `<Esc>`、`q` | 在这些本地上下文中取消或返回；`plugins-input` 不支持此操作，`tabs-input` 虽支持但默认未绑定。 |
 | `uiDelete` | Reader Marks `d` | 在 `reader-marks` 中删除选中的书签。 |
 | `uiClear` | Reader Marks `x` | 在 `reader-marks` 中清除书签。 |
-| `uiSearch` | Picker List `/`；Plugins List `/` | 从结果列表上下文聚焦查询/筛选框。 |
-| `uiFocusList` | Plugins Input `<Esc>` | 从筛选框返回结果列表；这是 `plugins-input` 唯一的 `ActionId`。 |
+| `uiSearch` | Picker List `/`；Plugins List `/`；Tabs List `/` | 从结果列表上下文聚焦查询/筛选框。 |
+| `uiFocusList` | Plugins Input `<Esc>`；Tabs Input `<Esc>` | 从输入框将焦点移到结果列表。 |
 | `uiPreviewDown` | Picker Input/List `<C-d>` | 向下滚动选择器预览。 |
 | `uiPreviewUp` | Picker Input/List `<C-u>` | 向上滚动选择器预览。 |
-| `uiNextPane` | **未绑定** | 在 `picker-input` 中受支持；默认没有快捷键。 |
-| `uiPreviousPane` | **未绑定** | 在 `picker-input` 中受支持；默认没有快捷键。 |
+| `uiNextPane` | **未绑定** | 在 `picker-input`、`tabs-input` 和 `tabs-list` 中受支持；默认没有快捷键。 |
+| `uiPreviousPane` | **未绑定** | 在 `picker-input`、`tabs-input` 和 `tabs-list` 中受支持；默认没有快捷键。 |
 | `uiPageDown` | Plugins List `<C-d>` | 在 Plugin Manager 结果中向下翻页。 |
 | `uiPageUp` | Plugins List `<C-u>` | 在 Plugin Manager 结果中向上翻页。 |
 | `pluginsRefresh` | Plugins List `r` | 重新读取 Plugin Manager 状态，不检查更新。 |
-| `pluginsInstall` | Plugins List `i` | 从官方发行地址下载所选的未安装 Translate 条目，确认后安装。 |
-| `pluginsUpdate` | Plugins List `u` | 通过 Zotero 检查所选已安装插件的更新，确认后安装。 |
+| `pluginsInstall` | Plugins List `i` | 经确认从官方来源安装固定版本 Translate 条目。 |
+| `pluginsUpdate` | Plugins List `u` | 经确认检查所选已安装插件的更新，再确认安装。 |
 | `pluginsEnable` | Plugins List `e` | Zotero AddonManager 允许时启用扩展。 |
 | `pluginsDisable` | Plugins List `d` | Zotero AddonManager 允许时停用扩展。 |
 | `pluginsPreferences` | Plugins List `p` | 打开扩展已注册的设置。 |
@@ -653,6 +699,8 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `reader-normal:<Space>pp` | `managePlugins` |
 | `reader-normal:<Space>ps` | `openNeoSettings` |
 | `reader-normal:<Space>yy` | `mainYankCitekey` |
+| `reader-normal:<Space>aa` | `openAIQA` |
+| `reader-normal:<Space>fr` | `openReferences` |
 | `reader-normal:<Space>ai` | `mainAddByIdentifier` |
 | `reader-select:s` | `flashText` |
 | `reader-select:a` | `openSelectionActions` |
@@ -908,12 +956,50 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `plugins-list:<C-d>` | `uiPageDown` |
 | `plugins-list:<C-u>` | `uiPageUp` |
 | `plugins-list:r` | `pluginsRefresh` |
+| `plugins-list:i` | `pluginsInstall` |
+| `plugins-list:u` | `pluginsUpdate` |
 | `plugins-list:e` | `pluginsEnable` |
 | `plugins-list:d` | `pluginsDisable` |
 | `plugins-list:p` | `pluginsPreferences` |
 | `plugins-list:o` | `pluginsHomepage` |
 | `plugins-list:R` | `pluginsReadme` |
 | `plugins-list:L` | `pluginsGitLog` |
+| `reader-normal:<Space>bb` | `tabFocusSidebar` |
+| `reader-normal:<Space>bt` | `tabToggleSidebar` |
+| `main-normal:<Space>bb` | `tabFocusSidebar` |
+| `main-normal:<Space>bt` | `tabToggleSidebar` |
+| `main-normal:<Space>bc` | `mainCreateReadingGroup` |
+| `main-normal:<Space>ba` | `mainAppendReadingGroup` |
+| `note-normal:<Space>bb` | `tabFocusSidebar` |
+| `note-normal:<Space>bt` | `tabToggleSidebar` |
+| `tabs-input:<C-j>` | `uiNext` |
+| `tabs-input:<C-n>` | `uiNext` |
+| `tabs-input:<Down>` | `uiNext` |
+| `tabs-input:<C-k>` | `uiPrevious` |
+| `tabs-input:<C-p>` | `uiPrevious` |
+| `tabs-input:<Up>` | `uiPrevious` |
+| `tabs-input:<Enter>` | `uiConfirm` |
+| `tabs-input:<Esc>` | `uiFocusList` |
+| `tabs-list:j` | `uiNext` |
+| `tabs-list:<Down>` | `uiNext` |
+| `tabs-list:k` | `uiPrevious` |
+| `tabs-list:<Up>` | `uiPrevious` |
+| `tabs-list:gg` | `uiFirst` |
+| `tabs-list:<Home>` | `uiFirst` |
+| `tabs-list:G` | `uiLast` |
+| `tabs-list:<End>` | `uiLast` |
+| `tabs-list:<Enter>` | `uiConfirm` |
+| `tabs-list:<Esc>` | `uiCancel` |
+| `tabs-list:q` | `uiCancel` |
+| `tabs-list:/` | `uiSearch` |
+| `tabs-list:a` | `tabCreateGroup` |
+| `tabs-list:r` | `tabRenameGroup` |
+| `tabs-list:d` | `tabCloseEntry` |
+| `tabs-list:<Del>` | `tabCloseEntry` |
+| `tabs-list:<Space>` | `tabToggleGroup` |
+| `tabs-list:c` | `tabCloseGroup` |
+| `tabs-list:u` | `tabUngroup` |
+| `tabs-list:x` | `tabRemoveFromGroup` |
 
 ## 计数示例
 

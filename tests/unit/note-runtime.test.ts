@@ -8,6 +8,18 @@ import { MainNavigation } from '../../src/main/navigation';
 import type { MainWindowSession } from '../../src/main/session';
 import { NoteEditing } from '../../src/modules/notes/editor';
 import { PrefixGuideRuntime, type PrefixGuideView } from '../../src/ui/key-guide-runtime';
+import type * as NativeUI from '../../src/platform/native-ui';
+
+vi.mock('../../src/platform/native-ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof NativeUI>();
+  return {
+    ...actual,
+    mountNativeReactView: (options: Parameters<typeof actual.mountNativeReactView>[0]) =>
+      options.surface === 'key-guide'
+        ? { ready: Promise.resolve(), update: () => {}, getElement: () => null, dispose: () => {} }
+        : actual.mountNativeReactView(options),
+  };
+});
 
 const originalServices = Reflect.get(globalThis, 'Services');
 const originalComponents = Reflect.get(globalThis, 'Components');

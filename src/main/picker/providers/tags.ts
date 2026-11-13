@@ -1,4 +1,5 @@
 import { suggestTagPaths } from '../../tag-path';
+import { isSourceNoteIdentity } from '../../../platform/note-relations';
 import type { PickerItem } from '../model';
 import type { PickerProvider } from '../types';
 
@@ -24,7 +25,6 @@ function tagItem(record: TagRecord, meta?: string): PickerItem {
     search: record.tag,
     tagName: record.tag,
     tagCandidate: 'tag',
-    tagType: record.type === 1 ? 'automatic' : 'manual',
     meta,
   };
 }
@@ -62,14 +62,17 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
     async load() {
       const byName = new Map<string, TagRecord>();
       for (const record of await options.loadTags()) {
-        const existing = byName.get(record.tag);
-        if (!existing || (existing.type === 1 && record.type !== 1)) byName.set(record.tag, record);
+        if (isSourceNoteIdentity(record.tag)) continue;
+        if (!byName.has(record.tag)) byName.set(record.tag, record);
       }
       return [...byName.values()].map((record) => tagItem(record, options.describe?.(record.tag)));
     },
     filterItems(items, query) {
       const records = items
-        .filter((item) => item.tagCandidate === 'tag' && item.tagName)
+        .filter(
+          (item) =>
+            item.tagCandidate === 'tag' && item.tagName && !isSourceNoteIdentity(item.tagName),
+        )
         .map((item) => ({
           item,
           name: item.tagName!,
@@ -88,6 +91,7 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
         options.allowCreate === true &&
         !!trimmed &&
         !exact &&
+        !isSourceNoteIdentity(trimmed) &&
         (!options.separator || !trimmed.endsWith(options.separator));
       return canCreate ? [createItem(trimmed), ...projected] : projected;
     },
@@ -97,9 +101,7 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
     rowText(item) {
       if (item.tagCandidate === 'namespace')
         return `› ${item.title}${item.meta ? ` · ${item.meta}` : ''}`;
-      return `${item.title}${item.tagType ? ` · ${item.tagType}` : ''}${
-        item.meta ? ` · ${item.meta}` : ''
-      }`;
+      return `${item.title}${item.meta ? ` · ${item.meta}` : ''}`;
     },
     preview(item) {
       if (item.tagCandidate === 'namespace') {
@@ -112,11 +114,7 @@ export function createTagCandidateProvider(options: TagCandidateSourceOptions): 
       }
       return {
         title: item.tagName ?? item.title,
-        body: [
-          item.tagCandidate === 'create' ? 'New tag' : 'Existing tag',
-          item.tagType ? `Type: ${item.tagType}` : '',
-          item.meta ?? '',
-        ]
+        body: [item.tagCandidate === 'create' ? 'New tag' : 'Existing tag', item.meta ?? '']
           .filter(Boolean)
           .join('\n'),
       };

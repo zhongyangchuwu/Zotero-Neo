@@ -10,7 +10,7 @@ import { ReaderTranslationSave } from './translation-save';
 type Translate = (
   text: string,
   options: { readonly pluginID: string; readonly itemID?: number },
-) => Promise<{ readonly result?: string }>;
+) => Promise<{ readonly result?: string; readonly status?: string }>;
 
 interface SelectionTranslationRuntime {
   readonly PDFTranslate?: { readonly api?: { readonly translate?: Translate } };
@@ -70,6 +70,9 @@ export function createReaderTranslationModule(
                 pluginID,
                 ...(selection.itemID === null ? {} : { itemID: selection.itemID }),
               });
+              if (!isCurrent(window)) return { retired: true };
+              if (task.status && task.status !== 'success')
+                throw new Error(task.result || 'translation failed');
               const text = task.result?.trim();
               if (!text) throw new Error('empty translation result');
               return { title: language === 'zh-CN' ? '翻译结果' : 'Translation', body: text };

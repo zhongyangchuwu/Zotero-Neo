@@ -3,7 +3,7 @@ import { excerptBounds } from '../../document-analysis/excerpts';
 import { documentRect } from '../../document-analysis/contracts';
 import type { SourceNoteEntry } from '../../core/source-note';
 import { documentMarkupText } from '../../platform/document-markup';
-import { relatedSourceNotes } from '../../platform/note-relations';
+import { migrateSourceNoteIdentity, relatedSourceNotes } from '../../platform/note-relations';
 import { escapeHTML } from '../../core/html';
 
 /** Public annotation positions may contain a continuation on the following page. Invalid geometry remains unclassified. */
@@ -21,7 +21,7 @@ function sourceLocations(value: unknown): readonly DocumentLocation[] {
 /** Read existing annotation and note content for this PDF only. Template parsing never attaches imported note HTML to a live document. */
 export async function sourceNoteEntries(
   itemID: number,
-  excludeRelationPrefix?: string,
+  excludeIdentityPrefix?: string,
 ): Promise<readonly SourceNoteEntry[]> {
   const source = await Zotero.Items.getAsync(itemID);
   if (!source || source.deleted || !source.isPDFAttachment())
@@ -64,24 +64,19 @@ export async function sourceNoteEntries(
     ...related.map((note) => note.id),
     ...(parent ? parent.getNotes() : []),
   ]);
-  const document = Zotero.getMainWindow().document;
+  let htmlDocument: Document | undefined;
   for (const id of noteIDs) {
     const note = await Zotero.Items.getAsync(id);
+    if (!note || note.deleted || !note.isNote() || note.libraryID !== source.libraryID) continue;
+    await migrateSourceNoteIdentity(note);
     if (
-      !note ||
-      note.deleted ||
-      !note.isNote() ||
-      note.libraryID !== source.libraryID ||
-      (excludeRelationPrefix &&
-        note
-          .getRelationsByPredicate('dc:relation')
-          .some((value) => value.startsWith(excludeRelationPrefix)))
+      excludeIdentityPrefix &&
+      note.getTags().some(({ tag }) => tag.startsWith(excludeIdentityPrefix))
     )
       continue;
-    const template = document.createElementNS(
-      'http://www.w3.org/1999/xhtml',
-      'template',
-    ) as HTMLTemplateElement;
+    // The chrome document is XHTML; native note markup needs the inert HTML fragment parser.
+    htmlDocument ??= Zotero.getMainWindow().document.implementation.createHTMLDocument();
+    const template = htmlDocument.createElement('template');
     template.innerHTML = note.getNote();
     let index = 0;
     for (const image of Array.from(

@@ -3,6 +3,7 @@ import { translateForZotero248 } from '../../platform/translate-for-zotero-v248'
 import { installMainPlugin, mainInstalledPlugins, setMainPluginEnabled } from '../../toolkit/main';
 import {
   TRANSLATE_PLUGIN_ID,
+  TRANSLATE_PLUGIN_HASH,
   TRANSLATE_PLUGIN_INSTALL_URL,
   TRANSLATE_SUPPORTED_VERSION,
 } from './dependency';
@@ -37,6 +38,7 @@ export async function readTranslationDependency(): Promise<TranslationDependency
 export async function prepareTranslationDependency(options: {
   readonly language: 'en' | 'zh-CN';
   readonly isCurrent: () => boolean;
+  readonly confirmDownload: () => boolean;
   readonly confirmInstall: (details: { name: string; version: string; source: string }) => boolean;
   readonly confirmEnable: (name: string, version: string) => boolean;
   readonly progress: (current: number, total: number) => void;
@@ -47,9 +49,11 @@ export async function prepareTranslationDependency(options: {
   if (!options.isCurrent()) return null;
 
   if (!plugin) {
+    if (!options.confirmDownload() || !options.isCurrent()) return null;
     const initialize = captureTranslateForZotero248Initialization(options.language);
     const result = await installMainPlugin(TRANSLATE_PLUGIN_INSTALL_URL, {
       id: TRANSLATE_PLUGIN_ID,
+      hash: TRANSLATE_PLUGIN_HASH,
       confirm: (details) => {
         if (!options.isCurrent()) return false;
         if (

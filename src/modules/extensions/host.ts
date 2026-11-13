@@ -4,11 +4,14 @@ import {
   openMainPluginPreferences,
   launchMainURL,
 } from '../../toolkit/main';
+import {
+  TRANSLATE_PLUGIN_ID as PROVIDER_ID,
+  TRANSLATE_PLUGIN_INSTALL_URL,
+} from '../translation/dependency';
 
 export const ZOTERO_NEO_PLUGIN_ID = 'zotero-neo@zotero-neo';
-export const TRANSLATE_PLUGIN_ID = 'zoteropdftranslate@euclpts.com';
-export const TRANSLATE_PLUGIN_URL =
-  'https://github.com/windingwind/zotero-pdf-translate/releases/latest/download/translate-for-zotero.xpi';
+export const TRANSLATE_PLUGIN_ID = PROVIDER_ID;
+export const TRANSLATE_PLUGIN_URL = TRANSLATE_PLUGIN_INSTALL_URL;
 
 export interface InstalledPlugin {
   readonly id: string;

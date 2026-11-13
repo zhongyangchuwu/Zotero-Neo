@@ -9,174 +9,167 @@ import {
 } from '../core/module-runtime';
 import {
   BUILTIN_MODULES,
-  OPTIONAL_MODULES,
   OPTIONAL_MODULE_DEFAULTS,
+  OPTIONAL_MODULES,
   type BuiltinModuleId,
   type OptionalModuleDescriptor,
   type OptionalModuleId,
 } from '../modules';
+import type {
+  SettingsFormCommand,
+  SettingsFormGroup,
+  SettingsFormModel,
+} from './settings-form-model';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
-import { settingsButton, settingsStatus } from './settings-ui';
+import { SettingsTabs } from './settings-tabs';
 import { SettingsTranslation } from './settings-translation';
-
-const H = 'http://www.w3.org/1999/xhtml';
 
 type ModuleFlags = Record<OptionalModuleId, boolean>;
 
-interface ModuleRow {
-  readonly checkbox: HTMLInputElement;
-  readonly summary: HTMLElement;
-  readonly details: HTMLElement;
-}
-
 /** Shows startup-applied module state separately from editable persisted requests. */
 export class SettingsModules {
-  readonly #root: HTMLElement;
-  readonly #owner: MainWindow;
+  readonly #owner: object;
   readonly #preferences: PreferenceStore;
   readonly #modules: BuiltinModuleRuntime;
   readonly #language: SettingsLanguage;
+  readonly #changed: () => void;
   readonly #saved: ModuleFlags;
   readonly #draft: ModuleFlags;
-  readonly #rows = new Map<OptionalModuleId, ModuleRow>();
-  readonly #cleanups: Array<() => void> = [];
-  readonly #status: HTMLElement;
-  readonly #saveButton: HTMLButtonElement;
-  readonly #restoreButton: HTMLButtonElement;
-  #translation!: SettingsTranslation;
-  #preparing = false;
+  readonly #cleanups = new CleanupScope();
+  readonly #tabs: SettingsTabs;
+  readonly #translation: SettingsTranslation;
+  #status = '';
   #disposed = false;
 
   constructor(
     window: MainWindow,
-    root: HTMLElement,
     preferences: PreferenceStore,
     modules: BuiltinModuleRuntime,
     language: SettingsLanguage,
+    changed: () => void,
   ) {
-    this.#root = root;
     this.#owner = window;
     this.#preferences = preferences;
     this.#modules = modules;
     this.#language = language;
+    this.#changed = changed;
     const requested = modules.requested();
     this.#saved = { ...requested };
     this.#draft = { ...requested };
-
-    const doc = window.document;
-    root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
-
-    const title = doc.createElementNS(H, 'h2');
-    title.textContent = settingsText(language, 'Optional enhancements');
-    title.style.cssText = 'margin:0 0 0.35em;font-size:1.55em';
-
-    const description = doc.createElementNS(H, 'p');
-    description.textContent = settingsText(
-      language,
-      'Choose which optional enhancements to request after restarting Zotero. Core library, worksets, tags, collections, reader navigation, selection, annotations, notes, and workspace remain available and are not affected.',
-    );
-    description.style.cssText = 'margin:0 0 0.8em';
-
-    const actions = doc.createElementNS(H, 'div');
-    actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:0 0 0.8em';
-    this.#saveButton = settingsButton(
-      doc,
-      settingsText(language, 'Save module requests'),
-      () => this.#save(),
-      this.#cleanups,
-    );
-    this.#saveButton.setAttribute('aria-label', settingsText(language, 'Save module requests'));
-    this.#restoreButton = settingsButton(
-      doc,
-      settingsText(language, 'Restore default module requests'),
-      () => this.#restoreDefaults(),
-      this.#cleanups,
-    );
-    this.#restoreButton.setAttribute(
-      'aria-label',
-      settingsText(language, 'Restore default module requests'),
-    );
-    actions.append(this.#saveButton, this.#restoreButton);
-
-    this.#status = settingsStatus(doc);
-
-    const rows = doc.createElementNS(H, 'div');
-    rows.style.cssText = 'display:grid;gap:8px';
-    for (const descriptor of OPTIONAL_MODULES) rows.append(this.#createRow(doc, descriptor));
-
-    root.append(title, description, actions, this.#status, rows);
-
+    this.#tabs = new SettingsTabs(preferences, language, () => this.#notify());
+    this.#cleanups.add(() => this.#tabs.dispose());
+    this.#translation = new SettingsTranslation(window, language, () => this.#notify());
+    this.#cleanups.add(() => this.#translation.dispose());
     try {
       for (const { id } of OPTIONAL_MODULES) {
         const cleanup = preferences.observe?.(modulePreferenceKey(id), () =>
           this.#syncRequestedPreferences(),
         );
-        if (cleanup) this.#cleanups.push(cleanup);
+        if (cleanup) this.#cleanups.add(cleanup);
       }
-      this.#cleanups.push(modules.subscribe(() => this.#refresh()));
-      this.#refresh();
+      this.#cleanups.add(modules.subscribe(() => this.#notify()));
     } catch (error) {
       this.dispose();
       throw error;
     }
   }
 
-  #createRow(doc: Document, descriptor: OptionalModuleDescriptor): HTMLElement {
-    const row = doc.createElementNS(H, 'article');
-    row.setAttribute('data-module-id', descriptor.id);
-    row.style.cssText = 'padding:0.7em;border:1px solid var(--zotero-neo-border);border-radius:5px';
-
-    const name = doc.createElementNS(H, 'h3');
-    name.textContent = descriptor.names[this.#language];
-    name.style.cssText = 'margin:0 0 0.25em;font-size:1.1em';
-
-    const scope = doc.createElementNS(H, 'p');
-    scope.textContent = `${settingsText(this.#language, 'Scope:')} ${descriptor.scopes
-      .map((item) => settingsScopeText(this.#language, item))
-      .join(', ')}`;
-    scope.style.cssText = 'margin:0 0 0.45em';
-
-    const request = doc.createElementNS(H, 'label');
-    request.style.cssText = 'display:inline-flex;align-items:center;gap:0.45em';
-    const checkbox = doc.createElementNS(H, 'input') as HTMLInputElement;
-    checkbox.type = 'checkbox';
-    checkbox.checked = this.#draft[descriptor.id];
-    checkbox.setAttribute(
-      'aria-label',
-      `${settingsText(this.#language, 'Draft request')}: ${descriptor.names[this.#language]}`,
+  model(): SettingsFormModel {
+    const language = this.#language;
+    const states = new Map(
+      this.#modules.inspect(this.#owner).map((state) => [state.id, state] as const),
     );
-    checkbox.setAttribute('data-module-request', descriptor.id);
-    const requestLabel = doc.createElementNS(H, 'span');
-    requestLabel.textContent = settingsText(this.#language, 'Request module');
-    request.append(checkbox, requestLabel);
-
-    const summary = doc.createElementNS(H, 'p');
-    summary.style.cssText = 'margin:0.4em 0 0';
-    const details = doc.createElementNS(H, 'p');
-    details.style.cssText = 'margin:0.25em 0 0';
-
-    const onChange = (): void => {
-      if (this.#preparing || this.#disposed) return;
-      this.#draft[descriptor.id] = checkbox.checked;
-      this.#status.textContent = '';
-      this.#refresh();
-    };
-    checkbox.addEventListener('change', onChange);
-    this.#cleanups.push(() => checkbox.removeEventListener('change', onChange));
-
-    row.append(name, scope, request, summary, details);
-    if (descriptor.id === 'translation') {
-      this.#translation = new SettingsTranslation(this.#owner, row, this.#language, (busy) => {
-        this.#preparing = busy;
-        this.#refresh();
+    const groups: SettingsFormGroup[] = [
+      {
+        id: 'module-actions',
+        title: settingsText(language, 'Optional enhancements'),
+        fields: [
+          {
+            kind: 'action',
+            id: 'modules.save',
+            label: settingsText(language, 'Save module requests'),
+            primary: true,
+            disabled:
+              this.#translation.busy ||
+              OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]),
+          },
+          {
+            kind: 'action',
+            id: 'modules.restore',
+            label: settingsText(language, 'Restore default module requests'),
+            disabled: this.#translation.busy,
+          },
+        ],
+      },
+    ];
+    for (const descriptor of OPTIONAL_MODULES) {
+      const state = states.get(descriptor.id);
+      const summary = state
+        ? [
+            `${settingsText(language, 'Applied')}: ${settingsText(language, state.applied ? 'On' : 'Off')}`,
+            `${settingsText(language, 'Requested')}: ${settingsText(language, state.requested ? 'On' : 'Off')}`,
+            `${settingsText(language, 'Draft request')}: ${settingsText(language, this.#draft[descriptor.id] ? 'On' : 'Off')}`,
+            `${settingsText(language, 'Runtime status')}: ${this.#statusText(state.status)}`,
+            ...(state.pendingRestart ? [settingsText(language, 'Pending restart')] : []),
+            this.#runtimeDetails(descriptor, state),
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '';
+      groups.push({
+        id: `module.${descriptor.id}`,
+        title: descriptor.names[language],
+        description: `${settingsText(language, 'Scope:')} ${descriptor.scopes.map((item) => settingsScopeText(language, item)).join(', ')}`,
+        fields: [
+          {
+            kind: 'boolean',
+            id: `modules.request.${descriptor.id}`,
+            label: `${settingsText(language, 'Draft request')}: ${descriptor.names[language]}`,
+            value: this.#draft[descriptor.id],
+            disabled: this.#translation.busy,
+            note: summary,
+          },
+        ],
       });
+      if (descriptor.id === 'tab-enhancements') groups.push(this.#tabs.group());
+      if (descriptor.id === 'translation') groups.push(this.#translation.group());
     }
-    this.#rows.set(descriptor.id, { checkbox, summary, details });
-    return row;
+    const status = this.#status || this.#tabs.status;
+    return {
+      title: settingsText(language, 'Optional enhancements'),
+      description: settingsText(
+        language,
+        'Choose which optional enhancements to request after restarting Zotero. Core library, worksets, tags, collections, reader navigation, selection, annotations, notes, and workspace remain available and are not affected.',
+      ),
+      groups,
+      ...(status ? { status: { text: status, error: true } } : {}),
+    };
+  }
+
+  dispatch(command: SettingsFormCommand): void {
+    if (this.#disposed) return;
+    if (command.type === 'value') {
+      const descriptor = OPTIONAL_MODULES.find(({ id }) => command.id === `modules.request.${id}`);
+      if (descriptor) {
+        if (this.#translation.busy || typeof command.value !== 'boolean') return;
+        this.#draft[descriptor.id] = command.value;
+        this.#status = '';
+        this.#notify();
+        return;
+      }
+    } else if (command.id === 'modules.save') {
+      this.#save();
+      return;
+    } else if (command.id === 'modules.restore') {
+      this.#restoreDefaults();
+      return;
+    }
+    this.#translation.dispatch(command);
+    this.#tabs.dispatch(command);
   }
 
   #save(): void {
-    if (this.#disposed || this.#preparing) return;
+    if (this.#disposed || this.#translation.busy) return;
     if (this.#draft.translation && !this.#saved.translation) {
       void this.#translation.prepare().then((prepared) => {
         if (prepared && !this.#disposed) this.#commitRequests();
@@ -193,32 +186,36 @@ export class SettingsModules {
           this.#preferences.set(modulePreferenceKey(id), this.#draft[id]);
       }
       this.#syncRequestedPreferences();
-      this.#status.textContent = '';
+      this.#status = '';
     } catch {
       this.#syncRequestedPreferences();
-      this.#status.textContent = settingsText(
+      this.#status = settingsText(
         this.#language,
         'Could not save module requests. Some changes may already be saved.',
       );
     }
+    this.#notify();
   }
 
   #restoreDefaults(): void {
-    if (this.#disposed || this.#preparing) return;
+    if (this.#translation.busy) return;
     for (const { id } of OPTIONAL_MODULES) this.#draft[id] = OPTIONAL_MODULE_DEFAULTS[id];
-    this.#refresh();
     try {
-      for (const { id } of OPTIONAL_MODULES)
-        this.#preferences.set(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]);
+      for (const { id } of OPTIONAL_MODULES) {
+        if (id === 'translation')
+          this.#preferences.set(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]);
+        else this.#preferences.clear(modulePreferenceKey(id));
+      }
       this.#syncRequestedPreferences();
-      this.#status.textContent = '';
+      this.#status = '';
     } catch {
       this.#syncRequestedPreferences();
-      this.#status.textContent = settingsText(
+      this.#status = settingsText(
         this.#language,
         'Could not restore module requests. Some requests may already be restored.',
       );
     }
+    this.#notify();
   }
 
   #syncRequestedPreferences(): void {
@@ -227,42 +224,11 @@ export class SettingsModules {
       if (this.#draft[id] === this.#saved[id]) this.#draft[id] = requested[id];
       this.#saved[id] = requested[id];
     }
-    this.#refresh();
+    this.#notify();
   }
 
-  #refresh(): void {
-    if (this.#disposed) return;
-    const states = new Map(
-      this.#modules.inspect(this.#owner).map((state) => [state.id, state] as const),
-    );
-    for (const descriptor of OPTIONAL_MODULES) {
-      const state = states.get(descriptor.id);
-      const row = this.#rows.get(descriptor.id);
-      if (!state || !row) continue;
-      row.checkbox.checked = this.#draft[descriptor.id];
-      row.checkbox.disabled = this.#preparing;
-      const summary = [
-        `${settingsText(this.#language, 'Applied')}: ${settingsText(
-          this.#language,
-          state.applied ? 'On' : 'Off',
-        )}`,
-        `${settingsText(this.#language, 'Requested')}: ${settingsText(
-          this.#language,
-          state.requested ? 'On' : 'Off',
-        )}`,
-        `${settingsText(this.#language, 'Draft request')}: ${settingsText(
-          this.#language,
-          this.#draft[descriptor.id] ? 'On' : 'Off',
-        )}`,
-        `${settingsText(this.#language, 'Runtime status')}: ${this.#statusText(state.status)}`,
-      ];
-      if (state.pendingRestart) summary.push(settingsText(this.#language, 'Pending restart'));
-      row.summary.textContent = summary.join(' · ');
-      row.details.textContent = this.#runtimeDetails(descriptor, state);
-    }
-    this.#saveButton.disabled =
-      this.#preparing || OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]);
-    this.#restoreButton.disabled = this.#preparing;
+  #notify(): void {
+    if (!this.#disposed) this.#changed();
   }
 
   #statusText(status: ModuleStatus): string {
@@ -287,13 +253,10 @@ export class SettingsModules {
         instance.host === 'main' ? 'Main window' : 'Reader session',
       );
       const parts = [`${host}: ${this.#statusText(instance.status)}`];
-      if (instance.dependencyIds.length) {
+      if (instance.dependencyIds.length)
         parts.push(
-          `${settingsText(this.#language, 'Requires:')} ${instance.dependencyIds
-            .map((id) => this.#moduleName(id))
-            .join(', ')}`,
+          `${settingsText(this.#language, 'Requires:')} ${instance.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
         );
-      }
       if (instance.failure)
         parts.push(`${settingsText(this.#language, 'Failure:')} ${instance.failure}`);
       return parts.join(' — ');
@@ -308,9 +271,7 @@ export class SettingsModules {
     }
     if (state.status === 'blocked' && state.dependencyIds.length && !details.length) {
       details.push(
-        `${settingsText(this.#language, 'Requires:')} ${state.dependencyIds
-          .map((id) => this.#moduleName(id))
-          .join(', ')}`,
+        `${settingsText(this.#language, 'Requires:')} ${state.dependencyIds.map((id) => this.#moduleName(id)).join(', ')}`,
       );
     }
     return details.join(' · ');
@@ -322,10 +283,6 @@ export class SettingsModules {
 
   dispose(): void {
     this.#disposed = true;
-    const cleanups = new CleanupScope();
-    cleanups.add(() => this.#root.replaceChildren());
-    cleanups.add(() => this.#translation?.dispose());
-    for (const cleanup of this.#cleanups.splice(0)) cleanups.add(cleanup);
-    cleanups.dispose();
+    this.#cleanups.dispose();
   }
 }

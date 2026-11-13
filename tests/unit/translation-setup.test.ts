@@ -6,6 +6,7 @@ import {
 } from '../../src/modules/translation/setup';
 import {
   TRANSLATE_PLUGIN_ID,
+  TRANSLATE_PLUGIN_HASH,
   TRANSLATE_PLUGIN_INSTALL_URL,
 } from '../../src/modules/translation/dependency';
 
@@ -80,6 +81,7 @@ function host(initial: { version: string; enabled: boolean } | null = null) {
   const options = {
     language: 'zh-CN' as const,
     isCurrent: () => current,
+    confirmDownload: vi.fn(() => true),
     confirmInstall,
     confirmEnable,
     progress: vi.fn(),
@@ -113,11 +115,22 @@ async function startDownload(h: {
 }
 
 describe('translation dependency preparation', () => {
+  it('does not contact the install source when download consent is declined', async () => {
+    const h = host();
+    h.options.confirmDownload.mockReturnValue(false);
+    await expect(prepareTranslationDependency(h.options)).resolves.toBeNull();
+    expect(h.manager.getInstallForURL).not.toHaveBeenCalled();
+    expect(h.native.install).not.toHaveBeenCalled();
+  });
+
   it('initializes an unset target even when provider startup writes its default language', async () => {
     const h = host();
     h.native.beforeStart = () =>
       h.preferences.set('extensions.zotero.ZoteroPDFTranslate.targetLanguage', 'en-US');
     const { pending } = await startDownload(h);
+    expect(h.manager.getInstallForURL).toHaveBeenCalledWith(TRANSLATE_PLUGIN_INSTALL_URL, {
+      hash: TRANSLATE_PLUGIN_HASH,
+    });
     h.native.download();
     await expect(pending).resolves.toMatchObject({
       installed: true,

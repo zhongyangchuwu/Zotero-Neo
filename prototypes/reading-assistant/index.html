@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Neo · 精读与原文对照</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="#" aria-label="Neo 阅读原型首页"
+        ><span class="brand-icon">N</span> Neo <span class="brand-detail">READING LAB</span></a
+      >
+      <span class="prototype-label">交互原型 · 预置解读</span>
+      <div class="header-actions">
+        <span id="save-state" role="status">正在打开记录…</span>
+        <button class="icon-button" id="about" aria-label="关于此原型">?</button>
+      </div>
+    </header>
+    <div class="workspace" id="workspace">
+      <nav class="outline" aria-label="阅读位置">
+        <div>
+          <div class="eyebrow">正在阅读</div>
+          <h1>DeepSeek-OCR</h1>
+          <p class="outline-subtitle">Contexts Optical Compression</p>
+          <div class="paper-meta">2025 · arXiv</div>
+        </div>
+        <div class="outline-heading">本文节选</div>
+        <button class="outline-section" data-target="p46">
+          <span>3.2.2</span><strong>多分辨率支持</strong>
+        </button>
+        <div class="outline-children">
+          <button data-target="p46">为什么支持多分辨率</button>
+          <button data-target="p48">原生分辨率</button>
+          <button data-target="p52">动态分辨率</button>
+          <button data-target="table1">Table 1 · 分辨率与 token</button>
+        </div>
+        <div class="outline-bottom">
+          <span class="ready-dot"></span> 本节已有 5 条阅读记录
+          <p>摘要、问答和两段译文，<br />可直接查看。</p>
+          <a id="paper-link" target="_blank" rel="noopener noreferrer">论文与来源 ↗</a>
+        </div>
+      </nav>
+      <section class="reading-area" aria-label="精读正文">
+        <div class="reading-toolbar">
+          <div class="mode-switch" role="group" aria-label="阅读视图">
+            <button id="mode-read" aria-pressed="true">精读</button>
+            <button id="mode-compare" aria-pressed="false">原文对照 <kbd>C</kbd></button>
+          </div>
+          <div class="reader-options">
+            <button id="toggle-translation" aria-pressed="false">
+              译文 <span>2</span> <kbd>T</kbd>
+            </button>
+            <button id="toggle-insights" aria-pressed="true">章节解读</button>
+          </div>
+        </div>
+        <div class="reader-scroll" id="reader-scroll" tabindex="0" aria-label="论文重排正文">
+          <article class="reading-document">
+            <div class="chapter-meta"><span>SECTION 3.2.2</span><span>原文第 6–7 页</span></div>
+            <h2>Multiple resolution support</h2>
+            <div class="chapter-title-translation">多分辨率支持</div>
+            <details class="chapter-summary" id="summary-inline" open>
+              <summary>
+                <span class="insight-star">✧</span> 本节解读 <span class="saved-label">已存</span
+                ><span class="disclosure">⌄</span>
+              </summary>
+              <div id="summary-content"></div>
+              <button class="text-button" data-record="summary">查看依据与完整记录 →</button>
+            </details>
+            <div id="reading-blocks"></div>
+            <footer class="document-footer">
+              <p>
+                正文与图像：Haoran Wei、Yaofeng Sun、Yukun Li，<em
+                  >DeepSeek-OCR: Contexts Optical Compression</em
+                >，arXiv:2510.18234v1，CC BY 4.0。
+              </p>
+              <p>
+                本页节选并重排 Zotero 原生提取的段落；表格与公式保留原 PDF
+                裁图。中文译文和解读为人工预置示例。
+              </p>
+              <a
+                href="https://creativecommons.org/licenses/by/4.0/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >CC BY 4.0</a
+              >
+            </footer>
+          </article>
+        </div>
+        <div class="reading-footer">
+          <span id="location-label">多分辨率支持 · 第 6 页</span
+          ><span>J / K 阅读 · C 对照 · T 译文</span>
+        </div>
+      </section>
+      <aside class="assistant-panel" id="assistant-panel" aria-label="已存阅读记录">
+        <div class="panel-heading">
+          <div>
+            <div class="eyebrow">阅读助手</div>
+            <h2>接着上次读</h2>
+          </div>
+          <span class="record-count">5</span>
+        </div>
+        <p class="panel-description">解读与回答已关联原文，重开可继续查看。</p>
+        <div class="record-scopes" role="group" aria-label="记录范围">
+          <button data-scope="current" aria-pressed="true">当前位置</button
+          ><button data-scope="all" aria-pressed="false">本节全部</button
+          ><button data-scope="saved" aria-pressed="false">收藏</button>
+        </div>
+        <div class="record-filters" role="group" aria-label="记录类型">
+          <button data-filter="all" aria-pressed="true">全部</button
+          ><button data-filter="question" aria-pressed="false">问答</button
+          ><button data-filter="translation" aria-pressed="false">译文</button>
+        </div>
+        <div class="records" id="records"></div>
+        <div class="panel-footer">本机记录 · 本轮使用预置结果</div>
+      </aside>
+      <aside class="pdf-panel" id="pdf-panel" aria-label="原版 PDF 对照" hidden>
+        <div class="pdf-heading">
+          <div>
+            <div class="eyebrow">原版 PDF</div>
+            <h2>保持论文原貌</h2>
+          </div>
+          <button id="close-compare" class="icon-button" aria-label="关闭原文对照">×</button>
+        </div>
+        <div class="pdf-toolbar">
+          <div class="pdf-pages" role="group" aria-label="PDF 页码">
+            <button data-page="6" aria-pressed="true">第 6 页</button
+            ><button data-page="7" aria-pressed="false">第 7 页</button>
+          </div>
+          <label
+            >缩放<select id="pdf-zoom" aria-label="PDF 缩放">
+              <option value="1">适应宽度</option>
+              <option value="1.35">135%</option>
+              <option value="1.75">175%</option>
+            </select></label
+          >
+        </div>
+        <div class="pdf-scroll" id="pdf-scroll" tabindex="0" aria-label="原始页面图像">
+          <div class="pdf-sheet" id="pdf-sheet">
+            <img id="pdf-image" alt="论文原版第 6 页" />
+            <div id="pdf-locations" aria-hidden="true"></div>
+          </div>
+        </div>
+        <div class="pdf-footer">
+          <span id="pdf-caption">原 PDF 页面渲染 · 第 6 页</span
+          ><a id="full-pdf" target="_blank" rel="noopener noreferrer">打开完整 PDF ↗</a>
+        </div>
+      </aside>
+    </div>
+    <dialog id="about-dialog">
+      <div class="dialog-heading">
+        <h2>这版原型做了什么</h2>
+        <button id="close-about" class="icon-button" aria-label="关闭说明">×</button>
+      </div>
+      <p>
+        用真实论文的一节，验证拟接入原生 Reading Mode
+        的交互：精读、查看已存结果、来源对照和重开复用。
+      </p>
+      <p>
+        这是独立的界面原型，尚未接入 Zotero
+        Reader。摘要、问答和译文为人工预置示例；编辑、收藏及隐藏偏好保存在当前浏览器的本机记录中。
+      </p>
+      <p>右侧展示原始 PDF 第 6／7 页的渲染图，只叠加短暂的来源框。完整原 PDF 可通过链接打开。</p>
+      <p class="small">
+        快捷键：J / K 滚动正文；C 切换对照；T 显示已存译文；Escape
+        关闭对照或取消编辑。输入文字时快捷键让位。
+      </p>
+      <button id="reset-demo" class="secondary-button">恢复预置示例</button>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <div id="fatal-error" hidden role="alert">原型未能加载。请使用项目中的预览命令打开。</div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

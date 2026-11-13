@@ -5,10 +5,56 @@ import { SelectionPanel, selectionPanelEntries } from '../../src/modules/workset
 import { SelectionStore } from '../../src/modules/worksets/selection-store';
 import { SelectionPanelRuntime } from '../../src/modules/worksets/selection-panel-runtime';
 import type { NavigationExecution } from '../../src/navigation/types';
+import type { SelectionPanelReactModel } from '../../src/modules/worksets/react-model';
+
+const bridge = vi.hoisted(() => ({
+  models: [] as unknown[],
+  dispose: vi.fn(),
+}));
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: (options: { model: unknown }) => {
+    bridge.models.push(options.model);
+    return {
+      ready: Promise.resolve(),
+      update: (model: unknown) => bridge.models.push(model),
+      getElement: () => null,
+      dispose: bridge.dispose,
+    };
+  },
+}));
+
+function openPanel(h: {
+  window: MainWindow;
+  session: {
+    window: MainWindow;
+    selection: SelectionStore;
+    selectionPanel: SelectionPanelRuntime;
+    theme: { add: () => () => void };
+  };
+  panel: SelectionPanel;
+}): void {
+  const createElement = () => ({
+    id: '',
+    tabIndex: 0,
+    style: { cssText: '' },
+    append: vi.fn(),
+    remove: vi.fn(),
+    focus: vi.fn(),
+    addEventListener: vi.fn(),
+  });
+  Object.assign(h.window.document, {
+    createElementNS: createElement,
+    body: { append: vi.fn() },
+  });
+  h.session.selectionPanel.open = false;
+  h.panel.open(h.window, h.session);
+}
 
 const originalZotero = Reflect.get(globalThis, 'Zotero');
 
 afterEach(() => {
+  bridge.models.length = 0;
+  bridge.dispose.mockClear();
   if (originalZotero === undefined) Reflect.deleteProperty(globalThis, 'Zotero');
   else Reflect.set(globalThis, 'Zotero', originalZotero);
 });
@@ -228,12 +274,13 @@ describe('Selection Panel', () => {
     const selected = item(8);
     const h = harness([selected], []);
     const selectionBefore = h.session.selection.values();
-    const footer = { textContent: '' } as HTMLElement;
-    h.session.selectionPanel.footer = footer;
+    openPanel(h);
     h.selectItem.mockResolvedValueOnce(false);
 
     h.panel.handleKey(h.key('Enter'), h.window, h.session);
-    await vi.waitFor(() => expect(footer.textContent).toContain('Reveal failed'));
+    await vi.waitFor(() =>
+      expect((bridge.models.at(-1) as SelectionPanelReactModel).footer).toContain('Reveal failed'),
+    );
 
     expect(h.selectItem).toHaveBeenCalledWith(selected.id);
     expect(h.session.selectionPanel.open).toBe(true);
@@ -252,17 +299,31 @@ describe('Selection Panel', () => {
     h.panel.handleKey(h.key('Enter'), h.window, h.session);
     await vi.waitFor(() => expect(h.selectItem).toHaveBeenCalledWith(selected.id));
     h.panel.close(h.session, false);
-    const footer = { textContent: 'New panel' } as HTMLElement;
-    h.session.selectionPanel.open = true;
-    h.session.selectionPanel.overlay = { remove: vi.fn() } as unknown as HTMLElement;
-    h.session.selectionPanel.refs = [{ libraryID: 1, itemID: selected.id }];
-    h.session.selectionPanel.footer = footer;
+    openPanel(h);
+    const footer = (bridge.models.at(-1) as SelectionPanelReactModel).footer;
 
     const execution = h.navigation.mock.results[0]?.value;
     if (!execution || !execution.pending) throw new Error('Expected a pending reveal');
     finishSelection(false);
     await execution.result;
     expect(h.session.selectionPanel.open).toBe(true);
-    expect(footer.textContent).toBe('New panel');
+    expect((bridge.models.at(-1) as SelectionPanelReactModel).footer).toBe(footer);
+  });
+});
+
+describe('Selection Panel React bridge', () => {
+  it('projects plain data, updates selection and retires the mounted view on close', () => {
+    const h = harness([item(1, 1, 'First'), item(2, 1, 'Second')], [1]);
+    openPanel(h);
+    expect((bridge.models.at(-1) as SelectionPanelReactModel).entries).toEqual([
+      { title: 'First', state: 'visible', libraryID: 1, itemID: 1 },
+      { title: 'Second', state: 'hidden', libraryID: 1, itemID: 2 },
+    ]);
+    h.panel.handleKey(h.key('j'), h.window, h.session);
+    expect((bridge.models.at(-1) as SelectionPanelReactModel).selected).toBe(1);
+    h.panel.handleKey(h.key('x'), h.window, h.session);
+    expect((bridge.models.at(-1) as SelectionPanelReactModel).entries).toHaveLength(1);
+    h.panel.close(h.session, false);
+    expect(bridge.dispose).toHaveBeenCalledOnce();
   });
 });

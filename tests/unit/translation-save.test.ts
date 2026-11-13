@@ -36,6 +36,7 @@ afterEach(() => {
 function harness(save: () => Promise<unknown>, quote = 'Source') {
   const textarea = Object.assign(new EventTarget(), {
     tagName: 'TEXTAREA',
+    id: 'prefix-text',
     isConnected: true,
     value: 'Translation',
   });
@@ -51,7 +52,7 @@ function harness(save: () => Promise<unknown>, quote = 'Source') {
     isConnected: true,
     getAttribute: (name: string) => (name === 'translate-task-id' ? 'a' : 'prefix'),
     contains: (element: unknown): boolean => element === popup || element === textarea,
-    ownerDocument: { getElementById: () => textarea },
+    querySelectorAll: () => [textarea],
   };
   const nativePopup = { isConnected: true, contains: (element: unknown) => element === popup };
   const attributes = new Map<string, string>();
@@ -134,7 +135,7 @@ function harness(save: () => Promise<unknown>, quote = 'Source') {
     },
   } as unknown as ReaderEventRuntime;
   owner.show(event, window, () => view.current);
-  return { button, textarea, task, owner, view, attachment, persisted, erased };
+  return { button, textarea, task, owner, view, attachment, persisted, erased, event, window };
 }
 
 async function ready(button: { disabled: boolean }) {
@@ -249,6 +250,16 @@ describe('saving native translation', () => {
 });
 
 describe('displayed PDF provenance', () => {
+  it('rejects a replacement loaded document before saving', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const h = harness(save);
+    await ready(h.button);
+    pdfState.identity = {};
+    h.button.dispatchEvent(new Event('click'));
+    expect(save).not.toHaveBeenCalled();
+    h.owner.clear();
+  });
+
   it('rejects a different attachment before the first popup instead of adopting disk as the baseline', async () => {
     pdfState.disk = 'pdf-b';
     const save = vi.fn().mockResolvedValue(undefined);
@@ -257,6 +268,18 @@ describe('displayed PDF provenance', () => {
     h.button.dispatchEvent(new Event('click'));
     expect(save).not.toHaveBeenCalled();
     expect(h.button.disabled).toBe(true);
+    h.owner.clear();
+  });
+
+  it('retries a failed source capture for the same loaded PDF', async () => {
+    pdfState.disk = 'pdf-b';
+    const h = harness(vi.fn().mockResolvedValue(undefined));
+    await vi.waitFor(() => expect(h.button.title).toContain('Displayed PDF'));
+    pdfState.disk = 'pdf-v1';
+    h.owner.show(h.event, h.window, () => h.view.current);
+    await ready(h.button);
+    h.button.dispatchEvent(new Event('click'));
+    await vi.waitFor(() => expect(h.persisted).toHaveLength(1));
     h.owner.clear();
   });
 

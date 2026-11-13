@@ -1,5 +1,21 @@
 /** Minimal chooser DOM; actual focus, IME and rendering are also checked in the dedicated Zotero profile. */
+function dialogEvent(target: unknown, payload: Record<string, unknown>) {
+  return {
+    target,
+    defaultPrevented: false,
+    propagationStopped: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {
+      this.propagationStopped = true;
+    },
+    ...payload,
+  };
+}
+
 export class DialogElement {
+  readonly nodeType = 1;
   children: DialogElement[] = [];
   parent: DialogElement | null = null;
   style: Record<string, string> = {};
@@ -56,6 +72,9 @@ export class DialogElement {
     this.ownerDocument.activeElement = this;
   }
   scrollIntoView() {}
+  getBoundingClientRect() {
+    return { left: 0, top: 0, right: 320, bottom: 200, width: 320, height: 200 };
+  }
   contains(node: DialogElement): boolean {
     return this === node || this.children.some((c) => c.contains(node));
   }
@@ -76,14 +95,31 @@ export class DialogElement {
       (this.listeners.get(name) ?? []).filter((l) => l !== listener),
     );
   }
-  emit(name: string) {
-    for (const listener of this.listeners.get(name) ?? []) listener({ target: this });
+  emit(name: string, payload: Record<string, unknown> = {}) {
+    const event = dialogEvent(this, payload);
+    for (const listener of this.listeners.get(name) ?? []) listener(event);
+    return event;
   }
 }
 export class DocumentFixture {
   documentElement = new DialogElement('html', this, true);
   activeElement: DialogElement | null = null;
   nodes: DialogElement[] = [];
+  listeners = new Map<string, ((event: unknown) => void)[]>();
+  addEventListener(name: string, listener: (event: unknown) => void) {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+  removeEventListener(name: string, listener: (event: unknown) => void) {
+    this.listeners.set(
+      name,
+      (this.listeners.get(name) ?? []).filter((registered) => registered !== listener),
+    );
+  }
+  emit(name: string, payload: Record<string, unknown> = {}) {
+    const event = dialogEvent(this, payload);
+    for (const listener of this.listeners.get(name) ?? []) listener(event);
+    return event;
+  }
   createElementNS(_ns: string, tag: string) {
     const node = new DialogElement(tag, this);
     this.nodes.push(node);

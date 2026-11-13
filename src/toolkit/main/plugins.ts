@@ -54,7 +54,7 @@ type AddonManagerLike = {
   readonly STATE_DOWNLOADED: number;
   readonly PENDING_INSTALL: number;
   readonly PENDING_UPGRADE: number;
-  getInstallForURL(url: string): Promise<InstallLike>;
+  getInstallForURL(url: string, options?: { hash?: string }): Promise<InstallLike>;
   getAddonsByTypes(types: readonly string[]): Promise<readonly AddonLike[]>;
   getAddonByID(id: string): Promise<AddonLike | null>;
 };
@@ -135,6 +135,7 @@ export async function setMainPluginEnabled(pluginID: string, enabled: boolean): 
 
 export interface MainPluginInstallOptions {
   readonly id: string;
+  readonly hash?: string;
   readonly confirm: (details: { name: string; version: string; source: string }) => boolean;
   readonly progress: (current: number, total: number) => void;
   readonly registerCancel: (cancel: (() => void) | null) => void;
@@ -264,7 +265,10 @@ export async function installMainPlugin(
   options: MainPluginInstallOptions,
 ): Promise<{ pendingRestart: boolean } | null> {
   if (await addonManager().getAddonByID(options.id)) throw new Error('Plugin is already installed');
-  return runPluginInstall(await addonManager().getInstallForURL(url), options);
+  return runPluginInstall(
+    await addonManager().getInstallForURL(url, { hash: options.hash }),
+    options,
+  );
 }
 
 export async function updateMainPlugin(

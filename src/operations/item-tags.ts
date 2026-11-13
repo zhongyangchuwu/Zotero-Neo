@@ -1,3 +1,5 @@
+import { isSourceNoteIdentity } from '../platform/note-relations';
+
 type TagTransition = {
   readonly item: Zotero.Item;
   readonly previousType: number;
@@ -11,6 +13,7 @@ export async function setItemTag(
 ): Promise<number> {
   const name = tag.trim();
   if (!name) throw new Error('Tag name is empty');
+  if (isSourceNoteIdentity(name)) throw new Error('Neo-managed tag cannot be edited');
 
   const transitions: TagTransition[] = [];
   for (const item of items) {

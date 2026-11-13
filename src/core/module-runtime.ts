@@ -3,8 +3,8 @@ import { parseBindingKey, type BindingContext, type BindingMap } from '../input/
 import { actionsForBindingMode } from '../input/binding-capabilities';
 import {
   BUILTIN_MODULES,
-  OPTIONAL_MODULE_IDS,
   OPTIONAL_MODULE_DEFAULTS,
+  OPTIONAL_MODULE_IDS,
   isOptionalModule,
   actionContribution,
   validateBuiltinModules,
@@ -66,7 +66,10 @@ export class BuiltinModuleRuntime {
     this.applied = Object.freeze({
       'reader-hints': flags['reader-hints'],
       extensions: flags.extensions,
-      translation: flags.translation,
+      translation: flags.translation === true,
+      'ai-qa': flags['ai-qa'] === true,
+      references: flags.references === true,
+      'tab-enhancements': flags['tab-enhancements'] === true,
     });
   }
 

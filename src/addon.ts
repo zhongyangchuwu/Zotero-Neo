@@ -1,4 +1,4 @@
-import { DocumentPreparationController } from './document-analysis/preparation-controller';
+import { DocumentPreparationController } from './modules/document-preparation';
 import type {
   CommandPaletteContext,
   MainWindow,
@@ -16,6 +16,10 @@ import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
 import { migrateTranslationModulePreference } from './modules/translation/preferences';
+import { AIQAController } from './ai-qa/controller';
+import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
+import { ManagedTagsUI } from './toolkit/main';
+import { registerNativeUIResources } from './platform/native-ui';
 
 export interface AddonContext {
   readonly id: string;
@@ -31,7 +35,7 @@ export interface ZoteroNeoPublicApi {
 
 export interface ZoteroNeoController {
   readonly api: ZoteroNeoPublicApi;
-  init(context: AddonContext): void;
+  init(context: AddonContext): Promise<void>;
   shutdown(): void;
   addToWindow(window: MainWindow): void;
   removeFromWindow(window: MainWindow): void;
@@ -44,6 +48,9 @@ type ZoteroWithNeo = typeof Zotero & {
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
   readonly #preferences = new ZoteroPreferenceStore();
+  readonly #managedTags = new ManagedTagsUI(isSourceNoteIdentity, (error) =>
+    this.#logger.debug(`Managed tag UI failed: ${String(error)}`),
+  );
   readonly #modules: BuiltinModuleRuntime;
   readonly #preparation = new DocumentPreparationController((message) =>
     this.#logger.debug(message),
@@ -53,6 +60,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly api: ZoteroNeoPublicApi;
   #context: AddonContext | null = null;
   #preferencesRegistered = false;
+  #releaseNativeUI: (() => void) | null = null;
+  aiQA: AIQAController | null = null;
 
   constructor() {
     migrateTranslationModulePreference(this.#preferences);
@@ -65,6 +74,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#reader = createReaderController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
+      aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
       main: {
@@ -80,6 +90,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
           main?.navigateForwardFromReader(ownerWindow, count),
         navigationForReader: (ownerWindow) => main?.navigationForReader(ownerWindow) ?? null,
         openTabPicker: (ownerWindow) => main?.openTabPicker(ownerWindow),
+        focusTabSidebar: (ownerWindow) => main?.focusTabSidebar(ownerWindow),
+        toggleTabSidebar: (ownerWindow) => main?.toggleTabSidebar(ownerWindow),
         closeReaderTab: (ownerWindow) => main?.closeReaderTab(ownerWindow),
         cycleReaderTab: (ownerWindow, direction) => main?.cycleReaderTab(ownerWindow, direction),
         showReaderItemInLibrary: (ownerWindow, targets) =>
@@ -94,6 +106,7 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     this.#main = createMainWindowController({
       modules: this.#modules,
       documentPreparation: this.#preparation,
+      aiQA: () => this.aiQA,
       preferences: this.#preferences,
       logger: this.#logger,
       reader: this.#reader,
@@ -110,13 +123,36 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     };
   }
 
-  init(context: AddonContext): void {
+  async init(context: AddonContext): Promise<void> {
     this.#context = context;
+    // Bootstrap initializes both early and after Zotero initialization completes.
+    this.#releaseNativeUI ??= registerNativeUIResources(context.rootURI);
     migrateBindingPreferences(this.#preferences);
     migrateReaderPreferences(this.#preferences);
     this.#registerPreferences();
+    this.#managedTags.start();
+    if (this.#modules.applied['ai-qa'] && !this.aiQA) {
+      try {
+        this.aiQA = new AIQAController({
+          pluginID: context.id,
+          rootURI: context.rootURI,
+          preferences: this.#preferences,
+          logger: this.#logger,
+        });
+      } catch {
+        // Optional AI registration must not prevent core Reader/Main startup.
+        this.#logger.debug('AI Q&A initialization failed');
+      }
+    }
     this.#reader.start(context.id);
     (Zotero as ZoteroWithNeo).Neo = this.api;
+    const migration = await migrateLegacySourceNoteIdentities();
+    if (this.#context !== context) return;
+    if (migration.migrated || migration.readOnly) {
+      this.#logger.debug(
+        `Source note identities migrated=${migration.migrated} deferredReadOnly=${migration.readOnly}`,
+      );
+    }
     this.#logger.debug(`Initialized v${context.version} on Zotero ${Zotero.version || '?'}`);
     this.#logger.diagnostic(
       `addon initialized version=${context.version} zotero=${Zotero.version || '?'}`,
@@ -128,9 +164,15 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
     if (host.Neo === this.api) delete host.Neo;
     this.#context = null;
     const failure = new CleanupFailure();
+    failure.run(() => this.#managedTags.dispose());
     failure.run(() => this.#preparation.dispose());
     failure.run(() => this.#reader.shutdown());
+    failure.run(() => this.aiQA?.dispose());
+    this.aiQA = null;
     failure.run(() => this.#main.shutdown());
+    const releaseNativeUI = this.#releaseNativeUI;
+    this.#releaseNativeUI = null;
+    failure.run(() => releaseNativeUI?.());
     failure.rethrow();
     this.#logger.debug('Shut down');
     this.#logger.diagnostic('addon shut down');

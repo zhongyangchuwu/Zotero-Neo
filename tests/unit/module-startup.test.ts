@@ -8,7 +8,12 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('application module startup flags', () => {
   it('keeps pending requests unapplied across Neo reloads and applies them after Zotero restarts', () => {
-    const legacy = { 'reader-hints': false, extensions: true };
+    const legacy = Object.fromEntries(BUILTIN_MODULES.map(({ id }) => [id, false]));
+    delete legacy.translation;
+    delete legacy.references;
+    delete legacy['tab-enhancements'];
+    legacy.extensions = true;
+    legacy['reader-ai'] = true;
     vi.stubGlobal('Zotero', {
       [Symbol.for('zotero-neo.startup-module-flags')]: JSON.stringify(legacy),
     });
@@ -18,6 +23,8 @@ describe('application module startup flags', () => {
       ),
       [modulePreferenceKey('reader-hints'), true],
       [modulePreferenceKey('extensions'), false],
+      [modulePreferenceKey('ai-qa'), true],
+      [modulePreferenceKey('tab-enhancements'), true],
     ]);
     const preferences = {
       get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
@@ -26,12 +33,22 @@ describe('application module startup flags', () => {
     const first = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
     values.set(modulePreferenceKey('translation'), true);
     const reloaded = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
-    expect(first.applied).toEqual({ 'reader-hints': false, extensions: true, translation: false });
+    expect(first.applied).toEqual({
+      'reader-hints': false,
+      extensions: true,
+      translation: false,
+      'ai-qa': false,
+      references: false,
+      'tab-enhancements': false,
+    });
     expect(reloaded.applied).toEqual(first.applied);
     expect(reloaded.requested()).toEqual({
       'reader-hints': true,
       extensions: false,
       translation: true,
+      'ai-qa': true,
+      references: true,
+      'tab-enhancements': true,
     });
     const owner = {};
     const main = reloaded.createScope('main', owner, () => true);
@@ -50,7 +67,11 @@ describe('application module startup flags', () => {
     }
     expect(reader.activate('reader-hints', vi.fn())).toBeNull();
     expect(reader.activate('translation', vi.fn())).toBeNull();
+    expect(reader.activate('ai-qa', vi.fn())).toBeNull();
+    expect(reader.activate('references', vi.fn())).toBeNull();
+    expect(reader.available('reader-normal', 'openReferences')).toBe(false);
     expect(main.activate('extensions', () => ({}))).not.toBeNull();
+    expect(main.activate('tab-enhancements', vi.fn())).toBeNull();
     const inspected = reloaded.inspect(owner);
     expect(
       inspected.filter(({ id }) => isOptionalModule(id)).every((state) => state.pendingRestart),
@@ -70,6 +91,9 @@ describe('application module startup flags', () => {
       'reader-hints': true,
       extensions: false,
       translation: true,
+      'ai-qa': true,
+      references: true,
+      'tab-enhancements': true,
     });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
     const reopened = restarted.createScope('reader', {}, () => true);
@@ -78,5 +102,42 @@ describe('application module startup flags', () => {
       available: true,
     });
     reopened.dispose();
+  });
+
+  it('defaults the experiment off even when the old preference was enabled', () => {
+    vi.stubGlobal('Zotero', {});
+    const values: Record<string, boolean> = { 'modules.reader-ai.enabled': true };
+    const preferences = {
+      get: (key: string, fallback: boolean | number | string) => values[key] ?? fallback,
+    } as PreferenceReader;
+    const logger = { debug: vi.fn(), diagnostic: vi.fn() };
+    const runtime = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
+    expect(runtime.applied['ai-qa']).toBe(false);
+    expect(runtime.requested()['ai-qa']).toBe(false);
+    const activate = vi.fn();
+    const reader = runtime.createScope('reader', {}, () => true);
+    expect(reader.activate('ai-qa', activate)).toBeNull();
+    expect(reader.available('reader-normal', 'openAIQA')).toBe(false);
+    expect(reader.host.hasAction('reader-normal', 'openAIQA')).toBe(false);
+    expect(activate).not.toHaveBeenCalled();
+    reader.dispose();
+  });
+
+  it('applies an opt-in only after a full application restart', () => {
+    vi.stubGlobal('Zotero', {});
+    const values = new Map<string, boolean>();
+    const preferences = {
+      get: (key: string, fallback: boolean | number | string) => values.get(key) ?? fallback,
+    } as PreferenceReader;
+    const logger = { debug: vi.fn(), diagnostic: vi.fn() };
+    const first = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
+    values.set(modulePreferenceKey('ai-qa'), true);
+    const reload = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
+    expect(first.applied['ai-qa']).toBe(false);
+    expect(reload.applied['ai-qa']).toBe(false);
+    expect(reload.requested()['ai-qa']).toBe(true);
+    vi.stubGlobal('Zotero', {});
+    const restart = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
+    expect(restart.applied['ai-qa']).toBe(true);
   });
 });

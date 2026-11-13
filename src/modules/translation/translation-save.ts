@@ -28,7 +28,7 @@ export class ReaderTranslationSave {
   #window: PdfWindow | null = null;
   #timer: number | null = null;
   #disposeCapture: (() => void) | null = null;
-  readonly #sources = new WeakMap<object, Promise<TranslationSource>>();
+  readonly #sources = new WeakMap<object, Map<number, Promise<TranslationSource>>>();
   readonly #saved = new Map<string, Set<string>>();
   readonly #pending = new Set<string>();
 
@@ -60,12 +60,21 @@ export class ReaderTranslationSave {
     const pageLabel = annotation.pageLabel;
     const baseKey = JSON.stringify([itemID, quote, annotation.position]);
     let key = baseKey;
-    let source = this.#sources.get(loaded.identity);
+    let sources = this.#sources.get(loaded.identity);
+    if (!sources) {
+      sources = new Map();
+      this.#sources.set(loaded.identity, sources);
+    }
+    let source = sources.get(itemID);
     if (!source) {
       source = loaded.fingerprint.then((fingerprint) =>
         captureTranslationSource(itemID, fingerprint),
       );
-      this.#sources.set(loaded.identity, source);
+      sources.set(itemID, source);
+      const cache = sources;
+      void source.catch(() => {
+        if (cache.get(itemID) === source) cache.delete(itemID);
+      });
     }
     const sourceSnapshot = source;
     let sourceReady = false;
@@ -88,6 +97,8 @@ export class ReaderTranslationSave {
           this.#revision === revision &&
           button.isConnected &&
           this.#ports.isCurrent(window) &&
+          this.#ports.reader.itemID === itemID &&
+          readerLoadedPDFSource(this.#ports.reader, window)?.identity === loaded.identity &&
           sourceCurrent()
         );
       } catch {

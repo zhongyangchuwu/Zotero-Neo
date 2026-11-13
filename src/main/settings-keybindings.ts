@@ -11,141 +11,117 @@ import {
   keyGuideConfig,
   neoCommandLanguage,
   normalizeKeyGuideNumber,
-  type KeyGuideNumberSetting,
 } from '../core/preferences';
 import {
+  addActionBinding,
   createBindingEditor,
   deriveBindingEditor,
+  resetAction,
   transition,
+  unbindAction,
   type BindingEditorLanguage,
   type BindingEditorState,
 } from '../input/binding-editor';
-import { encodeBindingOverrides } from '../input/bindings';
-import { THEME_VARS } from '../ui/theme';
-import { mountShortcutBrowser, type MountedShortcutBrowser } from './settings-keybindings-view';
+import { BINDING_CONTEXTS, encodeBindingOverrides } from '../input/bindings';
 import {
-  settingsText,
-  settingsToggleLabels,
-  type SettingsLanguage,
-  type SettingsMessage,
-} from './settings-i18n';
-import {
-  settingsGroup,
-  settingsNumberRow,
-  settingsStatus,
-  settingsToggleRow,
-  type SettingsNumberInput,
-  type SettingsToggle,
-} from './settings-ui';
-
-const H = 'http://www.w3.org/1999/xhtml';
+  ACTION_GROUPS,
+  contextLabel,
+  groupLabel,
+  nativeShortcutCatalog,
+} from '../input/shortcut-catalog';
+import { keyString } from '../input/keys';
+import { serializeBindingTokens } from '../input/key-sequence';
+import { settingsText, type SettingsLanguage, type SettingsMessage } from './settings-i18n';
+import type { KeybindingsPageCommand, KeybindingsPageModel } from './settings-keybindings-model';
 
 export interface SettingsKeybindingsState {
   editor: BindingEditorState | null;
 }
 
+const MESSAGES = [
+  'Keybindings',
+  'Shortcut browser',
+  'Search shortcuts',
+  'Search actions, IDs, keys, and contexts',
+  'All contexts',
+  'All groups',
+  'Show bound and unbound',
+  'Bound actions',
+  'Unbound actions',
+  'Search results',
+  'No matching actions.',
+  'Apply bindings',
+  'Fix invalid rows before applying.',
+  'Prefix conflicts detected; Apply is allowed.',
+  'Unsaved changes',
+  'Saved.',
+  'Could not save bindings.',
+  'Current shortcuts',
+  'Default shortcuts',
+  'No shortcut is assigned in this context.',
+  'Unbound',
+  'Origin',
+  'Default',
+  'Custom',
+  'Record keys',
+  'Add shortcut',
+  'Unbind this action',
+  'Reset this action',
+  'Delete binding',
+  'Recording keys — press keys in order, then choose Done',
+  'Shortcut recorded; choose Done to keep it.',
+  'Shortcut recording cancelled.',
+  'Done',
+  'Cancel',
+  'Native shortcuts',
+  'Read-only; Zotero or the operating system owns these keys.',
+  'Enter a key sequence and action.',
+  'Invalid mode, key sequence, or action.',
+  'Action is not supported in this mode.',
+  'Duplicate mode and key sequence.',
+  'Strict prefix of another sequence.',
+  'Native key is reserved by Zotero or text editing.',
+  'Prefix Guide',
+  'Show valid continuations while a multi-key command prefix is pending.',
+  'Show Prefix Guide',
+  'Display delay (ms)',
+  'Font size (px)',
+  'Could not update Prefix Guide settings.',
+] as const;
+
 /** Owns Prefix Guide configuration and one explicit-Apply keybinding draft. */
 export class SettingsKeybindings {
-  readonly #root: HTMLElement;
-  readonly #browserRoot: HTMLElement;
   readonly #preferences: PreferenceStore;
-  readonly #language: SettingsLanguage;
   readonly #state: SettingsKeybindingsState;
+  readonly #language: SettingsLanguage;
+  readonly #changed: () => void;
   readonly #cleanups: Array<() => void> = [];
-  readonly #guideToggle: SettingsToggle;
-  readonly #guideNumbers: Record<KeyGuideNumberSetting, SettingsNumberInput>;
-  readonly #guideStatus: HTMLElement;
-  #browserView: MountedShortcutBrowser | null = null;
+  #recording: KeybindingsPageModel['recording'] = null;
+  #status = '';
+  #guideError = '';
+  #disposed = false;
+
   constructor(
-    window: MainWindow,
-    root: HTMLElement,
+    _window: MainWindow,
     preferences: PreferenceStore,
-    state: SettingsKeybindingsState = { editor: null },
-    language: SettingsLanguage = 'en',
+    state: SettingsKeybindingsState,
+    language: SettingsLanguage,
+    changed: () => void,
   ) {
-    this.#root = root;
     this.#preferences = preferences;
     this.#state = state;
     this.#language = language;
-    const doc = window.document;
-    root.style.cssText = 'display:block;overflow:auto;padding:16px 20px';
-
-    const title = doc.createElementNS(H, 'h2');
-    title.textContent = settingsText(language, 'Keybindings');
-    title.style.cssText = 'margin:0 0 0.55em;font-size:1.55em';
-
-    const browser = settingsGroup(doc, settingsText(language, 'Shortcut browser'));
-    this.#browserRoot = doc.createElementNS(H, 'div');
-    browser.append(this.#browserRoot);
-
-    const guide = doc.createElementNS(H, 'details');
-    guide.style.cssText = 'margin:0 0 1.5em';
-    const guideSummary = doc.createElementNS(H, 'summary');
-    guideSummary.textContent = settingsText(language, 'Prefix Guide');
-    guideSummary.style.cssText = 'cursor:pointer;font-weight:600';
-    const guideDescription = doc.createElementNS(H, 'p');
-    guideDescription.textContent = settingsText(
-      language,
-      'Show valid continuations while a multi-key command prefix is pending.',
-    );
-    guideDescription.style.cssText = `margin:0.5em 0;color:${THEME_VARS.muted}`;
-
-    const config = keyGuideConfig(preferences);
-    this.#guideToggle = settingsToggleRow(
-      doc,
-      settingsText(language, 'Show Prefix Guide'),
-      config.enabled,
-      (enabled) => this.#saveGuide(KEY_GUIDE_ENABLED_PREFERENCE_KEY, enabled),
-      this.#cleanups,
-      undefined,
-      settingsToggleLabels(language),
-    );
-    this.#guideNumbers = {
-      delayMs: settingsNumberRow(
-        doc,
-        settingsText(language, 'Display delay (ms)'),
-        config.delayMs,
-        {
-          minimum: KEY_GUIDE_NUMBER_SPECS.delayMs.minimum,
-          maximum: KEY_GUIDE_NUMBER_SPECS.delayMs.maximum,
-          step: 25,
-        },
-        (value) => this.#saveGuideNumber('delayMs', value),
-        this.#cleanups,
-      ),
-      fontSizePx: settingsNumberRow(
-        doc,
-        settingsText(language, 'Font size (px)'),
-        config.fontSizePx,
-        {
-          minimum: KEY_GUIDE_NUMBER_SPECS.fontSizePx.minimum,
-          maximum: KEY_GUIDE_NUMBER_SPECS.fontSizePx.maximum,
-          step: 1,
-        },
-        (value) => this.#saveGuideNumber('fontSizePx', value),
-        this.#cleanups,
-      ),
-    };
-    this.#guideStatus = settingsStatus(doc);
-    guide.append(
-      guideSummary,
-      guideDescription,
-      this.#guideToggle.element,
-      this.#guideNumbers.delayMs.element,
-      this.#guideNumbers.fontSizePx.element,
-      this.#guideStatus,
-    );
-
-    root.append(title, browser, guide);
+    this.#changed = changed;
     this.#prepareDraft();
-    this.#mountEditor();
-
     for (const key of [
       KEY_GUIDE_ENABLED_PREFERENCE_KEY,
       KEY_GUIDE_DELAY_PREFERENCE_KEY,
       KEY_GUIDE_FONT_SIZE_PREFERENCE_KEY,
     ]) {
-      const cleanup = preferences.observe?.(key, () => this.#refreshGuide(true));
+      const cleanup = preferences.observe?.(key, () => {
+        this.#guideError = '';
+        this.#publish();
+      });
       if (cleanup) this.#cleanups.push(cleanup);
     }
     const bindingsCleanup = preferences.observe?.(BINDINGS_PREFERENCE_KEY, () => {
@@ -155,12 +131,18 @@ export class SettingsKeybindings {
         bindingsFromPreferences(preferences),
         this.#editorLanguage(),
       );
-      this.#mountEditor();
+      this.#publish();
     });
     if (bindingsCleanup) this.#cleanups.push(bindingsCleanup);
-    const languageCleanup = preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () =>
-      this.#refreshLanguage(),
-    );
+    const languageCleanup = preferences.observe?.(LANGUAGE_PREFERENCE_KEY, () => {
+      const editor = this.#state.editor;
+      if (!editor) return;
+      const language = this.#editorLanguage();
+      if (editor.language !== language) {
+        this.#state.editor = transition(editor, { type: 'set-language', language });
+        this.#publish();
+      }
+    });
     if (languageCleanup) this.#cleanups.push(languageCleanup);
   }
 
@@ -170,85 +152,181 @@ export class SettingsKeybindings {
       typeof Zotero === 'undefined' ? '' : (Zotero.locale ?? ''),
     );
   }
-
   #prepareDraft(): void {
     const language = this.#editorLanguage();
-    const existing = this.#state.editor;
-    if (!existing || !deriveBindingEditor(existing).dirty) {
-      this.#state.editor = createBindingEditor(
-        bindingsFromPreferences(this.#preferences),
-        language,
-      );
+    const editor = this.#state.editor;
+    this.#state.editor =
+      !editor || !deriveBindingEditor(editor).dirty
+        ? createBindingEditor(bindingsFromPreferences(this.#preferences), language)
+        : editor.language === language
+          ? editor
+          : transition(editor, { type: 'set-language', language });
+  }
+  #publish(): void {
+    if (!this.#disposed) this.#changed();
+  }
+  model(): KeybindingsPageModel {
+    const editor = this.#state.editor!;
+    const derived = deriveBindingEditor(editor);
+    const labels: Record<string, string> = {};
+    for (const message of MESSAGES)
+      labels[message] = settingsText(editor.language, message as SettingsMessage);
+    const guide = keyGuideConfig(this.#preferences);
+    return {
+      labels,
+      contexts: BINDING_CONTEXTS.map((value) => ({
+        value,
+        label: contextLabel(value, editor.language),
+      })),
+      groups: ACTION_GROUPS.map((value) => ({ value, label: groupLabel(value, editor.language) })),
+      catalog: derived.catalog,
+      native: nativeShortcutCatalog(undefined, editor.language),
+      rows: editor.rows,
+      errors: derived.validation.errors,
+      warnings: derived.validation.warnings,
+      dirty: derived.dirty,
+      canApply: derived.dirty && derived.validation.valid && !!derived.effectiveMap,
+      saveOutcome: editor.saveOutcome,
+      recording: this.#recording,
+      status: this.#status,
+      guide: { ...guide, error: this.#guideError },
+    };
+  }
+  dispatch(command: KeybindingsPageCommand): void {
+    if (this.#disposed || !command || typeof command !== 'object') return;
+    let editor = this.#state.editor;
+    if (!editor) return;
+    const derived = deriveBindingEditor(editor);
+    if (command.type === 'guide-enabled' || command.type === 'guide-number') {
+      let key: string;
+      let value: boolean | number;
+      if (command.type === 'guide-enabled') {
+        if (typeof command.value !== 'boolean') return;
+        key = KEY_GUIDE_ENABLED_PREFERENCE_KEY;
+        value = command.value;
+      } else {
+        if (
+          (command.setting !== 'delayMs' && command.setting !== 'fontSizePx') ||
+          typeof command.value !== 'number' ||
+          !Number.isFinite(command.value)
+        )
+          return;
+        key = KEY_GUIDE_NUMBER_SPECS[command.setting].key;
+        value = normalizeKeyGuideNumber(command.setting, command.value);
+      }
+      try {
+        this.#preferences.set(key, value);
+        this.#guideError = '';
+      } catch {
+        this.#guideError = settingsText(this.#language, 'Could not update Prefix Guide settings.');
+      }
+      this.#publish();
       return;
     }
-    if (existing.language !== language) {
-      this.#state.editor = transition(existing, {
-        type: 'set-language',
-        language,
-      });
-    }
+    if (command.type === 'record') {
+      if (
+        !derived.catalog.some(
+          (entry) => entry.context === command.context && entry.action === command.action,
+        )
+      )
+        return;
+      if (
+        command.rowId !== null &&
+        !editor.rows.some(
+          (row) =>
+            row.id === command.rowId &&
+            row.mode === command.context &&
+            row.action === command.action,
+        )
+      )
+        return;
+      this.#recording = {
+        context: command.context,
+        action: command.action,
+        rowId: command.rowId,
+        tokens: [],
+        sequence: '',
+      };
+      this.#status = '';
+    } else if (command.type === 'record-key') {
+      if (!this.#recording || !command.event || typeof command.event.key !== 'string') return;
+      const key = keyString(command.event);
+      if (!key) return;
+      const tokens = [...this.#recording.tokens, key];
+      const sequence = serializeBindingTokens(tokens);
+      if (!sequence) return;
+      this.#recording = { ...this.#recording, tokens, sequence };
+    } else if (command.type === 'cancel-recording') {
+      if (!this.#recording) return;
+      this.#recording = null;
+      this.#status = settingsText(editor.language, 'Shortcut recording cancelled.');
+    } else if (command.type === 'finish-recording') {
+      const recording = this.#recording;
+      if (!recording?.sequence) return;
+      if (
+        !derived.catalog.some(
+          (entry) => entry.context === recording.context && entry.action === recording.action,
+        )
+      )
+        return;
+      if (
+        recording.rowId !== null &&
+        !editor.rows.some(
+          (row) =>
+            row.id === recording.rowId &&
+            row.mode === recording.context &&
+            row.action === recording.action,
+        )
+      )
+        return;
+      editor =
+        recording.rowId === null
+          ? addActionBinding(editor, recording.context, recording.action, recording.sequence)
+          : transition(editor, {
+              type: 'update-row',
+              rowId: recording.rowId,
+              patch: { key: recording.sequence },
+            });
+      this.#recording = null;
+      this.#status = '';
+    } else if (command.type === 'apply') {
+      if (!derived.dirty || !derived.validation.valid || !derived.effectiveMap) return;
+      try {
+        this.#preferences.set(
+          BINDINGS_PREFERENCE_KEY,
+          encodeBindingOverrides(derived.effectiveMap),
+        );
+        editor = transition(editor, { type: 'save-success', bindings: derived.effectiveMap });
+      } catch {
+        editor = transition(editor, { type: 'save-failure' });
+      }
+      this.#recording = null;
+      this.#status = '';
+    } else if (command.type === 'delete-row') {
+      if (!editor.rows.some((row) => row.id === command.rowId)) return;
+      editor = transition(editor, { type: 'delete-row', rowId: command.rowId });
+      this.#recording = null;
+      this.#status = '';
+    } else if (command.type === 'unbind' || command.type === 'reset-action') {
+      if (
+        !derived.catalog.some(
+          (entry) => entry.context === command.context && entry.action === command.action,
+        )
+      )
+        return;
+      editor =
+        command.type === 'unbind'
+          ? unbindAction(editor, command.context, command.action)
+          : resetAction(editor, command.context, command.action);
+      this.#recording = null;
+      this.#status = '';
+    } else return;
+    this.#state.editor = editor;
+    this.#publish();
   }
-
-  #refreshLanguage(): void {
-    const state = this.#state.editor;
-    if (!state) return;
-    const language = this.#editorLanguage();
-    if (state.language === language) return;
-    this.#state.editor = transition(state, { type: 'set-language', language });
-    this.#mountEditor();
-  }
-
-  #mountEditor(): void {
-    this.#browserView?.dispose();
-    const state = this.#state.editor;
-    if (!state) return;
-    this.#browserView = mountShortcutBrowser({
-      document: this.#root.ownerDocument,
-      root: this.#browserRoot,
-      state,
-      localize: (key, editorLanguage) => settingsText(editorLanguage, key as SettingsMessage),
-      onSave: (bindings) => {
-        this.#preferences.set(BINDINGS_PREFERENCE_KEY, encodeBindingOverrides(bindings));
-      },
-      onStateChange: (next) => {
-        this.#state.editor = next;
-      },
-    });
-  }
-
-  #saveGuide(key: string, value: boolean | number | string): boolean {
-    try {
-      this.#preferences.set(key, value);
-      this.#refreshGuide(true);
-      return true;
-    } catch {
-      this.#refreshGuide();
-      this.#guideStatus.textContent = settingsText(
-        this.#language,
-        'Could not update Prefix Guide settings.',
-      );
-      return false;
-    }
-  }
-
-  #saveGuideNumber(setting: KeyGuideNumberSetting, raw: number): number | false {
-    const next = normalizeKeyGuideNumber(setting, raw);
-    if (!this.#saveGuide(KEY_GUIDE_NUMBER_SPECS[setting].key, next)) return false;
-    return keyGuideConfig(this.#preferences)[setting];
-  }
-
-  #refreshGuide(clearStatus = false): void {
-    const config = keyGuideConfig(this.#preferences);
-    this.#guideToggle.set(config.enabled);
-    this.#guideNumbers.delayMs.set(config.delayMs);
-    this.#guideNumbers.fontSizePx.set(config.fontSizePx);
-    if (clearStatus) this.#guideStatus.textContent = '';
-  }
-
   dispose(): void {
-    this.#browserView?.dispose();
-    this.#browserView = null;
+    this.#disposed = true;
+    this.#recording = null;
     for (const cleanup of this.#cleanups.splice(0)) cleanup();
-    this.#root.replaceChildren();
   }
 }

@@ -14,6 +14,9 @@ export function readerSelectionPopupSource(
   const primary = state.primaryViewSelectionPopup?.annotation === annotation;
   const secondary = state.secondaryViewSelectionPopup?.annotation === annotation;
   if (primary === secondary) return null;
+  const selectionPopup = primary
+    ? state.primaryViewSelectionPopup
+    : state.secondaryViewSelectionPopup;
   const view = readerPresentationView(reader, primary);
   const window = view && readerViewWindow(view);
   if (!view || !window || !readerViewIsLive(reader, view, window)) return null;
@@ -29,6 +32,7 @@ export function readerSelectionPopupSource(
         ? current?.secondaryViewSelectionPopup
         : current?.primaryViewSelectionPopup;
       return (
+        popup === selectionPopup &&
         popup?.annotation === annotation &&
         other?.annotation !== annotation &&
         window.document === document &&

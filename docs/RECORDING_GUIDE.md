@@ -129,7 +129,7 @@
 第三方集成只录独立的可选片，不并入核心 S0–S6；只有当前已安装、启用的集成在界面提供相应操作时才拍，条件不符便跳过。
 
 - **Better BibTeX：** 仅当当前 Zotero 已安装并启用 Better BibTeX，且一次性测试条目确有 citekey（引文键）时，才单独拍主窗口 Normal 模式下按 `<Space>yy` 为有效目标复制 citekey。按目标名称确认目标是主窗口当前条目或 Neo 选择集；若目标没有可用 citekey，不录成成功。
-- **Translate for Zotero：** 按[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)准备并启用翻译增强，完整重启 Zotero 后，只有上游公开翻译 API 可用时，Reader Select 的 Selection Actions 才显示手动 **Translate**。自动翻译的独立片按[保存自动翻译的译文](SELECTION_GUIDE.md#保存自动翻译的译文)操作：等上游结果完成，修订后保存，展示原文旁的便签及侧栏译文角色；不要把原生自动翻译与 Neo 保存剪成第二次翻译。字幕标明实际插件／集成名称及版本。
+- **Translate for Zotero：** 按[模块设置指南](SETTINGS_GUIDE.md#准备翻译增强)准备并启用翻译增强，完整重启 Zotero 后，只有上游公开翻译 API 可用时，Reader Select 的 Selection Actions 才显示手动 **Translate**。自动翻译的独立片按[保存自动翻译的译文](SELECTION_GUIDE.md#保存自动翻译的译文)操作：等上游结果完成，修订后保存，展示原文旁的便签及侧栏译文角色；不要把原生自动翻译与 Neo 保存剪成第二次翻译。字幕标明实际插件／集成名称及版本。
 
 ## 参考边界
 

@@ -13,10 +13,14 @@ import {
   isCommittedInput,
 } from '../../input/composition';
 import { asElement, isEditableElement } from '../../platform/dom';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model';
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
-import { THEME_VARS } from '../../ui/theme';
+import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
 import { installMainPlugin, updateMainPlugin } from '../../toolkit/main';
+import { TRANSLATE_PLUGIN_HASH, TRANSLATE_SUPPORTED_VERSION } from '../translation/dependency';
 import {
   installedPlugins,
   openPluginInfoURL,
@@ -59,6 +63,7 @@ export function filterInstalledPlugins(
 
 export class PluginManagerPanel {
   readonly #host: PluginManagerPanelHost;
+  #view: NativeReactView<ExtensionsReactModel> | null = null;
 
   constructor(host: PluginManagerPanelHost) {
     this.#host = host;
@@ -68,8 +73,11 @@ export class PluginManagerPanel {
     if (!this.#host.isCurrent()) return;
     const state = this.#host.state;
     if (state.open) {
-      state.overlay?.focus();
-      return;
+      if (state.overlay?.ownerDocument === this.#host.window.document) {
+        state.overlay.focus();
+        return;
+      }
+      this.close();
     }
     const window = this.#host.window;
     let pendingOverlay: HTMLElement | null = null;
@@ -80,45 +88,10 @@ export class PluginManagerPanel {
       pendingOverlay = overlay;
       overlay.id = 'zv-plugin-manager';
       overlay.tabIndex = -1;
-      overlay.style.cssText = `position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:40px;background:${THEME_VARS.backdrop};color:${THEME_VARS.text};font:13px/1.4 monospace`;
+      overlay.style.cssText = CENTERED_MONOSPACE_OVERLAY_STYLE;
 
-      const panel = create('section');
-      panel.style.cssText = `width:min(960px,calc(100vw - 80px));height:min(640px,calc(100vh - 80px));min-width:620px;min-height:420px;display:flex;flex-direction:column;overflow:hidden;background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 24px 70px ${THEME_VARS.shadow}`;
-
-      const header = create('header');
-      header.style.cssText = `display:flex;align-items:center;gap:14px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}`;
-      const title = create('strong');
-      title.textContent = 'Plugin Manager';
-      title.style.cssText = 'font-size:14px;white-space:nowrap';
-      const count = create('span');
-      count.style.cssText = `color:${THEME_VARS.muted};white-space:nowrap`;
-      const input = doc.createElementNS(H, 'input') as HTMLInputElement;
-      input.type = 'text';
-      input.placeholder = 'Filter installed plugins';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.style.cssText = `flex:1;min-width:140px;padding:6px 9px;color:${THEME_VARS.text};background:${THEME_VARS.input};border:1px solid ${THEME_VARS.border};border-radius:5px;outline:none;font:inherit`;
-      header.append(title, count, input);
-
-      const content = create('div');
-      content.style.cssText =
-        'display:grid;grid-template-columns:minmax(260px,42%) minmax(320px,58%);flex:1;min-height:0';
-
-      const list = create('div');
-      list.tabIndex = -1;
-      list.style.cssText = `overflow:auto;min-height:0;padding:7px 0;border-right:1px solid ${THEME_VARS.border};outline:none`;
-
-      const details = create('div');
-      details.tabIndex = -1;
-      details.style.cssText = `overflow:auto;min-height:0;padding:20px 22px;background:${THEME_VARS.elevated};white-space:pre-wrap;outline:none`;
-
-      content.append(list, details);
-
-      const footer = create('footer');
-      footer.style.cssText = `padding:7px 12px;color:${THEME_VARS.muted};border-top:1px solid ${THEME_VARS.border};white-space:nowrap;overflow:hidden;text-overflow:ellipsis`;
-
-      panel.append(header, content, footer);
-      overlay.append(panel);
+      const root = create('div');
+      overlay.append(root);
       (doc.body ?? doc.documentElement).append(overlay);
 
       state.open = true;
@@ -129,11 +102,11 @@ export class PluginManagerPanel {
       state.query = '';
       state.selected = 0;
       state.overlay = overlay;
-      state.list = list;
-      state.details = details;
-      state.count = count;
-      state.input = input;
-      state.footer = footer;
+      state.list = null;
+      state.details = null;
+      state.count = null;
+      state.input = null;
+      state.footer = null;
       state.previousElement = doc.activeElement;
       const themeCleanup = this.#host.themeRoot(overlay);
       if (state.overlay !== overlay) {
@@ -159,7 +132,6 @@ export class PluginManagerPanel {
         schedule: (callback, delay) => window.setTimeout(callback, delay),
         clearTimer: (timer) => window.clearTimeout(timer),
       });
-      const compositionCleanup = bindCompositionState(input, state.composition);
       const localBindings = state.localBindings;
       const deactivate = (): void => localBindings?.deactivate();
       const focus = (): void => {
@@ -167,31 +139,58 @@ export class PluginManagerPanel {
         deactivate();
         this.renderFooter();
       };
-      input.addEventListener('compositionstart', deactivate);
-      overlay.addEventListener('focusout', deactivate);
-      input.addEventListener('focus', focus);
-
-      const onInput = (event: Event): void => {
-        if (
-          !this.#host.isCurrent() ||
-          !state.open ||
-          state.overlay !== overlay ||
-          !isCommittedInput(event, state.composition.active)
-        )
-          return;
-        state.query = input.value;
-        state.selected = 0;
-        this.filter();
-        this.render();
-      };
-      input.addEventListener('input', onInput);
-      state.inputCleanup = () => {
-        compositionCleanup();
-        input.removeEventListener('input', onInput);
-        input.removeEventListener('compositionstart', deactivate);
-        input.removeEventListener('focus', focus);
-        overlay.removeEventListener('focusout', deactivate);
-      };
+      const current = (): boolean =>
+        this.#host.isCurrent() &&
+        state.open &&
+        state.overlay === overlay &&
+        window.document === doc &&
+        overlay.isConnected;
+      const view = mountNativeReactView<ExtensionsReactModel, ExtensionsReactCommand>({
+        surface: 'extensions',
+        root,
+        model: this.model(),
+        dispatch: (command) => this.dispatch(command),
+        isCurrent: current,
+        loadingText: 'Preparing Plugin Manager…',
+        errorText: 'Could not load Plugin Manager. Press Escape to close.',
+        onError: (error) =>
+          reportDiagnosticError(this.#host.logger, 'Plugin manager renderer failed', error),
+      });
+      this.#view = view;
+      void view.ready.then(
+        () => {
+          if (!current()) return;
+          const input = view.getElement('input') as HTMLInputElement | null;
+          const list = view.getElement('list');
+          if (!input || !list) return;
+          state.input = input;
+          state.list = list;
+          state.details = view.getElement('details');
+          state.count = view.getElement('count');
+          state.footer = view.getElement('footer');
+          const compositionCleanup = bindCompositionState(input, state.composition);
+          const onInput = (event: Event): void => {
+            if (!current() || !isCommittedInput(event, state.composition.active)) return;
+            state.query = input.value;
+            state.selected = 0;
+            this.filter();
+            this.render();
+          };
+          input.addEventListener('compositionstart', deactivate);
+          overlay.addEventListener('focusout', deactivate);
+          input.addEventListener('focus', focus);
+          input.addEventListener('input', onInput);
+          state.inputCleanup = () => {
+            compositionCleanup();
+            input.removeEventListener('input', onInput);
+            input.removeEventListener('compositionstart', deactivate);
+            input.removeEventListener('focus', focus);
+            overlay.removeEventListener('focusout', deactivate);
+          };
+          this.render();
+        },
+        () => undefined,
+      );
 
       overlay.addEventListener('mousedown', (event) => {
         if (
@@ -231,9 +230,11 @@ export class PluginManagerPanel {
     const generation = ++state.generation;
     const cancelInstall = state.cancelInstall;
     state.cancelInstall = null;
+    state.open = false;
     cancelInstall?.();
     const { localBindings, inputCleanup, themeCleanup, overlay, previousElement } = state;
-    state.open = false;
+    const view = this.#view;
+    this.#view = null;
     state.localBindings = null;
     state.inputCleanup = null;
     state.themeCleanup = null;
@@ -255,6 +256,7 @@ export class PluginManagerPanel {
     const failure = new CleanupFailure();
     failure.run(() => localBindings?.dispose());
     failure.run(() => inputCleanup?.());
+    failure.run(() => view?.dispose());
     failure.run(() => themeCleanup?.());
     failure.run(() => overlay?.remove());
     try {
@@ -262,6 +264,7 @@ export class PluginManagerPanel {
         this.#host.isCurrent() &&
         state.generation === generation &&
         !state.open &&
+        overlay?.ownerDocument === this.#host.window.document &&
         previousElement?.isConnected
       )
         (previousElement as HTMLElement).focus();
@@ -276,7 +279,12 @@ export class PluginManagerPanel {
 
   handleKey(event: KeyboardEvent): void {
     const state = this.#host.state;
-    if (!this.#host.isCurrent() || !state.open) return;
+    if (
+      !this.#host.isCurrent() ||
+      !state.open ||
+      state.overlay?.ownerDocument !== this.#host.window.document
+    )
+      return;
     const eventTarget = asElement(event.target);
     let target = eventTarget;
     while (
@@ -391,13 +399,20 @@ export class PluginManagerPanel {
   async refresh(): Promise<void> {
     const state = this.#host.state;
     if (!this.#host.isCurrent() || !state.open) return;
+    const document = state.overlay?.ownerDocument;
     const generation = ++state.generation;
     state.loading = true;
     state.error = '';
     this.render();
     try {
       const plugins = await installedPlugins();
-      if (!this.#host.isCurrent() || !state.open || state.generation !== generation) return;
+      if (
+        !this.#host.isCurrent() ||
+        !state.open ||
+        state.generation !== generation ||
+        this.#host.window.document !== document
+      )
+        return;
       const selectedID = state.filtered[state.selected]?.id;
       state.plugins = plugins;
       this.filter();
@@ -409,12 +424,24 @@ export class PluginManagerPanel {
           ? selectedIndex
           : Math.min(state.selected, Math.max(0, state.filtered.length - 1));
     } catch (error) {
-      if (!this.#host.isCurrent() || !state.open || state.generation !== generation) return;
+      if (
+        !this.#host.isCurrent() ||
+        !state.open ||
+        state.generation !== generation ||
+        this.#host.window.document !== document
+      )
+        return;
       state.error = String(error);
       this.#host.logger.debug(`plugin manager load failed: ${String(error)}`);
       this.#host.logger.diagnostic(`plugin manager load failed: ${String(error)}`);
     } finally {
-      if (!this.#host.isCurrent() || !state.open || state.generation !== generation) return;
+      if (
+        !this.#host.isCurrent() ||
+        !state.open ||
+        state.generation !== generation ||
+        this.#host.window.document !== document
+      )
+        return;
       state.loading = false;
       this.render();
     }
@@ -426,16 +453,39 @@ export class PluginManagerPanel {
     if (!this.#host.isCurrent() || !state.open || !plugin || state.busy || state.loading) return;
     if (update ? plugin.installed === false : plugin.installed !== false) return;
     const overlay = state.overlay;
+    const document = overlay?.ownerDocument;
     const current = (): boolean =>
-      this.#host.isCurrent() && state.open && state.overlay === overlay;
+      this.#host.isCurrent() &&
+      state.open &&
+      state.overlay === overlay &&
+      overlay?.isConnected === true &&
+      this.#host.window.document === document;
+    if (
+      !this.#host.window.confirm(
+        update
+          ? `Check for updates for ${plugin.name}? This contacts the plugin's update service.`
+          : `Download Translate for Zotero ${TRANSLATE_SUPPORTED_VERSION} from ${TRANSLATE_PLUGIN_URL}?`,
+      )
+    )
+      return;
+    if (!current()) return;
     state.busy = true;
     state.notice = update ? `Checking updates for ${plugin.name}…` : `Downloading ${plugin.name}…`;
     this.render();
     try {
       const options = {
         id: plugin.id,
+        hash: update ? undefined : TRANSLATE_PLUGIN_HASH,
         confirm: (details: { name: string; version: string; source: string }): boolean => {
           if (!current()) return false;
+          if (
+            !update &&
+            (details.version !== TRANSLATE_SUPPORTED_VERSION ||
+              details.source !== TRANSLATE_PLUGIN_URL)
+          )
+            throw new Error('Downloaded translation provider version or source validation failed');
+          if (update && !details.source.startsWith('https://'))
+            throw new Error('Plugin update source must use HTTPS');
           const accepted = this.#host.window.confirm(
             `Install ${details.name} ${details.version}?\n\nPlugin ID: ${plugin.id}\nSource: ${details.source}\n\nPlugins can access your Zotero data and computer. Only install plugins you trust.`,
           );
@@ -456,7 +506,7 @@ export class PluginManagerPanel {
             return;
           }
           state.cancelInstall = cancel;
-          this.renderDetails();
+          this.render();
         },
       };
       const result = update
@@ -510,21 +560,40 @@ export class PluginManagerPanel {
     }
 
     const overlay = state.overlay;
+    const document = overlay?.ownerDocument;
     state.busy = true;
     state.notice = `${enabled ? 'Enabling' : 'Disabling'} ${plugin.name}…`;
     this.render();
     try {
       await setPluginEnabled(plugin.id, enabled);
-      if (!this.#host.isCurrent() || !state.open || state.overlay !== overlay) return;
+      if (
+        !this.#host.isCurrent() ||
+        !state.open ||
+        state.overlay !== overlay ||
+        this.#host.window.document !== document
+      )
+        return;
       state.notice = `${enabled ? 'Enabled' : 'Disabled'} ${plugin.name}`;
       await this.refresh();
     } catch (error) {
-      if (!this.#host.isCurrent() || !state.open || state.overlay !== overlay) return;
+      if (
+        !this.#host.isCurrent() ||
+        !state.open ||
+        state.overlay !== overlay ||
+        this.#host.window.document !== document
+      )
+        return;
       state.notice = `Failed to ${enabled ? 'enable' : 'disable'} ${plugin.name}: ${String(error)}`;
       this.#host.logger.debug(`plugin manager lifecycle action failed: ${String(error)}`);
       this.#host.logger.diagnostic(`plugin manager lifecycle action failed: ${String(error)}`);
     } finally {
-      if (!this.#host.isCurrent() || !state.open || state.overlay !== overlay) return;
+      if (
+        !this.#host.isCurrent() ||
+        !state.open ||
+        state.overlay !== overlay ||
+        this.#host.window.document !== document
+      )
+        return;
       state.busy = false;
       this.render();
     }
@@ -597,182 +666,116 @@ export class PluginManagerPanel {
     this.render();
   }
 
-  private render(): void {
+  private dispatch(command: ExtensionsReactCommand): void {
     const state = this.#host.state;
-    const list = state.list;
-    if (!list) return;
-
-    state.count!.textContent = state.loading
-      ? 'Loading…'
-      : `${state.filtered.length}/${state.plugins.length}`;
-
-    list.replaceChildren();
-    if (state.loading && !state.plugins.length) {
-      list.textContent = 'Loading installed plugins…';
-      list.style.color = THEME_VARS.muted;
-      this.renderDetails();
-      this.renderFooter();
+    if (!this.#host.isCurrent() || !state.open) return;
+    if (command.type === 'cancel') {
+      state.cancelInstall?.();
       return;
     }
-    if (state.error) {
-      list.textContent = `Unable to load plugins: ${state.error.slice(0, 120)}`;
-      list.style.color = THEME_VARS.error;
-      this.renderDetails();
-      this.renderFooter();
+    if (command.type === 'select') {
+      if (
+        !Number.isInteger(command.index) ||
+        command.index < 0 ||
+        command.index >= state.filtered.length
+      )
+        return;
+      state.localBindings?.deactivate();
+      state.list?.focus();
+      this.select(command.index);
       return;
     }
-    list.style.color = THEME_VARS.text;
-    if (!state.filtered.length) {
-      list.textContent = state.query.trim() ? 'No matching plugins' : 'No installed plugins';
-      this.renderDetails();
-      this.renderFooter();
-      return;
-    }
-
-    const doc = list.ownerDocument;
-    state.filtered.forEach((plugin, index) => {
-      const row = doc.createElementNS(H, 'div');
-      const selected = index === state.selected;
-      row.dataset.zvPluginIndex = String(index);
-      row.style.cssText = `display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer;color:${selected ? THEME_VARS.selectedText : THEME_VARS.text};background:${selected ? THEME_VARS.selected : 'transparent'};border-left:3px solid ${selected ? THEME_VARS.accent : 'transparent'}`;
-      const marker = doc.createElementNS(H, 'span');
-      marker.textContent = plugin.enabled ? '●' : '○';
-      marker.style.cssText = `color:${plugin.enabled ? THEME_VARS.success : THEME_VARS.muted}`;
-      const label = doc.createElementNS(H, 'span');
-      label.textContent = plugin.name;
-      label.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis';
-      const version = doc.createElementNS(H, 'span');
-      version.textContent = plugin.version || '—';
-      version.style.cssText = `color:${THEME_VARS.muted};font-size:11px`;
-      row.append(marker, label, version);
-      row.addEventListener('click', () => {
-        if (
-          !this.#host.isCurrent() ||
-          !state.open ||
-          state.list !== list ||
-          row.parentElement !== list
-        )
-          return;
-        state.localBindings?.deactivate();
-        state.list?.focus();
-        this.select(index);
-      });
-      list.append(row);
-    });
-
-    list.children[state.selected]?.scrollIntoView({ block: 'nearest' });
-    this.renderDetails();
-    this.renderFooter();
+    const plugin = state.filtered[state.selected];
+    if (!plugin) return;
+    const url =
+      command.kind === 'homepage'
+        ? plugin.homepageURL
+        : command.kind === 'repository'
+          ? plugin.repositoryURL
+          : command.kind === 'readme'
+            ? plugin.readmeURL
+            : command.kind === 'git-log'
+              ? plugin.gitLogURL
+              : undefined;
+    if (url) openPluginInfoURL(url);
   }
 
-  private renderDetails(): void {
+  private render(): void {
+    this.#view?.update(this.model());
     const state = this.#host.state;
-    const details = state.details;
-    if (!details) return;
-    const bindings = this.#host.bindings();
+    if (!state.loading && !state.error && state.filtered.length)
+      state.list?.children[state.selected]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  private model(context?: BindingContext): ExtensionsReactModel {
+    const state = this.#host.state;
     const plugin = state.filtered[state.selected];
-    if (!plugin) {
-      details.textContent = state.loading ? 'Loading plugin details…' : 'No plugin selected.';
-      return;
-    }
-
-    details.replaceChildren();
-    const doc = details.ownerDocument;
-    const title = doc.createElementNS(H, 'div');
-    title.textContent = plugin.name;
-    title.style.cssText = 'font-size:18px;font-weight:700;margin-bottom:18px';
-    const status = doc.createElementNS(H, 'div');
-    status.textContent =
-      plugin.installed === false ? 'Not installed' : plugin.enabled ? 'Active' : 'Inactive';
-    status.style.cssText = `display:inline-block;margin-bottom:18px;padding:3px 8px;border-radius:999px;color:${plugin.enabled ? THEME_VARS.success : THEME_VARS.muted};border:1px solid ${plugin.enabled ? THEME_VARS.success : THEME_VARS.border}`;
-    const meta = doc.createElementNS(H, 'div');
-    meta.style.cssText = 'display:grid;grid-template-columns:90px 1fr;gap:8px 14px';
-    const add = (labelText: string, value: string): void => {
-      const label = doc.createElementNS(H, 'span');
-      label.textContent = labelText;
-      label.style.color = THEME_VARS.muted;
-      const content = doc.createElementNS(H, 'span');
-      content.textContent = value;
-      content.style.overflowWrap = 'anywhere';
-      meta.append(label, content);
+    const bindings = this.#host.bindings();
+    const actions = plugin
+      ? [
+          plugin.installed === false
+            ? this.hint(bindings, 'plugins-list', 'pluginsInstall')
+            : this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
+          !plugin.enabled && plugin.canEnable
+            ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
+            : null,
+          plugin.enabled && plugin.canDisable
+            ? this.hint(bindings, 'plugins-list', 'pluginsDisable')
+            : null,
+          plugin.preferencePaneID
+            ? this.hint(bindings, 'plugins-list', 'pluginsPreferences')
+            : null,
+          plugin.homepageURL ? this.hint(bindings, 'plugins-list', 'pluginsHomepage') : null,
+          plugin.readmeURL ? this.hint(bindings, 'plugins-list', 'pluginsReadme') : null,
+          plugin.gitLogURL ? this.hint(bindings, 'plugins-list', 'pluginsGitLog') : null,
+        ].filter((hint): hint is string => !!hint)
+      : [];
+    const loading = state.loading && !state.plugins.length;
+    return {
+      plugins: state.filtered.map((item) => ({
+        id: item.id,
+        name: item.name,
+        version: item.version,
+        installed: item.installed,
+        pendingRestart: item.pendingRestart,
+        enabled: item.enabled,
+        canEnable: item.canEnable,
+        canDisable: item.canDisable,
+        description: item.description,
+        homepageURL: item.homepageURL,
+        repositoryURL: item.repositoryURL,
+        readmeURL: item.readmeURL,
+        gitLogURL: item.gitLogURL,
+        preferencePaneID: item.preferencePaneID,
+      })),
+      selected: state.selected,
+      query: state.query,
+      count: state.loading ? 'Loading…' : `${state.filtered.length}/${state.plugins.length}`,
+      listMessage: loading
+        ? 'Loading installed plugins…'
+        : state.error
+          ? `Unable to load plugins: ${state.error.slice(0, 120)}`
+          : !state.filtered.length
+            ? state.query.trim()
+              ? 'No matching plugins'
+              : 'No installed plugins'
+            : '',
+      listStatus: loading ? 'muted' : state.error ? 'error' : 'normal',
+      canCancel: !!state.cancelInstall,
+      loading: state.loading,
+      shortcuts: actions.length
+        ? `Shortcuts\n${actions.join('  ·  ')}`
+        : 'No additional shortcuts available',
+      footer: this.footer(context),
     };
-    add('Version', plugin.version || 'Unknown');
-    if (plugin.pendingRestart) add('Pending', 'Restart required to finish installation or update');
-    add('Plugin ID', plugin.id);
-    add('Settings', plugin.preferencePaneID ? 'Available' : 'Not registered');
-    if (plugin.id === TRANSLATE_PLUGIN_ID && plugin.installed !== false)
-      add('API', 'Readiness not checked');
-
-    const description = doc.createElementNS(H, 'div');
-    description.style.cssText = `margin-top:18px;padding-top:16px;border-top:1px solid ${THEME_VARS.border};color:${plugin.description ? THEME_VARS.text : THEME_VARS.muted};white-space:pre-wrap;overflow-wrap:anywhere`;
-    description.textContent = plugin.description || 'No description provided by the plugin.';
-
-    const links = doc.createElementNS(H, 'div');
-    links.style.cssText = `margin-top:18px;display:flex;flex-wrap:wrap;gap:8px 14px;color:${THEME_VARS.muted}`;
-    const linkEntries: Array<[string, string | undefined]> = [
-      ['Homepage', plugin.homepageURL],
-      [
-        'Repository',
-        plugin.repositoryURL === plugin.homepageURL ? undefined : plugin.repositoryURL,
-      ],
-      ['README', plugin.readmeURL],
-      ['Git log', plugin.gitLogURL],
-    ];
-    for (const [labelText, url] of linkEntries) {
-      if (!url) continue;
-      const link = doc.createElementNS(H, 'button') as HTMLButtonElement;
-      link.type = 'button';
-      link.textContent = labelText;
-      link.title = url;
-      link.style.cssText = `padding:0;border:0;background:none;color:${THEME_VARS.accent};font:inherit;text-decoration:underline;cursor:pointer`;
-      link.addEventListener('click', () => {
-        if (
-          this.#host.isCurrent() &&
-          state.open &&
-          state.details === details &&
-          links.parentElement === details
-        )
-          openPluginInfoURL(url);
-      });
-      links.append(link);
-    }
-
-    const actions = doc.createElementNS(H, 'div');
-    actions.style.cssText = `margin-top:24px;padding-top:16px;border-top:1px solid ${THEME_VARS.border};color:${THEME_VARS.muted}`;
-    const hints = [
-      plugin.installed === false
-        ? this.hint(bindings, 'plugins-list', 'pluginsInstall')
-        : this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
-      !plugin.enabled && plugin.canEnable
-        ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
-        : null,
-      plugin.enabled && plugin.canDisable
-        ? this.hint(bindings, 'plugins-list', 'pluginsDisable')
-        : null,
-      plugin.preferencePaneID ? this.hint(bindings, 'plugins-list', 'pluginsPreferences') : null,
-      plugin.homepageURL ? this.hint(bindings, 'plugins-list', 'pluginsHomepage') : null,
-      plugin.readmeURL ? this.hint(bindings, 'plugins-list', 'pluginsReadme') : null,
-      plugin.gitLogURL ? this.hint(bindings, 'plugins-list', 'pluginsGitLog') : null,
-    ].filter((hint): hint is string => !!hint);
-    actions.textContent = hints.length
-      ? `Shortcuts\n${hints.join('  ·  ')}`
-      : 'No additional shortcuts available';
-
-    details.append(title, status, meta, description);
-    if (links.childElementCount) details.append(links);
-    if (state.cancelInstall) {
-      const cancel = doc.createElementNS(H, 'button') as HTMLButtonElement;
-      cancel.type = 'button';
-      cancel.textContent = 'Cancel download';
-      cancel.addEventListener('click', () => state.cancelInstall?.());
-      details.append(cancel);
-    }
-    details.append(actions);
   }
 
   private renderFooter(context?: BindingContext): void {
+    this.#view?.update(this.model(context));
+  }
+
+  private footer(context?: BindingContext): string {
     const state = this.#host.state;
-    if (!state.footer) return;
     const bindings = this.#host.bindings();
     const plugin = state.filtered[state.selected];
     const actions = plugin
@@ -808,7 +811,7 @@ export class PluginManagerPanel {
     const hints = navigation
       .map((action) => this.hint(bindings, ownedContext, action))
       .filter(Boolean);
-    state.footer.textContent = `${[...hints, ...(ownedContext === 'plugins-list' ? actions : [])].join(' · ')}${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}${busy}${notice}`;
+    return `${[...hints, ...(ownedContext === 'plugins-list' ? actions : [])].join(' · ')}${state.query.trim() ? ` · filter: ${state.query.trim()}` : ''}${busy}${notice}`;
   }
 
   private hint(bindings: BindingMap, context: BindingContext, action: ActionId): string | null {

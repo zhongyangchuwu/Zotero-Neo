@@ -4,6 +4,15 @@ import { NOTE_EDITOR_ENABLED_PREFERENCE_KEY } from '../../src/core/preferences';
 import { createMainWindowController as composeMainWindowController } from '../../src/main/controller';
 import { BuiltinModuleRuntime } from '../../src/core/module-runtime';
 
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView: () => ({
+    update: () => {},
+    getElement: () => null,
+    dispose: () => {},
+    ready: Promise.resolve(),
+  }),
+}));
+
 function createController(dependencies: Omit<MainWindowControllerDependencies, 'modules'>) {
   return composeMainWindowController({
     ...dependencies,

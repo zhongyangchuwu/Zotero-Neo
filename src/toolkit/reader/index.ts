@@ -8,6 +8,16 @@ export type {
   ReaderOwnedCompletion,
 } from './history-bridge';
 export * from './host';
+export { observeReaderReferenceInteractions } from './reference-interactions';
+export type {
+  ReaderReferenceClientRect,
+  ReaderReferenceInteractionContext,
+  ReaderReferencePopupSlot,
+  ReaderReferenceMenuItem,
+  ReaderReferenceMenuContext,
+  ReaderReferenceToolbarSlot,
+  ReaderReferenceInteractionCallbacks,
+} from './reference-interaction-contracts';
 export * from './selection-geometry';
 export type {
   ReaderRuntime,
@@ -30,9 +40,18 @@ export {
 export type { ReaderTextSourceLocation } from './text-admission';
 export * from './identifier-text';
 export * from './annotation-targets';
+export { readerActionsTagsItemIDs } from './actions-tags-targets';
 export * from './sidebar';
 export * from './structured-document';
 export * from './document-source';
+export { readReaderReferenceDocument } from './references';
+export type {
+  ReaderReferenceDocument,
+  ReaderReferenceSnapshot,
+  ReaderReferenceEntry,
+  ReaderCitationOccurrence,
+  ReaderReferenceLocation,
+} from './reference-contracts';
 export { readerRegionPreview } from './region-preview';
 export type { ReaderRegionPreview } from './region-preview';
 
@@ -43,3 +62,5 @@ export { readerSelectionPopupSource } from './selection-popup-source';
 export { captureTranslateForZotero248 } from './translate-for-zotero-v248';
 export { appendTranslationPopupAction, isReaderTranslationControl } from './translation-popup';
 export { readerLoadedPDFSource } from './loaded-pdf-source';
+export { AIQAPanelHost } from './ai-qa-panel';
+export type { AIQAPanelLease, AIQAPanelCallbacks } from './ai-qa-panel';

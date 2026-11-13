@@ -8,6 +8,20 @@ import {
   type InteractionAppearanceSource,
 } from '../../src/main/interaction-appearance';
 import type { PreferenceReader } from '../../src/core/preferences';
+import type { MainStatusReactModel } from '../../src/modules/worksets/status-react-model';
+import type { NativeReactViewOptions } from '../../src/ui/react/types';
+
+vi.mock('../../src/platform/native-ui', () => ({
+  mountNativeReactView(options: NativeReactViewOptions<MainStatusReactModel, never>) {
+    const update = (model: MainStatusReactModel) => Reflect.set(options.root, 'statusModel', model);
+    update(options.model);
+    return { update, getElement: () => null, dispose: () => {}, ready: Promise.resolve() };
+  },
+}));
+
+function badgeStatus(badge: HTMLElement): MainStatusReactModel['status'] {
+  return (Reflect.get(badge, 'statusModel') as MainStatusReactModel).status;
+}
 
 const logger = { debug: vi.fn(), diagnostic: vi.fn() };
 
@@ -229,10 +243,10 @@ describe('Main Selection retirement ownership', () => {
     selection.add({ libraryID: 1, itemID: 12 });
     feature.addWindow(host.window, selection, appearanceSource());
     feature.refresh(host.window, selection);
-    const status = host.badge.textContent;
+    const status = badgeStatus(host.badge);
     oldSelection.add({ libraryID: 1, itemID: 11 });
     for (const callback of appearanceCallbacks) callback(appearance.appearance);
-    expect(host.badge.textContent).toBe(status);
+    expect(badgeStatus(host.badge)).toBe(status);
     expect(host.badge.isConnected).toBe(true);
     feature.removeWindow(host.window);
   });
@@ -413,7 +427,11 @@ describe('Main Visual Selection', () => {
       feature.addWindow(host.window, store, appearance);
 
       expect(feature.enter(host.window, store)).toBe('entered');
-      expect(host.badge.textContent).toBe('VISUAL 1 · SEL 0');
+      expect(badgeStatus(host.badge)).toEqual({
+        kind: 'visual',
+        targetCount: 1,
+        selectionCount: 0,
+      });
       feature[exit](host.window, store);
 
       expect(store.empty).toBe(true);
@@ -440,7 +458,7 @@ describe('Main Visual Selection', () => {
       feature[exit](host.window, store);
 
       expect(selectedIDs(store)).toEqual([10]);
-      expect(host.badge.textContent).toBe('SEL 1 · 1 visible');
+      expect(badgeStatus(host.badge)).toEqual({ kind: 'selection', total: 1, visible: 1 });
       expect(host.badge.remove).not.toHaveBeenCalled();
       feature.removeWindow(host.window);
     }

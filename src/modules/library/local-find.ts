@@ -1,10 +1,17 @@
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import type { NavigationCause } from '../../navigation/types';
 import type { MainWindow } from '../../core/contracts';
-import { compositionOwnsKey } from '../../input/composition';
+import {
+  bindCompositionState,
+  compositionOwnsKey,
+  type CompositionState,
+} from '../../input/composition';
 import { keyString } from '../../input/keys';
 import { citationKey } from '../../platform/better-bibtex';
-import { THEME_VARS } from '../../ui/theme';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { LocalFindReactCommand, LocalFindReactModel } from './local-find-react-model';
+import { LOCAL_FIND_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import {
   mainItem,
   mainItemCursorRow,
@@ -86,6 +93,9 @@ interface LocalFindOpening {
   input: HTMLInputElement | null;
   previousElement: Element | null;
   themeCleanup: Cleanup | null;
+  view: NativeReactView<LocalFindReactModel> | null;
+  composition: CompositionState;
+  compositionCleanup: Cleanup | null;
 }
 
 interface LocalFindPorts {
@@ -123,6 +133,9 @@ export class MainLocalFind {
       input: null,
       previousElement: null,
       themeCleanup: null,
+      view: null,
+      composition: { active: false },
+      compositionCleanup: null,
     };
     this.#opening = opening;
     const revision = ++this.#revision;
@@ -134,21 +147,8 @@ export class MainLocalFind {
       const overlay = doc.createElementNS(H, 'div');
       opening.overlay = overlay;
       overlay.id = 'zv-main-local-find';
-      overlay.style.cssText = `position:fixed;left:14px;right:14px;bottom:10px;z-index:100000;display:flex;align-items:center;gap:8px;max-width:760px;margin:0 auto;padding:7px 10px;background:${THEME_VARS.surface};color:${THEME_VARS.text};border:1px solid ${THEME_VARS.border};border-radius:5px;box-shadow:0 8px 28px ${THEME_VARS.shadow};font:13px/1.4 monospace`;
+      overlay.style.cssText = LOCAL_FIND_OVERLAY_STYLE;
 
-      const prefix = doc.createElementNS(H, 'span');
-      prefix.textContent = '/';
-      prefix.style.cssText = `color:${THEME_VARS.muted};font-weight:bold`;
-
-      const input = doc.createElementNS(H, 'input') as HTMLInputElement;
-      opening.input = input;
-      input.type = 'text';
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.placeholder = 'Find in visible items…';
-      input.style.cssText = `flex:1;min-width:0;border:0;outline:none;background:transparent;color:${THEME_VARS.text};font:inherit`;
-
-      overlay.append(prefix, input);
       if (!current()) {
         this.#discard(opening);
         return;
@@ -168,8 +168,39 @@ export class MainLocalFind {
         return;
       }
       opening.themeCleanup = cleanup;
-      input.focus();
-      if (!current()) this.#discard(opening);
+      const view = mountNativeReactView<LocalFindReactModel, LocalFindReactCommand>({
+        surface: 'local-find',
+        root: overlay,
+        model: { placeholder: 'Find in visible items…' },
+        dispatch: () => undefined,
+        isCurrent: current,
+        loadingText: 'Loading…',
+        errorText: 'Unable to open local find.',
+        onError: () => {
+          this.#ports.status('✗ Unable to open local find');
+          if (current()) this.#discard(opening, true);
+        },
+      });
+      opening.view = view;
+      void view.ready
+        .then(() => {
+          if (!current()) return;
+          const input = view.getElement('query') as HTMLInputElement | null;
+          if (!input) {
+            this.#ports.status('✗ Unable to open local find');
+            this.#discard(opening, true);
+            return;
+          }
+          opening.input = input;
+          opening.compositionCleanup = bindCompositionState(input, opening.composition);
+          input.focus();
+          if (!current()) this.#discard(opening);
+        })
+        .catch(() => {
+          if (!current()) return;
+          this.#ports.status('✗ Unable to open local find');
+          if (current()) this.#discard(opening, true);
+        });
     } catch (error) {
       try {
         this.#discard(opening);
@@ -188,7 +219,13 @@ export class MainLocalFind {
     const cleanup = opening.themeCleanup;
     opening.themeCleanup = null;
     const failure = new CleanupFailure();
+    const compositionCleanup = opening.compositionCleanup;
+    opening.compositionCleanup = null;
+    const view = opening.view;
+    opening.view = null;
     if (cleanup) failure.run(cleanup);
+    if (compositionCleanup) failure.run(compositionCleanup);
+    if (view) failure.run(() => view.dispose());
     if (opening.overlay) failure.run(() => opening.overlay?.remove());
     if (owned && restoreFocus && this.#ports.isCurrent() && this.#revision === revision) {
       try {
@@ -212,7 +249,7 @@ export class MainLocalFind {
       event.stopPropagation();
     };
 
-    if (compositionOwnsKey(event, false)) {
+    if (compositionOwnsKey(event, opening.composition.active)) {
       event.stopPropagation();
       return;
     }

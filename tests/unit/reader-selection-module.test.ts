@@ -55,7 +55,6 @@ function selectionModule() {
   const host = new ModuleHost({ debug: vi.fn(), diagnostic: vi.fn() }, () => true);
   const ports: ReaderSelectionModulePorts = {
     reader,
-    noteTarget: () => null,
     preferences: {
       get: (_key: string, fallback: unknown) => fallback,
     } as ReaderSelectionModulePorts['preferences'],

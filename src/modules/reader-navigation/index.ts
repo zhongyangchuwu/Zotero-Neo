@@ -1,7 +1,3 @@
-import { ReaderChapterSearch } from './chapter-search';
-import { ReaderFigurePicker } from './figure-picker';
-import { readerRegionPreview } from '../../toolkit/reader';
-import { ReaderDocumentComparison, type DocumentComparisonHost } from './document-comparison';
 import type { ModuleHost } from '../../core/module-host';
 import {
   readerAnnotationPageRatio,
@@ -15,6 +11,8 @@ import { ReaderSmoothScroller, type ReaderSmoothScrollerHost } from './smooth-sc
 import { ReaderMarks, type MarksHost } from './marks';
 import { ReaderNativeSidebar, type ReaderNativeSidebarHost } from './native-sidebar';
 import { ReaderCaptionTargets } from './caption-targets';
+import type { ReaderCaptionTarget } from './caption-targets';
+import type { PreferenceStore } from '../../core/preference-store';
 import { readReaderDocumentCache } from '../../reader/document-cache';
 import { observeAttachmentDocumentCache } from '../../platform/document-analysis-cache';
 import { DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY } from '../../document-analysis/settings';
@@ -29,10 +27,7 @@ import type { ActionId } from '../../input/actions';
 import type { SmoothScrollSpec } from './smooth-scroll';
 
 export interface ReaderNavigationModulePorts {
-  readonly documentComparison?: Pick<
-    DocumentComparisonHost,
-    'preferences' | 'language' | 'themeRoot' | 'copyText'
-  >;
+  readonly preferences?: PreferenceStore;
   readonly reader: ReaderRuntime;
   readonly navigationHost: ReaderNavigationHost;
   readonly smooth: ReaderSmoothScrollerHost;
@@ -47,19 +42,17 @@ export interface ReaderNavigationModulePorts {
     'isCurrent' | 'reader' | 'marks' | 'captions' | 'onCaptionTarget' | 'bindAction'
   >;
   readonly beginCaptionJump: (window: PdfWindow) => (() => boolean) | null;
-  readonly captureView?: (window: PdfWindow) => () => boolean;
-  readonly actions: Omit<
-    ReaderNavigationActionPorts,
-    'openDocumentComparison' | 'openFigurePicker' | 'openChapterSearch'
-  >;
+  readonly actions: ReaderNavigationActionPorts;
   readonly showStatus: (message: string, duration?: number) => void;
   readonly debug: (message: string) => void;
 }
 
+export type { ReaderCaptionTarget } from './caption-targets';
+export type ReaderCaptionSource = Pick<ReaderCaptionTargets, 'load' | 'bodies' | 'sourceCurrent'>;
+
 export interface ReaderNavigationModule {
-  handleKey(event: KeyboardEvent): boolean;
-  releaseView(window: PdfWindow): void;
-  deactivate(): void;
+  readonly captions: ReaderCaptionSource;
+  navigateCaption(target: ReaderCaptionTarget, window: PdfWindow): Promise<boolean>;
   readonly smooth: ReaderSmoothScroller;
   readonly marks: ReaderMarks;
   readonly sidebar: ReaderNativeSidebar;
@@ -124,28 +117,22 @@ export function createReaderNavigationModule(
       () => sidebar?.refreshCaptions(),
       ports.debug,
       () => scope.isCurrent(),
-      ports.documentComparison
+      ports.preferences
         ? {
             read: () =>
-              readReaderDocumentCache(ports.reader, ports.documentComparison!.preferences, () =>
-                scope.isCurrent(),
-              ),
+              readReaderDocumentCache(ports.reader, ports.preferences!, () => scope.isCurrent()),
             unnamedTitle: (kind, pageIndex) =>
               `${t(`reader.sidebar.${kind}`, ports.sidebar.language())} · ${pageIndex + 1}`,
           }
         : undefined,
     );
     scope.add(() => captions.dispose());
-    let picker: ReaderFigurePicker | null = null;
-    let chapter: ReaderChapterSearch | null = null;
     const refreshAnalysis = (): void => {
-      picker?.close(false);
-      chapter?.close();
       const loaded = captions.state !== 'idle';
       captions.invalidate();
       if (loaded) void captions.load();
     };
-    const preferences = ports.documentComparison?.preferences;
+    const preferences = ports.preferences;
     if (ports.reader.itemID)
       scope.add(observeAttachmentDocumentCache(ports.reader.itemID, refreshAnalysis));
     for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
@@ -188,54 +175,6 @@ export function createReaderNavigationModule(
       showStatus: ports.showStatus,
       debug: ports.debug,
     });
-    const comparison = ports.documentComparison
-      ? new ReaderDocumentComparison({
-          ...ports.documentComparison,
-          debug: ports.debug,
-          reader: ports.reader,
-          isCurrent: () => scope.isCurrent(),
-          focusReader: () => {
-            const window = ports.navigationHost.activePdfWindow();
-            if (ports.markViewCurrent(window)) window.focus();
-          },
-          navigate: (position) => {
-            const window = ports.navigationHost.activePdfWindow();
-            const current = ports.beginCaptionJump(window);
-            if (current?.())
-              return ports.navigationHost.navigateToRegion(window, {
-                position,
-              });
-          },
-        })
-      : null;
-    if (comparison) scope.add(() => comparison.close());
-    if (ports.documentComparison && ports.captureView) {
-      picker = new ReaderFigurePicker({
-        reader: ports.reader,
-        captions,
-        text: (key) => t(`reader.figures.${key}`, ports.documentComparison!.language()),
-        themeRoot: ports.documentComparison.themeRoot,
-        captureView: ports.captureView,
-        isCurrent: () => scope.isCurrent(),
-        render: (target, signal) =>
-          readerRegionPreview(ports.reader, target.location.position, signal),
-        navigate: (target, window) => navigation.navigateCaption(target, window),
-        debug: ports.debug,
-      });
-      scope.add(() => picker?.close(false));
-      chapter = new ReaderChapterSearch({
-        reader: ports.reader,
-        preferences: ports.documentComparison.preferences,
-        captureView: ports.captureView,
-        isCurrent: () => scope.isCurrent(),
-        themeRoot: ports.documentComparison.themeRoot,
-        text: (key) => t(`reader.chapter.${key}`, ports.documentComparison!.language()),
-        navigate: (result, window) =>
-          ports.navigationHost.navigateToRegion(window, { position: result.location }),
-        debug: ports.debug,
-      });
-      scope.add(() => chapter?.close());
-    }
     const executeAction = bindReaderNavigationActions(
       host,
       scope,
@@ -243,24 +182,7 @@ export function createReaderNavigationModule(
       marks,
       sidebar,
       captions,
-      {
-        ...ports.actions,
-        openDocumentComparison: () => {
-          chapter?.close();
-          picker?.close(false);
-          comparison?.open();
-        },
-        openChapterSearch: (window) => {
-          picker?.close(false);
-          comparison?.close();
-          chapter?.open(window);
-        },
-        openFigurePicker: (window) => {
-          chapter?.close();
-          comparison?.close();
-          picker?.open(window);
-        },
-      },
+      ports.actions,
     );
     const startSmooth: ReaderNavigationModule['startSmooth'] = (
       window,
@@ -291,20 +213,9 @@ export function createReaderNavigationModule(
       );
     };
     return {
-      handleKey: (event) =>
-        chapter?.handleKey(event) ||
-        picker?.handleKey(event) ||
-        comparison?.handleKey(event) ||
-        false,
-      releaseView: (window) => {
-        picker?.releaseView(window);
-        chapter?.releaseView(window);
-      },
-      deactivate: () => {
-        picker?.close(false);
-        chapter?.close();
-      },
       smooth,
+      captions,
+      navigateCaption: (target, window) => navigation.navigateCaption(target, window),
       marks,
       sidebar,
       executeAction,

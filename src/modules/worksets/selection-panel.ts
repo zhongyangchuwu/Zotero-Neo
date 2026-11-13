@@ -1,12 +1,15 @@
 import type { MainWindow } from '../../core/contracts';
 import { CleanupFailure, type Cleanup } from '../../core/cleanup';
 import { keyString } from '../../input/keys';
-import { THEME_VARS } from '../../ui/theme';
+import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { mainItem, mainItemRowForRef } from '../../toolkit/main';
 import type { ItemRef } from '../../core/item-ref';
 import type { NavigationExecution } from '../../navigation/types';
 import type { SelectionStore } from './selection-store';
 import type { SelectionPanelRuntime } from './selection-panel-runtime';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { SelectionPanelReactCommand, SelectionPanelReactModel } from './react-model';
 
 interface PanelState {
   readonly window: MainWindow;
@@ -16,6 +19,8 @@ interface PanelState {
 }
 
 const H = 'http://www.w3.org/1999/xhtml';
+const DEFAULT_FOOTER =
+  'j/k move · gg/G ends · x remove · c clear · Enter reveal · r refresh · q close';
 
 export type SelectionEntryState = 'visible' | 'hidden' | 'unavailable';
 
@@ -72,6 +77,13 @@ export class SelectionPanel {
   readonly #navigation: SelectionNavigation;
   readonly #isCurrent: () => boolean;
   readonly #onSelectionChange: SelectionPanelChangeListener;
+  readonly #views = new WeakMap<
+    SelectionPanelRuntime,
+    {
+      view: NativeReactView<SelectionPanelReactModel>;
+      model: SelectionPanelReactModel;
+    }
+  >();
 
   constructor(
     logger: SelectionPanelLogger,
@@ -97,39 +109,10 @@ export class SelectionPanel {
     const overlay = create('div');
     overlay.id = 'zv-selection-panel';
     overlay.tabIndex = -1;
-    overlay.style.cssText = `position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;padding:40px;background:${THEME_VARS.backdrop};color:${THEME_VARS.text};font:13px/1.4 monospace`;
-
-    const panel = create('section');
-    panel.style.cssText = `width:min(900px,calc(100vw - 80px));height:min(600px,calc(100vh - 80px));min-width:580px;min-height:380px;display:flex;flex-direction:column;overflow:hidden;background:${THEME_VARS.surface};border:1px solid ${THEME_VARS.border};border-radius:8px;box-shadow:0 24px 70px ${THEME_VARS.shadow}`;
-
-    const header = create('header');
-    header.style.cssText = `display:flex;align-items:center;gap:14px;padding:12px 14px;background:${THEME_VARS.elevated};border-bottom:1px solid ${THEME_VARS.border}`;
-    const title = create('strong');
-    title.textContent = 'Selection';
-    title.style.cssText = 'font-size:14px;white-space:nowrap';
-    const count = create('span');
-    count.style.cssText = `color:${THEME_VARS.muted};white-space:nowrap`;
-    header.append(title, count);
+    overlay.style.cssText = CENTERED_MONOSPACE_OVERLAY_STYLE;
 
     const content = create('div');
-    content.style.cssText =
-      'display:grid;grid-template-columns:minmax(300px,52%) minmax(260px,48%);flex:1;min-height:0';
-
-    const list = create('div');
-    list.tabIndex = -1;
-    list.style.cssText = `overflow:auto;min-height:0;padding:7px 0;border-right:1px solid ${THEME_VARS.border};outline:none`;
-
-    const details = create('div');
-    details.tabIndex = -1;
-    details.style.cssText = `overflow:auto;min-height:0;padding:20px 22px;background:${THEME_VARS.elevated};white-space:pre-wrap;outline:none`;
-
-    content.append(list, details);
-
-    const footer = create('footer');
-    footer.style.cssText = `padding:7px 12px;color:${THEME_VARS.muted};border-top:1px solid ${THEME_VARS.border};white-space:nowrap;overflow:hidden;text-overflow:ellipsis`;
-
-    panel.append(header, content, footer);
-    overlay.append(panel);
+    overlay.append(content);
 
     state.revision += 1;
     state.open = true;
@@ -137,14 +120,14 @@ export class SelectionPanel {
     state.selected = 0;
     state.commandBuffer = '';
     state.overlay = overlay;
-    state.list = list;
-    state.details = details;
-    state.count = count;
-    state.footer = footer;
     state.previousElement = doc.activeElement;
     try {
       const isOpeningCurrent = (): boolean =>
-        this.#isCurrent() && state.open && state.overlay === overlay;
+        this.#isCurrent() &&
+        window.document === doc &&
+        !window.closed &&
+        state.open &&
+        state.overlay === overlay;
       (doc.body ?? doc.documentElement).append(overlay);
       if (!isOpeningCurrent()) {
         overlay.remove();
@@ -156,6 +139,28 @@ export class SelectionPanel {
         return;
       }
       state.themeCleanup = themeCleanup;
+      const model: SelectionPanelReactModel = { entries: [], selected: 0, footer: DEFAULT_FOOTER };
+      const view = mountNativeReactView<SelectionPanelReactModel, SelectionPanelReactCommand>({
+        surface: 'selection-panel',
+        root: content,
+        model,
+        dispatch: () => {},
+        isCurrent: isOpeningCurrent,
+        loadingText: 'Loading selection…',
+        errorText: 'Selection panel unavailable.',
+        onError: (error) => this.#logger.debug(`Selection panel failed: ${String(error)}`),
+      });
+      if (!isOpeningCurrent()) {
+        view.dispose();
+        return;
+      }
+      this.#views.set(state, { view, model });
+      void view.ready
+        .then(() => {
+          if (isOpeningCurrent())
+            view.getElement('selected')?.scrollIntoView?.({ block: 'nearest' });
+        })
+        .catch(() => {});
       overlay.addEventListener('mousedown', (event) => {
         if (
           this.#isCurrent() &&
@@ -189,6 +194,8 @@ export class SelectionPanel {
     const overlay = state.overlay;
     const previousElement = state.previousElement;
     const revision = state.revision;
+    const mounted = this.#views.get(state);
+    this.#views.delete(state);
     state.open = false;
     state.commandTimer = undefined;
     state.themeCleanup = null;
@@ -196,13 +203,10 @@ export class SelectionPanel {
     state.selected = 0;
     state.commandBuffer = '';
     state.overlay = null;
-    state.list = null;
-    state.details = null;
-    state.count = null;
-    state.footer = null;
     state.previousElement = null;
     const failure = new CleanupFailure();
     failure.run(() => session.window.clearTimeout(timer));
+    failure.run(() => mounted?.view.dispose());
     failure.run(() => themeCleanup?.());
     failure.run(() => overlay?.remove());
     if (
@@ -389,51 +393,26 @@ export class SelectionPanel {
 
   private render(window: MainWindow, session: PanelState): void {
     const state = session.selectionPanel;
-    const entries = selectionPanelEntries(window, state.refs);
-    const visible = entries.filter((entry) => entry.state === 'visible').length;
-    const hidden = entries.filter((entry) => entry.state === 'hidden').length;
-    const unavailable = entries.length - visible - hidden;
-
-    if (state.count) {
-      state.count.textContent = `${entries.length} selected · ${visible} visible${hidden ? ` · ${hidden} hidden` : ''}${unavailable ? ` · ${unavailable} unavailable` : ''}`;
-    }
-
-    const list = state.list;
-    if (list) {
-      list.replaceChildren();
-      if (!entries.length) {
-        const empty = window.document.createElementNS(H, 'div');
-        empty.textContent = 'Selection is empty';
-        empty.style.cssText = `padding:12px 14px;color:${THEME_VARS.muted}`;
-        list.append(empty);
-      } else {
-        entries.forEach((entry, index) => {
-          const row = window.document.createElementNS(H, 'div');
-          row.dataset.index = String(index);
-          row.style.cssText = `padding:7px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${index === state.selected ? `background:${THEME_VARS.selected};color:${THEME_VARS.selectedText};` : ''}`;
-          const marker = entry.state === 'visible' ? 'V' : entry.state === 'hidden' ? 'H' : '!';
-          row.textContent = `[${marker}] ${entry.title}`;
-          list.append(row);
-        });
-        const selected = list.children[state.selected] as HTMLElement | undefined;
-        selected?.scrollIntoView?.({ block: 'nearest' });
-      }
-    }
-
-    if (state.details) {
-      const entry = entries[state.selected];
-      state.details.textContent = entry
-        ? `${entry.title}\n\nStatus: ${entry.state}\nLibrary: ${entry.ref.libraryID}\nItem: ${entry.ref.itemID}\n\nReveal is explicit and may change the current Zotero View when the item is hidden.`
-        : 'No explicit Selection members.';
-    }
-
-    this.renderFooter(session);
+    const mounted = this.#views.get(state);
+    if (!mounted) return;
+    mounted.model = {
+      entries: selectionPanelEntries(window, state.refs).map((entry) => ({
+        title: entry.title,
+        state: entry.state,
+        libraryID: entry.ref.libraryID,
+        itemID: entry.ref.itemID,
+      })),
+      selected: state.selected,
+      footer: DEFAULT_FOOTER,
+    };
+    mounted.view.update(mounted.model);
+    mounted.view.getElement('selected')?.scrollIntoView?.({ block: 'nearest' });
   }
 
   private renderFooter(session: PanelState, override?: string): void {
-    const footer = session.selectionPanel.footer;
-    if (!footer) return;
-    footer.textContent =
-      override ?? 'j/k move · gg/G ends · x remove · c clear · Enter reveal · r refresh · q close';
+    const mounted = this.#views.get(session.selectionPanel);
+    if (!mounted) return;
+    mounted.model = { ...mounted.model, footer: override ?? DEFAULT_FOOTER };
+    mounted.view.update(mounted.model);
   }
 }

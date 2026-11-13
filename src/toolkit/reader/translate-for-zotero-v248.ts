@@ -28,15 +28,26 @@ export function captureTranslateForZotero248(
     if (!runtime || !queue) return { status: 'unsupported' };
     const popup = runtime.data?.popup?.currentPopup;
     if (!popup || !nativePopup.contains(popup)) return { status: 'not-ready' };
+    // Upstream may reuse a task for the same text. Admit the result displayed in this
+    // popup, not the task's original request pane; the source view is bound separately.
+    // Item and quote must still match so a task reused across PDFs fails closed.
     const taskID = popup.getAttribute('translate-task-id');
     const task = queue.find((candidate) => candidate && candidate.id === taskID);
     if (!task || task.type !== 'text' || task.raw !== normalizedQuote || task.itemId !== itemID)
       return { status: 'not-ready' };
     const prefix = popup.getAttribute('zoteropdftranslate-prefix');
-    const element = prefix ? popup.ownerDocument.getElementById(`${prefix}-text`) : null;
-    if (!element || element.tagName.toLowerCase() !== 'textarea' || !popup.contains(element))
-      return { status: 'unsupported' };
-    const textarea = element as HTMLTextAreaElement;
+    let element: HTMLTextAreaElement | undefined;
+    if (prefix) {
+      const id = `${prefix}-text`;
+      for (const node of popup.querySelectorAll('textarea')) {
+        const candidate = node as HTMLTextAreaElement | null;
+        if (candidate?.id !== id) continue;
+        element = candidate;
+        break;
+      }
+    }
+    if (!element) return { status: 'unsupported' };
+    const textarea = element;
     let publishedResult: string | null = null;
     let comparedResult: string | null = null;
     let textareaResult = '';
@@ -46,6 +57,7 @@ export function captureTranslateForZotero248(
       popup.isConnected &&
       translateForZotero248() === runtime &&
       runtime.data?.popup?.currentPopup === popup &&
+      runtime.data?.translate?.queue === queue &&
       popup.getAttribute('translate-task-id') === taskID &&
       queue.includes(task) &&
       task.raw === normalizedQuote &&

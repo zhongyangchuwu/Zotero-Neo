@@ -1,7 +1,8 @@
 import type { Logger } from '../core/logging';
 import type { MainWindow } from '../core/contracts';
 import type { FocusDirection } from '../input/actions';
-import { THEME_VARS } from '../ui/theme';
+import { mountNativeReactView } from '../platform/native-ui';
+import type { MainNoticeReactModel } from './notice-react-model';
 import type { MainPanel, MainWindowSession } from './session';
 import {
   closeSelectedMainTab,
@@ -16,8 +17,10 @@ import {
 
 export class MainNavigation {
   readonly #rescan: (window: MainWindow) => void;
+  readonly #logger: Logger;
   readonly #focusEpochs = new WeakMap<MainWindowSession, number>();
-  constructor(_logger: Logger, rescan: (window: MainWindow) => void) {
+  constructor(logger: Logger, rescan: (window: MainWindow) => void) {
+    this.#logger = logger;
     this.#rescan = rescan;
   }
   status(session: MainWindowSession, text: string, milliseconds = 2000): void {
@@ -25,24 +28,35 @@ export class MainNavigation {
     const previousTimer = session.statusTimer;
     session.statusTimer = undefined;
     session.window.clearTimeout(previousTimer);
-    session.status.textContent = text;
-    session.status.style.display = 'block';
-    const success = text.startsWith('✓');
-    const info = text.startsWith('→') || text.startsWith('▶');
-    session.status.style.color = success
-      ? THEME_VARS.statusSuccessText
-      : info
-        ? THEME_VARS.statusInfoText
-        : THEME_VARS.statusErrorText;
-    session.status.style.background = success
-      ? THEME_VARS.statusSuccess
-      : info
-        ? THEME_VARS.statusInfo
-        : THEME_VARS.statusError;
+    const model: MainNoticeReactModel = {
+      text,
+      visible: true,
+      kind: text.startsWith('✓')
+        ? 'success'
+        : text.startsWith('→') || text.startsWith('▶')
+          ? 'info'
+          : 'error',
+    };
+    if (session.statusView) session.statusView.update(model);
+    else {
+      const root = session.status;
+      const document = root.ownerDocument;
+      session.statusView = mountNativeReactView({
+        surface: 'main-notice',
+        root,
+        model,
+        dispatch: () => {},
+        isCurrent: () =>
+          !session.cleanup.disposed && session.window.document === document && root.isConnected,
+        loadingText: '',
+        errorText: '',
+        onError: (error) => this.#logger.debug(`Main status view failed: ${String(error)}`),
+      });
+    }
     const timer = session.window.setTimeout(() => {
       if (session.cleanup.disposed || session.statusTimer !== timer) return;
       session.statusTimer = undefined;
-      session.status.style.display = 'none';
+      session.statusView?.update({ ...model, visible: false });
     }, milliseconds);
     session.statusTimer = timer;
   }

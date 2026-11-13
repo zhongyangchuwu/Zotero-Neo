@@ -973,6 +973,20 @@ describe('binding schema migrations', () => {
     expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
   });
 
+  it('migrates the old AI action before parsing schema-20 custom bindings', () => {
+    const preferences = new TestPreferences({
+      'bindings.schemaVersion': 20,
+      bindings: JSON.stringify({ 'reader-normal:aq': 'openReaderAI', 'reader-normal:z': null }),
+    });
+    migrateBindingPreferences(preferences);
+    expect(JSON.parse(preferences.get('bindings', ''))).toEqual({
+      'reader-normal:aq': 'openAIQA',
+      'reader-normal:z': null,
+    });
+    expect(bindingsFromPreferences(preferences)['reader-normal:aq']).toBe('openAIQA');
+    expect(preferences.get('bindings.schemaVersion', 0)).toBe(BINDING_SCHEMA_VERSION);
+  });
+
   it('rewrites schema-18 action IDs in place while preserving custom bindings and tombstones', () => {
     const raw = JSON.stringify({
       'reader-normal:y': 'yankAnnotation',

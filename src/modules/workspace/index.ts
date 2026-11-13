@@ -32,6 +32,8 @@ export interface WorkspaceModuleHost {
 }
 
 export interface WorkspaceModule {
+  /** Accepts an explicit native tab without creating a second navigation/history owner. */
+  activateTab(id: string, surface: NavigationSurface): boolean;
   switchTab(surface: NavigationSurface): boolean;
   closeTab(surface: NavigationSurface): boolean;
   cycleTab(direction: -1 | 1, surface: NavigationSurface): boolean;
@@ -163,6 +165,17 @@ export function createWorkspaceModule(
       );
     const show = { reader: bindShow('reader'), note: bindShow('note') };
     return {
+      activateTab: (id, surface) => {
+        if (!scope.isCurrent()) return false;
+        const revision = ++workflowRevision;
+        ports.navigate(
+          { kind: 'action', action: 'switchTab' },
+          surface,
+          () => ports.selectTab(id),
+          () => scope.isCurrent() && workflowRevision === revision,
+        );
+        return true;
+      },
       switchTab: (surface) => surfaces[surface].switchTab(),
       closeTab: (surface) => surfaces[surface].closeTab(),
       cycleTab: (direction, surface) =>

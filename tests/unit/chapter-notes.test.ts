@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { chapterNoteEntries, chapterNoteMarkup } from '../../src/modules/notes/chapter-plan';
+import {
+  chapterNoteEntries,
+  chapterNoteMarkup,
+} from '../../src/modules/chapter-notes/chapter-plan';
 import type { SourceNoteEntry } from '../../src/core/source-note';
 import type { DocumentRegion } from '../../src/document-analysis/contracts';
 

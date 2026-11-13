@@ -20,16 +20,16 @@ import {
   type InteractionAppearanceSource,
   type InteractionStatusKind,
 } from '../../main/interaction-appearance';
+import { mountNativeReactView } from '../../platform/native-ui';
+import type { NativeReactView } from '../../ui/react/types';
+import type { ItemSelectStatus, MainStatusReactModel } from './status-react-model';
 
 type ItemSelectDirection = 1 | -1 | 'first' | 'last';
 export type ItemSelectEnterResult = 'entered' | 'unavailable' | 'pass';
-type ItemSelectStatus =
-  | { readonly kind: 'message'; readonly text: string }
-  | { readonly kind: 'selection'; readonly total: number; readonly visible: number }
-  | { readonly kind: 'visual'; readonly targetCount: number; readonly selectionCount: number };
 
 type ItemSelectUi = {
   badge: HTMLElement | null;
+  view: NativeReactView<MainStatusReactModel> | null;
   timer: number | undefined;
   readonly appearance: InteractionAppearanceSource;
   selectionCleanup: (() => void) | null;
@@ -80,6 +80,7 @@ export class MainItemSelect {
     if (this.#ui.has(window)) return;
     const ui: ItemSelectUi = {
       badge: null,
+      view: null,
       timer: undefined,
       appearance,
       selectionCleanup: null,
@@ -337,6 +338,7 @@ export class MainItemSelect {
       failure.run(() => window.clearTimeout(ui.timer));
       failure.run(() => ui.selectionCleanup?.());
       failure.run(() => ui.appearanceCleanup?.());
+      failure.run(() => ui.view?.dispose());
       failure.run(() => ui.badge?.remove());
     }
     failure.rethrow();
@@ -407,65 +409,35 @@ export class MainItemSelect {
   }
 
   private renderBadge(window: MainWindow, ui: ItemSelectUi, status: ItemSelectStatus): void {
-    if (!ui.badge) {
-      const badge = window.document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
-      badge.id = 'zotero-neo-item-select-status';
-      ui.badge = badge;
-      (window.document.body ?? window.document.documentElement).append(badge);
-    }
-    const badge = ui.badge;
     const kind: InteractionStatusKind = status.kind === 'message' ? 'neutral' : status.kind;
-    const appearance = ui.appearance.appearance;
-    const colors = interactionStatusColors(appearance, kind);
-    badge.style.cssText = `position:fixed;bottom:10px;left:50%;transform:translateX(-50%);z-index:99998;font:600 12px/1.4 monospace;padding:3px 9px;border:1px solid ${colors.border};border-radius:6px;background:${colors.background};color:${colors.foreground};box-shadow:0 2px 8px ${colors.shadow};pointer-events:none;user-select:none;display:block`;
-    badge.replaceChildren();
-
-    if (status.kind === 'message') {
-      this.appendStatusSpan(window, badge, status.text, 'zotero-neo-status-message');
+    const model: MainStatusReactModel = {
+      status,
+      colors: interactionStatusColors(ui.appearance.appearance, kind),
+    };
+    if (ui.view) {
+      ui.view.update(model);
       return;
     }
-    if (status.kind === 'selection') {
-      this.appendStatusSpan(
-        window,
-        badge,
-        'SEL',
-        'zotero-neo-status-selection',
-        colors.selectionPrefix,
-      );
-      const hidden = Math.max(0, status.total - status.visible);
-      this.appendStatusSpan(
-        window,
-        badge,
-        ` ${status.total} · ${status.visible} visible${hidden ? ` · ${hidden} hidden` : ''}`,
-        'zotero-neo-status-detail',
-      );
-      return;
-    }
-
-    this.appendStatusSpan(window, badge, 'VISUAL', 'zotero-neo-status-visual', colors.visualPrefix);
-    this.appendStatusSpan(window, badge, ` ${status.targetCount} · `, 'zotero-neo-status-detail');
-    this.appendStatusSpan(
-      window,
-      badge,
-      'SEL',
-      'zotero-neo-status-selection',
-      colors.selectionPrefix,
-    );
-    this.appendStatusSpan(window, badge, ` ${status.selectionCount}`, 'zotero-neo-status-detail');
-  }
-
-  private appendStatusSpan(
-    window: MainWindow,
-    badge: HTMLElement,
-    text: string,
-    className: string,
-    color?: string,
-  ): void {
-    const span = window.document.createElementNS('http://www.w3.org/1999/xhtml', 'span');
-    span.className = className;
-    span.textContent = text;
-    if (color) span.style.color = color;
-    badge.append(span);
+    const document = window.document;
+    const root = document.createElementNS('http://www.w3.org/1999/xhtml', 'div') as HTMLElement;
+    root.id = 'zotero-neo-item-select-status';
+    ui.badge = root;
+    (document.body ?? document.documentElement).append(root);
+    ui.view = mountNativeReactView({
+      surface: 'main-status',
+      root,
+      model,
+      dispatch: () => {},
+      isCurrent: () =>
+        this.#isCurrent() &&
+        this.#ui.get(window) === ui &&
+        ui.badge === root &&
+        window.document === document &&
+        root.isConnected,
+      loadingText: '',
+      errorText: '',
+      onError: (error) => this.#logger.debug(`Main selection status view failed: ${String(error)}`),
+    });
   }
 
   private hide(window: MainWindow): void {
@@ -474,6 +446,8 @@ export class MainItemSelect {
     window.clearTimeout(ui.timer);
     ui.timer = undefined;
     ui.status = null;
+    ui.view?.dispose();
+    ui.view = null;
     ui.badge?.remove();
     ui.badge = null;
   }

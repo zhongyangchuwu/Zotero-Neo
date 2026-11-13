@@ -1,8 +1,12 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModuleHost } from '../../src/core/module-host';
-import { createReaderNotesModule, type ReaderNotesHost } from '../../src/modules/notes/reader';
+import { createChapterNotesModule, type ChapterNotesHost } from '../../src/modules/chapter-notes';
 import type { SourceNoteEntry } from '../../src/core/source-note';
-import { DocumentFixture } from '../fixtures/dialog-dom';
+import type {
+  SearchDialogReactCommand,
+  SearchDialogReactModel,
+} from '../../src/ui/search-dialog-react-model';
 
 const io = vi.hoisted(() => ({ read: vi.fn(), entries: vi.fn(), save: vi.fn(), owner: vi.fn() }));
 vi.mock('../../src/reader/document-cache', () => ({ readReaderDocument: io.read }));
@@ -16,14 +20,29 @@ vi.mock('../../src/platform/note-relations', () => ({
   sourceNoteIdentity: (value: string) => value,
   SOURCE_NOTE_IDENTITY_PREFIX: 'urn:zotero-neo:chapter-note:v1:',
 }));
+vi.mock('../../src/platform/native-ui', async () => {
+  const { mountSearchDialogReactView } = await import('../../src/ui/react/surfaces/search-dialog');
+  return {
+    mountNativeReactView(options: {
+      root: HTMLElement;
+      model: SearchDialogReactModel;
+      dispatch: (command: SearchDialogReactCommand) => void;
+    }) {
+      return {
+        ...mountSearchDialogReactView(options.root, options.model, options.dispatch),
+        ready: Promise.resolve(),
+      };
+    },
+  };
+});
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal('Components', { utils: { isDeadWrapper: () => false } });
 });
 afterEach(() => vi.unstubAllGlobals());
 function fixture() {
-  const doc = new DocumentFixture(),
-    owner = { document: doc, AbortController };
+  const doc = document,
+    owner = globalThis.window;
   io.owner.mockReturnValue(owner);
   const sourceCurrent = vi.fn(async () => true);
   io.read.mockResolvedValue({
@@ -47,11 +66,11 @@ function fixture() {
     showStatus = vi.fn();
   let current = true;
   const window = { document: { activeElement: null }, focus: vi.fn() } as unknown as Parameters<
-    ReturnType<typeof createReaderNotesModule>['open']
+    ReturnType<typeof createChapterNotesModule>['open']
   >[0];
-  const ports: ReaderNotesHost = {
+  const ports: ChapterNotesHost = {
     reader: { itemID: 7 },
-    preferences: {} as ReaderNotesHost['preferences'],
+    preferences: {} as ChapterNotesHost['preferences'],
     target: () => ({
       attachment: { itemID: 7, libraryID: 1, key: 'PDF', title: 'Paper' },
       parent: null,
@@ -63,14 +82,14 @@ function fixture() {
     showStatus,
     debug: vi.fn(),
   };
-  const module = createReaderNotesModule(host, ports);
+  const module = createChapterNotesModule(host, ports);
   const loaded = async () => {
     for (let i = 0; i < 10; i++) await Promise.resolve();
   };
   const save = () =>
-    doc.nodes
-      .find((node) => node.isConnected && node.tagName === 'button' && node.textContent === 'save')!
-      .emit('click');
+    Array.from(doc.querySelectorAll('button'), (node) => node as HTMLButtonElement)
+      .find((node) => node.textContent === 'save')!
+      .click();
   const key = (key: string) =>
     module.handleKey({
       key,
@@ -101,12 +120,13 @@ describe('Reader chapter notes review', () => {
       pending = Promise.withResolvers<unknown>();
     io.read.mockReturnValue(pending.promise);
     f.module.open(f.window);
+    await f.loaded();
     f.key('Escape');
     pending.resolve({ parsed: { regions: [] } });
     await f.loaded();
     expect(io.save).not.toHaveBeenCalled();
     expect(io.entries).not.toHaveBeenCalled();
-    expect(f.doc.find('section')).toBeUndefined();
+    expect(f.doc.querySelector('section')).toBeNull();
     f.host.dispose();
   });
   it('uses Enter only for source navigation and saves only after the explicit action', async () => {
@@ -158,7 +178,7 @@ describe('Reader chapter notes review', () => {
     pending.resolve({ reused: false });
     await f.loaded();
     expect(f.showStatus).not.toHaveBeenCalled();
-    expect(f.doc.find('section')).toBeUndefined();
+    expect(f.doc.querySelector('section')).toBeNull();
     f.host.dispose();
   });
 });
