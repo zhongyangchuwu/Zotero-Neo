@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
@@ -8,6 +9,10 @@ const statePath = process.env.RELEASE_FIXTURE_STATE;
 const state = JSON.parse(readFileSync(statePath, 'utf8'));
 const args = process.argv.slice(2);
 const program = basename(process.argv[1]);
+if (state.recordCalls) {
+  (state.calls ||= []).push([program, ...args]);
+  writeFileSync(statePath, JSON.stringify(state));
+}
 const save = () => writeFileSync(statePath, JSON.stringify(state));
 const fail = (message) => {
   console.error(message);
@@ -24,10 +29,12 @@ const mutate = (event) => {
 };
 const metadata = () =>
   Object.entries(state.assets).map(([name, data], index) => ({
-    id: index + 100,
+    id: index + 100 + (state.assetIdOffset || 0),
     name,
     size: Buffer.from(data, 'base64').length,
     state: 'uploaded',
+    browser_download_url: `https://github.com/example/neo/releases/download/v1.2.3/${name}`,
+    ...state.assetMetadata?.[name],
   }));
 const option = (flag) => {
   const index = args.indexOf(flag);
@@ -185,6 +192,28 @@ if (program === 'git') {
         state.remoteCommit = 'e'.repeat(40);
         save();
       }
+      if (state.replaceReleaseOnDownload) {
+        state.release.id = 99;
+        delete state.replaceReleaseOnDownload;
+        save();
+      }
+      if (state.replaceAssetsOnDownload) {
+        state.assetIdOffset = 1000;
+        delete state.replaceAssetsOnDownload;
+        save();
+      }
+      if (state.replaceRealTagOnDownload) {
+        const result = spawnSync(process.env.RELEASE_FIXTURE_REAL_GIT, [
+          '--git-dir',
+          state.remotePath,
+          'update-ref',
+          'refs/tags/v1.2.3',
+          state.replaceRealTagOnDownload,
+        ]);
+        if (result.status !== 0) fail('failed real tag race fixture');
+        delete state.replaceRealTagOnDownload;
+        save();
+      }
     } else {
       fail(`unsupported API endpoint: ${endpoint}`);
     }
@@ -213,6 +242,30 @@ if (program === 'git') {
     }
   } else {
     fail(`unsupported gh operation: ${args.join(' ')}`);
+  }
+} else if (program === 'curl') {
+  const url = args.at(-1);
+  if (state.publicUnavailable) fail('curl: public URL unavailable (HTTP 404)');
+  if (
+    args[0] !== '--disable' ||
+    !args.includes('--fail') ||
+    !args.includes('--location') ||
+    option('--proto') !== '=https' ||
+    option('--proto-redir') !== '=https' ||
+    args.some((arg) => ['--user', '--header', '--cookie', '-H', '-u', '-b'].includes(arg))
+  )
+    fail('public download must not use credentials or unsafe redirects');
+  if (url === 'https://raw.githubusercontent.com/example/neo/main/updates.json') {
+    state.feedReads = (state.feedReads || 0) + 1;
+    const feed =
+      state.feedReads > 1 && state.changedPublicFeed ? state.changedPublicFeed : state.publicFeed;
+    save();
+    process.stdout.write(Buffer.from(feed, 'base64'));
+  } else {
+    const name = url?.split('/').at(-1);
+    const asset = metadata().find((entry) => entry.browser_download_url === url);
+    if (!asset || !state.assets[name]) fail('curl: unknown public URL');
+    process.stdout.write(Buffer.from(state.publicAssets?.[name] || state.assets[name], 'base64'));
   }
 } else {
   fail(`unsupported fixture program: ${program}`);
