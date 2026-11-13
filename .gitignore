@@ -35,7 +35,7 @@ zotero-neo-startup.log
 Session.vim
 
 # Node and generated TypeScript output
-node_modules/
+node_modules
 build/
 coverage/
 *.tsbuildinfo
