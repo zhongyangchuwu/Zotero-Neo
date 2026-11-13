@@ -4,6 +4,10 @@ import type { MainWindow, ReaderJumpLocation, ReaderJumpPosition } from '../../s
 import { ReaderJumpHostAdapter } from '../../src/toolkit/reader/jump-host';
 import type { ItemRuntime } from '../../src/reader/types';
 import type { PdfWindow, ReaderRuntime, ReaderViewRuntime } from '../fixtures/reader-native-types';
+import { MainNavigationExecutor, type MainViewOperations } from '../../src/main/jump-history';
+import type { MainNavigation } from '../../src/main/navigation';
+import type { MainWindowSession } from '../../src/main/session';
+import { NavigationHistoryState } from '../../src/navigation/history';
 
 interface TestTab {
   id: string;
@@ -614,4 +618,208 @@ describe('ReaderJumpHostAdapter restore', () => {
     expect(fixture.open).not.toHaveBeenCalled();
     expect(fixture.select).not.toHaveBeenCalled();
   });
+
+  it.each(['wrong attachment metadata', 'foreign owner'] as const)(
+    'does not trust a recorded tab ID with %s',
+    async (mismatch) => {
+      vi.useFakeTimers();
+      const fixture = createFixture();
+      addItem(fixture, 42);
+      const fallback = createPdfView({ pageIndex: 0, top: 0, left: 0 });
+      const rejected = createPdfView({ pageIndex: 1, top: 40, left: 0 });
+      addReader(fixture, 42, 'reader-A', { primary: fallback });
+      const { reader } = addReader(fixture, 42, 'reader-B', { primary: rejected });
+      if (mismatch === 'wrong attachment metadata')
+        fixture.tabs.find((tab) => tab.id === 'reader-B')!.data = { itemID: 99 };
+      else Reflect.set(reader, '_window', createOtherWindow());
+      const restoring = fixture.adapter.restoreJumpLocation(
+        fixture.ownerWindow,
+        jumpLocation('reader-B', 42, { primary: true, pageIndex: 4, top: 60, left: 5 }),
+        () => true,
+        () => {},
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      expect(await restoring).toBe('reader-A');
+      expect(fallback.navigate).toHaveBeenCalledOnce();
+      expect(rejected.navigate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['native tab', 'registered Reader'] as const)(
+    'rejects a replaced %s while the preferred duplicate initializes',
+    async (replacement) => {
+      vi.useFakeTimers();
+      const fixture = createFixture();
+      addItem(fixture, 42);
+      const other = createPdfView({ pageIndex: 0, top: 10, left: 0 });
+      const original = createPdfView({ pageIndex: 1, top: 40, left: 0 });
+      addReader(fixture, 42, 'reader-A', { primary: other });
+      const { reader } = addReader(fixture, 42, 'reader-B', { primary: original });
+      const initialized = Promise.withResolvers<void>();
+      Reflect.set(reader, '_isReaderInitialized', false);
+      Reflect.set(reader, '_initPromise', initialized.promise);
+      const restoring = fixture.adapter.restoreJumpLocation(
+        fixture.ownerWindow,
+        jumpLocation('reader-B', 42, { primary: true, pageIndex: 4, top: 60, left: 5 }),
+        () => true,
+        () => {},
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      const successor = createPdfView({ pageIndex: 2, top: 90, left: 0 });
+      if (replacement === 'native tab') {
+        const index = fixture.tabs.findIndex((tab) => tab.id === 'reader-B');
+        fixture.tabs[index] = { id: 'reader-B', type: 'reader', data: { itemID: 42 } };
+      } else addReader(fixture, 42, 'reader-B', { primary: successor });
+      Reflect.set(reader, '_isReaderInitialized', true);
+      initialized.resolve();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(await restoring).toBeNull();
+      expect(original.navigate).not.toHaveBeenCalled();
+      expect(other.navigate).not.toHaveBeenCalled();
+      expect(successor.navigate).not.toHaveBeenCalled();
+      expect(original.view.focus).not.toHaveBeenCalled();
+      expect(successor.view.focus).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('duplicate PDF shared-history roundtrip', () => {
+  it.each([
+    { destination: 'note', primary: true },
+    { destination: 'note', primary: false },
+    { destination: 'local PDF', primary: true },
+    { destination: 'local PDF', primary: false },
+  ] as const)(
+    'returns from $destination to the original duplicate and exact pane (primary=$primary)',
+    async ({ destination, primary }) => {
+      vi.useFakeTimers();
+      const fixture = createFixture();
+      addItem(fixture, 42);
+      const untouched = createPdfView({ pageIndex: 1, top: 15, left: 3 });
+      addReader(fixture, 42, 'reader-A', { primary: untouched });
+      const originalPrimary = createPdfView({ pageIndex: 2, top: 50, left: 6 });
+      const originalSecondary = createPdfView({ pageIndex: 6, top: 250, left: 20 });
+      const { reader, focusView } = addReader(fixture, 42, 'reader-B', {
+        primary: originalPrimary,
+        secondary: originalSecondary,
+      });
+      const origin = primary ? originalPrimary : originalSecondary;
+      Reflect.set(reader._internalReader!, '_lastView', origin.view);
+      Reflect.set(reader._internalReader!, '_lastViewPrimary', primary);
+      const savedPosition = { ...origin.location };
+      const local = createPdfView({ pageIndex: 8, top: 100, left: 12 });
+      const destinationID = destination === 'note' ? 'note-target' : 'reader-local';
+      if (destination === 'note')
+        fixture.tabs.push({ id: destinationID, type: 'note', data: { itemID: 90 } });
+      else {
+        addItem(fixture, 90);
+        addReader(fixture, 90, destinationID, { primary: local });
+      }
+      fixture.setSelectedID('reader-B');
+
+      const state = new NavigationHistoryState();
+      const session = {
+        jumpHistory: state,
+        navigationCoordinator: null,
+      } as unknown as MainWindowSession;
+      // Window status/focus chrome is outside the traversal and exact-PDF restoration contract.
+      const navigation = {
+        status: vi.fn(),
+        afterTabSwitch: vi.fn(),
+      } as unknown as MainNavigation;
+      const unexpectedLibraryOperation = (): never => {
+        throw new Error('Unexpected Library operation in a Reader/Note roundtrip');
+      };
+      const views: MainViewOperations = {
+        state: unexpectedLibraryOperation,
+        applyQuickSearch: unexpectedLibraryOperation,
+        applyTagFilter: unexpectedLibraryOperation,
+        closeAdvancedSearch: unexpectedLibraryOperation,
+      };
+      const history = new MainNavigationExecutor(
+        { debug: vi.fn(), diagnostic: vi.fn() },
+        navigation,
+        views,
+        {
+          captureJumpLocation: (tabID, itemID) =>
+            fixture.adapter.captureJumpLocation(tabID, itemID),
+          restoreJumpLocation: (window, location, current) =>
+            fixture.adapter.restoreJumpLocation(window, location, current, () => {}),
+        },
+        () => true,
+        () => false,
+      );
+      const source = fixture.adapter.captureReader(reader, 'reader-B', origin.view)!;
+      const departing = history.port(fixture.ownerWindow, session).execute(
+        {
+          cause: {
+            kind: 'event',
+            event: destination === 'note' ? 'reader-excerpts.open-note' : 'references.open-local',
+          },
+          surface: 'reader',
+        },
+        {
+          dispatch: 'serial-navigation',
+          capture: () => source,
+          start: () => {
+            fixture.select(destinationID);
+            return {
+              kind: 'immediate',
+              outcome: {
+                kind: 'completed',
+                evidence: 'settled-change',
+                destination:
+                  destination === 'note'
+                    ? { kind: 'tab', tabID: destinationID }
+                    : fixture.adapter.captureJumpLocation(destinationID, 90)!,
+              },
+            };
+          },
+        },
+      );
+      expect(await departing.result).toMatchObject({ kind: 'completed', recorded: true });
+      const traverse = async (direction: -1 | 1): Promise<void> => {
+        const execution = history.execute(
+          fixture.ownerWindow,
+          session,
+          {
+            cause: { kind: 'action', action: direction < 0 ? 'navigateBack' : 'navigateForward' },
+            surface: 'reader',
+          },
+          history.traversal(fixture.ownerWindow, session, direction),
+        );
+        await vi.advanceTimersByTimeAsync(100);
+        expect(await execution.result).toMatchObject({ kind: 'completed', recorded: false });
+      };
+
+      for (let round = 0; round < 2; round++) {
+        origin.location.pageNumber = 12;
+        origin.location.top = 900;
+        await traverse(-1);
+        expect(fixture.selectedID()).toBe('reader-B');
+        expect(origin.location).toEqual(savedPosition);
+        expect(focusView).toHaveBeenLastCalledWith(primary);
+        expect(untouched.location).toEqual({ pageNumber: 2, top: 15, left: 3 });
+        expect(untouched.navigate).not.toHaveBeenCalled();
+        const otherPane = primary ? originalSecondary : originalPrimary;
+        expect(otherPane.navigate).not.toHaveBeenCalled();
+        if (destination === 'local PDF') {
+          local.location.pageNumber = 14;
+          local.location.top = 800;
+        }
+        await traverse(1);
+        expect(fixture.selectedID()).toBe(destinationID);
+        if (destination === 'local PDF')
+          expect(local.location).toEqual({ pageNumber: 9, top: 100, left: 12 });
+      }
+      expect(origin.navigate).toHaveBeenCalledTimes(2);
+      expect(state.locations).toHaveLength(2);
+      expect(state.locations[0]).toMatchObject({
+        kind: 'reader',
+        tabID: 'reader-B',
+        position: { primary },
+      });
+      expect(fixture.open).not.toHaveBeenCalled();
+    },
+  );
 });

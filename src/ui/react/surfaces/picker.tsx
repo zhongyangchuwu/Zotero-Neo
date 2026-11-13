@@ -61,6 +61,7 @@ export function mountPickerReactView(
               className={`picker-results${model.focusPane === 'list' ? ' focused' : ''}`}
               data-neo-ui-part="results"
               tabIndex={-1}
+              aria-busy={model.loading}
             >
               {model.loading || !model.rows.length
                 ? model.empty

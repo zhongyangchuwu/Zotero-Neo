@@ -17,12 +17,8 @@ import type {
   ReaderReferenceMenuContext,
   ReaderReferenceToolbarSlot,
 } from '../toolkit/reader/reference-interaction-contracts';
-import {
-  observeReaderReferenceInteractions,
-  readReaderReferenceDocument,
-  readerMainWindow,
-} from '../toolkit/reader';
-import { launchMainURL, mainItemOpening } from '../toolkit/main';
+import { observeReaderReferenceInteractions, readReaderReferenceDocument } from '../toolkit/reader';
+import { launchMainURL } from '../toolkit/main';
 import { createReferenceMetadataService } from './metadata';
 import { addReferencePaper, findReferenceItems } from '../operations/references';
 import { createReferenceAbortController } from '../platform/reference-http';
@@ -299,9 +295,7 @@ export class ReferenceController {
     let data: ReaderReferenceDocument | null = null;
     let selected: ReaderReferenceEntry | null = null;
     let paper: ScholarlyPaper | null = null;
-    const mainWindow = readerMainWindow(this.port.reader);
     let view: NativeReactView<ReferenceViewModel> | null = null;
-    const opening = mainWindow ? mainItemOpening(mainWindow) : null;
     const attachment = this.port.reader.itemID ? Zotero.Items.get(this.port.reader.itemID) : false;
     const libraryID = attachment ? attachment.libraryID : null;
     const stop = (): void => {
@@ -846,17 +840,20 @@ export class ReferenceController {
         case 'match': {
           if (model.scene !== 'local' || !model.rows.some((row) => row.id === command.id)) break;
           const match = matches[Number(command.id)];
-          if (!match?.attachmentID || !opening?.viewAttachment) {
+          if (!match?.attachmentID) {
             setStatus(text('No local PDF available.', '没有可用的本地 PDF。'));
             break;
           }
           const attachmentID = match.attachmentID;
-          const viewAttachment = opening.viewAttachment;
           const token = revision;
           void validated()
-            .then((valid) =>
-              valid && revision === token ? viewAttachment(attachmentID) : undefined,
-            )
+            .then(async (valid) => {
+              if (!valid || revision !== token) return;
+              const opened = await access.openAttachment(attachmentID);
+              if (!current() || revision !== token) return;
+              if (opened) close();
+              else setStatus(text('No local PDF available.', '没有可用的本地 PDF。'));
+            })
             .catch((error: unknown) => {
               if (current() && revision === token) setStatus(message(error));
             });
@@ -927,8 +924,22 @@ export class ReferenceController {
             async () => (await validated()) && revision === token,
           )
             .then(async (match) => {
-              if (revision === token && (await validated()) && revision === token)
-                setStatus(`${text('Available in Zotero', '已在 Zotero 中可用')}: ${match.title}`);
+              if (revision !== token || !(await validated()) || revision !== token) return;
+              matches = [match];
+              initialQuery = {
+                text: value.title,
+                ...(value.doi ? { doi: value.doi } : {}),
+                ...(value.arxivID ? { arxivID: value.arxivID } : {}),
+              };
+              go('local', {
+                title: text('Available Zotero item', '已保存的 Zotero 条目'),
+                query: initialQuery.text,
+                rows: [{ id: '0', label: `${match.title}${match.attachmentID ? ' (PDF)' : ''}` }],
+                status: `${match.reused ? text('Reused existing item', '已复用现有条目') : text('Created item', '已创建条目')}: ${match.title}`,
+                result: match.attachmentID
+                  ? text('Choose the item to open its local PDF.', '选择该条目可打开其本地 PDF。')
+                  : text('No local PDF available.', '没有可用的本地 PDF。'),
+              });
             })
             .catch((error: unknown) => {
               if (current() && revision === token) setStatus(message(error));

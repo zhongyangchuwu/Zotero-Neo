@@ -242,8 +242,15 @@ export class ReaderJumpHostAdapter {
     const tabs = owner.Zotero_Tabs;
     if (!tabs?.select) return null;
     let expectedSelectedID = tabs.selectedID;
+    let targetTab: ReaderTabRuntime | undefined;
     const current = (): boolean =>
-      Date.now() < deadline && isCurrentSafely(isCurrent) && tabs.selectedID === expectedSelectedID;
+      Date.now() < deadline &&
+      isCurrentSafely(isCurrent) &&
+      tabs.selectedID === expectedSelectedID &&
+      (!targetTab ||
+        (tabs._tabs?.includes(targetTab) === true &&
+          isReaderTabType(targetTab.type) &&
+          (targetTab.data?.itemID === undefined || targetTab.data.itemID === location.itemID)));
 
     const attachment = this.#availableAttachment(location.itemID, location.libraryID);
     const readable =
@@ -252,7 +259,8 @@ export class ReaderJumpHostAdapter {
 
     let reader: ReaderRuntime | null = null;
     let tabID: string | null = null;
-    const existing = this.#existingTab(owner, location.itemID);
+    const existing = this.#existingTab(owner, location.itemID, location.tabID);
+    if (existing) targetTab = tabs._tabs?.find((tab) => tab.id === existing.tabID);
     if (existing?.reader) {
       reader = existing.reader;
       tabID = existing.tabID;
@@ -295,7 +303,8 @@ export class ReaderJumpHostAdapter {
           opened.value,
         );
       } else {
-        const reopened = this.#existingTab(owner, location.itemID);
+        const reopened = this.#existingTab(owner, location.itemID, location.tabID);
+        if (reopened) targetTab = tabs._tabs?.find((tab) => tab.id === reopened.tabID);
         if (reopened?.reader) {
           reader = reopened.reader;
           tabID = reopened.tabID;
@@ -312,8 +321,14 @@ export class ReaderJumpHostAdapter {
       }
       tabID = reader?.tabID ?? tabID;
     }
+    targetTab ??= tabs._tabs?.find((tab) => tab.id === tabID);
 
-    if (!reader || !tabID || !this.#readerIsInOwnerTab(reader, owner, tabID, location.itemID))
+    if (
+      !current() ||
+      !reader ||
+      !tabID ||
+      !this.#readerIsInOwnerTab(reader, owner, tabID, location.itemID)
+    )
       return null;
     if (reader._isReaderInitialized !== true) {
       if (!reader._initPromise) return null;
@@ -476,37 +491,44 @@ export class ReaderJumpHostAdapter {
   #existingTab(
     owner: ReaderWindowRuntime,
     itemID: number,
+    preferredTabID: string,
   ): { readonly tabID: string; readonly reader: ReaderRuntime | null } | null {
     const tabs = owner.Zotero_Tabs;
-    for (const tab of tabs?._tabs ?? []) {
-      if (!tab.id || !isReaderTabType(tab.type)) continue;
+    const match = (
+      tab: ReaderTabRuntime | undefined,
+      attachmentHint = false,
+    ): { readonly tabID: string; readonly reader: ReaderRuntime | null } | null => {
+      if (
+        !tab?.id ||
+        !isReaderTabType(tab.type) ||
+        (tab.data?.itemID !== undefined && tab.data.itemID !== itemID)
+      )
+        return null;
       const reader =
         hostRuntime().Reader.getByTabID?.(tab.id) ??
         hostRuntime().Reader._readers?.find((candidate) => candidate.tabID === tab.id) ??
         null;
-      if (
-        reader &&
-        reader._window === owner &&
-        reader.itemID === itemID &&
-        reader._isTabClosed !== true
-      )
-        return { tabID: tab.id, reader };
-      if (tab.data?.itemID === itemID) return { tabID: tab.id, reader: null };
+      if (reader)
+        return reader._window === owner &&
+          reader.tabID === tab.id &&
+          reader.itemID === itemID &&
+          reader._isTabClosed !== true
+          ? { tabID: tab.id, reader }
+          : null;
+      return tab.data?.itemID === itemID || attachmentHint ? { tabID: tab.id, reader: null } : null;
+    };
+    const preferred = match(tabs?._tabs?.find((tab) => tab.id === preferredTabID));
+    if (preferred) return preferred;
+    for (const tab of tabs?._tabs ?? []) {
+      if (tab.id === preferredTabID) continue;
+      const candidate = match(tab);
+      if (candidate) return candidate;
     }
-    const tabID = tabs?.getTabIDByItemID?.(itemID);
-    const tab = tabs?._tabs?.find((candidate) => candidate.id === tabID);
-    if (!tabID || !tab || !isReaderTabType(tab.type)) return null;
-    const reader =
-      hostRuntime().Reader.getByTabID?.(tabID) ??
-      hostRuntime().Reader._readers?.find((candidate) => candidate.tabID === tabID) ??
-      null;
-    if (reader)
-      return reader._window === owner && reader.itemID === itemID && reader._isTabClosed !== true
-        ? { tabID, reader }
-        : null;
-    return tab.data?.itemID === undefined || tab.data.itemID === itemID
-      ? { tabID, reader: null }
-      : null;
+    const hintedID = tabs?.getTabIDByItemID?.(itemID);
+    return match(
+      tabs?._tabs?.find((tab) => tab.id === hintedID),
+      true,
+    );
   }
 
   #readerIsInOwnerTab(
@@ -517,6 +539,10 @@ export class ReaderJumpHostAdapter {
   ): boolean {
     if (reader.tabID !== tabID || reader.itemID !== itemID || reader._window !== owner)
       return false;
+    const currentReader =
+      hostRuntime().Reader.getByTabID?.(tabID) ??
+      hostRuntime().Reader._readers?.find((candidate) => candidate.tabID === tabID);
+    if (reader._isTabClosed === true || (currentReader && currentReader !== reader)) return false;
     const tabs = owner.Zotero_Tabs?._tabs;
     if (!tabs) return true;
     const tab = tabs.find((candidate) => candidate.id === tabID);

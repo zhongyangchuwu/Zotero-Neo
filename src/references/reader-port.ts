@@ -7,6 +7,8 @@ export interface ReferenceReaderViewAccess {
   readonly window: PdfWindow;
   isCurrent(): boolean;
   jump(location: ReaderReferenceLocation): boolean;
+  /** Explicit local opening participates in shared history from this captured view/document. */
+  openAttachment(itemID: number): Promise<boolean>;
   restoreFocus(): void;
 }
 

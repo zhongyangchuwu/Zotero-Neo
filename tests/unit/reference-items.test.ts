@@ -83,6 +83,7 @@ describe('reference library operations', () => {
   it('creates complete metadata in the explicitly provided library, then deduplicates exact identifiers', async () => {
     const { items } = host();
     const result = await addReferencePaper(paper, 1, () => true);
+    expect(result.reused).toBe(false);
     const item = items.get(result.itemID)!;
     expect(item.fields).toMatchObject({
       title: paper.title,
@@ -96,9 +97,10 @@ describe('reference library operations', () => {
     expect(item.creators).toEqual([
       { creatorType: 'author', lastName: 'Ada Lovelace', fieldMode: 1 },
     ]);
-    expect(await addReferencePaper(paper, 1, () => true)).toEqual(result);
+    expect(await addReferencePaper(paper, 1, () => true)).toEqual({ ...result, reused: true });
     expect(items.size).toBe(1);
-    expect(await findReferenceItems({ text: '', doi: paper.doi! }, 1)).toEqual([result]);
+    const { reused: _reused, ...localMatch } = result;
+    expect(await findReferenceItems({ text: '', doi: paper.doi! }, 1)).toEqual([localMatch]);
   });
   it('does not overwrite title-only ambiguous matches', async () => {
     const { Item, items } = host();

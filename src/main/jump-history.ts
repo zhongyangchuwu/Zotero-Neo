@@ -367,7 +367,8 @@ export class MainNavigationExecutor {
       if (!isCurrent()) return { restored: false, stale: true, missing: [] };
       if (!tabID) return { restored: false, stale: false, missing: ['Reader location'] };
       if (selectedMainTabID(window) !== tabID) return { restored: false, stale: true, missing: [] };
-      session.jumpHistory.remapReaderTab(location, tabID);
+      // Exact duplicate-PDF views keep their own history identity; only a fallback remaps it.
+      if (tabID !== location.tabID) session.jumpHistory.remapReaderTab(location, tabID);
       this.#navigation.afterTabSwitch(window);
       return { restored: true, stale: false, missing: [] };
     }

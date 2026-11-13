@@ -13,6 +13,7 @@ export class PickerRuntime {
   view: NativeReactView<PickerReactModel> | null = null;
   status = '';
   loadingText = '';
+  loadError = '';
   overlay: HTMLElement | null = null;
   input: HTMLInputElement | null = null;
   composition: CompositionState = { active: false };
@@ -33,6 +34,8 @@ export class PickerRuntime {
   items: PickerItem[] = [];
   filtered: PickerItem[] = [];
   selected = 0;
+  /** Selected identity retained until the current source/query produces authoritative results. */
+  pendingSelectionID: PickerItem['id'] | undefined;
   focusPane: 'search' | 'list' | 'preview' = 'search';
   provider: PickerProvider | null = null;
   confirm: PickerConfirm | null = null;

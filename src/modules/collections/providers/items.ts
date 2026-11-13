@@ -35,7 +35,6 @@ export function createCollectionItemsProvider(collection: MainCollectionRef): Pi
       query: 'Enter adds · Esc ends (saved additions remain)',
       list: 'Enter adds · Esc ends',
     },
-    loadingText: 'Searching this library…',
     load: () => query(''),
     query,
     rowText: (item) => `${itemRowText(item)} · ${item.meta}`,
