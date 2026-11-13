@@ -78,6 +78,7 @@ export {
 } from './rendered-items';
 export {
   mainInstalledPlugins,
+  mainPluginInstalled,
   setMainPluginEnabled,
   installMainPlugin,
   updateMainPlugin,

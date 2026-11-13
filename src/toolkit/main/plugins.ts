@@ -98,6 +98,12 @@ export interface MainPluginSnapshot {
   readonly preferencePaneID?: string;
 }
 
+/** Resolve installation independently of whether the extension is enabled or running. */
+export async function mainPluginInstalled(pluginID: string): Promise<boolean> {
+  const addon = await addonManager().getAddonByID(pluginID);
+  return addon?.type === 'extension';
+}
+
 /** AddonManager is the platform registry; preference pane discovery remains a private seam. */
 export async function mainInstalledPlugins(): Promise<MainPluginSnapshot[]> {
   const manager = addonManager();

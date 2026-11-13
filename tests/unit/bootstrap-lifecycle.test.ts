@@ -6,9 +6,11 @@ import { describe, expect, it } from 'vitest';
 
 const SOURCE = readFileSync(new URL('../../src/bootstrap.ts', import.meta.url), 'utf8');
 
-async function bootstrap() {
+async function bootstrap(deferCreation = false) {
   const database = Promise.withResolvers<void>();
   const migration = Promise.withResolvers<void>();
+  const creation = Promise.withResolvers<void>();
+  const windowAttached = Promise.withResolvers<void>();
   const attached = new Set<object>();
   const window = {};
   let active = false;
@@ -24,19 +26,25 @@ async function bootstrap() {
     Services: {
       scriptloader: {
         loadSubScript: () => {
-          sandbox.ZoteroNeo = {
+          const controller = {
             init: async () => {
               active = true;
               await migration.promise;
             },
             addToWindow: (window: object) => {
-              if (active) attached.add(window);
+              if (active) {
+                attached.add(window);
+                windowAttached.resolve();
+              }
             },
             shutdown: () => {
               active = false;
               attached.clear();
             },
           };
+          sandbox.ZoteroNeo = deferCreation
+            ? creation.promise.then(() => controller)
+            : Promise.resolve(controller);
         },
       },
     },
@@ -58,8 +66,10 @@ async function bootstrap() {
   return {
     database,
     migration,
+    creation,
     attached,
     window,
+    windowAttached: windowAttached.promise,
     startup,
     shutdown: sandbox.shutdown as () => void,
   };
@@ -68,6 +78,7 @@ async function bootstrap() {
 describe('Bootstrap with asynchronous data migration', () => {
   it('attaches the early Main window before database readiness without finishing startup before migration', async () => {
     const h = await bootstrap();
+    await h.windowAttached;
     expect(h.attached.has(h.window)).toBe(true);
     let ready = false;
     void h.startup.then(() => {
@@ -84,8 +95,31 @@ describe('Bootstrap with asynchronous data migration', () => {
 
   it('does not revive a shut-down controller when its migration finishes late', async () => {
     const h = await bootstrap();
+    await h.windowAttached;
     h.database.resolve();
     h.shutdown();
+    h.migration.resolve();
+    await h.startup;
+    expect(h.attached.has(h.window)).toBe(false);
+  });
+
+  it('waits for provider discovery before attaching the controller', async () => {
+    const h = await bootstrap(true);
+    expect(h.attached.has(h.window)).toBe(false);
+    h.creation.resolve();
+    await h.windowAttached;
+    expect(h.attached.has(h.window)).toBe(true);
+    h.database.resolve();
+    h.migration.resolve();
+    await h.startup;
+    expect(h.attached.has(h.window)).toBe(true);
+  });
+
+  it('does not revive a controller created after shutdown', async () => {
+    const h = await bootstrap(true);
+    h.shutdown();
+    h.creation.resolve();
+    h.database.resolve();
     h.migration.resolve();
     await h.startup;
     expect(h.attached.has(h.window)).toBe(false);

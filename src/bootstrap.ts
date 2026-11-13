@@ -24,7 +24,8 @@ interface BootstrapController {
   removeFromWindow(window: _ZoteroTypes.MainWindow): void;
 }
 
-var ZoteroNeo: BootstrapController | undefined;
+var ZoteroNeo: Promise<BootstrapController> | undefined;
+let activeController: BootstrapController | undefined;
 
 const APP_START_TS = Date.now();
 let LOG_EPOCH = 0;
@@ -95,7 +96,13 @@ async function startup(context: BootstrapContext, reason: number): Promise<void>
   Services.scriptloader.loadSubScript(`${context.rootURI}content/zotero-neo.js`);
   if (!ZoteroNeo) throw new Error('Zotero Neo runtime bundle did not install its controller');
 
-  const controller = ZoteroNeo;
+  const pendingController = ZoteroNeo;
+  const controller = await pendingController;
+  if (ZoteroNeo !== pendingController) {
+    controller.shutdown();
+    return;
+  }
+  activeController = controller;
   const earlyInit = controller.init(runtimeContext).catch((error: unknown) => {
     log(`Early init failed: ${String(error)}`);
     logFile(`early init FAILED: ${String(error)}`);
@@ -111,7 +118,7 @@ async function startup(context: BootstrapContext, reason: number): Promise<void>
   log(`initializationPromise resolved (startup +${Date.now() - startedAt}ms)`);
   logFile(`initializationPromise resolved (startup +${Date.now() - startedAt}ms)`);
   await earlyInit;
-  if (ZoteroNeo !== controller) return;
+  if (ZoteroNeo !== pendingController) return;
 
   try {
     await controller.init(runtimeContext);
@@ -119,7 +126,7 @@ async function startup(context: BootstrapContext, reason: number): Promise<void>
     log(`Init after initialization failed: ${String(error)}`);
     logFile(`init after initialization FAILED: ${String(error)}`);
   }
-  if (ZoteroNeo !== controller) return;
+  if (ZoteroNeo !== pendingController) return;
   try {
     for (const window of Zotero.getMainWindows()) controller.addToWindow(window);
   } catch (error) {
@@ -129,16 +136,17 @@ async function startup(context: BootstrapContext, reason: number): Promise<void>
 }
 
 function onMainWindowLoad(event: MainWindowEvent): void {
-  ZoteroNeo?.addToWindow(event.window);
+  activeController?.addToWindow(event.window);
 }
 
 function onMainWindowUnload(event: MainWindowEvent): void {
-  ZoteroNeo?.removeFromWindow(event.window);
+  activeController?.removeFromWindow(event.window);
 }
 
 function shutdown(): void {
   log('Shutting down');
-  const controller = ZoteroNeo;
+  const controller = activeController;
+  activeController = undefined;
   ZoteroNeo = undefined;
   controller?.shutdown();
 }

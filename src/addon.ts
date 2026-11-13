@@ -47,7 +47,7 @@ type ZoteroWithNeo = typeof Zotero & {
 
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
-  readonly #preferences = new ZoteroPreferenceStore();
+  readonly #preferences: ZoteroPreferenceStore;
   readonly #managedTags = new ManagedTagsUI(isSourceNoteIdentity, (error) =>
     this.#logger.debug(`Managed tag UI failed: ${String(error)}`),
   );
@@ -63,8 +63,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   #releaseNativeUI: (() => void) | null = null;
   aiQA: AIQAController | null = null;
 
-  constructor() {
-    migrateTranslationModulePreference(this.#preferences);
+  constructor(preferences: ZoteroPreferenceStore) {
+    this.#preferences = preferences;
     this.#modules = new BuiltinModuleRuntime(
       this.#preferences,
       this.#logger,
@@ -200,6 +200,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   }
 }
 
-export function createAddon(): ZoteroNeoController {
-  return new ZoteroNeoAddon();
+export async function createAddon(): Promise<ZoteroNeoController> {
+  const preferences = new ZoteroPreferenceStore();
+  await migrateTranslationModulePreference(preferences);
+  return new ZoteroNeoAddon(preferences);
 }

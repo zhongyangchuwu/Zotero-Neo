@@ -8,6 +8,7 @@ import {
   setPluginEnabled,
   ZOTERO_NEO_PLUGIN_ID,
 } from '../../src/modules/extensions/host';
+import { mainPluginInstalled } from '../../src/toolkit/main';
 
 const originalChromeUtils = Reflect.get(globalThis, 'ChromeUtils');
 const originalZotero = Reflect.get(globalThis, 'Zotero');
@@ -47,6 +48,24 @@ afterEach(() => {
 });
 
 describe('Plugin Manager host adapter', () => {
+  it.each([
+    {
+      name: 'disabled extension',
+      addon: { id: 'translation@test', type: 'extension', isActive: false },
+      expected: true,
+    },
+    { name: 'missing add-on', addon: null, expected: false },
+    {
+      name: 'non-extension add-on',
+      addon: { id: 'theme@test', type: 'theme' },
+      expected: false,
+    },
+  ])('detects installation independently of runtime: $name', async ({ addon, expected }) => {
+    installHost([]);
+    getAddonByID.mockResolvedValue(addon);
+    expect(await mainPluginInstalled('translation@test')).toBe(expected);
+  });
+
   it('projects lifecycle permissions and registered settings panes', async () => {
     const plugin = {
       id: 'example@example.test',
