@@ -26,7 +26,7 @@
 
 ## 模式、焦点与功能可用性
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。九个核心模块固定启用，只有链接与复制提示（`reader-hints`）和扩展管理面板（`extensions`）可关闭，设置见[模块设置指南](SETTINGS_GUIDE.md#开关两项可选功能)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。12 个内部模块中，九个核心模块固定启用；链接与复制提示（`reader-hints`）、扩展管理面板（`extensions`）和翻译增强（`translation`）是三项可关闭的可选增强，设置见[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |
@@ -323,9 +323,9 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 ### 选区操作、Plugin Manager、设置与 Neo 选择集面板
 
-在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；安装 Zotero Translate 后还会显示“翻译”。按 `y` 可复制结果。
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；翻译增强在重启后已应用且 Translate for Zotero 的公开 API 可用时，还会提供“翻译”。准备和状态见[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)。按 `y` 可复制结果。
 
-按 `<Space>pp` 打开常驻 Plugin Manager，并在其中浏览扩展。在 `plugins-list` 中，默认按 `j` / Down、`k` / Up 移动，按 `gg` / Home 和 `G` / End 跳到首项/末项，按 `Ctrl+d` / `Ctrl+u` 翻页，按 `/` 筛选，按 Escape / `q` 关闭。按 `r` 刷新列表；Zotero 允许时可按 `e` / `d` 启用或停用扩展；按 `p` 打开已注册设置，按 `o` 打开主页，按 `R` 打开关联的 GitHub README，按 `L` 打开其提交历史。在 `plugins-input` 中按 Escape 返回结果。哪些生命周期操作可用由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
+按 `<Space>pp` 打开常驻 Plugin Manager，并在其中浏览扩展。在 `plugins-list` 中，默认按 `j` / Down、`k` / Up 移动，按 `gg` / Home 和 `G` / End 跳到首项/末项，按 `Ctrl+d` / `Ctrl+u` 翻页，按 `/` 筛选，按 Escape / `q` 关闭。按 `r` 重新读取列表；选中未安装的 Translate for Zotero 条目后按 `i` 下载并确认安装，选中已安装插件后按 `u` 检查并确认更新。更新使用 Zotero AddonManager，不改动其自动更新策略。Zotero 允许时可按 `e` / `d` 启用或停用扩展；按 `p` 打开已注册设置，按 `o` 打开主页，按 `R` 打开关联的 GitHub README，按 `L` 打开其提交历史。在 `plugins-input` 中，普通输入仍用于查询，按 Escape 返回结果。哪些生命周期操作可用由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 
 按 `<Space>ps` 打开设置；快捷键修改在点击**应用绑定**前仍是草稿。按 `<Space>ss` 打开 Main 选择集面板：按 `j` / `k` 移动，按 `Home` / `gg` 或 `End` / `G` 跳到首项/末项，按 Enter 在文库中显示条目，按 `x` 将条目从 Neo 选择集中移除，按 `c` 清空选择集，按 `r` 刷新，按 Escape / `q` 关闭。条目不可用时无法显示；显示失败时面板会保持打开。
 
@@ -508,7 +508,9 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `uiPreviousPane` | **未绑定** | 在 `picker-input` 中受支持；默认没有快捷键。 |
 | `uiPageDown` | Plugins List `<C-d>` | 在 Plugin Manager 结果中向下翻页。 |
 | `uiPageUp` | Plugins List `<C-u>` | 在 Plugin Manager 结果中向上翻页。 |
-| `pluginsRefresh` | Plugins List `r` | 刷新 Plugin Manager 状态。 |
+| `pluginsRefresh` | Plugins List `r` | 重新读取 Plugin Manager 状态，不检查更新。 |
+| `pluginsInstall` | Plugins List `i` | 从官方发行地址下载所选的未安装 Translate 条目，确认后安装。 |
+| `pluginsUpdate` | Plugins List `u` | 通过 Zotero 检查所选已安装插件的更新，确认后安装。 |
 | `pluginsEnable` | Plugins List `e` | Zotero AddonManager 允许时启用扩展。 |
 | `pluginsDisable` | Plugins List `d` | Zotero AddonManager 允许时停用扩展。 |
 | `pluginsPreferences` | Plugins List `p` | 打开扩展已注册的设置。 |

@@ -6,12 +6,17 @@ import {
 } from '../../toolkit/main';
 
 export const ZOTERO_NEO_PLUGIN_ID = 'zotero-neo@zotero-neo';
+export const TRANSLATE_PLUGIN_ID = 'zoteropdftranslate@euclpts.com';
+export const TRANSLATE_PLUGIN_URL =
+  'https://github.com/windingwind/zotero-pdf-translate/releases/latest/download/translate-for-zotero.xpi';
 
 export interface InstalledPlugin {
   readonly id: string;
+  readonly installed?: boolean;
   readonly name: string;
   readonly version: string;
   readonly enabled: boolean;
+  readonly pendingRestart?: boolean;
   readonly canEnable: boolean;
   readonly canDisable: boolean;
   readonly description: string;
@@ -68,13 +73,28 @@ function pluginInfoLinks(homepageURL?: string): {
 
 export async function installedPlugins(): Promise<InstalledPlugin[]> {
   const plugins = await mainInstalledPlugins();
-  return plugins
-    .map((plugin) => ({
-      ...plugin,
-      canDisable: plugin.id !== ZOTERO_NEO_PLUGIN_ID && plugin.canDisable,
-      ...pluginInfoLinks(plugin.homepageURL),
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name, Zotero.locale));
+  const entries: InstalledPlugin[] = plugins.map((plugin) => ({
+    ...plugin,
+    installed: true,
+    canDisable: plugin.id !== ZOTERO_NEO_PLUGIN_ID && plugin.canDisable,
+    ...pluginInfoLinks(plugin.homepageURL),
+  }));
+  if (!entries.some((plugin) => plugin.id === TRANSLATE_PLUGIN_ID)) {
+    const homepageURL = 'https://github.com/windingwind/zotero-pdf-translate';
+    entries.push({
+      id: TRANSLATE_PLUGIN_ID,
+      name: 'Translate for Zotero',
+      version: '',
+      installed: false,
+      enabled: false,
+      canEnable: false,
+      canDisable: false,
+      description: 'Translate text in Zotero using Translate for Zotero.',
+      preferencePaneID: undefined,
+      ...pluginInfoLinks(homepageURL),
+    });
+  }
+  return entries.sort((left, right) => left.name.localeCompare(right.name, Zotero.locale));
 }
 
 export async function setPluginEnabled(pluginID: string, enabled: boolean): Promise<void> {

@@ -66,22 +66,44 @@ describe('Plugin Manager host adapter', () => {
       { id: 'example-root', pluginID: plugin.id },
     ]);
 
-    await expect(installedPlugins()).resolves.toEqual([
+    const plugins = await installedPlugins();
+    expect(plugins.find((entry) => entry.id === plugin.id)).toMatchObject({
+      id: plugin.id,
+      name: plugin.name,
+      version: plugin.version,
+      installed: true,
+      enabled: true,
+      canEnable: true,
+      canDisable: true,
+      description: 'Keyboard-first example plugin',
+      homepageURL: 'https://github.com/example/example-plugin/releases',
+      repositoryURL: 'https://github.com/example/example-plugin',
+      readmeURL: 'https://github.com/example/example-plugin#readme',
+      gitLogURL: 'https://github.com/example/example-plugin/commits',
+      preferencePaneID: 'example-root',
+    });
+    expect(plugins.filter((entry) => entry.id === 'zoteropdftranslate@euclpts.com')).toHaveLength(
+      1,
+    );
+    expect(plugins.find((entry) => entry.id === 'zoteropdftranslate@euclpts.com')).toMatchObject({
+      installed: false,
+    });
+  });
+
+  it('does not duplicate the curated entry when Translate is installed', async () => {
+    installHost([
       {
-        id: plugin.id,
-        name: plugin.name,
-        version: plugin.version,
-        enabled: true,
-        canEnable: true,
-        canDisable: true,
-        description: 'Keyboard-first example plugin',
-        homepageURL: 'https://github.com/example/example-plugin/releases',
-        repositoryURL: 'https://github.com/example/example-plugin',
-        readmeURL: 'https://github.com/example/example-plugin#readme',
-        gitLogURL: 'https://github.com/example/example-plugin/commits',
-        preferencePaneID: 'example-root',
+        id: 'zoteropdftranslate@euclpts.com',
+        name: 'Translate',
+        type: 'extension',
+        isActive: false,
       },
     ]);
+    const matches = (await installedPlugins()).filter(
+      (entry) => entry.id === 'zoteropdftranslate@euclpts.com',
+    );
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({ installed: true, enabled: false });
   });
 
   it('derives GitHub repository documentation links conservatively', () => {
@@ -112,7 +134,7 @@ describe('Plugin Manager host adapter', () => {
       },
     ]);
 
-    const [neo] = await installedPlugins();
+    const neo = (await installedPlugins()).find((plugin) => plugin.id === ZOTERO_NEO_PLUGIN_ID);
     expect(neo).toMatchObject({ canEnable: true, canDisable: false });
     await expect(setPluginEnabled(ZOTERO_NEO_PLUGIN_ID, false)).rejects.toThrow(
       'cannot disable itself',

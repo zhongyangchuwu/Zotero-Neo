@@ -4,6 +4,7 @@ import { actionsForBindingMode } from '../input/binding-capabilities';
 import {
   BUILTIN_MODULES,
   OPTIONAL_MODULE_IDS,
+  OPTIONAL_MODULE_DEFAULTS,
   isOptionalModule,
   actionContribution,
   validateBuiltinModules,
@@ -65,6 +66,7 @@ export class BuiltinModuleRuntime {
     this.applied = Object.freeze({
       'reader-hints': flags['reader-hints'],
       extensions: flags.extensions,
+      translation: flags.translation,
     });
   }
 
@@ -72,7 +74,7 @@ export class BuiltinModuleRuntime {
     return Object.fromEntries(
       OPTIONAL_MODULE_IDS.map((id) => [
         id,
-        this.#preferences.get(modulePreferenceKey(id), true) === true,
+        this.#preferences.get(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]) === true,
       ]),
     ) as Record<OptionalModuleId, boolean>;
   }

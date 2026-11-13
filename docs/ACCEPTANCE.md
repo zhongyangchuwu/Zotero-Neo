@@ -148,13 +148,15 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 ### U9：变更与可选集成
 
-- 模块边界：在一次性 profile 中，将 `library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 各自对应的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并关闭 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）。保存请求前后、Neo 重载后确认当前能力不变；真正重启 Zotero 后确认只关闭两项增强，九个核心仍提供 Main、Reader、Note 与 Workspace 工作流，包括 Main Visual、选择/批注、导航、笔记查找和标签/分类操作。
-- 恢复默认模块请求，只恢复 `reader-hints` 与 `extensions` 两项默认启用值；对照确认九个核心旧值及 `noteEditor.enabled` 等行为偏好未被改写。模块保存与恢复默认都不得改变快捷键、行为偏好或 Zotero 数据。
+- 模块边界：在一次性 profile 中，将 `library`、`worksets`、`tags`、`collections`、`reader-navigation`、`reader-selection`、`reader-annotations`、`notes`、`workspace` 的旧 `extensions.zotero-neo.modules.<id>.enabled=false` 值设为无效状态，并分别关闭 `reader-hints`、`extensions`、`translation`。12 个分区中九个核心固定启用、三项增强关闭；保存请求前后、Neo 重载后确认当前能力不变，真正重启 Zotero 后确认九个核心仍提供 Main、Reader、Note 与 Workspace 工作流。
+- 首次迁移：在翻译模块偏好键缺失的配置中，分别验证 Translate for Zotero 运行时已存在或留有用户配置时保留既有使用；已有明确 `false` 时不被覆盖；无 provider／配置的新配置默认关闭翻译增强，另外两项默认开启。
+- 首次准备：即使 `extensions` 关闭，也能从翻译增强设置准备依赖。对未安装 provider 分别验证取消不安装且不保存模块请求、确认后安装固定官方 2.4.8。仅新安装初始化准备安装前尚无用户值的两个上游偏好，不能被上游启动时写入的默认目标语言阻止；验证卸载后重装保留 `enableAuto=false` 和自定义目标语言，以及只保留其中一个用户值时仅补写另一个缺失键。已有 provider 必须明确同意后才启用，不能覆盖其配置、静默替换或降级版本；已安装元数据不能代替运行时就绪状态。
+- 恢复默认模块请求，确认显式写入 `reader-hints=true`、`extensions=true`、`translation=false`；重启后应用。保存与恢复不得改核心旧值、`noteEditor.enabled` 等行为偏好、快捷键或 Zotero 数据。关闭翻译增强后，上游插件仍保持原启停状态，已有原生便签仍可读取。
 
 - 标签／集合操作在主窗口以 Neo 选择集为优先目标，在阅读器／笔记编辑器中使用各自上下文，操作目标和数量应清楚可解释。主窗口清除视图筛选不等于清除 Neo 选择集。
 - 对一次性测试条目执行 Trash 取消，再执行确认／`u` 恢复；应能观察到对隐藏 Neo 选择集成员的拒绝，以及取消后的保存结果。阅读器中的批注删除是永久操作，仅使用一次性测试批注并检查确认。
-- 只有实际安装并工作的 Better BibTeX 才验收 citekey；只有实际 Translate provider 才录制翻译结果。未具备条件的可选场景写 `NOT APPLICABLE` 并说明条件，不能替代任何必需场景。
-- Plugin Manager 只演示现有列表／查询／enable-disable／registered settings／信息链接。它不能停用 Neo 自身；没有通用商店、自动安装或卸载工作流。
+- 只有 Better BibTeX 实际安装并工作时才验收 citekey；只有 `translation` 请求已在重启后应用、Translate for Zotero 运行时就绪且公开 API 可用时才录制手动翻译或译文保存。未具备条件的可选场景写 `NOT APPLICABLE` 并说明条件，不能替代任何必需场景。
+- Plugin Manager 核心场景演示列表／查询／enable-disable／registered settings／信息链接。官方 Translate 安装和所选插件更新在一次性测试配置中单独验收，核对确认／取消、真实安装状态、重启提示及自动更新策略未被改写，操作见[插件管理](SETTINGS_GUIDE.md#查看已安装的插件)。它不能停用 Neo 自身；没有通用商店、自动安装或卸载工作流。
 
 ## 7. 结果记录与收束
 

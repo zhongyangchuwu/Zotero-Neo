@@ -79,6 +79,9 @@ export {
 export {
   mainInstalledPlugins,
   setMainPluginEnabled,
+  installMainPlugin,
+  updateMainPlugin,
+  type MainPluginInstallOptions,
   openMainPluginPreferences,
   launchMainURL,
   type MainPluginSnapshot,

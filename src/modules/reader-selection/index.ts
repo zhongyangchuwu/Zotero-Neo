@@ -49,7 +49,6 @@ export interface ReaderSelectionModulePorts {
   readonly copyText: (text: string) => void;
   readonly themeRoot: (root: HTMLElement) => () => void;
   readonly language: () => KeyGuideLanguage;
-  readonly pluginID: () => string | null;
   readonly contributedActions: (
     window: PdfWindow,
     language: KeyGuideLanguage,
@@ -76,22 +75,6 @@ export interface ReaderSelectionModule {
 
 function selectionText(value: string): string {
   return value.normalize('NFKC').replace(/\n/g, ' ').replace(/ {2,}/g, ' ').trim();
-}
-
-type Translate = (
-  text: string,
-  options: { readonly pluginID: string; readonly itemID?: number },
-) => Promise<{ readonly result?: string }>;
-
-interface SelectionTranslationRuntime {
-  readonly PDFTranslate?: { readonly api?: { readonly translate?: Translate } };
-}
-
-function selectionTranslator(): Translate | undefined {
-  if (typeof Zotero === 'undefined') return undefined;
-  // PDFTranslate's existing optional public API is absent from Zotero's host declarations.
-  const runtime = Zotero as unknown as SelectionTranslationRuntime;
-  return runtime.PDFTranslate?.api?.translate;
 }
 
 /** Owns selection-domain state; the Surface still owns modes, exact views and input admission. */
@@ -229,25 +212,6 @@ export function createReaderSelectionModule(
         if (!queryCurrent()) return [];
         const language = ports.language();
         const result: ReaderSelectionActionDefinition[] = [];
-        const translate = selectionTranslator();
-        const pluginID = ports.pluginID();
-        if (typeof translate === 'function' && pluginID) {
-          result.push({
-            id: 'pdf-translate.translate',
-            label: language === 'zh-CN' ? '翻译' : 'Translate',
-            run: async (selection) => {
-              if (!isCurrent(window)) return { retired: true };
-              const task = await translate(selection.text, {
-                pluginID,
-                ...(selection.itemID === null ? {} : { itemID: selection.itemID }),
-              });
-              const text = task.result?.trim();
-              if (!text) throw new Error('empty translation result');
-              return { title: language === 'zh-CN' ? '翻译结果' : 'Translation', body: text };
-            },
-          });
-        }
-        if (!queryCurrent()) return [];
         result.push(...ports.contributedActions(window, language));
         if (!queryCurrent()) return [];
         result.push(...ports.registeredActions(snapshot, queryCurrent));

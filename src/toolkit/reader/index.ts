@@ -37,3 +37,9 @@ export { readerRegionPreview } from './region-preview';
 export type { ReaderRegionPreview } from './region-preview';
 
 export { readerReadingMode } from './presentation';
+export { translationMarkerPosition } from './translation-marker';
+export { ReaderTranslationSidebar } from './translation-sidebar';
+export { readerSelectionPopupSource } from './selection-popup-source';
+export { captureTranslateForZotero248 } from './translate-for-zotero-v248';
+export { appendTranslationPopupAction, isReaderTranslationControl } from './translation-popup';
+export { readerLoadedPDFSource } from './loaded-pdf-source';

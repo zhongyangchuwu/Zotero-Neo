@@ -10,7 +10,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 共享导航栈及其记录/恢复策略见[导航历史设计](NAVIGATION_HISTORY_DESIGN.md)。本文描述当前运行时所有权；[交互模型](INTERACTION_MODEL.md)定义 Main 交互语义，[命令参考](COMMAND_REFERENCE.md)维护准确的按键说明。
 
-[模块拆分与基座能力设计](MODULE_DESIGN.md)记录十一项内部模块分区及其迁移约束：九个核心分区固定启用，只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）是可选增强。静态清单、实际宿主依赖及两项增强的启动配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#开关两项可选功能)，下文维护运行时所有权。
+[模块拆分与基座能力设计](MODULE_DESIGN.md)记录 12 项内部模块分区及其迁移约束：9 个核心分区固定启用，`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `translation`（翻译增强）是 3 个可选增强。静态清单、实际宿主依赖及三项增强的启动配置均已接入；用户操作见[模块设置](SETTINGS_GUIDE.md#管理可选增强)，下文维护运行时所有权。
 
 ## 分层
 
@@ -26,7 +26,7 @@ Zotero Neo 在 Zotero 之上增加交互能力，不维护另一套文档、选�
 
 `src/input/actions.ts` 是唯一的 `ActionId` 目录。功能能力模块定义可执行动作；controller 分发已解析的语义动作，不模拟键盘事件。Settings、Key Guide、快捷键提示和按键匹配都由同一动作目录、处理方能力与已解析绑定生成。
 
-`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。九个核心分区固定启用；只有 `reader-hints` 与 `extensions` 可按已应用请求关闭。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
+`src/modules/index.ts` 定义精确上下文/动作归属与依赖，`src/core/module-runtime.ts` 按已应用图和实际宿主实例过滤能力，再交给按键匹配、count/前缀、Guide 和 Palette。九个核心分区固定启用；`reader-hints`、`extensions` 与 `translation` 可按已应用请求关闭。不可用贡献的元数据及用户绑定保留；不能按全局 ActionId 删除其他上下文的同名贡献，例如 Library 的 Main Select Trash。独立 Reader 的标识符动作使用实际 Main opener，其余跨窗口委托继续使用各自真实接收方，不借用任意健康 Main。
 
 条目目标由发起操作的 Surface 解析。`src/core/item-target.ts` 定义共享结果形状；`src/platform/zotero-items.ts` 负责 Zotero 查找、归一化与身份去重。`src/main/main-item-target.ts` 在 Main 中优先解析 Selection，再解析 CurrentTarget；`src/reader/item-target.ts` 解析当前 Reader 条目；`src/main/note-item-target.ts` 解析当前 Note。Reader 和 Note 不借用 Main Selection。
 
@@ -52,16 +52,16 @@ Toolkit 仅从实际 Main document 中已连接、可见且有布局的 Note ifr
 
 `src/core/module-host.ts` 为每个 MainWindow 或 ReaderSession 的模块提供独立子作用域、同步激活回滚和 `(BindingContext, ActionId)` 贡献所有权。调用返回有类型的业务入口，不新增命令 ID 或跨 Surface 分发器。宿主退出先退休全部贡献，再尝试释放所有资源；原始激活或清理失败仍可观测。
 
-`BuiltinModuleRuntime` 对两项可选增强分别保存已应用值与偏好请求；九个核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存不可变布尔图的 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，真正重启 Zotero 后才应用可选项的新请求。Settings 显示可选增强的请求、已应用值、当前宿主状态与待重启状态；恢复默认只清除这两项请求。
+`BuiltinModuleRuntime` 对三项可选增强分别保存已应用值与偏好请求；九个核心分区固定启用，已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值不会关闭核心功能。`src/platform/module-startup.ts` 在原生 Zotero 应用对象上仅保存不可变布尔图的 JSON，不保存窗口、模块或 SDK 对象；Neo 重载沿用本进程快照，真正重启 Zotero 后才应用可选项的新请求。Settings 显示可选增强的请求、已应用值、当前宿主状态与待重启状态；恢复默认会显式写入三项规范默认值（`reader-hints=true`、`extensions=true`、`translation=false`），而非清除模块偏好。
 
 
 `src/modules/tags/` 是首条完整接入路径：`index.ts` 组合模块与作用域，`actions.ts` 拥有标签候选/确认与过滤策略，`capabilities.ts` 向现有三个 Surface 能力目录提供动作集合。Main controller 只在各自 Surface 解析目标后调用模块入口，并注入 Picker、状态反馈和 Main 过滤端口。标签事务仍由 `src/operations/item-tags.ts` 执行，候选 provider 仍只处理数据和展示。
 
 标签模块不持有 Main session、原生 pane 或 Reader 对象。Picker 端口返回仅能关闭本次调用的释放句柄；视图或窗口退休后不能确认旧选择、重画状态或关闭后来替换的界面。已接纳的保存继续按原生事务结果完成，不因模块退休而伪装成取消。
 
-`src/modules/extensions/` 拥有已安装 Zotero 扩展的 Plugin Manager。`index.ts` 为每个 MainWindow 创建模块作用域、面板和状态；Main session 不再持有插件面板状态。Main/Reader/Note 的 `managePlugins` 进入实际所属窗口的同一面板，局部输入继续使用 `plugins-input` / `plugins-list` 和既有重绑定。
+`src/modules/extensions/` 拥有 Zotero 扩展的 Plugin Manager，列表包含已安装扩展和静态目录中的 Translate for Zotero 安装条目。`index.ts` 为每个 MainWindow 创建模块作用域、面板和状态；Main session 不再持有插件面板状态。Main/Reader/Note 的 `managePlugins` 进入实际所属窗口的同一面板，局部输入继续使用 `plugins-input` / `plugins-list` 和既有重绑定。
 
-面板关闭先退休交互，再分别释放局部绑定、输入监听、主题与 DOM；某项释放失败仍尝试其余资源，并保留原始错误。异步刷新和原生启停完成后同时核对模块作用域与本次界面身份，不更新退休界面或恢复其焦点。已接纳的原生操作不伪装成可取消。原生 AddonManager 接缝仍在 Toolkit；该模块不负责 Neo 内部模块配置，也不新增安装、更新或卸载功能。
+面板关闭先退休交互，再分别释放局部绑定、输入监听、主题与 DOM；某项释放失败仍尝试其余资源，并保留原始错误。异步刷新和原生启停完成后同时核对模块作用域与本次界面身份，不更新退休界面或恢复其焦点。安装取消遵守 AddonManager 状态，已完成安装不伪装成可撤销。原生接缝仍在 Toolkit；模块只提供官方 Translate 安装和所选插件更新，不负责 Neo 内部模块配置、任意包来源或卸载。详细边界见[可选翻译与扩展管理](DEVELOPMENT.md#可选翻译与扩展管理)。
 
 `src/modules/collections/` 拥有分类成员操作、查找、连续添加条目、分类结构操作、候选展示及每个窗口的重命名草稿。Main/Reader 传入各自的目标解析器和显示标签，确认时重验证来源、库与目标签名；模块不持有整个 Main session、共享 Picker 或 MainNavigation。Main 保留现有九个分类命令，Reader 保留 Add/Remove，Note 不新增命令。
 
@@ -83,7 +83,7 @@ Reader Surface 保留输入/IME/count/前缀、模式、CurrentTarget、精确�
 
 `src/modules/reader-selection/` 按 ReaderSession 拥有 Select 范围/垂直 motions、Flash、选择文本复制/搜索和 Selection Actions。每次交互捕获确切 ReaderView、Window 与 Document；旧可用性回调、输入或异步结果不能作用于替换视图。Surface 在接纳新动作或原生选择前先同步旧视图退休，避免较晚扫描清理新取得的资源。范围退出释放 anchor/preferred-X 与样式租约；忙碌面板自己忽略的重复/IME 按键不使其结果失效。
 
-`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。公共选择 API 门面和类型不变，选择模块退休后返回 `null`、不执行旧回调。批注相关选择动作由组合根具名注入；可选 PDFTranslate 接口保持原义，选择模块不写 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
+`registry.ts` 保存应用级、无 DOM 的外部动作定义；单个 Reader 模块退出不清空它。公共选择 API 门面和类型不变，选择模块退休后返回 `null`、不执行旧回调。`reader-selection` 仍拥有选择上下文与 Selection Actions 面板；`src/modules/translation/` 负责向该面板贡献 `pdf-translate.translate`，并拥有自动译文弹窗的保存入口和侧栏译文角色，不新增 Reader mode。手动翻译调用上游公开 API，保存只接纳已完成结果而不再次请求翻译；上游继续管理翻译服务与凭据。批注相关选择动作仍由组合根具名注入；`reader-selection` 不直接写入 Note 或批注。从选择发起的 Find 通过 Toolkit 捕获精确 pane 和本次原生 Find 状态，不覆盖新的查询或关闭重开后的界面。
 
 `src/modules/reader-annotations/` 按 ReaderSession 拥有创建、删除、改色、颜色过滤、批注文本/评论复制及评论保存。CurrentTarget 的原生优先与最后目标后备留在 Surface；模块自己的过滤后备通过具名端口供导航读取，不把批注写入下沉到选择模块。创建仍要求完整 PDF 几何，删除仍由所属窗口确认并调用明确 Operation。
 

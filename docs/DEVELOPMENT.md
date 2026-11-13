@@ -117,13 +117,13 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-当前已接入 `src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/`、`notes/`、`reader-navigation/`、`reader-selection/`、`reader-annotations/` 与 `workspace/`。九个核心分区固定启用；只有 `reader-hints`（链接与复制提示）和 `extensions`（扩展管理面板）是可选增强。MainWindow 组合标签、扩展、分类、工作集、Library、Notes 和 Workspace；ReaderSession 组合导航、选择、批注、hints、独立 Library citekey 贡献及 Workspace 分屏/焦点。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。
+当前已接入 12 个内置模块：`src/modules/tags/`、`extensions/`、`collections/`、`worksets/`、`reader-hints/`、`library/`、`notes/`、`reader-navigation/`、`reader-selection/`、`reader-annotations/`、`translation/` 与 `workspace/`。九个核心分区固定启用；`reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）和 `translation`（翻译增强）是三项可选增强。MainWindow 组合标签、扩展、分类、工作集、Library、Notes 和 Workspace；ReaderSession 组合导航、选择、批注、hints、翻译、独立 Library citekey 贡献及 Workspace 分屏/焦点。模块只取得已有调用需要的具名端口，不依赖整个 Surface session。Operations 与 Toolkit 保持唯一负责方。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖、环和精确上下文贡献冲突。`src/core/module-runtime.ts` 固定启用九个核心分区，只根据 `reader-hints` 与 `extensions` 请求应用可选增强；`src/platform/module-startup.ts` 在 Zotero 应用对象上仅保留两项请求的纯 JSON 快照，`npm run dev` 热重载不会应用新的请求。改变可选增强请求时必须完全退出并重新启动专用 profile；普通代码迭代继续使用热重载。旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭功能。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖、环和精确上下文贡献冲突。`src/core/module-runtime.ts` 固定启用九个核心分区，只根据 `reader-hints`、`extensions` 与 `translation` 三项请求应用可选增强；`src/platform/module-startup.ts` 在 Zotero 应用对象上仅保留三项请求的纯 JSON 快照，`npm run dev` 热重载不会应用新的请求。改变任一可选增强请求时必须完全退出并重新启动专用 profile；普通代码迭代继续使用热重载。旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭功能。
 
 结构不可用的绑定在 matcher/count/前缀、Guide 和 Palette 前过滤，不能改写保存的用户绑定或全局删除同名动作。Navigation 的 marks/侧栏获取必须在激活事务内，Base 启动失败释放未完成 session；失败实例不由定时重扫循环重建。模块清理错误通过显式 `CleanupFailure` 收集，不登记到会吞异常的通用清理层。
 
-实机验证模块配置时使用自有条目、PDF、Note 与分类，覆盖两项可选增强的保存请求、Neo 重载与真实进程重启差异，并确认两项关闭后九个核心模块仍可工作。检查旧核心关闭值被忽略，保存和恢复默认不改核心偏好或行为偏好（包括 `noteEditor.enabled`）；不再把“全部模块关闭”作为当前配置。局部故障只注入本次自有宿主，随后恢复原方法并验证新宿主可重新激活。结束后核对自有数据库记录、文件、偏好存在性与值、原标签页及原生 Main 状态；进程退出另从操作系统确认。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+实机验证模块配置时使用自有条目、PDF、Note 与分类，覆盖三项可选增强的保存请求、Neo 重载与真实进程重启差异，并确认三项关闭后九个核心模块仍可工作。翻译增强还需在 `extensions` 关闭时覆盖首次准备、安装确认与取消、已有插件的显式启用、运行时/版本状态及完整重启；仅新安装初始化准备安装前尚无用户值的上游键，并验证上游启动写入默认语言后仍能完成 Neo 语言初始化，以及卸载后重装、部分保留配置时不覆盖已留存的自动翻译或目标语言。既有配置和版本不被覆盖或降级，关闭增强不关闭上游插件或删除现有原生便签。检查翻译偏好缺失时的既有用户迁移与显式关闭值，恢复默认写入 `reader-hints=true`、`extensions=true`、`translation=false`，且保存和恢复不改核心偏好或行为偏好（包括 `noteEditor.enabled`）。局部故障只注入本次自有宿主，随后恢复原方法并验证新宿主可重新激活。结束后核对自有数据库记录、文件、偏好存在性与值、原标签页及原生 Main 状态；进程退出另从操作系统确认。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
 
 工作集拥有 SelectionStore、Visual 范围及 Selection Panel。Main Surface 继续初始化和取消原生 Cursor/多目标，持有共享行渲染，并向模块注入刷新、主题和现有 Reveal 导航端口。目标解析与 Library Trash 接收明确 Selection 端口；来源为空或退休后沿用当前目标，不读取旧 Selection。共享导航通过局部界面端口捕获原面板，不再读取 session 的 Selection Panel 状态。
 
@@ -146,6 +146,18 @@ Reader 批注模块拥有创建/删除/改色/过滤/复制及评论编辑，Sur
 
 Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show in Library，ReaderSession 拥有分屏切换和方向焦点。基座保留唯一历史、原生标签页重扫、精确视图发现、NativeInput 以及 Main/Note 通用面板焦点（含 Note Insert）。实机需确认三个 Surface 的标签页选择、关闭后的历史重开、主次分屏实际焦点及 Palette 路由；按键只有实际完成方向焦点移动才消费。Picker 应等待输入框实际聚焦后再发送 Enter；验证独立 Main 行选择时从 `itemsView.getSelectedItems(true)` 回读，`ZoteroPane.getSelectedItems(true)` 在 Reader 活跃时可能投影 Reader 条目，不能据此认定底层行选择相同。
 
+### 可选翻译与扩展管理
+
+`src/modules/translation/index.ts` 拥有手动 `pdf-translate.translate` 选择动作、自动结果弹窗的保存入口和侧栏译文角色；保存实现位于 `src/modules/translation/translation-save.ts`，不新增 Reader mode，也不接管上游翻译请求。`src/platform/translate-for-zotero-v248.ts` 与 Toolkit 的同名适配器只读 Translate for Zotero 2.4.8 的当前 popup、任务队列和结果控件：核对任务 ID、文本类型、原文、附件及成功状态，确认结果已发布后才接纳当前 textarea 的完整值。比较时可规范化 CRLF，保存时保留实际显示值及用户修订；未知版本拒绝增强，不能重新调用翻译 API 来补结果。首次依赖准备和用户可见状态由[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)维护。
+
+Toolkit 的 `selection-popup-source.ts` 按 `params.annotation` 的原生对象身份，唯一匹配主／次视图当前的 popup 状态，并捕获对应 PDF／Reading Mode 呈现与 Document。来源不能由最后活动分屏推断；后续焦点转到按钮也不应使仍有效的次视图来源失效。`loaded-pdf-source.ts` 读取该呈现背后实际加载的 `PDFDocument.getData()`，按原生 PDF 对象缓存一次 MD5 计算；跨 compartment 的 Promise 和字节需先取得原生对象。PDF trailer 的 fingerprint 不能代替加载字节与磁盘文件的比对。
+
+`src/operations/save-translation.ts` 消费明确的附件与文件快照，写入前后复查身份、文件内容和可编辑性，来源失效时只清理自身刚创建的批注。原文与译文按纯文本写入原生 note 的 `annotationComment`，不设置 note 不支持的 `annotationText`，不生成 HTML。蓝色便签使用 `zotero-neo:translation` 标签区分角色，不创建强调高亮；同一会话中的未改结果去重，不覆盖旧标记。已接纳保存独立于 popup 寿命，完成后不夺回焦点。
+
+Toolkit 的 `translation-sidebar.ts` 只装饰原生批注侧栏，并按角色投影当前行，不修改 PDF 过滤状态。它必须兼容侧栏已渲染后的热加载，退休时撤销自有样式、控件与观察者。`translation-popup.ts` 标记自有按钮；Surface 的捕获和原生按键转发都让出这些控件，评论输入仍归现有原生输入处理。
+
+Plugin Manager 的静态目录仅增加 Translate for Zotero 的官方 XPI 入口；Toolkit 通过 AddonManager 原生下载／安装，在下载后和安装开始前校验插件 ID、类型、兼容性、版本与来源。更新调用所选扩展的 `findUpdates()`，不调用全局后台更新，也不另建下载器、版本引擎或自动更新偏好。安装确认与取消属于当前面板；取消意图即使遇到宿主暂时拒绝 `cancel()`，仍须在后续安装入口阻止安装。需要重启的状态从原生 pending 状态重建，不能只保存在一次性提示中。
+
 ### 宿主能力 Toolkit
 
 | 能力 | Toolkit 负责方 | 边界与原因 |
@@ -155,7 +167,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | 分类身份、条目搜索与 Scope 选择 | `src/toolkit/main/collections.ts` | 提供稳定分类 ID、路径与库可写性；先限制原生搜索 ID 数量再加载候选；等待 `onCollectionSelected()` 和 Main 条目视图加载，并核对已选及已渲染 Scope ID 后才报告完成。 |
 | 分类事务回调屏障 | `src/toolkit/main/collection-transactions.ts` | 只在进入的事务体内捕获回调，按实际所属 ID 分发一次。局部观察原生 10.0.6 在 SQL 提交后的 `_commitCount` 增量，在共享回调执行前确认该事务结果，区分 SQL 回滚与提交后回调失败。仅恢复自有临时 registrar/counter descriptor，保留外部替换，不清空共享队列，也不安装宿主常驻 patch。 |
 | Main 渲染行装饰 | `src/toolkit/main/rendered-items.ts` | 管理行标记与观察者；安装失败时先退休回调，再释放资源，保留原错误。 |
-| 已安装扩展与偏好 | `src/toolkit/main/plugins.ts` | 将 Mozilla AddonManager 和 Zotero 偏好注册表投影为元数据/能力；扩展管理策略仍属于 Plugin Manager。 |
+| 已安装扩展、安装更新与偏好 | `src/toolkit/main/plugins.ts` | 将 Mozilla AddonManager 和 Zotero 偏好注册表投影为元数据／能力；校验原生安装对象并保留取消与重启状态，目录、确认及扩展管理策略仍属于 Plugin Manager。 |
 | Reader 注册、清单与身份 | `src/toolkit/reader/host.ts` | Reader 身份就是原生句柄；只有权威原生清单才能据此退休缺失 session。 |
 | Reader 按键转发 | `src/toolkit/reader/input-bridge.ts` | 包装私有 `PdfView._onKeyDown` 与 `_textAnnotationFocused`。Zotero 会在普通 DOM 传播之外转发 PDF 按键，只有 `preventDefault()` 不能阻止原生处理；精确视图输入策略仍由 Reader 提供。 |
 | PDF 视图监听与发现 | `src/toolkit/reader/view-lifecycle.ts` | 管理主/次 PDF 视图的附着与释放；注册绑定 ReaderView、Window 与 Document，复用 Window 不复活旧监听，部分获取失败仍释放先前句柄。 |
@@ -167,6 +179,7 @@ Workspace 按 MainWindow 拥有标签页来源、确认与 Reader/Note 的 Show 
 | Reader 目标 frame 可见性 | `src/toolkit/reader/visibility.ts` | 批注、标识符与原生链接共享窗口关闭及包含 frame 的可见性检查；Reading Mode 下隐藏的 PDF 不能成为操作目标。 |
 | 原生 Reader 侧栏 | `src/toolkit/reader/sidebar.ts` | 为 Zotero 管理的 pane/行提供可逆展示与监听机制；绑定和目标策略在 `src/modules/reader-navigation/native-sidebar.ts`，Surface 独立使用 Toolkit 判断原生侧栏输入目标。 |
 | 批注选择、过滤与 popup | `src/toolkit/reader/annotations.ts` | 适配 Reader 私有操作；条目写入继续使用公开 Zotero API。 |
+| 自动译文来源、标记与侧栏 | `src/toolkit/reader/selection-popup-source.ts`、`loaded-pdf-source.ts`、`translate-for-zotero-v248.ts`、`translation-marker.ts`、`translation-sidebar.ts` | 只读适配受支持的上游结果，绑定精确 popup 和已加载 PDF，生成便签几何及可逆侧栏展示；保存接纳与去重属于 `src/modules/translation/translation-save.ts`，原生写入属于 Operation。 |
 | 可见批注模型与几何 | `src/toolkit/reader/annotation-targets.ts` | 只接纳当前过滤视图中、具有支持锚点且与 viewport 相交的原生批注；隐藏、已过滤、屏外及不支持的目标不进入候选。 |
 | marks 几何与旧存储 | `src/toolkit/reader/marks.ts` | 提供宿主存储/几何；父条目或附件的存储策略由 `ReaderMarks` 决定。 |
 | Zotero 结构化文档块 | `src/toolkit/reader/structured-document.ts` | 原生冷处理可能覆盖整个 PDF 且无法取消；请求保持显式，语义分类属于 `ReaderCaptionTargets`。 |

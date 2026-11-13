@@ -128,7 +128,7 @@ src/
   i18n/                    shared app localization and locale catalogs
   bootstrap.ts             global Gecko Bootstrap lifecycle entry
   input/                   canonical bindings, actions, and matcher
-  modules/                 eleven internal partitions; nine core; optional Link and Copy Hints (`reader-hints`) and Plugin Manager (`extensions`)
+  modules/                 twelve internal partitions; nine core; optional Link and Copy Hints (`reader-hints`), Plugin Manager (`extensions`), and Translation Enhancement (`translation`)
   reader/                  reader lifecycle and features
   toolkit/                 internal Main (including Note-pane) and Reader host capabilities
   platform/                narrow host-boundary adapters
@@ -221,6 +221,7 @@ Input policy and annotation target/save admission remain in their feature owners
 private native geometry, exact-pane Find interaction capabilities, and DOM discovery.
 `src/modules/reader-annotations/` 按 ReaderSession 拥有批注写入、过滤、复制与评论编辑，并具名提供 Select 贡献。
 Surface 保留 CurrentTarget、NativeInput 及 `i` / `zb` 的混合路由；评论资源绑定精确 ReaderView / Document，已接纳保存与界面焦点寿命分离。
+The optional `src/modules/translation/` owns the manual `pdf-translate.translate` Reader Select action and automatic-result Save/sidebar roles; it does not add a Reader mode. Translate for Zotero remains authoritative for translation requests, services, credentials, and provider preferences.
 
 Main chooser ownership follows the same rule. `src/main/picker/` owns candidate search,
 ranking, rendering, preview, focus, IME, confirmation/cancellation, and stale-work containment.
@@ -260,6 +261,7 @@ compatibility dispatcher/re-export remains.
 | `src/modules/reader-navigation/` | Reader navigation, marks, semantic targets, scoped native sidebar and smooth-scroll behavior |
 | `src/modules/reader-selection/` | Select ranges/motions, Flash, selection actions, and the stable selection API domain |
 | `src/modules/reader-annotations/` | 批注创建/删除/改色/过滤/复制、Select 贡献及精确视图评论编辑 |
+| `src/modules/translation/` | Optional manual translation action, automatic-result Save, and translation sidebar roles |
 | `src/main/controller.ts`             | Main-window key dispatch and lifecycle                                                   |
 | `src/preferences/index.ts`           | Legacy Preferences registration and behavior                                             |
 | `tools/build.mjs`                    | esbuild/XPI package pipeline                                                             |

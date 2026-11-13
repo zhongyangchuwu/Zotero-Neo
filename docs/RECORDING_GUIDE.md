@@ -122,14 +122,14 @@
 - **可见结果：** Plugin Manager 保持面板形态而非选择器；重载后显示 AddonManager 状态。Neo 不能在自身面板内禁用，须通过 Zotero 原生 Plugins 界面管理。插件信息和可用操作与当前列表一致。
 - **持久变化／重置：** 本流程只读取或重载状态，不切换其他插件；关闭后按共同规则处理本次配置文件。如另行获准演示 `e/d`，须使用专用的一次性配置文件，确认目标插件、依赖和预期恢复方法，并拍下操作前后的 AddonManager 状态；不得在本场混入未经授权的停用。
 - **镜头／不录条件：** 若 Zotero Neo 不在当前列表、状态或版本无法读取、禁用操作仍可用，或无法判断焦点在筛选框还是结果列表，不录成“自我保护成功”。
-- **依据：** [Plugin Manager 生命周期和自我保护](SETTINGS_GUIDE.md#查看已安装的插件)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#模式、焦点与功能可用性)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#选区操作、plugin-manager、设置与-neo-选择集面板)。Zotero AddonManager 是生命周期状态权威；此面板不提供任意软件包安装、更新、卸载或远端插件发现。
+- **依据：** [Plugin Manager 生命周期和自我保护](SETTINGS_GUIDE.md#查看已安装的插件)、[plugins-list 与 plugins-input 的准确边界](COMMAND_REFERENCE.md#模式、焦点与功能可用性)、[管理器操作与安装能力边界](COMMAND_REFERENCE.md#选区操作、plugin-manager、设置与-neo-选择集面板)。Zotero AddonManager 是生命周期状态权威；官方 Translate 安装与所选插件更新须另行录制，不混入本场只读操作。面板不提供任意来源安装、卸载或远端插件发现。
 
 ## 可选第三方集成（与 S0–S6 核心片分开）
 
 第三方集成只录独立的可选片，不并入核心 S0–S6；只有当前已安装、启用的集成在界面提供相应操作时才拍，条件不符便跳过。
 
 - **Better BibTeX：** 仅当当前 Zotero 已安装并启用 Better BibTeX，且一次性测试条目确有 citekey（引文键）时，才单独拍主窗口 Normal 模式下按 `<Space>yy` 为有效目标复制 citekey。按目标名称确认目标是主窗口当前条目或 Neo 选择集；若目标没有可用 citekey，不录成成功。
-- **Translate for Zotero：** 仅当已安装的 Translate 集成使 Selection Actions 中出现 **Translate** 时，才从阅读器 Select 模式的文本选区打开该项并录下实际翻译结果。字幕标明实际插件／集成名称。可用性的依据见 [Selection Actions 与可选 Translate](SELECTION_GUIDE.md#使用当前选区)。
+- **Translate for Zotero：** 按[模块设置指南](SETTINGS_GUIDE.md#管理可选增强)准备并启用翻译增强，完整重启 Zotero 后，只有上游公开翻译 API 可用时，Reader Select 的 Selection Actions 才显示手动 **Translate**。自动翻译的独立片按[保存自动翻译的译文](SELECTION_GUIDE.md#保存自动翻译的译文)操作：等上游结果完成，修订后保存，展示原文旁的便签及侧栏译文角色；不要把原生自动翻译与 Neo 保存剪成第二次翻译。字幕标明实际插件／集成名称及版本。
 
 ## 参考边界
 

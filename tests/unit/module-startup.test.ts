@@ -8,8 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('application module startup flags', () => {
   it('keeps pending requests unapplied across Neo reloads and applies them after Zotero restarts', () => {
-    const legacy = Object.fromEntries(BUILTIN_MODULES.map(({ id }) => [id, false]));
-    legacy.extensions = true;
+    const legacy = { 'reader-hints': false, extensions: true };
     vi.stubGlobal('Zotero', {
       [Symbol.for('zotero-neo.startup-module-flags')]: JSON.stringify(legacy),
     });
@@ -25,10 +24,15 @@ describe('application module startup flags', () => {
     } as PreferenceReader;
     const logger = { debug: vi.fn(), diagnostic: vi.fn() };
     const first = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
+    values.set(modulePreferenceKey('translation'), true);
     const reloaded = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
-    expect(first.applied).toEqual({ 'reader-hints': false, extensions: true });
+    expect(first.applied).toEqual({ 'reader-hints': false, extensions: true, translation: false });
     expect(reloaded.applied).toEqual(first.applied);
-    expect(reloaded.requested()).toEqual({ 'reader-hints': true, extensions: false });
+    expect(reloaded.requested()).toEqual({
+      'reader-hints': true,
+      extensions: false,
+      translation: true,
+    });
     const owner = {};
     const main = reloaded.createScope('main', owner, () => true);
     const reader = reloaded.createScope(
@@ -45,6 +49,7 @@ describe('application module startup flags', () => {
       }
     }
     expect(reader.activate('reader-hints', vi.fn())).toBeNull();
+    expect(reader.activate('translation', vi.fn())).toBeNull();
     expect(main.activate('extensions', () => ({}))).not.toBeNull();
     const inspected = reloaded.inspect(owner);
     expect(
@@ -61,7 +66,17 @@ describe('application module startup flags', () => {
       logger,
       moduleStartupFlags(preferences),
     );
-    expect(restarted.applied).toEqual({ 'reader-hints': true, extensions: false });
+    expect(restarted.applied).toEqual({
+      'reader-hints': true,
+      extensions: false,
+      translation: true,
+    });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
+    const reopened = restarted.createScope('reader', {}, () => true);
+    reopened.activate('reader-selection', () => ({}));
+    expect(reopened.activate('translation', () => ({ available: true }))).toEqual({
+      available: true,
+    });
+    reopened.dispose();
   });
 });

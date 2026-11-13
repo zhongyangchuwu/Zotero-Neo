@@ -5,7 +5,10 @@ import type { NativeReaderRuntime, NativeReaderViewRuntime } from './private-typ
 import { isDeadObject } from '../../platform/cross-compartment';
 import { readerPresentationViews } from './presentation';
 
-export type ReaderEventName = 'renderToolbar' | 'renderTextSelectionPopup';
+export type ReaderEventName =
+  | 'renderToolbar'
+  | 'renderTextSelectionPopup'
+  | 'renderSidebarAnnotationHeader';
 export type ReaderEventListener = (event: ReaderEventRuntime) => void;
 
 interface ReaderService {

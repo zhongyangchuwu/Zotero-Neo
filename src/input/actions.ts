@@ -183,6 +183,8 @@ const BASE_ACTION_IDS = [
   'uiPageDown',
   'uiPageUp',
   'pluginsRefresh',
+  'pluginsInstall',
+  'pluginsUpdate',
   'pluginsEnable',
   'pluginsDisable',
   'pluginsPreferences',

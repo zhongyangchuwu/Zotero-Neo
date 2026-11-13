@@ -1,9 +1,13 @@
 import { modulePreferenceKey, type ModuleFlags } from '../core/module-runtime';
 import type { PreferenceReader } from '../core/preferences';
-import { OPTIONAL_MODULE_IDS } from '../modules';
+import { OPTIONAL_MODULE_DEFAULTS, OPTIONAL_MODULE_IDS } from '../modules';
 
-const STARTUP_FLAGS = Symbol.for('zotero-neo.startup-module-flags');
-type ModuleStartupHost = typeof Zotero & { readonly [STARTUP_FLAGS]?: string };
+const STARTUP_FLAGS = Symbol.for('zotero-neo.startup-module-flags.v2');
+const PREVIOUS_STARTUP_FLAGS = Symbol.for('zotero-neo.startup-module-flags');
+type ModuleStartupHost = typeof Zotero & {
+  readonly [STARTUP_FLAGS]?: string;
+  readonly [PREVIOUS_STARTUP_FLAGS]?: string;
+};
 
 /**
  * Zotero's application object survives a Neo reload but not a Zotero restart.
@@ -17,13 +21,22 @@ export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
     return Object.freeze({
       'reader-hints': previous['reader-hints'],
       extensions: previous.extensions,
+      translation: previous.translation,
     });
   }
+  // Preserve the already-applied older enhancements during an in-process code update.
+  const previous = host[PREVIOUS_STARTUP_FLAGS];
+  const applied =
+    previous === undefined
+      ? null
+      : (JSON.parse(previous) as Pick<ModuleFlags, 'reader-hints' | 'extensions'>);
   const flags = Object.freeze(
     Object.fromEntries(
       OPTIONAL_MODULE_IDS.map((id) => [
         id,
-        preferences.get(modulePreferenceKey(id), true) === true,
+        id !== 'translation' && applied
+          ? applied[id]
+          : preferences.get(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]) === true,
       ]),
     ) as ModuleFlags,
   );

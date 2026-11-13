@@ -1,9 +1,40 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
 import type { PreferenceStore } from '../../src/core/preference-store';
-import { OPTIONAL_MODULES, type OptionalModuleId } from '../../src/modules';
+import type { OptionalModuleId } from '../../src/modules';
 import { SettingsModules } from '../../src/main/settings-modules';
+import {
+  prepareTranslationDependency,
+  readTranslationDependency,
+  type TranslationDependencySnapshot,
+} from '../../src/modules/translation/setup';
+
+vi.mock('../../src/modules/translation/setup', () => ({
+  prepareTranslationDependency: vi.fn(),
+  readTranslationDependency: vi.fn(),
+}));
+
+const MISSING_TRANSLATION: TranslationDependencySnapshot = {
+  installed: false,
+  version: null,
+  enabled: false,
+  pendingRestart: false,
+  saveSupported: false,
+  runtimeReady: false,
+};
+const READY_TRANSLATION: TranslationDependencySnapshot = {
+  installed: true,
+  version: '2.4.8',
+  enabled: true,
+  pendingRestart: false,
+  saveSupported: true,
+  runtimeReady: true,
+};
+beforeEach(() => {
+  vi.mocked(readTranslationDependency).mockReset().mockResolvedValue(MISSING_TRANSLATION);
+  vi.mocked(prepareTranslationDependency).mockReset().mockResolvedValue(READY_TRANSLATION);
+});
 
 class FakeElement {
   readonly children: FakeElement[] = [];
@@ -340,6 +371,7 @@ describe('Settings Modules page', () => {
     const test = mount({
       [modulePreferenceKey('reader-hints')]: false,
       [modulePreferenceKey('extensions')]: false,
+      [modulePreferenceKey('translation')]: true,
       'modules.library.enabled': false,
       'modules.notes.enabled': false,
       'modules.workspace.enabled': false,
@@ -355,10 +387,6 @@ describe('Settings Modules page', () => {
       )!
       .click();
 
-    expect(test.preferences.clears).toEqual(
-      OPTIONAL_MODULES.map(({ id }) => modulePreferenceKey(id)),
-    );
-    expect(test.preferences.writes).toEqual([]);
     expect(test.preferences.get('modules.library.enabled', true)).toBe(false);
     expect(test.preferences.get('modules.notes.enabled', true)).toBe(false);
     expect(test.preferences.get('modules.workspace.enabled', true)).toBe(false);
@@ -368,9 +396,86 @@ describe('Settings Modules page', () => {
     expect(test.modules.applied['reader-hints']).toBe(false);
     expect(test.modules.requested()['reader-hints']).toBe(true);
     expect(test.modules.requested().extensions).toBe(true);
+    expect(test.modules.applied.translation).toBe(true);
+    expect(test.modules.requested().translation).toBe(false);
+    expect(test.preferences.has(modulePreferenceKey('translation'))).toBe(true);
     expect(requestCheckbox(test.root, 'reader-hints').checked).toBe(true);
     expect(requestCheckbox(test.root, 'extensions').checked).toBe(true);
 
     test.page.dispose();
+  });
+});
+
+function saveRequests(root: FakeElement): void {
+  root
+    .all()
+    .find((element) => element.getAttribute('aria-label') === 'Save module requests')!
+    .click();
+}
+
+describe('translation dependency admission in module settings', () => {
+  it('prepares before persisting an enable request even with Plugin Manager disabled', async () => {
+    const pending = Promise.withResolvers<TranslationDependencySnapshot | null>();
+    vi.mocked(prepareTranslationDependency).mockReturnValue(pending.promise);
+    const test = mount({ [modulePreferenceKey('extensions')]: false });
+    const checkbox = requestCheckbox(test.root, 'translation');
+    checkbox.checked = true;
+    checkbox.emit('change');
+    saveRequests(test.root);
+    expect(test.modules.requested().translation).toBe(false);
+    expect(checkbox.disabled).toBe(true);
+    pending.resolve(READY_TRANSLATION);
+    await vi.waitFor(() => expect(test.modules.requested().translation).toBe(true));
+    expect(test.modules.applied.translation).toBe(false);
+    expect(test.modules.requested().extensions).toBe(false);
+    expect(moduleSummary(test.root, 'translation')).toContain('Pending restart');
+    expect(checkbox.disabled).toBe(false);
+    test.page.dispose();
+  });
+
+  it.each(['cancelled', 'failed'] as const)(
+    'does not persist an enable request after %s preparation',
+    async (outcome) => {
+      if (outcome === 'cancelled') vi.mocked(prepareTranslationDependency).mockResolvedValue(null);
+      else
+        vi.mocked(prepareTranslationDependency).mockRejectedValue(
+          new Error('Native download unavailable'),
+        );
+      const test = mount();
+      const checkbox = requestCheckbox(test.root, 'translation');
+      checkbox.checked = true;
+      checkbox.emit('change');
+      saveRequests(test.root);
+      await vi.waitFor(() => expect(checkbox.disabled).toBe(false));
+      expect(test.modules.requested().translation).toBe(false);
+      expect(test.preferences.writes).toEqual([]);
+      expect(checkbox.checked).toBe(true);
+      expect(moduleRow(test.root, 'translation').text()).toContain(
+        outcome === 'cancelled' ? 'Preparation cancelled' : 'Native download unavailable',
+      );
+      test.page.dispose();
+    },
+  );
+
+  it('does not persist or repaint after the preparing Settings view is retired', async () => {
+    const pending = Promise.withResolvers<TranslationDependencySnapshot | null>();
+    const cancel = vi.fn();
+    vi.mocked(prepareTranslationDependency).mockImplementation((options) => {
+      options.registerCancel(cancel);
+      return pending.promise;
+    });
+    const test = mount();
+    const checkbox = requestCheckbox(test.root, 'translation');
+    checkbox.checked = true;
+    checkbox.emit('change');
+    saveRequests(test.root);
+    test.page.dispose();
+    pending.resolve(READY_TRANSLATION);
+    await pending.promise;
+    await Promise.resolve();
+    expect(test.modules.requested().translation).toBe(false);
+    expect(test.preferences.writes).toEqual([]);
+    expect(test.root.children).toEqual([]);
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });

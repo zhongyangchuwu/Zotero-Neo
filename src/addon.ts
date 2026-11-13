@@ -15,6 +15,7 @@ import { migrateBindingPreferences, migrateReaderPreferences } from './core/pref
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
+import { migrateTranslationModulePreference } from './modules/translation/preferences';
 
 export interface AddonContext {
   readonly id: string;
@@ -43,11 +44,7 @@ type ZoteroWithNeo = typeof Zotero & {
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
   readonly #preferences = new ZoteroPreferenceStore();
-  readonly #modules = new BuiltinModuleRuntime(
-    this.#preferences,
-    this.#logger,
-    moduleStartupFlags(this.#preferences),
-  );
+  readonly #modules: BuiltinModuleRuntime;
   readonly #preparation = new DocumentPreparationController((message) =>
     this.#logger.debug(message),
   );
@@ -58,6 +55,12 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   #preferencesRegistered = false;
 
   constructor() {
+    migrateTranslationModulePreference(this.#preferences);
+    this.#modules = new BuiltinModuleRuntime(
+      this.#preferences,
+      this.#logger,
+      moduleStartupFlags(this.#preferences),
+    );
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
       modules: this.#modules,

@@ -30,14 +30,20 @@ export type BuiltinModuleId =
   | 'collections'
   | 'reader-navigation'
   | 'reader-selection'
+  | 'translation'
   | 'reader-annotations'
   | 'reader-hints'
   | 'notes'
   | 'workspace'
   | 'extensions';
 
-export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions'] as const;
+export const OPTIONAL_MODULE_IDS = ['reader-hints', 'extensions', 'translation'] as const;
 export type OptionalModuleId = (typeof OPTIONAL_MODULE_IDS)[number];
+export const OPTIONAL_MODULE_DEFAULTS: Readonly<Record<OptionalModuleId, boolean>> = {
+  'reader-hints': true,
+  extensions: true,
+  translation: false,
+};
 const OPTIONAL_MODULE_ID_SET = new Set<BuiltinModuleId>(OPTIONAL_MODULE_IDS);
 
 /** Internal ownership is not a user switch; only independent enhancements are optional. */
@@ -197,8 +203,19 @@ export const BUILTIN_MODULES: readonly BuiltinModuleDescriptor[] = [
       { host: 'reader', context: 'reader-normal', actions: READER_SELECTION_NORMAL_ACTIONS },
       { host: 'reader', context: 'reader-select', actions: READER_SELECTION_SELECT_ACTIONS },
     ],
-    selectionActions: ['pdf-translate.translate'],
+    selectionActions: [],
     ui: ['Selection actions', 'Flash'],
+  },
+  {
+    id: 'translation',
+    names: { en: 'Translation Enhancement', 'zh-CN': '翻译增强' },
+    hosts: ['reader'],
+    scopes: ['Reader session', 'Reader view', 'Selection action'],
+    requires: ['reader-selection'],
+    optional: [],
+    contributions: [],
+    selectionActions: ['pdf-translate.translate'],
+    ui: ['Translation popup', 'Translation sidebar'],
   },
   {
     id: 'reader-annotations',

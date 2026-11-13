@@ -38,7 +38,7 @@ function selectionModule() {
     findState.primaryViewFindState = { ...findState.primaryViewFindState, popupOpen: true };
   });
   const outer = {
-    document: { querySelector: () => input },
+    document: { getElementById: () => null, querySelector: () => input },
     Event: class {
       constructor(readonly type: string) {}
     },
@@ -77,7 +77,6 @@ function selectionModule() {
     copyText: (text) => copied.push(text),
     themeRoot: () => vi.fn(),
     language: () => 'en',
-    pluginID: () => null,
     contributedActions: () => [],
     registeredActions: () => [],
     showStatus: vi.fn(),

@@ -10,12 +10,14 @@ import {
 import {
   BUILTIN_MODULES,
   OPTIONAL_MODULES,
+  OPTIONAL_MODULE_DEFAULTS,
   type BuiltinModuleId,
   type OptionalModuleDescriptor,
   type OptionalModuleId,
 } from '../modules';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
 import { settingsButton, settingsStatus } from './settings-ui';
+import { SettingsTranslation } from './settings-translation';
 
 const H = 'http://www.w3.org/1999/xhtml';
 
@@ -30,7 +32,7 @@ interface ModuleRow {
 /** Shows startup-applied module state separately from editable persisted requests. */
 export class SettingsModules {
   readonly #root: HTMLElement;
-  readonly #owner: object;
+  readonly #owner: MainWindow;
   readonly #preferences: PreferenceStore;
   readonly #modules: BuiltinModuleRuntime;
   readonly #language: SettingsLanguage;
@@ -40,6 +42,10 @@ export class SettingsModules {
   readonly #cleanups: Array<() => void> = [];
   readonly #status: HTMLElement;
   readonly #saveButton: HTMLButtonElement;
+  readonly #restoreButton: HTMLButtonElement;
+  #translation!: SettingsTranslation;
+  #preparing = false;
+  #disposed = false;
 
   constructor(
     window: MainWindow,
@@ -80,17 +86,17 @@ export class SettingsModules {
       this.#cleanups,
     );
     this.#saveButton.setAttribute('aria-label', settingsText(language, 'Save module requests'));
-    const restoreButton = settingsButton(
+    this.#restoreButton = settingsButton(
       doc,
       settingsText(language, 'Restore default module requests'),
       () => this.#restoreDefaults(),
       this.#cleanups,
     );
-    restoreButton.setAttribute(
+    this.#restoreButton.setAttribute(
       'aria-label',
       settingsText(language, 'Restore default module requests'),
     );
-    actions.append(this.#saveButton, restoreButton);
+    actions.append(this.#saveButton, this.#restoreButton);
 
     this.#status = settingsStatus(doc);
 
@@ -150,6 +156,7 @@ export class SettingsModules {
     details.style.cssText = 'margin:0.25em 0 0';
 
     const onChange = (): void => {
+      if (this.#preparing || this.#disposed) return;
       this.#draft[descriptor.id] = checkbox.checked;
       this.#status.textContent = '';
       this.#refresh();
@@ -158,11 +165,28 @@ export class SettingsModules {
     this.#cleanups.push(() => checkbox.removeEventListener('change', onChange));
 
     row.append(name, scope, request, summary, details);
+    if (descriptor.id === 'translation') {
+      this.#translation = new SettingsTranslation(this.#owner, row, this.#language, (busy) => {
+        this.#preparing = busy;
+        this.#refresh();
+      });
+    }
     this.#rows.set(descriptor.id, { checkbox, summary, details });
     return row;
   }
 
   #save(): void {
+    if (this.#disposed || this.#preparing) return;
+    if (this.#draft.translation && !this.#saved.translation) {
+      void this.#translation.prepare().then((prepared) => {
+        if (prepared && !this.#disposed) this.#commitRequests();
+      });
+      return;
+    }
+    this.#commitRequests();
+  }
+
+  #commitRequests(): void {
     try {
       for (const { id } of OPTIONAL_MODULES) {
         if (this.#draft[id] !== this.#saved[id])
@@ -180,10 +204,12 @@ export class SettingsModules {
   }
 
   #restoreDefaults(): void {
-    for (const { id } of OPTIONAL_MODULES) this.#draft[id] = true;
+    if (this.#disposed || this.#preparing) return;
+    for (const { id } of OPTIONAL_MODULES) this.#draft[id] = OPTIONAL_MODULE_DEFAULTS[id];
     this.#refresh();
     try {
-      for (const { id } of OPTIONAL_MODULES) this.#preferences.clear(modulePreferenceKey(id));
+      for (const { id } of OPTIONAL_MODULES)
+        this.#preferences.set(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]);
       this.#syncRequestedPreferences();
       this.#status.textContent = '';
     } catch {
@@ -205,6 +231,7 @@ export class SettingsModules {
   }
 
   #refresh(): void {
+    if (this.#disposed) return;
     const states = new Map(
       this.#modules.inspect(this.#owner).map((state) => [state.id, state] as const),
     );
@@ -213,6 +240,7 @@ export class SettingsModules {
       const row = this.#rows.get(descriptor.id);
       if (!state || !row) continue;
       row.checkbox.checked = this.#draft[descriptor.id];
+      row.checkbox.disabled = this.#preparing;
       const summary = [
         `${settingsText(this.#language, 'Applied')}: ${settingsText(
           this.#language,
@@ -232,9 +260,9 @@ export class SettingsModules {
       row.summary.textContent = summary.join(' · ');
       row.details.textContent = this.#runtimeDetails(descriptor, state);
     }
-    this.#saveButton.disabled = OPTIONAL_MODULES.every(
-      ({ id }) => this.#draft[id] === this.#saved[id],
-    );
+    this.#saveButton.disabled =
+      this.#preparing || OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]);
+    this.#restoreButton.disabled = this.#preparing;
   }
 
   #statusText(status: ModuleStatus): string {
@@ -293,8 +321,10 @@ export class SettingsModules {
   }
 
   dispose(): void {
+    this.#disposed = true;
     const cleanups = new CleanupScope();
     cleanups.add(() => this.#root.replaceChildren());
+    cleanups.add(() => this.#translation?.dispose());
     for (const cleanup of this.#cleanups.splice(0)) cleanups.add(cleanup);
     cleanups.dispose();
   }

@@ -8,6 +8,7 @@ export class PluginManagerRuntime {
   generation = 0;
   loading = false;
   busy = false;
+  cancelInstall: (() => void) | null = null;
   error = '';
   notice = '';
   plugins: InstalledPlugin[] = [];

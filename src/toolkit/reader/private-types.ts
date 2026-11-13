@@ -36,6 +36,8 @@ export interface InternalReaderRuntime {
     readonly showAnnotations?: boolean;
     readonly primaryReadingModeEnabled?: boolean;
     readonly secondaryReadingModeEnabled?: boolean;
+    readonly primaryViewSelectionPopup?: { readonly annotation?: object } | null;
+    readonly secondaryViewSelectionPopup?: { readonly annotation?: object } | null;
     readonly selectedAnnotationIDs?: readonly string[];
     readonly primaryViewFindState?: NativeReaderFindState;
     readonly secondaryViewFindState?: NativeReaderFindState;
@@ -91,6 +93,7 @@ export interface NativeReaderAnnotationRuntime {
   readonly type?: string;
   readonly text?: string;
   readonly comment?: string;
+  readonly tags?: readonly { readonly name?: string }[];
   readonly _hidden?: boolean;
   readonly position?: {
     readonly pageIndex?: number;
@@ -200,6 +203,7 @@ export interface PdfRenderTaskRuntime {
 
 export interface PdfDocumentRuntime {
   readonly numPages?: number;
+  getData?(): Promise<Uint8Array>;
   getDestination?(destination: string): Promise<unknown>;
   getPageIndex?(reference: unknown): Promise<number>;
   getPage?(page: number): Promise<{
