@@ -28,6 +28,44 @@ Windows 可使用：
 powershell -ExecutionPolicy Bypass -File tools\build.ps1
 ```
 
+### 发布小版本
+
+稳定版按完整、可验收的用户改进发布；修复用补丁版本，新增能力或改变交互契约时提升次版本。每周保留一个发布窗口，有已验收内容才发布；严重回归及时修复，不把每个合并提交自动推给用户。正式版本号不得重复使用，也不得覆盖已公布的 XPI。
+
+#### 准备候选
+
+1. 在功能分支同步 `manifest.json`、`package.json` 和 `package-lock.json` 的版本。扩展 ID 与 `update_url` 保持不变，兼容范围只声明实际支持的 Zotero。
+2. 构建确切候选，运行适用检查，并按[安装升级验收](ACCEPTANCE.md#3-安装和升级)验证持久包。记录源码提交、包 SHA-256、宿主版本和真实结果；热重载不代替升级。
+3. 从该包准备候选清单，例如：
+
+   ```bash
+   node tools/prepare-release.mjs v0.2.1 zotero-neo.xpi --output updates.candidate.json
+   node tools/check-release.mjs v0.2.1
+   ```
+
+   准备工具保留正式 `updates.json` 的历史，不继承未发布的旧候选，也不修改正式更新清单。代码或包版本变化后必须重新准备哈希；文档与候选清单本身不进入 XPI。
+4. 通过 PR 合并候选，要求最新 HEAD 的 CI 通过。取得同一源码的 CI 包并核对已验收哈希；不把相同版本号当作相同包的证据。
+
+#### 发布与推广
+
+获得发布授权后，从已验收的 `main` 运行 **Build and release**，填写 `release_tag`。工作流固定本轮源码 SHA，验证候选与规范包；只在标签不存在时创建标签，不重定向旧标签。发布器先创建草稿、上传 XPI 与 SHA-256 文件、下载回验，再公开 Release。已存在的同字节资产可幂等复用，冲突或不完整的资产拒绝覆盖。
+
+为 Release 填写中文用户说明：主要改进、影响现有设置的变化、宿主兼容范围、已知限制与是否需要重启。GitHub 自动提交清单不能代替这些说明。
+
+公开 Release 不等于已向用户推送。取得该标签的完整源码 SHA 后，执行：
+
+```bash
+GITHUB_REPOSITORY=zhongyangchuwu/Zotero-Neo node tools/promote-release.mjs v0.2.1 <完整源码SHA> --output /tmp/neo-updates.json
+```
+
+该命令只读取远端，核对稳定版标签、公开 Release、包身份、哈希、下载可达性及正式清单，输出待审查的新清单；不会直接推送或更改 `main`。将输出作为独立 PR 的 `updates.json` 变更，在合并前再次核对 Release 与版本单调递增。正式清单只接纳稳定版，不把候选或预发布自动推给普通用户。
+
+清单合并后，从保留旧版本的独立 profile 使用 Zotero 原生更新检查完成真实网络升级，并核对安装字节、设置和重启后的行为。发布前的本地持久升级与发布后的网络发现分别记录，不把其中一个称作另一个。
+
+#### 失败与恢复
+
+包验收、发布或下载校验失败时，不推广清单。先保留错误和确切身份，再解决原因；不要移动已发布标签、重传同号不同字节或跳过哈希。若用户已安装有问题的版本，发布更高的补丁版本修复；从清单移除版本只会停止后续分发，不会让已安装用户自动降级。GitHub 没有跨标签、Release、资产与 Git 提交的原子事务，工具的末次核对不能防止所有外部并发改动，发布期间应避免其他写入者修改同一发行。
+
 ### 文档站
 
 仓库根目录也是 VitePress 文档站根目录，配置位于 `.vitepress/config.ts`。Markdown 来源包括根页面和 `docs/*.md`，静态构建输出到 `.vitepress/dist/`。文档默认只维护中文；现有英文按需迁移，不建立双语副本，具体要求见[文档编写规范](DOCUMENTATION_AUTHORING.md)。

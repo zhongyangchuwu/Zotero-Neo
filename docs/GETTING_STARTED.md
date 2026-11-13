@@ -4,7 +4,9 @@ Neo 是 Zotero 插件。安装后，文献、PDF 附件和笔记都留在原来�
 
 ## 获取 XPI 安装包
 
-目前的文档对应 `main` 分支。你可以下载该分支的构建产物，也可以自行编译：
+日常使用优先从 [GitHub Releases](https://github.com/zhongyangchuwu/Zotero-Neo/releases/latest) 下载正式版 `zotero-neo.xpi`；安装后由 Zotero 管理后续更新。
+
+文档描述当前 `main`，可能包含尚未发布的改进。需要试用开发版时，可以：
 
 - **下载构建包**：打开 [main 分支的 GitHub Actions 构建记录](https://github.com/zhongyangchuwu/Zotero-Neo/actions/workflows/build.yml?query=branch%3Amain)，选择一次成功的运行，在 **Artifacts** 中下载 `zotero-neo-linux`。解压后找到 `zotero-neo.xpi`。下载通常需要登录 GitHub；旧构建附件可能过期。
 - **自己构建**：获取 `main` 分支源码，按[开发指南](DEVELOPMENT.md#构建)安装依赖并执行构建，根目录会生成 `zotero-neo.xpi`。
@@ -17,7 +19,13 @@ Neo 是 Zotero 插件。安装后，文献、PDF 附件和笔记都留在原来�
 2. 选择 **Install Plugin From File…**，选中 `zotero-neo.xpi`。
 3. 按提示重启 Zotero。
 
-安装或更新插件都通过 Zotero 的插件管理器操作。
+## 自动更新
+
+在 Zotero 插件管理器的齿轮菜单中开启 **Update Add-ons Automatically**。Neo 沿用固定扩展 ID 和更新地址；已有正式版无需卸载或重装，也不需要每次手动下载 XPI。
+
+可用 **Check for Updates** 主动检查。更新必须同时满足：正式更新清单已公布更高版本、该版本兼容当前 Zotero、网络可访问更新清单与 GitHub 下载地址。按宿主提示完成安装或重启；发布后不一定立即收到更新。
+
+开发包可能与正式包使用相同版本号；版本号相同不会触发升级。需要替换同号开发包时，手动安装正式包一次，或等待更高版本。不要卸载插件来尝试解决更新问题；先检查插件自动更新设置和网络。
 
 ## 打开 PDF 试试
 
