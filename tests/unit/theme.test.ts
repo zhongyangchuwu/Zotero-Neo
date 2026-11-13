@@ -151,6 +151,7 @@ describe('appearance theme contract', () => {
       applyTheme(panel, theme);
       for (const [surface, text] of [
         ['surface', 'text'],
+        ['input', 'text'],
         ['selected', 'selected-text'],
         ['accent', 'on-accent'],
         ['mode-normal', 'mode-normal-text'],
@@ -197,6 +198,24 @@ describe('appearance theme contract', () => {
     manager.dispose();
     host.setColors({ '--color-sidepane': '#aaaaaa' });
     expect(embedded.values.get('--zotero-neo-elevated')).toBe('#eeeeee');
+  });
+
+  it('keeps native form controls readable when the dark host control swatch stays light', () => {
+    const host = themeWindow('#ffffff', false);
+    const manager = new ThemeManager(host.window, preferences('auto'));
+    const panel = root();
+    manager.add(panel);
+    host.setColors({
+      '--color-background': '#1e1e1e',
+      '--fill-primary': '#eeeeee',
+      '--color-control': '#cccccc',
+      '--color-form-element-base-background': '#303030',
+    });
+    expect(panel.attributes.get('data-zotero-neo-theme')).toBe('dark');
+    expect(
+      contrast(panel.values.get('--zotero-neo-input')!, panel.values.get('--zotero-neo-text')!),
+    ).toBeGreaterThanOrEqual(4.5);
+    manager.dispose();
   });
 
   it('does not mix opposite-mode host surfaces or an incomplete accent foreground pair', () => {

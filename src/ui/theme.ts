@@ -126,7 +126,7 @@ const HOST_COLORS = [
   ],
   ['--fill-secondary', ['muted']],
   ['--color-border', ['border']],
-  ['--color-control', ['input']],
+  ['--color-form-element-base-background', ['input']],
   ['--color-quarternary-on-background', ['selected']],
   ['--color-accent', ['focus-ring']],
 ] as const;
