@@ -107,6 +107,8 @@ export interface ReaderSessionState {
 
 export interface AnnotationSelectionParams {
   readonly annotation: {
+    readonly id?: string;
+    readonly tags?: readonly { readonly name: string }[];
     readonly text?: string;
     readonly sortIndex?: string;
     readonly pageLabel?: string;
@@ -118,6 +120,8 @@ export interface AnnotationSelectionParams {
 export interface ReaderEventRuntime {
   readonly reader?: ReaderRuntime;
   readonly params?: AnnotationSelectionParams;
+  readonly doc?: Document;
+  readonly append?: (element: Element) => void;
 }
 
 export type ReaderAction = ActionId;

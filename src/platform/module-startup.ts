@@ -17,6 +17,7 @@ export function moduleStartupFlags(preferences: PreferenceReader): ModuleFlags {
     return Object.freeze({
       'reader-hints': previous['reader-hints'],
       extensions: previous.extensions,
+      translation: previous.translation === true,
       'ai-qa': previous['ai-qa'] === true,
       references: previous.references === true,
       'tab-enhancements': previous['tab-enhancements'] === true,

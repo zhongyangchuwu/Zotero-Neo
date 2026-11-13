@@ -9,6 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe('application module startup flags', () => {
   it('keeps pending requests unapplied across Neo reloads and applies them after Zotero restarts', () => {
     const legacy = Object.fromEntries(BUILTIN_MODULES.map(({ id }) => [id, false]));
+    delete legacy.translation;
     delete legacy.references;
     delete legacy['tab-enhancements'];
     legacy.extensions = true;
@@ -30,10 +31,12 @@ describe('application module startup flags', () => {
     } as PreferenceReader;
     const logger = { debug: vi.fn(), diagnostic: vi.fn() };
     const first = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
+    values.set(modulePreferenceKey('translation'), true);
     const reloaded = new BuiltinModuleRuntime(preferences, logger, moduleStartupFlags(preferences));
     expect(first.applied).toEqual({
       'reader-hints': false,
       extensions: true,
+      translation: false,
       'ai-qa': false,
       references: false,
       'tab-enhancements': false,
@@ -42,6 +45,7 @@ describe('application module startup flags', () => {
     expect(reloaded.requested()).toEqual({
       'reader-hints': true,
       extensions: false,
+      translation: true,
       'ai-qa': true,
       references: true,
       'tab-enhancements': true,
@@ -62,6 +66,7 @@ describe('application module startup flags', () => {
       }
     }
     expect(reader.activate('reader-hints', vi.fn())).toBeNull();
+    expect(reader.activate('translation', vi.fn())).toBeNull();
     expect(reader.activate('ai-qa', vi.fn())).toBeNull();
     expect(reader.activate('references', vi.fn())).toBeNull();
     expect(reader.available('reader-normal', 'openReferences')).toBe(false);
@@ -85,11 +90,18 @@ describe('application module startup flags', () => {
     expect(restarted.applied).toEqual({
       'reader-hints': true,
       extensions: false,
+      translation: true,
       'ai-qa': true,
       references: true,
       'tab-enhancements': true,
     });
     expect(restarted.inspect({}).every((state) => !state.pendingRestart)).toBe(true);
+    const reopened = restarted.createScope('reader', {}, () => true);
+    reopened.activate('reader-selection', () => ({}));
+    expect(reopened.activate('translation', () => ({ available: true }))).toEqual({
+      available: true,
+    });
+    reopened.dispose();
   });
 
   it('defaults the experiment off even when the old preference was enabled', () => {

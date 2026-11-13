@@ -134,13 +134,17 @@ Zotero 管理 Items、视图、标签页、Notes 和 Reader 状态。功能负�
 
 `src/core/module-host.ts` 提供按 MainWindow 或 ReaderSession 隔离的模块宿主及独立模块作用域。同步激活失败会释放部分资源并保留原错误；动作贡献按 `(BindingContext, ActionId)` 唯一登记，返回有类型的调用入口。退出先使全部回调失效，再完成其余释放，即使某次清理失败也不会中断其他模块。
 
-`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；15 个核心模块固定启用，5 个可选增强为 `reader-hints`、`extensions`、`references`、`ai-qa` 与 `tab-enhancements`。`ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
+`src/modules/index.ts` 是静态内置清单，启动校验 ID、依赖图和精确上下文贡献。完整能力目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)；15 个核心模块固定启用，6 个可选增强为 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa` 与 `tab-enhancements`。`translation` 与 `ai-qa` 依赖核心 `reader-selection`，`references` 不依赖 AI 问答，`tab-enhancements` 依赖核心 `workspace`。
 
-MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 与文档准备入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
+MainWindow 组合标签、扩展、分类、工作集、Library、Notes、Workspace 与文档准备入口；启用时，标签页增强会在 Zotero 初始化完成后按该窗口的有效 session 延迟激活。ReaderSession 直接组合导航、章节查找、图表浏览、解析对照、选择、批注、对象摘录、章节笔记、文档准备、hints、引用增强、可选翻译与 AI 问答、独立 Library citekey 贡献及 Workspace 分屏/焦点。各模块仅接收具名端口；Operations 与 Toolkit 保持各自负责方。
 
-`src/core/module-runtime.ts` 根据五项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`ai-qa` 与 `tab-enhancements` 默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留五项请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧版启动快照缺少 `references` 或 `tab-enhancements` 字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
+`src/core/module-runtime.ts` 根据六项可选请求应用增强；`reader-hints`、`extensions` 与 `references` 默认开启，`translation`、`ai-qa` 与 `tab-enhancements` 对新配置默认关闭。`src/platform/module-startup.ts` 在 Zotero 应用对象上保留请求的 JSON 快照，因此 Neo 热重载不会应用新请求，完全退出并重启 Zotero 后才会应用。旧启动快照缺少可选字段时，已应用值按关闭处理；旧版 `reader-ai` 启用偏好不构成启用 `ai-qa` 的同意；旧核心键 `extensions.zotero-neo.modules.<core>.enabled=false` 不会关闭核心功能。
 
-实机核对模块配置时使用专用 profile 和自有数据，确认五项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认默认状态下标签页增强关闭；手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留；恢复默认后 `reader-hints`、`extensions`、`references` 为开启，`ai-qa`、`tab-enhancements` 为关闭。关闭全部五项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+实机核对模块配置时使用专用 profile 和自有数据，确认六项可选请求保存、Neo 热重载与 Zotero 完全退出／重启的差异；确认默认引用增强已启用、其本地分析和文库查找不发起元数据请求，只有用户明确查询才访问来源；确认默认状态下 AI 问答无入口／选区动作，且不挂载面板 runtime、不读取凭据或发送请求；确认新配置默认关闭翻译和标签页增强。手动启用 `ai-qa` 并重启后入口可用，关闭再重启后入口撤除且既有成果仍保留。恢复默认后 `reader-hints`、`extensions`、`references` 开启，`translation`、`ai-qa`、`tab-enhancements` 关闭，其中 `translation=false` 显式保留；关闭全部六项后核心模块仍须可用，旧核心 `false` 偏好无效，恢复默认不改变行为偏好（包括 `noteEditor.enabled`）。故障只注入自有宿主并恢复原方法；回读自有数据与偏好，确认进程状态。不要把“关闭全部模块”作为配置场景。完整用户状态说明见[设置参考](SETTINGS_REFERENCE.md#模块)。
+
+#### 翻译与安装手动核对
+
+在隔离 profile 中使用真实 Translate for Zotero 2.4.8，覆盖首次准备的确认／取消、已有用户偏好保留及完整重启。确认自动译文完成后保存用户修订内容，原生便签位于发起选区；主／次分屏、Reading Mode、相同原文的任务复用、替换 popup、关闭视图及外部修改 PDF 均不得写错来源。重开 Reader 后核对原生持久化、侧栏角色与原有颜色筛选。安装／更新路径还需核对下载前确认、校验失败、取消和重启提示；未实际执行的路径不记录通过。
 
 #### 标签页增强手动核对
 

@@ -32,6 +32,7 @@ const model: ExtensionsReactModel = {
   listMessage: '',
   listStatus: 'normal',
   loading: false,
+  canCancel: false,
   shortcuts: 'Shortcuts',
   footer: 'j/k move',
 };

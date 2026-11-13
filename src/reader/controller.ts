@@ -82,6 +82,10 @@ import {
 import { isReaderSelectionAction } from '../modules/reader-selection/actions';
 import { ReaderSelectionActionRegistry } from '../modules/reader-selection/registry';
 import {
+  createReaderTranslationModule,
+  type ReaderTranslationModule,
+} from '../modules/translation';
+import {
   createReaderAnnotationsModule,
   type ReaderAnnotationsModule,
 } from '../modules/reader-annotations';
@@ -92,7 +96,11 @@ import {
 } from '../modules/workspace/reader';
 import { isReaderWorkspaceAction } from '../modules/workspace/reader-actions';
 import { ReaderNativeInput } from './native-input';
-import { readerRegionPreview, readerSelectionIsFiltered } from '../toolkit/reader';
+import {
+  readerRegionPreview,
+  readerSelectionIsFiltered,
+  isReaderTranslationControl,
+} from '../toolkit/reader';
 import {
   ReaderHostKeyBridge,
   ReaderJumpHostAdapter,
@@ -109,6 +117,7 @@ import {
   readerIsClosed,
   readerViewForWindow,
   readerViewIsLive,
+  readerSelectionPopupSource,
   readerInventory,
   readerByTabID,
   readerSelectedTabID,
@@ -224,6 +233,7 @@ export class ReaderController implements ReaderControllerApi {
   readonly #failedReaders = new WeakSet<ReaderRuntime>();
   #toolbarListener: ReaderEventListener | null = null;
   #selectionPopupListener: ReaderEventListener | null = null;
+  #annotationHeaderListener: ReaderEventListener | null = null;
   #pluginID: string | null = null;
   readonly #selectionActions = new ReaderSelectionActionRegistry();
   #selectionOwner: ReaderSession | null = null;
@@ -241,12 +251,18 @@ export class ReaderController implements ReaderControllerApi {
     const selectionPopupListener: ReaderEventListener = (event) => {
       if (this.#selectionPopupListener === selectionPopupListener) this.#onSelectionPopup(event);
     };
+    const annotationHeaderListener: ReaderEventListener = (event) => {
+      if (this.#annotationHeaderListener === annotationHeaderListener)
+        this.#onAnnotationHeader(event);
+    };
     this.#toolbarListener = toolbarListener;
     this.#selectionPopupListener = selectionPopupListener;
+    this.#annotationHeaderListener = annotationHeaderListener;
     try {
       // Zotero returns no listener ID: teardown requires the exact event/handler pair.
       registerReaderEvent('renderToolbar', toolbarListener, pluginId);
       registerReaderEvent('renderTextSelectionPopup', selectionPopupListener, pluginId);
+      registerReaderEvent('renderSidebarAnnotationHeader', annotationHeaderListener, pluginId);
       this.#pluginID = pluginId;
       this.#dependencies.logger.debug('reader listeners registered');
       this.#dependencies.logger.diagnostic('reader listeners registered');
@@ -261,9 +277,11 @@ export class ReaderController implements ReaderControllerApi {
   shutdown(): void {
     const toolbarListener = this.#toolbarListener;
     const selectionPopupListener = this.#selectionPopupListener;
+    const annotationHeaderListener = this.#annotationHeaderListener;
     // Retire before touching the host registry so queued callbacks cannot reclaim input.
     this.#toolbarListener = null;
     this.#selectionPopupListener = null;
+    this.#annotationHeaderListener = null;
     this.#pluginID = null;
     if (toolbarListener) {
       try {
@@ -275,6 +293,13 @@ export class ReaderController implements ReaderControllerApi {
     if (selectionPopupListener) {
       try {
         unregisterReaderEvent('renderTextSelectionPopup', selectionPopupListener);
+      } catch {
+        // Host shutdown may already have discarded the reader registry.
+      }
+    }
+    if (annotationHeaderListener) {
+      try {
+        unregisterReaderEvent('renderSidebarAnnotationHeader', annotationHeaderListener);
       } catch {
         // Host shutdown may already have discarded the reader registry.
       }
@@ -383,9 +408,18 @@ export class ReaderController implements ReaderControllerApi {
     const params = event.params;
     const reader = event.reader;
     const instanceID = reader ? readerInstanceID(reader) : undefined;
-    if (!params?.annotation || !params.onAddAnnotation || !reader || !instanceID) return;
+    if (!params?.annotation || !reader || !instanceID) return;
     const session = this.#sessions.get(instanceID);
-    if (session?.reader === reader) session.acceptSelectionParams(params);
+    if (session?.reader !== reader) return;
+    session.acceptTranslationPopup(event);
+    if (params.onAddAnnotation) session.acceptSelectionParams(params);
+  }
+
+  #onAnnotationHeader(event: ReaderEventRuntime): void {
+    const reader = event.reader;
+    const instanceID = reader ? readerInstanceID(reader) : undefined;
+    const session = instanceID ? this.#sessions.get(instanceID) : null;
+    if (reader && session?.reader === reader) session.acceptAnnotationHeader(event);
   }
 
   #ensure(reader: ReaderRuntime): void {
@@ -541,6 +575,7 @@ export class ReaderSession {
   readonly #commentEditor: ReaderAnnotationsModule['commentEditor'] | null;
   readonly #nativeInput: ReaderNativeInput;
   readonly #selection: ReaderSelectionModule | null;
+  readonly #translation: ReaderTranslationModule | null;
   readonly #chapterNotes: ChapterNotesModule | null;
   readonly #chapters: ReaderChaptersModule | null;
   #figures: ReaderFiguresModule | null = null;
@@ -905,14 +940,23 @@ export class ReaderSession {
           copyText: (text) => this.copyText(text),
           themeRoot: (root) => this.themeRoot(root),
           language: () => this.keyGuideLanguage(),
-          pluginID: () => this.#dependencies.selection?.pluginID() ?? null,
           registeredActions: (context, isCurrent) =>
             this.#dependencies.selection?.registered(context, isCurrent) ?? [],
           contributedActions: (window, language) => [
+            ...(this.#translation?.selectionActions(window, language) ?? []),
             ...(this.#annotations?.selectionActions(window, language) ?? []),
             ...(this.#ai?.selectionActions() ?? []),
           ],
           showStatus: (message, duration) => this.showStatus(message, duration),
+          debug: (message) => dependencies.controller.dependencies.logger.debug(message),
+        }),
+      );
+      this.#translation = this.#modules.activate('translation', () =>
+        createReaderTranslationModule(this.#modules.host, {
+          reader: dependencies.reader,
+          isViewCurrent: (window) => this.readerViewCurrent(window),
+          language: () => this.keyGuideLanguage(),
+          pluginID: () => this.#dependencies.selection?.pluginID() ?? null,
           debug: (message) => dependencies.controller.dependencies.logger.debug(message),
         }),
       );
@@ -992,6 +1036,7 @@ export class ReaderSession {
           failure.run(() => this.#figures?.releaseView(pdfWindow));
           failure.run(() => this.#excerpts?.releaseView(pdfWindow));
           failure.run(() => this.#selection?.releaseView(pdfWindow));
+          failure.run(() => this.#translation?.releaseView(pdfWindow));
           failure.run(() => this.#chapterNotes?.releaseView(pdfWindow));
           failure.run(() => this.#references?.releaseView(pdfWindow));
           failure.run(() => this.#hints?.links.releaseView(pdfWindow));
@@ -1383,6 +1428,18 @@ export class ReaderSession {
     if (this.#selection && this.mode === 'visual') this.#dependencies.selection?.noteOwner(this);
   }
 
+  acceptTranslationPopup(event: ReaderEventRuntime): void {
+    if (this.#scope.disposed || !this.#translation || !event.params?.annotation) return;
+    this.#viewLifecycle.sync();
+    const source = readerSelectionPopupSource(this.reader, event.params.annotation);
+    if (source && source.isCurrent())
+      this.#translation.showSave(event, source.window, source.isCurrent);
+  }
+
+  acceptAnnotationHeader(event: ReaderEventRuntime): void {
+    if (!this.#scope.disposed) this.#translation?.showSidebar(event);
+  }
+
   private clearNativeSelection(): void {
     this.state.selectionParams = null;
     this.#selectionView = null;
@@ -1409,13 +1466,19 @@ export class ReaderSession {
   }
 
   nativeEditableFocused(): boolean {
-    return isEditableElement(
-      readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
-    );
+    const active = readerWindow(this.#dependencies.reader)?.document.activeElement ?? null;
+    return isReaderTranslationControl(active) || isEditableElement(active);
   }
 
   focusAndHandle(event: KeyboardEvent): void {
     if (this.#scope.disposed) return;
+    if (
+      !this.#nativeInput.ownsInput &&
+      isReaderTranslationControl(
+        readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
+      )
+    )
+      return;
     if (this.#references?.ownsTarget(event.target)) return;
     if (this.#dependencies.controller.dependencies.aiQA?.()?.ownsTarget(event.target)) return;
     const pdfWindow = this.#navigationHost.activePdfWindow();
@@ -1433,7 +1496,11 @@ export class ReaderSession {
       'focusin',
       ((event: Event) => {
         this.#interactionRevision += 1;
-        if (!this.#commentEditor?.ownsInput || !isEditableElement(asElement(event.target))) return;
+        if (
+          !this.#commentEditor?.ownsInput ||
+          !(isReaderTranslationControl(event.target) || isEditableElement(asElement(event.target)))
+        )
+          return;
         void this.handOverNativeEditor();
       }) as EventListener,
       true,
@@ -1448,6 +1515,8 @@ export class ReaderSession {
           this.input.reset();
           this.clearKeyGuide();
           this.updateIndicator();
+          if (isReaderTranslationControl(keyEvent.target) && keyString(keyEvent) === 'escape')
+            this.#navigationHost.activePdfWindow()?.focus();
           return;
         }
         const pdfWindow = this.#navigationHost.activePdfWindow();
@@ -1693,6 +1762,12 @@ export class ReaderSession {
   private readerConsumesKey(key: string, pdfWindow: PdfWindow | undefined): boolean {
     if (!key) return false;
     if (this.#nativeInput.ownsInput) return key === 'escape';
+    if (
+      isReaderTranslationControl(
+        readerWindow(this.#dependencies.reader)?.document.activeElement ?? null,
+      )
+    )
+      return false;
     if (pdfWindow && this.#commentEditor?.ownsView(pdfWindow))
       return this.#commentEditor.consumesKey(key, pdfWindow);
     if (this.#selectionActions?.isOpen && pdfWindow && this.#selectionActions?.ownsView(pdfWindow))

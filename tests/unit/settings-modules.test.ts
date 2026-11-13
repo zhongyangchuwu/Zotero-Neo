@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MainWindow } from '../../src/core/contracts';
 import { BuiltinModuleRuntime, modulePreferenceKey } from '../../src/core/module-runtime';
 import type { PreferenceStore } from '../../src/core/preference-store';
@@ -8,6 +8,37 @@ import {
   TAB_GROUP_STATE_PREFERENCE,
 } from '../../src/modules/tab-enhancements/config';
 import { SettingsModules } from '../../src/main/settings-modules';
+import {
+  prepareTranslationDependency,
+  readTranslationDependency,
+  type TranslationDependencySnapshot,
+} from '../../src/modules/translation/setup';
+
+vi.mock('../../src/modules/translation/setup', () => ({
+  prepareTranslationDependency: vi.fn(),
+  readTranslationDependency: vi.fn(),
+}));
+
+const MISSING_TRANSLATION: TranslationDependencySnapshot = {
+  installed: false,
+  version: null,
+  enabled: false,
+  pendingRestart: false,
+  saveSupported: false,
+  runtimeReady: false,
+};
+const READY_TRANSLATION: TranslationDependencySnapshot = {
+  installed: true,
+  version: '2.4.8',
+  enabled: true,
+  pendingRestart: false,
+  saveSupported: true,
+  runtimeReady: true,
+};
+beforeEach(() => {
+  vi.mocked(readTranslationDependency).mockReset().mockResolvedValue(MISSING_TRANSLATION);
+  vi.mocked(prepareTranslationDependency).mockReset().mockResolvedValue(READY_TRANSLATION);
+});
 
 class Preferences implements PreferenceStore {
   readonly values = new Map<string, boolean | number | string>();
@@ -117,6 +148,7 @@ describe('headless module settings', () => {
     const test = mount({
       [modulePreferenceKey('reader-hints')]: false,
       [modulePreferenceKey('extensions')]: false,
+      [modulePreferenceKey('translation')]: true,
       'modules.library.enabled': false,
     });
     test.preferences.failClearKey = modulePreferenceKey('extensions');
@@ -129,9 +161,12 @@ describe('headless module settings', () => {
     expect(test.preferences.values.get('modules.library.enabled')).toBe(false);
     test.preferences.failClearKey = null;
     test.page.dispatch({ type: 'action', id: 'modules.restore' });
-    expect(OPTIONAL_MODULES.every(({ id }) => !test.preferences.has(modulePreferenceKey(id)))).toBe(
-      true,
-    );
+    expect(
+      OPTIONAL_MODULES.filter(({ id }) => id !== 'translation').every(
+        ({ id }) => !test.preferences.has(modulePreferenceKey(id)),
+      ),
+    ).toBe(true);
+    expect(test.preferences.values.get(modulePreferenceKey('translation'))).toBe(false);
     test.page.dispose();
   });
 
@@ -204,5 +239,68 @@ describe('headless module settings', () => {
     expect(field(test.page, 'tabs.width')).toMatchObject({ value: 320 });
     expect(test.page.model().status?.error).toBe(true);
     test.page.dispose();
+  });
+});
+
+describe('translation dependency admission in module settings', () => {
+  it('prepares before persisting an enable request even with Plugin Manager disabled', async () => {
+    const pending = Promise.withResolvers<TranslationDependencySnapshot | null>();
+    vi.mocked(prepareTranslationDependency).mockReturnValue(pending.promise);
+    const test = mount({ [modulePreferenceKey('extensions')]: false });
+    request(test.page, 'translation', true);
+    test.page.dispatch({ type: 'action', id: 'modules.save' });
+    expect(test.modules.requested().translation).toBe(false);
+    expect(field(test.page, 'modules.request.translation').disabled).toBe(true);
+    pending.resolve(READY_TRANSLATION);
+    await vi.waitFor(() => expect(test.modules.requested().translation).toBe(true));
+    expect(test.modules.applied.translation).toBe(false);
+    expect(test.modules.requested().extensions).toBe(false);
+    expect(field(test.page, 'modules.request.translation').note).toContain('Pending restart');
+    test.page.dispose();
+  });
+
+  it.each(['cancelled', 'failed'] as const)(
+    'retains the draft after %s preparation',
+    async (outcome) => {
+      if (outcome === 'cancelled') vi.mocked(prepareTranslationDependency).mockResolvedValue(null);
+      else
+        vi.mocked(prepareTranslationDependency).mockRejectedValue(
+          new Error('Native download unavailable'),
+        );
+      const test = mount();
+      request(test.page, 'translation', true);
+      test.page.dispatch({ type: 'action', id: 'modules.save' });
+      await vi.waitFor(() =>
+        expect(field(test.page, 'modules.request.translation').disabled).toBe(false),
+      );
+      expect(test.modules.requested().translation).toBe(false);
+      expect(test.preferences.writes).toEqual([]);
+      expect(field(test.page, 'modules.request.translation')).toMatchObject({ value: true });
+      expect(
+        test.page.model().groups.find((group) => group.id === 'translation.setup')?.description,
+      ).toContain(
+        outcome === 'cancelled' ? 'Preparation cancelled' : 'Native download unavailable',
+      );
+      test.page.dispose();
+    },
+  );
+
+  it('cancels and does not persist after the settings view is retired', async () => {
+    const pending = Promise.withResolvers<TranslationDependencySnapshot | null>();
+    const cancel = vi.fn();
+    vi.mocked(prepareTranslationDependency).mockImplementation((options) => {
+      options.registerCancel(cancel);
+      return pending.promise;
+    });
+    const test = mount();
+    request(test.page, 'translation', true);
+    test.page.dispatch({ type: 'action', id: 'modules.save' });
+    test.page.dispose();
+    pending.resolve(READY_TRANSLATION);
+    await pending.promise;
+    await Promise.resolve();
+    expect(test.modules.requested().translation).toBe(false);
+    expect(test.preferences.writes).toEqual([]);
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });

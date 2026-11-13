@@ -8,6 +8,7 @@ import { readerPresentationViews } from './presentation';
 export type ReaderEventName =
   | 'renderToolbar'
   | 'renderTextSelectionPopup'
+  | 'renderSidebarAnnotationHeader'
   | 'createViewContextMenu';
 export type ReaderEventListener = (event: ReaderEventRuntime) => void;
 

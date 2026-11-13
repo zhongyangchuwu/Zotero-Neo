@@ -147,7 +147,9 @@ function readerPreferences(initial: Readonly<Record<string, boolean | number | s
   };
 }
 
-function createReaderRegistryHarness() {
+function createReaderRegistryHarness(
+  initial: Readonly<Record<string, boolean | number | string>> = {},
+) {
   const service = {
     _readers: [] as ReaderRuntime[],
     _registeredListeners: [] as {
@@ -173,7 +175,7 @@ function createReaderRegistryHarness() {
     },
   };
   Reflect.set(globalThis, 'Zotero', { Reader: service });
-  const preferences = readerPreferences();
+  const preferences = readerPreferences(initial);
   const logger = { debug: () => {}, diagnostic: () => {} };
   const dependencies: ReaderControllerDependencies = {
     preferences,
@@ -2533,10 +2535,12 @@ describe('reader keymap forwarding', () => {
   });
 });
 describe('Reader Selection Actions capture', () => {
-  function nativeSelectionController() {
+  function nativeSelectionController(translation = false) {
     const created = createHistorySession();
     configureAnnotationSelection(created);
-    const { service, dependencies } = createReaderRegistryHarness();
+    const { service, dependencies } = createReaderRegistryHarness({
+      'modules.translation.enabled': translation,
+    });
     configureAnnotationPersistence([created]);
     service._readers = [created.reader];
     Reflect.set(service, 'getByTabID', () => created.reader);
@@ -2559,6 +2563,37 @@ describe('Reader Selection Actions capture', () => {
       },
     };
   }
+
+  it.each([false, true])('executes manual translation only when enabled: %s', async (enabled) => {
+    const fixture = nativeSelectionController(enabled);
+    const translate = vi.fn(async () => ({ result: ' translated text ' }));
+    Reflect.set(Zotero, 'PDFTranslate', { api: { translate } });
+    const other = vi.fn(() => ({ body: 'ordinary action' }));
+    fixture.controller.registerSelectionAction({ id: 'ordinary', label: 'Ordinary', run: other });
+    try {
+      fixture.press('a');
+      await settleReaderMicrotasks();
+      if (!enabled) fixture.press('G');
+      fixture.press('Enter');
+      await settleReaderMicrotasks();
+      if (enabled) {
+        expect(translate).toHaveBeenCalledWith('alpha', {
+          pluginID: 'zotero-neo@zotero-neo',
+          itemID: fixture.created.reader.itemID,
+        });
+        expect(other).not.toHaveBeenCalled();
+        const overlay = fixture.created.bodyChildren.find(
+          (node) => node.dataset.zoteroNeoSelectionActions === '1',
+        );
+        expect(overlay?.textContent).toBe('translated text');
+      } else {
+        expect(translate).not.toHaveBeenCalled();
+        expect(other).toHaveBeenCalledOnce();
+      }
+    } finally {
+      fixture.dispose();
+    }
+  });
 
   it.each(['Document', 'ReaderView'] as const)(
     'keeps a fresh pending palette when the periodic scan follows same-Window %s replacement',

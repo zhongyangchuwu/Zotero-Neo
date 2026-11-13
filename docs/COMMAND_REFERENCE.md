@@ -26,7 +26,7 @@
 
 ## 模式、焦点与功能可用性
 
-主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。核心模块固定启用；`reader-hints`、`extensions`、`ai-qa`、`references` 和 `tab-enhancements` 五项可选增强可关闭，其中 `ai-qa` 依赖固定启用的 `reader-selection`。`reader-hints`、`extensions` 和 `references` 默认开启，`ai-qa` 和 `tab-enhancements` 默认关闭。关闭模块后，其动作不会出现在当前按键匹配、前缀提示或命令面板中。设置见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+主窗口、阅读器、笔记、侧栏、选择器和 Plugin Manager 使用下表所列的绑定上下文。焦点决定当前可用的本地命令；目标、行为偏好和宿主状态也会影响具体操作。核心模块固定启用；六项可选增强的默认值与依赖见[设置参考](SETTINGS_REFERENCE.md#模块)。关闭模块后，其动作不会出现在当前按键匹配、前缀提示或命令面板中。设置见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
 | 操作界面 | BindingContext | 可用功能 |
 | --- | --- | --- |
@@ -198,7 +198,7 @@ Reader Normal 的计数规则因操作而异：滚动步进、半屏/整屏移�
 | `exitMode` | `v`、`<Esc>` | 取消 Reader Select 并返回 Normal。 |
 | `underlineSelection` | **未绑定** | 如果内置操作可用，可通过选区操作执行受支持的 Select 操作；默认没有快捷键。 |
 
-Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在 Zotero Translate 集成可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
+Flash 接受当前视图中的可见文字，包括 Unicode 和输入法输入。部分单词匹配会扩展到完整词元，短语扩展到首末完整词元，标点可独立选取；同一词元范围只显示一个提示。选择显示的提示，或按 Enter 选择最近的匹配项；去重后的目标超过 48 个时，继续输入以缩小查询。按 Escape 取消 Flash 并保留当前选区。选区操作提供“为选区添加下划线”和“添加批注评论”；仅在翻译增强已启用且上游 API 可用时显示“翻译”。详见[输入与输入法](INPUT_METHODS.md#reader-flash)和[选择与批注指南](SELECTION_GUIDE.md#从一段文字开始)。
 Reader Select 忽略计数：每次移动或选择操作都只执行一次。评论编辑器的控件和保存行为见[批注评论编辑器](#批注评论编辑器)。
 
 ## 主窗口
@@ -331,9 +331,9 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 
 ### 选区操作、Plugin Manager、设置与 Neo 选择集面板
 
-在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；安装 Zotero Translate 后还会显示“翻译”。按 `y` 可复制结果。
+在 Reader Select 中按 `a` / Enter 打开选区操作。用方向键或 `j` / `k` 移动，按 `Home` / `g` 选择首项，按 `End` / `G` 选择末项，按 `1`–`9` 或 Enter 执行操作。按 Escape 关闭面板并保留选区。可使用“为选区添加下划线”和“添加批注评论”；翻译增强已启用且 Translate for Zotero API 可用时还会显示“翻译”。自动结果旁的保存入口见[保存自动译文](SELECTION_GUIDE.md#保存自动翻译的译文)。按 `y` 可复制结果。
 
-按 `<Space>pp` 打开常驻 Plugin Manager，并在其中浏览扩展。在 `plugins-list` 中，默认按 `j` / Down、`k` / Up 移动，按 `gg` / Home 和 `G` / End 跳到首项/末项，按 `Ctrl+d` / `Ctrl+u` 翻页，按 `/` 筛选，按 Escape / `q` 关闭。按 `r` 刷新列表；Zotero 允许时可按 `e` / `d` 启用或停用扩展；按 `p` 打开已注册设置，按 `o` 打开主页，按 `R` 打开关联的 GitHub README，按 `L` 打开其提交历史。在 `plugins-input` 中按 Escape 返回结果。哪些生命周期操作可用由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
+按 `<Space>pp` 打开常驻 Plugin Manager。在 `plugins-list` 中，默认用 `j` / Down、`k` / Up 移动，`gg` / Home 和 `G` / End 跳到首项／末项，`Ctrl+d` / `Ctrl+u` 翻页，`/` 筛选，Escape / `q` 关闭。`r` 重新读取列表，不检查更新；`i` 经确认安装所选的未安装 Translate 条目；`u` 经确认检查所选已安装插件的更新，再确认安装。Zotero 允许时，`e` / `d` 启用或停用；`p` 打开已注册设置，`o` 打开主页，`R` 打开关联 GitHub README，`L` 打开提交历史。`plugins-input` 中 Escape 返回结果。生命周期能力由 Zotero AddonManager 决定；Neo 不能在自己的面板中停用自身。
 
 按 `<Space>ps` 打开设置；快捷键修改在点击**应用绑定**前仍是草稿。按 `<Space>ss` 打开 Main 选择集面板：按 `j` / `k` 移动，按 `Home` / `gg` 或 `End` / `G` 跳到首项/末项，按 Enter 在文库中显示条目，按 `x` 将条目从 Neo 选择集中移除，按 `c` 清空选择集，按 `r` 刷新，按 Escape / `q` 关闭。条目不可用时无法显示；显示失败时面板会保持打开。
 
@@ -554,7 +554,9 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `uiPreviousPane` | **未绑定** | 在 `picker-input`、`tabs-input` 和 `tabs-list` 中受支持；默认没有快捷键。 |
 | `uiPageDown` | Plugins List `<C-d>` | 在 Plugin Manager 结果中向下翻页。 |
 | `uiPageUp` | Plugins List `<C-u>` | 在 Plugin Manager 结果中向上翻页。 |
-| `pluginsRefresh` | Plugins List `r` | 刷新 Plugin Manager 状态。 |
+| `pluginsRefresh` | Plugins List `r` | 重新读取 Plugin Manager 状态，不检查更新。 |
+| `pluginsInstall` | Plugins List `i` | 经确认从官方来源安装固定版本 Translate 条目。 |
+| `pluginsUpdate` | Plugins List `u` | 经确认检查所选已安装插件的更新，再确认安装。 |
 | `pluginsEnable` | Plugins List `e` | Zotero AddonManager 允许时启用扩展。 |
 | `pluginsDisable` | Plugins List `d` | Zotero AddonManager 允许时停用扩展。 |
 | `pluginsPreferences` | Plugins List `p` | 打开扩展已注册的设置。 |
@@ -954,6 +956,8 @@ Reader Normal 中按 `<Space>ro`、`<Space>rm`、`<Space>ra` 和 `<Space>rt` 可
 | `plugins-list:<C-d>` | `uiPageDown` |
 | `plugins-list:<C-u>` | `uiPageUp` |
 | `plugins-list:r` | `pluginsRefresh` |
+| `plugins-list:i` | `pluginsInstall` |
+| `plugins-list:u` | `pluginsUpdate` |
 | `plugins-list:e` | `pluginsEnable` |
 | `plugins-list:d` | `pluginsDisable` |
 | `plugins-list:p` | `pluginsPreferences` |

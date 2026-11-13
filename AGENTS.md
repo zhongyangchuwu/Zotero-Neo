@@ -97,7 +97,7 @@ src/
   i18n/                    共享应用本地化、动作标签和语言目录
   bootstrap.ts             Gecko Bootstrap 全局生命周期入口
   input/                   规范绑定、动作和匹配器
-  modules/                 内置能力模块；可选模块 `reader-hints`、`extensions`、`references`、`ai-qa`、`tab-enhancements`
+  modules/                 内置能力模块；可选模块 `reader-hints`、`extensions`、`translation`、`references`、`ai-qa`、`tab-enhancements`
   reader/                  Reader 生命周期与功能
   toolkit/                 内部 Main（含 Note pane）及 Reader 宿主能力，包含 Main 标签页宿主接缝
   platform/                窄范围的宿主边界适配器

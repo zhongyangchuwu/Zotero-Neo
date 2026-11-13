@@ -151,8 +151,10 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 
 ### U9：变更与可选集成
 
-- 模块边界：在一次性 profile 中，将核心模块的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并请求关闭 `reader-hints`（链接与复制提示）、`extensions`（扩展管理面板）、`references`（引用增强）、`ai-qa`（AI 问答（实验））和 `tab-enhancements`（标签页增强）。在新 profile 核对默认值：前三项开启，`ai-qa` 与 `tab-enhancements` 关闭。保存请求后，Neo 热重载或重新打开 PDF 不得切换已应用状态；完全退出并重新启动 Zotero 后仅关闭这五项增强，核心模块仍提供 Main、Reader、Note 与 Workspace 工作流。
-- 确认默认关闭的 `ai-qa` 不注册 Reader 选择动作或 `<Space>aa` 入口，不挂载面板／界面 runtime、不读取凭据或发起网络请求；手动启用 `ai-qa` 并完全重启 Zotero 后才提供 AI 问答入口和选区动作。保存关闭请求后，Neo 热重载仍保持当前应用状态；真正重启后关闭入口，已存配置和成果仍保留。恢复默认后 `reader-hints`、`extensions` 和 `references` 开启，`ai-qa` 与 `tab-enhancements` 关闭。保存或恢复默认不得改变核心旧值、快捷键、行为偏好或 Zotero 数据。
+- 模块边界：在一次性 profile 中，将核心模块的 `extensions.zotero-neo.modules.<id>.enabled` 旧值设为 `false`，并请求关闭六项可选增强。新配置中 `reader-hints`、`extensions`、`references` 默认开启，`translation`、`ai-qa`、`tab-enhancements` 默认关闭。保存请求后，Neo 热重载或重开 PDF 不得切换已应用状态；完全退出并重启后应用，核心 Main、Reader、Note 与 Workspace 仍可用。
+- 确认默认关闭的 `ai-qa` 不注册选择动作或 `<Space>aa`，不挂载界面 runtime、不读取凭据或发起请求；手动启用并完全重启后才提供入口。保存关闭请求后，热重载保持当前状态；真正重启后撤除入口，已存配置和成果保留。恢复默认恢复六项规范值，并显式写入 `translation=false`，不改变核心旧值、快捷键、行为偏好或 Zotero 数据。
+- 翻译首次迁移：模块键缺失时，已有 provider 或用户配置保留既有使用；明确 `false` 不被覆盖。`extensions` 关闭时仍能准备依赖；取消不下载也不保存启用请求。确认后安装固定官方 2.4.8，校验身份、版本和 SHA-256；保留既有上游偏好，不静默替换其他版本。
+- 用真实 provider 自动翻译公开测试文字，修订弹窗内容后保存；确认无需再次请求、只生成原生蓝色便签，重复保存同一结果不重复创建。覆盖次分屏、Reading Mode、相同原文复用与 popup／视图替换，保存位置必须来自当前 popup。重开 Reader 检查持久化及全部／批注／译文筛选；已有人工批注和原生颜色筛选不受破坏。
 - 在一次性 profile 中启用 `tab-enhancements` 并完全重启 Zotero。核对位置选项为左、右、上方，默认左侧；模块启用后切换位置立即生效，当前活动视图、分组与顺序保留，Reader、PDF、Note 不重挂或重载。
 - 上方模式使用 Neo 绘制的横向标签栏，原生工具栏保留。用鼠标完成最终界面提供的基本标签／分组操作；核对 Zotero 原生键盘输入仍可用，未新增快捷键。原生标签操作逐项适配；未实现或未验证的拖放、菜单等交互不得记为通过。
 - 确认阅读分组仍只组织已打开视图，不会按 Zotero 分类自动创建。通过原生与 Neo 路径关闭成员后，成员立即移除且空组保留；同一 PDF 的多个视图独立，其他窗口的成员不伪装成本窗口的原生标签，跨窗口激活转到所属窗口，关闭组仅关闭当前窗口成员。
@@ -162,7 +164,7 @@ Recorder 不是汉字编辑器；这一场景验证它让出 IME 和保持显式
 - 标签／集合操作在主窗口以 Neo 选择集为优先目标，在阅读器／笔记编辑器中使用各自上下文，操作目标和数量应清楚可解释。主窗口清除视图筛选不等于清除 Neo 选择集。
 - 对一次性测试条目执行 Trash 取消，再执行确认／`u` 恢复；应能观察到对隐藏 Neo 选择集成员的拒绝，以及取消后的保存结果。阅读器中的批注删除是永久操作，仅使用一次性测试批注并检查确认。
 - 在 Zotero 10.0.7 的测试条目上确认原生 `citationKey` 在未安装 Better BibTeX 时也能供标题模板使用；若环境安装了 Better BibTeX，再单独验证它的可选 citekey fallback，未安装时记录 `NOT APPLICABLE`。缺少引用键时回退原生标题，绝不把内部 `itemKey` 冒充 `citationKey` 或伪造键。只有实际安装且工作的 Translate provider 才录制翻译结果。
-- Plugin Manager 只演示现有列表／查询／enable-disable／registered settings／信息链接。它不能停用 Neo 自身；没有通用商店、自动安装或卸载工作流。
+- Plugin Manager 覆盖列表／查询／启停／设置／信息链接，以及下载前确认、固定 Translate 安装和所选插件更新；验证取消与需要重启的状态。它不能停用 Neo 自身，不提供通用商店、自动安装或卸载。
 
 #### 引用增强（无 AI）
 

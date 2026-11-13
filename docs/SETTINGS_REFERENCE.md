@@ -31,8 +31,8 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 
 ## 模块
 
-当前目录共 20 个模块：15 个固定启用的核心模块和 5 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`ai-qa`、`references` 和 `tab-enhancements`。
-五个模块请求的偏好键分别为 `extensions.zotero-neo.modules.reader-hints.enabled`、`extensions.zotero-neo.modules.extensions.enabled`、`extensions.zotero-neo.modules.ai-qa.enabled`、`extensions.zotero-neo.modules.references.enabled` 和 `extensions.zotero-neo.modules.tab-enhancements.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；`ai-qa` 和 `tab-enhancements` 默认 `false`。`ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
+当前目录共 21 个模块：15 个固定启用的核心模块和 6 个可选增强；完整目录见[模块所有权表](MODULE_DESIGN.md#模块目录与所有权)。可选 ID 为 `reader-hints`、`extensions`、`translation`、`ai-qa`、`references` 和 `tab-enhancements`。
+模块请求使用 `extensions.zotero-neo.modules.<id>.enabled`。`reader-hints`、`extensions` 和 `references` 默认 `true`；`translation`、`ai-qa` 和 `tab-enhancements` 默认 `false`。`translation` 与 `ai-qa` 依赖固定启用的 `reader-selection`。旧版 `reader-ai` 的偏好不会自动启用 `ai-qa`；必须明确请求启用。已有 `extensions.zotero-neo.modules.<core>.enabled=false` 值会被忽略，不会关闭核心功能。
 
 | 模块 ID | 名称 | 功能与依赖 |
 | --- | --- | --- |
@@ -45,6 +45,7 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `reader-figures` | 图表浏览 | 图表筛选、原图预览和确认定位；依赖 `reader-navigation` 提供既有来源与导航。 |
 | `document-comparison` | 文档解析对照 | 原生／云端解析对照、缓存和显式解析；打开面板不自动上传。 |
 | `reader-selection` | 阅读选区 | Select、范围动作、Flash、复制/搜索所选文本和所选文本操作面板。 |
+| `translation` | 翻译增强 | 可选增强：手动翻译、自动译文弹窗保存与侧栏译文角色；依赖 `reader-selection`，新配置默认关闭。准备流程见[设置指南](SETTINGS_GUIDE.md#准备翻译增强)。 |
 | `reader-annotations` | 阅读批注 | 批注创建、删除、改色、过滤、复制和评论编辑。 |
 | `reader-excerpts` | 对象摘录 | 图表／公式的预览、复制及显式保存为来源笔记。 |
 | `chapter-notes` | 章节笔记整理 | 来源内容的章节归属、筛选、预览与显式生成笔记。 |
@@ -54,23 +55,23 @@ Neo 面板跟随 Zotero 计算出的浅色或深色配色。快捷键草稿操�
 | `ai-qa` | AI 问答（实验） | 可选增强：解释当前 Reader 选区、就选区或有限章节证据提问，并准备章节图文导引；仅可选附带相关图表裁图，不检索批注、笔记或其他论文。依赖 `reader-selection`；默认关闭。 |
 | `notes` | 笔记 | 笔记查找、打开及可选 Vim 编辑。 |
 | `workspace` | 工作区 | 标签页操作、Show in Library、Reader 分屏与方向焦点；不依赖 `library` 或 `reader-navigation`。 |
-| `extensions` | 扩展管理面板 | 可选增强：已安装 Zotero 扩展的 Plugin Manager；不管理 Neo 内部模块。 |
+| `extensions` | 扩展管理面板 | 可选增强：Zotero 扩展的 Plugin Manager，含固定官方 Translate 安装及所选插件更新；不管理 Neo 内部模块。 |
 | `tab-enhancements` | 标签页增强 | 可选增强：Main 左侧／右侧垂直栏或上方横向标签显示，以及不支持嵌套的活动标签分组；依赖 `workspace`，默认关闭。分组流程见[标签页增强指南](MAIN_GUIDE.md#用标签页增强管理阅读分组)。 |
 
 | 运行状态 | 含义 |
 | --- | --- |
 | 已启用（Enabled） | 当前宿主中的模块激活成功。 |
-| 已停用（Disabled） | 仅适用于 `reader-hints`、`extensions`、`ai-qa`、`references` 或 `tab-enhancements`；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
+| 已停用（Disabled） | 仅适用于可选增强；当前已应用请求关闭，不创建对应增强实例，其贡献不参与按键、前缀提示或命令面板。 |
 | 已阻止（Blocked） | 当前启用图或实际宿主缺少必需依赖；界面列出依赖，不自动修改开关。 |
 | 失败（Failed） | 当前宿主实例激活失败，已退休其入口并尝试清理部分资源；显示失败原因，详细日志保留原错误。该实例不自动重试，新宿主实例或重启 Zotero 可重新激活。 |
 | 等待主机（Pending host） | 尚未在支持的宿主激活，例如还没有打开 Reader。 |
 | 等待重启（Pending restart） | 保存请求与已应用值不同，附加在当前状态后；当前能力不提前变化。 |
 
-草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**会将 `reader-hints`、`extensions` 和 `references` 设为开启，将 `ai-qa` 和 `tab-enhancements` 设为关闭；恢复后仍需完全重启 Zotero。Neo 热重载沿用已应用的启动快照，不能应用新请求；旧启动快照中缺少某个可选模块标记时，该模块按关闭处理。保存与恢复默认都不改动核心模块偏好或其他行为设置。
+草稿、已保存请求与已应用值分别显示。**恢复默认模块请求**会将 `reader-hints`、`extensions` 和 `references` 设为开启，将 `translation`、`ai-qa` 和 `tab-enhancements` 设为关闭，并显式保留 `translation=false`；恢复后仍需完全重启 Zotero。Neo 热重载沿用已应用的启动快照，不能应用新请求；旧启动快照中缺少某个可选模块标记时，该模块按关闭处理。保存与恢复默认都不改动核心模块偏好或其他行为设置。
 
 行为与存储偏好不等于模块开关：`noteEditor.enabled=false` 只关闭 Vim 风格笔记编辑，不关闭笔记查找；`annotationCommentEditor.enabled=false` 不关闭 Select 的添加批注评论或原生评论；`marks.persist=false` 仍允许会话内 marks；`mode.visual.enabled` 等保留各自原义。核心 `worksets` 固定启用，Main Visual 的行为仍可由其专属偏好控制。关闭可选增强不清除绑定、marks、主题、行为偏好或原生数据。
 
-设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部五项可选增强，核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
+设置、共享焦点、Picker 与后退／前进属于核心交互，不随可选增强停用。即使关闭全部六项可选增强，核心分区仍保持启用；Zotero 原生偏好页中的 **Open Neo Settings** 与 `Zotero.Neo.openSettings` 仍可用于设置。详细步骤见[模块设置指南](SETTINGS_GUIDE.md#开关可选功能)。
 
 ## 标签页增强的显示设置
 

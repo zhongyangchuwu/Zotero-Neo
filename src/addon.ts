@@ -15,6 +15,7 @@ import { migrateBindingPreferences, migrateReaderPreferences } from './core/pref
 import { createMainWindowController } from './main/controller';
 import { createReaderController } from './reader/controller';
 import { moduleStartupFlags } from './platform/module-startup';
+import { migrateTranslationModulePreference } from './modules/translation/preferences';
 import { AIQAController } from './ai-qa/controller';
 import { isSourceNoteIdentity, migrateLegacySourceNoteIdentities } from './platform/note-relations';
 import { ManagedTagsUI } from './toolkit/main';
@@ -46,15 +47,11 @@ type ZoteroWithNeo = typeof Zotero & {
 
 export class ZoteroNeoAddon implements ZoteroNeoController {
   readonly #logger = new ZoteroLogger();
-  readonly #preferences = new ZoteroPreferenceStore();
+  readonly #preferences: ZoteroPreferenceStore;
   readonly #managedTags = new ManagedTagsUI(isSourceNoteIdentity, (error) =>
     this.#logger.debug(`Managed tag UI failed: ${String(error)}`),
   );
-  readonly #modules = new BuiltinModuleRuntime(
-    this.#preferences,
-    this.#logger,
-    moduleStartupFlags(this.#preferences),
-  );
+  readonly #modules: BuiltinModuleRuntime;
   readonly #preparation = new DocumentPreparationController((message) =>
     this.#logger.debug(message),
   );
@@ -66,7 +63,13 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   #releaseNativeUI: (() => void) | null = null;
   aiQA: AIQAController | null = null;
 
-  constructor() {
+  constructor(preferences: ZoteroPreferenceStore) {
+    this.#preferences = preferences;
+    this.#modules = new BuiltinModuleRuntime(
+      this.#preferences,
+      this.#logger,
+      moduleStartupFlags(this.#preferences),
+    );
     let main: MainWindowControllerApi | null = null;
     this.#reader = createReaderController({
       modules: this.#modules,
@@ -197,6 +200,8 @@ export class ZoteroNeoAddon implements ZoteroNeoController {
   }
 }
 
-export function createAddon(): ZoteroNeoController {
-  return new ZoteroNeoAddon();
+export async function createAddon(): Promise<ZoteroNeoController> {
+  const preferences = new ZoteroPreferenceStore();
+  await migrateTranslationModulePreference(preferences);
+  return new ZoteroNeoAddon(preferences);
 }

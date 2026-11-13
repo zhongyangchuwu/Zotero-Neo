@@ -9,10 +9,12 @@ export interface ExtensionsReactModel {
   readonly listMessage: string;
   readonly listStatus: 'normal' | 'muted' | 'error';
   readonly loading: boolean;
+  readonly canCancel: boolean;
   readonly shortcuts: string;
   readonly footer: string;
 }
 
 export type ExtensionsReactCommand =
+  | { readonly type: 'cancel' }
   | { readonly type: 'select'; readonly index: number }
   | { readonly type: 'link'; readonly kind: 'homepage' | 'repository' | 'readme' | 'git-log' };

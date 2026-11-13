@@ -66,6 +66,7 @@ export class BuiltinModuleRuntime {
     this.applied = Object.freeze({
       'reader-hints': flags['reader-hints'],
       extensions: flags.extensions,
+      translation: flags.translation === true,
       'ai-qa': flags['ai-qa'] === true,
       references: flags.references === true,
       'tab-enhancements': flags['tab-enhancements'] === true,

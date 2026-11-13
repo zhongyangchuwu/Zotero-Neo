@@ -22,6 +22,7 @@ import type {
 } from './settings-form-model';
 import { settingsScopeText, settingsText, type SettingsLanguage } from './settings-i18n';
 import { SettingsTabs } from './settings-tabs';
+import { SettingsTranslation } from './settings-translation';
 
 type ModuleFlags = Record<OptionalModuleId, boolean>;
 
@@ -36,6 +37,7 @@ export class SettingsModules {
   readonly #draft: ModuleFlags;
   readonly #cleanups = new CleanupScope();
   readonly #tabs: SettingsTabs;
+  readonly #translation: SettingsTranslation;
   #status = '';
   #disposed = false;
 
@@ -56,6 +58,8 @@ export class SettingsModules {
     this.#draft = { ...requested };
     this.#tabs = new SettingsTabs(preferences, language, () => this.#notify());
     this.#cleanups.add(() => this.#tabs.dispose());
+    this.#translation = new SettingsTranslation(window, language, () => this.#notify());
+    this.#cleanups.add(() => this.#translation.dispose());
     try {
       for (const { id } of OPTIONAL_MODULES) {
         const cleanup = preferences.observe?.(modulePreferenceKey(id), () =>
@@ -85,12 +89,15 @@ export class SettingsModules {
             id: 'modules.save',
             label: settingsText(language, 'Save module requests'),
             primary: true,
-            disabled: OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]),
+            disabled:
+              this.#translation.busy ||
+              OPTIONAL_MODULES.every(({ id }) => this.#draft[id] === this.#saved[id]),
           },
           {
             kind: 'action',
             id: 'modules.restore',
             label: settingsText(language, 'Restore default module requests'),
+            disabled: this.#translation.busy,
           },
         ],
       },
@@ -119,11 +126,13 @@ export class SettingsModules {
             id: `modules.request.${descriptor.id}`,
             label: `${settingsText(language, 'Draft request')}: ${descriptor.names[language]}`,
             value: this.#draft[descriptor.id],
+            disabled: this.#translation.busy,
             note: summary,
           },
         ],
       });
       if (descriptor.id === 'tab-enhancements') groups.push(this.#tabs.group());
+      if (descriptor.id === 'translation') groups.push(this.#translation.group());
     }
     const status = this.#status || this.#tabs.status;
     return {
@@ -142,7 +151,7 @@ export class SettingsModules {
     if (command.type === 'value') {
       const descriptor = OPTIONAL_MODULES.find(({ id }) => command.id === `modules.request.${id}`);
       if (descriptor) {
-        if (typeof command.value !== 'boolean') return;
+        if (this.#translation.busy || typeof command.value !== 'boolean') return;
         this.#draft[descriptor.id] = command.value;
         this.#status = '';
         this.#notify();
@@ -155,10 +164,22 @@ export class SettingsModules {
       this.#restoreDefaults();
       return;
     }
+    this.#translation.dispatch(command);
     this.#tabs.dispatch(command);
   }
 
   #save(): void {
+    if (this.#disposed || this.#translation.busy) return;
+    if (this.#draft.translation && !this.#saved.translation) {
+      void this.#translation.prepare().then((prepared) => {
+        if (prepared && !this.#disposed) this.#commitRequests();
+      });
+      return;
+    }
+    this.#commitRequests();
+  }
+
+  #commitRequests(): void {
     try {
       for (const { id } of OPTIONAL_MODULES) {
         if (this.#draft[id] !== this.#saved[id])
@@ -177,9 +198,14 @@ export class SettingsModules {
   }
 
   #restoreDefaults(): void {
+    if (this.#translation.busy) return;
     for (const { id } of OPTIONAL_MODULES) this.#draft[id] = OPTIONAL_MODULE_DEFAULTS[id];
     try {
-      for (const { id } of OPTIONAL_MODULES) this.#preferences.clear(modulePreferenceKey(id));
+      for (const { id } of OPTIONAL_MODULES) {
+        if (id === 'translation')
+          this.#preferences.set(modulePreferenceKey(id), OPTIONAL_MODULE_DEFAULTS[id]);
+        else this.#preferences.clear(modulePreferenceKey(id));
+      }
       this.#syncRequestedPreferences();
       this.#status = '';
     } catch {

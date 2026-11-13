@@ -35,6 +35,7 @@ const SCOPE_MESSAGES: Readonly<Record<string, SettingsMessage>> = {
   'Main window': 'Main window',
   'Reader session': 'Reader session',
   'Reader view': 'Reader view',
+  'Selection action': 'Selection action',
   'Hint overlay': 'Hint overlay',
   'Plugin manager': 'Plugin manager',
   'Tab sidebar': 'Tab sidebar',

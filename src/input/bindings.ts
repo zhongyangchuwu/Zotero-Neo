@@ -355,6 +355,8 @@ export const DEFAULT_BINDINGS = {
   'plugins-list:<C-d>': 'uiPageDown',
   'plugins-list:<C-u>': 'uiPageUp',
   'plugins-list:r': 'pluginsRefresh',
+  'plugins-list:i': 'pluginsInstall',
+  'plugins-list:u': 'pluginsUpdate',
   'plugins-list:e': 'pluginsEnable',
   'plugins-list:d': 'pluginsDisable',
   'plugins-list:p': 'pluginsPreferences',

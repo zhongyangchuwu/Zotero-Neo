@@ -116,11 +116,18 @@ function ExtensionsView({
                   border: `1px solid ${plugin.enabled ? THEME_VARS.success : THEME_VARS.border}`,
                 }}
               >
-                {plugin.enabled ? 'Enabled' : 'Disabled'}
+                {plugin.installed === false
+                  ? 'Not installed'
+                  : plugin.enabled
+                    ? 'Enabled'
+                    : 'Disabled'}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: '8px 14px' }}>
                 {[
                   ['Version', plugin.version || 'Unknown'],
+                  ...(plugin.pendingRestart
+                    ? [['Pending', 'Restart required to finish installation or update']]
+                    : []),
                   ['Plugin ID', plugin.id],
                   ['Settings', plugin.preferencePaneID ? 'Available' : 'Not registered'],
                 ].map(([label, value]) => (
@@ -155,6 +162,11 @@ function ExtensionsView({
                     </button>
                   ))}
                 </div>
+              )}
+              {model.canCancel && (
+                <button type="button" onClick={() => dispatch({ type: 'cancel' })}>
+                  Cancel download
+                </button>
               )}
               <div
                 style={{

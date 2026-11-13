@@ -19,12 +19,16 @@ import type { ExtensionsReactCommand, ExtensionsReactModel } from './react-model
 import { PLUGINS_INPUT_ACTIONS, PLUGINS_LIST_ACTIONS } from './capabilities';
 import { CENTERED_MONOSPACE_OVERLAY_STYLE } from '../../ui/react/shells/main';
 import { fuzzyMatchScore } from '../../ui/fuzzy';
+import { installMainPlugin, updateMainPlugin } from '../../toolkit/main';
+import { TRANSLATE_PLUGIN_HASH, TRANSLATE_SUPPORTED_VERSION } from '../translation/dependency';
 import {
   installedPlugins,
   openPluginInfoURL,
   openPluginPreferences,
   setPluginEnabled,
   ZOTERO_NEO_PLUGIN_ID,
+  TRANSLATE_PLUGIN_ID,
+  TRANSLATE_PLUGIN_URL,
   type InstalledPlugin,
 } from './host';
 import type { PluginManagerRuntime } from './runtime';
@@ -224,10 +228,13 @@ export class PluginManagerPanel {
     const state = this.#host.state;
     if (!state.open) return;
     const generation = ++state.generation;
+    const cancelInstall = state.cancelInstall;
+    state.cancelInstall = null;
+    state.open = false;
+    cancelInstall?.();
     const { localBindings, inputCleanup, themeCleanup, overlay, previousElement } = state;
     const view = this.#view;
     this.#view = null;
-    state.open = false;
     state.localBindings = null;
     state.inputCleanup = null;
     state.themeCleanup = null;
@@ -359,6 +366,12 @@ export class PluginManagerPanel {
       case 'pluginsRefresh':
         void this.refresh();
         break;
+      case 'pluginsInstall':
+        void this.installOrUpdate(false);
+        break;
+      case 'pluginsUpdate':
+        void this.installOrUpdate(true);
+        break;
       case 'pluginsEnable':
         void this.setEnabled(true);
         break;
@@ -431,6 +444,94 @@ export class PluginManagerPanel {
         return;
       state.loading = false;
       this.render();
+    }
+  }
+
+  private async installOrUpdate(update: boolean): Promise<void> {
+    const state = this.#host.state;
+    const plugin = state.filtered[state.selected];
+    if (!this.#host.isCurrent() || !state.open || !plugin || state.busy || state.loading) return;
+    if (update ? plugin.installed === false : plugin.installed !== false) return;
+    const overlay = state.overlay;
+    const document = overlay?.ownerDocument;
+    const current = (): boolean =>
+      this.#host.isCurrent() &&
+      state.open &&
+      state.overlay === overlay &&
+      overlay?.isConnected === true &&
+      this.#host.window.document === document;
+    if (
+      !this.#host.window.confirm(
+        update
+          ? `Check for updates for ${plugin.name}? This contacts the plugin's update service.`
+          : `Download Translate for Zotero ${TRANSLATE_SUPPORTED_VERSION} from ${TRANSLATE_PLUGIN_URL}?`,
+      )
+    )
+      return;
+    if (!current()) return;
+    state.busy = true;
+    state.notice = update ? `Checking updates for ${plugin.name}…` : `Downloading ${plugin.name}…`;
+    this.render();
+    try {
+      const options = {
+        id: plugin.id,
+        hash: update ? undefined : TRANSLATE_PLUGIN_HASH,
+        confirm: (details: { name: string; version: string; source: string }): boolean => {
+          if (!current()) return false;
+          if (
+            !update &&
+            (details.version !== TRANSLATE_SUPPORTED_VERSION ||
+              details.source !== TRANSLATE_PLUGIN_URL)
+          )
+            throw new Error('Downloaded translation provider version or source validation failed');
+          if (update && !details.source.startsWith('https://'))
+            throw new Error('Plugin update source must use HTTPS');
+          const accepted = this.#host.window.confirm(
+            `Install ${details.name} ${details.version}?\n\nPlugin ID: ${plugin.id}\nSource: ${details.source}\n\nPlugins can access your Zotero data and computer. Only install plugins you trust.`,
+          );
+          if (accepted && current()) {
+            state.notice = `Installing ${details.name} ${details.version}…`;
+            this.renderFooter();
+          }
+          return accepted && current();
+        },
+        progress: (bytes: number, total: number): void => {
+          if (!current()) return;
+          state.notice = `Downloading ${plugin.name}: ${bytes}${total > 0 ? ` / ${total}` : ''} bytes`;
+          this.renderFooter();
+        },
+        registerCancel: (cancel: (() => void) | null): void => {
+          if (!current()) {
+            cancel?.();
+            return;
+          }
+          state.cancelInstall = cancel;
+          this.render();
+        },
+      };
+      const result = update
+        ? await updateMainPlugin(options)
+        : await installMainPlugin(TRANSLATE_PLUGIN_URL, options);
+      if (!current()) return;
+      state.notice =
+        result === 'no-update'
+          ? `No update available for ${plugin.name}`
+          : result === null
+            ? 'Installation cancelled'
+            : result.pendingRestart
+              ? 'Installation complete; restart required'
+              : 'Installation complete';
+      await this.refresh();
+    } catch (error) {
+      if (!current()) return;
+      state.notice = `Plugin operation failed: ${String(error)}`;
+      this.#host.logger.diagnostic(`plugin installation failed: ${String(error)}`);
+    } finally {
+      if (current()) {
+        state.cancelInstall = null;
+        state.busy = false;
+        this.render();
+      }
     }
   }
 
@@ -568,6 +669,10 @@ export class PluginManagerPanel {
   private dispatch(command: ExtensionsReactCommand): void {
     const state = this.#host.state;
     if (!this.#host.isCurrent() || !state.open) return;
+    if (command.type === 'cancel') {
+      state.cancelInstall?.();
+      return;
+    }
     if (command.type === 'select') {
       if (
         !Number.isInteger(command.index) ||
@@ -608,6 +713,9 @@ export class PluginManagerPanel {
     const bindings = this.#host.bindings();
     const actions = plugin
       ? [
+          plugin.installed === false
+            ? this.hint(bindings, 'plugins-list', 'pluginsInstall')
+            : this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
           !plugin.enabled && plugin.canEnable
             ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
             : null,
@@ -628,6 +736,8 @@ export class PluginManagerPanel {
         id: item.id,
         name: item.name,
         version: item.version,
+        installed: item.installed,
+        pendingRestart: item.pendingRestart,
         enabled: item.enabled,
         canEnable: item.canEnable,
         canDisable: item.canDisable,
@@ -651,6 +761,7 @@ export class PluginManagerPanel {
               : 'No installed plugins'
             : '',
       listStatus: loading ? 'muted' : state.error ? 'error' : 'normal',
+      canCancel: !!state.cancelInstall,
       loading: state.loading,
       shortcuts: actions.length
         ? `Shortcuts\n${actions.join('  ·  ')}`
@@ -669,6 +780,9 @@ export class PluginManagerPanel {
     const plugin = state.filtered[state.selected];
     const actions = plugin
       ? [
+          plugin.installed === false
+            ? this.hint(bindings, 'plugins-list', 'pluginsInstall')
+            : this.hint(bindings, 'plugins-list', 'pluginsUpdate'),
           !plugin.enabled && plugin.canEnable
             ? this.hint(bindings, 'plugins-list', 'pluginsEnable')
             : null,

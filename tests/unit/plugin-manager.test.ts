@@ -46,7 +46,7 @@ vi.mock('../../src/platform/native-ui', () => ({
       footer.textContent = model.footer;
       const selected = model.plugins[model.selected];
       details.textContent = selected
-        ? `${selected.name} ${model.shortcuts}`
+        ? `${selected.name} ${selected.pendingRestart ? 'Restart required' : ''} ${model.shortcuts}`
         : 'No plugin selected.';
       if (model.listMessage) {
         list.replaceChildren();
@@ -142,6 +142,10 @@ function installManagerHost() {
     version: '1.0',
     isActive: false,
     permissions: 6,
+    pendingOperations: 0,
+    findUpdates(listener: { onUpdateFinished: (addon: unknown, error: number) => void }) {
+      listener.onUpdateFinished(alpha, 0);
+    },
     homepageURL: 'https://github.com/example/alpha',
     enable: vi.fn(async () => {
       alpha.isActive = true;
@@ -174,6 +178,10 @@ function installManagerHost() {
   const manager = {
     PERM_CAN_ENABLE: 2,
     PERM_CAN_DISABLE: 4,
+    PENDING_INSTALL: 8,
+    PENDING_UPGRADE: 16,
+    UPDATE_WHEN_USER_REQUESTED: 1,
+    UPDATE_STATUS_NO_ERROR: 0,
     getAddonsByTypes: vi.fn(async () => addons),
     getAddonByID: vi.fn(async (id: string) => addons.find((addon) => addon.id === id) ?? null),
   };
@@ -301,11 +309,11 @@ describe('configurable plugin manager contexts', () => {
     panel.handleKey(pickerKey('n', state.overlay));
     expect(state.selected).toBe(1);
     panel.handleKey(pickerKey('F2', state.overlay));
-    expect(state.selected).toBe(2);
+    expect(state.filtered[state.selected]?.id).toBe(state.filtered.at(-1)?.id);
     panel.handleKey(pickerKey('F1', state.overlay));
     expect(state.selected).toBe(0);
     panel.handleKey(pickerKey('d', state.overlay, { ctrl: true }));
-    expect(state.selected).toBe(2);
+    expect(state.filtered[state.selected]?.id).toBe(state.filtered.at(-1)?.id);
     panel.handleKey(pickerKey('u', state.overlay, { ctrl: true }));
     expect(state.selected).toBe(0);
     panel.handleKey(pickerKey('F3', state.overlay));
@@ -343,7 +351,7 @@ describe('configurable plugin manager contexts', () => {
     const ime = pickerKey('F4', input);
     panel.handleKey(ime);
     expect(ime.preventDefault).not.toHaveBeenCalled();
-    expect(state.filtered).toHaveLength(3);
+    expect(state.filtered).toHaveLength(4);
     expect(window.document.activeElement).toBe(input);
     input.emit('compositionend');
     input.emit('input');
@@ -431,6 +439,105 @@ describe('configurable plugin manager contexts', () => {
     await vi.waitFor(() => expect(state.busy).toBe(false));
     expect(host.alpha.enable).toHaveBeenCalledOnce();
     expect(host.beta.enable).not.toHaveBeenCalled();
+    panel.close();
+  });
+
+  it('keeps native pending restart status after reopen and a no-update check', async () => {
+    const native = installManagerHost();
+    const { state, panel, window } = createPanelFixture();
+    Reflect.set(
+      window,
+      'confirm',
+      vi.fn(() => true),
+    );
+    for (const pending of [native.manager.PENDING_INSTALL, native.manager.PENDING_UPGRADE]) {
+      native.alpha.pendingOperations = pending;
+      panel.open();
+      await vi.waitFor(() => expect(state.loading).toBe(false));
+      expect(state.details?.textContent).toContain('Restart required');
+      panel.close();
+      panel.open();
+      await vi.waitFor(() => expect(state.loading).toBe(false));
+      expect(state.details?.textContent).toContain('Restart required');
+      panel.handleKey(pickerKey('u', state.overlay));
+      await vi.waitFor(() => expect(state.notice).toContain('No update available'));
+      expect(state.details?.textContent).toContain('Restart required');
+      panel.close();
+    }
+  });
+  it('does not download a missing provider without consent', async () => {
+    const native = installManagerHost();
+    const getInstallForURL = vi.fn();
+    Reflect.set(native.manager, 'getInstallForURL', getInstallForURL);
+    const { state, panel, window } = createPanelFixture();
+    Reflect.set(
+      window,
+      'confirm',
+      vi.fn(() => false),
+    );
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const input = state.input as HTMLInputElement & { emit(type: string): void };
+    input.value = 'Translate for Zotero';
+    input.emit('input');
+    panel.handleKey(pickerKey('i', state.overlay));
+    expect(getInstallForURL).not.toHaveBeenCalled();
+    expect(state.busy).toBe(false);
+    panel.close();
+  });
+
+  it('does not execute a late download after cancellation fails and the panel reopens', async () => {
+    const native = installManagerHost();
+    type Listener = { onDownloadEnded?: (install: unknown) => boolean };
+    let listener: Listener | null = null;
+    const install = {
+      state: 0,
+      addon: {
+        id: 'zoteropdftranslate@euclpts.com',
+        type: 'extension',
+        name: 'Translate',
+        version: '2.4.8',
+        isCompatible: true,
+      },
+      sourceURI: { spec: 'https://example.test/translate.xpi' },
+      addListener(value: Listener) {
+        listener = value;
+      },
+      removeListener(value: Listener) {
+        if (listener === value) listener = null;
+      },
+      cancel() {
+        throw new Error('channel already cleared');
+      },
+      install: vi.fn(),
+    };
+    Reflect.set(native.manager, 'STATE_AVAILABLE', 0);
+    Reflect.set(native.manager, 'STATE_DOWNLOADED', 3);
+    Reflect.set(
+      native.manager,
+      'getInstallForURL',
+      vi.fn(async () => install),
+    );
+    const { state, panel, window } = createPanelFixture();
+    const confirm = vi.fn(() => true);
+    Reflect.set(window, 'confirm', confirm);
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const input = state.input as HTMLInputElement & { emit(type: string): void };
+    input.value = 'Translate for Zotero';
+    input.emit('input');
+    panel.handleKey(pickerKey('i', state.overlay));
+    await vi.waitFor(() => expect(install.install).toHaveBeenCalledOnce());
+    panel.close();
+    panel.open();
+    await vi.waitFor(() => expect(state.loading).toBe(false));
+    const replacement = state.overlay;
+    install.state = 3;
+    const continuation = (listener as Listener | null)?.onDownloadEnded?.(install) !== false;
+    expect(continuation).toBe(false);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(state.overlay).toBe(replacement);
+    expect(state.notice).toBe('');
     panel.close();
   });
 
