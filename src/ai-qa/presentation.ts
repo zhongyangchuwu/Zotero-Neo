@@ -5,7 +5,12 @@ import type { PreferenceStore } from '../core/preference-store';
 import { neoCommandLanguage } from '../core/preferences';
 import { t } from '../i18n';
 import { releaseAIQAUI } from '../platform/ai-qa-ui';
-import { AIQAPanelHost, type AIQAPanelLease, type ReaderRuntime } from '../toolkit/reader';
+import {
+  AIQAPanelHost,
+  readerWindow,
+  type AIQAPanelLease,
+  type ReaderRuntime,
+} from '../toolkit/reader';
 import { ThemeManager } from '../ui/theme';
 import { AIQAError } from './errors';
 import type { AIQAReaderPresentationPort } from './reader-port';
@@ -199,7 +204,10 @@ export class AIQAPresentation {
     mount.active = true;
     try {
       if (lease.ownsWindow) {
-        const theme = new ThemeManager(lease.window, this.#preferences);
+        const theme = new ThemeManager(
+          readerWindow(lease.reader) ?? lease.window,
+          this.#preferences,
+        );
         mount.themeRelease = () => theme.dispose();
         theme.add(lease.root);
       } else {

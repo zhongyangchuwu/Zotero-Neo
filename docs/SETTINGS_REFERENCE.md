@@ -4,7 +4,7 @@
 
 | 控件 | 默认值 | 作用 |
 | --- | --- | --- |
-| 主题 | Zotero | 交互配色，可选 Zotero、Catppuccin、Tokyo Night、Gruvbox 或自定义主题。 |
+| 交互配色 | Zotero | 仅控制交互标记和状态颜色，可选 Zotero、Catppuccin、Tokyo Night、Gruvbox 或自定义配色；面板颜色跟随宿主。 |
 | 标记宽度（px） | 3 px | Main Cursor 和 Select 标记宽度，可选 1–4 px。 |
 | 状态样式 | 中性 | 状态指示器可选中性或着色。 |
 | 文本选择模式 | 开 | 允许 `v` 或原生 Zotero 文本选择进入 Reader Select。 |

@@ -32,7 +32,11 @@ export function AppearancePage({
     <div className="neo-settings-appearance">
       {model.view === 'library' ? (
         <>
-          <h2>{t('Appearance')}</h2>
+          <p className="neo-muted">
+            {t(
+              'Panel colors follow Zotero. These presets only change interaction markers and status colors.',
+            )}
+          </p>
           <section className="appearance-controls">
             <div>
               <span>{t('Marker width (px)')} </span>
@@ -61,7 +65,7 @@ export function AppearancePage({
               ))}
             </div>
           </section>
-          <h3>{t('Themes')}</h3>
+          <h3>{t('Interaction colors')}</h3>
           <div className="appearance-grid">
             {model.themes.map((theme) => (
               <div
@@ -144,7 +148,6 @@ export function AppearancePage({
                 {zh ? '重置调色板' : 'Reset palettes'}
               </button>
             </div>
-            <h2>{t('Appearance')}</h2>
             <h3>{t('Custom theme')}</h3>
             <label className="appearance-name">
               {t('Theme name')}

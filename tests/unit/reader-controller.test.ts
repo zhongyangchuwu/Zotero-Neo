@@ -1930,7 +1930,7 @@ describe('Reader per-view owner retirement', () => {
       (location: { readonly pageIndex: number }) => view.navigate?.(location),
     );
     const media = { matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() };
-    Reflect.set(created.pdfWindow, 'matchMedia', () => media);
+    Reflect.set(created.readerWindow, 'matchMedia', () => media);
     created.session.start();
     executeReaderAction(created.session, 'firstPage', created.pdfWindow);
     expect(nativeNavigate).toHaveBeenCalledOnce();

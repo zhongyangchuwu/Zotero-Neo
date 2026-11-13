@@ -60,6 +60,8 @@ function root(): ThemeRoot & { attributes: Map<string, string>; values: Map<stri
 
 function themeWindow(background: string, matches: boolean) {
   const mediaListeners = new Set<() => void>();
+  const rootListeners = new Set<() => void>();
+  const colors: Record<string, string> = { '--color-background': background };
   let disconnected = false;
   const media = {
     matches,
@@ -71,21 +73,45 @@ function themeWindow(background: string, matches: boolean) {
     },
   };
   class FakeMutationObserver {
-    constructor(_listener: () => void) {}
+    constructor(listener: () => void) {
+      rootListeners.add(listener);
+    }
     observe(): void {}
     disconnect(): void {
       disconnected = true;
+      rootListeners.clear();
     }
   }
   const window = {
     document: { documentElement: {} },
     getComputedStyle() {
-      return { getPropertyValue: () => background };
+      return { getPropertyValue: (name: string) => colors[name] ?? '' };
     },
     matchMedia: () => media,
     MutationObserver: FakeMutationObserver,
   } as unknown as Window;
-  return { window, mediaListeners, disconnected: () => disconnected };
+  return {
+    window,
+    mediaListeners,
+    disconnected: () => disconnected,
+    setColors(next: Record<string, string>) {
+      Object.assign(colors, next);
+      for (const listener of rootListeners) listener();
+    },
+  };
+}
+
+function contrast(background: string, foreground: string): number {
+  const luminance = (hex: string) => {
+    const channels = [1, 3, 5].map((offset) => {
+      const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  const a = luminance(background);
+  const b = luminance(foreground);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
 describe('appearance theme contract', () => {
@@ -119,36 +145,98 @@ describe('appearance theme contract', () => {
     manager.dispose();
   });
 
-  it('provides paired semantic surfaces and foregrounds for modes and statuses', () => {
+  it('keeps text readable on fallback surfaces, selections and semantic states in either mode', () => {
     const panel = root();
+    for (const theme of ['light', 'dark'] as const) {
+      applyTheme(panel, theme);
+      for (const [surface, text] of [
+        ['surface', 'text'],
+        ['input', 'text'],
+        ['selected', 'selected-text'],
+        ['accent', 'on-accent'],
+        ['mode-normal', 'mode-normal-text'],
+        ['mode-visual', 'mode-visual-text'],
+        ['mode-insert', 'mode-insert-text'],
+        ['status-success', 'status-success-text'],
+        ['status-info', 'status-info-text'],
+        ['status-error', 'status-error-text'],
+      ]) {
+        expect(
+          contrast(
+            panel.values.get(`--zotero-neo-${surface}`)!,
+            panel.values.get(`--zotero-neo-${text}`)!,
+          ),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 
-    applyTheme(panel, 'light');
-    expect(panel.values.get('--zotero-neo-mode-visual')).toBe('#e8f5e9');
-    expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#14532d');
-    expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#fff8e1');
-    expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#713f12');
-    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#eab308');
-    expect(panel.values.get('--zotero-neo-item-visual')).toBe('#22c55e');
-    expect(panel.values.get('--zotero-neo-status-success')).toBe('#dcfce7');
-    expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#166534');
-    expect(panel.values.get('--zotero-neo-status-info')).toBe('#dbeafe');
-    expect(panel.values.get('--zotero-neo-status-info-text')).toBe('#1e40af');
-    expect(panel.values.get('--zotero-neo-status-error')).toBe('#fee2e2');
-    expect(panel.values.get('--zotero-neo-status-error-text')).toBe('#991b1b');
+  it('copies native chrome colors into embedded roots and updates them without a mode change', () => {
+    const source = preferences('auto');
+    const host = themeWindow('#ffffff', false);
+    host.setColors({
+      '--color-sidepane': '#f0f0f0',
+      '--fill-primary': '#202020',
+      '--color-quarternary-on-background': '#dddddd',
+      '--color-accent': '#225588',
+      '--color-accent-text': '#ffffff',
+    });
+    const manager = new ThemeManager(host.window, source);
+    const embedded = root();
+    manager.add(embedded);
+    expect(embedded.values.get('--zotero-neo-elevated')).toBe('#f0f0f0');
+    expect(embedded.values.get('--zotero-neo-text')).toBe('#202020');
+    expect(embedded.values.get('--zotero-neo-selected')).toBe('#dddddd');
+    expect(embedded.values.get('--zotero-neo-accent')).toBe('#225588');
+    expect(embedded.values.get('--zotero-neo-on-accent')).toBe('#ffffff');
+    host.setColors({
+      '--color-sidepane': '#eeeeee',
+      '--color-quarternary-on-background': '#cccccc',
+    });
+    expect(embedded.values.get('--zotero-neo-elevated')).toBe('#eeeeee');
+    expect(embedded.values.get('--zotero-neo-selected')).toBe('#cccccc');
+    manager.dispose();
+    host.setColors({ '--color-sidepane': '#aaaaaa' });
+    expect(embedded.values.get('--zotero-neo-elevated')).toBe('#eeeeee');
+  });
 
-    applyTheme(panel, 'dark');
-    expect(panel.values.get('--zotero-neo-mode-visual')).toBe('#1a3020');
-    expect(panel.values.get('--zotero-neo-mode-visual-text')).toBe('#dcfce7');
-    expect(panel.values.get('--zotero-neo-mode-insert')).toBe('#332800');
-    expect(panel.values.get('--zotero-neo-mode-insert-text')).toBe('#fef3c7');
-    expect(panel.values.get('--zotero-neo-item-selection')).toBe('#facc15');
-    expect(panel.values.get('--zotero-neo-item-visual')).toBe('#4ade80');
-    expect(panel.values.get('--zotero-neo-status-success')).toBe('#16301f');
-    expect(panel.values.get('--zotero-neo-status-success-text')).toBe('#bbf7d0');
-    expect(panel.values.get('--zotero-neo-status-info')).toBe('#172554');
-    expect(panel.values.get('--zotero-neo-status-info-text')).toBe('#dbeafe');
-    expect(panel.values.get('--zotero-neo-status-error')).toBe('#3f1d1d');
-    expect(panel.values.get('--zotero-neo-status-error-text')).toBe('#fecaca');
+  it('keeps native form controls readable when the dark host control swatch stays light', () => {
+    const host = themeWindow('#ffffff', false);
+    const manager = new ThemeManager(host.window, preferences('auto'));
+    const panel = root();
+    manager.add(panel);
+    host.setColors({
+      '--color-background': '#1e1e1e',
+      '--fill-primary': '#eeeeee',
+      '--color-control': '#cccccc',
+      '--color-form-element-base-background': '#303030',
+    });
+    expect(panel.attributes.get('data-zotero-neo-theme')).toBe('dark');
+    expect(
+      contrast(panel.values.get('--zotero-neo-input')!, panel.values.get('--zotero-neo-text')!),
+    ).toBeGreaterThanOrEqual(4.5);
+    manager.dispose();
+  });
+
+  it('does not mix opposite-mode host surfaces or an incomplete accent foreground pair', () => {
+    const source = preferences('dark');
+    const host = themeWindow('#ffffff', false);
+    host.setColors({ '--fill-primary': '#000000', '--color-accent': '#ffffff' });
+    const manager = new ThemeManager(host.window, source);
+    const panel = root();
+    manager.add(panel);
+    expect(cssColorIsDark(panel.values.get('--zotero-neo-surface')!)).toBe(true);
+    expect(
+      contrast(panel.values.get('--zotero-neo-surface')!, panel.values.get('--zotero-neo-text')!),
+    ).toBeGreaterThanOrEqual(4.5);
+    source.set('light');
+    expect(
+      contrast(
+        panel.values.get('--zotero-neo-accent')!,
+        panel.values.get('--zotero-neo-on-accent')!,
+      ),
+    ).toBeGreaterThanOrEqual(4.5);
+    manager.dispose();
   });
 
   it('notifies live consumers only when the resolved theme changes', () => {
@@ -175,11 +263,11 @@ describe('appearance theme contract', () => {
 
     manager.add(panel);
     expect(panel.attributes.get('data-zotero-neo-theme')).toBe('light');
-    expect(panel.values.get('--zotero-neo-surface')).toBe('#ffffff');
+    expect(cssColorIsDark(panel.values.get('--zotero-neo-surface')!)).toBe(false);
 
     source.set('dark');
     expect(panel.attributes.get('data-zotero-neo-theme')).toBe('dark');
-    expect(panel.values.get('--zotero-neo-surface')).toBe('#1e1e1e');
+    expect(cssColorIsDark(panel.values.get('--zotero-neo-surface')!)).toBe(true);
 
     manager.dispose();
     expect(source.listeners.size).toBe(0);

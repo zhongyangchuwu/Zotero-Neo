@@ -4,13 +4,13 @@ import type { ReactView } from '../types';
 import type { PickerReactCommand, PickerReactModel } from '../../../main/picker/react-model';
 
 export const PICKER_REACT_CSS = `
-.neo-picker { height:100%; color:var(--zotero-neo-text); font:13px/1.45 system-ui,sans-serif; }
+.neo-picker { height:100%; color:var(--zotero-neo-text); font:menu; line-height:1.45; }
 .neo-picker .picker-content { display:grid; grid-template-columns:minmax(360px,48%) minmax(0,1fr); height:100%; min-height:0; }
 .neo-picker .picker-content.single { grid-template-columns:1fr; grid-template-rows:minmax(280px,1fr) minmax(180px,.65fr); }
 .neo-picker section { display:flex; flex-direction:column; min-width:0; min-height:0; }
 .neo-picker .picker-left { border-right:1px solid var(--zotero-neo-border); }
 .neo-picker .single .picker-left { border-right:0; border-bottom:1px solid var(--zotero-neo-border); }
-.neo-picker header { padding:4px 12px; color:var(--zotero-neo-accent); background:var(--zotero-neo-elevated); border-bottom:1px solid var(--zotero-neo-border); font-weight:700; }
+.neo-picker header { padding:4px 12px; color:var(--zotero-neo-text); background:var(--zotero-neo-elevated); border-bottom:1px solid var(--zotero-neo-border); font-weight:700; }
 .neo-picker .picker-header { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
 .neo-picker .picker-source { grid-column:1; grid-row:1; justify-self:start; font:inherit; color:inherit; background:var(--zotero-neo-input); border:1px solid var(--zotero-neo-border); border-radius:3px; padding:2px 6px; }
 .neo-picker .picker-title { grid-column:2; }
