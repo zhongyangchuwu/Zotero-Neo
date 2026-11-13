@@ -416,6 +416,10 @@ describe('collection workflows', () => {
     });
     await h.start(() => h.actions.addItems());
     h.input('Paper 2');
+    await vi.waitFor(() => {
+      expect(pickerModel(h.session).loading).toBe(false);
+      expect(h.session.picker.filtered.map((candidate) => candidate.id)).toEqual([2]);
+    });
     const confirmation = h.confirm(2);
     await entered.promise;
     h.items.delete(h.second.id);

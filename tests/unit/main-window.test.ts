@@ -2692,14 +2692,31 @@ describe('Reader to Main command palette integration', () => {
         stopPropagation: vi.fn(),
         stopImmediatePropagation: vi.fn(),
       }) as unknown as KeyboardEvent;
+    const selectCommand = async (query: string, action: ActionId): Promise<HTMLElement> => {
+      const parts = pickerParts(owner);
+      const title = t(`action.${action}`, 'en');
+      parts.input.value = query;
+      parts.input.emit('input');
+      await vi.waitFor(() => {
+        const model = pickerParts(owner).model;
+        expect(model.loading).toBe(false);
+        expect(model.rows.some((row) => row.text.startsWith(`${title} ·`))).toBe(true);
+      });
+      const model = pickerParts(owner).model;
+      const target = model.rows.findIndex((row) => row.text.startsWith(`${title} ·`));
+      const direction = model.selected < target ? 'ArrowDown' : 'ArrowUp';
+      // A query can retain another matching command; select the intended visible result explicitly.
+      for (let step = 0; step < Math.abs(target - model.selected); step++)
+        owner.keydown(key(direction, parts.results));
+      expect(pickerParts(owner).model.previewTitle).toBe(title);
+      return parts.results;
+    };
 
     owner.keydown(key(':'));
     await vi.waitFor(() => expect(overlayFor(owner)).not.toBeNull());
     await vi.waitFor(() => expect(pickerParts(owner).model.rows.length).toBeGreaterThan(0));
-    const readerCommands = pickerParts(owner);
-    readerCommands.input.value = 'Zoom in';
-    readerCommands.input.emit('input');
-    owner.keydown(key('Enter', readerCommands.results));
+    const readerCommands = await selectCommand('Zoom in', 'zoomIn');
+    owner.keydown(key('Enter', readerCommands));
     await vi.waitFor(() => expect(zoomIn).toHaveBeenCalledOnce());
     expect(overlayFor(owner)).toBeNull();
     expect(overlayFor(other)).toBeNull();
@@ -2707,10 +2724,8 @@ describe('Reader to Main command palette integration', () => {
     owner.keydown(key(':'));
     await vi.waitFor(() => expect(overlayFor(owner)).not.toBeNull());
     await vi.waitFor(() => expect(pickerParts(owner).model.rows.length).toBeGreaterThan(0));
-    const mainCommands = pickerParts(owner);
-    mainCommands.input.value = 'all items';
-    mainCommands.input.emit('input');
-    owner.keydown(key('Enter', mainCommands.results));
+    const mainCommands = await selectCommand('all items', 'findAllItems');
+    owner.keydown(key('Enter', mainCommands));
     await vi.waitFor(() => expect(pickerParts(owner).model.title).toBe('All items'));
     expect(overlayFor(other)).toBeNull();
 
