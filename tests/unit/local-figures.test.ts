@@ -662,6 +662,91 @@ describe('hosted PDF geometry regressions', () => {
     },
   );
 
+  it.each(['Figure 4 shows', 'Fig. 4 illustrates', 'Table IV summarizes'])(
+    'keeps a paragraph-starting %s reference in body text even beside a plausible graphic',
+    (lead) => {
+      const input = page(
+        [
+          text(`${lead} the estimated results for all experimental groups.`, [50, 500, 280, 510]),
+          text(
+            'The repeated measurements use independent samples in each trial.',
+            [50, 488, 280, 498],
+          ),
+          text(
+            'Their uncertainty is evaluated with the same sampling protocol.',
+            [50, 476, 280, 486],
+          ),
+        ],
+        [[50, 540, 280, 640]],
+      );
+      expect(localFigureRegions([input])).toEqual([]);
+      const regions = localDocumentRegions([input]);
+      expect(regions).toHaveLength(1);
+      expect(regions[0]).toMatchObject({
+        kind: 'text',
+        flow: 'body',
+        rect: [50, 476, 280, 510],
+      });
+      expect(regions[0]?.text).toContain(lead);
+      expect(regions[0]?.text).toContain('Their uncertainty');
+    },
+  );
+
+  it.each(['Figure 4. Shows', 'Table IV: Summarizes'])(
+    'preserves a punctuated %s caption with the same typography as body text',
+    (lead) => {
+      const regions = localFigureRegions([
+        page(
+          [
+            text(`${lead} the estimated results for all experimental groups.`, [50, 500, 280, 510]),
+            text(
+              'The repeated measurements use independent samples in each trial.',
+              [50, 488, 280, 498],
+            ),
+          ],
+          [[50, 540, 280, 640]],
+        ),
+      ]);
+      expect(bodies(regions)).toHaveLength(1);
+      expect(regions.find((r) => r.kind === 'caption')?.text).toContain(lead);
+      expect(bodies(regions)[0]?.sourceObject).toEqual(
+        regions.find((r) => r.kind === 'caption')?.sourceObject,
+      );
+    },
+  );
+
+  it.each([9, 9.09])(
+    'stops a %s-point wrapped caption at the larger body-text typography',
+    (captionSize) => {
+      const input = page(
+        [
+          text('Figure 5. Independent measurements.', [50, 500, 280, 509], captionSize),
+          text('Repeated estimates share the same scale.', [50, 489, 280, 498], 9),
+          text(
+            'The following discussion concerns the complete experimental protocol.',
+            [50, 477, 280, 487],
+          ),
+          text(
+            'Its next aligned line must remain ordinary document body text.',
+            [50, 465, 280, 475],
+          ),
+        ],
+        [[50, 530, 280, 640]],
+      );
+      const regions = localDocumentRegions([input]);
+      const cap = caption(regions, '5');
+      expect(cap.rect).toEqual([50, 489, 280, 509]);
+      expect(cap.text).toBe(
+        'Figure 5. Independent measurements.\nRepeated estimates share the same scale.',
+      );
+      expect(bodies(regions)).toHaveLength(1);
+      expect(bodies(regions)[0]?.sourceObject).toEqual(cap.sourceObject);
+      expect(regions.filter((r) => r.flow === 'body').map((r) => r.text)).toEqual([
+        'The following discussion concerns the complete experimental protocol. Its next aligned line must remain ordinary document body text.',
+      ]);
+    },
+  );
+
   it('uses persistent column starts rather than a fixed gutter width to assemble prose', () => {
     const regions = localDocumentRegions([
       page(
@@ -745,36 +830,42 @@ describe('painted structures and neighboring object ownership', () => {
     expect(caption(regions, '2').sourceObject).toBeDefined();
   });
 
-  it('assembles a text-heavy hierarchy through genuine connector-to-label adjacency', () => {
-    const input = page(
-      [
-        text('Ordinary surrounding prose establishes the body typography.', [50, 700, 280, 710]),
-        text('Its next aligned line remains separate from the diagram below.', [50, 688, 280, 698]),
-        text('Root', [50, 542, 72, 550], 7.5),
-        text('Branch Alpha', [80, 536, 150, 544], 7.5),
-        text('Leaf One', [156, 536, 210, 544], 7.5),
-        text('Leaf Two', [156, 500, 210, 508], 7.5),
-        text('Branch Beta', [80, 412, 144, 420], 7.5),
-        text('Figure 1: A hierarchy with textual nodes.', [50, 380, 280, 390]),
-      ],
-      [
-        [74, 410, 74.3, 550],
-        [74, 540, 80, 540.3],
-        [74, 415, 80, 415.3],
-        [150, 420, 150.3, 540],
-        [150, 539.8, 156, 540.2],
-      ],
-    );
-    const regions = localDocumentRegions([input]);
-    expect(bodies(regions)).toHaveLength(1);
-    expect(bodies(regions)[0]?.rect).toEqual([50, 410, 210, 550]);
-    expect(bodies(regions)[0]?.text).toContain('Branch Alpha');
-    expect(bodies(regions)[0]?.text).toContain('Leaf Two');
-    expect(bodies(regions)[0]?.sourceObject).toEqual(caption(regions, '1').sourceObject);
-    expect(regions.filter((r) => r.flow === 'body').map((r) => r.text)).toEqual([
-      'Ordinary surrounding prose establishes the body typography. Its next aligned line remains separate from the diagram below.',
-    ]);
-  });
+  it.each([0.3, 4.4])(
+    'assembles a text-heavy hierarchy with %s-point connector hulls',
+    (stemWidth) => {
+      const input = page(
+        [
+          text('Ordinary surrounding prose establishes the body typography.', [50, 700, 280, 710]),
+          text(
+            'Its next aligned line remains separate from the diagram below.',
+            [50, 688, 280, 698],
+          ),
+          text('Root', [50, 542, 72, 550], 7.5),
+          text('Branch Alpha', [80, 536, 150, 544], 7.5),
+          text('Leaf One', [156, 536, 210, 544], 7.5),
+          text('Leaf Two', [156, 500, 210, 508], 7.5),
+          text('Branch Beta', [80, 412, 144, 420], 7.5),
+          text('Figure 1: A hierarchy with textual nodes.', [50, 380, 280, 390]),
+        ],
+        [
+          [74, 410, 74 + stemWidth, 550],
+          [74, 540, 80, 540.3],
+          [74, 415, 80, 415.3],
+          [150, 420, 150 + stemWidth, 540],
+          [150, 539.8, 156, 540.2],
+        ],
+      );
+      const regions = localDocumentRegions([input]);
+      expect(bodies(regions)).toHaveLength(1);
+      expect(bodies(regions)[0]?.rect).toEqual([50, 410, 210, 550]);
+      expect(bodies(regions)[0]?.text).toContain('Branch Alpha');
+      expect(bodies(regions)[0]?.text).toContain('Leaf Two');
+      expect(bodies(regions)[0]?.sourceObject).toEqual(caption(regions, '1').sourceObject);
+      expect(regions.filter((r) => r.flow === 'body').map((r) => r.text)).toEqual([
+        'Ordinary surrounding prose establishes the body typography. Its next aligned line remains separate from the diagram below.',
+      ]);
+    },
+  );
 
   it.each(['above', 'below'])(
     'uses repeated lexical cell columns around a single rule with a caption %s',

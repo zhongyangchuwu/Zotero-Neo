@@ -1,0 +1,552 @@
+{
+  "schemaVersion": 1,
+  "description": "Corpus D: a frozen, non-random independent validation slice of PDFFigures2 Conference150 v2, disjoint from corpus C. Paired captions and foreground-cropped bodies are published human annotations, not extractor predictions or newly rechecked gold. Selected pages include every published figure/table annotation on those pages; no completeness is claimed for unselected pages or objects missed upstream. Coordinates are PDF user-space [left, bottom, right, top], pageIndex is zero-based. PDFs are not redistributed.",
+  "documents": [
+    {
+      "id": "d-icml10_1",
+      "title": "The Elastic Embedding Algorithm for Dimensionality Reduction",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/123.pdf",
+        "sha256": "d264a43ae1bf3ba654deddea5fef4335d5c75150cb042a5c67fbdb310295fb19",
+        "fileName": "d-icml10_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/123.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 4, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 1. Left: plot of (x(λ)) 2 when the dataset has N = 2 points in 1D, for w + = w − = λ ∗ 1 = 1. Right: plot of the squared diameter of X(λ) for the Swiss roll example (blue",
+          "captionRect": [54.72, 568.8, 288.72, 612.0],
+          "rect": [50.4, 619.92, 289.44, 722.88]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2. EE trained with homotopy with a 2D spiral.",
+          "captionRect": [187.92, 615.6, 406.8, 624.24],
+          "rect": [56.16, 634.32, 538.56, 724.32]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 3. Swiss roll. Top: EE with homotopy; we show X for different λ. Bottom: true X and results with other methods.",
+          "captionRect": [54.72, 446.4, 540.0, 455.04],
+          "rect": [55.44, 469.44, 541.44, 599.76]
+        },
+        {
+          "id": "figure-4",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 4. Affinities w nm = w nm − λw nm exp (− kx n − x m k 2 ) learned for a point x n near the centre of the Swiss roll for",
+          "captionRect": [307.44, 82.08, 548.64, 115.2],
+          "rect": [307.44, 128.88, 540.0, 184.32]
+        }
+      ]
+    },
+    {
+      "id": "d-icml10_2",
+      "title": "Multiscale Wavelets on Trees, Graphs and High Dimensional Data: Theory and Applications to Semi Supervised Learning",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/137.pdf",
+        "sha256": "8a9d28a3e6cc0004864e0a4bb8e5bc85bb7e60d483a5434c167a3d23f4ecfc27",
+        "fileName": "d-icml10_2.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/137.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1. An illustration of a Haar-like basis.",
+          "captionRect": [102.24, 401.04, 272.88, 408.96],
+          "rect": [139.68, 426.96, 236.16, 726.48]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2. Results on the USPS benchmark.",
+          "captionRect": [342.72, 584.64, 506.16, 592.56],
+          "rect": [348.48, 606.24, 501.12, 727.2]
+        }
+      ]
+    },
+    {
+      "id": "d-icml10_6",
+      "title": "Total Variation and Cheeger Cuts",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/233.pdf",
+        "sha256": "bd5fb5594b95ea2e5b9e9978f30aeda056b841c0753ce47a2adf32fde442bfef",
+        "fileName": "d-icml10_6.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/233.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 6, 7 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 1. Top: the confusion matrix for the clustering of MNIST using Algorithm 3.1 iterated as described in 4.1. Each row is a cluster; the number in the leftmost column of each row is the dominant label of that cluster. The 4’s and 9’s are merged, but otherwise the clustering is very accu- rate. The total computation time (not including construct- ing the weights) was 214 seconds. Middle: the confusion matrix using (B¨ uhler & Hein, 2009); the total computation time is 7303 seconds. Bottom: the confusion matrix using the iterated second eigenvector cut. More classes have been merged, and the ones broken into 4 clusters. The compu-",
+          "captionRect": [306.72, 588.96, 542.16, 715.68],
+          "rect": [332.64, 318.24, 516.24, 582.48]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 1. Results on two moons and CIFAR-10. Two moons is averaged over 100 instances, and CIFAR-10 is averaged over the 45 pairs of two class problems.",
+          "captionRect": [307.44, 683.28, 540.72, 714.24],
+          "rect": [312.48, 472.32, 536.4, 678.24]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 3. Results for an instantiation of the two moons dataset, 2000 points in 100 dimensions, with the modified algorithm 3.1 as in Remark 1 .",
+          "captionRect": [306.72, 78.48, 540.72, 109.44],
+          "rect": [347.04, 124.56, 501.12, 448.56]
+        }
+      ]
+    },
+    {
+      "id": "d-icml13_1",
+      "title": "Revisiting Frank-Wolfe: Projection-Free Sparse Convex Optimization",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/jaggi13.pdf",
+        "sha256": "d6447bb08c4b395304dbbf78b00d9a9b7cbf4e6866dc8f86d1edad4a8c658660",
+        "fileName": "d-icml13_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/jaggi13.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 6, 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 1. Some examples of atomic domains suitable for optimization using the Frank-Wolfe algorithm. Here SVD refers to the complexity of computing a singular value decomposition, which is O(min{mn 2 , m 2 n}). N f is the number of non-zero δC f entries in the gradient of the objective function f , and ε 0 = k+2 is the required accuracy for the linear subproblems. For 1 1 any p ∈ [1, ∞], the conjugate value q is meant to satisfy p + q = 1, allowing q = ∞ for p = 1 and vice versa.",
+          "captionRect": [56.16, 496.08, 541.44, 542.88],
+          "rect": [72.72, 548.64, 524.16, 725.04]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 2. Examples of some factorized matrix norms on R m×n , each induced by two atomic norms (last two rows giving ~ denotes the entries non-negative factorizations). Here kM k 2,∞ is the length of the ` 2 -longest row of the matrix M , and M of M written in a single large vector.",
+          "captionRect": [55.44, 605.52, 540.72, 636.48],
+          "rect": [63.36, 642.24, 533.52, 725.04]
+        }
+      ]
+    },
+    {
+      "id": "d-icml13_5",
+      "title": "A Randomized Mirror Descent Algorithm for Large Scale Multiple Kernel Learning",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v28/afkanpour13.pdf",
+        "sha256": "e06169d3f7096b62d658914ca99d3a21508c239871d3b6a2cb1d0f21b3267fec",
+        "fileName": "d-icml13_5.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v28/afkanpour13.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical page 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 1. Convergence comparison of our method and other algorithms.",
+          "captionRect": [156.24, 576.72, 439.2, 585.36],
+          "rect": [67.68, 594.0, 529.2, 722.16]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 2. Comparison of kernel learning methods in terms of test error (left) and training time (right).",
+          "captionRect": [95.76, 393.84, 499.68, 402.48],
+          "rect": [143.28, 412.56, 460.08, 561.6]
+        }
+      ]
+    },
+    {
+      "id": "d-icml14_1",
+      "title": "A Discriminative Latent Variable Model for Online Clustering",
+      "pdf": {
+        "url": "https://proceedings.mlr.press/v32/samdani14.pdf",
+        "sha256": "80fe468fcd800fab49da2850ff507634be9732c9924037725af46b591ee5935e",
+        "fileName": "d-icml14_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://proceedings.mlr.press/v32/samdani14.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical page 7 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 1: Performance on ACE 2004 and OntoNotes-5.0. Corr-Clustering is proposed by Finley & Joachims (2005); Spanning Forest is the latent spanning forest-based approach by Yu & Joachims (2009); Sum-Link is an online clustering technique by Haider et al. (2007); Bin-Left-Link uses a Best-Left-Link inference and the training strategy by Bengtson & Roth (2008). Our proposed approach is L 3 M— L 3 M with tuned γ is when we tune the value of γ using a development set; L 3 M (γ = 0) is with γ fixed to 0. Corr-Clustering and Spanning Forest are batch clustering techniques. Sum-Link, Bin-Left-Link, L 3 M (tuned γ), and L 3 M (γ = 0) are online clustering techniques. “(1 pass)” means when trained with just one pass over the data.",
+          "captionRect": [54.72, 490.32, 540.72, 558.72],
+          "rect": [89.28, 570.24, 507.6, 725.04]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 2: Tab. (a) presents summary statistics for the forum data. Tab. (b) presents results on the forum data for author-based and discussion topic-based clustering. Note that small VI is desirable. For author-based clustering, one pass over the data was sufficient for online algorithms. For topic-based clustering, we report results with one pass as well as five passes (last column) during training for online algorithms (note that one pass vs five passes distinction only holds for online clustering algorithms; for batch techniques we make ten passes.) All the results are scaled by 100. In all cases, L 3 M (tuned γ) is statistically significantly better than all other approaches.",
+          "captionRect": [55.44, 307.44, 540.72, 363.6],
+          "rect": [84.24, 377.28, 522.0, 476.64]
+        }
+      ]
+    },
+    {
+      "id": "d-nips09_1",
+      "title": "A Bayesian Model for Simultaneous Image Clustering, Annotation and Object Segmentation",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3655-a-bayesian-model-for-simultaneous-image-clustering-annotation-and-object-segmentation.pdf",
+        "sha256": "30bd3751c46cb7341ec2945e9c1866a431b06dad7bb17eee9bc6594b38d438a3",
+        "fileName": "d-nips09_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://papers.nips.cc/paper/3655-a-bayesian-model-for-simultaneous-image-clustering-annotation-and-object-segmentation.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 4, 7 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 1: Depiction of the generative process. (i) A scene-class indicator zm ∈ {1, . . . , I} is drawn to define the image class; (ii) conditioned on zm , and using the LSBP, contiguous segmented blocks are constituted, with associated words defined by object indicator cml ∈ {1, · · · , K}, where w i defines the probability of observing each object type for image class i; (iii) conditioned on cml , image-feature atoms are drawn from appropriate mixture models Gcml , linked to over-segmented regions within each of the object clusters; (iv) the image-feature model parameters are responsible for generating the image features, via the model F (θ), where θ is the image-feature parameter.",
+          "captionRect": [108.0, 459.36, 504.0, 528.48],
+          "rect": [164.16, 531.36, 441.36, 666.72]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 2: Example inferred latent properties associated with MSRC dataset. Left: Posterior distribution on the mixture-weights u, quantifying the probability of scene classes (10 classes are inferred). Middle and Right: Example probability of objects for a given class, w i (probability of object/words); here we only give the top 5 words for each class.",
+          "captionRect": [107.28, 513.36, 502.56, 550.08],
+          "rect": [125.28, 557.28, 475.2, 619.2]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 3: Comparisons using confusion matrices for all images in each dataset (all of the annotated and non- annotated images in MSRC; all the non-annotated images in UIUC-Sport). The left two results are for MSRC, and the right two for UIUC-Sport. In each pair, the result is without LSBP, and the right is with LSBP. Average performance, left to right: 82.90%, 86.80%, 60.50% and 63.50%.",
+          "captionRect": [107.28, 390.96, 503.28, 429.12],
+          "rect": [105.84, 436.32, 509.76, 510.48]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 1: Comparison of precision and recall values for annotation and segmentation with Corr-LDA [6], our model without LSBP (Simp. Model) and the extended models with KSBP (Ext. with KSBP) and LSBP (Ext. with LSBP) on MSRC datasets. To evaluate annotation performance, the results are just calculated based on non-annotated images; while for segmentation, the results are based on all images.",
+          "captionRect": [107.28, 263.52, 503.28, 300.96],
+          "rect": [107.28, 155.52, 514.08, 261.36]
+        }
+      ]
+    },
+    {
+      "id": "d-nips09_2",
+      "title": "Adaptive Regularization for Transductive Support Vector Machine",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3843-adaptive-regularization-for-transductive-support-vector-machine.pdf",
+        "sha256": "5a954041f3f89381127b0ea8f59f70ab119b99a7bfc6a3fe1b3edf1db694c19e",
+        "fileName": "d-nips09_2.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://papers.nips.cc/paper/3843-adaptive-regularization-for-transductive-support-vector-machine.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 7, 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "text": "Table 1: Datasets used in our experiments. d represents the data dimensionality, and n denotes the total number of examples.",
+          "captionRect": [108.0, 325.44, 503.28, 343.44],
+          "rect": [179.28, 262.8, 429.12, 324.72]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 2: The classification performance of Transductive SVMs on benchmark data sets.",
+          "captionRect": [114.48, 564.48, 496.08, 573.12],
+          "rect": [115.2, 457.2, 493.2, 563.04]
+        }
+      ]
+    },
+    {
+      "id": "d-nips10_1",
+      "title": "A Discriminative Latent Model of Image Region and Object Tag Correspondence",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3968-a-discriminative-latent-model-of-image-region-and-object-tag-correspondence.pdf",
+        "sha256": "76f6d6fe88f44c070c2b589a16075ac23c8f26f444122e99cc403c0e193126d5",
+        "fileName": "d-nips10_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://papers.nips.cc/paper/3968-a-discriminative-latent-model-of-image-region-and-object-tag-correspondence.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 3 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Our goal is to learn a model using images and their associated unaligned textual object annotations (a) as the training data. Given a new image (b), we can use the model to predict its textual annotations and roughly localize image regions corresponding to each of the annotation terms (c).",
+          "captionRect": [108.0, 634.32, 503.28, 662.4],
+          "rect": [109.44, 676.08, 503.28, 760.32]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2: Graphical illustration of our model. An input image is segmented into several regions. The annotation of the image is represented as a 0-1 vector indicating the presence/absence of each possible annotation term. Our model captures the unobserved mapping that translate image regions to annotation terms associated with the image (e.g. horse, athlete). For annotation terms not associated with the image (e.g. car, dog), there are no mapped image regions. Our model also captures relationship between the unobserved scene label (e.g. polo) and image regions/annotations.",
+          "captionRect": [107.28, 599.04, 503.28, 655.92],
+          "rect": [162.0, 667.44, 449.28, 760.32]
+        }
+      ]
+    },
+    {
+      "id": "d-nips11_1",
+      "title": "A Convergence Analysis of Log-Linear Training",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/4421-a-convergence-analysis-of-log-linear-training.pdf",
+        "sha256": "ca55c9f76b44c4f8f4c8ed097075d5046dee85ae31af75186da09879825bb4a2",
+        "fileName": "d-nips11_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://papers.nips.cc/paper/4421-a-convergence-analysis-of-log-linear-training.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 6, 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 1: Results on the USPS task for different feature transformations and regularization parameters α. The columns “separation” and “termination” list the number of passes through the dataset until",
+          "captionRect": [108.0, 669.6, 503.28, 700.56],
+          "rect": [141.12, 569.52, 468.0, 668.16]
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "text": "Table 2: Results on the IAM database for polynomial feature spaces of degree m ∈ {1, 2, 3} with",
+          "captionRect": [108.0, 680.4, 503.28, 700.56],
+          "rect": [115.2, 570.24, 496.08, 678.24]
+        }
+      ]
+    },
+    {
+      "id": "d-nips12_1",
+      "title": "A memory frontier for complex synapses",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/4872-a-memory-frontier-for-complex-synapses.pdf",
+        "sha256": "1b683810d53494643dc62f8415e705dadab194b3e813ee17a3ad1d04d0eff819",
+        "fileName": "d-nips12_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://papers.nips.cc/paper/4872-a-memory-frontier-for-complex-synapses.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3, 5 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Models of complex synapses. (a) The cascade model of [10], showing transitions between states of high/low synaptic weight (red/blue circles) due to potentiation/depression (solid red/dashed blue arrows). (b) The serial model of [12]. (c) The memory curves of these two models, showing the decay of the signal-to-noise ratio (to be defined in §2) as subsequent memories are stored.",
+          "captionRect": [108.72, 575.28, 504.0, 622.08],
+          "rect": [124.56, 637.2, 486.0, 710.64]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2: Synaptic models that maximize initial SNR. (a) For potentiation, all transitions starting from a weak state lead to a strong state, and the probabilities for all transitions leaving a given weak state sum to 1. (a) Depression is similar to potentiation, but with strong and weak interchanged. (c) The equivalent two state model, with transition probabilities under potentiation and depression equal to one.",
+          "captionRect": [108.0, 596.88, 504.0, 651.6],
+          "rect": [200.16, 665.28, 412.56, 710.64]
+        }
+      ]
+    },
+    {
+      "id": "d-nips13_1",
+      "title": "A Determinantal Point Process Latent Variable Model for Inhibition in Neural Spiking Data",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/5051-a-determinantal-point-process-latent-variable-model-for-inhibition-in-neural-spiking-data.pdf",
+        "sha256": "216fabdde5b94d6b91b79827a65d2c27e3db2a3938d9b1d8389c6ac326eb43e8",
+        "fileName": "d-nips13_1.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://papers.nips.cc/paper/5051-a-determinantal-point-process-latent-variable-model-for-inhibition-in-neural-spiking-data.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 5, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1: Results of the simulated moving bar experiment (1a) compared to independent spiking behavior (1b). Note that in 1a the model puts neighboring neurons within the unit length scale while it puts others at least one length scale apart. 1c demonstrates the weights, w ν , of the gain component learned if up to 5x random gain is",
+          "captionRect": [107.28, 557.28, 503.28, 594.0],
+          "rect": [120.96, 609.84, 493.2, 700.56]
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2: Results of the digits experiment. A visualization of the neuron specific weights w n (2a) and latent embedding (2b) learned by the DPP. In (2b) each blue number indicates the position of the neuron that always fires for that specific digit, and the red and green numbers indicate the neurons that respond to that digit but inhibit each other. We observe in (2b) that inhibitory pairs of neurons, the red and green pairs, are placed extremely close to each other in the DPP’s learned latent space while neurons that spike simultaneously (the blue and either red or green) are distant. This scenario emphasizes the benefit of having an inhibitory dependence between neurons. The coupled GLM can not model this scenario well because both neurons of the inhibitory pair receive strong stimulus but there is no indication from past spiking behavior which neuron will spike.",
+          "captionRect": [108.0, 462.24, 503.28, 540.72],
+          "rect": [110.16, 556.56, 504.0, 699.84]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 3: Visualizations of the parameters learned by the DPP on the Hippocampal data. Figure 3a shows a visualization of the kernel matrix K S . Dark colored entries of K S indicate a strong pairwise inhibition while lighter ones indicate no inhibition. The low frequency neurons, pyramidal cells, are strongly anti-correlated which is consistent with the notion that they are inhibited by a common source such as an interneuron. Figure 3b shows the (normalized) weights, w n learned from the stimulus feature vectors, which consist of concatenated (t) location and orientation bins, to each neuron’s Poisson spike rate λ n . An interesting observation is that the two highest frequency neurons, interneurons, have little dependence on any particular stimulus and are strongly anti-correlated with a large group of low frequency pyramidal cells. 3c shows the weights, w ν to the gain control, ν, and 3d shows a visualization of the stimulus weights for a single neuron n = 3 organized by location and orientation bins. In 3a and 3b the neurons are ordered by their firing rates. In 3d we see that the neuron is stimulated heavily by a specific location and orientation.",
+          "captionRect": [107.28, 189.36, 504.0, 299.52],
+          "rect": [112.32, 316.08, 502.56, 449.28]
+        }
+      ]
+    }
+  ]
+}

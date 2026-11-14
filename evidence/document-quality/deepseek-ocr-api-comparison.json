@@ -1,0 +1,591 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-14T16:04:53.408Z",
+  "purpose": "用户明确授权的 DeepSeek OCR API 小样本对照；不改变 Neo 运行时或默认后端。",
+  "endpoint": "https://api.deepseek.com/v1/tools/ocr",
+  "officialReferences": {
+    "guide": "https://api-docs.deepseek.com/zh-cn/guides/ocr",
+    "api": "https://api-docs.deepseek.com/zh-cn/api/ocr"
+  },
+  "requestPolicy": {
+    "credentialsEnvironment": "DEEPSEEK_API_KEY",
+    "credentialStored": false,
+    "multipartFields": ["file", "purpose"],
+    "purposes": ["rich_layout_recognition", "text_recognition"],
+    "maximumRequests": 8,
+    "retries": 0,
+    "tls": "正常证书校验，无重定向或聊天接口回退"
+  },
+  "inputs": {
+    "sources": [
+      {
+        "documentId": "attention",
+        "url": "https://arxiv.org/pdf/1706.03762v1",
+        "sha256": "0a9bff1be3575cf9fe26a4a3d3a9175bc791ecec90de8b9deba4cff75d2b9476",
+        "pageCount": 15
+      },
+      {
+        "documentId": "resnet",
+        "url": "https://arxiv.org/pdf/1512.03385v1",
+        "sha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a",
+        "pageCount": 12
+      },
+      {
+        "documentId": "b-omnidocbench",
+        "url": "https://arxiv.org/pdf/2412.07626v1",
+        "sha256": "af246c0ca296221e6ec1e5b800f2c359689cc6921a97764e650b0b34686c1907",
+        "pageCount": 30
+      }
+    ],
+    "singlePages": [
+      {
+        "id": "attention-p3",
+        "documentId": "attention",
+        "originalPageIndex": 2,
+        "physicalPage": 3,
+        "sha256": "cbd1c8847ac9b50089f9132c4e46195a0f587ae9f5e8c22e5af646b42c4d000d",
+        "sizePoints": [612, 792],
+        "boxes": {
+          "MediaBox": [0, 0, 612, 792],
+          "CropBox": [0, 0, 612, 792]
+        },
+        "rotation": 0,
+        "posthoc": false
+      },
+      {
+        "id": "attention-p4",
+        "documentId": "attention",
+        "originalPageIndex": 3,
+        "physicalPage": 4,
+        "sha256": "f7852c316fad88da9475632496fbaa3d35d24d84ab96ee982b2055454968a2ea",
+        "sizePoints": [612, 792],
+        "boxes": {
+          "MediaBox": [0, 0, 612, 792],
+          "CropBox": [0, 0, 612, 792]
+        },
+        "rotation": 0,
+        "posthoc": true
+      },
+      {
+        "id": "resnet-p2",
+        "documentId": "resnet",
+        "originalPageIndex": 1,
+        "physicalPage": 2,
+        "sha256": "6b6cee1f25612a663d8f4e079a1f004d652ca846aee82c8d2cfdc7e7a4961d07",
+        "sizePoints": [612, 792],
+        "boxes": {
+          "MediaBox": [0, 0, 612, 792],
+          "CropBox": [0, 0, 612, 792]
+        },
+        "rotation": 0,
+        "posthoc": false
+      },
+      {
+        "id": "b-omnidocbench-p6",
+        "documentId": "b-omnidocbench",
+        "originalPageIndex": 5,
+        "physicalPage": 6,
+        "sha256": "7fbfb2a720a41664f9b799bc27b8fadbc392e47fc3dcc9bc0132880d49092f39",
+        "sizePoints": [612, 792],
+        "boxes": {
+          "MediaBox": [0, 0, 612, 792],
+          "CropBox": [0, 0, 612, 792]
+        },
+        "rotation": 0,
+        "posthoc": false
+      }
+    ],
+    "annotation": {
+      "kind": "agent-source-verified",
+      "scope": "Exhaustive figure/table objects on three selected physical pages only; not full-document or human gold.",
+      "bodyBoxes": "Approximate body-only rectangles independently estimated from 144-DPI original PDF renders before seeing any extraction output. Existing OmniDocBench Table2/3 source boxes retained.",
+      "captionBoxes": "Original PDF text block geometry from pdftotext -bbox-layout; ResNet XML control characters stripped in memory only, not PDF.",
+      "sha256": "e1696d0912e1c2478635244578310b59ada30220a0fc1e8376942c645b028cb5"
+    },
+    "expectedObjects": [
+      {
+        "documentId": "attention",
+        "pageIndex": 2,
+        "id": "figure-1",
+        "kind": "figure",
+        "label": "1",
+        "bodyRect": [194, 396, 420, 722],
+        "captionRect": [210.011, 377.547078, 401.990302, 386.453643]
+      },
+      {
+        "documentId": "resnet",
+        "pageIndex": 1,
+        "id": "figure-2",
+        "kind": "figure",
+        "label": "2",
+        "bodyRect": [96, 635, 234, 716],
+        "captionRect": [86.617, 625.108258, 249.859278, 633.124219]
+      },
+      {
+        "documentId": "b-omnidocbench",
+        "pageIndex": 5,
+        "id": "table-2",
+        "kind": "table",
+        "label": "2",
+        "bodyRect": [78.82, 599.51, 532.14, 720.03],
+        "captionRect": [58.5, 572.998258, 553.499078, 591.973219]
+      },
+      {
+        "documentId": "b-omnidocbench",
+        "pageIndex": 5,
+        "id": "table-3",
+        "kind": "table",
+        "label": "3",
+        "bodyRect": [83.99, 445.24, 527.33, 563.7],
+        "captionRect": [77.09, 427.756258, 534.9096, 435.879816]
+      },
+      {
+        "documentId": "b-omnidocbench",
+        "pageIndex": 5,
+        "id": "table-4",
+        "kind": "table",
+        "label": "4",
+        "bodyRect": [80.5, 266, 274, 420],
+        "captionRect": [58.5, 214.170258, 294.751838, 255.062219]
+      },
+      {
+        "documentId": "b-omnidocbench",
+        "pageIndex": 5,
+        "id": "table-5",
+        "kind": "table",
+        "label": "5",
+        "bodyRect": [320, 266, 551, 421],
+        "captionRect": [317.25, 225.123258, 553.496707, 255.057219]
+      }
+    ]
+  },
+  "criterion": {
+    "bodyIoUThreshold": 0.5,
+    "captionIoUThreshold": 0.5,
+    "bodyScoring": "Same kind and same original page; maximum cardinality then maximum summed IoU, threshold 0.5, identical to preserved evaluation. API image/figure blocks count as figure candidates; table blocks count as tables. Keep unmatched extra candidates.",
+    "captionScoring": "Independent caption block coverage: explicit leading Figure/Fig/Table label identity and caption IoU >=0.5. Body coverage alone never implies association.",
+    "apiAssociation": "not supplied: marker categories and reading sequence contain no explicit body-caption relation",
+    "extraAssociationRule": "If response has no explicit body-caption links, report raw API association as not supplied. Separately evaluate API+geometry rule: same-kind caption leading label, horizontal overlap >=0.5 of narrower box, choose closest vertical edge gap for each body with one-to-one caption use; no annotation-based choice, no manual merging or tuning. Reading-order index breaks exact distance ties.",
+    "coordinates": "For original page W,H, top-left 0-1000 [x1,y1,x2,y2] becomes bottom-left PDF points [x1*W/1000, H-y2*H/1000, x2*W/1000, H-y1*H/1000]. Require unchanged one-page MediaBox/CropBox and rotation zero."
+  },
+  "api": {
+    "serverModelRevision": "未提供可锁定的版本",
+    "requests": [
+      {
+        "requestId": "attention-p3-rich_layout_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:50:05 GMT"
+        },
+        "responseSha256": "b0e1e169c6e1ef75239f37cb64be6e6b2dd29939ef32cdb86b7a9706fd68353a",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 416,
+          "output_tokens": 472,
+          "total_tokens": 888
+        },
+        "purpose": "rich_layout_recognition",
+        "wallSeconds": 2.575139471970033,
+        "finishedUtc": "2026-11-14T14:50:07.319517+00:00"
+      },
+      {
+        "requestId": "attention-p4-rich_layout_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:50:49 GMT"
+        },
+        "responseSha256": "24d0987b53686f68a4746d335733b638a29873d38f7fb0f05e250ee720042052",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 416,
+          "output_tokens": 827,
+          "total_tokens": 1243
+        },
+        "purpose": "rich_layout_recognition",
+        "wallSeconds": 4.747384176997002,
+        "finishedUtc": "2026-11-14T14:50:53.790542+00:00"
+      },
+      {
+        "requestId": "resnet-p2-rich_layout_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:50:56 GMT"
+        },
+        "responseSha256": "0ed0ec21c81ba50bd5394ebf2c5e6aab530edb50d63c07632e4b11cda54582be",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 416,
+          "output_tokens": 1346,
+          "total_tokens": 1762
+        },
+        "purpose": "rich_layout_recognition",
+        "wallSeconds": 4.955599485023413,
+        "finishedUtc": "2026-11-14T14:51:01.496951+00:00"
+      },
+      {
+        "requestId": "b-omnidocbench-p6-rich_layout_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:51:06 GMT"
+        },
+        "responseSha256": "a154757c0c17ab6ce46a20c5c85520a34a2ebf40ae3ba7cbdbf265120ef60d92",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 416,
+          "output_tokens": 3786,
+          "total_tokens": 4202
+        },
+        "purpose": "rich_layout_recognition",
+        "wallSeconds": 7.616318884014618,
+        "finishedUtc": "2026-11-14T14:51:13.741967+00:00"
+      },
+      {
+        "requestId": "attention-p3-text_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:50:46 GMT"
+        },
+        "responseSha256": "33963719e2aaa5fc9d97c8aea9783454df2574f9f65c1ce2ee1f6a71fea22bef",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 401,
+          "output_tokens": 326,
+          "total_tokens": 727
+        },
+        "purpose": "text_recognition",
+        "wallSeconds": 2.6532806329778396,
+        "finishedUtc": "2026-11-14T14:50:49.042259+00:00"
+      },
+      {
+        "requestId": "attention-p4-text_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:50:54 GMT"
+        },
+        "responseSha256": "e8dd3913f42fb83d1607414a714d56a3587aa7662b7419f26b0c019e0b691970",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 401,
+          "output_tokens": 642,
+          "total_tokens": 1043
+        },
+        "purpose": "text_recognition",
+        "wallSeconds": 2.7489215409732424,
+        "finishedUtc": "2026-11-14T14:50:56.540300+00:00"
+      },
+      {
+        "requestId": "resnet-p2-text_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:51:01 GMT"
+        },
+        "responseSha256": "adba7d4074b230a31aac6b73296357f5c87ef3fff8b1a69fc51bb074005c0339",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 401,
+          "output_tokens": 1165,
+          "total_tokens": 1566
+        },
+        "purpose": "text_recognition",
+        "wallSeconds": 4.626913140993565,
+        "finishedUtc": "2026-11-14T14:51:06.124714+00:00"
+      },
+      {
+        "requestId": "b-omnidocbench-p6-text_recognition",
+        "outcome": "success",
+        "page_count": 1,
+        "httpStatus": 200,
+        "responseHeaders": {
+          "Content-Type": "application/json",
+          "Date": "Sat, 14 Nov 2026 14:51:14 GMT"
+        },
+        "responseSha256": "18bedb5be36333466ed051f2e1a4057a035b4714b1171ecf8bbf45d2d654b1bf",
+        "leadingWhitespaceBytes": 0,
+        "finishReasons": ["stop"],
+        "usage": {
+          "input_tokens": 401,
+          "output_tokens": 2713,
+          "total_tokens": 3114
+        },
+        "purpose": "text_recognition",
+        "wallSeconds": 8.597578561981209,
+        "finishedUtc": "2026-11-14T14:51:22.340630+00:00"
+      }
+    ],
+    "billing": {
+      "attemptedRequests": 8,
+      "knownSuccessfulPages": 8,
+      "publishedCnyPer1000SuccessfulPages": 1.5,
+      "publishedPriceEstimateCny": 0.012,
+      "invoiceVerified": false
+    },
+    "richLayout": {
+      "expected": 6,
+      "predictedBodies": 6,
+      "bodyTruePositives": 5,
+      "bodyFalsePositives": 1,
+      "bodyMisses": 1,
+      "rawCaptionCorrect": 4,
+      "geometryCaptionPairCorrect": 3,
+      "objects": [
+        {
+          "pageId": "attention-p3",
+          "id": "figure-1",
+          "kind": "figure",
+          "label": "1",
+          "bodyFound": true,
+          "bodyIoU": 0.7662552130356896,
+          "rawCaptionFound": true,
+          "rawCaptionIoU": 0.7372352702129503,
+          "rawCaptionIndex": 0,
+          "apiExplicitAssociation": null,
+          "geometryCaptionPairCorrect": true,
+          "bestCandidateBlockIndex": 0,
+          "bestCandidateBodyIoU": 0.7662552130356896,
+          "bodyBlockIndex": 0,
+          "bodyRect": [159.12, 396, 451.656, 724.6800000000001],
+          "associatedCaptionBlockIndex": 1,
+          "associatedCaptionIdentity": ["figure", "1"],
+          "associatedCaptionIoU": 0.7372352702129503
+        },
+        {
+          "pageId": "resnet-p2",
+          "id": "figure-2",
+          "kind": "figure",
+          "label": "2",
+          "bodyFound": true,
+          "bodyIoU": 0.7695769734925444,
+          "rawCaptionFound": true,
+          "rawCaptionIoU": 0.505709726943476,
+          "rawCaptionIndex": 0,
+          "apiExplicitAssociation": null,
+          "geometryCaptionPairCorrect": true,
+          "bestCandidateBlockIndex": 0,
+          "bestCandidateBodyIoU": 0.7695769734925444,
+          "bodyBlockIndex": 0,
+          "bodyRect": [107.712, 634.392, 253.368, 719.136],
+          "associatedCaptionBlockIndex": 1,
+          "associatedCaptionIdentity": ["figure", "2"],
+          "associatedCaptionIoU": 0.505709726943476
+        },
+        {
+          "pageId": "b-omnidocbench-p6",
+          "id": "table-2",
+          "kind": "table",
+          "label": "2",
+          "bodyFound": true,
+          "bodyIoU": 0.7318367616938072,
+          "rawCaptionFound": false,
+          "rawCaptionIoU": 0,
+          "rawCaptionIndex": 0,
+          "apiExplicitAssociation": null,
+          "geometryCaptionPairCorrect": false,
+          "bestCandidateBlockIndex": 0,
+          "bestCandidateBodyIoU": 0.7318367616938072,
+          "bodyBlockIndex": 0,
+          "bodyRect": [56.304, 575.784, 570.384, 719.136],
+          "associatedCaptionBlockIndex": 1,
+          "associatedCaptionIdentity": ["table", "2"],
+          "associatedCaptionIoU": 0
+        },
+        {
+          "pageId": "b-omnidocbench-p6",
+          "id": "table-3",
+          "kind": "table",
+          "label": "3",
+          "bodyFound": true,
+          "bodyIoU": 0.5822112200348882,
+          "rawCaptionFound": false,
+          "rawCaptionIoU": 0,
+          "rawCaptionIndex": 1,
+          "apiExplicitAssociation": null,
+          "geometryCaptionPairCorrect": false,
+          "bestCandidateBlockIndex": 2,
+          "bestCandidateBodyIoU": 0.5822112200348882,
+          "bodyBlockIndex": 2,
+          "bodyRect": [56.304, 465.696, 570.384, 541.7280000000001],
+          "associatedCaptionBlockIndex": 3,
+          "associatedCaptionIdentity": ["table", "3"],
+          "associatedCaptionIoU": 0
+        },
+        {
+          "pageId": "b-omnidocbench-p6",
+          "id": "table-4",
+          "kind": "table",
+          "label": "4",
+          "bodyFound": false,
+          "bodyIoU": 0,
+          "rawCaptionFound": true,
+          "rawCaptionIoU": 0.5913287407093997,
+          "rawCaptionIndex": 2,
+          "apiExplicitAssociation": null,
+          "geometryCaptionPairCorrect": false,
+          "bestCandidateBlockIndex": 4,
+          "bestCandidateBodyIoU": 0.31144254392064147
+        },
+        {
+          "pageId": "b-omnidocbench-p6",
+          "id": "table-5",
+          "kind": "table",
+          "label": "5",
+          "bodyFound": true,
+          "bodyIoU": 0.7542905899062357,
+          "rawCaptionFound": true,
+          "rawCaptionIoU": 0.7722521824440197,
+          "rawCaptionIndex": 3,
+          "apiExplicitAssociation": null,
+          "geometryCaptionPairCorrect": true,
+          "bestCandidateBlockIndex": 7,
+          "bestCandidateBodyIoU": 0.7542905899062357,
+          "bodyBlockIndex": 7,
+          "bodyRect": [324.972, 257.4, 570.384, 443.52],
+          "associatedCaptionBlockIndex": 8,
+          "associatedCaptionIdentity": ["table", "5"],
+          "associatedCaptionIoU": 0.7722521824440197
+        }
+      ]
+    },
+    "textRecognition": {
+      "completedPages": 4,
+      "geometryAvailable": false,
+      "ocrAccuracy": "未测；没有逐字符或表格单元格真值，未把无定位框计为 OCR 错误"
+    }
+  },
+  "currentNeo": {
+    "source": {
+      "baseCommit": "834e40ce5f2ee2574020dd355b9d54115c5fb77b",
+      "workingTree": true,
+      "helperSha256": "8c92430d1b87c443ca9062492c398dd2c4328b75e06275f798ed35e386c5c421",
+      "localCacheAdapterVersion": 2,
+      "method": "Production readLocalReaderDocument and documentObjectGroups in dedicated Windows Zotero10.0.8; source PDFs match prior SHA-locked comparison."
+    },
+    "criterion": "Same page/kind, one-to-one maximum match count then summed IoU; bodyIoU>=0.5, captionIoU>=0.5 and identical label for captions and paired results. Native local groups provide pairing; no box adjustment or matching to truth in extraction.",
+    "counts": {
+      "targets": 6,
+      "bodyMatches": 2,
+      "captionMatches": 6,
+      "pairedMatches": 2,
+      "candidateBodies": 4
+    },
+    "paired": [
+      {
+        "documentId": "attention",
+        "check": "figure-1",
+        "candidateId": "object:object:local:2:caption:0",
+        "bodyIoU": 0.9585828991801941,
+        "captionIoU": 0.9999999326339584
+      },
+      {
+        "documentId": "resnet",
+        "check": "figure-2",
+        "candidateId": "object:object:local:1:caption:0",
+        "bodyIoU": 0.5050132504052477,
+        "captionIoU": 0.9999999226990073
+      }
+    ],
+    "scope": "本次读取相同 SHA 的三份完整 PDF，共 57 页；六对象评分限于相同三个选定页。ResNet 主体 IoU 0.505013 位于 0.5 阈值边缘。"
+  },
+  "preservedBaselines": {
+    "rerun": false,
+    "sourceFiles": [
+      {
+        "file": "corpus.json",
+        "sha256": "633dabbbe950df40725357426bc8ddd5d8b00abc3335a08c539e7b7fe3b7d738"
+      },
+      {
+        "file": "protocol.json",
+        "sha256": "908c3becb3d2f3cbd6351428e0e0b9b214ee3244ff85db10e8d68ec83c8451a5"
+      },
+      {
+        "file": "comparison-evaluation.json",
+        "sha256": "e4fc55b0d10afca60a5f37d2cf98d4db545b31a0cd5ac01b5d9bdf6ce4856930"
+      },
+      {
+        "file": "comparison-metrics.json",
+        "sha256": "ec5054c18ba421a1271049d7bf0ccc123456c4c19ff25e77b3730de2d48450d1"
+      },
+      {
+        "file": "historical-comparison.json",
+        "sha256": "bd42086f91863094ec76c36967a4d4b61dbdf7dc9fc82caee4e8861e8b4c117e"
+      }
+    ],
+    "methods": [
+      {
+        "name": "figure-extractor",
+        "version": "0.4.0",
+        "expected": 6,
+        "predictedBodies": 6,
+        "bodyTruePositives": 6,
+        "bodyFalsePositives": 0,
+        "bodyMisses": 0,
+        "captionPairCorrect": 6
+      },
+      {
+        "name": "PDFFigures2",
+        "commit": "3d7ad46753d4a315cccd1c2bcab398380e88c534",
+        "expected": 6,
+        "predictedBodies": 6,
+        "bodyTruePositives": 6,
+        "bodyFalsePositives": 0,
+        "bodyMisses": 0,
+        "captionPairCorrect": 6
+      },
+      {
+        "name": "Docling",
+        "version": "2.150.1",
+        "layoutModel": "D-FINE Egret medium",
+        "expected": 6,
+        "predictedBodies": 6,
+        "bodyTruePositives": 6,
+        "bodyFalsePositives": 0,
+        "bodyMisses": 0,
+        "captionPairCorrect": 6
+      }
+    ]
+  },
+  "visualFindings": [
+    "OmniDocBench Table 2/3 的独立题注框落在错误位置；Table 4 的过宽主体框跨过相邻表格，最佳主体 IoU 为 0.31144254392064147。",
+    "ResNet 图体虽通过 IoU 阈值，左侧公式仍有裁切。",
+    "独立事后诊断 Attention 第 4 页 Figure 2 包含左右两组图，底部 V/K/Q 仍被裁切；该项不计入六对象分母。"
+  ],
+  "limits": [
+    "标注是既有代理对照原页得到的近似框，人工金标准复审未完成。",
+    "六对象小样本用于局部诊断；全文准确率、召回率、额外页面、OCR 字符准确率和表格单元格准确率均未测。",
+    "API 的单页请求时间与历史本地全篇 CLI 时间处理范围不同，不做速度排名。",
+    "SDT／MinerU 的历史结果使用不同适配器及标注口径，分别保留在原有报告中，不混入六点配对排名。",
+    "本地 C/D 静态评分使用其他论文与公开标注，分别报告；未根据本轮独立 D 结果继续调参。"
+  ],
+  "artifacts": {
+    "storage": "本地实验目录 neo-local-figures-next.2FPmOb/deepseek-api-compare；保留请求脚本、协议、原始响应、叠加截图和 API-REPORT.zh-CN.md。",
+    "apiEvaluationSha256": "acd5842251a1de55f752e44b3a64099363d60ac1f4ceea16ce2a07aff15926f1",
+    "currentNeoEvaluationSha256": "ec71b12cd18d730d6293b85cef5c09090c9bd5b680659e1529bd40908219d683"
+  }
+}

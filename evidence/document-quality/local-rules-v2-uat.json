@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-14T16:02:57.647Z",
+  "source": {
+    "baseCommit": "834e40ce5f2ee2574020dd355b9d54115c5fb77b",
+    "workingTree": true,
+    "runtime": {
+      "os": "WINNT",
+      "zotero": "10.0.8",
+      "pdfjs": "5.7.0"
+    },
+    "xpiSha256": "13ad3ac683c0ab08b1014401b5bb4fd495866e0249f8bffbe8a169bb1fad55ef",
+    "installedBundleSha256": "2d2ac5ec8f7f48156ab5d4852ed43507292964419f70f93053da40c57b7e5178"
+  },
+  "method": {
+    "driver": "Firefox RDP 驱动专用 Zotero 配置中的合成按键与真实按钮事件",
+    "visualReview": "逐张检查真实界面截图与界面生成的完整预览 PNG",
+    "documentId": "c-icml13_6",
+    "pdfSha256": "185efd151e5991206a7dd50a1f36c0976f71e4367eb4ec038c907711cec16ea2",
+    "oldResultSource": "neo-local-figures.S0mMuu/local-capture-v3.json 中同一 PDF 的真实首轮本地结果",
+    "scope": "本记录核对缓存代次和 Figure 2 的预览／定位；与 C/D 静态配对评分分别记录。",
+    "notPerformed": [
+      "物理键盘与输入法验收",
+      "本轮未重复对象摘录笔记流程；原有记录保存在 local-rules-uat.json",
+      "未把 77 个静态核验点计为实际阅读任务"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "generation-one-cache-valid",
+      "status": "passed",
+      "observed": {
+        "oldKey": {
+          "backend": "local-rules",
+          "adapterVersion": 1,
+          "configuration": "pdfjs-native-text-graphics-v1"
+        },
+        "oldReadValid": true,
+        "currentReadValid": false,
+        "pages": 9,
+        "regions": 233,
+        "oldFigure2Association": "同页题注已识别，主体未关联",
+        "oldCacheSha256": "65e29544ccdd0e6552db81605a0619b8bedf6879aa328000e11280dae844d7d7"
+      }
+    },
+    {
+      "id": "readonly-current-figure-preview",
+      "status": "passed",
+      "observed": {
+        "keys": ["Space", "r", "f"],
+        "consumed": [true, true, true],
+        "selected": "Figure 2 · p. 2 · Document layout · Group with caption",
+        "image": {
+          "width": 469,
+          "height": 423
+        },
+        "currentCacheCreated": false,
+        "oldCacheSha256After": "65e29544ccdd0e6552db81605a0619b8bedf6879aa328000e11280dae844d7d7"
+      }
+    },
+    {
+      "id": "figure-source-navigation",
+      "status": "passed",
+      "observed": {
+        "beforePage": "1",
+        "afterPage": "2",
+        "pickerClosed": true,
+        "documentHidden": false
+      }
+    },
+    {
+      "id": "explicit-local-parse-saves-current-generation",
+      "status": "passed",
+      "observed": {
+        "button": "Use cache or parse locally",
+        "backend": "local-rules",
+        "key": {
+          "backend": "local-rules",
+          "adapterVersion": 2,
+          "configuration": "pdfjs-native-text-graphics-v1"
+        },
+        "pages": 9,
+        "regions": 230,
+        "currentCacheValid": true,
+        "currentCacheSha256": "2063dd60e43179aa208024abaf450c9b45479134ca2bc295e86aaad135bea2f3",
+        "oldCacheRetained": true,
+        "oldCacheSha256After": "65e29544ccdd0e6552db81605a0619b8bedf6879aa328000e11280dae844d7d7"
+      }
+    },
+    {
+      "id": "current-cache-reuse",
+      "status": "passed",
+      "observed": {
+        "comparisonStatus": "Loaded local analysis cache; PDF was not uploaded.",
+        "figure2Preview": {
+          "width": 469,
+          "height": 423,
+          "pngBytes": 49744
+        },
+        "currentCacheSha256": "2063dd60e43179aa208024abaf450c9b45479134ca2bc295e86aaad135bea2f3",
+        "sourcePdfUnchanged": true
+      }
+    }
+  ],
+  "guards": {
+    "sdtGetReaderCalls": 0,
+    "getPackBlocked": 4,
+    "remoteHttpAttempts": 0,
+    "blockedPackagedMetadata": 22,
+    "allowedPackagedFontReads": 7,
+    "scope": "计数覆盖整个专用配置实验。本地提取未调用 SDT.getReader；Reader 初始化的模型准备入口被拦截。22 次被拦截请求均为宿主打包 metadata.json，远端 HTTP 尝试为 0。DeepSeek API 实验由独立 Linux 进程执行，不计入此处。"
+  },
+  "screenshots": {
+    "storage": "本地实验目录 neo-local-figures-next.2FPmOb/screenshots；仓库保留摘要，完整截图与预览 PNG 留在测试环境。",
+    "windowSize": {
+      "width": 1016,
+      "height": 608
+    },
+    "files": [
+      {
+        "file": "figure2-readonly-generation2.png",
+        "sha256": "e3cbeb8cb4f686c3e7954de6812c6deeb88a20d4e2ee211c718b6f9c76caaa57",
+        "bytes": 163275
+      },
+      {
+        "file": "figure2-source-page2.png",
+        "sha256": "e285d0de5a2452a130ea0d323c6aaf28fc624709ef257f86a8bfccf90c671b74",
+        "bytes": 218209
+      },
+      {
+        "file": "old-cache-current-generation-miss.png",
+        "sha256": "2b9ede6fa44592d5ef756bf02580ca53487c32f7b8c860dbed37d0a65f28c5b0",
+        "bytes": 69109
+      },
+      {
+        "file": "explicit-local-generation2-saved.png",
+        "sha256": "839d22dc2ad9eddac720d5377214d17480eda75c7942e25a6dad95ec8c77c380",
+        "bytes": 89546
+      },
+      {
+        "file": "figure2-current-cache-reused.png",
+        "sha256": "1f11b688586d1c32b36a153dec16a16dbec09c4ba65f165eed47a777a623e23b",
+        "bytes": 157592
+      },
+      {
+        "file": "figure2-cached-preview.png",
+        "sha256": "c82448d0ad4a5eec3f26e007e4ccae3afaea97acb29e3d7de9a0c11619d2a11e",
+        "bytes": 49744
+      },
+      {
+        "file": "current-generation-matching-cache.png",
+        "sha256": "1b26961fd29f17f01866a229aee9ebb3adda3ebb468efaad8d9a065240f1a955",
+        "bytes": 90572
+      }
+    ]
+  },
+  "verification": {
+    "command": "npm run verify",
+    "status": "passed",
+    "testFiles": 187,
+    "tests": 2288,
+    "packageMembers": 25
+  }
+}

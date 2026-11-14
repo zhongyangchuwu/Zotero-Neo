@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Provenance and selection notes for corpus-c; PDFs are obtained separately and are not redistributed.",
+  "description": "Provenance and selection notes for corpora C and D; PDFs are obtained separately and are not redistributed.",
   "selectedDataset": {
     "name": "PDFFigures2 Conference150 (CS-150)",
     "datasetVersion": 2,
@@ -92,6 +92,39 @@
       "figures": 30,
       "tables": 17
     }
+  },
+  "selectedValidationDataset": {
+    "name": "PDFFigures2 Conference150 (CS-150), corpus D",
+    "datasetVersion": 2,
+    "repositoryCommit": "3d7ad46753d4a315cccd1c2bcab398380e88c534",
+    "annotationSource": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+    "annotationSha256": "1611797d9b07966d7df195e9aa4c8453e7142af221d4764568511dfe06a9aaf7",
+    "upstreamDocumentList": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/doc_ids.txt",
+    "documentListSha256": "20c904b99e00463a1fc682b0a920892abf55b5088d3b787bd8b835078e3f4b03",
+    "formatSource": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+    "methodPaper": "https://doi.org/10.1145/2910896.2910904",
+    "repositoryLicense": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/LICENSE.txt",
+    "rights": "The upstream repository provides Apache-2.0 code licensing and distributes annotations but not PDFs for copyright reasons. PDF rights and reuse permissions are individual to each paper; the code license is not a PDF reuse grant. Captions are limited source excerpts.",
+    "labeling": "Published Conference150 v2 human figure, table and caption boxes were foreground-cropped; these are upstream annotations independent of this extractor, not newly rechecked gold. PDFFigures2 itself was evaluated on this dataset. Caption transcriptions can be partial; annotation tool components are not open source.",
+    "coordinates": "Each selected PDF page is unrotated, with CropBox [0,0,612,792] pt. Upstream boxes [l,t,r,b] have top-left origin at their listed annotation DPI; scale s=72/dpi, pageIndex=page-1, and native PDF rectangle=[s*l,792-s*b,s*r,792-s*t], rounded to 0.01 pt. Body region_bb and caption_bb remain separate. icml10_1 annotations use 100 dpi; the other selected annotations use 72 dpi.",
+    "selection": "Frozen by upstream IDs, without inspecting extractor predictions: select ICML 2010 IDs 1, 2 and 6; ICML 2013 IDs 1 and 5; ICML 2014 ID 1; and NeurIPS IDs nips09_1, nips09_2, nips10_1, nips11_1, nips12_1 and nips13_1. These six ICML and six NeurIPS papers exclude every corpus C document. For each paper take its first two distinct physical pages with published figure/table annotations, or its only such page. Include every published annotation on selected pages. This is a deterministic purposive sample, not a representative random sample or a claim of completeness beyond upstream labels on selected pages.",
+    "identity": "Each PDF was fetched twice from its URL in corpus-d.json and the byte streams compared equal; SHA-256 there records current byte identity. Historical upstream PDF hashes were not provided. Title, selected caption text and page geometry corroborate association with the annotation, but do not prove historical byte identity. For icml10_1 Figure 1 mathematical text extraction differs in ordering; its caption was also inspected in page layout.",
+    "sourceAccess": "The twelve selected HTTPS source URLs returned HTTP 200 and supplied PDFs, with 10,481,078 PDF bytes in the retained copies. Historic upstream HTTP links were upgraded to HTTPS; the two JMLR links and one jmlr.org link use their proceedings.mlr.press equivalents. papers.nips.cc redirected to proceedings.neurips.cc; notably upstream ID nips12_1 redirects to a 2013 archive path while the title and selected captions match. No selected source was inaccessible. Raw annotations and document list are pinned at the repository revision; no archives were downloaded. Existing corpus C selection and exclusions remain unchanged.",
+    "documents": [
+      { "id": "d-icml10_1", "selectedPhysicalPages1": [4, 6], "objects": 4 },
+      { "id": "d-icml10_2", "selectedPhysicalPages1": [2, 6], "objects": 2 },
+      { "id": "d-icml10_6", "selectedPhysicalPages1": [6, 7], "objects": 3 },
+      { "id": "d-icml13_1", "selectedPhysicalPages1": [6, 8], "objects": 2 },
+      { "id": "d-icml13_5", "selectedPhysicalPages1": [8], "objects": 2 },
+      { "id": "d-icml14_1", "selectedPhysicalPages1": [7], "objects": 2 },
+      { "id": "d-nips09_1", "selectedPhysicalPages1": [4, 7], "objects": 4 },
+      { "id": "d-nips09_2", "selectedPhysicalPages1": [7, 8], "objects": 2 },
+      { "id": "d-nips10_1", "selectedPhysicalPages1": [2, 3], "objects": 2 },
+      { "id": "d-nips11_1", "selectedPhysicalPages1": [6, 8], "objects": 2 },
+      { "id": "d-nips12_1", "selectedPhysicalPages1": [3, 5], "objects": 2 },
+      { "id": "d-nips13_1", "selectedPhysicalPages1": [5, 6], "objects": 3 }
+    ],
+    "counts": { "documents": 12, "selectedPages": 22, "figures": 20, "tables": 10 }
   },
   "otherDatasets": [
     {

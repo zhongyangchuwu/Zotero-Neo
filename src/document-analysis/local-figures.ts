@@ -293,6 +293,32 @@ function captionsFromLines(
   const used = new Set<Line>();
   const captions: Caption[] = [];
   for (const [seed, identity] of seeds) {
+    // An unpunctuated label followed by a sentence predicate can start a prose paragraph.
+    // Require a matching body-text baseline too: the identity alone remains valid for captions.
+    const paragraphReference =
+      /^\s*(?:fig(?:ure)?\.?|table)\s*\S+(?<![.:：,，])\s+(?:shows?|illustrates?|summari[sz]es?|presents?|compares?|reports?|describes?|demonstrates?)\b/iu.test(
+        seed.text,
+      ) &&
+      Math.abs(seed.fontSize - unit) <= unit * 0.05 &&
+      lines.some((next) => {
+        if (
+          seeds.has(next) ||
+          !proseLine(next, unit) ||
+          Math.abs(next.fontSize - seed.fontSize) > unit * 0.05 ||
+          Math.abs(next.rect[0] - seed.rect[0]) > unit ||
+          !sameColumn(next.rect, seed.rect, unit)
+        )
+          return false;
+        const distance = centerY(seed.rect) - centerY(next.rect);
+        const gap = seed.rect[1] - next.rect[3];
+        return (
+          distance >= unit * 0.7 &&
+          distance <= proseLeading * 1.35 &&
+          gap >= -unit * 0.1 &&
+          gap <= Math.min(unit * 0.65, proseLeading - height(seed.rect) + unit * 0.25)
+        );
+      });
+    if (paragraphReference) continue;
     // A numbered reference on the next normal paragraph baseline is not a caption lead.
     if (
       proseLine(seed, unit) &&
@@ -325,7 +351,9 @@ function captionsFromLines(
       const gap = last.rect[1] - line.rect[3];
       if (gap > Math.max(unit * 0.65, leading - height(last.rect) + unit * 0.2)) continue;
       if (gap < -unit * 0.2 || !sameColumn(last.rect, line.rect, unit)) continue;
-      if (line.fontSize < seed.fontSize * 0.85 || line.fontSize > seed.fontSize * 1.15) continue;
+      // Body prose is commonly only one point larger than a caption; a 15% tolerance crosses
+      // that typography boundary and can swallow the paragraph after an otherwise valid caption.
+      if (Math.abs(line.fontSize - seed.fontSize) > unit * 0.08) continue;
       // A nearby diagram's labels are not caption continuation, even at the same font size.
       if (
         graphics.some(
@@ -582,7 +610,8 @@ function graphicsFromPage(
   const connectors = groups.map((group) =>
     group.members.some(
       (r) =>
-        (width(r) <= unit * 0.35 && height(r) >= unit * 1.5) ||
+        // A slanted stem's axis-aligned hull is wider than its painted stroke.
+        (width(r) <= unit * 0.6 && height(r) >= Math.max(unit * 1.5, width(r) * 4)) ||
         (height(r) <= unit * 0.3 && width(r) >= unit * 1.5),
     ),
   );
