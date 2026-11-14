@@ -131,6 +131,33 @@ D 仍有三项主体未关联：`d-icml10_6` Figure 1／3 和 `d-nips09_1` Figur
 
 首轮专用配置已走通图表列表、预览、原文跳转、解析缓存保存／复用及图文笔记保存／打开，记录见 [`local-rules-uat.json`](../evidence/document-quality/local-rules-uat.json)。这些操作通过 Firefox RDP 驱动真实界面，并逐张检查截图；物理键盘与输入法的手动验收按[验收指南](ACCEPTANCE.md)另行执行。
 
+## 现成图表工具扩大对照
+
+历史六对象结果不足以说明方法在更大范围内的表现。本轮让原版 [figure-extractor 0.4.0](https://github.com/Sunrich-HT/figure-extractor/tree/dc0f41a04986011faadb6a8e81046041d87d5806) 和 [PDFFigures2](https://github.com/allenai/pdffigures2/tree/3d7ad46753d4a315cccd1c2bcab398380e88c534) 分别读取相同的 C/D/E 全部 34 篇 PDF，共 293 页；两者均完成 34/34 篇，没有提取失败。评分范围仍是 65 个选定页的 108 个已发布对象，不是全文准确率。
+
+| 方法 | C 配对 | D 配对 | E 配对 | 总配对 | 仅主体定位 |
+| --- | --- | --- | --- | --- | --- |
+| figure-extractor 0.4.0 | 30/47 | 26/30 | 26/31 | 82/108 | 89/108 |
+| PDFFigures2 `3d7ad467…` | 42/47 | 26/30 | 26/31 | 94/108 | 100/108 |
+| Neo 冻结后的代次 3 | 47/47 | 26/30 | 25/31 | 98/108 | 98/108 |
+
+配对沿用生产评分器，主体框和题注框都须达到 IoU ≥ 0.5，且同一资源不能重复计分。仅主体定位另外按同页、同类型、IoU ≥ 0.5 做最大数量一对一匹配，不以题注框通过为前提。外部工具只做坐标和数据结构转换，不修补预测；figure-extractor 保留原版含 8 pt 留白的实际裁图边界，不按标注收紧。原始输出、版本、输入与脚本哈希、逐项配对和独立主体匹配见 [`local-rules-v3-external-comparison.json`](../evidence/document-quality/local-rules-v3-external-comparison.json)。
+
+这些结果不证明 Neo 更好：
+
+- C/D 已用于 Neo 规则校准，不能用总配对数证明泛化优势；在 Neo 冻结后才测试的 E 上，两个现成工具均略高。
+- 仅看主体定位，PDFFigures2 的匹配数更高。其 D 集主体全部通过，但四项题注范围未过阈值，因此配对数较低。
+- C/D/E 来自 PDFFigures2 自己使用的 Conference150 v2 开发／评估数据，对它不是独立的新测试集。这里也没有新增人工金标准，中文、扫描页和旋转页仍未测。
+- 实际裁图仍有不同问题：figure-extractor 的 `c-icml10_3` Figure 1 混入邻图；它也恢复了 Neo 未关联的 `e-icml11_3` Figure 1 四组曲线，但带入页眉。PDFFigures2 的 `c-icml14_9` 原始 JSON 将 Table 1 与同一行的 Figure 2 题注合并。通过框阈值不保证裁图完全干净。
+
+本轮使用 Python 3.12.12／PyMuPDF 1.28.2 和 Temurin Java 17.0.21+9，在隔离实验目录离线提取，没有模型或云端调用。外部提取含导入、整份 PDF 处理或裁图，Neo 记录只计原生几何上的分组重放，不能据此做耗时排名。
+
+### 直接复用与插件边界
+
+不直接打包这两个工具，主要是当前发行约束，不是已有证据证明自研更准。figure-extractor 需要 Python 与 PyMuPDF；外层源码为 MIT，但 [PyMuPDF／MuPDF 采用 AGPL 或商业许可](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright)，需分别审查。PDFFigures2 源码为 Apache-2.0，直接运行需要 JVM／PDFBox，不能当作普通 JavaScript 依赖；其完整发行依赖仍需审计。
+
+Neo 当前保持自包含 XPI，不附带或运行时下载 Python、JVM、原生辅助程序；现有提取复用 Zotero 内置 PDF.js，并非重写 PDF 解析器。若接受外部预处理，应优先评估直接复用 PDFFigures2；保持免外部运行时的插件形态，则优先复用／移植成熟布局策略，不把自研本身当目标。本轮没有新增外部后端，也未在 E 结果出来后继续调规则。
+
 ## DeepSeek OCR API 小样本对照
 
 本轮按用户授权，使用环境变量 `DEEPSEEK_API_KEY` 调用[官方 OCR 接口](https://api-docs.deepseek.com/zh-cn/guides/ocr)。Attention、ResNet 和 OmniDocBench 的原始 PDF 字节与先前实验相同，六个核验对象位于三个选定页；另用 Attention 第 4 页的复合图作独立诊断。四页分别调用 `rich_layout_recognition` 与 `text_recognition`，共 8 次成功请求，未重试。请求身份、来源哈希、配对规则和逐项结果见 [`deepseek-ocr-api-comparison.json`](../evidence/document-quality/deepseek-ocr-api-comparison.json)。
