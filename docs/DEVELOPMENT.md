@@ -14,6 +14,8 @@ npm ci
 
 两种 XPI 构建入口都会调用 `npm run verify`，依次检查 Prettier、严格 TypeScript、Vitest、包构建与 XPI 成员。
 
+固定 PDF 的来源清单、原生捕获命令、逐核验点评分和冷／暖耗时见[解析质量评测](QUALITY_EVALUATION.md)。该评测不以契约测试、缓存命中或处理完成代替解析正确率与实际任务成功率。
+
 ## 构建
 
 在仓库根目录运行：

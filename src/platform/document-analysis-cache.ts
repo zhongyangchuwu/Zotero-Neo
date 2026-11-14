@@ -10,6 +10,23 @@ import { ZoteroLogger } from '../core/logging';
 const MAX_CACHE_BYTES = 32 * 1024 * 1024;
 const pendingWrites = new Map<string, Promise<unknown>>();
 const observers = new Map<number, Set<() => void>>();
+const revisions = new Map<number, number>();
+
+export function attachmentDocumentRevision(itemID: number): number {
+  return revisions.get(itemID) ?? 0;
+}
+
+/** Both parser caches and correction sidecars retire the same Reader resources after commit. */
+export function notifyAttachmentDocumentSaved(itemID: number): void {
+  revisions.set(itemID, attachmentDocumentRevision(itemID) + 1);
+  for (const observer of observers.get(itemID) ?? []) {
+    try {
+      observer();
+    } catch {
+      logger.debug('Document cache presentation could not refresh');
+    }
+  }
+}
 const logger = new ZoteroLogger();
 
 /** Reader owners subscribe once; any single/batch writer can retire their memoized navigation targets after commit. */
@@ -82,14 +99,7 @@ export function attachmentDocumentCache(itemID: number): DocumentResultCache {
       pendingWrites.set(file.path, task);
       try {
         const saved = await task;
-        if (saved)
-          for (const observer of observers.get(itemID) ?? []) {
-            try {
-              observer();
-            } catch {
-              logger.debug('Document cache presentation could not refresh');
-            }
-          }
+        if (saved) notifyAttachmentDocumentSaved(itemID);
         return saved;
       } finally {
         if (pendingWrites.get(file.path) === task) pendingWrites.delete(file.path);

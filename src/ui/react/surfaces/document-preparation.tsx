@@ -41,17 +41,39 @@ export function mountDocumentPreparationReactView(
               autoComplete="off"
               aria-label={model.token}
               disabled={model.busy}
+              onCompositionStart={() => dispatch({ type: 'credential-composition' })}
+              onCompositionEnd={() => dispatch({ type: 'credential-change' })}
+              onInput={(event) =>
+                dispatch({
+                  type: (event.nativeEvent as InputEvent).isComposing
+                    ? 'credential-composition'
+                    : 'credential-change',
+                })
+              }
               style={{ marginInlineStart: 8 }}
             />
           </label>
           <span>
-            <button type="button" disabled={model.busy} onClick={() => dispatch({ type: 'save' })}>
-              {model.save}
+            <button
+              type="button"
+              disabled={model.credentialChecking}
+              onClick={() => dispatch({ type: 'credential-verify' })}
+            >
+              {model.verify}
             </button>
-            <button type="button" disabled={model.busy} onClick={() => dispatch({ type: 'clear' })}>
-              {model.clear}
-            </button>
+            <a
+              href={model.credentialHelpURL}
+              onClick={(event) => {
+                event.preventDefault();
+                dispatch({ type: 'credential-help' });
+              }}
+            >
+              {model.credentialHelp}
+            </a>
           </span>
+          <small style={{ display: 'block', color: 'var(--zotero-neo-muted)' }}>
+            {model.credentialHint}
+          </small>
           <small role="status" style={{ display: 'block', color: 'var(--zotero-neo-muted)' }}>
             {model.credentialStatus}
           </small>

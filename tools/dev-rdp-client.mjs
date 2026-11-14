@@ -33,6 +33,8 @@ export class RDPClient {
   #active = new Map();
   #buffer = Buffer.alloc(0);
   #socket = null;
+  #evaluationResults = new Map();
+  #evaluationWaiters = new Map();
 
   async connect(port, host = '127.0.0.1', timeoutMs = 1000) {
     await new Promise((resolve, reject) => {
@@ -64,7 +66,7 @@ export class RDPClient {
     this.#rejectAll(new Error('RDP connection closed'));
   }
 
-  async request(request) {
+  async request(request, timeoutMs) {
     const message = typeof request === 'string' ? { to: 'root', type: request } : request;
     if (!message.to) throw new Error(`RDP request has no target: ${message.type}`);
     if (!this.#socket) throw new Error('RDP connection is not open');
@@ -73,14 +75,73 @@ export class RDPClient {
     }
 
     return await new Promise((resolve, reject) => {
-      this.#active.set(message.to, { resolve, reject });
+      let timer;
+      this.#active.set(message.to, {
+        resolve: (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
+      if (timeoutMs !== undefined) {
+        timer = setTimeout(() => {
+          this.#rejectAll(new Error(`RDP request exceeded ${timeoutMs}ms`));
+          this.disconnect();
+        }, timeoutMs);
+      }
       this.#socket.write(encodeMessage(message));
     });
+  }
+
+  /** Evaluate explicit development code, including native promises and full exported JSON strings. */
+  async evaluate(consoleActor, text, timeoutMs = 180000) {
+    const ack = await this.request(
+      { to: consoleActor, type: 'evaluateJSAsync', text, mapped: { await: true } },
+      20000,
+    );
+    const resultID = ack.resultID;
+    if (typeof resultID !== 'string') throw new Error('RDP evaluation did not return an ID');
+    let response = this.#evaluationResults.get(resultID);
+    this.#evaluationResults.delete(resultID);
+    if (!response) {
+      response = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.#evaluationWaiters.delete(resultID);
+          reject(new Error(`Native evaluation exceeded ${timeoutMs}ms`));
+        }, timeoutMs);
+        this.#evaluationWaiters.set(resultID, {
+          resolve: (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          reject: (error) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        });
+      });
+    }
+    if (response.exception || response.exceptionMessage) throw new Error(JSON.stringify(response));
+    const value = response.result;
+    if (value?.type !== 'longString') return value;
+    if (!Number.isSafeInteger(value.length) || value.length > 64 * 1024 * 1024)
+      throw new Error('RDP export exceeds size limit');
+    const full = await this.request(
+      { to: value.actor, type: 'substring', start: 0, end: value.length },
+      20000,
+    );
+    return full.substring;
   }
 
   #rejectAll(error) {
     for (const deferred of this.#active.values()) deferred.reject(error);
     this.#active.clear();
+    for (const deferred of this.#evaluationWaiters.values()) deferred.reject(error);
+    this.#evaluationWaiters.clear();
+    this.#evaluationResults.clear();
   }
 
   #onData(data) {
@@ -102,6 +163,16 @@ export class RDPClient {
     const payload = this.#buffer.subarray(separator + 1, separator + 1 + length);
     this.#buffer = this.#buffer.subarray(separator + 1 + length);
     const message = JSON.parse(payload.toString());
+    if (message.type === 'evaluationResult') {
+      const waiter = this.#evaluationWaiters.get(message.resultID);
+      if (waiter) {
+        this.#evaluationWaiters.delete(message.resultID);
+        waiter.resolve(message);
+      } else {
+        this.#evaluationResults.set(message.resultID, message);
+      }
+      return true;
+    }
 
     if (message.type && UNSOLICITED_EVENTS.has(message.type)) return true;
     const deferred = this.#active.get(message.from);

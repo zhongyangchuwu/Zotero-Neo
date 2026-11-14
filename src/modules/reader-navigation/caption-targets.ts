@@ -223,15 +223,18 @@ export class ReaderCaptionTargets {
       if (cached) {
         const targets = this.targets(cached.parsed.regions, 'cache');
         const bodies = this.bodyTargets(cached.parsed.regions, 'cache');
-        if (targets.length || bodies.length) {
-          this.#cacheCurrent = cached.isCurrent;
-          return this.finish(targets, bodies, true);
-        }
+        // A valid empty effective layout is authoritative: restoring the last body to text
+        // must not resurrect its original native graph through fallback.
+        this.#cacheCurrent = cached.isCurrent;
+        return this.finish(targets, bodies, true);
       }
     } catch {
-      if (current()) this.#debug('Reader document cache unavailable; using native targets');
+      if (current()) this.#debug('Reader effective document unavailable');
     }
     if (!current()) return [];
+    // A configured shared reader already owns native fallback and correction admission.
+    // Bypassing it after failure could revive raw graph regions whose overrides are unreadable.
+    if (this.#cache) return this.finish([], [], false);
     const native = await this.native();
     if (!current()) return [];
     return this.finish(native?.entries ?? [], native?.bodies ?? [], native !== null);

@@ -13,6 +13,8 @@ export const DOCUMENT_COMPARISON_REACT_CSS = `
 .neo-comparison-credential small { display:block; color:var(--zotero-neo-muted); }
 .neo-comparison-results { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
 .neo-comparison-results details { padding:6px 0; border-bottom:1px solid var(--zotero-neo-border); }
+.neo-comparison-correction { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 0; }
+.neo-comparison-correction select { max-width:100%; }
 .neo-comparison-results p { white-space:pre-wrap; overflow-wrap:anywhere; }
 .neo-comparison-vocabulary { grid-column:1 / -1; }
 `;
@@ -59,27 +61,39 @@ export function mountDocumentComparisonReactView(
                 type="password"
                 autoComplete="off"
                 aria-label={model.credentialLabel}
-                disabled={model.busy || model.credentialPending}
+                disabled={model.busy}
+                onCompositionStart={() => dispatch({ type: 'credential-composition' })}
+                onCompositionEnd={() => dispatch({ type: 'credential-change' })}
+                onInput={(event) =>
+                  dispatch({
+                    type: (event.nativeEvent as InputEvent).isComposing
+                      ? 'credential-composition'
+                      : 'credential-change',
+                  })
+                }
               />
             </label>
             {model.provider === 'mineru' && (
               <span>
                 <button
                   type="button"
-                  disabled={model.busy || model.credentialPending}
-                  onClick={() => dispatch({ type: 'credential-save' })}
+                  disabled={model.credentialChecking}
+                  onClick={() => dispatch({ type: 'credential-verify' })}
                 >
-                  {model.credentialSaveLabel}
+                  {model.credentialVerifyLabel}
                 </button>
-                <button
-                  type="button"
-                  disabled={model.busy || model.credentialPending}
-                  onClick={() => dispatch({ type: 'credential-clear' })}
+                <a
+                  href={model.credentialHelpURL}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    dispatch({ type: 'credential-help' });
+                  }}
                 >
-                  {model.credentialClearLabel}
-                </button>
+                  {model.credentialHelpLabel}
+                </a>
               </span>
             )}
+            {model.credentialHint && <small>{model.credentialHint}</small>}
             <small role="status">{model.credentialStatus}</small>
           </div>
           <button
@@ -108,6 +122,7 @@ export function mountDocumentComparisonReactView(
           </button>
         </div>
         <p role="status">{model.status}</p>
+        <p>{model.corrections.hint}</p>
         <div className="neo-comparison-results">
           {model.vocabulary && (
             <details className="neo-comparison-vocabulary">
@@ -117,10 +132,44 @@ export function mountDocumentComparisonReactView(
           )}
           {model.columns.map((column, index) => (
             <section key={index}>
+              {model.corrections.undoColumns.includes(index) && (
+                <button
+                  type="button"
+                  disabled={model.corrections.busy}
+                  onClick={() => dispatch({ type: 'correct-undo', column: index })}
+                >
+                  {model.corrections.undo}
+                </button>
+              )}
               <h3>{column.label}</h3>
               {column.error && <p>{column.error}</p>}
               {column.summary && <p>{column.summary}</p>}
               {column.cache && <p>{column.cache}</p>}
+              {column.pageCount > 1 && (
+                <div className="neo-comparison-controls">
+                  <button
+                    type="button"
+                    disabled={model.busy || column.page === 0}
+                    onClick={() =>
+                      dispatch({ type: 'regions-page', column: index, page: column.page - 1 })
+                    }
+                  >
+                    {column.previousLabel}
+                  </button>
+                  <span>
+                    {column.page + 1} / {column.pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={model.busy || column.page + 1 >= column.pageCount}
+                    onClick={() =>
+                      dispatch({ type: 'regions-page', column: index, page: column.page + 1 })
+                    }
+                  >
+                    {column.nextLabel}
+                  </button>
+                </div>
+              )}
               {column.targets.map((target) => (
                 <details key={target.id}>
                   <summary>{target.title}</summary>
@@ -128,6 +177,70 @@ export function mountDocumentComparisonReactView(
                   <button type="button" onClick={() => dispatch({ type: 'locate', id: target.id })}>
                     {target.action}
                   </button>
+                  {target.correction && (
+                    <div className="neo-comparison-correction">
+                      {target.correction.corrected && <strong>{model.corrections.saved}</strong>}
+                      <button
+                        type="button"
+                        disabled={model.corrections.busy}
+                        onClick={() =>
+                          dispatch({
+                            type: 'correct-body',
+                            column: index,
+                            regionID: target.correction!.regionID,
+                          })
+                        }
+                      >
+                        {model.corrections.body}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={model.corrections.busy || !target.correction.corrected}
+                        onClick={() =>
+                          dispatch({
+                            type: 'correct-restore',
+                            column: index,
+                            regionID: target.correction!.regionID,
+                          })
+                        }
+                      >
+                        {model.corrections.restore}
+                      </button>
+                      {target.correction.bodies.length > 0 && (
+                        <form
+                          className="neo-comparison-correction"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            const select = event.currentTarget.querySelector('select');
+                            if (select?.value)
+                              dispatch({
+                                type: 'correct-caption',
+                                column: index,
+                                regionID: target.correction!.regionID,
+                                bodyID: select.value,
+                              });
+                          }}
+                        >
+                          <label>
+                            {model.corrections.target}
+                            <select required defaultValue="" disabled={model.corrections.busy}>
+                              <option value="" disabled>
+                                {model.corrections.choose}
+                              </option>
+                              {target.correction.bodies.map((body) => (
+                                <option key={body.id} value={body.id}>
+                                  {body.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button type="submit" disabled={model.corrections.busy}>
+                            {model.corrections.caption}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  )}
                 </details>
               ))}
               {column.truncated && <p>{column.truncated}</p>}

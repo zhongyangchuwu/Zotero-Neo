@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { readReferenceKey } from '../../src/platform/reference-credentials';
-import { createReferenceMetadataService } from '../../src/references/metadata';
+import {
+  changeReferenceKey,
+  readReferenceKey,
+  readSettledReferenceKey,
+} from '../../src/platform/reference-credentials';
 
 function loginManager() {
   const logins: Array<{ username: string; password: string }> = [];
@@ -33,38 +36,33 @@ function loginManager() {
 }
 afterEach(() => vi.unstubAllGlobals());
 
-it('orders a deferred save before a later forget across services', async () => {
+it('orders a deferred save before a later clear from independent callers', async () => {
   const { logins, manager } = loginManager();
   const deferred = Promise.withResolvers<void>();
   manager.addLoginAsync.mockImplementationOnce(async (login) => {
     await deferred.promise;
     logins.push(login);
   });
-  const first = createReferenceMetadataService();
-  const second = createReferenceMetadataService();
-  const save = first.setSemanticScholarKey('secret');
+  const save = changeReferenceKey('secret');
   await Promise.resolve();
-  const forget = second.setSemanticScholarKey(null);
-  expect(manager.findLogins).toHaveBeenCalledTimes(1);
+  const forget = changeReferenceKey(null);
   deferred.resolve();
   await Promise.all([save, forget]);
   expect(logins).toEqual([]);
   expect(readReferenceKey()).toBe('');
 });
 
-it('applies overlapping saves in invocation order across services', async () => {
+it('applies overlapping saves in invocation order', async () => {
   const { logins, manager } = loginManager();
   const deferred = Promise.withResolvers<void>();
   manager.addLoginAsync.mockImplementationOnce(async (login) => {
     await deferred.promise;
     logins.push(login);
   });
-  const first = createReferenceMetadataService();
-  const second = createReferenceMetadataService();
-  const save1 = first.setSemanticScholarKey('first');
+  const save1 = changeReferenceKey('first');
   await Promise.resolve();
-  const save2 = second.setSemanticScholarKey('second');
-  const save3 = first.setSemanticScholarKey('third');
+  const save2 = changeReferenceKey('second');
+  const save3 = changeReferenceKey('third');
   deferred.resolve();
   await Promise.all([save1, save2, save3]);
   expect(logins.map((login) => login.password)).toEqual(['third']);
@@ -73,11 +71,28 @@ it('applies overlapping saves in invocation order across services', async () => 
 it('exposes a mutation failure without blocking the next mutation', async () => {
   const { manager } = loginManager();
   manager.addLoginAsync.mockRejectedValueOnce(new Error('storage failed'));
-  const first = createReferenceMetadataService();
-  const second = createReferenceMetadataService();
-  const failed = first.setSemanticScholarKey('first');
-  const succeeded = second.setSemanticScholarKey('second');
+  const failed = changeReferenceKey('first');
+  const succeeded = changeReferenceKey('second');
   await expect(failed).rejects.toThrow('storage failed');
   await succeeded;
   expect(readReferenceKey()).toBe('second');
 });
+
+it.each(['latest', ''])(
+  'prefills the final admitted edit %j after an outstanding write',
+  async (latest) => {
+    const { logins, manager } = loginManager();
+    const deferred = Promise.withResolvers<void>();
+    manager.addLoginAsync.mockImplementationOnce(async (login) => {
+      await deferred.promise;
+      logins.push(login);
+    });
+    const first = changeReferenceKey('initial');
+    await Promise.resolve();
+    const prefill = readSettledReferenceKey();
+    const last = changeReferenceKey(latest);
+    deferred.resolve();
+    await Promise.all([first, last]);
+    expect(await prefill).toBe(latest);
+  },
+);

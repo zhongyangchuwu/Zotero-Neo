@@ -7,7 +7,16 @@ import {
   nativeDocumentTextRegions,
 } from '../document-analysis/native';
 import { analysisPDF } from '../platform/document-analysis';
-import { attachmentDocumentCache } from '../platform/document-analysis-cache';
+import {
+  attachmentDocumentCache,
+  attachmentDocumentRevision,
+} from '../platform/document-analysis-cache';
+import { readAttachmentDocumentCorrections } from '../platform/document-corrections';
+import {
+  applyDocumentCorrections,
+  correctedNativeTextRegions,
+  NATIVE_CORRECTION_KEY,
+} from '../document-analysis/corrections';
 import {
   readerDocumentPageGeometry,
   structuredDocumentData,
@@ -32,6 +41,7 @@ export async function readNativeReaderDocument(
   current: () => boolean,
 ): Promise<ReaderDocumentSnapshot | null> {
   if (!current() || !reader.itemID) return null;
+  const revision = attachmentDocumentRevision(reader.itemID);
   const pdf = await analysisPDF(reader.itemID);
   if (!current()) return null;
   const data = await structuredDocumentData(reader.itemID, current);
@@ -41,10 +51,26 @@ export async function readNativeReaderDocument(
     fileName: pdf.fileName,
     pages: nativeDocumentPages(data.catalog),
   };
-  const parsed = nativeParsedDocument(source, data);
-  const isCurrent = async (): Promise<boolean> => current() && (await pdf.isCurrent()) && current();
+  const raw = nativeParsedDocument(source, data);
+  const corrections = await readAttachmentDocumentCorrections(
+    reader.itemID,
+    raw,
+    NATIVE_CORRECTION_KEY,
+  );
+  const parsed = applyDocumentCorrections(raw, corrections);
+  const isCurrent = async (): Promise<boolean> =>
+    current() &&
+    revision === attachmentDocumentRevision(reader.itemID!) &&
+    (await pdf.isCurrent()) &&
+    current() &&
+    revision === attachmentDocumentRevision(reader.itemID!);
   return (await isCurrent())
-    ? { parsed, origin: 'native', textRegions: nativeDocumentTextRegions(data), isCurrent }
+    ? {
+        parsed,
+        origin: 'native',
+        textRegions: correctedNativeTextRegions(nativeDocumentTextRegions(data), parsed),
+        isCurrent,
+      }
     : null;
 }
 
@@ -54,11 +80,14 @@ export async function readReaderDocument(
   preferences: PreferenceStore,
   current: () => boolean,
 ): Promise<ReaderDocumentSnapshot | null> {
-  const cached = await readReaderDocumentCache(reader, preferences, current);
-  if (!current()) return null;
+  const slot = documentCacheSlot(selectedDocumentCacheKey(preferences));
+  const sourceCurrent = (): boolean =>
+    current() && documentCacheSlot(selectedDocumentCacheKey(preferences)) === slot;
+  const cached = await readReaderDocumentCache(reader, preferences, sourceCurrent);
+  if (!sourceCurrent()) return null;
   return cached
     ? { ...cached, origin: 'cache', textRegions: cached.parsed.regions }
-    : readNativeReaderDocument(reader, current);
+    : readNativeReaderDocument(reader, sourceCurrent);
 }
 
 /** Reader features share the selected service's validated cache; this path never uploads or runs SDT. */
@@ -68,6 +97,7 @@ export async function readReaderDocumentCache(
   current: () => boolean,
 ): Promise<ReaderCachedDocument | null> {
   if (!current() || !reader.itemID) return null;
+  const revision = attachmentDocumentRevision(reader.itemID);
   const key = selectedDocumentCacheKey(preferences);
   const pdf = await analysisPDF(reader.itemID);
   if (!current()) return null;
@@ -80,10 +110,16 @@ export async function readReaderDocumentCache(
   };
   const cached = await attachmentDocumentCache(reader.itemID).read(source, key);
   if (!cached || !current()) return null;
+  const corrections = await readAttachmentDocumentCorrections(reader.itemID, cached.parsed, key);
   const isCurrent = async (): Promise<boolean> =>
     current() &&
+    revision === attachmentDocumentRevision(reader.itemID!) &&
     documentCacheSlot(selectedDocumentCacheKey(preferences)) === documentCacheSlot(key) &&
     (await pdf.isCurrent()) &&
-    current();
-  return (await isCurrent()) ? { parsed: cached.parsed, isCurrent } : null;
+    current() &&
+    documentCacheSlot(selectedDocumentCacheKey(preferences)) === documentCacheSlot(key) &&
+    revision === attachmentDocumentRevision(reader.itemID!);
+  return (await isCurrent())
+    ? { parsed: applyDocumentCorrections(cached.parsed, corrections), isCurrent }
+    : null;
 }

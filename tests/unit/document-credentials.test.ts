@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readMinerUToken, saveMinerUToken } from '../../src/platform/document-credentials';
+import {
+  readMinerUToken,
+  readSettledMinerUToken,
+  saveMinerUToken,
+} from '../../src/platform/document-credentials';
 
 function harness() {
   const records: nsILoginInfo[] = [];
@@ -82,4 +86,22 @@ describe('shared saved MinerU credential', () => {
     await saveMinerUToken('two');
     expect(readMinerUToken()).toBe('two');
   });
+  it.each(['latest', ''])(
+    'prefills the final admitted edit %j after an outstanding write',
+    async (latest) => {
+      const t = harness();
+      const deferred = Promise.withResolvers<void>();
+      t.manager.addLoginAsync.mockImplementationOnce(async (login) => {
+        await deferred.promise;
+        t.records.push(login);
+      });
+      const first = saveMinerUToken('initial');
+      await Promise.resolve();
+      const prefill = readSettledMinerUToken();
+      const last = saveMinerUToken(latest);
+      deferred.resolve();
+      await Promise.all([first, last]);
+      expect(await prefill).toBe(latest);
+    },
+  );
 });

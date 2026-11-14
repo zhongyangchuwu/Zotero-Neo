@@ -114,7 +114,7 @@ function blockText(value: unknown): string {
   return Array.isArray(node?.content) ? node.content.map(blockText).join('') : '';
 }
 
-/** Only number-delimited entries in an explicitly named bibliography can be completed safely. */
+/** Recover observed numbered entries; a contiguous list cannot prove that no entries were omitted. */
 function supplementBibliography(
   blocks: readonly unknown[],
   nativeRegions: readonly DocumentRegion[],
@@ -328,7 +328,7 @@ export async function readReaderReferenceDocument(
   if (!current()) throw new Error('Reference analysis cancelled');
   const nativeRegions = blocks ? nativeDocumentRegions(blocks) : [];
   const bibliographyCoverage =
-    blocks && supplementBibliography(blocks, nativeRegions, entries) ? 'complete' : 'partial';
+    blocks && supplementBibliography(blocks, nativeRegions, entries) ? 'numbered' : 'partial';
   if (blocks) {
     const pages = new Map<number, DocumentRegion[]>();
     for (const region of nativeRegions) {

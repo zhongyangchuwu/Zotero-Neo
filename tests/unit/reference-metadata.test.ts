@@ -7,14 +7,13 @@ vi.mock('../../src/platform/reference-http', async (importOriginal) => ({
 }));
 vi.mock('../../src/platform/reference-credentials', () => ({
   readReferenceKey: vi.fn(),
-  changeReferenceKey: vi.fn(),
 }));
 vi.mock('../../src/platform/reference-cache', () => ({
   readReferenceCache: vi.fn(async () => null),
   writeReferenceCache: vi.fn(async () => {}),
 }));
 import { referenceRequest } from '../../src/platform/reference-http';
-import { changeReferenceKey, readReferenceKey } from '../../src/platform/reference-credentials';
+import { readReferenceKey } from '../../src/platform/reference-credentials';
 const request = vi.mocked(referenceRequest);
 const readKey = vi.mocked(readReferenceKey);
 const signal = () => new AbortController().signal;
@@ -107,14 +106,6 @@ describe('reference metadata', () => {
     const pending = service.lookup({ text: 'x' }, incoming);
     service.dispose();
     await expect(pending).rejects.toThrow('cancelled');
-  });
-  it('saves and forgets credentials only on explicit actions', async () => {
-    const service = createReferenceMetadataService();
-    expect(changeReferenceKey).not.toHaveBeenCalled();
-    await service.setSemanticScholarKey('  new key  ');
-    await service.setSemanticScholarKey(null);
-    expect(vi.mocked(changeReferenceKey).mock.calls).toEqual([['new key'], [null]]);
-    await expect(service.setSemanticScholarKey('  ')).rejects.toThrow('empty');
   });
   it('decodes an arXiv entry and never accesses or sends the Semantic Scholar key', async () => {
     const node = (textContent: string) => ({ textContent });

@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "documentId": "b-omnidocbench",
+  "pdfSha256": "af246c0ca296221e6ec1e5b800f2c359689cc6921a97764e650b0b34686c1907",
+  "baselineReport": "mineru-authorized.json",
+  "source": {
+    "baseHead": "61bcbdf415c1785fe925cd4d78024fdc2c0c4af1",
+    "state": "task-worktree-at-build",
+    "installedXpiSha256": "24e4641d1b399832115398f120b4e5a5a1364089883687976c4a925e1634988e",
+    "adapterHelperSha256": "5335ad672ffdc05305916e8cfe367d5816f75d012248e7dcf5cad8d083072971"
+  },
+  "host": {
+    "application": "Zotero",
+    "version": "10.0.8",
+    "os": "Windows",
+    "addonVersion": "0.2.2",
+    "persistentInstallation": true
+  },
+  "method": "软件通过原生键盘事件与实际控件驱动独立 Zotero 配置；代理查看 PDF 预览和已打开的笔记，不是人类用户实验。",
+  "annotation": "agent-source-verified；两个来源主体框为原 PDF 的近似标注，不是人工金标准。",
+  "corrections": [
+    {
+      "checkId": "table-2",
+      "captionRegionId": "mineru:5:1.0",
+      "bodyRegionId": "mineru:5:0.0",
+      "sourceBodyRect": [78.82, 599.51, 532.14, 720.03],
+      "correctedBodyRect": [77, 600, 533, 720],
+      "baselineBodyIoU": 0,
+      "correctedBodyIoU": 0.9898586291819084
+    },
+    {
+      "checkId": "table-3",
+      "captionRegionId": "mineru:5:2.0",
+      "bodyRegionId": "mineru:5:1.1",
+      "sourceBodyRect": [83.99, 445.24, 527.33, 563.7],
+      "correctedBodyRect": [82, 446, 528, 564],
+      "baselineBodyIoU": 0,
+      "correctedBodyIoU": 0.9852011458206476
+    }
+  ],
+  "taskOutcomes": [
+    {
+      "checkId": "table-2",
+      "status": "passed",
+      "operation": "纠错并重启后，实际图表列表显示正确表体和题注；定位按钮在 PDF 第 6 页标示对应成员框。",
+      "pageIndex": 5,
+      "nativePositionRects": [
+        [77, 600, 533, 720],
+        [55, 572, 555, 594]
+      ],
+      "previewInspected": true,
+      "dialogClosedAfterNavigation": true
+    },
+    {
+      "checkId": "table-3",
+      "status": "passed",
+      "operation": "图表列表与摘录使用相同 PNG；实际保存并打开原生笔记，核对表体、题注及第 6 页来源链接。",
+      "pageIndex": 5,
+      "nativePositionRects": [
+        [82, 446, 528, 564],
+        [74, 427, 536, 437.99999999999994]
+      ],
+      "previewInspected": true,
+      "excerptMatchesFigurePreview": true,
+      "embeddedNoteImageExists": true,
+      "noteSourceRects": [[74, 427, 536, 564]],
+      "openedNoteTab": true,
+      "nativeEditorInspected": true
+    }
+  ],
+  "bodySelection": {
+    "originalFilteredViewport": {
+      "flashInput": false,
+      "hints": 0,
+      "message": "No visible text"
+    },
+    "savedRegionId": "mineru:5:1.1",
+    "correctedKind": "text",
+    "correctedFlow": "body",
+    "nativeSelectedText": "0.044",
+    "restoredKind": "table",
+    "restoredFlow": "auxiliary",
+    "conflictHandling": "保存为正文移除引用该主体的冲突题注修正；恢复原始归属后显式重新保存 Table 3 的题注关联，最终保留两个正确表组。"
+  },
+  "persistence": {
+    "fullZoteroRestartAndReaderReopen": true,
+    "restoredCaptionToBody": [
+      ["mineru:5:1.0", "mineru:5:0.0"],
+      ["mineru:5:2.0", "mineru:5:1.1"]
+    ]
+  },
+  "invalidation": {
+    "providerChange": {
+      "from": "mineru",
+      "to": "oxr",
+      "newNotesAfterAttemptedStaleSave": 0,
+      "restoredProvider": "mineru",
+      "feedbackNotCaptured": true
+    },
+    "storedSidecarIdentityAdmission": {
+      "matchingSourceEdits": 2,
+      "results": [
+        {
+          "name": "pdfFingerprint",
+          "admittedEdits": 0
+        },
+        {
+          "name": "parserText",
+          "admittedEdits": 0
+        },
+        {
+          "name": "regionGeometry",
+          "admittedEdits": 0
+        },
+        {
+          "name": "pageGeometry",
+          "admittedEdits": 0
+        },
+        {
+          "name": "modelRevision",
+          "admittedEdits": 0
+        },
+        {
+          "name": "durationOnly",
+          "admittedEdits": 2
+        }
+      ],
+      "method": "in-memory identity variants against the real stored sidecar; PDF and caches were not modified"
+    }
+  },
+  "preservedRawCaches": [
+    {
+      "file": ".zotero-neo-analysis-2b623bf77d9e43da7f3264f9ea37844e.json",
+      "md5Before": "cc6d521639113093ebb2e37b9910910a",
+      "md5After": "cc6d521639113093ebb2e37b9910910a",
+      "sha256After": "eb377ab69923a72ec7e1b25df13b3dc62e474ac78a6ce020b3e561681c2a41ea"
+    },
+    {
+      "file": ".zotero-sdt-cache",
+      "md5Before": "c7057c28d2f2c731c9edee79c90cd757",
+      "md5After": "c7057c28d2f2c731c9edee79c90cd757",
+      "sha256After": "9a4f9c921c198c73c3dc3f122f3a5cbd851ef0f6459d3b1d23b35a67c2f67c80"
+    }
+  ],
+  "timing": {
+    "bodySaveAndSourceReadbackMs": 669,
+    "earlierSoftwareDrivenActions": [
+      {
+        "action": "Save as body text",
+        "elapsedMs": 473
+      },
+      {
+        "action": "undo",
+        "elapsedMs": 456
+      },
+      {
+        "action": "Restore original ownership",
+        "elapsedMs": 428
+      },
+      {
+        "action": "undo",
+        "elapsedMs": 524
+      }
+    ],
+    "humanReviewMs": null
+  },
+  "limits": [
+    "仅一篇论文的两个纠错对象；不能推算 24 篇 PDF 的端到端任务成功率。",
+    "纠错后结果单独记录，不改写原生或 MinerU 基线成绩，也不表示模型准确率提高。",
+    "身份失效检查改变内存中的输入并读取实际侧车，未替换真实 PDF 文件；界面另行实测服务切换后的旧摘录不能新建笔记。",
+    "软件动作耗时不含人工阅读、核对或决策；人工成本未测。",
+    "本轮不执行 OXR 解析、额外付费重解析或 AI 问答。"
+  ]
+}

@@ -1,4 +1,10 @@
-import { readMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
+import { readSettledMinerUToken, saveMinerUToken } from '../../platform/document-credentials';
+import {
+  checkCredential,
+  CREDENTIAL_HELP_URLS,
+  createCredentialAbortController,
+  openCredentialHelp,
+} from '../../platform/credential-check';
 import type { PreferenceStore } from '../../core/preference-store';
 import { CleanupFailure } from '../../core/cleanup';
 import type { KeyGuideLanguage } from '../../input/key-guide-config';
@@ -10,13 +16,31 @@ import {
   type AnalyzedDocument,
 } from '../../document-analysis/analyze';
 import type { DocumentResultCache } from '../../document-analysis/cache';
+import { documentCacheSlot } from '../../document-analysis/cache';
+import {
+  applyDocumentCorrections,
+  changeDocumentCorrection,
+  documentCorrectionIdentity,
+  NATIVE_CORRECTION_KEY,
+  type DocumentCorrections,
+} from '../../document-analysis/corrections';
+import {
+  readAttachmentDocumentCorrections,
+  saveAttachmentDocumentCorrections,
+} from '../../platform/document-corrections';
 import { documentObjectLocation } from '../../document-analysis/object-groups';
 import type {
   DocumentSource,
   DocumentLocation,
   DocumentParser,
+  DocumentCacheKey,
+  ParsedDocument,
 } from '../../document-analysis/contracts';
-import { nativeDocumentPages, nativeDocumentParser } from '../../document-analysis/native';
+import {
+  nativeDocumentPages,
+  nativeDocumentParser,
+  nativeParsedDocument,
+} from '../../document-analysis/native';
 import { oxrDocumentParser } from '../../document-analysis/oxr';
 import { mineruDocumentParser } from '../../document-analysis/mineru';
 import {
@@ -26,7 +50,10 @@ import {
   type AnalysisPDF,
 } from '../../platform/document-analysis';
 import { documentMarkupText } from '../../platform/document-markup';
-import { attachmentDocumentCache } from '../../platform/document-analysis-cache';
+import {
+  attachmentDocumentCache,
+  observeAttachmentDocumentCache,
+} from '../../platform/document-analysis-cache';
 import {
   readerWindow,
   readerDocumentPageGeometry,
@@ -37,6 +64,7 @@ import { COMPARISON_BACKDROP_STYLE, COMPARISON_PANEL_STYLE } from '../../ui/reac
 import {
   DOCUMENT_PROVIDER_KEY,
   OXR_ENDPOINT_KEY,
+  selectedDocumentCacheKey,
   DEFAULT_OXR_ENDPOINT,
 } from '../../document-analysis/settings';
 import { mountNativeReactView } from '../../platform/native-ui';
@@ -63,6 +91,13 @@ export interface DocumentComparisonHost {
   readonly onCacheSaved?: () => void;
 }
 
+interface CorrectionSource {
+  readonly raw: ParsedDocument;
+  readonly key: DocumentCacheKey;
+  state: DocumentCorrections;
+  readonly undo: DocumentCorrections[];
+}
+
 interface ComparisonView {
   readonly backdrop: HTMLElement;
   readonly root: HTMLElement;
@@ -72,10 +107,18 @@ interface ComparisonView {
   readonly endpoint: { value: string; disabled: boolean };
   readonly provider: { value: 'mineru' | 'oxr'; disabled: boolean };
   credentialStatus: string;
-  credentialPending: boolean;
+  credentialRevision: number;
+  credentialComposing: boolean;
+  credentialCheck?: AbortController;
+  credentialWrite?: Promise<boolean>;
+  credentialStorageError: boolean;
   readonly abort: AbortController;
   readonly untheme: () => void;
   react?: NativeReactView<DocumentComparisonModel>;
+  stopObserving?: () => void;
+  readonly stopPreferences: (() => void)[];
+  preferenceSlot: string;
+  preferenceWrite?: boolean;
   title: string;
   locations: Map<string, DocumentLocation>;
   prepared?: {
@@ -91,6 +134,9 @@ interface ComparisonView {
   native?: AnalyzedDocument;
   nativeError?: string;
   cloud?: AnalyzedDocument;
+  readonly corrections: Map<number, CorrectionSource>;
+  readonly regionPages: Map<number, number>;
+  correctionPending?: boolean;
 }
 
 /** One explicit comparison owns preparation, network cancellation, presentation and stale-result fencing. */
@@ -151,7 +197,9 @@ export class ReaderDocumentComparison {
       backdrop,
       provider,
       credentialStatus: '',
-      credentialPending: false,
+      credentialRevision: 0,
+      credentialComposing: false,
+      credentialStorageError: false,
       endpoint: {
         value: this.#host.preferences.get(OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT),
         disabled: false,
@@ -167,6 +215,10 @@ export class ReaderDocumentComparison {
           if (view.react) view.react.update(model());
         },
       },
+      corrections: new Map(),
+      regionPages: new Map(),
+      stopPreferences: [],
+      preferenceSlot: documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences)),
       title: this.#text('title'),
       locations: new Map(),
       cloudRevision: 0,
@@ -174,6 +226,14 @@ export class ReaderDocumentComparison {
       untheme: this.#host.themeRoot(backdrop),
     };
     this.#view = view;
+    view.stopObserving = observeAttachmentDocumentCache(this.#host.reader.itemID!, () => {
+      if (this.#current(view) && !view.cloudPending && !view.correctionPending)
+        void this.#refreshCorrections(view);
+    });
+    for (const key of [DOCUMENT_PROVIDER_KEY, OXR_ENDPOINT_KEY]) {
+      const stop = this.#host.preferences.observe?.(key, () => this.#selectedServiceChanged(view));
+      if (stop) view.stopPreferences.push(stop);
+    }
     const model = () => this.#model(view);
     view.react = mountNativeReactView({
       surface: 'document-comparison',
@@ -188,7 +248,7 @@ export class ReaderDocumentComparison {
     void view.react.ready
       .then(() => {
         if (this.#current(view)) {
-          this.#loadCredential(view);
+          if (view.credentialRevision === 0) void this.#loadCredential(view);
           view.react?.getElement('close')?.focus();
         }
       })
@@ -206,6 +266,23 @@ export class ReaderDocumentComparison {
   #command(view: ComparisonView, command: DocumentComparisonCommand): void {
     if (!this.#current(view)) return;
     switch (command.type) {
+      case 'regions-page':
+        if (
+          !view.cloudPending &&
+          !view.correctionPending &&
+          Number.isInteger(command.page) &&
+          command.page >= 0
+        ) {
+          view.regionPages.set(command.column, command.page);
+          this.#render(view);
+        }
+        break;
+      case 'correct-body':
+      case 'correct-restore':
+      case 'correct-caption':
+      case 'correct-undo':
+        void this.#correct(view, command);
+        break;
       case 'close':
         this.close(true);
         break;
@@ -215,23 +292,35 @@ export class ReaderDocumentComparison {
       case 'refresh':
         void this.#cloud(view, true);
         break;
-      case 'credential-save':
-        void this.#saveCredential(view, false);
+      case 'credential-change':
+        view.credentialComposing = false;
+        void this.#saveCredential(view);
         break;
-      case 'credential-clear':
-        void this.#saveCredential(view, true);
+      case 'credential-composition':
+        view.credentialComposing = true;
+        this.#retireCredential(view);
+        this.#render(view);
+        break;
+      case 'credential-verify':
+        void this.#verifyCredential(view);
+        break;
+      case 'credential-help':
+        if (view.provider.value === 'mineru') openCredentialHelp('mineru');
         break;
       case 'provider':
-        if (view.cloudPending) break;
+        if (view.cloudPending || view.correctionPending) break;
         view.provider.value = command.value;
-        this.#loadCredential(view);
-        this.#host.preferences.set(DOCUMENT_PROVIDER_KEY, command.value);
+        void this.#loadCredential(view);
+        this.#setPreference(view, DOCUMENT_PROVIDER_KEY, command.value);
         this.#render(view);
         void this.#restoreCloud(view);
         break;
       case 'endpoint':
-        if (view.cloudPending) break;
+        if (view.cloudPending || view.correctionPending) break;
         view.endpoint.value = command.value;
+        this.#retireCredentialCheck(view);
+        if (!view.credentialStorageError) view.credentialStatus = '';
+        this.#render(view);
         void this.#restoreCloud(view);
         break;
       case 'locate': {
@@ -260,64 +349,148 @@ export class ReaderDocumentComparison {
     }
   }
 
-  #loadCredential(view: ComparisonView): void {
+  /** Synchronous preference observers must retire other dialogs, not the writer's own prepared result. */
+  #setPreference(view: ComparisonView, key: string, value: string): void {
+    view.preferenceWrite = true;
+    try {
+      this.#host.preferences.set(key, value);
+      view.preferenceSlot = documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences));
+    } finally {
+      view.preferenceWrite = false;
+    }
+  }
+
+  #selectedServiceChanged(view: ComparisonView): void {
+    if (!this.#current(view) || view.preferenceWrite) return;
+    const slot = documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences));
+    if (slot === view.preferenceSlot) return;
+    view.preferenceSlot = slot;
+    // Retire old reads/writes and their controls immediately. Reload remains an explicit local lookup/parse action.
+    view.cloudRevision++;
+    view.provider.value =
+      this.#host.preferences.get(DOCUMENT_PROVIDER_KEY, 'mineru') === 'oxr' ? 'oxr' : 'mineru';
+    view.endpoint.value = this.#host.preferences.get(OXR_ENDPOINT_KEY, DEFAULT_OXR_ENDPOINT);
+    view.cloud = undefined;
+    view.cloudState = undefined;
+    view.cloudSavedAt = undefined;
+    view.corrections.delete(1);
+    view.regionPages.delete(1);
+    view.cloudNotice = this.#text('corrections.changed');
+    this.#busy(view, false);
+    void this.#loadCredential(view);
+    view.status.textContent = view.cloudNotice;
+  }
+
+  #retireCredentialCheck(view: ComparisonView): void {
+    view.credentialCheck?.abort();
+    view.credentialCheck = undefined;
+  }
+
+  #retireCredential(view: ComparisonView): void {
+    view.credentialRevision++;
+    this.#retireCredentialCheck(view);
+    view.credentialWrite = undefined;
+    view.credentialStorageError = false;
+    view.credentialStatus = '';
+  }
+
+  async #loadCredential(view: ComparisonView): Promise<void> {
+    this.#retireCredential(view);
+    view.credentialComposing = false;
+    const revision = view.credentialRevision;
+    const provider = view.provider.value;
     const input = view.react?.getElement('credential') as HTMLInputElement | null;
     if (!input) return;
+    input.value = provider === 'mineru' ? '' : 'dummy';
+    this.#render(view);
+    if (provider !== 'mineru') return;
+    const current = () =>
+      this.#current(view) &&
+      view.credentialRevision === revision &&
+      view.provider.value === provider &&
+      view.react?.getElement('credential') === input &&
+      input.value === '';
     try {
-      input.value = view.provider.value === 'mineru' ? readMinerUToken() : 'dummy';
-      view.credentialStatus =
-        view.provider.value === 'mineru'
-          ? t('documentCredentials.hint', this.#host.language())
-          : '';
+      const value = await readSettledMinerUToken();
+      if (!current()) return;
+      this.#retireCredentialCheck(view);
+      input.value = value;
+      view.credentialStatus = '';
     } catch {
-      input.value = '';
+      if (!current()) return;
+      this.#retireCredentialCheck(view);
+      view.credentialStorageError = true;
       view.credentialStatus = t('documentCredentials.unavailable', this.#host.language());
     }
     this.#render(view);
   }
 
-  async #saveCredential(view: ComparisonView, clear: boolean): Promise<void> {
+  #saveCredential(view: ComparisonView): void {
+    this.#retireCredential(view);
+    const revision = view.credentialRevision;
+    const input = view.react?.getElement('credential') as HTMLInputElement | null;
+    this.#render(view);
+    if (!input || view.provider.value !== 'mineru') return;
+    const value = input.value;
+    // Admit every completed edit immediately; shared storage serializes writes even after close.
+    view.credentialWrite = saveMinerUToken(value).then(
+      () => true,
+      () => {
+        if (
+          this.#current(view) &&
+          view.credentialRevision === revision &&
+          input.value === value &&
+          view.provider.value === 'mineru'
+        ) {
+          view.credentialStorageError = true;
+          view.credentialStatus = t('documentCredentials.unavailable', this.#host.language());
+          this.#render(view);
+        }
+        return false;
+      },
+    );
+  }
+
+  async #verifyCredential(view: ComparisonView): Promise<void> {
     if (
-      !this.#current(view) ||
-      view.cloudPending ||
-      view.credentialPending ||
-      view.provider.value !== 'mineru'
+      view.provider.value !== 'mineru' ||
+      view.credentialComposing ||
+      view.credentialCheck ||
+      view.credentialStorageError
     )
       return;
     const input = view.react?.getElement('credential') as HTMLInputElement | null;
     if (!input) return;
-    const doc = view.root.ownerDocument;
-    const ownedFocus = view.root.contains(doc.activeElement);
-    const forget = clear || !input.value.trim();
-    const value = forget ? '' : input.value;
-    view.credentialPending = true;
+    const revision = view.credentialRevision;
+    const value = input.value;
+    const check = createCredentialAbortController();
+    view.credentialCheck = check;
+    const current = () =>
+      this.#current(view) &&
+      !check.signal.aborted &&
+      view.credentialCheck === check &&
+      view.credentialRevision === revision &&
+      view.provider.value === 'mineru' &&
+      input.value === value;
+    view.credentialStatus = t('credentials.validation.checking', this.#host.language());
     this.#render(view);
-    try {
-      await saveMinerUToken(value);
-      if (this.#current(view)) {
-        if (forget) input.value = '';
-        view.credentialStatus = t(
-          `documentCredentials.${forget ? 'cleared' : 'saved'}`,
-          this.#host.language(),
-        );
-      }
-    } catch {
-      if (this.#current(view))
+    if (view.credentialWrite) {
+      const saved = await view.credentialWrite;
+      if (!current()) return;
+      if (!saved) {
+        view.credentialCheck = undefined;
         view.credentialStatus = t('documentCredentials.unavailable', this.#host.language());
-    } finally {
-      if (this.#current(view)) {
-        view.credentialPending = false;
         this.#render(view);
-        if (
-          ownedFocus &&
-          (!doc.activeElement ||
-            doc.activeElement === view.root ||
-            doc.activeElement === doc.body ||
-            doc.activeElement === doc.documentElement)
-        )
-          input.focus();
+        return;
       }
     }
+    if (!current()) return;
+    const result = await checkCredential('mineru', value, check.signal).catch(() => 'unavailable');
+    if (!current()) return;
+    view.credentialCheck = undefined;
+    view.credentialStatus =
+      result === 'cancelled' ? '' : t(`credentials.validation.${result}`, this.#host.language());
+    this.#render(view);
   }
 
   /** Keep dialog keys out of Reader's matcher; Tab remains native and Escape closes this owner. */
@@ -325,14 +498,14 @@ export class ReaderDocumentComparison {
     const view = this.#view;
     if (!view || !event.target || !view.root.contains(event.target as Node)) return false;
     event.stopImmediatePropagation();
-    if (event.key === 'Escape' && !event.isComposing) {
+    if (event.key === 'Escape' && !event.isComposing && !view.credentialComposing) {
       event.preventDefault();
       this.close(true);
     }
     if (event.key === 'Tab') {
       const controls = (
         Array.from(
-          view.root.querySelectorAll('input,select,button,summary,[tabindex]'),
+          view.root.querySelectorAll('input,select,button,a[href],summary,[tabindex]'),
         ) as HTMLElement[]
       ).filter(
         (control) =>
@@ -357,10 +530,13 @@ export class ReaderDocumentComparison {
     const input = view.react?.getElement('credential') as HTMLInputElement | null;
     this.#view = null;
     const cleanup = new CleanupFailure();
+    cleanup.run(() => this.#retireCredential(view));
     cleanup.run(() => {
       if (input) input.value = '';
     });
     cleanup.run(() => view.abort.abort());
+    cleanup.run(() => view.stopObserving?.());
+    for (const stop of view.stopPreferences) cleanup.run(stop);
     cleanup.run(() => view.react?.dispose());
     cleanup.run(view.untheme);
     cleanup.run(() => view.backdrop.remove());
@@ -398,7 +574,14 @@ export class ReaderDocumentComparison {
       if (!this.#current(view)) return;
       if (!(await pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#current(view)) return;
-      view.native = native;
+      const state = await readAttachmentDocumentCorrections(
+        this.#host.reader.itemID!,
+        native,
+        NATIVE_CORRECTION_KEY,
+      );
+      if (!this.#current(view)) return;
+      view.corrections.set(0, { raw: native, key: NATIVE_CORRECTION_KEY, state, undo: [] });
+      view.native = analyzeParsedDocument(applyDocumentCorrections(native, state), source);
       if (!view.cloudPending) view.status.textContent = this.#readyText(view);
       this.#render(view);
     } catch (error) {
@@ -456,9 +639,35 @@ export class ReaderDocumentComparison {
     return this.#current(view) && view.cloudRevision === revision;
   }
 
+  async #refreshCorrections(view: ComparisonView): Promise<void> {
+    const source = view.corrections.get(0);
+    void this.#restoreCloud(view);
+    if (!source || !view.prepared) return;
+    try {
+      const state = await readAttachmentDocumentCorrections(
+        this.#host.reader.itemID!,
+        source.raw,
+        source.key,
+      );
+      if (!this.#current(view) || view.correctionPending || view.corrections.get(0) !== source)
+        return;
+      if (!(await view.prepared.pdf.isCurrent()) || !this.#current(view)) return;
+      if (view.correctionPending || view.corrections.get(0) !== source) return;
+      view.corrections.set(0, { ...source, state, undo: [] });
+      view.native = analyzeParsedDocument(
+        applyDocumentCorrections(source.raw, state),
+        view.prepared.source,
+      );
+      this.#render(view);
+    } catch {
+      if (this.#current(view)) view.status.textContent = this.#text('corrections.failed');
+    }
+  }
+
   /** Cache lookup never initiates a network request, including invalid or unavailable cache files. */
   async #restoreCloud(view: ComparisonView): Promise<void> {
-    if (!view.prepared || !this.#current(view) || view.cloudPending) return;
+    if (!view.prepared || !this.#current(view) || view.cloudPending || view.correctionPending)
+      return;
     const revision = ++view.cloudRevision;
     // A local lookup must not swallow the click that committed an edited endpoint.
     // An explicit parse may supersede it; the revision fences its late result.
@@ -467,6 +676,7 @@ export class ReaderDocumentComparison {
     view.cloudState = undefined;
     view.cloudSavedAt = undefined;
     view.cloudNotice = undefined;
+    view.corrections.delete(1);
     this.#render(view);
     try {
       if (
@@ -497,7 +707,19 @@ export class ReaderDocumentComparison {
     if (!cached) return false;
     if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
     if (!this.#cloudCurrent(view, revision)) return true;
-    view.cloud = analyzeParsedDocument(cached.parsed, prepared.source);
+    const state = await readAttachmentDocumentCorrections(
+      this.#host.reader.itemID!,
+      cached.parsed,
+      parser.cacheKey,
+    );
+    if (!this.#cloudCurrent(view, revision)) return true;
+    if (view.provider.value === 'oxr')
+      this.#setPreference(view, OXR_ENDPOINT_KEY, view.endpoint.value.trim());
+    view.corrections.set(1, { raw: cached.parsed, key: parser.cacheKey, state, undo: [] });
+    view.cloud = analyzeParsedDocument(
+      applyDocumentCorrections(cached.parsed, state),
+      prepared.source,
+    );
     view.cloudState = 'cached';
     view.cloudSavedAt = cached.savedAt;
     view.cloudNotice = undefined;
@@ -508,7 +730,8 @@ export class ReaderDocumentComparison {
 
   async #cloud(view: ComparisonView, refresh = false): Promise<void> {
     const prepared = view.prepared;
-    if (!prepared || !this.#current(view) || view.cloudButton.disabled) return;
+    if (!prepared || !this.#current(view) || view.cloudButton.disabled || view.correctionPending)
+      return;
     const credential =
       (view.react?.getElement('credential') as HTMLInputElement | null)?.value ?? '';
     const revision = ++view.cloudRevision;
@@ -530,7 +753,8 @@ export class ReaderDocumentComparison {
       if (!this.#cloudCurrent(view, revision)) return;
       if (!(await prepared.pdf.isCurrent())) throw new Error('PDF changed; reopen the comparison');
       if (!this.#cloudCurrent(view, revision)) return;
-      if (view.provider.value === 'oxr') this.#host.preferences.set(OXR_ENDPOINT_KEY, endpoint);
+      if (view.provider.value === 'oxr') this.#setPreference(view, OXR_ENDPOINT_KEY, endpoint);
+      view.corrections.delete(1);
       view.cloud = result;
       view.cloudState = 'unsaved';
       view.cloudSavedAt = undefined;
@@ -549,6 +773,19 @@ export class ReaderDocumentComparison {
           if (!this.#cloudCurrent(view, revision)) return;
           view.cloudState = saved ? 'saved' : 'unsaved';
           if (saved) this.#host.onCacheSaved?.();
+          if (saved) {
+            const state = await readAttachmentDocumentCorrections(
+              this.#host.reader.itemID!,
+              result,
+              parser.cacheKey,
+            );
+            if (!this.#cloudCurrent(view, revision)) return;
+            view.corrections.set(1, { raw: result, key: parser.cacheKey, state, undo: [] });
+            view.cloud = analyzeParsedDocument(
+              applyDocumentCorrections(result, state),
+              prepared.source,
+            );
+          }
         } catch {
           this.#host.debug('Document analysis cache write unavailable');
         }
@@ -568,6 +805,99 @@ export class ReaderDocumentComparison {
     }
   }
 
+  /** Persist before publishing. Revalidate the uncorrected result at both sides of staging. */
+  async #correct(
+    view: ComparisonView,
+    command: Extract<
+      DocumentComparisonCommand,
+      { readonly type: 'correct-body' | 'correct-restore' | 'correct-caption' | 'correct-undo' }
+    >,
+  ): Promise<void> {
+    this.#selectedServiceChanged(view);
+    const source = view.corrections.get(command.column);
+    const prepared = view.prepared;
+    if (!source || !prepared || view.cloudPending || view.correctionPending || !this.#current(view))
+      return;
+    const revision = view.cloudRevision;
+    const owned = (): boolean =>
+      this.#current(view) &&
+      view.corrections.get(command.column) === source &&
+      (command.column === 0 ||
+        (view.cloudRevision === revision &&
+          documentCacheSlot(selectedDocumentCacheKey(this.#host.preferences)) ===
+            documentCacheSlot(source.key)));
+    const current = async (): Promise<boolean> => {
+      if (!owned() || !(await prepared.pdf.isCurrent()) || !owned()) return false;
+      let raw: ParsedDocument | undefined;
+      if (command.column === 0) {
+        const data = await structuredDocumentData(this.#host.reader.itemID, owned);
+        if (!data || !owned()) return false;
+        raw = nativeParsedDocument(prepared.source, data);
+      } else {
+        raw = (await prepared.cache.read(prepared.source, source.key))?.parsed;
+      }
+      return (
+        !!raw && owned() && documentCorrectionIdentity(raw, source.key) === source.state.identity
+      );
+    };
+    view.correctionPending = true;
+    view.status.textContent = this.#text('corrections.saving');
+    this.#render(view);
+    try {
+      const previous = source.state;
+      const undo = command.type === 'correct-undo';
+      const next =
+        command.type === 'correct-undo'
+          ? source.undo.at(-1)
+          : changeDocumentCorrection(
+              previous,
+              source.raw,
+              source.key,
+              command.regionID,
+              command.type === 'correct-restore'
+                ? null
+                : command.type === 'correct-caption'
+                  ? { type: 'caption', regionID: command.regionID, bodyID: command.bodyID }
+                  : { type: 'body', regionID: command.regionID },
+            );
+      if (!next) throw new Error(this.#text('corrections.changed'));
+      const saved = await saveAttachmentDocumentCorrections({
+        itemID: this.#host.reader.itemID!,
+        parsed: source.raw,
+        key: source.key,
+        previous,
+        next,
+        current,
+      });
+      if (!owned() || !saved || !(await current()) || !owned())
+        throw new Error(this.#text('corrections.changed'));
+      source.state = next;
+      if (undo) source.undo.pop();
+      else {
+        source.undo.push(previous);
+        if (source.undo.length > 20) source.undo.shift();
+      }
+      const result = analyzeParsedDocument(
+        applyDocumentCorrections(source.raw, next),
+        prepared.source,
+      );
+      if (command.column === 0) view.native = result;
+      else view.cloud = result;
+      view.status.textContent = this.#text('corrections.saved');
+    } catch (error) {
+      if (this.#current(view))
+        view.status.textContent = `${this.#text('corrections.failed')} ${
+          owned() ? String(error) : this.#text('corrections.changed')
+        }`;
+    } finally {
+      if (this.#current(view)) {
+        view.correctionPending = false;
+        this.#selectedServiceChanged(view);
+        this.#render(view);
+      }
+    }
+  }
+
   #render(view: ComparisonView): void {
     view.react?.update(this.#model(view));
   }
@@ -579,6 +909,22 @@ export class ReaderDocumentComparison {
       [0, this.#text('native'), view.native, view.nativeError],
       [1, view.provider.value === 'mineru' ? 'MinerU' : 'OXR', view.cloud, undefined],
     ] as const) {
+      const pageCount = Math.max(1, Math.ceil((result?.regions.length ?? 0) / 500));
+      const page = Math.min(view.regionPages.get(index) ?? 0, pageCount - 1);
+      const correctionSource = view.corrections.get(index);
+      const correctedIDs = new Set(correctionSource?.state.edits.map((e) => e.regionID));
+      const captionIDs = new Set<string>();
+      const bodies = new Map<number, { id: string; title: string }[]>();
+      for (const r of correctionSource?.raw.regions ?? []) {
+        if (r.kind === 'caption') captionIDs.add(r.id);
+        if (r.kind !== 'image' && r.kind !== 'table') continue;
+        const options = bodies.get(r.pageIndex) ?? [];
+        options.push({
+          id: r.id,
+          title: `${r.pageIndex + 1} · ${this.#text(`kind.${r.kind}`)} · ${r.id} · [${r.rect.join(', ')}]`,
+        });
+        bodies.set(r.pageIndex, options);
+      }
       const targets: ComparisonTarget[] = [];
       if (result) {
         for (const [i, group] of result.objectGroups.slice(0, 500).entries()) {
@@ -590,25 +936,39 @@ export class ReaderDocumentComparison {
             `${this.#text(`kind.${group.kind === 'figure' ? 'image' : 'table'}`)} · ${location.pageIndex + 1}`;
           targets.push({
             id,
-            title: `${this.#text('objectGroup')} · ${name} · ${this.#text(`association.${group.association}`)}`,
+            title: `${this.#text('objectGroup')} · ${name} · ${group.id.startsWith('object:local-caption:') ? this.#text('corrections.saved') : this.#text(`association.${group.association}`)}`,
             text: `${group.title}\n${this.#text('members')}: ${group.memberRegionIds.length}`,
             action: this.#text('locateGroup'),
           });
         }
-        for (const [i, region] of result.regions.slice(0, 500).entries()) {
+        for (const region of result.regions.slice(page * 500, (page + 1) * 500)) {
           const text = region.format === 'html' ? documentMarkupText(region.text) : region.text;
-          const id = `${index}:region:${i}`;
+          const id = `${index}:region:${region.id}`;
           locations.set(id, { pageIndex: region.pageIndex, rects: [region.rect] });
           targets.push({
             id,
             title: `${region.pageIndex + 1} · ${this.#text(`kind.${region.kind}`)} · ${this.#text(`flow.${region.flow}`)} · ${text.slice(0, 100)}`,
             text,
             action: this.#text('locate'),
+            ...(correctionSource
+              ? {
+                  correction: {
+                    regionID: region.id,
+                    column: index,
+                    corrected: correctedIDs.has(region.id),
+                    bodies: captionIDs.has(region.id) ? (bodies.get(region.pageIndex) ?? []) : [],
+                  },
+                }
+              : {}),
           });
         }
       }
       columns.push({
         label,
+        page,
+        pageCount,
+        previousLabel: this.#text('corrections.previous'),
+        nextLabel: this.#text('corrections.next'),
         error: result ? '' : (error ?? ''),
         targets,
         summary: result
@@ -619,10 +979,7 @@ export class ReaderDocumentComparison {
             ? this.#readyText(view) +
               (view.cloudSavedAt ? ` · ${new Date(view.cloudSavedAt).toLocaleString()}` : '')
             : '',
-        truncated:
-          result && (result.regions.length > 500 || result.objectGroups.length > 500)
-            ? this.#text('truncated')
-            : '',
+        truncated: result && result.objectGroups.length > 500 ? this.#text('truncated') : '',
       });
     }
     view.locations = locations;
@@ -634,15 +991,20 @@ export class ReaderDocumentComparison {
       endpointLabel: this.#text('endpoint'),
       provider: view.provider.value,
       endpoint: view.endpoint.value,
-      credentialLabel: t(
-        `documentCredentials.${view.provider.value === 'mineru' ? 'token' : 'temporaryToken'}`,
-        this.#host.language(),
-      ),
-      credentialSaveLabel: t('documentCredentials.save', this.#host.language()),
-      credentialClearLabel: t('documentCredentials.clear', this.#host.language()),
+      credentialLabel:
+        view.provider.value === 'mineru'
+          ? t('documentCredentials.token', this.#host.language())
+          : `OXR / SoMark · ${t('documentCredentials.temporaryToken', this.#host.language())}`,
+      credentialVerifyLabel: t('documentCredentials.verify', this.#host.language()),
+      credentialHelpLabel: t('documentCredentials.help', this.#host.language()),
+      credentialHelpURL: CREDENTIAL_HELP_URLS.mineru,
+      credentialHint:
+        view.provider.value === 'mineru'
+          ? t('documentCredentials.hint', this.#host.language())
+          : '',
       credentialStatus: view.credentialStatus,
-      credentialPending: view.credentialPending,
-      busy: !!view.cloudPending,
+      credentialChecking: !!view.credentialCheck,
+      busy: !!view.cloudPending || !!view.correctionPending,
       ready: !!view.prepared,
       parseLabel: this.#text('parseCloud'),
       refreshLabel: this.#text('refreshCloud'),
@@ -653,6 +1015,20 @@ export class ReaderDocumentComparison {
       vocabulary: comparison
         ? `${this.#text('diagnostic')}\n${this.#text('nativeOnly')}: ${comparison.nativeOnlyWords.slice(0, 50).join(', ')}\n${this.#text('cloudOnly')}: ${comparison.cloudOnlyWords.slice(0, 50).join(', ')}`
         : '',
+      corrections: {
+        hint: this.#text('corrections.hint'),
+        body: this.#text('corrections.body'),
+        restore: this.#text('corrections.restore'),
+        caption: this.#text('corrections.caption'),
+        target: this.#text('corrections.target'),
+        choose: this.#text('corrections.choose'),
+        saved: this.#text('corrections.saved'),
+        undo: this.#text('corrections.undo'),
+        undoColumns: [...view.corrections]
+          .filter(([, source]) => source.undo.length > 0)
+          .map(([index]) => index),
+        busy: !!view.cloudPending || !!view.correctionPending,
+      },
       columns,
     };
   }

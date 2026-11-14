@@ -4,8 +4,11 @@ export interface PreparationReactModel {
   selection: string;
   names: string[];
   token: string;
-  save: string;
-  clear: string;
+  verify: string;
+  credentialHelp: string;
+  credentialHelpURL: string;
+  credentialHint: string;
+  credentialChecking: boolean;
   credentialStatus: string;
   start: string;
   retry: string;
@@ -20,5 +23,13 @@ export interface PreparationReactModel {
 }
 
 export type PreparationReactCommand = {
-  type: 'start' | 'retry' | 'stop' | 'close' | 'save' | 'clear';
+  type:
+    | 'start'
+    | 'retry'
+    | 'stop'
+    | 'close'
+    | 'credential-change'
+    | 'credential-composition'
+    | 'credential-verify'
+    | 'credential-help';
 };

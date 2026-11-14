@@ -60,60 +60,66 @@ function NumberField({
 function CredentialField({
   provider,
   model,
-  cancel,
   dispatch,
 }: {
   provider: 'mineru' | 'semanticScholar';
   model: ReaderCredentialModel;
-  cancel: string;
   dispatch: Dispatch;
 }) {
   const input = React.useRef<HTMLInputElement>(null);
-  React.useLayoutEffect(
-    () => () => {
-      if (input.current) input.current.value = '';
-    },
-    [],
-  );
+  const composing = React.useRef(false);
+  React.useLayoutEffect(() => {
+    const element = input.current;
+    dispatch({ type: 'mountCredential', provider });
+    return () => {
+      if (element) element.value = '';
+    };
+  }, []);
   return (
     <section className="neo-reader-group">
       <h3>{model.title}</h3>
       <p>{model.hint}</p>
       <label className="neo-reader-row">
         <span>{model.inputLabel}</span>
-        <input ref={input} type="password" autoComplete="off" disabled={model.pending} />
+        <input
+          ref={input}
+          data-neo-ui-part={`credential-${provider}`}
+          type="password"
+          autoComplete="off"
+          onCompositionStart={() => {
+            composing.current = true;
+            dispatch({ type: 'credentialEditing', provider });
+          }}
+          onCompositionEnd={() => {
+            composing.current = false;
+            dispatch({ type: 'credentialInput', provider });
+          }}
+          onInput={(event) => {
+            if (composing.current || (event.nativeEvent as InputEvent).isComposing) return;
+            dispatch({ type: 'credentialInput', provider });
+          }}
+        />
       </label>
       <div className="neo-reader-actions">
         <button
           type="button"
-          disabled={model.pending}
+          disabled={model.checking}
           onClick={() => {
-            const value = input.current?.value ?? '';
-            if (input.current) input.current.value = '';
-            dispatch({ type: 'saveCredential', provider, value });
+            if (composing.current) return;
+            dispatch({ type: 'verifyCredential', provider });
           }}
         >
-          {model.saveLabel}
+          {model.verifyLabel}
         </button>
-        <button
-          type="button"
-          disabled={model.pending}
-          onClick={() => {
-            if (input.current) input.current.value = '';
-            dispatch({ type: 'forgetCredential', provider });
+        <a
+          href={model.helpURL}
+          onClick={(event) => {
+            event.preventDefault();
+            dispatch({ type: 'credentialHelp', provider });
           }}
         >
-          {model.forgetLabel}
-        </button>
-        <button
-          type="button"
-          disabled={model.pending}
-          onClick={() => {
-            if (input.current) input.current.value = '';
-          }}
-        >
-          {cancel}
-        </button>
+          {model.helpLabel}
+        </a>
       </div>
       <small role={model.error ? 'alert' : 'status'}>{model.status}</small>
     </section>
@@ -212,16 +218,10 @@ export function ReaderPage({ model, dispatch }: { model: ReaderPageModel; dispat
       <p role="status" aria-live="polite" className="neo-reader-error">
         {model.status}
       </p>
-      <CredentialField
-        provider="mineru"
-        model={model.mineru}
-        cancel={l.cancel}
-        dispatch={dispatch}
-      />
+      <CredentialField provider="mineru" model={model.mineru} dispatch={dispatch} />
       <CredentialField
         provider="semanticScholar"
         model={model.semanticScholar}
-        cancel={l.cancel}
         dispatch={dispatch}
       />
     </div>

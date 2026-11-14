@@ -1,3 +1,4 @@
+import type * as CredentialChecks from '../../src/platform/credential-check';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreferenceStore } from '../../src/core/preference-store';
 import {
@@ -12,20 +13,22 @@ import { SettingsReader } from '../../src/main/settings-reader';
 const credentials = vi.hoisted(() => ({
   readMinerU: vi.fn(),
   saveMinerU: vi.fn(),
-  hasKey: vi.fn(),
+  readKey: vi.fn(),
   setKey: vi.fn(),
-  dispose: vi.fn(),
 }));
 vi.mock('../../src/platform/document-credentials', () => ({
-  readMinerUToken: credentials.readMinerU,
+  readSettledMinerUToken: credentials.readMinerU,
   saveMinerUToken: credentials.saveMinerU,
 }));
-vi.mock('../../src/references/metadata', () => ({
-  createReferenceMetadataService: () => ({
-    hasSemanticScholarKey: credentials.hasKey,
-    setSemanticScholarKey: credentials.setKey,
-    dispose: credentials.dispose,
-  }),
+vi.mock('../../src/platform/reference-credentials', () => ({
+  readSettledReferenceKey: credentials.readKey,
+  changeReferenceKey: credentials.setKey,
+}));
+vi.mock('../../src/platform/credential-check', async (importOriginal) => ({
+  ...(await importOriginal<typeof CredentialChecks>()),
+  CREDENTIAL_HELP_URLS: { mineru: '', semanticScholar: '' },
+  checkCredential: vi.fn(),
+  openCredentialHelp: vi.fn(),
 }));
 
 class Preferences implements PreferenceStore {
@@ -64,14 +67,14 @@ beforeEach(() => {
   vi.resetAllMocks();
   credentials.readMinerU.mockReturnValue('stored-mineru-secret');
   credentials.saveMinerU.mockResolvedValue(undefined);
-  credentials.hasKey.mockResolvedValue(true);
+  credentials.readKey.mockReturnValue('stored-s2-secret');
   credentials.setKey.mockResolvedValue(undefined);
 });
 
 function mount() {
   const preferences = new Preferences();
   const changed = vi.fn();
-  const page = new SettingsReader({} as never, preferences, 'en', changed);
+  const page = new SettingsReader({} as never, preferences, 'en', changed, () => null);
   return { page, preferences, changed };
 }
 
@@ -121,49 +124,5 @@ describe('Reader Settings', () => {
     expect([...preferences.observers.values()].every((listeners) => listeners.size === 0)).toBe(
       true,
     );
-  });
-
-  it('keeps stored credentials out of the model and explicitly saves and forgets both providers', async () => {
-    const { page } = mount();
-    await Promise.resolve();
-    expect(page.model().mineru.configured).toBe(true);
-    expect(page.model().semanticScholar.configured).toBe(true);
-    expect(JSON.stringify(page.model())).not.toContain('stored-mineru-secret');
-    page.dispatch({ type: 'saveCredential', provider: 'mineru', value: 'new-token' });
-    expect(credentials.saveMinerU).toHaveBeenCalledWith('new-token');
-    expect(JSON.stringify(page.model())).not.toContain('new-token');
-    await Promise.resolve();
-    page.dispatch({ type: 'forgetCredential', provider: 'mineru' });
-    expect(credentials.saveMinerU).toHaveBeenLastCalledWith('');
-    page.dispatch({ type: 'saveCredential', provider: 'semanticScholar', value: 'new-key' });
-    expect(credentials.setKey).toHaveBeenCalledWith('new-key');
-    expect(JSON.stringify(page.model())).not.toContain('new-key');
-    await Promise.resolve();
-    page.dispatch({ type: 'forgetCredential', provider: 'semanticScholar' });
-    expect(credentials.setKey).toHaveBeenLastCalledWith(null);
-    page.dispose();
-  });
-
-  it('reports credential failures and ignores completions after disposal', async () => {
-    let finish!: () => void;
-    credentials.saveMinerU.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finish = resolve;
-      }),
-    );
-    credentials.setKey.mockRejectedValue(new Error('storage failed'));
-    const { page, changed } = mount();
-    await Promise.resolve();
-    page.dispatch({ type: 'saveCredential', provider: 'semanticScholar', value: 'key' });
-    await Promise.resolve();
-    expect(page.model().semanticScholar.error).toBe(true);
-    page.dispatch({ type: 'saveCredential', provider: 'mineru', value: 'token' });
-    expect(page.model().mineru.pending).toBe(true);
-    page.dispose();
-    changed.mockClear();
-    finish();
-    await Promise.resolve();
-    expect(changed).not.toHaveBeenCalled();
-    expect(credentials.dispose).toHaveBeenCalled();
   });
 });

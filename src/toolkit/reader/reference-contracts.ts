@@ -27,7 +27,8 @@ export interface ReaderCitationOccurrence {
 export interface ReaderReferenceDocument {
   readonly attachmentID: number;
   readonly sourceID: string;
-  readonly bibliographyCoverage: 'complete' | 'partial';
+  /** Numbered means structurally consistent observed entries, never verified full-document coverage. */
+  readonly bibliographyCoverage: 'numbered' | 'partial';
   readonly entries: readonly ReaderReferenceEntry[];
   readonly occurrences: readonly ReaderCitationOccurrence[];
 }

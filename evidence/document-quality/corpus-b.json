@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 1,
+  "description": "B 分片：12 篇固定版本的文档理解、OCR 和机器人论文，按领域及版式分层；仅对选定原文、图表题注及引用核验点作代理对源核验，不是人工金标准或全文穷尽标注。页码为从零开始的 PDF 物理页序号；仅少数对象提供基于原页渲染图的近似表体框，不能据此计算全文召回。PDF 不随仓库分发。",
+  "documents": [
+    {
+      "id": "b-deepseek-ocr",
+      "title": "DeepSeek-OCR: Contexts Optical Compression",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2510.18234v1",
+        "sha256": "a7297788968f8ad9ed21bcd273110814e4889efbbc99bfea86dca12205797a90",
+        "fileName": "b-deepseek-ocr.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["document-parsing", "ocr", "single-column", "dense-tables"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2510.18234v1", "https://arxiv.org/abs/2510.18234v1"],
+        "scope": "22 页；核验选定正文、图 3 题注和 Nougat 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-introduction",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "We present DeepSeek-OCR as an initial investigation into the feasibility of compressing long contexts via optical 2D mapping."
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 3 | The architecture of DeepSeek-OCR."
+        },
+        {
+          "id": "reference-nougat",
+          "kind": "reference",
+          "pageIndex": 19,
+          "text": "Nougat: Neural optical understanding for academic documents.",
+          "arxivID": "2308.13418"
+        },
+        {
+          "id": "citation-nougat",
+          "kind": "citation",
+          "pageIndex": 3,
+          "text": "[6]",
+          "arxivID": "2308.13418"
+        }
+      ]
+    },
+    {
+      "id": "b-omnidocbench",
+      "title": "OmniDocBench: Benchmarking Diverse PDF Document Parsing with Comprehensive Annotations",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2412.07626v1",
+        "sha256": "af246c0ca296221e6ec1e5b800f2c359689cc6921a97764e650b0b34686c1907",
+        "fileName": "b-omnidocbench.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-benchmark", "two-column", "dense-tables", "caption-association"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2412.07626v1", "https://arxiv.org/abs/2412.07626v1"],
+        "scope": "30 页；选定正文、同页表 2/3 题注及 Nougat 引用/书目。第 6 物理页表 2/3 表体框由原 PDF 页面渲染图的表格外缘估计并换算为 PDF 用户坐标，排除题注；框为近似值，不含全文标注或人工复核。"
+      },
+      "checks": [
+        {
+          "id": "body-introduction",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "Document content extraction is crucial in computer"
+        },
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 2. Comprehensive evaluation of document parsing algorithms on OmniDocBench: performance metrics for text, formula, table, and reading order extraction, with overall scores derived from ground truth comparisons.",
+          "rect": [78.82, 599.51, 532.14, 720.03]
+        },
+        {
+          "id": "table-3",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 3. End-to-end text recognition performance on OmniDocBench: evaluation using edit distance across 9 PDF page types.",
+          "rect": [83.99, 445.24, 527.33, 563.7]
+        },
+        {
+          "id": "reference-nougat",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Nougat: Neural optical understanding for academic documents.",
+          "arxivID": "2308.13418"
+        },
+        {
+          "id": "citation-nougat",
+          "kind": "citation",
+          "pageIndex": 6,
+          "text": "[5]",
+          "arxivID": "2308.13418"
+        }
+      ]
+    },
+    {
+      "id": "b-openvla",
+      "title": "OpenVLA: An Open-Source Vision-Language-Action Model",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2406.09246v1",
+        "sha256": "9d44351d8ca2aafc11b28949c99d9a99bd1403598fcf9cca042bbfda2dceb706",
+        "fileName": "b-openvla.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["robotics", "vision-language-action", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2406.09246v1", "https://arxiv.org/abs/2406.09246v1"],
+        "scope": "32 页；核验选定正文、图 2 和 BridgeData V2 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-release",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "We release training data, code and model weights for reproducing OpenVLA"
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2: OpenVLA model architecture."
+        },
+        {
+          "id": "reference-bridgedata",
+          "kind": "reference",
+          "pageIndex": 11,
+          "text": "Bridgedata v2: A dataset for robot learning at scale"
+        },
+        {
+          "id": "citation-bridgedata",
+          "kind": "citation",
+          "pageIndex": 4,
+          "text": "[6]",
+          "referenceText": "Bridgedata v2: A dataset for robot learning at scale"
+        }
+      ]
+    },
+    {
+      "id": "b-olmocr",
+      "title": "olmOCR: Unlocking Trillions of Tokens in PDFs with Vision Language Models",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2502.18443v1",
+        "sha256": "2b83caed3b300206bbf189ab83eb26d41afa8d2ad857bff3499589f38a8ab84a",
+        "fileName": "b-olmocr.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["document-parsing", "ocr", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2502.18443v1", "https://arxiv.org/abs/2502.18443v1"],
+        "scope": "20 页；核验选定正文、图 2 和 Nougat 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-anchoring",
+          "kind": "text",
+          "pageIndex": 2,
+          "text": "Figure 2 provides an overview of our method"
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2 Example of how document-anchoring works for a typical page."
+        },
+        {
+          "id": "reference-nougat",
+          "kind": "reference",
+          "pageIndex": 10,
+          "text": "Nougat: Neural optical understanding for academic documents",
+          "arxivID": "2308.13418"
+        },
+        {
+          "id": "citation-nougat",
+          "kind": "citation",
+          "pageIndex": 2,
+          "text": "Blecher et al., 2023",
+          "arxivID": "2308.13418"
+        }
+      ]
+    },
+    {
+      "id": "b-donut",
+      "title": "Donut: Document Understanding Transformer without OCR",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2111.15664v1",
+        "sha256": "6743f93bb65a41f6522a3f64c4e5917d6397dc6fd993586b471c0b76c308b1ea",
+        "fileName": "b-donut.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-understanding", "ocr-free", "two-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2111.15664v1", "https://arxiv.org/abs/2111.15664v1"],
+        "scope": "12 页；核验选定正文、图 3 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-receipts",
+          "kind": "text",
+          "pageIndex": 4,
+          "text": "Indonesian Receipts (Park et al., 2019)."
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 3: The overview of Donut."
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "BERT: pre-training of deep bidirectional transformers for language understanding."
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 7,
+          "text": "Devlin et al., 2018",
+          "referenceText": "BERT: pre-training of deep bidirectional transformers for language understanding"
+        }
+      ]
+    },
+    {
+      "id": "b-layoutlm",
+      "title": "LayoutLM: Pre-training of Text and Layout for Document Image Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/1912.13318v1",
+        "sha256": "2e4362ab545c37f4e802afd24346e8d11539dc4480dc68deb45afc4fe9e80d6f",
+        "fileName": "b-layoutlm.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-understanding", "layout-model", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/1912.13318v1", "https://arxiv.org/abs/1912.13318v1"],
+        "scope": "13 页；核验选定正文、图 2 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-overview",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "Inspired by the BERT model (Devlin et al., 2019)"
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2: An example of LayoutLM, where 2-D layout and image embeddings are added to the original BERT architecture"
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 11,
+          "text": "BERT: Pre-training of deep bidirectional transformers for language understanding.",
+          "doi": "10.18653/v1/N19-1423"
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 1,
+          "text": "Devlin et al., 2019",
+          "doi": "10.18653/v1/N19-1423"
+        }
+      ]
+    },
+    {
+      "id": "b-layoutlmv2",
+      "title": "LayoutLMv2: Multi-modal Pre-training for Visually-Rich Document Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2012.14740v1",
+        "sha256": "96c6e0dd3bae1707bb7483aba1bca7f967f1a520a1611eb614a48157e9b070eb",
+        "fileName": "b-layoutlmv2.pdf",
+        "license": "arXiv non-exclusive distribution license: http://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+      },
+      "strata": ["document-understanding", "layout-model", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2012.14740v1", "https://arxiv.org/abs/2012.14740v1"],
+        "scope": "16 页；核验选定正文、图 2 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-pretraining",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "fully understand the relative positional relationship among different text blocks."
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2: An illustration of the model architecture and pre-training strategies for LayoutLMv2"
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 12,
+          "text": "BERT: Pre-training of deep bidirectional transformers for language understanding.",
+          "doi": "10.18653/v1/N19-1423"
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 7,
+          "text": "Devlin et al., 2019",
+          "doi": "10.18653/v1/N19-1423"
+        }
+      ]
+    },
+    {
+      "id": "b-layoutlmv3",
+      "title": "LayoutLMv3: Pre-training for Document AI with Unified Text and Image Masking",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2204.08387v1",
+        "sha256": "69976d62a0b4935a4081a86ba8ae4a720d751fc3cef2cd9cb6e6a1ee2299dad7",
+        "fileName": "b-layoutlmv3.pdf",
+        "license": "CC BY-NC-SA 4.0: http://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "strata": ["document-understanding", "layout-model", "two-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2204.08387v1", "https://arxiv.org/abs/2204.08387v1"],
+        "scope": "11 页；核验选定正文、图 3 和 FUNSD 引用/书目，保留原题注的 LayoutLM3 拼写；非全文穷尽，无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-funsd",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "FUNSD [19] for form understanding"
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 3. The architecture and pre-training objectives of LayoutLM3."
+        },
+        {
+          "id": "reference-funsd",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Funsd: A dataset for form understanding in noisy scanned documents."
+        },
+        {
+          "id": "citation-funsd",
+          "kind": "citation",
+          "pageIndex": 1,
+          "text": "[19]",
+          "referenceText": "Funsd: A dataset for form understanding in noisy scanned documents"
+        }
+      ]
+    },
+    {
+      "id": "b-nougat",
+      "title": "Nougat: Neural Optical Understanding for Academic Documents",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2308.13418v1",
+        "sha256": "679be336ce8010d3dc86b9530f0a30d4d5ea2a13153c6f274601b40f4382745b",
+        "fileName": "b-nougat.pdf",
+        "license": "CC BY-SA 4.0: http://creativecommons.org/licenses/by-sa/4.0/"
+      },
+      "strata": ["academic-document-parsing", "ocr-free", "single-column", "equations"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2308.13418v1", "https://arxiv.org/abs/2308.13418v1"],
+        "scope": "17 页；核验选定正文、图 1 和 Donut 引用/书目，保留原题注 followin 拼写；非全文穷尽，无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-decoding",
+          "kind": "text",
+          "pageIndex": 2,
+          "text": "During inference the text is generated using greedy decoding."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Our simple end-to-end architecture followin Donut [28]."
+        },
+        {
+          "id": "reference-donut",
+          "kind": "reference",
+          "pageIndex": 10,
+          "text": "OCR-free Document Understanding Transformer",
+          "arxivID": "2111.15664"
+        },
+        {
+          "id": "citation-donut",
+          "kind": "citation",
+          "pageIndex": 1,
+          "text": "[28]",
+          "arxivID": "2111.15664"
+        }
+      ]
+    },
+    {
+      "id": "b-docling",
+      "title": "Docling Technical Report",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2408.09869v1",
+        "sha256": "c2151058e77cd07f0802ba13c6a8bf4c37ad9578bf9d9404c8b0550b6a32d277",
+        "fileName": "b-docling.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/ (paper; distinct from the software license)"
+      },
+      "strata": ["document-parsing", "technical-report", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2408.09869v1", "https://arxiv.org/abs/2408.09869v1"],
+        "scope": "9 页；核验选定正文、报告本身的图 1 和 IBM Data Prep Kit 引用/书目；非全文穷尽，无人工复核或对象框。后续附录中的重复图 1 不属于此核验点。"
+      },
+      "checks": [
+        {
+          "id": "body-pdf",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "This technical report introduces Docling"
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Sketch of Docling’s default processing pipeline."
+        },
+        {
+          "id": "reference-data-prep",
+          "kind": "reference",
+          "pageIndex": 5,
+          "text": "Data Prep Kit: a community project to democratize and accelerate unstructured data preparation for LLM app developers"
+        },
+        {
+          "id": "citation-data-prep",
+          "kind": "citation",
+          "pageIndex": 4,
+          "text": "[6]",
+          "referenceText": "Data Prep Kit: a community project to democratize and accelerate unstructured data preparation for LLM app developers"
+        }
+      ]
+    },
+    {
+      "id": "b-pix2struct",
+      "title": "Pix2Struct: Screenshot Parsing as Pretraining for Visual Language Understanding",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2210.03347v1",
+        "sha256": "71442a504efc377728a6853dd43db6a6f1be166e7e62f4be276041fbeecfdf2a",
+        "fileName": "b-pix2struct.pdf",
+        "license": "CC BY 4.0: http://creativecommons.org/licenses/by/4.0/"
+      },
+      "strata": ["visual-language", "document-understanding", "single-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2210.03347v1", "https://arxiv.org/abs/2210.03347v1"],
+        "scope": "21 页；核验选定正文、图 2 和 DUE 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-pixel-models",
+          "kind": "text",
+          "pageIndex": 1,
+          "text": "Effective use of pixel-only models remains an open challenge."
+        },
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2: Toy illustration of input-output pairs (right) sampled from the original web page (left)."
+        },
+        {
+          "id": "reference-due",
+          "kind": "reference",
+          "pageIndex": 9,
+          "text": "Due: End-to-end document understanding benchmark."
+        },
+        {
+          "id": "citation-due",
+          "kind": "citation",
+          "pageIndex": 9,
+          "text": "Borchmann et al., 2021",
+          "referenceText": "Due: End-to-end document understanding benchmark"
+        }
+      ]
+    },
+    {
+      "id": "b-trocr",
+      "title": "TrOCR: Transformer-based Optical Character Recognition with Pre-trained Models",
+      "pdf": {
+        "url": "https://arxiv.org/pdf/2109.10282v1",
+        "sha256": "c49b1a722227899375f2bae3571cb95a7f5b086647d481da7bab260e6ae10399",
+        "fileName": "b-trocr.pdf",
+        "license": "CC BY-NC-SA 4.0: http://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "strata": ["ocr", "transformer", "two-column", "figures"],
+      "annotation": {
+        "kind": "agent-source-verified",
+        "sources": ["https://arxiv.org/pdf/2109.10282v1", "https://arxiv.org/abs/2109.10282v1"],
+        "scope": "10 页；核验选定正文、图 1 和 BERT 引用/书目，非全文穷尽；无人工复核或对象框。"
+      },
+      "checks": [
+        {
+          "id": "body-scope",
+          "kind": "text",
+          "pageIndex": 0,
+          "text": "leave text detection as the future work."
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Model Architecture of TrOCR, where an encoder-decoder model is designed with a pre-trained image Transformer as the encoder and a pre-trained text Transformer as the decoder."
+        },
+        {
+          "id": "reference-bert",
+          "kind": "reference",
+          "pageIndex": 8,
+          "text": "Bert: Pre-training of deep bidirectional transformers for language"
+        },
+        {
+          "id": "citation-bert",
+          "kind": "citation",
+          "pageIndex": 3,
+          "text": "Devlin et al., 2019",
+          "referenceText": "Bert: Pre-training of deep bidirectional transformers for language"
+        }
+      ]
+    }
+  ]
+}
