@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Provenance and selection notes for corpora C and D; PDFs are obtained separately and are not redistributed.",
+  "description": "Provenance and selection notes for corpora C, D and E; PDFs are obtained separately and are not redistributed.",
   "selectedDataset": {
     "name": "PDFFigures2 Conference150 (CS-150)",
     "datasetVersion": 2,
@@ -125,6 +125,119 @@
       { "id": "d-nips13_1", "selectedPhysicalPages1": [5, 6], "objects": 3 }
     ],
     "counts": { "documents": 12, "selectedPages": 22, "figures": 20, "tables": 10 }
+  },
+  "selectedIndependentDataset": {
+    "name": "PDFFigures2 Conference150 (CS-150), corpus E",
+    "datasetVersion": 2,
+    "repositoryCommit": "3d7ad46753d4a315cccd1c2bcab398380e88c534",
+    "annotationSource": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+    "annotationSha256": "1611797d9b07966d7df195e9aa4c8453e7142af221d4764568511dfe06a9aaf7",
+    "upstreamDocumentList": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/doc_ids.txt",
+    "documentListSha256": "20c904b99e00463a1fc682b0a920892abf55b5088d3b787bd8b835078e3f4b03",
+    "formatSource": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+    "methodPaper": "https://doi.org/10.1145/2910896.2910904",
+    "repositoryLicense": "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/LICENSE.txt",
+    "rights": "The upstream repository provides Apache-2.0 code licensing and distributes annotations but not PDFs for copyright reasons. Each paper has its own PDF rights and reuse terms; the code license is not a PDF reuse grant. Captions are limited source excerpts.",
+    "labeling": "Published Conference150 v2 human figure, table and caption boxes were foreground-cropped; these are upstream annotations independent of this extractor, not newly rechecked gold. PDFFigures2 itself was evaluated on this dataset. The upstream captions can be incomplete or include unrelated text; annotation tool components are not open source.",
+    "selection": "Before predictions, sort ICML and NeurIPS upstream IDs separately by numeric year and suffix, omit C/D identities, then take the first six eligible from each. Eligible papers have an accessible original proceedings PDF, matching caption/page geometry and at least two published objects across their first two distinct annotated physical pages, or their only annotated page. Include every published object on those pages. Selection is deterministic and non-random; no detector output was used. Unselected pages and objects missed upstream are outside scope.",
+    "exclusions": [
+      {
+        "ids": [
+          "icml10_1",
+          "icml10_2",
+          "icml10_3",
+          "icml10_4",
+          "icml10_5",
+          "icml10_6",
+          "icml10_8",
+          "nips09_1",
+          "nips09_2"
+        ],
+        "reason": "Already in corpus C or D."
+      },
+      {
+        "ids": ["icml11_1", "icml11_2"],
+        "reason": "No published objects on annotated pages; fewer than the two-check minimum."
+      }
+    ],
+    "coordinates": "Selected pages are unrotated with CropBox [0,0,612,792] pt except nips09_4 [0,0,595.27,841.82] and nips09_6 [0,0,595,842]. For upstream [l,t,r,b], scale s=72/dpi, pageIndex=page-1, and PDF rectangle=[cropLeft+s*l,cropTop-s*b,cropLeft+s*r,cropTop-s*t], rounded to 0.01 pt. Each selected label uses its actual listed DPI: 72.01672725080974 for nips09_4, 71.95630254997545 for nips09_6, and 72 for the others. Body region_bb and caption_bb remain separate; scaled published page dimensions agree with the CropBox within 2 pt.",
+    "identity": "Each selected HTTPS source was fetched twice, returned PDF bytes and HTTP 200, and the two byte streams were equal; corpus-e.json records SHA-256 and the selected HTTPS URL. The selected documents have distinct hashes and are disjoint from C/D by both upstream ID and SHA-256. Title, selected-page CropBox/rotation and caption text extracted from each published caption rectangle corroborate identity, but upstream supplied no historical PDF hashes. Mathematical tokens and line wrapping can differ. The published icml11_3 Figure 2 and Figure 3 captions interleave neighboring text, and icml11_4 Figure 1 includes diagram text; their boxes and upstream transcriptions are retained unchanged, not newly corrected gold.",
+    "sourceAccess": "The selected PDFs total 6,137,219 bytes. Original upstream URLs are listed in each corpus annotation; final URLs are recorded below. The three 2011 legacy HTTP sources were also fetched once and matched their corresponding HTTPS icml.cc/2011 official mirror byte-for-byte; direct HTTPS on the legacy host failed certificate hostname validation. Original NeurIPS HTTP URLs were upgraded to HTTPS and redirected to proceedings.neurips.cc. No PDF is redistributed in the repository.",
+    "documents": [
+      {
+        "id": "e-icml10_7",
+        "selectedPhysicalPages1": [5, 6],
+        "objects": 4,
+        "finalUrl": "https://icml.cc/Conferences/2010/papers/235.pdf"
+      },
+      {
+        "id": "e-icml10_9",
+        "selectedPhysicalPages1": [3, 6],
+        "objects": 2,
+        "finalUrl": "https://icml.cc/Conferences/2010/papers/247.pdf"
+      },
+      {
+        "id": "e-icml10_10",
+        "selectedPhysicalPages1": [2, 4],
+        "objects": 2,
+        "finalUrl": "https://icml.cc/Conferences/2010/papers/259.pdf"
+      },
+      {
+        "id": "e-icml11_3",
+        "selectedPhysicalPages1": [5, 6],
+        "objects": 3,
+        "finalUrl": "https://icml.cc/2011/papers/150_icmlpaper.pdf"
+      },
+      {
+        "id": "e-icml11_4",
+        "selectedPhysicalPages1": [3],
+        "objects": 2,
+        "finalUrl": "https://icml.cc/2011/papers/175_icmlpaper.pdf"
+      },
+      {
+        "id": "e-icml11_5",
+        "selectedPhysicalPages1": [6, 7],
+        "objects": 3,
+        "finalUrl": "https://icml.cc/2011/papers/176_icmlpaper.pdf"
+      },
+      {
+        "id": "e-nips09_3",
+        "selectedPhysicalPages1": [2, 5],
+        "objects": 3,
+        "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2009/file/e46de7e1bcaaced9a54f1e9d0d2f800d-Paper.pdf"
+      },
+      {
+        "id": "e-nips09_4",
+        "selectedPhysicalPages1": [3, 8],
+        "objects": 3,
+        "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2009/file/996a7fa078cc36c46d02f9af3bef918b-Paper.pdf"
+      },
+      {
+        "id": "e-nips09_5",
+        "selectedPhysicalPages1": [3, 4],
+        "objects": 2,
+        "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2009/file/f2217062e9a397a1dca429e7d70bc6ca-Paper.pdf"
+      },
+      {
+        "id": "e-nips09_6",
+        "selectedPhysicalPages1": [2, 4],
+        "objects": 2,
+        "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2009/file/389bc7bb1e1c2a5e7e147703232a88f6-Paper.pdf"
+      },
+      {
+        "id": "e-nips09_7",
+        "selectedPhysicalPages1": [2, 7],
+        "objects": 2,
+        "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2009/file/fc221309746013ac554571fbd180e1c8-Paper.pdf"
+      },
+      {
+        "id": "e-nips09_8",
+        "selectedPhysicalPages1": [7, 8],
+        "objects": 3,
+        "finalUrl": "https://proceedings.neurips.cc/paper_files/paper/2009/file/94f6d7e04a4d452035300f18b984988c-Paper.pdf"
+      }
+    ],
+    "counts": { "documents": 12, "selectedPages": 23, "figures": 24, "tables": 7 }
   },
   "otherDatasets": [
     {

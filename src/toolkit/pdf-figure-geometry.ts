@@ -4,6 +4,7 @@ import { record } from '../document-analysis/contracts';
 
 type Matrix = readonly [number, number, number, number, number, number];
 const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
+const EMPTY_CLIP: DocumentRect = [0, 0, 0, 0];
 
 function numbers(value: unknown): readonly number[] | null {
   if (!value || typeof value !== 'object' || !('length' in value)) return null;
@@ -36,6 +37,16 @@ function transformed(rect: readonly number[], matrix: Matrix, padding = 0): Docu
     Math.max(...xs) + padding,
     Math.max(...ys) + padding,
   ];
+}
+
+function intersect(a: DocumentRect, b: DocumentRect): DocumentRect {
+  const left = Math.max(a[0], b[0]);
+  const bottom = Math.max(a[1], b[1]);
+  const right = Math.min(a[2], b[2]);
+  const top = Math.min(a[3], b[3]);
+  return left === a[0] && bottom === a[1] && right === a[2] && top === a[3]
+    ? a
+    : [left, bottom, right, top];
 }
 
 /** Project PDF.js font metrics and text transforms without applying the display viewport or rotation. */
@@ -72,7 +83,7 @@ export function pdfFigureText(value: unknown): readonly LocalFigureText[] {
   return result;
 }
 
-/** Observe painted graphics only. A clipping path is not visual evidence for a figure body. */
+/** Observe painted bounds within native clipping regions; clipping paths are not figure evidence. */
 export function pdfFigureGraphics(
   value: unknown,
   ops: Readonly<Record<string, number>>,
@@ -82,8 +93,10 @@ export function pdfFigureGraphics(
     throw new Error('PDF graphics unavailable');
   let matrix = IDENTITY;
   let lineWidth = 1;
+  let clip: DocumentRect | null = null;
   let pending: readonly number[] | null = null;
-  const stack: { matrix: Matrix; lineWidth: number }[] = [];
+  let pendingClip = false;
+  const stack: { matrix: Matrix; lineWidth: number; clip: DocumentRect | null }[] = [];
   const result: DocumentRect[] = [];
   const painted = new Set(
     [
@@ -97,15 +110,34 @@ export function pdfFigureGraphics(
       'closeEOFillStroke',
     ].map((name) => ops[name]),
   );
+  const clipTo = (bounds: readonly number[], transform = matrix): void => {
+    if (bounds.length !== 4) return;
+    const rect =
+      bounds[0] === bounds[2] || bounds[1] === bounds[3]
+        ? EMPTY_CLIP
+        : transformed(bounds, transform);
+    clip = clip ? intersect(clip, rect) : rect;
+  };
+  const consumePath = (bounds: readonly number[] | null, empty = false): void => {
+    if (pendingClip) {
+      if (bounds) clipTo(bounds);
+      else if (empty) clip = EMPTY_CLIP;
+    }
+    pending = null;
+    pendingClip = false;
+  };
   const add = (bounds: readonly number[], stroke: boolean): void => {
     if (bounds.length !== 4 || !bounds.every(Number.isFinite)) return;
+    if (clip && (clip[2] <= clip[0] || clip[3] <= clip[1])) return;
     const scale = Math.max(Math.hypot(matrix[0], matrix[1]), Math.hypot(matrix[2], matrix[3]));
     const rect = transformed(
       bounds,
       matrix,
       stroke ? Math.max(0.1, (lineWidth * scale) / 2) : 0.05,
     );
-    if (rect.every(Number.isFinite) && rect[2] > rect[0] && rect[3] > rect[1]) result.push(rect);
+    const visible = clip ? intersect(rect, clip) : rect;
+    if (visible.every(Number.isFinite) && visible[2] > visible[0] && visible[3] > visible[1])
+      result.push(visible);
   };
   const addImage = (next: readonly number[]): void => {
     if (next.length !== 6) return;
@@ -119,22 +151,32 @@ export function pdfFigureGraphics(
     const args: readonly unknown[] = Array.isArray(list.argsArray[index])
       ? list.argsArray[index]
       : [];
-    if (op === ops.save || op === ops.beginGroup) stack.push({ matrix, lineWidth });
-    else if (op === ops.restore || op === ops.endGroup) {
+    if (op === ops.save || op === ops.beginGroup) {
+      stack.push({ matrix, lineWidth, clip });
+      if (op === ops.beginGroup) {
+        const group = record(args[0]);
+        const bounds = numbers(group?.bbox);
+        const next = numbers(group?.matrix);
+        // PDF.js transforms the group's clip, not its content CTM; Form operators own that.
+        if (bounds) clipTo(bounds, next?.length === 6 ? multiply(matrix, next) : matrix);
+      }
+    } else if (op === ops.restore || op === ops.endGroup) {
       const state = stack.pop();
-      if (state) ({ matrix, lineWidth } = state);
+      if (state) ({ matrix, lineWidth, clip } = state);
     } else if (op === ops.transform) {
       const next = numbers(args);
       if (next?.length === 6) matrix = multiply(matrix, next);
     } else if (op === ops.setLineWidth && typeof args[0] === 'number')
       lineWidth = Math.abs(args[0]);
     else if (op === ops.paintFormXObjectBegin) {
-      stack.push({ matrix, lineWidth });
+      stack.push({ matrix, lineWidth, clip });
       const next = numbers(args[0]);
       if (next?.length === 6) matrix = multiply(matrix, next);
+      const bounds = numbers(args[1]);
+      if (bounds) clipTo(bounds);
     } else if (op === ops.paintFormXObjectEnd) {
       const state = stack.pop();
-      if (state) ({ matrix, lineWidth } = state);
+      if (state) ({ matrix, lineWidth, clip } = state);
     } else if (op === ops.constructPath) {
       // Zotero's installed PDF.js uses either a separate paint op (older builds),
       // or [paintOp, pathBuffers, bounds]. Both expose the untransformed path bounds.
@@ -142,12 +184,16 @@ export function pdfFigureGraphics(
       if (typeof args[0] === 'number') {
         if (bounds && painted.has(args[0]))
           add(bounds, args[0] !== ops.fill && args[0] !== ops.eoFill);
-        pending = null;
+        consumePath(
+          bounds,
+          args[2] === null && Array.isArray(args[1]) && args[1].length === 1 && args[1][0] === null,
+        );
       } else pending = bounds;
-    } else if (painted.has(op as number)) {
+    } else if (op === ops.clip || op === ops.eoClip) pendingClip = true;
+    else if (painted.has(op as number)) {
       if (pending) add(pending, op !== ops.fill && op !== ops.eoFill);
-      pending = null;
-    } else if (op === ops.endPath) pending = null;
+      consumePath(pending);
+    } else if (op === ops.endPath) consumePath(pending);
     else if (
       op === ops.paintImageXObject ||
       op === ops.paintInlineImageXObject ||

@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-11-14T19:14:24.552Z",
+  "source": {
+    "baseCommit": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+    "workingTree": true,
+    "runtime": {
+      "os": "WINNT",
+      "zotero": "10.0.8",
+      "pdfjs": "5.7.0"
+    },
+    "localCacheGeneration": 3,
+    "configuration": "pdfjs-native-text-graphics-v1",
+    "xpiSha256": "4e22af052822b65c6b1fdfdec73aab2f5099454ca03bf0f1784b0f9d24e882b2",
+    "installedBundleSha256": "b4e66e28558daf20754cb437b34b3beb68d89926d7f1f9bff35d670f8ddb2a05",
+    "installation": "从实际构建的 build/addon 复制到独立 profile，经 RDP 临时安装；未改变共享开发配置，不声称持久安装或重启升级验收。"
+  },
+  "method": {
+    "driver": "Firefox RDP 驱动隔离 Zotero 中的合成按键、真实按钮与原生笔记；逐张核对界面截图和完整预览 PNG。",
+    "documents": [
+      {
+        "id": "c-icml14_9",
+        "pdfSha256": "7d4ef649618294cbdf79e1b5ff4a182d33432d8a5bc98c8311b51a135dbd3e5c",
+        "object": "Table 1",
+        "physicalPage": 5
+      },
+      {
+        "id": "c-icml13_8",
+        "pdfSha256": "fb60b5cea5a3f18de6a4e1ace58252296409db55faa7cc4769013974c4eb9dbd",
+        "object": "Figure 1",
+        "physicalPage": 1
+      }
+    ],
+    "scope": "两个固定对象的实际操作证据，与 108 项静态公开标注评分分开，不推广为全文任务成功率。",
+    "notPerformed": [
+      "物理键盘与真实输入法",
+      "原生 SDT 识别、模型下载或云端解析",
+      "持久 XPI 安装／更新与完整重启复用"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "old-cache-readonly",
+      "status": "passed",
+      "oldResult": "同一 PDF 在 da0875ec 上真实生成的代次 2 布局，9 页、695 区域；旧 Table 1 仅有题注。",
+      "oldCacheSha256": "3754dc4a0106a2556986f6e2aba91051e874142831f785c9b06a1a71b9700f7d",
+      "actions": "打开图表列表并选择 Table 1，完整 PNG 含所有表行、列、题注，不含相邻 Figure 2。",
+      "preview": "table1-readonly-preview.png",
+      "surface": "table1-readonly-generation3.png",
+      "previewSize": {
+        "width": 670,
+        "height": 226
+      },
+      "newCacheWritten": false,
+      "oldCacheUnchanged": true
+    },
+    {
+      "id": "table-source",
+      "status": "passed",
+      "beforePage": "1",
+      "afterPage": "5",
+      "pickerClosed": true,
+      "documentHiddenBefore": false,
+      "pdfCanvases": 3,
+      "currentCacheExists": false,
+      "screenshot": "table1-source-page5-visible.png",
+      "documentHiddenAfter": false
+    },
+    {
+      "id": "explicit-generation3-and-reuse",
+      "status": "passed",
+      "button": "Use cache or parse locally",
+      "currentKey": {
+        "backend": "local-rules",
+        "adapterVersion": 3,
+        "configuration": "pdfjs-native-text-graphics-v1"
+      },
+      "pages": 9,
+      "regions": 668,
+      "tableAssociation": [
+        {
+          "association": "backend",
+          "members": 2
+        }
+      ],
+      "oldCacheStillValid": true,
+      "oldCacheUnchanged": true,
+      "currentCacheSha256": "396d9a5fbebd2fda0065e962196a2805ac7684f0aa00c21cb1868fe3bc91fcc2",
+      "saveSurface": "generation3-explicit-cache-saved.png",
+      "reopenedStatus": "Loaded local analysis cache; PDF was not uploaded.",
+      "warmPreview": "table1-cached-preview.png",
+      "warmCacheUnchanged": true
+    },
+    {
+      "id": "table-excerpt-note",
+      "status": "passed",
+      "selection": "Table · Page 5\nTable 1. Estimated intrinsic dimension (avg. ± std.) for each k ∈ {5, 10, . . . , 100}.",
+      "preview": "table1-excerpt-preview.png",
+      "savedSurface": "table1-excerpt-saved.png",
+      "openedSurface": "table1-opened-note.png",
+      "noteID": 35,
+      "noteKey": "5D6FDNH8",
+      "embeddedImageKey": "I2WL79BR",
+      "embeddedImageSha256": "88d3a01adaf0ff7b0c1617d5b397e2401e0869f100ca4460e3fa7156606d1d29",
+      "previewAndEmbeddedImageByteIdentical": true,
+      "captionAndSourceLinkVisible": true,
+      "sourceURL": "zotero://open-pdf/library/items/7GBX7GCC?page=5",
+      "sourceAnnotation": {
+        "pageIndex": 4,
+        "rect": [57.732, 600.3302576000001, 392.5300000305176, 713.2010000305175]
+      },
+      "reopenedSave": {
+        "statusLines": ["Reused existing note: Table 1 · Neo coverage: c-icml14_9"],
+        "noteIDs": [35],
+        "sameNote": true,
+        "htmlUnchanged": true,
+        "openedAgain": true
+      }
+    },
+    {
+      "id": "compound-figure",
+      "status": "passed",
+      "preview": "compound-figure1-preview.png",
+      "previewSize": {
+        "width": 482,
+        "height": 554
+      },
+      "surface": "compound-figure1-picker.png",
+      "sourceSurface": "compound-figure1-source.png",
+      "sourcePage": "1",
+      "pickerClosed": true,
+      "sourceDocumentHidden": false,
+      "visualResult": "两个子图、内部箭头、(a)/(b) 换行说明与完整题注在裁剪内；相邻摘要正文不在预览内，实际原页定位一致。"
+    }
+  ],
+  "guards": {
+    "sdtGetReaderCallsBlocked": 1,
+    "sdtGetPackCallsBlocked": 2,
+    "remoteHttpAttempts": 0,
+    "blockedRequests": [],
+    "allowedPackagedFontReads": 7,
+    "packagedPdfSourceReads": 1,
+    "afterTableExplicitParse": {
+      "sdtGetReaderCalls": 0,
+      "sdtGetPackCallsBlocked": 1
+    },
+    "scope": "原始 SDT 读取和包入口均未执行，守卫直接抛错。表格显式本地解析时 getReader 为 0；之后的笔记／第二个 Reader 交互阶段新增一次 getReader 和一次 getPack，未记录调用栈，不能据此归因具体调用方。全程无远端 HTTP 或模型下载。"
+  },
+  "harnessObservations": [
+    {
+      "issue": "首次原文截图时 PDF 被其他桌面窗口遮挡，页面空白。",
+      "rejectedFile": "table1-source-page5.png",
+      "resolution": "仅对 PID＋profile 核验通过的自有窗口临时置顶并立即解除；重新捕获时 document.hidden 为 false，确认真实 PDF 可见。",
+      "acceptedFile": "table1-source-page5-visible.png"
+    },
+    {
+      "issue": "第二个 Reader 原生初始化刚返回时，Neo 尚未接纳合成快捷键。",
+      "initialConsumed": [false, false, false],
+      "readyConsumed": [true, true, true],
+      "resolution": "交互就绪后打开真实选择器；初次未消费事件保留，不计为成功输入。"
+    }
+  ],
+  "screenshots": {
+    "storage": "本地实验 neo-local-figure-coverage.i51dYY/screenshots；仓库仅保存摘要与哈希，不分发论文图像。",
+    "windowSize": {
+      "width": 1000,
+      "height": 600
+    },
+    "files": [
+      {
+        "file": "compound-figure1-picker.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 446472,
+        "sha256": "85177884799570e1205f37ff2bf9752e5aaa40176c893094ff1d9e27ec7d257f",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "compound-figure1-preview.png",
+        "width": 482,
+        "height": 554,
+        "bytes": 322913,
+        "sha256": "2606abfa1be927b8b5f8d187d1f6fa6f7f281987e91caa2b3399f486960c3da3",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "compound-figure1-source.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 367046,
+        "sha256": "1e999ef5b4ec53f2985223aa6302edf526b36173c26c9ce0615f858fbd9b7e69",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "generation3-explicit-cache-saved.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 73454,
+        "sha256": "0ffeb029488602c94c743f22e9c3141f668c9e86eedba83ca868a61883134ebb",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-cached-preview.png",
+        "width": 670,
+        "height": 226,
+        "bytes": 33316,
+        "sha256": "88d3a01adaf0ff7b0c1617d5b397e2401e0869f100ca4460e3fa7156606d1d29",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-excerpt-preview.png",
+        "width": 670,
+        "height": 226,
+        "bytes": 33316,
+        "sha256": "88d3a01adaf0ff7b0c1617d5b397e2401e0869f100ca4460e3fa7156606d1d29",
+        "review": "byte-identical to visually reviewed table1-cached-preview.png"
+      },
+      {
+        "file": "table1-excerpt-saved.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 137852,
+        "sha256": "0616fa99a87c5bcaf245b4cd0e6e3d2d7984261c01f80ab390fc22b6cfe6620b",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-opened-note.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 114256,
+        "sha256": "041dd55dbac39786f9b73843238b7f53bd79fbcb8a7cab556bd7b1607d7a6fb0",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-readonly-generation3.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 118011,
+        "sha256": "dbac962489e081fe7225b994c42cafb3098f4fb03bd2a35a339ad163a9e3baf0",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-readonly-preview.png",
+        "width": 670,
+        "height": 226,
+        "bytes": 31437,
+        "sha256": "85bd8806e32e8bbf925bd3fd1169bc6273d07b79e826eac60de5061d320b5ac2",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-source-page5-visible.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 186582,
+        "sha256": "10c247c4ef6cc4740638d93a6b2b374e8b697e2e957606516398aa7f7aadd2f1",
+        "review": "visually reviewed actual UI or full preview"
+      },
+      {
+        "file": "table1-source-page5.png",
+        "width": 1000,
+        "height": 600,
+        "bytes": 23979,
+        "sha256": "61700e60cdbb997435215b4869bdbb73b110a388618475a12fd58cb6b8891e09",
+        "review": "rejected: PDF occluded and blank; replaced by the visible capture"
+      }
+    ]
+  },
+  "preservedFiles": {
+    "generation2.json": {
+      "sha256": "3754dc4a0106a2556986f6e2aba91051e874142831f785c9b06a1a71b9700f7d",
+      "bytes": 218235
+    },
+    "generation3.json": {
+      "sha256": "396d9a5fbebd2fda0065e962196a2805ac7684f0aa00c21cb1868fe3bc91fcc2",
+      "bytes": 212163
+    },
+    "note-image.png": {
+      "sha256": "88d3a01adaf0ff7b0c1617d5b397e2401e0869f100ca4460e3fa7156606d1d29",
+      "bytes": 33316
+    }
+  }
+}

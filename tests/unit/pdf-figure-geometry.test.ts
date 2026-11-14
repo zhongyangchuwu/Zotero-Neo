@@ -17,6 +17,7 @@ const ops = {
   closeEOFillStroke: 27,
   endPath: 28,
   clip: 29,
+  eoClip: 30,
   paintFormXObjectBegin: 74,
   paintFormXObjectEnd: 75,
   beginGroup: 76,
@@ -154,6 +155,147 @@ describe('PDF figure source coordinates', () => {
     expect(graphics.map((rect) => rect.map(Math.round))).toEqual([
       [64, 140, 70, 146],
       [14, 29, 22, 44],
+    ]);
+  });
+
+  it.each([ops.clip, ops.eoClip])(
+    'clips oversized painted paths after compact endPath (%s)',
+    (clip) => {
+      const graphics = pdfFigureGraphics(
+        {
+          fnArray: [clip, ops.constructPath, ops.constructPath],
+          argsArray: [
+            [],
+            [ops.endPath, [[]], [10, 20, 50, 60]],
+            [ops.stroke, [[]], [-200, -300, 600, 800]],
+          ],
+        },
+        ops,
+      );
+      expect(graphics).toEqual([[10, 20, 50, 60]]);
+    },
+  );
+
+  it('keeps nested clips in page coordinates and restores the parent clip', () => {
+    const graphics = pdfFigureGraphics(
+      {
+        fnArray: [
+          ops.clip,
+          ops.constructPath,
+          ops.save,
+          ops.transform,
+          ops.eoClip,
+          ops.constructPath,
+          ops.transform,
+          ops.constructPath,
+          ops.restore,
+          ops.constructPath,
+        ],
+        argsArray: [
+          [],
+          [ops.endPath, [[]], [0, 0, 100, 100]],
+          [],
+          [2, 0, 0, 2, 10, 20],
+          [],
+          [ops.endPath, [[]], [0, 0, 20, 20]],
+          [1, 0, 0, 1, 40, 0],
+          [ops.fill, [[]], [-100, -100, 100, 100]],
+          [],
+          [ops.fill, [[]], [-100, -100, 200, 200]],
+        ],
+      },
+      ops,
+    );
+    expect(graphics).toEqual([
+      [10, 20, 50, 60],
+      [0, 0, 100, 100],
+    ]);
+  });
+
+  it('applies a legacy clipping path only after its current paint operation', () => {
+    const graphics = pdfFigureGraphics(
+      {
+        fnArray: [ops.constructPath, ops.clip, ops.fill, ops.transform, ops.paintImageXObject],
+        argsArray: [[[], [], [10, 20, 50, 60]], [], [], [100, 0, 0, 100, 0, 0], ['image']],
+      },
+      ops,
+    );
+    expect(graphics).toEqual([
+      [9.95, 19.95, 50.05, 60.05],
+      [10, 20, 50, 60],
+    ]);
+  });
+
+  it('suppresses images inside an empty clip without changing the restored parent', () => {
+    const graphics = pdfFigureGraphics(
+      {
+        fnArray: [
+          ops.save,
+          ops.clip,
+          ops.constructPath,
+          ops.paintImageXObject,
+          ops.restore,
+          ops.paintImageXObject,
+        ],
+        argsArray: [[], [], [ops.endPath, [null], null], ['hidden'], [], ['visible']],
+      },
+      ops,
+    );
+    expect(graphics).toEqual([[-0.05, -0.05, 1.05, 1.05]]);
+  });
+
+  it('clips Form contents to the transformed bounding box and restores its parent', () => {
+    const graphics = pdfFigureGraphics(
+      {
+        fnArray: [
+          ops.paintFormXObjectBegin,
+          ops.transform,
+          ops.paintImageXObject,
+          ops.paintFormXObjectEnd,
+          ops.paintImageXObject,
+        ],
+        argsArray: [
+          [
+            [2, 0, 0, 3, 10, 20],
+            [0, 0, 10, 10],
+          ],
+          [30, 0, 0, 30, 0, 0],
+          ['inside'],
+          [],
+          ['after'],
+        ],
+      },
+      ops,
+    );
+    expect(graphics).toEqual([
+      [10, 20, 30, 50],
+      [-0.05, -0.05, 1.05, 1.05],
+    ]);
+  });
+
+  it('transforms a transparency group clip without applying its matrix to the content twice', () => {
+    const graphics = pdfFigureGraphics(
+      {
+        fnArray: [
+          ops.beginGroup,
+          ops.transform,
+          ops.paintImageXObject,
+          ops.endGroup,
+          ops.paintImageXObject,
+        ],
+        argsArray: [
+          [{ matrix: [2, 0, 0, 2, 10, 20], bbox: [0, 0, 10, 10] }],
+          [40, 0, 0, 15, 0, 20],
+          ['inside'],
+          [],
+          ['after'],
+        ],
+      },
+      ops,
+    );
+    expect(graphics).toEqual([
+      [10, 20, 30, 35.05],
+      [-0.05, -0.05, 1.05, 1.05],
     ]);
   });
 });

@@ -1,0 +1,4195 @@
+{
+  "schemaVersion": 1,
+  "description": "固定 C/D/E 108 个公开标注对象：原版 figure-extractor、PDFFigures2 与冻结后的 Neo 代次 3 对照。",
+  "experiment": "neo-external-figures.ps6K4S/restored-runtime-v1",
+  "measurement": {
+    "fullPdfDocuments": 34,
+    "fullPdfPages": 293,
+    "selectedPages": 65,
+    "checks": 108,
+    "bodyIoUThreshold": 0.5,
+    "captionIoUThreshold": 0.5,
+    "pairing": "tools/evaluate-document-quality.mjs：保留各工具原生主体／题注关系和输出框，要求主体与题注均通过阈值，同一资源不重复计分。",
+    "bodyOnly": "Maximum-cardinality one-to-one same-page same-kind matching against published body boxes. Caption geometry is not a body-match prerequisite. Unmatched body candidates are NOT automatically extra-object false positives: they can be badly bounded genuine objects or objects absent from upstream annotations. Scope is selected pages only, not full-document precision/recall.",
+    "figureExtractorBounds": "使用原版 margin=8 的实际裁图边界，不按标注去掉留白、题注或页眉。",
+    "coordinateConversion": "统一为未旋转 PDF 原生坐标；PDFFigures2 使用 pdfinfo 提供的两位小数 CropBox 将 72 DPI 左上坐标转为左下坐标。所有输入页面 rotation=0。",
+    "timing": "未做可比耗时排名。外部工具时间含完整提取／导入或裁图；Neo 的 durationMs 只计原生几何上的生产分组重放。",
+    "taskOutcomes": "外部工具仅运行 CLI 并核验输出与部分裁图，不声称 Zotero 接入或实际阅读任务通过；Neo 界面证据另见 local-rules-v3-uat.json。"
+  },
+  "limitations": [
+    "所选页采用全部已发布标注，但不是全文完整标注，不报告全文准确率或召回率。",
+    "C/D 已用于 Neo 规则校准；E 在 Neo 最终冻结后首次提取，不能用总分证明 Neo 泛化优于其他方法。",
+    "C/D/E 均来自 PDFFigures2 Conference150 v2 开发／评估数据，不是对 PDFFigures2 独立的新测试集；未加入新的人工金标准。",
+    "仅覆盖这些数字版英文会议论文，不涵盖扫描页、中文、旋转页或所有版式。",
+    "未匹配主体候选可能是边界不准的真实对象或上游未标注对象，不自动归为额外对象误报。",
+    "通过 IoU 阈值不保证裁图无页眉、邻图或细节裁切；工具自身 ok 状态也不等于识别正确。"
+  ],
+  "methods": {
+    "figure-extractor": {
+      "name": "Sunrich-HT/figure-extractor",
+      "version": "0.4.0",
+      "expectedVersion": "0.4.0",
+      "commit": "dc0f41a04986011faadb6a8e81046041d87d5806",
+      "sourcePath": "/home/han/.omp/experiments/neo-figure-compare.ykIij7/rules/source",
+      "sourceVersionEvidence": "/home/han/.omp/experiments/neo-figure-compare.ykIij7/rules/source/pyproject.toml",
+      "runtime": {
+        "python": "3.12.12 (main, Feb 12 2026, 00:42:14) [Clang 21.1.4 ]",
+        "PyMuPDF": "1.28.2",
+        "expectedPyMuPDF": "1.28.2",
+        "MuPDF": "1.28.2",
+        "availabilityError": null
+      },
+      "parameters": {
+        "dpi": 300,
+        "marginPoints": 8,
+        "kinds": "all",
+        "tiers": "A,B,C",
+        "prefer": "pdf",
+        "fallback": "none",
+        "contactSheet": true,
+        "zip": false,
+        "fullPdf": true,
+        "networkBlocked": true,
+        "maximumLogicalCpus": 2,
+        "perPdfTimeoutSeconds": 90,
+        "wholeRunBoundSeconds": 900
+      },
+      "fullPdfOutcomes": {
+        "completed": 34,
+        "failed": 0,
+        "figureTableObjects": 168,
+        "otherExhibits": 26,
+        "captionCandidates": 194
+      },
+      "sourceLicense": "MIT",
+      "dependencyLicense": "PyMuPDF/MuPDF：AGPL 或商业许可，不能由外层 MIT 推断依赖均为 MIT。",
+      "sourceUrl": "https://github.com/Sunrich-HT/figure-extractor/tree/dc0f41a04986011faadb6a8e81046041d87d5806"
+    },
+    "pdffigures2": {
+      "name": "pdffigures2",
+      "version": "source commit",
+      "commit": "3d7ad46753d4a315cccd1c2bcab398380e88c534",
+      "runtime": {
+        "javaPath": "/home/han/.omp/experiments/neo-external-figures.ps6K4S/pdffigures2/restored-v1/jre/bin/java",
+        "javaVersion": "openjdk version \"17.0.21\" 2026-10-20\nOpenJDK Runtime Environment Temurin-17.0.21+9 (build 17.0.21+9)\nOpenJDK 64-Bit Server VM Temurin-17.0.21+9 (build 17.0.21+9, mixed mode, sharing)",
+        "javaVersionExitCode": 0,
+        "jarPath": "/home/han/.omp/experiments/neo-figure-compare.ykIij7/classical/pdffigures2.jar",
+        "jarSha256": "ec25fd2090c4cabeb955bf87c9b79bc81a1489b30905c0e949ac03e8e1ba1649",
+        "vendor": "Eclipse Adoptium",
+        "archiveUrl": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jre_x64_linux_hotspot_17.0.21_9.tar.gz",
+        "metadataUrl": "https://api.adoptium.net/v3/assets/feature_releases/17/ga?architecture=x64&image_type=jre&os=linux&vendor=eclipse&page_size=20",
+        "publishedSha256": "9f41bf88c7900c7097444a1bdeb84146ae692bc08842490ab098063c74bf9a8a",
+        "actualSha256": "9f41bf88c7900c7097444a1bdeb84146ae692bc08842490ab098063c74bf9a8a"
+      },
+      "parameters": {
+        "cli": "-q -t 1 -c -d <document-dir>/ -s <document-dir>/stats.json <full-pdf>",
+        "jvm": "-XX:ActiveProcessorCount=2 -Xmx2g -Duser.home=/home/han/.omp/experiments/neo-external-figures.ps6K4S/pdffigures2/restored-v1",
+        "noImages": true,
+        "timeoutSecondsPerDocument": 90,
+        "wholeRunBoundSeconds": 900,
+        "cpuAffinity": [0, 1],
+        "coordinateConversion": "pdfinfo CropBox (2 decimal places), unrotated top-left 72 DPI -> native PDF bottom-left; rotated pages retained but not converted",
+        "runIdentity": "restored-runtime-v1"
+      },
+      "fullPdfOutcomes": {
+        "completed": 34,
+        "failed": 0,
+        "associatedFigureTableObjects": 165,
+        "regionlessCaptions": 8
+      },
+      "sourceLicense": "Apache-2.0；未将整个 JAR 依赖闭包宣称为同一许可证。",
+      "sourceUrl": "https://github.com/allenai/pdffigures2/tree/3d7ad46753d4a315cccd1c2bcab398380e88c534"
+    },
+    "neo": {
+      "name": "Neo local-rules",
+      "adapterGeneration": 3,
+      "bundleSha256": "67f179955165d38b36f8e42d158fb9a00c4d4948db1def270a63776ca7036d60",
+      "sourceBaseCommit": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "scope": "Frozen candidate-r4 objects on the selected published-annotation pages",
+      "sourceEvidence": "local-rules-v3-comparison.json",
+      "uatEvidence": "local-rules-v3-uat.json"
+    }
+  },
+  "summary": {
+    "figure-extractor": {
+      "C": {
+        "documents": 10,
+        "expected": 47,
+        "predictedBodyGroups": 46,
+        "matchedBodyBoxes": 34,
+        "unmatchedBodyCandidates": 12,
+        "expectedWithoutBodyIoUMatch": 13,
+        "captionOnlyCandidates": 0,
+        "paired": 30
+      },
+      "D": {
+        "documents": 12,
+        "expected": 30,
+        "predictedBodyGroups": 30,
+        "matchedBodyBoxes": 29,
+        "unmatchedBodyCandidates": 1,
+        "expectedWithoutBodyIoUMatch": 1,
+        "captionOnlyCandidates": 0,
+        "paired": 26
+      },
+      "E": {
+        "documents": 12,
+        "expected": 31,
+        "predictedBodyGroups": 31,
+        "matchedBodyBoxes": 26,
+        "unmatchedBodyCandidates": 5,
+        "expectedWithoutBodyIoUMatch": 5,
+        "captionOnlyCandidates": 0,
+        "paired": 26
+      },
+      "all": {
+        "documents": 34,
+        "expected": 108,
+        "predictedBodyGroups": 107,
+        "matchedBodyBoxes": 89,
+        "unmatchedBodyCandidates": 18,
+        "expectedWithoutBodyIoUMatch": 19,
+        "captionOnlyCandidates": 0,
+        "paired": 82
+      }
+    },
+    "pdffigures2": {
+      "C": {
+        "documents": 10,
+        "expected": 47,
+        "predictedBodyGroups": 43,
+        "matchedBodyBoxes": 43,
+        "unmatchedBodyCandidates": 0,
+        "expectedWithoutBodyIoUMatch": 4,
+        "captionOnlyCandidates": 3,
+        "paired": 42
+      },
+      "D": {
+        "documents": 12,
+        "expected": 30,
+        "predictedBodyGroups": 30,
+        "matchedBodyBoxes": 30,
+        "unmatchedBodyCandidates": 0,
+        "expectedWithoutBodyIoUMatch": 0,
+        "captionOnlyCandidates": 0,
+        "paired": 26
+      },
+      "E": {
+        "documents": 12,
+        "expected": 31,
+        "predictedBodyGroups": 27,
+        "matchedBodyBoxes": 27,
+        "unmatchedBodyCandidates": 0,
+        "expectedWithoutBodyIoUMatch": 4,
+        "captionOnlyCandidates": 5,
+        "paired": 26
+      },
+      "all": {
+        "documents": 34,
+        "expected": 108,
+        "predictedBodyGroups": 100,
+        "matchedBodyBoxes": 100,
+        "unmatchedBodyCandidates": 0,
+        "expectedWithoutBodyIoUMatch": 8,
+        "captionOnlyCandidates": 8,
+        "paired": 94
+      }
+    },
+    "neo": {
+      "C": {
+        "documents": 10,
+        "expected": 47,
+        "predictedBodyGroups": 47,
+        "matchedBodyBoxes": 47,
+        "unmatchedBodyCandidates": 0,
+        "expectedWithoutBodyIoUMatch": 0,
+        "captionOnlyCandidates": 1,
+        "paired": 47
+      },
+      "D": {
+        "documents": 12,
+        "expected": 30,
+        "predictedBodyGroups": 27,
+        "matchedBodyBoxes": 26,
+        "unmatchedBodyCandidates": 1,
+        "expectedWithoutBodyIoUMatch": 4,
+        "captionOnlyCandidates": 4,
+        "paired": 26
+      },
+      "E": {
+        "documents": 12,
+        "expected": 31,
+        "predictedBodyGroups": 25,
+        "matchedBodyBoxes": 25,
+        "unmatchedBodyCandidates": 0,
+        "expectedWithoutBodyIoUMatch": 6,
+        "captionOnlyCandidates": 9,
+        "paired": 25
+      },
+      "all": {
+        "documents": 34,
+        "expected": 108,
+        "predictedBodyGroups": 99,
+        "matchedBodyBoxes": 98,
+        "unmatchedBodyCandidates": 1,
+        "expectedWithoutBodyIoUMatch": 10,
+        "captionOnlyCandidates": 14,
+        "paired": 98
+      }
+    }
+  },
+  "documents": [
+    {
+      "documentId": "c-icml10_3",
+      "corpus": "C",
+      "pdfSha256": "71c86360b4672298bb70e83dd0359cc080f56711abed161f34b4ab7c04eba1af",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [4, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 6,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 0,
+              "pageIndex": 4,
+              "kind": "figure",
+              "label": "Figure 1",
+              "rect": [53.44, 617.86, 293.44, 733.21],
+              "bodyRects": [[53.44, 617.86, 293.44, 733.21]],
+              "captionRects": [[59.4089, 539.9903, 156.6075, 615.8647]],
+              "bestPublishedBody": {
+                "checkId": "figure-1",
+                "iou": 0.2508296488946683
+              }
+            },
+            {
+              "index": 1,
+              "pageIndex": 4,
+              "kind": "figure",
+              "label": "Figure 2",
+              "rect": [53.44, 597.66, 556.81, 746.86],
+              "bodyRects": [[53.44, 597.66, 556.81, 746.86]],
+              "captionRects": [[172.9702, 558.6116, 537.4739, 589.6656]],
+              "bestPublishedBody": {
+                "checkId": "figure-2",
+                "iou": 0.43831119807457486
+              }
+            },
+            {
+              "index": 2,
+              "pageIndex": 4,
+              "kind": "table",
+              "label": "Table 1",
+              "rect": [307.44, 70.86, 546.48, 129.32],
+              "bodyRects": [[307.44, 70.86, 546.48, 129.32]],
+              "captionRects": [],
+              "bestPublishedBody": null
+            },
+            {
+              "index": 3,
+              "pageIndex": 6,
+              "kind": "figure",
+              "label": "Figure 3",
+              "rect": [53.44, 416.98, 293.44, 671.14],
+              "bodyRects": [[53.44, 416.98, 293.44, 671.14]],
+              "captionRects": [[55.4398, 394.8923, 289.4382, 414.9757]],
+              "bestPublishedBody": {
+                "checkId": "figure-3",
+                "iou": 0.43206798866855517
+              }
+            },
+            {
+              "index": 4,
+              "pageIndex": 6,
+              "kind": "table",
+              "label": "Table 2",
+              "rect": [88.22, 428.09, 264.98, 566.55],
+              "bodyRects": [[88.22, 428.09, 264.98, 566.55]],
+              "captionRects": [[55.4398, 673.1365, 289.4424, 715.2211]],
+              "bestPublishedBody": {
+                "checkId": "table-2",
+                "iou": 0
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.2508296488946683,
+            "captionIoU": 0.9703655210042736,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.975402719906639,
+            "captionIoU": 0.9467179860854841,
+            "bodyOnlyIoU": 0.975402719906639
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9812872836027655,
+            "captionIoU": 0.9820739990749769,
+            "bodyOnlyIoU": 0.9812872836027655
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9750276614657915,
+            "captionIoU": 0.8357957048029505,
+            "bodyOnlyIoU": 0.9750276614657915
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8548485026787225,
+            "captionIoU": 0.9893576818834968,
+            "bodyOnlyIoU": 0.8548485026787225
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0,
+            "captionIoU": 0.9649186290606198,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.974167725904626,
+            "captionIoU": 0.8776147354231184,
+            "bodyOnlyIoU": 0.974167725904626
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9946616069858168,
+            "captionIoU": 0.9592974945140785,
+            "bodyOnlyIoU": 0.9946616069858168
+          }
+        },
+        {
+          "checkId": "table-3",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8217890212333276,
+            "captionIoU": 0.9521919619192118,
+            "bodyOnlyIoU": 0.8217890212333276
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.8932555779331036,
+            "captionIoU": 0.7397769281277914,
+            "bodyOnlyIoU": 0.8932555779331036
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9933881319623106,
+            "captionIoU": 0.9405590315206173,
+            "bodyOnlyIoU": 0.9933881319623106
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9569333735310764,
+            "captionIoU": 0.7931191530557289,
+            "bodyOnlyIoU": 0.9569333735310764
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8633122431411121,
+            "captionIoU": 0.93437385830735,
+            "bodyOnlyIoU": 0.8633122431411121
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml10_4",
+      "corpus": "C",
+      "pdfSha256": "d8045d2534e6aa6349c66f7633078c86c1f4a4eabffed5e2f765e556eebbdc4c",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [5, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 7,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 4,
+              "pageIndex": 5,
+              "kind": "figure",
+              "label": "Figure 5",
+              "rect": [53.02, 139.56, 293.02, 287.56],
+              "bodyRects": [[53.02, 139.56, 293.02, 287.56]],
+              "captionRects": [[55.019, 91.3209, 289.546, 136.1616]],
+              "bestPublishedBody": {
+                "checkId": "figure-5",
+                "iou": 0.9075540181986531
+              }
+            },
+            {
+              "index": 8,
+              "pageIndex": 6,
+              "kind": "table",
+              "label": "Table 1",
+              "rect": [53.02, 333.52, 543.69, 693.4],
+              "bodyRects": [[53.02, 333.52, 543.69, 693.4]],
+              "captionRects": [[55.019, 695.4006, 541.3984, 718.2816]],
+              "bestPublishedBody": {
+                "checkId": "table-1",
+                "iou": 0.3907500963646871
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 2,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 7,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-6",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8709276175046312,
+            "captionIoU": 0.9103649423891933,
+            "bodyOnlyIoU": 0.8709276175046312
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.972186239812797,
+            "captionIoU": 0.921781981953347,
+            "bodyOnlyIoU": 0.972186239812797
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9871031050557609,
+            "captionIoU": 0.9801564664580084,
+            "bodyOnlyIoU": 0.9871031050557609
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0,
+            "captionIoU": 0.8125368322685813,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9683270181215449,
+            "captionIoU": 0.8474746558951832,
+            "bodyOnlyIoU": 0.9683270181215449
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8804034686335176,
+            "captionIoU": 0.9186747236044908,
+            "bodyOnlyIoU": 0.8804034686335176
+          }
+        },
+        {
+          "checkId": "figure-4",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0,
+            "captionIoU": 0.8409911901784108,
+            "bodyOnlyIoU": 0.8678785566125182,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9643118200546527,
+            "captionIoU": 0.8266548801619795,
+            "bodyOnlyIoU": 0.9643118200546527
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.940604770532451,
+            "captionIoU": 0.9860667966757469,
+            "bodyOnlyIoU": 0.940604770532451
+          }
+        },
+        {
+          "checkId": "figure-5",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9075540181986531,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.970151406312562,
+            "captionIoU": 0.9217711858530353,
+            "bodyOnlyIoU": 0.970151406312562
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9892612225660843,
+            "captionIoU": 0.9801650052818909,
+            "bodyOnlyIoU": 0.9892612225660843
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.3907500963646871,
+            "captionIoU": 0.7535046857297846,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9984001740689209,
+            "captionIoU": 0.8723638182818557,
+            "bodyOnlyIoU": 0.9984001740689209
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9943147102051159,
+            "captionIoU": 0.8389031554762474,
+            "bodyOnlyIoU": 0.9943147102051159
+          }
+        },
+        {
+          "checkId": "figure-8",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.8811208898635354,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9743164524618929,
+            "captionIoU": 0.9761489272668615,
+            "bodyOnlyIoU": 0.9743164524618929
+          }
+        },
+        {
+          "checkId": "figure-7",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.8664355416991428,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9738328919056688,
+            "captionIoU": 0.986959850188218,
+            "bodyOnlyIoU": 0.9738328919056688
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml10_5",
+      "corpus": "C",
+      "pdfSha256": "80ff40e0d7865d762680b4bbcce271f8ca045cb7236d4be57c44a43a1213d02a",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [3, 4],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8450042071945197,
+            "captionIoU": 0.7953605798795436,
+            "bodyOnlyIoU": 0.8450042071945197
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9877858571450714,
+            "captionIoU": 0.7574035396871418,
+            "bodyOnlyIoU": 0.9877858571450714
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.7806729240831424,
+            "captionIoU": 0.7320214470596392,
+            "bodyOnlyIoU": 0.7806729240831424
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7707653126960881,
+            "captionIoU": 0.939480064135252,
+            "bodyOnlyIoU": 0.7707653126960881
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9760326026389765,
+            "captionIoU": 0.6324119104719077,
+            "bodyOnlyIoU": 0.9760326026389765
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9579692182167977,
+            "captionIoU": 0.880575484544351,
+            "bodyOnlyIoU": 0.9579692182167977
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9736987092530436,
+            "captionIoU": 0.6308369255525685,
+            "bodyOnlyIoU": 0.9736987092530436
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.95768970662443,
+            "captionIoU": 0.9260087506596179,
+            "bodyOnlyIoU": 0.95768970662443
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.971151038570527,
+            "captionIoU": 0.6313556420707409,
+            "bodyOnlyIoU": 0.971151038570527
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9504705209538552,
+            "captionIoU": 0.9241864322652081,
+            "bodyOnlyIoU": 0.9504705209538552
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8949597983234344,
+            "captionIoU": 0.9566593549929013,
+            "bodyOnlyIoU": 0.8949597983234344
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9905747784939991,
+            "captionIoU": 0.630974412078281,
+            "bodyOnlyIoU": 0.9905747784939991
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9949255916422547,
+            "captionIoU": 0.9221903606876802,
+            "bodyOnlyIoU": 0.9949255916422547
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml10_8",
+      "corpus": "C",
+      "pdfSha256": "bb0d55dc5f7a156f56aaf5be31f16f5326c1eb1f22f3b43c953f0ac4e5603b76",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [4, 5],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 6,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 6,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 6,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8270134026805365,
+            "captionIoU": 0.8467663513722646,
+            "bodyOnlyIoU": 0.8270134026805365
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9942718807453422,
+            "captionIoU": 0.6781333927381255,
+            "bodyOnlyIoU": 0.9942718807453422
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9969502996468835,
+            "captionIoU": 0.8572571589357549,
+            "bodyOnlyIoU": 0.9969502996468835
+          }
+        },
+        {
+          "checkId": "figure-4",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.9158201290611192,
+            "captionIoU": 0.9166553452951071,
+            "bodyOnlyIoU": 0.9158201290611192
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9832942621980819,
+            "captionIoU": 0.8662691616745839,
+            "bodyOnlyIoU": 0.9832942621980819
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9913733265037036,
+            "captionIoU": 0.9252989079683568,
+            "bodyOnlyIoU": 0.9913733265037036
+          }
+        },
+        {
+          "checkId": "figure-5",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.918365665672544,
+            "captionIoU": 0.9336641668141057,
+            "bodyOnlyIoU": 0.918365665672544
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9880831713325866,
+            "captionIoU": 0.8328484648272036,
+            "bodyOnlyIoU": 0.9880831713325866
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9894979044409424,
+            "captionIoU": 0.942631479007246,
+            "bodyOnlyIoU": 0.9894979044409424
+          }
+        },
+        {
+          "checkId": "figure-6",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.888904868487412,
+            "captionIoU": 0.8417794929691599,
+            "bodyOnlyIoU": 0.888904868487412
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9697762083201013,
+            "captionIoU": 0.6796972434982139,
+            "bodyOnlyIoU": 0.9697762083201013
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9771364935359339,
+            "captionIoU": 0.860146723822313,
+            "bodyOnlyIoU": 0.9771364935359339
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.850990603418997,
+            "captionIoU": 0.8172443872491317,
+            "bodyOnlyIoU": 0.850990603418997
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.991721739130435,
+            "captionIoU": 0.6781801679157065,
+            "bodyOnlyIoU": 0.991721739130435
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9971402166444915,
+            "captionIoU": 0.8295301348629938,
+            "bodyOnlyIoU": 0.9971402166444915
+          }
+        },
+        {
+          "checkId": "figure-7",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.9094002963379461,
+            "captionIoU": 0.7733416577896378,
+            "bodyOnlyIoU": 0.9094002963379461
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9848253506493508,
+            "captionIoU": 0.7407912977215958,
+            "bodyOnlyIoU": 0.9848253506493508
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9973734458823342,
+            "captionIoU": 0.7879859326648633,
+            "bodyOnlyIoU": 0.9973734458823342
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml13_2",
+      "corpus": "C",
+      "pdfSha256": "9c2fec72abba2629f6aa3164daffc2d3967bf260fe4d409da4c5f26a7f05f26a",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [1, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 1,
+              "pageIndex": 1,
+              "kind": "table",
+              "label": "Table 1",
+              "rect": [305.44, 322.82, 543.48, 581.84],
+              "bodyRects": [[305.44, 322.82, 543.48, 581.84]],
+              "captionRects": [[313.418, 583.8385, 513.1209, 616.4905]],
+              "bestPublishedBody": {
+                "checkId": "table-1",
+                "iou": 0.2340374743203127
+              }
+            },
+            {
+              "index": 7,
+              "pageIndex": 7,
+              "kind": "figure",
+              "label": "Figure 5",
+              "rect": [53.44, 451, 293.44, 557.06],
+              "bodyRects": [[53.44, 451, 293.44, 557.06]],
+              "captionRects": [[55.44, 407.1581, 289.472, 449.0015]],
+              "bestPublishedBody": {
+                "checkId": "figure-5",
+                "iou": 0.41342636243635716
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.683536480686695,
+            "captionIoU": 0.9731372547610485,
+            "bodyOnlyIoU": 0.683536480686695
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9177693045506753,
+            "captionIoU": 0.8680015934368075,
+            "bodyOnlyIoU": 0.9177693045506753
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8507692702115268,
+            "captionIoU": 0.9820381237135852,
+            "bodyOnlyIoU": 0.8507692702115268
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9785137051663134,
+            "captionIoU": 0.6206987687268144,
+            "bodyOnlyIoU": 0.9785137051663134
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.6572182979047029,
+            "captionIoU": 0.7642635320977723,
+            "bodyOnlyIoU": 0.6572182979047029
+          }
+        },
+        {
+          "checkId": "figure-4",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7871875065028122,
+            "captionIoU": 0.9364926031341503,
+            "bodyOnlyIoU": 0.7871875065028122
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9701472607299865,
+            "captionIoU": 0.8227952067687538,
+            "bodyOnlyIoU": 0.9701472607299865
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9320341475995896,
+            "captionIoU": 0.9179619813244878,
+            "bodyOnlyIoU": 0.9320341475995896
+          }
+        },
+        {
+          "checkId": "figure-5",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.41342636243635716,
+            "captionIoU": 0.96049657371706,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9779842590910098,
+            "captionIoU": 0.9677486372776416,
+            "bodyOnlyIoU": 0.9779842590910098
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml13_3",
+      "corpus": "C",
+      "pdfSha256": "01003316b1b949b47db8f5d5d300bd9cac687693f9e331c883f546a2999ab200",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [1, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8214085200597622,
+            "captionIoU": 0.8772928991159162,
+            "bodyOnlyIoU": 0.8214085200597622
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9951122159588253,
+            "captionIoU": 0.5639070623013621,
+            "bodyOnlyIoU": 0.9951122159588253
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.993068891657594,
+            "captionIoU": 0.8268383839294462,
+            "bodyOnlyIoU": 0.993068891657594
+          }
+        },
+        {
+          "checkId": "table-3",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7775626745603121,
+            "captionIoU": 0.977613039338689,
+            "bodyOnlyIoU": 0.7775626745603121
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9509694430114788,
+            "captionIoU": 0.9077791190721421,
+            "bodyOnlyIoU": 0.9509694430114788
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9861901734529317,
+            "captionIoU": 0.9783810830282493,
+            "bodyOnlyIoU": 0.9861901734529317
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6956889067112865,
+            "captionIoU": 0.984659699252071,
+            "bodyOnlyIoU": 0.6956889067112865
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9697275329044172,
+            "captionIoU": 0.9565312733853807,
+            "bodyOnlyIoU": 0.9697275329044172
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.7877613956493054,
+            "captionIoU": 0.986850504424474,
+            "bodyOnlyIoU": 0.7877613956493054
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml13_4",
+      "corpus": "C",
+      "pdfSha256": "85f3edc1b6b156fc56d2d87a9d86964be5f0658d277c96c2b22494ee3591c63d",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [5, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7727075611980834,
+            "captionIoU": 0.9761355574737667,
+            "bodyOnlyIoU": 0.7727075611980834
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9531284210526316,
+            "captionIoU": 0.8706320620731093,
+            "bodyOnlyIoU": 0.9531284210526316
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9592907767291591,
+            "captionIoU": 0.9851907147199753,
+            "bodyOnlyIoU": 0.9592907767291591
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8956040362753863,
+            "captionIoU": 0.9755116732476652,
+            "bodyOnlyIoU": 0.8956040362753863
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9950855418827996,
+            "captionIoU": 0.7943449475820122,
+            "bodyOnlyIoU": 0.9950855418827996
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9943852578428747,
+            "captionIoU": 0.9615492608634548,
+            "bodyOnlyIoU": 0.9943852578428747
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8450312964484623,
+            "captionIoU": 0.9729765939496549,
+            "bodyOnlyIoU": 0.8450312964484623
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9529773559322035,
+            "captionIoU": 0.8683467131416422,
+            "bodyOnlyIoU": 0.9529773559322035
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9606064491696159,
+            "captionIoU": 0.97031828984018,
+            "bodyOnlyIoU": 0.9606064491696159
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8566674780231849,
+            "captionIoU": 0.9806680749295088,
+            "bodyOnlyIoU": 0.8566674780231849
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9896077241379306,
+            "captionIoU": 0.9103182389362785,
+            "bodyOnlyIoU": 0.9896077241379306
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9973936444036056,
+            "captionIoU": 0.9813506500711425,
+            "bodyOnlyIoU": 0.9973936444036056
+          }
+        },
+        {
+          "checkId": "figure-4",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7974852849092051,
+            "captionIoU": 0.9889259519536736,
+            "bodyOnlyIoU": 0.7974852849092051
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.903607094994088,
+            "captionIoU": 0.850513094786385,
+            "bodyOnlyIoU": 0.903607094994088
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9167879470482488,
+            "captionIoU": 0.9622553719851232,
+            "bodyOnlyIoU": 0.9167879470482488
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml13_6",
+      "corpus": "C",
+      "pdfSha256": "185efd151e5991206a7dd50a1f36c0976f71e4367eb4ec038c907711cec16ea2",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [1, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 5,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8234022832320625,
+            "captionIoU": 0.9447834694159712,
+            "bodyOnlyIoU": 0.8234022832320625
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.8253033815528328,
+            "captionIoU": 0.9279953571537705,
+            "bodyOnlyIoU": 0.8253033815528328
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.972743345213943,
+            "captionIoU": 0.9309990102842806,
+            "bodyOnlyIoU": 0.972743345213943
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.894016935136455,
+            "captionIoU": 0.9760264397315801,
+            "bodyOnlyIoU": 0.894016935136455
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.8806070829395516,
+            "captionIoU": 0.87069291943223,
+            "bodyOnlyIoU": 0.8806070829395516
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9912801825114547,
+            "captionIoU": 0.9576791715458649,
+            "bodyOnlyIoU": 0.9912801825114547
+          }
+        },
+        {
+          "checkId": "figure-7",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.5980577765804364,
+            "captionIoU": 0.9852966615182243,
+            "bodyOnlyIoU": 0.5980577765804364
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9637880426186312,
+            "captionIoU": 0.7642390603767174,
+            "bodyOnlyIoU": 0.9637880426186312
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8274094808917859,
+            "captionIoU": 0.9359349002857493,
+            "bodyOnlyIoU": 0.8274094808917859
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8095617500505744,
+            "captionIoU": 0.989092633166566,
+            "bodyOnlyIoU": 0.8095617500505744
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9656123941084441,
+            "captionIoU": 0.8921680373410916,
+            "bodyOnlyIoU": 0.9656123941084441
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9666588484387933,
+            "captionIoU": 0.9749965375073296,
+            "bodyOnlyIoU": 0.9666588484387933
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8245767769421745,
+            "captionIoU": 0.9859733919544161,
+            "bodyOnlyIoU": 0.8245767769421745
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9577555808108048,
+            "captionIoU": 0.8897000612380573,
+            "bodyOnlyIoU": 0.9577555808108048
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9839266822459604,
+            "captionIoU": 0.9720496018600318,
+            "bodyOnlyIoU": 0.9839266822459604
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml13_8",
+      "corpus": "C",
+      "pdfSha256": "fb60b5cea5a3f18de6a4e1ace58252296409db55faa7cc4769013974c4eb9dbd",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [0, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 4,
+              "pageIndex": 7,
+              "kind": "figure",
+              "label": "Figure 5",
+              "rect": [307.44, 372.42, 543.49, 693.33],
+              "bodyRects": [[307.44, 372.42, 543.49, 693.33]],
+              "captionRects": [[307.44, 325.4772, 541.4885, 367.3202]],
+              "bestPublishedBody": {
+                "checkId": "figure-5",
+                "iou": 0.32670828827028103
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 0,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8928512926490207,
+            "captionIoU": 0.9904861196917399,
+            "bodyOnlyIoU": 0.8928512926490207
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9913006247534047,
+            "captionIoU": 0.9329029899927747,
+            "bodyOnlyIoU": 0.9913006247534047
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9813475024079753,
+            "captionIoU": 0.9874872543679734,
+            "bodyOnlyIoU": 0.9813475024079753
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8577550066777794,
+            "captionIoU": 0.9695697256004846,
+            "bodyOnlyIoU": 0.8577550066777794
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9921403675163012,
+            "captionIoU": 0.7904797812750473,
+            "bodyOnlyIoU": 0.9921403675163012
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9940598935164375,
+            "captionIoU": 0.9675022428092214,
+            "bodyOnlyIoU": 0.9940598935164375
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8548932843116288,
+            "captionIoU": 0.969532439157828,
+            "bodyOnlyIoU": 0.8548932843116288
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9944879242510639,
+            "captionIoU": 0.7904749639960144,
+            "bodyOnlyIoU": 0.9944879242510639
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9977162794713893,
+            "captionIoU": 0.9674950251822535,
+            "bodyOnlyIoU": 0.9977162794713893
+          }
+        },
+        {
+          "checkId": "figure-5",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9235773781989395,
+            "captionIoU": 0.8946113652918575,
+            "bodyOnlyIoU": 0.9235773781989395
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8803020758661914,
+            "captionIoU": 0.9779147738195146,
+            "bodyOnlyIoU": 0.8803020758661914
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "c-icml14_9",
+      "corpus": "C",
+      "pdfSha256": "7d4ef649618294cbdf79e1b5ff4a182d33432d8a5bc98c8311b51a135dbd3e5c",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [4, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 1,
+              "pageIndex": 4,
+              "kind": "figure",
+              "label": "Figure 2",
+              "rect": [329.16, 620.92, 529.14, 732.94],
+              "bodyRects": [[329.16, 620.92, 529.14, 732.94]],
+              "captionRects": [[403.871, 600.7456, 541.2032, 609.712]],
+              "bestPublishedBody": {
+                "checkId": "figure-2",
+                "iou": 0.37266329739562015
+              }
+            },
+            {
+              "index": 2,
+              "pageIndex": 4,
+              "kind": "table",
+              "label": "Table 1",
+              "rect": [53.44, 686.98, 400.15, 714.98],
+              "bodyRects": [[53.44, 686.98, 400.15, 714.98]],
+              "captionRects": [[73.206, 600.1006, 377.0556, 609.3907]],
+              "bestPublishedBody": {
+                "checkId": "table-1",
+                "iou": 0.340202125147579
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.340202125147579,
+            "captionIoU": 0.9255853488417608,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.5397773195876282,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9883580651038156,
+            "captionIoU": 0.9638259197481198,
+            "bodyOnlyIoU": 0.9883580651038156
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8899387876941448,
+            "captionIoU": 0.9480088483411149,
+            "bodyOnlyIoU": 0.8899387876941448
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.9002443071323296,
+            "captionIoU": 0.9837980914515204,
+            "bodyOnlyIoU": 0.9002443071323296
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9139359331514236,
+            "captionIoU": 0.9140390023955184,
+            "bodyOnlyIoU": 0.9139359331514236
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9358774786221182,
+            "captionIoU": 0.9720468652652101,
+            "bodyOnlyIoU": 0.9358774786221182
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-icml10_1",
+      "corpus": "D",
+      "pdfSha256": "d264a43ae1bf3ba654deddea5fef4335d5c75150cb042a5c67fbdb310295fb19",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [3, 5],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.8787093180847712,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9731690725522676,
+            "captionIoU": 0.8842876503494814,
+            "bodyOnlyIoU": 0.9731690725522676
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9704139814090457,
+            "captionIoU": 0.951005719427326,
+            "bodyOnlyIoU": 0.9704139814090457
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.707233817364314,
+            "captionIoU": 0.9380366987169652,
+            "bodyOnlyIoU": 0.707233817364314
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9611077295072348,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.963027624866924,
+            "captionIoU": 0.9544089924045764,
+            "bodyOnlyIoU": 0.963027624866924
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8000688405992993,
+            "captionIoU": 0.7792092536606567,
+            "bodyOnlyIoU": 0.8000688405992993
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9800053603844199,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9894802329539937,
+            "captionIoU": 0.9365848754319097,
+            "bodyOnlyIoU": 0.9894802329539937
+          }
+        },
+        {
+          "checkId": "figure-4",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.7541674699810014,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9908297950083828,
+            "captionIoU": 0.7794720942679104,
+            "bodyOnlyIoU": 0.9908297950083828
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9393974600559885,
+            "captionIoU": 0.9198385833124794,
+            "bodyOnlyIoU": 0.9393974600559885
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-icml10_2",
+      "corpus": "D",
+      "pdfSha256": "8a9d28a3e6cc0004864e0a4bb8e5bc85bb7e60d483a5434c167a3d23f4ecfc27",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [1, 5],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8243878182870656,
+            "captionIoU": 0.7919980436703703,
+            "bodyOnlyIoU": 0.8243878182870656
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9932974018794916,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9908148329316341,
+            "captionIoU": 0.7754475810699858,
+            "bodyOnlyIoU": 0.9908148329316341
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6672994674740937,
+            "captionIoU": 0.8243050296274207,
+            "bodyOnlyIoU": 0.6672994674740937
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9540295388360475,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9600916134630949,
+            "captionIoU": 0.807521276448293,
+            "bodyOnlyIoU": 0.9600916134630949
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-icml10_6",
+      "corpus": "D",
+      "pdfSha256": "bd5fb5594b95ea2e5b9e9978f30aeda056b841c0753ce47a2adf32fde442bfef",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [5, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 1,
+              "pageIndex": 6,
+              "kind": "figure",
+              "label": "Figure 1",
+              "rect": [309.43, 716.05, 541.43, 734.99],
+              "bodyRects": [[309.43, 716.05, 541.43, 734.99]],
+              "captionRects": [[307.44, 682.9583, 541.3607, 714.0486]],
+              "bestPublishedBody": {
+                "checkId": "figure-1",
+                "iou": 0
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 2,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 0,
+              "pageIndex": 5,
+              "kind": "table",
+              "label": "1",
+              "rect": [333.058, 504.538, 515.798, 582.3979999999999],
+              "bodyRects": [[333.058, 504.538, 515.798, 582.3979999999999]],
+              "captionRects": [[307.43989999999997, 585.998905, 541.5065736266854, 715.444785]],
+              "bestPublishedBody": {
+                "checkId": "table-1",
+                "iou": 0.29327617429721536
+              }
+            }
+          ]
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.9000297984300751,
+            "captionIoU": 0.9710481951494477,
+            "bodyOnlyIoU": 0.9000297984300751
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9938827888878966,
+            "captionIoU": 0.9653814250540369,
+            "bodyOnlyIoU": 0.9938827888878966
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": 0.29327617429721536,
+            "captionIoU": 0.9697924514077056,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0,
+            "captionIoU": 0.9809198412047877,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9919020951143868,
+            "captionIoU": 0.836113161120106,
+            "bodyOnlyIoU": 0.9919020951143868
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6163500890400027,
+            "captionIoU": 0.97031911913693,
+            "bodyOnlyIoU": 0.6163500890400027
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9916740637353189,
+            "captionIoU": 0.8334595028398734,
+            "bodyOnlyIoU": 0.9916740637353189
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-icml13_1",
+      "corpus": "D",
+      "pdfSha256": "d6447bb08c4b395304dbbf78b00d9a9b7cbf4e6866dc8f86d1edad4a8c658660",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [5, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8897649354674737,
+            "captionIoU": 0.6926357991449258,
+            "bodyOnlyIoU": 0.8897649354674737
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9957942213572355,
+            "captionIoU": 0.9270791966594824,
+            "bodyOnlyIoU": 0.9957942213572355
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9979229670144979,
+            "captionIoU": 0.9363685043292039,
+            "bodyOnlyIoU": 0.9979229670144979
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8202823531720158,
+            "captionIoU": 0.9412241045065547,
+            "bodyOnlyIoU": 0.8202823531720158
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9948515597070455,
+            "captionIoU": 0.8516420085362653,
+            "bodyOnlyIoU": 0.9948515597070455
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9909495948931092,
+            "captionIoU": 0.9598229293069191,
+            "bodyOnlyIoU": 0.9909495948931092
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-icml13_5",
+      "corpus": "D",
+      "pdfSha256": "e06169d3f7096b62d658914ca99d3a21508c239871d3b6a2cb1d0f21b3267fec",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.647351913349208,
+            "captionIoU": 0.9512085886843811,
+            "bodyOnlyIoU": 0.647351913349208
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9848269997144212,
+            "captionIoU": 0.5170519388218149,
+            "bodyOnlyIoU": 0.9848269997144212
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.7840615574658749,
+            "captionIoU": 0.8868008750819413,
+            "bodyOnlyIoU": 0.7840615574658749
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7122798754709463,
+            "captionIoU": 0.9591408165119569,
+            "bodyOnlyIoU": 0.7122798754709463
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9689012022610939,
+            "captionIoU": 0.517688606759958,
+            "bodyOnlyIoU": 0.9689012022610939
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.7796773130637394,
+            "captionIoU": 0.8994941368628434,
+            "bodyOnlyIoU": 0.7796773130637394
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-icml14_1",
+      "corpus": "D",
+      "pdfSha256": "80fe468fcd800fab49da2850ff507634be9732c9924037725af46b591ee5935e",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8782514683330409,
+            "captionIoU": 0.9813160960776839,
+            "bodyOnlyIoU": 0.8782514683330409
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9965744509820098,
+            "captionIoU": 0.9588576670044582,
+            "bodyOnlyIoU": 0.9965744509820098
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9980941613449021,
+            "captionIoU": 0.9955017831896643,
+            "bodyOnlyIoU": 0.9980941613449021
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8413959303441194,
+            "captionIoU": 0.9745288176047573,
+            "bodyOnlyIoU": 0.8413959303441194
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9846547103032267,
+            "captionIoU": 0.9570047523566213,
+            "bodyOnlyIoU": 0.9846547103032267
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9909651514214407,
+            "captionIoU": 0.9922979764195164,
+            "bodyOnlyIoU": 0.9909651514214407
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-nips09_1",
+      "corpus": "D",
+      "pdfSha256": "30bd3751c46cb7341ec2945e9c1866a431b06dad7bb17eee9bc6594b38d438a3",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [3, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.829442063771723,
+            "captionIoU": 0.9497331395575542,
+            "bodyOnlyIoU": 0.829442063771723
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9318003021493775,
+            "captionIoU": 0.9449559800121546,
+            "bodyOnlyIoU": 0.9318003021493775
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.913353906304845,
+            "captionIoU": 0.9868810809660958,
+            "bodyOnlyIoU": 0.913353906304845
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7760723095686256,
+            "captionIoU": 0.851639408331264,
+            "bodyOnlyIoU": 0.7760723095686256
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9813431205829674,
+            "captionIoU": 0.947262472825453,
+            "bodyOnlyIoU": 0.9813431205829674
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9332102151618888,
+            "captionIoU": 0.9316465766714863,
+            "bodyOnlyIoU": 0.9332102151618888
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9357442390279622,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.976474724388879,
+            "captionIoU": 0.9253604750607184,
+            "bodyOnlyIoU": 0.976474724388879
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.9200869417073703,
+            "captionIoU": 0.8697963112823414,
+            "bodyOnlyIoU": 0.9200869417073703
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9911915744816913,
+            "captionIoU": 0.9431101101355671,
+            "bodyOnlyIoU": 0.9911915744816913
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9886461926063147,
+            "captionIoU": 0.9397134006397397,
+            "bodyOnlyIoU": 0.9886461926063147
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-nips09_2",
+      "corpus": "D",
+      "pdfSha256": "5a954041f3f89381127b0ea8f59f70ab119b99a7bfc6a3fe1b3edf1db694c19e",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [6, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8308500112696213,
+            "captionIoU": 0.8541344943975245,
+            "bodyOnlyIoU": 0.8308500112696213
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9555066994119602,
+            "captionIoU": 0.8452247269821701,
+            "bodyOnlyIoU": 0.9555066994119602
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9576958049584463,
+            "captionIoU": 0.8604401053124899,
+            "bodyOnlyIoU": 0.9576958049584463
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.706967737740231,
+            "captionIoU": 0.8260806791239247,
+            "bodyOnlyIoU": 0.706967737740231
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9966826483357891,
+            "captionIoU": 0.5750514486073222,
+            "bodyOnlyIoU": 0.9966826483357891
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9873554671721718,
+            "captionIoU": 0.8260914963105551,
+            "bodyOnlyIoU": 0.9873554671721718
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-nips10_1",
+      "corpus": "D",
+      "pdfSha256": "76f6d6fe88f44c070c2b589a16075ac23c8f26f444122e99cc403c0e193126d5",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [1, 2],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8529813085020417,
+            "captionIoU": 0.8896252721339947,
+            "bodyOnlyIoU": 0.8529813085020417
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9737882330065055,
+            "captionIoU": 0.871235230688531,
+            "bodyOnlyIoU": 0.9737882330065055
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9850314406840298,
+            "captionIoU": 0.9530980784812622,
+            "bodyOnlyIoU": 0.9850314406840298
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8631581478773961,
+            "captionIoU": 0.9325595160015361,
+            "bodyOnlyIoU": 0.8631581478773961
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9791317570314809,
+            "captionIoU": 0.9423986186921885,
+            "bodyOnlyIoU": 0.9791317570314809
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9858455290252308,
+            "captionIoU": 0.9619874528297775,
+            "bodyOnlyIoU": 0.9858455290252308
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-nips11_1",
+      "corpus": "D",
+      "pdfSha256": "ca55c9f76b44c4f8f4c8ed097075d5046dee85ae31af75186da09879825bb4a2",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [5, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6344414592043529,
+            "captionIoU": 0.969349992345965,
+            "bodyOnlyIoU": 0.6344414592043529
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9860380183486237,
+            "captionIoU": 0.9003373013313853,
+            "bodyOnlyIoU": 0.9860380183486237
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9954737896515886,
+            "captionIoU": 0.9754134634304575,
+            "bodyOnlyIoU": 0.9954737896515886
+          }
+        },
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8849232090166235,
+            "captionIoU": 0.9455869728970062,
+            "bodyOnlyIoU": 0.8849232090166235
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9879206494067917,
+            "captionIoU": 0.8400535006126794,
+            "bodyOnlyIoU": 0.9879206494067917
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9928219924717793,
+            "captionIoU": 0.9415128711372915,
+            "bodyOnlyIoU": 0.9928219924717793
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-nips12_1",
+      "corpus": "D",
+      "pdfSha256": "1b683810d53494643dc62f8415e705dadab194b3e813ee17a3ad1d04d0eff819",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [2, 4],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7756095717147525,
+            "captionIoU": 0.9138432535033755,
+            "bodyOnlyIoU": 0.7756095717147525
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9871194827683551,
+            "captionIoU": 0.8294959909359946,
+            "bodyOnlyIoU": 0.9871194827683551
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9682847656630574,
+            "captionIoU": 0.8913548196216735,
+            "bodyOnlyIoU": 0.9682847656630574
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7442550778748882,
+            "captionIoU": 0.9666213599619583,
+            "bodyOnlyIoU": 0.7442550778748882
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9754590056939746,
+            "captionIoU": 0.9107828056597496,
+            "bodyOnlyIoU": 0.9754590056939746
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.5741024314641203,
+            "captionIoU": 0.9565277422445199,
+            "bodyOnlyIoU": 0.5741024314641203
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "d-nips13_1",
+      "corpus": "D",
+      "pdfSha256": "216fabdde5b94d6b91b79827a65d2c27e3db2a3938d9b1d8389c6ac326eb43e8",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [4, 5],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8562429777984344,
+            "captionIoU": 0.9359642427903709,
+            "bodyOnlyIoU": 0.8562429777984344
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9526940860973147,
+            "captionIoU": 0.9531841375908345,
+            "bodyOnlyIoU": 0.9526940860973147
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8470778374943726,
+            "captionIoU": 0.9229928686790421,
+            "bodyOnlyIoU": 0.8470778374943726
+          }
+        },
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7170192538315011,
+            "captionIoU": 0.9906135534502654,
+            "bodyOnlyIoU": 0.7170192538315011
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9847141459987825,
+            "captionIoU": 0.9557759576524212,
+            "bodyOnlyIoU": 0.9847141459987825
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9965592537151128,
+            "captionIoU": 0.9835737670260455,
+            "bodyOnlyIoU": 0.9965592537151128
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6521091133626978,
+            "captionIoU": 0.5478109905531722,
+            "bodyOnlyIoU": 0.6521091133626978
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9850121771329645,
+            "captionIoU": 0.9701768801488341,
+            "bodyOnlyIoU": 0.9850121771329645
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.8860323314289905,
+            "captionIoU": 0.9937019947166562,
+            "bodyOnlyIoU": 0.8860323314289905
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml10_7",
+      "corpus": "E",
+      "pdfSha256": "1f35414d4febd6c41a1ae2de1f2beba632598c5bc929103eaf9fc29fa6613f81",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [4, 5],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 4,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8006210526315781,
+            "captionIoU": 0.9515554435660348,
+            "bodyOnlyIoU": 0.8006210526315781
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9257847090148341,
+            "captionIoU": 0.9535822949104584,
+            "bodyOnlyIoU": 0.9257847090148341
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9378096474767749,
+            "captionIoU": 0.9549283951852702,
+            "bodyOnlyIoU": 0.9378096474767749
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7220197753780386,
+            "captionIoU": 0.9696438927169483,
+            "bodyOnlyIoU": 0.7220197753780386
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9820706143108856,
+            "captionIoU": 0.7904474930473635,
+            "bodyOnlyIoU": 0.9820706143108856
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9935697622597705,
+            "captionIoU": 0.9674517216817968,
+            "bodyOnlyIoU": 0.9935697622597705
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6721178092570061,
+            "captionIoU": 0.9640687317203491,
+            "bodyOnlyIoU": 0.6721178092570061
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.900162488931322,
+            "captionIoU": 0.9159807113768608,
+            "bodyOnlyIoU": 0.900162488931322
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9080561990963418,
+            "captionIoU": 0.9638327989686977,
+            "bodyOnlyIoU": 0.9080561990963418
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8228008969989805,
+            "captionIoU": 0.9761521199089194,
+            "bodyOnlyIoU": 0.8228008969989805
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9377774064113679,
+            "captionIoU": 0.8707152496933557,
+            "bodyOnlyIoU": 0.9377774064113679
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9445324891623257,
+            "captionIoU": 0.9621757420989877,
+            "bodyOnlyIoU": 0.9445324891623257
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml10_9",
+      "corpus": "E",
+      "pdfSha256": "825933dc66b607a3dc9aaa123add24ecb21f7df604db949a8a398e756937ec79",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [2, 5],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 0,
+              "pageIndex": 2,
+              "kind": "figure",
+              "label": "Figure 1",
+              "rect": [53.43, 410.3, 288.48, 596.05],
+              "bodyRects": [[53.43, 410.3, 288.48, 596.05]],
+              "captionRects": [[55.4398, 366.5187, 163.3626, 399.3648]],
+              "bestPublishedBody": {
+                "checkId": "figure-1",
+                "iou": 0.23535497702015235
+              }
+            },
+            {
+              "index": 1,
+              "pageIndex": 5,
+              "kind": "table",
+              "label": "Table 1",
+              "rect": [53.43, 603.07, 282.63, 704.48],
+              "bodyRects": [[53.43, 603.07, 282.63, 704.48]],
+              "captionRects": [[105.12, 706.4784, 239.5508, 715.6086]],
+              "bestPublishedBody": {
+                "checkId": "table-1",
+                "iou": 0.402664214677755
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.23535497702015235,
+            "captionIoU": 0.9653118491449066,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.5102146829078619,
+            "captionIoU": 0.9653117684780403,
+            "bodyOnlyIoU": 0.5102146829078619
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.402664214677755,
+            "captionIoU": 0.6901382713990424,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9847095306924729,
+            "captionIoU": 0.5010147513577825,
+            "bodyOnlyIoU": 0.9847095306924729
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9680183130307312,
+            "captionIoU": 0.6726073234821653,
+            "bodyOnlyIoU": 0.9680183130307312
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml10_10",
+      "corpus": "E",
+      "pdfSha256": "52247cea88cc2f15ae69c3b06ca2b96c2df4574b14cc980e3dc44ad31d3bc1b5",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [3, 1],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 0,
+              "pageIndex": 1,
+              "kind": "table",
+              "label": "Table 1",
+              "rect": [53.44, 427.78, 543.5, 694.39],
+              "bodyRects": [[53.44, 427.78, 543.5, 694.39]],
+              "captionRects": [[126.513, 696.3924, 501.8008, 715.6387]],
+              "bestPublishedBody": {
+                "checkId": "table-1",
+                "iou": 0.16478854471232313
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6934494844131074,
+            "captionIoU": 0.8531507106082356,
+            "bodyOnlyIoU": 0.6934494844131074
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9430356164383561,
+            "captionIoU": 0.5014793885760727,
+            "bodyOnlyIoU": 0.9430356164383561
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9492503722408376,
+            "captionIoU": 0.8355042334944887,
+            "bodyOnlyIoU": 0.9492503722408376
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": 0.9863570961875207,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.7248400732665417,
+            "captionIoU": 0.9129128560731772,
+            "bodyOnlyIoU": 0.7248400732665417
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml11_3",
+      "corpus": "E",
+      "pdfSha256": "39f87714fb8227113cb8bfc0cb0afdcf78ea5e7b96c38ac8cc87ff05d60c74dc",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [5, 4],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 2,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 0,
+          "captionOnlyCandidates": 4,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6853340141923363,
+            "captionIoU": 0.9920097319013332,
+            "bodyOnlyIoU": 0.6853340141923363
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.789238346476581,
+            "captionIoU": 0.9764451217221835,
+            "bodyOnlyIoU": 0.789238346476581
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9964441069930577,
+            "captionIoU": 0.9090991208514184,
+            "bodyOnlyIoU": 0.9964441069930577
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7591119931574895,
+            "captionIoU": 0.9888156440684536,
+            "bodyOnlyIoU": 0.7591119931574895
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml11_4",
+      "corpus": "E",
+      "pdfSha256": "e1a1cb19400718b601a97df4de51670ce13f265f778214fc928a7fbd1fe1d23f",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [2],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7949677701507868,
+            "captionIoU": 0.9787381600931143,
+            "bodyOnlyIoU": 0.7949677701507868
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9873727380005466,
+            "captionIoU": 0.9293805871399444,
+            "bodyOnlyIoU": 0.9873727380005466
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9817775840441667,
+            "captionIoU": 0.9709642907788513,
+            "bodyOnlyIoU": 0.9817775840441667
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8303059895609146,
+            "captionIoU": 0.972624175813218,
+            "bodyOnlyIoU": 0.8303059895609146
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9822418114985892,
+            "captionIoU": 0.7923935154366916,
+            "bodyOnlyIoU": 0.9822418114985892
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.994831136542454,
+            "captionIoU": 0.9703731061338189,
+            "bodyOnlyIoU": 0.994831136542454
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml11_5",
+      "corpus": "E",
+      "pdfSha256": "447328caa15d963ebf6e487b371c592821c8d32b4d2ba6d46337bfcebe11420c",
+      "sourcePageCount": 8,
+      "selectedPageIndices": [5, 6],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "table-2",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7208410360836209,
+            "captionIoU": 0.9726176319212946,
+            "bodyOnlyIoU": 0.7208410360836209
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9743757269279355,
+            "captionIoU": 0.7923958034055147,
+            "bodyOnlyIoU": 0.9743757269279355
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9886847213501224,
+            "captionIoU": 0.9630795616267651,
+            "bodyOnlyIoU": 0.9886847213501224
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7590700964014307,
+            "captionIoU": 0.9511102607017214,
+            "bodyOnlyIoU": 0.7590700964014307
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9788132305732891,
+            "captionIoU": 0.5153732805196116,
+            "bodyOnlyIoU": 0.9788132305732891
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9856650614861505,
+            "captionIoU": 0.9040955162109422,
+            "bodyOnlyIoU": 0.9856650614861505
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.7540238358956183,
+            "captionIoU": 0.976103602731159,
+            "bodyOnlyIoU": 0.7540238358956183
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9798904768145779,
+            "captionIoU": 0.8707068088151838,
+            "bodyOnlyIoU": 0.9798904768145779
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9822000378356398,
+            "captionIoU": 0.9801010574027491,
+            "bodyOnlyIoU": 0.9822000378356398
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_3",
+      "corpus": "E",
+      "pdfSha256": "e39cec743226cf074e0e0020d569e6c8f3b8ee2e1241613ff6fee5c17008eb40",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [4, 1],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8486079168008318,
+            "captionIoU": 0.8898128870456917,
+            "bodyOnlyIoU": 0.8486079168008318
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9935650202429152,
+            "captionIoU": 0.9319080630251422,
+            "bodyOnlyIoU": 0.9935650202429152
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9808949253179575,
+            "captionIoU": 0.889811300435781,
+            "bodyOnlyIoU": 0.9808949253179575
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8894646020698482,
+            "captionIoU": 0.9537178330407597,
+            "bodyOnlyIoU": 0.8894646020698482
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9793556756756755,
+            "captionIoU": 0.9717355205103819,
+            "bodyOnlyIoU": 0.9793556756756755
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9874396845152975,
+            "captionIoU": 0.9537189349253963,
+            "bodyOnlyIoU": 0.9874396845152975
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.5722636735375252,
+            "captionIoU": 0.8883745194483336,
+            "bodyOnlyIoU": 0.5722636735375252
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.8080173134328356,
+            "captionIoU": 0.9302180538323818,
+            "bodyOnlyIoU": 0.8080173134328356
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.7555666497050396,
+            "captionIoU": 0.8883727139934556,
+            "bodyOnlyIoU": 0.7555666497050396
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_4",
+      "corpus": "E",
+      "pdfSha256": "b468c509698c3022ee6a42c4b3311f609784d153713dced5b43f79b170be0f9f",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [7, 2],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8891183640310085,
+            "captionIoU": 0.8992429455936736,
+            "bodyOnlyIoU": 0.8891183640310085
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9747075050490032,
+            "captionIoU": 0.9570824253636632,
+            "bodyOnlyIoU": 0.9747075050490032
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.876877757130718,
+            "captionIoU": 0.9168147442209046,
+            "bodyOnlyIoU": 0.876877757130718
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8631484200012998,
+            "captionIoU": 0.9668157369018249,
+            "bodyOnlyIoU": 0.8631484200012998
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9171279096705613,
+            "captionIoU": 0.9599322349577203,
+            "bodyOnlyIoU": 0.9171279096705613
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9805307424528246,
+            "captionIoU": 0.9668149572872486,
+            "bodyOnlyIoU": 0.9805307424528246
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8859645998642275,
+            "captionIoU": 0.8855402869461241,
+            "bodyOnlyIoU": 0.8859645998642275
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9765354655530365,
+            "captionIoU": 0.8855563920831323,
+            "bodyOnlyIoU": 0.9765354655530365
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9934659273414388,
+            "captionIoU": 0.8685539088289789,
+            "bodyOnlyIoU": 0.9934659273414388
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_5",
+      "corpus": "E",
+      "pdfSha256": "79fdf5093a4aa42e372187e1ac79ab952f1c046db8012088820c48dc9ce9398c",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [3, 2],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 1,
+              "pageIndex": 3,
+              "kind": "figure",
+              "label": "Figure 2",
+              "rect": [106, 112.33, 506.02, 205.74],
+              "bodyRects": [[106, 112.33, 506.02, 205.74]],
+              "captionRects": [[192.85, 100.3887, 419.144, 109.5135]],
+              "bestPublishedBody": {
+                "checkId": "figure-2",
+                "iou": 0.29371526317988433
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": 0.29371526317988433,
+            "captionIoU": 0.8643818162522466,
+            "bodyOnlyIoU": null,
+            "reason": "object-iou-below-threshold",
+            "iouReason": null
+          },
+          "pdffigures2": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.6135357224588041,
+            "captionIoU": 0.9249261024649907,
+            "bodyOnlyIoU": 0.6135357224588041
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.8081304464933184,
+            "captionIoU": 0.6174057745155207,
+            "bodyOnlyIoU": 0.8081304464933184
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.833335883390096,
+            "captionIoU": 0.9326912631941519,
+            "bodyOnlyIoU": 0.833335883390096
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_6",
+      "corpus": "E",
+      "pdfSha256": "55ad57284e82e0555686df8d8395d2823f0b180b75efbd8048ce28545dbff602",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [1, 3],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8864337759528675,
+            "captionIoU": 0.8226846748481292,
+            "bodyOnlyIoU": 0.8864337759528675
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9953634665849115,
+            "captionIoU": 0.6934392454165995,
+            "bodyOnlyIoU": 0.9953634665849115
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.995290631989962,
+            "captionIoU": 0.8229649510260376,
+            "bodyOnlyIoU": 0.995290631989962
+          }
+        },
+        {
+          "checkId": "table-1",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8456802504631652,
+            "captionIoU": 0.8201770039292936,
+            "bodyOnlyIoU": 0.8456802504631652
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9932275862068959,
+            "captionIoU": 0.6908144564186822,
+            "bodyOnlyIoU": 0.9932275862068959
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_7",
+      "corpus": "E",
+      "pdfSha256": "263e2c791a0976e49ba992095d0164ed49089e5cb46eae97aa5d03b742dc1055",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [6, 1],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 2,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 1,
+          "captionOnlyCandidates": 1,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8758822490719712,
+            "captionIoU": 0.8633274440438045,
+            "bodyOnlyIoU": 0.8758822490719712
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9731686823679351,
+            "captionIoU": 0.6925938381621175,
+            "bodyOnlyIoU": 0.9731686823679351
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9766256660522297,
+            "captionIoU": 0.9656918263308812,
+            "bodyOnlyIoU": 0.9766256660522297
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8533107179065398,
+            "captionIoU": 0.9693407027956025,
+            "bodyOnlyIoU": 0.8533107179065398
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9913375431793726,
+            "captionIoU": 0.9281300731221593,
+            "bodyOnlyIoU": 0.9913375431793726
+          },
+          "neo": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": null,
+            "iouReason": "no-matched-object"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_8",
+      "corpus": "E",
+      "pdfSha256": "58156d526b86189371dfca64fc0c1b09b0fad8e6c044a358f05c33070e35db14",
+      "sourcePageCount": 9,
+      "selectedPageIndices": [6, 7],
+      "methods": {
+        "figure-extractor": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": [
+            {
+              "index": 1,
+              "pageIndex": 6,
+              "kind": "figure",
+              "label": "Figure 2",
+              "rect": [107.7, 420.61, 499.02, 556.63],
+              "bodyRects": [[107.7, 420.61, 499.02, 556.63]],
+              "captionRects": [[108, 397.6931, 504.0031, 418.6145]],
+              "bestPublishedBody": {
+                "checkId": "figure-2",
+                "iou": 0.8839920273550447
+              }
+            }
+          ]
+        },
+        "pdffigures2": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        },
+        "neo": {
+          "status": "completed",
+          "predictedBodyGroups": 3,
+          "captionOnlyCandidates": 0,
+          "unmatchedBodyCandidates": []
+        }
+      },
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8839920273550447,
+            "captionIoU": 0.9274954181612949,
+            "bodyOnlyIoU": 0.8839920273550447
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9581192474032455,
+            "captionIoU": 0.8711062284891163,
+            "bodyOnlyIoU": 0.9581192474032455
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9525723787137916,
+            "captionIoU": 0.9767970805937275,
+            "bodyOnlyIoU": 0.9525723787137916
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "figure-extractor": {
+            "paired": false,
+            "pairBodyIoU": null,
+            "captionIoU": null,
+            "bodyOnlyIoU": null,
+            "reason": "candidate-already-used-by-another-check",
+            "iouReason": "no-matched-object"
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9839086446039201,
+            "captionIoU": 0.6916581035722655,
+            "bodyOnlyIoU": 0.9839086446039201
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.9919481042111993,
+            "captionIoU": 0.9022864854621568,
+            "bodyOnlyIoU": 0.9919481042111993
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "figure-extractor": {
+            "paired": true,
+            "pairBodyIoU": 0.8264324586019886,
+            "captionIoU": 0.8595686268489864,
+            "bodyOnlyIoU": 0.8264324586019886
+          },
+          "pdffigures2": {
+            "paired": true,
+            "pairBodyIoU": 0.9898130482647308,
+            "captionIoU": 0.690447640016839,
+            "bodyOnlyIoU": 0.9898130482647308
+          },
+          "neo": {
+            "paired": true,
+            "pairBodyIoU": 0.988893208921979,
+            "captionIoU": 0.9614856538106102,
+            "bodyOnlyIoU": 0.988893208921979
+          }
+        }
+      ]
+    }
+  ],
+  "visualChecks": [
+    {
+      "documentId": "c-icml10_3",
+      "checkId": "figure-1",
+      "method": "figure-extractor",
+      "image": "figure-extractor/restored-v1/documents/c-icml10_3/raw/fig1_p05.png",
+      "observed": "原版裁图包含 Figure 1 的二部图，也混入相邻 Figure 2 的散点子图。",
+      "imageSha256": "9a45d4f0c2cc99c86dd818a628fe651be224d226b8b3ae743c6f44f044683a35"
+    },
+    {
+      "documentId": "e-icml11_3",
+      "checkId": "figure-1",
+      "method": "figure-extractor",
+      "image": "figure-extractor/restored-v1/documents/e-icml11_3/raw/fig1_p05.png",
+      "observed": "原版裁图保留 Neo 未关联的四组曲线与图例，但上边界也带入论文页眉。",
+      "imageSha256": "9fc5ff944c130cce63623a888e35e47232d30647791b1de92f192983ce99de37"
+    },
+    {
+      "documentId": "c-icml14_9",
+      "checkId": "table-1",
+      "method": "pdffigures2",
+      "observed": "原始 JSON 只有一个 Table 1 候选，caption 同时包含 Table 1 与 Figure 2，主体框跨过二者所在区域；与已核对的原页布局对照。",
+      "caption": "Table 1. Estimated intrinsic dimension (avg.± std.) for each k ∈ {5, 10, . . . , 100}. Figure 2. Local dimension estimation."
+    }
+  ],
+  "integrationDecision": {
+    "currentConstraint": "保持自包含 JavaScript XPI，不加入 Python、JVM 或原生辅助程序。现有实现复用 Zotero 内置 PDF.js。",
+    "interpretation": "PDFFigures2 主体定位更强；现有证据不证明自研泛化更好。若允许外部预处理，应优先评估直接复用 PDFFigures2；免外部运行时场景优先复用／移植成熟布局策略，而不是把自研本身当目标。",
+    "implementedExternalBackend": false
+  },
+  "artifacts": [
+    {
+      "path": "protocol-restored-v1.json",
+      "bytes": 11341,
+      "sha256": "95a5f253a86d12999f3551ce81021e33fcfac0cc76e61000faaf9616914cf82b"
+    },
+    {
+      "path": "normalize-external.mjs",
+      "bytes": 3978,
+      "sha256": "069b96d534cce1947847a7ca5ca13dea4e715b91ee93933184177509d51bfaf8"
+    },
+    {
+      "path": "audit-bodies.mjs",
+      "bytes": 5840,
+      "sha256": "8c7d40d2f2268ce9642e1a0062b241f129eacc51da14d26f3968d29cfb5705ff"
+    },
+    {
+      "path": "figure-extractor/restored-v1/normalized-all.json",
+      "bytes": 625172,
+      "sha256": "17fa5b39b05cafefb3b4a7b0e6ee137154722a2d8d77826bdcac1234a096bbc6"
+    },
+    {
+      "path": "figure-extractor/restored-v1/run-summary.json",
+      "bytes": 1265,
+      "sha256": "4cac32f0a21b8f0976bf23a886acdf50bb9339fe2c9d5506e96562106f8fc508"
+    },
+    {
+      "path": "pdffigures2/restored-v1/normalized-all.json",
+      "bytes": 298668,
+      "sha256": "944a289d9c57bff8905a91291193bef1b1936eb0bc72ad404f4e2b5d68d863e8"
+    },
+    {
+      "path": "pdffigures2/restored-v1/run-summary.json",
+      "bytes": 51439,
+      "sha256": "e78cf1369b785e6d4e3f27febc171bc88d7d021b0dc5e327876243b73c450291"
+    },
+    {
+      "path": "figure-extractor-observations.json",
+      "bytes": 481403,
+      "sha256": "22cbca6d899bed7b622e689383b415e307a8f4a8d2adeca06c307afef8ea8377"
+    },
+    {
+      "path": "figure-extractor-evaluation.json",
+      "bytes": 193168,
+      "sha256": "234f2898eea2d963f28fcc6c8b23e484b6c420644b77e0a02b2e802baa9e4966"
+    },
+    {
+      "path": "figure-extractor-body-audit.json",
+      "bytes": 36665,
+      "sha256": "92cd67575d3235ffea24833fd9a3ff87f1d9555066788ce025b54efc8d5d3335"
+    },
+    {
+      "path": "pdffigures2-observations.json",
+      "bytes": 381414,
+      "sha256": "0002296228cdb8fd8f10eb0740d788fd651b140ebc0732ae71793327c77a020f"
+    },
+    {
+      "path": "pdffigures2-evaluation.json",
+      "bytes": 192889,
+      "sha256": "7d41641228147679b622234e4259a9e303b7394132ac6170f3becbecaf474754"
+    },
+    {
+      "path": "pdffigures2-body-audit.json",
+      "bytes": 31864,
+      "sha256": "ccd848fc9e60e32979afd9f2128f4b98d37e3c1099bfd8f1278dd0b96182eb62"
+    },
+    {
+      "path": "neo-selected-normalized.json",
+      "bytes": 174637,
+      "sha256": "194fdf37fc69d6aaf5c1a88ec36f9ce5e7a3a8e542f1caa0ddf2a067d36ab80d"
+    },
+    {
+      "path": "neo-body-audit.json",
+      "bytes": 32607,
+      "sha256": "73b2b25f4986c19dd76546fe7754a18da3735417513ad61d22f4f2e7093ec815"
+    },
+    {
+      "path": "tools/evaluate-document-quality.mjs",
+      "bytes": 24862,
+      "sha256": "c861ef2920b4dfb0c672c9b05494f35f407c8810fe6eb6eccd7e14b8b5508c04"
+    },
+    {
+      "path": "evidence/document-quality/corpus-c.json",
+      "bytes": 36599,
+      "sha256": "4cac35f330681f4c2d28ea5a407aa9b55308d25eb8045503b5bda92858bbd837"
+    },
+    {
+      "path": "evidence/document-quality/corpus-d.json",
+      "bytes": 37037,
+      "sha256": "cef4ba563d0d72d33ef30abdb2b8dc66fd1c369af7d7afbbc9c1a4eacea44666"
+    },
+    {
+      "path": "evidence/document-quality/corpus-e.json",
+      "bytes": 35126,
+      "sha256": "698ff3e6725f682f424263482cd9ee05afa1e4096ef5930e799559eb846311d0"
+    }
+  ]
+}

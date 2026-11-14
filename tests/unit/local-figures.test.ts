@@ -783,7 +783,8 @@ describe('painted structures and neighboring object ownership', () => {
         [
           [50, 500, 140, 620],
           [210, 500, 280, 620],
-          [50, 330, 280, 459],
+          [50, 400, 280, 459],
+          [50, 330, 280, 386],
         ],
       ),
     ]);
@@ -803,7 +804,10 @@ describe('painted structures and neighboring object ownership', () => {
       bodies(regions)
         .filter((r) => r.sourceObject?.id === second.sourceObject?.id)
         .map((r) => r.rect),
-    ).toEqual([[50, 330, 280, 459]]);
+    ).toEqual([
+      [50, 400, 280, 459],
+      [50, 330, 280, 386],
+    ]);
     expect(
       bodies(regions).find((r) => r.sourceObject?.id === second.sourceObject?.id)?.text,
     ).toContain('600');
@@ -830,6 +834,27 @@ describe('painted structures and neighboring object ownership', () => {
     expect(caption(regions, '2').sourceObject).toBeDefined();
   });
 
+  it('keeps disconnected same-kind objects with opposite caption orientations separate', () => {
+    const regions = localFigureRegions([
+      page(
+        [
+          text('Figure 1: Independent measurements.', [50, 675, 280, 685]),
+          text('Figure 2: Independent observations.', [50, 390, 280, 400]),
+        ],
+        [
+          [50, 590, 280, 667],
+          [50, 419, 280, 571],
+        ],
+      ),
+    ]);
+    expect(bodies(regions).map((region) => [region.rect, region.sourceObject])).toEqual([
+      [[50, 590, 280, 667], caption(regions, '1').sourceObject],
+      [[50, 419, 280, 571], caption(regions, '2').sourceObject],
+    ]);
+    expect(caption(regions, '1').sourceObject).toBeDefined();
+    expect(caption(regions, '2').sourceObject).toBeDefined();
+  });
+
   it.each([0.3, 4.4])(
     'assembles a text-heavy hierarchy with %s-point connector hulls',
     (stemWidth) => {
@@ -842,7 +867,7 @@ describe('painted structures and neighboring object ownership', () => {
           ),
           text('Root', [50, 542, 72, 550], 7.5),
           text('Branch Alpha', [80, 536, 150, 544], 7.5),
-          text('Leaf One', [156, 536, 210, 544], 7.5),
+          text('Leaf One with descriptive text', [156, 536, 320, 544], 7.5),
           text('Leaf Two', [156, 500, 210, 508], 7.5),
           text('Branch Beta', [80, 412, 144, 420], 7.5),
           text('Figure 1: A hierarchy with textual nodes.', [50, 380, 280, 390]),
@@ -857,8 +882,9 @@ describe('painted structures and neighboring object ownership', () => {
       );
       const regions = localDocumentRegions([input]);
       expect(bodies(regions)).toHaveLength(1);
-      expect(bodies(regions)[0]?.rect).toEqual([50, 410, 210, 550]);
+      expect(bodies(regions)[0]?.rect).toEqual([50, 410, 320, 550]);
       expect(bodies(regions)[0]?.text).toContain('Branch Alpha');
+      expect(bodies(regions)[0]?.text).toContain('Leaf One with descriptive text');
       expect(bodies(regions)[0]?.text).toContain('Leaf Two');
       expect(bodies(regions)[0]?.sourceObject).toEqual(caption(regions, '1').sourceObject);
       expect(regions.filter((r) => r.flow === 'body').map((r) => r.text)).toEqual([
@@ -900,4 +926,325 @@ describe('painted structures and neighboring object ownership', () => {
       ]);
     },
   );
+});
+
+describe('caption-bounded cells and component labels', () => {
+  it.each([false, true])(
+    'recognizes repeated notation cells without requiring painted rules (separator: %s)',
+    (separator) => {
+      // Native chunks have a repeated 18-point cell gap, smaller than the normal line split.
+      // Their merged symbol/description lines look like prose; their actual cells do not.
+      const chunks = [
+        text('Table 1. Summary of notations.', [335.8, 607.7, 513.1, 615.7], 9),
+        text('The following paragraph explains the separate operation.', [307.4, 550, 541.4, 560]),
+        text('Its next normal baseline must remain document prose.', [307.4, 538, 541.4, 548]),
+      ];
+      for (const [y, description, right] of [
+        [596.4, 'original energy terms (factors)', 474.1],
+        [584.1, 'clique tree messages, from (2)', 471.4],
+        [571.7, 'incomplete clique tree messages, from (4)', 531.7],
+      ] as const) {
+        chunks.push(
+          text('∆', [313.4, y, 319, y + 8.8]),
+          text('i', [319.3, y - 0.9, 322.1, y + 5.3], 7),
+          text(description, [341.6, y, right, y + 8.8]),
+        );
+      }
+      const input = page(chunks, separator ? [[335.5, 570.8, 335.9, 606.9]] : []);
+      const regions = localDocumentRegions([input]);
+      expect(bodies(regions)).toHaveLength(1);
+      expect(bodies(regions)[0]).toMatchObject({
+        kind: 'table',
+        rect: [313.4, separator ? 570.8 : 571.7 - 0.9, 531.7, separator ? 606.9 : 596.4 + 8.8],
+        sourceObject: caption(regions, '1').sourceObject,
+      });
+      expect(bodies(regions)[0]?.text).toContain('incomplete clique tree messages');
+      expect(
+        regions.filter((region) => region.flow === 'body').map((region) => region.text),
+      ).toEqual([
+        'The following paragraph explains the separate operation. Its next normal baseline must remain document prose.',
+      ]);
+      expect(
+        localDocumentRegions([
+          { ...input, text: [...input.text].reverse(), graphics: [...input.graphics].reverse() },
+        ]),
+      ).toEqual(regions);
+    },
+  );
+
+  it('does not turn two aligned prose columns into a ruleless table', () => {
+    const chunks = [text('Table 1. An unresolved reference.', [50, 600, 550, 610], 9)];
+    for (const y of [650, 638, 626]) {
+      chunks.push(
+        text('The left paragraph reports the independent observations.', [50, y, 280, y + 10]),
+        text('The right paragraph discusses the separate measurements.', [320, y, 550, y + 10]),
+      );
+    }
+    const regions = localDocumentRegions([page(chunks, [])]);
+    expect(bodies(regions)).toEqual([]);
+    expect(caption(regions, '1').sourceObject).toBeUndefined();
+    expect(regions.filter((region) => region.flow === 'body')).toHaveLength(2);
+  });
+
+  it('bounds table membership away from a page-header rule and an adjacent figure', () => {
+    const chunks = [
+      text(
+        'An Information Geometry of Statistical Manifold Learning',
+        [185.7, 736, 411.2, 744.1],
+        9,
+      ),
+      text('Table 1. Estimated intrinsic dimensions.', [73.2, 600.3, 377.1, 609], 9),
+      text('Figure 2. Local dimension estimation.', [403.9, 601, 541.2, 609], 9),
+    ];
+    for (const y of [702.6, 690.3, 678.4, 666.4, 654.5, 642.5]) {
+      chunks.push(
+        text('Dataset 200', [64, y, 136, y + 8.8]),
+        text('3', [163, y, 168, y + 8.8]),
+        text('1.3 ± 0.23', [231.3, y, 274, y + 8.8]),
+        text('1.2 ± 0.21', [288.4, y, 331, y + 8.8]),
+        text('1.1 ± 0.06', [343.3, y, 386, y + 8.8]),
+      );
+    }
+    const input = page(chunks, [
+      [54.9, 733.9, 541.9, 734.9],
+      [57.7, 700.6, 392.5, 701],
+      [337, 640.5, 337.4, 713.2],
+      [391.9, 640.5, 392.3, 713.2],
+      [423.9, 628.9, 521.2, 725],
+    ]);
+    const regions = localFigureRegions([input]);
+    expect(
+      bodies(regions).map((region) => [region.kind, region.rect, region.sourceObject]),
+    ).toEqual([
+      ['table', [57.7, 640.5, 392.5, 713.2], caption(regions, '1').sourceObject],
+      ['image', [423.9, 628.9, 521.2, 725], caption(regions, '2').sourceObject],
+    ]);
+    expect(caption(regions, '1').sourceObject).toBeDefined();
+    expect(caption(regions, '2').sourceObject).toBeDefined();
+    expect(caption(regions, '1').sourceObject?.id).not.toBe(caption(regions, '2').sourceObject?.id);
+  });
+
+  it('keeps wrapped panel descriptions with their actual components across a compound figure', () => {
+    const input = page(
+      [
+        text(
+          'Ordinary surrounding prose establishes the document typography.',
+          [55, 600, 289, 610],
+        ),
+        text('Its next aligned line belongs only to this paragraph.', [55, 588, 289, 598]),
+        text('(a) A spectrogram of speech with user annotations.', [307.8, 484, 547.7, 492], 9),
+        text(
+          '(b) Spectrograms of the initially separated speech and am-',
+          [307.4, 359.7, 548.1, 367.6],
+          9,
+        ),
+        text('bulance siren with further overlaid annotations.', [307.4, 349.7, 499.6, 357.6], 9),
+        text('Figure 1. Interactive sound separation.', [307.4, 327, 541.4, 335], 9),
+      ],
+      [
+        [310.7, 497.7, 544.8, 548.8],
+        [310.7, 373.6, 544.8, 475.5],
+      ],
+    );
+    const regions = localDocumentRegions([input]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([
+      [307.8, 484, 547.7, 548.8],
+      [307.4, 349.7, 548.1, 475.5],
+    ]);
+    expect(
+      bodies(regions).every(
+        (region) => region.sourceObject?.id === caption(regions, '1').sourceObject?.id,
+      ),
+    ).toBe(true);
+    expect(bodies(regions)[1]?.text).toContain('bulance siren');
+    expect(regions.filter((region) => region.flow === 'body').map((region) => region.text)).toEqual(
+      [
+        'Ordinary surrounding prose establishes the document typography. Its next aligned line belongs only to this paragraph.',
+      ],
+    );
+  });
+
+  it('retains detached chart headers, rotated labels and panel measurements without promoting a page rule', () => {
+    const regions = localFigureRegions([
+      page(
+        [
+          text(
+            'An Information Geometry of Statistical Manifold Learning',
+            [185.7, 736, 411.2, 744.1],
+            9,
+          ),
+          text('Random', [109.1, 715.2, 142.9, 724.1]),
+          text('Swiss roll', [67.2, 647.5, 76.1, 687]),
+          text('(a) 5.3 × 10', [93.1, 610.8, 138.6, 619.5], 9),
+          text('(f) 3.2 × 10', [93.1, 500.6, 137.6, 509.3], 9),
+          text('Figure 3. Performance measurements.', [55.4, 482.1, 541.4, 490.1], 9),
+          text('The following discussion is ordinary document prose.', [55.4, 440, 541.4, 450]),
+          text('Its aligned continuation remains outside the figure.', [55.4, 428, 541.4, 438]),
+        ],
+        [
+          [54.9, 733.9, 541.9, 734.9],
+          [77.8, 624.7, 160.5, 707.4],
+          [77.3, 514.4, 160, 597.2],
+        ],
+      ),
+    ]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([
+      [67.2, 610.8, 160.5, 724.1],
+      [77.3, 500.6, 160, 597.2],
+    ]);
+    expect(bodies(regions)[0]?.text).toContain('Swiss roll');
+    expect(bodies(regions).every((region) => !region.text.includes('Information Geometry'))).toBe(
+      true,
+    );
+  });
+
+  it('uses the caption sentence typography rather than its larger label to recognize wrapping', () => {
+    const regions = localDocumentRegions([
+      page(
+        [
+          text('Table 1:', [55.4, 549.8, 88, 558.7]),
+          text(
+            'Performance of the independently trained clustering techniques.',
+            [91.9, 550, 541.4, 558],
+            9,
+          ),
+          text(
+            'Repeated estimates use the same held-out evaluation protocol.',
+            [55.4, 538.1, 541.4, 546.1],
+            9,
+          ),
+          text(
+            'The following paragraph describes a different experiment.',
+            [55.4, 520, 541.4, 530],
+          ),
+          text('Its next line belongs to ordinary document prose.', [55.4, 508, 541.4, 518]),
+        ],
+        [[89.5, 570.3, 507.4, 724.9]],
+      ),
+    ]);
+    expect(caption(regions, '1').rect).toEqual([55.4, 538.1, 541.4, 558.7]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([[89.5, 570.3, 507.4, 724.9]]);
+    expect(regions.filter((region) => region.flow === 'body').map((region) => region.text)).toEqual(
+      [
+        'The following paragraph describes a different experiment. Its next line belongs to ordinary document prose.',
+      ],
+    );
+  });
+
+  it('does not join a plot to a nearly touching page rule over the neighboring prose column', () => {
+    const plot: DocumentRect = [340, 604.3, 513.6, 734.5];
+    const input = page(
+      [
+        text(
+          'Wavelets on trees, graphs and high dimensional data',
+          [191.4, 739.2, 422.3, 746.8],
+          9,
+        ),
+        text(
+          'The neighboring column contains an independent argument.',
+          [78.3, 652.1, 298.4, 662.1],
+        ),
+        text('Its next aligned line must remain outside the plot.', [78.3, 640.1, 298.4, 650.1]),
+        text('Figure 2. Results on the benchmark.', [343, 583.6, 507.7, 592], 9),
+      ],
+      [[77.8, 737.2, 535.9, 738.1], plot],
+    );
+    const regions = localDocumentRegions([input]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([plot]);
+    expect(bodies(regions)[0]?.text).not.toContain('Wavelets');
+    expect(
+      regions
+        .filter((region) => region.flow === 'body')
+        .some((region) => region.text.includes('neighboring column')),
+    ).toBe(true);
+    expect(
+      localDocumentRegions([
+        { ...input, graphics: [...input.graphics].reverse(), text: [...input.text].reverse() },
+      ]),
+    ).toEqual(regions);
+  });
+
+  it('keeps a short paragraph tail out of a nearly touching painted figure', () => {
+    const plot: DocumentRect = [50, 450, 280, 650];
+    const input = page(
+      [
+        text(
+          'The experiment uses independent samples for every validation run.',
+          [50, 678, 280, 689],
+        ),
+        text(
+          'All measurements use exactly the same protocol and the original',
+          [50, 665.95, 280, 677],
+        ),
+        text('training and validation sets.', [50, 655, 160, 666]),
+        text('Figure 1. Results for the held-out observations.', [50, 430, 280, 440]),
+      ],
+      [plot],
+    );
+    const regions = localDocumentRegions([input]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([plot]);
+    expect(bodies(regions)[0]?.text).not.toContain('validation sets');
+    expect(
+      regions.some(
+        (region) => region.flow === 'body' && region.text.includes('training and validation sets.'),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not use a table separator to admit the ordinary paragraph below the grid', () => {
+    const chunks = [
+      text('Table 1. Dataset dimensions.', [50, 600, 280, 610]),
+      text(
+        'For simplicity, the proposed adaptive regularization approach is denoted as the baseline.',
+        [50, 516, 280, 526],
+      ),
+    ];
+    for (const y of [560, 548, 536]) {
+      chunks.push(text('Dataset', [60, y, 110, y + 10]), text('1500', [170, y, 200, y + 10]));
+    }
+    const regions = localDocumentRegions([
+      page(chunks, [
+        [50, 574, 280, 575],
+        [50, 530, 280, 531],
+      ]),
+    ]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([[50, 530, 280, 575]]);
+    expect(bodies(regions)[0]?.text).not.toContain('For simplicity');
+    expect(
+      regions.some((region) => region.flow === 'body' && region.text.includes('For simplicity')),
+    ).toBe(true);
+  });
+
+  it('keeps nearby running headers and caption superscripts outside a ruled table', () => {
+    const chunks = [
+      text(
+        'Revisiting projection-free sparse convex optimization and its applications',
+        [130, 736, 460, 744],
+        9,
+      ),
+      text('Table 2. Factorized matrix norms.', [60, 656, 540, 666], 9),
+      text('m×n', [200, 663, 215, 671], 7),
+      text(
+        'The next paragraph explains the optimization method in ordinary prose.',
+        [50, 600, 540, 610],
+      ),
+      text(
+        'Its continuation establishes the same body typography and paragraph spacing.',
+        [50, 588, 540, 598],
+      ),
+    ];
+    for (const y of [713, 701, 689]) {
+      chunks.push(text('Trace norm', [70, y, 150, y + 10]), text('O(nm)', [300, y, 500, y + 10]));
+    }
+    const regions = localFigureRegions([
+      page(chunks, [
+        [50, 734, 550, 735],
+        [60, 725, 540, 726],
+        [60, 678, 540, 679],
+      ]),
+    ]);
+    expect(bodies(regions).map((region) => region.rect)).toEqual([[60, 678, 540, 726]]);
+    expect(bodies(regions)[0]?.text).not.toContain('Revisiting');
+    expect(bodies(regions)[0]?.text).not.toContain('m×n');
+  });
 });
