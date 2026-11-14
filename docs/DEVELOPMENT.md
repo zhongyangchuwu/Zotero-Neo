@@ -326,11 +326,15 @@ Bootstrap 将诊断写入 profile 下的 `zotero-neo-startup.log`，并通过 `Z
 
 `src/document-analysis/contracts.ts` 定义 `DocumentParser`、来源和版本化区域结果。`local.ts`、`native.ts`、`oxr.ts`、`mineru.ts` 各自提供适配；本地规则为默认，已保存的显式云端选择保留。`DocumentRegion` 保留格式、正文归属和区域锚点精度；布局框不提供字符级批注保证。本地规则处理数字 PDF，OCR、表格单元格和公式 LaTeX 不在其输出范围内。
 
-`document-source.ts` 单独读取页面几何，不依赖 SDT。`toolkit/pdf-source.ts` 统一加载 Zotero 自带 PDF.js；`pdfSourceFigurePages()` 读取原始文字及实际绘图操作，`pdf-figure-geometry.ts` 将字体度量、路径和图像单位方框经过 CTM 转为未旋转 PDF 用户坐标，不把裁剪路径当作图像，也不使用栅格像素尺寸当作页面尺寸。`local-figures.ts` 拥有题注、分栏、段落和视觉区域规则，使用独立本地身份。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过 `_pageInfo` 适配；共享 `geometry.ts` 负责云端坐标转换，缺页、重复页、非法尺寸和越界矩形拒绝接纳，不静默裁剪。
+`document-source.ts` 单独读取页面几何，不依赖 SDT。`toolkit/pdf-source.ts` 统一加载 Zotero 自带 PDF.js；`pdfSourceFigurePages()` 读取原始文字及实际绘图操作。Chrome 侧不可见的 PDFPageProxy getter 仅在 Toolkit 内通过 `_pageInfo` 适配；共享 `geometry.ts` 负责云端坐标转换，缺页、重复页、非法尺寸和越界矩形拒绝接纳，不静默裁剪。
+
+`pdf-figure-geometry.ts` 将字体度量、路径和图像单位方框经过 CTM 转为未旋转 PDF 用户坐标，不使用栅格像素尺寸当作页面尺寸。`clip`／`eoClip` 在路径被消费后生效，当前绘制仍使用旧裁剪；save／restore、Form 和 Group 保留各自裁剪范围，再与实际绘制包围框求交。Form 的 bbox 使用 Form 矩阵；Group 矩阵仅变换其裁剪 bbox，不重复施加到内容 CTM。空裁剪不产生图像，裁剪路径本身也不是绘制。轴对齐包围框是保守近似，不解码任意路径的逐像素可见性。
+
+`local-figures.ts` 拥有题注、分栏、段落和视觉区域规则，使用独立本地身份。少线／无框表先由至少三行、两个稳定列起点的原生单元格识别，再合并正文；题注、正文及相邻对象限制表体扩张。图内标签按字符加权字号与最近无争用对象归属，允许换行子图说明，同时用候选包围框内的正文阻止跨对象拼接。图形主体仍需实际绘制证据，不把题注附近的空白制造成主体。
 
 `src/platform/document-analysis.ts` 封装文件快照和可取消 HTTP；日志与结果均排除请求体和凭据。`ReaderDocumentComparison` 拥有显式处理、对照与迟到结果隔离。本地模式打开时准备来源和缓存，单独点击读取才运行 SDT；本地解析使用本地适配器，其他后端保留独立原生对照。SDK 提取不可真正中止，云端取消也不承诺远端停止。表格 HTML 只作为纯文本展示，后端 HTML 和外部资源不会加载到界面。
 
-`document-analysis/cache.ts` 定义 Neo 后端缓存、非秘密配置身份及完整校验；`platform/document-analysis-cache.ts` 使用 Zotero 文件 API 和 `IOUtils.move` 原子提交附件目录中的 `.zotero-neo-analysis-<配置摘要>.json`，不写链接 PDF 的外部源目录。每项配置保留最后一次成功结果，包含 PDF 哈希、页面几何、后端、适配器版本、已知模型版本和时间；本地键为 `local-rules`／`pdfjs-native-text-graphics-v1`，规则适配改变缓存语义时须更新版本。格式、区域种类、唯一身份和完整坐标均校验，限制 32 MiB／100000 区域；损坏视为未命中，不因此自动上传。
+`document-analysis/cache.ts` 定义 Neo 后端缓存、非秘密配置身份及完整校验；`platform/document-analysis-cache.ts` 使用 Zotero 文件 API 和 `IOUtils.move` 原子提交附件目录中的 `.zotero-neo-analysis-<配置摘要>.json`，不写链接 PDF 的外部源目录。每项配置保留最后一次成功结果，包含 PDF 哈希、页面几何、后端、适配器版本、已知模型版本和时间；本地键为 `local-rules`／`pdfjs-native-text-graphics-v1`，当前 `adapterVersion` 为 3，规则改变缓存语义时须更新版本，旧代次文件保持原样。格式、区域种类、唯一身份和完整坐标均校验，限制 32 MiB／100000 区域；损坏视为未命中，不因此自动上传。
 
 写入按目标串行，暂存后重查调用寿命与来源再原子替换；已开始的最终提交继续完成，即使界面已经关闭。缓存只保存 `ParsedDocument` 已知字段，读取后按当前算法重算图表关系；凭据、原始响应和派生分组均不保存。本地与云端的显式对照解析负责持久写入；普通 `readReaderDocument()` 按需提取只供会话使用，避免保存通知退休其调用方正在打开的界面。通知仍正常退休已有布局和纠错快照，并反映版本变化。原生 SDT 缓存继续由 Zotero 管理，PDF 内嵌缓存和跨设备同步不在此链路范围。
 

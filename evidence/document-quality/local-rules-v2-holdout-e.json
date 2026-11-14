@@ -1,0 +1,1472 @@
+{
+  "schemaVersion": 1,
+  "run": {
+    "id": "local-geometry-baseline-1794680300772",
+    "sourceCommit": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+    "sourceTree": "commit",
+    "harnessSha256": "f8ea7b4c6715645d608af38332ef58979eee1b917008539414c46766c4e7981d",
+    "host": "Native PDF.js geometry from WINNT Zotero 10.0.8; pure production grouping replayed in Node",
+    "startedAt": "2026-11-14T18:18:20.773Z",
+    "protocol": "Versioned immutable native geometry from the same source PDFs: baseline uses the old decoder, candidate applies native clipping before grouping. Grouping invokes production localDocumentRegions and documentObjectGroups. Duration covers grouping only, not import, source extraction, Reader initialization or human review. Published selected-page checks do not imply full-document accuracy or UI success.",
+    "finishedAt": "2026-11-14T18:18:21.032Z"
+  },
+  "corpusDocuments": 12,
+  "corpus": [
+    {
+      "id": "e-icml10_7",
+      "title": "Learning Temporal Causal Graphs for Relational Time-Series Analysis",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/235.pdf",
+        "sha256": "1f35414d4febd6c41a1ae2de1f2beba632598c5bc929103eaf9fc29fa6613f81",
+        "fileName": "e-icml10_7.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/235.pdf",
+          "https://icml.cc/Conferences/2010/papers/235.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 5, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2. Example of learned graphs by different methods: (a1, b1) true component graphs of state 1 and state 2; (a2, b2) learned graphs by baseline method SUB; (a3, b3) learned graphs by hMRF; (4) learned graph by baseline method ALL",
+          "captionRect": [55.44, 353.52, 288.72, 403.92],
+          "rect": [62.64, 423.36, 288, 520.56]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 4,
+          "text": "Table 1. Comparison results of structure learning on sim- ulation data (sample size per node = 500)",
+          "captionRect": [308.16, 493.2, 540.72, 512.64],
+          "rect": [312.48, 435.6, 536.4, 486.72]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1. Comparison results on Simulation Data II: (a) performance (in F 1 ) of structure learning by competing methods for component graph associated with state 1. x axis: number of sample size per node, y axis: F 1 score. (b) performance (in F 1 ) of structure learning by competing methods for component graph associated with state 2. (c) performance of state prediction. x axis: number of sample size per task, y axis: F 1 scores.",
+          "captionRect": [56.16, 542.16, 540.72, 583.92],
+          "rect": [97.2, 604.8, 505.44, 714.24]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 3. Predicted labels of underlying hidden states for each location. Green diamonds: state 1; Red circle: state 2; Blue square: state 3",
+          "captionRect": [307.44, 390.96, 540.72, 421.2],
+          "rect": [336.96, 442.08, 515.52, 721.44]
+        }
+      ]
+    },
+    {
+      "id": "e-icml10_9",
+      "title": "Feature Selection as a One-Player Game",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/247.pdf",
+        "sha256": "825933dc66b607a3dc9aaa123add24ecb21f7df604db949a8a398e756937ec79",
+        "fileName": "e-icml10_9.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/247.pdf",
+          "https://icml.cc/Conferences/2010/papers/247.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1. One iteration of FUSE (UCT approach for FS).",
+          "captionRect": [54.72, 367.2, 163.44, 399.6],
+          "rect": [71.28, 417.6, 147.6, 552.24]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 1. Datasets characteristics.",
+          "captionRect": [105.12, 709.2, 238.32, 715.68],
+          "rect": [60.48, 655.2, 280.8, 697.68]
+        }
+      ]
+    },
+    {
+      "id": "e-icml10_10",
+      "title": "Online Prediction with Privacy",
+      "pdf": {
+        "url": "https://icml.cc/Conferences/2010/papers/259.pdf",
+        "sha256": "52247cea88cc2f15ae69c3b06ca2b96c2df4574b14cc980e3dc44ad31d3bc1b5",
+        "fileName": "e-icml10_10.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "https://icml.cc/Conferences/2010/papers/259.pdf",
+          "https://icml.cc/Conferences/2010/papers/259.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 4 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "text": "Table 2. Information model and sequence observation.",
+          "captionRect": [55.44, 707.76, 272.16, 715.68],
+          "rect": [63.36, 653.04, 281.52, 704.16]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 1,
+          "text": "Table 1. The regret bound and information model",
+          "captionRect": [197.28, 707.04, 398.88, 715.68],
+          "rect": [54.72, 646.56, 524.16, 706.32]
+        }
+      ]
+    },
+    {
+      "id": "e-icml11_3",
+      "title": "An Augmented Lagrangian Approach to Constrained MAP Inference",
+      "pdf": {
+        "url": "https://icml.cc/2011/papers/150_icmlpaper.pdf",
+        "sha256": "39f87714fb8227113cb8bfc0cb0afdcf78ea5e7b96c38ac8cc87ff05d60c74dc",
+        "fileName": "e-icml11_3.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://www.icml-2011.org/papers/150_icmlpaper.pdf",
+          "https://icml.cc/2011/papers/150_icmlpaper.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 5, 6 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "Figure 2. Results for a 20 × 20 Potts model 2 ) parsing al- 8-valued nodes and coupling gorithm, factor ρ yielding = 10. an We O(n plot the gorithm. We evaluate these methods dual objectives, and the value of the true dual optimum. on the Prague Dependency Treebank us- For DD-Acc,   = 1.0; for DD-ADMM, η = 0.5, τ = 1.0. ing online large-margin learning",
+          "captionRect": [55.44, 552.24, 288.72, 594],
+          "rect": [62.64, 609.84, 261.36, 716.4]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 1. Results for 30 × 30 random Ising models with several edge couplings. We plot the dual objectives and the best primal feasible solution at each iteration. For DD-subgradient, we set η t = η 0 /t, with η 0 yielding the maximum dual improvement in 10 iterations, with halving steps (those iterations are not plotted). For DD-Acc we plot the most favorable   ∈ {0.1, 1, 10, 100}. For DD-ADMM, we set η = 5.0 and τ = 1.0. All decompositions are edge-based.",
+          "captionRect": [55.44, 534.96, 540.72, 576],
+          "rect": [97.92, 590.4, 498.96, 725.04]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 5,
+          "text": "instead of no crossing edges, as illustrated in Figure 2. In lan- before, since they can reasons handle for multi-valued variables; Figure Top: with a more dependency parse tree, more informative phrase in structures is 3. guages flexible word order than where English, each arc for DD-ADMM we binarized the graph lexicalized as described that they are more efficient to learn and parse (h, while such as German, Dutch and a Czech, non-projective m) links a head word h to modifier word m. Middle: Sect. 4.3. Fig. 2 shows the best dual solutions obtained still encoding much of the predicate-argument tree-based infor- dependencies are more frequent. Rich factor graph corresponding to inflection a second-order at each iteration for the mation three needed algorithms. We observe in applications. systems reduce model reliance with on word order and to express dependency parsing sibling grandparent that MPLP decreases the objective very rapidly in the beginning and then slows down. DD-Acc manages to converge faster, but it is relatively slow to take off. DD-ADMM has the best features of both methods. features, including a tree hard constraint factor. Bottom: the flow-based factor graph is an alternative representation for the same model, in which extra flow and path variables are added, and the tree factor is replaced by smaller xor, or and or-out. See Martins et al. (2010) for details.",
+          "captionRect": [306.72, 304.56, 540.72, 401.04],
+          "rect": [335.52, 411.84, 513.36, 708.48]
+        }
+      ]
+    },
+    {
+      "id": "e-icml11_4",
+      "title": "Inference of Inversion Transduction Grammars",
+      "pdf": {
+        "url": "https://icml.cc/2011/papers/175_icmlpaper.pdf",
+        "sha256": "e1a1cb19400718b601a97df4de51670ce13f265f778214fc928a7fbd1fe1d23f",
+        "fileName": "e-icml11_4.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://www.icml-2011.org/papers/175_icmlpaper.pdf",
+          "https://icml.cc/2011/papers/175_icmlpaper.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 2. Example of alignment matrix for prefix order to postfix order transduction. The example is (×1 + 3 × 22, 1322 × +×). On the left an alignment matrix, and on the right an alignment diagram showing the crossing dependencies.",
+          "captionRect": [55.44, 339.84, 288.72, 391.68],
+          "rect": [71.28, 410.4, 272.16, 516.96]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1. Derivation (+12, 12+). P S S 2/2 1/1 trees for O S +/+ 2/2 input output pair",
+          "captionRect": [56.16, 540.72, 289.44, 560.16],
+          "rect": [80.64, 583.2, 264.24, 725.04]
+        }
+      ]
+    },
+    {
+      "id": "e-icml11_5",
+      "title": "BCDNPKL: Scalable Non-Parametric Kernel Learning Using Block Coordinate Descent",
+      "pdf": {
+        "url": "https://icml.cc/2011/papers/176_icmlpaper.pdf",
+        "sha256": "447328caa15d963ebf6e487b371c592821c8d32b4d2ba6d46337bfcebe11420c",
+        "fileName": "e-icml11_5.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "two-column", "figure", "table", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://www.icml-2011.org/papers/176_icmlpaper.pdf",
+          "https://icml.cc/2011/papers/176_icmlpaper.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 6, 7 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "table-2",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 2. The third group data sets including seven Adult",
+          "captionRect": [307.44, 630, 540.72, 649.44],
+          "rect": [307.44, 601.2, 532.8, 628.56]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 5,
+          "text": "Table 1. The second group data sets.",
+          "captionRect": [349.92, 714.24, 498.24, 722.88],
+          "rect": [307.44, 659.52, 536.4, 713.52]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 1. The comparison of convergent objective values between BCDNPKL and the baselines based on SDP solver on data sets: iris (C = 10) and soybean (C = 5).",
+          "captionRect": [55.44, 405.36, 288.72, 435.6],
+          "rect": [66.24, 451.44, 277.92, 644.4]
+        }
+      ]
+    },
+    {
+      "id": "e-nips09_3",
+      "title": "An Additive Latent Feature Model for Transparent Object Recognition",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3808-an-additive-latent-feature-model-for-transparent-object-recognition.pdf",
+        "sha256": "e39cec743226cf074e0e0020d569e6c8f3b8ee2e1241613ff6fee5c17008eb40",
+        "fileName": "e-nips09_3.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3808-an-additive-latent-feature-model-for-transparent-object-recognition.pdf",
+          "https://papers.nips.cc/paper/3808-an-additive-latent-feature-model-for-transparent-object-recognition.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 5 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 2: Left: Graphical model representing our latent topic model of patch appearance and quan- tization into a potentially overlapping set of visual words. See text for details. Right: Local factors learned by latent topic model for example training data.",
+          "captionRect": [108, 537.12, 503.28, 567.36],
+          "rect": [115.2, 581.04, 493.92, 710.64]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Left: Images of a transparent object in different environments. A point on the object is highlighted in each image, and the local orientation edge energy map is shown. While the back- ground dominates the local patch, there is a latent structure that is discriminative of the object. Right: Our model finds local transparent structure by applying a latent factor model (e.g., LDA) before a quantization step. In contrast to previous approaches that applied such models to a quantized vi- sual word model, we apply them directly to the SIFT representation, and then quantize the resulting model into descriptors according to the learned topic distribution.",
+          "captionRect": [108, 457.2, 504, 531.36],
+          "rect": [123.84, 542.16, 488.88, 709.92]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 4,
+          "text": "Figure 3: Detected quantized transparent local features (transparent visual words) on an example image. Each image shows the detected locations for the transparent visual word corresponding to the latent topics depicted on the left.",
+          "captionRect": [107.28, 396.72, 503.28, 426.96],
+          "rect": [113.76, 448.56, 501.84, 515.52]
+        }
+      ]
+    },
+    {
+      "id": "e-nips09_4",
+      "title": "Anomaly Detection with Score functions based on Nearest Neighbor Graphs",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3723-anomaly-detection-with-score-functions-based-on-nearest-neighbor-graphs.pdf",
+        "sha256": "b468c509698c3022ee6a42c4b3311f609784d153713dced5b43f79b170be0f9f",
+        "fileName": "e-nips09_4.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3723-anomaly-detection-with-score-functions-based-on-nearest-neighbor-graphs.pdf",
+          "https://papers.nips.cc/paper/3723-anomaly-detection-with-score-functions-based-on-nearest-neighbor-graphs.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3, 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 2: (a) Empirical ROC curve of K -LPE on the banana dataset with K = 2, 4, 6, 8, 10, 12 (with n = 400 ) vs the empirical ROC curve of one class SVM developed in [9]; (b) Empirical ROC curves of K -LPE algorithm vs clairvoyant ROC curve ( f 0 is given by Equation 10) for K = 6 and for n = 40 or 160 .",
+          "captionRect": [108, 564.62, 504.72, 592.7],
+          "rect": [126, 604.22, 479.52, 756.14]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Left : Level sets of the nominal bivariate Gaussian mixture distribution used to illustrate the K- LPE algorithm. Middle : Results of K-LPE with K = 6 and Euclidean distance metric for m = 150 test points drawn from a equal mixture of 2D uniform and the (nominal) bivariate distributions. Scores for the test points are based on 200 nominal training samples. Scores falling below a threshold level 0.05 are declared as anomalies. The dotted contour corresponds to the exact bivariate Gaussian density level set at level α = 0.05 . Right : The empirical distribution of the test point scores associated with the bivariate Gaussian appear to be uniform while scores for the test points drawn from 2D uniform distribution cluster around zero.",
+          "captionRect": [107.28, 260.06, 504, 328.46],
+          "rect": [104.4, 342.86, 505.44, 477.5]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 3: ROC curves on real datasets via LPE ; (a) Wine dataset with D = 13, n = 39, ² = 0.9 ; (b)",
+          "captionRect": [108, 271.58, 503.28, 289.58],
+          "rect": [105.12, 296.78, 499.68, 416.3]
+        }
+      ]
+    },
+    {
+      "id": "e-nips09_5",
+      "title": "Boosting with Spatial Regularization",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3696-boosting-with-spatial-regularization.pdf",
+        "sha256": "79fdf5093a4aa42e372187e1ac79ab952f1c046db8012088820c48dc9ce9398c",
+        "fileName": "e-nips09_5.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3696-boosting-with-spatial-regularization.pdf",
+          "https://papers.nips.cc/paper/3696-boosting-with-spatial-regularization.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 3, 4 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 3,
+          "text": "Figure 2: The SRB (spatially regularized boosting algorithms).",
+          "captionRect": [192.96, 100.8, 418.32, 108.72],
+          "rect": [108, 120.24, 504, 402.48]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 2,
+          "text": "Figure 1: Each graph is the eigenimage of size d × d corresponding to an eigenvector of K = µI − G.",
+          "captionRect": [120.96, 233.28, 490.32, 241.92],
+          "rect": [117.36, 259.2, 497.52, 300.24]
+        }
+      ]
+    },
+    {
+      "id": "e-nips09_6",
+      "title": "Bootstrapping from Game Tree Search",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3722-bootstrapping-from-game-tree-search.pdf",
+        "sha256": "55ad57284e82e0555686df8d8395d2823f0b180b75efbd8048ce28545dbff602",
+        "fileName": "e-nips09_6.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure", "table"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3722-bootstrapping-from-game-tree-search.pdf",
+          "https://papers.nips.cc/paper/3722-bootstrapping-from-game-tree-search.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 4 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Left: TD, TD-Root and TD-Leaf backups. Right: RootStrap(minimax) and TreeStrap(minimax).",
+          "captionRect": [110.16, 588.56, 495.36, 597.2],
+          "rect": [113.76, 618.08, 497.52, 752.72]
+        },
+        {
+          "id": "table-1",
+          "kind": "object",
+          "objectKind": "table",
+          "pageIndex": 3,
+          "text": "Table 1: Backups for various learning algorithms.",
+          "captionRect": [206.64, 649.04, 403.92, 657.68],
+          "rect": [190.08, 668.48, 421.92, 759.92]
+        }
+      ]
+    },
+    {
+      "id": "e-nips09_7",
+      "title": "Breaking Boundaries: Active Information Acquisition Across Learning and Diagnosis",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3653-breaking-boundaries-between-induction-time-and-diagnosis-time-active-information-acquisition.pdf",
+        "sha256": "263e2c791a0976e49ba992095d0164ed49089e5cb46eae97aa5d03b742dc1055",
+        "fileName": "e-nips09_7.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3653-breaking-boundaries-between-induction-time-and-diagnosis-time-active-information-acquisition.pdf",
+          "https://papers.nips.cc/paper/3653-breaking-boundaries-between-induction-time-and-diagnosis-time-active-information-acquisition.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 2, 7 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 2: Comparison of various selective selection schemes (best viewed in color).",
+          "captionRect": [139.68, 593.28, 471.6, 601.92],
+          "rect": [94.32, 612, 491.04, 720]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 1,
+          "text": "Figure 1: Illustration of induction-time and diagnosis-time active information acquisition. Induction-time active learning focuses on acquiring information for the pool of data used to train a diagnostic model; diagnosis-time information acquisition focuses on the next best observations to acquire from the test case at hand.",
+          "captionRect": [108.72, 504.72, 503.28, 545.76],
+          "rect": [166.32, 570.96, 445.68, 705.6]
+        }
+      ]
+    },
+    {
+      "id": "e-nips09_8",
+      "title": "Conditional Random Fields with High-Order Features for Sequence Labeling",
+      "pdf": {
+        "url": "https://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf",
+        "sha256": "58156d526b86189371dfca64fc0c1b09b0fad8e6c044a358f05c33070e35db14",
+        "fileName": "e-nips09_8.pdf",
+        "license": "Public proceedings PDF; individual copyright and reuse terms apply. Dataset code licensing does not establish permission to redistribute the PDF."
+      },
+      "strata": ["computer-science", "single-column", "figure", "same-page-objects"],
+      "annotation": {
+        "kind": "dataset-ground-truth",
+        "sources": [
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json",
+          "https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/README.md",
+          "https://doi.org/10.1145/2910896.2910904",
+          "http://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf",
+          "https://papers.nips.cc/paper/3815-conditional-random-fields-with-high-order-features-for-sequence-labeling.pdf"
+        ],
+        "scope": "PDFFigures2 Conference150 v2 human-marked, foreground-cropped labels. All published figure/table annotations on physical pages 7, 8 are included; other pages are excluded. Captions are upstream transcriptions and can be partial. Labels have not been newly rechecked as gold; selected-page coverage is only relative to published annotations."
+      },
+      "checks": [
+        {
+          "id": "figure-2",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 2: Accuracy (left) and running time (right) as a function of maximum order for the handwrit- ing recognition data set.",
+          "captionRect": [108, 398.16, 503.28, 417.6],
+          "rect": [115.92, 427.68, 491.76, 560.88]
+        },
+        {
+          "id": "figure-1",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 6,
+          "text": "Figure 1: Accuracy as a function of maximum order on the synthetic data set.",
+          "captionRect": [151.92, 559.44, 458.64, 568.08],
+          "rect": [115.92, 577.44, 491.76, 704.88]
+        },
+        {
+          "id": "figure-3",
+          "kind": "object",
+          "objectKind": "figure",
+          "pageIndex": 7,
+          "text": "Figure 3: Named entity recognition results.",
+          "captionRect": [321.12, 532.08, 491.76, 540.72],
+          "rect": [314.64, 551.52, 493.92, 679.68]
+        }
+      ]
+    }
+  ],
+  "unobservedDocuments": [],
+  "unobservedChecks": {
+    "text": 0,
+    "object": 0,
+    "reference": 0,
+    "citation": 0,
+    "reading-order": 0
+  },
+  "objectIoUThreshold": 0.5,
+  "limitations": [
+    "Selected source-verified checks only; not exhaustive precision or recall.",
+    "Static matches do not establish end-to-end task success.",
+    "PDF hashes are compared to observation metadata; the evaluator does not read PDF bytes.",
+    "Object caption matches use provided object groups or explicit same-page provider membership; no geometry is inferred by this evaluator.",
+    "Without an annotated object rectangle, a match establishes localization only, not caption association correctness."
+  ],
+  "summary": {
+    "observations": 12,
+    "statuses": {
+      "completed": 12,
+      "failed": 0,
+      "unsupported": 0,
+      "not-performed": 0
+    },
+    "selectedChecks": {
+      "text": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 0,
+        "reasons": {}
+      },
+      "object": {
+        "passed": 19,
+        "measured": 31,
+        "notMeasured": 0,
+        "reasons": {}
+      },
+      "reference": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 0,
+        "reasons": {}
+      },
+      "citation": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 0,
+        "reasons": {}
+      },
+      "reading-order": {
+        "passed": 0,
+        "measured": 0,
+        "notMeasured": 0,
+        "reasons": {}
+      }
+    },
+    "actualTaskOutcomes": {
+      "passed": 0,
+      "failed": 0,
+      "unsupported": 0,
+      "not-performed": 31
+    },
+    "taskUnmeasuredReasons": {
+      "No actual task outcome provided": 31
+    },
+    "objectIoU": {
+      "measured": 21,
+      "notMeasured": 10,
+      "mean": 0.866347846172266,
+      "reasons": {
+        "no-matched-object": 10
+      }
+    }
+  },
+  "groups": [
+    {
+      "backend": "local-rules",
+      "mode": "cold",
+      "summary": {
+        "observations": 12,
+        "statuses": {
+          "completed": 12,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "selectedChecks": {
+          "text": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "object": {
+            "passed": 19,
+            "measured": 31,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reference": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "citation": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reading-order": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          }
+        },
+        "actualTaskOutcomes": {
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 31
+        },
+        "taskUnmeasuredReasons": {
+          "No actual task outcome provided": 31
+        },
+        "objectIoU": {
+          "measured": 21,
+          "notMeasured": 10,
+          "mean": 0.866347846172266,
+          "reasons": {
+            "no-matched-object": 10
+          }
+        }
+      }
+    },
+    {
+      "backend": "local-rules",
+      "mode": "warm",
+      "summary": {
+        "observations": 0,
+        "statuses": {
+          "completed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "selectedChecks": {
+          "text": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "object": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reference": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "citation": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reading-order": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          }
+        },
+        "actualTaskOutcomes": {
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "taskUnmeasuredReasons": {},
+        "objectIoU": {
+          "measured": 0,
+          "notMeasured": 0,
+          "mean": null,
+          "reasons": {}
+        }
+      }
+    },
+    {
+      "backend": "local-rules",
+      "mode": "cache",
+      "summary": {
+        "observations": 0,
+        "statuses": {
+          "completed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "selectedChecks": {
+          "text": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "object": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reference": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "citation": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          },
+          "reading-order": {
+            "passed": 0,
+            "measured": 0,
+            "notMeasured": 0,
+            "reasons": {}
+          }
+        },
+        "actualTaskOutcomes": {
+          "passed": 0,
+          "failed": 0,
+          "unsupported": 0,
+          "not-performed": 0
+        },
+        "taskUnmeasuredReasons": {},
+        "objectIoU": {
+          "measured": 0,
+          "notMeasured": 0,
+          "mean": null,
+          "reasons": {}
+        }
+      }
+    }
+  ],
+  "observations": [
+    {
+      "documentId": "e-icml10_7",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "1f35414d4febd6c41a1ae2de1f2beba632598c5bc929103eaf9fc29fa6613f81",
+      "durationMs": 40.217034000000005,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9378096474767749,
+          "iouReason": null,
+          "captionIoU": 0.9549283951852702,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9935697622597705,
+          "iouReason": null,
+          "captionIoU": 0.9674517216817968,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.7981656999453994,
+          "iouReason": null,
+          "captionIoU": 0.9638327989686977,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml10_9",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "825933dc66b607a3dc9aaa123add24ecb21f7df604db949a8a398e756937ec79",
+      "durationMs": 21.552594,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9749308390109791,
+          "iouReason": null,
+          "captionIoU": 0.9653117684780403,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9680183130307312,
+          "iouReason": null,
+          "captionIoU": 0.6726073234821653,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml10_10",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "52247cea88cc2f15ae69c3b06ca2b96c2df4574b14cc980e3dc44ad31d3bc1b5",
+      "durationMs": 18.619024999999993,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "table-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9492503722408376,
+          "iouReason": null,
+          "captionIoU": 0.8355042334944887,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-1",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml11_3",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "39f87714fb8227113cb8bfc0cb0afdcf78ea5e7b96c38ac8cc87ff05d60c74dc",
+      "durationMs": 27.460225999999977,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml11_4",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "e1a1cb19400718b601a97df4de51670ce13f265f778214fc928a7fbd1fe1d23f",
+      "durationMs": 9.816196999999988,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.799774313459749,
+          "iouReason": null,
+          "captionIoU": 0.9709642907788513,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.994831136542454,
+          "iouReason": null,
+          "captionIoU": 0.9703731061338189,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-icml11_5",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "447328caa15d963ebf6e487b371c592821c8d32b4d2ba6d46337bfcebe11420c",
+      "durationMs": 13.164785999999992,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "table-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9886847213501224,
+          "iouReason": null,
+          "captionIoU": 0.9630795616267651,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9856650614861505,
+          "iouReason": null,
+          "captionIoU": 0.9040955162109422,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.7471832413848118,
+          "iouReason": null,
+          "captionIoU": 0.9801010574027491,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_3",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "e39cec743226cf074e0e0020d569e6c8f3b8ee2e1241613ff6fee5c17008eb40",
+      "durationMs": 6.259478000000001,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_4",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "b468c509698c3022ee6a42c4b3311f609784d153713dced5b43f79b170be0f9f",
+      "durationMs": 30.743105000000014,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.876877757130718,
+          "iouReason": null,
+          "captionIoU": 0.9168147442209046,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9560876577166428,
+          "iouReason": null,
+          "captionIoU": 0.9668149572872486,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_5",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "79fdf5093a4aa42e372187e1ac79ab952f1c046db8012088820c48dc9ce9398c",
+      "durationMs": 25.955115000000006,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": false,
+          "reason": "object-iou-below-threshold",
+          "iou": 0.48379037330318847,
+          "iouReason": null,
+          "captionIoU": 0.9630076286184185,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.833335883390096,
+          "iouReason": null,
+          "captionIoU": 0.9326912631941519,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_6",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "55ad57284e82e0555686df8d8395d2823f0b180b75efbd8048ce28545dbff602",
+      "durationMs": 6.616151000000002,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.995290631989962,
+          "iouReason": null,
+          "captionIoU": 0.8229649510260376,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "table-1",
+          "kind": "object",
+          "static": false,
+          "reason": "object-iou-below-threshold",
+          "iou": 0,
+          "iouReason": null,
+          "captionIoU": 0.8201751516462593,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "table-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_7",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "263e2c791a0976e49ba992095d0164ed49089e5cb46eae97aa5d03b742dc1055",
+      "durationMs": 7.056770999999969,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9766256660522297,
+          "iouReason": null,
+          "captionIoU": 0.9656918263308812,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": false,
+          "reason": null,
+          "iou": null,
+          "iouReason": "no-matched-object",
+          "captionIoU": null,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    },
+    {
+      "documentId": "e-nips09_8",
+      "backend": "local-rules",
+      "mode": "cold",
+      "status": "completed",
+      "adapterVersion": "da0875ec5ffdbfc4098b7335593b42a404f50065",
+      "modelRevision": null,
+      "pdfSha256": "58156d526b86189371dfca64fc0c1b09b0fad8e6c044a358f05c33070e35db14",
+      "durationMs": 9.010976999999968,
+      "failure": null,
+      "bibliographyCoverage": null,
+      "checks": [
+        {
+          "checkId": "figure-2",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9525723787137916,
+          "iouReason": null,
+          "captionIoU": 0.9767970805937275,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-2",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-1",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.9919481042111993,
+          "iouReason": null,
+          "captionIoU": 0.9022864854621568,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-1",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        },
+        {
+          "checkId": "figure-3",
+          "kind": "object",
+          "static": true,
+          "reason": null,
+          "iou": 0.988893208921979,
+          "iouReason": null,
+          "captionIoU": 0.9614856538106102,
+          "staticEvidence": "caption-and-object-box",
+          "task": {
+            "checkId": "figure-3",
+            "status": "not-performed",
+            "detail": "No actual task outcome provided"
+          }
+        }
+      ]
+    }
+  ]
+}

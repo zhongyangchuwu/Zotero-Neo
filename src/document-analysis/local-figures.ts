@@ -19,6 +19,7 @@ interface Line {
   readonly rect: DocumentRect;
   readonly text: string;
   readonly fontSize: number;
+  readonly chunks: readonly LocalFigureText[];
 }
 interface TextRow {
   rect: DocumentRect;
@@ -33,7 +34,7 @@ interface Caption {
 interface Graphic {
   readonly index: number;
   readonly rect: DocumentRect;
-  /** Text membership proved by connector adjacency or a repeated ruled cell grid. */
+  /** Text membership proved by local adjacency or repeated caption-bounded cells. */
   readonly labels: ReadonlySet<Line>;
 }
 interface Body {
@@ -93,7 +94,7 @@ function median(values: readonly number[], fallback: number): number {
 }
 
 /** Character weighting prevents a handful of headings or plot ticks setting the body scale. */
-function textScale(text: readonly LocalFigureText[], page: DocumentRect): number {
+function textScale(text: readonly LocalFigureText[], fallback: number): number {
   const samples = text
     .filter((t) => Number.isFinite(t.fontSize) && t.fontSize > 0)
     .map((t) => ({ size: t.fontSize, weight: Math.max(1, t.text.trim().length) }))
@@ -104,8 +105,7 @@ function textScale(text: readonly LocalFigureText[], page: DocumentRect): number
     weight += sample.weight;
     if (weight >= half) return sample.size;
   }
-  // Only used for a page without usable text; no caption can be invented from this scale.
-  return Math.min(width(page), height(page)) / 60;
+  return fallback;
 }
 
 /** Aligned prose starts and sibling caption leads reveal gutters narrower than a cell-gap cutoff. */
@@ -159,7 +159,7 @@ function columnBoundaries(rows: readonly TextRow[], unit: number): number[] {
 }
 
 /** Build visual rows, then split column/cell gaps instead of trusting PDF content-stream order. */
-function textLines(text: readonly LocalFigureText[], unit: number): Line[] {
+function textLines(text: readonly LocalFigureText[], unit: number, cellGap = unit * 2.5): Line[] {
   const rows: TextRow[] = [];
   for (const chunk of [...text].sort(
     (a, b) => readingOrder(a.rect, b.rect) || a.text.localeCompare(b.text),
@@ -202,10 +202,8 @@ function textLines(text: readonly LocalFigureText[], unit: number): Line[] {
       lines.push({
         rect: bounds(parts.map((p) => p.rect)),
         text: content.replace(/\s+/gu, ' ').trim(),
-        fontSize: median(
-          parts.map((p) => (p.fontSize > 0 ? p.fontSize : unit)),
-          unit,
-        ),
+        fontSize: textScale(parts, unit),
+        chunks: parts,
       });
       parts = [];
       prefix = '';
@@ -222,7 +220,7 @@ function textLines(text: readonly LocalFigureText[], unit: number): Line[] {
           );
         const captionRestart =
           captionStart && gap > unit * 0.75 && documentCaptionIdentity(chunk.text);
-        if (gap > unit * 2.5 || previous.hasEOL || columnGap || captionRestart) flush();
+        if (gap > cellGap || previous.hasEOL || columnGap || captionRestart) flush();
       }
       parts.push(chunk);
       if (!captionStart && prefix.length < 40) {
@@ -412,7 +410,7 @@ function bodyLines(
       l.fontSize <= unit * 1.25 &&
       proseLine(l, unit),
   );
-  return new Set(
+  const barriers = new Set(
     prose.filter(
       (line) =>
         (line.text.length >= 55 && /[.!?。！？,，;；]/u.test(line.text)) ||
@@ -426,57 +424,77 @@ function bodyLines(
         ),
     ),
   );
+  // Short final lines inherit a proved paragraph's typography and line spacing.
+  for (const line of lines) {
+    if (barriers.has(line) || captionLines.has(line)) continue;
+    for (const previous of barriers) {
+      const gap = previous.rect[1] - line.rect[3];
+      if (
+        gap >= -unit * 0.15 &&
+        gap <= leading * 0.65 &&
+        Math.abs(line.fontSize - previous.fontSize) <= unit * 0.08 &&
+        Math.abs(line.rect[0] - previous.rect[0]) <= unit * 2 &&
+        sameColumn(line.rect, previous.rect, unit)
+      ) {
+        barriers.add(line);
+        break;
+      }
+    }
+  }
+  return barriers;
 }
 
 /**
- * Text can complete genuine painted structures: small labels bridge tree connectors, and
- * repeated cell columns give a single separator rule a real table extent. Ordinary prose
- * inside a rectangle is deliberately insufficient for either kind of membership.
+ * Repeated cells can prove a table without painted rules. Reconstruct their whitespace from
+ * native chunks, not merged prose lines; require multiple rows and two stable cell starts.
+ * The caption bounds the search horizontally, while prose and other captions split row chains.
  */
-function graphicTextLabels(
-  boxes: readonly DocumentRect[],
-  connectors: readonly boolean[],
+function tableTextGroups(
   lines: readonly Line[],
   captions: readonly Caption[],
+  graphics: readonly DocumentRect[],
+  barriers: ReadonlySet<Line>,
   unit: number,
   leading: number,
-): Set<Line>[] {
-  const captionLines = new Set(captions.flatMap((caption) => caption.lines));
-  const labels = boxes.map(() => new Set<Line>());
-  boxes.forEach((r, index) => {
-    if (connectors[index]) {
-      for (const line of lines) {
-        if (captionLines.has(line) || line.fontSize >= unit * 0.85) continue;
-        const beside =
-          gapX(r, line.rect) <= unit * 0.8 &&
-          overlapY(r, line.rect) >= Math.min(height(r), height(line.rect)) * 0.25;
-        const aboveBelow =
-          gapY(r, line.rect) <= unit * 0.3 &&
-          overlapX(r, line.rect) >= Math.min(width(r), width(line.rect)) * 0.25;
-        if (beside || aboveBelow) labels[index]!.add(line);
-      }
+): { rect: DocumentRect; labels: Set<Line> }[] {
+  if (!captions.some((caption) => caption.identity.kind === 'table')) return [];
+  const cells = textLines(
+    lines.flatMap((line) => line.chunks).filter((chunk) => chunk.fontSize >= unit * 0.85),
+    unit,
+    unit * 0.75,
+  );
+  const paragraphLines = lines.filter((line) => barriers.has(line) || proseLine(line, unit));
+  const chunkLines = new Map<LocalFigureText, Line>();
+  for (const line of lines) for (const chunk of line.chunks) chunkLines.set(chunk, line);
+  const groups: { rect: DocumentRect; labels: Set<Line> }[] = [];
+  for (const caption of captions) {
+    if (caption.identity.kind !== 'table') continue;
+    let left = caption.rect[0] - unit * 3;
+    let right = caption.rect[2] + unit * 3;
+    for (const other of captions) {
+      if (other === caption || overlapY(other.rect, caption.rect) <= 0) continue;
+      if (other.rect[2] < caption.rect[0]) left = Math.max(left, other.rect[2] + unit * 0.5);
+      if (other.rect[0] > caption.rect[2]) right = Math.min(right, other.rect[0] - unit * 0.5);
     }
-    if (height(r) > unit * 0.3 || width(r) < unit * 5) return;
     const rows: Line[][] = [];
-    for (const line of lines) {
+    for (const cell of cells) {
       if (
-        captionLines.has(line) ||
-        line.rect[0] < r[0] - unit ||
-        line.rect[2] > r[2] + unit ||
-        line.fontSize < unit * 0.65 ||
-        line.fontSize > unit * 1.2
+        cell.rect[0] < left ||
+        cell.rect[2] > right ||
+        captions.some((other) => intersects(other.rect, cell.rect))
       )
         continue;
       const last = rows[rows.length - 1];
-      if (last && Math.abs(centerY(last[0]!.rect) - centerY(line.rect)) <= unit * 0.4)
-        last.push(line);
-      else rows.push([line]);
+      if (last && Math.abs(centerY(last[0]!.rect) - centerY(cell.rect)) <= unit * 0.4)
+        last.push(cell);
+      else rows.push([cell]);
     }
     const grid = rows.filter(
       (row) =>
         row.length >= 2 &&
-        Math.max(...row.map((line) => line.rect[0])) -
-          Math.min(...row.map((line) => line.rect[0])) >=
+        row.some((cell) => !proseLine(cell, unit)) &&
+        Math.max(...row.map((cell) => cell.rect[0])) -
+          Math.min(...row.map((cell) => cell.rect[0])) >=
           unit * 2.5,
     );
     const columns: { x: number; rows: Set<Line[]> }[] = [];
@@ -499,59 +517,189 @@ function graphicTextLabels(
     const chains: Line[][][] = [];
     for (const row of supported) {
       const previous = chains[chains.length - 1];
-      const previousRect =
-        previous && bounds(previous[previous.length - 1]!.map((line) => line.rect));
-      const rect = bounds(row.map((line) => line.rect));
+      const previousRow = previous?.[previous.length - 1];
+      const previousRect = previousRow && bounds(previousRow.map((cell) => cell.rect));
+      const rect = bounds(row.map((cell) => cell.rect));
+      const passage = previousRect && corridor(previousRect, rect);
       const separated =
         previousRect &&
         (gapY(previousRect, rect) > leading * 2.2 ||
-          captions.some((caption) => intersects(caption.rect, corridor(previousRect, rect))));
+          captions.some((other) => intersects(other.rect, passage!)) ||
+          // Subscripts extend a member's source line into the row gap; they are not a paragraph barrier.
+          paragraphLines.some(
+            (line) =>
+              intersects(line.rect, passage!) &&
+              !row.some((cell) => cell.chunks.some((chunk) => chunkLines.get(chunk) === line)) &&
+              !previousRow!.some((cell) =>
+                cell.chunks.some((chunk) => chunkLines.get(chunk) === line),
+              ),
+          ));
       if (!previous || separated) chains.push([row]);
       else previous.push(row);
     }
     for (const chain of chains) {
       if (chain.length < 3) continue;
-      const cells = chain.flat();
-      const cellRect = bounds(cells.map((line) => line.rect));
-      if (gapY(r, cellRect) > leading * 2.2) continue;
-      const structure = bounds([r, cellRect]);
+      let rect = bounds(chain.flatMap((row) => row.map((cell) => cell.rect)));
       if (
-        !captions.some(
-          (caption) =>
-            caption.identity.kind === 'table' &&
-            sameColumn(caption.rect, structure, unit) &&
-            gapY(caption.rect, structure) <= leading * 6 &&
-            !captions.some(
-              (other) =>
-                other !== caption &&
-                (intersects(other.rect, structure) ||
-                  intersects(other.rect, corridor(caption.rect, structure))),
-            ),
+        gapY(caption.rect, rect) > leading * 6 ||
+        intersects(caption.rect, rect) ||
+        captions.some(
+          (other) =>
+            other !== caption &&
+            (intersects(other.rect, rect) || intersects(other.rect, corridor(caption.rect, rect))),
         )
       )
         continue;
-      const font = median(
-        cells.map((line) => line.fontSize),
-        unit,
-      );
-      for (const line of lines) {
+      const members = new Set(chain.flat());
+      // Include adjacent headers and full-width numeric rows, but never an ordinary paragraph.
+      // A lexical header needs a real separator between it and the established cell grid.
+      for (const row of rows) {
+        const rowRect = bounds(row.map((cell) => cell.rect));
+        if (gapY(rowRect, rect) > leading * 1.6) continue;
+        const aligned = row.some((cell) =>
+          stable.some((column) => Math.abs(column.x - cell.rect[0]) <= unit * 0.6),
+        );
+        const header =
+          rowRect[1] >= rect[3] - unit * 0.1 &&
+          row.every(
+            (cell) => !proseLine(cell, unit) || Math.abs(cell.fontSize - unit) <= unit * 0.08,
+          ) &&
+          graphics.some(
+            (rule) =>
+              height(rule) <= unit * 0.3 &&
+              rule[0] >= left &&
+              rule[2] <= right &&
+              width(rule) >= width(rect) * 0.8 &&
+              intersects(rule, corridor(rowRect, rect)),
+          );
         if (
-          captionLines.has(line) ||
-          Math.abs(line.fontSize - font) > unit * 0.08 ||
-          line.rect[0] < r[0] - unit ||
-          line.rect[2] > r[2] + unit
+          !contains(rect, rowRect, unit * 0.1) &&
+          !(aligned && row.every((cell) => !proseLine(cell, unit))) &&
+          !header
         )
           continue;
-        const withinRows =
-          line.rect[1] >= cellRect[1] - unit * 0.1 && line.rect[3] <= cellRect[3] + unit * 0.1;
-        const header =
-          cellRect[3] <= r[1] &&
-          line.rect[1] >= r[3] - unit * 0.1 &&
-          line.rect[3] <= r[3] + leading * 2.2;
-        if (withinRows || header) labels[index]!.add(line);
+        const expanded = bounds([rect, rowRect]);
+        if (captions.some((other) => intersects(other.rect, expanded))) continue;
+        for (const cell of row) members.add(cell);
       }
+      rect = bounds([...members].map((cell) => cell.rect));
+      const labels = new Set<Line>();
+      for (const cell of members)
+        for (const chunk of cell.chunks) labels.add(chunkLines.get(chunk)!);
+      for (const line of lines)
+        if (line.fontSize < unit * 0.85 && contains(rect, line.rect, unit * 0.8)) labels.add(line);
+      if (
+        paragraphLines.some((line) => !labels.has(line) && intersects(line.rect, rect)) ||
+        paragraphLines.some(
+          (line) => !labels.has(line) && intersects(line.rect, corridor(caption.rect, rect)),
+        )
+      )
+        continue;
+      groups.push({ rect: bounds([rect, ...[...labels].map((line) => line.rect)]), labels });
     }
-  });
+  }
+  return groups;
+}
+
+/**
+ * Painted connectors can share small node labels. Other labels need an uncontested nearest
+ * component; panel subcaptions may wrap, but normal prose remains a barrier.
+ */
+function graphicTextLabels(
+  boxes: readonly DocumentRect[],
+  connectors: readonly boolean[],
+  lines: readonly Line[],
+  captions: readonly Caption[],
+  barriers: ReadonlySet<Line>,
+  reserved: ReadonlySet<Line>,
+  unit: number,
+  leading: number,
+): Set<Line>[] {
+  const captionLines = new Set(captions.flatMap((caption) => caption.lines));
+  const labels = boxes.map(() => new Set<Line>());
+  const panelLabels = new Set<Line>();
+  const barrierLines = [...barriers];
+  for (const line of lines) {
+    if (
+      captionLines.has(line) ||
+      reserved.has(line) ||
+      line.fontSize > unit * 1.4 ||
+      captions.some((caption) => intersects(caption.rect, line.rect))
+    )
+      continue;
+    const panelLead = /^\([a-z]\)\s/iu.test(line.text);
+    if (
+      (barriers.has(line) || (line.fontSize >= unit * 0.85 && proseLine(line, unit))) &&
+      !panelLead
+    )
+      continue;
+    const candidates: { index: number; distance: number }[] = [];
+    boxes.forEach((r, index) => {
+      const structure = width(r) >= unit * 3 && height(r) >= unit * 2;
+      const connectorLabel = connectors[index] && line.fontSize < unit * 0.85;
+      if (!structure && !connectorLabel) return;
+      const beside =
+        gapX(r, line.rect) <= unit * 0.8 &&
+        overlapY(r, line.rect) >= Math.min(height(r), height(line.rect)) * 0.25;
+      const aboveBelow =
+        gapY(r, line.rect) <= leading &&
+        overlapX(r, line.rect) >= Math.min(width(r), width(line.rect)) * 0.5;
+      if (!beside && !aboveBelow) return;
+      const passage = corridor(r, line.rect);
+      if (
+        captions.some(
+          (caption) => intersects(caption.rect, passage) || intersects(caption.rect, r),
+        ) ||
+        barrierLines.some(
+          (other) => other !== line && !panelLabels.has(other) && intersects(other.rect, passage),
+        )
+      )
+        return;
+      if (
+        connectors[index] &&
+        line.fontSize < unit * 0.85 &&
+        (beside || gapY(r, line.rect) <= unit * 0.3)
+      )
+        labels[index]!.add(line);
+      if (structure) candidates.push({ index, distance: gapX(r, line.rect) + gapY(r, line.rect) });
+    });
+    candidates.sort((a, b) => a.distance - b.distance || a.index - b.index);
+    if (!candidates.length || (candidates[1] && candidates[1].distance === candidates[0]!.distance))
+      continue;
+    const owner = candidates[0]!.index;
+    labels[owner]!.add(line);
+    if (panelLead) panelLabels.add(line);
+  }
+  for (const seed of panelLabels) {
+    const owner = labels.findIndex((members) => members.has(seed));
+    let last = seed;
+    for (const line of lines) {
+      if (
+        centerY(line.rect) >= centerY(last.rect) ||
+        captionLines.has(line) ||
+        reserved.has(line) ||
+        /^\([a-z]\)\s/iu.test(line.text) ||
+        Math.abs(line.fontSize - seed.fontSize) > unit * 0.08 ||
+        Math.abs(line.rect[0] - seed.rect[0]) > unit ||
+        last.rect[1] - line.rect[3] < -unit * 0.1 ||
+        last.rect[1] - line.rect[3] > unit * 0.65
+      )
+        continue;
+      // Wrapping is anchored by the panel lead and typography, not a fixed number of lines.
+      if (
+        boxes.some(
+          (box, index) =>
+            index !== owner &&
+            width(box) >= unit * 3 &&
+            height(box) >= unit * 2 &&
+            intersects(box, line.rect),
+        )
+      )
+        continue;
+      labels[owner]!.add(line);
+      last = line;
+    }
+  }
   return labels;
 }
 
@@ -593,7 +741,24 @@ function graphicsFromPage(
     const r = rects[i]!;
     for (let j = i + 1; j < rects.length; j++) {
       if (rects[j]![3] < r[1] - unit * 0.35) break;
-      if (gapX(r, rects[j]!) <= unit * 0.35 && root(i) !== root(j)) parents[root(j)] = root(i);
+      const other = rects[j]!;
+      if (gapX(r, other) > unit * 0.35 || root(i) === root(j)) continue;
+      // A nearby page rule must not turn a one-column plot into a hull over the prose beside it.
+      // Inspect the prospective hull before joining otherwise disconnected painted members.
+      if (
+        !intersects(r, other) &&
+        barrierLines.some(
+          (line) =>
+            line.rect[0] < Math.max(r[2], other[2]) &&
+            line.rect[2] > Math.min(r[0], other[0]) &&
+            line.rect[1] < Math.max(r[3], other[3]) &&
+            line.rect[3] > Math.min(r[1], other[1]) &&
+            !intersects(line.rect, r) &&
+            !intersects(line.rect, other),
+        )
+      )
+        continue;
+      parents[root(j)] = root(i);
     }
   }
   const components = new Map<number, DocumentRect[]>();
@@ -606,16 +771,63 @@ function graphicsFromPage(
   const groups = [...components.values()]
     .map((members) => ({ members, rect: bounds(members) }))
     .sort((a, b) => readingOrder(a.rect, b.rect));
-  const boxes = groups.map((group) => group.rect);
-  const connectors = groups.map((group) =>
-    group.members.some(
-      (r) =>
-        // A slanted stem's axis-aligned hull is wider than its painted stroke.
-        (width(r) <= unit * 0.6 && height(r) >= Math.max(unit * 1.5, width(r) * 4)) ||
-        (height(r) <= unit * 0.3 && width(r) >= unit * 1.5),
+  const tables = tableTextGroups(lines, captions, rects, barriers, unit, leading);
+  const boxes = [...groups.map((group) => group.rect), ...tables.map((table) => table.rect)];
+  const connectors = [
+    ...groups.map((group) =>
+      group.members.some(
+        (r) =>
+          // A slanted stem's axis-aligned hull is wider than its painted stroke.
+          (width(r) <= unit * 0.6 && height(r) >= Math.max(unit * 1.5, width(r) * 4)) ||
+          (height(r) <= unit * 0.3 && width(r) >= unit * 1.5),
+      ),
     ),
+    ...tables.map(() => false),
+  ];
+  const reserved = new Set(tables.flatMap((table) => [...table.labels]));
+  const labels = graphicTextLabels(
+    boxes,
+    connectors,
+    lines,
+    captions,
+    barriers,
+    reserved,
+    unit,
+    leading,
   );
-  const labels = graphicTextLabels(boxes, connectors, lines, captions, unit, leading);
+  tables.forEach((table, tableIndex) => {
+    const index = groups.length + tableIndex;
+    for (const line of table.labels) labels[index]!.add(line);
+    groups.forEach((group, graphicIndex) => {
+      const r = group.rect;
+      const contained = contains(table.rect, r, unit * 0.8);
+      const separator =
+        height(r) <= unit * 0.3 &&
+        overlapX(r, table.rect) >= width(table.rect) * 0.8 &&
+        ((r[0] >= table.rect[0] - unit * 1.2 && r[2] <= table.rect[2] + unit * 1.2) ||
+          groups.some(
+            (other) =>
+              other !== group &&
+              height(other.rect) <= unit * 0.3 &&
+              Math.abs(other.rect[0] - r[0]) <= unit * 0.2 &&
+              Math.abs(other.rect[2] - r[2]) <= unit * 0.2 &&
+              gapY(other.rect, table.rect) <= leading * 1.6 &&
+              (overlapY(other.rect, table.rect) > 0 ||
+                (r[1] >= table.rect[3] && other.rect[3] <= table.rect[1]) ||
+                (other.rect[1] >= table.rect[3] && r[3] <= table.rect[1])),
+          )) &&
+        width(r) >= width(table.rect) * 0.8 &&
+        gapY(r, table.rect) <= leading * 1.6;
+      if (!contained && !separator) return;
+      const enclosure = bounds([r, table.rect]);
+      if (
+        captions.some((caption) => intersects(caption.rect, enclosure)) ||
+        barrierLines.some((line) => !table.labels.has(line) && intersects(line.rect, enclosure))
+      )
+        return;
+      for (const line of table.labels) labels[graphicIndex]!.add(line);
+    });
+  });
   const ruleParents = boxes.map((_, index) => index);
   const ruleRoot = (index: number): number => {
     while (ruleParents[index] !== index) {
@@ -643,8 +855,8 @@ function graphicsFromPage(
       const b = boxes[j]!;
       if (
         height(b) > unit * 0.3 ||
-        Math.abs(a[0] - b[0]) > unit ||
-        Math.abs(a[2] - b[2]) > unit ||
+        Math.abs(a[0] - b[0]) > unit * 0.2 ||
+        Math.abs(a[2] - b[2]) > unit * 0.2 ||
         gapY(a, b) < unit * 0.5
       )
         continue;
@@ -671,18 +883,18 @@ function graphicsFromPage(
       ruleParents[ruleRoot(j)] = ruleRoot(i);
     }
   }
-  const tables = new Map<number, { rects: DocumentRect[]; labels: Set<Line> }>();
+  const structures = new Map<number, { rects: DocumentRect[]; labels: Set<Line> }>();
   boxes.forEach((rect, index) => {
     const key = ruleRoot(index);
-    const members = tables.get(key) ?? { rects: [], labels: new Set<Line>() };
+    const members = structures.get(key) ?? { rects: [], labels: new Set<Line>() };
     members.rects.push(rect);
     for (const line of labels[index]!) {
       members.labels.add(line);
       members.rects.push(line.rect);
     }
-    tables.set(key, members);
+    structures.set(key, members);
   });
-  return [...tables.values()]
+  return [...structures.values()]
     .map((members) => ({ rect: bounds(members.rects), labels: members.labels }))
     .filter((graphic) => !pageLike(graphic.rect))
     .sort((a, b) => readingOrder(a.rect, b.rect))
@@ -716,12 +928,27 @@ function bodiesForCaption(
           ? below
           : null;
     if (!direction) continue;
-    // Farther rows may extend a compound figure, but not into a different nearby caption's body.
+    // A farther row may continue a near-caption band, not annex a separate neighboring object.
+    const farther = gapY(caption.rect, r) > leading * 5;
+    const continuesNearBand =
+      farther &&
+      graphics.some(
+        (nearer) =>
+          nearer !== graphic &&
+          gapY(caption.rect, nearer.rect) <= leading * 5 &&
+          gapY(r, nearer.rect) <= unit * 1.5 &&
+          sameColumn(r, nearer.rect, unit),
+      );
     if (
-      gapY(caption.rect, r) > leading * 5 &&
+      farther &&
       captions.some(
         (other) =>
           other !== caption &&
+          (!continuesNearBand ||
+            other.identity.kind !== caption.identity.kind ||
+            (direction === above
+              ? r[1] >= other.rect[3] - unit * 0.15
+              : r[3] <= other.rect[1] + unit * 0.15)) &&
           sameColumn(other.rect, r, unit) &&
           !intersects(other.rect, r) &&
           gapY(other.rect, r) <= leading * 5,
@@ -733,9 +960,8 @@ function bodiesForCaption(
       barrierLines.some(
         (line) =>
           !graphic.labels.has(line) &&
-          (intersects(line.rect, passage) ||
-            (overlapX(line.rect, r) > width(line.rect) * 0.5 &&
-              overlapY(line.rect, r) > height(line.rect) * 0.5)),
+          overlapX(line.rect, r) > width(line.rect) * 0.5 &&
+          overlapY(line.rect, r) > height(line.rect) * 0.5,
       )
     )
       continue;
@@ -768,22 +994,25 @@ function bodiesForCaption(
           }
         }
       }
-      // Once a nearby visual band is found, keep its farther rows/panels too.
-      if (connected.some((g) => gapY(g.rect, caption.rect) <= leading * 5)) bands.push(connected);
+      // Test a compound band's passage against all its proved labels, not only its farthest
+      // panel's labels. A nearer panel subcaption is not intervening document prose.
+      const band = bounds(connected.map((graphic) => graphic.rect));
+      const passage = corridor(caption.rect, band);
+      if (
+        connected.some((graphic) => gapY(graphic.rect, caption.rect) <= leading * 5) &&
+        !barrierLines.some(
+          (line) =>
+            (intersects(line.rect, band) || intersects(line.rect, passage)) &&
+            !connected.some((graphic) => graphic.labels.has(line)),
+        ) &&
+        !captions.some((other) => other !== caption && intersects(other.rect, band))
+      )
+        bands.push(connected);
     }
   }
   // Both directions, or disconnected nearby bands, are competing hypotheses. Do not guess.
   if (bands.length !== 1) return [];
   const selected = bands[0]!.sort((a, b) => a.index - b.index);
-  const band = bounds(selected.map((g) => g.rect));
-  // Prose or another caption in the gap between widely separated panels prevents a composite.
-  if (
-    barrierLines.some(
-      (line) => intersects(line.rect, band) && !selected.some((g) => g.labels.has(line)),
-    ) ||
-    captions.some((other) => other !== caption && intersects(other.rect, band))
-  )
-    return [];
   const allCaptionLines = new Set(captions.flatMap((c) => c.lines));
   return selected.map((graphic) => {
     const labels = lines.filter(
@@ -827,7 +1056,7 @@ function pageTextLayout(page: LocalFigurePage): PageTextLayout | null {
   const text = page.text.filter(
     (t) => t.text.trim() && valid(t.rect) && intersects(page.viewBox, t.rect),
   );
-  const unit = textScale(text, page.viewBox);
+  const unit = textScale(text, Math.min(width(page.viewBox), height(page.viewBox)) / 60);
   const lines = textLines(text, unit);
   const leading = lineLeading(lines, unit);
   const captions = captionsFromLines(lines, unit, leading, page.graphics);
@@ -903,7 +1132,7 @@ function pageFigureRegions(
 
 /**
  * Local, conservative caption-to-visual association in unrotated PDF user coordinates.
- * Captions survive uncertainty; body membership requires actual graphics and an uncontested path.
+ * Captions survive uncertainty; bodies need painted graphics or repeated table cells and an uncontested path.
  * Inputs are never modified, and geometry ordering makes ids independent of PDF operator ordering.
  */
 export function localFigureRegions(pages: readonly LocalFigurePage[]): readonly DocumentRegion[] {

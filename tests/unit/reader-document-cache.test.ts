@@ -216,7 +216,7 @@ describe('Reader external document cache admission', () => {
   it('replaces obsolete local layouts with current model-free geometry and reuses matching caches without SDT', async () => {
     settings.clear();
     io.read.mockImplementation(async (_source, key) =>
-      key.backend === 'local-rules' && key.adapterVersion === 1
+      key.backend === 'local-rules' && key.adapterVersion === 2
         ? { parsed: { ...parsed, backend: 'local-rules' } }
         : null,
     );
