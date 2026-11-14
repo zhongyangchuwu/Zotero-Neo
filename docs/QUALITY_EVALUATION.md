@@ -22,9 +22,11 @@ A/B 清单记录下载 URL、SHA-256、许可证、物理页序号和标注来�
 
 `corpus-c.json` 采用 [PDFFigures2 Conference150 v2 的公开标注](https://github.com/allenai/pdffigures2/blob/3d7ad46753d4a315cccd1c2bcab398380e88c534/evaluation/datasets/conference/annotations.json)，包含 10 篇 ICML 论文、20 个选定页面、47 组对象（30 图、17 表）。每项都有独立主体框和题注框。上游标注者圈选区域后按页面前景裁切；本仓库完成坐标转换和来源核对，本次额外人工金标准复审保持未测。
 
-所选页面的全部已发布标注均纳入，论文、年份和页面按版式需要挑选。47 项用于局部回归与规则校准；全文精确率、召回率、其他页面和额外误报需另行评估。用于修正规则的样例继续保留在回归语料中，后续独立评估应使用新的样本。
+所选页面的全部已发布标注均纳入，论文、年份和页面按版式需要挑选。C 的 47 项用于局部回归与规则校准；全文精确率、召回率、其他页面和额外误报需另行评估。
 
-PDF 下载自原会议站，并固定本次实际字节哈希。上游提供的身份信息是题注与页面几何，本次据此核对文档；历史 PDF 字节哈希缺失。标注从 72 dpi 左上原点转换到未旋转 PDF 用户坐标，主体和题注保持分开。版本、许可和其他数据集取舍见 [`figure-datasets.json`](../evidence/document-quality/figure-datasets.json)。仓库保存来源清单和评分，PDF 与完整正文留在测试环境；论文版权按各自声明处理。
+`corpus-d.json` 另收录 12 篇 ICML／NeurIPS 论文、22 个选定页面和 30 组对象（20 图、10 表），与 C 的 PDF 字节身份不重叠。D 的页面与标注在首次预测前固定，同样纳入所选页面的全部已发布标注。本轮保留其独立首测结果；继续按 D 修正规则时，需要另留新的验证样本。这些按版式挑选的切片未采用随机抽样。
+
+PDF 下载自原会议站，并固定本次实际字节哈希。上游提供的身份信息是题注与页面几何，本次据此核对文档；历史 PDF 字节哈希缺失。C 与 D 的大多数标注从 72 dpi 左上原点转换到未旋转 PDF 用户坐标；D 中 `d-icml10_1` 的标注为 100 dpi，先缩放至 PDF 点。主体和题注保持分开。版本、许可和其他数据集取舍见 [`figure-datasets.json`](../evidence/document-quality/figure-datasets.json)。仓库保存来源清单和评分，PDF 与完整正文留在测试环境；论文版权按各自声明处理。
 
 
 ## 准备并捕获原生结果
@@ -71,6 +73,8 @@ npm run quality:capture -- --backend local \
 
 评分使用同一份 `corpus-c.json` 和对应观测。主体缺失时记录 `no-matched-object`，IoU 保持未测，该项仍计入 47 个核验点；通过要求题注和主体同时匹配。
 
+独立验证时，将本节准备、捕获命令的 `--corpus` 改为 `evidence/document-quality/corpus-d.json`，并使用新的输出名。评分也传入同一份 D 清单，分别保留 C、D 的观测与报告。
+
 
 ## 生成报告
 
@@ -91,19 +95,46 @@ npm run quality:evaluate -- \
 
 ## 已测本地规则
 
-Conference150 v2 的 10 篇 PDF 均完成本地提取。评分同时要求主体和题注 IoU ≥ 0.5，逐项结果见 [`local-rules-baseline.json`](../evidence/document-quality/local-rules-baseline.json)。
+当前本地规则使用适配器代次 2，分别记录 C 校准集与 D 独立验证集。评分同时要求主体和题注 IoU ≥ 0.5，逐项结果见 [`local-rules-v2-calibration.json`](../evidence/document-quality/local-rules-v2-calibration.json) 和 [`local-rules-v2-validation.json`](../evidence/document-quality/local-rules-v2-validation.json)。
 
-| 核验结果 | 数量 |
-| --- | --- |
-| 主体与题注同时通过 | 39/47 |
-| 已匹配主体，可计算 IoU | 40/47 |
-| 主体未关联，IoU 保持未测 | 7/47 |
+| 语料 | 完成提取的文档 | 主体与题注同时通过 | 主体可计算 IoU | 主体未关联 |
+| --- | --- | --- | --- | --- |
+| C：规则校准 | 10/10 | 42/47 | 43/47 | 4/47 |
+| D：独立首测 | 12/12 | 17/30 | 19/30 | 11/30 |
 
-已匹配项中的一处失败是 `c-icml14_9` 的 Figure 3：题注 IoU 为 0.9720，主体 IoU 为 0.3723。其余七项列出已识别题注，主体仍待关联。正文引用也可能被误列为题注，额外误报需单独审阅。这些样例用于规则校准，结论范围是当前 47 个核验点。
+本轮修正狭长层级连接干、英文段首图表引用与题注字号边界。C 保留首轮通过的 39 项，并新增通过 `c-icml10_8` Figure 7、`c-icml13_4` Figure 4 和 `c-icml13_6` Figure 2。尚未关联的四项是 `c-icml13_2` Table 1、`c-icml13_8` Figure 1，以及 `c-icml14_9` Table 1／Figure 2；同篇 Figure 3 的主体 IoU 仍为 0.3723。
 
-宿主为 Windows Zotero 10.0.8，使用自带 PDF.js 5.7.0。执行源码是基于 `d4129d4dd038232b32b728a52b55fe191813a34a` 的任务工作树，实际辅助 bundle SHA-256 为 `a13be636ef4d2d92c96dd119750ff86cc702a1d498db11a656dacc0cb72f024f`。本轮使用 PDF 原有文字与绘图几何进行处理。静态评分中的 47 项实际阅读任务状态为未执行，界面验收按独立流程记录。
+D 的 11 项主体未关联，IoU 保持未测；另外两项主体框未达阈值，分别是 `d-icml10_6` Table 1（0.2933）与 Figure 1（0.2260）。D 的结果显示当前规则在这些新页面仍有漏关联和范围偏差，本轮未据此继续调参。
 
-专用配置中已走通首次打开图表列表、预览和原文跳转，随后完成解析缓存保存／复用及图文笔记保存／打开，记录见 [`local-rules-uat.json`](../evidence/document-quality/local-rules-uat.json)。这些操作通过 Firefox RDP 驱动真实界面，并逐张检查截图。物理键盘与输入法的手动验收单独记录，状态为未执行，操作要求见[验收指南](ACCEPTANCE.md)。
+两组均在 Windows Zotero 10.0.8、自带 PDF.js 5.7.0 上执行。源码是基于 `834e40ce5f2ee2574020dd355b9d54115c5fb77b` 的任务工作树，实际辅助 bundle SHA-256 为 `8c92430d1b87c443ca9062492c398dd2c4328b75e06275f798ed35e386c5c421`。77 个静态核验点的实际阅读任务状态均为未执行。
+
+缓存按规则代次分槽，旧结果保持原样。专用配置中已用同一 PDF 的真实旧结果验证：首次图表浏览跳过代次 1 缓存，直接预览并定位修复后的 Figure 2；普通按需读取未写入新缓存，显式本地解析后保存代次 2 结果，重开对照与图表界面可复用。实际界面截图、完整预览 PNG 和缓存哈希见 [`local-rules-v2-uat.json`](../evidence/document-quality/local-rules-v2-uat.json)。本地提取未调用 SDT，物理键盘与输入法在本轮保持未测。
+
+### 首轮历史记录
+
+首轮 C 基线保留在 [`local-rules-baseline.json`](../evidence/document-quality/local-rules-baseline.json)：配对通过 39/47，40 项主体可计算 IoU，7 项主体未关联。同篇 `c-icml14_9` Figure 3 的题注 IoU 为 0.9720、主体 IoU 为 0.3723；其余七项保留已识别题注，主体待关联。正文引用也曾被误列为题注，额外误报需单独审阅。
+
+该轮宿主同为 Windows Zotero 10.0.8／PDF.js 5.7.0，源码是基于 `d4129d4dd038232b32b728a52b55fe191813a34a` 的任务工作树，实际辅助 bundle SHA-256 为 `a13be636ef4d2d92c96dd119750ff86cc702a1d498db11a656dacc0cb72f024f`。47 项静态评分与界面流程分别记录。
+
+首轮专用配置已走通图表列表、预览、原文跳转、解析缓存保存／复用及图文笔记保存／打开，记录见 [`local-rules-uat.json`](../evidence/document-quality/local-rules-uat.json)。这些操作通过 Firefox RDP 驱动真实界面，并逐张检查截图；物理键盘与输入法的手动验收按[验收指南](ACCEPTANCE.md)另行执行。
+
+## DeepSeek OCR API 小样本对照
+
+本轮按用户授权，使用环境变量 `DEEPSEEK_API_KEY` 调用[官方 OCR 接口](https://api-docs.deepseek.com/zh-cn/guides/ocr)。Attention、ResNet 和 OmniDocBench 的原始 PDF 字节与先前实验相同，六个核验对象位于三个选定页；另用 Attention 第 4 页的复合图作独立诊断。四页分别调用 `rich_layout_recognition` 与 `text_recognition`，共 8 次成功请求，未重试。请求身份、来源哈希、配对规则和逐项结果见 [`deepseek-ocr-api-comparison.json`](../evidence/document-quality/deepseek-ocr-api-comparison.json)。
+
+| 方法 | 六对象主体与题注配对 | 结果来源 |
+| --- | --- | --- |
+| Neo 当前本地规则 | 2/6 | 本轮生产路径，读取相同三份完整 PDF |
+| DeepSeek rich-layout 加固定几何关联 | 3/6 | 本轮单页 API 响应 |
+| figure-extractor 0.4.0 | 6/6 | 保留的历史实测，未重跑 |
+| PDFFigures2，提交 `3d7ad467…` | 6/6 | 保留的历史实测，未重跑 |
+| Docling 2.150.1 | 6/6 | 保留的历史实测，未重跑 |
+
+rich-layout 独立匹配到 5/6 主体与 4/6 题注，原始响应未提供主体与题注关系。表中的 API 配对结果使用预先固定的同类、水平重叠和最近垂直距离规则。OmniDocBench Table 2／3 的题注坐标偏移，Table 4 的主体框跨过相邻表格，最佳主体 IoU 为 0.3114。ResNet 主体通过阈值，左侧公式仍有裁切；当前 Neo 在同一对象的主体 IoU 为 0.5050，也处于阈值边缘。复合图诊断中，API 框包含左右两组图，底部 V/K/Q 仍被裁切。
+
+`text_recognition` 返回文字、公式和表格转写，本次四页均未提供定位框。逐字符、公式与表格单元格准确率保持未测。六个对象沿用代理对照原页得到的近似框，人工金标准复审尚未完成；这些结果与 C/D 公开标注评分分别报告。
+
+8 个成功响应均为 `finish_reason: stop`，单次请求耗时 2.58 至 8.60 秒。按[公布价格](https://api-docs.deepseek.com/zh-cn/guides/ocr#计费)每千成功页 1.5 元估算，本轮为 0.012 元，实际账单未核对。API 单页时间与旧工具全篇处理时间范围不同，未做速度排名。服务未提供可锁定的模型版本；这轮测试保留本地默认路线，运行时服务选择保持现状。
 
 
 ## 已测原生基线

@@ -213,9 +213,13 @@ describe('Reader external document cache admission', () => {
     expect(io.native).not.toHaveBeenCalled();
   });
 
-  it('builds and reuses model-free local graph geometry without consulting SDT or a cloud provider', async () => {
+  it('replaces obsolete local layouts with current model-free geometry and reuses matching caches without SDT', async () => {
     settings.clear();
-    io.read.mockResolvedValue(null);
+    io.read.mockImplementation(async (_source, key) =>
+      key.backend === 'local-rules' && key.adapterVersion === 1
+        ? { parsed: { ...parsed, backend: 'local-rules' } }
+        : null,
+    );
     io.write.mockImplementation(async (_source, _key, parsed) => {
       io.revision++;
       io.read.mockResolvedValue({ parsed });

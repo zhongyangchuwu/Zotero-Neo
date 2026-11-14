@@ -9,7 +9,7 @@ import { localDocumentRegions, type LocalFigurePage } from './local-figures';
 
 const LOCAL_DOCUMENT_KEY: DocumentCacheKey = {
   backend: 'local-rules',
-  adapterVersion: 1,
+  adapterVersion: 2,
   configuration: 'pdfjs-native-text-graphics-v1',
 };
 
